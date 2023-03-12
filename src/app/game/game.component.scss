@@ -1,0 +1,54 @@
+.game-container {
+  display: flex;
+  height: calc(100% - 50px);
+  background-color: #000;
+  border: 5px solid #444;
+  padding: 20px;
+  box-shadow: 0 0 20px #666;
+  overflow: hidden;
+
+  .title {
+    position: absolute;
+    top: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 50px;
+
+    .letter {
+      font-size: 3rem;
+      font-family: "Orbitron", sans-serif;
+      color: #fff;
+      margin: 0 .25rem;
+      transition: font-size 0.2s ease-in-out;
+      user-select: none;
+
+      &.touched.v {
+          color: #FF9A66;
+          position: relative;
+          transform-style: preserve-3d;
+          perspective: 1000px;
+          transform: rotateX(30deg) rotateY(30deg);
+          transition: transform 1.5s cubic-bezier(0.47, 0, 0.745, 0.715) 0.5s;
+
+          &:hover {
+            transform: rotateX(0deg) rotateY(360deg) scale(1.2);
+            transition: transform 1.5s cubic-bezier(0.47, 0, 0.745, 0.715) 0s;
+          }
+
+          animation: rotateV 1s linear infinite;
+        }
+
+        @keyframes rotateV {
+          0% {
+            transform: rotateY(0deg);
+          }
+          100% {
+            transform: rotateY(360deg);
+          }
+      }
+    }
+  }
+}

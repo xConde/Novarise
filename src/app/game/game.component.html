@@ -1,1 +1,12 @@
-<app-game-board></app-game-board>
+<div class="game-container">
+  <div class="title">
+    <div *ngFor="let letter of title.split(''); let i = index"
+          class="letter"
+          [ngClass]="{ 'touched': i === hoverIndex, 'v': i === 2 }"
+          (mouseover)="hoverIndex = i"
+          (mouseleave)="hoverIndex = null">
+      {{ letter }}
+    </div>
+  </div>
+  <app-game-board></app-game-board>
+</div>
