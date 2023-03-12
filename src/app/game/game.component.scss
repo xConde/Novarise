@@ -1,3 +1,25 @@
+@mixin specialChar {
+  position: relative;
+  cursor: pointer;
+
+  &.touched, &.clicked {
+    color: #FF9A66;
+  }
+
+  &.clicked {
+    animation: rotateChar 1s linear infinite forwards;
+  }
+
+  @keyframes rotateChar {
+    0% {
+      transform: rotateY(0deg);
+    }
+    100% {
+      transform: rotateY(360deg);
+    }
+  }
+}
+
 .game-container {
   display: flex;
   height: calc(100% - 50px);
@@ -25,30 +47,10 @@
       transition: font-size 0.2s ease-in-out;
       user-select: none;
 
-      &.touched.v {
-          color: #FF9A66;
-          position: relative;
-          transform-style: preserve-3d;
-          perspective: 1000px;
-          transform: rotateX(30deg) rotateY(30deg);
-          transition: transform 1.5s cubic-bezier(0.47, 0, 0.745, 0.715) 0.5s;
-
-          &:hover {
-            transform: rotateX(0deg) rotateY(360deg) scale(1.2);
-            transition: transform 1.5s cubic-bezier(0.47, 0, 0.745, 0.715) 0s;
-          }
-
-          animation: rotateV 1s linear infinite;
-        }
-
-        @keyframes rotateV {
-          0% {
-            transform: rotateY(0deg);
-          }
-          100% {
-            transform: rotateY(360deg);
-          }
+      &.v {
+        @include specialChar;
       }
+
     }
   }
 }

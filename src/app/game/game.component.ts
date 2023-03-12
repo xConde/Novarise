@@ -8,6 +8,7 @@ import { Component, OnInit } from '@angular/core';
 export class GameComponent implements OnInit {
   title = 'Novarise';
   hoverIndex: number | null = null;
+  isClicked = false;
 
   constructor() { }
 
