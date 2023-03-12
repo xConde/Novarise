@@ -4,7 +4,7 @@
   "scripts": {
     "ng": "ng",
     "start": "bash ./nvmrc-check.sh && ng serve",
-    "build": "ng build",
+    "build": "bash ./nvmrc-check.sh && ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },
