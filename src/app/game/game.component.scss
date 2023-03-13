@@ -62,6 +62,40 @@
     margin: auto;
   }
 
+  .arrows-overlay {
+    position: fixed;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    height: 40px;
+    display: flex;
+    background-color: #000;
+    opacity: 0.5;
+    color: #FFF;
+    z-index: 1;
+
+    &.full {
+      background-color: darkred;
+    }
+
+    .arrow {
+      margin: 0 .25rem;
+      user-select: none;
+
+      &.ArrowLeft {
+        transform: rotate(-90deg);
+      }
+
+      &.ArrowDown {
+        transform: rotate(180deg);
+      }
+
+      &.ArrowRight {
+        transform: rotate(90deg);
+      }
+    }
+  }
+
   @media screen and (max-width: 1023px) {
     height: calc(100% - 14px);
     width: calc(100% - 8px);

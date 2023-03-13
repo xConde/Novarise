@@ -2,12 +2,17 @@
   <div class="title">
     <div class="letter"
         *ngFor="let letter of title.split(''); let i = index"
-        [ngClass]="{ 'touched': i === hoverIndex, 'clicked': isClicked,'v': i === 2}"
-        (click)="isClicked = !isClicked"
+        [ngClass]="{ 'touched': i === hoverIndex, 'clicked': ccSession,'v': i === 2}"
+        (click)="isClicked()"
         (mouseover)="hoverIndex = i"
         (mouseleave)="hoverIndex = null">
       {{ letter }}
     </div>
   </div>
   <app-game-board></app-game-board>
+  <div class="arrows-overlay" *ngIf="ccSession && arrows.length > 0" [ngClass]="{'full': arrows.length === 8}">
+    <span *ngFor="let arrow of arrows; let i = index">
+      <img class="arrow" [ngClass]="arrow" *ngIf="i < 8" src="../../assets/arrow.svg"/>
+    </span>
+  </div>
 </div>
