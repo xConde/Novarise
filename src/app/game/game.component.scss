@@ -23,27 +23,27 @@
 
 @keyframes borderGradient {
   0% {
-    border-image: linear-gradient(to right, gold, orange, red, purple, indigo, blue, green) 1;
+    border-image: linear-gradient(to right, gold, orange, red, purple, indigo, gold, blue, green) 1;
     border-color: #FF0000;
     box-shadow: 0 0 10px #FF0000;
   }
   20% {
-    border-image: linear-gradient(to right, green, blue, indigo, purple, red, orange, gold) 2;
+    border-image: linear-gradient(to right, green, gold, blue, indigo, purple, red, orange, gold) 2;
     border-color: #FFA500;
     box-shadow: 0 0 10px #FFA500;
   }
   40% {
-    border-image: linear-gradient(to right, gold, orange, red, purple, indigo, blue, green) 3;
+    border-image: linear-gradient(to right, gold, orange, red, purple, gold, indigo, blue, green) 3;
     border-color: #FFFF00;
     box-shadow: 0 0 10px #FFFF00;
   }
   60% {
-    border-image: linear-gradient(to right, green, blue, indigo, purple, red, orange, gold) 4;
+    border-image: linear-gradient(to right, green, gold, blue, indigo, purple, red, orange, gold) 4;
     border-color: #008000;
     box-shadow: 0 0 10px #008000;
   }
   80% {
-    border-image: linear-gradient(to right, gold, orange, red, purple, indigo, blue, green) 5;
+    border-image: linear-gradient(to right, gold, orange, red, purple, gold, indigo, blue, green) 5;
     border-color: gold;
     box-shadow: 0 0 10px gold;
   }
@@ -56,6 +56,21 @@
     border-image: none;
     border-color: #444;
     box-shadow: none;
+  }
+}
+
+@keyframes sparkle {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.5);
   }
 }
 
@@ -122,7 +137,10 @@
     z-index: 1;
 
     &.success {
+      position: unset;
       background-color: darkgreen;
+      animation: sparkle 2s ease-in-out 2;
+      width: auto;
     }
 
     &.fail {
