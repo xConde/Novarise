@@ -72,6 +72,8 @@
     background-color: #000;
     opacity: 0.5;
     color: #FFF;
+    justify-content: center;
+    align-items: center;
     z-index: 1;
 
     &.full {
@@ -86,7 +88,12 @@
         transform: rotate(-90deg);
       }
 
+      &.ArrowUp {
+        margin-top: .5rem;
+      }
+
       &.ArrowDown {
+        margin-bottom: .5rem;
         transform: rotate(180deg);
       }
 
@@ -94,6 +101,7 @@
         transform: rotate(90deg);
       }
     }
+    width: fit-content;
   }
 
   @media screen and (max-width: 1023px) {
