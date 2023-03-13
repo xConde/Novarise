@@ -1,4 +1,4 @@
-<div class="game-container">
+<div class="game-container" [ngClass]="{'success': ccCompleteStatus === 'success'}">
   <div class="title">
     <div class="letter"
         *ngFor="let letter of title.split(''); let i = index"
@@ -10,8 +10,8 @@
     </div>
   </div>
   <app-game-board></app-game-board>
-  <div class="arrows-overlay" *ngIf="ccSession && arrows.length > 0" [ngClass]="{'full': arrows.length > 7}">
-    <span *ngFor="let arrow of arrows; let i = index">
+  <div class="arrows-overlay" *ngIf="ccSession && ccArrows.length > 0" [ngClass]="ccCompleteStatus">
+    <span *ngFor="let arrow of ccArrows; let i = index">
       <img class="arrow" [ngClass]="arrow" *ngIf="i < 8" src="../../assets/arrow.svg"/>
     </span>
   </div>
