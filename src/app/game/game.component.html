@@ -10,7 +10,7 @@
     </div>
   </div>
   <app-game-board></app-game-board>
-  <div class="arrows-overlay" *ngIf="ccSession && arrows.length > 0" [ngClass]="{'full': arrows.length === 8}">
+  <div class="arrows-overlay" *ngIf="ccSession && arrows.length > 0" [ngClass]="{'full': arrows.length > 7}">
     <span *ngFor="let arrow of arrows; let i = index">
       <img class="arrow" [ngClass]="arrow" *ngIf="i < 8" src="../../assets/arrow.svg"/>
     </span>
