@@ -29,9 +29,7 @@ export class GameComponent implements OnInit {
   }
 
   resetCCSession() {
-    if (this.ccArrows.length === 8) {
-      this.checkCheatCodes();
-    }
+    if (this.ccArrows.length === 8) { this.checkCheatCodes(); }
     if (!this.ccSession) { this.ccArrows = []; }
   }
 

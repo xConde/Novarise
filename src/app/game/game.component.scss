@@ -86,7 +86,7 @@
   overflow: hidden;
 
   &.success {
-    animation: borderGradient 5s linear infinite;
+    animation: borderGradient 4s linear infinite;
     border-image-slice: 1;
     animation-fill-mode: forwards;
   }
