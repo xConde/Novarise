@@ -13,8 +13,8 @@ export class GameComponent implements OnInit {
   ccArrows: string[] = [];
   ccs: { code: string[], successMessage: string }[] = [
     { code: ['up', 'up', 'down', 'down', 'left', 'right', 'left', 'right'], successMessage: 'Success!' },
-    { code: ['up', 'up', 'down', 'down', 'left', 'right', 'left'], successMessage: 'Success!' },
-    { code: ['up', 'up', 'down', 'down', 'left', 'right'], successMessage: 'Success!' }
+    { code: ['up', 'up', 'down', 'down', 'left', 'left', 'right', 'right'], successMessage: 'Success!' },
+    { code: ['left', 'left', 'up', 'down', 'up', 'down', 'right', 'right'], successMessage: 'Success!' }
   ];
 
   constructor() { }
