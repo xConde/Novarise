@@ -6,7 +6,7 @@ import { BlockType, GameBoardTile, Spawner, SpawnerType } from './models/game-bo
 export class GameBoardService {
   private readonly gameBoardWidth = 25;
   private readonly gameBoardHeight = 20;
-  private readonly gameBoard: GameBoardTile[][] = [];
+  private gameBoard: GameBoardTile[][] = [];
 
   private spawnerChoices: SpawnerType[] = [
     SpawnerType.TOP_LEFT,
@@ -173,12 +173,16 @@ export class GameBoardService {
     scene.add(group);
   }
 
-  getSpawnerTiles(): Number[][] {
+  getSpawnerTiles(): number[][] {
     return this.spawnerTiles;
   }
 
-  getExitTiles(): Number[][] {
+  getExitTiles(): number[][] {
     return this.exitTiles;
+  }
+
+  getGameBoard(): GameBoardTile[][] {
+    return this.gameBoard;
   }
 
 }
