@@ -34,6 +34,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
   private renderer!: THREE.WebGLRenderer;
   private controls!: OrbitControls;
 
+  // Interaction
+  private raycaster = new THREE.Raycaster();
+  private mouse = new THREE.Vector2();
+  private tileMeshes: Map<string, THREE.Mesh> = new Map();
+  private hoveredTile: THREE.Mesh | null = null;
+  private selectedTile: { row: number, col: number } | null = null;
+
+  // Tower management
+  private towerMeshes: Map<string, THREE.Mesh> = new Map();
+
   constructor(private gameBoardService: GameBoardService) { }
 
   ngOnInit(): void {
@@ -47,6 +57,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
   ngAfterViewInit(): void {
     this.initializeRenderer();
     this.initializeControls();
+    this.setupMouseInteraction();
     this.animate();
   }
 
@@ -126,6 +137,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
     boardTiles.forEach((row, rowIndex) => {
       row.forEach((tile, colIndex) => {
         const mesh = this.gameBoardService.createTileMesh(rowIndex, colIndex, tile.type);
+        mesh.userData = { row: rowIndex, col: colIndex, tile: tile };
+        this.tileMeshes.set(`${rowIndex}-${colIndex}`, mesh);
         this.scene.add(mesh);
       });
     });
@@ -147,6 +160,100 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
     this.controls.maxPolarAngle = this.maxPolarAngle;
     this.controls.target.set(0, 0, 0);
     this.controls.update();
+  }
+
+  private setupMouseInteraction(): void {
+    const canvas = this.renderer.domElement;
+
+    // Mouse move for hover effect
+    canvas.addEventListener('mousemove', (event) => {
+      const rect = canvas.getBoundingClientRect();
+      this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+      const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
+
+      // Reset previous hover
+      if (this.hoveredTile && this.hoveredTile !== this.getSelectedTileMesh()) {
+        const material = this.hoveredTile.material as THREE.MeshLambertMaterial;
+        material.emissiveIntensity = this.hoveredTile.userData['tile'].type === 0 ? 0 : 0.3;
+      }
+
+      if (intersects.length > 0) {
+        const mesh = intersects[0].object as THREE.Mesh;
+        if (mesh !== this.getSelectedTileMesh()) {
+          this.hoveredTile = mesh;
+          const material = mesh.material as THREE.MeshLambertMaterial;
+          material.emissiveIntensity = 0.5;
+          canvas.style.cursor = 'pointer';
+        }
+      } else {
+        this.hoveredTile = null;
+        canvas.style.cursor = 'default';
+      }
+    });
+
+    // Mouse click for selection
+    canvas.addEventListener('click', (event) => {
+      const rect = canvas.getBoundingClientRect();
+      this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+      const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
+
+      // Reset previous selection
+      const prevSelected = this.getSelectedTileMesh();
+      if (prevSelected) {
+        const material = prevSelected.material as THREE.MeshLambertMaterial;
+        material.emissiveIntensity = prevSelected.userData['tile'].type === 0 ? 0 : 0.3;
+      }
+
+      if (intersects.length > 0) {
+        const mesh = intersects[0].object as THREE.Mesh;
+        const row = mesh.userData['row'];
+        const col = mesh.userData['col'];
+
+        this.selectedTile = { row, col };
+
+        // Highlight selected tile
+        const material = mesh.material as THREE.MeshLambertMaterial;
+        material.emissiveIntensity = 0.8;
+
+        console.log(`Tile selected: Row ${row}, Col ${col}`, mesh.userData['tile']);
+
+        // Try to place a tower
+        if (this.gameBoardService.canPlaceTower(row, col)) {
+          if (this.gameBoardService.placeTower(row, col, 'basic')) {
+            this.spawnTower(row, col);
+            console.log(`Tower placed at Row ${row}, Col ${col}`);
+          }
+        } else {
+          console.log(`Cannot place tower at Row ${row}, Col ${col}`);
+        }
+      } else {
+        this.selectedTile = null;
+      }
+    });
+  }
+
+  private spawnTower(row: number, col: number): void {
+    const key = `${row}-${col}`;
+
+    // Don't place if tower already exists
+    if (this.towerMeshes.has(key)) {
+      return;
+    }
+
+    const towerMesh = this.gameBoardService.createTowerMesh(row, col);
+    this.towerMeshes.set(key, towerMesh);
+    this.scene.add(towerMesh);
+  }
+
+  private getSelectedTileMesh(): THREE.Mesh | null {
+    if (!this.selectedTile) return null;
+    return this.tileMeshes.get(`${this.selectedTile.row}-${this.selectedTile.col}`) || null;
   }
 
   private animate = (): void => {

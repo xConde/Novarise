@@ -158,16 +158,47 @@ export class GameBoardService {
     return mesh;
   }
 
-  // Create grid lines for better visibility
-  createGridLines(): THREE.LineSegments {
-    const gridHelper = new THREE.GridHelper(
-      Math.max(this.gameBoardWidth, this.gameBoardHeight) * this.tileSize,
-      Math.max(this.gameBoardWidth, this.gameBoardHeight),
-      this.colorGrid,
-      this.colorGrid
-    );
-    gridHelper.position.y = 0;
-    return gridHelper as unknown as THREE.LineSegments;
+  // Create grid lines for better visibility - aligned with tiles
+  createGridLines(): THREE.Group {
+    const gridGroup = new THREE.Group();
+
+    // Create vertical lines (along Z axis)
+    for (let i = 0; i <= this.gameBoardWidth; i++) {
+      const geometry = new THREE.BufferGeometry();
+      const x = (i - this.gameBoardWidth / 2) * this.tileSize;
+      const z1 = -this.gameBoardHeight / 2 * this.tileSize;
+      const z2 = this.gameBoardHeight / 2 * this.tileSize;
+
+      const vertices = new Float32Array([
+        x, 0.01, z1,
+        x, 0.01, z2
+      ]);
+
+      geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+      const material = new THREE.LineBasicMaterial({ color: this.colorGrid, transparent: true, opacity: 0.3 });
+      const line = new THREE.Line(geometry, material);
+      gridGroup.add(line);
+    }
+
+    // Create horizontal lines (along X axis)
+    for (let i = 0; i <= this.gameBoardHeight; i++) {
+      const geometry = new THREE.BufferGeometry();
+      const z = (i - this.gameBoardHeight / 2) * this.tileSize;
+      const x1 = -this.gameBoardWidth / 2 * this.tileSize;
+      const x2 = this.gameBoardWidth / 2 * this.tileSize;
+
+      const vertices = new Float32Array([
+        x1, 0.01, z,
+        x2, 0.01, z
+      ]);
+
+      geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+      const material = new THREE.LineBasicMaterial({ color: this.colorGrid, transparent: true, opacity: 0.3 });
+      const line = new THREE.Line(geometry, material);
+      gridGroup.add(line);
+    }
+
+    return gridGroup;
   }
 
   private getTileColor(type: BlockType): number {
@@ -205,5 +236,53 @@ export class GameBoardService {
 
   getTileSize(): number {
     return this.tileSize;
+  }
+
+  // Tower placement
+  canPlaceTower(row: number, col: number): boolean {
+    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+      return false;
+    }
+
+    const tile = this.gameBoard[row][col];
+
+    // Can only place on BASE tiles that are purchasable
+    return tile.type === BlockType.BASE && tile.isPurchasable && tile.towerType === null;
+  }
+
+  placeTower(row: number, col: number, towerType: string): boolean {
+    if (!this.canPlaceTower(row, col)) {
+      return false;
+    }
+
+    // For now, just mark the tile - we'll add actual tower objects later
+    this.gameBoard[row][col] = {
+      ...this.gameBoard[row][col],
+      towerType: towerType as any // Simple string for now
+    };
+
+    return true;
+  }
+
+  // Create a simple tower mesh
+  createTowerMesh(row: number, col: number): THREE.Mesh {
+    const geometry = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8);
+    const material = new THREE.MeshLambertMaterial({
+      color: 0xff6600,
+      emissive: 0xff6600,
+      emissiveIntensity: 0.2
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+
+    // Position tower on the tile
+    const x = (col - this.gameBoardWidth / 2) * this.tileSize;
+    const z = (row - this.gameBoardHeight / 2) * this.tileSize;
+
+    mesh.position.set(x, 0.6, z); // Elevated above tile
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    return mesh;
   }
 }
