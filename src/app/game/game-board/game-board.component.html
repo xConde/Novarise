@@ -1,3 +1,32 @@
 <div class="board-container">
   <div class="canvas-container" #canvasContainer></div>
+
+  <div class="tower-selection">
+    <button
+      class="tower-btn"
+      [class.selected]="selectedTowerType === 'basic'"
+      (click)="selectTowerType('basic')"
+      aria-label="Select Basic Tower">
+      <div class="tower-icon basic"></div>
+      <span class="tower-name">Basic</span>
+    </button>
+
+    <button
+      class="tower-btn"
+      [class.selected]="selectedTowerType === 'sniper'"
+      (click)="selectTowerType('sniper')"
+      aria-label="Select Sniper Tower">
+      <div class="tower-icon sniper"></div>
+      <span class="tower-name">Sniper</span>
+    </button>
+
+    <button
+      class="tower-btn"
+      [class.selected]="selectedTowerType === 'splash'"
+      (click)="selectTowerType('splash')"
+      aria-label="Select Splash Tower">
+      <div class="tower-icon splash"></div>
+      <span class="tower-name">Splash</span>
+    </button>
+  </div>
 </div>

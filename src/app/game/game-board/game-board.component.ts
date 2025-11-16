@@ -43,6 +43,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
 
   // Tower management
   private towerMeshes: Map<string, THREE.Mesh> = new Map();
+  public selectedTowerType: string = 'basic';
 
   constructor(private gameBoardService: GameBoardService) { }
 
@@ -225,9 +226,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
 
         // Try to place a tower
         if (this.gameBoardService.canPlaceTower(row, col)) {
-          if (this.gameBoardService.placeTower(row, col, 'basic')) {
-            this.spawnTower(row, col);
-            console.log(`Tower placed at Row ${row}, Col ${col}`);
+          if (this.gameBoardService.placeTower(row, col, this.selectedTowerType)) {
+            this.spawnTower(row, col, this.selectedTowerType);
+            console.log(`${this.selectedTowerType} tower placed at Row ${row}, Col ${col}`);
           }
         } else {
           console.log(`Cannot place tower at Row ${row}, Col ${col}`);
@@ -238,7 +239,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
     });
   }
 
-  private spawnTower(row: number, col: number): void {
+  private spawnTower(row: number, col: number, towerType: string): void {
     const key = `${row}-${col}`;
 
     // Don't place if tower already exists
@@ -246,9 +247,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
       return;
     }
 
-    const towerMesh = this.gameBoardService.createTowerMesh(row, col);
+    const towerMesh = this.gameBoardService.createTowerMesh(row, col, towerType);
     this.towerMeshes.set(key, towerMesh);
     this.scene.add(towerMesh);
+  }
+
+  public selectTowerType(type: string): void {
+    this.selectedTowerType = type;
   }
 
   private getSelectedTileMesh(): THREE.Mesh | null {

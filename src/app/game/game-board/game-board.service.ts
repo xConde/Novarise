@@ -158,17 +158,16 @@ export class GameBoardService {
     return mesh;
   }
 
-  // Create grid lines for better visibility - aligned perfectly between tiles
+  // Create grid lines - exactly matching tile count (25x20)
   createGridLines(): THREE.Group {
     const gridGroup = new THREE.Group();
 
-    // Create vertical lines (along Z axis) - between tiles
-    for (let i = 0; i <= this.gameBoardWidth; i++) {
+    // Create vertical lines (along Z axis) - one per column
+    for (let i = 0; i < this.gameBoardWidth; i++) {
       const geometry = new THREE.BufferGeometry();
-      // Offset by 0.5 to place lines BETWEEN tiles instead of through centers
-      const x = (i - this.gameBoardWidth / 2 - 0.5) * this.tileSize;
-      const z1 = (-this.gameBoardHeight / 2 - 0.5) * this.tileSize;
-      const z2 = (this.gameBoardHeight / 2 + 0.5) * this.tileSize;
+      const x = (i - this.gameBoardWidth / 2) * this.tileSize;
+      const z1 = -this.gameBoardHeight / 2 * this.tileSize;
+      const z2 = this.gameBoardHeight / 2 * this.tileSize;
 
       const vertices = new Float32Array([
         x, 0.01, z1,
@@ -176,18 +175,17 @@ export class GameBoardService {
       ]);
 
       geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      const material = new THREE.LineBasicMaterial({ color: this.colorGrid, transparent: true, opacity: 0.3 });
+      const material = new THREE.LineBasicMaterial({ color: this.colorGrid, transparent: true, opacity: 0.4 });
       const line = new THREE.Line(geometry, material);
       gridGroup.add(line);
     }
 
-    // Create horizontal lines (along X axis) - between tiles
-    for (let i = 0; i <= this.gameBoardHeight; i++) {
+    // Create horizontal lines (along X axis) - one per row
+    for (let i = 0; i < this.gameBoardHeight; i++) {
       const geometry = new THREE.BufferGeometry();
-      // Offset by 0.5 to place lines BETWEEN tiles instead of through centers
-      const z = (i - this.gameBoardHeight / 2 - 0.5) * this.tileSize;
-      const x1 = (-this.gameBoardWidth / 2 - 0.5) * this.tileSize;
-      const x2 = (this.gameBoardWidth / 2 + 0.5) * this.tileSize;
+      const z = (i - this.gameBoardHeight / 2) * this.tileSize;
+      const x1 = -this.gameBoardWidth / 2 * this.tileSize;
+      const x2 = this.gameBoardWidth / 2 * this.tileSize;
 
       const vertices = new Float32Array([
         x1, 0.01, z,
@@ -195,7 +193,7 @@ export class GameBoardService {
       ]);
 
       geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      const material = new THREE.LineBasicMaterial({ color: this.colorGrid, transparent: true, opacity: 0.3 });
+      const material = new THREE.LineBasicMaterial({ color: this.colorGrid, transparent: true, opacity: 0.4 });
       const line = new THREE.Line(geometry, material);
       gridGroup.add(line);
     }
@@ -266,12 +264,38 @@ export class GameBoardService {
     return true;
   }
 
-  // Create a simple tower mesh
-  createTowerMesh(row: number, col: number): THREE.Mesh {
-    const geometry = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8);
+  // Create tower mesh based on type
+  createTowerMesh(row: number, col: number, towerType: string = 'basic'): THREE.Mesh {
+    let geometry: THREE.BufferGeometry;
+    let color: number;
+    let height: number;
+
+    // Different shapes and colors for different tower types
+    switch (towerType) {
+      case 'basic':
+        geometry = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8);
+        color = 0xff6600; // Orange
+        height = 0.6;
+        break;
+      case 'sniper':
+        geometry = new THREE.ConeGeometry(0.25, 1.2, 4);
+        color = 0x9900ff; // Purple
+        height = 0.8;
+        break;
+      case 'splash':
+        geometry = new THREE.BoxGeometry(0.5, 0.7, 0.5);
+        color = 0x00ff00; // Green
+        height = 0.55;
+        break;
+      default:
+        geometry = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8);
+        color = 0xff6600;
+        height = 0.6;
+    }
+
     const material = new THREE.MeshLambertMaterial({
-      color: 0xff6600,
-      emissive: 0xff6600,
+      color: color,
+      emissive: color,
       emissiveIntensity: 0.2
     });
 
@@ -281,7 +305,7 @@ export class GameBoardService {
     const x = (col - this.gameBoardWidth / 2) * this.tileSize;
     const z = (row - this.gameBoardHeight / 2) * this.tileSize;
 
-    mesh.position.set(x, 0.6, z); // Elevated above tile
+    mesh.position.set(x, height, z); // Elevated above tile
     mesh.castShadow = true;
     mesh.receiveShadow = true;
 
