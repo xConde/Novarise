@@ -158,16 +158,17 @@ export class GameBoardService {
     return mesh;
   }
 
-  // Create grid lines for better visibility - aligned with tiles
+  // Create grid lines for better visibility - aligned perfectly between tiles
   createGridLines(): THREE.Group {
     const gridGroup = new THREE.Group();
 
-    // Create vertical lines (along Z axis)
+    // Create vertical lines (along Z axis) - between tiles
     for (let i = 0; i <= this.gameBoardWidth; i++) {
       const geometry = new THREE.BufferGeometry();
-      const x = (i - this.gameBoardWidth / 2) * this.tileSize;
-      const z1 = -this.gameBoardHeight / 2 * this.tileSize;
-      const z2 = this.gameBoardHeight / 2 * this.tileSize;
+      // Offset by 0.5 to place lines BETWEEN tiles instead of through centers
+      const x = (i - this.gameBoardWidth / 2 - 0.5) * this.tileSize;
+      const z1 = (-this.gameBoardHeight / 2 - 0.5) * this.tileSize;
+      const z2 = (this.gameBoardHeight / 2 + 0.5) * this.tileSize;
 
       const vertices = new Float32Array([
         x, 0.01, z1,
@@ -180,12 +181,13 @@ export class GameBoardService {
       gridGroup.add(line);
     }
 
-    // Create horizontal lines (along X axis)
+    // Create horizontal lines (along X axis) - between tiles
     for (let i = 0; i <= this.gameBoardHeight; i++) {
       const geometry = new THREE.BufferGeometry();
-      const z = (i - this.gameBoardHeight / 2) * this.tileSize;
-      const x1 = -this.gameBoardWidth / 2 * this.tileSize;
-      const x2 = this.gameBoardWidth / 2 * this.tileSize;
+      // Offset by 0.5 to place lines BETWEEN tiles instead of through centers
+      const z = (i - this.gameBoardHeight / 2 - 0.5) * this.tileSize;
+      const x1 = (-this.gameBoardWidth / 2 - 0.5) * this.tileSize;
+      const x2 = (this.gameBoardWidth / 2 + 0.5) * this.tileSize;
 
       const vertices = new Float32Array([
         x1, 0.01, z,
