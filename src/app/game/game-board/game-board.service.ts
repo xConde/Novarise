@@ -8,16 +8,19 @@ export class GameBoardService {
   private readonly gameBoardWidth = 25;
   private readonly gameBoardHeight = 20;
   private readonly spawnerSize = 2;
+  private readonly tileSize = 1;
+  private readonly tileHeight = 0.2;
 
   // Exit tile coordinates (center of board)
   private readonly exitTileCoordinates: number[][] = [
     [9, 11], [9, 12], [10, 11], [10, 12]
   ];
 
-  // Tile shape dimensions
-  private readonly baseTileSize = 0.5;
-  private readonly spawnerTileSize = 1;
-  private readonly exitTileSize = 1.5;
+  // Colors for different tile types
+  private readonly colorBase = 0x2a2a2a;
+  private readonly colorSpawner = 0x00ffff;
+  private readonly colorExit = 0xff00ff;
+  private readonly colorGrid = 0x444444;
 
   // State
   private gameBoard: GameBoardTile[][] = [];
@@ -132,52 +135,51 @@ export class GameBoardService {
     throw new Error('No exit tile found');
   }
 
-  generateMesh(blockType: BlockType, shape: THREE.Shape, x: number, y: number): THREE.Mesh {
-    const geometry = new THREE.ShapeGeometry(shape);
-    const material = new THREE.MeshBasicMaterial({ color: this.getMeshColor(blockType) });
+  // Create a visible tile mesh using BoxGeometry
+  createTileMesh(row: number, col: number, type: BlockType): THREE.Mesh {
+    const geometry = new THREE.BoxGeometry(this.tileSize * 0.95, this.tileHeight, this.tileSize * 0.95);
+    const color = this.getTileColor(type);
+    const material = new THREE.MeshLambertMaterial({
+      color: color,
+      emissive: type === BlockType.BASE ? 0x000000 : color,
+      emissiveIntensity: type === BlockType.BASE ? 0 : 0.3
+    });
+
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(y, 0, x);
+
+    // Position tiles in a grid - centered at origin
+    const x = (col - this.gameBoardWidth / 2) * this.tileSize;
+    const z = (row - this.gameBoardHeight / 2) * this.tileSize;
+
+    mesh.position.set(x, this.tileHeight / 2, z);
+    mesh.receiveShadow = true;
+    mesh.castShadow = true;
+
     return mesh;
   }
 
-  getMeshColor(blockType: BlockType): number {
-    switch (blockType) {
-      case BlockType.BASE:
-        return 0xCCCCCC;
-      case BlockType.SPAWNER:
-        return 0x00FFFF;
-      case BlockType.EXIT:
-        return 0xFF00FF;
-      default:
-        throw new Error('Invalid block type');
-    }
+  // Create grid lines for better visibility
+  createGridLines(): THREE.LineSegments {
+    const gridHelper = new THREE.GridHelper(
+      Math.max(this.gameBoardWidth, this.gameBoardHeight) * this.tileSize,
+      Math.max(this.gameBoardWidth, this.gameBoardHeight),
+      this.colorGrid,
+      this.colorGrid
+    );
+    gridHelper.position.y = 0;
+    return gridHelper as unknown as THREE.LineSegments;
   }
 
-  getMeshShape(blockType: BlockType): THREE.Shape {
-    switch (blockType) {
+  private getTileColor(type: BlockType): number {
+    switch (type) {
       case BlockType.BASE:
-        return new THREE.Shape([
-          new THREE.Vector2(-this.baseTileSize, -this.baseTileSize),
-          new THREE.Vector2(this.baseTileSize, -this.baseTileSize),
-          new THREE.Vector2(this.baseTileSize, this.baseTileSize),
-          new THREE.Vector2(-this.baseTileSize, this.baseTileSize)
-        ]);
+        return this.colorBase;
       case BlockType.SPAWNER:
-        return new THREE.Shape([
-          new THREE.Vector2(-this.spawnerTileSize, -this.spawnerTileSize),
-          new THREE.Vector2(this.spawnerTileSize, -this.spawnerTileSize),
-          new THREE.Vector2(this.spawnerTileSize, this.spawnerTileSize),
-          new THREE.Vector2(-this.spawnerTileSize, this.spawnerTileSize)
-        ]);
+        return this.colorSpawner;
       case BlockType.EXIT:
-        return new THREE.Shape([
-          new THREE.Vector2(-this.exitTileSize, -this.exitTileSize),
-          new THREE.Vector2(this.exitTileSize, -this.exitTileSize),
-          new THREE.Vector2(this.exitTileSize, this.exitTileSize),
-          new THREE.Vector2(-this.exitTileSize, this.exitTileSize)
-        ]);
+        return this.colorExit;
       default:
-        throw new Error('Invalid block type');
+        return this.colorBase;
     }
   }
 
@@ -193,4 +195,15 @@ export class GameBoardService {
     return this.gameBoard;
   }
 
+  getBoardWidth(): number {
+    return this.gameBoardWidth;
+  }
+
+  getBoardHeight(): number {
+    return this.gameBoardHeight;
+  }
+
+  getTileSize(): number {
+    return this.tileSize;
+  }
 }

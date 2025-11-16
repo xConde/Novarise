@@ -2,7 +2,6 @@ import { AfterViewInit, Component, ElementRef, OnInit, ViewChild } from '@angula
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GameBoardService } from './game-board.service';
-import { BlockType } from './models/game-board-tile';
 
 @Component({
   selector: 'app-game-board',
@@ -12,55 +11,48 @@ import { BlockType } from './models/game-board-tile';
 export class GameBoardComponent implements OnInit, AfterViewInit {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
 
-  // Camera configuration constants
-  private readonly cameraDistance = 50;
-  private readonly cameraFov = 75;
+  // Camera configuration constants - Top-down view
+  private readonly cameraDistance = 35;
+  private readonly cameraFov = 45;
   private readonly cameraNear = 0.1;
   private readonly cameraFar = 1000;
-  private readonly cameraPositionY = 30;
-  private readonly cameraPositionZ = 3;
-  private readonly maxPolarAngle = Math.PI / 2;
 
   // Lighting configuration constants
-  private readonly ambientLightIntensity = 1.0;
   private readonly ambientLightColor = 0xffffff;
-  private readonly directionalLightIntensity = 0.5;
+  private readonly ambientLightIntensity = 0.6;
   private readonly directionalLightColor = 0xffffff;
+  private readonly directionalLightIntensity = 0.8;
 
   // Control configuration constants
   private readonly controlsDampingFactor = 0.05;
+  private readonly minPolarAngle = 0;
+  private readonly maxPolarAngle = Math.PI / 2.5; // Limit to mostly top-down
 
   // Scene objects
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
-  private light!: THREE.AmbientLight;
-  private boardGroup!: THREE.Group;
-  private spawnerGroup!: THREE.Group;
-  private exitGroup!: THREE.Group;
-  private spawnerTiles: number[][] = [];
-  private exitTiles: number[][] = [];
+  private controls!: OrbitControls;
 
   constructor(private gameBoardService: GameBoardService) { }
 
   ngOnInit(): void {
     this.initializeScene();
     this.initializeCamera();
-    this.initializeLight();
-    this.addLights();
+    this.initializeLights();
     this.renderGameBoard();
-    this.renderSpawners();
-    this.renderExits();
+    this.addGridLines();
   }
 
   ngAfterViewInit(): void {
     this.initializeRenderer();
-    this.addCameraControls();
+    this.initializeControls();
     this.animate();
   }
 
   private initializeScene(): void {
     this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x0a0a0a);
   }
 
   private initializeCamera(): void {
@@ -71,17 +63,25 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
       this.cameraNear,
       this.cameraFar
     );
-    this.camera.position.set(0, this.cameraPositionY, this.cameraPositionZ);
-    this.camera.lookAt(this.scene.position);
+
+    // Position camera above the board looking down
+    this.camera.position.set(0, this.cameraDistance, this.cameraDistance * 0.5);
+    this.camera.lookAt(0, 0, 0);
   }
 
   private initializeRenderer(): void {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false
+    });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
     this.canvasContainer.nativeElement.appendChild(this.renderer.domElement);
+
+    // Handle window resize
     window.addEventListener('resize', () => {
       const width = window.innerWidth;
       const height = window.innerHeight;
@@ -91,92 +91,72 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
     });
   }
 
-  private initializeLight(): void {
-    this.light = new THREE.AmbientLight(
+  private initializeLights(): void {
+    // Ambient light for overall illumination
+    const ambientLight = new THREE.AmbientLight(
       this.ambientLightColor,
       this.ambientLightIntensity
     );
-    this.scene.add(this.light);
-  }
-
-  private renderGameBoard(): void {
-    const boardTiles = this.gameBoardService.getGameBoard();
-    this.boardGroup = new THREE.Group();
-    boardTiles.forEach(row => {
-      row.forEach(tile => {
-        const { type } = tile;
-        const shape = this.gameBoardService.getMeshShape(type);
-        const mesh = this.gameBoardService.generateMesh(type, shape, tile.x, tile.y);
-        mesh.receiveShadow = true;
-        this.boardGroup.add(mesh);
-      });
-    });
-    this.scene.add(this.boardGroup);
-  }
-
-  private renderSpawners(): void {
-    this.spawnerTiles = this.gameBoardService.getSpawnerTiles();
-    this.spawnerGroup = new THREE.Group();
-    this.spawnerTiles.forEach(coords => {
-      const mesh = this.gameBoardService.generateMesh(BlockType.SPAWNER, this.gameBoardService.getMeshShape(BlockType.SPAWNER), coords[0], coords[1]);
-      mesh.receiveShadow = true;
-      this.spawnerGroup.add(mesh);
-    });
-    this.scene.add(this.spawnerGroup);
-  }
-
-  private renderExits(): void {
-    const exitTiles = this.gameBoardService.getExitTiles();
-
-    const geometry = new THREE.PlaneGeometry(1, 1, 1);
-    const material = new THREE.MeshBasicMaterial({ color: 0x00FFFF });
-    const mesh = new THREE.Mesh(geometry, material);
-
-    exitTiles.forEach((tile) => {
-      const [x, y] = tile;
-      const exitMesh = mesh.clone();
-      exitMesh.position.set(y, 0.5, x);
-      exitMesh.rotateX(-Math.PI / 2);
-      this.scene.add(exitMesh);
-    });
-  }
-
-  animate() {
-    this.renderer.render(this.scene, this.camera);
-    requestAnimationFrame(() => {
-      this.animate();
-    });
-  }
-
-  onWindowResize() {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-  }
-
-  addLights() {
-    const ambientLight = new THREE.AmbientLight(
-      this.ambientLightColor,
-      this.ambientLightIntensity / 2
-    );
     this.scene.add(ambientLight);
 
+    // Directional light for shadows and definition
     const directionalLight = new THREE.DirectionalLight(
       this.directionalLightColor,
       this.directionalLightIntensity
     );
-    directionalLight.position.set(1, 1, 1);
+    directionalLight.position.set(10, 20, 10);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.camera.left = -20;
+    directionalLight.shadow.camera.right = 20;
+    directionalLight.shadow.camera.top = 20;
+    directionalLight.shadow.camera.bottom = -20;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
     this.scene.add(directionalLight);
+
+    // Additional fill light from opposite side
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    fillLight.position.set(-10, 10, -10);
+    this.scene.add(fillLight);
   }
 
-  addCameraControls() {
-    const controls = new OrbitControls(this.camera, this.renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = this.controlsDampingFactor;
-    controls.screenSpacePanning = false;
-    controls.minDistance = this.cameraDistance / 2;
-    controls.maxDistance = this.cameraDistance * 2;
-    controls.maxPolarAngle = this.maxPolarAngle;
-    controls.update();
+  private renderGameBoard(): void {
+    const boardTiles = this.gameBoardService.getGameBoard();
+
+    boardTiles.forEach((row, rowIndex) => {
+      row.forEach((tile, colIndex) => {
+        const mesh = this.gameBoardService.createTileMesh(rowIndex, colIndex, tile.type);
+        this.scene.add(mesh);
+      });
+    });
+  }
+
+  private addGridLines(): void {
+    const gridLines = this.gameBoardService.createGridLines();
+    this.scene.add(gridLines);
+  }
+
+  private initializeControls(): void {
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = this.controlsDampingFactor;
+    this.controls.screenSpacePanning = false;
+    this.controls.minDistance = this.cameraDistance / 2;
+    this.controls.maxDistance = this.cameraDistance * 3;
+    this.controls.minPolarAngle = this.minPolarAngle;
+    this.controls.maxPolarAngle = this.maxPolarAngle;
+    this.controls.target.set(0, 0, 0);
+    this.controls.update();
+  }
+
+  private animate = (): void => {
+    requestAnimationFrame(this.animate);
+
+    // Update controls if they exist
+    if (this.controls) {
+      this.controls.update();
+    }
+
+    this.renderer.render(this.scene, this.camera);
   }
 }
