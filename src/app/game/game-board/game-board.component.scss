@@ -1,12 +1,12 @@
 .board-container {
   display: flex;
-  border: 1px solid #444;
+  border: var(--border-width-thin) solid var(--game-primary);
   height: 100%;
   width: 100%;
 
   @media screen and (max-width: 1023px) {
     border: 0;
-    border-top: 1px solid #444;
+    border-top: var(--border-width-thin) solid var(--game-primary);
   }
 
   .canvas-container {

@@ -4,10 +4,23 @@ import { BlockType, GameBoardTile, Spawner, SpawnerType } from './models/game-bo
 
 @Injectable()
 export class GameBoardService {
+  // Board configuration constants
   private readonly gameBoardWidth = 25;
   private readonly gameBoardHeight = 20;
-  private gameBoard: GameBoardTile[][] = [];
+  private readonly spawnerSize = 2;
 
+  // Exit tile coordinates (center of board)
+  private readonly exitTileCoordinates: number[][] = [
+    [9, 11], [9, 12], [10, 11], [10, 12]
+  ];
+
+  // Tile shape dimensions
+  private readonly baseTileSize = 0.5;
+  private readonly spawnerTileSize = 1;
+  private readonly exitTileSize = 1.5;
+
+  // State
+  private gameBoard: GameBoardTile[][] = [];
   private spawnerChoices: SpawnerType[] = [
     SpawnerType.TOP_LEFT,
     SpawnerType.TOP_RIGHT,
@@ -15,10 +28,7 @@ export class GameBoardService {
     SpawnerType.BOTTOM_RIGHT
   ];
   private spawnerTiles: number[][] = [];
-
   private exitTiles: number[][] = [];
-
-  private readonly spawnerSize = 2;
   private readonly spawnerPlacements: Spawner[] = [];
 
   constructor() {
@@ -37,13 +47,10 @@ export class GameBoardService {
   }
 
   generateExitTiles(): void {
-    this.exitTiles = [ [9, 11], [9, 12], [10, 11], [10, 12] ];
+    this.exitTiles = this.exitTileCoordinates;
 
     for (const [exitX, exitY] of this.exitTiles) {
       this.gameBoard[exitX][exitY] = GameBoardTile.createExit(exitX, exitY);
-      this.gameBoard[exitX][exitY+1] = GameBoardTile.createExit(exitX, exitY+1);
-      this.gameBoard[exitX+1][exitY] = GameBoardTile.createExit(exitX+1, exitY);
-      this.gameBoard[exitX+1][exitY+1] = GameBoardTile.createExit(exitX+1, exitY+1);
     }
   }
 
@@ -149,28 +156,29 @@ export class GameBoardService {
   getMeshShape(blockType: BlockType): THREE.Shape {
     switch (blockType) {
       case BlockType.BASE:
-        return new THREE.Shape([new THREE.Vector2(-0.5, -0.5), new THREE.Vector2(0.5, -0.5), new THREE.Vector2(0.5, 0.5), new THREE.Vector2(-0.5, 0.5)]);
+        return new THREE.Shape([
+          new THREE.Vector2(-this.baseTileSize, -this.baseTileSize),
+          new THREE.Vector2(this.baseTileSize, -this.baseTileSize),
+          new THREE.Vector2(this.baseTileSize, this.baseTileSize),
+          new THREE.Vector2(-this.baseTileSize, this.baseTileSize)
+        ]);
       case BlockType.SPAWNER:
-        return new THREE.Shape([new THREE.Vector2(-1, -1), new THREE.Vector2(1, -1), new THREE.Vector2(1, 1), new THREE.Vector2(-1, 1)]);
+        return new THREE.Shape([
+          new THREE.Vector2(-this.spawnerTileSize, -this.spawnerTileSize),
+          new THREE.Vector2(this.spawnerTileSize, -this.spawnerTileSize),
+          new THREE.Vector2(this.spawnerTileSize, this.spawnerTileSize),
+          new THREE.Vector2(-this.spawnerTileSize, this.spawnerTileSize)
+        ]);
       case BlockType.EXIT:
-        return new THREE.Shape([new THREE.Vector2(-1.5, -1.5), new THREE.Vector2(1.5, -1.5), new THREE.Vector2(1.5, 1.5), new THREE.Vector2(-1.5, 1.5)]);
+        return new THREE.Shape([
+          new THREE.Vector2(-this.exitTileSize, -this.exitTileSize),
+          new THREE.Vector2(this.exitTileSize, -this.exitTileSize),
+          new THREE.Vector2(this.exitTileSize, this.exitTileSize),
+          new THREE.Vector2(-this.exitTileSize, this.exitTileSize)
+        ]);
       default:
         throw new Error('Invalid block type');
     }
-  }
-
-  addGameBoardToScene(scene: THREE.Scene): void {
-    const group = new THREE.Group();
-    this.gameBoard.forEach((row, i) => {
-      row.forEach((tile, j) => {
-        const { type } = tile;
-        const shape = this.getMeshShape(type);
-        const mesh = this.generateMesh(type, shape, i, j);
-        group.add(mesh);
-
-      });
-    });
-    scene.add(group);
   }
 
   getSpawnerTiles(): number[][] {

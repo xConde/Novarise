@@ -11,6 +11,26 @@ import { BlockType } from './models/game-board-tile';
 })
 export class GameBoardComponent implements OnInit, AfterViewInit {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
+
+  // Camera configuration constants
+  private readonly cameraDistance = 50;
+  private readonly cameraFov = 75;
+  private readonly cameraNear = 0.1;
+  private readonly cameraFar = 1000;
+  private readonly cameraPositionY = 30;
+  private readonly cameraPositionZ = 3;
+  private readonly maxPolarAngle = Math.PI / 2;
+
+  // Lighting configuration constants
+  private readonly ambientLightIntensity = 1.0;
+  private readonly ambientLightColor = 0xffffff;
+  private readonly directionalLightIntensity = 0.5;
+  private readonly directionalLightColor = 0xffffff;
+
+  // Control configuration constants
+  private readonly controlsDampingFactor = 0.05;
+
+  // Scene objects
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
@@ -20,14 +40,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
   private exitGroup!: THREE.Group;
   private spawnerTiles: number[][] = [];
   private exitTiles: number[][] = [];
-  private cameraDistance = 50;
 
   constructor(private gameBoardService: GameBoardService) { }
 
   ngOnInit(): void {
     this.initializeScene();
     this.initializeCamera();
-    // this.initializeRenderer();
     this.initializeLight();
     this.addLights();
     this.renderGameBoard();
@@ -47,11 +65,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
 
   private initializeCamera(): void {
     const aspectRatio = window.innerWidth / window.innerHeight;
-    console.log(aspectRatio, window.innerHeight, window.innerWidth)
-    this.camera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
-    this.camera.position.set(0, 30, 3);
+    this.camera = new THREE.PerspectiveCamera(
+      this.cameraFov,
+      aspectRatio,
+      this.cameraNear,
+      this.cameraFar
+    );
+    this.camera.position.set(0, this.cameraPositionY, this.cameraPositionZ);
     this.camera.lookAt(this.scene.position);
-
   }
 
   private initializeRenderer(): void {
@@ -71,14 +92,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
   }
 
   private initializeLight(): void {
-    this.light = new THREE.AmbientLight(0xffffff, 1.0);
+    this.light = new THREE.AmbientLight(
+      this.ambientLightColor,
+      this.ambientLightIntensity
+    );
     this.scene.add(this.light);
   }
 
   private renderGameBoard(): void {
     const boardTiles = this.gameBoardService.getGameBoard();
     this.boardGroup = new THREE.Group();
-    boardTiles.forEach((row: any[]) => {
+    boardTiles.forEach(row => {
       row.forEach(tile => {
         const { type } = tile;
         const shape = this.gameBoardService.getMeshShape(type);
@@ -88,7 +112,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
       });
     });
     this.scene.add(this.boardGroup);
-    console.log(this.scene.children)
   }
 
   private renderSpawners(): void {
@@ -132,10 +155,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
   }
 
   addLights() {
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    const ambientLight = new THREE.AmbientLight(
+      this.ambientLightColor,
+      this.ambientLightIntensity / 2
+    );
     this.scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    const directionalLight = new THREE.DirectionalLight(
+      this.directionalLightColor,
+      this.directionalLightIntensity
+    );
     directionalLight.position.set(1, 1, 1);
     this.scene.add(directionalLight);
   }
@@ -143,27 +172,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
   addCameraControls() {
     const controls = new OrbitControls(this.camera, this.renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
+    controls.dampingFactor = this.controlsDampingFactor;
     controls.screenSpacePanning = false;
     controls.minDistance = this.cameraDistance / 2;
     controls.maxDistance = this.cameraDistance * 2;
-    controls.maxPolarAngle = Math.PI / 2;
+    controls.maxPolarAngle = this.maxPolarAngle;
     controls.update();
-  }
-
-  createTowerMesh(position: THREE.Vector3): THREE.Mesh {
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshPhongMaterial({ color: 0xff0000 });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.copy(position);
-    return mesh;
-  }
-
-  createEnemyMesh(position: THREE.Vector3): THREE.Mesh {
-    const geometry = new THREE.SphereGeometry(0.5, 32, 32);
-    const material = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.copy(position);
-    return mesh;
   }
 }
