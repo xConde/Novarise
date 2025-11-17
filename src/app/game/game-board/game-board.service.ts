@@ -100,69 +100,125 @@ export class GameBoardService {
     const actualTerrainType = terrainType ?? tile?.terrainType ?? TerrainType.BEDROCK;
     const actualTerrainHeight = terrainHeight ?? tile?.terrainHeight ?? TerrainHeight.BASE;
 
-    // Get terrain properties (with theme overrides)
-    const terrainProps = this.themeService.getThemedTerrainProperties(actualTerrainType);
+    // CRITICAL FIX: More pronounced height variations
+    const baseHeight = this.tileHeight;
+    let heightOffset = 0;
+    let actualHeight = baseHeight;
 
-    const geometry = new THREE.BoxGeometry(this.tileSize * 0.95, this.tileHeight, this.tileSize * 0.95);
-
-    // Determine color based on BlockType (special tiles) or terrain type
-    let color: number;
-    let emissiveColor: number;
-    let emissiveIntensity: number;
-    let roughness: number;
-    let metalness: number;
-
-    if (type === BlockType.SPAWNER) {
-      color = this.colorSpawner;
-      emissiveColor = this.colorSpawner;
-      emissiveIntensity = 0.2;
-      roughness = 0.7;
-      metalness = 0.1;
-    } else if (type === BlockType.EXIT) {
-      color = this.colorExit;
-      emissiveColor = this.colorExit;
-      emissiveIntensity = 0.2;
-      roughness = 0.7;
-      metalness = 0.1;
-    } else {
-      // Use terrain properties for base tiles
-      color = terrainProps.color;
-      emissiveColor = terrainProps.emissiveColor;
-      emissiveIntensity = terrainProps.emissiveIntensity;
-      roughness = terrainProps.roughness;
-      metalness = terrainProps.metalness;
+    if (actualTerrainHeight === TerrainHeight.ELEVATED) {
+      heightOffset = 1.0;  // INCREASED from 0.5 for visibility
+      actualHeight = baseHeight * 2.0;  // TALLER blocks
+    } else if (actualTerrainHeight === TerrainHeight.SUNKEN) {
+      heightOffset = -0.5;  // More visible depression
+      actualHeight = baseHeight * 0.5;  // SHORTER blocks
     }
 
-    // Organic cave rock material with terrain properties
-    const material = new THREE.MeshStandardMaterial({
-      color: color,
-      emissive: emissiveColor,
-      emissiveIntensity: emissiveIntensity,
-      metalness: metalness,
-      roughness: roughness,
-      envMapIntensity: 0.3
-    });
+    const geometry = new THREE.BoxGeometry(
+      this.tileSize * 0.95,
+      actualHeight,  // Variable height based on terrain
+      this.tileSize * 0.95
+    );
+
+    // CRITICAL FIX: Better material properties for visual distinction
+    let material: THREE.MeshStandardMaterial;
+
+    if (actualTerrainType === TerrainType.MITHRIL_CRYSTAL && type === BlockType.BASE) {
+      // Bright crystalline purple with strong glow
+      material = new THREE.MeshStandardMaterial({
+        color: 0x7050cc,  // Brighter purple
+        emissive: 0x9060ff,  // Strong purple glow
+        emissiveIntensity: 0.7,  // INCREASED for visibility
+        metalness: 0.9,  // Very metallic
+        roughness: 0.1,  // Very smooth/shiny
+      });
+    } else if (actualTerrainType === TerrainType.LUMINOUS_MOSS && type === BlockType.BASE) {
+      // Vibrant green moss with bioluminescence
+      material = new THREE.MeshStandardMaterial({
+        color: 0x50cc50,  // Brighter green
+        emissive: 0x60ff60,  // Green glow
+        emissiveIntensity: 0.5,  // Medium glow
+        metalness: 0.0,  // Organic, non-metallic
+        roughness: 0.7,  // Rough texture
+      });
+    } else if (actualTerrainType === TerrainType.ABYSS && type === BlockType.BASE) {
+      // Deep black void
+      material = new THREE.MeshStandardMaterial({
+        color: 0x050505,  // Almost pure black
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        metalness: 0.0,
+        roughness: 1.0,
+        opacity: 0.7,  // See-through to show depth
+        transparent: true
+      });
+    } else if (type === BlockType.SPAWNER) {
+      // Bright cyan spawner
+      material = new THREE.MeshStandardMaterial({
+        color: 0x00cccc,
+        emissive: 0x00ffff,
+        emissiveIntensity: 0.8,  // Strong glow
+        metalness: 0.4,
+        roughness: 0.3
+      });
+    } else if (type === BlockType.EXIT) {
+      // Bright magenta exit
+      material = new THREE.MeshStandardMaterial({
+        color: 0xcc00cc,
+        emissive: 0xff00ff,
+        emissiveIntensity: 0.8,  // Strong glow
+        metalness: 0.4,
+        roughness: 0.3
+      });
+    } else {
+      // Bedrock with height-based color variation
+      const baseColor = heightOffset > 0 ? 0x606060 :  // Light gray for elevated
+                       heightOffset < 0 ? 0x202020 :  // Dark gray for sunken
+                       0x404040;  // Medium gray for base
+      material = new THREE.MeshStandardMaterial({
+        color: baseColor,
+        emissive: 0x101010,
+        emissiveIntensity: 0.05,
+        metalness: 0.2,
+        roughness: 0.85
+      });
+    }
 
     const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
 
-    // Position tiles in a grid - centered at origin
+    // CRITICAL FIX: Apply height offset to Y position
     const x = (col - this.gameBoardWidth / 2) * this.tileSize;
+    const y = heightOffset;  // Direct height offset (not baseY + heightOffset)
     const z = (row - this.gameBoardHeight / 2) * this.tileSize;
 
-    // Calculate Y position based on terrain height
-    const baseY = this.tileHeight / 2;
-    const heightOffset = actualTerrainHeight;
-    const yPosition = baseY + heightOffset;
+    mesh.position.set(x, y, z);
 
-    mesh.position.set(x, yPosition, z);
-    mesh.receiveShadow = true;
-    mesh.castShadow = true;
+    // Add outer glow for crystal tiles
+    if (actualTerrainType === TerrainType.MITHRIL_CRYSTAL && type === BlockType.BASE) {
+      const glowGeometry = new THREE.BoxGeometry(
+        this.tileSize,
+        actualHeight * 1.2,
+        this.tileSize
+      );
+      const glowMaterial = new THREE.MeshBasicMaterial({
+        color: 0xa070ff,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.BackSide
+      });
+      const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
+      mesh.add(glowMesh);
+    }
 
     // Store terrain data as user data for reference
     mesh.userData = {
       terrainType: actualTerrainType,
       terrainHeight: actualTerrainHeight,
-      blockType: type
+      blockType: type,
+      row,
+      col,
+      tile
     };
 
     return mesh;

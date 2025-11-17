@@ -86,6 +86,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.initializeParticles();
     this.initializeTerrain();
     this.renderGameBoard();
+    this.addTerrainLights();  // Add dynamic point lights for terrain
     this.addGridLines();
     this.subscribeToTerrainChanges();
     this.subscribeToThemeChanges();
@@ -110,14 +111,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private initializeCamera(): void {
     const aspectRatio = window.innerWidth / window.innerHeight;
     this.camera = new THREE.PerspectiveCamera(
-      this.cameraFov,
+      60,  // Wider FOV for better perspective (was 45)
       aspectRatio,
       this.cameraNear,
       this.cameraFar
     );
 
-    // Position camera above the board looking down
-    this.camera.position.set(0, this.cameraDistance, this.cameraDistance * 0.5);
+    // CRITICAL: Better 3D perspective angle - higher and further back
+    this.camera.position.set(20, 25, 30);
     this.camera.lookAt(0, 0, 0);
   }
 
@@ -128,8 +129,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+
+    // Enable high-quality shadows
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    // Enhanced tone mapping for better lighting
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.2;
 
@@ -201,36 +206,34 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private initializeLights(): void {
-    // Dim ambient light - cave atmosphere
-    const ambientLight = new THREE.AmbientLight(0x3a2a4a, 0.3);
+    // 1. Ambient light for base visibility
+    const ambientLight = new THREE.AmbientLight(0x505060, 0.5);  // Slightly blue tint, brighter
     this.scene.add(ambientLight);
 
-    // Main light from above - like light filtering through cave opening
-    const directionalLight = new THREE.DirectionalLight(0x9a8ab0, 0.6);
-    directionalLight.position.set(10, 20, 10);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.camera.left = -20;
-    directionalLight.shadow.camera.right = 20;
-    directionalLight.shadow.camera.top = 20;
-    directionalLight.shadow.camera.bottom = -20;
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
-    directionalLight.shadow.bias = -0.0001;
-    this.scene.add(directionalLight);
+    // 2. Main directional light with high-quality shadows
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);  // Brighter, white light
+    mainLight.position.set(15, 30, 15);
+    mainLight.castShadow = true;
+    mainLight.shadow.mapSize.width = 4096;  // High quality shadows
+    mainLight.shadow.mapSize.height = 4096;
+    mainLight.shadow.camera.near = 0.5;
+    mainLight.shadow.camera.far = 60;
+    mainLight.shadow.camera.left = -40;
+    mainLight.shadow.camera.right = 40;
+    mainLight.shadow.camera.top = 40;
+    mainLight.shadow.camera.bottom = -40;
+    mainLight.shadow.bias = -0.001;  // Reduce shadow acne
+    this.scene.add(mainLight);
 
-    // Mysterious glow from below - bioluminescent cave floor effect
-    const underLight = new THREE.PointLight(0x4a3a6a, 0.5, 50);
-    underLight.position.set(0, -5, 0);
-    this.scene.add(underLight);
+    // 3. Fill light to soften shadows
+    const fillLight = new THREE.DirectionalLight(0x8090ff, 0.4);  // Blue tint
+    fillLight.position.set(-10, 15, -10);
+    this.scene.add(fillLight);
 
-    // Accent lights for cave crystals effect
-    const accent1 = new THREE.PointLight(0x6a4a8a, 0.4, 30);
-    accent1.position.set(-15, 5, -10);
-    this.scene.add(accent1);
-
-    const accent2 = new THREE.PointLight(0x4a6a8a, 0.4, 30);
-    accent2.position.set(15, 5, 10);
-    this.scene.add(accent2);
+    // 4. Rim light for edge definition
+    const rimLight = new THREE.DirectionalLight(0xffa040, 0.3);  // Warm orange
+    rimLight.position.set(0, 10, -25);
+    this.scene.add(rimLight);
   }
 
   private renderGameBoard(): void {
@@ -247,8 +250,57 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private addGridLines(): void {
-    const gridLines = this.gameBoardService.createGridLines();
-    this.scene.add(gridLines);
+    const width = this.gameBoardService.getBoardWidth();
+    const height = this.gameBoardService.getBoardHeight();
+    const tileSize = this.gameBoardService.getTileSize();
+
+    // Create a more visible grid
+    const gridHelper = new THREE.GridHelper(
+      Math.max(width, height) * tileSize,
+      Math.max(width, height),
+      0x606060,  // Lighter center lines
+      0x404040   // Lighter grid lines
+    );
+    gridHelper.position.y = 0.02;  // Slightly above ground to avoid z-fighting
+    this.scene.add(gridHelper);
+
+    // Add coordinate axes for debugging (optional - remove if not needed)
+    const axesHelper = new THREE.AxesHelper(10);
+    axesHelper.position.y = 0.1;
+    this.scene.add(axesHelper);
+  }
+
+  /**
+   * Add dynamic point lights for glowing terrain types
+   */
+  private addTerrainLights(): void {
+    const tiles = this.gameBoardService.getGameBoard();
+    const tileSize = this.gameBoardService.getTileSize();
+
+    // Sample every other row/col to avoid too many lights
+    for (let row = 0; row < tiles.length; row += 2) {
+      for (let col = 0; col < tiles[row].length; col += 2) {
+        const tile = tiles[row][col];
+
+        if (tile.terrainType === TerrainType.MITHRIL_CRYSTAL) {
+          // Purple point light for crystals
+          const light = new THREE.PointLight(0x9060ff, 0.8, 5);
+          const x = (col - tiles[0].length / 2) * tileSize;
+          const z = (row - tiles.length / 2) * tileSize;
+          const y = tile.terrainHeight === TerrainHeight.ELEVATED ? 2 : 1;
+          light.position.set(x, y, z);
+          this.scene.add(light);
+        } else if (tile.terrainType === TerrainType.LUMINOUS_MOSS) {
+          // Green point light for moss
+          const light = new THREE.PointLight(0x60ff60, 0.5, 4);
+          const x = (col - tiles[0].length / 2) * tileSize;
+          const z = (row - tiles.length / 2) * tileSize;
+          const y = tile.terrainHeight === TerrainHeight.SUNKEN ? 0.5 : 1;
+          light.position.set(x, y, z);
+          this.scene.add(light);
+        }
+      }
+    }
   }
 
   private addSkybox(): void {
@@ -357,12 +409,18 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private initializeControls(): void {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
-    this.controls.dampingFactor = this.controlsDampingFactor;
+    this.controls.dampingFactor = 0.05;
     this.controls.screenSpacePanning = false;
-    this.controls.minDistance = this.cameraDistance / 2;
-    this.controls.maxDistance = this.cameraDistance * 3;
-    this.controls.minPolarAngle = this.minPolarAngle;
-    this.controls.maxPolarAngle = this.maxPolarAngle;
+
+    // Better distance range for new camera position
+    this.controls.minDistance = 15;
+    this.controls.maxDistance = 60;
+
+    // Better angle range for 3D perspective
+    this.controls.minPolarAngle = Math.PI / 8;  // 22.5 degrees min
+    this.controls.maxPolarAngle = Math.PI / 2.5;  // 72 degrees max
+
+    this.controls.rotateSpeed = 0.8;
     this.controls.target.set(0, 0, 0);
     this.controls.update();
   }
