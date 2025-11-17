@@ -160,7 +160,8 @@ export class EnemyService {
   private findPath(start: { x: number, y: number }, end: { x: number, y: number }): GridNode[] {
     const cacheKey = `${start.x},${start.y}-${end.x},${end.y}`;
     if (this.pathCache.has(cacheKey)) {
-      return this.pathCache.get(cacheKey)!;
+      // Return a shallow copy to prevent cache corruption
+      return [...this.pathCache.get(cacheKey)!];
     }
 
     const openSet: GridNode[] = [];
