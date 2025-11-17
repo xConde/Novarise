@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { BlockType, GameBoardTile, Spawner, SpawnerType } from './models/game-board-tile';
+import { TerrainType, TerrainHeight, getTerrainProperties } from './models/terrain.model';
+import { ThemeService } from './services/theme.service';
 
 @Injectable()
 export class GameBoardService {
@@ -33,7 +35,7 @@ export class GameBoardService {
   private exitTiles: number[][] = [];
   private readonly spawnerPlacements: Spawner[] = [];
 
-  constructor() {
+  constructor(private themeService: ThemeService) {
     this.generateBaseBoard();
     this.generateExitTiles();
     this.generateSpawner();
@@ -91,18 +93,53 @@ export class GameBoardService {
     }
   }
 
-  // Create a visible tile mesh using BoxGeometry
-  createTileMesh(row: number, col: number, type: BlockType): THREE.Mesh {
-    const geometry = new THREE.BoxGeometry(this.tileSize * 0.95, this.tileHeight, this.tileSize * 0.95);
-    const color = this.getTileColor(type);
+  // Create a visible tile mesh using BoxGeometry with terrain support
+  createTileMesh(row: number, col: number, type: BlockType, terrainType?: TerrainType, terrainHeight?: TerrainHeight): THREE.Mesh {
+    // Get tile from board if available, or use provided terrain parameters
+    const tile = this.gameBoard[row]?.[col];
+    const actualTerrainType = terrainType ?? tile?.terrainType ?? TerrainType.BEDROCK;
+    const actualTerrainHeight = terrainHeight ?? tile?.terrainHeight ?? TerrainHeight.BASE;
 
-    // Organic cave rock material
+    // Get terrain properties (with theme overrides)
+    const terrainProps = this.themeService.getThemedTerrainProperties(actualTerrainType);
+
+    const geometry = new THREE.BoxGeometry(this.tileSize * 0.95, this.tileHeight, this.tileSize * 0.95);
+
+    // Determine color based on BlockType (special tiles) or terrain type
+    let color: number;
+    let emissiveColor: number;
+    let emissiveIntensity: number;
+    let roughness: number;
+    let metalness: number;
+
+    if (type === BlockType.SPAWNER) {
+      color = this.colorSpawner;
+      emissiveColor = this.colorSpawner;
+      emissiveIntensity = 0.2;
+      roughness = 0.7;
+      metalness = 0.1;
+    } else if (type === BlockType.EXIT) {
+      color = this.colorExit;
+      emissiveColor = this.colorExit;
+      emissiveIntensity = 0.2;
+      roughness = 0.7;
+      metalness = 0.1;
+    } else {
+      // Use terrain properties for base tiles
+      color = terrainProps.color;
+      emissiveColor = terrainProps.emissiveColor;
+      emissiveIntensity = terrainProps.emissiveIntensity;
+      roughness = terrainProps.roughness;
+      metalness = terrainProps.metalness;
+    }
+
+    // Organic cave rock material with terrain properties
     const material = new THREE.MeshStandardMaterial({
       color: color,
-      emissive: type === BlockType.BASE ? 0x1a1528 : color,
-      emissiveIntensity: type === BlockType.BASE ? 0.05 : 0.2,
-      metalness: 0.1,
-      roughness: type === BlockType.BASE ? 0.9 : 0.7,
+      emissive: emissiveColor,
+      emissiveIntensity: emissiveIntensity,
+      metalness: metalness,
+      roughness: roughness,
       envMapIntensity: 0.3
     });
 
@@ -112,9 +149,21 @@ export class GameBoardService {
     const x = (col - this.gameBoardWidth / 2) * this.tileSize;
     const z = (row - this.gameBoardHeight / 2) * this.tileSize;
 
-    mesh.position.set(x, this.tileHeight / 2, z);
+    // Calculate Y position based on terrain height
+    const baseY = this.tileHeight / 2;
+    const heightOffset = actualTerrainHeight;
+    const yPosition = baseY + heightOffset;
+
+    mesh.position.set(x, yPosition, z);
     mesh.receiveShadow = true;
     mesh.castShadow = true;
+
+    // Store terrain data as user data for reference
+    mesh.userData = {
+      terrainType: actualTerrainType,
+      terrainHeight: actualTerrainHeight,
+      blockType: type
+    };
 
     return mesh;
   }
@@ -201,6 +250,45 @@ export class GameBoardService {
     return this.tileSize;
   }
 
+  /**
+   * Apply terrain layout to the game board tiles.
+   * Updates terrain properties on existing tiles.
+   */
+  applyTerrainLayout(terrainLayout: { tiles: Array<Array<{ type: TerrainType, height: TerrainHeight }>> }): void {
+    for (let row = 0; row < this.gameBoardHeight; row++) {
+      for (let col = 0; col < this.gameBoardWidth; col++) {
+        if (terrainLayout.tiles[row] && terrainLayout.tiles[row][col]) {
+          const terrainData = terrainLayout.tiles[row][col];
+          const tile = this.gameBoard[row][col];
+
+          // Only apply terrain to BASE tiles (not spawner/exit)
+          if (tile.type === BlockType.BASE) {
+            tile.setTerrain(terrainData.type, terrainData.height);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Update terrain for a specific tile.
+   */
+  updateTileTerrain(row: number, col: number, terrainType: TerrainType, terrainHeight?: TerrainHeight): boolean {
+    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+      return false;
+    }
+
+    const tile = this.gameBoard[row][col];
+
+    // Only update terrain on BASE tiles
+    if (tile.type === BlockType.BASE) {
+      tile.setTerrain(terrainType, terrainHeight);
+      return true;
+    }
+
+    return false;
+  }
+
   // Tower placement
   canPlaceTower(row: number, col: number): boolean {
     if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
@@ -218,11 +306,19 @@ export class GameBoardService {
       return false;
     }
 
-    // Mark the tile as occupied with a tower
-    this.gameBoard[row][col] = {
-      ...this.gameBoard[row][col],
-      towerType: null // Tower mesh is tracked separately in component
-    };
+    // Mark the tile as occupied with a tower by creating a new tile instance
+    const currentTile = this.gameBoard[row][col];
+    this.gameBoard[row][col] = new GameBoardTile(
+      currentTile.x,
+      currentTile.y,
+      BlockType.TOWER,
+      false, // No longer traversable with tower placed
+      false, // No longer purchasable
+      null,
+      null, // Tower mesh is tracked separately in component
+      currentTile.terrainType,
+      currentTile.terrainHeight
+    );
 
     return true;
   }

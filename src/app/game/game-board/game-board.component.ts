@@ -5,9 +5,13 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
+import { Subscription } from 'rxjs';
 import { GameBoardService } from './game-board.service';
 import { EnemyService } from './services/enemy.service';
+import { TerrainService } from './services/terrain.service';
+import { ThemeService } from './services/theme.service';
 import { EnemyType } from './models/enemy.model';
+import { TerrainType, TerrainHeight } from './models/terrain.model';
 
 @Component({
   selector: 'app-game-board',
@@ -58,9 +62,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private lastTime = 0;
   private keyboardHandler: (event: KeyboardEvent) => void;
 
+  // Terrain management
+  private terrainLayoutSubscription?: Subscription;
+  private themeSubscription?: Subscription;
+  public terrainEditMode: 'none' | 'paint' | 'height' = 'none';
+  public selectedTerrainType: TerrainType = TerrainType.BEDROCK;
+
   constructor(
     private gameBoardService: GameBoardService,
-    private enemyService: EnemyService
+    private enemyService: EnemyService,
+    private terrainService: TerrainService,
+    private themeService: ThemeService
   ) {
     // Store bound handler for cleanup
     this.keyboardHandler = this.handleKeyboard.bind(this);
@@ -72,8 +84,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.initializeLights();
     this.addSkybox();
     this.initializeParticles();
+    this.initializeTerrain();
     this.renderGameBoard();
     this.addGridLines();
+    this.subscribeToTerrainChanges();
+    this.subscribeToThemeChanges();
   }
 
   ngAfterViewInit(): void {
@@ -411,10 +426,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const material = mesh.material as THREE.MeshStandardMaterial;
         material.emissiveIntensity = 0.8;
 
-        // Try to place a tower
-        if (this.gameBoardService.canPlaceTower(row, col)) {
-          if (this.gameBoardService.placeTower(row, col, this.selectedTowerType)) {
-            this.spawnTower(row, col, this.selectedTowerType);
+        // Check if in terrain edit mode
+        if (this.terrainEditMode !== 'none') {
+          this.handleTerrainEdit(row, col);
+        } else {
+          // Try to place a tower
+          if (this.gameBoardService.canPlaceTower(row, col)) {
+            if (this.gameBoardService.placeTower(row, col, this.selectedTowerType)) {
+              this.spawnTower(row, col, this.selectedTowerType);
+            }
           }
         }
       } else {
@@ -450,6 +470,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private handleKeyboard(event: KeyboardEvent): void {
     switch (event.key.toLowerCase()) {
+      // Enemy spawning
       case 'e':
         // Spawn basic enemy
         this.enemyService.spawnEnemy(EnemyType.BASIC, this.scene);
@@ -468,6 +489,57 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         break;
       case '5':
         this.enemyService.spawnEnemy(EnemyType.BOSS, this.scene);
+        break;
+
+      // Terrain editing controls
+      case 't':
+        // Toggle terrain paint mode
+        this.terrainEditMode = this.terrainEditMode === 'paint' ? 'none' : 'paint';
+        console.log(`Terrain paint mode: ${this.terrainEditMode}`);
+        break;
+      case 'h':
+        // Toggle height edit mode
+        this.terrainEditMode = this.terrainEditMode === 'height' ? 'none' : 'height';
+        console.log(`Height edit mode: ${this.terrainEditMode}`);
+        break;
+      case 'b':
+        // Select Bedrock terrain
+        this.selectedTerrainType = TerrainType.BEDROCK;
+        console.log('Selected terrain: Bedrock');
+        break;
+      case 'c':
+        // Select Crystal terrain
+        this.selectedTerrainType = TerrainType.MITHRIL_CRYSTAL;
+        console.log('Selected terrain: Mithril Crystal');
+        break;
+      case 'm':
+        // Select Moss terrain
+        this.selectedTerrainType = TerrainType.LUMINOUS_MOSS;
+        console.log('Selected terrain: Luminous Moss');
+        break;
+      case 'a':
+        // Select Abyss terrain
+        this.selectedTerrainType = TerrainType.ABYSS;
+        console.log('Selected terrain: Abyss');
+        break;
+      case 's':
+        // Save current terrain layout
+        if (event.ctrlKey || event.metaKey) {
+          const result = this.terrainService.saveLayout();
+          console.log(result.success ? result.message : result.error);
+        }
+        break;
+      case 'g':
+        // Generate new procedural terrain
+        if (event.ctrlKey || event.metaKey) {
+          const layout = this.terrainService.generateProceduralTerrain({
+            width: this.gameBoardService.getBoardWidth(),
+            height: this.gameBoardService.getBoardHeight()
+          });
+          this.gameBoardService.applyTerrainLayout(layout);
+          this.refreshBoard();
+          console.log('Generated new procedural terrain');
+        }
         break;
     }
   }
@@ -516,9 +588,147 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  /**
+   * Initialize terrain system - generate or load terrain layout
+   */
+  private initializeTerrain(): void {
+    let layout = this.terrainService.getCurrentLayout();
+
+    // If no terrain layout exists, generate a procedural one
+    if (!layout) {
+      layout = this.terrainService.generateProceduralTerrain({
+        width: this.gameBoardService.getBoardWidth(),
+        height: this.gameBoardService.getBoardHeight(),
+        elevatedChance: 0.15,
+        sunkenChance: 0.1,
+        crystalChance: 0.12,
+        mossChance: 0.15,
+        abyssChance: 0.03
+      });
+    }
+
+    // Apply terrain to game board
+    this.gameBoardService.applyTerrainLayout(layout);
+  }
+
+  /**
+   * Subscribe to terrain layout changes
+   */
+  private subscribeToTerrainChanges(): void {
+    this.terrainLayoutSubscription = this.terrainService.currentLayout$.subscribe(layout => {
+      if (layout) {
+        // Refresh the entire board when terrain changes
+        this.refreshBoard();
+      }
+    });
+  }
+
+  /**
+   * Subscribe to theme changes
+   */
+  private subscribeToThemeChanges(): void {
+    this.themeSubscription = this.themeService.currentTheme$.subscribe(theme => {
+      // Update scene colors and lighting based on theme
+      this.applyThemeToScene(theme);
+      // Refresh board to update terrain colors
+      this.refreshBoard();
+    });
+  }
+
+  /**
+   * Apply theme configuration to the scene
+   */
+  private applyThemeToScene(theme: any): void {
+    // Update background and fog
+    if (this.scene) {
+      this.scene.background = new THREE.Color(theme.backgroundColor);
+      this.scene.fog = new THREE.FogExp2(theme.fogColor, theme.fogDensity);
+    }
+
+    // Update lights (if they exist)
+    // This would require storing references to lights, which we can enhance later
+  }
+
+  /**
+   * Refresh the entire game board (re-render all tiles)
+   */
+  private refreshBoard(): void {
+    // Remove existing tile meshes
+    this.tileMeshes.forEach(mesh => {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      if (Array.isArray(mesh.material)) {
+        mesh.material.forEach(mat => mat.dispose());
+      } else {
+        mesh.material.dispose();
+      }
+    });
+    this.tileMeshes.clear();
+
+    // Re-render board with updated terrain
+    this.renderGameBoard();
+  }
+
+  /**
+   * Handle terrain painting on tile click
+   */
+  private handleTerrainEdit(row: number, col: number): void {
+    if (this.terrainEditMode === 'paint') {
+      // Paint terrain type
+      const result = this.terrainService.paintTerrain(row, col, this.selectedTerrainType);
+      if (result.success) {
+        // Update the tile mesh
+        this.updateTileMesh(row, col);
+        // Clear path cache since terrain changed
+        this.enemyService.clearPathCache();
+      }
+    } else if (this.terrainEditMode === 'height') {
+      // Adjust height (raise on left click, will add lower on right click later)
+      const result = this.terrainService.adjustHeight(row, col, 1);
+      if (result.success) {
+        // Update the tile mesh
+        this.updateTileMesh(row, col);
+        // Clear path cache since terrain changed
+        this.enemyService.clearPathCache();
+      }
+    }
+  }
+
+  /**
+   * Update a single tile mesh (for terrain editing)
+   */
+  private updateTileMesh(row: number, col: number): void {
+    const key = `${row}-${col}`;
+    const oldMesh = this.tileMeshes.get(key);
+
+    if (oldMesh) {
+      // Remove old mesh
+      this.scene.remove(oldMesh);
+      oldMesh.geometry.dispose();
+      if (Array.isArray(oldMesh.material)) {
+        oldMesh.material.forEach(mat => mat.dispose());
+      } else {
+        oldMesh.material.dispose();
+      }
+
+      // Create new mesh with updated terrain
+      const tile = this.gameBoardService.getGameBoard()[row][col];
+      const newMesh = this.gameBoardService.createTileMesh(row, col, tile.type);
+      newMesh.userData = { row, col, tile };
+
+      // Add to scene and update map
+      this.scene.add(newMesh);
+      this.tileMeshes.set(key, newMesh);
+    }
+  }
+
   ngOnDestroy(): void {
     // Clean up event listeners
     window.removeEventListener('keydown', this.keyboardHandler);
+
+    // Clean up subscriptions
+    this.terrainLayoutSubscription?.unsubscribe();
+    this.themeSubscription?.unsubscribe();
 
     // Clean up Three.js resources
     this.renderer.dispose();

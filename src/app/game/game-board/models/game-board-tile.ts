@@ -1,3 +1,5 @@
+import { TerrainType, TerrainHeight, DEFAULT_TERRAIN } from './terrain.model';
+
 export class GameBoardTile {
   public readonly x: number;
   public readonly y: number;
@@ -7,6 +9,12 @@ export class GameBoardTile {
   public readonly cost: number | null;
   public readonly towerType: TowerType | null;
 
+  /** Terrain type for this tile (affects movement and visuals) */
+  public terrainType: TerrainType;
+
+  /** Height level of this tile (affects elevation and movement) */
+  public terrainHeight: TerrainHeight;
+
   constructor(
     x: number,
     y: number,
@@ -15,6 +23,8 @@ export class GameBoardTile {
     isPurchasable: boolean,
     cost: number | null,
     towerType: TowerType | null,
+    terrainType: TerrainType = DEFAULT_TERRAIN.type,
+    terrainHeight: TerrainHeight = DEFAULT_TERRAIN.height
     ) {
     this.x = x;
     this.y = y;
@@ -23,10 +33,12 @@ export class GameBoardTile {
     this.isPurchasable = isPurchasable;
     this.cost = cost;
     this.towerType = towerType;
+    this.terrainType = terrainType;
+    this.terrainHeight = terrainHeight;
   }
 
-  static createBase(x: number, y: number): GameBoardTile {
-    return new GameBoardTile(x, y, BlockType.BASE, true, true, 0, null);
+  static createBase(x: number, y: number, terrainType?: TerrainType, terrainHeight?: TerrainHeight): GameBoardTile {
+    return new GameBoardTile(x, y, BlockType.BASE, true, true, 0, null, terrainType, terrainHeight);
   }
 
   static createSpawner(x: number, y: number): GameBoardTile {
@@ -35,6 +47,31 @@ export class GameBoardTile {
 
   static createExit(x: number, y: number): GameBoardTile {
     return new GameBoardTile(x, y, BlockType.EXIT, false, false, null, null);
+  }
+
+  /**
+   * Update the terrain properties of this tile.
+   * This allows modifying terrain after tile creation.
+   */
+  setTerrain(terrainType: TerrainType, terrainHeight?: TerrainHeight): void {
+    this.terrainType = terrainType;
+    if (terrainHeight !== undefined) {
+      this.terrainHeight = terrainHeight;
+    }
+  }
+
+  /**
+   * Get the effective traversability of this tile considering both
+   * block type and terrain type.
+   */
+  getEffectiveTraversability(): boolean {
+    // If the block type is not traversable, terrain doesn't matter
+    if (!this.isTraversable) {
+      return false;
+    }
+
+    // Check if terrain is traversable (e.g., ABYSS is not)
+    return this.terrainType !== TerrainType.ABYSS;
   }
 }
 

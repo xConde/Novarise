@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Enemy, EnemyType, ENEMY_STATS, GridNode } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { BlockType } from '../models/game-board-tile';
+import { calculateMovementCost } from '../models/terrain.model';
 
 @Injectable()
 export class EnemyService {
@@ -223,14 +224,29 @@ export class EnemyService {
           continue;
         }
 
-        // Check if traversable
+        // Check if traversable (considering both block type and terrain)
         const tile = this.gameBoardService.getGameBoard()[neighbor.y][neighbor.x];
-        if (!tile.isTraversable && tile.type !== BlockType.EXIT) {
+        const currentTile = this.gameBoardService.getGameBoard()[current.y][current.x];
+
+        // Use effective traversability that considers terrain
+        if (!tile.getEffectiveTraversability() && tile.type !== BlockType.EXIT) {
           continue;
         }
 
-        // Calculate costs
-        const gScore = current.g + 1;
+        // Calculate movement cost based on terrain
+        const movementCost = calculateMovementCost(
+          tile.terrainType,
+          currentTile.terrainHeight,
+          tile.terrainHeight
+        );
+
+        // If terrain is impassable, skip this tile
+        if (movementCost === Infinity) {
+          continue;
+        }
+
+        // Calculate costs with terrain-based movement multiplier
+        const gScore = current.g + movementCost;
         const hScore = this.heuristic(neighbor, end);
         const fScore = gScore + hScore;
 
