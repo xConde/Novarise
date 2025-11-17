@@ -4,10 +4,25 @@ import { BlockType, GameBoardTile, Spawner, SpawnerType } from './models/game-bo
 
 @Injectable()
 export class GameBoardService {
+  // Board configuration constants
   private readonly gameBoardWidth = 25;
   private readonly gameBoardHeight = 20;
-  private gameBoard: GameBoardTile[][] = [];
+  private readonly tileSize = 1;
+  private readonly tileHeight = 0.2;
 
+  // Exit tile coordinates (center of board)
+  private readonly exitTileCoordinates: number[][] = [
+    [9, 11], [9, 12], [10, 11], [10, 12]
+  ];
+
+  // Colors for different tile types
+  private readonly colorBase = 0x2a2a2a;
+  private readonly colorSpawner = 0x00ffff;
+  private readonly colorExit = 0xff00ff;
+  private readonly colorGrid = 0x444444;
+
+  // State
+  private gameBoard: GameBoardTile[][] = [];
   private spawnerChoices: SpawnerType[] = [
     SpawnerType.TOP_LEFT,
     SpawnerType.TOP_RIGHT,
@@ -15,10 +30,7 @@ export class GameBoardService {
     SpawnerType.BOTTOM_RIGHT
   ];
   private spawnerTiles: number[][] = [];
-
   private exitTiles: number[][] = [];
-
-  private readonly spawnerSize = 2;
   private readonly spawnerPlacements: Spawner[] = [];
 
   constructor() {
@@ -37,13 +49,10 @@ export class GameBoardService {
   }
 
   generateExitTiles(): void {
-    this.exitTiles = [ [9, 11], [9, 12], [10, 11], [10, 12] ];
+    this.exitTiles = this.exitTileCoordinates;
 
     for (const [exitX, exitY] of this.exitTiles) {
       this.gameBoard[exitX][exitY] = GameBoardTile.createExit(exitX, exitY);
-      this.gameBoard[exitX][exitY+1] = GameBoardTile.createExit(exitX, exitY+1);
-      this.gameBoard[exitX+1][exitY] = GameBoardTile.createExit(exitX+1, exitY);
-      this.gameBoard[exitX+1][exitY+1] = GameBoardTile.createExit(exitX+1, exitY+1);
     }
   }
 
@@ -82,107 +91,176 @@ export class GameBoardService {
     }
   }
 
-  canPlaceBlock(x: number, y: number, tiles: number): boolean {
-    const checkWithinRange = (targetX: number, targetY: number): boolean => {
-      for (let i = x - tiles; i <= x + tiles; i++) {
-        for (let j = y - tiles; j <= y + tiles; j++) {
-          if (tileInRange(i, j) && this.gameBoard[i][j].type !== BlockType.BASE) {
-            return false;
-          }
-        }
-      }
-      return true;
-    };
+  // Create a visible tile mesh using BoxGeometry
+  createTileMesh(row: number, col: number, type: BlockType): THREE.Mesh {
+    const geometry = new THREE.BoxGeometry(this.tileSize * 0.95, this.tileHeight, this.tileSize * 0.95);
+    const color = this.getTileColor(type);
+    const material = new THREE.MeshLambertMaterial({
+      color: color,
+      emissive: type === BlockType.BASE ? 0x000000 : color,
+      emissiveIntensity: type === BlockType.BASE ? 0 : 0.3
+    });
 
-    const tileInRange = (i: number, j: number): boolean => {
-      return (i >= 0 && i < this.gameBoardHeight && j >= 0 && j < this.gameBoardWidth);
-    };
-
-    // Check if block within range of spawner
-    if (this.spawnerPlacements.some(spawner => {
-      return checkWithinRange(spawner.x, spawner.y);
-    })) {
-      return false;
-    }
-
-    // Check if block within range of exit
-    const exitTile = this.getExitTile();
-    if (!checkWithinRange(exitTile.x, exitTile.y)) {
-      return false;
-    }
-
-    return true;
-  }
-
-  getExitTile(): GameBoardTile {
-    for (let i = 0; i < this.gameBoardHeight; i++) {
-      for (let j = 0; j < this.gameBoardWidth; j++) {
-        if (this.gameBoard[i][j].type === BlockType.EXIT) {
-          return this.gameBoard[i][j];
-        }
-      }
-    }
-    throw new Error('No exit tile found');
-  }
-
-  generateMesh(blockType: BlockType, shape: THREE.Shape, x: number, y: number): THREE.Mesh {
-    const geometry = new THREE.ShapeGeometry(shape);
-    const material = new THREE.MeshBasicMaterial({ color: this.getMeshColor(blockType) });
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(y, 0, x);
+
+    // Position tiles in a grid - centered at origin
+    const x = (col - this.gameBoardWidth / 2) * this.tileSize;
+    const z = (row - this.gameBoardHeight / 2) * this.tileSize;
+
+    mesh.position.set(x, this.tileHeight / 2, z);
+    mesh.receiveShadow = true;
+    mesh.castShadow = true;
+
     return mesh;
   }
 
-  getMeshColor(blockType: BlockType): number {
-    switch (blockType) {
-      case BlockType.BASE:
-        return 0xCCCCCC;
-      case BlockType.SPAWNER:
-        return 0x00FFFF;
-      case BlockType.EXIT:
-        return 0xFF00FF;
-      default:
-        throw new Error('Invalid block type');
+  // Create grid lines - interior lines positioned BETWEEN tiles (24x19)
+  createGridLines(): THREE.Group {
+    const gridGroup = new THREE.Group();
+
+    // Create vertical lines between columns - positioned at tile boundaries
+    for (let i = 1; i < this.gameBoardWidth; i++) {
+      const geometry = new THREE.BufferGeometry();
+      // Shift by -0.5 to position lines BETWEEN tiles instead of at centers
+      const x = (i - this.gameBoardWidth / 2 - 0.5) * this.tileSize;
+      // Lines should only extend across actual tile range
+      const z1 = (-this.gameBoardHeight / 2) * this.tileSize;
+      const z2 = (this.gameBoardHeight / 2 - 1) * this.tileSize;
+
+      const vertices = new Float32Array([
+        x, 0.01, z1,
+        x, 0.01, z2
+      ]);
+
+      geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+      const material = new THREE.LineBasicMaterial({ color: this.colorGrid, transparent: true, opacity: 0.5 });
+      const line = new THREE.Line(geometry, material);
+      gridGroup.add(line);
     }
-  }
 
-  getMeshShape(blockType: BlockType): THREE.Shape {
-    switch (blockType) {
-      case BlockType.BASE:
-        return new THREE.Shape([new THREE.Vector2(-0.5, -0.5), new THREE.Vector2(0.5, -0.5), new THREE.Vector2(0.5, 0.5), new THREE.Vector2(-0.5, 0.5)]);
-      case BlockType.SPAWNER:
-        return new THREE.Shape([new THREE.Vector2(-1, -1), new THREE.Vector2(1, -1), new THREE.Vector2(1, 1), new THREE.Vector2(-1, 1)]);
-      case BlockType.EXIT:
-        return new THREE.Shape([new THREE.Vector2(-1.5, -1.5), new THREE.Vector2(1.5, -1.5), new THREE.Vector2(1.5, 1.5), new THREE.Vector2(-1.5, 1.5)]);
-      default:
-        throw new Error('Invalid block type');
+    // Create horizontal lines between rows - positioned at tile boundaries
+    for (let i = 1; i < this.gameBoardHeight; i++) {
+      const geometry = new THREE.BufferGeometry();
+      // Shift by -0.5 to position lines BETWEEN tiles instead of at centers
+      const z = (i - this.gameBoardHeight / 2 - 0.5) * this.tileSize;
+      // Lines should only extend across actual tile range
+      const x1 = (-this.gameBoardWidth / 2) * this.tileSize;
+      const x2 = (this.gameBoardWidth / 2 - 1) * this.tileSize;
+
+      const vertices = new Float32Array([
+        x1, 0.01, z,
+        x2, 0.01, z
+      ]);
+
+      geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+      const material = new THREE.LineBasicMaterial({ color: this.colorGrid, transparent: true, opacity: 0.5 });
+      const line = new THREE.Line(geometry, material);
+      gridGroup.add(line);
     }
+
+    return gridGroup;
   }
 
-  addGameBoardToScene(scene: THREE.Scene): void {
-    const group = new THREE.Group();
-    this.gameBoard.forEach((row, i) => {
-      row.forEach((tile, j) => {
-        const { type } = tile;
-        const shape = this.getMeshShape(type);
-        const mesh = this.generateMesh(type, shape, i, j);
-        group.add(mesh);
-
-      });
-    });
-    scene.add(group);
-  }
-
-  getSpawnerTiles(): number[][] {
-    return this.spawnerTiles;
-  }
-
-  getExitTiles(): number[][] {
-    return this.exitTiles;
+  private getTileColor(type: BlockType): number {
+    switch (type) {
+      case BlockType.BASE:
+        return this.colorBase;
+      case BlockType.SPAWNER:
+        return this.colorSpawner;
+      case BlockType.EXIT:
+        return this.colorExit;
+      default:
+        return this.colorBase;
+    }
   }
 
   getGameBoard(): GameBoardTile[][] {
     return this.gameBoard;
   }
 
+  getBoardWidth(): number {
+    return this.gameBoardWidth;
+  }
+
+  getBoardHeight(): number {
+    return this.gameBoardHeight;
+  }
+
+  getTileSize(): number {
+    return this.tileSize;
+  }
+
+  // Tower placement
+  canPlaceTower(row: number, col: number): boolean {
+    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+      return false;
+    }
+
+    const tile = this.gameBoard[row][col];
+
+    // Can only place on BASE tiles that are purchasable
+    return tile.type === BlockType.BASE && tile.isPurchasable && tile.towerType === null;
+  }
+
+  placeTower(row: number, col: number, towerType: string): boolean {
+    if (!this.canPlaceTower(row, col)) {
+      return false;
+    }
+
+    // Mark the tile as occupied with a tower
+    this.gameBoard[row][col] = {
+      ...this.gameBoard[row][col],
+      towerType: null // Tower mesh is tracked separately in component
+    };
+
+    return true;
+  }
+
+  // Create tower mesh based on type
+  createTowerMesh(row: number, col: number, towerType: string = 'basic'): THREE.Mesh {
+    let geometry: THREE.BufferGeometry;
+    let color: number;
+    let height: number;
+
+    // Different shapes and colors for different tower types
+    switch (towerType) {
+      case 'basic':
+        geometry = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8);
+        color = 0xff6600; // Orange
+        height = 0.6;
+        break;
+      case 'sniper':
+        geometry = new THREE.ConeGeometry(0.25, 1.2, 4);
+        color = 0x9900ff; // Purple
+        height = 0.8;
+        break;
+      case 'splash':
+        geometry = new THREE.BoxGeometry(0.5, 0.7, 0.5);
+        color = 0x00ff00; // Green
+        height = 0.55;
+        break;
+      default:
+        geometry = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8);
+        color = 0xff6600;
+        height = 0.6;
+    }
+
+    const material = new THREE.MeshLambertMaterial({
+      color: color,
+      emissive: color,
+      emissiveIntensity: 0.2
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+
+    // Position tower on the tile
+    const x = (col - this.gameBoardWidth / 2) * this.tileSize;
+    const z = (row - this.gameBoardHeight / 2) * this.tileSize;
+
+    mesh.position.set(x, height, z); // Elevated above tile
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    return mesh;
+  }
 }

@@ -2,7 +2,6 @@ import { AfterViewInit, Component, ElementRef, OnInit, ViewChild } from '@angula
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GameBoardService } from './game-board.service';
-import { BlockType } from './models/game-board-tile';
 
 @Component({
   selector: 'app-game-board',
@@ -11,56 +10,90 @@ import { BlockType } from './models/game-board-tile';
 })
 export class GameBoardComponent implements OnInit, AfterViewInit {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
+
+  // Camera configuration constants - Top-down view
+  private readonly cameraDistance = 35;
+  private readonly cameraFov = 45;
+  private readonly cameraNear = 0.1;
+  private readonly cameraFar = 1000;
+
+  // Lighting configuration constants
+  private readonly ambientLightColor = 0xffffff;
+  private readonly ambientLightIntensity = 0.6;
+  private readonly directionalLightColor = 0xffffff;
+  private readonly directionalLightIntensity = 0.8;
+
+  // Control configuration constants
+  private readonly controlsDampingFactor = 0.05;
+  private readonly minPolarAngle = 0;
+  private readonly maxPolarAngle = Math.PI / 2.5; // Limit to mostly top-down
+
+  // Scene objects
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
-  private light!: THREE.AmbientLight;
-  private boardGroup!: THREE.Group;
-  private spawnerGroup!: THREE.Group;
-  private exitGroup!: THREE.Group;
-  private spawnerTiles: number[][] = [];
-  private exitTiles: number[][] = [];
-  private cameraDistance = 50;
+  private controls!: OrbitControls;
+
+  // Interaction
+  private raycaster = new THREE.Raycaster();
+  private mouse = new THREE.Vector2();
+  private tileMeshes: Map<string, THREE.Mesh> = new Map();
+  private hoveredTile: THREE.Mesh | null = null;
+  private selectedTile: { row: number, col: number } | null = null;
+
+  // Tower management
+  private towerMeshes: Map<string, THREE.Mesh> = new Map();
+  public selectedTowerType: string = 'basic';
 
   constructor(private gameBoardService: GameBoardService) { }
 
   ngOnInit(): void {
     this.initializeScene();
     this.initializeCamera();
-    // this.initializeRenderer();
-    this.initializeLight();
-    this.addLights();
+    this.initializeLights();
     this.renderGameBoard();
-    this.renderSpawners();
-    this.renderExits();
+    this.addGridLines();
   }
 
   ngAfterViewInit(): void {
     this.initializeRenderer();
-    this.addCameraControls();
+    this.initializeControls();
+    this.setupMouseInteraction();
     this.animate();
   }
 
   private initializeScene(): void {
     this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x0a0a0a);
   }
 
   private initializeCamera(): void {
     const aspectRatio = window.innerWidth / window.innerHeight;
-    console.log(aspectRatio, window.innerHeight, window.innerWidth)
-    this.camera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
-    this.camera.position.set(0, 30, 3);
-    this.camera.lookAt(this.scene.position);
+    this.camera = new THREE.PerspectiveCamera(
+      this.cameraFov,
+      aspectRatio,
+      this.cameraNear,
+      this.cameraFar
+    );
 
+    // Position camera above the board looking down
+    this.camera.position.set(0, this.cameraDistance, this.cameraDistance * 0.5);
+    this.camera.lookAt(0, 0, 0);
   }
 
   private initializeRenderer(): void {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false
+    });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
     this.canvasContainer.nativeElement.appendChild(this.renderer.domElement);
+
+    // Handle window resize
     window.addEventListener('resize', () => {
       const width = window.innerWidth;
       const height = window.innerHeight;
@@ -70,100 +103,167 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
     });
   }
 
-  private initializeLight(): void {
-    this.light = new THREE.AmbientLight(0xffffff, 1.0);
-    this.scene.add(this.light);
+  private initializeLights(): void {
+    // Ambient light for overall illumination
+    const ambientLight = new THREE.AmbientLight(
+      this.ambientLightColor,
+      this.ambientLightIntensity
+    );
+    this.scene.add(ambientLight);
+
+    // Directional light for shadows and definition
+    const directionalLight = new THREE.DirectionalLight(
+      this.directionalLightColor,
+      this.directionalLightIntensity
+    );
+    directionalLight.position.set(10, 20, 10);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.camera.left = -20;
+    directionalLight.shadow.camera.right = 20;
+    directionalLight.shadow.camera.top = 20;
+    directionalLight.shadow.camera.bottom = -20;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    this.scene.add(directionalLight);
+
+    // Additional fill light from opposite side
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    fillLight.position.set(-10, 10, -10);
+    this.scene.add(fillLight);
   }
 
   private renderGameBoard(): void {
     const boardTiles = this.gameBoardService.getGameBoard();
-    this.boardGroup = new THREE.Group();
-    boardTiles.forEach((row: any[]) => {
-      row.forEach(tile => {
-        const { type } = tile;
-        const shape = this.gameBoardService.getMeshShape(type);
-        const mesh = this.gameBoardService.generateMesh(type, shape, tile.x, tile.y);
-        mesh.receiveShadow = true;
-        this.boardGroup.add(mesh);
+
+    boardTiles.forEach((row, rowIndex) => {
+      row.forEach((tile, colIndex) => {
+        const mesh = this.gameBoardService.createTileMesh(rowIndex, colIndex, tile.type);
+        mesh.userData = { row: rowIndex, col: colIndex, tile: tile };
+        this.tileMeshes.set(`${rowIndex}-${colIndex}`, mesh);
+        this.scene.add(mesh);
       });
     });
-    this.scene.add(this.boardGroup);
-    console.log(this.scene.children)
   }
 
-  private renderSpawners(): void {
-    this.spawnerTiles = this.gameBoardService.getSpawnerTiles();
-    this.spawnerGroup = new THREE.Group();
-    this.spawnerTiles.forEach(coords => {
-      const mesh = this.gameBoardService.generateMesh(BlockType.SPAWNER, this.gameBoardService.getMeshShape(BlockType.SPAWNER), coords[0], coords[1]);
-      mesh.receiveShadow = true;
-      this.spawnerGroup.add(mesh);
+  private addGridLines(): void {
+    const gridLines = this.gameBoardService.createGridLines();
+    this.scene.add(gridLines);
+  }
+
+  private initializeControls(): void {
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = this.controlsDampingFactor;
+    this.controls.screenSpacePanning = false;
+    this.controls.minDistance = this.cameraDistance / 2;
+    this.controls.maxDistance = this.cameraDistance * 3;
+    this.controls.minPolarAngle = this.minPolarAngle;
+    this.controls.maxPolarAngle = this.maxPolarAngle;
+    this.controls.target.set(0, 0, 0);
+    this.controls.update();
+  }
+
+  private setupMouseInteraction(): void {
+    const canvas = this.renderer.domElement;
+
+    // Mouse move for hover effect
+    canvas.addEventListener('mousemove', (event) => {
+      const rect = canvas.getBoundingClientRect();
+      this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+      const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
+
+      // Reset previous hover
+      if (this.hoveredTile && this.hoveredTile !== this.getSelectedTileMesh()) {
+        const material = this.hoveredTile.material as THREE.MeshLambertMaterial;
+        material.emissiveIntensity = this.hoveredTile.userData['tile'].type === 0 ? 0 : 0.3;
+      }
+
+      if (intersects.length > 0) {
+        const mesh = intersects[0].object as THREE.Mesh;
+        if (mesh !== this.getSelectedTileMesh()) {
+          this.hoveredTile = mesh;
+          const material = mesh.material as THREE.MeshLambertMaterial;
+          material.emissiveIntensity = 0.5;
+          canvas.style.cursor = 'pointer';
+        }
+      } else {
+        this.hoveredTile = null;
+        canvas.style.cursor = 'default';
+      }
     });
-    this.scene.add(this.spawnerGroup);
-  }
 
-  private renderExits(): void {
-    const exitTiles = this.gameBoardService.getExitTiles();
+    // Mouse click for selection
+    canvas.addEventListener('click', (event) => {
+      const rect = canvas.getBoundingClientRect();
+      this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-    const geometry = new THREE.PlaneGeometry(1, 1, 1);
-    const material = new THREE.MeshBasicMaterial({ color: 0x00FFFF });
-    const mesh = new THREE.Mesh(geometry, material);
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+      const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
 
-    exitTiles.forEach((tile) => {
-      const [x, y] = tile;
-      const exitMesh = mesh.clone();
-      exitMesh.position.set(y, 0.5, x);
-      exitMesh.rotateX(-Math.PI / 2);
-      this.scene.add(exitMesh);
+      // Reset previous selection
+      const prevSelected = this.getSelectedTileMesh();
+      if (prevSelected) {
+        const material = prevSelected.material as THREE.MeshLambertMaterial;
+        material.emissiveIntensity = prevSelected.userData['tile'].type === 0 ? 0 : 0.3;
+      }
+
+      if (intersects.length > 0) {
+        const mesh = intersects[0].object as THREE.Mesh;
+        const row = mesh.userData['row'];
+        const col = mesh.userData['col'];
+
+        this.selectedTile = { row, col };
+
+        // Highlight selected tile
+        const material = mesh.material as THREE.MeshLambertMaterial;
+        material.emissiveIntensity = 0.8;
+
+        // Try to place a tower
+        if (this.gameBoardService.canPlaceTower(row, col)) {
+          if (this.gameBoardService.placeTower(row, col, this.selectedTowerType)) {
+            this.spawnTower(row, col, this.selectedTowerType);
+          }
+        }
+      } else {
+        this.selectedTile = null;
+      }
     });
   }
 
-  animate() {
+  private spawnTower(row: number, col: number, towerType: string): void {
+    const key = `${row}-${col}`;
+
+    // Don't place if tower already exists
+    if (this.towerMeshes.has(key)) {
+      return;
+    }
+
+    const towerMesh = this.gameBoardService.createTowerMesh(row, col, towerType);
+    this.towerMeshes.set(key, towerMesh);
+    this.scene.add(towerMesh);
+  }
+
+  public selectTowerType(type: string): void {
+    this.selectedTowerType = type;
+  }
+
+  private getSelectedTileMesh(): THREE.Mesh | null {
+    if (!this.selectedTile) return null;
+    return this.tileMeshes.get(`${this.selectedTile.row}-${this.selectedTile.col}`) || null;
+  }
+
+  private animate = (): void => {
+    requestAnimationFrame(this.animate);
+
+    // Update controls if they exist
+    if (this.controls) {
+      this.controls.update();
+    }
+
     this.renderer.render(this.scene, this.camera);
-    requestAnimationFrame(() => {
-      this.animate();
-    });
-  }
-
-  onWindowResize() {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-  }
-
-  addLights() {
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    this.scene.add(ambientLight);
-
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    directionalLight.position.set(1, 1, 1);
-    this.scene.add(directionalLight);
-  }
-
-  addCameraControls() {
-    const controls = new OrbitControls(this.camera, this.renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.screenSpacePanning = false;
-    controls.minDistance = this.cameraDistance / 2;
-    controls.maxDistance = this.cameraDistance * 2;
-    controls.maxPolarAngle = Math.PI / 2;
-    controls.update();
-  }
-
-  createTowerMesh(position: THREE.Vector3): THREE.Mesh {
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshPhongMaterial({ color: 0xff0000 });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.copy(position);
-    return mesh;
-  }
-
-  createEnemyMesh(position: THREE.Vector3): THREE.Mesh {
-    const geometry = new THREE.SphereGeometry(0.5, 32, 32);
-    const material = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.copy(position);
-    return mesh;
   }
 }
