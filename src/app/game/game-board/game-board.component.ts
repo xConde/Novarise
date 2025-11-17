@@ -2,11 +2,14 @@ import { AfterViewInit, Component, ElementRef, OnInit, ViewChild } from '@angula
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GameBoardService } from './game-board.service';
+import { EnemyService } from './services/enemy.service';
+import { EnemyType } from './models/enemy.model';
 
 @Component({
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
-  styleUrls: ['./game-board.component.scss']
+  styleUrls: ['./game-board.component.scss'],
+  providers: [EnemyService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -45,7 +48,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
   private towerMeshes: Map<string, THREE.Mesh> = new Map();
   public selectedTowerType: string = 'basic';
 
-  constructor(private gameBoardService: GameBoardService) { }
+  // Enemy management
+  private lastTime = 0;
+
+  constructor(
+    private gameBoardService: GameBoardService,
+    private enemyService: EnemyService
+  ) { }
 
   ngOnInit(): void {
     this.initializeScene();
@@ -59,6 +68,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
     this.initializeRenderer();
     this.initializeControls();
     this.setupMouseInteraction();
+    this.setupKeyboardControls();
     this.animate();
   }
 
@@ -256,12 +266,51 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
     return this.tileMeshes.get(`${this.selectedTile.row}-${this.selectedTile.col}`) || null;
   }
 
-  private animate = (): void => {
+  private setupKeyboardControls(): void {
+    window.addEventListener('keydown', (event) => {
+      switch (event.key.toLowerCase()) {
+        case 'e':
+          // Spawn basic enemy
+          this.enemyService.spawnEnemy(EnemyType.BASIC, this.scene);
+          break;
+        case '1':
+          this.enemyService.spawnEnemy(EnemyType.BASIC, this.scene);
+          break;
+        case '2':
+          this.enemyService.spawnEnemy(EnemyType.FAST, this.scene);
+          break;
+        case '3':
+          this.enemyService.spawnEnemy(EnemyType.HEAVY, this.scene);
+          break;
+        case '4':
+          this.enemyService.spawnEnemy(EnemyType.FLYING, this.scene);
+          break;
+        case '5':
+          this.enemyService.spawnEnemy(EnemyType.BOSS, this.scene);
+          break;
+      }
+    });
+  }
+
+  private animate = (time: number = 0): void => {
     requestAnimationFrame(this.animate);
+
+    // Calculate delta time in seconds
+    const deltaTime = this.lastTime === 0 ? 0 : (time - this.lastTime) / 1000;
+    this.lastTime = time;
 
     // Update controls if they exist
     if (this.controls) {
       this.controls.update();
+    }
+
+    // Update enemies
+    if (deltaTime > 0) {
+      const reachedExit = this.enemyService.updateEnemies(deltaTime);
+      // Remove enemies that reached the exit
+      reachedExit.forEach(enemyId => {
+        this.enemyService.removeEnemy(enemyId, this.scene);
+      });
     }
 
     this.renderer.render(this.scene, this.camera);
