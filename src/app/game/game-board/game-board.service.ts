@@ -158,12 +158,12 @@ export class GameBoardService {
     return mesh;
   }
 
-  // Create grid lines - exactly matching tile count (25x20)
+  // Create grid lines - interior lines only (24x19) to divide tiles
   createGridLines(): THREE.Group {
     const gridGroup = new THREE.Group();
 
-    // Create vertical lines (along Z axis) - one per column
-    for (let i = 0; i < this.gameBoardWidth; i++) {
+    // Create vertical lines between columns (skip first and last edge)
+    for (let i = 1; i < this.gameBoardWidth; i++) {
       const geometry = new THREE.BufferGeometry();
       const x = (i - this.gameBoardWidth / 2) * this.tileSize;
       const z1 = -this.gameBoardHeight / 2 * this.tileSize;
@@ -175,13 +175,13 @@ export class GameBoardService {
       ]);
 
       geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      const material = new THREE.LineBasicMaterial({ color: this.colorGrid, transparent: true, opacity: 0.4 });
+      const material = new THREE.LineBasicMaterial({ color: this.colorGrid, transparent: true, opacity: 0.5 });
       const line = new THREE.Line(geometry, material);
       gridGroup.add(line);
     }
 
-    // Create horizontal lines (along X axis) - one per row
-    for (let i = 0; i < this.gameBoardHeight; i++) {
+    // Create horizontal lines between rows (skip first and last edge)
+    for (let i = 1; i < this.gameBoardHeight; i++) {
       const geometry = new THREE.BufferGeometry();
       const z = (i - this.gameBoardHeight / 2) * this.tileSize;
       const x1 = -this.gameBoardWidth / 2 * this.tileSize;
@@ -193,7 +193,7 @@ export class GameBoardService {
       ]);
 
       geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      const material = new THREE.LineBasicMaterial({ color: this.colorGrid, transparent: true, opacity: 0.4 });
+      const material = new THREE.LineBasicMaterial({ color: this.colorGrid, transparent: true, opacity: 0.5 });
       const line = new THREE.Line(geometry, material);
       gridGroup.add(line);
     }
