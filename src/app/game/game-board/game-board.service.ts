@@ -7,7 +7,6 @@ export class GameBoardService {
   // Board configuration constants
   private readonly gameBoardWidth = 25;
   private readonly gameBoardHeight = 20;
-  private readonly spawnerSize = 2;
   private readonly tileSize = 1;
   private readonly tileHeight = 0.2;
 
@@ -90,49 +89,6 @@ export class GameBoardService {
       case SpawnerType.BOTTOM_RIGHT:
         return { minRow: 18, maxRow: 19, minCol: 23, maxCol: 24, centerX: 18, centerY: 24 };
     }
-  }
-
-  canPlaceBlock(x: number, y: number, tiles: number): boolean {
-    const checkWithinRange = (targetX: number, targetY: number): boolean => {
-      for (let i = x - tiles; i <= x + tiles; i++) {
-        for (let j = y - tiles; j <= y + tiles; j++) {
-          if (tileInRange(i, j) && this.gameBoard[i][j].type !== BlockType.BASE) {
-            return false;
-          }
-        }
-      }
-      return true;
-    };
-
-    const tileInRange = (i: number, j: number): boolean => {
-      return (i >= 0 && i < this.gameBoardHeight && j >= 0 && j < this.gameBoardWidth);
-    };
-
-    // Check if block within range of spawner
-    if (this.spawnerPlacements.some(spawner => {
-      return checkWithinRange(spawner.x, spawner.y);
-    })) {
-      return false;
-    }
-
-    // Check if block within range of exit
-    const exitTile = this.getExitTile();
-    if (!checkWithinRange(exitTile.x, exitTile.y)) {
-      return false;
-    }
-
-    return true;
-  }
-
-  getExitTile(): GameBoardTile {
-    for (let i = 0; i < this.gameBoardHeight; i++) {
-      for (let j = 0; j < this.gameBoardWidth; j++) {
-        if (this.gameBoard[i][j].type === BlockType.EXIT) {
-          return this.gameBoard[i][j];
-        }
-      }
-    }
-    throw new Error('No exit tile found');
   }
 
   // Create a visible tile mesh using BoxGeometry
@@ -218,14 +174,6 @@ export class GameBoardService {
     }
   }
 
-  getSpawnerTiles(): number[][] {
-    return this.spawnerTiles;
-  }
-
-  getExitTiles(): number[][] {
-    return this.exitTiles;
-  }
-
   getGameBoard(): GameBoardTile[][] {
     return this.gameBoard;
   }
@@ -259,10 +207,10 @@ export class GameBoardService {
       return false;
     }
 
-    // For now, just mark the tile - we'll add actual tower objects later
+    // Mark the tile as occupied with a tower
     this.gameBoard[row][col] = {
       ...this.gameBoard[row][col],
-      towerType: towerType as any // Simple string for now
+      towerType: null // Tower mesh is tracked separately in component
     };
 
     return true;

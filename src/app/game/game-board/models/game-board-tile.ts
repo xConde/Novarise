@@ -36,27 +36,6 @@ export class GameBoardTile {
   static createExit(x: number, y: number): GameBoardTile {
     return new GameBoardTile(x, y, BlockType.EXIT, false, false, null, null);
   }
-
-  static createCanon(x: number, y: number): GameBoardTile {
-    return new GameBoardTile(x, y, BlockType.TOWER, false, false, 20, TowerType.CANON);
-  }
-
-  static createGatling(x: number, y: number): GameBoardTile {
-    return new GameBoardTile(x, y, BlockType.TOWER, false, false, 35, TowerType.GATLING);
-  }
-
-  static createSlowing(x: number, y: number): GameBoardTile {
-    return new GameBoardTile(x, y, BlockType.TOWER, false, false, 40, TowerType.SLOWING);
-  }
-
-  static createSniper(x: number, y: number): GameBoardTile {
-    return new GameBoardTile(x, y, BlockType.TOWER, false, false, 60, TowerType.SNIPER);
-  }
-
-  static createLaser(x: number, y: number): GameBoardTile {
-    return new GameBoardTile(x, y, BlockType.TOWER, false, false, 100, TowerType.LASER);
-  }
-
 }
 
 export interface Spawner {
@@ -67,7 +46,6 @@ export interface Spawner {
 
 export enum BlockType {
   BASE,
-  BLOCK,
   EXIT,
   SPAWNER,
   TOWER,

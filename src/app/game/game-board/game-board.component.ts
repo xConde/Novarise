@@ -222,16 +222,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
         const material = mesh.material as THREE.MeshLambertMaterial;
         material.emissiveIntensity = 0.8;
 
-        console.log(`Tile selected: Row ${row}, Col ${col}`, mesh.userData['tile']);
-
         // Try to place a tower
         if (this.gameBoardService.canPlaceTower(row, col)) {
           if (this.gameBoardService.placeTower(row, col, this.selectedTowerType)) {
             this.spawnTower(row, col, this.selectedTowerType);
-            console.log(`${this.selectedTowerType} tower placed at Row ${row}, Col ${col}`);
           }
-        } else {
-          console.log(`Cannot place tower at Row ${row}, Col ${col}`);
         }
       } else {
         this.selectedTile = null;
