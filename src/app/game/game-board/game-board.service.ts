@@ -95,10 +95,15 @@ export class GameBoardService {
   createTileMesh(row: number, col: number, type: BlockType): THREE.Mesh {
     const geometry = new THREE.BoxGeometry(this.tileSize * 0.95, this.tileHeight, this.tileSize * 0.95);
     const color = this.getTileColor(type);
-    const material = new THREE.MeshLambertMaterial({
+
+    // Enhanced material with metallic and reflective properties
+    const material = new THREE.MeshStandardMaterial({
       color: color,
-      emissive: type === BlockType.BASE ? 0x000000 : color,
-      emissiveIntensity: type === BlockType.BASE ? 0 : 0.3
+      emissive: type === BlockType.BASE ? 0x1a1a2e : color,
+      emissiveIntensity: type === BlockType.BASE ? 0.1 : 0.3,
+      metalness: type === BlockType.BASE ? 0.6 : 0.3,
+      roughness: type === BlockType.BASE ? 0.4 : 0.6,
+      envMapIntensity: 1.0
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -118,6 +123,14 @@ export class GameBoardService {
   createGridLines(): THREE.Group {
     const gridGroup = new THREE.Group();
 
+    // Enhanced glowing grid line material
+    const gridMaterial = new THREE.LineBasicMaterial({
+      color: 0x00ccff,
+      transparent: true,
+      opacity: 0.4,
+      linewidth: 1
+    });
+
     // Create vertical lines between columns - positioned at tile boundaries
     for (let i = 1; i < this.gameBoardWidth; i++) {
       const geometry = new THREE.BufferGeometry();
@@ -133,8 +146,7 @@ export class GameBoardService {
       ]);
 
       geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      const material = new THREE.LineBasicMaterial({ color: this.colorGrid, transparent: true, opacity: 0.5 });
-      const line = new THREE.Line(geometry, material);
+      const line = new THREE.Line(geometry, gridMaterial.clone());
       gridGroup.add(line);
     }
 
@@ -153,8 +165,7 @@ export class GameBoardService {
       ]);
 
       geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      const material = new THREE.LineBasicMaterial({ color: this.colorGrid, transparent: true, opacity: 0.5 });
-      const line = new THREE.Line(geometry, material);
+      const line = new THREE.Line(geometry, gridMaterial.clone());
       gridGroup.add(line);
     }
 
@@ -217,50 +228,124 @@ export class GameBoardService {
   }
 
   // Create tower mesh based on type
-  createTowerMesh(row: number, col: number, towerType: string = 'basic'): THREE.Mesh {
-    let geometry: THREE.BufferGeometry;
+  createTowerMesh(row: number, col: number, towerType: string = 'basic'): THREE.Group {
+    const towerGroup = new THREE.Group();
     let color: number;
     let height: number;
 
     // Different shapes and colors for different tower types
     switch (towerType) {
       case 'basic':
-        geometry = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8);
+        // Multi-tiered cylinder tower
+        const baseGeom = new THREE.CylinderGeometry(0.35, 0.4, 0.3, 8);
+        const midGeom = new THREE.CylinderGeometry(0.3, 0.35, 0.4, 8);
+        const topGeom = new THREE.CylinderGeometry(0.2, 0.3, 0.3, 8);
+
         color = 0xff6600; // Orange
+        const material = new THREE.MeshStandardMaterial({
+          color: color,
+          emissive: color,
+          emissiveIntensity: 0.3,
+          metalness: 0.7,
+          roughness: 0.3
+        });
+
+        const base = new THREE.Mesh(baseGeom, material);
+        base.position.y = 0.15;
+        const mid = new THREE.Mesh(midGeom, material);
+        mid.position.y = 0.5;
+        const top = new THREE.Mesh(topGeom, material);
+        top.position.y = 0.85;
+
+        towerGroup.add(base, mid, top);
         height = 0.6;
         break;
+
       case 'sniper':
-        geometry = new THREE.ConeGeometry(0.25, 1.2, 4);
+        // Tall spire with crystalline appearance
+        const spireBase = new THREE.CylinderGeometry(0.3, 0.35, 0.3, 6);
+        const spireMain = new THREE.ConeGeometry(0.25, 1.0, 6);
+        const spireTip = new THREE.ConeGeometry(0.15, 0.4, 6);
+
         color = 0x9900ff; // Purple
+        const snipeMat = new THREE.MeshStandardMaterial({
+          color: color,
+          emissive: color,
+          emissiveIntensity: 0.4,
+          metalness: 0.5,
+          roughness: 0.2
+        });
+
+        const sBase = new THREE.Mesh(spireBase, snipeMat);
+        sBase.position.y = 0.15;
+        const sMain = new THREE.Mesh(spireMain, snipeMat);
+        sMain.position.y = 0.65;
+        const sTip = new THREE.Mesh(spireTip, snipeMat);
+        sTip.position.y = 1.3;
+
+        towerGroup.add(sBase, sMain, sTip);
         height = 0.8;
         break;
+
       case 'splash':
-        geometry = new THREE.BoxGeometry(0.5, 0.7, 0.5);
+        // Cube-based tower with rotating elements
+        const splashBase = new THREE.BoxGeometry(0.5, 0.3, 0.5);
+        const splashMid = new THREE.BoxGeometry(0.4, 0.35, 0.4);
+        const splashTop = new THREE.OctahedronGeometry(0.2);
+
         color = 0x00ff00; // Green
+        const splashMat = new THREE.MeshStandardMaterial({
+          color: color,
+          emissive: color,
+          emissiveIntensity: 0.3,
+          metalness: 0.6,
+          roughness: 0.4
+        });
+
+        const spBase = new THREE.Mesh(splashBase, splashMat);
+        spBase.position.y = 0.15;
+        const spMid = new THREE.Mesh(splashMid, splashMat);
+        spMid.position.y = 0.475;
+        spMid.rotation.y = Math.PI / 4;
+        const spTop = new THREE.Mesh(splashTop, splashMat);
+        spTop.position.y = 0.8;
+
+        towerGroup.add(spBase, spMid, spTop);
         height = 0.55;
         break;
+
       default:
-        geometry = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8);
+        const defaultGeom = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8);
         color = 0xff6600;
+        const defaultMat = new THREE.MeshStandardMaterial({
+          color: color,
+          emissive: color,
+          emissiveIntensity: 0.3,
+          metalness: 0.7,
+          roughness: 0.3
+        });
+        const defaultMesh = new THREE.Mesh(defaultGeom, defaultMat);
+        defaultMesh.position.y = 0.4;
+        towerGroup.add(defaultMesh);
         height = 0.6;
     }
-
-    const material = new THREE.MeshLambertMaterial({
-      color: color,
-      emissive: color,
-      emissiveIntensity: 0.2
-    });
-
-    const mesh = new THREE.Mesh(geometry, material);
 
     // Position tower on the tile
     const x = (col - this.gameBoardWidth / 2) * this.tileSize;
     const z = (row - this.gameBoardHeight / 2) * this.tileSize;
 
-    mesh.position.set(x, height, z); // Elevated above tile
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    towerGroup.position.set(x, height, z);
+    towerGroup.castShadow = true;
+    towerGroup.receiveShadow = true;
 
-    return mesh;
+    // Add shadow casting to all children
+    towerGroup.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+
+    return towerGroup;
   }
 }
