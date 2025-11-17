@@ -158,14 +158,15 @@ export class GameBoardService {
     return mesh;
   }
 
-  // Create grid lines - interior lines only (24x19) to divide tiles
+  // Create grid lines - interior lines positioned BETWEEN tiles (24x19)
   createGridLines(): THREE.Group {
     const gridGroup = new THREE.Group();
 
-    // Create vertical lines between columns (skip first and last edge)
+    // Create vertical lines between columns - positioned at tile boundaries
     for (let i = 1; i < this.gameBoardWidth; i++) {
       const geometry = new THREE.BufferGeometry();
-      const x = (i - this.gameBoardWidth / 2) * this.tileSize;
+      // Shift by -0.5 to position lines BETWEEN tiles instead of at centers
+      const x = (i - this.gameBoardWidth / 2 - 0.5) * this.tileSize;
       const z1 = -this.gameBoardHeight / 2 * this.tileSize;
       const z2 = this.gameBoardHeight / 2 * this.tileSize;
 
@@ -180,10 +181,11 @@ export class GameBoardService {
       gridGroup.add(line);
     }
 
-    // Create horizontal lines between rows (skip first and last edge)
+    // Create horizontal lines between rows - positioned at tile boundaries
     for (let i = 1; i < this.gameBoardHeight; i++) {
       const geometry = new THREE.BufferGeometry();
-      const z = (i - this.gameBoardHeight / 2) * this.tileSize;
+      // Shift by -0.5 to position lines BETWEEN tiles instead of at centers
+      const z = (i - this.gameBoardHeight / 2 - 0.5) * this.tileSize;
       const x1 = -this.gameBoardWidth / 2 * this.tileSize;
       const x2 = this.gameBoardWidth / 2 * this.tileSize;
 
