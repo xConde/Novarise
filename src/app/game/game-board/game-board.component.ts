@@ -430,11 +430,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
 
     // Animate particles - gentle floating motion
     if (this.particles) {
-      const positions = this.particles.geometry.attributes['position'].array as Float32Array;
+      const positionAttribute = this.particles.geometry.attributes['position'] as THREE.BufferAttribute;
+      const positions = positionAttribute.array as Float32Array;
       for (let i = 0; i < positions.length; i += 3) {
         positions[i + 1] += Math.sin(Date.now() * 0.001 + i) * 0.002;
       }
-      this.particles.geometry.attributes['position'].needsUpdate = true;
+      positionAttribute.needsUpdate = true;
       this.particles.rotation.y += 0.0002;
     }
 
