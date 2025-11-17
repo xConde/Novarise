@@ -106,11 +106,17 @@ export class GameBoardService {
     let actualHeight = baseHeight;
 
     if (actualTerrainHeight === TerrainHeight.ELEVATED) {
-      heightOffset = 1.0;  // INCREASED from 0.5 for visibility
-      actualHeight = baseHeight * 2.0;  // TALLER blocks
+      heightOffset = 1.5;  // INCREASED from 1.0 for more drama
+      actualHeight = baseHeight * 2.5;  // Even TALLER blocks
     } else if (actualTerrainHeight === TerrainHeight.SUNKEN) {
-      heightOffset = -0.5;  // More visible depression
-      actualHeight = baseHeight * 0.5;  // SHORTER blocks
+      heightOffset = -0.8;  // DEEPER depression (was -0.5)
+      actualHeight = baseHeight * 0.3;  // Even SHORTER blocks
+    }
+
+    // Special handling for ABYSS terrain - make it dramatically low
+    if (actualTerrainType === TerrainType.ABYSS && type === BlockType.BASE) {
+      heightOffset = -1.0;  // Drop way down
+      actualHeight = baseHeight * 0.1;  // Nearly flat
     }
 
     const geometry = new THREE.BoxGeometry(
@@ -141,14 +147,14 @@ export class GameBoardService {
         roughness: 0.7,  // Rough texture
       });
     } else if (actualTerrainType === TerrainType.ABYSS && type === BlockType.BASE) {
-      // Deep black void
+      // Deep black void - pure darkness
       material = new THREE.MeshStandardMaterial({
-        color: 0x050505,  // Almost pure black
+        color: 0x000000,  // PURE BLACK (was 0x050505)
         emissive: 0x000000,
         emissiveIntensity: 0,
         metalness: 0.0,
         roughness: 1.0,
-        opacity: 0.7,  // See-through to show depth
+        opacity: 0.3,  // MORE transparent to show depth (was 0.7)
         transparent: true
       });
     } else if (type === BlockType.SPAWNER) {

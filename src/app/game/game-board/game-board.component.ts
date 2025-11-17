@@ -222,7 +222,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     mainLight.shadow.camera.right = 40;
     mainLight.shadow.camera.top = 40;
     mainLight.shadow.camera.bottom = -40;
-    mainLight.shadow.bias = -0.001;  // Reduce shadow acne
+    mainLight.shadow.bias = -0.0005;  // Reduce shadow acne (adjusted for better visibility)
     this.scene.add(mainLight);
 
     // 3. Fill light to soften shadows
@@ -283,16 +283,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const tile = tiles[row][col];
 
         if (tile.terrainType === TerrainType.MITHRIL_CRYSTAL) {
-          // Purple point light for crystals
-          const light = new THREE.PointLight(0x9060ff, 0.8, 5);
+          // Purple point light for crystals - BOOSTED intensity
+          const light = new THREE.PointLight(0x9060ff, 1.5, 6);  // Increased from 0.8/5
           const x = (col - tiles[0].length / 2) * tileSize;
           const z = (row - tiles.length / 2) * tileSize;
           const y = tile.terrainHeight === TerrainHeight.ELEVATED ? 2 : 1;
           light.position.set(x, y, z);
           this.scene.add(light);
         } else if (tile.terrainType === TerrainType.LUMINOUS_MOSS) {
-          // Green point light for moss
-          const light = new THREE.PointLight(0x60ff60, 0.5, 4);
+          // Green point light for moss - BOOSTED intensity
+          const light = new THREE.PointLight(0x60ff60, 1.0, 5);  // Increased from 0.5/4
           const x = (col - tiles[0].length / 2) * tileSize;
           const z = (row - tiles.length / 2) * tileSize;
           const y = tile.terrainHeight === TerrainHeight.SUNKEN ? 0.5 : 1;
