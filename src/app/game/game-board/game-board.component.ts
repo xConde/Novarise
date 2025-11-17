@@ -12,6 +12,7 @@ import { TerrainService } from './services/terrain.service';
 import { ThemeService } from './services/theme.service';
 import { EnemyType } from './models/enemy.model';
 import { TerrainType, TerrainHeight } from './models/terrain.model';
+import { ThemeConfig } from './models/theme.model';
 
 @Component({
   selector: 'app-game-board',
@@ -67,6 +68,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private themeSubscription?: Subscription;
   public terrainEditMode: 'none' | 'paint' | 'height' = 'none';
   public selectedTerrainType: TerrainType = TerrainType.BEDROCK;
+  private terrainLights: THREE.PointLight[] = [];
+
+  // Light references for theme updates
+  private ambientLight?: THREE.AmbientLight;
+  private mainLight?: THREE.DirectionalLight;
+  private fillLight?: THREE.DirectionalLight;
+  private rimLight?: THREE.DirectionalLight;
 
   constructor(
     private gameBoardService: GameBoardService,
@@ -86,7 +94,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.initializeParticles();
     this.initializeTerrain();
     this.renderGameBoard();
-    this.addTerrainLights();  // Add dynamic point lights for terrain
+    this.updateTerrainLights();  // Add dynamic point lights for terrain
     this.addGridLines();
     this.subscribeToTerrainChanges();
     this.subscribeToThemeChanges();
@@ -207,33 +215,33 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private initializeLights(): void {
     // 1. Ambient light for base visibility
-    const ambientLight = new THREE.AmbientLight(0x505060, 0.5);  // Slightly blue tint, brighter
-    this.scene.add(ambientLight);
+    this.ambientLight = new THREE.AmbientLight(0x505060, 0.5);  // Slightly blue tint, brighter
+    this.scene.add(this.ambientLight);
 
     // 2. Main directional light with high-quality shadows
-    const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);  // Brighter, white light
-    mainLight.position.set(15, 30, 15);
-    mainLight.castShadow = true;
-    mainLight.shadow.mapSize.width = 4096;  // High quality shadows
-    mainLight.shadow.mapSize.height = 4096;
-    mainLight.shadow.camera.near = 0.5;
-    mainLight.shadow.camera.far = 60;
-    mainLight.shadow.camera.left = -40;
-    mainLight.shadow.camera.right = 40;
-    mainLight.shadow.camera.top = 40;
-    mainLight.shadow.camera.bottom = -40;
-    mainLight.shadow.bias = -0.0005;  // Reduce shadow acne (adjusted for better visibility)
-    this.scene.add(mainLight);
+    this.mainLight = new THREE.DirectionalLight(0xffffff, 1.0);  // Brighter, white light
+    this.mainLight.position.set(15, 30, 15);
+    this.mainLight.castShadow = true;
+    this.mainLight.shadow.mapSize.width = 4096;  // High quality shadows
+    this.mainLight.shadow.mapSize.height = 4096;
+    this.mainLight.shadow.camera.near = 0.5;
+    this.mainLight.shadow.camera.far = 60;
+    this.mainLight.shadow.camera.left = -40;
+    this.mainLight.shadow.camera.right = 40;
+    this.mainLight.shadow.camera.top = 40;
+    this.mainLight.shadow.camera.bottom = -40;
+    this.mainLight.shadow.bias = -0.0005;  // Reduce shadow acne (adjusted for better visibility)
+    this.scene.add(this.mainLight);
 
     // 3. Fill light to soften shadows
-    const fillLight = new THREE.DirectionalLight(0x8090ff, 0.4);  // Blue tint
-    fillLight.position.set(-10, 15, -10);
-    this.scene.add(fillLight);
+    this.fillLight = new THREE.DirectionalLight(0x8090ff, 0.4);  // Blue tint
+    this.fillLight.position.set(-10, 15, -10);
+    this.scene.add(this.fillLight);
 
     // 4. Rim light for edge definition
-    const rimLight = new THREE.DirectionalLight(0xffa040, 0.3);  // Warm orange
-    rimLight.position.set(0, 10, -25);
-    this.scene.add(rimLight);
+    this.rimLight = new THREE.DirectionalLight(0xffa040, 0.3);  // Warm orange
+    this.rimLight.position.set(0, 10, -25);
+    this.scene.add(this.rimLight);
   }
 
   private renderGameBoard(): void {
@@ -271,9 +279,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Add dynamic point lights for glowing terrain types
+   * Update dynamic point lights for glowing terrain types.
+   * Removes old lights and creates new ones based on current terrain.
    */
-  private addTerrainLights(): void {
+  private updateTerrainLights(): void {
+    // Remove all existing terrain lights
+    this.terrainLights.forEach(light => {
+      this.scene.remove(light);
+    });
+    this.terrainLights = [];
+
+    // Create new lights based on current terrain
     const tiles = this.gameBoardService.getGameBoard();
     const tileSize = this.gameBoardService.getTileSize();
 
@@ -290,6 +306,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           const y = tile.terrainHeight === TerrainHeight.ELEVATED ? 2 : 1;
           light.position.set(x, y, z);
           this.scene.add(light);
+          this.terrainLights.push(light);
         } else if (tile.terrainType === TerrainType.LUMINOUS_MOSS) {
           // Green point light for moss - BOOSTED intensity
           const light = new THREE.PointLight(0x60ff60, 1.0, 5);  // Increased from 0.5/4
@@ -298,6 +315,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           const y = tile.terrainHeight === TerrainHeight.SUNKEN ? 0.5 : 1;
           light.position.set(x, y, z);
           this.scene.add(light);
+          this.terrainLights.push(light);
         }
       }
     }
@@ -696,15 +714,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   /**
    * Apply theme configuration to the scene
    */
-  private applyThemeToScene(theme: any): void {
+  private applyThemeToScene(theme: ThemeConfig): void {
     // Update background and fog
     if (this.scene) {
       this.scene.background = new THREE.Color(theme.backgroundColor);
       this.scene.fog = new THREE.FogExp2(theme.fogColor, theme.fogDensity);
     }
 
-    // Update lights (if they exist)
-    // This would require storing references to lights, which we can enhance later
+    // Update lights based on theme
+    if (this.ambientLight) {
+      this.ambientLight.color.setHex(theme.ambientLightColor);
+      this.ambientLight.intensity = theme.ambientLightIntensity;
+    }
+
+    if (this.mainLight) {
+      this.mainLight.color.setHex(theme.directionalLightColor);
+      this.mainLight.intensity = theme.directionalLightIntensity;
+    }
   }
 
   /**
@@ -725,6 +751,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Re-render board with updated terrain
     this.renderGameBoard();
+
+    // Update terrain lights to match new terrain
+    this.updateTerrainLights();
   }
 
   /**
