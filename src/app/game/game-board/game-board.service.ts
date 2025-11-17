@@ -167,8 +167,9 @@ export class GameBoardService {
       const geometry = new THREE.BufferGeometry();
       // Shift by -0.5 to position lines BETWEEN tiles instead of at centers
       const x = (i - this.gameBoardWidth / 2 - 0.5) * this.tileSize;
-      const z1 = -this.gameBoardHeight / 2 * this.tileSize;
-      const z2 = this.gameBoardHeight / 2 * this.tileSize;
+      // Lines should only extend across actual tile range
+      const z1 = (-this.gameBoardHeight / 2) * this.tileSize;
+      const z2 = (this.gameBoardHeight / 2 - 1) * this.tileSize;
 
       const vertices = new Float32Array([
         x, 0.01, z1,
@@ -186,8 +187,9 @@ export class GameBoardService {
       const geometry = new THREE.BufferGeometry();
       // Shift by -0.5 to position lines BETWEEN tiles instead of at centers
       const z = (i - this.gameBoardHeight / 2 - 0.5) * this.tileSize;
-      const x1 = -this.gameBoardWidth / 2 * this.tileSize;
-      const x2 = this.gameBoardWidth / 2 * this.tileSize;
+      // Lines should only extend across actual tile range
+      const x1 = (-this.gameBoardWidth / 2) * this.tileSize;
+      const x2 = (this.gameBoardWidth / 2 - 1) * this.tileSize;
 
       const vertices = new Float32Array([
         x1, 0.01, z,
