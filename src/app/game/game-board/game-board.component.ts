@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, OnInit, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
@@ -6,13 +6,16 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
 import { GameBoardService } from './game-board.service';
+import { EnemyService } from './services/enemy.service';
+import { EnemyType } from './models/enemy.model';
 
 @Component({
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
-  styleUrls: ['./game-board.component.scss']
+  styleUrls: ['./game-board.component.scss'],
+  providers: [EnemyService]
 })
-export class GameBoardComponent implements OnInit, AfterViewInit {
+export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
 
   // Camera configuration constants - Top-down view
@@ -51,7 +54,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
   private towerMeshes: Map<string, THREE.Group> = new Map();
   public selectedTowerType: string = 'basic';
 
-  constructor(private gameBoardService: GameBoardService) { }
+  // Enemy management
+  private lastTime = 0;
+  private keyboardHandler: (event: KeyboardEvent) => void;
+
+  constructor(
+    private gameBoardService: GameBoardService,
+    private enemyService: EnemyService
+  ) {
+    // Store bound handler for cleanup
+    this.keyboardHandler = this.handleKeyboard.bind(this);
+  }
 
   ngOnInit(): void {
     this.initializeScene();
@@ -68,6 +81,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
     this.initializePostProcessing();
     this.initializeControls();
     this.setupMouseInteraction();
+    this.setupKeyboardControls();
     this.animate();
   }
 
@@ -353,7 +367,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
       // Reset previous hover
       if (this.hoveredTile && this.hoveredTile !== this.getSelectedTileMesh()) {
         const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
-        material.emissiveIntensity = this.hoveredTile.userData['tile'].type === 0 ? 0.1 : 0.3;
+        material.emissiveIntensity = this.hoveredTile.userData['tile'].type === 0 ? 0.05 : 0.2;
       }
 
       if (intersects.length > 0) {
@@ -383,7 +397,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
       const prevSelected = this.getSelectedTileMesh();
       if (prevSelected) {
         const material = prevSelected.material as THREE.MeshStandardMaterial;
-        material.emissiveIntensity = prevSelected.userData['tile'].type === 0 ? 0.1 : 0.3;
+        material.emissiveIntensity = prevSelected.userData['tile'].type === 0 ? 0.05 : 0.2;
       }
 
       if (intersects.length > 0) {
@@ -420,6 +434,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
     const towerMesh = this.gameBoardService.createTowerMesh(row, col, towerType);
     this.towerMeshes.set(key, towerMesh);
     this.scene.add(towerMesh);
+
+    // Clear enemy path cache since board layout changed
+    this.enemyService.clearPathCache();
   }
 
   public selectTowerType(type: string): void {
@@ -431,8 +448,40 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
     return this.tileMeshes.get(`${this.selectedTile.row}-${this.selectedTile.col}`) || null;
   }
 
-  private animate = (): void => {
+  private handleKeyboard(event: KeyboardEvent): void {
+    switch (event.key.toLowerCase()) {
+      case 'e':
+        // Spawn basic enemy
+        this.enemyService.spawnEnemy(EnemyType.BASIC, this.scene);
+        break;
+      case '1':
+        this.enemyService.spawnEnemy(EnemyType.BASIC, this.scene);
+        break;
+      case '2':
+        this.enemyService.spawnEnemy(EnemyType.FAST, this.scene);
+        break;
+      case '3':
+        this.enemyService.spawnEnemy(EnemyType.HEAVY, this.scene);
+        break;
+      case '4':
+        this.enemyService.spawnEnemy(EnemyType.FLYING, this.scene);
+        break;
+      case '5':
+        this.enemyService.spawnEnemy(EnemyType.BOSS, this.scene);
+        break;
+    }
+  }
+
+  private setupKeyboardControls(): void {
+    window.addEventListener('keydown', this.keyboardHandler);
+  }
+
+  private animate = (time: number = 0): void => {
     requestAnimationFrame(this.animate);
+
+    // Calculate delta time in seconds
+    const deltaTime = this.lastTime === 0 ? 0 : (time - this.lastTime) / 1000;
+    this.lastTime = time;
 
     // Update controls if they exist
     if (this.controls) {
@@ -450,11 +499,28 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
       this.particles.rotation.y += 0.0002;
     }
 
+    // Update enemies
+    if (deltaTime > 0) {
+      const reachedExit = this.enemyService.updateEnemies(deltaTime);
+      // Remove enemies that reached the exit
+      reachedExit.forEach(enemyId => {
+        this.enemyService.removeEnemy(enemyId, this.scene);
+      });
+    }
+
     // Use composer for post-processing instead of direct render
     if (this.composer) {
       this.composer.render();
     } else {
       this.renderer.render(this.scene, this.camera);
     }
+  }
+
+  ngOnDestroy(): void {
+    // Clean up event listeners
+    window.removeEventListener('keydown', this.keyboardHandler);
+
+    // Clean up Three.js resources
+    this.renderer.dispose();
   }
 }
