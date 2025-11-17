@@ -73,9 +73,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
 
   private initializeScene(): void {
     this.scene = new THREE.Scene();
-    // Remove solid background - skybox will provide the background
+    // Dark cave atmosphere
     this.scene.background = new THREE.Color(0x000000);
-    this.scene.fog = new THREE.Fog(0x000814, 50, 200);
+    this.scene.fog = new THREE.FogExp2(0x0a0515, 0.015);
   }
 
   private initializeCamera(): void {
@@ -127,12 +127,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
     const renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(renderPass);
 
-    // Add bloom pass for glowing effects
+    // Subtle bloom for bioluminescent glow
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.6,  // strength
-      0.4,  // radius
-      0.85  // threshold
+      0.4,  // strength - reduced for organic feel
+      0.6,  // radius
+      0.9   // threshold - higher to only affect brightest elements
     );
     this.composer.addPass(bloomPass);
 
@@ -140,8 +140,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
     const vignetteShader = {
       uniforms: {
         tDiffuse: { value: null },
-        offset: { value: 0.95 },
-        darkness: { value: 1.2 }
+        offset: { value: 0.9 },
+        darkness: { value: 1.5 }
       },
       vertexShader: `
         varying vec2 vUv;
@@ -172,12 +172,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
   }
 
   private initializeLights(): void {
-    // Ambient light for overall illumination - slightly cooler tone for space feel
-    const ambientLight = new THREE.AmbientLight(0xccddff, 0.4);
+    // Dim ambient light - cave atmosphere
+    const ambientLight = new THREE.AmbientLight(0x3a2a4a, 0.3);
     this.scene.add(ambientLight);
 
-    // Main directional light for shadows and definition
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    // Main light from above - like light filtering through cave opening
+    const directionalLight = new THREE.DirectionalLight(0x9a8ab0, 0.6);
     directionalLight.position.set(10, 20, 10);
     directionalLight.castShadow = true;
     directionalLight.shadow.camera.left = -20;
@@ -186,17 +186,22 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
     directionalLight.shadow.camera.bottom = -20;
     directionalLight.shadow.mapSize.width = 2048;
     directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.bias = -0.0001;
     this.scene.add(directionalLight);
 
-    // Fill light from opposite side - warmer tone
-    const fillLight = new THREE.DirectionalLight(0xffddaa, 0.2);
-    fillLight.position.set(-10, 10, -10);
-    this.scene.add(fillLight);
+    // Mysterious glow from below - bioluminescent cave floor effect
+    const underLight = new THREE.PointLight(0x4a3a6a, 0.5, 50);
+    underLight.position.set(0, -5, 0);
+    this.scene.add(underLight);
 
-    // Accent rim light for visual depth
-    const rimLight = new THREE.DirectionalLight(0x6688ff, 0.3);
-    rimLight.position.set(0, 5, -15);
-    this.scene.add(rimLight);
+    // Accent lights for cave crystals effect
+    const accent1 = new THREE.PointLight(0x6a4a8a, 0.4, 30);
+    accent1.position.set(-15, 5, -10);
+    this.scene.add(accent1);
+
+    const accent2 = new THREE.PointLight(0x4a6a8a, 0.4, 30);
+    accent2.position.set(15, 5, 10);
+    this.scene.add(accent2);
   }
 
   private renderGameBoard(): void {
@@ -246,22 +251,28 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
         }
 
         void main() {
-          // Create a deep space gradient
-          vec3 deepBlue = vec3(0.0, 0.02, 0.1);
-          vec3 purple = vec3(0.05, 0.0, 0.15);
-          vec3 color = mix(deepBlue, purple, vUv.y);
+          // Dark cave rock texture gradient
+          vec3 deepPurple = vec3(0.02, 0.01, 0.05);
+          vec3 darkBlue = vec3(0.03, 0.02, 0.08);
+          vec3 color = mix(deepPurple, darkBlue, vUv.y * 0.5);
 
-          // Add stars
-          vec2 starPos = vUv * 100.0;
+          // Distant stars - sparse and dim
+          vec2 starPos = vUv * 150.0;
           float star = random(floor(starPos));
-          if (star > 0.985) {
-            float brightness = random(floor(starPos) + 1.0);
-            color += vec3(brightness * 0.8);
+          if (star > 0.992) {
+            float brightness = random(floor(starPos) + 1.0) * 0.3;
+            color += vec3(brightness * 0.4, brightness * 0.3, brightness * 0.5);
           }
 
-          // Add some nebula-like clouds
-          float nebula = random(floor(vUv * 20.0)) * 0.1;
-          color += vec3(nebula * 0.2, nebula * 0.1, nebula * 0.3);
+          // Cave crystal veins - organic patterns
+          float vein1 = random(floor(vUv * 40.0 + vec2(0.0, vUv.x * 10.0)));
+          if (vein1 > 0.97) {
+            color += vec3(0.15, 0.08, 0.2) * vein1;
+          }
+
+          // Subtle bioluminescent patches
+          float bio = random(floor(vUv * 25.0)) * 0.08;
+          color += vec3(bio * 0.3, bio * 0.5, bio * 0.7);
 
           gl_FragColor = vec4(color, 1.0);
         }
@@ -275,25 +286,25 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
   }
 
   private initializeParticles(): void {
-    // Create floating ambient particles
-    const particleCount = 500;
+    // Create floating spores/dust particles - cave atmosphere
+    const particleCount = 400;
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
 
     for (let i = 0; i < particleCount; i++) {
-      // Distribute particles in a large area around the board
-      positions[i * 3] = (Math.random() - 0.5) * 60;
-      positions[i * 3 + 1] = Math.random() * 40 + 5;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 60;
+      // Distribute particles closer to the board - cave enclosed feeling
+      positions[i * 3] = (Math.random() - 0.5) * 50;
+      positions[i * 3 + 1] = Math.random() * 30 + 2;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 50;
 
-      // Random colors - cyan, purple, blue tints
+      // Bioluminescent spore colors - organic and mysterious
       const colorChoice = Math.random();
-      if (colorChoice < 0.33) {
-        colors[i * 3] = 0.3; colors[i * 3 + 1] = 0.8; colors[i * 3 + 2] = 1.0; // Cyan
-      } else if (colorChoice < 0.66) {
-        colors[i * 3] = 0.6; colors[i * 3 + 1] = 0.3; colors[i * 3 + 2] = 1.0; // Purple
+      if (colorChoice < 0.4) {
+        colors[i * 3] = 0.4; colors[i * 3 + 1] = 0.5; colors[i * 3 + 2] = 0.7; // Dim blue
+      } else if (colorChoice < 0.7) {
+        colors[i * 3] = 0.5; colors[i * 3 + 1] = 0.3; colors[i * 3 + 2] = 0.6; // Purple spores
       } else {
-        colors[i * 3] = 0.8; colors[i * 3 + 1] = 0.9; colors[i * 3 + 2] = 1.0; // Blue-white
+        colors[i * 3] = 0.3; colors[i * 3 + 1] = 0.6; colors[i * 3 + 2] = 0.5; // Greenish glow
       }
     }
 
@@ -302,10 +313,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit {
     particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const particleMaterial = new THREE.PointsMaterial({
-      size: 0.15,
+      size: 0.12,
       vertexColors: true,
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.4,
       sizeAttenuation: true,
       blending: THREE.AdditiveBlending
     });
