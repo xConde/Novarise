@@ -1,6 +1,10 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
 import { GameBoardService } from './game-board.service';
 import { EnemyService } from './services/enemy.service';
 import { EnemyType } from './models/enemy.model';
@@ -36,6 +40,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private camera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
   private controls!: OrbitControls;
+  private particles!: THREE.Points;
+  private composer!: EffectComposer;
 
   // Interaction
   private raycaster = new THREE.Raycaster();
@@ -45,7 +51,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private selectedTile: { row: number, col: number } | null = null;
 
   // Tower management
-  private towerMeshes: Map<string, THREE.Mesh> = new Map();
+  private towerMeshes: Map<string, THREE.Group> = new Map();
   public selectedTowerType: string = 'basic';
 
   // Enemy management
@@ -64,12 +70,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.initializeScene();
     this.initializeCamera();
     this.initializeLights();
+    this.addSkybox();
+    this.initializeParticles();
     this.renderGameBoard();
     this.addGridLines();
   }
 
   ngAfterViewInit(): void {
     this.initializeRenderer();
+    this.initializePostProcessing();
     this.initializeControls();
     this.setupMouseInteraction();
     this.setupKeyboardControls();
@@ -78,7 +87,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private initializeScene(): void {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0a0a0a);
+    // Dark cave atmosphere
+    this.scene.background = new THREE.Color(0x000000);
+    this.scene.fog = new THREE.FogExp2(0x0a0515, 0.015);
   }
 
   private initializeCamera(): void {
@@ -104,6 +115,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.2;
 
     this.canvasContainer.nativeElement.appendChild(this.renderer.domElement);
 
@@ -114,22 +127,71 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.renderer.setSize(width, height);
       this.camera.aspect = width / height;
       this.camera.updateProjectionMatrix();
+      if (this.composer) {
+        this.composer.setSize(width, height);
+      }
     });
   }
 
-  private initializeLights(): void {
-    // Ambient light for overall illumination
-    const ambientLight = new THREE.AmbientLight(
-      this.ambientLightColor,
-      this.ambientLightIntensity
+  private initializePostProcessing(): void {
+    // Create composer for post-processing effects
+    this.composer = new EffectComposer(this.renderer);
+
+    // Add render pass
+    const renderPass = new RenderPass(this.scene, this.camera);
+    this.composer.addPass(renderPass);
+
+    // Subtle bloom for bioluminescent glow
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.4,  // strength - reduced for organic feel
+      0.6,  // radius
+      0.9   // threshold - higher to only affect brightest elements
     );
+    this.composer.addPass(bloomPass);
+
+    // Add vignette effect using custom shader
+    const vignetteShader = {
+      uniforms: {
+        tDiffuse: { value: null },
+        offset: { value: 0.9 },
+        darkness: { value: 1.5 }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform float offset;
+        uniform float darkness;
+        varying vec2 vUv;
+
+        void main() {
+          vec4 texel = texture2D(tDiffuse, vUv);
+          vec2 uv = (vUv - vec2(0.5)) * vec2(offset);
+          float vignette = clamp(1.0 - dot(uv, uv), 0.0, 1.0);
+          vignette = pow(vignette, darkness);
+          texel.rgb *= vignette;
+          gl_FragColor = texel;
+        }
+      `
+    };
+
+    const vignettePass = new ShaderPass(vignetteShader);
+    this.composer.addPass(vignettePass);
+  }
+
+  private initializeLights(): void {
+    // Dim ambient light - cave atmosphere
+    const ambientLight = new THREE.AmbientLight(0x3a2a4a, 0.3);
     this.scene.add(ambientLight);
 
-    // Directional light for shadows and definition
-    const directionalLight = new THREE.DirectionalLight(
-      this.directionalLightColor,
-      this.directionalLightIntensity
-    );
+    // Main light from above - like light filtering through cave opening
+    const directionalLight = new THREE.DirectionalLight(0x9a8ab0, 0.6);
     directionalLight.position.set(10, 20, 10);
     directionalLight.castShadow = true;
     directionalLight.shadow.camera.left = -20;
@@ -138,12 +200,22 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     directionalLight.shadow.camera.bottom = -20;
     directionalLight.shadow.mapSize.width = 2048;
     directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.bias = -0.0001;
     this.scene.add(directionalLight);
 
-    // Additional fill light from opposite side
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
-    fillLight.position.set(-10, 10, -10);
-    this.scene.add(fillLight);
+    // Mysterious glow from below - bioluminescent cave floor effect
+    const underLight = new THREE.PointLight(0x4a3a6a, 0.5, 50);
+    underLight.position.set(0, -5, 0);
+    this.scene.add(underLight);
+
+    // Accent lights for cave crystals effect
+    const accent1 = new THREE.PointLight(0x6a4a8a, 0.4, 30);
+    accent1.position.set(-15, 5, -10);
+    this.scene.add(accent1);
+
+    const accent2 = new THREE.PointLight(0x4a6a8a, 0.4, 30);
+    accent2.position.set(15, 5, 10);
+    this.scene.add(accent2);
   }
 
   private renderGameBoard(): void {
@@ -162,6 +234,109 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private addGridLines(): void {
     const gridLines = this.gameBoardService.createGridLines();
     this.scene.add(gridLines);
+  }
+
+  private addSkybox(): void {
+    // Create a starfield using a sphere geometry
+    const starfieldGeometry = new THREE.SphereGeometry(500, 32, 32);
+
+    // Create a custom shader material for procedural starfield
+    const starfieldMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        time: { value: 0 }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vPosition;
+        void main() {
+          vUv = uv;
+          vPosition = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec2 vUv;
+        varying vec3 vPosition;
+        uniform float time;
+
+        // Simple noise function for stars
+        float random(vec2 st) {
+          return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+        }
+
+        void main() {
+          // Dark cave rock texture gradient
+          vec3 deepPurple = vec3(0.02, 0.01, 0.05);
+          vec3 darkBlue = vec3(0.03, 0.02, 0.08);
+          vec3 color = mix(deepPurple, darkBlue, vUv.y * 0.5);
+
+          // Distant stars - sparse and dim
+          vec2 starPos = vUv * 150.0;
+          float star = random(floor(starPos));
+          if (star > 0.992) {
+            float brightness = random(floor(starPos) + 1.0) * 0.3;
+            color += vec3(brightness * 0.4, brightness * 0.3, brightness * 0.5);
+          }
+
+          // Cave crystal veins - organic patterns
+          float vein1 = random(floor(vUv * 40.0 + vec2(0.0, vUv.x * 10.0)));
+          if (vein1 > 0.97) {
+            color += vec3(0.15, 0.08, 0.2) * vein1;
+          }
+
+          // Subtle bioluminescent patches
+          float bio = random(floor(vUv * 25.0)) * 0.08;
+          color += vec3(bio * 0.3, bio * 0.5, bio * 0.7);
+
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `,
+      side: THREE.BackSide,
+      depthWrite: false
+    });
+
+    const starfield = new THREE.Mesh(starfieldGeometry, starfieldMaterial);
+    this.scene.add(starfield);
+  }
+
+  private initializeParticles(): void {
+    // Create floating spores/dust particles - cave atmosphere
+    const particleCount = 400;
+    const positions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+
+    for (let i = 0; i < particleCount; i++) {
+      // Distribute particles closer to the board - cave enclosed feeling
+      positions[i * 3] = (Math.random() - 0.5) * 50;
+      positions[i * 3 + 1] = Math.random() * 30 + 2;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 50;
+
+      // Bioluminescent spore colors - organic and mysterious
+      const colorChoice = Math.random();
+      if (colorChoice < 0.4) {
+        colors[i * 3] = 0.4; colors[i * 3 + 1] = 0.5; colors[i * 3 + 2] = 0.7; // Dim blue
+      } else if (colorChoice < 0.7) {
+        colors[i * 3] = 0.5; colors[i * 3 + 1] = 0.3; colors[i * 3 + 2] = 0.6; // Purple spores
+      } else {
+        colors[i * 3] = 0.3; colors[i * 3 + 1] = 0.6; colors[i * 3 + 2] = 0.5; // Greenish glow
+      }
+    }
+
+    const particleGeometry = new THREE.BufferGeometry();
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const particleMaterial = new THREE.PointsMaterial({
+      size: 0.12,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.4,
+      sizeAttenuation: true,
+      blending: THREE.AdditiveBlending
+    });
+
+    this.particles = new THREE.Points(particleGeometry, particleMaterial);
+    this.scene.add(this.particles);
   }
 
   private initializeControls(): void {
@@ -191,15 +366,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Reset previous hover
       if (this.hoveredTile && this.hoveredTile !== this.getSelectedTileMesh()) {
-        const material = this.hoveredTile.material as THREE.MeshLambertMaterial;
-        material.emissiveIntensity = this.hoveredTile.userData['tile'].type === 0 ? 0 : 0.3;
+        const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
+        material.emissiveIntensity = this.hoveredTile.userData['tile'].type === 0 ? 0.05 : 0.2;
       }
 
       if (intersects.length > 0) {
         const mesh = intersects[0].object as THREE.Mesh;
         if (mesh !== this.getSelectedTileMesh()) {
           this.hoveredTile = mesh;
-          const material = mesh.material as THREE.MeshLambertMaterial;
+          const material = mesh.material as THREE.MeshStandardMaterial;
           material.emissiveIntensity = 0.5;
           canvas.style.cursor = 'pointer';
         }
@@ -221,8 +396,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // Reset previous selection
       const prevSelected = this.getSelectedTileMesh();
       if (prevSelected) {
-        const material = prevSelected.material as THREE.MeshLambertMaterial;
-        material.emissiveIntensity = prevSelected.userData['tile'].type === 0 ? 0 : 0.3;
+        const material = prevSelected.material as THREE.MeshStandardMaterial;
+        material.emissiveIntensity = prevSelected.userData['tile'].type === 0 ? 0.05 : 0.2;
       }
 
       if (intersects.length > 0) {
@@ -233,7 +408,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.selectedTile = { row, col };
 
         // Highlight selected tile
-        const material = mesh.material as THREE.MeshLambertMaterial;
+        const material = mesh.material as THREE.MeshStandardMaterial;
         material.emissiveIntensity = 0.8;
 
         // Try to place a tower
@@ -313,6 +488,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.controls.update();
     }
 
+    // Animate particles - gentle floating motion
+    if (this.particles) {
+      const positionAttribute = this.particles.geometry.attributes['position'] as THREE.BufferAttribute;
+      const positions = positionAttribute.array as Float32Array;
+      for (let i = 0; i < positions.length; i += 3) {
+        positions[i + 1] += Math.sin(Date.now() * 0.001 + i) * 0.002;
+      }
+      positionAttribute.needsUpdate = true;
+      this.particles.rotation.y += 0.0002;
+    }
+
     // Update enemies
     if (deltaTime > 0) {
       const reachedExit = this.enemyService.updateEnemies(deltaTime);
@@ -322,7 +508,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       });
     }
 
-    this.renderer.render(this.scene, this.camera);
+    // Use composer for post-processing instead of direct render
+    if (this.composer) {
+      this.composer.render();
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
   }
 
   ngOnDestroy(): void {
