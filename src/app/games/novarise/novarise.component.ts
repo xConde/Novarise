@@ -76,6 +76,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   // Current map tracking
   private currentMapName = 'Untitled Map';
 
+  // Title display
+  public title = 'NOVARISE';
+
   constructor(private mapStorage: MapStorageService) {
     this.keyboardHandler = this.handleKeyDown.bind(this);
     this.keyUpHandler = this.handleKeyUp.bind(this);
