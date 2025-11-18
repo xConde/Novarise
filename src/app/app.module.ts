@@ -1,22 +1,23 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
+import { CommonModule } from '@angular/common';
 
 import { AppComponent } from './app.component';
-import { GameBoardComponent } from './game/game-board/game-board.component';
-import { GameBoardService } from './game/game-board/game-board.service';
-import { GameComponent } from './game/game.component';
+import { NovariseComponent } from './games/novarise/novarise.component';
+import { EditControlsComponent } from './games/novarise/features/ui-controls/edit-controls.component';
 
 @NgModule({
   declarations: [
     AppComponent,
-    GameComponent,
-    GameBoardComponent
+    NovariseComponent,
+    EditControlsComponent
   ],
   imports: [
     BrowserModule,
+    CommonModule
   ],
   exports: [],
-  providers: [GameBoardService],
+  providers: [],
   bootstrap: [AppComponent]
 })
 export class AppModule { }

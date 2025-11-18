@@ -1,0 +1,43 @@
+<div class="game-container">
+  <div class="title">
+    <div class="letter" *ngFor="let letter of title.split(''); let i = index">
+      {{ letter }}
+    </div>
+  </div>
+
+  <div class="novarise-content">
+    <div #canvasContainer class="canvas-container"></div>
+
+    <app-edit-controls
+      [editMode]="editMode"
+      [selectedTerrainType]="selectedTerrainType"
+      (editModeChange)="setEditMode($event)"
+      (terrainTypeChange)="setTerrainType($event)">
+    </app-edit-controls>
+
+    <div class="shortcuts-hint">
+      <div class="hint-section">
+        <div class="hint-title">Movement</div>
+        <div class="hint-item">WASD - Move Camera</div>
+        <div class="hint-item">Arrow Keys - Rotate View</div>
+        <div class="hint-item">Mouse Wheel - Zoom</div>
+        <div class="hint-item">Q / E - Up / Down</div>
+        <div class="hint-item">Shift - Move Faster</div>
+      </div>
+      <div class="hint-section">
+        <div class="hint-title">Editing</div>
+        <div class="hint-item">Click & Drag - Edit Terrain</div>
+        <div class="hint-item">T - Paint Mode</div>
+        <div class="hint-item">H - Height Mode</div>
+        <div class="hint-item">1-4 - Select Terrain</div>
+      </div>
+      <div class="hint-section">
+        <div class="hint-title">Map Tools</div>
+        <div class="hint-item">P - Set Spawn Point</div>
+        <div class="hint-item">X - Set Exit Point</div>
+        <div class="hint-item">G - Save Map</div>
+        <div class="hint-item">L - Load Map</div>
+      </div>
+    </div>
+  </div>
+</div>
