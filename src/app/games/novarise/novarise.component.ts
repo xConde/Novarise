@@ -46,7 +46,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   // Camera movement
   private cameraVelocity = { x: 0, y: 0, z: 0 };
-  private moveSpeed = 0.5;
+  private baseSpeed = 0.3;
+  private fastSpeed = 0.8;
   private keysPressed = new Set<string>();
 
   // Event handlers
@@ -424,15 +425,20 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private updateCameraMovement(): void {
-    // Check if any movement keys are pressed
+    // Check if any movement keys are pressed (WASD + Arrow Keys)
     const isMoving = this.keysPressed.has('w') || this.keysPressed.has('s') ||
                      this.keysPressed.has('a') || this.keysPressed.has('d') ||
-                     this.keysPressed.has('q') || this.keysPressed.has('e');
+                     this.keysPressed.has('q') || this.keysPressed.has('e') ||
+                     this.keysPressed.has('arrowup') || this.keysPressed.has('arrowdown') ||
+                     this.keysPressed.has('arrowleft') || this.keysPressed.has('arrowright');
 
     // Only process movement if keys are actually pressed
     if (!isMoving) {
       return;
     }
+
+    // Determine speed (Shift for faster movement)
+    const moveSpeed = this.keysPressed.has('shift') ? this.fastSpeed : this.baseSpeed;
 
     // Get camera forward and right vectors
     const forward = new THREE.Vector3();
@@ -448,36 +454,42 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.cameraVelocity.z = 0;
     this.cameraVelocity.y = 0;
 
-    // WASD movement
-    if (this.keysPressed.has('w')) {
-      this.cameraVelocity.x += forward.x * this.moveSpeed;
-      this.cameraVelocity.z += forward.z * this.moveSpeed;
+    // WASD + Arrow Keys movement
+    if (this.keysPressed.has('w') || this.keysPressed.has('arrowup')) {
+      this.cameraVelocity.x += forward.x * moveSpeed;
+      this.cameraVelocity.z += forward.z * moveSpeed;
     }
-    if (this.keysPressed.has('s')) {
-      this.cameraVelocity.x -= forward.x * this.moveSpeed;
-      this.cameraVelocity.z -= forward.z * this.moveSpeed;
+    if (this.keysPressed.has('s') || this.keysPressed.has('arrowdown')) {
+      this.cameraVelocity.x -= forward.x * moveSpeed;
+      this.cameraVelocity.z -= forward.z * moveSpeed;
     }
-    if (this.keysPressed.has('a')) {
-      this.cameraVelocity.x -= right.x * this.moveSpeed;
-      this.cameraVelocity.z -= right.z * this.moveSpeed;
+    if (this.keysPressed.has('a') || this.keysPressed.has('arrowleft')) {
+      this.cameraVelocity.x -= right.x * moveSpeed;
+      this.cameraVelocity.z -= right.z * moveSpeed;
     }
-    if (this.keysPressed.has('d')) {
-      this.cameraVelocity.x += right.x * this.moveSpeed;
-      this.cameraVelocity.z += right.z * this.moveSpeed;
+    if (this.keysPressed.has('d') || this.keysPressed.has('arrowright')) {
+      this.cameraVelocity.x += right.x * moveSpeed;
+      this.cameraVelocity.z += right.z * moveSpeed;
     }
 
     // Q/E for up/down
     if (this.keysPressed.has('q')) {
-      this.cameraVelocity.y -= this.moveSpeed;
+      this.cameraVelocity.y -= moveSpeed;
     }
     if (this.keysPressed.has('e')) {
-      this.cameraVelocity.y += this.moveSpeed;
+      this.cameraVelocity.y += moveSpeed;
     }
 
     // Apply movement
     this.camera.position.x += this.cameraVelocity.x;
     this.camera.position.y += this.cameraVelocity.y;
     this.camera.position.z += this.cameraVelocity.z;
+
+    // Keep camera within reasonable bounds
+    const maxDistance = 50;
+    this.camera.position.x = Math.max(-maxDistance, Math.min(maxDistance, this.camera.position.x));
+    this.camera.position.z = Math.max(-maxDistance, Math.min(maxDistance, this.camera.position.z));
+    this.camera.position.y = Math.max(5, Math.min(60, this.camera.position.y)); // Min 5, max 60
 
     // Update orbit controls target to follow camera ONLY when moving
     if (this.controls) {
@@ -495,9 +507,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     gridHelper.position.y = -0.5;
     this.scene.add(gridHelper);
 
-    // Add axis helper
-    const axesHelper = new THREE.AxesHelper(5);
-    this.scene.add(axesHelper);
+    // Remove axis helper - it's confusing and not needed for terrain editing
   }
 
   public setEditMode(mode: EditMode): void {
