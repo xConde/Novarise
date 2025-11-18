@@ -55,6 +55,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   // Camera rotation
   private cameraRotation = { yaw: 0, pitch: 0 };
+  private targetRotation = { yaw: 0, pitch: 0 };  // Target rotation for smooth acceleration
+  private rotationAcceleration = 0.12;  // Smooth rotation acceleration
 
   // Event handlers
   private keyboardHandler: (event: KeyboardEvent) => void;
@@ -119,11 +121,15 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const direction = new THREE.Vector3().subVectors(lookAtPoint, this.camera.position);
 
     // Calculate yaw (horizontal rotation) from X and Z components
-    this.cameraRotation.yaw = Math.atan2(direction.x, direction.z);
+    const initialYaw = Math.atan2(direction.x, direction.z);
+    this.cameraRotation.yaw = initialYaw;
+    this.targetRotation.yaw = initialYaw;
 
     // Calculate pitch (vertical rotation) from Y component and horizontal distance
     const horizontalDistance = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
-    this.cameraRotation.pitch = Math.atan2(direction.y, horizontalDistance);
+    const initialPitch = Math.atan2(direction.y, horizontalDistance);
+    this.cameraRotation.pitch = initialPitch;
+    this.targetRotation.pitch = initialPitch;
   }
 
   private initializeRenderer(): void {
@@ -478,23 +484,27 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    // Arrow keys for camera rotation
+    // Arrow keys for camera rotation - update target rotation
     if (isRotating) {
       if (this.keysPressed.has('arrowleft')) {
-        this.cameraRotation.yaw += this.rotationSpeed;
+        this.targetRotation.yaw += this.rotationSpeed;
       }
       if (this.keysPressed.has('arrowright')) {
-        this.cameraRotation.yaw -= this.rotationSpeed;
+        this.targetRotation.yaw -= this.rotationSpeed;
       }
       if (this.keysPressed.has('arrowup')) {
         // Limited to 45 degrees (reduced from 60 degrees)
-        this.cameraRotation.pitch = Math.min(this.cameraRotation.pitch + this.rotationSpeed, Math.PI / 4);
+        this.targetRotation.pitch = Math.min(this.targetRotation.pitch + this.rotationSpeed, Math.PI / 4);
       }
       if (this.keysPressed.has('arrowdown')) {
         // Allowed to -75 degrees for near top-down view (increased from -30 degrees)
-        this.cameraRotation.pitch = Math.max(this.cameraRotation.pitch - this.rotationSpeed, -Math.PI * 5 / 12);
+        this.targetRotation.pitch = Math.max(this.targetRotation.pitch - this.rotationSpeed, -Math.PI * 5 / 12);
       }
     }
+
+    // Smoothly interpolate current rotation toward target rotation
+    this.cameraRotation.yaw += (this.targetRotation.yaw - this.cameraRotation.yaw) * this.rotationAcceleration;
+    this.cameraRotation.pitch += (this.targetRotation.pitch - this.cameraRotation.pitch) * this.rotationAcceleration;
 
     // Determine movement speed (Shift for faster)
     const currentSpeed = this.keysPressed.has('shift') ? this.fastSpeed : this.moveSpeed;
