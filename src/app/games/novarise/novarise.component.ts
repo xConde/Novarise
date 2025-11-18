@@ -370,13 +370,17 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private initializeControls(): void {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
-    // Disable all mouse controls - mouse is reserved for terrain editing
-    this.controls.enabled = false;
+    // Disable mouse rotation and pan - mouse is for terrain editing
     this.controls.enableRotate = false;
     this.controls.enablePan = false;
-    this.controls.enableZoom = false;
 
-    // Disable damping - we handle our own smoothing
+    // Enable zoom with mouse wheel
+    this.controls.enableZoom = true;
+    this.controls.zoomSpeed = 1.0;
+    this.controls.minDistance = 10;
+    this.controls.maxDistance = 80;
+
+    // Disable damping - we handle our own smoothing for keyboard
     this.controls.enableDamping = false;
 
     this.controls.target.set(0, 0, 0);
@@ -660,12 +664,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private addHelpers(): void {
-    // Add grid helper for spatial reference
-    const gridHelper = new THREE.GridHelper(30, 30, 0x666666, 0x333333);
-    gridHelper.position.y = -0.5;
-    this.scene.add(gridHelper);
-
-    // Remove axis helper - it's confusing and not needed for terrain editing
+    // Don't add THREE.js GridHelper - we have custom grid lines that match tiles perfectly
+    // The custom grid lines are added by TerrainGrid and aligned to actual tile positions
   }
 
   private createBrushIndicator(): void {
