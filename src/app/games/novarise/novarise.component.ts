@@ -48,7 +48,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private cameraVelocity = { x: 0, y: 0, z: 0 };
   private moveSpeed = 0.4;  // Smooth, educated pace
   private fastSpeed = 1.0;  // Faster when holding Shift
-  private rotationSpeed = 0.02;  // Smooth camera rotation
+  private rotationSpeed = 0.005;  // Much slower, more controlled rotation
   private keysPressed = new Set<string>();
 
   // Camera rotation
