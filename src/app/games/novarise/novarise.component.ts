@@ -43,6 +43,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private mouse = new THREE.Vector2();
   private hoveredTile: THREE.Mesh | null = null;
   private isMouseDown = false;
+  private brushIndicator!: THREE.Mesh;
+  private lastEditedTiles = new Set<THREE.Mesh>();
 
   // Camera movement
   private cameraVelocity = { x: 0, y: 0, z: 0 };
@@ -86,6 +88,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Add helpers for spatial reference
     this.addHelpers();
+
+    // Create brush indicator for crisp visual feedback
+    this.createBrushIndicator();
 
     // Initialize camera rotation to match initial camera view
     this.initializeCameraRotation();
@@ -381,8 +386,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       const tileMeshes = this.terrainGrid.getTileMeshes();
       const intersects = this.raycaster.intersectObjects(tileMeshes);
 
-      // Reset previous hover
-      if (this.hoveredTile) {
+      // Reset previous hover with crisp transition
+      if (this.hoveredTile && !this.lastEditedTiles.has(this.hoveredTile)) {
         const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
         material.emissiveIntensity = 0.2;
       }
@@ -390,8 +395,21 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       if (intersects.length > 0) {
         this.hoveredTile = intersects[0].object as THREE.Mesh;
         const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
-        material.emissiveIntensity = 0.6;
-        canvas.style.cursor = 'pointer';
+
+        // Crisp, bright hover state for clear feedback
+        material.emissiveIntensity = 0.9;
+
+        // Position brush indicator at tile location
+        this.brushIndicator.position.copy(this.hoveredTile.position);
+        this.brushIndicator.position.y = this.hoveredTile.position.y + 0.15;
+        this.brushIndicator.visible = true;
+
+        // Update brush color based on mode for instant visual feedback
+        const brushMaterial = this.brushIndicator.material as THREE.MeshBasicMaterial;
+        brushMaterial.color.setHex(this.editMode === 'paint' ? 0x6a9aff : 0xff6a9a);
+
+        // Crisp cursor change for mode indication
+        canvas.style.cursor = this.editMode === 'paint' ? 'cell' : 'ns-resize';
 
         // Apply edit if mouse is down
         if (this.isMouseDown) {
@@ -399,6 +417,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         }
       } else {
         this.hoveredTile = null;
+        this.brushIndicator.visible = false;
         canvas.style.cursor = 'default';
       }
     });
@@ -427,10 +446,40 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     if (this.editMode === 'paint') {
       this.terrainGrid.paintTile(x, z, this.selectedTerrainType);
+      // Crisp visual feedback: brief flash on edit
+      this.flashTileEdit(mesh);
     } else if (this.editMode === 'height') {
       const delta = 0.2;
       this.terrainGrid.adjustHeight(x, z, delta);
+      // Get the updated mesh after height change
+      const tile = this.terrainGrid.getTileAt(x, z);
+      if (tile) {
+        this.flashTileEdit(tile.mesh);
+      }
     }
+  }
+
+  private flashTileEdit(mesh: THREE.Mesh): void {
+    // Crisp flash animation for immediate feedback
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    const originalIntensity = material.emissiveIntensity;
+
+    // Add to edited tiles set
+    this.lastEditedTiles.add(mesh);
+
+    // Instant bright flash
+    material.emissiveIntensity = 1.5;
+
+    // Quick fade back for crisp feel
+    setTimeout(() => {
+      material.emissiveIntensity = 0.9; // Hover state
+      setTimeout(() => {
+        this.lastEditedTiles.delete(mesh);
+        if (this.hoveredTile !== mesh) {
+          material.emissiveIntensity = originalIntensity;
+        }
+      }, 100);
+    }, 50);
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
@@ -572,8 +621,30 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Remove axis helper - it's confusing and not needed for terrain editing
   }
 
+  private createBrushIndicator(): void {
+    // Create a ring to show brush area - crisp and clear
+    const geometry = new THREE.RingGeometry(0.4, 0.5, 32);
+    const material = new THREE.MeshBasicMaterial({
+      color: this.editMode === 'paint' ? 0x6a9aff : 0xff6a9a,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.8,
+      depthTest: false
+    });
+    this.brushIndicator = new THREE.Mesh(geometry, material);
+    this.brushIndicator.rotation.x = -Math.PI / 2;
+    this.brushIndicator.visible = false;
+    this.brushIndicator.renderOrder = 1000; // Always render on top
+    this.scene.add(this.brushIndicator);
+  }
+
   public setEditMode(mode: EditMode): void {
     this.editMode = mode;
+    // Update brush indicator color immediately for crisp feedback
+    if (this.brushIndicator) {
+      const material = this.brushIndicator.material as THREE.MeshBasicMaterial;
+      material.color.setHex(mode === 'paint' ? 0x6a9aff : 0xff6a9a);
+    }
   }
 
   public setTerrainType(type: TerrainType): void {
@@ -591,6 +662,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     if (this.controls) {
       this.controls.update();
+    }
+
+    // Animate brush indicator for crisp, noticeable feedback
+    if (this.brushIndicator && this.brushIndicator.visible) {
+      const pulse = Math.sin(Date.now() * 0.005) * 0.1 + 0.9;
+      this.brushIndicator.scale.set(pulse, pulse, 1);
+      const material = this.brushIndicator.material as THREE.MeshBasicMaterial;
+      material.opacity = 0.6 + Math.sin(Date.now() * 0.005) * 0.2;
     }
 
     if (this.particles) {
