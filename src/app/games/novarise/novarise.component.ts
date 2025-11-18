@@ -7,6 +7,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
 import { TerrainGrid } from './features/terrain-editor/terrain-grid.class';
 import { TerrainType } from './models/terrain-types.enum';
+import { MapStorageService } from './core/map-storage.service';
 
 export type EditMode = 'paint' | 'height' | 'spawn' | 'exit';
 
@@ -72,7 +73,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private mouseDownHandler: (event: MouseEvent) => void;
   private mouseUpHandler: (event: MouseEvent) => void;
 
-  constructor() {
+  // Current map tracking
+  private currentMapName = 'Untitled Map';
+
+  constructor(private mapStorage: MapStorageService) {
     this.keyboardHandler = this.handleKeyDown.bind(this);
     this.keyUpHandler = this.handleKeyUp.bind(this);
     this.mouseDownHandler = this.handleMouseDown.bind(this);
@@ -103,6 +107,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Initialize camera rotation to match initial camera view
     this.initializeCameraRotation();
+
+    // Try to migrate old format and load current map
+    this.mapStorage.migrateOldFormat();
+    this.tryLoadCurrentMap();
 
     this.setupInteraction();
     this.setupKeyboardControls();
@@ -738,26 +746,73 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private saveGridState(): void {
+    // Get current map name or prompt for new one
+    const mapName = prompt('Enter map name:', this.currentMapName);
+    if (!mapName) return; // User cancelled
+
     const state = this.terrainGrid.exportState();
-    const json = JSON.stringify(state);
-    localStorage.setItem('novarise_terrain', json);
-    console.log('Terrain saved to localStorage');
+    const currentId = this.mapStorage.getCurrentMapId();
+
+    // Save (will update if ID exists, create new if not)
+    const savedId = this.mapStorage.saveMap(mapName, state, currentId || undefined);
+    this.currentMapName = mapName;
+
+    alert(`Map "${mapName}" saved successfully!`);
   }
 
   private loadGridState(): void {
-    const json = localStorage.getItem('novarise_terrain');
-    if (json) {
-      try {
-        const state = JSON.parse(json);
-        this.terrainGrid.importState(state);
-        this.updateSpawnMarker();
-        this.updateExitMarker();
-        console.log('Terrain loaded from localStorage');
-      } catch (e) {
-        console.error('Failed to load terrain:', e);
-      }
+    const maps = this.mapStorage.getAllMaps();
+
+    if (maps.length === 0) {
+      alert('No saved maps found.');
+      return;
+    }
+
+    // Build a simple list for user selection
+    let message = 'Select a map to load:\n\n';
+    maps.forEach((map, index) => {
+      const date = new Date(map.updatedAt).toLocaleString();
+      message += `${index + 1}. ${map.name} (${date})\n`;
+    });
+
+    const selection = prompt(message + '\nEnter number:');
+    if (!selection) return; // User cancelled
+
+    const index = parseInt(selection) - 1;
+    if (index < 0 || index >= maps.length) {
+      alert('Invalid selection.');
+      return;
+    }
+
+    const selectedMap = maps[index];
+    const state = this.mapStorage.loadMap(selectedMap.id);
+
+    if (state) {
+      this.terrainGrid.importState(state);
+      this.updateSpawnMarker();
+      this.updateExitMarker();
+      this.currentMapName = selectedMap.name;
+      alert(`Map "${selectedMap.name}" loaded successfully!`);
     } else {
-      console.log('No saved terrain found');
+      alert('Failed to load map.');
+    }
+  }
+
+  private tryLoadCurrentMap(): void {
+    const state = this.mapStorage.loadCurrentMap();
+    if (state) {
+      this.terrainGrid.importState(state);
+      this.updateSpawnMarker();
+      this.updateExitMarker();
+
+      const currentId = this.mapStorage.getCurrentMapId();
+      if (currentId) {
+        const metadata = this.mapStorage.getMapMetadata(currentId);
+        if (metadata) {
+          this.currentMapName = metadata.name;
+          console.log(`Loaded current map: "${metadata.name}"`);
+        }
+      }
     }
   }
 
