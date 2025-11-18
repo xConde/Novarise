@@ -85,8 +85,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   private initializeScene(): void {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x000000);
-    this.scene.fog = new THREE.FogExp2(0x0a0515, 0.015);
+    // Lighter background for better visibility
+    this.scene.background = new THREE.Color(0x1a1a2e);
+    // Reduce fog for better visibility
+    this.scene.fog = new THREE.FogExp2(0x1a1a2e, 0.005);
   }
 
   private initializeCamera(): void {
@@ -108,7 +110,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    this.renderer.toneMappingExposure = 1.8; // Increased from 1.2 for brightness
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.canvasContainer.nativeElement.appendChild(this.renderer.domElement);
 
@@ -129,17 +132,21 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(renderPass);
 
+    // Reduced bloom for better visibility
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.4, 0.6, 0.9
+      0.3,  // Reduced strength
+      0.4,  // Reduced radius
+      0.95  // Higher threshold - only brightest elements
     );
     this.composer.addPass(bloomPass);
 
+    // Lighter vignette for better edge visibility
     const vignetteShader = {
       uniforms: {
         tDiffuse: { value: null },
-        offset: { value: 0.9 },
-        darkness: { value: 1.5 }
+        offset: { value: 1.2 },      // Increased offset = less vignette
+        darkness: { value: 0.8 }     // Reduced darkness
       },
       vertexShader: `
         varying vec2 vUv;
@@ -169,40 +176,49 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private initializeLights(): void {
-    // MUCH BRIGHTER ambient light for visibility
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    // VERY BRIGHT ambient light for full visibility
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
     this.scene.add(ambientLight);
 
-    // Stronger main directional light
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    directionalLight.position.set(10, 30, 10);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.camera.left = -30;
-    directionalLight.shadow.camera.right = 30;
-    directionalLight.shadow.camera.top = 30;
-    directionalLight.shadow.camera.bottom = -30;
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
-    this.scene.add(directionalLight);
+    // Multiple strong directional lights for even coverage
+    const directionalLight1 = new THREE.DirectionalLight(0xffffff, 2.0);
+    directionalLight1.position.set(10, 40, 10);
+    directionalLight1.castShadow = true;
+    directionalLight1.shadow.camera.left = -30;
+    directionalLight1.shadow.camera.right = 30;
+    directionalLight1.shadow.camera.top = 30;
+    directionalLight1.shadow.camera.bottom = -30;
+    directionalLight1.shadow.mapSize.width = 2048;
+    directionalLight1.shadow.mapSize.height = 2048;
+    this.scene.add(directionalLight1);
 
-    // Add a helper light from below for better tile visibility
-    const bottomLight = new THREE.DirectionalLight(0x9090ff, 0.5);
-    bottomLight.position.set(0, -10, 0);
+    // Second directional light from opposite angle
+    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 1.5);
+    directionalLight2.position.set(-10, 30, -10);
+    this.scene.add(directionalLight2);
+
+    // Bright light from below for complete visibility
+    const bottomLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    bottomLight.position.set(0, -20, 0);
     bottomLight.lookAt(0, 0, 0);
     this.scene.add(bottomLight);
 
-    // Add hemisphere light for natural outdoor lighting
-    const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x444444, 0.6);
+    // Hemisphere light for natural fill
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x888888, 1.0);
     this.scene.add(hemiLight);
 
-    // Accent lights for depth (reduced intensity)
-    const accent1 = new THREE.PointLight(0x6a4a8a, 0.3, 30);
-    accent1.position.set(-15, 5, -10);
-    this.scene.add(accent1);
+    // Point lights for extra brightness at key positions
+    const pointLight1 = new THREE.PointLight(0xffffff, 1.0, 50);
+    pointLight1.position.set(0, 20, 0);
+    this.scene.add(pointLight1);
 
-    const accent2 = new THREE.PointLight(0x4a6a8a, 0.3, 30);
-    accent2.position.set(15, 5, 10);
-    this.scene.add(accent2);
+    const pointLight2 = new THREE.PointLight(0xffffff, 0.8, 50);
+    pointLight2.position.set(15, 15, 15);
+    this.scene.add(pointLight2);
+
+    const pointLight3 = new THREE.PointLight(0xffffff, 0.8, 50);
+    pointLight3.position.set(-15, 15, -15);
+    this.scene.add(pointLight3);
   }
 
   private addSkybox(): void {
@@ -292,16 +308,18 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   private initializeControls(): void {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+
+    // Disable all mouse controls - mouse is reserved for terrain editing
+    this.controls.enabled = false;
+    this.controls.enableRotate = false;
+    this.controls.enablePan = false;
+    this.controls.enableZoom = false;
+
+    // Keep damping for smooth WASD movement
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.1;
-    this.controls.screenSpacePanning = false;
-    this.controls.minDistance = 5;
-    this.controls.maxDistance = 100;
-    this.controls.maxPolarAngle = Math.PI / 2; // Don't go below ground
+
     this.controls.target.set(0, 0, 0);
-    this.controls.enablePan = true;
-    this.controls.panSpeed = 1.0;
-    this.controls.rotateSpeed = 0.5;
     this.controls.update();
   }
 
