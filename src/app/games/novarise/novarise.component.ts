@@ -56,7 +56,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   // Camera rotation
   private cameraRotation = { yaw: 0, pitch: 0 };
   private targetRotation = { yaw: 0, pitch: 0 };  // Target rotation for smooth acceleration
-  private rotationAcceleration = 0.12;  // Smooth rotation acceleration
+  private rotationAcceleration = 0.15;  // Smooth rotation acceleration (matches movement)
 
   // Event handlers
   private keyboardHandler: (event: KeyboardEvent) => void;
@@ -362,9 +362,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.controls.enablePan = false;
     this.controls.enableZoom = false;
 
-    // Keep damping for smooth WASD movement
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.1;
+    // Disable damping - we handle our own smoothing
+    this.controls.enableDamping = false;
 
     this.controls.target.set(0, 0, 0);
     this.controls.update();
@@ -471,38 +470,23 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private updateCameraMovement(): void {
-    // Check if any keys are pressed
-    const isMoving = this.keysPressed.has('w') || this.keysPressed.has('s') ||
-                     this.keysPressed.has('a') || this.keysPressed.has('d') ||
-                     this.keysPressed.has('q') || this.keysPressed.has('e');
-
-    const isRotating = this.keysPressed.has('arrowup') || this.keysPressed.has('arrowdown') ||
-                       this.keysPressed.has('arrowleft') || this.keysPressed.has('arrowright');
-
-    // Only process if any camera control is active
-    if (!isMoving && !isRotating) {
-      return;
-    }
-
     // Arrow keys for camera rotation - update target rotation
-    if (isRotating) {
-      if (this.keysPressed.has('arrowleft')) {
-        this.targetRotation.yaw += this.rotationSpeed;
-      }
-      if (this.keysPressed.has('arrowright')) {
-        this.targetRotation.yaw -= this.rotationSpeed;
-      }
-      if (this.keysPressed.has('arrowup')) {
-        // Limited to 45 degrees (reduced from 60 degrees)
-        this.targetRotation.pitch = Math.min(this.targetRotation.pitch + this.rotationSpeed, Math.PI / 4);
-      }
-      if (this.keysPressed.has('arrowdown')) {
-        // Allowed to -75 degrees for near top-down view (increased from -30 degrees)
-        this.targetRotation.pitch = Math.max(this.targetRotation.pitch - this.rotationSpeed, -Math.PI * 5 / 12);
-      }
+    if (this.keysPressed.has('arrowleft')) {
+      this.targetRotation.yaw += this.rotationSpeed;
+    }
+    if (this.keysPressed.has('arrowright')) {
+      this.targetRotation.yaw -= this.rotationSpeed;
+    }
+    if (this.keysPressed.has('arrowup')) {
+      // Limited to 45 degrees (reduced from 60 degrees)
+      this.targetRotation.pitch = Math.min(this.targetRotation.pitch + this.rotationSpeed, Math.PI / 4);
+    }
+    if (this.keysPressed.has('arrowdown')) {
+      // Allowed to -75 degrees for near top-down view (increased from -30 degrees)
+      this.targetRotation.pitch = Math.max(this.targetRotation.pitch - this.rotationSpeed, -Math.PI * 5 / 12);
     }
 
-    // Smoothly interpolate current rotation toward target rotation
+    // ALWAYS smoothly interpolate rotation (even when no keys pressed) for perfect smoothness
     this.cameraRotation.yaw += (this.targetRotation.yaw - this.cameraRotation.yaw) * this.rotationAcceleration;
     this.cameraRotation.pitch += (this.targetRotation.pitch - this.cameraRotation.pitch) * this.rotationAcceleration;
 
