@@ -694,7 +694,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.targetVelocity.x += forward.x * currentSpeed;
       this.targetVelocity.z += forward.z * currentSpeed;
     }
-    if (this.keysPressed.has('s')) {
+    // 'S' key: only move backward if NOT in height mode using it for smoothing
+    // (i.e., if in height mode and stationary, 's' is for smoothing, not movement)
+    const isSmoothingWithS = this.editMode === 'height' &&
+                             !this.keysPressed.has('w') &&
+                             !this.keysPressed.has('a') &&
+                             !this.keysPressed.has('d');
+    if (this.keysPressed.has('s') && !isSmoothingWithS) {
       this.targetVelocity.x -= forward.x * currentSpeed;
       this.targetVelocity.z -= forward.z * currentSpeed;
     }
@@ -1275,6 +1281,17 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     canvas.removeEventListener('mousedown', this.mouseDownHandler);
     canvas.removeEventListener('mouseup', this.mouseUpHandler);
     canvas.removeEventListener('mouseleave', this.mouseUpHandler);
+
+    // Clean up brush preview meshes
+    this.brushPreviewMeshes.forEach(mesh => {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    });
+    this.brushPreviewMeshes = [];
+
+    // Clean up rectangle preview meshes
+    this.clearRectanglePreview();
 
     if (this.terrainGrid) {
       this.terrainGrid.dispose();
