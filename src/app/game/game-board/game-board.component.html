@@ -29,4 +29,85 @@
       <span class="tower-name">Splash</span>
     </button>
   </div>
+
+  <!-- Terrain Controls Panel -->
+  <div class="terrain-controls">
+    <div class="control-section">
+      <h3 class="section-title">Edit Mode</h3>
+      <div class="mode-buttons">
+        <button
+          class="mode-btn"
+          [class.active]="terrainEditMode === 'paint'"
+          (click)="togglePaintMode()"
+          aria-label="Toggle Paint Mode">
+          🎨 Paint (T)
+        </button>
+        <button
+          class="mode-btn"
+          [class.active]="terrainEditMode === 'height'"
+          (click)="toggleHeightMode()"
+          aria-label="Toggle Height Mode">
+          ⛰️ Height (H)
+        </button>
+      </div>
+    </div>
+
+    <div class="control-section" *ngIf="terrainEditMode === 'paint'">
+      <h3 class="section-title">Terrain Type</h3>
+      <div class="terrain-buttons">
+        <button
+          class="terrain-btn"
+          [class.selected]="selectedTerrainType === 'bedrock'"
+          (click)="selectTerrainType('bedrock')"
+          aria-label="Select Bedrock">
+          🪨 Bedrock (B)
+        </button>
+        <button
+          class="terrain-btn"
+          [class.selected]="selectedTerrainType === 'mithril_crystal'"
+          (click)="selectTerrainType('mithril_crystal')"
+          aria-label="Select Mithril Crystal">
+          💎 Crystal (C)
+        </button>
+        <button
+          class="terrain-btn"
+          [class.selected]="selectedTerrainType === 'luminous_moss'"
+          (click)="selectTerrainType('luminous_moss')"
+          aria-label="Select Luminous Moss">
+          🌿 Moss (M)
+        </button>
+        <button
+          class="terrain-btn"
+          [class.selected]="selectedTerrainType === 'abyss'"
+          (click)="selectTerrainType('abyss')"
+          aria-label="Select Abyss">
+          ⚫ Abyss (A)
+        </button>
+      </div>
+    </div>
+
+    <div class="control-section" *ngIf="terrainEditMode === 'height'">
+      <h3 class="section-title">Height Adjustment</h3>
+      <div class="info-text">
+        Left-click a tile to raise it<br>
+        Right-click to lower it
+      </div>
+    </div>
+
+    <div class="control-section">
+      <h3 class="section-title">Shortcuts</h3>
+      <button
+        class="action-btn"
+        (click)="generateNewTerrain()"
+        aria-label="Generate New Terrain">
+        🎲 New Terrain (Ctrl+G)
+      </button>
+      <button
+        class="action-btn"
+        (click)="saveTerrain()"
+        aria-label="Save Terrain">
+        💾 Save (Ctrl+S)
+      </button>
+    </div>
+  </div>
 </div>

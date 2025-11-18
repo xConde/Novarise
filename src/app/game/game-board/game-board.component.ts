@@ -539,6 +539,73 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedTowerType = type;
   }
 
+  /**
+   * Toggle terrain paint mode on/off
+   */
+  public togglePaintMode(): void {
+    this.terrainEditMode = this.terrainEditMode === 'paint' ? 'none' : 'paint';
+    console.log(`Terrain paint mode: ${this.terrainEditMode}`);
+  }
+
+  /**
+   * Toggle terrain height edit mode on/off
+   */
+  public toggleHeightMode(): void {
+    this.terrainEditMode = this.terrainEditMode === 'height' ? 'none' : 'height';
+    console.log(`Height edit mode: ${this.terrainEditMode}`);
+  }
+
+  /**
+   * Select terrain type for painting
+   */
+  public selectTerrainType(type: string): void {
+    // Convert string to TerrainType enum
+    switch (type) {
+      case 'bedrock':
+        this.selectedTerrainType = TerrainType.BEDROCK;
+        break;
+      case 'mithril_crystal':
+        this.selectedTerrainType = TerrainType.MITHRIL_CRYSTAL;
+        break;
+      case 'luminous_moss':
+        this.selectedTerrainType = TerrainType.LUMINOUS_MOSS;
+        break;
+      case 'abyss':
+        this.selectedTerrainType = TerrainType.ABYSS;
+        break;
+      default:
+        console.warn(`Unknown terrain type: ${type}`);
+    }
+    console.log(`Selected terrain: ${this.selectedTerrainType}`);
+  }
+
+  /**
+   * Generate new procedural terrain
+   */
+  public generateNewTerrain(): void {
+    const layout = this.terrainService.generateProceduralTerrain({
+      width: this.gameBoardService.getBoardWidth(),
+      height: this.gameBoardService.getBoardHeight()
+    });
+    this.gameBoardService.applyTerrainLayout(layout);
+    this.refreshBoard();
+    console.log('Generated new procedural terrain');
+  }
+
+  /**
+   * Save current terrain layout
+   */
+  public saveTerrain(): void {
+    const result = this.terrainService.saveLayout();
+    if (result.success) {
+      console.log(result.message);
+      alert(`✓ ${result.message}`);
+    } else {
+      console.error(result.error);
+      alert(`✗ ${result.error}`);
+    }
+  }
+
   private getSelectedTileMesh(): THREE.Mesh | null {
     if (!this.selectedTile) return null;
     return this.tileMeshes.get(`${this.selectedTile.row}-${this.selectedTile.col}`) || null;
@@ -806,6 +873,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // Add to scene and update map
       this.scene.add(newMesh);
       this.tileMeshes.set(key, newMesh);
+
+      // Update terrain lights to reflect new terrain
+      // NOTE: This updates ALL lights (not optimal but correct)
+      // TODO: Optimize to update only affected lights
+      this.updateTerrainLights();
     }
   }
 

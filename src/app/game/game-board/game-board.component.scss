@@ -130,4 +130,114 @@
       }
     }
   }
+
+  .terrain-controls {
+    position: absolute;
+    top: var(--spacing-lg);
+    right: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: rgba(0, 0, 0, 0.85);
+    border: var(--border-width-thin) solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    backdrop-filter: blur(0.625rem);
+    z-index: var(--z-index-overlay);
+    max-width: 16rem;
+    box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.5);
+
+    @media screen and (max-width: 768px) {
+      top: var(--spacing-sm);
+      right: var(--spacing-sm);
+      padding: var(--spacing-sm);
+      max-width: 14rem;
+    }
+
+    .control-section {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-sm);
+
+      &:not(:last-child) {
+        padding-bottom: var(--spacing-sm);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .section-title {
+        margin: 0;
+        font-size: var(--font-size-small);
+        color: var(--text-color);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.0625rem;
+        opacity: 0.8;
+      }
+
+      .mode-buttons,
+      .terrain-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-xs);
+      }
+
+      .mode-btn,
+      .terrain-btn,
+      .action-btn {
+        padding: var(--spacing-sm);
+        background: rgba(255, 255, 255, 0.05);
+        border: var(--border-width-medium) solid var(--border-color);
+        border-radius: var(--border-radius-sm);
+        color: var(--text-color);
+        font-size: var(--font-size-small);
+        cursor: pointer;
+        transition: all var(--transition-medium) cubic-bezier(0.4, 0, 0.2, 1);
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        font-family: inherit;
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.1);
+          border-color: var(--border-color-strong);
+          transform: translateX(-0.125rem);
+        }
+
+        &:active {
+          transform: translateX(0.0625rem);
+        }
+      }
+
+      .mode-btn.active,
+      .terrain-btn.selected {
+        background: rgba(144, 96, 255, 0.2);
+        border-color: #9060ff;
+        box-shadow: 0 0 var(--spacing-sm) rgba(144, 96, 255, 0.3);
+        font-weight: 600;
+      }
+
+      .action-btn {
+        background: rgba(255, 255, 255, 0.08);
+        justify-content: center;
+        font-weight: 500;
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.15);
+          transform: translateY(-0.125rem);
+        }
+
+        &:active {
+          transform: translateY(0.0625rem);
+        }
+      }
+
+      .info-text {
+        font-size: 0.8125rem;
+        color: rgba(255, 255, 255, 0.7);
+        line-height: 1.4;
+        margin: 0;
+      }
+    }
+  }
 }
