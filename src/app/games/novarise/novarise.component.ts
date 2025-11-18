@@ -293,13 +293,15 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private initializeControls(): void {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
+    this.controls.dampingFactor = 0.1;
     this.controls.screenSpacePanning = false;
-    this.controls.minDistance = this.cameraDistance / 2;
-    this.controls.maxDistance = this.cameraDistance * 3;
-    this.controls.minPolarAngle = 0;
-    this.controls.maxPolarAngle = Math.PI / 2.5;
+    this.controls.minDistance = 5;
+    this.controls.maxDistance = 100;
+    this.controls.maxPolarAngle = Math.PI / 2; // Don't go below ground
     this.controls.target.set(0, 0, 0);
+    this.controls.enablePan = true;
+    this.controls.panSpeed = 1.0;
+    this.controls.rotateSpeed = 0.5;
     this.controls.update();
   }
 
@@ -404,6 +406,16 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private updateCameraMovement(): void {
+    // Check if any movement keys are pressed
+    const isMoving = this.keysPressed.has('w') || this.keysPressed.has('s') ||
+                     this.keysPressed.has('a') || this.keysPressed.has('d') ||
+                     this.keysPressed.has('q') || this.keysPressed.has('e');
+
+    // Only process movement if keys are actually pressed
+    if (!isMoving) {
+      return;
+    }
+
     // Get camera forward and right vectors
     const forward = new THREE.Vector3();
     this.camera.getWorldDirection(forward);
@@ -449,7 +461,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.camera.position.y += this.cameraVelocity.y;
     this.camera.position.z += this.cameraVelocity.z;
 
-    // Update orbit controls target to follow camera
+    // Update orbit controls target to follow camera ONLY when moving
     if (this.controls) {
       this.controls.target.set(
         this.camera.position.x + forward.x * 10,
