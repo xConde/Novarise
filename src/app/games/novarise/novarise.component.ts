@@ -554,10 +554,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       case '4':
         this.setTerrainType(TerrainType.ABYSS);
         break;
-      case 's':
-        if (!event.shiftKey) { // Only if not shift (which is for speed)
-          this.setEditMode('spawn');
-        }
+      case 'p':
+        this.setEditMode('spawn');
         break;
       case 'x':
         this.setEditMode('exit');
