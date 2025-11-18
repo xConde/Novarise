@@ -1,0 +1,49 @@
+<div class="edit-controls-panel">
+  <div class="panel-section">
+    <h3 class="section-title">Edit Mode</h3>
+    <div class="mode-toggle">
+      <button
+        class="mode-button"
+        [class.active]="editMode === 'paint'"
+        (click)="setMode('paint')">
+        <span class="icon">🎨</span>
+        <span class="label">Paint</span>
+        <span class="shortcut">(T)</span>
+      </button>
+      <button
+        class="mode-button"
+        [class.active]="editMode === 'height'"
+        (click)="setMode('height')">
+        <span class="icon">▲</span>
+        <span class="label">Height</span>
+        <span class="shortcut">(H)</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="panel-section" *ngIf="editMode === 'paint'">
+    <h3 class="section-title">Terrain Type</h3>
+    <div class="terrain-selector">
+      <button
+        *ngFor="let type of terrainTypes; let i = index"
+        class="terrain-button"
+        [class.active]="selectedTerrainType === type"
+        [style.border-color]="getTerrainColor(type)"
+        (click)="selectTerrain(type)">
+        <div class="terrain-preview" [style.background-color]="getTerrainColor(type)"></div>
+        <div class="terrain-info">
+          <span class="terrain-name">{{ terrainConfigs[type].label }}</span>
+          <span class="terrain-shortcut">({{ i + 1 }})</span>
+        </div>
+      </button>
+    </div>
+  </div>
+
+  <div class="panel-section" *ngIf="editMode === 'height'">
+    <h3 class="section-title">Height Editor</h3>
+    <div class="height-info">
+      <p class="info-text">Click and drag to raise terrain</p>
+      <p class="info-text">Heights blend smoothly with neighbors</p>
+    </div>
+  </div>
+</div>

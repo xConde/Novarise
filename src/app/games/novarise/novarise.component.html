@@ -1,0 +1,16 @@
+<div class="novarise-container">
+  <div #canvasContainer class="canvas-container"></div>
+
+  <app-edit-controls
+    [editMode]="editMode"
+    [selectedTerrainType]="selectedTerrainType"
+    (editModeChange)="setEditMode($event)"
+    (terrainTypeChange)="setTerrainType($event)">
+  </app-edit-controls>
+
+  <div class="shortcuts-hint">
+    <div class="hint-item">T - Paint Mode</div>
+    <div class="hint-item">H - Height Mode</div>
+    <div class="hint-item">1-4 - Terrain Types</div>
+  </div>
+</div>
