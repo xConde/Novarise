@@ -46,9 +46,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   // Camera movement
   private cameraVelocity = { x: 0, y: 0, z: 0 };
-  private moveSpeed = 0.4;  // Smooth, educated pace
-  private fastSpeed = 1.0;  // Faster when holding Shift
-  private rotationSpeed = 0.005;  // Much slower, more controlled rotation
+  private targetVelocity = { x: 0, y: 0, z: 0 };  // For smooth acceleration
+  private moveSpeed = 0.25;  // Reduced from 0.4 for gentler movement
+  private fastSpeed = 0.6;   // Reduced from 1.0 for smoother fast movement
+  private acceleration = 0.15;  // Smooth acceleration/deceleration
+  private rotationSpeed = 0.005;  // Controlled rotation
   private keysPressed = new Set<string>();
 
   // Camera rotation
@@ -469,10 +471,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.cameraRotation.yaw -= this.rotationSpeed;
       }
       if (this.keysPressed.has('arrowup')) {
-        this.cameraRotation.pitch = Math.min(this.cameraRotation.pitch + this.rotationSpeed, Math.PI / 3);
+        // Limited to 45 degrees (reduced from 60 degrees)
+        this.cameraRotation.pitch = Math.min(this.cameraRotation.pitch + this.rotationSpeed, Math.PI / 4);
       }
       if (this.keysPressed.has('arrowdown')) {
-        this.cameraRotation.pitch = Math.max(this.cameraRotation.pitch - this.rotationSpeed, -Math.PI / 6);
+        // Allowed to -75 degrees for near top-down view (increased from -30 degrees)
+        this.cameraRotation.pitch = Math.max(this.cameraRotation.pitch - this.rotationSpeed, -Math.PI * 5 / 12);
       }
     }
 
@@ -490,36 +494,41 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const right = new THREE.Vector3();
     right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
 
-    // Reset velocity
-    this.cameraVelocity.x = 0;
-    this.cameraVelocity.z = 0;
-    this.cameraVelocity.y = 0;
+    // Reset target velocity
+    this.targetVelocity.x = 0;
+    this.targetVelocity.z = 0;
+    this.targetVelocity.y = 0;
 
-    // WASD movement (independent from rotation)
+    // Calculate target velocity based on input (WASD movement)
     if (this.keysPressed.has('w')) {
-      this.cameraVelocity.x += forward.x * currentSpeed;
-      this.cameraVelocity.z += forward.z * currentSpeed;
+      this.targetVelocity.x += forward.x * currentSpeed;
+      this.targetVelocity.z += forward.z * currentSpeed;
     }
     if (this.keysPressed.has('s')) {
-      this.cameraVelocity.x -= forward.x * currentSpeed;
-      this.cameraVelocity.z -= forward.z * currentSpeed;
+      this.targetVelocity.x -= forward.x * currentSpeed;
+      this.targetVelocity.z -= forward.z * currentSpeed;
     }
     if (this.keysPressed.has('a')) {
-      this.cameraVelocity.x -= right.x * currentSpeed;
-      this.cameraVelocity.z -= right.z * currentSpeed;
+      this.targetVelocity.x -= right.x * currentSpeed;
+      this.targetVelocity.z -= right.z * currentSpeed;
     }
     if (this.keysPressed.has('d')) {
-      this.cameraVelocity.x += right.x * currentSpeed;
-      this.cameraVelocity.z += right.z * currentSpeed;
+      this.targetVelocity.x += right.x * currentSpeed;
+      this.targetVelocity.z += right.z * currentSpeed;
     }
 
     // Q/E for up/down
     if (this.keysPressed.has('q')) {
-      this.cameraVelocity.y -= currentSpeed;
+      this.targetVelocity.y -= currentSpeed;
     }
     if (this.keysPressed.has('e')) {
-      this.cameraVelocity.y += currentSpeed;
+      this.targetVelocity.y += currentSpeed;
     }
+
+    // Smooth acceleration/deceleration (lerp towards target velocity)
+    this.cameraVelocity.x += (this.targetVelocity.x - this.cameraVelocity.x) * this.acceleration;
+    this.cameraVelocity.y += (this.targetVelocity.y - this.cameraVelocity.y) * this.acceleration;
+    this.cameraVelocity.z += (this.targetVelocity.z - this.cameraVelocity.z) * this.acceleration;
 
     // Apply movement
     this.camera.position.x += this.cameraVelocity.x;
