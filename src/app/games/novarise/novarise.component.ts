@@ -44,13 +44,20 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private hoveredTile: THREE.Mesh | null = null;
   private isMouseDown = false;
 
+  // Camera movement
+  private cameraVelocity = { x: 0, y: 0, z: 0 };
+  private moveSpeed = 0.5;
+  private keysPressed = new Set<string>();
+
   // Event handlers
   private keyboardHandler: (event: KeyboardEvent) => void;
+  private keyUpHandler: (event: KeyboardEvent) => void;
   private mouseDownHandler: (event: MouseEvent) => void;
   private mouseUpHandler: (event: MouseEvent) => void;
 
   constructor() {
-    this.keyboardHandler = this.handleKeyboard.bind(this);
+    this.keyboardHandler = this.handleKeyDown.bind(this);
+    this.keyUpHandler = this.handleKeyUp.bind(this);
     this.mouseDownHandler = this.handleMouseDown.bind(this);
     this.mouseUpHandler = this.handleMouseUp.bind(this);
   }
@@ -67,6 +74,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Initialize terrain grid
     this.terrainGrid = new TerrainGrid(this.scene, 25);
+
+    // Add helpers for spatial reference
+    this.addHelpers();
 
     this.setupInteraction();
     this.setupKeyboardControls();
@@ -159,29 +169,38 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private initializeLights(): void {
-    const ambientLight = new THREE.AmbientLight(0x3a2a4a, 0.3);
+    // MUCH BRIGHTER ambient light for visibility
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     this.scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0x9a8ab0, 0.6);
-    directionalLight.position.set(10, 20, 10);
+    // Stronger main directional light
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    directionalLight.position.set(10, 30, 10);
     directionalLight.castShadow = true;
-    directionalLight.shadow.camera.left = -20;
-    directionalLight.shadow.camera.right = 20;
-    directionalLight.shadow.camera.top = 20;
-    directionalLight.shadow.camera.bottom = -20;
+    directionalLight.shadow.camera.left = -30;
+    directionalLight.shadow.camera.right = 30;
+    directionalLight.shadow.camera.top = 30;
+    directionalLight.shadow.camera.bottom = -30;
     directionalLight.shadow.mapSize.width = 2048;
     directionalLight.shadow.mapSize.height = 2048;
     this.scene.add(directionalLight);
 
-    const underLight = new THREE.PointLight(0x4a3a6a, 0.5, 50);
-    underLight.position.set(0, -5, 0);
-    this.scene.add(underLight);
+    // Add a helper light from below for better tile visibility
+    const bottomLight = new THREE.DirectionalLight(0x9090ff, 0.5);
+    bottomLight.position.set(0, -10, 0);
+    bottomLight.lookAt(0, 0, 0);
+    this.scene.add(bottomLight);
 
-    const accent1 = new THREE.PointLight(0x6a4a8a, 0.4, 30);
+    // Add hemisphere light for natural outdoor lighting
+    const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x444444, 0.6);
+    this.scene.add(hemiLight);
+
+    // Accent lights for depth (reduced intensity)
+    const accent1 = new THREE.PointLight(0x6a4a8a, 0.3, 30);
     accent1.position.set(-15, 5, -10);
     this.scene.add(accent1);
 
-    const accent2 = new THREE.PointLight(0x4a6a8a, 0.4, 30);
+    const accent2 = new THREE.PointLight(0x4a6a8a, 0.3, 30);
     accent2.position.set(15, 5, 10);
     this.scene.add(accent2);
   }
@@ -348,8 +367,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private handleKeyboard(event: KeyboardEvent): void {
-    switch (event.key.toLowerCase()) {
+  private handleKeyDown(event: KeyboardEvent): void {
+    const key = event.key.toLowerCase();
+    this.keysPressed.add(key);
+
+    // Mode and terrain shortcuts
+    switch (key) {
       case 't':
         this.setEditMode('paint');
         break;
@@ -371,8 +394,80 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  private handleKeyUp(event: KeyboardEvent): void {
+    this.keysPressed.delete(event.key.toLowerCase());
+  }
+
   private setupKeyboardControls(): void {
     window.addEventListener('keydown', this.keyboardHandler);
+    window.addEventListener('keyup', this.keyUpHandler);
+  }
+
+  private updateCameraMovement(): void {
+    // Get camera forward and right vectors
+    const forward = new THREE.Vector3();
+    this.camera.getWorldDirection(forward);
+    forward.y = 0; // Keep movement horizontal
+    forward.normalize();
+
+    const right = new THREE.Vector3();
+    right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+    // Reset velocity
+    this.cameraVelocity.x = 0;
+    this.cameraVelocity.z = 0;
+    this.cameraVelocity.y = 0;
+
+    // WASD movement
+    if (this.keysPressed.has('w')) {
+      this.cameraVelocity.x += forward.x * this.moveSpeed;
+      this.cameraVelocity.z += forward.z * this.moveSpeed;
+    }
+    if (this.keysPressed.has('s')) {
+      this.cameraVelocity.x -= forward.x * this.moveSpeed;
+      this.cameraVelocity.z -= forward.z * this.moveSpeed;
+    }
+    if (this.keysPressed.has('a')) {
+      this.cameraVelocity.x -= right.x * this.moveSpeed;
+      this.cameraVelocity.z -= right.z * this.moveSpeed;
+    }
+    if (this.keysPressed.has('d')) {
+      this.cameraVelocity.x += right.x * this.moveSpeed;
+      this.cameraVelocity.z += right.z * this.moveSpeed;
+    }
+
+    // Q/E for up/down
+    if (this.keysPressed.has('q')) {
+      this.cameraVelocity.y -= this.moveSpeed;
+    }
+    if (this.keysPressed.has('e')) {
+      this.cameraVelocity.y += this.moveSpeed;
+    }
+
+    // Apply movement
+    this.camera.position.x += this.cameraVelocity.x;
+    this.camera.position.y += this.cameraVelocity.y;
+    this.camera.position.z += this.cameraVelocity.z;
+
+    // Update orbit controls target to follow camera
+    if (this.controls) {
+      this.controls.target.set(
+        this.camera.position.x + forward.x * 10,
+        this.camera.position.y - 5,
+        this.camera.position.z + forward.z * 10
+      );
+    }
+  }
+
+  private addHelpers(): void {
+    // Add grid helper for spatial reference
+    const gridHelper = new THREE.GridHelper(30, 30, 0x666666, 0x333333);
+    gridHelper.position.y = -0.5;
+    this.scene.add(gridHelper);
+
+    // Add axis helper
+    const axesHelper = new THREE.AxesHelper(5);
+    this.scene.add(axesHelper);
   }
 
   public setEditMode(mode: EditMode): void {
@@ -388,6 +483,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   private animate = (): void => {
     requestAnimationFrame(this.animate);
+
+    // Update camera movement
+    this.updateCameraMovement();
 
     if (this.controls) {
       this.controls.update();
@@ -410,6 +508,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     window.removeEventListener('keydown', this.keyboardHandler);
+    window.removeEventListener('keyup', this.keyUpHandler);
     const canvas = this.renderer.domElement;
     canvas.removeEventListener('mousedown', this.mouseDownHandler);
     canvas.removeEventListener('mouseup', this.mouseUpHandler);
