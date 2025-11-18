@@ -85,6 +85,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Add helpers for spatial reference
     this.addHelpers();
 
+    // Initialize camera rotation to match initial camera view
+    this.initializeCameraRotation();
+
     this.setupInteraction();
     this.setupKeyboardControls();
     this.animate();
@@ -108,6 +111,19 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     );
     this.camera.position.set(0, this.cameraDistance, this.cameraDistance * 0.5);
     this.camera.lookAt(0, 0, 0);
+  }
+
+  private initializeCameraRotation(): void {
+    // Calculate initial rotation based on camera's current position and lookAt point
+    const lookAtPoint = new THREE.Vector3(0, 0, 0);
+    const direction = new THREE.Vector3().subVectors(lookAtPoint, this.camera.position);
+
+    // Calculate yaw (horizontal rotation) from X and Z components
+    this.cameraRotation.yaw = Math.atan2(direction.x, direction.z);
+
+    // Calculate pitch (vertical rotation) from Y component and horizontal distance
+    const horizontalDistance = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
+    this.cameraRotation.pitch = Math.atan2(direction.y, horizontalDistance);
   }
 
   private initializeRenderer(): void {
