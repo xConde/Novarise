@@ -888,7 +888,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         const metadata = this.mapStorage.getMapMetadata(currentId);
         if (metadata) {
           this.currentMapName = metadata.name;
-          console.log(`Loaded current map: "${metadata.name}"`);
         }
       }
     }
@@ -898,7 +897,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.brushSizeIndex = (this.brushSizeIndex + direction + this.brushSizes.length) % this.brushSizes.length;
     this.brushSize = this.brushSizes[this.brushSizeIndex];
     this.updateBrushPreview();
-    console.log(`Brush size: ${this.brushSize}x${this.brushSize}`);
   }
 
   private changeActiveTool(tool: BrushTool): void {
@@ -909,8 +907,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.rectangleStartTile = null;
       this.clearRectanglePreview();
     }
-
-    console.log(`Tool: ${tool}`);
   }
 
   private updateBrushPreview(): void {
@@ -955,6 +951,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
+    // Validate userData exists
+    if (!this.hoveredTile.userData ||
+        typeof this.hoveredTile.userData['gridX'] !== 'number' ||
+        typeof this.hoveredTile.userData['gridZ'] !== 'number') {
+      this.hideBrushPreview();
+      return;
+    }
+
     const centerX = this.hoveredTile.userData['gridX'];
     const centerZ = this.hoveredTile.userData['gridZ'];
 
@@ -984,6 +988,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     if (this.brushSize === 1) return tiles;
 
+    // Validate userData exists
+    if (!centerTile.userData ||
+        typeof centerTile.userData['gridX'] !== 'number' ||
+        typeof centerTile.userData['gridZ'] !== 'number') {
+      return tiles;
+    }
+
     const centerX = centerTile.userData['gridX'];
     const centerZ = centerTile.userData['gridZ'];
     const halfSize = Math.floor(this.brushSize / 2);
@@ -1003,6 +1014,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private floodFill(startTile: THREE.Mesh): void {
+    // Validate userData exists
+    if (!startTile.userData ||
+        typeof startTile.userData['gridX'] !== 'number' ||
+        typeof startTile.userData['gridZ'] !== 'number') {
+      return;
+    }
+
     const startX = startTile.userData['gridX'];
     const startZ = startTile.userData['gridZ'];
     const startTileData = this.terrainGrid.getTileAt(startX, startZ);
@@ -1017,8 +1035,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     const visited = new Set<string>();
     const queue: [number, number][] = [[startX, startZ]];
+    const maxIterations = 625; // Max 25x25 grid
+    let iterations = 0;
 
-    while (queue.length > 0) {
+    while (queue.length > 0 && iterations < maxIterations) {
+      iterations++;
       const [x, z] = queue.shift()!;
       const key = `${x},${z}`;
 
@@ -1049,6 +1070,17 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private fillRectangle(startTile: THREE.Mesh, endTile: THREE.Mesh): void {
+    // Validate userData exists for both tiles
+    if (!startTile.userData || !endTile.userData ||
+        typeof startTile.userData['gridX'] !== 'number' ||
+        typeof startTile.userData['gridZ'] !== 'number' ||
+        typeof endTile.userData['gridX'] !== 'number' ||
+        typeof endTile.userData['gridZ'] !== 'number') {
+      this.clearRectanglePreview();
+      this.rectangleStartTile = null;
+      return;
+    }
+
     const x1 = startTile.userData['gridX'];
     const z1 = startTile.userData['gridZ'];
     const x2 = endTile.userData['gridX'];
@@ -1080,6 +1112,15 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private updateRectanglePreview(startTile: THREE.Mesh, endTile: THREE.Mesh): void {
     this.clearRectanglePreview();
 
+    // Validate userData exists for both tiles
+    if (!startTile.userData || !endTile.userData ||
+        typeof startTile.userData['gridX'] !== 'number' ||
+        typeof startTile.userData['gridZ'] !== 'number' ||
+        typeof endTile.userData['gridX'] !== 'number' ||
+        typeof endTile.userData['gridZ'] !== 'number') {
+      return;
+    }
+
     const x1 = startTile.userData['gridX'];
     const z1 = startTile.userData['gridZ'];
     const x2 = endTile.userData['gridX'];
@@ -1089,6 +1130,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const maxX = Math.max(x1, x2);
     const minZ = Math.min(z1, z2);
     const maxZ = Math.max(z1, z2);
+
+    // Performance limit: don't create more than 100 preview meshes
+    const tileCount = (maxX - minX + 1) * (maxZ - minZ + 1);
+    if (tileCount > 100) {
+      // For large selections, only show corner/edge previews
+      return;
+    }
 
     for (let x = minX; x <= maxX; x++) {
       for (let z = minZ; z <= maxZ; z++) {
@@ -1125,6 +1173,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   private smoothTerrain(): void {
     if (!this.hoveredTile) return;
+
+    // Validate userData exists
+    if (!this.hoveredTile.userData ||
+        typeof this.hoveredTile.userData['gridX'] !== 'number' ||
+        typeof this.hoveredTile.userData['gridZ'] !== 'number') {
+      return;
+    }
 
     const centerX = this.hoveredTile.userData['gridX'];
     const centerZ = this.hoveredTile.userData['gridZ'];
