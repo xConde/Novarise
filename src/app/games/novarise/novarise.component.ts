@@ -46,9 +46,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   // Camera movement
   private cameraVelocity = { x: 0, y: 0, z: 0 };
-  private baseSpeed = 0.3;
-  private fastSpeed = 0.8;
+  private moveSpeed = 0.4;  // Smooth, educated pace
+  private fastSpeed = 1.0;  // Faster when holding Shift
+  private rotationSpeed = 0.02;  // Smooth camera rotation
   private keysPressed = new Set<string>();
+
+  // Camera rotation
+  private cameraRotation = { yaw: 0, pitch: 0 };
 
   // Event handlers
   private keyboardHandler: (event: KeyboardEvent) => void;
@@ -177,12 +181,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private initializeLights(): void {
-    // VERY BRIGHT ambient light for full visibility
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
+    // EXTREMELY BRIGHT ambient light for maximum visibility
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
     this.scene.add(ambientLight);
 
     // Multiple strong directional lights for even coverage
-    const directionalLight1 = new THREE.DirectionalLight(0xffffff, 2.0);
+    const directionalLight1 = new THREE.DirectionalLight(0xffffff, 2.5);
     directionalLight1.position.set(10, 40, 10);
     directionalLight1.castShadow = true;
     directionalLight1.shadow.camera.left = -30;
@@ -194,32 +198,50 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.scene.add(directionalLight1);
 
     // Second directional light from opposite angle
-    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 1.5);
+    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 2.0);
     directionalLight2.position.set(-10, 30, -10);
     this.scene.add(directionalLight2);
 
+    // Third directional light from side
+    const directionalLight3 = new THREE.DirectionalLight(0xffffff, 1.5);
+    directionalLight3.position.set(20, 25, 0);
+    this.scene.add(directionalLight3);
+
+    // Fourth directional light from opposite side
+    const directionalLight4 = new THREE.DirectionalLight(0xffffff, 1.5);
+    directionalLight4.position.set(-20, 25, 0);
+    this.scene.add(directionalLight4);
+
     // Bright light from below for complete visibility
-    const bottomLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    const bottomLight = new THREE.DirectionalLight(0xffffff, 1.5);
     bottomLight.position.set(0, -20, 0);
     bottomLight.lookAt(0, 0, 0);
     this.scene.add(bottomLight);
 
     // Hemisphere light for natural fill
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x888888, 1.0);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xaaaaaa, 1.5);
     this.scene.add(hemiLight);
 
     // Point lights for extra brightness at key positions
-    const pointLight1 = new THREE.PointLight(0xffffff, 1.0, 50);
+    const pointLight1 = new THREE.PointLight(0xffffff, 1.5, 50);
     pointLight1.position.set(0, 20, 0);
     this.scene.add(pointLight1);
 
-    const pointLight2 = new THREE.PointLight(0xffffff, 0.8, 50);
+    const pointLight2 = new THREE.PointLight(0xffffff, 1.2, 50);
     pointLight2.position.set(15, 15, 15);
     this.scene.add(pointLight2);
 
-    const pointLight3 = new THREE.PointLight(0xffffff, 0.8, 50);
+    const pointLight3 = new THREE.PointLight(0xffffff, 1.2, 50);
     pointLight3.position.set(-15, 15, -15);
     this.scene.add(pointLight3);
+
+    const pointLight4 = new THREE.PointLight(0xffffff, 1.2, 50);
+    pointLight4.position.set(15, 15, -15);
+    this.scene.add(pointLight4);
+
+    const pointLight5 = new THREE.PointLight(0xffffff, 1.2, 50);
+    pointLight5.position.set(-15, 15, 15);
+    this.scene.add(pointLight5);
   }
 
   private addSkybox(): void {
@@ -425,25 +447,44 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private updateCameraMovement(): void {
-    // Check if any movement keys are pressed (WASD + Arrow Keys)
+    // Check if any keys are pressed
     const isMoving = this.keysPressed.has('w') || this.keysPressed.has('s') ||
                      this.keysPressed.has('a') || this.keysPressed.has('d') ||
-                     this.keysPressed.has('q') || this.keysPressed.has('e') ||
-                     this.keysPressed.has('arrowup') || this.keysPressed.has('arrowdown') ||
-                     this.keysPressed.has('arrowleft') || this.keysPressed.has('arrowright');
+                     this.keysPressed.has('q') || this.keysPressed.has('e');
 
-    // Only process movement if keys are actually pressed
-    if (!isMoving) {
+    const isRotating = this.keysPressed.has('arrowup') || this.keysPressed.has('arrowdown') ||
+                       this.keysPressed.has('arrowleft') || this.keysPressed.has('arrowright');
+
+    // Only process if any camera control is active
+    if (!isMoving && !isRotating) {
       return;
     }
 
-    // Determine speed (Shift for faster movement)
-    const moveSpeed = this.keysPressed.has('shift') ? this.fastSpeed : this.baseSpeed;
+    // Arrow keys for camera rotation
+    if (isRotating) {
+      if (this.keysPressed.has('arrowleft')) {
+        this.cameraRotation.yaw += this.rotationSpeed;
+      }
+      if (this.keysPressed.has('arrowright')) {
+        this.cameraRotation.yaw -= this.rotationSpeed;
+      }
+      if (this.keysPressed.has('arrowup')) {
+        this.cameraRotation.pitch = Math.min(this.cameraRotation.pitch + this.rotationSpeed, Math.PI / 3);
+      }
+      if (this.keysPressed.has('arrowdown')) {
+        this.cameraRotation.pitch = Math.max(this.cameraRotation.pitch - this.rotationSpeed, -Math.PI / 6);
+      }
+    }
 
-    // Get camera forward and right vectors
-    const forward = new THREE.Vector3();
-    this.camera.getWorldDirection(forward);
-    forward.y = 0; // Keep movement horizontal
+    // Determine movement speed (Shift for faster)
+    const currentSpeed = this.keysPressed.has('shift') ? this.fastSpeed : this.moveSpeed;
+
+    // Calculate camera direction based on yaw rotation
+    const forward = new THREE.Vector3(
+      Math.sin(this.cameraRotation.yaw),
+      0,
+      Math.cos(this.cameraRotation.yaw)
+    );
     forward.normalize();
 
     const right = new THREE.Vector3();
@@ -454,30 +495,30 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.cameraVelocity.z = 0;
     this.cameraVelocity.y = 0;
 
-    // WASD + Arrow Keys movement
-    if (this.keysPressed.has('w') || this.keysPressed.has('arrowup')) {
-      this.cameraVelocity.x += forward.x * moveSpeed;
-      this.cameraVelocity.z += forward.z * moveSpeed;
+    // WASD movement (independent from rotation)
+    if (this.keysPressed.has('w')) {
+      this.cameraVelocity.x += forward.x * currentSpeed;
+      this.cameraVelocity.z += forward.z * currentSpeed;
     }
-    if (this.keysPressed.has('s') || this.keysPressed.has('arrowdown')) {
-      this.cameraVelocity.x -= forward.x * moveSpeed;
-      this.cameraVelocity.z -= forward.z * moveSpeed;
+    if (this.keysPressed.has('s')) {
+      this.cameraVelocity.x -= forward.x * currentSpeed;
+      this.cameraVelocity.z -= forward.z * currentSpeed;
     }
-    if (this.keysPressed.has('a') || this.keysPressed.has('arrowleft')) {
-      this.cameraVelocity.x -= right.x * moveSpeed;
-      this.cameraVelocity.z -= right.z * moveSpeed;
+    if (this.keysPressed.has('a')) {
+      this.cameraVelocity.x -= right.x * currentSpeed;
+      this.cameraVelocity.z -= right.z * currentSpeed;
     }
-    if (this.keysPressed.has('d') || this.keysPressed.has('arrowright')) {
-      this.cameraVelocity.x += right.x * moveSpeed;
-      this.cameraVelocity.z += right.z * moveSpeed;
+    if (this.keysPressed.has('d')) {
+      this.cameraVelocity.x += right.x * currentSpeed;
+      this.cameraVelocity.z += right.z * currentSpeed;
     }
 
     // Q/E for up/down
     if (this.keysPressed.has('q')) {
-      this.cameraVelocity.y -= moveSpeed;
+      this.cameraVelocity.y -= currentSpeed;
     }
     if (this.keysPressed.has('e')) {
-      this.cameraVelocity.y += moveSpeed;
+      this.cameraVelocity.y += currentSpeed;
     }
 
     // Apply movement
@@ -489,15 +530,17 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const maxDistance = 50;
     this.camera.position.x = Math.max(-maxDistance, Math.min(maxDistance, this.camera.position.x));
     this.camera.position.z = Math.max(-maxDistance, Math.min(maxDistance, this.camera.position.z));
-    this.camera.position.y = Math.max(5, Math.min(60, this.camera.position.y)); // Min 5, max 60
+    this.camera.position.y = Math.max(5, Math.min(60, this.camera.position.y));
 
-    // Update orbit controls target to follow camera ONLY when moving
+    // Apply rotation to camera
+    const lookAtDistance = 10;
+    const targetX = this.camera.position.x + forward.x * lookAtDistance;
+    const targetY = this.camera.position.y + Math.sin(this.cameraRotation.pitch) * lookAtDistance - 5;
+    const targetZ = this.camera.position.z + forward.z * lookAtDistance;
+
+    // Update orbit controls target
     if (this.controls) {
-      this.controls.target.set(
-        this.camera.position.x + forward.x * 10,
-        this.camera.position.y - 5,
-        this.camera.position.z + forward.z * 10
-      );
+      this.controls.target.set(targetX, targetY, targetZ);
     }
   }
 
