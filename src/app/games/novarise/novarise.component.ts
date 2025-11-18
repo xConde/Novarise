@@ -6,7 +6,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
 import { TerrainGrid } from './features/terrain-editor/terrain-grid.class';
-import { TerrainType } from './models/terrain-types.enum';
+import { TerrainType, TERRAIN_CONFIGS } from './models/terrain-types.enum';
 import { MapStorageService } from './core/map-storage.service';
 
 export type EditMode = 'paint' | 'height' | 'spawn' | 'exit';
@@ -425,7 +425,16 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       // Reset previous hover with crisp transition
       if (this.hoveredTile && !this.lastEditedTiles.has(this.hoveredTile)) {
         const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
-        material.emissiveIntensity = 0.2;
+        // Reset to original terrain emissive intensity from config
+        const x = this.hoveredTile.userData['gridX'];
+        const z = this.hoveredTile.userData['gridZ'];
+        if (typeof x === 'number' && typeof z === 'number') {
+          const tile = this.terrainGrid.getTileAt(x, z);
+          if (tile) {
+            const config = TERRAIN_CONFIGS[tile.type];
+            material.emissiveIntensity = config.emissiveIntensity;
+          }
+        }
       }
 
       if (intersects.length > 0) {
@@ -459,8 +468,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         };
         canvas.style.cursor = modeCursors[this.editMode];
 
-        // Update brush preview meshes
-        this.updateBrushPreviewPositions();
+        // Update brush preview meshes (only for brush tool)
+        if (this.activeTool === 'brush') {
+          this.updateBrushPreviewPositions();
+        } else {
+          this.hideBrushPreview();
+        }
 
         // Apply edit if mouse is down (with throttling for performance)
         if (this.isMouseDown) {
@@ -560,7 +573,19 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private flashTileEdit(mesh: THREE.Mesh): void {
     // Crisp flash animation for immediate feedback
     const material = mesh.material as THREE.MeshStandardMaterial;
-    const originalIntensity = material.emissiveIntensity;
+
+    // Get original intensity from terrain config
+    const x = mesh.userData['gridX'];
+    const z = mesh.userData['gridZ'];
+    let originalIntensity = 0.2; // Default fallback
+
+    if (typeof x === 'number' && typeof z === 'number') {
+      const tile = this.terrainGrid.getTileAt(x, z);
+      if (tile) {
+        const config = TERRAIN_CONFIGS[tile.type];
+        originalIntensity = config.emissiveIntensity;
+      }
+    }
 
     // Add to edited tiles set
     this.lastEditedTiles.add(mesh);
@@ -906,6 +931,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (tool !== 'rectangle') {
       this.rectangleStartTile = null;
       this.clearRectanglePreview();
+    }
+
+    // Hide brush previews when switching away from brush tool
+    if (tool !== 'brush') {
+      this.hideBrushPreview();
     }
   }
 
