@@ -11,8 +11,12 @@
     <app-edit-controls
       [editMode]="editMode"
       [selectedTerrainType]="selectedTerrainType"
+      [brushSize]="brushSize"
+      [activeTool]="activeTool"
       (editModeChange)="setEditMode($event)"
-      (terrainTypeChange)="setTerrainType($event)">
+      (terrainTypeChange)="setTerrainType($event)"
+      (brushSizeChange)="setBrushSize($event)"
+      (activeToolChange)="setActiveTool($event)">
     </app-edit-controls>
 
     <div class="shortcuts-hint">
@@ -26,15 +30,23 @@
       </div>
       <div class="hint-section">
         <div class="hint-title">Editing</div>
-        <div class="hint-item">Click & Drag - Edit Terrain</div>
+        <div class="hint-item">Click & Drag - Paint</div>
         <div class="hint-item">T - Paint Mode</div>
         <div class="hint-item">H - Height Mode</div>
-        <div class="hint-item">1-4 - Select Terrain</div>
+        <div class="hint-item">1-4 - Terrain Type</div>
+        <div class="hint-item">[ ] - Brush Size</div>
+      </div>
+      <div class="hint-section">
+        <div class="hint-title">Brush Tools</div>
+        <div class="hint-item">B - Brush Tool</div>
+        <div class="hint-item">F - Fill Tool</div>
+        <div class="hint-item">R - Rectangle</div>
+        <div class="hint-item">S - Smooth (Height)</div>
       </div>
       <div class="hint-section">
         <div class="hint-title">Map Tools</div>
-        <div class="hint-item">P - Set Spawn Point</div>
-        <div class="hint-item">X - Set Exit Point</div>
+        <div class="hint-item">P - Set Spawn</div>
+        <div class="hint-item">X - Set Exit</div>
         <div class="hint-item">G - Save Map</div>
         <div class="hint-item">L - Load Map</div>
       </div>

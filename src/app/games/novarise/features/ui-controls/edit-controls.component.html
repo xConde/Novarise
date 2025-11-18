@@ -19,6 +19,47 @@
     </div>
   </div>
 
+  <div class="panel-section">
+    <h3 class="section-title">Brush Tool</h3>
+    <div class="tool-toggle">
+      <button
+        class="tool-button"
+        [class.active]="activeTool === 'brush'"
+        (click)="setTool('brush')">
+        <span class="label">Brush</span>
+        <span class="shortcut">(B)</span>
+      </button>
+      <button
+        class="tool-button"
+        [class.active]="activeTool === 'fill'"
+        (click)="setTool('fill')">
+        <span class="label">Fill</span>
+        <span class="shortcut">(F)</span>
+      </button>
+      <button
+        class="tool-button"
+        [class.active]="activeTool === 'rectangle'"
+        (click)="setTool('rectangle')">
+        <span class="label">Rectangle</span>
+        <span class="shortcut">(R)</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="panel-section" *ngIf="activeTool === 'brush'">
+    <h3 class="section-title">Brush Size</h3>
+    <div class="brush-size-selector">
+      <button
+        *ngFor="let size of brushSizes"
+        class="size-button"
+        [class.active]="brushSize === size"
+        (click)="setBrushSize(size)">
+        <span class="size-label">{{ size }}x{{ size }}</span>
+      </button>
+    </div>
+    <p class="info-text">Use [ ] to cycle brush size</p>
+  </div>
+
   <div class="panel-section" *ngIf="editMode === 'paint'">
     <h3 class="section-title">Terrain Type</h3>
     <div class="terrain-selector">
@@ -42,6 +83,7 @@
     <div class="height-info">
       <p class="info-text">Click and drag to raise terrain</p>
       <p class="info-text">Heights blend smoothly with neighbors</p>
+      <p class="info-text">Press S (not moving) to smooth</p>
     </div>
   </div>
 </div>
