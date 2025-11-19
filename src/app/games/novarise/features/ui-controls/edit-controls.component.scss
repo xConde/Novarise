@@ -7,7 +7,7 @@
   &.active { background: rgba(106,74,138,.4); border-color: #9a8ab0; color: #e0d0f0; box-shadow: 0 0 8px rgba(106,74,138,.3); }
 }
 .tab-content { flex: 1; overflow-y: auto; overflow-x: hidden; }
-.panel-section { margin-bottom: 20px; &:last-child { margin-bottom: 0; } }
+.panel-section { margin-bottom: 20px; &:last-child { margin: 0; } }
 .section-title { margin: 0 0 10px; font-size: 12px; font-weight: 600; color: #9a8ab0; border-bottom: 1px solid rgba(106,74,138,.3); padding-bottom: 6px; }
 .mode-toggle-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 .mode-button, .terrain-button-compact, .tool-button, .size-button {
@@ -21,7 +21,7 @@
 }
 
 .mode-button, .terrain-button-compact { display: flex; flex-direction: column; align-items: center; }
-.mode-button { padding: 14px 10px; font-size: 12px; &.compact { padding: 10px 8px; font-size: 11px; } }
+.mode-button { padding: 14px 10px; font-size: 12px; &.compact { padding: 10px 8px; } }
 .terrain-selector-compact { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .terrain-button-compact { gap: 4px; padding: 8px 6px; font-size: 10px; }
 .terrain-preview-compact { width: 24px; height: 24px; border-radius: 4px; box-shadow: 0 1px 4px #0006; .terrain-button-compact.active & { box-shadow: 0 0 10px currentColor; } }
@@ -40,8 +40,8 @@
 .shortcut-item { font-size: 10px; color: #9a8ab0; margin: 3px 0 3px 6px; &::before { content: '▸ '; color: #6a4a8a; } }
 
 @media (max-width: 768px) {
-  .reopen-button { top: auto; bottom: max(20px, env(safe-area-inset-bottom)); right: 20px; padding: 10px 16px; min-height: 44px; font-size: 11px; }
-  .edit-controls-panel { position: fixed; top: auto; bottom: max(160px, calc(160px + env(safe-area-inset-bottom))); left: 50%; transform: translateX(-50%); width: calc(100vw - 40px); max-width: 400px; max-height: calc(100vh - 200px); padding: 12px; }
+  .reopen-button { top: auto; bottom: 56px; bottom: calc(56px + env(safe-area-inset-bottom)); right: 20px; padding: 10px 16px; min-height: 44px; font-size: 11px; }
+  .edit-controls-panel { position: fixed; top: auto; bottom: 216px; bottom: calc(216px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: calc(100vw - 40px); max-width: 400px; max-height: calc(100vh - 200px); padding: 12px; }
   .tab-button, .mode-button.compact, .tool-button, .size-button, .terrain-button-compact { min-height: 44px; }
   .terrain-button-compact { padding: 10px 6px; font-size: 10px; }
   .terrain-preview-compact { width: 20px; height: 20px; }
