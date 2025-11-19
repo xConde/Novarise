@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, OnInit } from '@angular/core';
 import { EditMode, BrushTool } from '../../novarise.component';
 import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
 
@@ -7,7 +7,7 @@ import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
   templateUrl: './edit-controls.component.html',
   styleUrls: ['./edit-controls.component.scss']
 })
-export class EditControlsComponent {
+export class EditControlsComponent implements OnInit {
   @Input() editMode: EditMode = 'paint';
   @Input() selectedTerrainType: TerrainType = TerrainType.BEDROCK;
   @Input() brushSize: number = 1;
@@ -23,6 +23,19 @@ export class EditControlsComponent {
   public brushSizes = [1, 3, 5, 7];
   public activeTab: 'editor' | 'shortcuts' = 'editor';
   public isCollapsed = false;
+  public isMobile = false;
+
+  ngOnInit(): void {
+    this.checkMobile();
+    window.addEventListener('resize', () => this.checkMobile());
+  }
+
+  private checkMobile(): void {
+    this.isMobile = window.innerWidth <= 768;
+    if (this.isMobile && !this.isCollapsed) {
+      this.isCollapsed = true;
+    }
+  }
 
   public setTab(tab: 'editor' | 'shortcuts'): void {
     if (this.activeTab === tab) {
@@ -35,6 +48,10 @@ export class EditControlsComponent {
 
   public openPanel(): void {
     this.isCollapsed = false;
+  }
+
+  public closePanel(): void {
+    this.isCollapsed = true;
   }
 
   public setMode(mode: EditMode): void {

@@ -3,6 +3,8 @@
 </button>
 
 <div class="edit-controls-panel" *ngIf="!isCollapsed">
+  <button class="close-button" *ngIf="isMobile" (click)="closePanel()" aria-label="Close">✕</button>
+
   <div class="tab-navigation">
     <button
       class="tab-button"
