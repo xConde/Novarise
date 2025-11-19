@@ -35,8 +35,9 @@
 .shortcut-item { font-size: 10px; color: #9a8ab0; margin: 3px 0 3px 6px; &::before { content: '▸ '; } }
 
 @media (max-width: 768px) {
-  .reopen-button { top: 10px; bottom: auto; left: 50%; transform: translateX(-50%); right: auto; padding: 6px 12px; font-size: 10px; }
+  .reopen-button { top: 10px; bottom: auto; left: 50%; transform: translateX(-50%); right: auto; padding: 10px 20px; font-size: 12px; min-height: 44px; }
   .edit-controls-panel { position: fixed; top: 10px; bottom: auto; left: 50%; transform: translateX(-50%); width: calc(100vw - 20px); max-width: 400px; max-height: 30vh; padding: 8px; }
+  .tab-content { overflow-y: scroll; }
   .tab-navigation, .panel-section { margin-bottom: 6px; }
   .tab-navigation { gap: 4px; padding-bottom: 4px; }
   .tab-button, .mode-button, .tool-button, .size-button, .terrain-button-compact { padding: 6px 4px; font-size: 10px; }
