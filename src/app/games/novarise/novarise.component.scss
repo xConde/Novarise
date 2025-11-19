@@ -93,8 +93,8 @@
 
 .mobile-joystick {
   position: absolute;
-  bottom: 80px;
-  bottom: calc(80px + env(safe-area-inset-bottom));
+  bottom: 120px;
+  bottom: calc(120px + env(safe-area-inset-bottom));
   left: 20px;
   width: 120px;
   height: 120px;

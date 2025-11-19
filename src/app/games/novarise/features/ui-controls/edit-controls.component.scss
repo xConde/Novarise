@@ -35,11 +35,12 @@
 .shortcut-item { font-size: 10px; color: #9a8ab0; margin: 3px 0 3px 6px; &::before { content: '▸ '; } }
 
 @media (max-width: 768px) {
-  .reopen-button { top: auto; bottom: 80px; bottom: calc(80px + env(safe-area-inset-bottom)); right: 20px; padding: 8px 12px; font-size: 10px; }
-  .edit-controls-panel { position: fixed; top: auto; bottom: 240px; bottom: calc(240px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: calc(100vw - 40px); max-width: 400px; max-height: 40vh; padding: 8px; }
-  .tab-navigation, .panel-section { margin-bottom: 8px; }
+  .reopen-button { top: 10px; bottom: auto; left: 50%; transform: translateX(-50%); right: auto; padding: 6px 12px; font-size: 10px; }
+  .edit-controls-panel { position: fixed; top: 10px; bottom: auto; left: 50%; transform: translateX(-50%); width: calc(100vw - 20px); max-width: 400px; max-height: 30vh; padding: 8px; }
+  .tab-navigation, .panel-section { margin-bottom: 6px; }
   .tab-navigation { gap: 4px; padding-bottom: 4px; }
   .tab-button, .mode-button, .tool-button, .size-button, .terrain-button-compact { padding: 6px 4px; font-size: 10px; }
+  .tab-button { min-height: 32px; }
   .section-title, .shortcut-title { font-size: 9px; margin: 0 0 4px; padding-bottom: 2px; }
   .mode-toggle-grid, .tool-toggle, .brush-size-selector, .shortcut-grid { gap: 4px; }
   .terrain-selector-compact { grid-template-columns: repeat(2, 1fr); }
