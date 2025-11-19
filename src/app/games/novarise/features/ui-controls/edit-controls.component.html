@@ -1,4 +1,8 @@
-<div class="edit-controls-panel">
+<button class="reopen-button" *ngIf="isCollapsed" (click)="openPanel()">
+  Controls
+</button>
+
+<div class="edit-controls-panel" *ngIf="!isCollapsed">
   <div class="tab-navigation">
     <button
       class="tab-button"
@@ -70,34 +74,38 @@
   </div>
 
   <div class="tab-content shortcuts-tab" *ngIf="activeTab === 'shortcuts'">
-    <div class="shortcut-section">
-      <div class="shortcut-title">Movement</div>
-      <div class="shortcut-item">WASD - Move</div>
-      <div class="shortcut-item">Arrows - Rotate</div>
-      <div class="shortcut-item">Q/E - Up/Down</div>
-      <div class="shortcut-item">Wheel - Zoom</div>
-      <div class="shortcut-item">Shift - Fast</div>
+    <div class="shortcut-grid">
+      <div class="shortcut-column">
+        <div class="shortcut-title">Movement</div>
+        <div class="shortcut-item">WASD - Move</div>
+        <div class="shortcut-item">Arrows - Rotate</div>
+        <div class="shortcut-item">Q/E - Up/Down</div>
+        <div class="shortcut-item">Wheel - Zoom</div>
+        <div class="shortcut-item">Shift - Fast</div>
+      </div>
+      <div class="shortcut-column">
+        <div class="shortcut-title">Editor</div>
+        <div class="shortcut-item">T - Paint</div>
+        <div class="shortcut-item">H - Height</div>
+        <div class="shortcut-item">P - Spawn</div>
+        <div class="shortcut-item">X - Exit</div>
+        <div class="shortcut-item">1-4 - Terrain</div>
+        <div class="shortcut-item">[ ] - Size</div>
+      </div>
     </div>
-    <div class="shortcut-section">
-      <div class="shortcut-title">Editor</div>
-      <div class="shortcut-item">T - Paint</div>
-      <div class="shortcut-item">H - Height</div>
-      <div class="shortcut-item">P - Spawn</div>
-      <div class="shortcut-item">X - Exit</div>
-      <div class="shortcut-item">1-4 - Terrain</div>
-      <div class="shortcut-item">[ ] - Size</div>
-    </div>
-    <div class="shortcut-section">
-      <div class="shortcut-title">Tools</div>
-      <div class="shortcut-item">B - Brush</div>
-      <div class="shortcut-item">F - Fill</div>
-      <div class="shortcut-item">R - Rectangle</div>
-      <div class="shortcut-item">S - Smooth</div>
-    </div>
-    <div class="shortcut-section">
-      <div class="shortcut-title">Map</div>
-      <div class="shortcut-item">G - Save</div>
-      <div class="shortcut-item">L - Load</div>
+    <div class="shortcut-grid">
+      <div class="shortcut-column">
+        <div class="shortcut-title">Tools</div>
+        <div class="shortcut-item">B - Brush</div>
+        <div class="shortcut-item">F - Fill</div>
+        <div class="shortcut-item">R - Rectangle</div>
+        <div class="shortcut-item">S - Smooth</div>
+      </div>
+      <div class="shortcut-column">
+        <div class="shortcut-title">Map</div>
+        <div class="shortcut-item">G - Save</div>
+        <div class="shortcut-item">L - Load</div>
+      </div>
     </div>
   </div>
 </div>

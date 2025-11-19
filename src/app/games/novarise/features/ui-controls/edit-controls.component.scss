@@ -1,3 +1,29 @@
+.reopen-button {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  background: rgba(10, 5, 21, 0.9);
+  border: 2px solid rgba(106, 74, 138, 0.6);
+  border-radius: 8px;
+  color: #e0d0f0;
+  cursor: pointer;
+  backdrop-filter: blur(15px);
+  box-shadow: 0 4px 16px #0008;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  z-index: 1000;
+  transition: all 0.15s;
+
+  &:hover {
+    background: rgba(42, 26, 58, 0.9);
+    border-color: #9a8ab0;
+    box-shadow: 0 0 12px rgba(106, 74, 138, 0.4);
+  }
+}
+
 .edit-controls-panel {
   position: absolute;
   top: 20px;
@@ -83,18 +109,13 @@
   gap: 6px;
 }
 
-.mode-button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 14px 10px;
+.mode-button, .terrain-button-compact, .tool-button, .size-button {
   background: rgba(42, 26, 58, 0.5);
   border: 2px solid rgba(106, 74, 138, 0.4);
   border-radius: 8px;
   color: #9a8ab0;
   cursor: pointer;
   transition: all 0.15s;
-  font-size: 12px;
 
   &:hover {
     background: rgba(52, 36, 68, 0.7);
@@ -107,11 +128,16 @@
     color: #e0d0f0;
     box-shadow: 0 0 12px rgba(106, 74, 138, 0.4);
   }
+}
 
-  &.compact {
-    padding: 10px 8px;
-    font-size: 11px;
-  }
+.mode-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 10px;
+  font-size: 12px;
+
+  &.compact { padding: 10px 8px; font-size: 11px; }
 }
 
 .terrain-selector-compact {
@@ -126,25 +152,7 @@
   align-items: center;
   gap: 4px;
   padding: 8px 6px;
-  background: rgba(42, 26, 58, 0.5);
-  border: 2px solid rgba(106, 74, 138, 0.4);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s;
   font-size: 10px;
-  color: #9a8ab0;
-
-  &:hover {
-    background: rgba(52, 36, 68, 0.7);
-    border-color: rgba(106, 74, 138, 0.6);
-  }
-
-  &.active {
-    background: rgba(106, 74, 138, 0.4);
-    border-color: #9a8ab0;
-    color: #e0d0f0;
-    box-shadow: 0 0 10px rgba(106, 74, 138, 0.4);
-  }
 }
 
 .terrain-preview-compact {
@@ -173,52 +181,38 @@
   grid-template-columns: repeat(3, 1fr);
 }
 
-.brush-size-selector {
-  grid-template-columns: repeat(4, 1fr);
-}
-
-.tool-button, .size-button {
-  background: rgba(42, 26, 58, 0.5);
-  border: 2px solid rgba(106, 74, 138, 0.4);
-  border-radius: 8px;
-  color: #9a8ab0;
-  cursor: pointer;
-  transition: all 0.15s;
-  font-weight: 600;
-
-  &:hover {
-    background: rgba(52, 36, 68, 0.7);
-    border-color: rgba(106, 74, 138, 0.7);
-  }
-
-  &.active {
-    background: rgba(106, 74, 138, 0.4);
-    border-color: #9a8ab0;
-    color: #e0d0f0;
-    box-shadow: 0 0 12px rgba(106, 74, 138, 0.4);
-  }
-}
-
 .tool-button {
   padding: 10px 6px;
   font-size: 11px;
+  font-weight: 600;
+}
+
+.brush-size-selector {
+  grid-template-columns: repeat(4, 1fr);
 }
 
 .size-button {
   padding: 12px 8px;
   font-size: 11px;
+  font-weight: 600;
 }
 
 .shortcuts-tab {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
-.shortcut-section {
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.shortcut-column {
   background: rgba(42, 26, 58, 0.3);
   border-radius: 6px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-left: 2px solid rgba(106, 74, 138, 0.5);
 }
 
@@ -227,27 +221,26 @@
   font-weight: 700;
   text-transform: uppercase;
   color: #b0a0c0;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   border-bottom: 1px solid rgba(106, 74, 138, 0.3);
-  padding-bottom: 4px;
+  padding-bottom: 3px;
 }
 
 .shortcut-item {
-  font-size: 11px;
+  font-size: 10px;
   color: #9a8ab0;
-  margin: 4px 0;
-  padding-left: 8px;
+  margin: 3px 0;
+  padding-left: 6px;
 
   &::before {
     content: '▸ ';
     color: #6a4a8a;
-    margin-right: 4px;
+    margin-right: 3px;
   }
 }
 
 @media (max-width: 768px) {
-  .edit-controls-panel { width: 260px; padding: 12px; top: 10px; right: 10px; }
-  .section-title { font-size: 11px; }
+  .edit-controls-panel, .reopen-button { width: 260px; padding: 12px; top: 10px; right: 10px; }
   .mode-button.compact { padding: 8px 6px; font-size: 10px; }
   .terrain-button-compact { padding: 6px 4px; font-size: 9px; }
   .terrain-preview-compact { width: 20px; height: 20px; }

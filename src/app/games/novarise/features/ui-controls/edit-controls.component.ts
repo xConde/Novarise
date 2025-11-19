@@ -22,9 +22,19 @@ export class EditControlsComponent {
   public terrainConfigs = TERRAIN_CONFIGS;
   public brushSizes = [1, 3, 5, 7];
   public activeTab: 'editor' | 'shortcuts' = 'editor';
+  public isCollapsed = false;
 
   public setTab(tab: 'editor' | 'shortcuts'): void {
-    this.activeTab = tab;
+    if (this.activeTab === tab) {
+      this.isCollapsed = true;
+    } else {
+      this.activeTab = tab;
+      this.isCollapsed = false;
+    }
+  }
+
+  public openPanel(): void {
+    this.isCollapsed = false;
   }
 
   public setMode(mode: EditMode): void {
