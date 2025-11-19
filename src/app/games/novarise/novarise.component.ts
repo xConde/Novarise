@@ -500,6 +500,62 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     canvas.addEventListener('mousedown', this.mouseDownHandler);
     canvas.addEventListener('mouseup', this.mouseUpHandler);
     canvas.addEventListener('mouseleave', this.mouseUpHandler);
+
+    // Touch event support for mobile
+    canvas.addEventListener('touchstart', (event) => {
+      event.preventDefault();
+      const touch = event.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+      const tileMeshes = this.terrainGrid.getTileMeshes();
+      const intersects = this.raycaster.intersectObjects(tileMeshes);
+
+      if (intersects.length > 0) {
+        this.hoveredTile = intersects[0].object as THREE.Mesh;
+        this.handleMouseDown({ button: 0 } as MouseEvent);
+      }
+    });
+
+    canvas.addEventListener('touchmove', (event) => {
+      event.preventDefault();
+      const touch = event.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+      const tileMeshes = this.terrainGrid.getTileMeshes();
+      const intersects = this.raycaster.intersectObjects(tileMeshes);
+
+      if (intersects.length > 0) {
+        this.hoveredTile = intersects[0].object as THREE.Mesh;
+
+        if (this.isMouseDown) {
+          if (this.activeTool === 'rectangle' && this.rectangleStartTile) {
+            this.updateRectanglePreview(this.rectangleStartTile, this.hoveredTile);
+          } else {
+            const now = Date.now();
+            if (now - this.lastEditTime >= this.editThrottleMs) {
+              this.applyEdit(this.hoveredTile);
+              this.lastEditTime = now;
+            }
+          }
+        }
+      }
+    });
+
+    canvas.addEventListener('touchend', (event) => {
+      event.preventDefault();
+      this.handleMouseUp();
+    });
+
+    canvas.addEventListener('touchcancel', (event) => {
+      event.preventDefault();
+      this.handleMouseUp();
+    });
   }
 
   private handleMouseDown(event: MouseEvent): void {
@@ -656,12 +712,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       case 'b':
         this.changeActiveTool('brush');
         break;
-      case 's':
-        // Check if not part of WASD movement
-        if (this.editMode === 'height' && !this.keysPressed.has('w') && !this.keysPressed.has('a') && !this.keysPressed.has('d')) {
-          this.smoothTerrain();
-        }
-        break;
     }
   }
 
@@ -719,13 +769,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.targetVelocity.x += forward.x * currentSpeed;
       this.targetVelocity.z += forward.z * currentSpeed;
     }
-    // 'S' key: only move backward if NOT in height mode using it for smoothing
-    // (i.e., if in height mode and stationary, 's' is for smoothing, not movement)
-    const isSmoothingWithS = this.editMode === 'height' &&
-                             !this.keysPressed.has('w') &&
-                             !this.keysPressed.has('a') &&
-                             !this.keysPressed.has('d');
-    if (this.keysPressed.has('s') && !isSmoothingWithS) {
+    if (this.keysPressed.has('s')) {
       this.targetVelocity.x -= forward.x * currentSpeed;
       this.targetVelocity.z -= forward.z * currentSpeed;
     }
