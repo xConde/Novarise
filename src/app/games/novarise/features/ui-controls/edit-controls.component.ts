@@ -21,6 +21,11 @@ export class EditControlsComponent {
   public terrainTypes = Object.values(TerrainType);
   public terrainConfigs = TERRAIN_CONFIGS;
   public brushSizes = [1, 3, 5, 7];
+  public activeTab: 'editor' | 'shortcuts' = 'editor';
+
+  public setTab(tab: 'editor' | 'shortcuts'): void {
+    this.activeTab = tab;
+  }
 
   public setMode(mode: EditMode): void {
     this.editModeChange.emit(mode);
