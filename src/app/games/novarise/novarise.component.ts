@@ -19,6 +19,8 @@ export type BrushTool = 'brush' | 'fill' | 'rectangle';
 })
 export class NovariseComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
+  @ViewChild('joystick') joystick!: ElementRef;
+  @ViewChild('joystickStick') joystickStick!: ElementRef;
 
   // Edit state
   public editMode: EditMode = 'paint';
@@ -76,6 +78,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private targetRotation = { yaw: 0, pitch: 0 };  // Target rotation for smooth acceleration
   private rotationAcceleration = 0.15;  // Smooth rotation acceleration (matches movement)
 
+  // Mobile joystick
+  private joystickActive = false;
+  private joystickVector = { x: 0, y: 0 };
+
   // Event handlers
   private keyboardHandler: (event: KeyboardEvent) => void;
   private keyUpHandler: (event: KeyboardEvent) => void;
@@ -129,6 +135,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     this.setupInteraction();
     this.setupKeyboardControls();
+    this.setupJoystick();
     this.animate();
   }
 
@@ -724,6 +731,55 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     window.addEventListener('keyup', this.keyUpHandler);
   }
 
+  private setupJoystick(): void {
+    if (!this.joystick || !this.joystickStick) return;
+
+    const joystickElement = this.joystick.nativeElement;
+    const stickElement = this.joystickStick.nativeElement;
+    const maxDistance = 35;
+
+    const handleTouchStart = (event: TouchEvent) => {
+      event.preventDefault();
+      this.joystickActive = true;
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (!this.joystickActive) return;
+      event.preventDefault();
+
+      const touch = event.touches[0];
+      const rect = joystickElement.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+
+      let deltaX = touch.clientX - centerX;
+      let deltaY = touch.clientY - centerY;
+
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      if (distance > maxDistance) {
+        deltaX = (deltaX / distance) * maxDistance;
+        deltaY = (deltaY / distance) * maxDistance;
+      }
+
+      this.joystickVector.x = deltaX / maxDistance;
+      this.joystickVector.y = -deltaY / maxDistance;
+
+      stickElement.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+    };
+
+    const handleTouchEnd = () => {
+      this.joystickActive = false;
+      this.joystickVector.x = 0;
+      this.joystickVector.y = 0;
+      stickElement.style.transform = 'translate(-50%, -50%)';
+    };
+
+    joystickElement.addEventListener('touchstart', handleTouchStart);
+    joystickElement.addEventListener('touchmove', handleTouchMove);
+    joystickElement.addEventListener('touchend', handleTouchEnd);
+    joystickElement.addEventListener('touchcancel', handleTouchEnd);
+  }
+
   private updateCameraMovement(): void {
     // Arrow keys for camera rotation - update target rotation
     if (this.keysPressed.has('arrowleft')) {
@@ -780,6 +836,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (this.keysPressed.has('d')) {
       this.targetVelocity.x += right.x * currentSpeed;
       this.targetVelocity.z += right.z * currentSpeed;
+    }
+
+    // Mobile joystick input
+    if (this.joystickActive) {
+      this.targetVelocity.x += (forward.x * this.joystickVector.y + right.x * this.joystickVector.x) * currentSpeed;
+      this.targetVelocity.z += (forward.z * this.joystickVector.y + right.z * this.joystickVector.x) * currentSpeed;
     }
 
     // Q/E for up/down

@@ -106,10 +106,13 @@
   }
 }
 
-.mode-button {
+.mode-button, .terrain-button-compact {
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.mode-button {
   padding: 14px 10px;
   font-size: 12px;
 
@@ -119,9 +122,6 @@
 .terrain-selector-compact { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 
 .terrain-button-compact {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   gap: 4px;
   padding: 8px 6px;
   font-size: 10px;
@@ -136,23 +136,15 @@
   .terrain-button-compact.active & { box-shadow: 0 0 10px currentColor; }
 }
 
-.terrain-label { font-size: 9px; font-weight: 600; text-transform: uppercase; }
+.terrain-label { font-size: 9px; font-weight: 600; }
 
 .tool-toggle, .brush-size-selector { display: grid; gap: 6px; }
 .tool-toggle { grid-template-columns: repeat(3, 1fr); }
 .brush-size-selector { grid-template-columns: repeat(4, 1fr); }
 
-.tool-button {
-  padding: 10px 6px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.size-button {
-  padding: 12px 8px;
-  font-size: 11px;
-  font-weight: 600;
-}
+.tool-button, .size-button { font-size: 11px; font-weight: 600; }
+.tool-button { padding: 10px 6px; }
+.size-button { padding: 12px 8px; }
 
 .shortcuts-tab { display: flex; flex-direction: column; gap: 12px; }
 .shortcut-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
@@ -169,7 +161,7 @@
   font-weight: 700;
   text-transform: uppercase;
   color: #b0a0c0;
-  margin-bottom: 6px;
+  margin: 0 0 6px;
   border-bottom: 1px solid rgba(106, 74, 138, 0.3);
   padding-bottom: 3px;
 }
@@ -186,11 +178,25 @@
 }
 
 @media (max-width: 768px) {
-  .edit-controls-panel, .reopen-button { width: 260px; padding: 12px; top: 10px; right: 10px; }
-  .reopen-button, .tab-button, .mode-button.compact, .tool-button, .size-button, .terrain-button-compact { min-height: 44px; }
-  .mode-button.compact { padding: 12px 8px; font-size: 11px; }
-  .tool-button { padding: 12px 6px; }
-  .size-button { padding: 14px 8px; }
+  .reopen-button, .edit-controls-panel {
+    top: auto;
+    bottom: max(20px, env(safe-area-inset-bottom));
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+
+  .reopen-button { width: auto; padding: 10px 24px; }
+
+  .edit-controls-panel {
+    position: fixed;
+    width: calc(100vw - 40px);
+    max-width: 400px;
+    max-height: 50vh;
+    padding: 12px;
+  }
+
+  .tab-button, .mode-button.compact, .tool-button, .size-button, .terrain-button-compact, .reopen-button { min-height: 44px; }
   .terrain-button-compact { padding: 10px 6px; font-size: 10px; }
   .terrain-preview-compact { width: 20px; height: 20px; }
 }
