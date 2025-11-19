@@ -1,47 +1,113 @@
-<div class="edit-controls-panel">
-  <div class="panel-section">
-    <h3 class="section-title">Edit Mode</h3>
-    <div class="mode-toggle">
-      <button
-        class="mode-button"
-        [class.active]="editMode === 'paint'"
-        (click)="setMode('paint')">
-        <span class="label">Paint</span>
-        <span class="shortcut">(T)</span>
-      </button>
-      <button
-        class="mode-button"
-        [class.active]="editMode === 'height'"
-        (click)="setMode('height')">
-        <span class="label">Height</span>
-        <span class="shortcut">(H)</span>
-      </button>
+<button class="reopen-button" *ngIf="isCollapsed" (click)="openPanel()">
+  Controls
+</button>
+
+<div class="edit-controls-panel" *ngIf="!isCollapsed">
+  <button class="close-button" *ngIf="isMobile" (click)="closePanel()" aria-label="Close">✕</button>
+
+  <div class="tab-navigation">
+    <button
+      class="tab-button"
+      [class.active]="activeTab === 'editor'"
+      (click)="setTab('editor')">
+      Editor
+    </button>
+    <button
+      class="tab-button"
+      [class.active]="activeTab === 'shortcuts'"
+      (click)="setTab('shortcuts')">
+      Shortcuts
+    </button>
+  </div>
+
+  <div class="tab-content" *ngIf="activeTab === 'editor'">
+    <div class="panel-section">
+      <h3 class="section-title">Mode</h3>
+      <div class="mode-toggle-grid">
+        <button class="mode-button compact" [class.active]="editMode === 'paint'" (click)="setMode('paint')">
+          Paint (T)
+        </button>
+        <button class="mode-button compact" [class.active]="editMode === 'height'" (click)="setMode('height')">
+          Height (H)
+        </button>
+        <button class="mode-button compact" [class.active]="editMode === 'spawn'" (click)="setMode('spawn')">
+          Spawn (P)
+        </button>
+        <button class="mode-button compact" [class.active]="editMode === 'exit'" (click)="setMode('exit')">
+          Exit (X)
+        </button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3 class="section-title">Tool</h3>
+      <div class="tool-toggle">
+        <button class="tool-button" [class.active]="activeTool === 'brush'" (click)="setTool('brush')">
+          Brush (B)
+        </button>
+        <button class="tool-button" [class.active]="activeTool === 'fill'" (click)="setTool('fill')">
+          Fill (F)
+        </button>
+        <button class="tool-button" [class.active]="activeTool === 'rectangle'" (click)="setTool('rectangle')">
+          Rect (R)
+        </button>
+      </div>
+    </div>
+
+    <div class="panel-section" *ngIf="activeTool === 'brush'">
+      <h3 class="section-title">Size</h3>
+      <div class="brush-size-selector">
+        <button *ngFor="let size of brushSizes" class="size-button" [class.active]="brushSize === size" (click)="setBrushSize(size)">
+          {{ size }}x{{ size }}
+        </button>
+      </div>
+    </div>
+
+    <div class="panel-section" *ngIf="editMode === 'paint'">
+      <h3 class="section-title">Terrain</h3>
+      <div class="terrain-selector-compact">
+        <button *ngFor="let type of terrainTypes; let i = index" class="terrain-button-compact"
+          [class.active]="selectedTerrainType === type" (click)="selectTerrain(type)">
+          <div class="terrain-preview-compact" [style.background-color]="getTerrainColor(type)"></div>
+          <span class="terrain-label">{{ terrainConfigs[type].label.substring(0, 3) }}</span>
+        </button>
+      </div>
     </div>
   </div>
 
-  <div class="panel-section" *ngIf="editMode === 'paint'">
-    <h3 class="section-title">Terrain Type</h3>
-    <div class="terrain-selector">
-      <button
-        *ngFor="let type of terrainTypes; let i = index"
-        class="terrain-button"
-        [class.active]="selectedTerrainType === type"
-        [style.border-color]="getTerrainColor(type)"
-        (click)="selectTerrain(type)">
-        <div class="terrain-preview" [style.background-color]="getTerrainColor(type)"></div>
-        <div class="terrain-info">
-          <span class="terrain-name">{{ terrainConfigs[type].label }}</span>
-          <span class="terrain-shortcut">({{ i + 1 }})</span>
-        </div>
-      </button>
+  <div class="tab-content shortcuts-tab" *ngIf="activeTab === 'shortcuts'">
+    <div class="shortcut-grid">
+      <div class="shortcut-column">
+        <div class="shortcut-title">Movement</div>
+        <div class="shortcut-item">WASD - Move</div>
+        <div class="shortcut-item">Arrows - Rotate</div>
+        <div class="shortcut-item">Q/E - Up/Down</div>
+        <div class="shortcut-item">Wheel - Zoom</div>
+        <div class="shortcut-item">Shift - Fast</div>
+      </div>
+      <div class="shortcut-column">
+        <div class="shortcut-title">Editor</div>
+        <div class="shortcut-item">T - Paint</div>
+        <div class="shortcut-item">H - Height</div>
+        <div class="shortcut-item">P - Spawn</div>
+        <div class="shortcut-item">X - Exit</div>
+        <div class="shortcut-item">1-4 - Terrain</div>
+        <div class="shortcut-item">[ ] - Size</div>
+      </div>
     </div>
-  </div>
-
-  <div class="panel-section" *ngIf="editMode === 'height'">
-    <h3 class="section-title">Height Editor</h3>
-    <div class="height-info">
-      <p class="info-text">Click and drag to raise terrain</p>
-      <p class="info-text">Heights blend smoothly with neighbors</p>
+    <div class="shortcut-grid">
+      <div class="shortcut-column">
+        <div class="shortcut-title">Tools</div>
+        <div class="shortcut-item">B - Brush</div>
+        <div class="shortcut-item">F - Fill</div>
+        <div class="shortcut-item">R - Rectangle</div>
+        <div class="shortcut-item">S - Smooth</div>
+      </div>
+      <div class="shortcut-column">
+        <div class="shortcut-title">Map</div>
+        <div class="shortcut-item">G - Save</div>
+        <div class="shortcut-item">L - Load</div>
+      </div>
     </div>
   </div>
 </div>

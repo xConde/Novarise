@@ -6,10 +6,11 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
 import { TerrainGrid } from './features/terrain-editor/terrain-grid.class';
-import { TerrainType } from './models/terrain-types.enum';
+import { TerrainType, TERRAIN_CONFIGS } from './models/terrain-types.enum';
 import { MapStorageService } from './core/map-storage.service';
 
 export type EditMode = 'paint' | 'height' | 'spawn' | 'exit';
+export type BrushTool = 'brush' | 'fill' | 'rectangle';
 
 @Component({
   selector: 'app-novarise',
@@ -18,11 +19,16 @@ export type EditMode = 'paint' | 'height' | 'spawn' | 'exit';
 })
 export class NovariseComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
+  @ViewChild('joystick') joystick!: ElementRef;
+  @ViewChild('joystickStick') joystickStick!: ElementRef;
 
   // Edit state
   public editMode: EditMode = 'paint';
   public selectedTerrainType: TerrainType = TerrainType.BEDROCK;
   public brushSize = 1;
+  public brushSizes = [1, 3, 5, 7];
+  public brushSizeIndex = 0;
+  public activeTool: BrushTool = 'brush';
 
   // Camera configuration
   private readonly cameraDistance = 35;
@@ -45,9 +51,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private hoveredTile: THREE.Mesh | null = null;
   private isMouseDown = false;
   private brushIndicator!: THREE.Mesh;
+  private brushPreviewMeshes: THREE.Mesh[] = [];
   private lastEditedTiles = new Set<THREE.Mesh>();
   private lastEditTime = 0;
   private editThrottleMs = 50; // Throttle edits during drag to 20fps max
+
+  // Rectangle selection state
+  private rectangleStartTile: THREE.Mesh | null = null;
+  private rectanglePreviewMeshes: THREE.Mesh[] = [];
 
   // Visual markers
   private spawnMarker!: THREE.Mesh;
@@ -66,6 +77,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private cameraRotation = { yaw: 0, pitch: 0 };
   private targetRotation = { yaw: 0, pitch: 0 };  // Target rotation for smooth acceleration
   private rotationAcceleration = 0.15;  // Smooth rotation acceleration (matches movement)
+
+  // Mobile joystick
+  private joystickActive = false;
+  private joystickVector = { x: 0, y: 0 };
 
   // Event handlers
   private keyboardHandler: (event: KeyboardEvent) => void;
@@ -105,6 +120,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Create brush indicator for crisp visual feedback
     this.createBrushIndicator();
 
+    // Initialize brush preview system
+    this.updateBrushPreview();
+
     // Create spawn/exit markers for tower defense
     this.createSpawnExitMarkers();
 
@@ -117,6 +135,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     this.setupInteraction();
     this.setupKeyboardControls();
+    this.setupJoystick();
     this.animate();
   }
 
@@ -413,7 +432,16 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       // Reset previous hover with crisp transition
       if (this.hoveredTile && !this.lastEditedTiles.has(this.hoveredTile)) {
         const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
-        material.emissiveIntensity = 0.2;
+        // Reset to original terrain emissive intensity from config
+        const x = this.hoveredTile.userData['gridX'];
+        const z = this.hoveredTile.userData['gridZ'];
+        if (typeof x === 'number' && typeof z === 'number') {
+          const tile = this.terrainGrid.getTileAt(x, z);
+          if (tile) {
+            const config = TERRAIN_CONFIGS[tile.type];
+            material.emissiveIntensity = config.emissiveIntensity;
+          }
+        }
       }
 
       if (intersects.length > 0) {
@@ -447,17 +475,31 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         };
         canvas.style.cursor = modeCursors[this.editMode];
 
+        // Update brush preview meshes (only for brush tool)
+        if (this.activeTool === 'brush') {
+          this.updateBrushPreviewPositions();
+        } else {
+          this.hideBrushPreview();
+        }
+
         // Apply edit if mouse is down (with throttling for performance)
         if (this.isMouseDown) {
-          const now = Date.now();
-          if (now - this.lastEditTime >= this.editThrottleMs) {
-            this.applyEdit(this.hoveredTile);
-            this.lastEditTime = now;
+          // Rectangle tool: update preview
+          if (this.activeTool === 'rectangle' && this.rectangleStartTile) {
+            this.updateRectanglePreview(this.rectangleStartTile, this.hoveredTile);
+          } else {
+            // Other tools: apply edit with throttling
+            const now = Date.now();
+            if (now - this.lastEditTime >= this.editThrottleMs) {
+              this.applyEdit(this.hoveredTile);
+              this.lastEditTime = now;
+            }
           }
         }
       } else {
         this.hoveredTile = null;
         this.brushIndicator.visible = false;
+        this.hideBrushPreview();
         canvas.style.cursor = 'default';
       }
     });
@@ -465,52 +507,148 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     canvas.addEventListener('mousedown', this.mouseDownHandler);
     canvas.addEventListener('mouseup', this.mouseUpHandler);
     canvas.addEventListener('mouseleave', this.mouseUpHandler);
+
+    // Touch event support for mobile
+    canvas.addEventListener('touchstart', (event) => {
+      event.preventDefault();
+      const touch = event.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+      const tileMeshes = this.terrainGrid.getTileMeshes();
+      const intersects = this.raycaster.intersectObjects(tileMeshes);
+
+      if (intersects.length > 0) {
+        this.hoveredTile = intersects[0].object as THREE.Mesh;
+        this.handleMouseDown({ button: 0 } as MouseEvent);
+      }
+    });
+
+    canvas.addEventListener('touchmove', (event) => {
+      event.preventDefault();
+      const touch = event.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+      const tileMeshes = this.terrainGrid.getTileMeshes();
+      const intersects = this.raycaster.intersectObjects(tileMeshes);
+
+      if (intersects.length > 0) {
+        this.hoveredTile = intersects[0].object as THREE.Mesh;
+
+        if (this.isMouseDown) {
+          if (this.activeTool === 'rectangle' && this.rectangleStartTile) {
+            this.updateRectanglePreview(this.rectangleStartTile, this.hoveredTile);
+          } else {
+            const now = Date.now();
+            if (now - this.lastEditTime >= this.editThrottleMs) {
+              this.applyEdit(this.hoveredTile);
+              this.lastEditTime = now;
+            }
+          }
+        }
+      }
+    });
+
+    canvas.addEventListener('touchend', (event) => {
+      event.preventDefault();
+      this.handleMouseUp();
+    });
+
+    canvas.addEventListener('touchcancel', (event) => {
+      event.preventDefault();
+      this.handleMouseUp();
+    });
   }
 
   private handleMouseDown(event: MouseEvent): void {
     if (event.button === 0) { // Left click
       this.isMouseDown = true;
+
       if (this.hoveredTile) {
-        this.applyEdit(this.hoveredTile);
+        // Rectangle tool: set start point
+        if (this.activeTool === 'rectangle') {
+          this.rectangleStartTile = this.hoveredTile;
+        } else {
+          // Other tools: apply immediately
+          this.applyEdit(this.hoveredTile);
+        }
       }
     }
   }
 
   private handleMouseUp(): void {
     this.isMouseDown = false;
+
+    // Rectangle tool: complete selection
+    if (this.activeTool === 'rectangle' && this.rectangleStartTile && this.hoveredTile) {
+      this.fillRectangle(this.rectangleStartTile, this.hoveredTile);
+    }
+
+    this.rectangleStartTile = null;
   }
 
   private applyEdit(mesh: THREE.Mesh): void {
-    const x = mesh.userData['gridX'];
-    const z = mesh.userData['gridZ'];
-
-    if (this.editMode === 'paint') {
-      this.terrainGrid.paintTile(x, z, this.selectedTerrainType);
-      // Crisp visual feedback: brief flash on edit
-      this.flashTileEdit(mesh);
-    } else if (this.editMode === 'height') {
-      const delta = 0.2;
-      this.terrainGrid.adjustHeight(x, z, delta);
-      // Get the updated mesh after height change
-      const tile = this.terrainGrid.getTileAt(x, z);
-      if (tile) {
-        this.flashTileEdit(tile.mesh);
-      }
-    } else if (this.editMode === 'spawn') {
-      this.terrainGrid.setSpawnPoint(x, z);
-      this.updateSpawnMarker();
-      this.flashTileEdit(mesh);
-    } else if (this.editMode === 'exit') {
-      this.terrainGrid.setExitPoint(x, z);
-      this.updateExitMarker();
-      this.flashTileEdit(mesh);
+    // Handle different tools
+    if (this.activeTool === 'fill') {
+      this.floodFill(mesh);
+      return;
     }
+
+    if (this.activeTool === 'rectangle') {
+      // Rectangle tool is handled in mouse handlers
+      return;
+    }
+
+    // Regular brush tool with multi-tile support
+    const affectedTiles = this.getAffectedTiles(mesh);
+
+    affectedTiles.forEach(tileMesh => {
+      const x = tileMesh.userData['gridX'];
+      const z = tileMesh.userData['gridZ'];
+
+      if (this.editMode === 'paint') {
+        this.terrainGrid.paintTile(x, z, this.selectedTerrainType);
+        this.flashTileEdit(tileMesh);
+      } else if (this.editMode === 'height') {
+        const delta = 0.2;
+        this.terrainGrid.adjustHeight(x, z, delta);
+        const tile = this.terrainGrid.getTileAt(x, z);
+        if (tile) {
+          this.flashTileEdit(tile.mesh);
+        }
+      } else if (this.editMode === 'spawn') {
+        this.terrainGrid.setSpawnPoint(x, z);
+        this.updateSpawnMarker();
+        this.flashTileEdit(tileMesh);
+      } else if (this.editMode === 'exit') {
+        this.terrainGrid.setExitPoint(x, z);
+        this.updateExitMarker();
+        this.flashTileEdit(tileMesh);
+      }
+    });
   }
 
   private flashTileEdit(mesh: THREE.Mesh): void {
     // Crisp flash animation for immediate feedback
     const material = mesh.material as THREE.MeshStandardMaterial;
-    const originalIntensity = material.emissiveIntensity;
+
+    // Get original intensity from terrain config
+    const x = mesh.userData['gridX'];
+    const z = mesh.userData['gridZ'];
+    let originalIntensity = 0.2; // Default fallback
+
+    if (typeof x === 'number' && typeof z === 'number') {
+      const tile = this.terrainGrid.getTileAt(x, z);
+      if (tile) {
+        const config = TERRAIN_CONFIGS[tile.type];
+        originalIntensity = config.emissiveIntensity;
+      }
+    }
 
     // Add to edited tiles set
     this.lastEditedTiles.add(mesh);
@@ -566,6 +704,21 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       case 'l':
         this.loadGridState();
         break;
+      case '[':
+        this.cycleBrushSize(-1);
+        break;
+      case ']':
+        this.cycleBrushSize(1);
+        break;
+      case 'f':
+        this.changeActiveTool('fill');
+        break;
+      case 'r':
+        this.changeActiveTool('rectangle');
+        break;
+      case 'b':
+        this.changeActiveTool('brush');
+        break;
     }
   }
 
@@ -576,6 +729,55 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private setupKeyboardControls(): void {
     window.addEventListener('keydown', this.keyboardHandler);
     window.addEventListener('keyup', this.keyUpHandler);
+  }
+
+  private setupJoystick(): void {
+    if (!this.joystick || !this.joystickStick) return;
+
+    const joystickElement = this.joystick.nativeElement;
+    const stickElement = this.joystickStick.nativeElement;
+    const maxDistance = 35;
+
+    const handleTouchStart = (event: TouchEvent) => {
+      event.preventDefault();
+      this.joystickActive = true;
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (!this.joystickActive) return;
+      event.preventDefault();
+
+      const touch = event.touches[0];
+      const rect = joystickElement.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+
+      let deltaX = touch.clientX - centerX;
+      let deltaY = touch.clientY - centerY;
+
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      if (distance > maxDistance) {
+        deltaX = (deltaX / distance) * maxDistance;
+        deltaY = (deltaY / distance) * maxDistance;
+      }
+
+      this.joystickVector.x = deltaX / maxDistance;
+      this.joystickVector.y = -deltaY / maxDistance;
+
+      stickElement.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+    };
+
+    const handleTouchEnd = () => {
+      this.joystickActive = false;
+      this.joystickVector.x = 0;
+      this.joystickVector.y = 0;
+      stickElement.style.transform = 'translate(-50%, -50%)';
+    };
+
+    joystickElement.addEventListener('touchstart', handleTouchStart);
+    joystickElement.addEventListener('touchmove', handleTouchMove);
+    joystickElement.addEventListener('touchend', handleTouchEnd);
+    joystickElement.addEventListener('touchcancel', handleTouchEnd);
   }
 
   private updateCameraMovement(): void {
@@ -634,6 +836,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (this.keysPressed.has('d')) {
       this.targetVelocity.x += right.x * currentSpeed;
       this.targetVelocity.z += right.z * currentSpeed;
+    }
+
+    // Mobile joystick input
+    if (this.joystickActive) {
+      this.targetVelocity.x += (forward.x * this.joystickVector.y + right.x * this.joystickVector.x) * currentSpeed;
+      this.targetVelocity.z += (forward.z * this.joystickVector.y + right.z * this.joystickVector.x) * currentSpeed;
     }
 
     // Q/E for up/down
@@ -811,7 +1019,357 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         const metadata = this.mapStorage.getMapMetadata(currentId);
         if (metadata) {
           this.currentMapName = metadata.name;
-          console.log(`Loaded current map: "${metadata.name}"`);
+        }
+      }
+    }
+  }
+
+  private cycleBrushSize(direction: number): void {
+    this.brushSizeIndex = (this.brushSizeIndex + direction + this.brushSizes.length) % this.brushSizes.length;
+    this.brushSize = this.brushSizes[this.brushSizeIndex];
+    this.updateBrushPreview();
+  }
+
+  private changeActiveTool(tool: BrushTool): void {
+    this.activeTool = tool;
+
+    // Reset rectangle selection when switching tools
+    if (tool !== 'rectangle') {
+      this.rectangleStartTile = null;
+      this.clearRectanglePreview();
+    }
+
+    // Hide brush previews when switching away from brush tool
+    if (tool !== 'brush') {
+      this.hideBrushPreview();
+    }
+  }
+
+  private updateBrushPreview(): void {
+    // Clear existing preview meshes
+    this.brushPreviewMeshes.forEach(mesh => {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    });
+    this.brushPreviewMeshes = [];
+
+    // Create new preview meshes for current brush size
+    if (this.brushSize > 1) {
+      const halfSize = Math.floor(this.brushSize / 2);
+      for (let dx = -halfSize; dx <= halfSize; dx++) {
+        for (let dz = -halfSize; dz <= halfSize; dz++) {
+          if (dx === 0 && dz === 0) continue; // Skip center (main brush indicator shows it)
+
+          const geometry = new THREE.RingGeometry(0.35, 0.4, 32);
+          const material = new THREE.MeshBasicMaterial({
+            color: 0x9a8ab0,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.5,
+            depthTest: false
+          });
+          const mesh = new THREE.Mesh(geometry, material);
+          mesh.rotation.x = -Math.PI / 2;
+          mesh.visible = false;
+          mesh.renderOrder = 999;
+          mesh.userData = { offsetX: dx, offsetZ: dz };
+          this.scene.add(mesh);
+          this.brushPreviewMeshes.push(mesh);
+        }
+      }
+    }
+  }
+
+  private updateBrushPreviewPositions(): void {
+    if (!this.hoveredTile) {
+      this.hideBrushPreview();
+      return;
+    }
+
+    // Validate userData exists
+    if (!this.hoveredTile.userData ||
+        typeof this.hoveredTile.userData['gridX'] !== 'number' ||
+        typeof this.hoveredTile.userData['gridZ'] !== 'number') {
+      this.hideBrushPreview();
+      return;
+    }
+
+    const centerX = this.hoveredTile.userData['gridX'];
+    const centerZ = this.hoveredTile.userData['gridZ'];
+
+    this.brushPreviewMeshes.forEach(mesh => {
+      const offsetX = mesh.userData['offsetX'];
+      const offsetZ = mesh.userData['offsetZ'];
+      const tile = this.terrainGrid.getTileAt(centerX + offsetX, centerZ + offsetZ);
+
+      if (tile) {
+        mesh.position.copy(tile.mesh.position);
+        mesh.position.y = tile.mesh.position.y + 0.15;
+        mesh.visible = true;
+      } else {
+        mesh.visible = false;
+      }
+    });
+  }
+
+  private hideBrushPreview(): void {
+    this.brushPreviewMeshes.forEach(mesh => {
+      mesh.visible = false;
+    });
+  }
+
+  private getAffectedTiles(centerTile: THREE.Mesh): THREE.Mesh[] {
+    const tiles: THREE.Mesh[] = [centerTile];
+
+    if (this.brushSize === 1) return tiles;
+
+    // Validate userData exists
+    if (!centerTile.userData ||
+        typeof centerTile.userData['gridX'] !== 'number' ||
+        typeof centerTile.userData['gridZ'] !== 'number') {
+      return tiles;
+    }
+
+    const centerX = centerTile.userData['gridX'];
+    const centerZ = centerTile.userData['gridZ'];
+    const halfSize = Math.floor(this.brushSize / 2);
+
+    for (let dx = -halfSize; dx <= halfSize; dx++) {
+      for (let dz = -halfSize; dz <= halfSize; dz++) {
+        if (dx === 0 && dz === 0) continue;
+
+        const tile = this.terrainGrid.getTileAt(centerX + dx, centerZ + dz);
+        if (tile) {
+          tiles.push(tile.mesh);
+        }
+      }
+    }
+
+    return tiles;
+  }
+
+  private floodFill(startTile: THREE.Mesh): void {
+    // Validate userData exists
+    if (!startTile.userData ||
+        typeof startTile.userData['gridX'] !== 'number' ||
+        typeof startTile.userData['gridZ'] !== 'number') {
+      return;
+    }
+
+    const startX = startTile.userData['gridX'];
+    const startZ = startTile.userData['gridZ'];
+    const startTileData = this.terrainGrid.getTileAt(startX, startZ);
+
+    if (!startTileData) return;
+
+    const targetType = startTileData.type;
+    const replacementType = this.selectedTerrainType;
+
+    // Don't fill if same type
+    if (targetType === replacementType) return;
+
+    const visited = new Set<string>();
+    const queue: [number, number][] = [[startX, startZ]];
+    const maxIterations = 625; // Max 25x25 grid
+    let iterations = 0;
+
+    while (queue.length > 0 && iterations < maxIterations) {
+      iterations++;
+      const [x, z] = queue.shift()!;
+      const key = `${x},${z}`;
+
+      if (visited.has(key)) continue;
+      visited.add(key);
+
+      const tile = this.terrainGrid.getTileAt(x, z);
+      if (!tile || tile.type !== targetType) continue;
+
+      // Paint this tile
+      if (this.editMode === 'paint') {
+        this.terrainGrid.paintTile(x, z, replacementType);
+        this.flashTileEdit(tile.mesh);
+      }
+
+      // Add neighbors to queue
+      const neighbors = [
+        [x - 1, z], [x + 1, z],
+        [x, z - 1], [x, z + 1]
+      ];
+
+      neighbors.forEach(([nx, nz]) => {
+        if (!visited.has(`${nx},${nz}`)) {
+          queue.push([nx, nz]);
+        }
+      });
+    }
+  }
+
+  private fillRectangle(startTile: THREE.Mesh, endTile: THREE.Mesh): void {
+    // Validate userData exists for both tiles
+    if (!startTile.userData || !endTile.userData ||
+        typeof startTile.userData['gridX'] !== 'number' ||
+        typeof startTile.userData['gridZ'] !== 'number' ||
+        typeof endTile.userData['gridX'] !== 'number' ||
+        typeof endTile.userData['gridZ'] !== 'number') {
+      this.clearRectanglePreview();
+      this.rectangleStartTile = null;
+      return;
+    }
+
+    const x1 = startTile.userData['gridX'];
+    const z1 = startTile.userData['gridZ'];
+    const x2 = endTile.userData['gridX'];
+    const z2 = endTile.userData['gridZ'];
+
+    const minX = Math.min(x1, x2);
+    const maxX = Math.max(x1, x2);
+    const minZ = Math.min(z1, z2);
+    const maxZ = Math.max(z1, z2);
+
+    for (let x = minX; x <= maxX; x++) {
+      for (let z = minZ; z <= maxZ; z++) {
+        const tile = this.terrainGrid.getTileAt(x, z);
+        if (tile) {
+          if (this.editMode === 'paint') {
+            this.terrainGrid.paintTile(x, z, this.selectedTerrainType);
+          } else if (this.editMode === 'height') {
+            this.terrainGrid.adjustHeight(x, z, 0.2);
+          }
+          this.flashTileEdit(tile.mesh);
+        }
+      }
+    }
+
+    this.clearRectanglePreview();
+    this.rectangleStartTile = null;
+  }
+
+  private updateRectanglePreview(startTile: THREE.Mesh, endTile: THREE.Mesh): void {
+    this.clearRectanglePreview();
+
+    // Validate userData exists for both tiles
+    if (!startTile.userData || !endTile.userData ||
+        typeof startTile.userData['gridX'] !== 'number' ||
+        typeof startTile.userData['gridZ'] !== 'number' ||
+        typeof endTile.userData['gridX'] !== 'number' ||
+        typeof endTile.userData['gridZ'] !== 'number') {
+      return;
+    }
+
+    const x1 = startTile.userData['gridX'];
+    const z1 = startTile.userData['gridZ'];
+    const x2 = endTile.userData['gridX'];
+    const z2 = endTile.userData['gridZ'];
+
+    const minX = Math.min(x1, x2);
+    const maxX = Math.max(x1, x2);
+    const minZ = Math.min(z1, z2);
+    const maxZ = Math.max(z1, z2);
+
+    // Performance limit: don't create more than 100 preview meshes
+    const tileCount = (maxX - minX + 1) * (maxZ - minZ + 1);
+    if (tileCount > 100) {
+      // For large selections, only show corner/edge previews
+      return;
+    }
+
+    for (let x = minX; x <= maxX; x++) {
+      for (let z = minZ; z <= maxZ; z++) {
+        const tile = this.terrainGrid.getTileAt(x, z);
+        if (tile) {
+          const geometry = new THREE.RingGeometry(0.35, 0.4, 32);
+          const material = new THREE.MeshBasicMaterial({
+            color: 0xffaa00,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.6,
+            depthTest: false
+          });
+          const mesh = new THREE.Mesh(geometry, material);
+          mesh.rotation.x = -Math.PI / 2;
+          mesh.position.copy(tile.mesh.position);
+          mesh.position.y = tile.mesh.position.y + 0.2;
+          mesh.renderOrder = 998;
+          this.scene.add(mesh);
+          this.rectanglePreviewMeshes.push(mesh);
+        }
+      }
+    }
+  }
+
+  private clearRectanglePreview(): void {
+    this.rectanglePreviewMeshes.forEach(mesh => {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    });
+    this.rectanglePreviewMeshes = [];
+  }
+
+  private smoothTerrain(): void {
+    if (!this.hoveredTile) return;
+
+    // Validate userData exists
+    if (!this.hoveredTile.userData ||
+        typeof this.hoveredTile.userData['gridX'] !== 'number' ||
+        typeof this.hoveredTile.userData['gridZ'] !== 'number') {
+      return;
+    }
+
+    const centerX = this.hoveredTile.userData['gridX'];
+    const centerZ = this.hoveredTile.userData['gridZ'];
+    const radius = Math.floor(this.brushSize / 2) + 1;
+
+    // Apply Gaussian blur
+    const tempHeightMap: number[][] = [];
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dz = -radius; dz <= radius; dz++) {
+        const x = centerX + dx;
+        const z = centerZ + dz;
+        const tile = this.terrainGrid.getTileAt(x, z);
+
+        if (tile) {
+          // Calculate Gaussian weight
+          const distance = Math.sqrt(dx * dx + dz * dz);
+          const weight = Math.exp(-(distance * distance) / (2 * radius * radius));
+
+          // Collect heights from neighbors
+          let totalHeight = 0;
+          let totalWeight = 0;
+
+          for (let ndx = -1; ndx <= 1; ndx++) {
+            for (let ndz = -1; ndz <= 1; ndz++) {
+              const neighbor = this.terrainGrid.getTileAt(x + ndx, z + ndz);
+              if (neighbor) {
+                const nDistance = Math.sqrt(ndx * ndx + ndz * ndz);
+                const nWeight = Math.exp(-(nDistance * nDistance) / 2);
+                totalHeight += neighbor.height * nWeight;
+                totalWeight += nWeight;
+              }
+            }
+          }
+
+          if (!tempHeightMap[x]) tempHeightMap[x] = [];
+          tempHeightMap[x][z] = totalHeight / totalWeight;
+        }
+      }
+    }
+
+    // Apply smoothed heights
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dz = -radius; dz <= radius; dz++) {
+        const x = centerX + dx;
+        const z = centerZ + dz;
+
+        if (tempHeightMap[x] && tempHeightMap[x][z] !== undefined) {
+          const currentTile = this.terrainGrid.getTileAt(x, z);
+          if (currentTile) {
+            const newHeight = tempHeightMap[x][z];
+            const delta = newHeight - currentTile.height;
+            this.terrainGrid.adjustHeight(x, z, delta);
+            this.flashTileEdit(currentTile.mesh);
+          }
         }
       }
     }
@@ -837,6 +1395,16 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (this.editMode !== 'paint') {
       this.editMode = 'paint';
     }
+  }
+
+  public setBrushSize(size: number): void {
+    this.brushSize = size;
+    this.brushSizeIndex = this.brushSizes.indexOf(size);
+    this.updateBrushPreview();
+  }
+
+  public setActiveTool(tool: BrushTool): void {
+    this.changeActiveTool(tool);
   }
 
   private animate = (): void => {
@@ -904,6 +1472,17 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     canvas.removeEventListener('mousedown', this.mouseDownHandler);
     canvas.removeEventListener('mouseup', this.mouseUpHandler);
     canvas.removeEventListener('mouseleave', this.mouseUpHandler);
+
+    // Clean up brush preview meshes
+    this.brushPreviewMeshes.forEach(mesh => {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    });
+    this.brushPreviewMeshes = [];
+
+    // Clean up rectangle preview meshes
+    this.clearRectanglePreview();
 
     if (this.terrainGrid) {
       this.terrainGrid.dispose();
