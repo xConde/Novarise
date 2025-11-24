@@ -8,18 +8,12 @@
   user-select: none;
   z-index: 999;
 
-  // Safe area support for notched devices
-  bottom: 120px;
-  bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+  // Default position - moved down to maximize viewing space
+  bottom: 30px;
+  bottom: calc(30px + env(safe-area-inset-bottom, 0px));
 
   &.visible {
     display: block;
-  }
-
-  &.active {
-    .joystick-stick {
-      transform: scale(1.05);
-    }
   }
 }
 
