@@ -8,6 +8,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
 import { TerrainGrid } from './features/terrain-editor/terrain-grid.class';
 import { TerrainType, TERRAIN_CONFIGS } from './models/terrain-types.enum';
 import { MapStorageService } from './core/map-storage.service';
+import { JoystickEvent } from './features/mobile-controls';
 
 export type EditMode = 'paint' | 'height' | 'spawn' | 'exit';
 export type BrushTool = 'brush' | 'fill' | 'rectangle';
@@ -19,8 +20,6 @@ export type BrushTool = 'brush' | 'fill' | 'rectangle';
 })
 export class NovariseComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
-  @ViewChild('joystick') joystick!: ElementRef;
-  @ViewChild('joystickStick') joystickStick!: ElementRef;
 
   // Edit state
   public editMode: EditMode = 'paint';
@@ -78,9 +77,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private targetRotation = { yaw: 0, pitch: 0 };  // Target rotation for smooth acceleration
   private rotationAcceleration = 0.15;  // Smooth rotation acceleration (matches movement)
 
-  // Mobile joystick
+  // Mobile joystick state (updated via modular VirtualJoystickComponent events)
   private joystickActive = false;
   private joystickVector = { x: 0, y: 0 };
+  private rotationJoystickActive = false;
+  private rotationJoystickVector = { x: 0, y: 0 };
 
   // Event handlers
   private keyboardHandler: (event: KeyboardEvent) => void;
@@ -135,7 +136,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     this.setupInteraction();
     this.setupKeyboardControls();
-    this.setupJoystick();
     this.animate();
   }
 
@@ -731,55 +731,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     window.addEventListener('keyup', this.keyUpHandler);
   }
 
-  private setupJoystick(): void {
-    if (!this.joystick || !this.joystickStick) return;
-
-    const joystickElement = this.joystick.nativeElement;
-    const stickElement = this.joystickStick.nativeElement;
-    const maxDistance = 35;
-
-    const handleTouchStart = (event: TouchEvent) => {
-      event.preventDefault();
-      this.joystickActive = true;
-    };
-
-    const handleTouchMove = (event: TouchEvent) => {
-      if (!this.joystickActive) return;
-      event.preventDefault();
-
-      const touch = event.touches[0];
-      const rect = joystickElement.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-
-      let deltaX = touch.clientX - centerX;
-      let deltaY = touch.clientY - centerY;
-
-      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-      if (distance > maxDistance) {
-        deltaX = (deltaX / distance) * maxDistance;
-        deltaY = (deltaY / distance) * maxDistance;
-      }
-
-      this.joystickVector.x = deltaX / maxDistance;
-      this.joystickVector.y = -deltaY / maxDistance;
-
-      stickElement.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
-    };
-
-    const handleTouchEnd = () => {
-      this.joystickActive = false;
-      this.joystickVector.x = 0;
-      this.joystickVector.y = 0;
-      stickElement.style.transform = 'translate(-50%, -50%)';
-    };
-
-    joystickElement.addEventListener('touchstart', handleTouchStart);
-    joystickElement.addEventListener('touchmove', handleTouchMove);
-    joystickElement.addEventListener('touchend', handleTouchEnd);
-    joystickElement.addEventListener('touchcancel', handleTouchEnd);
-  }
-
   private updateCameraMovement(): void {
     // Arrow keys for camera rotation - update target rotation
     if (this.keysPressed.has('arrowleft')) {
@@ -795,6 +746,19 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (this.keysPressed.has('arrowdown')) {
       // Allowed to -75 degrees for near top-down view (increased from -30 degrees)
       this.targetRotation.pitch = Math.max(this.targetRotation.pitch - this.rotationSpeed, -Math.PI * 5 / 12);
+    }
+
+    // Mobile rotation joystick input - controls camera yaw (X) and pitch (Y)
+    if (this.rotationJoystickActive) {
+      const rotationJoystickSpeed = this.rotationSpeed * 1.5; // Slightly faster for mobile feel
+
+      // X axis controls yaw (horizontal look) - pushing right looks right
+      this.targetRotation.yaw -= this.rotationJoystickVector.x * rotationJoystickSpeed;
+
+      // Y axis controls pitch (vertical look) - pushing up looks up
+      const newPitch = this.targetRotation.pitch + this.rotationJoystickVector.y * rotationJoystickSpeed;
+      // Clamp pitch to same limits as arrow keys
+      this.targetRotation.pitch = Math.max(-Math.PI * 5 / 12, Math.min(Math.PI / 4, newPitch));
     }
 
     // ALWAYS smoothly interpolate rotation (even when no keys pressed) for perfect smoothness
@@ -1372,6 +1336,19 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           }
         }
       }
+    }
+  }
+
+  /**
+   * Handle joystick events from the modular VirtualJoystickComponent
+   */
+  public onJoystickChange(event: JoystickEvent): void {
+    if (event.type === 'movement') {
+      this.joystickActive = event.active;
+      this.joystickVector = event.vector;
+    } else if (event.type === 'rotation') {
+      this.rotationJoystickActive = event.active;
+      this.rotationJoystickVector = event.vector;
     }
   }
 
