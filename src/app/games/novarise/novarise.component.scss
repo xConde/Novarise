@@ -2,7 +2,9 @@
 .game-container {
   display: flex;
   flex-direction: column;
+  // Use dynamic viewport height for mobile browser chrome compatibility
   height: 100vh;
+  height: 100dvh; // Dynamic viewport height (accounts for browser chrome)
   width: 100vw;
   background-color: #000;
   border: 4px solid #6a4a8a;
@@ -12,12 +14,18 @@
   position: relative;
   box-sizing: border-box;
 
+  // Fallback for browsers without dvh support
+  @supports not (height: 100dvh) {
+    height: calc(var(--vh, 1vh) * 100);
+  }
+
   .title {
     display: flex;
     justify-content: center;
     align-items: center;
     margin-top: 1vh;
     margin-bottom: 1vh;
+    flex-shrink: 0; // Don't shrink title
 
     .letter {
       font-size: 3rem;
@@ -35,6 +43,7 @@
     justify-content: center;
     align-items: center;
     overflow: hidden;
+    min-height: 0; // Allow flex shrinking
   }
 }
 
@@ -91,7 +100,35 @@
   }
 }
 
-// Hide shortcuts hint on mobile (joystick controls are now handled by VirtualJoystickComponent)
+// Mobile responsive adjustments
 @media (max-width: 768px) {
-  .shortcuts-hint { display: none; }
+  .game-container {
+    border-width: 2px;
+    padding: 4px;
+
+    .title .letter {
+      font-size: 2rem;
+      margin: 0 0.15rem;
+    }
+  }
+
+  .shortcuts-hint {
+    display: none;
+  }
+}
+
+// Landscape mode on mobile - minimize chrome
+@media (max-width: 768px) and (orientation: landscape) {
+  .game-container {
+    padding: 2px;
+
+    .title {
+      margin-top: 0;
+      margin-bottom: 0;
+
+      .letter {
+        font-size: 1.2rem;
+      }
+    }
+  }
 }

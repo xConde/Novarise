@@ -178,8 +178,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   private initializeRenderer(): void {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setPixelRatio(window.devicePixelRatio);
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cap at 2 for performance
+
+    // Initial size using proper viewport calculation
+    const { width, height } = this.getViewportSize();
+    this.renderer.setSize(width, height);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -188,16 +191,53 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     this.canvasContainer.nativeElement.appendChild(this.renderer.domElement);
 
-    window.addEventListener('resize', () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
+    // Set up viewport CSS variable for fallback
+    this.updateViewportVariable();
+
+    // Handle resize with proper viewport calculations
+    const resizeHandler = () => {
+      this.updateViewportVariable();
+      const { width, height } = this.getViewportSize();
       this.renderer.setSize(width, height);
       this.camera.aspect = width / height;
       this.camera.updateProjectionMatrix();
       if (this.composer) {
         this.composer.setSize(width, height);
       }
-    });
+    };
+
+    window.addEventListener('resize', resizeHandler);
+
+    // Also listen to visualViewport for mobile browser chrome changes
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', resizeHandler);
+    }
+  }
+
+  /**
+   * Get accurate viewport size accounting for mobile browser chrome
+   */
+  private getViewportSize(): { width: number; height: number } {
+    // Use visualViewport for accurate mobile sizing (accounts for browser chrome)
+    if (window.visualViewport) {
+      return {
+        width: window.visualViewport.width,
+        height: window.visualViewport.height
+      };
+    }
+    // Fallback to innerWidth/innerHeight
+    return {
+      width: window.innerWidth,
+      height: window.innerHeight
+    };
+  }
+
+  /**
+   * Update --vh CSS variable for browsers without dvh support
+   */
+  private updateViewportVariable(): void {
+    const vh = (window.visualViewport?.height || window.innerHeight) * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
   }
 
   private initializePostProcessing(): void {
@@ -206,8 +246,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.composer.addPass(renderPass);
 
     // Reduced bloom for better visibility
+    const { width, height } = this.getViewportSize();
     const bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      new THREE.Vector2(width, height),
       0.3,  // Reduced strength
       0.4,  // Reduced radius
       0.95  // Higher threshold - only brightest elements

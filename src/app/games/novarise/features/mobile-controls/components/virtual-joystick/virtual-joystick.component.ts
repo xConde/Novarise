@@ -47,10 +47,13 @@ export class VirtualJoystickComponent implements OnInit, OnDestroy {
   stickSize: number = JOYSTICK_SIZES.MOBILE_PORTRAIT.stick;
   maxDistance: number = JOYSTICK_SIZES.MOBILE_PORTRAIT.maxDistance;
 
+  // Track specific touch for this joystick (enables simultaneous dual-stick)
+  private activeTouchId: number | null = null;
+
   private subscription?: Subscription;
   private touchStartHandler?: (e: TouchEvent) => void;
   private touchMoveHandler?: (e: TouchEvent) => void;
-  private touchEndHandler?: () => void;
+  private touchEndHandler?: (e: TouchEvent) => void;
 
   constructor(
     private touchDetection: TouchDetectionService,
@@ -98,42 +101,47 @@ export class VirtualJoystickComponent implements OnInit, OnDestroy {
     const baseElement = this.joystickBase.nativeElement;
 
     this.touchStartHandler = (event: TouchEvent) => {
-      event.preventDefault();
+      // Stop propagation to prevent other joysticks from capturing this touch
+      event.stopPropagation();
+
+      // Only capture if we don't already have an active touch
+      if (this.activeTouchId !== null) return;
+
+      // Get the touch that started on this element
+      const touch = event.changedTouches[0];
+      this.activeTouchId = touch.identifier;
       this.isActive = true;
-      this.emitChange();
-    };
 
-    this.touchMoveHandler = (event: TouchEvent) => {
-      if (!this.isActive) return;
-      event.preventDefault();
-
-      const touch = event.touches[0];
-      const rect = baseElement.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-
-      let deltaX = touch.clientX - centerX;
-      let deltaY = touch.clientY - centerY;
-
-      // Clamp to max distance
-      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-      if (distance > this.maxDistance) {
-        deltaX = (deltaX / distance) * this.maxDistance;
-        deltaY = (deltaY / distance) * this.maxDistance;
-      }
-
-      // Normalize to -1 to 1 range and apply sensitivity
-      this.vector.x = (deltaX / this.maxDistance) * this.sensitivity;
-      this.vector.y = (-deltaY / this.maxDistance) * this.sensitivity; // Invert Y
-
-      // Update visual position
-      this.stickTransform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
-
+      // Calculate initial position
+      this.updateStickPosition(touch);
       this.emitChange();
       this.cdr.markForCheck();
     };
 
-    this.touchEndHandler = () => {
+    this.touchMoveHandler = (event: TouchEvent) => {
+      if (this.activeTouchId === null) return;
+
+      // Find our specific touch among all touches
+      const touch = this.findTouch(event.touches);
+      if (!touch) return;
+
+      // Stop propagation to keep touches isolated
+      event.stopPropagation();
+
+      this.updateStickPosition(touch);
+      this.emitChange();
+      this.cdr.markForCheck();
+    };
+
+    this.touchEndHandler = (event: TouchEvent) => {
+      if (this.activeTouchId === null) return;
+
+      // Check if our tracked touch is in the ended touches
+      const touch = this.findTouch(event.changedTouches);
+      if (!touch) return;
+
+      // Our touch ended - reset state
+      this.activeTouchId = null;
       this.isActive = false;
       this.vector = { x: 0, y: 0 };
       this.stickTransform = 'translate(-50%, -50%)';
@@ -141,10 +149,50 @@ export class VirtualJoystickComponent implements OnInit, OnDestroy {
       this.cdr.markForCheck();
     };
 
-    baseElement.addEventListener('touchstart', this.touchStartHandler, { passive: false });
-    baseElement.addEventListener('touchmove', this.touchMoveHandler, { passive: false });
-    baseElement.addEventListener('touchend', this.touchEndHandler);
-    baseElement.addEventListener('touchcancel', this.touchEndHandler);
+    // Use capture phase to ensure we get the event first
+    baseElement.addEventListener('touchstart', this.touchStartHandler, { passive: true, capture: true });
+    baseElement.addEventListener('touchmove', this.touchMoveHandler, { passive: true, capture: true });
+    baseElement.addEventListener('touchend', this.touchEndHandler, { passive: true });
+    baseElement.addEventListener('touchcancel', this.touchEndHandler, { passive: true });
+  }
+
+  /**
+   * Find the touch matching our tracked touch ID
+   */
+  private findTouch(touches: TouchList): Touch | null {
+    for (let i = 0; i < touches.length; i++) {
+      if (touches[i].identifier === this.activeTouchId) {
+        return touches[i];
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Update stick position based on touch coordinates
+   */
+  private updateStickPosition(touch: Touch): void {
+    const baseElement = this.joystickBase.nativeElement;
+    const rect = baseElement.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    let deltaX = touch.clientX - centerX;
+    let deltaY = touch.clientY - centerY;
+
+    // Clamp to max distance
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    if (distance > this.maxDistance) {
+      deltaX = (deltaX / distance) * this.maxDistance;
+      deltaY = (deltaY / distance) * this.maxDistance;
+    }
+
+    // Normalize to -1 to 1 range and apply sensitivity
+    this.vector.x = (deltaX / this.maxDistance) * this.sensitivity;
+    this.vector.y = (-deltaY / this.maxDistance) * this.sensitivity; // Invert Y
+
+    // Update visual position
+    this.stickTransform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
   }
 
   private removeTouchListeners(): void {
@@ -153,10 +201,10 @@ export class VirtualJoystickComponent implements OnInit, OnDestroy {
     const baseElement = this.joystickBase.nativeElement;
 
     if (this.touchStartHandler) {
-      baseElement.removeEventListener('touchstart', this.touchStartHandler);
+      baseElement.removeEventListener('touchstart', this.touchStartHandler, { capture: true } as EventListenerOptions);
     }
     if (this.touchMoveHandler) {
-      baseElement.removeEventListener('touchmove', this.touchMoveHandler);
+      baseElement.removeEventListener('touchmove', this.touchMoveHandler, { capture: true } as EventListenerOptions);
     }
     if (this.touchEndHandler) {
       baseElement.removeEventListener('touchend', this.touchEndHandler);
