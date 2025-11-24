@@ -1,7 +1,8 @@
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { ElementRef, NO_ERRORS_SCHEMA } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { NovariseComponent } from './novarise.component';
 import { MapStorageService } from './core/map-storage.service';
+import { JoystickEvent } from './features/mobile-controls';
 
 describe('NovariseComponent', () => {
   let component: NovariseComponent;
@@ -29,45 +30,9 @@ describe('NovariseComponent', () => {
       providers: [
         { provide: MapStorageService, useValue: mockMapStorageService }
       ],
-      schemas: [NO_ERRORS_SCHEMA] // Ignore unknown elements like app-edit-controls
+      schemas: [NO_ERRORS_SCHEMA] // Ignore unknown elements like app-virtual-joystick
     }).compileComponents();
   });
-
-  function createMockJoystickElement(): HTMLElement {
-    const element = document.createElement('div');
-    element.style.width = '120px';
-    element.style.height = '120px';
-    spyOn(element, 'getBoundingClientRect').and.returnValue({
-      left: 20,
-      top: 500,
-      width: 120,
-      height: 120,
-      right: 140,
-      bottom: 620,
-      x: 20,
-      y: 500,
-      toJSON: () => {}
-    });
-    return element;
-  }
-
-  function createMockStickElement(): HTMLElement {
-    const element = document.createElement('div');
-    element.style.transform = 'translate(-50%, -50%)';
-    return element;
-  }
-
-  function createTouchEvent(type: string, clientX?: number, clientY?: number): TouchEvent {
-    const touches = clientX !== undefined && clientY !== undefined
-      ? [{ clientX, clientY, identifier: 0, target: document.createElement('div') } as unknown as Touch]
-      : [];
-
-    return new TouchEvent(type, {
-      bubbles: true,
-      cancelable: true,
-      touches: touches
-    });
-  }
 
   describe('Joystick State Initialization', () => {
     beforeEach(() => {
@@ -92,236 +57,120 @@ describe('NovariseComponent', () => {
     });
   });
 
-  describe('Movement Joystick Touch Events', () => {
-    let joystickElement: HTMLElement;
-    let stickElement: HTMLElement;
-
+  describe('onJoystickChange Handler', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);
       component = fixture.componentInstance;
-
-      joystickElement = createMockJoystickElement();
-      stickElement = createMockStickElement();
-
-      (component as any).joystick = { nativeElement: joystickElement } as ElementRef;
-      (component as any).joystickStick = { nativeElement: stickElement } as ElementRef;
-
-      (component as any).setupJoystick();
     });
 
-    it('should activate joystick on touchstart', () => {
-      const touchEvent = createTouchEvent('touchstart', 80, 560);
-      joystickElement.dispatchEvent(touchEvent);
+    it('should update movement joystick state when movement event received', () => {
+      const event: JoystickEvent = {
+        type: 'movement',
+        vector: { x: 0.5, y: -0.3 },
+        active: true
+      };
+
+      component.onJoystickChange(event);
 
       expect((component as any).joystickActive).toBe(true);
+      expect((component as any).joystickVector).toEqual({ x: 0.5, y: -0.3 });
     });
 
-    it('should update joystick vector on touchmove', () => {
-      (component as any).joystickActive = true;
+    it('should update rotation joystick state when rotation event received', () => {
+      const event: JoystickEvent = {
+        type: 'rotation',
+        vector: { x: -0.7, y: 0.4 },
+        active: true
+      };
 
-      const touchEvent = createTouchEvent('touchmove', 100, 540);
-      joystickElement.dispatchEvent(touchEvent);
-
-      // Vector should be normalized between -1 and 1
-      expect((component as any).joystickVector.x).toBeGreaterThanOrEqual(-1);
-      expect((component as any).joystickVector.x).toBeLessThanOrEqual(1);
-      expect((component as any).joystickVector.y).toBeGreaterThanOrEqual(-1);
-      expect((component as any).joystickVector.y).toBeLessThanOrEqual(1);
-    });
-
-    it('should deactivate joystick on touchend', () => {
-      (component as any).joystickActive = true;
-      (component as any).joystickVector = { x: 0.5, y: 0.5 };
-
-      const touchEvent = createTouchEvent('touchend');
-      joystickElement.dispatchEvent(touchEvent);
-
-      expect((component as any).joystickActive).toBe(false);
-      expect((component as any).joystickVector).toEqual({ x: 0, y: 0 });
-    });
-
-    it('should reset stick transform on touchend', () => {
-      (component as any).joystickActive = true;
-
-      const touchEvent = createTouchEvent('touchend');
-      joystickElement.dispatchEvent(touchEvent);
-
-      expect(stickElement.style.transform).toBe('translate(-50%, -50%)');
-    });
-
-    it('should handle touchcancel same as touchend', () => {
-      (component as any).joystickActive = true;
-      (component as any).joystickVector = { x: 0.8, y: 0.3 };
-
-      const touchEvent = createTouchEvent('touchcancel');
-      joystickElement.dispatchEvent(touchEvent);
-
-      expect((component as any).joystickActive).toBe(false);
-      expect((component as any).joystickVector).toEqual({ x: 0, y: 0 });
-    });
-
-    it('should clamp joystick movement to max distance', () => {
-      (component as any).joystickActive = true;
-
-      // Move way beyond the max distance (35px from center at 80, 560)
-      const touchEvent = createTouchEvent('touchmove', 200, 400);
-      joystickElement.dispatchEvent(touchEvent);
-
-      // Even with extreme movement, vector magnitude should be <= sqrt(2) (diagonal max)
-      const magnitude = Math.sqrt(
-        (component as any).joystickVector.x ** 2 +
-        (component as any).joystickVector.y ** 2
-      );
-      expect(magnitude).toBeLessThanOrEqual(Math.sqrt(2) + 0.01);
-    });
-
-    it('should not update vector when joystick is inactive', () => {
-      (component as any).joystickActive = false;
-      (component as any).joystickVector = { x: 0, y: 0 };
-
-      const touchEvent = createTouchEvent('touchmove', 100, 540);
-      joystickElement.dispatchEvent(touchEvent);
-
-      expect((component as any).joystickVector).toEqual({ x: 0, y: 0 });
-    });
-  });
-
-  describe('Rotation Joystick Touch Events', () => {
-    let rotationJoystickElement: HTMLElement;
-    let rotationStickElement: HTMLElement;
-
-    beforeEach(() => {
-      fixture = TestBed.createComponent(NovariseComponent);
-      component = fixture.componentInstance;
-
-      rotationJoystickElement = createMockJoystickElement();
-      rotationStickElement = createMockStickElement();
-
-      (component as any).rotationJoystick = { nativeElement: rotationJoystickElement } as ElementRef;
-      (component as any).rotationJoystickStick = { nativeElement: rotationStickElement } as ElementRef;
-
-      (component as any).setupRotationJoystick();
-    });
-
-    it('should activate rotation joystick on touchstart', () => {
-      const touchEvent = createTouchEvent('touchstart', 300, 560);
-      rotationJoystickElement.dispatchEvent(touchEvent);
+      component.onJoystickChange(event);
 
       expect((component as any).rotationJoystickActive).toBe(true);
+      expect((component as any).rotationJoystickVector).toEqual({ x: -0.7, y: 0.4 });
     });
 
-    it('should update rotation joystick vector on touchmove', () => {
-      (component as any).rotationJoystickActive = true;
+    it('should reset movement joystick when deactivated', () => {
+      // First activate
+      component.onJoystickChange({
+        type: 'movement',
+        vector: { x: 1, y: 1 },
+        active: true
+      });
 
-      const touchEvent = createTouchEvent('touchmove', 100, 540);
-      rotationJoystickElement.dispatchEvent(touchEvent);
+      // Then deactivate
+      component.onJoystickChange({
+        type: 'movement',
+        vector: { x: 0, y: 0 },
+        active: false
+      });
 
-      // Vector should be normalized between -1 and 1
-      expect((component as any).rotationJoystickVector.x).toBeGreaterThanOrEqual(-1);
-      expect((component as any).rotationJoystickVector.x).toBeLessThanOrEqual(1);
-      expect((component as any).rotationJoystickVector.y).toBeGreaterThanOrEqual(-1);
-      expect((component as any).rotationJoystickVector.y).toBeLessThanOrEqual(1);
+      expect((component as any).joystickActive).toBe(false);
+      expect((component as any).joystickVector).toEqual({ x: 0, y: 0 });
     });
 
-    it('should deactivate rotation joystick on touchend', () => {
-      (component as any).rotationJoystickActive = true;
-      (component as any).rotationJoystickVector = { x: 0.5, y: 0.5 };
+    it('should reset rotation joystick when deactivated', () => {
+      // First activate
+      component.onJoystickChange({
+        type: 'rotation',
+        vector: { x: 0.8, y: -0.6 },
+        active: true
+      });
 
-      const touchEvent = createTouchEvent('touchend');
-      rotationJoystickElement.dispatchEvent(touchEvent);
+      // Then deactivate
+      component.onJoystickChange({
+        type: 'rotation',
+        vector: { x: 0, y: 0 },
+        active: false
+      });
 
       expect((component as any).rotationJoystickActive).toBe(false);
       expect((component as any).rotationJoystickVector).toEqual({ x: 0, y: 0 });
     });
 
-    it('should handle touchcancel for rotation joystick', () => {
-      (component as any).rotationJoystickActive = true;
-      (component as any).rotationJoystickVector = { x: -0.7, y: 0.4 };
+    it('should handle both joysticks independently', () => {
+      // Activate movement
+      component.onJoystickChange({
+        type: 'movement',
+        vector: { x: 0.5, y: 0.5 },
+        active: true
+      });
 
-      const touchEvent = createTouchEvent('touchcancel');
-      rotationJoystickElement.dispatchEvent(touchEvent);
+      // Activate rotation
+      component.onJoystickChange({
+        type: 'rotation',
+        vector: { x: -0.3, y: 0.7 },
+        active: true
+      });
 
-      expect((component as any).rotationJoystickActive).toBe(false);
-      expect((component as any).rotationJoystickVector).toEqual({ x: 0, y: 0 });
-    });
-  });
-
-  describe('Dual-Stick Simultaneous Usage', () => {
-    let movementJoystick: HTMLElement;
-    let movementStick: HTMLElement;
-    let rotationJoystick: HTMLElement;
-    let rotationStick: HTMLElement;
-
-    beforeEach(() => {
-      fixture = TestBed.createComponent(NovariseComponent);
-      component = fixture.componentInstance;
-
-      movementJoystick = createMockJoystickElement();
-      movementStick = createMockStickElement();
-      rotationJoystick = createMockJoystickElement();
-      rotationStick = createMockStickElement();
-
-      (component as any).joystick = { nativeElement: movementJoystick } as ElementRef;
-      (component as any).joystickStick = { nativeElement: movementStick } as ElementRef;
-      (component as any).rotationJoystick = { nativeElement: rotationJoystick } as ElementRef;
-      (component as any).rotationJoystickStick = { nativeElement: rotationStick } as ElementRef;
-
-      (component as any).setupJoystick();
-      (component as any).setupRotationJoystick();
-    });
-
-    it('should allow both joysticks to be active simultaneously', () => {
-      // Activate movement joystick
-      movementJoystick.dispatchEvent(createTouchEvent('touchstart', 80, 560));
-
-      // Activate rotation joystick
-      rotationJoystick.dispatchEvent(createTouchEvent('touchstart', 300, 560));
-
+      // Both should be active with independent vectors
       expect((component as any).joystickActive).toBe(true);
       expect((component as any).rotationJoystickActive).toBe(true);
+      expect((component as any).joystickVector).toEqual({ x: 0.5, y: 0.5 });
+      expect((component as any).rotationJoystickVector).toEqual({ x: -0.3, y: 0.7 });
     });
 
-    it('should maintain independent vectors for each joystick', () => {
-      (component as any).joystickActive = true;
-      (component as any).rotationJoystickActive = true;
+    it('should allow deactivating one joystick while other remains active', () => {
+      // Activate both
+      component.onJoystickChange({
+        type: 'movement',
+        vector: { x: 1, y: 0 },
+        active: true
+      });
+      component.onJoystickChange({
+        type: 'rotation',
+        vector: { x: 0, y: 1 },
+        active: true
+      });
 
-      // Update movement joystick (moving right and forward)
-      movementJoystick.dispatchEvent(createTouchEvent('touchmove', 100, 520));
-      const movementX = (component as any).joystickVector.x;
-      const movementY = (component as any).joystickVector.y;
-
-      // Update rotation joystick (different direction)
-      rotationJoystick.dispatchEvent(createTouchEvent('touchmove', 60, 580));
-
-      // Movement vector should remain unchanged
-      expect((component as any).joystickVector.x).toBe(movementX);
-      expect((component as any).joystickVector.y).toBe(movementY);
-
-      // Rotation vector should have its own values
-      expect((component as any).rotationJoystickVector.x).toBeDefined();
-      expect((component as any).rotationJoystickVector.y).toBeDefined();
-    });
-
-    it('should allow releasing one joystick while keeping the other active', () => {
-      (component as any).joystickActive = true;
-      (component as any).rotationJoystickActive = true;
-
-      // Release only movement joystick
-      movementJoystick.dispatchEvent(createTouchEvent('touchend'));
+      // Deactivate only movement
+      component.onJoystickChange({
+        type: 'movement',
+        vector: { x: 0, y: 0 },
+        active: false
+      });
 
       expect((component as any).joystickActive).toBe(false);
       expect((component as any).rotationJoystickActive).toBe(true);
-    });
-
-    it('should allow releasing rotation joystick while keeping movement active', () => {
-      (component as any).joystickActive = true;
-      (component as any).rotationJoystickActive = true;
-
-      // Release only rotation joystick
-      rotationJoystick.dispatchEvent(createTouchEvent('touchend'));
-
-      expect((component as any).joystickActive).toBe(true);
-      expect((component as any).rotationJoystickActive).toBe(false);
     });
   });
 
@@ -464,6 +313,25 @@ describe('NovariseComponent', () => {
         (component as any).cameraVelocity.z ** 2
       );
       expect(velocityMagnitude).toBeGreaterThan(0);
+    });
+
+    it('should combine both joysticks for full FPS-style control', () => {
+      // Activate both joysticks
+      (component as any).joystickActive = true;
+      (component as any).joystickVector = { x: 0.5, y: 0.5 }; // Move forward-right
+      (component as any).rotationJoystickActive = true;
+      (component as any).rotationJoystickVector = { x: 0.3, y: 0 }; // Look right
+
+      const initialYaw = (component as any).targetRotation.yaw;
+      (component as any).updateCameraMovement();
+
+      // Both movement and rotation should be applied
+      const velocityMagnitude = Math.sqrt(
+        (component as any).cameraVelocity.x ** 2 +
+        (component as any).cameraVelocity.z ** 2
+      );
+      expect(velocityMagnitude).toBeGreaterThan(0);
+      expect((component as any).targetRotation.yaw).not.toBe(initialYaw);
     });
   });
 });
