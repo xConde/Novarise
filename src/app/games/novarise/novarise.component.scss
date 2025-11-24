@@ -91,17 +91,39 @@
   }
 }
 
+// Base joystick styles shared by both sticks
 .mobile-joystick {
   position: absolute;
   bottom: 120px;
   bottom: calc(120px + env(safe-area-inset-bottom));
-  left: 20px;
   width: 120px;
   height: 120px;
   display: none;
   touch-action: none;
   user-select: none;
   z-index: 999;
+}
+
+// Left joystick - movement control
+.mobile-joystick-left {
+  left: 20px;
+  left: calc(20px + env(safe-area-inset-left));
+}
+
+// Right joystick - camera rotation control
+.mobile-joystick-right {
+  right: 20px;
+  right: calc(20px + env(safe-area-inset-right));
+
+  .joystick-base {
+    border-color: rgba(138, 106, 74, 0.6); // Warmer orange-brown tint for distinction
+  }
+
+  .joystick-stick {
+    background: rgba(138, 106, 74, 0.8); // Matching warmer tint
+    border-color: #b0a08a;
+    box-shadow: 0 2px 8px rgba(138, 106, 74, 0.6);
+  }
 }
 
 .joystick-base {
@@ -132,4 +154,19 @@
 @media (max-width: 768px) {
   .mobile-joystick { display: block; }
   .shortcuts-hint { display: none; }
+}
+
+// Landscape mode adjustments for dual-stick controls
+@media (max-width: 768px) and (orientation: landscape) {
+  .mobile-joystick {
+    bottom: 20px;
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    width: 100px;
+    height: 100px;
+  }
+
+  .joystick-stick {
+    width: 42px;
+    height: 42px;
+  }
 }

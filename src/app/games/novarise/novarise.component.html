@@ -8,9 +8,16 @@
   <div class="novarise-content">
     <div #canvasContainer class="canvas-container"></div>
 
-    <div class="mobile-joystick" #joystick>
+    <!-- Left joystick for movement -->
+    <div class="mobile-joystick mobile-joystick-left" #joystick>
       <div class="joystick-base"></div>
       <div class="joystick-stick" #joystickStick></div>
+    </div>
+
+    <!-- Right joystick for camera rotation -->
+    <div class="mobile-joystick mobile-joystick-right" #rotationJoystick>
+      <div class="joystick-base"></div>
+      <div class="joystick-stick" #rotationJoystickStick></div>
     </div>
 
     <app-edit-controls

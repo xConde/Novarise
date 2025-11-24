@@ -21,6 +21,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
   @ViewChild('joystick') joystick!: ElementRef;
   @ViewChild('joystickStick') joystickStick!: ElementRef;
+  @ViewChild('rotationJoystick') rotationJoystick!: ElementRef;
+  @ViewChild('rotationJoystickStick') rotationJoystickStick!: ElementRef;
 
   // Edit state
   public editMode: EditMode = 'paint';
@@ -78,9 +80,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private targetRotation = { yaw: 0, pitch: 0 };  // Target rotation for smooth acceleration
   private rotationAcceleration = 0.15;  // Smooth rotation acceleration (matches movement)
 
-  // Mobile joystick
+  // Mobile joystick (left - movement)
   private joystickActive = false;
   private joystickVector = { x: 0, y: 0 };
+
+  // Mobile rotation joystick (right - camera rotation)
+  private rotationJoystickActive = false;
+  private rotationJoystickVector = { x: 0, y: 0 };
 
   // Event handlers
   private keyboardHandler: (event: KeyboardEvent) => void;
@@ -136,6 +142,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.setupInteraction();
     this.setupKeyboardControls();
     this.setupJoystick();
+    this.setupRotationJoystick();
     this.animate();
   }
 
@@ -780,6 +787,57 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     joystickElement.addEventListener('touchcancel', handleTouchEnd);
   }
 
+  private setupRotationJoystick(): void {
+    if (!this.rotationJoystick || !this.rotationJoystickStick) return;
+
+    const joystickElement = this.rotationJoystick.nativeElement;
+    const stickElement = this.rotationJoystickStick.nativeElement;
+    const maxDistance = 35;
+
+    const handleTouchStart = (event: TouchEvent) => {
+      event.preventDefault();
+      this.rotationJoystickActive = true;
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (!this.rotationJoystickActive) return;
+      event.preventDefault();
+
+      const touch = event.touches[0];
+      const rect = joystickElement.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+
+      let deltaX = touch.clientX - centerX;
+      let deltaY = touch.clientY - centerY;
+
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      if (distance > maxDistance) {
+        deltaX = (deltaX / distance) * maxDistance;
+        deltaY = (deltaY / distance) * maxDistance;
+      }
+
+      // Normalize to -1 to 1 range
+      // X controls yaw (horizontal rotation), Y controls pitch (vertical)
+      this.rotationJoystickVector.x = deltaX / maxDistance;
+      this.rotationJoystickVector.y = -deltaY / maxDistance;
+
+      stickElement.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+    };
+
+    const handleTouchEnd = () => {
+      this.rotationJoystickActive = false;
+      this.rotationJoystickVector.x = 0;
+      this.rotationJoystickVector.y = 0;
+      stickElement.style.transform = 'translate(-50%, -50%)';
+    };
+
+    joystickElement.addEventListener('touchstart', handleTouchStart);
+    joystickElement.addEventListener('touchmove', handleTouchMove);
+    joystickElement.addEventListener('touchend', handleTouchEnd);
+    joystickElement.addEventListener('touchcancel', handleTouchEnd);
+  }
+
   private updateCameraMovement(): void {
     // Arrow keys for camera rotation - update target rotation
     if (this.keysPressed.has('arrowleft')) {
@@ -795,6 +853,19 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (this.keysPressed.has('arrowdown')) {
       // Allowed to -75 degrees for near top-down view (increased from -30 degrees)
       this.targetRotation.pitch = Math.max(this.targetRotation.pitch - this.rotationSpeed, -Math.PI * 5 / 12);
+    }
+
+    // Mobile rotation joystick input - controls camera yaw (X) and pitch (Y)
+    if (this.rotationJoystickActive) {
+      const rotationJoystickSpeed = this.rotationSpeed * 1.5; // Slightly faster for mobile feel
+
+      // X axis controls yaw (horizontal look) - pushing right looks right
+      this.targetRotation.yaw -= this.rotationJoystickVector.x * rotationJoystickSpeed;
+
+      // Y axis controls pitch (vertical look) - pushing up looks up
+      const newPitch = this.targetRotation.pitch + this.rotationJoystickVector.y * rotationJoystickSpeed;
+      // Clamp pitch to same limits as arrow keys
+      this.targetRotation.pitch = Math.max(-Math.PI * 5 / 12, Math.min(Math.PI / 4, newPitch));
     }
 
     // ALWAYS smoothly interpolate rotation (even when no keys pressed) for perfect smoothness
