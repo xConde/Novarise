@@ -16,11 +16,8 @@
     display: block;
   }
 
-  &.active {
-    .joystick-stick {
-      transform: scale(1.05);
-    }
-  }
+  // Note: Active scale effect is handled via inline transform in component
+  // to avoid CSS/inline-style conflict
 }
 
 // Position variants

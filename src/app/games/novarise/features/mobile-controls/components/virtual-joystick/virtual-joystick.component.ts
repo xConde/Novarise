@@ -100,7 +100,10 @@ export class VirtualJoystickComponent implements OnInit, OnDestroy {
     this.touchStartHandler = (event: TouchEvent) => {
       event.preventDefault();
       this.isActive = true;
+      // Apply scale on activation (centered position with scale)
+      this.stickTransform = 'translate(-50%, -50%) scale(1.1)';
       this.emitChange();
+      this.cdr.markForCheck();
     };
 
     this.touchMoveHandler = (event: TouchEvent) => {
@@ -126,8 +129,8 @@ export class VirtualJoystickComponent implements OnInit, OnDestroy {
       this.vector.x = (deltaX / this.maxDistance) * this.sensitivity;
       this.vector.y = (-deltaY / this.maxDistance) * this.sensitivity; // Invert Y
 
-      // Update visual position
-      this.stickTransform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+      // Update visual position with scale effect while active
+      this.stickTransform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px)) scale(1.1)`;
 
       this.emitChange();
       this.cdr.markForCheck();
