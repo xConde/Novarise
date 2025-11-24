@@ -94,6 +94,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private mouseDownHandler: (event: MouseEvent) => void;
   private mouseUpHandler: (event: MouseEvent) => void;
 
+  // Joystick event handlers (stored for cleanup)
+  private joystickTouchStartHandler?: (event: TouchEvent) => void;
+  private joystickTouchMoveHandler?: (event: TouchEvent) => void;
+  private joystickTouchEndHandler?: () => void;
+  private rotationJoystickTouchStartHandler?: (event: TouchEvent) => void;
+  private rotationJoystickTouchMoveHandler?: (event: TouchEvent) => void;
+  private rotationJoystickTouchEndHandler?: () => void;
+
   // Current map tracking
   private currentMapName = 'Untitled Map';
 
@@ -745,12 +753,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const stickElement = this.joystickStick.nativeElement;
     const maxDistance = 35;
 
-    const handleTouchStart = (event: TouchEvent) => {
+    this.joystickTouchStartHandler = (event: TouchEvent) => {
       event.preventDefault();
       this.joystickActive = true;
     };
 
-    const handleTouchMove = (event: TouchEvent) => {
+    this.joystickTouchMoveHandler = (event: TouchEvent) => {
       if (!this.joystickActive) return;
       event.preventDefault();
 
@@ -774,17 +782,17 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       stickElement.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
     };
 
-    const handleTouchEnd = () => {
+    this.joystickTouchEndHandler = () => {
       this.joystickActive = false;
       this.joystickVector.x = 0;
       this.joystickVector.y = 0;
       stickElement.style.transform = 'translate(-50%, -50%)';
     };
 
-    joystickElement.addEventListener('touchstart', handleTouchStart);
-    joystickElement.addEventListener('touchmove', handleTouchMove);
-    joystickElement.addEventListener('touchend', handleTouchEnd);
-    joystickElement.addEventListener('touchcancel', handleTouchEnd);
+    joystickElement.addEventListener('touchstart', this.joystickTouchStartHandler);
+    joystickElement.addEventListener('touchmove', this.joystickTouchMoveHandler);
+    joystickElement.addEventListener('touchend', this.joystickTouchEndHandler);
+    joystickElement.addEventListener('touchcancel', this.joystickTouchEndHandler);
   }
 
   private setupRotationJoystick(): void {
@@ -794,12 +802,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const stickElement = this.rotationJoystickStick.nativeElement;
     const maxDistance = 35;
 
-    const handleTouchStart = (event: TouchEvent) => {
+    this.rotationJoystickTouchStartHandler = (event: TouchEvent) => {
       event.preventDefault();
       this.rotationJoystickActive = true;
     };
 
-    const handleTouchMove = (event: TouchEvent) => {
+    this.rotationJoystickTouchMoveHandler = (event: TouchEvent) => {
       if (!this.rotationJoystickActive) return;
       event.preventDefault();
 
@@ -825,17 +833,17 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       stickElement.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
     };
 
-    const handleTouchEnd = () => {
+    this.rotationJoystickTouchEndHandler = () => {
       this.rotationJoystickActive = false;
       this.rotationJoystickVector.x = 0;
       this.rotationJoystickVector.y = 0;
       stickElement.style.transform = 'translate(-50%, -50%)';
     };
 
-    joystickElement.addEventListener('touchstart', handleTouchStart);
-    joystickElement.addEventListener('touchmove', handleTouchMove);
-    joystickElement.addEventListener('touchend', handleTouchEnd);
-    joystickElement.addEventListener('touchcancel', handleTouchEnd);
+    joystickElement.addEventListener('touchstart', this.rotationJoystickTouchStartHandler);
+    joystickElement.addEventListener('touchmove', this.rotationJoystickTouchMoveHandler);
+    joystickElement.addEventListener('touchend', this.rotationJoystickTouchEndHandler);
+    joystickElement.addEventListener('touchcancel', this.rotationJoystickTouchEndHandler);
   }
 
   private updateCameraMovement(): void {
@@ -1543,6 +1551,36 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     canvas.removeEventListener('mousedown', this.mouseDownHandler);
     canvas.removeEventListener('mouseup', this.mouseUpHandler);
     canvas.removeEventListener('mouseleave', this.mouseUpHandler);
+
+    // Clean up movement joystick event listeners
+    if (this.joystick?.nativeElement) {
+      const joystickElement = this.joystick.nativeElement;
+      if (this.joystickTouchStartHandler) {
+        joystickElement.removeEventListener('touchstart', this.joystickTouchStartHandler);
+      }
+      if (this.joystickTouchMoveHandler) {
+        joystickElement.removeEventListener('touchmove', this.joystickTouchMoveHandler);
+      }
+      if (this.joystickTouchEndHandler) {
+        joystickElement.removeEventListener('touchend', this.joystickTouchEndHandler);
+        joystickElement.removeEventListener('touchcancel', this.joystickTouchEndHandler);
+      }
+    }
+
+    // Clean up rotation joystick event listeners
+    if (this.rotationJoystick?.nativeElement) {
+      const rotationJoystickElement = this.rotationJoystick.nativeElement;
+      if (this.rotationJoystickTouchStartHandler) {
+        rotationJoystickElement.removeEventListener('touchstart', this.rotationJoystickTouchStartHandler);
+      }
+      if (this.rotationJoystickTouchMoveHandler) {
+        rotationJoystickElement.removeEventListener('touchmove', this.rotationJoystickTouchMoveHandler);
+      }
+      if (this.rotationJoystickTouchEndHandler) {
+        rotationJoystickElement.removeEventListener('touchend', this.rotationJoystickTouchEndHandler);
+        rotationJoystickElement.removeEventListener('touchcancel', this.rotationJoystickTouchEndHandler);
+      }
+    }
 
     // Clean up brush preview meshes
     this.brushPreviewMeshes.forEach(mesh => {
