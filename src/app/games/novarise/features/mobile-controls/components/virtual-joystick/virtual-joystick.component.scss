@@ -1,0 +1,112 @@
+// Virtual Joystick Component Styles
+// Supports mobile phones and tablets with touch capability
+
+.virtual-joystick {
+  position: absolute;
+  display: none; // Hidden by default, shown via .visible class
+  touch-action: none;
+  user-select: none;
+  z-index: 999;
+
+  // Safe area support for notched devices
+  bottom: 120px;
+  bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+
+  &.visible {
+    display: block;
+  }
+
+  &.active {
+    .joystick-stick {
+      transform: scale(1.05);
+    }
+  }
+}
+
+// Position variants
+.virtual-joystick.left {
+  left: 20px;
+  left: calc(20px + env(safe-area-inset-left, 0px));
+}
+
+.virtual-joystick.right {
+  right: 20px;
+  right: calc(20px + env(safe-area-inset-right, 0px));
+}
+
+// Joystick base (outer ring)
+.joystick-base {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: rgba(10, 5, 21, 0.6);
+  border: 2px solid rgba(106, 74, 138, 0.6);
+  border-radius: 50%;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+// Joystick stick (inner circle)
+.joystick-stick {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background: rgba(106, 74, 138, 0.8);
+  border: 2px solid #9a8ab0;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: transform 0.1s ease-out, box-shadow 0.1s ease-out;
+  box-shadow: 0 2px 8px rgba(106, 74, 138, 0.6);
+}
+
+// Type variants - Movement (left, purple theme)
+.virtual-joystick.movement {
+  .joystick-base {
+    border-color: rgba(106, 74, 138, 0.6);
+  }
+
+  .joystick-stick {
+    background: rgba(106, 74, 138, 0.8);
+    border-color: #9a8ab0;
+    box-shadow: 0 2px 8px rgba(106, 74, 138, 0.6);
+  }
+}
+
+// Type variants - Rotation (right, warm orange-brown theme)
+.virtual-joystick.rotation {
+  .joystick-base {
+    border-color: rgba(138, 106, 74, 0.6);
+  }
+
+  .joystick-stick {
+    background: rgba(138, 106, 74, 0.8);
+    border-color: #b0a08a;
+    box-shadow: 0 2px 8px rgba(138, 106, 74, 0.6);
+  }
+}
+
+// Responsive adjustments for landscape on phones
+@media (max-height: 500px) and (orientation: landscape) {
+  .virtual-joystick {
+    bottom: 20px;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+// Tablet adjustments - larger joysticks, more spacing
+@media (min-width: 769px) and (max-width: 1366px) {
+  .virtual-joystick {
+    bottom: 60px;
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+
+    &.left {
+      left: 40px;
+      left: calc(40px + env(safe-area-inset-left, 0px));
+    }
+
+    &.right {
+      right: 40px;
+      right: calc(40px + env(safe-area-inset-right, 0px));
+    }
+  }
+}

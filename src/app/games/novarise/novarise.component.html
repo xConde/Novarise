@@ -8,17 +8,19 @@
   <div class="novarise-content">
     <div #canvasContainer class="canvas-container"></div>
 
-    <!-- Left joystick for movement -->
-    <div class="mobile-joystick mobile-joystick-left" #joystick>
-      <div class="joystick-base"></div>
-      <div class="joystick-stick" #joystickStick></div>
-    </div>
+    <!-- Mobile dual-stick controls (shown on touch devices) -->
+    <app-virtual-joystick
+      type="movement"
+      position="left"
+      (joystickChange)="onJoystickChange($event)">
+    </app-virtual-joystick>
 
-    <!-- Right joystick for camera rotation -->
-    <div class="mobile-joystick mobile-joystick-right" #rotationJoystick>
-      <div class="joystick-base"></div>
-      <div class="joystick-stick" #rotationJoystickStick></div>
-    </div>
+    <app-virtual-joystick
+      type="rotation"
+      position="right"
+      [sensitivity]="1.5"
+      (joystickChange)="onJoystickChange($event)">
+    </app-virtual-joystick>
 
     <app-edit-controls
       [editMode]="editMode"

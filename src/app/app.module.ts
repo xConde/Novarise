@@ -5,6 +5,7 @@ import { CommonModule } from '@angular/common';
 import { AppComponent } from './app.component';
 import { NovariseComponent } from './games/novarise/novarise.component';
 import { EditControlsComponent } from './games/novarise/features/ui-controls/edit-controls.component';
+import { MobileControlsModule } from './games/novarise/features/mobile-controls';
 
 @NgModule({
   declarations: [
@@ -14,7 +15,8 @@ import { EditControlsComponent } from './games/novarise/features/ui-controls/edi
   ],
   imports: [
     BrowserModule,
-    CommonModule
+    CommonModule,
+    MobileControlsModule
   ],
   exports: [],
   providers: [],
