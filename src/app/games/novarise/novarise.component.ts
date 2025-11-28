@@ -8,11 +8,13 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
 import { TerrainGrid } from './features/terrain-editor/terrain-grid.class';
 import { TerrainType, TERRAIN_CONFIGS } from './models/terrain-types.enum';
 import { MapStorageService } from './core/map-storage.service';
-import { EditHistoryService, PaintCommand, HeightCommand, SpawnPointCommand, ExitPointCommand, TileState, GridPoint } from './core/edit-history.service';
+import { EditHistoryService, PaintCommand, HeightCommand, SpawnPointCommand, ExitPointCommand, TileState } from './core/edit-history.service';
+import { CameraControlService, MovementInput, RotationInput, JoystickInput } from './core/camera-control.service';
+import { EditorStateService, EditMode, BrushTool } from './core/editor-state.service';
 import { JoystickEvent } from './features/mobile-controls';
 
-export type EditMode = 'paint' | 'height' | 'spawn' | 'exit';
-export type BrushTool = 'brush' | 'fill' | 'rectangle';
+// Re-export types for template compatibility
+export { EditMode, BrushTool } from './core/editor-state.service';
 
 @Component({
   selector: 'app-novarise',
@@ -22,13 +24,12 @@ export type BrushTool = 'brush' | 'fill' | 'rectangle';
 export class NovariseComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
 
-  // Edit state
-  public editMode: EditMode = 'paint';
-  public selectedTerrainType: TerrainType = TerrainType.BEDROCK;
-  public brushSize = 1;
-  public brushSizes = [1, 3, 5, 7];
-  public brushSizeIndex = 0;
-  public activeTool: BrushTool = 'brush';
+  // Edit state - delegated to EditorStateService
+  public get editMode(): EditMode { return this.editorState.getEditMode(); }
+  public get selectedTerrainType(): TerrainType { return this.editorState.getTerrainType(); }
+  public get brushSize(): number { return this.editorState.getBrushSize(); }
+  public get brushSizes(): number[] { return this.editorState.brushSizes; }
+  public get activeTool(): BrushTool { return this.editorState.getActiveTool(); }
 
   // Camera configuration
   private readonly cameraDistance = 35;
@@ -64,25 +65,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private spawnMarker!: THREE.Mesh;
   private exitMarker!: THREE.Mesh;
 
-  // Camera movement
-  private cameraVelocity = { x: 0, y: 0, z: 0 };
-  private targetVelocity = { x: 0, y: 0, z: 0 };  // For smooth acceleration
-  private moveSpeed = 0.25;  // Reduced from 0.4 for gentler movement
-  private fastSpeed = 0.6;   // Reduced from 1.0 for smoother fast movement
-  private acceleration = 0.15;  // Smooth acceleration/deceleration
-  private rotationSpeed = 0.005;  // Controlled rotation
+  // Camera movement - delegated to CameraControlService
   private keysPressed = new Set<string>();
 
-  // Camera rotation
-  private cameraRotation = { yaw: 0, pitch: 0 };
-  private targetRotation = { yaw: 0, pitch: 0 };  // Target rotation for smooth acceleration
-  private rotationAcceleration = 0.15;  // Smooth rotation acceleration (matches movement)
-
   // Mobile joystick state (updated via modular VirtualJoystickComponent events)
-  private joystickActive = false;
-  private joystickVector = { x: 0, y: 0 };
-  private rotationJoystickActive = false;
-  private rotationJoystickVector = { x: 0, y: 0 };
+  private movementJoystick: JoystickInput = { active: false, x: 0, y: 0 };
+  private rotationJoystick: JoystickInput = { active: false, x: 0, y: 0 };
 
   // Event handlers
   private keyboardHandler: (event: KeyboardEvent) => void;
@@ -90,8 +78,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private mouseDownHandler: (event: MouseEvent) => void;
   private mouseUpHandler: (event: MouseEvent) => void;
 
-  // Current map tracking
-  private currentMapName = 'Untitled Map';
+  // Current map tracking - delegated to EditorStateService
+  private get currentMapName(): string { return this.editorState.getCurrentMapName(); }
+  private set currentMapName(name: string) { this.editorState.setCurrentMapName(name); }
 
   // Title display
   public title = 'Novarise';
@@ -109,7 +98,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   constructor(
     private mapStorage: MapStorageService,
-    private editHistory: EditHistoryService
+    private editHistory: EditHistoryService,
+    private cameraControl: CameraControlService,
+    private editorState: EditorStateService
   ) {
     this.keyboardHandler = this.handleKeyDown.bind(this);
     this.keyUpHandler = this.handleKeyUp.bind(this);
@@ -175,20 +166,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private initializeCameraRotation(): void {
-    // Calculate initial rotation based on camera's current position and lookAt point
-    const lookAtPoint = new THREE.Vector3(0, 0, 0);
-    const direction = new THREE.Vector3().subVectors(lookAtPoint, this.camera.position);
-
-    // Calculate yaw (horizontal rotation) from X and Z components
-    const initialYaw = Math.atan2(direction.x, direction.z);
-    this.cameraRotation.yaw = initialYaw;
-    this.targetRotation.yaw = initialYaw;
-
-    // Calculate pitch (vertical rotation) from Y component and horizontal distance
-    const horizontalDistance = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
-    const initialPitch = Math.atan2(direction.y, horizontalDistance);
-    this.cameraRotation.pitch = initialPitch;
-    this.targetRotation.pitch = initialPitch;
+    // Initialize camera control service from current camera state
+    this.cameraControl.initializeFromCamera(this.camera, new THREE.Vector3(0, 0, 0));
   }
 
   private initializeRenderer(): void {
@@ -906,116 +885,30 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private updateCameraMovement(): void {
-    // Arrow keys for camera rotation - update target rotation
-    if (this.keysPressed.has('arrowleft')) {
-      this.targetRotation.yaw += this.rotationSpeed;
-    }
-    if (this.keysPressed.has('arrowright')) {
-      this.targetRotation.yaw -= this.rotationSpeed;
-    }
-    if (this.keysPressed.has('arrowup')) {
-      // Limited to 45 degrees (reduced from 60 degrees)
-      this.targetRotation.pitch = Math.min(this.targetRotation.pitch + this.rotationSpeed, Math.PI / 4);
-    }
-    if (this.keysPressed.has('arrowdown')) {
-      // Allowed to -75 degrees for near top-down view (increased from -30 degrees)
-      this.targetRotation.pitch = Math.max(this.targetRotation.pitch - this.rotationSpeed, -Math.PI * 5 / 12);
-    }
+    // Build movement input from keyboard state
+    const movementInput: MovementInput = {
+      forward: this.keysPressed.has('w'),
+      backward: this.keysPressed.has('s'),
+      left: this.keysPressed.has('a'),
+      right: this.keysPressed.has('d'),
+      up: this.keysPressed.has('e'),
+      down: this.keysPressed.has('q'),
+      fast: this.keysPressed.has('shift')
+    };
 
-    // Mobile rotation joystick input - controls camera yaw (X) and pitch (Y)
-    if (this.rotationJoystickActive) {
-      const rotationJoystickSpeed = this.rotationSpeed * 1.5; // Slightly faster for mobile feel
+    // Build rotation input from arrow keys
+    const rotationInput: RotationInput = {
+      left: this.keysPressed.has('arrowleft'),
+      right: this.keysPressed.has('arrowright'),
+      up: this.keysPressed.has('arrowup'),
+      down: this.keysPressed.has('arrowdown')
+    };
 
-      // X axis controls yaw (horizontal look) - pushing right looks right
-      this.targetRotation.yaw -= this.rotationJoystickVector.x * rotationJoystickSpeed;
+    // Update camera control service
+    this.cameraControl.update(movementInput, rotationInput, this.movementJoystick, this.rotationJoystick);
 
-      // Y axis controls pitch (vertical look) - pushing up looks up
-      const newPitch = this.targetRotation.pitch + this.rotationJoystickVector.y * rotationJoystickSpeed;
-      // Clamp pitch to same limits as arrow keys
-      this.targetRotation.pitch = Math.max(-Math.PI * 5 / 12, Math.min(Math.PI / 4, newPitch));
-    }
-
-    // ALWAYS smoothly interpolate rotation (even when no keys pressed) for perfect smoothness
-    this.cameraRotation.yaw += (this.targetRotation.yaw - this.cameraRotation.yaw) * this.rotationAcceleration;
-    this.cameraRotation.pitch += (this.targetRotation.pitch - this.cameraRotation.pitch) * this.rotationAcceleration;
-
-    // Determine movement speed (Shift for faster)
-    const currentSpeed = this.keysPressed.has('shift') ? this.fastSpeed : this.moveSpeed;
-
-    // Calculate camera direction based on yaw rotation
-    const forward = new THREE.Vector3(
-      Math.sin(this.cameraRotation.yaw),
-      0,
-      Math.cos(this.cameraRotation.yaw)
-    );
-    forward.normalize();
-
-    const right = new THREE.Vector3();
-    right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
-
-    // Reset target velocity
-    this.targetVelocity.x = 0;
-    this.targetVelocity.z = 0;
-    this.targetVelocity.y = 0;
-
-    // Calculate target velocity based on input (WASD movement)
-    if (this.keysPressed.has('w')) {
-      this.targetVelocity.x += forward.x * currentSpeed;
-      this.targetVelocity.z += forward.z * currentSpeed;
-    }
-    if (this.keysPressed.has('s')) {
-      this.targetVelocity.x -= forward.x * currentSpeed;
-      this.targetVelocity.z -= forward.z * currentSpeed;
-    }
-    if (this.keysPressed.has('a')) {
-      this.targetVelocity.x -= right.x * currentSpeed;
-      this.targetVelocity.z -= right.z * currentSpeed;
-    }
-    if (this.keysPressed.has('d')) {
-      this.targetVelocity.x += right.x * currentSpeed;
-      this.targetVelocity.z += right.z * currentSpeed;
-    }
-
-    // Mobile joystick input
-    if (this.joystickActive) {
-      this.targetVelocity.x += (forward.x * this.joystickVector.y + right.x * this.joystickVector.x) * currentSpeed;
-      this.targetVelocity.z += (forward.z * this.joystickVector.y + right.z * this.joystickVector.x) * currentSpeed;
-    }
-
-    // Q/E for up/down
-    if (this.keysPressed.has('q')) {
-      this.targetVelocity.y -= currentSpeed;
-    }
-    if (this.keysPressed.has('e')) {
-      this.targetVelocity.y += currentSpeed;
-    }
-
-    // Smooth acceleration/deceleration (lerp towards target velocity)
-    this.cameraVelocity.x += (this.targetVelocity.x - this.cameraVelocity.x) * this.acceleration;
-    this.cameraVelocity.y += (this.targetVelocity.y - this.cameraVelocity.y) * this.acceleration;
-    this.cameraVelocity.z += (this.targetVelocity.z - this.cameraVelocity.z) * this.acceleration;
-
-    // Apply movement
-    this.camera.position.x += this.cameraVelocity.x;
-    this.camera.position.y += this.cameraVelocity.y;
-    this.camera.position.z += this.cameraVelocity.z;
-
-    // Keep camera within reasonable bounds
-    const maxDistance = 50;
-    this.camera.position.x = Math.max(-maxDistance, Math.min(maxDistance, this.camera.position.x));
-    this.camera.position.z = Math.max(-maxDistance, Math.min(maxDistance, this.camera.position.z));
-    this.camera.position.y = Math.max(5, Math.min(60, this.camera.position.y));
-
-    // Apply rotation to camera
-    const lookAtDistance = 10;
-    const targetX = this.camera.position.x + forward.x * lookAtDistance;
-    const targetY = this.camera.position.y + Math.sin(this.cameraRotation.pitch) * lookAtDistance - 5;
-    const targetZ = this.camera.position.z + forward.z * lookAtDistance;
-
-    // Update orbit controls target
-    if (this.controls) {
-      this.controls.target.set(targetX, targetY, targetZ);
-    }
+    // Apply camera state to Three.js camera and controls
+    this.cameraControl.applyToCamera(this.camera, this.controls?.target);
   }
 
   private addHelpers(): void {
@@ -1163,13 +1056,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private cycleBrushSize(direction: number): void {
-    this.brushSizeIndex = (this.brushSizeIndex + direction + this.brushSizes.length) % this.brushSizes.length;
-    this.brushSize = this.brushSizes[this.brushSizeIndex];
+    this.editorState.cycleBrushSize(direction);
     this.updateBrushPreview();
   }
 
   private changeActiveTool(tool: BrushTool): void {
-    this.activeTool = tool;
+    this.editorState.setActiveTool(tool);
 
     // Reset rectangle selection when switching tools
     if (tool !== 'rectangle') {
@@ -1573,39 +1465,40 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
    */
   public onJoystickChange(event: JoystickEvent): void {
     if (event.type === 'movement') {
-      this.joystickActive = event.active;
-      this.joystickVector = event.vector;
+      this.movementJoystick = {
+        active: event.active,
+        x: event.vector.x,
+        y: event.vector.y
+      };
     } else if (event.type === 'rotation') {
-      this.rotationJoystickActive = event.active;
-      this.rotationJoystickVector = event.vector;
+      this.rotationJoystick = {
+        active: event.active,
+        x: event.vector.x,
+        y: event.vector.y
+      };
     }
   }
 
   public setEditMode(mode: EditMode): void {
-    this.editMode = mode;
+    this.editorState.setEditMode(mode);
     // Update brush indicator color immediately for crisp feedback
     if (this.brushIndicator) {
       const material = this.brushIndicator.material as THREE.MeshBasicMaterial;
-      const modeColors = {
-        'paint': 0x6a9aff,
-        'height': 0xff6a9a,
-        'spawn': 0x50ff50,
-        'exit': 0xff5050
-      };
-      material.color.setHex(modeColors[mode]);
+      material.color.setHex(this.editorState.getColorForMode());
     }
   }
 
   public setTerrainType(type: TerrainType): void {
-    this.selectedTerrainType = type;
-    if (this.editMode !== 'paint') {
-      this.editMode = 'paint';
+    this.editorState.setTerrainType(type);
+    // Update brush indicator color since mode may have changed
+    if (this.brushIndicator) {
+      const material = this.brushIndicator.material as THREE.MeshBasicMaterial;
+      material.color.setHex(this.editorState.getColorForMode());
     }
   }
 
   public setBrushSize(size: number): void {
-    this.brushSize = size;
-    this.brushSizeIndex = this.brushSizes.indexOf(size);
+    this.editorState.setBrushSize(size);
     this.updateBrushPreview();
   }
 
