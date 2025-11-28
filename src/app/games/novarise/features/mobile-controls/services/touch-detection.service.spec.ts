@@ -1,17 +1,13 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { TouchDetectionService, DeviceInfo, DeviceType, Orientation } from './touch-detection.service';
+import { TouchDetectionService, DeviceInfo } from './touch-detection.service';
 import { JOYSTICK_BREAKPOINTS } from '../models/joystick.types';
 
 describe('TouchDetectionService', () => {
   let service: TouchDetectionService;
-  let originalWindow: Window & typeof globalThis;
   let mockInnerWidth: number;
   let mockInnerHeight: number;
 
   beforeEach(() => {
-    // Store original window
-    originalWindow = window;
-
     // Default to mobile portrait
     mockInnerWidth = 375;
     mockInnerHeight = 667;

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TerrainGrid, TerrainTile } from './terrain-grid.class';
+import { TerrainGrid } from './terrain-grid.class';
 import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
 
 describe('TerrainGrid', () => {
