@@ -8,6 +8,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
 import { TerrainGrid } from './features/terrain-editor/terrain-grid.class';
 import { TerrainType, TERRAIN_CONFIGS } from './models/terrain-types.enum';
 import { MapStorageService } from './core/map-storage.service';
+import { EditHistoryService, PaintCommand, HeightCommand, SpawnPointCommand, ExitPointCommand, TileState, GridPoint } from './core/edit-history.service';
 import { JoystickEvent } from './features/mobile-controls';
 
 export type EditMode = 'paint' | 'height' | 'spawn' | 'exit';
@@ -95,7 +96,21 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   // Title display
   public title = 'Novarise';
 
-  constructor(private mapStorage: MapStorageService) {
+  // Undo/Redo state - expose for UI binding
+  public get canUndo(): boolean { return this.editHistory.canUndo; }
+  public get canRedo(): boolean { return this.editHistory.canRedo; }
+  public get undoDescription(): string | null { return this.editHistory.nextUndoDescription; }
+  public get redoDescription(): string | null { return this.editHistory.nextRedoDescription; }
+
+  // Track tiles being edited in current stroke for batching
+  private currentStrokeTiles: Map<string, TileState> = new Map();
+  private currentStrokeNewHeights: Map<string, number> = new Map();
+  private isInStroke = false;
+
+  constructor(
+    private mapStorage: MapStorageService,
+    private editHistory: EditHistoryService
+  ) {
     this.keyboardHandler = this.handleKeyDown.bind(this);
     this.keyUpHandler = this.handleKeyUp.bind(this);
     this.mouseDownHandler = this.handleMouseDown.bind(this);
@@ -610,6 +625,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (event.button === 0) { // Left click
       this.isMouseDown = true;
 
+      // Start tracking stroke for undo/redo (brush tool with paint/height mode)
+      if (this.activeTool === 'brush' && (this.editMode === 'paint' || this.editMode === 'height')) {
+        this.startStroke();
+      }
+
       if (this.hoveredTile) {
         // Rectangle tool: set start point
         if (this.activeTool === 'rectangle') {
@@ -625,12 +645,49 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private handleMouseUp(): void {
     this.isMouseDown = false;
 
+    // End stroke and record command for undo/redo
+    if (this.isInStroke) {
+      this.endStroke();
+    }
+
     // Rectangle tool: complete selection
     if (this.activeTool === 'rectangle' && this.rectangleStartTile && this.hoveredTile) {
       this.fillRectangle(this.rectangleStartTile, this.hoveredTile);
     }
 
     this.rectangleStartTile = null;
+  }
+
+  private startStroke(): void {
+    this.isInStroke = true;
+    this.currentStrokeTiles.clear();
+    this.currentStrokeNewHeights.clear();
+  }
+
+  private endStroke(): void {
+    this.isInStroke = false;
+
+    // Record command based on edit mode
+    if (this.editMode === 'paint' && this.currentStrokeTiles.size > 0) {
+      const tiles = Array.from(this.currentStrokeTiles.values());
+      const command = new PaintCommand(
+        tiles,
+        this.selectedTerrainType,
+        (x, z, type) => this.terrainGrid.paintTile(x, z, type)
+      );
+      this.editHistory.record(command);
+    } else if (this.editMode === 'height' && this.currentStrokeTiles.size > 0) {
+      const tiles = Array.from(this.currentStrokeTiles.values());
+      const command = new HeightCommand(
+        tiles,
+        new Map(this.currentStrokeNewHeights),
+        (x, z, height) => this.terrainGrid.setHeight(x, z, height)
+      );
+      this.editHistory.record(command);
+    }
+
+    this.currentStrokeTiles.clear();
+    this.currentStrokeNewHeights.clear();
   }
 
   private applyEdit(mesh: THREE.Mesh): void {
@@ -653,25 +710,75 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       const z = tileMesh.userData['gridZ'];
 
       if (this.editMode === 'paint') {
+        // Track tile state before painting for undo
+        this.trackTileForUndo(x, z);
         this.terrainGrid.paintTile(x, z, this.selectedTerrainType);
         this.flashTileEdit(tileMesh);
       } else if (this.editMode === 'height') {
+        // Track tile state before height change for undo
+        this.trackTileForUndo(x, z);
         const delta = 0.2;
         this.terrainGrid.adjustHeight(x, z, delta);
         const tile = this.terrainGrid.getTileAt(x, z);
         if (tile) {
+          // Track new height after change
+          const key = `${x},${z}`;
+          this.currentStrokeNewHeights.set(key, tile.height);
           this.flashTileEdit(tile.mesh);
         }
       } else if (this.editMode === 'spawn') {
+        // Record spawn point change for undo
+        const previousSpawn = this.terrainGrid.getSpawnPoint();
         this.terrainGrid.setSpawnPoint(x, z);
         this.updateSpawnMarker();
         this.flashTileEdit(tileMesh);
+        // Record command immediately (not part of stroke)
+        const command = new SpawnPointCommand(
+          previousSpawn ? { ...previousSpawn } : null,
+          { x, z },
+          (sx, sz) => {
+            this.terrainGrid.setSpawnPoint(sx, sz);
+            this.updateSpawnMarker();
+          }
+        );
+        this.editHistory.record(command);
       } else if (this.editMode === 'exit') {
+        // Record exit point change for undo
+        const previousExit = this.terrainGrid.getExitPoint();
         this.terrainGrid.setExitPoint(x, z);
         this.updateExitMarker();
         this.flashTileEdit(tileMesh);
+        // Record command immediately (not part of stroke)
+        const command = new ExitPointCommand(
+          previousExit ? { ...previousExit } : null,
+          { x, z },
+          (ex, ez) => {
+            this.terrainGrid.setExitPoint(ex, ez);
+            this.updateExitMarker();
+          }
+        );
+        this.editHistory.record(command);
       }
     });
+  }
+
+  /**
+   * Track a tile's current state before making changes (for undo)
+   */
+  private trackTileForUndo(x: number, z: number): void {
+    const key = `${x},${z}`;
+    // Only track first state (before any changes in this stroke)
+    if (!this.currentStrokeTiles.has(key)) {
+      const tile = this.terrainGrid.getTileAt(x, z);
+      if (tile) {
+        this.currentStrokeTiles.set(key, {
+          x,
+          z,
+          type: tile.type,
+          height: tile.height
+        });
+      }
+    }
   }
 
   private flashTileEdit(mesh: THREE.Mesh): void {
@@ -712,6 +819,20 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private handleKeyDown(event: KeyboardEvent): void {
     const key = event.key.toLowerCase();
     this.keysPressed.add(key);
+
+    // Undo/Redo shortcuts (Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z)
+    if (event.ctrlKey || event.metaKey) {
+      if (key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        this.undo();
+        return;
+      }
+      if (key === 'y' || (key === 'z' && event.shiftKey)) {
+        event.preventDefault();
+        this.redo();
+        return;
+      }
+    }
 
     // Mode and terrain shortcuts
     switch (key) {
@@ -1174,6 +1295,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Don't fill if same type
     if (targetType === replacementType) return;
 
+    // Track tiles for undo
+    const affectedTiles: TileState[] = [];
+
     const visited = new Set<string>();
     const queue: [number, number][] = [[startX, startZ]];
     const maxIterations = 625; // Max 25x25 grid
@@ -1189,6 +1313,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
       const tile = this.terrainGrid.getTileAt(x, z);
       if (!tile || tile.type !== targetType) continue;
+
+      // Track tile state before change
+      affectedTiles.push({
+        x, z,
+        type: tile.type,
+        height: tile.height
+      });
 
       // Paint this tile
       if (this.editMode === 'paint') {
@@ -1207,6 +1338,16 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           queue.push([nx, nz]);
         }
       });
+    }
+
+    // Record command for undo
+    if (affectedTiles.length > 0) {
+      const command = new PaintCommand(
+        affectedTiles,
+        replacementType,
+        (x, z, type) => this.terrainGrid.paintTile(x, z, type)
+      );
+      this.editHistory.record(command);
     }
   }
 
@@ -1232,17 +1373,52 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const minZ = Math.min(z1, z2);
     const maxZ = Math.max(z1, z2);
 
+    // Track tiles for undo
+    const affectedTiles: TileState[] = [];
+    const newHeights = new Map<string, number>();
+
     for (let x = minX; x <= maxX; x++) {
       for (let z = minZ; z <= maxZ; z++) {
         const tile = this.terrainGrid.getTileAt(x, z);
         if (tile) {
+          // Track tile state before change
+          affectedTiles.push({
+            x, z,
+            type: tile.type,
+            height: tile.height
+          });
+
           if (this.editMode === 'paint') {
             this.terrainGrid.paintTile(x, z, this.selectedTerrainType);
           } else if (this.editMode === 'height') {
             this.terrainGrid.adjustHeight(x, z, 0.2);
+            // Track new height after change
+            const updatedTile = this.terrainGrid.getTileAt(x, z);
+            if (updatedTile) {
+              newHeights.set(`${x},${z}`, updatedTile.height);
+            }
           }
           this.flashTileEdit(tile.mesh);
         }
+      }
+    }
+
+    // Record command for undo
+    if (affectedTiles.length > 0) {
+      if (this.editMode === 'paint') {
+        const command = new PaintCommand(
+          affectedTiles,
+          this.selectedTerrainType,
+          (x, z, type) => this.terrainGrid.paintTile(x, z, type)
+        );
+        this.editHistory.record(command);
+      } else if (this.editMode === 'height') {
+        const command = new HeightCommand(
+          affectedTiles,
+          newHeights,
+          (x, z, height) => this.terrainGrid.setHeight(x, z, height)
+        );
+        this.editHistory.record(command);
       }
     }
 
@@ -1423,6 +1599,37 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   public setActiveTool(tool: BrushTool): void {
     this.changeActiveTool(tool);
+  }
+
+  /**
+   * Undo the last edit action
+   */
+  public undo(): void {
+    const command = this.editHistory.undo();
+    if (command) {
+      // Update markers if spawn/exit was undone
+      this.updateSpawnMarker();
+      this.updateExitMarker();
+    }
+  }
+
+  /**
+   * Redo the last undone action
+   */
+  public redo(): void {
+    const command = this.editHistory.redo();
+    if (command) {
+      // Update markers if spawn/exit was redone
+      this.updateSpawnMarker();
+      this.updateExitMarker();
+    }
+  }
+
+  /**
+   * Clear all edit history
+   */
+  public clearHistory(): void {
+    this.editHistory.clear();
   }
 
   private animate = (): void => {
