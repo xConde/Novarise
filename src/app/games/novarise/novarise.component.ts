@@ -832,6 +832,18 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.redo();
         return;
       }
+      // Export map (Ctrl+E)
+      if (key === 'e') {
+        event.preventDefault();
+        this.exportCurrentMap();
+        return;
+      }
+      // Import map (Ctrl+O for "Open")
+      if (key === 'o') {
+        event.preventDefault();
+        this.importMapFromFile();
+        return;
+      }
     }
 
     // Mode and terrain shortcuts
@@ -1630,6 +1642,44 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
    */
   public clearHistory(): void {
     this.editHistory.clear();
+  }
+
+  /**
+   * Export current map to a downloadable file
+   */
+  public exportCurrentMap(): void {
+    const currentId = this.mapStorage.getCurrentMapId();
+    if (!currentId) {
+      alert('No map to export. Save a map first (G key).');
+      return;
+    }
+
+    const success = this.mapStorage.downloadMapAsFile(currentId);
+    if (!success) {
+      alert('Failed to export map.');
+    }
+  }
+
+  /**
+   * Import a map from a file
+   */
+  public async importMapFromFile(): Promise<void> {
+    const mapId = await this.mapStorage.promptFileImport();
+    if (mapId) {
+      const state = this.mapStorage.loadMap(mapId);
+      if (state) {
+        this.terrainGrid.importState(state);
+        this.updateSpawnMarker();
+        this.updateExitMarker();
+        const metadata = this.mapStorage.getMapMetadata(mapId);
+        if (metadata) {
+          this.currentMapName = metadata.name;
+        }
+        // Clear edit history when loading a new map
+        this.editHistory.clear();
+        alert(`Map "${this.currentMapName}" imported successfully!`);
+      }
+    }
   }
 
   private animate = (): void => {

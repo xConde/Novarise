@@ -192,7 +192,7 @@ export class MapStorageService {
   }
 
   /**
-   * Export map to JSON file (for future download feature)
+   * Export map to JSON string
    * @param id Map ID
    * @returns JSON string or null
    */
@@ -203,7 +203,39 @@ export class MapStorageService {
   }
 
   /**
-   * Import map from JSON string (for future upload feature)
+   * Download map as a .novarise.json file
+   * @param id Map ID
+   * @returns true if download started, false if map not found
+   */
+  public downloadMapAsFile(id: string): boolean {
+    const json = this.exportMapToJson(id);
+    if (!json) {
+      return false;
+    }
+
+    const metadata = this.getMapMetadata(id);
+    const filename = this.sanitizeFilename(metadata?.name || 'map') + '.novarise.json';
+
+    // Create blob and download link
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Clean up the URL object
+    URL.revokeObjectURL(url);
+
+    console.log(`Map "${metadata?.name}" downloaded as ${filename}`);
+    return true;
+  }
+
+  /**
+   * Import map from JSON string
    * @param json JSON string
    * @param name Optional name override
    * @returns Imported map ID or null
@@ -211,12 +243,103 @@ export class MapStorageService {
   public importMapFromJson(json: string, name?: string): string | null {
     try {
       const savedMap: SavedMap = JSON.parse(json);
-      const mapName = name || savedMap.metadata.name || 'Imported Map';
+
+      // Validate the imported data structure
+      if (!savedMap.data || typeof savedMap.data.gridSize !== 'number') {
+        console.error('Invalid map data structure');
+        return null;
+      }
+
+      const mapName = name || savedMap.metadata?.name || 'Imported Map';
       return this.saveMap(mapName, savedMap.data);
     } catch (e) {
       console.error('Failed to import map:', e);
       return null;
     }
+  }
+
+  /**
+   * Validate JSON string is a valid Novarise map
+   * @param json JSON string to validate
+   * @returns Validation result with map name if valid
+   */
+  public validateMapJson(json: string): { valid: boolean; name?: string; error?: string } {
+    try {
+      const savedMap: SavedMap = JSON.parse(json);
+
+      // Check for required fields
+      if (!savedMap.data) {
+        return { valid: false, error: 'Missing map data' };
+      }
+
+      if (typeof savedMap.data.gridSize !== 'number') {
+        return { valid: false, error: 'Invalid or missing grid size' };
+      }
+
+      if (!savedMap.data.tiles || !Array.isArray(savedMap.data.tiles)) {
+        return { valid: false, error: 'Invalid or missing tiles data' };
+      }
+
+      return {
+        valid: true,
+        name: savedMap.metadata?.name || 'Unnamed Map'
+      };
+    } catch (e) {
+      return { valid: false, error: 'Invalid JSON format' };
+    }
+  }
+
+  /**
+   * Create a file input and handle file selection for import
+   * @returns Promise that resolves with imported map ID or null
+   */
+  public promptFileImport(): Promise<string | null> {
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json,.novarise.json';
+
+      input.onchange = async (event) => {
+        const file = (event.target as HTMLInputElement).files?.[0];
+        if (!file) {
+          resolve(null);
+          return;
+        }
+
+        try {
+          const json = await file.text();
+          const validation = this.validateMapJson(json);
+
+          if (!validation.valid) {
+            console.error('Invalid map file:', validation.error);
+            resolve(null);
+            return;
+          }
+
+          const mapId = this.importMapFromJson(json);
+          resolve(mapId);
+        } catch (e) {
+          console.error('Failed to read file:', e);
+          resolve(null);
+        }
+      };
+
+      input.oncancel = () => {
+        resolve(null);
+      };
+
+      input.click();
+    });
+  }
+
+  /**
+   * Sanitize a string for use as a filename
+   */
+  private sanitizeFilename(name: string): string {
+    return name
+      .replace(/[<>:"/\\|?*]/g, '') // Remove invalid characters
+      .replace(/\s+/g, '_')          // Replace spaces with underscores
+      .substring(0, 50);             // Limit length
   }
 
   /**
