@@ -8,10 +8,13 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
 import { TerrainGrid } from './features/terrain-editor/terrain-grid.class';
 import { TerrainType, TERRAIN_CONFIGS } from './models/terrain-types.enum';
 import { MapStorageService } from './core/map-storage.service';
+import { EditHistoryService, PaintCommand, HeightCommand, SpawnPointCommand, ExitPointCommand, TileState } from './core/edit-history.service';
+import { CameraControlService, MovementInput, RotationInput, JoystickInput } from './core/camera-control.service';
+import { EditorStateService, EditMode, BrushTool } from './core/editor-state.service';
 import { JoystickEvent } from './features/mobile-controls';
 
-export type EditMode = 'paint' | 'height' | 'spawn' | 'exit';
-export type BrushTool = 'brush' | 'fill' | 'rectangle';
+// Re-export types for template compatibility
+export { EditMode, BrushTool } from './core/editor-state.service';
 
 @Component({
   selector: 'app-novarise',
@@ -21,13 +24,12 @@ export type BrushTool = 'brush' | 'fill' | 'rectangle';
 export class NovariseComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
 
-  // Edit state
-  public editMode: EditMode = 'paint';
-  public selectedTerrainType: TerrainType = TerrainType.BEDROCK;
-  public brushSize = 1;
-  public brushSizes = [1, 3, 5, 7];
-  public brushSizeIndex = 0;
-  public activeTool: BrushTool = 'brush';
+  // Edit state - delegated to EditorStateService
+  public get editMode(): EditMode { return this.editorState.getEditMode(); }
+  public get selectedTerrainType(): TerrainType { return this.editorState.getTerrainType(); }
+  public get brushSize(): number { return this.editorState.getBrushSize(); }
+  public get brushSizes(): number[] { return this.editorState.brushSizes; }
+  public get activeTool(): BrushTool { return this.editorState.getActiveTool(); }
 
   // Camera configuration
   private readonly cameraDistance = 35;
@@ -63,25 +65,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private spawnMarker!: THREE.Mesh;
   private exitMarker!: THREE.Mesh;
 
-  // Camera movement
-  private cameraVelocity = { x: 0, y: 0, z: 0 };
-  private targetVelocity = { x: 0, y: 0, z: 0 };  // For smooth acceleration
-  private moveSpeed = 0.25;  // Reduced from 0.4 for gentler movement
-  private fastSpeed = 0.6;   // Reduced from 1.0 for smoother fast movement
-  private acceleration = 0.15;  // Smooth acceleration/deceleration
-  private rotationSpeed = 0.005;  // Controlled rotation
+  // Camera movement - delegated to CameraControlService
   private keysPressed = new Set<string>();
 
-  // Camera rotation
-  private cameraRotation = { yaw: 0, pitch: 0 };
-  private targetRotation = { yaw: 0, pitch: 0 };  // Target rotation for smooth acceleration
-  private rotationAcceleration = 0.15;  // Smooth rotation acceleration (matches movement)
-
   // Mobile joystick state (updated via modular VirtualJoystickComponent events)
-  private joystickActive = false;
-  private joystickVector = { x: 0, y: 0 };
-  private rotationJoystickActive = false;
-  private rotationJoystickVector = { x: 0, y: 0 };
+  private movementJoystick: JoystickInput = { active: false, x: 0, y: 0 };
+  private rotationJoystick: JoystickInput = { active: false, x: 0, y: 0 };
 
   // Event handlers
   private keyboardHandler: (event: KeyboardEvent) => void;
@@ -89,13 +78,30 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private mouseDownHandler: (event: MouseEvent) => void;
   private mouseUpHandler: (event: MouseEvent) => void;
 
-  // Current map tracking
-  private currentMapName = 'Untitled Map';
+  // Current map tracking - delegated to EditorStateService
+  private get currentMapName(): string { return this.editorState.getCurrentMapName(); }
+  private set currentMapName(name: string) { this.editorState.setCurrentMapName(name); }
 
   // Title display
   public title = 'Novarise';
 
-  constructor(private mapStorage: MapStorageService) {
+  // Undo/Redo state - expose for UI binding
+  public get canUndo(): boolean { return this.editHistory.canUndo; }
+  public get canRedo(): boolean { return this.editHistory.canRedo; }
+  public get undoDescription(): string | null { return this.editHistory.nextUndoDescription; }
+  public get redoDescription(): string | null { return this.editHistory.nextRedoDescription; }
+
+  // Track tiles being edited in current stroke for batching
+  private currentStrokeTiles: Map<string, TileState> = new Map();
+  private currentStrokeNewHeights: Map<string, number> = new Map();
+  private isInStroke = false;
+
+  constructor(
+    private mapStorage: MapStorageService,
+    private editHistory: EditHistoryService,
+    private cameraControl: CameraControlService,
+    private editorState: EditorStateService
+  ) {
     this.keyboardHandler = this.handleKeyDown.bind(this);
     this.keyUpHandler = this.handleKeyUp.bind(this);
     this.mouseDownHandler = this.handleMouseDown.bind(this);
@@ -160,20 +166,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private initializeCameraRotation(): void {
-    // Calculate initial rotation based on camera's current position and lookAt point
-    const lookAtPoint = new THREE.Vector3(0, 0, 0);
-    const direction = new THREE.Vector3().subVectors(lookAtPoint, this.camera.position);
-
-    // Calculate yaw (horizontal rotation) from X and Z components
-    const initialYaw = Math.atan2(direction.x, direction.z);
-    this.cameraRotation.yaw = initialYaw;
-    this.targetRotation.yaw = initialYaw;
-
-    // Calculate pitch (vertical rotation) from Y component and horizontal distance
-    const horizontalDistance = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
-    const initialPitch = Math.atan2(direction.y, horizontalDistance);
-    this.cameraRotation.pitch = initialPitch;
-    this.targetRotation.pitch = initialPitch;
+    // Initialize camera control service from current camera state
+    this.cameraControl.initializeFromCamera(this.camera, new THREE.Vector3(0, 0, 0));
   }
 
   private initializeRenderer(): void {
@@ -610,6 +604,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (event.button === 0) { // Left click
       this.isMouseDown = true;
 
+      // Start tracking stroke for undo/redo (brush tool with paint/height mode)
+      if (this.activeTool === 'brush' && (this.editMode === 'paint' || this.editMode === 'height')) {
+        this.startStroke();
+      }
+
       if (this.hoveredTile) {
         // Rectangle tool: set start point
         if (this.activeTool === 'rectangle') {
@@ -625,12 +624,49 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private handleMouseUp(): void {
     this.isMouseDown = false;
 
+    // End stroke and record command for undo/redo
+    if (this.isInStroke) {
+      this.endStroke();
+    }
+
     // Rectangle tool: complete selection
     if (this.activeTool === 'rectangle' && this.rectangleStartTile && this.hoveredTile) {
       this.fillRectangle(this.rectangleStartTile, this.hoveredTile);
     }
 
     this.rectangleStartTile = null;
+  }
+
+  private startStroke(): void {
+    this.isInStroke = true;
+    this.currentStrokeTiles.clear();
+    this.currentStrokeNewHeights.clear();
+  }
+
+  private endStroke(): void {
+    this.isInStroke = false;
+
+    // Record command based on edit mode
+    if (this.editMode === 'paint' && this.currentStrokeTiles.size > 0) {
+      const tiles = Array.from(this.currentStrokeTiles.values());
+      const command = new PaintCommand(
+        tiles,
+        this.selectedTerrainType,
+        (x, z, type) => this.terrainGrid.paintTile(x, z, type)
+      );
+      this.editHistory.record(command);
+    } else if (this.editMode === 'height' && this.currentStrokeTiles.size > 0) {
+      const tiles = Array.from(this.currentStrokeTiles.values());
+      const command = new HeightCommand(
+        tiles,
+        new Map(this.currentStrokeNewHeights),
+        (x, z, height) => this.terrainGrid.setHeight(x, z, height)
+      );
+      this.editHistory.record(command);
+    }
+
+    this.currentStrokeTiles.clear();
+    this.currentStrokeNewHeights.clear();
   }
 
   private applyEdit(mesh: THREE.Mesh): void {
@@ -653,25 +689,75 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       const z = tileMesh.userData['gridZ'];
 
       if (this.editMode === 'paint') {
+        // Track tile state before painting for undo
+        this.trackTileForUndo(x, z);
         this.terrainGrid.paintTile(x, z, this.selectedTerrainType);
         this.flashTileEdit(tileMesh);
       } else if (this.editMode === 'height') {
+        // Track tile state before height change for undo
+        this.trackTileForUndo(x, z);
         const delta = 0.2;
         this.terrainGrid.adjustHeight(x, z, delta);
         const tile = this.terrainGrid.getTileAt(x, z);
         if (tile) {
+          // Track new height after change
+          const key = `${x},${z}`;
+          this.currentStrokeNewHeights.set(key, tile.height);
           this.flashTileEdit(tile.mesh);
         }
       } else if (this.editMode === 'spawn') {
+        // Record spawn point change for undo
+        const previousSpawn = this.terrainGrid.getSpawnPoint();
         this.terrainGrid.setSpawnPoint(x, z);
         this.updateSpawnMarker();
         this.flashTileEdit(tileMesh);
+        // Record command immediately (not part of stroke)
+        const command = new SpawnPointCommand(
+          previousSpawn ? { ...previousSpawn } : null,
+          { x, z },
+          (sx, sz) => {
+            this.terrainGrid.setSpawnPoint(sx, sz);
+            this.updateSpawnMarker();
+          }
+        );
+        this.editHistory.record(command);
       } else if (this.editMode === 'exit') {
+        // Record exit point change for undo
+        const previousExit = this.terrainGrid.getExitPoint();
         this.terrainGrid.setExitPoint(x, z);
         this.updateExitMarker();
         this.flashTileEdit(tileMesh);
+        // Record command immediately (not part of stroke)
+        const command = new ExitPointCommand(
+          previousExit ? { ...previousExit } : null,
+          { x, z },
+          (ex, ez) => {
+            this.terrainGrid.setExitPoint(ex, ez);
+            this.updateExitMarker();
+          }
+        );
+        this.editHistory.record(command);
       }
     });
+  }
+
+  /**
+   * Track a tile's current state before making changes (for undo)
+   */
+  private trackTileForUndo(x: number, z: number): void {
+    const key = `${x},${z}`;
+    // Only track first state (before any changes in this stroke)
+    if (!this.currentStrokeTiles.has(key)) {
+      const tile = this.terrainGrid.getTileAt(x, z);
+      if (tile) {
+        this.currentStrokeTiles.set(key, {
+          x,
+          z,
+          type: tile.type,
+          height: tile.height
+        });
+      }
+    }
   }
 
   private flashTileEdit(mesh: THREE.Mesh): void {
@@ -712,6 +798,32 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private handleKeyDown(event: KeyboardEvent): void {
     const key = event.key.toLowerCase();
     this.keysPressed.add(key);
+
+    // Undo/Redo shortcuts (Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z)
+    if (event.ctrlKey || event.metaKey) {
+      if (key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        this.undo();
+        return;
+      }
+      if (key === 'y' || (key === 'z' && event.shiftKey)) {
+        event.preventDefault();
+        this.redo();
+        return;
+      }
+      // Export map (Ctrl+E)
+      if (key === 'e') {
+        event.preventDefault();
+        this.exportCurrentMap();
+        return;
+      }
+      // Import map (Ctrl+O for "Open")
+      if (key === 'o') {
+        event.preventDefault();
+        this.importMapFromFile();
+        return;
+      }
+    }
 
     // Mode and terrain shortcuts
     switch (key) {
@@ -773,116 +885,30 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private updateCameraMovement(): void {
-    // Arrow keys for camera rotation - update target rotation
-    if (this.keysPressed.has('arrowleft')) {
-      this.targetRotation.yaw += this.rotationSpeed;
-    }
-    if (this.keysPressed.has('arrowright')) {
-      this.targetRotation.yaw -= this.rotationSpeed;
-    }
-    if (this.keysPressed.has('arrowup')) {
-      // Limited to 45 degrees (reduced from 60 degrees)
-      this.targetRotation.pitch = Math.min(this.targetRotation.pitch + this.rotationSpeed, Math.PI / 4);
-    }
-    if (this.keysPressed.has('arrowdown')) {
-      // Allowed to -75 degrees for near top-down view (increased from -30 degrees)
-      this.targetRotation.pitch = Math.max(this.targetRotation.pitch - this.rotationSpeed, -Math.PI * 5 / 12);
-    }
+    // Build movement input from keyboard state
+    const movementInput: MovementInput = {
+      forward: this.keysPressed.has('w'),
+      backward: this.keysPressed.has('s'),
+      left: this.keysPressed.has('a'),
+      right: this.keysPressed.has('d'),
+      up: this.keysPressed.has('e'),
+      down: this.keysPressed.has('q'),
+      fast: this.keysPressed.has('shift')
+    };
 
-    // Mobile rotation joystick input - controls camera yaw (X) and pitch (Y)
-    if (this.rotationJoystickActive) {
-      const rotationJoystickSpeed = this.rotationSpeed * 1.5; // Slightly faster for mobile feel
+    // Build rotation input from arrow keys
+    const rotationInput: RotationInput = {
+      left: this.keysPressed.has('arrowleft'),
+      right: this.keysPressed.has('arrowright'),
+      up: this.keysPressed.has('arrowup'),
+      down: this.keysPressed.has('arrowdown')
+    };
 
-      // X axis controls yaw (horizontal look) - pushing right looks right
-      this.targetRotation.yaw -= this.rotationJoystickVector.x * rotationJoystickSpeed;
+    // Update camera control service
+    this.cameraControl.update(movementInput, rotationInput, this.movementJoystick, this.rotationJoystick);
 
-      // Y axis controls pitch (vertical look) - pushing up looks up
-      const newPitch = this.targetRotation.pitch + this.rotationJoystickVector.y * rotationJoystickSpeed;
-      // Clamp pitch to same limits as arrow keys
-      this.targetRotation.pitch = Math.max(-Math.PI * 5 / 12, Math.min(Math.PI / 4, newPitch));
-    }
-
-    // ALWAYS smoothly interpolate rotation (even when no keys pressed) for perfect smoothness
-    this.cameraRotation.yaw += (this.targetRotation.yaw - this.cameraRotation.yaw) * this.rotationAcceleration;
-    this.cameraRotation.pitch += (this.targetRotation.pitch - this.cameraRotation.pitch) * this.rotationAcceleration;
-
-    // Determine movement speed (Shift for faster)
-    const currentSpeed = this.keysPressed.has('shift') ? this.fastSpeed : this.moveSpeed;
-
-    // Calculate camera direction based on yaw rotation
-    const forward = new THREE.Vector3(
-      Math.sin(this.cameraRotation.yaw),
-      0,
-      Math.cos(this.cameraRotation.yaw)
-    );
-    forward.normalize();
-
-    const right = new THREE.Vector3();
-    right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
-
-    // Reset target velocity
-    this.targetVelocity.x = 0;
-    this.targetVelocity.z = 0;
-    this.targetVelocity.y = 0;
-
-    // Calculate target velocity based on input (WASD movement)
-    if (this.keysPressed.has('w')) {
-      this.targetVelocity.x += forward.x * currentSpeed;
-      this.targetVelocity.z += forward.z * currentSpeed;
-    }
-    if (this.keysPressed.has('s')) {
-      this.targetVelocity.x -= forward.x * currentSpeed;
-      this.targetVelocity.z -= forward.z * currentSpeed;
-    }
-    if (this.keysPressed.has('a')) {
-      this.targetVelocity.x -= right.x * currentSpeed;
-      this.targetVelocity.z -= right.z * currentSpeed;
-    }
-    if (this.keysPressed.has('d')) {
-      this.targetVelocity.x += right.x * currentSpeed;
-      this.targetVelocity.z += right.z * currentSpeed;
-    }
-
-    // Mobile joystick input
-    if (this.joystickActive) {
-      this.targetVelocity.x += (forward.x * this.joystickVector.y + right.x * this.joystickVector.x) * currentSpeed;
-      this.targetVelocity.z += (forward.z * this.joystickVector.y + right.z * this.joystickVector.x) * currentSpeed;
-    }
-
-    // Q/E for up/down
-    if (this.keysPressed.has('q')) {
-      this.targetVelocity.y -= currentSpeed;
-    }
-    if (this.keysPressed.has('e')) {
-      this.targetVelocity.y += currentSpeed;
-    }
-
-    // Smooth acceleration/deceleration (lerp towards target velocity)
-    this.cameraVelocity.x += (this.targetVelocity.x - this.cameraVelocity.x) * this.acceleration;
-    this.cameraVelocity.y += (this.targetVelocity.y - this.cameraVelocity.y) * this.acceleration;
-    this.cameraVelocity.z += (this.targetVelocity.z - this.cameraVelocity.z) * this.acceleration;
-
-    // Apply movement
-    this.camera.position.x += this.cameraVelocity.x;
-    this.camera.position.y += this.cameraVelocity.y;
-    this.camera.position.z += this.cameraVelocity.z;
-
-    // Keep camera within reasonable bounds
-    const maxDistance = 50;
-    this.camera.position.x = Math.max(-maxDistance, Math.min(maxDistance, this.camera.position.x));
-    this.camera.position.z = Math.max(-maxDistance, Math.min(maxDistance, this.camera.position.z));
-    this.camera.position.y = Math.max(5, Math.min(60, this.camera.position.y));
-
-    // Apply rotation to camera
-    const lookAtDistance = 10;
-    const targetX = this.camera.position.x + forward.x * lookAtDistance;
-    const targetY = this.camera.position.y + Math.sin(this.cameraRotation.pitch) * lookAtDistance - 5;
-    const targetZ = this.camera.position.z + forward.z * lookAtDistance;
-
-    // Update orbit controls target
-    if (this.controls) {
-      this.controls.target.set(targetX, targetY, targetZ);
-    }
+    // Apply camera state to Three.js camera and controls
+    this.cameraControl.applyToCamera(this.camera, this.controls?.target);
   }
 
   private addHelpers(): void {
@@ -1030,13 +1056,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private cycleBrushSize(direction: number): void {
-    this.brushSizeIndex = (this.brushSizeIndex + direction + this.brushSizes.length) % this.brushSizes.length;
-    this.brushSize = this.brushSizes[this.brushSizeIndex];
+    this.editorState.cycleBrushSize(direction);
     this.updateBrushPreview();
   }
 
   private changeActiveTool(tool: BrushTool): void {
-    this.activeTool = tool;
+    this.editorState.setActiveTool(tool);
 
     // Reset rectangle selection when switching tools
     if (tool !== 'rectangle') {
@@ -1174,6 +1199,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Don't fill if same type
     if (targetType === replacementType) return;
 
+    // Track tiles for undo
+    const affectedTiles: TileState[] = [];
+
     const visited = new Set<string>();
     const queue: [number, number][] = [[startX, startZ]];
     const maxIterations = 625; // Max 25x25 grid
@@ -1189,6 +1217,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
       const tile = this.terrainGrid.getTileAt(x, z);
       if (!tile || tile.type !== targetType) continue;
+
+      // Track tile state before change
+      affectedTiles.push({
+        x, z,
+        type: tile.type,
+        height: tile.height
+      });
 
       // Paint this tile
       if (this.editMode === 'paint') {
@@ -1207,6 +1242,16 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           queue.push([nx, nz]);
         }
       });
+    }
+
+    // Record command for undo
+    if (affectedTiles.length > 0) {
+      const command = new PaintCommand(
+        affectedTiles,
+        replacementType,
+        (x, z, type) => this.terrainGrid.paintTile(x, z, type)
+      );
+      this.editHistory.record(command);
     }
   }
 
@@ -1232,17 +1277,52 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const minZ = Math.min(z1, z2);
     const maxZ = Math.max(z1, z2);
 
+    // Track tiles for undo
+    const affectedTiles: TileState[] = [];
+    const newHeights = new Map<string, number>();
+
     for (let x = minX; x <= maxX; x++) {
       for (let z = minZ; z <= maxZ; z++) {
         const tile = this.terrainGrid.getTileAt(x, z);
         if (tile) {
+          // Track tile state before change
+          affectedTiles.push({
+            x, z,
+            type: tile.type,
+            height: tile.height
+          });
+
           if (this.editMode === 'paint') {
             this.terrainGrid.paintTile(x, z, this.selectedTerrainType);
           } else if (this.editMode === 'height') {
             this.terrainGrid.adjustHeight(x, z, 0.2);
+            // Track new height after change
+            const updatedTile = this.terrainGrid.getTileAt(x, z);
+            if (updatedTile) {
+              newHeights.set(`${x},${z}`, updatedTile.height);
+            }
           }
           this.flashTileEdit(tile.mesh);
         }
+      }
+    }
+
+    // Record command for undo
+    if (affectedTiles.length > 0) {
+      if (this.editMode === 'paint') {
+        const command = new PaintCommand(
+          affectedTiles,
+          this.selectedTerrainType,
+          (x, z, type) => this.terrainGrid.paintTile(x, z, type)
+        );
+        this.editHistory.record(command);
+      } else if (this.editMode === 'height') {
+        const command = new HeightCommand(
+          affectedTiles,
+          newHeights,
+          (x, z, height) => this.terrainGrid.setHeight(x, z, height)
+        );
+        this.editHistory.record(command);
       }
     }
 
@@ -1312,117 +1392,119 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.rectanglePreviewMeshes = [];
   }
 
-  private smoothTerrain(): void {
-    if (!this.hoveredTile) return;
-
-    // Validate userData exists
-    if (!this.hoveredTile.userData ||
-        typeof this.hoveredTile.userData['gridX'] !== 'number' ||
-        typeof this.hoveredTile.userData['gridZ'] !== 'number') {
-      return;
-    }
-
-    const centerX = this.hoveredTile.userData['gridX'];
-    const centerZ = this.hoveredTile.userData['gridZ'];
-    const radius = Math.floor(this.brushSize / 2) + 1;
-
-    // Apply Gaussian blur
-    const tempHeightMap: number[][] = [];
-    for (let dx = -radius; dx <= radius; dx++) {
-      for (let dz = -radius; dz <= radius; dz++) {
-        const x = centerX + dx;
-        const z = centerZ + dz;
-        const tile = this.terrainGrid.getTileAt(x, z);
-
-        if (tile) {
-          // Calculate Gaussian weight
-          const distance = Math.sqrt(dx * dx + dz * dz);
-          const weight = Math.exp(-(distance * distance) / (2 * radius * radius));
-
-          // Collect heights from neighbors
-          let totalHeight = 0;
-          let totalWeight = 0;
-
-          for (let ndx = -1; ndx <= 1; ndx++) {
-            for (let ndz = -1; ndz <= 1; ndz++) {
-              const neighbor = this.terrainGrid.getTileAt(x + ndx, z + ndz);
-              if (neighbor) {
-                const nDistance = Math.sqrt(ndx * ndx + ndz * ndz);
-                const nWeight = Math.exp(-(nDistance * nDistance) / 2);
-                totalHeight += neighbor.height * nWeight;
-                totalWeight += nWeight;
-              }
-            }
-          }
-
-          if (!tempHeightMap[x]) tempHeightMap[x] = [];
-          tempHeightMap[x][z] = totalHeight / totalWeight;
-        }
-      }
-    }
-
-    // Apply smoothed heights
-    for (let dx = -radius; dx <= radius; dx++) {
-      for (let dz = -radius; dz <= radius; dz++) {
-        const x = centerX + dx;
-        const z = centerZ + dz;
-
-        if (tempHeightMap[x] && tempHeightMap[x][z] !== undefined) {
-          const currentTile = this.terrainGrid.getTileAt(x, z);
-          if (currentTile) {
-            const newHeight = tempHeightMap[x][z];
-            const delta = newHeight - currentTile.height;
-            this.terrainGrid.adjustHeight(x, z, delta);
-            this.flashTileEdit(currentTile.mesh);
-          }
-        }
-      }
-    }
-  }
-
   /**
    * Handle joystick events from the modular VirtualJoystickComponent
    */
   public onJoystickChange(event: JoystickEvent): void {
     if (event.type === 'movement') {
-      this.joystickActive = event.active;
-      this.joystickVector = event.vector;
+      this.movementJoystick = {
+        active: event.active,
+        x: event.vector.x,
+        y: event.vector.y
+      };
     } else if (event.type === 'rotation') {
-      this.rotationJoystickActive = event.active;
-      this.rotationJoystickVector = event.vector;
+      this.rotationJoystick = {
+        active: event.active,
+        x: event.vector.x,
+        y: event.vector.y
+      };
     }
   }
 
   public setEditMode(mode: EditMode): void {
-    this.editMode = mode;
+    this.editorState.setEditMode(mode);
     // Update brush indicator color immediately for crisp feedback
     if (this.brushIndicator) {
       const material = this.brushIndicator.material as THREE.MeshBasicMaterial;
-      const modeColors = {
-        'paint': 0x6a9aff,
-        'height': 0xff6a9a,
-        'spawn': 0x50ff50,
-        'exit': 0xff5050
-      };
-      material.color.setHex(modeColors[mode]);
+      material.color.setHex(this.editorState.getColorForMode());
     }
   }
 
   public setTerrainType(type: TerrainType): void {
-    this.selectedTerrainType = type;
-    if (this.editMode !== 'paint') {
-      this.editMode = 'paint';
+    this.editorState.setTerrainType(type);
+    // Update brush indicator color since mode may have changed
+    if (this.brushIndicator) {
+      const material = this.brushIndicator.material as THREE.MeshBasicMaterial;
+      material.color.setHex(this.editorState.getColorForMode());
     }
   }
 
   public setBrushSize(size: number): void {
-    this.brushSize = size;
-    this.brushSizeIndex = this.brushSizes.indexOf(size);
+    this.editorState.setBrushSize(size);
     this.updateBrushPreview();
   }
 
   public setActiveTool(tool: BrushTool): void {
     this.changeActiveTool(tool);
+  }
+
+  /**
+   * Undo the last edit action
+   */
+  public undo(): void {
+    const command = this.editHistory.undo();
+    if (command) {
+      // Update markers if spawn/exit was undone
+      this.updateSpawnMarker();
+      this.updateExitMarker();
+    }
+  }
+
+  /**
+   * Redo the last undone action
+   */
+  public redo(): void {
+    const command = this.editHistory.redo();
+    if (command) {
+      // Update markers if spawn/exit was redone
+      this.updateSpawnMarker();
+      this.updateExitMarker();
+    }
+  }
+
+  /**
+   * Clear all edit history
+   */
+  public clearHistory(): void {
+    this.editHistory.clear();
+  }
+
+  /**
+   * Export current map to a downloadable file
+   */
+  public exportCurrentMap(): void {
+    const currentId = this.mapStorage.getCurrentMapId();
+    if (!currentId) {
+      alert('No map to export. Save a map first (G key).');
+      return;
+    }
+
+    const success = this.mapStorage.downloadMapAsFile(currentId);
+    if (!success) {
+      alert('Failed to export map.');
+    }
+  }
+
+  /**
+   * Import a map from a file
+   */
+  public async importMapFromFile(): Promise<void> {
+    const mapId = await this.mapStorage.promptFileImport();
+    if (mapId) {
+      const state = this.mapStorage.loadMap(mapId);
+      if (state) {
+        this.terrainGrid.importState(state);
+        this.updateSpawnMarker();
+        this.updateExitMarker();
+        const metadata = this.mapStorage.getMapMetadata(mapId);
+        if (metadata) {
+          this.currentMapName = metadata.name;
+        }
+        // Clear edit history when loading a new map
+        this.editHistory.clear();
+        alert(`Map "${this.currentMapName}" imported successfully!`);
+      }
+    }
   }
 
   private animate = (): void => {

@@ -174,6 +174,24 @@ export class TerrainGrid {
     });
   }
 
+  /**
+   * Set tile height to an absolute value (used for undo/redo)
+   */
+  public setHeight(x: number, z: number, height: number): void {
+    if (!this.isValidPosition(x, z)) return;
+
+    const clampedHeight = Math.max(0, Math.min(5, height));
+
+    // Skip if height is already at target
+    if (this.heightMap[x][z] === clampedHeight) return;
+
+    // Update height directly
+    this.heightMap[x][z] = clampedHeight;
+
+    // Update mesh
+    this.updateTileMesh(x, z);
+  }
+
   private smoothNeighbors(x: number, z: number): void {
     const centerHeight = this.heightMap[x][z];
     const neighbors = this.getNeighbors(x, z);
