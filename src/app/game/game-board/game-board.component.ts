@@ -542,7 +542,45 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     window.removeEventListener('keydown', this.keyboardHandler);
     window.removeEventListener('resize', this.resizeHandler);
 
-    // Clean up Three.js resources
+    // Dispose OrbitControls (removes its internal pointer/wheel listeners)
+    if (this.controls) {
+      this.controls.dispose();
+    }
+
+    // Dispose tile meshes
+    this.tileMeshes.forEach(mesh => {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    });
+    this.tileMeshes.clear();
+
+    // Dispose tower meshes
+    this.towerMeshes.forEach(group => {
+      this.scene.remove(group);
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          (child.material as THREE.Material).dispose();
+        }
+      });
+    });
+    this.towerMeshes.clear();
+
+    // Dispose particles
+    if (this.particles) {
+      this.scene.remove(this.particles);
+      this.particles.geometry.dispose();
+      (this.particles.material as THREE.Material).dispose();
+    }
+
+    // Dispose composer render targets
+    if (this.composer) {
+      this.composer.renderTarget1.dispose();
+      this.composer.renderTarget2.dispose();
+    }
+
+    // Dispose renderer
     this.renderer.dispose();
   }
 }
