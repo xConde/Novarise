@@ -34,11 +34,8 @@ export class GameBoardService {
   private exitTiles: number[][] = [];
   private readonly spawnerPlacements: Spawner[] = [];
 
-  constructor() {
-    this.generateBaseBoard();
-    this.generateExitTiles();
-    this.generateSpawner();
-  }
+  // No eager board generation — ngOnInit always calls importBoard() or resetBoard()
+  // before the board is used, so constructor work would be immediately discarded.
 
   generateBaseBoard(): void {
     for (let i = 0; i < this.gameBoardHeight; i++) {
