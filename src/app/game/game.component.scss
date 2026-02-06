@@ -76,8 +76,8 @@
 .game-container {
   display: flex;
   flex-direction: column;
-  height: calc(100% - 1.125rem);
-  width: calc(100% - 1.125rem);
+  height: 100%;
+  width: 100%;
   background-color: var(--bg-color);
   border: var(--border-width-thick) solid var(--game-primary);
   padding: var(--spacing-xs);

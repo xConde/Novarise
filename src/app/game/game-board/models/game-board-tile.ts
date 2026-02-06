@@ -36,6 +36,10 @@ export class GameBoardTile {
   static createExit(x: number, y: number): GameBoardTile {
     return new GameBoardTile(x, y, BlockType.EXIT, false, false, null, null);
   }
+
+  static createWall(x: number, y: number): GameBoardTile {
+    return new GameBoardTile(x, y, BlockType.WALL, false, false, null, null);
+  }
 }
 
 export interface Spawner {
@@ -49,6 +53,7 @@ export enum BlockType {
   EXIT,
   SPAWNER,
   TOWER,
+  WALL,
 }
 
 export enum SpawnerType {
