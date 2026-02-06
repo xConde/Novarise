@@ -1573,8 +1573,15 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     canvas.removeEventListener('mouseleave', this.mouseUpHandler);
 
     // Snapshot terrain state for the game to consume on /play navigation
+    // and auto-save to localStorage to prevent data loss
     if (this.terrainGrid) {
-      this.mapBridge.setEditorMapState(this.terrainGrid.exportState());
+      const state = this.terrainGrid.exportState();
+      this.mapBridge.setEditorMapState(state);
+      this.mapStorage.saveMap(
+        this.currentMapName,
+        state,
+        this.mapStorage.getCurrentMapId() || undefined
+      );
     }
 
     // Clear undo/redo history to prevent stale closures referencing disposed TerrainGrid
