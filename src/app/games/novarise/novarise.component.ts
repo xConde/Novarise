@@ -11,6 +11,7 @@ import { MapStorageService } from './core/map-storage.service';
 import { EditHistoryService, PaintCommand, HeightCommand, SpawnPointCommand, ExitPointCommand, TileState } from './core/edit-history.service';
 import { CameraControlService, MovementInput, RotationInput, JoystickInput } from './core/camera-control.service';
 import { EditorStateService, EditMode, BrushTool } from './core/editor-state.service';
+import { MapBridgeService } from '../../game/game-board/services/map-bridge.service';
 import { JoystickEvent } from './features/mobile-controls';
 
 // Re-export types for template compatibility
@@ -77,6 +78,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private keyUpHandler: (event: KeyboardEvent) => void;
   private mouseDownHandler: (event: MouseEvent) => void;
   private mouseUpHandler: (event: MouseEvent) => void;
+  private resizeHandler: () => void = () => {};
+  private animationFrameId = 0;
 
   // Current map tracking - delegated to EditorStateService
   private get currentMapName(): string { return this.editorState.getCurrentMapName(); }
@@ -100,7 +103,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     private mapStorage: MapStorageService,
     private editHistory: EditHistoryService,
     private cameraControl: CameraControlService,
-    private editorState: EditorStateService
+    private editorState: EditorStateService,
+    private mapBridge: MapBridgeService
   ) {
     this.keyboardHandler = this.handleKeyDown.bind(this);
     this.keyUpHandler = this.handleKeyUp.bind(this);
@@ -185,12 +189,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     this.canvasContainer.nativeElement.appendChild(this.renderer.domElement);
 
-    // Set up viewport CSS variable for fallback
-    this.updateViewportVariable();
-
     // Handle resize with proper viewport calculations
-    const resizeHandler = () => {
-      this.updateViewportVariable();
+    this.resizeHandler = () => {
       const { width, height } = this.getViewportSize();
       this.renderer.setSize(width, height);
       this.camera.aspect = width / height;
@@ -200,11 +200,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       }
     };
 
-    window.addEventListener('resize', resizeHandler);
+    window.addEventListener('resize', this.resizeHandler);
 
     // Also listen to visualViewport for mobile browser chrome changes
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', resizeHandler);
+      window.visualViewport.addEventListener('resize', this.resizeHandler);
     }
   }
 
@@ -224,14 +224,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       width: window.innerWidth,
       height: window.innerHeight
     };
-  }
-
-  /**
-   * Update --vh CSS variable for browsers without dvh support
-   */
-  private updateViewportVariable(): void {
-    const vh = (window.visualViewport?.height || window.innerHeight) * 0.01;
-    document.documentElement.style.setProperty('--vh', `${vh}px`);
   }
 
   private initializePostProcessing(): void {
@@ -1508,7 +1500,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private animate = (): void => {
-    requestAnimationFrame(this.animate);
+    this.animationFrameId = requestAnimationFrame(this.animate);
 
     // Update camera movement
     this.updateCameraMovement();
@@ -1566,12 +1558,34 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    // Stop the animation loop first to prevent calls to disposed resources
+    cancelAnimationFrame(this.animationFrameId);
+
     window.removeEventListener('keydown', this.keyboardHandler);
     window.removeEventListener('keyup', this.keyUpHandler);
+    window.removeEventListener('resize', this.resizeHandler);
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', this.resizeHandler);
+    }
     const canvas = this.renderer.domElement;
     canvas.removeEventListener('mousedown', this.mouseDownHandler);
     canvas.removeEventListener('mouseup', this.mouseUpHandler);
     canvas.removeEventListener('mouseleave', this.mouseUpHandler);
+
+    // Snapshot terrain state for the game to consume on /play navigation
+    // and auto-save to localStorage to prevent data loss
+    if (this.terrainGrid) {
+      const state = this.terrainGrid.exportState();
+      this.mapBridge.setEditorMapState(state);
+      this.mapStorage.saveMap(
+        this.currentMapName,
+        state,
+        this.mapStorage.getCurrentMapId() || undefined
+      );
+    }
+
+    // Clear undo/redo history to prevent stale closures referencing disposed TerrainGrid
+    this.editHistory.clear();
 
     // Clean up brush preview meshes
     this.brushPreviewMeshes.forEach(mesh => {

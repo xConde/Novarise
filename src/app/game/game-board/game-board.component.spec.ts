@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { GameBoardComponent } from './game-board.component';
+import { GameBoardService } from './game-board.service';
+import { MapBridgeService } from './services/map-bridge.service';
 
 describe('GameBoardComponent', () => {
   let component: GameBoardComponent;
@@ -8,7 +10,8 @@ describe('GameBoardComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [ GameBoardComponent ]
+      declarations: [ GameBoardComponent ],
+      providers: [ GameBoardService, MapBridgeService ]
     })
     .compileComponents();
   });
@@ -16,7 +19,7 @@ describe('GameBoardComponent', () => {
   beforeEach(() => {
     fixture = TestBed.createComponent(GameBoardComponent);
     component = fixture.componentInstance;
-    fixture.detectChanges();
+    // Don't call detectChanges here - it triggers ngOnInit which needs a canvas
   });
 
   it('should create', () => {

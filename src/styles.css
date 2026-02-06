@@ -92,6 +92,13 @@ html, body {
   box-sizing: inherit;
 }
 
+/* Routed component fills remaining space */
+app-novarise, app-game {
+  flex: 1;
+  overflow: hidden;
+  display: block;
+}
+
 /* Typography */
 h1, h2, h3, h4, h5, h6 {
   margin: 0;

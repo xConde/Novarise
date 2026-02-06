@@ -2,10 +2,8 @@
 .game-container {
   display: flex;
   flex-direction: column;
-  // Use dynamic viewport height for mobile browser chrome compatibility
-  height: 100vh;
-  height: 100dvh; // Dynamic viewport height (accounts for browser chrome)
-  width: 100vw;
+  height: 100%;
+  width: 100%;
   background-color: #000;
   border: 4px solid #6a4a8a;
   padding: 8px;
@@ -13,11 +11,6 @@
   overflow: hidden;
   position: relative;
   box-sizing: border-box;
-
-  // Fallback for browsers without dvh support
-  @supports not (height: 100dvh) {
-    height: calc(var(--vh, 1vh) * 100);
-  }
 
   .title {
     display: flex;

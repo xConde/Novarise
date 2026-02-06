@@ -7,6 +7,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
 import { GameBoardService } from './game-board.service';
 import { EnemyService } from './services/enemy.service';
+import { MapBridgeService } from './services/map-bridge.service';
 import { EnemyType } from './models/enemy.model';
 
 @Component({
@@ -57,16 +58,32 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Enemy management
   private lastTime = 0;
   private keyboardHandler: (event: KeyboardEvent) => void;
+  private animationFrameId = 0;
+  private resizeHandler: () => void = () => {};
 
   constructor(
     private gameBoardService: GameBoardService,
-    private enemyService: EnemyService
+    private enemyService: EnemyService,
+    private mapBridge: MapBridgeService
   ) {
     // Store bound handler for cleanup
     this.keyboardHandler = this.handleKeyboard.bind(this);
   }
 
   ngOnInit(): void {
+    // Import editor map if it has spawn and exit points; otherwise use default board
+    if (this.mapBridge.hasEditorMap()) {
+      const state = this.mapBridge.getEditorMapState()!;
+      if (state.spawnPoint && state.exitPoint) {
+        const { board, width, height } = this.mapBridge.convertToGameBoard(state);
+        this.gameBoardService.importBoard(board, width, height);
+      } else {
+        this.gameBoardService.resetBoard();
+      }
+    } else {
+      this.gameBoardService.resetBoard();
+    }
+
     this.initializeScene();
     this.initializeCamera();
     this.initializeLights();
@@ -121,7 +138,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.canvasContainer.nativeElement.appendChild(this.renderer.domElement);
 
     // Handle window resize
-    window.addEventListener('resize', () => {
+    this.resizeHandler = () => {
       const width = window.innerWidth;
       const height = window.innerHeight;
       this.renderer.setSize(width, height);
@@ -130,7 +147,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.composer) {
         this.composer.setSize(width, height);
       }
-    });
+    };
+    window.addEventListener('resize', this.resizeHandler);
   }
 
   private initializePostProcessing(): void {
@@ -477,7 +495,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private animate = (time: number = 0): void => {
-    requestAnimationFrame(this.animate);
+    this.animationFrameId = requestAnimationFrame(this.animate);
 
     // Calculate delta time in seconds
     const deltaTime = this.lastTime === 0 ? 0 : (time - this.lastTime) / 1000;
@@ -517,10 +535,52 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    // Stop the animation loop first to prevent calls to disposed resources
+    cancelAnimationFrame(this.animationFrameId);
+
     // Clean up event listeners
     window.removeEventListener('keydown', this.keyboardHandler);
+    window.removeEventListener('resize', this.resizeHandler);
 
-    // Clean up Three.js resources
+    // Dispose OrbitControls (removes its internal pointer/wheel listeners)
+    if (this.controls) {
+      this.controls.dispose();
+    }
+
+    // Dispose tile meshes
+    this.tileMeshes.forEach(mesh => {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    });
+    this.tileMeshes.clear();
+
+    // Dispose tower meshes
+    this.towerMeshes.forEach(group => {
+      this.scene.remove(group);
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          (child.material as THREE.Material).dispose();
+        }
+      });
+    });
+    this.towerMeshes.clear();
+
+    // Dispose particles
+    if (this.particles) {
+      this.scene.remove(this.particles);
+      this.particles.geometry.dispose();
+      (this.particles.material as THREE.Material).dispose();
+    }
+
+    // Dispose composer render targets
+    if (this.composer) {
+      this.composer.renderTarget1.dispose();
+      this.composer.renderTarget2.dispose();
+    }
+
+    // Dispose renderer
     this.renderer.dispose();
   }
 }

@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, OnInit } from '@angular/core';
+import { Component, EventEmitter, Input, Output, OnInit, OnDestroy } from '@angular/core';
 import { EditMode, BrushTool } from '../../novarise.component';
 import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
 
@@ -7,7 +7,7 @@ import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
   templateUrl: './edit-controls.component.html',
   styleUrls: ['./edit-controls.component.scss']
 })
-export class EditControlsComponent implements OnInit {
+export class EditControlsComponent implements OnInit, OnDestroy {
   @Input() editMode: EditMode = 'paint';
   @Input() selectedTerrainType: TerrainType = TerrainType.BEDROCK;
   @Input() brushSize: number = 1;
@@ -25,9 +25,15 @@ export class EditControlsComponent implements OnInit {
   public isCollapsed = false;
   public isMobile = false;
 
+  private resizeHandler = () => this.checkMobile();
+
   ngOnInit(): void {
     this.checkMobile();
-    window.addEventListener('resize', () => this.checkMobile());
+    window.addEventListener('resize', this.resizeHandler);
+  }
+
+  ngOnDestroy(): void {
+    window.removeEventListener('resize', this.resizeHandler);
   }
 
   private checkMobile(): void {

@@ -4,9 +4,9 @@ import { BlockType, GameBoardTile, Spawner, SpawnerType } from './models/game-bo
 
 @Injectable()
 export class GameBoardService {
-  // Board configuration constants
-  private readonly gameBoardWidth = 25;
-  private readonly gameBoardHeight = 20;
+  // Board configuration
+  private gameBoardWidth = 25;
+  private gameBoardHeight = 20;
   private readonly tileSize = 1;
   private readonly tileHeight = 0.2;
 
@@ -19,6 +19,7 @@ export class GameBoardService {
   private readonly colorBase = 0x2a2a2a;
   private readonly colorSpawner = 0x00ffff;
   private readonly colorExit = 0xff00ff;
+  private readonly colorWall = 0x1a1525;
   private readonly colorGrid = 0x444444;
 
   // State
@@ -33,11 +34,8 @@ export class GameBoardService {
   private exitTiles: number[][] = [];
   private readonly spawnerPlacements: Spawner[] = [];
 
-  constructor() {
-    this.generateBaseBoard();
-    this.generateExitTiles();
-    this.generateSpawner();
-  }
+  // No eager board generation — ngOnInit always calls importBoard() or resetBoard()
+  // before the board is used, so constructor work would be immediately discarded.
 
   generateBaseBoard(): void {
     for (let i = 0; i < this.gameBoardHeight; i++) {
@@ -97,12 +95,13 @@ export class GameBoardService {
     const color = this.getTileColor(type);
 
     // Organic cave rock material
+    const isSubdued = type === BlockType.BASE || type === BlockType.WALL;
     const material = new THREE.MeshStandardMaterial({
       color: color,
-      emissive: type === BlockType.BASE ? 0x1a1528 : color,
-      emissiveIntensity: type === BlockType.BASE ? 0.05 : 0.2,
-      metalness: 0.1,
-      roughness: type === BlockType.BASE ? 0.9 : 0.7,
+      emissive: isSubdued ? 0x1a1528 : color,
+      emissiveIntensity: isSubdued ? 0.05 : 0.2,
+      metalness: type === BlockType.WALL ? 0.3 : 0.1,
+      roughness: isSubdued ? 0.9 : 0.7,
       envMapIntensity: 0.3
     });
 
@@ -180,6 +179,8 @@ export class GameBoardService {
         return this.colorSpawner;
       case BlockType.EXIT:
         return this.colorExit;
+      case BlockType.WALL:
+        return this.colorWall;
       default:
         return this.colorBase;
     }
@@ -201,6 +202,54 @@ export class GameBoardService {
     return this.tileSize;
   }
 
+  /**
+   * Import an external board, replacing all internal state.
+   * Used by MapBridgeService to load editor-created maps.
+   */
+  importBoard(board: GameBoardTile[][], width: number, height: number): void {
+    this.gameBoard = board;
+    this.gameBoardWidth = width;
+    this.gameBoardHeight = height;
+    this.spawnerTiles = [];
+    this.exitTiles = [];
+    this.spawnerChoices = [];
+    this.spawnerPlacements.length = 0;
+
+    // Scan imported board for spawner/exit positions
+    for (let row = 0; row < height; row++) {
+      for (let col = 0; col < width; col++) {
+        const tile = board[row][col];
+        if (tile.type === BlockType.SPAWNER) {
+          this.spawnerTiles.push([row, col]);
+        } else if (tile.type === BlockType.EXIT) {
+          this.exitTiles.push([row, col]);
+        }
+      }
+    }
+  }
+
+  /**
+   * Reset board to default hardcoded state.
+   * Fixes ghost tower singleton leak on re-navigation.
+   */
+  resetBoard(): void {
+    this.gameBoardWidth = 25;
+    this.gameBoardHeight = 20;
+    this.gameBoard = [];
+    this.spawnerTiles = [];
+    this.exitTiles = [];
+    this.spawnerChoices = [
+      SpawnerType.TOP_LEFT,
+      SpawnerType.TOP_RIGHT,
+      SpawnerType.BOTTOM_LEFT,
+      SpawnerType.BOTTOM_RIGHT
+    ];
+    this.spawnerPlacements.length = 0;
+    this.generateBaseBoard();
+    this.generateExitTiles();
+    this.generateSpawner();
+  }
+
   // Tower placement
   canPlaceTower(row: number, col: number): boolean {
     if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
@@ -218,11 +267,17 @@ export class GameBoardService {
       return false;
     }
 
-    // Mark the tile as occupied with a tower
-    this.gameBoard[row][col] = {
-      ...this.gameBoard[row][col],
-      towerType: null // Tower mesh is tracked separately in component
-    };
+    // Mark the tile as occupied with a tower and non-traversable
+    const oldTile = this.gameBoard[row][col];
+    this.gameBoard[row][col] = new GameBoardTile(
+      oldTile.x,
+      oldTile.y,
+      BlockType.TOWER,
+      false,
+      false,
+      oldTile.cost,
+      null
+    );
 
     return true;
   }
