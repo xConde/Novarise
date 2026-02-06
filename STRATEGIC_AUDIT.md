@@ -138,3 +138,12 @@ If `exportState()` ever changes its return shape (renames a field, changes a typ
 ### MINOR: GameBoardComponent.ngOnDestroy() Cleanup Asymmetry
 
 `NovariseComponent.ngOnDestroy()` thoroughly disposes brush meshes, rectangle previews, terrain grid, and renderer. `GameBoardComponent.ngOnDestroy()` only disposes the renderer — no `controls.dispose()`, no scene traversal for geometry/material disposal, no composer cleanup. Practically mitigated (renderer.dispose() kills the GL context, Angular DOM cleanup + GC handles the rest), but creates an inconsistent cleanup pattern that invites future resource leaks.
+
+## Deployment Checklist
+
+Concrete steps to take this from "started" to "shippable":
+
+- [x] **1. Harden GameBoardComponent.ngOnDestroy()** — Dispose OrbitControls, traverse tileMeshes/towerMeshes Maps to dispose geometries and materials, dispose particle geometry/material, dispose EffectComposer render targets. Match NovariseComponent's cleanup rigor.
+- [x] **2. Lazy-init GameBoardService constructor** — Remove eager board generation from constructor. The board is always replaced by `importBoard()` or `resetBoard()` in `ngOnInit()` before any rendering occurs, making the constructor work pure waste.
+- [x] **3. Auto-save editor map on destroy** — Call `MapStorageService` to persist the current map to localStorage in `NovariseComponent.ngOnDestroy()` before terrain disposal. Prevents data loss when users navigate to `/play` and back.
+- [x] **4. Unit tests for GameBoardService** — Cover `importBoard()`, `resetBoard()`, `canPlaceTower()`, `placeTower()`, and board dimension accessors. 29 tests, all passing.
