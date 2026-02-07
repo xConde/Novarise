@@ -12,8 +12,8 @@ import { MapBridgeService } from './services/map-bridge.service';
 import { GameStateService } from './services/game-state.service';
 import { WaveService } from './services/wave.service';
 import { TowerCombatService } from './services/tower-combat.service';
-import { ENEMY_STATS } from './models/enemy.model';
 import { TowerType, TOWER_CONFIGS } from './models/tower.model';
+import { BlockType } from './models/game-board-tile';
 import { GamePhase, GameState } from './models/game-state.model';
 
 @Component({
@@ -44,6 +44,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private particles!: THREE.Points;
   private skybox?: THREE.Mesh;
   private bloomPass?: UnrealBloomPass;
+  private vignettePass?: ShaderPass;
   private composer!: EffectComposer;
 
   // Interaction
@@ -67,6 +68,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Animation
   private lastTime = 0;
   private keyboardHandler: (event: KeyboardEvent) => void;
+  private mousemoveHandler: (event: MouseEvent) => void = () => {};
+  private clickHandler: (event: MouseEvent) => void = () => {};
   private animationFrameId = 0;
   private resizeHandler: () => void = () => {};
   private stateSubscription: Subscription | null = null;
@@ -273,8 +276,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       `
     };
 
-    const vignettePass = new ShaderPass(vignetteShader);
-    this.composer.addPass(vignettePass);
+    this.vignettePass = new ShaderPass(vignetteShader);
+    this.composer.addPass(this.vignettePass);
   }
 
   private initializeLights(): void {
@@ -446,7 +449,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private setupMouseInteraction(): void {
     const canvas = this.renderer.domElement;
 
-    canvas.addEventListener('mousemove', (event) => {
+    this.mousemoveHandler = (event: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -456,7 +459,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       if (this.hoveredTile && this.hoveredTile !== this.getSelectedTileMesh()) {
         const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
-        material.emissiveIntensity = this.hoveredTile.userData['tile'].type === 0 ? 0.05 : 0.2;
+        const isBase = this.hoveredTile.userData['tile'].type === BlockType.BASE;
+        material.emissiveIntensity = isBase ? 0.05 : 0.2;
       }
 
       if (intersects.length > 0) {
@@ -471,9 +475,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.hoveredTile = null;
         canvas.style.cursor = 'default';
       }
-    });
+    };
 
-    canvas.addEventListener('click', (event) => {
+    this.clickHandler = (event: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -484,7 +488,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       const prevSelected = this.getSelectedTileMesh();
       if (prevSelected) {
         const material = prevSelected.material as THREE.MeshStandardMaterial;
-        material.emissiveIntensity = prevSelected.userData['tile'].type === 0 ? 0.05 : 0.2;
+        const isBase = prevSelected.userData['tile'].type === BlockType.BASE;
+        material.emissiveIntensity = isBase ? 0.05 : 0.2;
       }
 
       if (intersects.length > 0) {
@@ -501,10 +506,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       } else {
         this.selectedTile = null;
       }
-    });
+    };
+
+    canvas.addEventListener('mousemove', this.mousemoveHandler);
+    canvas.addEventListener('click', this.clickHandler);
   }
 
   private tryPlaceTower(row: number, col: number): void {
+    const phase = this.gameStateService.getState().phase;
+    if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
+
     if (!this.gameBoardService.canPlaceTower(row, col)) return;
 
     const towerStats = TOWER_CONFIGS[this.selectedTowerType];
@@ -640,6 +651,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     window.removeEventListener('keydown', this.keyboardHandler);
     window.removeEventListener('resize', this.resizeHandler);
 
+    // Remove canvas event listeners (stored as named references)
+    if (this.renderer) {
+      const canvas = this.renderer.domElement;
+      canvas.removeEventListener('mousemove', this.mousemoveHandler);
+      canvas.removeEventListener('click', this.clickHandler);
+    }
+
     if (this.controls) {
       this.controls.dispose();
     }
@@ -694,6 +712,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.skybox.geometry.dispose();
         (this.skybox.material as THREE.Material).dispose();
       }
+    }
+
+    if (this.vignettePass) {
+      this.vignettePass.dispose();
     }
 
     if (this.bloomPass) {

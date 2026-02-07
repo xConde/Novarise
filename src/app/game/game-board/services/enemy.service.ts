@@ -72,9 +72,14 @@ export class EnemyService {
    * Update all enemies - move along paths
    */
   updateEnemies(deltaTime: number): string[] {
+    if (deltaTime <= 0) return [];
+
     const reachedExit: string[] = [];
 
     this.enemies.forEach(enemy => {
+      // Skip dead enemies awaiting removal — prevents double-penalty if ordering changes
+      if (enemy.health <= 0) return;
+
       if (enemy.pathIndex >= enemy.path.length - 1) {
         // Enemy reached exit
         reachedExit.push(enemy.id);
