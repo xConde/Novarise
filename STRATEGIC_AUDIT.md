@@ -151,4 +151,4 @@ The `target: Enemy` field on every `Projectile` is assigned at fire-time but nev
 - [x] **Unit tests for GameStateService** — Phase transitions, gold/lives math, edge cases (negative gold, zero lives), reset behavior.
 - [x] **Unit tests for WaveService** — Wave start, spawn queue processing, failed spawn retry, completion detection, reset.
 - [x] **Unit tests for TowerCombatService** — Tower registration, targeting (range, nearest), projectile lifecycle, splash damage, kill tracking, cleanup.
-- [ ] **Push to PR and verify CI** — All new tests pass, pre-existing failures unchanged, Cloudflare Pages deploy succeeds.
+- [x] **Push to PR and verify CI** — All new tests pass, pre-existing failures unchanged, Cloudflare Pages deploy succeeds.
