@@ -290,7 +290,7 @@ export class GameBoardService {
 
     // Different organic tower designs
     switch (towerType) {
-      case 'basic':
+      case TowerType.BASIC:
         // Ancient crystal obelisk - jagged and organic
         const obeliskBase = new THREE.CylinderGeometry(0.35, 0.42, 0.25, 6);
         const obeliskMid1 = new THREE.CylinderGeometry(0.32, 0.35, 0.35, 6);
@@ -328,7 +328,7 @@ export class GameBoardService {
         towerGroup.add(oBase, oMid1, oMid2, oTop, oCrystal);
         break;
 
-      case 'sniper':
+      case TowerType.SNIPER:
         // Tall crystalline spike - elegant and sharp
         const spikeBase = new THREE.DodecahedronGeometry(0.3, 0);
         const spikeShaft1 = new THREE.CylinderGeometry(0.22, 0.26, 0.5, 8);
@@ -365,7 +365,7 @@ export class GameBoardService {
         towerGroup.add(snBase, snShaft1, snShaft2, snTip, snPoint);
         break;
 
-      case 'splash':
+      case TowerType.SPLASH:
         // Mushroom-like spore launcher - organic and bulbous
         const stemBase = new THREE.CylinderGeometry(0.28, 0.35, 0.3, 8);
         const stemMid = new THREE.CylinderGeometry(0.24, 0.28, 0.35, 8);

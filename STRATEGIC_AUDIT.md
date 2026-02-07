@@ -120,9 +120,9 @@ When the browser tab is hidden then shown, `requestAnimationFrame` pauses. On re
 
 **Fix:** Cap `deltaTime` at 100ms: `const deltaTime = Math.min(rawDelta, 0.1)`.
 
-### BUG #9 (LOW): FLYING Enemies Use Ground Pathfinding
+### BUG #9 (LOW): SWIFT Enemies Use Ground Pathfinding
 
-`EnemyType.FLYING` is defined in waves 6, 8, 9 with distinct stats, but `spawnEnemy()` routes all enemies through identical A* pathfinding that respects walls and towers as obstacles. Flying enemies walk through corridors like ground units. The "FLYING" designation is cosmetic — different speed/health/color, no aerial behavior.
+`EnemyType.SWIFT` is defined in waves 6, 8, 9 with distinct stats, but `spawnEnemy()` routes all enemies through identical A* pathfinding that respects walls and towers as obstacles. Swift enemies walk through corridors like ground units. The "SWIFT" designation is cosmetic — different speed/health/color, no aerial behavior.
 
 ### BUG #10 (LOW): Tower Placement Doesn't Invalidate In-Transit Enemy Paths
 
@@ -152,3 +152,28 @@ The `target: Enemy` field on every `Projectile` is assigned at fire-time but nev
 - [x] **Unit tests for WaveService** — Wave start, spawn queue processing, failed spawn retry, completion detection, reset.
 - [x] **Unit tests for TowerCombatService** — Tower registration, targeting (range, nearest), projectile lifecycle, splash damage, kill tracking, cleanup.
 - [x] **Push to PR and verify CI** — All new tests pass, pre-existing failures unchanged, Cloudflare Pages deploy succeeds.
+- [x] **Pre-merge hardening pass** — See section below.
+
+---
+
+## Pre-Merge Hardening Pass
+
+Systematic audit of the gameplay loop implementation before merging to main.
+
+### Changes Applied
+
+1. **Derived `maxWaves` from `WAVE_DEFINITIONS.length`** — Eliminated the hardcoded `10` in `INITIAL_GAME_STATE` that could silently desync from actual wave count if waves are added or removed.
+
+2. **Renamed `EnemyType.FLYING` → `EnemyType.SWIFT`** — The FLYING name implied aerial behavior (ignoring ground obstacles) that doesn't exist. SWIFT accurately describes its role: fast movement, moderate health. Updated across all source, test, and documentation files.
+
+3. **Centralized damage pipeline through `EnemyService.damageEnemy()`** — `TowerCombatService.applyDamage()` previously mutated `enemy.health` directly via map lookups, bypassing the official damage method. Now all damage flows through `damageEnemy()`, establishing a single point of control for future damage modifiers, shields, or logging.
+
+4. **Eliminated O(n) reverse tower lookup** — `findTowerForProjectile()` iterated all towers to match projectile origin coordinates via floating-point comparison. Replaced with direct `placedTowers.get(proj.towerKey)` using a `towerKey` field stored at fire time. Removed dead `origin` and `target` fields from the `Projectile` interface.
+
+5. **Fixed skybox memory leak** — `addSkybox()` created a `THREE.Mesh` stored only in a local variable, making it impossible to dispose on destroy. Now tracked as `this.skybox` and disposed in `ngOnDestroy()`.
+
+6. **Fixed UnrealBloomPass memory leak** — The bloom pass was stored only as a local variable in `initializePostProcessing()`. Its internal render targets were never disposed. Now tracked as `this.bloomPass` and disposed in `ngOnDestroy()`.
+
+7. **Fixed `Date.now()` in particle animation** — Replaced `Date.now() * 0.001` with the `time` parameter already available from `requestAnimationFrame`, which is more accurate and avoids redundant system calls.
+
+8. **Type-safe tower switch** — Replaced string literals (`'basic'`, `'sniper'`, `'splash'`) with `TowerType.BASIC`, `TowerType.SNIPER`, `TowerType.SPLASH` in `createTowerMesh()`, enabling TypeScript exhaustiveness checking.
