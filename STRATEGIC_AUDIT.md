@@ -99,3 +99,47 @@ The `getState$().subscribe()` in `ngOnInit` is never unsubscribed in `ngOnDestro
 ### BUG #6 (LOW): `EnemyService.damageEnemy()` Is Dead Code
 
 `TowerCombatService.applyDamage()` directly mutates `enemy.health` by reaching through `getEnemies().get()`. The `damageEnemy()` method added to `EnemyService` is never called. Two damage pathways exist for one responsibility — the "official" one is unused.
+
+---
+
+## Red Team Critique — Round 3
+
+### BUG #7 (MEDIUM): Grid Line Disposal Uses Wrong THREE.js Type — Resource Leak Compounds on Restart
+
+`addGridLines()` traverses children checking `child instanceof THREE.LineSegments`, but `createGridLines()` constructs `THREE.Line` objects. In the Three.js class hierarchy, `LineSegments extends Line` — NOT the other way around. So `new THREE.Line() instanceof THREE.LineSegments` evaluates to `false`. The 43 line geometries and 43 cloned materials are never disposed. Additionally, `ngOnDestroy()` removes the grid group from the scene but doesn't attempt child disposal at all. Each restart compounds the leak.
+
+**Root cause:** Round 2 hardening added disposal logic but used the wrong class in the `instanceof` check. `THREE.Line` is the parent class; `THREE.LineSegments` is the child. The check is backwards.
+
+**Fix:** Change `instanceof THREE.LineSegments` to `instanceof THREE.Line` (which also catches `LineSegments` subclass). Add child disposal to `ngOnDestroy()` grid cleanup.
+
+### BUG #8 (MEDIUM): No deltaTime Cap — Tab-Switch Causes Physics Burst Exploit
+
+When the browser tab is hidden then shown, `requestAnimationFrame` pauses. On resume, `deltaTime` spikes to the full elapsed seconds (could be minutes). No cap is applied. Effects: (1) all tower cooldowns expire simultaneously — every tower fires in the same frame, (2) projectiles travel `speed * deltaTime` units which far exceeds any target distance — instant hit, (3) enemy movement only advances one path node per frame regardless of delta (movement code doesn't loop), so enemies barely move. Net effect: tab-switching during combat is an exploit — free tower burst damage while enemies freeze.
+
+**Root cause:** Standard game-loop issue — `deltaTime` is computed from wall-clock time with no upper bound.
+
+**Fix:** Cap `deltaTime` at 100ms: `const deltaTime = Math.min(rawDelta, 0.1)`.
+
+### BUG #9 (LOW): FLYING Enemies Use Ground Pathfinding
+
+`EnemyType.FLYING` is defined in waves 6, 8, 9 with distinct stats, but `spawnEnemy()` routes all enemies through identical A* pathfinding that respects walls and towers as obstacles. Flying enemies walk through corridors like ground units. The "FLYING" designation is cosmetic — different speed/health/color, no aerial behavior.
+
+### BUG #10 (LOW): Tower Placement Doesn't Invalidate In-Transit Enemy Paths
+
+When a tower is placed, `clearPathCache()` invalidates future pathfinding, but enemies already on the board continue following pre-tower paths. An enemy whose path traverses the newly occupied tile walks through the tower mesh visually.
+
+---
+
+## Red Team Critique — Round 4
+
+### BUG #11 (MEDIUM): `restartGame()` Doesn't Reset Interaction State — Stale Reference Causes Visual Artifact
+
+After `restartGame()`, `hoveredTile` still references a disposed THREE.Mesh and `selectedTile` still holds coordinates from the old game. On the first post-restart click, `getSelectedTileMesh()` looks up the old coordinates in the rebuilt `tileMeshes` map, returns a NEW mesh, and incorrectly modifies its `emissiveIntensity`. This produces a visible brightness artifact on the fresh board where one tile renders dimmer than intended.
+
+**Root cause:** `restartGame()` destroys and rebuilds all tile meshes but never nullifies the interaction state (`hoveredTile`, `selectedTile`) that references the old objects.
+
+**Fix:** Add `this.hoveredTile = null; this.selectedTile = null;` at the start of `restartGame()`.
+
+### BUG #12 (LOW): `Projectile.target` Is a Dead Field
+
+The `target: Enemy` field on every `Projectile` is assigned at fire-time but never read — all enemy tracking uses `targetId` for fresh map lookups via `getEnemies().get()`. The stale reference retains a pointer to a mutable Enemy object that may already be dead/removed, preventing GC of the JS shell until the projectile itself is cleared. Code clarity issue and minor memory pressure.

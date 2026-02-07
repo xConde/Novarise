@@ -134,6 +134,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   restartGame(): void {
+    // Reset interaction state — old references point to disposed meshes
+    this.hoveredTile = null;
+    this.selectedTile = null;
+
     // Clean up enemies — snapshot keys to avoid mutating Map during iteration
     for (const id of Array.from(this.enemyService.getEnemies().keys())) {
       this.enemyService.removeEnemy(id, this.scene);
@@ -317,7 +321,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.gridLines) {
       this.scene.remove(this.gridLines);
       this.gridLines.traverse(child => {
-        if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
+        if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
           child.geometry.dispose();
           if (child.material instanceof THREE.Material) {
             child.material.dispose();
@@ -551,7 +555,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private animate = (time: number = 0): void => {
     this.animationFrameId = requestAnimationFrame(this.animate);
 
-    const deltaTime = this.lastTime === 0 ? 0 : (time - this.lastTime) / 1000;
+    const rawDelta = this.lastTime === 0 ? 0 : (time - this.lastTime) / 1000;
+    const deltaTime = Math.min(rawDelta, 0.1); // Cap at 100ms to prevent tab-switch physics burst
     this.lastTime = time;
 
     if (this.controls) {
@@ -666,6 +671,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       if (this.gridLines) {
         this.scene.remove(this.gridLines);
+        this.gridLines.traverse(child => {
+          if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+            child.geometry.dispose();
+            if (child.material instanceof THREE.Material) {
+              child.material.dispose();
+            }
+          }
+        });
       }
 
       if (this.particles) {
