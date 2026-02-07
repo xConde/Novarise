@@ -63,6 +63,38 @@ describe('WaveService', () => {
       service.startWave(-1, mockScene);
       expect(service.isSpawning()).toBeFalse();
     });
+
+    it('should not corrupt internal index on invalid wave number', () => {
+      // Start a valid wave first
+      service.startWave(1, mockScene);
+      expect(service.isSpawning()).toBeTrue();
+
+      // Reset to clean state
+      service.reset();
+
+      // Attempt invalid wave — should leave index at reset value
+      service.startWave(999, mockScene);
+      expect(service.isSpawning()).toBeFalse();
+
+      // Valid wave should still work after invalid attempt
+      service.startWave(2, mockScene);
+      expect(service.isSpawning()).toBeTrue();
+    });
+
+    it('should not activate when called while already spawning (replaces queue)', () => {
+      service.startWave(1, mockScene);
+      service.update(0.016, mockScene); // spawn first from wave 1
+      const callsAfterWave1Start = enemyServiceSpy.spawnEnemy.calls.count();
+
+      // Start wave 2 while wave 1 is active — replaces queues
+      service.startWave(2, mockScene);
+      expect(service.isSpawning()).toBeTrue();
+
+      service.update(0.016, mockScene);
+      // Should now be spawning wave 2 enemies (BASIC + FAST)
+      const callsAfterWave2Start = enemyServiceSpy.spawnEnemy.calls.count();
+      expect(callsAfterWave2Start).toBeGreaterThan(callsAfterWave1Start);
+    });
   });
 
   // --- update (spawn processing) ---

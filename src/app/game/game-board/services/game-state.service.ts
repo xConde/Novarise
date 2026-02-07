@@ -21,12 +21,14 @@ export class GameStateService {
   }
 
   startWave(): void {
+    if (this.state.wave >= this.state.maxWaves) return;
     this.state.wave++;
     this.state.phase = GamePhase.COMBAT;
     this.emit();
   }
 
   completeWave(reward: number): void {
+    if (this.state.phase !== GamePhase.COMBAT) return;
     this.state.gold += reward;
     this.state.score += reward;
 
@@ -39,6 +41,7 @@ export class GameStateService {
   }
 
   loseLife(amount: number = 1): void {
+    if (this.state.phase === GamePhase.VICTORY || this.state.phase === GamePhase.DEFEAT) return;
     this.state.lives = Math.max(0, this.state.lives - amount);
     if (this.state.lives <= 0) {
       this.state.phase = GamePhase.DEFEAT;
@@ -53,7 +56,7 @@ export class GameStateService {
   }
 
   spendGold(amount: number): boolean {
-    if (this.state.gold < amount) {
+    if (amount <= 0 || this.state.gold < amount) {
       return false;
     }
     this.state.gold -= amount;

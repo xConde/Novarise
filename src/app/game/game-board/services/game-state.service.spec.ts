@@ -79,6 +79,33 @@ describe('GameStateService', () => {
       });
       service.startWave();
     });
+
+    it('should not increment wave past maxWaves', () => {
+      const maxWaves = service.getState().maxWaves;
+      // Advance through all waves via startWave + completeWave cycle
+      for (let i = 0; i < maxWaves; i++) {
+        service.startWave();
+      }
+      expect(service.getState().wave).toBe(maxWaves);
+
+      // Try to go past — should be a no-op
+      service.startWave();
+      expect(service.getState().wave).toBe(maxWaves);
+    });
+
+    it('should not change phase when called past maxWaves', () => {
+      const maxWaves = service.getState().maxWaves;
+      for (let i = 0; i < maxWaves; i++) {
+        service.startWave();
+      }
+      // Complete the final wave → VICTORY
+      service.completeWave(100);
+      expect(service.getState().phase).toBe(GamePhase.VICTORY);
+
+      // startWave should not override VICTORY
+      service.startWave();
+      expect(service.getState().phase).toBe(GamePhase.VICTORY);
+    });
   });
 
   // --- completeWave ---
@@ -122,6 +149,43 @@ describe('GameStateService', () => {
       service.completeWave(0);
       expect(service.getState().gold).toBe(goldBefore);
     });
+
+    it('should be a no-op when called in SETUP phase', () => {
+      service.reset(); // Back to SETUP
+      const goldBefore = service.getState().gold;
+      service.completeWave(999);
+      expect(service.getState().gold).toBe(goldBefore);
+      expect(service.getState().phase).toBe(GamePhase.SETUP);
+    });
+
+    it('should be a no-op when called in INTERMISSION phase', () => {
+      service.completeWave(25); // wave 1 complete → INTERMISSION
+      expect(service.getState().phase).toBe(GamePhase.INTERMISSION);
+      const goldBefore = service.getState().gold;
+      service.completeWave(999); // should be ignored
+      expect(service.getState().gold).toBe(goldBefore);
+      expect(service.getState().phase).toBe(GamePhase.INTERMISSION);
+    });
+
+    it('should be a no-op when called in VICTORY phase', () => {
+      const maxWaves = service.getState().maxWaves;
+      for (let i = 1; i < maxWaves; i++) {
+        service.startWave();
+      }
+      service.completeWave(100); // final wave → VICTORY
+      expect(service.getState().phase).toBe(GamePhase.VICTORY);
+      const goldBefore = service.getState().gold;
+      service.completeWave(999); // should be ignored
+      expect(service.getState().gold).toBe(goldBefore);
+    });
+
+    it('should be a no-op when called in DEFEAT phase', () => {
+      service.loseLife(INITIAL_GAME_STATE.lives); // → DEFEAT
+      const goldBefore = service.getState().gold;
+      service.completeWave(999);
+      expect(service.getState().gold).toBe(goldBefore);
+      expect(service.getState().phase).toBe(GamePhase.DEFEAT);
+    });
   });
 
   // --- loseLife ---
@@ -157,6 +221,27 @@ describe('GameStateService', () => {
 
     it('should set DEFEAT when lives go below 0 (overkill)', () => {
       service.loseLife(INITIAL_GAME_STATE.lives + 10);
+      expect(service.getState().lives).toBe(0);
+      expect(service.getState().phase).toBe(GamePhase.DEFEAT);
+    });
+
+    it('should be a no-op when called during VICTORY', () => {
+      const maxWaves = service.getState().maxWaves;
+      for (let i = 0; i < maxWaves; i++) {
+        service.startWave();
+      }
+      service.completeWave(100); // → VICTORY
+      const livesBefore = service.getState().lives;
+      service.loseLife(5);
+      expect(service.getState().lives).toBe(livesBefore);
+      expect(service.getState().phase).toBe(GamePhase.VICTORY);
+    });
+
+    it('should be a no-op when called during DEFEAT', () => {
+      service.startWave(); // → COMBAT
+      service.loseLife(INITIAL_GAME_STATE.lives); // → DEFEAT
+      expect(service.getState().phase).toBe(GamePhase.DEFEAT);
+      service.loseLife(1); // should be ignored
       expect(service.getState().lives).toBe(0);
       expect(service.getState().phase).toBe(GamePhase.DEFEAT);
     });
@@ -209,6 +294,20 @@ describe('GameStateService', () => {
       const result = service.spendGold(INITIAL_GAME_STATE.gold);
       expect(result).toBeTrue();
       expect(service.getState().gold).toBe(0);
+    });
+
+    it('spendGold should reject negative amounts', () => {
+      const goldBefore = service.getState().gold;
+      const result = service.spendGold(-100);
+      expect(result).toBeFalse();
+      expect(service.getState().gold).toBe(goldBefore);
+    });
+
+    it('spendGold should reject zero amount', () => {
+      const goldBefore = service.getState().gold;
+      const result = service.spendGold(0);
+      expect(result).toBeFalse();
+      expect(service.getState().gold).toBe(goldBefore);
     });
   });
 

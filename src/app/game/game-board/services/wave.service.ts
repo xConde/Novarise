@@ -21,10 +21,11 @@ export class WaveService {
   constructor(private enemyService: EnemyService) {}
 
   startWave(waveNumber: number, scene: THREE.Scene): void {
-    this.currentWaveIndex = waveNumber - 1;
-    if (this.currentWaveIndex < 0 || this.currentWaveIndex >= this.waveDefinitions.length) {
+    const index = waveNumber - 1;
+    if (index < 0 || index >= this.waveDefinitions.length) {
       return;
     }
+    this.currentWaveIndex = index;
 
     const waveDef = this.waveDefinitions[this.currentWaveIndex];
     this.spawnQueues = waveDef.entries.map(entry => ({
