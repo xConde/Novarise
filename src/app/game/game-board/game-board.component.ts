@@ -53,6 +53,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Tower management
   private towerMeshes: Map<string, THREE.Group> = new Map();
+  private gridLines: THREE.Group | null = null;
   selectedTowerType: TowerType = TowerType.BASIC;
 
   // Game state exposed to template
@@ -133,10 +134,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   restartGame(): void {
-    // Clean up enemies
-    this.enemyService.getEnemies().forEach((enemy, id) => {
+    // Clean up enemies — snapshot keys to avoid mutating Map during iteration
+    for (const id of Array.from(this.enemyService.getEnemies().keys())) {
       this.enemyService.removeEnemy(id, this.scene);
-    });
+    }
     // Clean up tower combat state (projectiles)
     this.towerCombatService.cleanup(this.scene);
     // Clean up tower meshes
@@ -313,8 +314,19 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private addGridLines(): void {
-    const gridLines = this.gameBoardService.createGridLines();
-    this.scene.add(gridLines);
+    if (this.gridLines) {
+      this.scene.remove(this.gridLines);
+      this.gridLines.traverse(child => {
+        if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
+          child.geometry.dispose();
+          if (child.material instanceof THREE.Material) {
+            child.material.dispose();
+          }
+        }
+      });
+    }
+    this.gridLines = this.gameBoardService.createGridLines();
+    this.scene.add(this.gridLines);
   }
 
   private addSkybox(): void {
@@ -647,10 +659,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // Cleanup combat projectiles
       this.towerCombatService.cleanup(this.scene);
 
-      // Cleanup enemies
-      this.enemyService.getEnemies().forEach((_, id) => {
+      // Cleanup enemies — snapshot keys to avoid mutating Map during iteration
+      for (const id of Array.from(this.enemyService.getEnemies().keys())) {
         this.enemyService.removeEnemy(id, this.scene);
-      });
+      }
+
+      if (this.gridLines) {
+        this.scene.remove(this.gridLines);
+      }
 
       if (this.particles) {
         this.scene.remove(this.particles);

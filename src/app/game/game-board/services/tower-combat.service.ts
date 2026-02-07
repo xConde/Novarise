@@ -78,10 +78,10 @@ export class TowerCombatService {
       const moveDistance = proj.speed * deltaTime;
 
       if (moveDistance >= dist) {
-        // Hit
-        this.removeProjectileMesh(proj, scene);
+        // Hit — apply damage before disposing mesh (applyDamage reads proj.mesh.position)
         const kills = this.applyDamage(proj, scene);
         killedEnemyIds.push(...kills);
+        this.removeProjectileMesh(proj, scene);
       } else {
         // Move toward target
         const nx = dx / dist;
