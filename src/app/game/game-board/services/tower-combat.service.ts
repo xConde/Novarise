@@ -8,8 +8,7 @@ import { GameBoardService } from '../game-board.service';
 interface Projectile {
   id: string;
   mesh: THREE.Mesh;
-  origin: { x: number, z: number };
-  target: Enemy;
+  towerKey: string;
   targetId: string;
   speed: number;
   damage: number;
@@ -143,8 +142,7 @@ export class TowerCombatService {
     this.projectiles.push({
       id: `proj-${this.projectileCounter++}`,
       mesh,
-      origin: { x: towerWorldX, z: towerWorldZ },
-      target,
+      towerKey: tower.id,
       targetId: target.id,
       speed: stats.projectileSpeed,
       damage: stats.damage,
@@ -168,48 +166,27 @@ export class TowerCombatService {
         const dist = Math.sqrt(dx * dx + dz * dz);
 
         if (dist <= proj.splashRadius) {
-          enemy.health -= proj.damage;
-          if (enemy.health <= 0) {
+          if (this.enemyService.damageEnemy(enemy.id, proj.damage)) {
             kills.push(enemy.id);
           }
         }
       });
     } else {
       // Single target damage
-      const enemy = this.enemyService.getEnemies().get(proj.targetId);
-      if (enemy && enemy.health > 0) {
-        enemy.health -= proj.damage;
-        if (enemy.health <= 0) {
-          kills.push(enemy.id);
-        }
+      if (this.enemyService.damageEnemy(proj.targetId, proj.damage)) {
+        kills.push(proj.targetId);
       }
     }
 
     // Track kills on the tower
     if (kills.length > 0) {
-      const tower = this.findTowerForProjectile(proj);
+      const tower = this.placedTowers.get(proj.towerKey);
       if (tower) {
         tower.kills += kills.length;
       }
     }
 
     return kills;
-  }
-
-  private findTowerForProjectile(proj: Projectile): PlacedTower | undefined {
-    // Find tower based on origin position (reverse-lookup)
-    let found: PlacedTower | undefined;
-    this.placedTowers.forEach(tower => {
-      const boardWidth = this.gameBoardService.getBoardWidth();
-      const boardHeight = this.gameBoardService.getBoardHeight();
-      const tileSize = this.gameBoardService.getTileSize();
-      const towerWorldX = (tower.col - boardWidth / 2) * tileSize;
-      const towerWorldZ = (tower.row - boardHeight / 2) * tileSize;
-      if (Math.abs(towerWorldX - proj.origin.x) < 0.01 && Math.abs(towerWorldZ - proj.origin.z) < 0.01) {
-        found = tower;
-      }
-    });
-    return found;
   }
 
   private removeProjectileMesh(proj: Projectile, scene: THREE.Scene): void {

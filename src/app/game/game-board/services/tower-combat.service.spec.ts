@@ -39,8 +39,14 @@ describe('TowerCombatService', () => {
   beforeEach(() => {
     enemyMap = new Map();
 
-    enemyServiceSpy = jasmine.createSpyObj('EnemyService', ['getEnemies']);
+    enemyServiceSpy = jasmine.createSpyObj('EnemyService', ['getEnemies', 'damageEnemy']);
     enemyServiceSpy.getEnemies.and.returnValue(enemyMap);
+    enemyServiceSpy.damageEnemy.and.callFake((id: string, damage: number) => {
+      const enemy = enemyMap.get(id);
+      if (!enemy || enemy.health <= 0) return false;
+      enemy.health -= damage;
+      return enemy.health <= 0;
+    });
 
     gameBoardServiceSpy = jasmine.createSpyObj('GameBoardService', [
       'getBoardWidth', 'getBoardHeight', 'getTileSize'
