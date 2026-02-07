@@ -153,6 +153,10 @@ The `target: Enemy` field on every `Projectile` is assigned at fire-time but nev
 - [x] **Unit tests for TowerCombatService** — Tower registration, targeting (range, nearest), projectile lifecycle, splash damage, kill tracking, cleanup.
 - [x] **Push to PR and verify CI** — All new tests pass, pre-existing failures unchanged, Cloudflare Pages deploy succeeds.
 - [x] **Pre-merge hardening pass** — See section below.
+- [x] **Red team quality gate (2 rounds)** — 6 weaknesses identified, 4 fixed, 2 accepted.
+- [ ] **Final full test suite run** — Confirm 187 pass / 3 pre-existing fail, zero regressions.
+- [ ] **Push to PR #10** — 5 hardening commits to remote.
+- [ ] **Verify Cloudflare Pages deploy** — Build succeeds on CI.
 
 ---
 
