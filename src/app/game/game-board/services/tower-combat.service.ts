@@ -160,7 +160,6 @@ export class TowerCombatService {
       const impactZ = proj.mesh.position.z;
 
       this.enemyService.getEnemies().forEach(enemy => {
-        if (enemy.health <= 0) return;
         const dx = enemy.position.x - impactX;
         const dz = enemy.position.z - impactZ;
         const dist = Math.sqrt(dx * dx + dz * dz);

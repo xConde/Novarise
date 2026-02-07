@@ -42,8 +42,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private renderer!: THREE.WebGLRenderer;
   private controls!: OrbitControls;
   private particles!: THREE.Points;
-  private skybox!: THREE.Mesh;
-  private bloomPass!: UnrealBloomPass;
+  private skybox?: THREE.Mesh;
+  private bloomPass?: UnrealBloomPass;
   private composer!: EffectComposer;
 
   // Interaction

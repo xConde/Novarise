@@ -314,7 +314,7 @@ npm run build
 
 **Workaround:** None needed currently
 
-**Fix:** Planned - flying enemies should ignore tower tiles
+**Fix:** Planned - swift enemies should ignore tower tiles
 
 ### Issue 3: All Enemies Spawn from Same Spawner
 **Description:** Random spawner selection may repeatedly use same corner

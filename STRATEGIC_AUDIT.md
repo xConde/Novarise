@@ -177,3 +177,45 @@ Systematic audit of the gameplay loop implementation before merging to main.
 7. **Fixed `Date.now()` in particle animation** — Replaced `Date.now() * 0.001` with the `time` parameter already available from `requestAnimationFrame`, which is more accurate and avoids redundant system calls.
 
 8. **Type-safe tower switch** — Replaced string literals (`'basic'`, `'sniper'`, `'splash'`) with `TowerType.BASIC`, `TowerType.SNIPER`, `TowerType.SPLASH` in `createTowerMesh()`, enabling TypeScript exhaustiveness checking.
+
+### Red Team Critique — Hardening Pass
+
+**WEAKNESS #1 (MEDIUM): Splash `applyDamage()` skips already-damaged enemies mid-iteration, silently dropping damage**
+
+In `TowerCombatService.applyDamage()`, the splash path iterates all enemies and checks `if (enemy.health <= 0) return` before calling `damageEnemy()`. But `damageEnemy()` *itself* has the same guard: `if (!enemy || enemy.health <= 0) return false`. This is redundant — the outer guard in `applyDamage` is not wrong, but it creates a subtle correctness asymmetry. If a future refactor makes `damageEnemy` handle already-dead enemies differently (e.g. overkill tracking, damage logging), the outer guard will silently shadow that behavior. The real protection is in `damageEnemy` itself; the outer guard is a vestigial copy from the pre-refactor code that directly mutated `enemy.health`.
+
+**Verdict:** Not a runtime bug today. Remove the redundant outer guard to keep the single-responsibility principle clean — `damageEnemy` owns the dead-check.
+
+**WEAKNESS #2 (LOW): `INITIAL_GAME_STATE.maxWaves` is evaluated once at module load — frozen snapshot**
+
+`WAVE_DEFINITIONS.length` is captured into `INITIAL_GAME_STATE` at import time. If a future feature dynamically modifies `WAVE_DEFINITIONS` (e.g. difficulty modes that splice waves), `INITIAL_GAME_STATE.maxWaves` would be stale. `GameStateService.reset()` spreads `INITIAL_GAME_STATE`, so restarting the game would still use the old count. This is currently a non-issue because `WAVE_DEFINITIONS` is an immutable `const` array — but the coupling is implicit and non-obvious.
+
+**Verdict:** Acceptable for now. The `const` keyword on `WAVE_DEFINITIONS` prevents accidental mutation. If dynamic wave lists are ever needed, `maxWaves` should be derived at `reset()` time, not import time.
+
+**WEAKNESS #3 (LOW): `!` definite-assignment on `skybox` and `bloomPass` masks uninitialized state**
+
+The fields `private skybox!: THREE.Mesh` and `private bloomPass!: UnrealBloomPass` use the `!` assertion, telling TypeScript they are always assigned. But they are only assigned in `addSkybox()` and `initializePostProcessing()` respectively, which run during `ngOnInit` / `ngAfterViewInit`. If the component is destroyed before those lifecycle hooks complete (fast route navigation), `ngOnDestroy()` would access `undefined`. The runtime `if (this.skybox)` and `if (this.bloomPass)` guards in `ngOnDestroy` prevent a crash — but the `!` assertion is a lie that a strict reviewer would flag. TypeScript's type system thinks these are always `THREE.Mesh` and `UnrealBloomPass`, but they can be `undefined`.
+
+**Verdict:** Fix by removing `!` and using optional types: `private skybox?: THREE.Mesh`. This makes the `if` guards in `ngOnDestroy()` type-correct instead of relying on a runtime safety net that contradicts the type declaration.
+
+## Red Team Critique — Round 6
+
+Second hostile review pass over the hardening commits and the Round 5 fixes themselves.
+
+### WEAKNESS #4 (MEDIUM): `FLYING→SWIFT` rename missed lowercase `flying` in TESTING_GUIDE.md
+
+The rename used `replace_all` on `FLYING` and `Flying` across documentation files, but `TESTING_GUIDE.md:317` still reads: *"flying enemies should ignore tower tiles"*. The lowercase form survived the search-and-replace. This is the exact kind of stale reference the rename was meant to eliminate — a future contributor reading the docs would encounter the retired `flying` terminology, contradicting the source code which now says `SWIFT`.
+
+**Verdict:** Fix the straggler. Single-line edit.
+
+### WEAKNESS #5 (LOW): `time * 0.001` particle change is a silent visual behavioral change, not a pure refactor
+
+The old code used `Date.now() * 0.001` (~1738900000) as the `sin` base. With `i` values 0–1197, `i` was negligible relative to the base — all particles bobbed nearly in-phase. The new code uses `time * 0.001` (~1.5 on early frames). Now `i` dominates — each particle oscillates at a distinct phase. The particle field shifts from synchronized bobbing to per-particle organic undulation. This is arguably more visually appealing, but the commit message describes it as "more accurate and avoids redundant system calls" — implying behavioral equivalence. It is not equivalent: the animation pattern is visibly different. Pre-existing particle drift bug (`+=` accumulation instead of absolute positioning) remains unchanged by either version.
+
+**Verdict:** Acknowledged, not fixed. The new behavior is better than the old, and the underlying drift bug is pre-existing and out-of-scope. No action required.
+
+### WEAKNESS #6 (LOW): Test spy `callFake` duplicates real `damageEnemy` logic — coupled to implementation details
+
+The `damageEnemy` spy in `tower-combat.service.spec.ts` is a hand-written clone of `EnemyService.damageEnemy()`. If the real method's behavior ever changes (e.g. adding damage reduction, minimum damage, event emission), the spy would silently diverge, making tests pass with stale behavior. This is inherent to the spy pattern and not specific to this change, but the callFake is now a **second implementation** of the damage formula that must be kept in sync manually.
+
+**Verdict:** Acceptable trade-off. The alternative (using a real EnemyService) would require wiring up GameBoardService and a mock board, tripling test complexity for no gain. The spy's logic is 4 lines and mirrors the production code exactly. If `damageEnemy` evolves, its own unit tests in `enemy.service.spec.ts` will catch drift.
