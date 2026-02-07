@@ -1,3 +1,5 @@
+import { WAVE_DEFINITIONS } from './wave.model';
+
 export enum GamePhase {
   SETUP = 'setup',
   COMBAT = 'combat',
@@ -19,7 +21,7 @@ export interface GameState {
 export const INITIAL_GAME_STATE: GameState = {
   phase: GamePhase.SETUP,
   wave: 0,
-  maxWaves: 10,
+  maxWaves: WAVE_DEFINITIONS.length,
   lives: 20,
   maxLives: 20,
   gold: 200,

@@ -6,7 +6,7 @@ describe('Enemy Model', () => {
       expect(EnemyType.BASIC).toBe('BASIC');
       expect(EnemyType.FAST).toBe('FAST');
       expect(EnemyType.HEAVY).toBe('HEAVY');
-      expect(EnemyType.FLYING).toBe('FLYING');
+      expect(EnemyType.SWIFT).toBe('SWIFT');
       expect(EnemyType.BOSS).toBe('BOSS');
     });
   });
@@ -16,7 +16,7 @@ describe('Enemy Model', () => {
       expect(ENEMY_STATS[EnemyType.BASIC]).toBeDefined();
       expect(ENEMY_STATS[EnemyType.FAST]).toBeDefined();
       expect(ENEMY_STATS[EnemyType.HEAVY]).toBeDefined();
-      expect(ENEMY_STATS[EnemyType.FLYING]).toBeDefined();
+      expect(ENEMY_STATS[EnemyType.SWIFT]).toBeDefined();
       expect(ENEMY_STATS[EnemyType.BOSS]).toBeDefined();
     });
 
@@ -106,21 +106,21 @@ describe('Enemy Model', () => {
       });
     });
 
-    describe('FLYING enemy stats', () => {
+    describe('SWIFT enemy stats', () => {
       it('should be fast with moderate health', () => {
-        const flying = ENEMY_STATS[EnemyType.FLYING];
+        const swift = ENEMY_STATS[EnemyType.SWIFT];
         const basic = ENEMY_STATS[EnemyType.BASIC];
 
-        expect(flying.speed).toBeGreaterThan(basic.speed);
-        expect(flying.health).toBeLessThan(basic.health);
+        expect(swift.speed).toBeGreaterThan(basic.speed);
+        expect(swift.health).toBeLessThan(basic.health);
       });
 
       it('should have correct stats', () => {
-        const flying = ENEMY_STATS[EnemyType.FLYING];
-        expect(flying.health).toBe(80);
-        expect(flying.speed).toBe(3.0);
-        expect(flying.value).toBe(20);
-        expect(flying.color).toBe(0x00ffff); // Cyan
+        const swift = ENEMY_STATS[EnemyType.SWIFT];
+        expect(swift.health).toBe(80);
+        expect(swift.speed).toBe(3.0);
+        expect(swift.value).toBe(20);
+        expect(swift.color).toBe(0x00ffff); // Cyan
       });
     });
 

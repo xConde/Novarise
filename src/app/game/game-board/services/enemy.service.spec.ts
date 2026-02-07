@@ -87,7 +87,7 @@ describe('EnemyService', () => {
         EnemyType.BASIC,
         EnemyType.FAST,
         EnemyType.HEAVY,
-        EnemyType.FLYING,
+        EnemyType.SWIFT,
         EnemyType.BOSS
       ];
 

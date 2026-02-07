@@ -51,11 +51,11 @@ export const WAVE_DEFINITIONS: WaveDefinition[] = [
     ],
     reward: 75
   },
-  // Wave 6: Aerial threat
+  // Wave 6: Swift assault
   {
     entries: [
       { type: EnemyType.FAST, count: 6, spawnInterval: 0.6 },
-      { type: EnemyType.FLYING, count: 4, spawnInterval: 1.0 }
+      { type: EnemyType.SWIFT, count: 4, spawnInterval: 1.0 }
     ],
     reward: 80
   },
@@ -71,7 +71,7 @@ export const WAVE_DEFINITIONS: WaveDefinition[] = [
   {
     entries: [
       { type: EnemyType.FAST, count: 12, spawnInterval: 0.4 },
-      { type: EnemyType.FLYING, count: 6, spawnInterval: 0.5 }
+      { type: EnemyType.SWIFT, count: 6, spawnInterval: 0.5 }
     ],
     reward: 120
   },
@@ -81,7 +81,7 @@ export const WAVE_DEFINITIONS: WaveDefinition[] = [
       { type: EnemyType.BASIC, count: 10, spawnInterval: 0.6 },
       { type: EnemyType.HEAVY, count: 5, spawnInterval: 1.0 },
       { type: EnemyType.FAST, count: 8, spawnInterval: 0.5 },
-      { type: EnemyType.FLYING, count: 4, spawnInterval: 0.8 }
+      { type: EnemyType.SWIFT, count: 4, spawnInterval: 0.8 }
     ],
     reward: 150
   },
