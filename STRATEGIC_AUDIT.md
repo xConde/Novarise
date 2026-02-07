@@ -143,3 +143,12 @@ After `restartGame()`, `hoveredTile` still references a disposed THREE.Mesh and 
 ### BUG #12 (LOW): `Projectile.target` Is a Dead Field
 
 The `target: Enemy` field on every `Projectile` is assigned at fire-time but never read — all enemy tracking uses `targetId` for fresh map lookups via `getEnemies().get()`. The stale reference retains a pointer to a mutable Enemy object that may already be dead/removed, preventing GC of the JS shell until the projectile itself is cleared. Code clarity issue and minor memory pressure.
+
+---
+
+## Deployment Checklist
+
+- [x] **Unit tests for GameStateService** — Phase transitions, gold/lives math, edge cases (negative gold, zero lives), reset behavior.
+- [x] **Unit tests for WaveService** — Wave start, spawn queue processing, failed spawn retry, completion detection, reset.
+- [x] **Unit tests for TowerCombatService** — Tower registration, targeting (range, nearest), projectile lifecycle, splash damage, kill tracking, cleanup.
+- [ ] **Push to PR and verify CI** — All new tests pass, pre-existing failures unchanged, Cloudflare Pages deploy succeeds.
