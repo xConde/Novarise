@@ -42,6 +42,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private renderer!: THREE.WebGLRenderer;
   private controls!: OrbitControls;
   private particles!: THREE.Points;
+  private skybox!: THREE.Mesh;
+  private bloomPass!: UnrealBloomPass;
   private composer!: EffectComposer;
 
   // Interaction
@@ -235,11 +237,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(renderPass);
 
-    const bloomPass = new UnrealBloomPass(
+    this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
       0.4, 0.6, 0.9
     );
-    this.composer.addPass(bloomPass);
+    this.composer.addPass(this.bloomPass);
 
     const vignetteShader = {
       uniforms: {
@@ -385,8 +387,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       depthWrite: false
     });
 
-    const starfield = new THREE.Mesh(starfieldGeometry, starfieldMaterial);
-    this.scene.add(starfield);
+    this.skybox = new THREE.Mesh(starfieldGeometry, starfieldMaterial);
+    this.scene.add(this.skybox);
   }
 
   private initializeParticles(): void {
@@ -568,7 +570,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       const positionAttribute = this.particles.geometry.attributes['position'] as THREE.BufferAttribute;
       const positions = positionAttribute.array as Float32Array;
       for (let i = 0; i < positions.length; i += 3) {
-        positions[i + 1] += Math.sin(Date.now() * 0.001 + i) * 0.002;
+        positions[i + 1] += Math.sin(time * 0.001 + i) * 0.002;
       }
       positionAttribute.needsUpdate = true;
       this.particles.rotation.y += 0.0002;
@@ -686,6 +688,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.particles.geometry.dispose();
         (this.particles.material as THREE.Material).dispose();
       }
+
+      if (this.skybox) {
+        this.scene.remove(this.skybox);
+        this.skybox.geometry.dispose();
+        (this.skybox.material as THREE.Material).dispose();
+      }
+    }
+
+    if (this.bloomPass) {
+      this.bloomPass.dispose();
     }
 
     if (this.composer) {
