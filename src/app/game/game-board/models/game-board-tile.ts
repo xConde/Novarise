@@ -1,3 +1,5 @@
+import { TowerType } from './tower.model';
+
 export class GameBoardTile {
   public readonly x: number;
   public readonly y: number;
@@ -63,10 +65,5 @@ export enum SpawnerType {
   BOTTOM_RIGHT,
 }
 
-export enum TowerType {
-  CANON,
-  GATLING,
-  SLOWING,
-  SNIPER,
-  LASER
-}
+// Re-export TowerType from tower.model.ts for backwards compatibility
+export { TowerType } from './tower.model';

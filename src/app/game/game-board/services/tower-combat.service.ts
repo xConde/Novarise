@@ -1,0 +1,238 @@
+import { Injectable } from '@angular/core';
+import * as THREE from 'three';
+import { Enemy } from '../models/enemy.model';
+import { PlacedTower, TowerType, TowerStats, TOWER_CONFIGS } from '../models/tower.model';
+import { EnemyService } from './enemy.service';
+import { GameBoardService } from '../game-board.service';
+
+interface Projectile {
+  id: string;
+  mesh: THREE.Mesh;
+  origin: { x: number, z: number };
+  target: Enemy;
+  targetId: string;
+  speed: number;
+  damage: number;
+  splashRadius: number;
+  towerType: TowerType;
+}
+
+@Injectable()
+export class TowerCombatService {
+  private placedTowers: Map<string, PlacedTower> = new Map();
+  private projectiles: Projectile[] = [];
+  private projectileCounter = 0;
+  private gameTime = 0;
+
+  constructor(
+    private enemyService: EnemyService,
+    private gameBoardService: GameBoardService
+  ) {}
+
+  registerTower(row: number, col: number, type: TowerType, mesh: THREE.Group): void {
+    const key = `${row}-${col}`;
+    this.placedTowers.set(key, {
+      id: key,
+      type,
+      row,
+      col,
+      lastFireTime: -Infinity,
+      kills: 0,
+      mesh
+    });
+  }
+
+  update(deltaTime: number, scene: THREE.Scene): string[] {
+    this.gameTime += deltaTime;
+    const killedEnemyIds: string[] = [];
+
+    // Tower targeting and firing
+    this.placedTowers.forEach(tower => {
+      const stats = TOWER_CONFIGS[tower.type];
+      const timeSinceLastFire = this.gameTime - tower.lastFireTime;
+
+      if (timeSinceLastFire < stats.fireRate) return;
+
+      const target = this.findTarget(tower, stats);
+      if (!target) return;
+
+      tower.lastFireTime = this.gameTime;
+      this.fireProjectile(tower, target, stats, scene);
+    });
+
+    // Update projectiles
+    const survivingProjectiles: Projectile[] = [];
+    for (const proj of this.projectiles) {
+      const enemy = this.enemyService.getEnemies().get(proj.targetId);
+
+      // Target dead or removed — remove projectile
+      if (!enemy) {
+        this.removeProjectileMesh(proj, scene);
+        continue;
+      }
+
+      // Move projectile toward enemy
+      const dx = enemy.position.x - proj.mesh.position.x;
+      const dz = enemy.position.z - proj.mesh.position.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      const moveDistance = proj.speed * deltaTime;
+
+      if (moveDistance >= dist) {
+        // Hit
+        this.removeProjectileMesh(proj, scene);
+        const kills = this.applyDamage(proj, scene);
+        killedEnemyIds.push(...kills);
+      } else {
+        // Move toward target
+        const nx = dx / dist;
+        const nz = dz / dist;
+        proj.mesh.position.x += nx * moveDistance;
+        proj.mesh.position.z += nz * moveDistance;
+        survivingProjectiles.push(proj);
+      }
+    }
+    this.projectiles = survivingProjectiles;
+
+    return killedEnemyIds;
+  }
+
+  private findTarget(tower: PlacedTower, stats: TowerStats): Enemy | null {
+    const boardWidth = this.gameBoardService.getBoardWidth();
+    const boardHeight = this.gameBoardService.getBoardHeight();
+    const tileSize = this.gameBoardService.getTileSize();
+    const towerWorldX = (tower.col - boardWidth / 2) * tileSize;
+    const towerWorldZ = (tower.row - boardHeight / 2) * tileSize;
+
+    let nearest: Enemy | null = null;
+    let nearestDist = Infinity;
+
+    this.enemyService.getEnemies().forEach(enemy => {
+      if (enemy.health <= 0) return;
+
+      const dx = enemy.position.x - towerWorldX;
+      const dz = enemy.position.z - towerWorldZ;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+
+      // Range check in world units (tileSize = 1, so range in tiles = range in world units)
+      if (dist <= stats.range && dist < nearestDist) {
+        nearest = enemy;
+        nearestDist = dist;
+      }
+    });
+
+    return nearest;
+  }
+
+  private fireProjectile(tower: PlacedTower, target: Enemy, stats: TowerStats, scene: THREE.Scene): void {
+    const boardWidth = this.gameBoardService.getBoardWidth();
+    const boardHeight = this.gameBoardService.getBoardHeight();
+    const tileSize = this.gameBoardService.getTileSize();
+    const towerWorldX = (tower.col - boardWidth / 2) * tileSize;
+    const towerWorldZ = (tower.row - boardHeight / 2) * tileSize;
+
+    const geometry = new THREE.SphereGeometry(0.08, 6, 6);
+    const material = new THREE.MeshBasicMaterial({
+      color: stats.color,
+      transparent: true,
+      opacity: 0.9
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(towerWorldX, 0.8, towerWorldZ);
+    scene.add(mesh);
+
+    this.projectiles.push({
+      id: `proj-${this.projectileCounter++}`,
+      mesh,
+      origin: { x: towerWorldX, z: towerWorldZ },
+      target,
+      targetId: target.id,
+      speed: stats.projectileSpeed,
+      damage: stats.damage,
+      splashRadius: stats.splashRadius,
+      towerType: tower.type
+    });
+  }
+
+  private applyDamage(proj: Projectile, scene: THREE.Scene): string[] {
+    const kills: string[] = [];
+
+    if (proj.splashRadius > 0) {
+      // Splash damage — hit all enemies within radius of impact point
+      const impactX = proj.mesh.position.x;
+      const impactZ = proj.mesh.position.z;
+
+      this.enemyService.getEnemies().forEach(enemy => {
+        if (enemy.health <= 0) return;
+        const dx = enemy.position.x - impactX;
+        const dz = enemy.position.z - impactZ;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+
+        if (dist <= proj.splashRadius) {
+          enemy.health -= proj.damage;
+          if (enemy.health <= 0) {
+            kills.push(enemy.id);
+          }
+        }
+      });
+    } else {
+      // Single target damage
+      const enemy = this.enemyService.getEnemies().get(proj.targetId);
+      if (enemy && enemy.health > 0) {
+        enemy.health -= proj.damage;
+        if (enemy.health <= 0) {
+          kills.push(enemy.id);
+        }
+      }
+    }
+
+    // Track kills on the tower
+    if (kills.length > 0) {
+      const tower = this.findTowerForProjectile(proj);
+      if (tower) {
+        tower.kills += kills.length;
+      }
+    }
+
+    return kills;
+  }
+
+  private findTowerForProjectile(proj: Projectile): PlacedTower | undefined {
+    // Find tower based on origin position (reverse-lookup)
+    let found: PlacedTower | undefined;
+    this.placedTowers.forEach(tower => {
+      const boardWidth = this.gameBoardService.getBoardWidth();
+      const boardHeight = this.gameBoardService.getBoardHeight();
+      const tileSize = this.gameBoardService.getTileSize();
+      const towerWorldX = (tower.col - boardWidth / 2) * tileSize;
+      const towerWorldZ = (tower.row - boardHeight / 2) * tileSize;
+      if (Math.abs(towerWorldX - proj.origin.x) < 0.01 && Math.abs(towerWorldZ - proj.origin.z) < 0.01) {
+        found = tower;
+      }
+    });
+    return found;
+  }
+
+  private removeProjectileMesh(proj: Projectile, scene: THREE.Scene): void {
+    scene.remove(proj.mesh);
+    proj.mesh.geometry.dispose();
+    (proj.mesh.material as THREE.Material).dispose();
+  }
+
+  getTower(key: string): PlacedTower | undefined {
+    return this.placedTowers.get(key);
+  }
+
+  getPlacedTowers(): Map<string, PlacedTower> {
+    return this.placedTowers;
+  }
+
+  cleanup(scene: THREE.Scene): void {
+    for (const proj of this.projectiles) {
+      this.removeProjectileMesh(proj, scene);
+    }
+    this.projectiles = [];
+    this.placedTowers.clear();
+    this.projectileCounter = 0;
+    this.gameTime = 0;
+  }
+}

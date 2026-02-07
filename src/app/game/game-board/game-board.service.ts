@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { BlockType, GameBoardTile, Spawner, SpawnerType } from './models/game-board-tile';
+import { BlockType, GameBoardTile, Spawner, SpawnerType, TowerType } from './models/game-board-tile';
 
 @Injectable()
 export class GameBoardService {
@@ -262,7 +262,7 @@ export class GameBoardService {
     return tile.type === BlockType.BASE && tile.isPurchasable && tile.towerType === null;
   }
 
-  placeTower(row: number, col: number, towerType: string): boolean {
+  placeTower(row: number, col: number, towerType: TowerType): boolean {
     if (!this.canPlaceTower(row, col)) {
       return false;
     }
@@ -276,14 +276,14 @@ export class GameBoardService {
       false,
       false,
       oldTile.cost,
-      null
+      towerType
     );
 
     return true;
   }
 
   // Create tower mesh based on type
-  createTowerMesh(row: number, col: number, towerType: string = 'basic'): THREE.Group {
+  createTowerMesh(row: number, col: number, towerType: TowerType = TowerType.BASIC): THREE.Group {
     const towerGroup = new THREE.Group();
     let color: number;
     const tileTop = this.tileHeight; // Towers sit on top of tile

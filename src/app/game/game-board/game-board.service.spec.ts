@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { GameBoardService } from './game-board.service';
 import { BlockType, GameBoardTile } from './models/game-board-tile';
+import { TowerType } from './models/tower.model';
 
 describe('GameBoardService', () => {
   let service: GameBoardService;
@@ -83,7 +84,7 @@ describe('GameBoardService', () => {
 
     it('should fully reset state when called multiple times', () => {
       // Place a tower to dirty the state
-      service.placeTower(5, 5, 'basic');
+      service.placeTower(5, 5, TowerType.BASIC);
       expect(service.getGameBoard()[5][5].type).toBe(BlockType.TOWER);
 
       // Reset and verify tower is gone
@@ -148,7 +149,7 @@ describe('GameBoardService', () => {
     it('should clear previous state when importing', () => {
       // First, set up default board with towers
       service.resetBoard();
-      service.placeTower(5, 5, 'basic');
+      service.placeTower(5, 5, TowerType.BASIC);
 
       // Import a clean board
       const board = createTestBoard(8, 8);
@@ -203,7 +204,7 @@ describe('GameBoardService', () => {
     });
 
     it('should reject placement on already-occupied tiles', () => {
-      service.placeTower(5, 5, 'basic');
+      service.placeTower(5, 5, TowerType.BASIC);
       expect(service.canPlaceTower(5, 5)).toBeFalse();
     });
 
@@ -224,34 +225,34 @@ describe('GameBoardService', () => {
     });
 
     it('should place a tower on a valid tile', () => {
-      const result = service.placeTower(5, 5, 'basic');
+      const result = service.placeTower(5, 5, TowerType.BASIC);
       expect(result).toBeTrue();
       expect(service.getGameBoard()[5][5].type).toBe(BlockType.TOWER);
     });
 
     it('should mark tower tile as non-traversable', () => {
-      service.placeTower(5, 5, 'basic');
+      service.placeTower(5, 5, TowerType.BASIC);
       expect(service.getGameBoard()[5][5].isTraversable).toBeFalse();
     });
 
     it('should mark tower tile as non-purchasable', () => {
-      service.placeTower(5, 5, 'basic');
+      service.placeTower(5, 5, TowerType.BASIC);
       expect(service.getGameBoard()[5][5].isPurchasable).toBeFalse();
     });
 
     it('should return false for invalid placement', () => {
-      const result = service.placeTower(-1, -1, 'basic');
+      const result = service.placeTower(-1, -1, TowerType.BASIC);
       expect(result).toBeFalse();
     });
 
     it('should prevent double-placement on same tile', () => {
-      service.placeTower(5, 5, 'basic');
-      const result = service.placeTower(5, 5, 'sniper');
+      service.placeTower(5, 5, TowerType.BASIC);
+      const result = service.placeTower(5, 5, TowerType.SNIPER);
       expect(result).toBeFalse();
     });
 
     it('should preserve tile coordinates after placement', () => {
-      service.placeTower(5, 5, 'basic');
+      service.placeTower(5, 5, TowerType.BASIC);
       const tile = service.getGameBoard()[5][5];
       expect(tile.x).toBe(5);
       expect(tile.y).toBe(5);

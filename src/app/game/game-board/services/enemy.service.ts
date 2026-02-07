@@ -135,6 +135,13 @@ export class EnemyService {
     const enemy = this.enemies.get(enemyId);
     if (enemy) {
       if (enemy.mesh) {
+        // Dispose health bar children before removing
+        enemy.mesh.children.forEach(child => {
+          if (child instanceof THREE.Mesh) {
+            child.geometry.dispose();
+            (child.material as THREE.Material).dispose();
+          }
+        });
         scene.remove(enemy.mesh);
         enemy.mesh.geometry.dispose();
         if (Array.isArray(enemy.mesh.material)) {
@@ -333,6 +340,45 @@ export class EnemyService {
   }
 
   /**
+   * Deal damage to a specific enemy. Returns true if the enemy dies.
+   */
+  damageEnemy(enemyId: string, damage: number): boolean {
+    const enemy = this.enemies.get(enemyId);
+    if (!enemy || enemy.health <= 0) return false;
+    enemy.health -= damage;
+    return enemy.health <= 0;
+  }
+
+  /**
+   * Update all enemy health bars to reflect current health
+   */
+  updateHealthBars(): void {
+    this.enemies.forEach(enemy => {
+      if (!enemy.mesh) return;
+      // The health bar is the second child (index 1) of the enemy group
+      // but since we use a plain Mesh, we store the health bar as userData
+      const healthBarBg = enemy.mesh.userData?.['healthBarBg'] as THREE.Mesh | undefined;
+      const healthBarFg = enemy.mesh.userData?.['healthBarFg'] as THREE.Mesh | undefined;
+
+      if (healthBarBg && healthBarFg) {
+        const healthPct = Math.max(0, enemy.health / enemy.maxHealth);
+        healthBarFg.scale.x = healthPct;
+        healthBarFg.position.x = -(1 - healthPct) * 0.25;
+
+        // Color transitions: green -> yellow -> red
+        const mat = healthBarFg.material as THREE.MeshBasicMaterial;
+        if (healthPct > 0.6) {
+          mat.color.setHex(0x00ff00);
+        } else if (healthPct > 0.3) {
+          mat.color.setHex(0xffff00);
+        } else {
+          mat.color.setHex(0xff0000);
+        }
+      }
+    });
+  }
+
+  /**
    * Create a 3D mesh for an enemy
    */
   private createEnemyMesh(enemy: Enemy): THREE.Mesh {
@@ -349,6 +395,27 @@ export class EnemyService {
     mesh.position.set(enemy.position.x, enemy.position.y, enemy.position.z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+
+    // Add health bar above enemy
+    const barWidth = 0.5;
+    const barHeight = 0.06;
+    const barY = stats.size + 0.2;
+
+    const bgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
+    const bgMaterial = new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide });
+    const healthBarBg = new THREE.Mesh(bgGeometry, bgMaterial);
+    healthBarBg.position.set(0, barY, 0);
+    healthBarBg.lookAt(0, barY, 1); // Face camera roughly
+
+    const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
+    const fgMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
+    const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
+    healthBarFg.position.set(0, barY + 0.001, 0);
+    healthBarFg.lookAt(0, barY + 0.001, 1);
+
+    mesh.add(healthBarBg);
+    mesh.add(healthBarFg);
+    mesh.userData = { healthBarBg, healthBarFg };
 
     return mesh;
   }
