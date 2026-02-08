@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { BlockType, GameBoardTile, Spawner, SpawnerType, TowerType } from './models/game-board-tile';
+import { BlockType, GameBoardTile, Spawner, SpawnerType } from './models/game-board-tile';
+import { TowerType } from './models/tower.model';
 
 @Injectable()
 export class GameBoardService {
