@@ -1,5 +1,18 @@
 import { TestBed } from '@angular/core/testing';
 import { MapStorageService, MapMetadata, SavedMap } from './map-storage.service';
+import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
+
+function testMapData(overrides?: Record<string, unknown>): TerrainGridState {
+  return {
+    gridSize: 25,
+    tiles: [],
+    heightMap: [],
+    spawnPoint: null,
+    exitPoint: null,
+    version: '1.0.0',
+    ...overrides
+  } as TerrainGridState;
+}
 
 describe('MapStorageService', () => {
   let service: MapStorageService;
@@ -34,7 +47,7 @@ describe('MapStorageService', () => {
 
   describe('saveMap', () => {
     it('should save a new map with generated ID', () => {
-      const mapData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const mapData = testMapData();
       const mapId = service.saveMap('Test Map', mapData);
 
       expect(mapId).toBeTruthy();
@@ -42,7 +55,7 @@ describe('MapStorageService', () => {
     });
 
     it('should save map data to localStorage', () => {
-      const mapData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const mapData = testMapData();
       const mapId = service.saveMap('Test Map', mapData);
 
       const savedJson = localStorageMock['novarise_map_' + mapId];
@@ -54,7 +67,7 @@ describe('MapStorageService', () => {
     });
 
     it('should update metadata with correct timestamps', () => {
-      const mapData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const mapData = testMapData();
       const beforeSave = Date.now();
       const mapId = service.saveMap('Test Map', mapData);
       const afterSave = Date.now();
@@ -69,7 +82,7 @@ describe('MapStorageService', () => {
     });
 
     it('should update existing map when ID is provided', () => {
-      const mapData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const mapData = testMapData();
       const mapId = service.saveMap('Original Name', mapData);
 
       const originalJson = localStorageMock['novarise_map_' + mapId];
@@ -77,7 +90,7 @@ describe('MapStorageService', () => {
       const originalCreatedAt = originalMap.metadata.createdAt;
 
       // Wait a bit to ensure different timestamp
-      const updatedData = { gridSize: 25, tiles: [1, 2, 3], version: '1.0.0' };
+      const updatedData = testMapData({ tiles: [1, 2, 3] });
       service.saveMap('Updated Name', updatedData, mapId);
 
       const updatedJson = localStorageMock['novarise_map_' + mapId];
@@ -85,18 +98,18 @@ describe('MapStorageService', () => {
 
       expect(updatedMap.metadata.name).toBe('Updated Name');
       expect(updatedMap.metadata.createdAt).toBe(originalCreatedAt);
-      expect(updatedMap.data.tiles).toEqual([1, 2, 3]);
+      expect(updatedMap.data.tiles as unknown).toEqual([1, 2, 3] as unknown);
     });
 
     it('should set saved map as current map', () => {
-      const mapData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const mapData = testMapData();
       const mapId = service.saveMap('Test Map', mapData);
 
       expect(localStorageMock['novarise_current_map']).toBe(mapId);
     });
 
     it('should update metadata index when saving', () => {
-      const mapData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const mapData = testMapData();
       service.saveMap('Test Map', mapData);
 
       const metadataJson = localStorageMock['novarise_maps_metadata'];
@@ -110,14 +123,14 @@ describe('MapStorageService', () => {
 
   describe('loadMap', () => {
     it('should return map data when map exists', () => {
-      const mapData = { gridSize: 25, tiles: [[1, 2]], version: '1.0.0' };
+      const mapData = testMapData({ tiles: [[1, 2]] });
       const mapId = service.saveMap('Test Map', mapData);
 
       const loadedData = service.loadMap(mapId);
 
       expect(loadedData).toBeTruthy();
-      expect(loadedData.gridSize).toBe(25);
-      expect(loadedData.tiles).toEqual([[1, 2]]);
+      expect(loadedData!.gridSize).toBe(25);
+      expect(loadedData!.tiles as unknown).toEqual([[1, 2]]);
     });
 
     it('should return null when map does not exist', () => {
@@ -127,7 +140,7 @@ describe('MapStorageService', () => {
     });
 
     it('should set loaded map as current map', () => {
-      const mapData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const mapData = testMapData();
       const mapId = service.saveMap('Test Map', mapData);
 
       // Clear current map
@@ -155,9 +168,9 @@ describe('MapStorageService', () => {
     });
 
     it('should return all saved maps metadata', () => {
-      service.saveMap('Map 1', { gridSize: 25, version: '1.0.0' });
-      service.saveMap('Map 2', { gridSize: 25, version: '1.0.0' });
-      service.saveMap('Map 3', { gridSize: 25, version: '1.0.0' });
+      service.saveMap('Map 1', testMapData());
+      service.saveMap('Map 2', testMapData());
+      service.saveMap('Map 3', testMapData());
 
       const maps = service.getAllMaps();
 
@@ -165,11 +178,11 @@ describe('MapStorageService', () => {
     });
 
     it('should return maps sorted by updated date (most recent first)', () => {
-      const mapId1 = service.saveMap('Map 1', { gridSize: 25, version: '1.0.0' });
-      service.saveMap('Map 2', { gridSize: 25, version: '1.0.0' });
+      const mapId1 = service.saveMap('Map 1', testMapData());
+      service.saveMap('Map 2', testMapData());
 
       // Update first map to make it most recent
-      service.saveMap('Map 1 Updated', { gridSize: 25, version: '1.0.0' }, mapId1);
+      service.saveMap('Map 1 Updated', testMapData(), mapId1);
 
       const maps = service.getAllMaps();
 
@@ -187,7 +200,7 @@ describe('MapStorageService', () => {
 
   describe('getMapMetadata', () => {
     it('should return metadata for existing map', () => {
-      const mapId = service.saveMap('Test Map', { gridSize: 25, version: '1.0.0' });
+      const mapId = service.saveMap('Test Map', testMapData());
 
       const metadata = service.getMapMetadata(mapId);
 
@@ -205,7 +218,7 @@ describe('MapStorageService', () => {
 
   describe('deleteMap', () => {
     it('should delete existing map and return true', () => {
-      const mapId = service.saveMap('Test Map', { gridSize: 25, version: '1.0.0' });
+      const mapId = service.saveMap('Test Map', testMapData());
 
       const result = service.deleteMap(mapId);
 
@@ -220,7 +233,7 @@ describe('MapStorageService', () => {
     });
 
     it('should remove map from metadata index', () => {
-      const mapId = service.saveMap('Test Map', { gridSize: 25, version: '1.0.0' });
+      const mapId = service.saveMap('Test Map', testMapData());
 
       service.deleteMap(mapId);
 
@@ -229,7 +242,7 @@ describe('MapStorageService', () => {
     });
 
     it('should clear current map if deleted map was current', () => {
-      const mapId = service.saveMap('Test Map', { gridSize: 25, version: '1.0.0' });
+      const mapId = service.saveMap('Test Map', testMapData());
       expect(localStorageMock['novarise_current_map']).toBe(mapId);
 
       service.deleteMap(mapId);
@@ -240,7 +253,7 @@ describe('MapStorageService', () => {
 
   describe('getCurrentMapId', () => {
     it('should return current map ID when set', () => {
-      const mapId = service.saveMap('Test Map', { gridSize: 25, version: '1.0.0' });
+      const mapId = service.saveMap('Test Map', testMapData());
 
       expect(service.getCurrentMapId()).toBe(mapId);
     });
@@ -252,13 +265,13 @@ describe('MapStorageService', () => {
 
   describe('loadCurrentMap', () => {
     it('should return current map data', () => {
-      const mapData = { gridSize: 25, tiles: [[1]], version: '1.0.0' };
+      const mapData = testMapData({ tiles: [[1]] });
       service.saveMap('Test Map', mapData);
 
       const loadedData = service.loadCurrentMap();
 
       expect(loadedData).toBeTruthy();
-      expect(loadedData.tiles).toEqual([[1]]);
+      expect(loadedData!.tiles as unknown).toEqual([[1]]);
     });
 
     it('should return null when no current map', () => {
@@ -268,7 +281,7 @@ describe('MapStorageService', () => {
 
   describe('migrateOldFormat', () => {
     it('should migrate old format data to new format', () => {
-      const oldData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const oldData = testMapData();
       localStorageMock['novarise_terrain'] = JSON.stringify(oldData);
 
       const result = service.migrateOldFormat();
@@ -298,7 +311,7 @@ describe('MapStorageService', () => {
 
   describe('exportMapToJson', () => {
     it('should return JSON string for existing map', () => {
-      const mapData = { gridSize: 25, tiles: [[1, 2, 3]], version: '1.0.0' };
+      const mapData = testMapData({ tiles: [[1, 2, 3]] });
       const mapId = service.saveMap('Test Map', mapData);
 
       const json = service.exportMapToJson(mapId);
@@ -326,7 +339,7 @@ describe('MapStorageService', () => {
           version: '1.0.0',
           gridSize: 25
         },
-        data: { gridSize: 25, tiles: [[1, 2]], version: '1.0.0' }
+        data: testMapData({ tiles: [[1, 2]] })
       };
 
       const mapId = service.importMapFromJson(JSON.stringify(savedMap));
@@ -335,7 +348,7 @@ describe('MapStorageService', () => {
       expect(mapId).not.toBe('old_id'); // Should generate new ID
 
       const loadedData = service.loadMap(mapId!);
-      expect(loadedData.tiles).toEqual([[1, 2]]);
+      expect(loadedData!.tiles as unknown).toEqual([[1, 2]]);
     });
 
     it('should allow name override on import', () => {
@@ -348,7 +361,7 @@ describe('MapStorageService', () => {
           version: '1.0.0',
           gridSize: 25
         },
-        data: { gridSize: 25, tiles: [], version: '1.0.0' }
+        data: testMapData()
       };
 
       const mapId = service.importMapFromJson(JSON.stringify(savedMap), 'Custom Name');
@@ -366,8 +379,8 @@ describe('MapStorageService', () => {
 
   describe('clearAllMaps', () => {
     it('should remove all maps from storage', () => {
-      service.saveMap('Map 1', { gridSize: 25, version: '1.0.0' });
-      service.saveMap('Map 2', { gridSize: 25, version: '1.0.0' });
+      service.saveMap('Map 1', testMapData());
+      service.saveMap('Map 2', testMapData());
 
       service.clearAllMaps();
 
@@ -378,7 +391,7 @@ describe('MapStorageService', () => {
 
   describe('generateMapId (private method behavior)', () => {
     it('should generate unique IDs for different maps', () => {
-      const mapData = { gridSize: 25, version: '1.0.0' };
+      const mapData = testMapData();
 
       const id1 = service.saveMap('Map 1', mapData);
       const id2 = service.saveMap('Map 2', mapData);
@@ -390,7 +403,7 @@ describe('MapStorageService', () => {
     });
 
     it('should generate IDs with expected format', () => {
-      const mapData = { gridSize: 25, version: '1.0.0' };
+      const mapData = testMapData();
       const mapId = service.saveMap('Test Map', mapData);
 
       // Format: map_{timestamp}_{random}
@@ -409,7 +422,7 @@ describe('MapStorageService', () => {
           version: '1.0.0',
           gridSize: 25
         },
-        data: { gridSize: 25, tiles: [[1, 2, 3]], version: '1.0.0' }
+        data: testMapData({ tiles: [[1, 2, 3]] })
       };
 
       const result = service.validateMapJson(JSON.stringify(savedMap));
@@ -521,7 +534,7 @@ describe('MapStorageService', () => {
     });
 
     it('should create download link with correct filename', () => {
-      const mapData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const mapData = testMapData();
       const mapId = service.saveMap('My Test Map', mapData);
 
       const result = service.downloadMapAsFile(mapId);
@@ -532,7 +545,7 @@ describe('MapStorageService', () => {
     });
 
     it('should sanitize filename by removing invalid characters', () => {
-      const mapData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const mapData = testMapData();
       const mapId = service.saveMap('Test<>:"/\\|?*Map', mapData);
 
       service.downloadMapAsFile(mapId);
@@ -541,7 +554,7 @@ describe('MapStorageService', () => {
     });
 
     it('should sanitize filename by replacing spaces with underscores', () => {
-      const mapData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const mapData = testMapData();
       const mapId = service.saveMap('My  Map   Name', mapData);
 
       service.downloadMapAsFile(mapId);
@@ -550,7 +563,7 @@ describe('MapStorageService', () => {
     });
 
     it('should truncate long filenames', () => {
-      const mapData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const mapData = testMapData();
       const longName = 'A'.repeat(100);
       const mapId = service.saveMap(longName, mapData);
 
@@ -561,7 +574,7 @@ describe('MapStorageService', () => {
     });
 
     it('should use default filename when map name is empty', () => {
-      const mapData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const mapData = testMapData();
       const mapId = service.saveMap('', mapData);
 
       service.downloadMapAsFile(mapId);
@@ -570,7 +583,7 @@ describe('MapStorageService', () => {
     });
 
     it('should create blob URL and trigger download', () => {
-      const mapData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const mapData = testMapData();
       const mapId = service.saveMap('Test', mapData);
 
       service.downloadMapAsFile(mapId);
@@ -581,7 +594,7 @@ describe('MapStorageService', () => {
     });
 
     it('should clean up blob URL after download', () => {
-      const mapData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const mapData = testMapData();
       const mapId = service.saveMap('Test', mapData);
 
       service.downloadMapAsFile(mapId);
@@ -590,7 +603,7 @@ describe('MapStorageService', () => {
     });
 
     it('should append and remove link from document body', () => {
-      const mapData = { gridSize: 25, tiles: [], version: '1.0.0' };
+      const mapData = testMapData();
       const mapId = service.saveMap('Test', mapData);
 
       service.downloadMapAsFile(mapId);
@@ -680,7 +693,7 @@ describe('MapStorageService', () => {
           version: '1.0.0',
           gridSize: 25
         },
-        data: { gridSize: 25, tiles: [], version: '1.0.0' }
+        data: testMapData()
       };
 
       const mockFile = new File([JSON.stringify(validMap)], 'test.json', { type: 'application/json' });
@@ -743,7 +756,7 @@ describe('MapStorageService', () => {
           version: '1.0.0',
           gridSize: 25
         },
-        data: { gridSize: 'invalid' as any, tiles: [], version: '1.0.0' }
+        data: testMapData({ gridSize: 'invalid' as unknown })
       };
 
       const result = service.importMapFromJson(JSON.stringify(invalidMap));
@@ -761,7 +774,7 @@ describe('MapStorageService', () => {
           version: '1.0.0',
           gridSize: 25
         },
-        data: { gridSize: 25, tiles: [], version: '1.0.0' }
+        data: testMapData()
       };
 
       const mapId = service.importMapFromJson(JSON.stringify(savedMap));
@@ -773,7 +786,7 @@ describe('MapStorageService', () => {
     it('should use "Imported Map" when no metadata name exists', () => {
       const savedMap = {
         metadata: {},  // no name
-        data: { gridSize: 25, tiles: [], version: '1.0.0' }
+        data: testMapData()
       };
 
       const mapId = service.importMapFromJson(JSON.stringify(savedMap));

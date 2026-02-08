@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
+import { TerrainGridState } from './terrain-grid-state.interface';
 
 export interface TerrainTile {
   type: TerrainType;
@@ -295,10 +296,10 @@ export class TerrainGrid {
 
   // State Management - Export/Import for saving maps
 
-  public exportState(): any {
-    const state = {
+  public exportState(): TerrainGridState {
+    const state: TerrainGridState = {
       gridSize: this.gridSize,
-      tiles: [] as any[],
+      tiles: [],
       heightMap: this.heightMap,
       spawnPoint: this.spawnPoint,
       exitPoint: this.exitPoint,
@@ -316,7 +317,7 @@ export class TerrainGrid {
     return state;
   }
 
-  public importState(state: any): void {
+  public importState(state: TerrainGridState | null | undefined): void {
     if (!state || state.gridSize !== this.gridSize) {
       console.error('Invalid state or grid size mismatch');
       return;

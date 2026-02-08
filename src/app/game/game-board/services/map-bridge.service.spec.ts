@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { MapBridgeService, EditorMapState } from './map-bridge.service';
 import { BlockType } from '../models/game-board-tile';
+import { TerrainType } from '../../../games/novarise/models/terrain-types.enum';
 
 describe('MapBridgeService', () => {
   let service: MapBridgeService;
@@ -66,7 +67,7 @@ describe('MapBridgeService', () => {
 
   it('should convert bedrock to BASE (traversable)', () => {
     const state = createMinimalState(3);
-    state.tiles[1][1] = 'bedrock';
+    state.tiles[1][1] = TerrainType.BEDROCK;
     const { board } = service.convertToGameBoard(state);
     // Editor tiles[col][row] → game board[row][col]
     expect(board[1][1].type).toBe(BlockType.BASE);
@@ -76,7 +77,7 @@ describe('MapBridgeService', () => {
 
   it('should convert moss to BASE (traversable)', () => {
     const state = createMinimalState(3);
-    state.tiles[0][0] = 'moss';
+    state.tiles[0][0] = TerrainType.MOSS;
     const { board } = service.convertToGameBoard(state);
     expect(board[0][0].type).toBe(BlockType.BASE);
     expect(board[0][0].isTraversable).toBeTrue();
@@ -84,7 +85,7 @@ describe('MapBridgeService', () => {
 
   it('should convert crystal to WALL (non-traversable)', () => {
     const state = createMinimalState(3);
-    state.tiles[2][1] = 'crystal';
+    state.tiles[2][1] = TerrainType.CRYSTAL;
     const { board } = service.convertToGameBoard(state);
     // tiles[2][1] → board[1][2]
     expect(board[1][2].type).toBe(BlockType.WALL);
@@ -94,7 +95,7 @@ describe('MapBridgeService', () => {
 
   it('should convert abyss to WALL (non-traversable)', () => {
     const state = createMinimalState(3);
-    state.tiles[0][2] = 'abyss';
+    state.tiles[0][2] = TerrainType.ABYSS;
     const { board } = service.convertToGameBoard(state);
     // tiles[0][2] → board[2][0]
     expect(board[2][0].type).toBe(BlockType.WALL);
@@ -114,8 +115,8 @@ describe('MapBridgeService', () => {
     // Create a 4x4 grid with a known pattern:
     // Editor tiles[col=0][row=3] = 'crystal' → game board[row=3][col=0] = WALL
     const state = createMinimalState(4);
-    state.tiles[0][3] = 'crystal';
-    state.tiles[3][0] = 'abyss';
+    state.tiles[0][3] = TerrainType.CRYSTAL;
+    state.tiles[3][0] = TerrainType.ABYSS;
 
     const { board } = service.convertToGameBoard(state);
     expect(board[3][0].type).toBe(BlockType.WALL); // tiles[0][3] → board[3][0]
@@ -137,7 +138,7 @@ describe('MapBridgeService', () => {
 
   it('should override terrain at spawn point location', () => {
     const state = createMinimalState(5);
-    state.tiles[1][1] = 'crystal'; // Would be WALL
+    state.tiles[1][1] = TerrainType.CRYSTAL; // Would be WALL
     state.spawnPoint = { x: 1, z: 1 }; // Same position — SPAWNER wins
 
     const { board } = service.convertToGameBoard(state);
@@ -170,7 +171,7 @@ describe('MapBridgeService', () => {
 
   it('should override terrain at exit point location', () => {
     const state = createMinimalState(5);
-    state.tiles[3][3] = 'abyss'; // Would be WALL
+    state.tiles[3][3] = TerrainType.ABYSS; // Would be WALL
     state.exitPoint = { x: 3, z: 3 }; // Same position — EXIT wins
 
     const { board } = service.convertToGameBoard(state);
@@ -196,8 +197,8 @@ describe('MapBridgeService', () => {
 
     // Create a corridor: walls on sides, open path in middle
     for (let x = 0; x < 5; x++) {
-      state.tiles[x][0] = 'crystal'; // Top wall row
-      state.tiles[x][4] = 'crystal'; // Bottom wall row
+      state.tiles[x][0] = TerrainType.CRYSTAL; // Top wall row
+      state.tiles[x][4] = TerrainType.CRYSTAL; // Bottom wall row
     }
     // Middle rows are bedrock (traversable) by default
 
@@ -266,14 +267,14 @@ describe('MapBridgeService', () => {
  * Helper to create a minimal valid editor state with all bedrock tiles.
  */
 function createMinimalState(gridSize: number): EditorMapState {
-  const tiles: string[][] = [];
+  const tiles: TerrainType[][] = [];
   const heightMap: number[][] = [];
 
   for (let x = 0; x < gridSize; x++) {
     tiles[x] = [];
     heightMap[x] = [];
     for (let z = 0; z < gridSize; z++) {
-      tiles[x][z] = 'bedrock';
+      tiles[x][z] = TerrainType.BEDROCK;
       heightMap[x][z] = 0;
     }
   }

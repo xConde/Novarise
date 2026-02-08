@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
 
 export interface MapMetadata {
   id: string;
@@ -12,7 +13,7 @@ export interface MapMetadata {
 
 export interface SavedMap {
   metadata: MapMetadata;
-  data: any; // The actual grid state from TerrainGrid.exportState()
+  data: TerrainGridState;
 }
 
 @Injectable({
@@ -32,7 +33,7 @@ export class MapStorageService {
    * @param id Optional ID (generates new if not provided)
    * @returns The saved map ID
    */
-  public saveMap(name: string, data: any, id?: string): string {
+  public saveMap(name: string, data: TerrainGridState, id?: string): string {
     const mapId = id || this.generateMapId();
     const now = Date.now();
 
@@ -42,8 +43,7 @@ export class MapStorageService {
       createdAt: id ? this.getMapMetadata(id)?.createdAt || now : now,
       updatedAt: now,
       version: data.version || '1.0.0',
-      gridSize: data.gridSize,
-      description: data.description
+      gridSize: data.gridSize
     };
 
     const savedMap: SavedMap = {
@@ -69,7 +69,7 @@ export class MapStorageService {
    * @param id Map ID
    * @returns The map data or null if not found
    */
-  public loadMap(id: string): any | null {
+  public loadMap(id: string): TerrainGridState | null {
     const key = this.STORAGE_PREFIX + id;
     const json = localStorage.getItem(key);
 
@@ -157,7 +157,7 @@ export class MapStorageService {
    * Load the current map
    * @returns Current map data or null
    */
-  public loadCurrentMap(): any | null {
+  public loadCurrentMap(): TerrainGridState | null {
     const currentId = this.getCurrentMapId();
     if (!currentId) {
       return null;

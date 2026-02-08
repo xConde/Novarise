@@ -1,17 +1,9 @@
 import { Injectable } from '@angular/core';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
+import { TerrainGridState } from '../../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 
-/**
- * The shape of an exported editor map state from TerrainGrid.exportState().
- */
-export interface EditorMapState {
-  gridSize: number;
-  tiles: string[][]; // tiles[x][z] = TerrainType string
-  heightMap: number[][];
-  spawnPoint: { x: number; z: number } | null;
-  exitPoint: { x: number; z: number } | null;
-  version: string;
-}
+/** @deprecated Use TerrainGridState directly. Kept as alias for backward compatibility. */
+export type EditorMapState = TerrainGridState;
 
 export interface ConvertedBoard {
   board: GameBoardTile[][];
