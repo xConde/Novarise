@@ -1,6 +1,11 @@
 <div class="board-container">
   <div class="canvas-container" #canvasContainer></div>
 
+  <!-- Back to Editor -->
+  <button class="nav-back-btn" (click)="goToEditor()" aria-label="Back to Editor">
+    Edit Map
+  </button>
+
   <!-- Game HUD -->
   <div class="game-hud">
     <div class="hud-stat">
@@ -45,7 +50,10 @@
       <h2 *ngIf="gameState.phase === GamePhase.VICTORY">Victory</h2>
       <h2 *ngIf="gameState.phase === GamePhase.DEFEAT">Defeat</h2>
       <p class="final-score">Score: {{ gameState.score }}</p>
-      <button class="restart-btn" (click)="restartGame()">Play Again</button>
+      <div class="overlay-actions">
+        <button class="restart-btn" (click)="restartGame()">Play Again</button>
+        <button class="edit-map-btn" (click)="goToEditor()">Edit Map</button>
+      </div>
     </div>
   </div>
 

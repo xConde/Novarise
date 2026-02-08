@@ -118,4 +118,16 @@
       </div>
     </div>
   </div>
+
+  <div class="play-section">
+    <button
+      class="play-map-btn"
+      [class.disabled]="!canPlayMap"
+      [disabled]="!canPlayMap"
+      (click)="playMapClick.emit()"
+      aria-label="Play this map">
+      Play Map
+    </button>
+    <span class="play-hint" *ngIf="!canPlayMap">Set spawn (P) and exit (X) first</span>
+  </div>
 </div>

@@ -1,4 +1,5 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
+import { Router } from '@angular/router';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
@@ -100,6 +101,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private isInStroke = false;
 
   constructor(
+    private router: Router,
     private mapStorage: MapStorageService,
     private editHistory: EditHistoryService,
     private cameraControl: CameraControlService,
@@ -1459,6 +1461,22 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
    */
   public clearHistory(): void {
     this.editHistory.clear();
+  }
+
+  /**
+   * Check if the map is ready to play (has both spawn and exit points)
+   */
+  public get canPlayMap(): boolean {
+    if (!this.terrainGrid) return false;
+    return this.terrainGrid.getSpawnPoint() !== null && this.terrainGrid.getExitPoint() !== null;
+  }
+
+  /**
+   * Navigate to the game to play the current map
+   */
+  public playMap(): void {
+    if (!this.canPlayMap) return;
+    this.router.navigate(['/play']);
   }
 
   /**

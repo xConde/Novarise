@@ -1,4 +1,5 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
@@ -75,6 +76,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private stateSubscription: Subscription | null = null;
 
   constructor(
+    private router: Router,
     private gameBoardService: GameBoardService,
     private enemyService: EnemyService,
     private mapBridge: MapBridgeService,
@@ -127,6 +129,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   selectTowerType(type: TowerType): void {
     this.selectedTowerType = type;
+  }
+
+  goToEditor(): void {
+    this.router.navigate(['/edit']);
   }
 
   startWave(): void {

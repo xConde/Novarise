@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { RouterTestingModule } from '@angular/router/testing';
 import { NovariseComponent } from './novarise.component';
 import { MapStorageService } from './core/map-storage.service';
 import { JoystickEvent } from './features/mobile-controls';
@@ -27,6 +28,7 @@ describe('NovariseComponent', () => {
 
     await TestBed.configureTestingModule({
       declarations: [NovariseComponent],
+      imports: [RouterTestingModule],
       providers: [
         { provide: MapStorageService, useValue: mockMapStorageService }
       ],

@@ -18,6 +18,36 @@
     overflow: hidden;
   }
 
+  // --- Nav back button ---
+  .nav-back-btn {
+    position: absolute;
+    top: var(--spacing-md);
+    left: var(--spacing-md);
+    padding: var(--spacing-xs) var(--spacing-md);
+    background: rgba(0, 0, 0, 0.75);
+    border: var(--border-width-thin) solid rgba(106, 74, 138, 0.5);
+    border-radius: var(--border-radius-md);
+    backdrop-filter: blur(0.625rem);
+    color: #b0a0c0;
+    font-family: "Orbitron", sans-serif;
+    font-size: var(--font-size-small);
+    cursor: pointer;
+    z-index: var(--z-index-overlay);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+
+    &:hover {
+      background: rgba(106, 74, 138, 0.3);
+      border-color: rgba(106, 74, 138, 0.8);
+      color: #e0d0f0;
+    }
+
+    @media screen and (max-width: 768px) {
+      font-size: 0.75rem;
+      padding: var(--spacing-xs) var(--spacing-sm);
+    }
+  }
+
   // --- Game HUD ---
   .game-hud {
     position: absolute;
@@ -184,7 +214,13 @@
         margin-bottom: var(--spacing-lg);
       }
 
-      .restart-btn {
+      .overlay-actions {
+        display: flex;
+        gap: var(--spacing-md);
+        justify-content: center;
+      }
+
+      .restart-btn, .edit-map-btn {
         padding: var(--spacing-sm) var(--spacing-xl);
         background: rgba(255, 255, 255, 0.1);
         border: var(--border-width-medium) solid rgba(255, 255, 255, 0.3);
@@ -198,6 +234,17 @@
         &:hover {
           background: rgba(255, 255, 255, 0.2);
           border-color: rgba(255, 255, 255, 0.6);
+        }
+      }
+
+      .edit-map-btn {
+        border-color: rgba(106, 74, 138, 0.5);
+        color: #b0a0c0;
+
+        &:hover {
+          background: rgba(106, 74, 138, 0.2);
+          border-color: rgba(106, 74, 138, 0.8);
+          color: #e0d0f0;
         }
       }
     }
