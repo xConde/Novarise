@@ -866,6 +866,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       case 'b':
         this.changeActiveTool('brush');
         break;
+      case 'enter':
+        this.playMap();
+        break;
     }
   }
 
