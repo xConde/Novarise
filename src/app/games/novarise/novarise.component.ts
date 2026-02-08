@@ -793,6 +793,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const key = event.key.toLowerCase();
     this.keysPressed.add(key);
 
+    // Ignore shortcuts when focus is on an interactive form element
+    const tag = (event.target as HTMLElement)?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
     // Undo/Redo shortcuts (Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z)
     if (event.ctrlKey || event.metaKey) {
       if (key === 'z' && !event.shiftKey) {

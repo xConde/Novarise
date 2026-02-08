@@ -116,3 +116,51 @@ Secondary gaps (out of scope for this sprint):
 - Game tests: 213/216 (3 pre-existing flakes)
 - Editor core tests: 180/181 (1 pre-existing flake)
 - Zero regressions across both passes
+
+---
+
+## Red Team Critique
+
+Hostile self-review of all changes on this branch. Goal: find what breaks at 3 AM.
+
+### W1 — Keyboard shortcuts fire in any focus context (CRITICAL)
+
+`handleKeyDown()` is bound to `window.addEventListener('keydown')` with **zero guard** against
+the event target. Every shortcut — including the new **Enter → playMap()** — fires regardless
+of whether the user is focused on a `<button>`, browser autocomplete, or a future `<input>`.
+
+Enter is the most dangerous key to bind globally: it's the universal "confirm" key. If a user
+tabs to any focusable element and presses Enter, the browser fires a click event on that element
+AND the keyboard handler fires `playMap()`, potentially navigating away from unsaved work.
+
+Today the editor has no text inputs (save uses `window.prompt()`), so this doesn't explode yet.
+But the pattern is a land mine — one `<input>` added later and every letter shortcut breaks.
+
+**Severity:** Critical (silent data loss on accidental navigation)
+**Fix:** Guard `handleKeyDown` to bail when `event.target` is an interactive element.
+
+### W2 — `goToEditor()` has no confirmation during active combat (HIGH)
+
+The "Edit Map" button is always visible, single-click, no confirmation dialog. During wave 9
+with towers and enemies mid-combat, a misclick silently discards all game progress. The
+component-level service providers (`GameStateService`, `WaveService`, etc.) are destroyed
+on navigation — there is no "resume game" path.
+
+**Severity:** High (UX data-loss, but product decision — not a code defect)
+
+### W3 — `exportState()` shares `heightMap` by reference (LOW)
+
+`TerrainGrid.exportState()` copies `tiles` (loop creates new arrays) but passes `heightMap`
+and `spawnPoint`/`exitPoint` as **live references** to internal state. The new
+`TerrainGridState` interface implies a clean value snapshot, giving downstream consumers
+false confidence. Any mutation of the exported state's `heightMap[x][z]` would corrupt the
+source terrain grid.
+
+No current consumer mutates the exported state, so this is latent. But the type system now
+blesses a reference-sharing pattern it shouldn't.
+
+**Severity:** Low (latent, pre-existing, currently unexploitable)
+
+### Hardening
+
+- [x] **W1 fixed** — Added input/textarea/select guard to `handleKeyDown()` in `novarise.component.ts`
