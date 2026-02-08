@@ -88,4 +88,31 @@ Secondary gaps (out of scope for this sprint):
 - [x] **Add keyboard shortcut for Play Map** — Enter key in editor triggers `playMap()`. Shortcuts panel updated.
 - [x] **Clean up GameComponent zombie** — Removed title/easter-egg wrapper. Game board owns full viewport. Bundle -12.7KB.
 - [x] **Final full test + build verification** — `ng build` clean. Game: 213/216 (3 pre-existing). Editor core: 180/181 (1 pre-existing). Zero regressions.
-- [ ] **Push to remote and open PR** — Branch ready for merge to main.
+- [x] **Push to remote and open PR** — Branch ready for merge to main.
+
+---
+
+## Second Pass: Type Safety & Architecture
+
+### Findings
+
+| # | Category | Finding | Impact |
+|---|----------|---------|--------|
+| 1 | Type safety | 6 `any` annotations across TerrainGrid, MapStorageService, MapBridgeService | Type holes in serialization layer |
+| 2 | Dead code | `Spawner` interface, `spawnerPlacements` (write-only), `GameState.maxLives` (never read) | Dead weight in models |
+| 3 | Bundle size | `BlockType` and `SpawnerType` emit runtime enum objects, never used reflectively | Wasted bytes |
+| 4 | Architecture | All components in root AppModule, eager-loaded | 892 kB initial bundle |
+
+### Execution
+
+- [x] **TerrainGridState interface** — Created shared interface in `terrain-grid-state.interface.ts`. Replaced 6 `any` annotations. `EditorMapState` is now a type alias. Tests updated with proper `TerrainType` enum values.
+- [x] **Dead code removal** — Removed `Spawner` interface, write-only `spawnerPlacements` array, unused `GameState.maxLives` field.
+- [x] **Const enums** — `BlockType` and `SpawnerType` converted to `const enum`. Values inlined at compile time.
+- [x] **Lazy-loaded modules** — Created `EditorModule` and `GameModule` with `loadChildren` routes. Initial bundle: **259 kB** (was 892 kB, **71% reduction**). Editor chunk: 606 kB. Game chunk: 49 kB.
+
+### Final Verification
+
+- `ng build`: Clean, zero errors
+- Game tests: 213/216 (3 pre-existing flakes)
+- Editor core tests: 180/181 (1 pre-existing flake)
+- Zero regressions across both passes
