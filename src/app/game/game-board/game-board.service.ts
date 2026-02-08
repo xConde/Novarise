@@ -16,10 +16,10 @@ export class GameBoardService {
   ];
 
   // Colors for different tile types
-  private readonly colorBase = 0x2a2a2a;
+  private readonly colorBase = 0x3a3a4a;
   private readonly colorSpawner = 0x00ffff;
   private readonly colorExit = 0xff00ff;
-  private readonly colorWall = 0x1a1525;
+  private readonly colorWall = 0x2a2540;
   private readonly colorGrid = 0x444444;
 
   // State
@@ -95,13 +95,15 @@ export class GameBoardService {
     const color = this.getTileColor(type);
 
     // Organic cave rock material
-    const isSubdued = type === BlockType.BASE || type === BlockType.WALL;
+    const isBase = type === BlockType.BASE;
+    const isWall = type === BlockType.WALL;
+    const isSubdued = isBase || isWall;
     const material = new THREE.MeshStandardMaterial({
       color: color,
-      emissive: isSubdued ? 0x1a1528 : color,
-      emissiveIntensity: isSubdued ? 0.05 : 0.2,
-      metalness: type === BlockType.WALL ? 0.3 : 0.1,
-      roughness: isSubdued ? 0.9 : 0.7,
+      emissive: isSubdued ? 0x2a2548 : color,
+      emissiveIntensity: isBase ? 0.15 : isWall ? 0.1 : 0.4,
+      metalness: isWall ? 0.4 : 0.1,
+      roughness: isBase ? 0.75 : isWall ? 0.9 : 0.7,
       envMapIntensity: 0.3
     });
 
@@ -124,9 +126,9 @@ export class GameBoardService {
 
     // Subtle bioluminescent veins
     const gridMaterial = new THREE.LineBasicMaterial({
-      color: 0x5a4a7a,
+      color: 0x7a6a9a,
       transparent: true,
-      opacity: 0.25,
+      opacity: 0.45,
       linewidth: 1
     });
 
@@ -301,9 +303,9 @@ export class GameBoardService {
         color = 0xd47a3a; // Warm amber
         const basicMat = new THREE.MeshStandardMaterial({
           color: color,
-          emissive: 0x8a4a1a,
-          emissiveIntensity: 0.4,
-          metalness: 0.2,
+          emissive: 0xaa6a2a,
+          emissiveIntensity: 0.7,
+          metalness: 0.3,
           roughness: 0.6
         });
 
@@ -339,9 +341,9 @@ export class GameBoardService {
         color = 0x7a5ac4; // Deep purple
         const sniperMat = new THREE.MeshStandardMaterial({
           color: color,
-          emissive: 0x4a2a7a,
-          emissiveIntensity: 0.5,
-          metalness: 0.3,
+          emissive: 0x6a4a9a,
+          emissiveIntensity: 0.8,
+          metalness: 0.4,
           roughness: 0.4
         });
 
@@ -378,9 +380,9 @@ export class GameBoardService {
         color = 0x4ac47a; // Vibrant green
         const splashMat = new THREE.MeshStandardMaterial({
           color: color,
-          emissive: 0x2a7a4a,
-          emissiveIntensity: 0.4,
-          metalness: 0.15,
+          emissive: 0x4a9a6a,
+          emissiveIntensity: 0.7,
+          metalness: 0.25,
           roughness: 0.7
         });
 
@@ -427,6 +429,7 @@ export class GameBoardService {
     const x = (col - this.gameBoardWidth / 2) * this.tileSize;
     const z = (row - this.gameBoardHeight / 2) * this.tileSize;
 
+    towerGroup.scale.set(1.4, 1.4, 1.4);
     towerGroup.position.set(x, tileTop, z);
     towerGroup.castShadow = true;
     towerGroup.receiveShadow = true;

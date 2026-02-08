@@ -21,6 +21,11 @@
     </div>
   </div>
 
+  <!-- Wave status indicator -->
+  <div class="hud-wave-status" *ngIf="gameState.phase === GamePhase.COMBAT">
+    Wave {{ gameState.wave }} in progress...
+  </div>
+
   <!-- Wave control -->
   <div class="wave-control" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
     <button
@@ -32,9 +37,6 @@
       <span *ngIf="gameState.wave > 0">Next Wave</span>
       <span class="wave-hint">[Space]</span>
     </button>
-    <div class="wave-active" *ngIf="gameState.phase === GamePhase.COMBAT">
-      Wave {{ gameState.wave }} in progress...
-    </div>
   </div>
 
   <!-- Victory/Defeat overlay -->

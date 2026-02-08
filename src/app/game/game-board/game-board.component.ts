@@ -192,8 +192,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private initializeScene(): void {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x000000);
-    this.scene.fog = new THREE.FogExp2(0x0a0515, 0.015);
+    this.scene.background = new THREE.Color(0x0a0a14);
+    this.scene.fog = new THREE.FogExp2(0x0a0a14, 0.008);
   }
 
   private initializeCamera(): void {
@@ -218,7 +218,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    this.renderer.toneMappingExposure = 1.8;
 
     this.canvasContainer.nativeElement.appendChild(this.renderer.domElement);
 
@@ -243,15 +243,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.4, 0.6, 0.9
+      0.6, 0.8, 0.7
     );
     this.composer.addPass(this.bloomPass);
 
     const vignetteShader = {
       uniforms: {
         tDiffuse: { value: null },
-        offset: { value: 0.9 },
-        darkness: { value: 1.5 }
+        offset: { value: 1.1 },
+        darkness: { value: 0.8 }
       },
       vertexShader: `
         varying vec2 vUv;
@@ -282,10 +282,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private initializeLights(): void {
-    const ambientLight = new THREE.AmbientLight(0x3a2a4a, 0.3);
+    const ambientLight = new THREE.AmbientLight(0x5a4a6a, 0.6);
     this.scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0x9a8ab0, 0.6);
+    const directionalLight = new THREE.DirectionalLight(0xc0b0d0, 0.9);
     directionalLight.position.set(10, 20, 10);
     directionalLight.castShadow = true;
     directionalLight.shadow.camera.left = -20;
@@ -297,15 +297,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     directionalLight.shadow.bias = -0.0001;
     this.scene.add(directionalLight);
 
-    const underLight = new THREE.PointLight(0x4a3a6a, 0.5, 50);
+    const underLight = new THREE.PointLight(0x6a5a8a, 0.7, 80);
     underLight.position.set(0, -5, 0);
     this.scene.add(underLight);
 
-    const accent1 = new THREE.PointLight(0x6a4a8a, 0.4, 30);
+    const accent1 = new THREE.PointLight(0x8a6aaa, 0.6, 50);
     accent1.position.set(-15, 5, -10);
     this.scene.add(accent1);
 
-    const accent2 = new THREE.PointLight(0x4a6a8a, 0.4, 30);
+    const accent2 = new THREE.PointLight(0x6a8aaa, 0.6, 50);
     accent2.position.set(15, 5, 10);
     this.scene.add(accent2);
   }
@@ -365,23 +365,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         }
 
         void main() {
-          vec3 deepPurple = vec3(0.02, 0.01, 0.05);
-          vec3 darkBlue = vec3(0.03, 0.02, 0.08);
+          vec3 deepPurple = vec3(0.04, 0.02, 0.08);
+          vec3 darkBlue = vec3(0.06, 0.04, 0.12);
           vec3 color = mix(deepPurple, darkBlue, vUv.y * 0.5);
 
           vec2 starPos = vUv * 150.0;
           float star = random(floor(starPos));
           if (star > 0.992) {
-            float brightness = random(floor(starPos) + 1.0) * 0.3;
+            float brightness = random(floor(starPos) + 1.0) * 0.5;
             color += vec3(brightness * 0.4, brightness * 0.3, brightness * 0.5);
           }
 
           float vein1 = random(floor(vUv * 40.0 + vec2(0.0, vUv.x * 10.0)));
           if (vein1 > 0.97) {
-            color += vec3(0.15, 0.08, 0.2) * vein1;
+            color += vec3(0.25, 0.15, 0.3) * vein1;
           }
 
-          float bio = random(floor(vUv * 25.0)) * 0.08;
+          float bio = random(floor(vUv * 25.0)) * 0.12;
           color += vec3(bio * 0.3, bio * 0.5, bio * 0.7);
 
           gl_FragColor = vec4(color, 1.0);
@@ -420,10 +420,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const particleMaterial = new THREE.PointsMaterial({
-      size: 0.12,
+      size: 0.18,
       vertexColors: true,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.6,
       sizeAttenuation: true,
       blending: THREE.AdditiveBlending
     });
@@ -460,8 +460,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       if (this.hoveredTile && this.hoveredTile !== this.getSelectedTileMesh()) {
         const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
-        const isBase = this.hoveredTile.userData['tile'].type === BlockType.BASE;
-        material.emissiveIntensity = isBase ? 0.05 : 0.2;
+        const tileType = this.hoveredTile.userData['tile'].type;
+        material.emissiveIntensity = tileType === BlockType.BASE ? 0.15 : tileType === BlockType.WALL ? 0.1 : 0.4;
       }
 
       if (intersects.length > 0) {
@@ -489,8 +489,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       const prevSelected = this.getSelectedTileMesh();
       if (prevSelected) {
         const material = prevSelected.material as THREE.MeshStandardMaterial;
-        const isBase = prevSelected.userData['tile'].type === BlockType.BASE;
-        material.emissiveIntensity = isBase ? 0.05 : 0.2;
+        const tileType = prevSelected.userData['tile'].type;
+        material.emissiveIntensity = tileType === BlockType.BASE ? 0.15 : tileType === BlockType.WALL ? 0.1 : 0.4;
       }
 
       if (intersects.length > 0) {
