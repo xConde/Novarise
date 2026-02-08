@@ -80,3 +80,12 @@ Secondary gaps (out of scope for this sprint):
 - User can click "Edit Map" from victory/defeat screen -> returns to `/edit`
 - All existing tests pass (201/204, 3 pre-existing flakes)
 - Build compiles with zero errors
+
+---
+
+## Deployment Checklist
+
+- [x] **Add keyboard shortcut for Play Map** — Enter key in editor triggers `playMap()`. Shortcuts panel updated.
+- [x] **Clean up GameComponent zombie** — Removed title/easter-egg wrapper. Game board owns full viewport. Bundle -12.7KB.
+- [x] **Final full test + build verification** — `ng build` clean. Game: 213/216 (3 pre-existing). Editor core: 180/181 (1 pre-existing). Zero regressions.
+- [ ] **Push to remote and open PR** — Branch ready for merge to main.
