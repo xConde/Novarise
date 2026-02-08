@@ -5,7 +5,7 @@
 ### ✅ Requirements Met
 
 **Enemy Model (enemy.model.ts)**
-- ✅ EnemyType enum with all 5 types (BASIC, FAST, HEAVY, FLYING, BOSS)
+- ✅ EnemyType enum with all 5 types (BASIC, FAST, HEAVY, SWIFT, BOSS)
 - ✅ Enemy interface with position, health, speed, path
 - ✅ GridNode interface for A* pathfinding
 - ✅ ENEMY_STATS constant with unique stats per type
@@ -59,10 +59,10 @@
 
 ### 🟡 Medium Priority Issues
 
-**4. Flying Enemy Logic Not Implemented**
+**4. Swift Enemy Logic Not Implemented**
 - **Location**: `enemy.service.ts:227`
-- **Issue**: FLYING enemies respect tile traversability like ground units
-- **Expected**: Flying enemies should ignore towers but still follow paths
+- **Issue**: SWIFT enemies respect tile traversability like ground units
+- **Expected**: Swift enemies should ignore towers but still follow paths
 - **Fix**: Add check for enemy type in pathfinding traversability logic
 
 **5. Spawner Edge Cases**
@@ -144,12 +144,12 @@ ngOnDestroy(): void {
 
 ### Priority 2 (Medium)
 ```typescript
-// Fix 4: Flying enemy pathfinding
+// Fix 4: Swift enemy pathfinding
 // In enemy.service.ts findPath(), modify traversability check:
 const tile = this.gameBoardService.getGameBoard()[neighbor.y][neighbor.x];
 const canTraverse = tile.isTraversable ||
   (tile.type === BlockType.EXIT) ||
-  (enemyType === EnemyType.FLYING && tile.type !== BlockType.SPAWNER);
+  (enemyType === EnemyType.SWIFT && tile.type !== BlockType.SPAWNER);
 ```
 
 ---
@@ -181,7 +181,7 @@ const canTraverse = tile.isTraversable ||
 1. Press '1' through '5' to spawn all types
 2. Yellow (FAST) moves faster than Red (BASIC)
 3. Blue (HEAVY) moves slower
-4. Cyan (FLYING) moves fast
+4. Cyan (SWIFT) moves fast
 5. Magenta (BOSS) moves very slowly and is large
 
 ### Test 3: Multiple Enemies

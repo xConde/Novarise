@@ -31,7 +31,7 @@ Navigate to `http://localhost:4200`
 1. Press `1` - BASIC (Red, medium speed)
 2. Press `2` - FAST (Yellow, fast speed)
 3. Press `3` - HEAVY (Blue, slow speed, large)
-4. Press `4` - FLYING (Cyan, fast speed)
+4. Press `4` - SWIFT (Cyan, fast speed)
 5. Press `5` - BOSS (Magenta, very slow, very large)
 
 **Expected:**
@@ -307,14 +307,14 @@ npm run build
 
 **Fix:** Planned - invalidate individual enemy paths when tower blocks their route
 
-### Issue 2: Flying Enemies Same as Ground
-**Description:** FLYING enemies respect tile traversability like ground units
+### Issue 2: Swift Enemies Same as Ground
+**Description:** SWIFT enemies respect tile traversability like ground units
 
 **Impact:** Low - visual only, gameplay not affected yet
 
 **Workaround:** None needed currently
 
-**Fix:** Planned - flying enemies should ignore tower tiles
+**Fix:** Planned - swift enemies should ignore tower tiles
 
 ### Issue 3: All Enemies Spawn from Same Spawner
 **Description:** Random spawner selection may repeatedly use same corner

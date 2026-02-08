@@ -1,32 +1,85 @@
 <div class="board-container">
   <div class="canvas-container" #canvasContainer></div>
 
-  <div class="tower-selection">
+  <!-- Game HUD -->
+  <div class="game-hud">
+    <div class="hud-stat">
+      <span class="hud-label">Lives</span>
+      <span class="hud-value lives" [class.critical]="gameState.lives <= 5">{{ gameState.lives }}</span>
+    </div>
+    <div class="hud-stat">
+      <span class="hud-label">Gold</span>
+      <span class="hud-value gold">{{ gameState.gold }}</span>
+    </div>
+    <div class="hud-stat">
+      <span class="hud-label">Wave</span>
+      <span class="hud-value">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
+    </div>
+    <div class="hud-stat">
+      <span class="hud-label">Score</span>
+      <span class="hud-value">{{ gameState.score }}</span>
+    </div>
+  </div>
+
+  <!-- Wave control -->
+  <div class="wave-control" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
+    <button
+      class="wave-btn"
+      *ngIf="gameState.phase !== GamePhase.COMBAT"
+      (click)="startWave()"
+      aria-label="Start next wave">
+      <span *ngIf="gameState.wave === 0">Start Game</span>
+      <span *ngIf="gameState.wave > 0">Next Wave</span>
+      <span class="wave-hint">[Space]</span>
+    </button>
+    <div class="wave-active" *ngIf="gameState.phase === GamePhase.COMBAT">
+      Wave {{ gameState.wave }} in progress...
+    </div>
+  </div>
+
+  <!-- Victory/Defeat overlay -->
+  <div class="game-overlay" *ngIf="gameState.phase === GamePhase.VICTORY || gameState.phase === GamePhase.DEFEAT">
+    <div class="overlay-content" [class.victory]="gameState.phase === GamePhase.VICTORY" [class.defeat]="gameState.phase === GamePhase.DEFEAT">
+      <h2 *ngIf="gameState.phase === GamePhase.VICTORY">Victory</h2>
+      <h2 *ngIf="gameState.phase === GamePhase.DEFEAT">Defeat</h2>
+      <p class="final-score">Score: {{ gameState.score }}</p>
+      <button class="restart-btn" (click)="restartGame()">Play Again</button>
+    </div>
+  </div>
+
+  <!-- Tower selection -->
+  <div class="tower-selection" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
     <button
       class="tower-btn"
-      [class.selected]="selectedTowerType === 'basic'"
-      (click)="selectTowerType('basic')"
+      [class.selected]="selectedTowerType === TowerType.BASIC"
+      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[TowerType.BASIC].cost"
+      (click)="selectTowerType(TowerType.BASIC)"
       aria-label="Select Basic Tower">
       <div class="tower-icon basic"></div>
       <span class="tower-name">Basic</span>
+      <span class="tower-cost">{{ towerConfigs[TowerType.BASIC].cost }}g</span>
     </button>
 
     <button
       class="tower-btn"
-      [class.selected]="selectedTowerType === 'sniper'"
-      (click)="selectTowerType('sniper')"
+      [class.selected]="selectedTowerType === TowerType.SNIPER"
+      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[TowerType.SNIPER].cost"
+      (click)="selectTowerType(TowerType.SNIPER)"
       aria-label="Select Sniper Tower">
       <div class="tower-icon sniper"></div>
       <span class="tower-name">Sniper</span>
+      <span class="tower-cost">{{ towerConfigs[TowerType.SNIPER].cost }}g</span>
     </button>
 
     <button
       class="tower-btn"
-      [class.selected]="selectedTowerType === 'splash'"
-      (click)="selectTowerType('splash')"
+      [class.selected]="selectedTowerType === TowerType.SPLASH"
+      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[TowerType.SPLASH].cost"
+      (click)="selectTowerType(TowerType.SPLASH)"
       aria-label="Select Splash Tower">
       <div class="tower-icon splash"></div>
       <span class="tower-name">Splash</span>
+      <span class="tower-cost">{{ towerConfigs[TowerType.SPLASH].cost }}g</span>
     </button>
   </div>
 </div>

@@ -87,7 +87,7 @@ describe('EnemyService', () => {
         EnemyType.BASIC,
         EnemyType.FAST,
         EnemyType.HEAVY,
-        EnemyType.FLYING,
+        EnemyType.SWIFT,
         EnemyType.BOSS
       ];
 
@@ -442,12 +442,16 @@ describe('EnemyService', () => {
     it('should handle negative delta time gracefully', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
       const initialPathIndex = enemy!.pathIndex;
+      const initialPos = { ...enemy!.position };
 
-      // Negative delta shouldn't cause issues
-      service.updateEnemies(-0.1);
+      // Negative delta should be rejected entirely
+      const result = service.updateEnemies(-0.1);
 
-      // Should not move backwards
+      // Should not move at all (pathIndex and position unchanged)
       expect(enemy!.pathIndex).toBe(initialPathIndex);
+      expect(enemy!.position.x).toBe(initialPos.x);
+      expect(enemy!.position.z).toBe(initialPos.z);
+      expect(result).toEqual([]);
     });
 
     it('should get all active enemies', () => {
@@ -457,6 +461,157 @@ describe('EnemyService', () => {
 
       const enemies = service.getEnemies();
       expect(enemies.size).toBe(3);
+    });
+  });
+
+  describe('Damage System (damageEnemy)', () => {
+    it('should reduce enemy health and return false when alive', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const initialHealth = enemy.health;
+
+      const killed = service.damageEnemy(enemy.id, 10);
+
+      expect(killed).toBe(false);
+      expect(enemy.health).toBe(initialHealth - 10);
+    });
+
+    it('should return true when damage kills the enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      const killed = service.damageEnemy(enemy.id, enemy.health);
+
+      expect(killed).toBe(true);
+      expect(enemy.health).toBe(0);
+    });
+
+    it('should return true when damage overkills the enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      const killed = service.damageEnemy(enemy.id, enemy.health + 100);
+
+      expect(killed).toBe(true);
+      expect(enemy.health).toBeLessThan(0);
+    });
+
+    it('should return false for already-dead enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Kill the enemy first
+      service.damageEnemy(enemy.id, enemy.health);
+      expect(enemy.health).toBe(0);
+
+      // Second damage should return false
+      const killed = service.damageEnemy(enemy.id, 10);
+      expect(killed).toBe(false);
+      // Health should not change further
+      expect(enemy.health).toBe(0);
+    });
+
+    it('should return false for non-existent enemy ID', () => {
+      const killed = service.damageEnemy('non-existent-id', 50);
+      expect(killed).toBe(false);
+    });
+
+    it('should handle multiple sequential damage calls', () => {
+      const enemy = service.spawnEnemy(EnemyType.HEAVY, mockScene)!;
+      const initialHealth = enemy.health;
+
+      service.damageEnemy(enemy.id, 10);
+      service.damageEnemy(enemy.id, 15);
+      service.damageEnemy(enemy.id, 20);
+
+      expect(enemy.health).toBe(initialHealth - 45);
+    });
+  });
+
+  describe('Health Bars (updateHealthBars)', () => {
+    it('should scale health bar foreground by health percentage', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth * 0.5); // 50% health
+
+      service.updateHealthBars();
+
+      const healthBarFg = enemy.mesh!.userData['healthBarFg'] as THREE.Mesh;
+      expect(healthBarFg.scale.x).toBeCloseTo(0.5, 1);
+    });
+
+    it('should show green color above 60% health', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth * 0.3); // 70% health
+
+      service.updateHealthBars();
+
+      const healthBarFg = enemy.mesh!.userData['healthBarFg'] as THREE.Mesh;
+      const mat = healthBarFg.material as THREE.MeshBasicMaterial;
+      expect(mat.color.getHex()).toBe(0x00ff00);
+    });
+
+    it('should show yellow color between 30% and 60% health', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth * 0.55); // 45% health
+
+      service.updateHealthBars();
+
+      const healthBarFg = enemy.mesh!.userData['healthBarFg'] as THREE.Mesh;
+      const mat = healthBarFg.material as THREE.MeshBasicMaterial;
+      expect(mat.color.getHex()).toBe(0xffff00);
+    });
+
+    it('should show red color below 30% health', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth * 0.8); // 20% health
+
+      service.updateHealthBars();
+
+      const healthBarFg = enemy.mesh!.userData['healthBarFg'] as THREE.Mesh;
+      const mat = healthBarFg.material as THREE.MeshBasicMaterial;
+      expect(mat.color.getHex()).toBe(0xff0000);
+    });
+
+    it('should clamp health bar at zero for dead enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth + 50); // Overkill
+
+      service.updateHealthBars();
+
+      const healthBarFg = enemy.mesh!.userData['healthBarFg'] as THREE.Mesh;
+      expect(healthBarFg.scale.x).toBe(0);
+    });
+
+    it('should not throw when enemy has no mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      enemy.mesh = undefined as any;
+
+      expect(() => service.updateHealthBars()).not.toThrow();
+    });
+  });
+
+  describe('Dead Enemy Movement Guard', () => {
+    it('should not move dead enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const initialPos = { ...enemy.position };
+
+      // Kill the enemy
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+
+      // Try to move
+      service.updateEnemies(0.5);
+
+      // Position should not change
+      expect(enemy.position.x).toBe(initialPos.x);
+      expect(enemy.position.z).toBe(initialPos.z);
+    });
+
+    it('should not report dead enemies as reaching exit', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Put enemy at exit and kill it
+      enemy.pathIndex = enemy.path.length - 1;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+
+      const reachedExit = service.updateEnemies(0.1);
+
+      expect(reachedExit).not.toContain(enemy.id);
     });
   });
 

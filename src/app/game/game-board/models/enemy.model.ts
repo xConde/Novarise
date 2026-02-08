@@ -4,7 +4,7 @@ export enum EnemyType {
   BASIC = 'BASIC',
   FAST = 'FAST',
   HEAVY = 'HEAVY',
-  FLYING = 'FLYING',
+  SWIFT = 'SWIFT',
   BOSS = 'BOSS'
 }
 
@@ -63,7 +63,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     color: 0x0000ff, // Blue
     size: 0.4
   },
-  [EnemyType.FLYING]: {
+  [EnemyType.SWIFT]: {
     health: 80,
     speed: 3.0,
     value: 20,

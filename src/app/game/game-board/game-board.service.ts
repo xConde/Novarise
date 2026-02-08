@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { BlockType, GameBoardTile, Spawner, SpawnerType } from './models/game-board-tile';
+import { BlockType, GameBoardTile, Spawner, SpawnerType, TowerType } from './models/game-board-tile';
 
 @Injectable()
 export class GameBoardService {
@@ -262,7 +262,7 @@ export class GameBoardService {
     return tile.type === BlockType.BASE && tile.isPurchasable && tile.towerType === null;
   }
 
-  placeTower(row: number, col: number, towerType: string): boolean {
+  placeTower(row: number, col: number, towerType: TowerType): boolean {
     if (!this.canPlaceTower(row, col)) {
       return false;
     }
@@ -276,21 +276,21 @@ export class GameBoardService {
       false,
       false,
       oldTile.cost,
-      null
+      towerType
     );
 
     return true;
   }
 
   // Create tower mesh based on type
-  createTowerMesh(row: number, col: number, towerType: string = 'basic'): THREE.Group {
+  createTowerMesh(row: number, col: number, towerType: TowerType = TowerType.BASIC): THREE.Group {
     const towerGroup = new THREE.Group();
     let color: number;
     const tileTop = this.tileHeight; // Towers sit on top of tile
 
     // Different organic tower designs
     switch (towerType) {
-      case 'basic':
+      case TowerType.BASIC:
         // Ancient crystal obelisk - jagged and organic
         const obeliskBase = new THREE.CylinderGeometry(0.35, 0.42, 0.25, 6);
         const obeliskMid1 = new THREE.CylinderGeometry(0.32, 0.35, 0.35, 6);
@@ -328,7 +328,7 @@ export class GameBoardService {
         towerGroup.add(oBase, oMid1, oMid2, oTop, oCrystal);
         break;
 
-      case 'sniper':
+      case TowerType.SNIPER:
         // Tall crystalline spike - elegant and sharp
         const spikeBase = new THREE.DodecahedronGeometry(0.3, 0);
         const spikeShaft1 = new THREE.CylinderGeometry(0.22, 0.26, 0.5, 8);
@@ -365,7 +365,7 @@ export class GameBoardService {
         towerGroup.add(snBase, snShaft1, snShaft2, snTip, snPoint);
         break;
 
-      case 'splash':
+      case TowerType.SPLASH:
         // Mushroom-like spore launcher - organic and bulbous
         const stemBase = new THREE.CylinderGeometry(0.28, 0.35, 0.3, 8);
         const stemMid = new THREE.CylinderGeometry(0.24, 0.28, 0.35, 8);
