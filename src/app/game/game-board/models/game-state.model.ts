@@ -13,7 +13,6 @@ export interface GameState {
   wave: number;
   maxWaves: number;
   lives: number;
-  maxLives: number;
   gold: number;
   score: number;
 }
@@ -23,7 +22,6 @@ export const INITIAL_GAME_STATE: GameState = {
   wave: 0,
   maxWaves: WAVE_DEFINITIONS.length,
   lives: 20,
-  maxLives: 20,
   gold: 200,
   score: 0
 };

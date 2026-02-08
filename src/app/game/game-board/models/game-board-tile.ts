@@ -44,12 +44,6 @@ export class GameBoardTile {
   }
 }
 
-export interface Spawner {
-  x: number;
-  y: number;
-  type: SpawnerType;
-}
-
 export enum BlockType {
   BASE,
   EXIT,
