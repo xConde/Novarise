@@ -297,24 +297,26 @@ export class TerrainGrid {
   // State Management - Export/Import for saving maps
 
   public exportState(): TerrainGridState {
-    const state: TerrainGridState = {
-      gridSize: this.gridSize,
-      tiles: [],
-      heightMap: this.heightMap,
-      spawnPoint: this.spawnPoint,
-      exitPoint: this.exitPoint,
-      version: '1.0.0'
-    };
-
-    // Export tile types
+    // Deep-copy tiles and heightMap so the snapshot is fully detached from live state
+    const tiles: TerrainGridState['tiles'] = [];
+    const heightMap: number[][] = [];
     for (let x = 0; x < this.gridSize; x++) {
-      state.tiles[x] = [];
+      tiles[x] = [];
+      heightMap[x] = [];
       for (let z = 0; z < this.gridSize; z++) {
-        state.tiles[x][z] = this.tiles[x][z].type;
+        tiles[x][z] = this.tiles[x][z].type;
+        heightMap[x][z] = this.heightMap[x][z];
       }
     }
 
-    return state;
+    return {
+      gridSize: this.gridSize,
+      tiles,
+      heightMap,
+      spawnPoint: this.spawnPoint ? { ...this.spawnPoint } : null,
+      exitPoint: this.exitPoint ? { ...this.exitPoint } : null,
+      version: '1.0.0'
+    };
   }
 
   public importState(state: TerrainGridState | null | undefined): void {
