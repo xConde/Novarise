@@ -44,7 +44,7 @@ export class GameBoardTile {
   }
 }
 
-export enum BlockType {
+export const enum BlockType {
   BASE,
   EXIT,
   SPAWNER,
@@ -52,7 +52,7 @@ export enum BlockType {
   WALL,
 }
 
-export enum SpawnerType {
+export const enum SpawnerType {
   TOP_LEFT,
   TOP_RIGHT,
   BOTTOM_LEFT,
