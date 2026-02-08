@@ -185,6 +185,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.renderGameBoard();
     this.addGridLines();
     this.enemyService.clearPathCache();
+    this.lastTime = 0;
   }
 
   // --- Scene setup ---

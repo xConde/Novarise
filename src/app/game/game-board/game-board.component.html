@@ -48,7 +48,7 @@
   </div>
 
   <!-- Tower selection -->
-  <div class="tower-selection">
+  <div class="tower-selection" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
     <button
       class="tower-btn"
       [class.selected]="selectedTowerType === TowerType.BASIC"
