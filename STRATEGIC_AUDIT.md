@@ -164,3 +164,11 @@ blesses a reference-sharing pattern it shouldn't.
 ### Hardening
 
 - [x] **W1 fixed** — Added input/textarea/select guard to `handleKeyDown()` in `novarise.component.ts`
+
+---
+
+## Deployment Checklist
+
+- [x] **Deep-copy `heightMap` in `exportState()`** — Fix W3 from Red Team: replace reference sharing with value copy to match the snapshot semantics that `TerrainGridState` implies.
+- [x] **Full regression test sweep** — Run game tests (216), editor core tests (181), and `ng build` to confirm zero regressions across all 10 commits.
+- [ ] **Push to remote and open PR** — Branch is 10 commits ahead of main. Push and create PR with full changelog.
