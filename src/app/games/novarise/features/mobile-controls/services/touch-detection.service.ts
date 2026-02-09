@@ -58,7 +58,7 @@ export class TouchDetectionService {
     return (
       'ontouchstart' in window ||
       navigator.maxTouchPoints > 0 ||
-      (window as any).DocumentTouch !== undefined
+      'DocumentTouch' in window
     );
   }
 

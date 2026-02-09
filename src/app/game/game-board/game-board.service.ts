@@ -146,7 +146,7 @@ export class GameBoardService {
       ]);
 
       geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      const line = new THREE.Line(geometry, gridMaterial.clone());
+      const line = new THREE.Line(geometry, gridMaterial);
       gridGroup.add(line);
     }
 
@@ -165,7 +165,7 @@ export class GameBoardService {
       ]);
 
       geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      const line = new THREE.Line(geometry, gridMaterial.clone());
+      const line = new THREE.Line(geometry, gridMaterial);
       gridGroup.add(line);
     }
 

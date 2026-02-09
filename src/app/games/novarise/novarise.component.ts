@@ -79,6 +79,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private keyUpHandler: (event: KeyboardEvent) => void;
   private mouseDownHandler: (event: MouseEvent) => void;
   private mouseUpHandler: (event: MouseEvent) => void;
+  private mousemoveHandler!: (event: MouseEvent) => void;
+  private touchStartHandler!: (event: TouchEvent) => void;
+  private touchMoveHandler!: (event: TouchEvent) => void;
+  private touchEndHandler!: (event: TouchEvent) => void;
   private resizeHandler: () => void = () => {};
   private animationFrameId = 0;
 
@@ -449,7 +453,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private setupInteraction(): void {
     const canvas = this.renderer.domElement;
 
-    canvas.addEventListener('mousemove', (event) => {
+    this.mousemoveHandler = (event: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -485,24 +489,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.brushIndicator.position.y = this.hoveredTile.position.y + 0.15;
         this.brushIndicator.visible = true;
 
-        // Update brush color based on mode for instant visual feedback
+        // Update brush color and cursor from centralized EditorStateService
         const brushMaterial = this.brushIndicator.material as THREE.MeshBasicMaterial;
-        const modeColors = {
-          'paint': 0x6a9aff,
-          'height': 0xff6a9a,
-          'spawn': 0x50ff50,
-          'exit': 0xff5050
-        };
-        brushMaterial.color.setHex(modeColors[this.editMode]);
-
-        // Crisp cursor change for mode indication
-        const modeCursors = {
-          'paint': 'cell',
-          'height': 'ns-resize',
-          'spawn': 'crosshair',
-          'exit': 'crosshair'
-        };
-        canvas.style.cursor = modeCursors[this.editMode];
+        brushMaterial.color.setHex(this.editorState.getColorForMode());
+        canvas.style.cursor = this.editorState.getCursorForMode();
 
         // Update brush preview meshes (only for brush tool)
         if (this.activeTool === 'brush') {
@@ -531,14 +521,15 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.hideBrushPreview();
         canvas.style.cursor = 'default';
       }
-    });
+    };
+    canvas.addEventListener('mousemove', this.mousemoveHandler);
 
     canvas.addEventListener('mousedown', this.mouseDownHandler);
     canvas.addEventListener('mouseup', this.mouseUpHandler);
     canvas.addEventListener('mouseleave', this.mouseUpHandler);
 
-    // Touch event support for mobile
-    canvas.addEventListener('touchstart', (event) => {
+    // Touch event support for mobile — stored as named refs for cleanup
+    this.touchStartHandler = (event: TouchEvent) => {
       event.preventDefault();
       const touch = event.touches[0];
       const rect = canvas.getBoundingClientRect();
@@ -553,9 +544,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.hoveredTile = intersects[0].object as THREE.Mesh;
         this.handleMouseDown({ button: 0 } as MouseEvent);
       }
-    });
+    };
 
-    canvas.addEventListener('touchmove', (event) => {
+    this.touchMoveHandler = (event: TouchEvent) => {
       event.preventDefault();
       const touch = event.touches[0];
       const rect = canvas.getBoundingClientRect();
@@ -581,17 +572,17 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           }
         }
       }
-    });
+    };
 
-    canvas.addEventListener('touchend', (event) => {
+    this.touchEndHandler = (event: TouchEvent) => {
       event.preventDefault();
       this.handleMouseUp();
-    });
+    };
 
-    canvas.addEventListener('touchcancel', (event) => {
-      event.preventDefault();
-      this.handleMouseUp();
-    });
+    canvas.addEventListener('touchstart', this.touchStartHandler);
+    canvas.addEventListener('touchmove', this.touchMoveHandler);
+    canvas.addEventListener('touchend', this.touchEndHandler);
+    canvas.addEventListener('touchcancel', this.touchEndHandler);
   }
 
   private handleMouseDown(event: MouseEvent): void {
@@ -1594,9 +1585,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       window.visualViewport.removeEventListener('resize', this.resizeHandler);
     }
     const canvas = this.renderer.domElement;
+    canvas.removeEventListener('mousemove', this.mousemoveHandler);
     canvas.removeEventListener('mousedown', this.mouseDownHandler);
     canvas.removeEventListener('mouseup', this.mouseUpHandler);
     canvas.removeEventListener('mouseleave', this.mouseUpHandler);
+    canvas.removeEventListener('touchstart', this.touchStartHandler);
+    canvas.removeEventListener('touchmove', this.touchMoveHandler);
+    canvas.removeEventListener('touchend', this.touchEndHandler);
+    canvas.removeEventListener('touchcancel', this.touchEndHandler);
 
     // Snapshot terrain state for the game to consume on /play navigation
     // and auto-save to localStorage to prevent data loss
