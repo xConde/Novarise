@@ -42,7 +42,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private camera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
   private controls!: OrbitControls;
-  private particles!: THREE.Points;
+  private particles: THREE.Points | null = null;
   private skybox?: THREE.Mesh;
   private bloomPass?: UnrealBloomPass;
   private vignettePass?: ShaderPass;
@@ -217,9 +217,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.gridLines.traverse(child => {
         if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
           child.geometry.dispose();
-          if (child.material instanceof THREE.Material) {
-            child.material.dispose();
-          }
+          this.disposeMaterial(child.material);
         }
       });
       this.gridLines = null;
@@ -230,6 +228,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.scene.remove(this.particles);
       this.particles.geometry.dispose();
       this.disposeMaterial(this.particles.material);
+      this.particles = null;
     }
 
     // Clean up skybox
@@ -237,6 +236,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.scene.remove(this.skybox);
       this.skybox.geometry.dispose();
       this.disposeMaterial(this.skybox.material);
+      this.skybox = undefined;
     }
   }
 
