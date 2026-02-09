@@ -1,0 +1,73 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - "src/**/*.ts"
+      - "src/**/*.html"
+      - "src/**/*.scss"
+      - "**/*.json"
+      - "package.json"
+
+jobs:
+  claude-review:
+    if: |
+      !contains(github.event.pull_request.title, '[skip-review]') &&
+      !contains(github.event.pull_request.title, '[WIP]')
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      actions: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR size
+        id: pr-size
+        run: |
+          DIFF_STAT=$(git diff --shortstat origin/${{ github.base_ref }}...HEAD)
+          echo "Diff statistics: $DIFF_STAT"
+
+          FILES_CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | wc -l)
+          echo "Files changed: $FILES_CHANGED"
+
+          if [ $FILES_CHANGED -gt 50 ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "PR has $FILES_CHANGED changed files (limit: 50). Claude review will be skipped." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Claude Code Review
+        if: steps.pr-size.outputs.skip != 'true'
+        id: claude-review
+        uses: anthropics/claude-code-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          direct_prompt: |
+            Please review this pull request and provide feedback on:
+            - Code quality and best practices
+            - Potential bugs or issues
+            - Performance considerations
+            - Security concerns
+            - Test coverage
+
+            Angular / Three.js specific review criteria:
+            - Follow Angular coding standards and style guide
+            - Ensure components follow single responsibility principle
+            - Check for proper TypeScript typing (no unnecessary `as any` casts)
+            - Verify Three.js resources are properly disposed in ngOnDestroy
+            - Check for memory leaks (subscriptions, event listeners, GPU resources)
+
+            Be constructive and helpful in your feedback.
+
+          allowed_tools: "Bash(npx ng build),Bash(npx ng test --no-watch --browsers=ChromeHeadless)"

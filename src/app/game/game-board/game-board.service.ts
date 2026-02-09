@@ -215,7 +215,6 @@ export class GameBoardService {
     this.exitTiles = [];
     this.spawnerChoices = [];
 
-
     // Scan imported board for spawner/exit positions
     for (let row = 0; row < height; row++) {
       for (let col = 0; col < width; col++) {
@@ -245,7 +244,6 @@ export class GameBoardService {
       SpawnerType.BOTTOM_LEFT,
       SpawnerType.BOTTOM_RIGHT
     ];
-
     this.generateBaseBoard();
     this.generateExitTiles();
     this.generateSpawner();

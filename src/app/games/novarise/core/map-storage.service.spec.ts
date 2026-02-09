@@ -673,10 +673,12 @@ describe('MapStorageService', () => {
     it('should resolve with null when no file selected', async () => {
       const promise = service.promptFileImport();
 
-      // Simulate change event with no files
+      // Simulate change event with no files, setting target to the mock input
       Object.defineProperty(mockInput, 'files', { value: [] });
       if (mockInput.onchange) {
-        mockInput.onchange(new Event('change') as any);
+        const event = new Event('change');
+        Object.defineProperty(event, 'target', { value: mockInput });
+        mockInput.onchange.call(mockInput, event);
       }
 
       const result = await promise;

@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
 
 import { GameBoardComponent } from './game-board.component';
@@ -26,5 +27,16 @@ describe('GameBoardComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  describe('goToEditor', () => {
+    it('should navigate to /edit', () => {
+      const router = TestBed.inject(Router);
+      spyOn(router, 'navigate');
+
+      component.goToEditor();
+
+      expect(router.navigate).toHaveBeenCalledWith(['/edit']);
+    });
   });
 });

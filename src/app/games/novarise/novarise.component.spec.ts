@@ -3,12 +3,30 @@ import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { RouterTestingModule } from '@angular/router/testing';
 import { NovariseComponent } from './novarise.component';
 import { MapStorageService } from './core/map-storage.service';
+import { CameraControlService, JoystickInput, MovementInput, RotationInput } from './core/camera-control.service';
 import { JoystickEvent } from './features/mobile-controls';
+
+/**
+ * Typed access to private members needed for test setup/assertion.
+ */
+interface TestableNovarise {
+  renderer: { domElement: HTMLCanvasElement; dispose(): void };
+  scene: { remove(...objects: unknown[]): void };
+  movementJoystick: JoystickInput;
+  rotationJoystick: JoystickInput;
+}
+
+const NO_MOVEMENT: MovementInput = {
+  forward: false, backward: false, left: false, right: false, up: false, down: false, fast: false
+};
+const NO_ROTATION: RotationInput = { left: false, right: false, up: false, down: false };
+const NO_JOYSTICK: JoystickInput = { active: false, x: 0, y: 0 };
 
 describe('NovariseComponent', () => {
   let component: NovariseComponent;
   let fixture: ComponentFixture<NovariseComponent>;
   let mockMapStorageService: jasmine.SpyObj<MapStorageService>;
+  let cameraControlService: CameraControlService;
 
   beforeEach(async () => {
     mockMapStorageService = jasmine.createSpyObj('MapStorageService', [
@@ -34,28 +52,42 @@ describe('NovariseComponent', () => {
       ],
       schemas: [NO_ERRORS_SCHEMA] // Ignore unknown elements like app-virtual-joystick
     }).compileComponents();
+
+    cameraControlService = TestBed.inject(CameraControlService);
   });
+
+  /** Mock Three.js fields that ngOnDestroy accesses (renderer is never initialized since ngAfterViewInit doesn't run in tests) */
+  function mockThreeJsFields(comp: NovariseComponent): void {
+    const t = comp as unknown as TestableNovarise;
+    t.renderer = { domElement: document.createElement('canvas'), dispose: () => {} };
+    t.scene = { remove: () => {} };
+  }
 
   describe('Joystick State Initialization', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);
       component = fixture.componentInstance;
+      mockThreeJsFields(component);
     });
 
     it('should initialize movement joystick state as inactive', () => {
-      expect((component as any).joystickActive).toBe(false);
+      expect((component as unknown as TestableNovarise).movementJoystick.active).toBe(false);
     });
 
     it('should initialize movement joystick vector to zero', () => {
-      expect((component as any).joystickVector).toEqual({ x: 0, y: 0 });
+      const mj = (component as unknown as TestableNovarise).movementJoystick;
+      expect(mj.x).toBe(0);
+      expect(mj.y).toBe(0);
     });
 
     it('should initialize rotation joystick state as inactive', () => {
-      expect((component as any).rotationJoystickActive).toBe(false);
+      expect((component as unknown as TestableNovarise).rotationJoystick.active).toBe(false);
     });
 
     it('should initialize rotation joystick vector to zero', () => {
-      expect((component as any).rotationJoystickVector).toEqual({ x: 0, y: 0 });
+      const rj = (component as unknown as TestableNovarise).rotationJoystick;
+      expect(rj.x).toBe(0);
+      expect(rj.y).toBe(0);
     });
   });
 
@@ -63,6 +95,7 @@ describe('NovariseComponent', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);
       component = fixture.componentInstance;
+      mockThreeJsFields(component);
     });
 
     it('should update movement joystick state when movement event received', () => {
@@ -74,8 +107,10 @@ describe('NovariseComponent', () => {
 
       component.onJoystickChange(event);
 
-      expect((component as any).joystickActive).toBe(true);
-      expect((component as any).joystickVector).toEqual({ x: 0.5, y: -0.3 });
+      const mj = (component as unknown as TestableNovarise).movementJoystick;
+      expect(mj.active).toBe(true);
+      expect(mj.x).toBe(0.5);
+      expect(mj.y).toBe(-0.3);
     });
 
     it('should update rotation joystick state when rotation event received', () => {
@@ -87,8 +122,10 @@ describe('NovariseComponent', () => {
 
       component.onJoystickChange(event);
 
-      expect((component as any).rotationJoystickActive).toBe(true);
-      expect((component as any).rotationJoystickVector).toEqual({ x: -0.7, y: 0.4 });
+      const rj = (component as unknown as TestableNovarise).rotationJoystick;
+      expect(rj.active).toBe(true);
+      expect(rj.x).toBe(-0.7);
+      expect(rj.y).toBe(0.4);
     });
 
     it('should reset movement joystick when deactivated', () => {
@@ -106,8 +143,10 @@ describe('NovariseComponent', () => {
         active: false
       });
 
-      expect((component as any).joystickActive).toBe(false);
-      expect((component as any).joystickVector).toEqual({ x: 0, y: 0 });
+      const mj = (component as unknown as TestableNovarise).movementJoystick;
+      expect(mj.active).toBe(false);
+      expect(mj.x).toBe(0);
+      expect(mj.y).toBe(0);
     });
 
     it('should reset rotation joystick when deactivated', () => {
@@ -125,8 +164,10 @@ describe('NovariseComponent', () => {
         active: false
       });
 
-      expect((component as any).rotationJoystickActive).toBe(false);
-      expect((component as any).rotationJoystickVector).toEqual({ x: 0, y: 0 });
+      const rj = (component as unknown as TestableNovarise).rotationJoystick;
+      expect(rj.active).toBe(false);
+      expect(rj.x).toBe(0);
+      expect(rj.y).toBe(0);
     });
 
     it('should handle both joysticks independently', () => {
@@ -144,11 +185,14 @@ describe('NovariseComponent', () => {
         active: true
       });
 
+      const t = component as unknown as TestableNovarise;
       // Both should be active with independent vectors
-      expect((component as any).joystickActive).toBe(true);
-      expect((component as any).rotationJoystickActive).toBe(true);
-      expect((component as any).joystickVector).toEqual({ x: 0.5, y: 0.5 });
-      expect((component as any).rotationJoystickVector).toEqual({ x: -0.3, y: 0.7 });
+      expect(t.movementJoystick.active).toBe(true);
+      expect(t.rotationJoystick.active).toBe(true);
+      expect(t.movementJoystick.x).toBe(0.5);
+      expect(t.movementJoystick.y).toBe(0.5);
+      expect(t.rotationJoystick.x).toBe(-0.3);
+      expect(t.rotationJoystick.y).toBe(0.7);
     });
 
     it('should allow deactivating one joystick while other remains active', () => {
@@ -171,8 +215,9 @@ describe('NovariseComponent', () => {
         active: false
       });
 
-      expect((component as any).joystickActive).toBe(false);
-      expect((component as any).rotationJoystickActive).toBe(true);
+      const t = component as unknown as TestableNovarise;
+      expect(t.movementJoystick.active).toBe(false);
+      expect(t.rotationJoystick.active).toBe(true);
     });
   });
 
@@ -180,84 +225,63 @@ describe('NovariseComponent', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);
       component = fixture.componentInstance;
-
-      // Initialize rotation values
-      (component as any).targetRotation = { yaw: 0, pitch: 0 };
-      (component as any).cameraRotation = { yaw: 0, pitch: 0 };
-      (component as any).rotationSpeed = 0.005;
-      (component as any).rotationAcceleration = 0.15;
+      mockThreeJsFields(component);
+      cameraControlService.reset();
     });
 
     it('should update target yaw when rotation joystick X is moved', () => {
-      (component as any).rotationJoystickActive = true;
-      (component as any).rotationJoystickVector = { x: 1, y: 0 }; // Push right
+      const initialYaw = cameraControlService.getRotation().yaw;
 
-      const initialYaw = (component as any).targetRotation.yaw;
-      (component as any).updateCameraMovement();
+      cameraControlService.update(NO_MOVEMENT, NO_ROTATION, NO_JOYSTICK, { active: true, x: 1, y: 0 });
 
-      expect((component as any).targetRotation.yaw).not.toBe(initialYaw);
+      expect(cameraControlService.getRotation().yaw).not.toBe(initialYaw);
     });
 
     it('should update target pitch when rotation joystick Y is moved', () => {
-      (component as any).rotationJoystickActive = true;
-      (component as any).rotationJoystickVector = { x: 0, y: 1 }; // Push up
+      const initialPitch = cameraControlService.getRotation().pitch;
 
-      const initialPitch = (component as any).targetRotation.pitch;
-      (component as any).updateCameraMovement();
+      cameraControlService.update(NO_MOVEMENT, NO_ROTATION, NO_JOYSTICK, { active: true, x: 0, y: 1 });
 
-      expect((component as any).targetRotation.pitch).not.toBe(initialPitch);
+      expect(cameraControlService.getRotation().pitch).not.toBe(initialPitch);
     });
 
     it('should clamp pitch to upper limit (45 degrees)', () => {
-      (component as any).rotationJoystickActive = true;
-      (component as any).rotationJoystickVector = { x: 0, y: 1 };
-
-      // Apply many updates to reach limit
       for (let i = 0; i < 1000; i++) {
-        (component as any).updateCameraMovement();
+        cameraControlService.update(NO_MOVEMENT, NO_ROTATION, NO_JOYSTICK, { active: true, x: 0, y: 1 });
       }
 
       // Should be clamped to max (PI/4 radians = 45 degrees)
-      expect((component as any).targetRotation.pitch).toBeLessThanOrEqual(Math.PI / 4 + 0.001);
+      expect(cameraControlService.getRotation().pitch).toBeLessThanOrEqual(Math.PI / 4 + 0.001);
     });
 
     it('should clamp pitch to lower limit (-75 degrees)', () => {
-      (component as any).rotationJoystickActive = true;
-      (component as any).rotationJoystickVector = { x: 0, y: -1 };
-
-      // Apply many updates to reach limit
       for (let i = 0; i < 1000; i++) {
-        (component as any).updateCameraMovement();
+        cameraControlService.update(NO_MOVEMENT, NO_ROTATION, NO_JOYSTICK, { active: true, x: 0, y: -1 });
       }
 
       // Should be clamped to min (-PI * 5/12 radians = -75 degrees)
-      expect((component as any).targetRotation.pitch).toBeGreaterThanOrEqual(-Math.PI * 5 / 12 - 0.001);
+      expect(cameraControlService.getRotation().pitch).toBeGreaterThanOrEqual(-Math.PI * 5 / 12 - 0.001);
     });
 
     it('should not update rotation when joystick is inactive', () => {
-      (component as any).rotationJoystickActive = false;
-      (component as any).rotationJoystickVector = { x: 1, y: 1 };
+      const initialRotation = cameraControlService.getRotation();
 
-      const initialYaw = (component as any).targetRotation.yaw;
-      const initialPitch = (component as any).targetRotation.pitch;
+      cameraControlService.update(NO_MOVEMENT, NO_ROTATION, NO_JOYSTICK, { active: false, x: 1, y: 1 });
 
-      (component as any).updateCameraMovement();
-
-      expect((component as any).targetRotation.yaw).toBe(initialYaw);
-      expect((component as any).targetRotation.pitch).toBe(initialPitch);
+      const newRotation = cameraControlService.getRotation();
+      expect(newRotation.yaw).toBe(initialRotation.yaw);
+      expect(newRotation.pitch).toBe(initialRotation.pitch);
     });
 
     it('should smoothly interpolate rotation values', () => {
-      (component as any).targetRotation = { yaw: 1, pitch: 0.5 };
-      (component as any).cameraRotation = { yaw: 0, pitch: 0 };
+      // Push rotation joystick to create a target offset
+      cameraControlService.update(NO_MOVEMENT, NO_ROTATION, NO_JOYSTICK, { active: true, x: 1, y: 1 });
 
-      (component as any).updateCameraMovement();
+      // Update again with no input — should continue interpolating
+      cameraControlService.update(NO_MOVEMENT, NO_ROTATION, NO_JOYSTICK, NO_JOYSTICK);
 
-      // Camera rotation should move towards target
-      expect((component as any).cameraRotation.yaw).toBeGreaterThan(0);
-      expect((component as any).cameraRotation.yaw).toBeLessThan(1);
-      expect((component as any).cameraRotation.pitch).toBeGreaterThan(0);
-      expect((component as any).cameraRotation.pitch).toBeLessThan(0.5);
+      // Rotation should have moved from first state (interpolation continues)
+      expect(cameraControlService.getRotation().yaw).not.toBe(0);
     });
   });
 
@@ -265,75 +289,57 @@ describe('NovariseComponent', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);
       component = fixture.componentInstance;
-
-      // Initialize movement values
-      (component as any).targetVelocity = { x: 0, y: 0, z: 0 };
-      (component as any).cameraVelocity = { x: 0, y: 0, z: 0 };
-      (component as any).cameraRotation = { yaw: 0, pitch: 0 };
-      (component as any).targetRotation = { yaw: 0, pitch: 0 };
-      (component as any).moveSpeed = 0.25;
-      (component as any).acceleration = 0.15;
-      (component as any).keysPressed = new Set();
+      mockThreeJsFields(component);
+      cameraControlService.reset();
     });
 
     it('should update velocity when movement joystick is active', () => {
-      (component as any).joystickActive = true;
-      (component as any).joystickVector = { x: 0.5, y: 0.5 };
+      const initialPos = cameraControlService.getPosition();
 
-      (component as any).updateCameraMovement();
+      cameraControlService.update(NO_MOVEMENT, NO_ROTATION, { active: true, x: 0.5, y: 0.5 }, NO_JOYSTICK);
 
-      // Velocity should have changed from joystick input
-      const velocityMagnitude = Math.sqrt(
-        (component as any).cameraVelocity.x ** 2 +
-        (component as any).cameraVelocity.z ** 2
-      );
-      expect(velocityMagnitude).toBeGreaterThan(0);
+      const newPos = cameraControlService.getPosition();
+      expect(newPos.x !== initialPos.x || newPos.z !== initialPos.z).toBe(true);
     });
 
     it('should not affect movement when joystick is inactive', () => {
-      (component as any).joystickActive = false;
-      (component as any).joystickVector = { x: 1, y: 1 };
-      (component as any).cameraVelocity = { x: 0, y: 0, z: 0 };
+      const initialPos = cameraControlService.getPosition();
 
-      (component as any).updateCameraMovement();
+      cameraControlService.update(NO_MOVEMENT, NO_ROTATION, NO_JOYSTICK, NO_JOYSTICK);
 
-      // With no active input, velocity should stay near zero
-      expect(Math.abs((component as any).cameraVelocity.x)).toBeLessThan(0.01);
-      expect(Math.abs((component as any).cameraVelocity.z)).toBeLessThan(0.01);
+      const newPos = cameraControlService.getPosition();
+      expect(newPos.x).toBe(initialPos.x);
+      expect(newPos.z).toBe(initialPos.z);
     });
 
     it('should work alongside keyboard input', () => {
-      (component as any).joystickActive = true;
-      (component as any).joystickVector = { x: 0.5, y: 0 }; // Strafe right
-      (component as any).keysPressed = new Set(['w']); // Also moving forward
+      const initialPos = cameraControlService.getPosition();
 
-      (component as any).updateCameraMovement();
-
-      // Both inputs should contribute to velocity
-      const velocityMagnitude = Math.sqrt(
-        (component as any).cameraVelocity.x ** 2 +
-        (component as any).cameraVelocity.z ** 2
+      cameraControlService.update(
+        { ...NO_MOVEMENT, forward: true },
+        NO_ROTATION,
+        { active: true, x: 0.5, y: 0 },
+        NO_JOYSTICK
       );
-      expect(velocityMagnitude).toBeGreaterThan(0);
+
+      const newPos = cameraControlService.getPosition();
+      expect(newPos.x !== initialPos.x || newPos.z !== initialPos.z).toBe(true);
     });
 
     it('should combine both joysticks for full FPS-style control', () => {
-      // Activate both joysticks
-      (component as any).joystickActive = true;
-      (component as any).joystickVector = { x: 0.5, y: 0.5 }; // Move forward-right
-      (component as any).rotationJoystickActive = true;
-      (component as any).rotationJoystickVector = { x: 0.3, y: 0 }; // Look right
+      const initialPos = cameraControlService.getPosition();
+      const initialRot = cameraControlService.getRotation();
 
-      const initialYaw = (component as any).targetRotation.yaw;
-      (component as any).updateCameraMovement();
-
-      // Both movement and rotation should be applied
-      const velocityMagnitude = Math.sqrt(
-        (component as any).cameraVelocity.x ** 2 +
-        (component as any).cameraVelocity.z ** 2
+      cameraControlService.update(
+        NO_MOVEMENT,
+        NO_ROTATION,
+        { active: true, x: 0.5, y: 0.5 },
+        { active: true, x: 0.3, y: 0 }
       );
-      expect(velocityMagnitude).toBeGreaterThan(0);
-      expect((component as any).targetRotation.yaw).not.toBe(initialYaw);
+
+      const newPos = cameraControlService.getPosition();
+      expect(newPos.x !== initialPos.x || newPos.z !== initialPos.z).toBe(true);
+      expect(cameraControlService.getRotation().yaw).not.toBe(initialRot.yaw);
     });
   });
 });

@@ -1,0 +1,63 @@
+name: Claude Manual Review
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: number
+      specific_files:
+        description: 'Specific files to review (comma-separated, optional)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  manual-claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      actions: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout PR
+        run: |
+          gh pr checkout ${{ inputs.pr_number }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Prepare focused review
+        id: prepare
+        run: |
+          echo "## Manual Review for PR #${{ inputs.pr_number }}" >> $GITHUB_STEP_SUMMARY
+
+          if [ -n "${{ inputs.specific_files }}" ]; then
+            echo "Reviewing specific files: ${{ inputs.specific_files }}"
+            echo "focus_prompt=Please review these specific files: ${{ inputs.specific_files }}" >> $GITHUB_OUTPUT
+          else
+            echo "focus_prompt=Please focus on the core business logic and critical changes" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Claude Code Review
+        uses: anthropics/claude-code-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          direct_prompt: |
+            Review PR #${{ inputs.pr_number }} with focus on code quality and best practices.
+            ${{ steps.prepare.outputs.focus_prompt }}
+
+            Be concise and focus on the most important issues.
+
+          allowed_tools: "Bash(npx ng build),Bash(npx ng test --no-watch --browsers=ChromeHeadless)"
+
+          timeout_minutes: 15

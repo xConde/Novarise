@@ -182,12 +182,17 @@ describe('EnemyService', () => {
     });
 
     it('should path around obstacles', () => {
-      // Block the direct path
-      const blockedCells = [
-        { row: 1, col: 1 },
-        { row: 2, col: 2 },
-        { row: 3, col: 3 }
-      ];
+      // Two staggered walls force a zigzag that exceeds the 18-step Manhattan minimum:
+      //   Row 4, cols 0-8 (gap at col 9)  — must go right to pass
+      //   Row 6, cols 1-9 (gap at col 0)  — must go left to pass
+      // This creates a serpentine path that is longer than 19 nodes.
+      const blockedCells: { row: number, col: number }[] = [];
+      for (let col = 0; col <= 8; col++) {
+        blockedCells.push({ row: 4, col });
+      }
+      for (let col = 1; col <= 9; col++) {
+        blockedCells.push({ row: 6, col });
+      }
       gameBoardService.getGameBoard.and.returnValue(createMockBoard(blockedCells));
 
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
@@ -329,17 +334,20 @@ describe('EnemyService', () => {
     });
 
     it('should maintain consistent speed regardless of frame rate', () => {
-      const enemy1 = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      const enemy2 = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      // Test each frame rate in isolation to avoid cross-contamination
 
-      // Simulate different frame rates
-      // 60 FPS: 10 frames at 0.0167s each = 0.167s total
+      // 60 FPS: 10 frames at 1/60s each = 0.1667s total
+      const enemy1 = service.spawnEnemy(EnemyType.BASIC, mockScene);
       for (let i = 0; i < 10; i++) {
         service.updateEnemies(1/60);
       }
       const distance1 = enemy1!.distanceTraveled;
 
-      // 30 FPS: 5 frames at 0.033s each = 0.165s total
+      // Remove enemy1 before testing enemy2
+      service.removeEnemy(enemy1!.id, mockScene);
+
+      // 30 FPS: 5 frames at 1/30s each = 0.1667s total
+      const enemy2 = service.spawnEnemy(EnemyType.BASIC, mockScene);
       for (let i = 0; i < 5; i++) {
         service.updateEnemies(1/30);
       }
@@ -432,7 +440,9 @@ describe('EnemyService', () => {
     it('should handle very large delta time', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
 
-      // Large delta time (1 second)
+      // Multiple updates with large delta time (1 second each)
+      service.updateEnemies(1.0);
+      service.updateEnemies(1.0);
       service.updateEnemies(1.0);
 
       // Should advance multiple nodes
