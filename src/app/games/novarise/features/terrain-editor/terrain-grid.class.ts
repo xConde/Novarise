@@ -234,9 +234,10 @@ export class TerrainGrid {
     // Find index in cache for the old mesh
     const oldMeshIndex = this.meshCache.indexOf(tile.mesh);
 
-    // Remove old mesh
+    // Remove old mesh and dispose its resources
     this.scene.remove(tile.mesh);
     tile.mesh.geometry.dispose();
+    this.disposeMaterial(tile.mesh.material);
 
     // Create new mesh with updated height
     const newMesh = this.createTileMesh(x, z, tile.type, height);
@@ -347,6 +348,15 @@ export class TerrainGrid {
     }
   }
 
+  /** Dispose a Three.js material, handling both single and array forms. */
+  private disposeMaterial(material: THREE.Material | THREE.Material[]): void {
+    if (Array.isArray(material)) {
+      material.forEach(mat => mat.dispose());
+    } else {
+      material.dispose();
+    }
+  }
+
   public dispose(): void {
     // Clean up all meshes
     for (let x = 0; x < this.gridSize; x++) {
@@ -354,7 +364,7 @@ export class TerrainGrid {
         const tile = this.tiles[x][z];
         this.scene.remove(tile.mesh);
         tile.mesh.geometry.dispose();
-        (tile.mesh.material as THREE.Material).dispose();
+        this.disposeMaterial(tile.mesh.material);
       }
     }
 
@@ -362,7 +372,7 @@ export class TerrainGrid {
     if (this.gridLines) {
       this.scene.remove(this.gridLines);
       this.gridLines.geometry.dispose();
-      (this.gridLines.material as THREE.Material).dispose();
+      this.disposeMaterial(this.gridLines.material);
     }
 
     // Clear caches

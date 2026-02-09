@@ -43,7 +43,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private renderer!: THREE.WebGLRenderer;
   private controls!: OrbitControls;
   private composer!: EffectComposer;
-  private particles!: THREE.Points;
+  private bloomPass?: UnrealBloomPass;
+  private vignettePass?: ShaderPass;
+  private skybox?: THREE.Mesh;
+  private particles: THREE.Points | null = null;
 
   // Terrain
   private terrainGrid!: TerrainGrid;
@@ -79,6 +82,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private keyUpHandler: (event: KeyboardEvent) => void;
   private mouseDownHandler: (event: MouseEvent) => void;
   private mouseUpHandler: (event: MouseEvent) => void;
+  private mousemoveHandler!: (event: MouseEvent) => void;
+  private touchStartHandler!: (event: TouchEvent) => void;
+  private touchMoveHandler!: (event: TouchEvent) => void;
+  private touchEndHandler!: (event: TouchEvent) => void;
   private resizeHandler: () => void = () => {};
   private animationFrameId = 0;
 
@@ -235,13 +242,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Reduced bloom for better visibility
     const { width, height } = this.getViewportSize();
-    const bloomPass = new UnrealBloomPass(
+    this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(width, height),
       0.3,  // Reduced strength
       0.4,  // Reduced radius
       0.95  // Higher threshold - only brightest elements
     );
-    this.composer.addPass(bloomPass);
+    this.composer.addPass(this.bloomPass);
 
     // Lighter vignette for better edge visibility
     const vignetteShader = {
@@ -273,8 +280,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       `
     };
 
-    const vignettePass = new ShaderPass(vignetteShader);
-    this.composer.addPass(vignettePass);
+    this.vignettePass = new ShaderPass(vignetteShader);
+    this.composer.addPass(this.vignettePass);
   }
 
   private initializeLights(): void {
@@ -385,8 +392,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       depthWrite: false
     });
 
-    const starfield = new THREE.Mesh(starfieldGeometry, starfieldMaterial);
-    this.scene.add(starfield);
+    this.skybox = new THREE.Mesh(starfieldGeometry, starfieldMaterial);
+    this.scene.add(this.skybox);
   }
 
   private initializeParticles(): void {
@@ -449,7 +456,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private setupInteraction(): void {
     const canvas = this.renderer.domElement;
 
-    canvas.addEventListener('mousemove', (event) => {
+    this.mousemoveHandler = (event: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -485,24 +492,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.brushIndicator.position.y = this.hoveredTile.position.y + 0.15;
         this.brushIndicator.visible = true;
 
-        // Update brush color based on mode for instant visual feedback
+        // Update brush color and cursor from centralized EditorStateService
         const brushMaterial = this.brushIndicator.material as THREE.MeshBasicMaterial;
-        const modeColors = {
-          'paint': 0x6a9aff,
-          'height': 0xff6a9a,
-          'spawn': 0x50ff50,
-          'exit': 0xff5050
-        };
-        brushMaterial.color.setHex(modeColors[this.editMode]);
-
-        // Crisp cursor change for mode indication
-        const modeCursors = {
-          'paint': 'cell',
-          'height': 'ns-resize',
-          'spawn': 'crosshair',
-          'exit': 'crosshair'
-        };
-        canvas.style.cursor = modeCursors[this.editMode];
+        brushMaterial.color.setHex(this.editorState.getColorForMode());
+        canvas.style.cursor = this.editorState.getCursorForMode();
 
         // Update brush preview meshes (only for brush tool)
         if (this.activeTool === 'brush') {
@@ -531,14 +524,15 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.hideBrushPreview();
         canvas.style.cursor = 'default';
       }
-    });
+    };
+    canvas.addEventListener('mousemove', this.mousemoveHandler);
 
     canvas.addEventListener('mousedown', this.mouseDownHandler);
     canvas.addEventListener('mouseup', this.mouseUpHandler);
     canvas.addEventListener('mouseleave', this.mouseUpHandler);
 
-    // Touch event support for mobile
-    canvas.addEventListener('touchstart', (event) => {
+    // Touch event support for mobile — stored as named refs for cleanup
+    this.touchStartHandler = (event: TouchEvent) => {
       event.preventDefault();
       const touch = event.touches[0];
       const rect = canvas.getBoundingClientRect();
@@ -553,9 +547,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.hoveredTile = intersects[0].object as THREE.Mesh;
         this.handleMouseDown({ button: 0 } as MouseEvent);
       }
-    });
+    };
 
-    canvas.addEventListener('touchmove', (event) => {
+    this.touchMoveHandler = (event: TouchEvent) => {
       event.preventDefault();
       const touch = event.touches[0];
       const rect = canvas.getBoundingClientRect();
@@ -581,17 +575,17 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           }
         }
       }
-    });
+    };
 
-    canvas.addEventListener('touchend', (event) => {
+    this.touchEndHandler = (event: TouchEvent) => {
       event.preventDefault();
       this.handleMouseUp();
-    });
+    };
 
-    canvas.addEventListener('touchcancel', (event) => {
-      event.preventDefault();
-      this.handleMouseUp();
-    });
+    canvas.addEventListener('touchstart', this.touchStartHandler);
+    canvas.addEventListener('touchmove', this.touchMoveHandler);
+    canvas.addEventListener('touchend', this.touchEndHandler);
+    canvas.addEventListener('touchcancel', this.touchEndHandler);
   }
 
   private handleMouseDown(event: MouseEvent): void {
@@ -1082,7 +1076,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.brushPreviewMeshes.forEach(mesh => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+      this.disposeMaterial(mesh.material);
     });
     this.brushPreviewMeshes = [];
 
@@ -1389,7 +1383,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.rectanglePreviewMeshes.forEach(mesh => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+      this.disposeMaterial(mesh.material);
     });
     this.rectanglePreviewMeshes = [];
   }
@@ -1583,6 +1577,15 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** Dispose a Three.js material, handling both single and array forms. */
+  private disposeMaterial(material: THREE.Material | THREE.Material[]): void {
+    if (Array.isArray(material)) {
+      material.forEach(mat => mat.dispose());
+    } else {
+      material.dispose();
+    }
+  }
+
   ngOnDestroy(): void {
     // Stop the animation loop first to prevent calls to disposed resources
     cancelAnimationFrame(this.animationFrameId);
@@ -1594,9 +1597,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       window.visualViewport.removeEventListener('resize', this.resizeHandler);
     }
     const canvas = this.renderer.domElement;
+    canvas.removeEventListener('mousemove', this.mousemoveHandler);
     canvas.removeEventListener('mousedown', this.mouseDownHandler);
     canvas.removeEventListener('mouseup', this.mouseUpHandler);
     canvas.removeEventListener('mouseleave', this.mouseUpHandler);
+    canvas.removeEventListener('touchstart', this.touchStartHandler);
+    canvas.removeEventListener('touchmove', this.touchMoveHandler);
+    canvas.removeEventListener('touchend', this.touchEndHandler);
+    canvas.removeEventListener('touchcancel', this.touchEndHandler);
 
     // Snapshot terrain state for the game to consume on /play navigation
     // and auto-save to localStorage to prevent data loss
@@ -1617,16 +1625,69 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.brushPreviewMeshes.forEach(mesh => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+      this.disposeMaterial(mesh.material);
     });
     this.brushPreviewMeshes = [];
 
     // Clean up rectangle preview meshes
     this.clearRectanglePreview();
 
+    // Clean up brush indicator
+    if (this.brushIndicator) {
+      this.scene.remove(this.brushIndicator);
+      this.brushIndicator.geometry.dispose();
+      this.disposeMaterial(this.brushIndicator.material);
+    }
+
+    // Clean up spawn/exit markers
+    if (this.spawnMarker) {
+      this.scene.remove(this.spawnMarker);
+      this.spawnMarker.geometry.dispose();
+      this.disposeMaterial(this.spawnMarker.material);
+    }
+    if (this.exitMarker) {
+      this.scene.remove(this.exitMarker);
+      this.exitMarker.geometry.dispose();
+      this.disposeMaterial(this.exitMarker.material);
+    }
+
+    // Clean up particles
+    if (this.particles) {
+      this.scene.remove(this.particles);
+      this.particles.geometry.dispose();
+      this.disposeMaterial(this.particles.material);
+      this.particles = null;
+    }
+
+    // Clean up skybox
+    if (this.skybox) {
+      this.scene.remove(this.skybox);
+      this.skybox.geometry.dispose();
+      this.disposeMaterial(this.skybox.material);
+      this.skybox = undefined;
+    }
+
     if (this.terrainGrid) {
       this.terrainGrid.dispose();
     }
+
+    // Dispose OrbitControls (removes its internal DOM event listeners)
+    if (this.controls) {
+      this.controls.dispose();
+    }
+
+    // Dispose post-processing passes (frees GPU framebuffers)
+    if (this.vignettePass) {
+      this.vignettePass.dispose();
+    }
+    if (this.bloomPass) {
+      this.bloomPass.dispose();
+    }
+    if (this.composer) {
+      this.composer.renderTarget1.dispose();
+      this.composer.renderTarget2.dispose();
+    }
+
     this.renderer.dispose();
   }
 }

@@ -144,7 +144,11 @@ export class EnemyService {
         enemy.mesh.children.forEach(child => {
           if (child instanceof THREE.Mesh) {
             child.geometry.dispose();
-            (child.material as THREE.Material).dispose();
+            if (Array.isArray(child.material)) {
+              child.material.forEach(mat => mat.dispose());
+            } else {
+              child.material.dispose();
+            }
           }
         });
         scene.remove(enemy.mesh);

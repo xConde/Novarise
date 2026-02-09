@@ -1,174 +1,115 @@
-# Strategic Audit — feat/velocity-play-loop
+# Strategic Audit — feat/velocity-tech-debt
 
-**Date:** 2026-02-08
-**Branch:** `feat/velocity-play-loop`
-**Sprint:** Founder Mode — Connect the Build-Play Loop
+**Date:** 2026-02-09
+**Branch:** `feat/velocity-tech-debt`
+**Sprint:** Founder Mode — Deep QA & Tech Debt Burn-down
 
 ---
 
 ## 1. MOMENTUM & ZOMBIES
 
-### What is mostly done but not shipping?
+### What shipped since last audit?
 
-The **editor-to-game play loop** is 95% built and 0% shipped.
+The editor-to-game play loop is **fully connected and merged to main**:
+- "Play Map" button + Enter shortcut in editor
+- "Back to Editor" in game HUD
+- MapBridgeService state transfer validated
+- Lazy-loaded modules: 259 kB initial bundle (down from 892 kB)
+- 216 game tests, 181 editor tests, clean `ng build`
 
-Both halves of the product work independently:
+### What debt accumulated?
 
-- **Map Editor** (`/edit`) — Fully functional terrain editor with paint/height/spawn/exit
-  editing, brush/fill/rectangle tools, undo/redo, save/load/export/import, mobile
-  joystick controls, and keyboard shortcuts. Production-quality.
-
-- **Tower Defense Game** (`/play`) — Complete gameplay loop: 10 waves, 5 enemy types
-  (Basic, Fast, Heavy, Swift, Boss), 3 tower types (Basic/Sniper/Splash) with A*
-  pathfinding, gold/lives/score economy, victory/defeat conditions. 204 tests, 201 passing.
-
-- **MapBridgeService** — The bridge exists and works. The editor saves terrain state on
-  `ngOnDestroy()`, and the game reads from it on `ngOnInit()`. Coordinate conversion,
-  terrain mapping, spawner/exit detection — all wired.
-
-### So why isn't it shipping?
-
-**There is no UI to navigate between them.** The user lands on `/edit`, builds a map, and
-hits a dead end. The only way to play is to manually type `/play` in the browser URL bar.
-There is no "Play Map" button, no "Back to Editor" link, no navigation whatsoever.
-
-The product is two disconnected apps sharing a domain.
-
-### Other zombies
-
-- `GameComponent` (`game.component.ts`) is a wrapper that only renders a title and a cheat
-  code easter egg. It adds no value — the actual game lives in `GameBoardComponent`.
-- The app routes `{ path: '' }` redirect to `/edit` with no landing page or context for
-  new users.
+4 parallel deep-audit agents analyzed every `.ts`, `.html`, `.scss`, and `.spec.ts` file.
+Total issues found: **~90 across 4 subsystems**.
 
 ---
 
 ## 2. THE GAP
 
-**The single architectural blocker: Zero navigation UI between editor and game.**
+**The single architectural blocker: Memory leaks and resource cleanup gaps in both Three.js components.**
 
-The core user flow is: **Build -> Play -> Iterate**. Every piece of this loop exists in code,
-but the user cannot trigger it without being a developer who knows the URL structure.
+### Critical Issues (Must Fix)
 
-This is not a code quality gap or a missing algorithm. It's a missing button.
+| # | Category | File | Issue |
+|---|----------|------|-------|
+| C1 | Memory leak | `novarise.component.ts:452-594` | 5 anonymous canvas event listeners (mousemove, touchstart, touchmove, touchend, touchcancel) cannot be removed in ngOnDestroy |
+| C2 | Memory leak | `game-board.component.ts:147-195` | `restartGame()` doesn't dispose particles geometry/material or skybox before recreation |
+| C3 | Memory leak | `game-board.service.ts:149,168` | `gridMaterial.clone()` creates 43+ material instances; parent material disposed but clones leak |
+| C4 | Cleanup duplication | `game-board.component.ts:147-195 vs 651-740` | restartGame() and ngOnDestroy() have ~40 lines of duplicated cleanup logic |
+| C5 | Type safety | `touch-detection.service.ts:61` | `(window as any).DocumentTouch` — only production `as any` cast |
 
-Secondary gaps (out of scope for this sprint):
-- No tower sell/upgrade mechanic
-- No path-blocking validation when placing towers
-- No audio/SFX
-- No persistent leaderboard or score history
+### High Issues (Should Fix)
+
+| # | Category | File | Issue |
+|---|----------|------|-------|
+| H1 | Missing tests | `edit-controls.component.ts` | No spec file — 6 @Output events, responsive behavior, tab navigation untested |
+| H2 | Console logging | `map-storage.service.ts` | 15 console.log/warn/error calls in production service |
+| H3 | Dead code | `editor-state.service.ts:155-176` | `getCursorForMode()` and `getColorForMode()` never called — duplicated inline in novarise.component.ts |
+| H4 | Hardcoded colors | `app.component.css:13`, `novarise.component.scss:8` | Colors not using CSS custom properties from design system |
+| H5 | Material type safety | `game-board.component.ts:164,676` | `(child.material as THREE.Material).dispose()` — no guard for material arrays |
+
+### Medium Issues (Nice to Have)
+
+| # | Category | File | Issue |
+|---|----------|------|-------|
+| M1 | File size | `novarise.component.ts` | 1632 lines — handles scene, editing, camera, input, persistence |
+| M2 | File size | `game-board.component.ts` | 741 lines — mesh creation, interaction, animation loop |
+| M3 | Accessibility | Templates | Missing `role` attributes on game HUD, tower selection, victory/defeat overlay |
+| M4 | Missing route guard | `app-routing.module.ts` | No CanActivate guard validates spawn/exit exist before `/play` navigation |
+| M5 | Subscription leak | `touch-detection.service.ts:34` | Constructor subscription never unsubscribed (root service, acceptable) |
 
 ---
 
 ## 3. THE BATTLE PLAN
 
-### Sprint: Connect the Loop
+### Sprint: Tech Debt Burn-down
 
-| # | Task | File(s) | Status |
-|---|------|---------|--------|
-| 1 | Add Router + "Play Map" button to editor | `novarise.component.ts/html`, `edit-controls.component.ts/html/scss` | |
-| 2 | Validate spawn+exit before navigation | `novarise.component.ts` | |
-| 3 | Add Router + "Back to Editor" nav in game | `game-board.component.ts/html/scss` | |
-| 4 | Add "Edit Map" to victory/defeat overlay | `game-board.component.html/scss` | |
-| 5 | Build verification (`ng build`) | — | |
-| 6 | Test verification (`ng test`) | — | |
+| # | Task | File(s) | Priority |
+|---|------|---------|----------|
+| 1 | Fix anonymous canvas event listeners — store named refs, remove in ngOnDestroy | `novarise.component.ts` | CRITICAL |
+| 2 | Fix restartGame() missing disposal — dispose particles + skybox before recreate | `game-board.component.ts` | CRITICAL |
+| 3 | Fix grid material cloning — share single material instance across all lines | `game-board.service.ts` | CRITICAL |
+| 4 | Extract shared cleanup method — deduplicate restartGame/ngOnDestroy | `game-board.component.ts` | CRITICAL |
+| 5 | Remove `as any` — use proper type guard for DocumentTouch | `touch-detection.service.ts` | HIGH |
+| 6 | Add material array guards — check Array.isArray before disposing | `game-board.component.ts` | HIGH |
+| 7 | Remove dead EditorStateService methods — getCursorForMode/getColorForMode | `editor-state.service.ts` | HIGH |
+| 8 | Strip console.log from production — replace with structured error handling | `map-storage.service.ts`, `enemy.service.ts` | HIGH |
+| 9 | Extract hardcoded colors to CSS vars | `app.component.css`, `novarise.component.scss` | HIGH |
+| 10 | Build + test verification | — | REQUIRED |
 
 ### Acceptance Criteria
 
-- User can click "Play Map" in the editor -> validates spawn+exit -> navigates to `/play`
-- User can click "Back to Editor" during gameplay -> returns to `/edit`
-- User can click "Edit Map" from victory/defeat screen -> returns to `/edit`
-- All existing tests pass (201/204, 3 pre-existing flakes)
-- Build compiles with zero errors
+- All 5 anonymous canvas listeners converted to named handler refs
+- restartGame() disposes particles and skybox before recreation
+- Grid lines share a single material instance (no .clone())
+- Zero `as any` in production (non-test) code
+- All material disposal uses array-safe guards
+- `ng build` clean, `ng test` passes (known flakes excepted)
 
 ---
 
-## Deployment Checklist
+## Execution Log
 
-- [x] **Add keyboard shortcut for Play Map** — Enter key in editor triggers `playMap()`. Shortcuts panel updated.
-- [x] **Clean up GameComponent zombie** — Removed title/easter-egg wrapper. Game board owns full viewport. Bundle -12.7KB.
-- [x] **Final full test + build verification** — `ng build` clean. Game: 213/216 (3 pre-existing). Editor core: 180/181 (1 pre-existing). Zero regressions.
-- [x] **Push to remote and open PR** — Branch ready for merge to main.
+### Fixes Applied
 
----
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| C1 | Fix anonymous canvas event listeners | DONE | 5 listeners (mousemove, touchstart, touchmove, touchend, touchcancel) converted to named handler refs with proper cleanup in ngOnDestroy |
+| C2 | Fix restartGame() missing disposal | DONE | Extracted `cleanupGameObjects()` shared method that disposes particles + skybox |
+| C3 | Fix grid material cloning | DONE | Removed `.clone()` — all grid lines now share single `LineBasicMaterial` instance |
+| C4 | Extract shared cleanup method | DONE | `cleanupGameObjects()` called by both `restartGame()` and `ngOnDestroy()` — eliminated ~40 lines of duplication |
+| C5 | Remove `as any` | DONE | Replaced `(window as any).DocumentTouch` with `'DocumentTouch' in window` |
+| H2 | Strip console.log | DONE | Removed 6 `console.log` calls from `MapStorageService`; kept `console.error`/`console.warn` for actual errors |
+| H3 | Wire EditorStateService methods | DONE | Replaced inline color/cursor maps in mousemove handler with `editorState.getColorForMode()` and `getCursorForMode()` — zero dead code |
+| H4 | CSS custom properties | DONE | Extracted 5 theme colors (`--theme-purple`, `--nav-bg`, etc.) to `:root`; updated `app.component.css` and `novarise.component.scss` |
+| H5 | Material array guards | DONE | Added `disposeMaterial()` helper that handles both single and array material forms |
+| BONUS | Fix ProxyZone crash | DONE | `touch-detection.service.spec.ts:252` — moved `fakeAsync()` from `describe()` callback to individual `it()` blocks. Recovered 3 previously unreachable tests. |
 
-## Second Pass: Type Safety & Architecture
+### Verification
 
-### Findings
-
-| # | Category | Finding | Impact |
-|---|----------|---------|--------|
-| 1 | Type safety | 6 `any` annotations across TerrainGrid, MapStorageService, MapBridgeService | Type holes in serialization layer |
-| 2 | Dead code | `Spawner` interface, `spawnerPlacements` (write-only), `GameState.maxLives` (never read) | Dead weight in models |
-| 3 | Bundle size | `BlockType` and `SpawnerType` emit runtime enum objects, never used reflectively | Wasted bytes |
-| 4 | Architecture | All components in root AppModule, eager-loaded | 892 kB initial bundle |
-
-### Execution
-
-- [x] **TerrainGridState interface** — Created shared interface in `terrain-grid-state.interface.ts`. Replaced 6 `any` annotations. `EditorMapState` is now a type alias. Tests updated with proper `TerrainType` enum values.
-- [x] **Dead code removal** — Removed `Spawner` interface, write-only `spawnerPlacements` array, unused `GameState.maxLives` field.
-- [x] **Const enums** — `BlockType` and `SpawnerType` converted to `const enum`. Values inlined at compile time.
-- [x] **Lazy-loaded modules** — Created `EditorModule` and `GameModule` with `loadChildren` routes. Initial bundle: **259 kB** (was 892 kB, **71% reduction**). Editor chunk: 606 kB. Game chunk: 49 kB.
-
-### Final Verification
-
-- `ng build`: Clean, zero errors
-- Game tests: 213/216 (3 pre-existing flakes)
-- Editor core tests: 180/181 (1 pre-existing flake)
-- Zero regressions across both passes
+- `ng build`: **Clean** — 259.55 kB initial, 0 errors
+- `ng test`: **545 / 545 SUCCESS** (0 failures, 0 disconnects)
+- Previous: 542 tests with ProxyZone crash killing runner — now all 545 pass
+- Game module: 49.04 kB (down from 49.27 kB)
 
 ---
-
-## Red Team Critique
-
-Hostile self-review of all changes on this branch. Goal: find what breaks at 3 AM.
-
-### W1 — Keyboard shortcuts fire in any focus context (CRITICAL)
-
-`handleKeyDown()` is bound to `window.addEventListener('keydown')` with **zero guard** against
-the event target. Every shortcut — including the new **Enter → playMap()** — fires regardless
-of whether the user is focused on a `<button>`, browser autocomplete, or a future `<input>`.
-
-Enter is the most dangerous key to bind globally: it's the universal "confirm" key. If a user
-tabs to any focusable element and presses Enter, the browser fires a click event on that element
-AND the keyboard handler fires `playMap()`, potentially navigating away from unsaved work.
-
-Today the editor has no text inputs (save uses `window.prompt()`), so this doesn't explode yet.
-But the pattern is a land mine — one `<input>` added later and every letter shortcut breaks.
-
-**Severity:** Critical (silent data loss on accidental navigation)
-**Fix:** Guard `handleKeyDown` to bail when `event.target` is an interactive element.
-
-### W2 — `goToEditor()` has no confirmation during active combat (HIGH)
-
-The "Edit Map" button is always visible, single-click, no confirmation dialog. During wave 9
-with towers and enemies mid-combat, a misclick silently discards all game progress. The
-component-level service providers (`GameStateService`, `WaveService`, etc.) are destroyed
-on navigation — there is no "resume game" path.
-
-**Severity:** High (UX data-loss, but product decision — not a code defect)
-
-### W3 — `exportState()` shares `heightMap` by reference (LOW)
-
-`TerrainGrid.exportState()` copies `tiles` (loop creates new arrays) but passes `heightMap`
-and `spawnPoint`/`exitPoint` as **live references** to internal state. The new
-`TerrainGridState` interface implies a clean value snapshot, giving downstream consumers
-false confidence. Any mutation of the exported state's `heightMap[x][z]` would corrupt the
-source terrain grid.
-
-No current consumer mutates the exported state, so this is latent. But the type system now
-blesses a reference-sharing pattern it shouldn't.
-
-**Severity:** Low (latent, pre-existing, currently unexploitable)
-
-### Hardening
-
-- [x] **W1 fixed** — Added input/textarea/select guard to `handleKeyDown()` in `novarise.component.ts`
-
----
-
-## Deployment Checklist
-
-- [x] **Deep-copy `heightMap` in `exportState()`** — Fix W3 from Red Team: replace reference sharing with value copy to match the snapshot semantics that `TerrainGridState` implies.
-- [x] **Full regression test sweep** — Run game tests (216), editor core tests (181), and `ng build` to confirm zero regressions across all 10 commits.
-- [x] **Push to remote and open PR** — Branch is 10 commits ahead of main. Push and create PR with full changelog.

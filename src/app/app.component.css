@@ -10,8 +10,8 @@
 .app-nav {
   display: flex;
   gap: 2px;
-  background: #0a0515;
-  border-bottom: 1px solid rgba(106, 74, 138, 0.4);
+  background: var(--nav-bg);
+  border-bottom: 1px solid var(--theme-purple-glow);
   padding: 0 8px;
   flex-shrink: 0;
   z-index: 2000;
@@ -19,7 +19,7 @@
 
 .app-nav a {
   padding: 8px 20px;
-  color: #9a8ab0;
+  color: var(--theme-purple-light);
   text-decoration: none;
   font-family: 'Orbitron', sans-serif;
   font-size: 12px;
@@ -32,12 +32,12 @@
 }
 
 .app-nav a:hover {
-  color: #e0d0f0;
+  color: var(--theme-purple-lighter);
 }
 
 .app-nav a.active {
-  color: #e0d0f0;
-  border-bottom-color: #9a8ab0;
+  color: var(--theme-purple-lighter);
+  border-bottom-color: var(--theme-purple-light);
 }
 
 @media (max-width: 768px) {

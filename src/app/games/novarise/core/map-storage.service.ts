@@ -60,7 +60,6 @@ export class MapStorageService {
     // Set as current map
     this.setCurrentMapId(mapId);
 
-    console.log(`Map "${name}" saved with ID: ${mapId}`);
     return mapId;
   }
 
@@ -81,7 +80,6 @@ export class MapStorageService {
     try {
       const savedMap: SavedMap = JSON.parse(json);
       this.setCurrentMapId(id);
-      console.log(`Map "${savedMap.metadata.name}" loaded`);
       return savedMap.data;
     } catch (e) {
       console.error('Failed to parse map data:', e);
@@ -141,7 +139,6 @@ export class MapStorageService {
       localStorage.removeItem(this.CURRENT_MAP_KEY);
     }
 
-    console.log(`Map with ID "${id}" deleted`);
     return true;
   }
 
@@ -183,7 +180,6 @@ export class MapStorageService {
       this.saveMap('Imported Map', data);
       // Remove old key
       localStorage.removeItem(oldKey);
-      console.log('Migrated old map format to new system');
       return true;
     } catch (e) {
       console.error('Failed to migrate old map:', e);
@@ -230,7 +226,6 @@ export class MapStorageService {
     // Clean up the URL object
     URL.revokeObjectURL(url);
 
-    console.log(`Map "${metadata?.name}" downloaded as ${filename}`);
     return true;
   }
 
@@ -352,7 +347,6 @@ export class MapStorageService {
     });
     localStorage.removeItem(this.METADATA_KEY);
     localStorage.removeItem(this.CURRENT_MAP_KEY);
-    console.log('All maps cleared');
   }
 
   // Private helper methods

@@ -249,8 +249,8 @@ describe('TouchDetectionService', () => {
     });
   });
 
-  describe('Resize Handling', fakeAsync(() => {
-    it('should update device info on window resize', () => {
+  describe('Resize Handling', () => {
+    it('should update device info on window resize', fakeAsync(() => {
       const emittedValues: DeviceInfo[] = [];
 
       service.getDeviceInfo().subscribe(info => {
@@ -270,9 +270,9 @@ describe('TouchDetectionService', () => {
       // Should have received new value
       const latestInfo = emittedValues[emittedValues.length - 1];
       expect(latestInfo.screenWidth).toBe(800);
-    });
+    }));
 
-    it('should update device info on orientation change', () => {
+    it('should update device info on orientation change', fakeAsync(() => {
       const emittedValues: DeviceInfo[] = [];
 
       service.getDeviceInfo().subscribe(info => {
@@ -288,9 +288,9 @@ describe('TouchDetectionService', () => {
 
       const latestInfo = emittedValues[emittedValues.length - 1];
       expect(latestInfo.orientation).toBe('landscape');
-    });
+    }));
 
-    it('should not emit duplicate values', () => {
+    it('should not emit duplicate values', fakeAsync(() => {
       const emittedValues: DeviceInfo[] = [];
 
       service.getDeviceInfo().subscribe(info => {
@@ -307,8 +307,8 @@ describe('TouchDetectionService', () => {
       // Should not have emitted new value if nothing changed
       // Note: Due to distinctUntilChanged, duplicates should be filtered
       expect(emittedValues.length).toBeLessThanOrEqual(initialCount + 1);
-    });
-  }));
+    }));
+  });
 
   describe('DeviceInfo Interface', () => {
     it('should include all required fields', () => {

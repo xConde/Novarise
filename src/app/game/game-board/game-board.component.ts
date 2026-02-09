@@ -42,7 +42,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private camera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
   private controls!: OrbitControls;
-  private particles!: THREE.Points;
+  private particles: THREE.Points | null = null;
   private skybox?: THREE.Mesh;
   private bloomPass?: UnrealBloomPass;
   private vignettePass?: ShaderPass;
@@ -149,33 +149,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.hoveredTile = null;
     this.selectedTile = null;
 
-    // Clean up enemies — snapshot keys to avoid mutating Map during iteration
-    for (const id of Array.from(this.enemyService.getEnemies().keys())) {
-      this.enemyService.removeEnemy(id, this.scene);
-    }
-    // Clean up tower combat state (projectiles)
-    this.towerCombatService.cleanup(this.scene);
-    // Clean up tower meshes
-    this.towerMeshes.forEach(group => {
-      this.scene.remove(group);
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          (child.material as THREE.Material).dispose();
-        }
-      });
-    });
-    this.towerMeshes.clear();
+    this.cleanupGameObjects();
+
     // Reset services
     this.waveService.reset();
     this.gameStateService.reset();
-    // Reset board
-    this.tileMeshes.forEach(mesh => {
-      this.scene.remove(mesh);
-      mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
-    });
-    this.tileMeshes.clear();
 
     if (this.mapBridge.hasEditorMap()) {
       const state = this.mapBridge.getEditorMapState()!;
@@ -192,6 +170,74 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.addGridLines();
     this.enemyService.clearPathCache();
     this.lastTime = 0;
+  }
+
+  /** Dispose a Three.js material, handling both single and array forms. */
+  private disposeMaterial(material: THREE.Material | THREE.Material[]): void {
+    if (Array.isArray(material)) {
+      material.forEach(mat => mat.dispose());
+    } else {
+      material.dispose();
+    }
+  }
+
+  /** Shared cleanup for game objects — used by both restartGame() and ngOnDestroy(). */
+  private cleanupGameObjects(): void {
+    // Clean up enemies — snapshot keys to avoid mutating Map during iteration
+    for (const id of Array.from(this.enemyService.getEnemies().keys())) {
+      this.enemyService.removeEnemy(id, this.scene);
+    }
+
+    // Clean up tower combat state (projectiles)
+    this.towerCombatService.cleanup(this.scene);
+
+    // Clean up tower meshes
+    this.towerMeshes.forEach(group => {
+      this.scene.remove(group);
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          this.disposeMaterial(child.material);
+        }
+      });
+    });
+    this.towerMeshes.clear();
+
+    // Clean up tile meshes
+    this.tileMeshes.forEach(mesh => {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      this.disposeMaterial(mesh.material);
+    });
+    this.tileMeshes.clear();
+
+    // Clean up grid lines
+    if (this.gridLines) {
+      this.scene.remove(this.gridLines);
+      this.gridLines.traverse(child => {
+        if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+          child.geometry.dispose();
+          this.disposeMaterial(child.material);
+        }
+      });
+      this.gridLines = null;
+    }
+
+    // Clean up particles
+    if (this.particles) {
+      this.scene.remove(this.particles);
+      this.particles.geometry.dispose();
+      this.disposeMaterial(this.particles.material);
+      this.particles = null;
+    }
+
+    // Clean up skybox
+    if (this.skybox) {
+      this.scene.remove(this.skybox);
+      this.skybox.geometry.dispose();
+      this.disposeMaterial(this.skybox.material);
+      this.skybox = undefined;
+    }
   }
 
   // --- Scene setup ---
@@ -670,55 +716,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     if (this.scene) {
-      this.tileMeshes.forEach(mesh => {
-        this.scene.remove(mesh);
-        mesh.geometry.dispose();
-        (mesh.material as THREE.Material).dispose();
-      });
-      this.tileMeshes.clear();
-
-      this.towerMeshes.forEach(group => {
-        this.scene.remove(group);
-        group.traverse(child => {
-          if (child instanceof THREE.Mesh) {
-            child.geometry.dispose();
-            (child.material as THREE.Material).dispose();
-          }
-        });
-      });
-      this.towerMeshes.clear();
-
-      // Cleanup combat projectiles
-      this.towerCombatService.cleanup(this.scene);
-
-      // Cleanup enemies — snapshot keys to avoid mutating Map during iteration
-      for (const id of Array.from(this.enemyService.getEnemies().keys())) {
-        this.enemyService.removeEnemy(id, this.scene);
-      }
-
-      if (this.gridLines) {
-        this.scene.remove(this.gridLines);
-        this.gridLines.traverse(child => {
-          if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
-            child.geometry.dispose();
-            if (child.material instanceof THREE.Material) {
-              child.material.dispose();
-            }
-          }
-        });
-      }
-
-      if (this.particles) {
-        this.scene.remove(this.particles);
-        this.particles.geometry.dispose();
-        (this.particles.material as THREE.Material).dispose();
-      }
-
-      if (this.skybox) {
-        this.scene.remove(this.skybox);
-        this.skybox.geometry.dispose();
-        (this.skybox.material as THREE.Material).dispose();
-      }
+      this.cleanupGameObjects();
     }
 
     if (this.vignettePass) {
