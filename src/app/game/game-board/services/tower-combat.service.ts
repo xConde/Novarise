@@ -191,7 +191,11 @@ export class TowerCombatService {
   private removeProjectileMesh(proj: Projectile, scene: THREE.Scene): void {
     scene.remove(proj.mesh);
     proj.mesh.geometry.dispose();
-    (proj.mesh.material as THREE.Material).dispose();
+    if (Array.isArray(proj.mesh.material)) {
+      proj.mesh.material.forEach(mat => mat.dispose());
+    } else {
+      proj.mesh.material.dispose();
+    }
   }
 
   getTower(key: string): PlacedTower | undefined {

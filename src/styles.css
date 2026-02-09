@@ -14,8 +14,27 @@
   --theme-purple: #6a4a8a;
   --theme-purple-glow: rgba(106, 74, 138, 0.4);
   --theme-purple-light: #9a8ab0;
+  --theme-purple-mid: #b0a0c0;
   --theme-purple-lighter: #e0d0f0;
   --nav-bg: #0a0515;
+
+  /* Purple alpha variants */
+  --theme-purple-a20: rgba(106, 74, 138, 0.2);
+  --theme-purple-a30: rgba(106, 74, 138, 0.3);
+  --theme-purple-a50: rgba(106, 74, 138, 0.5);
+  --theme-purple-a60: rgba(106, 74, 138, 0.6);
+  --theme-purple-a70: rgba(106, 74, 138, 0.7);
+  --theme-purple-a80: rgba(106, 74, 138, 0.8);
+
+  /* Dark purple backgrounds */
+  --theme-purple-dark: rgba(42, 26, 58, 0.3);
+  --theme-purple-dark-hover: rgba(52, 36, 68, 0.5);
+  --theme-purple-dark-strong: rgba(42, 26, 58, 0.5);
+  --theme-purple-dark-hover-strong: rgba(52, 36, 68, 0.7);
+
+  /* Nav background alpha variants */
+  --nav-bg-a60: rgba(10, 5, 21, 0.6);
+  --nav-bg-a90: rgba(10, 5, 21, 0.9);
 
   /* Game-specific colors */
   --game-primary: #444444;

@@ -43,7 +43,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private renderer!: THREE.WebGLRenderer;
   private controls!: OrbitControls;
   private composer!: EffectComposer;
-  private particles!: THREE.Points;
+  private bloomPass?: UnrealBloomPass;
+  private vignettePass?: ShaderPass;
+  private skybox?: THREE.Mesh;
+  private particles: THREE.Points | null = null;
 
   // Terrain
   private terrainGrid!: TerrainGrid;
@@ -239,13 +242,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Reduced bloom for better visibility
     const { width, height } = this.getViewportSize();
-    const bloomPass = new UnrealBloomPass(
+    this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(width, height),
       0.3,  // Reduced strength
       0.4,  // Reduced radius
       0.95  // Higher threshold - only brightest elements
     );
-    this.composer.addPass(bloomPass);
+    this.composer.addPass(this.bloomPass);
 
     // Lighter vignette for better edge visibility
     const vignetteShader = {
@@ -277,8 +280,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       `
     };
 
-    const vignettePass = new ShaderPass(vignetteShader);
-    this.composer.addPass(vignettePass);
+    this.vignettePass = new ShaderPass(vignetteShader);
+    this.composer.addPass(this.vignettePass);
   }
 
   private initializeLights(): void {
@@ -389,8 +392,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       depthWrite: false
     });
 
-    const starfield = new THREE.Mesh(starfieldGeometry, starfieldMaterial);
-    this.scene.add(starfield);
+    this.skybox = new THREE.Mesh(starfieldGeometry, starfieldMaterial);
+    this.scene.add(this.skybox);
   }
 
   private initializeParticles(): void {
@@ -1073,7 +1076,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.brushPreviewMeshes.forEach(mesh => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+      this.disposeMaterial(mesh.material);
     });
     this.brushPreviewMeshes = [];
 
@@ -1380,7 +1383,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.rectanglePreviewMeshes.forEach(mesh => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+      this.disposeMaterial(mesh.material);
     });
     this.rectanglePreviewMeshes = [];
   }
@@ -1574,6 +1577,15 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** Dispose a Three.js material, handling both single and array forms. */
+  private disposeMaterial(material: THREE.Material | THREE.Material[]): void {
+    if (Array.isArray(material)) {
+      material.forEach(mat => mat.dispose());
+    } else {
+      material.dispose();
+    }
+  }
+
   ngOnDestroy(): void {
     // Stop the animation loop first to prevent calls to disposed resources
     cancelAnimationFrame(this.animationFrameId);
@@ -1613,16 +1625,69 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.brushPreviewMeshes.forEach(mesh => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+      this.disposeMaterial(mesh.material);
     });
     this.brushPreviewMeshes = [];
 
     // Clean up rectangle preview meshes
     this.clearRectanglePreview();
 
+    // Clean up brush indicator
+    if (this.brushIndicator) {
+      this.scene.remove(this.brushIndicator);
+      this.brushIndicator.geometry.dispose();
+      this.disposeMaterial(this.brushIndicator.material);
+    }
+
+    // Clean up spawn/exit markers
+    if (this.spawnMarker) {
+      this.scene.remove(this.spawnMarker);
+      this.spawnMarker.geometry.dispose();
+      this.disposeMaterial(this.spawnMarker.material);
+    }
+    if (this.exitMarker) {
+      this.scene.remove(this.exitMarker);
+      this.exitMarker.geometry.dispose();
+      this.disposeMaterial(this.exitMarker.material);
+    }
+
+    // Clean up particles
+    if (this.particles) {
+      this.scene.remove(this.particles);
+      this.particles.geometry.dispose();
+      this.disposeMaterial(this.particles.material);
+      this.particles = null;
+    }
+
+    // Clean up skybox
+    if (this.skybox) {
+      this.scene.remove(this.skybox);
+      this.skybox.geometry.dispose();
+      this.disposeMaterial(this.skybox.material);
+      this.skybox = undefined;
+    }
+
     if (this.terrainGrid) {
       this.terrainGrid.dispose();
     }
+
+    // Dispose OrbitControls (removes its internal DOM event listeners)
+    if (this.controls) {
+      this.controls.dispose();
+    }
+
+    // Dispose post-processing passes (frees GPU framebuffers)
+    if (this.vignettePass) {
+      this.vignettePass.dispose();
+    }
+    if (this.bloomPass) {
+      this.bloomPass.dispose();
+    }
+    if (this.composer) {
+      this.composer.renderTarget1.dispose();
+      this.composer.renderTarget2.dispose();
+    }
+
     this.renderer.dispose();
   }
 }
