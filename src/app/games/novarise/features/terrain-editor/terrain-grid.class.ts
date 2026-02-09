@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
+import { TerrainGridState } from './terrain-grid-state.interface';
 
 export interface TerrainTile {
   type: TerrainType;
@@ -295,28 +296,30 @@ export class TerrainGrid {
 
   // State Management - Export/Import for saving maps
 
-  public exportState(): any {
-    const state = {
-      gridSize: this.gridSize,
-      tiles: [] as any[],
-      heightMap: this.heightMap,
-      spawnPoint: this.spawnPoint,
-      exitPoint: this.exitPoint,
-      version: '1.0.0'
-    };
-
-    // Export tile types
+  public exportState(): TerrainGridState {
+    // Deep-copy tiles and heightMap so the snapshot is fully detached from live state
+    const tiles: TerrainGridState['tiles'] = [];
+    const heightMap: number[][] = [];
     for (let x = 0; x < this.gridSize; x++) {
-      state.tiles[x] = [];
+      tiles[x] = [];
+      heightMap[x] = [];
       for (let z = 0; z < this.gridSize; z++) {
-        state.tiles[x][z] = this.tiles[x][z].type;
+        tiles[x][z] = this.tiles[x][z].type;
+        heightMap[x][z] = this.heightMap[x][z];
       }
     }
 
-    return state;
+    return {
+      gridSize: this.gridSize,
+      tiles,
+      heightMap,
+      spawnPoint: this.spawnPoint ? { ...this.spawnPoint } : null,
+      exitPoint: this.exitPoint ? { ...this.exitPoint } : null,
+      version: '1.0.0'
+    };
   }
 
-  public importState(state: any): void {
+  public importState(state: TerrainGridState | null | undefined): void {
     if (!state || state.gridSize !== this.gridSize) {
       console.error('Invalid state or grid size mismatch');
       return;

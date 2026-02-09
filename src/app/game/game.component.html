@@ -1,18 +1,3 @@
-<div class="game-container" [ngClass]="{'success': ccCompleteStatus === 'success'}">
-  <div class="title">
-    <div class="letter"
-        *ngFor="let letter of title.split(''); let i = index"
-        [ngClass]="{ 'touched': i === hoverIndex, 'clicked': ccSession,'v': i === 2}"
-        (click)="isClicked()"
-        (mouseover)="hoverIndex = i"
-        (mouseleave)="hoverIndex = null">
-      {{ letter }}
-    </div>
-  </div>
+<div class="game-container">
   <app-game-board></app-game-board>
-  <div class="arrows-overlay" *ngIf="ccSession && ccArrows.length > 0" [ngClass]="ccCompleteStatus">
-    <span *ngFor="let arrow of ccArrows; let i = index">
-      <img class="arrow" [ngClass]="arrow" *ngIf="i < 8" src="../../assets/arrow.svg"/>
-    </span>
-  </div>
 </div>

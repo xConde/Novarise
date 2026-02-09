@@ -27,10 +27,12 @@
       [selectedTerrainType]="selectedTerrainType"
       [brushSize]="brushSize"
       [activeTool]="activeTool"
+      [canPlayMap]="canPlayMap"
       (editModeChange)="setEditMode($event)"
       (terrainTypeChange)="setTerrainType($event)"
       (brushSizeChange)="setBrushSize($event)"
-      (activeToolChange)="setActiveTool($event)">
+      (activeToolChange)="setActiveTool($event)"
+      (playMapClick)="playMap()">
     </app-edit-controls>
   </div>
 </div>

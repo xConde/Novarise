@@ -12,11 +12,13 @@ export class EditControlsComponent implements OnInit, OnDestroy {
   @Input() selectedTerrainType: TerrainType = TerrainType.BEDROCK;
   @Input() brushSize: number = 1;
   @Input() activeTool: BrushTool = 'brush';
+  @Input() canPlayMap: boolean = false;
 
   @Output() editModeChange = new EventEmitter<EditMode>();
   @Output() terrainTypeChange = new EventEmitter<TerrainType>();
   @Output() brushSizeChange = new EventEmitter<number>();
   @Output() activeToolChange = new EventEmitter<BrushTool>();
+  @Output() playMapClick = new EventEmitter<void>();
 
   public terrainTypes = Object.values(TerrainType);
   public terrainConfigs = TERRAIN_CONFIGS;

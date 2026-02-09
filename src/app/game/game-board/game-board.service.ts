@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { BlockType, GameBoardTile, Spawner, SpawnerType, TowerType } from './models/game-board-tile';
+import { BlockType, GameBoardTile, SpawnerType } from './models/game-board-tile';
+import { TowerType } from './models/tower.model';
 
 @Injectable()
 export class GameBoardService {
@@ -32,7 +33,6 @@ export class GameBoardService {
   ];
   private spawnerTiles: number[][] = [];
   private exitTiles: number[][] = [];
-  private readonly spawnerPlacements: Spawner[] = [];
 
   // No eager board generation — ngOnInit always calls importBoard() or resetBoard()
   // before the board is used, so constructor work would be immediately discarded.
@@ -73,7 +73,6 @@ export class GameBoardService {
         }
       }
     }
-    this.spawnerPlacements.push({ x: range.centerX, y: range.centerY, type });
   }
 
   private getSpawnerRange(type: SpawnerType) {
@@ -215,7 +214,7 @@ export class GameBoardService {
     this.spawnerTiles = [];
     this.exitTiles = [];
     this.spawnerChoices = [];
-    this.spawnerPlacements.length = 0;
+
 
     // Scan imported board for spawner/exit positions
     for (let row = 0; row < height; row++) {
@@ -246,7 +245,7 @@ export class GameBoardService {
       SpawnerType.BOTTOM_LEFT,
       SpawnerType.BOTTOM_RIGHT
     ];
-    this.spawnerPlacements.length = 0;
+
     this.generateBaseBoard();
     this.generateExitTiles();
     this.generateSpawner();

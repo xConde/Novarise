@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { RouterTestingModule } from '@angular/router/testing';
 
 import { GameBoardComponent } from './game-board.component';
 import { GameBoardService } from './game-board.service';
@@ -11,6 +12,7 @@ describe('GameBoardComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       declarations: [ GameBoardComponent ],
+      imports: [ RouterTestingModule ],
       providers: [ GameBoardService, MapBridgeService ]
     })
     .compileComponents();
