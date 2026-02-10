@@ -1,3 +1,11 @@
+@mixin glass-panel($bg: rgba(0, 0, 0, 0.75)) {
+  background: $bg;
+  border-radius: var(--border-radius-md);
+  backdrop-filter: blur(0.625rem);
+  z-index: var(--z-index-overlay);
+  font-family: "Orbitron", sans-serif;
+}
+
 .board-container {
   display: flex;
   flex-direction: column;
@@ -20,19 +28,15 @@
 
   // --- Nav back button ---
   .nav-back-btn {
+    @include glass-panel;
     position: absolute;
     top: var(--spacing-md);
     left: var(--spacing-md);
     padding: var(--spacing-xs) var(--spacing-md);
-    background: rgba(0, 0, 0, 0.75);
     border: var(--border-width-thin) solid var(--theme-purple-a50);
-    border-radius: var(--border-radius-md);
-    backdrop-filter: blur(0.625rem);
     color: var(--theme-purple-mid);
-    font-family: "Orbitron", sans-serif;
     font-size: var(--font-size-small);
     cursor: pointer;
-    z-index: var(--z-index-overlay);
     transition: all 0.2s ease;
     white-space: nowrap;
 
@@ -50,6 +54,7 @@
 
   // --- Game HUD ---
   .game-hud {
+    @include glass-panel;
     position: absolute;
     top: var(--spacing-md);
     left: 50%;
@@ -57,12 +62,7 @@
     display: flex;
     gap: var(--spacing-lg);
     padding: var(--spacing-sm) var(--spacing-lg);
-    background: rgba(0, 0, 0, 0.75);
     border: var(--border-width-thin) solid var(--border-color);
-    border-radius: var(--border-radius-md);
-    backdrop-filter: blur(0.625rem);
-    z-index: var(--z-index-overlay);
-    font-family: "Orbitron", sans-serif;
     user-select: none;
 
     @media screen and (max-width: 768px) {
@@ -106,20 +106,16 @@
   }
 
   .hud-wave-status {
+    @include glass-panel;
     position: absolute;
     top: var(--spacing-md);
     right: var(--spacing-md);
     padding: var(--spacing-xs) var(--spacing-md);
-    background: rgba(0, 0, 0, 0.75);
     border: var(--border-width-thin) solid rgba(255, 100, 100, 0.3);
-    border-radius: var(--border-radius-md);
-    backdrop-filter: blur(0.625rem);
     color: #ff8888;
-    font-family: "Orbitron", sans-serif;
     font-size: var(--font-size-small);
     animation: pulse-glow 2s ease-in-out infinite;
     white-space: nowrap;
-    z-index: var(--z-index-overlay);
   }
 
   // --- Wave control ---
@@ -136,16 +132,14 @@
       flex-direction: column;
       align-items: center;
       gap: var(--spacing-xs);
+      @include glass-panel(rgba(0, 0, 0, 0.85));
       padding: var(--spacing-md) var(--spacing-xl);
-      background: rgba(0, 0, 0, 0.85);
       border: var(--border-width-medium) solid rgba(255, 255, 255, 0.3);
       border-radius: var(--border-radius-lg);
       color: var(--text-color);
-      font-family: "Orbitron", sans-serif;
       font-size: var(--font-size-title);
       cursor: pointer;
       transition: all var(--transition-medium) ease;
-      backdrop-filter: blur(0.625rem);
 
       &:hover {
         background: rgba(255, 255, 255, 0.1);
@@ -250,8 +244,153 @@
     }
   }
 
+  // --- Tower info panel ---
+  .tower-info-panel {
+    @include glass-panel(rgba(0, 0, 0, 0.85));
+    position: absolute;
+    bottom: calc(var(--spacing-lg) + 5.5rem);
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 14rem;
+    padding: var(--spacing-md);
+    border: var(--border-width-thin) solid var(--theme-purple-a50);
+    backdrop-filter: blur(0.75rem);
+    animation: scale-in 0.2s ease-out;
+
+    @media screen and (max-width: 768px) {
+      min-width: 12rem;
+      bottom: calc(var(--spacing-md) + 4.5rem);
+    }
+
+    .tower-info-header {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      margin-bottom: var(--spacing-sm);
+      padding-bottom: var(--spacing-xs);
+      border-bottom: var(--border-width-thin) solid var(--border-color);
+
+      .tower-info-name {
+        font-size: var(--font-size-base);
+        font-weight: 700;
+        color: var(--text-color);
+        text-transform: uppercase;
+        letter-spacing: 0.0625rem;
+      }
+
+      .tower-info-level {
+        display: flex;
+        gap: 0.125rem;
+
+        .level-star {
+          font-size: 0.75rem;
+          color: #ffd700;
+
+          &.empty {
+            color: rgba(255, 255, 255, 0.2);
+          }
+        }
+      }
+
+      .tower-info-close {
+        margin-left: auto;
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.5);
+        font-size: var(--font-size-large);
+        cursor: pointer;
+        padding: 0 var(--spacing-xs);
+        line-height: 1;
+
+        &:hover {
+          color: var(--text-color);
+        }
+      }
+    }
+
+    .tower-info-stats {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+      margin-bottom: var(--spacing-sm);
+
+      .stat-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: var(--font-size-small);
+
+        .stat-label {
+          color: rgba(255, 255, 255, 0.5);
+          text-transform: uppercase;
+          letter-spacing: 0.0313rem;
+        }
+
+        .stat-value {
+          color: var(--text-color);
+          font-weight: 600;
+        }
+      }
+    }
+
+    .tower-info-actions {
+      display: flex;
+      gap: var(--spacing-sm);
+
+      .upgrade-btn, .sell-btn {
+        flex: 1;
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border: var(--border-width-thin) solid var(--border-color);
+        border-radius: var(--border-radius-sm);
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.6875rem;
+        cursor: pointer;
+        transition: all var(--transition-medium) ease;
+      }
+
+      .upgrade-btn {
+        background: rgba(0, 100, 0, 0.3);
+        border-color: rgba(0, 255, 0, 0.3);
+        color: #88ff88;
+
+        &:hover {
+          background: rgba(0, 150, 0, 0.4);
+          border-color: rgba(0, 255, 0, 0.6);
+        }
+
+        &.unaffordable {
+          opacity: 0.4;
+          cursor: not-allowed;
+          color: #ff4444;
+        }
+      }
+
+      .sell-btn {
+        background: rgba(100, 50, 0, 0.3);
+        border-color: rgba(255, 200, 0, 0.3);
+        color: #ffd700;
+
+        &:hover {
+          background: rgba(150, 75, 0, 0.4);
+          border-color: rgba(255, 200, 0, 0.6);
+        }
+      }
+
+      .max-level-badge {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.6875rem;
+        color: #ffd700;
+        text-transform: uppercase;
+        letter-spacing: 0.0625rem;
+      }
+    }
+  }
+
   // --- Tower selection ---
   .tower-selection {
+    @include glass-panel(rgba(0, 0, 0, 0.8));
     position: absolute;
     bottom: var(--spacing-lg);
     left: 50%;
@@ -259,11 +398,7 @@
     display: flex;
     gap: var(--spacing-md);
     padding: var(--spacing-sm);
-    background: rgba(0, 0, 0, 0.8);
     border: var(--border-width-thin) solid var(--border-color);
-    border-radius: var(--border-radius-md);
-    backdrop-filter: blur(0.625rem);
-    z-index: var(--z-index-overlay);
 
     @media screen and (max-width: 768px) {
       bottom: var(--spacing-md);

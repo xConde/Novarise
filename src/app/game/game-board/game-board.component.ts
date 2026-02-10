@@ -13,7 +13,7 @@ import { MapBridgeService } from './services/map-bridge.service';
 import { GameStateService } from './services/game-state.service';
 import { WaveService } from './services/wave.service';
 import { TowerCombatService } from './services/tower-combat.service';
-import { TowerType, TOWER_CONFIGS } from './models/tower.model';
+import { TowerType, TOWER_CONFIGS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
 import { GamePhase, GameState } from './models/game-state.model';
 
@@ -37,6 +37,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly minPolarAngle = 0;
   private readonly maxPolarAngle = Math.PI / 2.5;
 
+  // Tower upgrade visual constants
+  private readonly towerScaleBase = 1.4;
+  private readonly towerScaleIncrement = 0.15;
+  private readonly towerEmissiveBase = 0.7;
+  private readonly towerEmissiveIncrement = 0.25;
+
   // Scene objects
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
@@ -58,7 +64,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Tower management
   private towerMeshes: Map<string, THREE.Group> = new Map();
   private gridLines: THREE.Group | null = null;
+  private rangePreviewMesh: THREE.Mesh | null = null;
   selectedTowerType: TowerType = TowerType.BASIC;
+
+  // Tower info panel state (exposed to template)
+  selectedTowerInfo: PlacedTower | null = null;
+  selectedTowerStats: { damage: number; range: number; fireRate: number } | null = null;
+  selectedTowerUpgradeCost: number = 0;
+  selectedTowerSellValue: number = 0;
+  MAX_TOWER_LEVEL = MAX_TOWER_LEVEL;
 
   // Game state exposed to template
   gameState: GameState;
@@ -127,8 +141,147 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // --- Public methods for template ---
 
+  levelStars(count: number): number[] {
+    return Array(Math.max(0, count)).fill(0);
+  }
+
   selectTowerType(type: TowerType): void {
     this.selectedTowerType = type;
+    this.deselectTower();
+  }
+
+  upgradeTower(): void {
+    if (!this.selectedTowerInfo) return;
+    const phase = this.gameStateService.getState().phase;
+    if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
+    if (this.selectedTowerInfo.level >= MAX_TOWER_LEVEL) return;
+
+    const cost = getUpgradeCost(this.selectedTowerInfo.type, this.selectedTowerInfo.level);
+    if (!this.gameStateService.canAfford(cost)) return;
+
+    // Confirm upgrade succeeds BEFORE spending gold — prevents gold loss on service rejection
+    if (!this.towerCombatService.upgradeTower(this.selectedTowerInfo.id)) return;
+    this.gameStateService.spendGold(cost);
+
+    // Scale tower mesh to reflect upgrade level
+    const towerMesh = this.towerMeshes.get(this.selectedTowerInfo.id);
+    if (towerMesh) {
+      const newLevel = this.selectedTowerInfo.level;
+      const scale = this.towerScaleBase + (newLevel - 1) * this.towerScaleIncrement;
+      towerMesh.scale.set(scale, scale, scale);
+
+      // Boost emissive intensity on upgrade
+      towerMesh.traverse(child => {
+        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
+          child.material.emissiveIntensity = this.towerEmissiveBase + (newLevel - 1) * this.towerEmissiveIncrement;
+        }
+      });
+    }
+
+    // Refresh info panel
+    this.refreshTowerInfoPanel();
+    this.showRangePreview(this.selectedTowerInfo);
+  }
+
+  sellTower(): void {
+    if (!this.selectedTowerInfo) return;
+    const phase = this.gameStateService.getState().phase;
+    if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
+
+    // Confirm unregistration succeeds BEFORE refunding gold — prevents free gold on stale reference
+    const soldTower = this.towerCombatService.unregisterTower(this.selectedTowerInfo.id);
+    if (!soldTower) return;
+
+    const refund = getSellValue(soldTower.totalInvested);
+    this.gameStateService.addGold(refund);
+
+    // Remove mesh from scene
+    const towerMesh = this.towerMeshes.get(this.selectedTowerInfo.id);
+    if (towerMesh) {
+      this.scene.remove(towerMesh);
+      towerMesh.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          this.disposeMaterial(child.material);
+        }
+      });
+      this.towerMeshes.delete(this.selectedTowerInfo.id);
+    }
+
+    // Restore tile to BASE
+    this.gameBoardService.removeTower(this.selectedTowerInfo.row, this.selectedTowerInfo.col);
+
+    // Clear path cache since board changed
+    this.enemyService.clearPathCache();
+
+    this.deselectTower();
+  }
+
+  deselectTower(): void {
+    this.selectedTowerInfo = null;
+    this.selectedTowerStats = null;
+    this.removeRangePreview();
+  }
+
+  private selectPlacedTower(key: string): void {
+    // Toggle: clicking the same tower deselects it
+    if (this.selectedTowerInfo?.id === key) {
+      this.deselectTower();
+      return;
+    }
+
+    const tower = this.towerCombatService.getTower(key);
+    if (!tower) return;
+
+    this.selectedTowerInfo = tower;
+    this.refreshTowerInfoPanel();
+    this.showRangePreview(tower);
+  }
+
+  private refreshTowerInfoPanel(): void {
+    if (!this.selectedTowerInfo) return;
+    const tower = this.selectedTowerInfo;
+    const stats = getEffectiveStats(tower.type, tower.level);
+    this.selectedTowerStats = { damage: stats.damage, range: stats.range, fireRate: stats.fireRate };
+    this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level);
+    this.selectedTowerSellValue = getSellValue(tower.totalInvested);
+  }
+
+  private showRangePreview(tower: PlacedTower): void {
+    this.removeRangePreview();
+
+    const stats = getEffectiveStats(tower.type, tower.level);
+    const radius = stats.range;
+
+    const geometry = new THREE.RingGeometry(radius - 0.05, radius, 64);
+    geometry.rotateX(-Math.PI / 2); // Lay flat on XZ plane
+    const material = new THREE.MeshBasicMaterial({
+      color: stats.color,
+      transparent: true,
+      opacity: 0.35,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+
+    this.rangePreviewMesh = new THREE.Mesh(geometry, material);
+
+    const boardWidth = this.gameBoardService.getBoardWidth();
+    const boardHeight = this.gameBoardService.getBoardHeight();
+    const tileSize = this.gameBoardService.getTileSize();
+    const x = (tower.col - boardWidth / 2) * tileSize;
+    const z = (tower.row - boardHeight / 2) * tileSize;
+
+    this.rangePreviewMesh.position.set(x, 0.35, z);
+    this.scene.add(this.rangePreviewMesh);
+  }
+
+  private removeRangePreview(): void {
+    if (this.rangePreviewMesh) {
+      this.scene.remove(this.rangePreviewMesh);
+      this.rangePreviewMesh.geometry.dispose();
+      this.disposeMaterial(this.rangePreviewMesh.material);
+      this.rangePreviewMesh = null;
+    }
   }
 
   goToEditor(): void {
@@ -190,6 +343,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Clean up tower combat state (projectiles)
     this.towerCombatService.cleanup(this.scene);
+
+    // Clean up range preview
+    this.removeRangePreview();
+    this.selectedTowerInfo = null;
+    this.selectedTowerStats = null;
 
     // Clean up tower meshes
     this.towerMeshes.forEach(group => {
@@ -536,6 +694,31 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
       this.raycaster.setFromCamera(this.mouse, this.camera);
+
+      // Check for tower mesh clicks first
+      const towerGroups = Array.from(this.towerMeshes.values());
+      const towerChildren: THREE.Object3D[] = [];
+      towerGroups.forEach(g => g.traverse(child => { if (child instanceof THREE.Mesh) towerChildren.push(child); }));
+      const towerHits = this.raycaster.intersectObjects(towerChildren);
+
+      if (towerHits.length > 0) {
+        // Walk up to find the tower group and its key
+        let hitObj: THREE.Object3D | null = towerHits[0].object;
+        let foundKey: string | null = null;
+        while (hitObj) {
+          for (const [key, group] of this.towerMeshes) {
+            if (group === hitObj) { foundKey = key; break; }
+          }
+          if (foundKey) break;
+          hitObj = hitObj.parent;
+        }
+        if (foundKey) {
+          this.selectPlacedTower(foundKey);
+          return;
+        }
+      }
+
+      // Check tile clicks
       const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
 
       const prevSelected = this.getSelectedTileMesh();
@@ -555,9 +738,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const material = mesh.material as THREE.MeshStandardMaterial;
         material.emissiveIntensity = 0.8;
 
+        this.deselectTower();
         this.tryPlaceTower(row, col);
       } else {
         this.selectedTile = null;
+        this.deselectTower();
       }
     };
 

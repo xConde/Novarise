@@ -259,6 +259,45 @@ describe('GameBoardService', () => {
     });
   });
 
+  // --- removeTower ---
+
+  describe('removeTower', () => {
+    beforeEach(() => {
+      service.resetBoard();
+    });
+
+    it('should remove a tower and restore BASE tile', () => {
+      service.placeTower(5, 5, TowerType.BASIC);
+      const result = service.removeTower(5, 5);
+
+      expect(result).toBeTrue();
+      const tile = service.getGameBoard()[5][5];
+      expect(tile.type).toBe(BlockType.BASE);
+      expect(tile.isTraversable).toBeTrue();
+      expect(tile.isPurchasable).toBeTrue();
+    });
+
+    it('should return false for non-tower tile', () => {
+      expect(service.removeTower(5, 5)).toBeFalse(); // BASE tile, no tower
+    });
+
+    it('should return false for out-of-bounds', () => {
+      expect(service.removeTower(-1, 0)).toBeFalse();
+      expect(service.removeTower(0, -1)).toBeFalse();
+      expect(service.removeTower(20, 0)).toBeFalse();
+      expect(service.removeTower(0, 25)).toBeFalse();
+    });
+
+    it('should allow re-placement after removal', () => {
+      service.placeTower(5, 5, TowerType.BASIC);
+      service.removeTower(5, 5);
+
+      const result = service.placeTower(5, 5, TowerType.SNIPER);
+      expect(result).toBeTrue();
+      expect(service.getGameBoard()[5][5].type).toBe(BlockType.TOWER);
+    });
+  });
+
   // --- Accessors ---
 
   describe('accessors', () => {

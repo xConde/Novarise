@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { TowerCombatService } from './tower-combat.service';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
-import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
+import { TowerType, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from '../models/tower.model';
 import { Enemy, EnemyType } from '../models/enemy.model';
 import * as THREE from 'three';
 
@@ -437,6 +437,248 @@ describe('TowerCombatService', () => {
       // Should only report the kill once (second projectile sees health <= 0)
       const e1Kills = kills.filter(id => id === 'e1');
       expect(e1Kills.length).toBe(1);
+    });
+  });
+
+  // --- Tower Upgrade System ---
+
+  describe('tower upgrades', () => {
+    it('should register towers at level 1', () => {
+      service.registerTower(5, 5, TowerType.BASIC, new THREE.Group());
+      const tower = service.getTower('5-5')!;
+      expect(tower.level).toBe(1);
+    });
+
+    it('should track totalInvested as placement cost', () => {
+      service.registerTower(5, 5, TowerType.BASIC, new THREE.Group());
+      const tower = service.getTower('5-5')!;
+      expect(tower.totalInvested).toBe(TOWER_CONFIGS[TowerType.BASIC].cost);
+    });
+
+    it('should upgrade tower level', () => {
+      service.registerTower(5, 5, TowerType.BASIC, new THREE.Group());
+      const result = service.upgradeTower('5-5');
+      expect(result).toBeTrue();
+      expect(service.getTower('5-5')!.level).toBe(2);
+    });
+
+    it('should accumulate totalInvested on upgrade', () => {
+      service.registerTower(5, 5, TowerType.BASIC, new THREE.Group());
+      const baseCost = TOWER_CONFIGS[TowerType.BASIC].cost;
+      const upgradeCost = getUpgradeCost(TowerType.BASIC, 1);
+
+      service.upgradeTower('5-5');
+      expect(service.getTower('5-5')!.totalInvested).toBe(baseCost + upgradeCost);
+    });
+
+    it('should cap at MAX_TOWER_LEVEL', () => {
+      service.registerTower(5, 5, TowerType.BASIC, new THREE.Group());
+      service.upgradeTower('5-5'); // 1 → 2
+      service.upgradeTower('5-5'); // 2 → 3
+
+      const result = service.upgradeTower('5-5'); // 3 → blocked
+      expect(result).toBeFalse();
+      expect(service.getTower('5-5')!.level).toBe(MAX_TOWER_LEVEL);
+    });
+
+    it('should return false for non-existent tower', () => {
+      expect(service.upgradeTower('99-99')).toBeFalse();
+    });
+
+    it('should use upgraded stats for combat', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      service.upgradeTower(`${TOWER_ROW}-${TOWER_COL}`); // Level 2 → 1.5x damage
+
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      service.update(0.016, mockScene);
+
+      // Level 2 BASIC: 25 * 1.5 = 38 (rounded)
+      const expectedDamage = getEffectiveStats(TowerType.BASIC, 2).damage;
+      expect(enemy.health).toBe(10000 - expectedDamage);
+    });
+  });
+
+  // --- Tower Sell (Unregister) ---
+
+  describe('unregisterTower', () => {
+    it('should remove tower from placed towers map', () => {
+      service.registerTower(5, 5, TowerType.BASIC, new THREE.Group());
+      const removed = service.unregisterTower('5-5');
+
+      expect(removed).toBeTruthy();
+      expect(removed!.type).toBe(TowerType.BASIC);
+      expect(service.getTower('5-5')).toBeUndefined();
+    });
+
+    it('should return undefined for non-existent tower', () => {
+      expect(service.unregisterTower('99-99')).toBeUndefined();
+    });
+
+    it('should preserve other towers when removing one', () => {
+      service.registerTower(1, 1, TowerType.BASIC, new THREE.Group());
+      service.registerTower(2, 2, TowerType.SNIPER, new THREE.Group());
+
+      service.unregisterTower('1-1');
+      expect(service.getPlacedTowers().size).toBe(1);
+      expect(service.getTower('2-2')).toBeTruthy();
+    });
+  });
+
+  // --- Full Lifecycle ---
+
+  describe('full lifecycle: register → upgrade → upgrade → sell', () => {
+    it('should track level and totalInvested through full lifecycle', () => {
+      const mesh = new THREE.Group();
+      service.registerTower(5, 5, TowerType.BASIC, mesh);
+
+      const baseCost = TOWER_CONFIGS[TowerType.BASIC].cost; // 50
+      const upgrade1Cost = getUpgradeCost(TowerType.BASIC, 1); // 38
+      const upgrade2Cost = getUpgradeCost(TowerType.BASIC, 2); // 50
+
+      // Upgrade 1→2
+      expect(service.upgradeTower('5-5')).toBeTrue();
+      expect(service.getTower('5-5')!.level).toBe(2);
+      expect(service.getTower('5-5')!.totalInvested).toBe(baseCost + upgrade1Cost);
+
+      // Upgrade 2→3
+      expect(service.upgradeTower('5-5')).toBeTrue();
+      expect(service.getTower('5-5')!.level).toBe(3);
+      expect(service.getTower('5-5')!.totalInvested).toBe(baseCost + upgrade1Cost + upgrade2Cost);
+
+      // Max level — upgrade fails
+      expect(service.upgradeTower('5-5')).toBeFalse();
+
+      // Sell
+      const sold = service.unregisterTower('5-5')!;
+      expect(sold.level).toBe(3);
+      expect(sold.totalInvested).toBe(baseCost + upgrade1Cost + upgrade2Cost);
+      expect(getSellValue(sold.totalInvested)).toBeGreaterThan(0);
+    });
+
+    it('should preserve mesh reference through upgrades', () => {
+      const mesh = new THREE.Group();
+      service.registerTower(5, 5, TowerType.BASIC, mesh);
+
+      service.upgradeTower('5-5');
+      service.upgradeTower('5-5');
+
+      expect(service.getTower('5-5')!.mesh).toBe(mesh);
+    });
+  });
+});
+
+// --- Tower Model Pure Function Tests ---
+
+describe('Tower Model Functions', () => {
+  describe('getUpgradeCost', () => {
+    it('should return finite cost for levels below max', () => {
+      const cost = getUpgradeCost(TowerType.BASIC, 1);
+      expect(cost).toBeGreaterThan(0);
+      expect(isFinite(cost)).toBeTrue();
+    });
+
+    it('should increase cost at higher levels', () => {
+      const cost1to2 = getUpgradeCost(TowerType.BASIC, 1);
+      const cost2to3 = getUpgradeCost(TowerType.BASIC, 2);
+      expect(cost2to3).toBeGreaterThan(cost1to2);
+    });
+
+    it('should return Infinity at max level', () => {
+      const cost = getUpgradeCost(TowerType.BASIC, MAX_TOWER_LEVEL);
+      expect(cost).toBe(Infinity);
+    });
+
+    it('should return Infinity for level 0 (invalid)', () => {
+      expect(getUpgradeCost(TowerType.BASIC, 0)).toBe(Infinity);
+    });
+
+    it('should return Infinity for negative levels', () => {
+      expect(getUpgradeCost(TowerType.BASIC, -1)).toBe(Infinity);
+    });
+
+    it('should scale with tower base cost', () => {
+      const basicCost = getUpgradeCost(TowerType.BASIC, 1);
+      const sniperCost = getUpgradeCost(TowerType.SNIPER, 1);
+      expect(sniperCost).toBeGreaterThan(basicCost);
+    });
+  });
+
+  describe('getSellValue', () => {
+    it('should return 50% of total invested', () => {
+      expect(getSellValue(100)).toBe(50);
+      expect(getSellValue(200)).toBe(100);
+    });
+
+    it('should round to nearest integer', () => {
+      expect(getSellValue(75)).toBe(38);
+      expect(getSellValue(1)).toBe(1);
+    });
+
+    it('should return 0 for 0 investment', () => {
+      expect(getSellValue(0)).toBe(0);
+    });
+  });
+
+  describe('getEffectiveStats', () => {
+    it('should return base stats at level 1 for all tower types', () => {
+      for (const type of [TowerType.BASIC, TowerType.SNIPER, TowerType.SPLASH]) {
+        const stats = getEffectiveStats(type, 1);
+        expect(stats.damage).toBe(TOWER_CONFIGS[type].damage);
+        expect(stats.range).toBe(TOWER_CONFIGS[type].range);
+        expect(stats.fireRate).toBe(TOWER_CONFIGS[type].fireRate);
+      }
+    });
+
+    it('should increase damage at level 2', () => {
+      const stats = getEffectiveStats(TowerType.BASIC, 2);
+      expect(stats.damage).toBeGreaterThan(TOWER_CONFIGS[TowerType.BASIC].damage);
+    });
+
+    it('should increase range at level 2', () => {
+      const stats = getEffectiveStats(TowerType.BASIC, 2);
+      expect(stats.range).toBeGreaterThan(TOWER_CONFIGS[TowerType.BASIC].range);
+    });
+
+    it('should decrease fire rate (faster) at level 2', () => {
+      const stats = getEffectiveStats(TowerType.BASIC, 2);
+      expect(stats.fireRate).toBeLessThan(TOWER_CONFIGS[TowerType.BASIC].fireRate);
+    });
+
+    it('should preserve non-scaling stats (projectileSpeed, splashRadius, color)', () => {
+      const stats = getEffectiveStats(TowerType.SPLASH, 3);
+      expect(stats.projectileSpeed).toBe(TOWER_CONFIGS[TowerType.SPLASH].projectileSpeed);
+      expect(stats.splashRadius).toBe(TOWER_CONFIGS[TowerType.SPLASH].splashRadius);
+      expect(stats.color).toBe(TOWER_CONFIGS[TowerType.SPLASH].color);
+    });
+
+    it('should have highest stats at max level', () => {
+      const lvl1 = getEffectiveStats(TowerType.SNIPER, 1);
+      const lvl3 = getEffectiveStats(TowerType.SNIPER, MAX_TOWER_LEVEL);
+      expect(lvl3.damage).toBeGreaterThan(lvl1.damage);
+      expect(lvl3.range).toBeGreaterThan(lvl1.range);
+      expect(lvl3.fireRate).toBeLessThan(lvl1.fireRate);
+    });
+
+    it('should clamp level 0 to base stats (defensive)', () => {
+      const stats = getEffectiveStats(TowerType.BASIC, 0);
+      expect(stats.damage).toBe(TOWER_CONFIGS[TowerType.BASIC].damage);
+    });
+
+    it('should clamp negative level to base stats (defensive)', () => {
+      const stats = getEffectiveStats(TowerType.BASIC, -5);
+      expect(stats.damage).toBe(TOWER_CONFIGS[TowerType.BASIC].damage);
+    });
+
+    it('should scale all tower types at level 3', () => {
+      for (const type of [TowerType.BASIC, TowerType.SNIPER, TowerType.SPLASH]) {
+        const base = TOWER_CONFIGS[type];
+        const lvl3 = getEffectiveStats(type, 3);
+        expect(lvl3.damage).toBeGreaterThan(base.damage);
+        expect(lvl3.range).toBeGreaterThan(base.range);
+        expect(lvl3.fireRate).toBeLessThan(base.fireRate);
+      }
     });
   });
 });

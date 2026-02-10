@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy } from '../models/enemy.model';
-import { PlacedTower, TowerType, TowerStats, TOWER_CONFIGS } from '../models/tower.model';
+import { PlacedTower, TowerType, TowerStats, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats } from '../models/tower.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 
@@ -33,21 +33,40 @@ export class TowerCombatService {
     this.placedTowers.set(key, {
       id: key,
       type,
+      level: 1,
       row,
       col,
       lastFireTime: -Infinity,
       kills: 0,
+      totalInvested: TOWER_CONFIGS[type].cost,
       mesh
     });
+  }
+
+  upgradeTower(key: string): boolean {
+    const tower = this.placedTowers.get(key);
+    if (!tower || tower.level >= MAX_TOWER_LEVEL) return false;
+
+    const cost = getUpgradeCost(tower.type, tower.level);
+    tower.level++;
+    tower.totalInvested += cost;
+    return true;
+  }
+
+  unregisterTower(key: string): PlacedTower | undefined {
+    const tower = this.placedTowers.get(key);
+    if (!tower) return undefined;
+    this.placedTowers.delete(key);
+    return tower;
   }
 
   update(deltaTime: number, scene: THREE.Scene): string[] {
     this.gameTime += deltaTime;
     const killedEnemyIds: string[] = [];
 
-    // Tower targeting and firing
+    // Tower targeting and firing — resolve stats per-tower using level
     this.placedTowers.forEach(tower => {
-      const stats = TOWER_CONFIGS[tower.type];
+      const stats = getEffectiveStats(tower.type, tower.level);
       const timeSinceLastFire = this.gameTime - tower.lastFireTime;
 
       if (timeSinceLastFire < stats.fireRate) return;

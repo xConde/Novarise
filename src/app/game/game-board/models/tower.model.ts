@@ -6,6 +6,8 @@ export enum TowerType {
   SPLASH = 'splash'
 }
 
+export const MAX_TOWER_LEVEL = 3;
+
 export interface TowerStats {
   damage: number;
   range: number;        // tiles
@@ -19,10 +21,12 @@ export interface TowerStats {
 export interface PlacedTower {
   id: string;
   type: TowerType;
+  level: number;        // 1-3
   row: number;
   col: number;
   lastFireTime: number; // elapsed game time of last shot
   kills: number;
+  totalInvested: number; // cumulative gold spent (placement + upgrades)
   mesh: THREE.Group | null;
 }
 
@@ -55,3 +59,36 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
     color: 0x4ac47a
   }
 };
+
+/** Per-level stat multipliers. Index 0 = level 1 (base), 1 = level 2, 2 = level 3. */
+export const UPGRADE_MULTIPLIERS: { damage: number; range: number; fireRate: number }[] = [
+  { damage: 1.0,  range: 1.0,  fireRate: 1.0  },  // Level 1 (base)
+  { damage: 1.5,  range: 1.15, fireRate: 0.85 },   // Level 2 (+50% dmg, +15% range, 15% faster)
+  { damage: 2.2,  range: 1.3,  fireRate: 0.7  },   // Level 3 (+120% dmg, +30% range, 30% faster)
+];
+
+/** Get the upgrade cost from current level to next level.
+ *  Level 1→2: 75% of base cost; Level 2→3: 100% of base cost. */
+export function getUpgradeCost(type: TowerType, currentLevel: number): number {
+  if (currentLevel < 1 || currentLevel >= MAX_TOWER_LEVEL) return Infinity;
+  const baseCost = TOWER_CONFIGS[type].cost;
+  return Math.round(baseCost * (0.5 + currentLevel * 0.25));
+}
+
+/** Get the sell refund (50% of total gold invested). */
+export function getSellValue(totalInvested: number): number {
+  return Math.round(totalInvested * 0.5);
+}
+
+/** Resolve effective stats for a tower at a given level (clamped to 1..MAX_TOWER_LEVEL). */
+export function getEffectiveStats(type: TowerType, level: number): TowerStats {
+  const base = TOWER_CONFIGS[type];
+  const clampedIndex = Math.max(0, Math.min(level, MAX_TOWER_LEVEL) - 1);
+  const mult = UPGRADE_MULTIPLIERS[clampedIndex];
+  return {
+    ...base,
+    damage: Math.round(base.damage * mult.damage),
+    range: +(base.range * mult.range).toFixed(2),
+    fireRate: +(base.fireRate * mult.fireRate).toFixed(2),
+  };
+}
