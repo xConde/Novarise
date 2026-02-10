@@ -281,6 +281,21 @@ export class GameBoardService {
     return true;
   }
 
+  removeTower(row: number, col: number): boolean {
+    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+      return false;
+    }
+
+    const tile = this.gameBoard[row][col];
+    if (tile.type !== BlockType.TOWER) {
+      return false;
+    }
+
+    // Restore tile to traversable BASE state
+    this.gameBoard[row][col] = GameBoardTile.createBase(row, col);
+    return true;
+  }
+
   // Create tower mesh based on type
   createTowerMesh(row: number, col: number, towerType: TowerType = TowerType.BASIC): THREE.Group {
     const towerGroup = new THREE.Group();

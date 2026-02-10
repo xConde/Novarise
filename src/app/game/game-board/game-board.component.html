@@ -57,6 +57,53 @@
     </div>
   </div>
 
+  <!-- Tower info panel -->
+  <div class="tower-info-panel" *ngIf="selectedTowerInfo && selectedTowerStats">
+    <div class="tower-info-header">
+      <span class="tower-info-name">{{ selectedTowerInfo.type | titlecase }}</span>
+      <span class="tower-info-level">
+        <span *ngFor="let star of levelStars(selectedTowerInfo.level)" class="level-star">&#9733;</span>
+        <span *ngFor="let star of levelStars(MAX_TOWER_LEVEL - selectedTowerInfo.level)" class="level-star empty">&#9733;</span>
+      </span>
+      <button class="tower-info-close" (click)="deselectTower()" aria-label="Close tower info">&times;</button>
+    </div>
+    <div class="tower-info-stats">
+      <div class="stat-row">
+        <span class="stat-label">Damage</span>
+        <span class="stat-value">{{ selectedTowerStats.damage }}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Range</span>
+        <span class="stat-value">{{ selectedTowerStats.range }}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Fire Rate</span>
+        <span class="stat-value">{{ selectedTowerStats.fireRate }}s</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Kills</span>
+        <span class="stat-value">{{ selectedTowerInfo.kills }}</span>
+      </div>
+    </div>
+    <div class="tower-info-actions">
+      <button
+        class="upgrade-btn"
+        *ngIf="selectedTowerInfo.level < MAX_TOWER_LEVEL"
+        [class.unaffordable]="!gameState || gameState.gold < selectedTowerUpgradeCost"
+        (click)="upgradeTower()"
+        aria-label="Upgrade tower">
+        Upgrade ({{ selectedTowerUpgradeCost }}g)
+      </button>
+      <span class="max-level-badge" *ngIf="selectedTowerInfo.level >= MAX_TOWER_LEVEL">MAX</span>
+      <button
+        class="sell-btn"
+        (click)="sellTower()"
+        aria-label="Sell tower">
+        Sell (+{{ selectedTowerSellValue }}g)
+      </button>
+    </div>
+  </div>
+
   <!-- Tower selection -->
   <div class="tower-selection" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
     <button
