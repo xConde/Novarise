@@ -7,8 +7,11 @@ on:
       - "src/**/*.ts"
       - "src/**/*.html"
       - "src/**/*.scss"
-      - "**/*.json"
       - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/**"
+    paths-ignore:
+      - "package-lock.json"
 
 jobs:
   claude-review:
@@ -19,16 +22,28 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
-      issues: read
+      pull-requests: write
+      issues: write
       actions: read
       id-token: write
 
     steps:
+      - name: Validate secrets
+        run: |
+          if [ -z "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}" ]; then
+            echo "::error::CLAUDE_CODE_OAUTH_TOKEN secret is not configured."
+            echo "Please add the secret at: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 50
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Fetch base branch for diff
+        run: git fetch origin ${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }} --depth=50
 
       - name: Check PR size
         id: pr-size
@@ -41,7 +56,7 @@ jobs:
 
           if [ $FILES_CHANGED -gt 50 ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "PR has $FILES_CHANGED changed files (limit: 50). Claude review will be skipped." >> $GITHUB_STEP_SUMMARY
+            echo "PR has $FILES_CHANGED changed files (limit: 50). Claude review skipped." >> $GITHUB_STEP_SUMMARY
           else
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
@@ -49,25 +64,22 @@ jobs:
       - name: Run Claude Code Review
         if: steps.pr-size.outputs.skip != 'true'
         id: claude-review
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
           direct_prompt: |
-            Please review this pull request and provide feedback on:
-            - Code quality and best practices
-            - Potential bugs or issues
-            - Performance considerations
-            - Security concerns
-            - Test coverage
+            Please review this pull request for Novarise — an Angular 15 + Three.js tower defense game with a map editor.
 
-            Angular / Three.js specific review criteria:
-            - Follow Angular coding standards and style guide
-            - Ensure components follow single responsibility principle
-            - Check for proper TypeScript typing (no unnecessary `as any` casts)
-            - Verify Three.js resources are properly disposed in ngOnDestroy
-            - Check for memory leaks (subscriptions, event listeners, GPU resources)
+            Focus on:
+            - **Magic numbers**: All numeric literals (colors, sizes, timings, thresholds) must live in constants files, not inline
+            - **Three.js disposal**: Geometries, materials, textures, render targets, and shader passes must be disposed in ngOnDestroy. Web Audio nodes must be disconnected.
+            - **Coordinate systems**: Editor uses `tiles[x][z]` (column-major), game uses `board[row][col]` (row-major). Verify no cross-wiring in any map conversion or pathfinding code.
+            - **State mutation**: Confirm-before-spend pattern — always verify service mutation succeeds BEFORE deducting resources (gold, lives). Same for sell refunds.
+            - **TypeScript strictness**: No `any` casts, proper typing on all new code
+            - **Memory leaks**: Subscriptions unsubscribed, event listeners removed, GPU resources freed
+            - **Test coverage**: New logic should have corresponding tests
 
-            Be constructive and helpful in your feedback.
+            Be constructive and specific in your feedback.
 
           allowed_tools: "Bash(npx ng build),Bash(npx ng test --no-watch --browsers=ChromeHeadless)"
