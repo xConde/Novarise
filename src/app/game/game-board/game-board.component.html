@@ -56,6 +56,25 @@
     </div>
   </div>
 
+  <!-- Wave preview panel — shown during SETUP and INTERMISSION -->
+  <div class="wave-preview"
+       *ngIf="(gameState.phase === GamePhase.SETUP || gameState.phase === GamePhase.INTERMISSION) && wavePreview.length > 0"
+       aria-label="Upcoming wave preview">
+    <div class="wave-preview-header">
+      Wave {{ gameState.wave + 1 }}
+    </div>
+    <ul class="wave-preview-list">
+      <li
+        *ngFor="let entry of wavePreview"
+        class="wave-preview-entry"
+        [attr.data-type]="entry.type.toLowerCase()">
+        <span class="enemy-dot" [attr.data-type]="entry.type.toLowerCase()"></span>
+        <span class="enemy-count">{{ entry.count }}x</span>
+        <span class="enemy-label">{{ entry.label }}</span>
+      </li>
+    </ul>
+  </div>
+
   <!-- Wave control -->
   <div class="wave-control" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
     <button
@@ -97,7 +116,45 @@
     <div class="overlay-content" [class.victory]="gameState.phase === GamePhase.VICTORY" [class.defeat]="gameState.phase === GamePhase.DEFEAT">
       <h2 *ngIf="gameState.phase === GamePhase.VICTORY">Victory</h2>
       <h2 *ngIf="gameState.phase === GamePhase.DEFEAT">Defeat</h2>
-      <p class="final-score">Score: {{ gameState.score }}</p>
+
+      <!-- Star rating -->
+      <div class="star-display" *ngIf="gameState.phase === GamePhase.VICTORY">
+        <span
+          *ngFor="let s of starArray; let i = index"
+          class="overlay-star"
+          [class.filled]="s === 'filled'"
+          [class.empty]="s === 'empty'"
+          [attr.aria-label]="s === 'filled' ? 'Star earned' : 'Star not earned'">
+          &#9733;
+        </span>
+      </div>
+
+      <!-- Score breakdown -->
+      <div class="score-breakdown" *ngIf="scoreBreakdown">
+        <div class="score-row">
+          <span class="score-label">Base Score</span>
+          <span class="score-value">{{ scoreBreakdown.baseScore }}</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">Difficulty</span>
+          <span class="score-value multiplier">x{{ scoreBreakdown.difficultyMultiplier }}</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">Waves Completed</span>
+          <span class="score-value">{{ scoreBreakdown.wavesCompleted }} / {{ gameState.maxWaves }}</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">Lives Remaining</span>
+          <span class="score-value">{{ scoreBreakdown.livesRemaining }} / {{ scoreBreakdown.livesTotal }}</span>
+        </div>
+        <div class="score-row final">
+          <span class="score-label">Final Score</span>
+          <span class="score-value final-value">{{ scoreBreakdown.finalScore }}</span>
+        </div>
+      </div>
+
+      <p class="final-score" *ngIf="!scoreBreakdown">Score: {{ gameState.score }}</p>
+
       <div class="overlay-actions">
         <button class="restart-btn" (click)="restartGame()">Play Again</button>
         <button class="edit-map-btn" (click)="goToEditor()">Edit Map</button>
@@ -163,6 +220,7 @@
       <div class="tower-icon basic"></div>
       <span class="tower-name">Basic</span>
       <span class="tower-cost">{{ towerConfigs[TowerType.BASIC].cost }}g</span>
+      <span class="tower-hotkey">[1]</span>
     </button>
 
     <button
@@ -174,6 +232,7 @@
       <div class="tower-icon sniper"></div>
       <span class="tower-name">Sniper</span>
       <span class="tower-cost">{{ towerConfigs[TowerType.SNIPER].cost }}g</span>
+      <span class="tower-hotkey">[2]</span>
     </button>
 
     <button
@@ -185,6 +244,7 @@
       <div class="tower-icon splash"></div>
       <span class="tower-name">Splash</span>
       <span class="tower-cost">{{ towerConfigs[TowerType.SPLASH].cost }}g</span>
+      <span class="tower-hotkey">[3]</span>
     </button>
 
     <button
@@ -196,6 +256,7 @@
       <div class="tower-icon slow"></div>
       <span class="tower-name">Slow</span>
       <span class="tower-cost">{{ towerConfigs[TowerType.SLOW].cost }}g</span>
+      <span class="tower-hotkey">[4]</span>
     </button>
 
     <button
@@ -207,6 +268,7 @@
       <div class="tower-icon chain"></div>
       <span class="tower-name">Chain</span>
       <span class="tower-cost">{{ towerConfigs[TowerType.CHAIN].cost }}g</span>
+      <span class="tower-hotkey">[5]</span>
     </button>
 
     <button
@@ -218,6 +280,7 @@
       <div class="tower-icon mortar"></div>
       <span class="tower-name">Mortar</span>
       <span class="tower-cost">{{ towerConfigs[TowerType.MORTAR].cost }}g</span>
+      <span class="tower-hotkey">[6]</span>
     </button>
   </div>
 </div>

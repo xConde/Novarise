@@ -1,0 +1,15 @@
+export const DAMAGE_POPUP_CONFIG = {
+  riseSpeed: 1.5,
+  lifetime: 0.6,
+  fontSize: 32,
+  fontFamily: 'monospace',
+  normalColor: '#ffffff',
+  criticalColor: '#ff4444',
+  shieldColor: '#4488ff',
+  strokeColor: '#000000',
+  strokeWidth: 2,
+  canvasWidth: 64,
+  canvasHeight: 32,
+  spriteScale: 0.5,
+  criticalThreshold: 50,
+} as const;

@@ -1,0 +1,20 @@
+export const MINIMAP_CONFIG = {
+  canvasSize: 150,
+  padding: 12,
+  backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  borderColor: 'rgba(138, 92, 246, 0.5)',
+  borderWidth: 2,
+  terrainColors: {
+    buildable: '#2a2a3a',
+    path: '#1a1a2e',
+    tower: '#8a5cf6',
+    enemy: '#ff4444',
+    spawn: '#00ff88',
+    exit: '#ff6600',
+  },
+  entityDotSize: 3,
+  towerDotSize: 4,
+  viewportColor: 'rgba(255, 255, 255, 0.4)',
+  viewportLineWidth: 1,
+  updateIntervalMs: 100,
+} as const;

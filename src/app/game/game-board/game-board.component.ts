@@ -23,6 +23,7 @@ import { disposeMaterial } from './utils/three-utils';
 import { TowerType, TOWER_CONFIGS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState } from './models/game-state.model';
+import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
 import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants/rendering.constants';
 import { AMBIENT_LIGHT, DIRECTIONAL_LIGHT, UNDER_LIGHT, POINT_LIGHTS } from './constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
@@ -30,9 +31,19 @@ import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants
 import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
 import { ENEMY_STATS } from './models/enemy.model';
+import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
 
 const CAMERA_PAN_SPEED = 0.5;
 const VALID_SPEED_VALUES = [1, 2, 3];
+
+const TOWER_HOTKEYS: Record<string, TowerType> = {
+  '1': TowerType.BASIC,
+  '2': TowerType.SNIPER,
+  '3': TowerType.SPLASH,
+  '4': TowerType.SLOW,
+  '5': TowerType.CHAIN,
+  '6': TowerType.MORTAR,
+};
 
 @Component({
   selector: 'app-game-board',
@@ -84,6 +95,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   difficultyPresets = DIFFICULTY_PRESETS;
   difficultyLevels = Object.values(DifficultyLevel);
 
+  // Score breakdown — populated when game ends (VICTORY or DEFEAT)
+  scoreBreakdown: ScoreBreakdown | null = null;
+
+  // Wave preview — shown during SETUP and INTERMISSION
+  wavePreview: WavePreviewEntry[] = [];
+
   // Animation
   private lastTime = 0;
   private defeatSoundPlayed = false;
@@ -97,6 +114,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Audio state exposed to template
   get audioMuted(): boolean { return this.audioService.isMuted; }
+
+  /** Returns a 3-element array of 'filled' | 'empty' for the star rating display. */
+  get starArray(): Array<'filled' | 'empty'> {
+    const stars = this.scoreBreakdown?.stars ?? 0;
+    return [0, 1, 2].map(i => (i < stars ? 'filled' : 'empty')) as Array<'filled' | 'empty'>;
+  }
 
   // FPS exposed to template
   get fps(): number { return this.fpsCounterService.getFps(); }
@@ -128,7 +151,37 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   ngOnInit(): void {
     // Subscribe to game state changes
     this.stateSubscription = this.gameStateService.getState$().subscribe(state => {
+      const prevPhase = this.gameState.phase;
+      const prevWave = this.gameState.wave;
       this.gameState = state;
+
+      // Compute score breakdown the first time we enter a terminal phase
+      if (
+        (state.phase === GamePhase.VICTORY || state.phase === GamePhase.DEFEAT) &&
+        prevPhase !== GamePhase.VICTORY &&
+        prevPhase !== GamePhase.DEFEAT
+      ) {
+        const livesTotal = DIFFICULTY_PRESETS[state.difficulty].lives;
+        this.scoreBreakdown = calculateScoreBreakdown(
+          state.score,
+          state.lives,
+          livesTotal,
+          state.difficulty,
+          state.wave,
+          state.phase === GamePhase.VICTORY
+        );
+      }
+
+      // Refresh wave preview when entering SETUP/INTERMISSION or when the wave number changes
+      const isPreviewPhase =
+        state.phase === GamePhase.SETUP || state.phase === GamePhase.INTERMISSION;
+      const waveChanged = state.wave !== prevWave;
+      const phaseChanged = state.phase !== prevPhase;
+      if (isPreviewPhase && (waveChanged || phaseChanged)) {
+        // Preview shows the NEXT wave that is about to start (wave + 1)
+        const nextWave = state.wave + 1;
+        this.wavePreview = getWavePreview(nextWave, state.isEndless);
+      }
     });
 
     // Import editor map if it has spawn and exit points; otherwise use default board
@@ -151,6 +204,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.initializeParticles();
     this.renderGameBoard();
     this.addGridLines();
+
+    // Seed initial wave preview for the first wave
+    const initialState = this.gameStateService.getState();
+    this.wavePreview = getWavePreview(initialState.wave + 1, initialState.isEndless);
   }
 
   ngAfterViewInit(): void {
@@ -341,6 +398,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Reset services
     this.waveService.reset();
     this.gameStateService.reset();
+    this.scoreBreakdown = null;
     this.defeatSoundPlayed = false;
     this.victorySoundPlayed = false;
 
@@ -835,16 +893,30 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const phase = this.gameStateService.getState().phase;
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
 
-    switch (event.key.toLowerCase()) {
+    // Tower hotkeys: 1-6 select tower types
+    if (TOWER_HOTKEYS[event.key]) {
+      event.preventDefault();
+      this.selectTowerType(TOWER_HOTKEYS[event.key]);
+      return;
+    }
+
+    switch (event.key) {
       case ' ':
         // Spacebar starts the next wave
         event.preventDefault();
         this.startWave();
         break;
       case 'p':
+      case 'P':
         // P key toggles pause
         event.preventDefault();
         this.togglePause();
+        break;
+      case 'Escape':
+        // Escape deselects tower type and closes tower info panel
+        event.preventDefault();
+        this.selectedTowerType = TowerType.BASIC;
+        this.deselectTower();
         break;
     }
   }
