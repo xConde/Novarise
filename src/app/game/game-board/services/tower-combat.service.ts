@@ -324,16 +324,18 @@ export class TowerCombatService {
     let currentTarget: Enemy = primaryTarget;
     let currentDamage = stats.damage;
 
+    // Track the position we draw each arc *from* — starts at the tower, then
+    // advances to each hit target's position after processing that bounce.
+    const towerPos = this.getTowerWorldPos(tower);
+    let previousX = towerPos.x;
+    let previousZ = towerPos.z;
+
     for (let bounce = 0; bounce <= chainCount; bounce++) {
       hitIds.add(currentTarget.id);
 
-      // Draw arc from previous position (tower on first bounce)
-      const fromX = bounce === 0
-        ? this.getTowerWorldPos(tower).x
-        : currentTarget.position.x;
-      const fromZ = bounce === 0
-        ? this.getTowerWorldPos(tower).z
-        : currentTarget.position.z;
+      // Draw arc from previousPosition → currentTarget
+      const fromX = previousX;
+      const fromZ = previousZ;
 
       const toX = currentTarget.position.x;
       const toZ = currentTarget.position.z;
@@ -372,6 +374,10 @@ export class TowerCombatService {
       // Find next target: nearest enemy within chainRange not yet hit
       const nextTarget = this.findChainTarget(currentTarget, chainRange, hitIds);
       if (!nextTarget) break;
+
+      // Advance "from" position to the current hit before moving to next target
+      previousX = currentTarget.position.x;
+      previousZ = currentTarget.position.z;
 
       currentDamage = Math.round(currentDamage * CHAIN_DAMAGE_FALLOFF);
       currentTarget = nextTarget;
@@ -470,7 +476,7 @@ export class TowerCombatService {
     impactZ: number,
     stats: TowerStats,
     scene: THREE.Scene
-  ): void {
+  ): string[] {
     const blastRadius = stats.blastRadius ?? 1.5;
     const dotDuration = stats.dotDuration ?? 3;
     const dotDamage = stats.dotDamage ?? 3;
@@ -487,14 +493,17 @@ export class TowerCombatService {
     zoneMesh.position.set(impactX, GROUND_EFFECT_Y, impactZ);
     scene.add(zoneMesh);
 
-    // Initial DoT tick — deal immediate damage on impact
-    // Kill tracking handled by the zone update loop; initial tick kills not attributed here
+    // Initial blast — deal immediate damage on impact and track kills
+    const initialKills: string[] = [];
     this.enemyService.getEnemies().forEach(enemy => {
       if (enemy.health <= 0) return;
       const dx = enemy.position.x - impactX;
       const dz = enemy.position.z - impactZ;
       if (Math.sqrt(dx * dx + dz * dz) <= blastRadius) {
         const result = this.enemyService.damageEnemy(enemy.id, dotDamage);
+        if (result.killed) {
+          initialKills.push(enemy.id);
+        }
         result.spawnedEnemies.forEach(mini => {
           if (mini.mesh) scene.add(mini.mesh);
         });
@@ -510,6 +519,8 @@ export class TowerCombatService {
       expiresAt: this.gameTime + dotDuration,
       lastTickTime: this.gameTime
     });
+
+    return initialKills;
   }
 
   private applyDamage(proj: Projectile, scene: THREE.Scene): string[] {
@@ -520,9 +531,10 @@ export class TowerCombatService {
       const tower = this.placedTowers.get(proj.towerKey);
       const stats = tower ? getEffectiveStats(tower.type, tower.level) : null;
       if (stats) {
-        this.createMortarZone(proj.mesh.position.x, proj.mesh.position.z, stats, scene);
+        const initialKills = this.createMortarZone(proj.mesh.position.x, proj.mesh.position.z, stats, scene);
+        kills.push(...initialKills);
       }
-      // Mortar splash kill tracking handled inside createMortarZone / zone update
+      // Further DoT kills are tracked in the zone update loop
     } else if (proj.splashRadius > 0) {
       // Splash damage — hit all enemies within radius of impact point
       const impactX = proj.mesh.position.x;
@@ -612,6 +624,22 @@ export class TowerCombatService {
     }
     this.slowEffects.clear();
 
+    // Dispose and remove all tower meshes from scene
+    this.placedTowers.forEach(tower => {
+      if (tower.mesh) {
+        scene.remove(tower.mesh);
+        tower.mesh.traverse(child => {
+          if (child instanceof THREE.Mesh) {
+            child.geometry.dispose();
+            if (Array.isArray(child.material)) {
+              child.material.forEach(mat => mat.dispose());
+            } else {
+              child.material.dispose();
+            }
+          }
+        });
+      }
+    });
     this.placedTowers.clear();
     this.projectileCounter = 0;
     this.gameTime = 0;

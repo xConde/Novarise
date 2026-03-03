@@ -402,6 +402,43 @@ describe('GameStateService', () => {
       expect(service.getState().lives).toBe(DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].lives);
       expect(service.getState().gold).toBe(DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].gold);
     });
+
+    it('should be a no-op during COMBAT phase (wave > 0)', () => {
+      service.startWave(); // phase=COMBAT, wave=1
+      const livesBefore = service.getState().lives;
+      const goldBefore = service.getState().gold;
+
+      service.setDifficulty(DifficultyLevel.EASY);
+
+      expect(service.getState().lives).toBe(livesBefore);
+      expect(service.getState().gold).toBe(goldBefore);
+      expect(service.getState().difficulty).toBe(DifficultyLevel.NORMAL);
+    });
+
+    it('should be a no-op during INTERMISSION phase (wave > 0)', () => {
+      service.startWave();
+      service.completeWave(50); // → INTERMISSION, wave=1
+      const livesBefore = service.getState().lives;
+
+      service.setDifficulty(DifficultyLevel.HARD);
+
+      expect(service.getState().lives).toBe(livesBefore);
+      expect(service.getState().difficulty).toBe(DifficultyLevel.NORMAL);
+    });
+
+    it('should be a no-op during VICTORY phase', () => {
+      const maxWaves = service.getState().maxWaves;
+      for (let i = 0; i < maxWaves; i++) {
+        service.startWave();
+      }
+      service.completeWave(100); // → VICTORY
+      const livesBefore = service.getState().lives;
+
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+
+      expect(service.getState().lives).toBe(livesBefore);
+      expect(service.getState().difficulty).toBe(DifficultyLevel.NORMAL);
+    });
   });
 
   // --- reset ---

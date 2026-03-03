@@ -7,7 +7,7 @@ const TEMPLATE_GRID_SIZE = 25;
 const TEMPLATE_VERSION = '1.0.0';
 
 /** Fill an entire grid with a single terrain type and zero height. */
-function createEmptyGrid(width: number, height: number, fill: TerrainType = TerrainType.BEDROCK): TerrainGridState {
+function createEmptyGrid(width: number, height: number, fill: TerrainType = TerrainType.ABYSS): TerrainGridState {
   const tiles: TerrainType[][] = [];
   const heightMap: number[][] = [];
 
@@ -36,7 +36,7 @@ function paintHorizontalPath(
   z: number,
   x0: number,
   x1: number,
-  type: TerrainType = TerrainType.ABYSS
+  type: TerrainType = TerrainType.BEDROCK
 ): void {
   for (let x = x0; x <= x1; x++) {
     tiles[x][z] = type;
@@ -49,7 +49,7 @@ function paintVerticalPath(
   x: number,
   z0: number,
   z1: number,
-  type: TerrainType = TerrainType.ABYSS
+  type: TerrainType = TerrainType.BEDROCK
 ): void {
   const lo = Math.min(z0, z1);
   const hi = Math.max(z0, z1);
@@ -158,7 +158,7 @@ function buildSpiralTemplate(): TerrainGridState {
  * all BEDROCK so the player can define their own path layout.
  */
 function buildOpenFieldTemplate(): TerrainGridState {
-  const state = createEmptyGrid(TEMPLATE_GRID_SIZE, TEMPLATE_GRID_SIZE);
+  const state = createEmptyGrid(TEMPLATE_GRID_SIZE, TEMPLATE_GRID_SIZE, TerrainType.BEDROCK);
   const midZ = Math.floor(TEMPLATE_GRID_SIZE / 2);
 
   state.spawnPoint = { x: 0, z: midZ };

@@ -47,7 +47,7 @@ export class MapShareService {
    * Build a shareable URL for the editor with the encoded map as a query param.
    */
   generateShareUrl(state: TerrainGridState): string {
-    const encoded = this.encode(state);
+    const encoded = encodeURIComponent(this.encode(state));
     return `${window.location.origin}/edit?map=${encoded}`;
   }
 
@@ -63,15 +63,22 @@ export class MapShareService {
     const obj = value as Record<string, unknown>;
 
     // Accept gridSize (canonical) or width + height (task-spec alias)
-    const hasDimensions =
-      typeof obj['gridSize'] === 'number' ||
-      (typeof obj['width'] === 'number' && typeof obj['height'] === 'number');
+    const gridSize = obj['gridSize'];
+    const hasValidGridSize =
+      typeof gridSize === 'number' && gridSize > 0 && gridSize <= 100;
+    const hasWidthHeight =
+      typeof obj['width'] === 'number' && typeof obj['height'] === 'number';
+    const hasDimensions = hasValidGridSize || hasWidthHeight;
 
     if (!hasDimensions) {
       return false;
     }
 
     if (!Array.isArray(obj['tiles'])) {
+      return false;
+    }
+
+    if (!Array.isArray(obj['heightMap'])) {
       return false;
     }
 

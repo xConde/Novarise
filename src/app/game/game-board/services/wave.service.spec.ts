@@ -203,6 +203,44 @@ describe('WaveService', () => {
     });
   });
 
+  // --- Wave info accessors: endless mode ---
+
+  describe('wave info: endless mode', () => {
+    it('getTotalEnemiesInWave should return >0 for endless wave when endlessMode is on', () => {
+      service.setEndlessMode(true);
+      const beyondMax = WAVE_DEFINITIONS.length + 1;
+      const count = service.getTotalEnemiesInWave(beyondMax);
+      expect(count).toBeGreaterThan(0);
+    });
+
+    it('getTotalEnemiesInWave should return 0 for endless wave when endlessMode is off', () => {
+      const beyondMax = WAVE_DEFINITIONS.length + 1;
+      const count = service.getTotalEnemiesInWave(beyondMax);
+      expect(count).toBe(0);
+    });
+
+    it('getWaveReward should return >0 for endless wave when endlessMode is on', () => {
+      service.setEndlessMode(true);
+      const beyondMax = WAVE_DEFINITIONS.length + 1;
+      const reward = service.getWaveReward(beyondMax);
+      expect(reward).toBeGreaterThan(0);
+    });
+
+    it('getWaveReward should return 0 for endless wave when endlessMode is off', () => {
+      const beyondMax = WAVE_DEFINITIONS.length + 1;
+      const reward = service.getWaveReward(beyondMax);
+      expect(reward).toBe(0);
+    });
+
+    it('getTotalEnemiesInWave and getWaveReward should scale up for higher endless waves', () => {
+      service.setEndlessMode(true);
+      const wave11 = WAVE_DEFINITIONS.length + 1;
+      const wave21 = WAVE_DEFINITIONS.length + 11;
+      expect(service.getTotalEnemiesInWave(wave21)).toBeGreaterThan(service.getTotalEnemiesInWave(wave11));
+      expect(service.getWaveReward(wave21)).toBeGreaterThan(service.getWaveReward(wave11));
+    });
+  });
+
   // --- reset ---
 
   describe('reset', () => {
@@ -220,6 +258,23 @@ describe('WaveService', () => {
       service.update(5.0, mockScene);
 
       expect(enemyServiceSpy.spawnEnemy).not.toHaveBeenCalled();
+    });
+
+    it('should reset endlessMode to false', () => {
+      service.setEndlessMode(true);
+      expect(service.isEndlessMode()).toBeTrue();
+
+      service.reset();
+      expect(service.isEndlessMode()).toBeFalse();
+    });
+
+    it('should not start endless waves after reset even if endless mode was on', () => {
+      service.setEndlessMode(true);
+      service.reset();
+
+      const beyondMax = WAVE_DEFINITIONS.length + 1;
+      service.startWave(beyondMax, mockScene);
+      expect(service.isSpawning()).toBeFalse();
     });
   });
 

@@ -22,7 +22,7 @@ import { FpsCounterService } from './services/fps-counter.service';
 import { disposeMaterial } from './utils/three-utils';
 import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState } from './models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
 import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants/rendering.constants';
 import { AMBIENT_LIGHT, DIRECTIONAL_LIGHT, UNDER_LIGHT, POINT_LIGHTS } from './constants/lighting.constants';
@@ -34,7 +34,6 @@ import { ENEMY_STATS } from './models/enemy.model';
 import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
 
 const CAMERA_PAN_SPEED = 0.5;
-const VALID_SPEED_VALUES = [1, 2, 3];
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -64,6 +63,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private skybox?: THREE.Mesh;
   private bloomPass?: UnrealBloomPass;
   private vignettePass?: ShaderPass;
+  private renderPass?: RenderPass;
   private composer!: EffectComposer;
 
   // Interaction
@@ -163,6 +163,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         prevPhase !== GamePhase.VICTORY &&
         prevPhase !== GamePhase.DEFEAT
       ) {
+        // Flush any accumulated elapsed time before scoring so the final time is accurate
+        if (this.elapsedTimeAccumulator > 0) {
+          this.gameStateService.addElapsedTime(this.elapsedTimeAccumulator);
+          this.elapsedTimeAccumulator = 0;
+        }
         const livesTotal = DIFFICULTY_PRESETS[state.difficulty].lives;
         this.scoreBreakdown = calculateScoreBreakdown(
           state.score,
@@ -401,6 +406,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.waveService.reset();
     this.gameStateService.reset();
     this.scoreBreakdown = null;
+    this.wavePreview = [];
     this.defeatSoundPlayed = false;
     this.victorySoundPlayed = false;
 
@@ -537,8 +543,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private initializePostProcessing(): void {
     this.composer = new EffectComposer(this.renderer);
 
-    const renderPass = new RenderPass(this.scene, this.camera);
-    this.composer.addPass(renderPass);
+    this.renderPass = new RenderPass(this.scene, this.camera);
+    this.composer.addPass(this.renderPass);
 
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
@@ -879,8 +885,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   setSpeed(speed: number): void {
-    if (speed === 1 || speed === 2 || speed === 3) {
-      this.gameStateService.setSpeed(speed);
+    if ((VALID_GAME_SPEEDS as readonly number[]).includes(speed)) {
+      this.gameStateService.setSpeed(speed as GameSpeed);
     }
   }
 
@@ -1124,12 +1130,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cleanupGameObjects();
     }
 
+    this.audioService.cleanup();
+    this.particleService.cleanup(this.scene);
+    this.goldPopupService.cleanup(this.scene);
+    this.screenShakeService.cleanup(this.camera);
+    this.towerPreviewService.cleanup(this.scene);
+    this.fpsCounterService.reset();
+
     if (this.vignettePass) {
       this.vignettePass.dispose();
     }
 
     if (this.bloomPass) {
       this.bloomPass.dispose();
+    }
+
+    if (this.renderPass) {
+      this.renderPass.dispose();
     }
 
     if (this.composer) {
@@ -1140,12 +1157,5 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.renderer) {
       this.renderer.dispose();
     }
-
-    this.audioService.cleanup();
-    this.particleService.cleanup(this.scene);
-    this.goldPopupService.cleanup(this.scene);
-    this.screenShakeService.cleanup(this.camera);
-    this.towerPreviewService.cleanup();
-    this.fpsCounterService.reset();
   }
 }

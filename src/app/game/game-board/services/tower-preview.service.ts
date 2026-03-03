@@ -57,8 +57,11 @@ export class TowerPreviewService {
     this.removeMeshesFromScene(scene);
   }
 
-  /** Disposes all Three.js resources and clears internal state. */
-  cleanup(): void {
+  /** Disposes all Three.js resources and clears internal state. Removes meshes from scene if provided. */
+  cleanup(scene?: THREE.Scene): void {
+    if (scene) {
+      this.removeMeshesFromScene(scene);
+    }
     this.disposeMeshes();
   }
 

@@ -162,14 +162,27 @@ export class WaveService {
 
   getTotalEnemiesInWave(waveNumber: number): number {
     const index = waveNumber - 1;
-    if (index < 0 || index >= this.waveDefinitions.length) return 0;
-    return this.waveDefinitions[index].entries.reduce((sum, e) => sum + e.count, 0);
+    if (index < 0) return 0;
+    if (index < this.waveDefinitions.length) {
+      return this.waveDefinitions[index].entries.reduce((sum, e) => sum + e.count, 0);
+    }
+    if (this.endlessMode) {
+      const waveDef = this.generateEndlessWave(waveNumber);
+      return waveDef.entries.reduce((sum, e) => sum + e.count, 0);
+    }
+    return 0;
   }
 
   getWaveReward(waveNumber: number): number {
     const index = waveNumber - 1;
-    if (index < 0 || index >= this.waveDefinitions.length) return 0;
-    return this.waveDefinitions[index].reward;
+    if (index < 0) return 0;
+    if (index < this.waveDefinitions.length) {
+      return this.waveDefinitions[index].reward;
+    }
+    if (this.endlessMode) {
+      return this.generateEndlessWave(waveNumber).reward;
+    }
+    return 0;
   }
 
   getMaxWaves(): number {
@@ -180,5 +193,6 @@ export class WaveService {
     this.spawnQueues = [];
     this.active = false;
     this.currentWaveIndex = -1;
+    this.endlessMode = false;
   }
 }

@@ -833,6 +833,65 @@ describe('EnemyService', () => {
     });
   });
 
+  describe('cleanup()', () => {
+    it('should remove all enemies from the map', () => {
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+      service.spawnEnemy(EnemyType.HEAVY, mockScene);
+
+      service.cleanup(mockScene);
+
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('should remove all enemy meshes from the scene', () => {
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+      const initialCount = mockScene.children.length;
+      expect(initialCount).toBe(2);
+
+      service.cleanup(mockScene);
+
+      expect(mockScene.children.length).toBe(0);
+    });
+
+    it('should dispose geometries and materials for all enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const geometry = enemy.mesh!.geometry;
+      const material = enemy.mesh!.material as THREE.Material;
+
+      spyOn(geometry, 'dispose');
+      spyOn(material, 'dispose');
+
+      service.cleanup(mockScene);
+
+      expect(geometry.dispose).toHaveBeenCalled();
+      expect(material.dispose).toHaveBeenCalled();
+    });
+
+    it('should be a no-op when called with no enemies', () => {
+      expect(() => service.cleanup(mockScene)).not.toThrow();
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('should handle SHIELDED enemies and dispose shield meshes', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      expect(enemy.mesh!.userData['shieldMesh']).toBeTruthy();
+
+      expect(() => service.cleanup(mockScene)).not.toThrow();
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('should allow spawning new enemies after cleanup', () => {
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.cleanup(mockScene);
+
+      const newEnemy = service.spawnEnemy(EnemyType.FAST, mockScene);
+      expect(newEnemy).toBeTruthy();
+      expect(service.getEnemies().size).toBe(1);
+    });
+  });
+
   describe('Performance', () => {
     it('should handle 20+ enemies without issues', () => {
       const enemyCount = 25;

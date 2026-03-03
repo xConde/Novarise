@@ -129,9 +129,9 @@ describe('MapShareService', () => {
       expect(url).toContain('?map=');
     });
 
-    it('should include the encoded map data in the URL', () => {
+    it('should include the URL-encoded map data in the URL', () => {
       const state = minimalState();
-      const encoded = service.encode(state);
+      const encoded = encodeURIComponent(service.encode(state));
       const url = service.generateShareUrl(state);
       expect(url).toContain(encoded);
     });
@@ -139,8 +139,8 @@ describe('MapShareService', () => {
     it('should produce a decodable map param', () => {
       const state = minimalState();
       const url = service.generateShareUrl(state);
-      const encoded = url.split('?map=')[1];
-      const decoded = service.decode(encoded);
+      const urlEncoded = url.split('?map=')[1];
+      const decoded = service.decode(decodeURIComponent(urlEncoded));
       expect(decoded).not.toBeNull();
       expect(decoded?.gridSize).toBe(state.gridSize);
     });

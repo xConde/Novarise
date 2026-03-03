@@ -99,6 +99,7 @@ export class GameStateService {
   }
 
   setDifficulty(difficulty: DifficultyLevel): void {
+    if (this.state.phase !== GamePhase.SETUP || this.state.wave !== 0) return;
     const preset = DIFFICULTY_PRESETS[difficulty];
     this.state.difficulty = difficulty;
     this.state.lives = preset.lives;

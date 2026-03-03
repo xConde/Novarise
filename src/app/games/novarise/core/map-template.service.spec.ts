@@ -148,16 +148,16 @@ describe('MapTemplateService', () => {
 
     it('should contain path tiles along the horizontal corridor', () => {
       const midZ = 12;
-      // At least the center tiles should be ABYSS (path)
-      expect(state.tiles[0][midZ]).toBe(TerrainType.ABYSS);
-      expect(state.tiles[12][midZ]).toBe(TerrainType.ABYSS);
-      expect(state.tiles[24][midZ]).toBe(TerrainType.ABYSS);
+      // Path tiles should be BEDROCK (traversable)
+      expect(state.tiles[0][midZ]).toBe(TerrainType.BEDROCK);
+      expect(state.tiles[12][midZ]).toBe(TerrainType.BEDROCK);
+      expect(state.tiles[24][midZ]).toBe(TerrainType.BEDROCK);
     });
 
-    it('should have BEDROCK tiles off the path', () => {
-      // Tiles far from the corridor should be buildable BEDROCK
-      expect(state.tiles[12][0]).toBe(TerrainType.BEDROCK);
-      expect(state.tiles[12][24]).toBe(TerrainType.BEDROCK);
+    it('should have ABYSS tiles off the path', () => {
+      // Tiles far from the corridor should be ABYSS (non-traversable walls)
+      expect(state.tiles[12][0]).toBe(TerrainType.ABYSS);
+      expect(state.tiles[12][24]).toBe(TerrainType.ABYSS);
     });
   });
 
@@ -209,7 +209,7 @@ describe('MapTemplateService', () => {
       const pathRows = new Set<number>();
       for (let x = 0; x < 25; x++) {
         for (let z = 0; z < 25; z++) {
-          if (state.tiles[x][z] === TerrainType.ABYSS) {
+          if (state.tiles[x][z] === TerrainType.BEDROCK) {
             pathRows.add(z);
           }
         }
@@ -255,15 +255,15 @@ describe('MapTemplateService', () => {
     });
 
     it('should contain path tiles along the outer top edge', () => {
-      // z=0 should be path from x=0 to x=24
-      expect(state.tiles[0][0]).toBe(TerrainType.ABYSS);
-      expect(state.tiles[12][0]).toBe(TerrainType.ABYSS);
-      expect(state.tiles[24][0]).toBe(TerrainType.ABYSS);
+      // z=0 should be path (BEDROCK = traversable) from x=0 to x=24
+      expect(state.tiles[0][0]).toBe(TerrainType.BEDROCK);
+      expect(state.tiles[12][0]).toBe(TerrainType.BEDROCK);
+      expect(state.tiles[24][0]).toBe(TerrainType.BEDROCK);
     });
 
     it('should contain path tiles on the right edge', () => {
-      // x=24 should be path from z=0 to z=24
-      expect(state.tiles[24][12]).toBe(TerrainType.ABYSS);
+      // x=24 should be path (BEDROCK = traversable) from z=0 to z=24
+      expect(state.tiles[24][12]).toBe(TerrainType.BEDROCK);
     });
   });
 

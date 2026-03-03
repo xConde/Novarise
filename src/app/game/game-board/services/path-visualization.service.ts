@@ -38,11 +38,12 @@ export class PathVisualizationService {
   }
 
   /**
-   * Removes the path line from the scene without disposing the underlying resources.
+   * Removes the path line from the scene and disposes the underlying resources.
    * Safe to call even if showPath has never been called.
    */
   hidePath(scene: THREE.Scene): void {
     this.removeLine(scene);
+    this.disposeResources();
   }
 
   /**

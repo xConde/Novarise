@@ -613,4 +613,17 @@ export class EnemyService {
   clearPathCache(): void {
     this.pathCache.clear();
   }
+
+  /**
+   * Remove all enemies from the scene, dispose their geometries/materials,
+   * and clear the internal enemies map. Call on game restart or route teardown.
+   */
+  cleanup(scene: THREE.Scene): void {
+    this.enemies.forEach((enemy, id) => {
+      this.removeEnemy(id, scene);
+    });
+    // removeEnemy deletes entries during forEach — ensure map is cleared in case
+    // any entry was skipped (e.g. enemy with no mesh)
+    this.enemies.clear();
+  }
 }
