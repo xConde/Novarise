@@ -17,3 +17,23 @@ export const GOLD_POPUP_CONFIG = {
   canvasHeight: 64,
   spriteScale: 0.8,
 } as const;
+
+export const TOWER_UPGRADE_VISUAL_CONFIG = {
+  /** Scale multiplier per tower level: level 1 = 1.0, level 2 = 1.15, level 3 = 1.3 */
+  scalePerLevel: [1.0, 1.15, 1.3] as readonly number[],
+  /** Flash sprite settings */
+  flash: {
+    color: 0xffffff,
+    opacity: 0.8,
+    size: 1.5,
+    duration: 0.3,
+  },
+  /** Base glow ring settings */
+  glowRing: {
+    innerRadius: 0.3,
+    outerRadius: 0.5,
+    color: 0x8a5cf6,
+    opacity: 0.4,
+    segments: 32,
+  },
+} as const;

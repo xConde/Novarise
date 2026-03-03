@@ -127,6 +127,16 @@ export function getSellValue(totalInvested: number): number {
   return Math.round(totalInvested * 0.5);
 }
 
+/** One-line description of each tower's special ability, shown in hover tooltips. */
+export const TOWER_DESCRIPTIONS: Record<TowerType, string> = {
+  [TowerType.BASIC]:  'Balanced all-rounder',
+  [TowerType.SNIPER]: 'Long range, high damage, slow fire',
+  [TowerType.SPLASH]: 'Area damage in a radius',
+  [TowerType.SLOW]:   'Slows enemies, no damage',
+  [TowerType.CHAIN]:  'Lightning bounces between enemies',
+  [TowerType.MORTAR]: 'Creates damage zones on the ground',
+};
+
 /** Resolve effective stats for a tower at a given level (clamped to 1..MAX_TOWER_LEVEL). */
 export function getEffectiveStats(type: TowerType, level: number): TowerStats {
   const base = TOWER_CONFIGS[type];

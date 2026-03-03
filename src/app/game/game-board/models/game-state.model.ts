@@ -64,6 +64,7 @@ export interface GameState {
   highestWave: number; // tracks best wave reached in endless mode
   isPaused: boolean;
   gameSpeed: GameSpeed;
+  elapsedTime: number; // total seconds spent in COMBAT phase
 }
 
 export const INITIAL_GAME_STATE: GameState = {
@@ -77,5 +78,6 @@ export const INITIAL_GAME_STATE: GameState = {
   isEndless: false,
   highestWave: 0,
   isPaused: false,
-  gameSpeed: 1
+  gameSpeed: 1,
+  elapsedTime: 0
 };

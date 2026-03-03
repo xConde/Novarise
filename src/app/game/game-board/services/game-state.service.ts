@@ -106,6 +106,12 @@ export class GameStateService {
     this.emit();
   }
 
+  addElapsedTime(seconds: number): void {
+    if (this.state.phase !== GamePhase.COMBAT) return;
+    this.state.elapsedTime += seconds;
+    this.emit();
+  }
+
   reset(): void {
     this.state = { ...INITIAL_GAME_STATE };
     this.emit();

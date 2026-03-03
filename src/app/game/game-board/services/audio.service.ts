@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { TowerType } from '../models/tower.model';
-import { AUDIO_CONFIG } from '../constants/audio.constants';
+import { AUDIO_CONFIG, SFX_CONFIGS, isSfxSequenceConfig } from '../constants/audio.constants';
 
 @Injectable()
 export class AudioService {
@@ -207,6 +207,37 @@ export class AudioService {
   playVictory(): void {
     const cfg = AUDIO_CONFIG.victory;
     this.playArpeggio(cfg.notes, cfg.noteDuration, cfg.noteGap, cfg.oscillatorType, cfg.gain);
+  }
+
+  /**
+   * Play a named SFX from SFX_CONFIGS. Handles both single-tone and sequence configs.
+   * No-op if the key is not found.
+   */
+  playSfx(key: string): void {
+    const cfg = SFX_CONFIGS[key];
+    if (!cfg) return;
+
+    if (isSfxSequenceConfig(cfg)) {
+      this.playSequence(cfg.notes, cfg.type, cfg.volume);
+    } else {
+      this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.type, cfg.volume);
+    }
+  }
+
+  /**
+   * Play a sequence of notes in order, each starting after the previous one ends.
+   * Useful for multi-note fanfares (waveComplete, etc.).
+   */
+  playSequence(
+    notes: { freq: number; duration: number }[],
+    oscillatorType: OscillatorType = 'sine',
+    gain = 0.3
+  ): void {
+    let elapsed = 0;
+    for (const note of notes) {
+      this.playTone(note.freq, note.freq, note.duration, oscillatorType, gain, elapsed);
+      elapsed += note.duration;
+    }
   }
 
   // --- Volume / mute ---

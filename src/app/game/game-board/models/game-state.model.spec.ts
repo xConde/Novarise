@@ -129,6 +129,10 @@ describe('game-state.model', () => {
       expect(INITIAL_GAME_STATE.score).toBe(0);
     });
 
+    it('should start with elapsedTime of 0', () => {
+      expect(INITIAL_GAME_STATE.elapsedTime).toBe(0);
+    });
+
     it('should be a plain object (shallow-copyable without shared references)', () => {
       const copy: GameState = { ...INITIAL_GAME_STATE };
       copy.lives = 0;

@@ -20,7 +20,7 @@ import { GoldPopupService } from './services/gold-popup.service';
 import { TowerPreviewService } from './services/tower-preview.service';
 import { FpsCounterService } from './services/fps-counter.service';
 import { disposeMaterial } from './utils/three-utils';
-import { TowerType, TOWER_CONFIGS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
+import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState } from './models/game-state.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
@@ -89,6 +89,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Game state exposed to template
   gameState: GameState;
   towerConfigs = TOWER_CONFIGS;
+  towerDescriptions = TOWER_DESCRIPTIONS;
   TowerType = TowerType;
   GamePhase = GamePhase;
   DifficultyLevel = DifficultyLevel;
@@ -103,6 +104,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Animation
   private lastTime = 0;
+  private elapsedTimeAccumulator = 0;
   private defeatSoundPlayed = false;
   private victorySoundPlayed = false;
   private keyboardHandler: (event: KeyboardEvent) => void;
@@ -417,6 +419,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.addGridLines();
     this.enemyService.clearPathCache();
     this.lastTime = 0;
+    this.elapsedTimeAccumulator = 0;
   }
 
 
@@ -889,6 +892,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.gameState.gameSpeed;
   }
 
+  /** Formats the total COMBAT elapsed time as "MM:SS". */
+  get formattedTime(): string {
+    const totalSeconds = Math.floor(this.gameState.elapsedTime);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
   private handleKeyboard(event: KeyboardEvent): void {
     const phase = this.gameStateService.getState().phase;
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
@@ -990,6 +1001,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       if (state.phase === GamePhase.COMBAT && !state.isPaused) {
         const scaledDelta = deltaTime * state.gameSpeed;
+
+        // Elapsed time tracking — accumulate locally, flush to service every ~1 second
+        this.elapsedTimeAccumulator += deltaTime;
+        if (this.elapsedTimeAccumulator >= 1) {
+          this.gameStateService.addElapsedTime(this.elapsedTimeAccumulator);
+          this.elapsedTimeAccumulator = 0;
+        }
+
         // Wave spawning
         this.waveService.update(scaledDelta, this.scene);
 

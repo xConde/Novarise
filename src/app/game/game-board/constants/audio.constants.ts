@@ -1,5 +1,88 @@
 import { TowerType } from '../models/tower.model';
 
+// --- SFX_CONFIGS: lightweight config for new tower type and game event sounds ---
+
+export interface SfxConfig {
+  type: OscillatorType;
+  frequency: number;
+  endFrequency: number;
+  duration: number;
+  volume: number;
+}
+
+export interface SfxSequenceConfig {
+  type: OscillatorType;
+  notes: { freq: number; duration: number }[];
+  volume: number;
+}
+
+export type SfxConfigEntry = SfxConfig | SfxSequenceConfig;
+
+export function isSfxSequenceConfig(cfg: SfxConfigEntry): cfg is SfxSequenceConfig {
+  return 'notes' in cfg;
+}
+
+export const SFX_CONFIGS: Record<string, SfxConfigEntry> = {
+  // High-frequency electric zap for chain lightning tower
+  chainZap: {
+    type: 'square',
+    frequency: 880,
+    endFrequency: 1760,
+    duration: 0.05,
+    volume: 0.18,
+  } as SfxConfig,
+
+  // Deep boom for mortar explosion impact
+  mortarExplosion: {
+    type: 'sine',
+    frequency: 80,
+    endFrequency: 40,
+    duration: 0.3,
+    volume: 0.25,
+  } as SfxConfig,
+
+  // Subtle hum for slow tower aura activation
+  slowAura: {
+    type: 'sine',
+    frequency: 220,
+    endFrequency: 220,
+    duration: 0.1,
+    volume: 0.1,
+  } as SfxConfig,
+
+  // Ascending tone fanfare for wave completion (multi-note sequence)
+  waveComplete: {
+    type: 'sine',
+    notes: [
+      { freq: 440, duration: 0.1 },   // A4
+      { freq: 554, duration: 0.1 },   // C#5
+      { freq: 659, duration: 0.1 },   // E5
+      { freq: 880, duration: 0.2 },   // A5 — held
+    ],
+    volume: 0.3,
+  } as SfxSequenceConfig,
+
+  // Descending tone for game over
+  gameOver: {
+    type: 'sine',
+    frequency: 440,
+    endFrequency: 110,
+    duration: 0.5,
+    volume: 0.3,
+  } as SfxConfig,
+
+  // Bright ascending chirp for tower upgrade confirmation
+  towerUpgrade: {
+    type: 'square',
+    frequency: 300,
+    endFrequency: 600,
+    duration: 0.15,
+    volume: 0.25,
+  } as SfxConfig,
+};
+
+// ---
+
 interface ToneConfig {
   frequency: number;
   endFrequency: number;

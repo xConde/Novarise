@@ -548,6 +548,71 @@ describe('GameStateService', () => {
     });
   });
 
+  // --- addElapsedTime ---
+
+  describe('addElapsedTime', () => {
+    it('should add time to elapsedTime when in COMBAT phase', () => {
+      service.startWave(); // → COMBAT
+      service.addElapsedTime(5);
+      expect(service.getState().elapsedTime).toBe(5);
+    });
+
+    it('should accumulate multiple calls', () => {
+      service.startWave(); // → COMBAT
+      service.addElapsedTime(3);
+      service.addElapsedTime(2.5);
+      expect(service.getState().elapsedTime).toBeCloseTo(5.5);
+    });
+
+    it('should be a no-op when in SETUP phase', () => {
+      service.addElapsedTime(10);
+      expect(service.getState().elapsedTime).toBe(0);
+    });
+
+    it('should be a no-op when in INTERMISSION phase', () => {
+      service.startWave();
+      service.completeWave(10); // → INTERMISSION
+      service.addElapsedTime(10);
+      expect(service.getState().elapsedTime).toBe(0);
+    });
+
+    it('should be a no-op when in VICTORY phase', () => {
+      const maxWaves = service.getState().maxWaves;
+      for (let i = 0; i < maxWaves; i++) {
+        service.startWave();
+      }
+      service.completeWave(100); // → VICTORY
+      service.addElapsedTime(10);
+      expect(service.getState().elapsedTime).toBe(0);
+    });
+
+    it('should be a no-op when in DEFEAT phase', () => {
+      service.loseLife(INITIAL_GAME_STATE.lives); // → DEFEAT
+      service.addElapsedTime(10);
+      expect(service.getState().elapsedTime).toBe(0);
+    });
+
+    it('should emit state after adding time', (done) => {
+      service.startWave();
+      let emitCount = 0;
+      service.getState$().subscribe(state => {
+        emitCount++;
+        if (emitCount === 2) {
+          expect(state.elapsedTime).toBe(1);
+          done();
+        }
+      });
+      service.addElapsedTime(1);
+    });
+
+    it('reset should clear elapsedTime', () => {
+      service.startWave();
+      service.addElapsedTime(30);
+      service.reset();
+      expect(service.getState().elapsedTime).toBe(0);
+    });
+  });
+
   // --- Observable contract ---
 
   describe('observable contract', () => {
