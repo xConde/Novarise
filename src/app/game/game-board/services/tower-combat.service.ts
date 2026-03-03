@@ -4,6 +4,7 @@ import { Enemy } from '../models/enemy.model';
 import { PlacedTower, TowerType, TowerStats, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats } from '../models/tower.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
+import { PROJECTILE_CONFIG } from '../constants/ui.constants';
 
 interface Projectile {
   id: string;
@@ -148,14 +149,14 @@ export class TowerCombatService {
     const towerWorldX = (tower.col - boardWidth / 2) * tileSize;
     const towerWorldZ = (tower.row - boardHeight / 2) * tileSize;
 
-    const geometry = new THREE.SphereGeometry(0.08, 6, 6);
+    const geometry = new THREE.SphereGeometry(PROJECTILE_CONFIG.radius, PROJECTILE_CONFIG.segments, PROJECTILE_CONFIG.segments);
     const material = new THREE.MeshBasicMaterial({
       color: stats.color,
       transparent: true,
-      opacity: 0.9
+      opacity: PROJECTILE_CONFIG.opacity
     });
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(towerWorldX, 0.8, towerWorldZ);
+    mesh.position.set(towerWorldX, PROJECTILE_CONFIG.spawnHeight, towerWorldZ);
     scene.add(mesh);
 
     this.projectiles.push({
