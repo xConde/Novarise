@@ -49,6 +49,9 @@ export const DIFFICULTY_PRESETS: Record<DifficultyLevel, DifficultyPreset> = {
   }
 };
 
+export const VALID_GAME_SPEEDS = [1, 2, 3] as const;
+export type GameSpeed = typeof VALID_GAME_SPEEDS[number];
+
 export interface GameState {
   phase: GamePhase;
   wave: number;
@@ -59,6 +62,8 @@ export interface GameState {
   difficulty: DifficultyLevel;
   isEndless: boolean;
   highestWave: number; // tracks best wave reached in endless mode
+  isPaused: boolean;
+  gameSpeed: GameSpeed;
 }
 
 export const INITIAL_GAME_STATE: GameState = {
@@ -70,5 +75,7 @@ export const INITIAL_GAME_STATE: GameState = {
   score: 0,
   difficulty: DifficultyLevel.NORMAL,
   isEndless: false,
-  highestWave: 0
+  highestWave: 0,
+  isPaused: false,
+  gameSpeed: 1
 };

@@ -790,6 +790,24 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.tileMeshes.get(`${this.selectedTile.row}-${this.selectedTile.col}`) || null;
   }
 
+  togglePause(): void {
+    this.gameStateService.togglePause();
+  }
+
+  setSpeed(speed: number): void {
+    if (speed === 1 || speed === 2 || speed === 3) {
+      this.gameStateService.setSpeed(speed);
+    }
+  }
+
+  get isPaused(): boolean {
+    return this.gameState.isPaused;
+  }
+
+  get gameSpeed(): number {
+    return this.gameState.gameSpeed;
+  }
+
   private handleKeyboard(event: KeyboardEvent): void {
     const phase = this.gameStateService.getState().phase;
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
@@ -799,6 +817,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         // Spacebar starts the next wave
         event.preventDefault();
         this.startWave();
+        break;
+      case 'p':
+        // P key toggles pause
+        event.preventDefault();
+        this.togglePause();
         break;
     }
   }
@@ -835,12 +858,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (deltaTime > 0) {
       const state = this.gameStateService.getState();
 
-      if (state.phase === GamePhase.COMBAT) {
+      if (state.phase === GamePhase.COMBAT && !state.isPaused) {
+        const scaledDelta = deltaTime * state.gameSpeed;
         // Wave spawning
-        this.waveService.update(deltaTime, this.scene);
+        this.waveService.update(scaledDelta, this.scene);
 
         // Tower combat — returns IDs of enemies killed, tower types that fired, and hit count
-        const { killed: killedByTowers, fired: firedTowerTypes, hitCount } = this.towerCombatService.update(deltaTime, this.scene);
+        const { killed: killedByTowers, fired: firedTowerTypes, hitCount } = this.towerCombatService.update(scaledDelta, this.scene);
 
         // Play tower fire sounds
         for (const towerType of firedTowerTypes) {
@@ -864,7 +888,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         }
 
         // Move enemies along paths
-        const reachedExit = this.enemyService.updateEnemies(deltaTime);
+        const reachedExit = this.enemyService.updateEnemies(scaledDelta);
 
         // Enemies reaching the exit cost lives
         for (const enemyId of reachedExit) {

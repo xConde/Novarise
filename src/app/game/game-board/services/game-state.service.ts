@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState, INITIAL_GAME_STATE } from '../models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, INITIAL_GAME_STATE, VALID_GAME_SPEEDS } from '../models/game-state.model';
 
 @Injectable()
 export class GameStateService {
@@ -83,6 +83,18 @@ export class GameStateService {
 
   addScore(points: number): void {
     this.state.score += points;
+    this.emit();
+  }
+
+  togglePause(): void {
+    if (this.state.phase !== GamePhase.COMBAT) return;
+    this.state.isPaused = !this.state.isPaused;
+    this.emit();
+  }
+
+  setSpeed(speed: GameSpeed): void {
+    if (!VALID_GAME_SPEEDS.includes(speed)) return;
+    this.state.gameSpeed = speed;
     this.emit();
   }
 

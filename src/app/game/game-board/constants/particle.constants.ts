@@ -10,6 +10,15 @@ export const PARTICLE_CONFIG = {
   rotationSpeed: 0.0002
 };
 
+export const DEATH_BURST_CONFIG = {
+  defaultCount: 8,
+  radius: 0.05,
+  minSpeed: 2,
+  maxSpeed: 5,
+  lifetime: 0.5,
+  gravity: -5,
+} as const;
+
 export const PARTICLE_COLORS: Array<{ threshold: number; r: number; g: number; b: number }> = [
   { threshold: 0.4, r: 0.4, g: 0.5, b: 0.7 },
   { threshold: 0.7, r: 0.5, g: 0.3, b: 0.6 },

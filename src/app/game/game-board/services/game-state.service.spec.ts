@@ -439,6 +439,115 @@ describe('GameStateService', () => {
     });
   });
 
+  // --- togglePause ---
+
+  describe('togglePause', () => {
+    it('should start unpaused', () => {
+      expect(service.getState().isPaused).toBeFalse();
+    });
+
+    it('should pause during COMBAT phase', () => {
+      service.startWave(); // → COMBAT
+      service.togglePause();
+      expect(service.getState().isPaused).toBeTrue();
+    });
+
+    it('should resume when called again during COMBAT', () => {
+      service.startWave(); // → COMBAT
+      service.togglePause();
+      service.togglePause();
+      expect(service.getState().isPaused).toBeFalse();
+    });
+
+    it('should be a no-op outside of COMBAT phase (SETUP)', () => {
+      service.togglePause(); // phase is SETUP
+      expect(service.getState().isPaused).toBeFalse();
+    });
+
+    it('should be a no-op in INTERMISSION phase', () => {
+      service.startWave();
+      service.completeWave(10); // → INTERMISSION
+      service.togglePause();
+      expect(service.getState().isPaused).toBeFalse();
+    });
+
+    it('should emit state change when toggling', (done) => {
+      service.startWave();
+      let emitCount = 0;
+      service.getState$().subscribe(state => {
+        emitCount++;
+        if (emitCount === 2) {
+          expect(state.isPaused).toBeTrue();
+          done();
+        }
+      });
+      service.togglePause();
+    });
+
+    it('reset should clear isPaused', () => {
+      service.startWave();
+      service.togglePause();
+      service.reset();
+      expect(service.getState().isPaused).toBeFalse();
+    });
+  });
+
+  // --- setSpeed ---
+
+  describe('setSpeed', () => {
+    it('should start at speed 1', () => {
+      expect(service.getState().gameSpeed).toBe(1);
+    });
+
+    it('should set speed to 2', () => {
+      service.setSpeed(2);
+      expect(service.getState().gameSpeed).toBe(2);
+    });
+
+    it('should set speed to 3', () => {
+      service.setSpeed(3);
+      expect(service.getState().gameSpeed).toBe(3);
+    });
+
+    it('should set speed back to 1', () => {
+      service.setSpeed(3);
+      service.setSpeed(1);
+      expect(service.getState().gameSpeed).toBe(1);
+    });
+
+    it('should reject invalid speed values and keep current speed', () => {
+      service.setSpeed(2);
+      service.setSpeed(99 as 1);
+      expect(service.getState().gameSpeed).toBe(2);
+    });
+
+    it('should work in any game phase', () => {
+      service.setSpeed(3);
+      expect(service.getState().gameSpeed).toBe(3);
+      service.startWave();
+      service.setSpeed(2);
+      expect(service.getState().gameSpeed).toBe(2);
+    });
+
+    it('should emit state change when speed changes', (done) => {
+      let emitCount = 0;
+      service.getState$().subscribe(state => {
+        emitCount++;
+        if (emitCount === 2) {
+          expect(state.gameSpeed).toBe(3);
+          done();
+        }
+      });
+      service.setSpeed(3);
+    });
+
+    it('reset should restore speed to 1', () => {
+      service.setSpeed(3);
+      service.reset();
+      expect(service.getState().gameSpeed).toBe(1);
+    });
+  });
+
   // --- Observable contract ---
 
   describe('observable contract', () => {

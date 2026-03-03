@@ -66,6 +66,29 @@
     </button>
   </div>
 
+  <!-- Pause/Speed controls -->
+  <div class="game-controls" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
+    <button
+      class="control-btn pause-btn"
+      (click)="togglePause()"
+      [class.active]="isPaused"
+      [attr.aria-label]="isPaused ? 'Resume game' : 'Pause game'"
+      [attr.aria-pressed]="isPaused">
+      {{ isPaused ? '&#9654;' : '&#9646;&#9646;' }}
+    </button>
+    <div class="speed-controls">
+      <button
+        *ngFor="let s of [1, 2, 3]"
+        class="control-btn speed-btn"
+        [class.active]="gameSpeed === s"
+        (click)="setSpeed(s)"
+        [attr.aria-label]="s + 'x speed'"
+        [attr.aria-pressed]="gameSpeed === s">
+        {{ s }}x
+      </button>
+    </div>
+  </div>
+
   <!-- Victory/Defeat overlay -->
   <div class="game-overlay" *ngIf="gameState.phase === GamePhase.VICTORY || gameState.phase === GamePhase.DEFEAT">
     <div class="overlay-content" [class.victory]="gameState.phase === GamePhase.VICTORY" [class.defeat]="gameState.phase === GamePhase.DEFEAT">
