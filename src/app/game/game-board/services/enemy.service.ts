@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Enemy, EnemyType, ENEMY_STATS, GridNode } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { BlockType } from '../models/game-board-tile';
+import { HEALTH_BAR_CONFIG } from '../constants/ui.constants';
 
 @Injectable()
 export class EnemyService {
@@ -376,12 +377,12 @@ export class EnemyService {
 
         // Color transitions: green -> yellow -> red
         const mat = healthBarFg.material as THREE.MeshBasicMaterial;
-        if (healthPct > 0.6) {
-          mat.color.setHex(0x00ff00);
-        } else if (healthPct > 0.3) {
-          mat.color.setHex(0xffff00);
+        if (healthPct > HEALTH_BAR_CONFIG.thresholdHigh) {
+          mat.color.setHex(HEALTH_BAR_CONFIG.colorGreen);
+        } else if (healthPct > HEALTH_BAR_CONFIG.thresholdLow) {
+          mat.color.setHex(HEALTH_BAR_CONFIG.colorYellow);
         } else {
-          mat.color.setHex(0xff0000);
+          mat.color.setHex(HEALTH_BAR_CONFIG.colorRed);
         }
       }
     });
@@ -406,18 +407,18 @@ export class EnemyService {
     mesh.receiveShadow = true;
 
     // Add health bar above enemy
-    const barWidth = 0.5;
-    const barHeight = 0.06;
-    const barY = stats.size + 0.2;
+    const barWidth = HEALTH_BAR_CONFIG.width;
+    const barHeight = HEALTH_BAR_CONFIG.height;
+    const barY = stats.size + HEALTH_BAR_CONFIG.yOffset;
 
     const bgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
-    const bgMaterial = new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide });
+    const bgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.bgColor, side: THREE.DoubleSide });
     const healthBarBg = new THREE.Mesh(bgGeometry, bgMaterial);
     healthBarBg.position.set(0, barY, 0);
     healthBarBg.lookAt(0, barY, 1); // Face camera roughly
 
     const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
-    const fgMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
+    const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
     const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
     healthBarFg.position.set(0, barY + 0.001, 0);
     healthBarFg.lookAt(0, barY + 0.001, 1);

@@ -1,5 +1,13 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
+import {
+  EDITOR_CAMERA_CONFIG,
+  EDITOR_CAMERA_INITIAL_POSITION,
+  EDITOR_CAMERA_JOYSTICK_ROTATION_MULTIPLIER,
+  EDITOR_CAMERA_POSITION_BOUND,
+  EDITOR_CAMERA_LOOK_AT_DISTANCE,
+  EDITOR_CAMERA_LOOK_AT_Y_OFFSET,
+} from '../constants/editor-camera.constants';
 
 export interface CameraState {
   position: THREE.Vector3;
@@ -50,19 +58,7 @@ export interface JoystickInput {
   providedIn: 'root'
 })
 export class CameraControlService {
-  private readonly defaultConfig: CameraConfig = {
-    moveSpeed: 0.25,
-    fastSpeed: 0.6,
-    acceleration: 0.15,
-    rotationSpeed: 0.005,
-    rotationAcceleration: 0.15,
-    minDistance: 10,
-    maxDistance: 80,
-    minHeight: 5,
-    maxHeight: 60,
-    maxPitch: Math.PI / 4,        // 45 degrees up
-    minPitch: -Math.PI * 5 / 12   // 75 degrees down
-  };
+  private readonly defaultConfig: CameraConfig = { ...EDITOR_CAMERA_CONFIG };
 
   private config: CameraConfig;
   private state: CameraState;
@@ -74,7 +70,7 @@ export class CameraControlService {
 
   private createInitialState(): CameraState {
     return {
-      position: new THREE.Vector3(0, 35, 17.5),
+      position: new THREE.Vector3(...EDITOR_CAMERA_INITIAL_POSITION),
       velocity: { x: 0, y: 0, z: 0 },
       targetVelocity: { x: 0, y: 0, z: 0 },
       rotation: { yaw: 0, pitch: 0 },
@@ -152,7 +148,7 @@ export class CameraControlService {
   private updateRotationFromJoystick(joystick: JoystickInput): void {
     if (!joystick.active) return;
 
-    const rotationJoystickSpeed = this.config.rotationSpeed * 1.5;
+    const rotationJoystickSpeed = this.config.rotationSpeed * EDITOR_CAMERA_JOYSTICK_ROTATION_MULTIPLIER;
 
     // X axis controls yaw
     this.state.targetRotation.yaw -= joystick.x * rotationJoystickSpeed;
@@ -232,7 +228,7 @@ export class CameraControlService {
   }
 
   private applyBounds(): void {
-    const maxDistance = 50;
+    const maxDistance = EDITOR_CAMERA_POSITION_BOUND;
     this.state.position.x = Math.max(-maxDistance, Math.min(maxDistance, this.state.position.x));
     this.state.position.z = Math.max(-maxDistance, Math.min(maxDistance, this.state.position.z));
     this.state.position.y = Math.max(this.config.minHeight, Math.min(this.config.maxHeight, this.state.position.y));
@@ -251,9 +247,9 @@ export class CameraControlService {
       Math.cos(this.state.rotation.yaw)
     ).normalize();
 
-    const lookAtDistance = 10;
+    const lookAtDistance = EDITOR_CAMERA_LOOK_AT_DISTANCE;
     const targetX = this.state.position.x + forward.x * lookAtDistance;
-    const targetY = this.state.position.y + Math.sin(this.state.rotation.pitch) * lookAtDistance - 5;
+    const targetY = this.state.position.y + Math.sin(this.state.rotation.pitch) * lookAtDistance + EDITOR_CAMERA_LOOK_AT_Y_OFFSET;
     const targetZ = this.state.position.z + forward.z * lookAtDistance;
 
     if (controlsTarget) {

@@ -28,11 +28,14 @@
       [brushSize]="brushSize"
       [activeTool]="activeTool"
       [canPlayMap]="canPlayMap"
+      [isPathValid]="isPathValid"
+      [hasSpawnAndExit]="hasSpawnAndExit"
       (editModeChange)="setEditMode($event)"
       (terrainTypeChange)="setTerrainType($event)"
       (brushSizeChange)="setBrushSize($event)"
       (activeToolChange)="setActiveTool($event)"
-      (playMapClick)="playMap()">
+      (playMapClick)="playMap()"
+      (deleteMapClick)="deleteMap()">
     </app-edit-controls>
   </div>
 </div>

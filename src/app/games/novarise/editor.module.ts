@@ -4,6 +4,7 @@ import { RouterModule } from '@angular/router';
 import { NovariseComponent } from './novarise.component';
 import { EditControlsComponent } from './features/ui-controls/edit-controls.component';
 import { MobileControlsModule } from './features/mobile-controls';
+import { PathValidationService } from './core/path-validation.service';
 
 @NgModule({
   declarations: [
@@ -14,6 +15,9 @@ import { MobileControlsModule } from './features/mobile-controls';
     CommonModule,
     MobileControlsModule,
     RouterModule.forChild([{ path: '', component: NovariseComponent }])
+  ],
+  providers: [
+    PathValidationService
   ]
 })
 export class EditorModule {}

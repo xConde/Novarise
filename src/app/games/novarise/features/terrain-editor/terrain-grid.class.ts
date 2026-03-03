@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
+import { disposeMaterial } from '../../../../game/game-board/utils/three-utils';
 import { TerrainGridState } from './terrain-grid-state.interface';
+import { EDITOR_GRID_LINES, EDITOR_HEIGHT } from '../../constants/editor-ui.constants';
 
 export interface TerrainTile {
   type: TerrainType;
@@ -97,8 +99,8 @@ export class TerrainGrid {
   private addGridLines(): void {
     const halfSize = this.gridSize / 2;
     const material = new THREE.LineBasicMaterial({
-      color: 0x3a2a4a,
-      opacity: 0.3,
+      color: EDITOR_GRID_LINES.color,
+      opacity: EDITOR_GRID_LINES.opacity,
       transparent: true
     });
 
@@ -122,7 +124,7 @@ export class TerrainGrid {
 
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     this.gridLines = new THREE.LineSegments(geometry, material);
-    this.gridLines.position.y = 0.01;
+    this.gridLines.position.y = EDITOR_GRID_LINES.yOffset;
     this.scene.add(this.gridLines);
   }
 
@@ -154,7 +156,7 @@ export class TerrainGrid {
     if (!this.isValidPosition(x, z)) return;
 
     const oldHeight = this.heightMap[x][z];
-    const newHeight = Math.max(0, Math.min(5, oldHeight + delta));
+    const newHeight = Math.max(EDITOR_HEIGHT.min, Math.min(EDITOR_HEIGHT.max, oldHeight + delta));
 
     // Performance: Skip if height didn't actually change (already at limit)
     if (oldHeight === newHeight) return;
@@ -181,7 +183,7 @@ export class TerrainGrid {
   public setHeight(x: number, z: number, height: number): void {
     if (!this.isValidPosition(x, z)) return;
 
-    const clampedHeight = Math.max(0, Math.min(5, height));
+    const clampedHeight = Math.max(EDITOR_HEIGHT.min, Math.min(EDITOR_HEIGHT.max, height));
 
     // Skip if height is already at target
     if (this.heightMap[x][z] === clampedHeight) return;
@@ -202,8 +204,8 @@ export class TerrainGrid {
       const diff = centerHeight - neighborHeight;
 
       // Smooth if difference is too large
-      if (Math.abs(diff) > 0.5) {
-        this.heightMap[nx][nz] += diff * 0.3;
+      if (Math.abs(diff) > EDITOR_HEIGHT.smoothingThreshold) {
+        this.heightMap[nx][nz] += diff * EDITOR_HEIGHT.smoothingBlendFactor;
       }
     });
   }
@@ -237,7 +239,7 @@ export class TerrainGrid {
     // Remove old mesh and dispose its resources
     this.scene.remove(tile.mesh);
     tile.mesh.geometry.dispose();
-    this.disposeMaterial(tile.mesh.material);
+    disposeMaterial(tile.mesh.material);
 
     // Create new mesh with updated height
     const newMesh = this.createTileMesh(x, z, tile.type, height);
@@ -348,15 +350,6 @@ export class TerrainGrid {
     }
   }
 
-  /** Dispose a Three.js material, handling both single and array forms. */
-  private disposeMaterial(material: THREE.Material | THREE.Material[]): void {
-    if (Array.isArray(material)) {
-      material.forEach(mat => mat.dispose());
-    } else {
-      material.dispose();
-    }
-  }
-
   public dispose(): void {
     // Clean up all meshes
     for (let x = 0; x < this.gridSize; x++) {
@@ -364,7 +357,7 @@ export class TerrainGrid {
         const tile = this.tiles[x][z];
         this.scene.remove(tile.mesh);
         tile.mesh.geometry.dispose();
-        this.disposeMaterial(tile.mesh.material);
+        disposeMaterial(tile.mesh.material);
       }
     }
 
@@ -372,7 +365,7 @@ export class TerrainGrid {
     if (this.gridLines) {
       this.scene.remove(this.gridLines);
       this.gridLines.geometry.dispose();
-      this.disposeMaterial(this.gridLines.material);
+      disposeMaterial(this.gridLines.material);
     }
 
     // Clear caches

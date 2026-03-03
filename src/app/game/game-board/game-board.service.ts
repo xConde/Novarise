@@ -2,14 +2,15 @@ import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { BlockType, GameBoardTile, SpawnerType } from './models/game-board-tile';
 import { TowerType } from './models/tower.model';
+import { BOARD_CONFIG } from './constants/board.constants';
 
 @Injectable()
 export class GameBoardService {
   // Board configuration
-  private gameBoardWidth = 25;
-  private gameBoardHeight = 20;
-  private readonly tileSize = 1;
-  private readonly tileHeight = 0.2;
+  private gameBoardWidth = BOARD_CONFIG.width;
+  private gameBoardHeight = BOARD_CONFIG.height;
+  private readonly tileSize = BOARD_CONFIG.tileSize;
+  private readonly tileHeight = BOARD_CONFIG.tileHeight;
 
   // Exit tile coordinates (center of board)
   private readonly exitTileCoordinates: number[][] = [
@@ -76,15 +77,17 @@ export class GameBoardService {
   }
 
   private getSpawnerRange(type: SpawnerType) {
+    const w = this.gameBoardWidth;
+    const h = this.gameBoardHeight;
     switch (type) {
       case SpawnerType.TOP_LEFT:
         return { minRow: 0, maxRow: 1, minCol: 0, maxCol: 1, centerX: 0, centerY: 0 };
       case SpawnerType.TOP_RIGHT:
-        return { minRow: 0, maxRow: 1, minCol: 23, maxCol: 24, centerX: 0, centerY: 24 };
+        return { minRow: 0, maxRow: 1, minCol: w - 2, maxCol: w - 1, centerX: 0, centerY: w - 1 };
       case SpawnerType.BOTTOM_LEFT:
-        return { minRow: 18, maxRow: 19, minCol: 0, maxCol: 1, centerX: 18, centerY: 0 };
+        return { minRow: h - 2, maxRow: h - 1, minCol: 0, maxCol: 1, centerX: h - 2, centerY: 0 };
       case SpawnerType.BOTTOM_RIGHT:
-        return { minRow: 18, maxRow: 19, minCol: 23, maxCol: 24, centerX: 18, centerY: 24 };
+        return { minRow: h - 2, maxRow: h - 1, minCol: w - 2, maxCol: w - 1, centerX: h - 2, centerY: w - 1 };
     }
   }
 
@@ -233,8 +236,8 @@ export class GameBoardService {
    * Fixes ghost tower singleton leak on re-navigation.
    */
   resetBoard(): void {
-    this.gameBoardWidth = 25;
-    this.gameBoardHeight = 20;
+    this.gameBoardWidth = BOARD_CONFIG.width;
+    this.gameBoardHeight = BOARD_CONFIG.height;
     this.gameBoard = [];
     this.spawnerTiles = [];
     this.exitTiles = [];

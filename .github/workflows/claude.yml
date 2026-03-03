@@ -20,10 +20,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
-      issues: read
+      pull-requests: write
+      issues: write
       id-token: write
       actions: read
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,20 +33,22 @@ jobs:
 
       - name: Run Claude Code
         id: claude
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-          additional_permissions: |
-            actions: read
 
           allowed_tools: "Bash(npm install),Bash(npx ng build),Bash(npx ng test --no-watch --browsers=ChromeHeadless)"
 
           custom_instructions: |
-            Follow Angular coding standards and style guide
-            Ensure components follow single responsibility principle
-            Check for proper TypeScript typing (no unnecessary as any casts)
-            Verify Three.js resources are properly disposed in ngOnDestroy
-            Check for memory leaks (subscriptions, event listeners, GPU resources)
-            Use TypeScript for new files
-            Ensure all new code has tests
+            This is Novarise — an Angular 15 + Three.js tower defense game with a map editor.
+
+            Key areas:
+            - Map Editor (src/app/games/novarise/) — terrain painting, height editing, spawn/exit placement, path validation
+            - Tower Defense Game (src/app/game/) — board generation, tower placement/upgrade/sell, A* pathfinding, wave spawning, projectile combat
+            - Constants architecture: all magic numbers in constants files (editor-ui.constants.ts, ui.constants.ts, audio.constants.ts)
+            - Coordinate systems: editor tiles[x][z] (column-major), game board[row][col] (row-major)
+            - Three.js disposal: all geometries/materials/textures/render targets must be cleaned up in ngOnDestroy
+            - State mutation: confirm-before-spend pattern for gold/lives
+
+            Follow TypeScript strict mode. All new code needs tests.
+            Reference CLAUDE.md for project conventions.

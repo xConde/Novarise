@@ -24,6 +24,14 @@ jobs:
       id-token: write
 
     steps:
+      - name: Validate secrets
+        run: |
+          if [ -z "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}" ]; then
+            echo "::error::CLAUDE_CODE_OAUTH_TOKEN secret is not configured."
+            echo "Please add the secret at: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -48,13 +56,20 @@ jobs:
           fi
 
       - name: Run Claude Code Review
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
           direct_prompt: |
-            Review PR #${{ inputs.pr_number }} with focus on code quality and best practices.
+            Review PR #${{ inputs.pr_number }} for Novarise (Angular 15 + Three.js tower defense game).
             ${{ steps.prepare.outputs.focus_prompt }}
+
+            Key review criteria:
+            - Magic numbers must be in constants files, not inline
+            - Three.js resources and Web Audio nodes must be properly disposed
+            - Coordinate system alignment (editor tiles[x][z] vs game board[row][col])
+            - Confirm-before-spend state mutation pattern
+            - TypeScript strict mode compliance
 
             Be concise and focus on the most important issues.
 

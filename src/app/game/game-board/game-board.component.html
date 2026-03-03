@@ -6,6 +6,11 @@
     Edit Map
   </button>
 
+  <!-- Audio mute toggle -->
+  <button class="audio-toggle-btn" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
+    {{ audioMuted ? '&#128263;' : '&#128266;' }}
+  </button>
+
   <!-- Game HUD -->
   <div class="game-hud">
     <div class="hud-stat">

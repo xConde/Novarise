@@ -13,7 +13,31 @@ import { EditHistoryService, PaintCommand, HeightCommand, SpawnPointCommand, Exi
 import { CameraControlService, MovementInput, RotationInput, JoystickInput } from './core/camera-control.service';
 import { EditorStateService, EditMode, BrushTool } from './core/editor-state.service';
 import { MapBridgeService } from '../../game/game-board/services/map-bridge.service';
+import { disposeMaterial } from '../../game/game-board/utils/three-utils';
 import { JoystickEvent } from './features/mobile-controls';
+import {
+  EDITOR_SCENE_CONFIG,
+  EDITOR_RENDERER_CONFIG,
+  EDITOR_POST_PROCESSING,
+  EDITOR_LIGHTS,
+  EDITOR_SKYBOX,
+  EDITOR_PARTICLES,
+} from './constants/editor-scene.constants';
+import {
+  EDITOR_EDIT_THROTTLE_MS,
+  EDITOR_BRUSH_INDICATOR,
+  EDITOR_BRUSH_PREVIEW,
+  EDITOR_RECTANGLE_PREVIEW,
+  EDITOR_SPAWN_MARKER,
+  EDITOR_EXIT_MARKER,
+  EDITOR_ANIMATION,
+  EDITOR_HOVER_EMISSIVE,
+  EDITOR_FLOOD_FILL_MAX_ITERATIONS,
+  EDITOR_PATH_INVALID_FLASH_MS,
+  EDITOR_PATH_INVALID_FLASH_COLOR,
+  EDITOR_HEIGHT,
+} from './constants/editor-ui.constants';
+import { PathValidationService, PathValidationResult } from './core/path-validation.service';
 
 // Re-export types for template compatibility
 export { EditMode, BrushTool } from './core/editor-state.service';
@@ -60,7 +84,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private brushPreviewMeshes: THREE.Mesh[] = [];
   private lastEditedTiles = new Set<THREE.Mesh>();
   private lastEditTime = 0;
-  private editThrottleMs = 50; // Throttle edits during drag to 20fps max
+  private readonly editThrottleMs = EDITOR_EDIT_THROTTLE_MS; // Throttle edits during drag to 20fps max
 
   // Rectangle selection state
   private rectangleStartTile: THREE.Mesh | null = null;
@@ -93,6 +117,16 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private get currentMapName(): string { return this.editorState.getCurrentMapName(); }
   private set currentMapName(name: string) { this.editorState.setCurrentMapName(name); }
 
+  // Path validation state
+  private pathValidationResult: PathValidationResult = { valid: false };
+  /** Whether the current map has a valid walkable path from spawn to exit. */
+  public get isPathValid(): boolean { return this.pathValidationResult.valid; }
+  /** Whether both spawn and exit points have been placed (regardless of path validity). */
+  public get hasSpawnAndExit(): boolean {
+    if (!this.terrainGrid) return false;
+    return this.terrainGrid.getSpawnPoint() !== null && this.terrainGrid.getExitPoint() !== null;
+  }
+
   // Title display
   public title = 'Novarise';
 
@@ -113,7 +147,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     private editHistory: EditHistoryService,
     private cameraControl: CameraControlService,
     private editorState: EditorStateService,
-    private mapBridge: MapBridgeService
+    private mapBridge: MapBridgeService,
+    private pathValidation: PathValidationService
   ) {
     this.keyboardHandler = this.handleKeyDown.bind(this);
     this.keyUpHandler = this.handleKeyUp.bind(this);
@@ -161,9 +196,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private initializeScene(): void {
     this.scene = new THREE.Scene();
     // Lighter background for better visibility
-    this.scene.background = new THREE.Color(0x1a1a2e);
+    this.scene.background = new THREE.Color(EDITOR_SCENE_CONFIG.backgroundColor);
     // Reduce fog for better visibility
-    this.scene.fog = new THREE.FogExp2(0x1a1a2e, 0.005);
+    this.scene.fog = new THREE.FogExp2(EDITOR_SCENE_CONFIG.fogColor, EDITOR_SCENE_CONFIG.fogDensity);
   }
 
   private initializeCamera(): void {
@@ -185,7 +220,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   private initializeRenderer(): void {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cap at 2 for performance
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, EDITOR_RENDERER_CONFIG.maxPixelRatio)); // Cap at 2 for performance
 
     // Initial size using proper viewport calculation
     const { width, height } = this.getViewportSize();
@@ -193,7 +228,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.8; // Increased from 1.2 for brightness
+    this.renderer.toneMappingExposure = EDITOR_RENDERER_CONFIG.toneMappingExposure; // Increased from 1.2 for brightness
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.canvasContainer.nativeElement.appendChild(this.renderer.domElement);
@@ -244,9 +279,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const { width, height } = this.getViewportSize();
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(width, height),
-      0.3,  // Reduced strength
-      0.4,  // Reduced radius
-      0.95  // Higher threshold - only brightest elements
+      EDITOR_POST_PROCESSING.bloom.strength,   // Reduced strength
+      EDITOR_POST_PROCESSING.bloom.radius,     // Reduced radius
+      EDITOR_POST_PROCESSING.bloom.threshold   // Higher threshold - only brightest elements
     );
     this.composer.addPass(this.bloomPass);
 
@@ -254,8 +289,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const vignetteShader = {
       uniforms: {
         tDiffuse: { value: null },
-        offset: { value: 1.2 },      // Increased offset = less vignette
-        darkness: { value: 0.8 }     // Reduced darkness
+        offset: { value: EDITOR_POST_PROCESSING.vignette.offset },    // Increased offset = less vignette
+        darkness: { value: EDITOR_POST_PROCESSING.vignette.darkness } // Reduced darkness
       },
       vertexShader: `
         varying vec2 vUv;
@@ -286,70 +321,66 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   private initializeLights(): void {
     // EXTREMELY BRIGHT ambient light for maximum visibility
-    const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
+    const ambientLight = new THREE.AmbientLight(
+      EDITOR_LIGHTS.ambient.color,
+      EDITOR_LIGHTS.ambient.intensity
+    );
     this.scene.add(ambientLight);
 
     // Multiple strong directional lights for even coverage
-    const directionalLight1 = new THREE.DirectionalLight(0xffffff, 2.5);
-    directionalLight1.position.set(10, 40, 10);
+    const [dl1Cfg, dl2Cfg, dl3Cfg, dl4Cfg] = EDITOR_LIGHTS.directional;
+
+    const directionalLight1 = new THREE.DirectionalLight(dl1Cfg.color, dl1Cfg.intensity);
+    directionalLight1.position.set(...dl1Cfg.position);
     directionalLight1.castShadow = true;
-    directionalLight1.shadow.camera.left = -30;
-    directionalLight1.shadow.camera.right = 30;
-    directionalLight1.shadow.camera.top = 30;
-    directionalLight1.shadow.camera.bottom = -30;
-    directionalLight1.shadow.mapSize.width = 2048;
-    directionalLight1.shadow.mapSize.height = 2048;
+    directionalLight1.shadow.camera.left = -dl1Cfg.shadowCameraExtent!;
+    directionalLight1.shadow.camera.right = dl1Cfg.shadowCameraExtent!;
+    directionalLight1.shadow.camera.top = dl1Cfg.shadowCameraExtent!;
+    directionalLight1.shadow.camera.bottom = -dl1Cfg.shadowCameraExtent!;
+    directionalLight1.shadow.mapSize.width = dl1Cfg.shadowMapSize!;
+    directionalLight1.shadow.mapSize.height = dl1Cfg.shadowMapSize!;
     this.scene.add(directionalLight1);
 
     // Second directional light from opposite angle
-    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 2.0);
-    directionalLight2.position.set(-10, 30, -10);
+    const directionalLight2 = new THREE.DirectionalLight(dl2Cfg.color, dl2Cfg.intensity);
+    directionalLight2.position.set(...dl2Cfg.position);
     this.scene.add(directionalLight2);
 
     // Third directional light from side
-    const directionalLight3 = new THREE.DirectionalLight(0xffffff, 1.5);
-    directionalLight3.position.set(20, 25, 0);
+    const directionalLight3 = new THREE.DirectionalLight(dl3Cfg.color, dl3Cfg.intensity);
+    directionalLight3.position.set(...dl3Cfg.position);
     this.scene.add(directionalLight3);
 
     // Fourth directional light from opposite side
-    const directionalLight4 = new THREE.DirectionalLight(0xffffff, 1.5);
-    directionalLight4.position.set(-20, 25, 0);
+    const directionalLight4 = new THREE.DirectionalLight(dl4Cfg.color, dl4Cfg.intensity);
+    directionalLight4.position.set(...dl4Cfg.position);
     this.scene.add(directionalLight4);
 
     // Bright light from below for complete visibility
-    const bottomLight = new THREE.DirectionalLight(0xffffff, 1.5);
-    bottomLight.position.set(0, -20, 0);
+    const blCfg = EDITOR_LIGHTS.bottomLight;
+    const bottomLight = new THREE.DirectionalLight(blCfg.color, blCfg.intensity);
+    bottomLight.position.set(...blCfg.position);
     bottomLight.lookAt(0, 0, 0);
     this.scene.add(bottomLight);
 
     // Hemisphere light for natural fill
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xaaaaaa, 1.5);
+    const hemiLight = new THREE.HemisphereLight(
+      EDITOR_LIGHTS.hemisphere.skyColor,
+      EDITOR_LIGHTS.hemisphere.groundColor,
+      EDITOR_LIGHTS.hemisphere.intensity
+    );
     this.scene.add(hemiLight);
 
     // Point lights for extra brightness at key positions
-    const pointLight1 = new THREE.PointLight(0xffffff, 1.5, 50);
-    pointLight1.position.set(0, 20, 0);
-    this.scene.add(pointLight1);
-
-    const pointLight2 = new THREE.PointLight(0xffffff, 1.2, 50);
-    pointLight2.position.set(15, 15, 15);
-    this.scene.add(pointLight2);
-
-    const pointLight3 = new THREE.PointLight(0xffffff, 1.2, 50);
-    pointLight3.position.set(-15, 15, -15);
-    this.scene.add(pointLight3);
-
-    const pointLight4 = new THREE.PointLight(0xffffff, 1.2, 50);
-    pointLight4.position.set(15, 15, -15);
-    this.scene.add(pointLight4);
-
-    const pointLight5 = new THREE.PointLight(0xffffff, 1.2, 50);
-    pointLight5.position.set(-15, 15, 15);
-    this.scene.add(pointLight5);
+    for (const cfg of EDITOR_LIGHTS.point) {
+      const pl = new THREE.PointLight(cfg.color, cfg.intensity, cfg.distance);
+      pl.position.set(...cfg.position);
+      this.scene.add(pl);
+    }
   }
 
   private addSkybox(): void {
-    const starfieldGeometry = new THREE.SphereGeometry(500, 32, 32);
+    const starfieldGeometry = new THREE.SphereGeometry(EDITOR_SKYBOX.radius, EDITOR_SKYBOX.widthSegments, EDITOR_SKYBOX.heightSegments);
     const starfieldMaterial = new THREE.ShaderMaterial({
       vertexShader: `
         varying vec2 vUv;
@@ -397,23 +428,25 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private initializeParticles(): void {
-    const particleCount = 400;
+    const particleCount = EDITOR_PARTICLES.count;
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
 
     for (let i = 0; i < particleCount; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 50;
-      positions[i * 3 + 1] = Math.random() * 30 + 2;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 50;
+      positions[i * 3]     = (Math.random() - 0.5) * EDITOR_PARTICLES.positionRange;
+      positions[i * 3 + 1] = Math.random() * EDITOR_PARTICLES.positionYRange + EDITOR_PARTICLES.positionYMin;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * EDITOR_PARTICLES.positionRange;
 
       const colorChoice = Math.random();
-      if (colorChoice < 0.4) {
-        colors[i * 3] = 0.4; colors[i * 3 + 1] = 0.5; colors[i * 3 + 2] = 0.7;
-      } else if (colorChoice < 0.7) {
-        colors[i * 3] = 0.5; colors[i * 3 + 1] = 0.3; colors[i * 3 + 2] = 0.6;
+      let rgb: [number, number, number];
+      if (colorChoice < EDITOR_PARTICLES.colorThresholds.blue) {
+        rgb = EDITOR_PARTICLES.colors.blue;
+      } else if (colorChoice < EDITOR_PARTICLES.colorThresholds.purple) {
+        rgb = EDITOR_PARTICLES.colors.purple;
       } else {
-        colors[i * 3] = 0.3; colors[i * 3 + 1] = 0.6; colors[i * 3 + 2] = 0.5;
+        rgb = EDITOR_PARTICLES.colors.teal;
       }
+      colors[i * 3] = rgb[0]; colors[i * 3 + 1] = rgb[1]; colors[i * 3 + 2] = rgb[2];
     }
 
     const particleGeometry = new THREE.BufferGeometry();
@@ -421,10 +454,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const particleMaterial = new THREE.PointsMaterial({
-      size: 0.12,
+      size: EDITOR_PARTICLES.size,
       vertexColors: true,
       transparent: true,
-      opacity: 0.4,
+      opacity: EDITOR_PARTICLES.opacity,
       sizeAttenuation: true,
       blending: THREE.AdditiveBlending
     });
@@ -485,11 +518,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
 
         // Crisp, bright hover state for clear feedback
-        material.emissiveIntensity = 0.9;
+        material.emissiveIntensity = EDITOR_HOVER_EMISSIVE.hover;
 
         // Position brush indicator at tile location
         this.brushIndicator.position.copy(this.hoveredTile.position);
-        this.brushIndicator.position.y = this.hoveredTile.position.y + 0.15;
+        this.brushIndicator.position.y = this.hoveredTile.position.y + EDITOR_BRUSH_INDICATOR.yOffset;
         this.brushIndicator.visible = true;
 
         // Update brush color and cursor from centralized EditorStateService
@@ -643,6 +676,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         (x, z, type) => this.terrainGrid.paintTile(x, z, type)
       );
       this.editHistory.record(command);
+      this.runPathValidation();
     } else if (this.editMode === 'height' && this.currentStrokeTiles.size > 0) {
       const tiles = Array.from(this.currentStrokeTiles.values());
       const command = new HeightCommand(
@@ -684,8 +718,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       } else if (this.editMode === 'height') {
         // Track tile state before height change for undo
         this.trackTileForUndo(x, z);
-        const delta = 0.2;
-        this.terrainGrid.adjustHeight(x, z, delta);
+        this.terrainGrid.adjustHeight(x, z, EDITOR_HEIGHT.stepSize);
         const tile = this.terrainGrid.getTileAt(x, z);
         if (tile) {
           // Track new height after change
@@ -694,6 +727,18 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           this.flashTileEdit(tile.mesh);
         }
       } else if (this.editMode === 'spawn') {
+        // Reject placement on non-walkable terrain
+        const tile = this.terrainGrid.getTileAt(x, z);
+        if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
+          this.flashMarkerRejection(this.spawnMarker);
+          return;
+        }
+        // Reject placement on same tile as exit
+        const currentExit = this.terrainGrid.getExitPoint();
+        if (currentExit && currentExit.x === x && currentExit.z === z) {
+          this.flashMarkerRejection(this.spawnMarker);
+          return;
+        }
         // Record spawn point change for undo
         const previousSpawn = this.terrainGrid.getSpawnPoint();
         this.terrainGrid.setSpawnPoint(x, z);
@@ -709,7 +754,20 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           }
         );
         this.editHistory.record(command);
+        this.runPathValidation();
       } else if (this.editMode === 'exit') {
+        // Reject placement on non-walkable terrain
+        const tile = this.terrainGrid.getTileAt(x, z);
+        if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
+          this.flashMarkerRejection(this.exitMarker);
+          return;
+        }
+        // Reject placement on same tile as spawn
+        const currentSpawn = this.terrainGrid.getSpawnPoint();
+        if (currentSpawn && currentSpawn.x === x && currentSpawn.z === z) {
+          this.flashMarkerRejection(this.exitMarker);
+          return;
+        }
         // Record exit point change for undo
         const previousExit = this.terrainGrid.getExitPoint();
         this.terrainGrid.setExitPoint(x, z);
@@ -725,6 +783,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           }
         );
         this.editHistory.record(command);
+        this.runPathValidation();
       }
     });
   }
@@ -755,7 +814,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Get original intensity from terrain config
     const x = mesh.userData['gridX'];
     const z = mesh.userData['gridZ'];
-    let originalIntensity = 0.2; // Default fallback
+    let originalIntensity: number = EDITOR_HOVER_EMISSIVE.defaultFallback; // Default fallback
 
     if (typeof x === 'number' && typeof z === 'number') {
       const tile = this.terrainGrid.getTileAt(x, z);
@@ -769,18 +828,30 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.lastEditedTiles.add(mesh);
 
     // Instant bright flash
-    material.emissiveIntensity = 1.5;
+    material.emissiveIntensity = EDITOR_HOVER_EMISSIVE.flashPeak;
 
     // Quick fade back for crisp feel
     setTimeout(() => {
-      material.emissiveIntensity = 0.9; // Hover state
+      material.emissiveIntensity = EDITOR_HOVER_EMISSIVE.flashMid; // Hover state
       setTimeout(() => {
         this.lastEditedTiles.delete(mesh);
         if (this.hoveredTile !== mesh) {
           material.emissiveIntensity = originalIntensity;
         }
-      }, 100);
-    }, 50);
+      }, EDITOR_HOVER_EMISSIVE.flashFadeBackMs);
+    }, EDITOR_HOVER_EMISSIVE.flashFadeDelayMs);
+  }
+
+  /**
+   * Flash a marker red briefly to signal a rejected spawn/exit placement.
+   */
+  private flashMarkerRejection(marker: THREE.Mesh): void {
+    const material = marker.material as THREE.MeshBasicMaterial;
+    const originalColor = material.color.getHex();
+    material.color.setHex(EDITOR_PATH_INVALID_FLASH_COLOR);
+    setTimeout(() => {
+      material.color.setHex(originalColor);
+    }, EDITOR_PATH_INVALID_FLASH_MS);
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
@@ -914,12 +985,16 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   private createBrushIndicator(): void {
     // Create a ring to show brush area - crisp and clear
-    const geometry = new THREE.RingGeometry(0.4, 0.5, 32);
+    const geometry = new THREE.RingGeometry(
+      EDITOR_BRUSH_INDICATOR.innerRadius,
+      EDITOR_BRUSH_INDICATOR.outerRadius,
+      EDITOR_BRUSH_INDICATOR.segments
+    );
     const material = new THREE.MeshBasicMaterial({
-      color: 0x6a9aff,
+      color: EDITOR_BRUSH_INDICATOR.color,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.8,
+      opacity: EDITOR_BRUSH_INDICATOR.opacity,
       depthTest: false
     });
     this.brushIndicator = new THREE.Mesh(geometry, material);
@@ -931,22 +1006,32 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   private createSpawnExitMarkers(): void {
     // Spawn marker - green cylinder
-    const spawnGeometry = new THREE.CylinderGeometry(0.3, 0.5, 0.8, 8);
+    const spawnGeometry = new THREE.CylinderGeometry(
+      EDITOR_SPAWN_MARKER.radiusTop,
+      EDITOR_SPAWN_MARKER.radiusBottom,
+      EDITOR_SPAWN_MARKER.height,
+      EDITOR_SPAWN_MARKER.radialSegments
+    );
     const spawnMaterial = new THREE.MeshBasicMaterial({
-      color: 0x50ff50,
+      color: EDITOR_SPAWN_MARKER.color,
       transparent: true,
-      opacity: 0.8
+      opacity: EDITOR_SPAWN_MARKER.opacity
     });
     this.spawnMarker = new THREE.Mesh(spawnGeometry, spawnMaterial);
     this.spawnMarker.renderOrder = 999;
     this.scene.add(this.spawnMarker);
 
     // Exit marker - red cylinder
-    const exitGeometry = new THREE.CylinderGeometry(0.5, 0.3, 0.8, 8);
+    const exitGeometry = new THREE.CylinderGeometry(
+      EDITOR_EXIT_MARKER.radiusTop,
+      EDITOR_EXIT_MARKER.radiusBottom,
+      EDITOR_EXIT_MARKER.height,
+      EDITOR_EXIT_MARKER.radialSegments
+    );
     const exitMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff5050,
+      color: EDITOR_EXIT_MARKER.color,
       transparent: true,
-      opacity: 0.8
+      opacity: EDITOR_EXIT_MARKER.opacity
     });
     this.exitMarker = new THREE.Mesh(exitGeometry, exitMaterial);
     this.exitMarker.renderOrder = 999;
@@ -963,7 +1048,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       const tile = this.terrainGrid.getTileAt(spawn.x, spawn.z);
       if (tile) {
         this.spawnMarker.position.copy(tile.mesh.position);
-        this.spawnMarker.position.y += 0.8;
+        this.spawnMarker.position.y += EDITOR_SPAWN_MARKER.yBase;
         this.spawnMarker.visible = true;
       }
     }
@@ -975,9 +1060,47 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       const tile = this.terrainGrid.getTileAt(exit.x, exit.z);
       if (tile) {
         this.exitMarker.position.copy(tile.mesh.position);
-        this.exitMarker.position.y += 0.8;
+        this.exitMarker.position.y += EDITOR_EXIT_MARKER.yBase;
         this.exitMarker.visible = true;
       }
+    }
+  }
+
+  /**
+   * Prompt the user to select and delete a saved map (with confirmation).
+   */
+  public deleteMap(): void {
+    const maps = this.mapStorage.getAllMaps();
+
+    if (maps.length === 0) {
+      alert('No saved maps to delete.');
+      return;
+    }
+
+    let message = 'Select a map to delete:\n\n';
+    maps.forEach((map, index) => {
+      const date = new Date(map.updatedAt).toLocaleString();
+      message += `${index + 1}. ${map.name} (${date})\n`;
+    });
+
+    const selection = prompt(message + '\nEnter number:');
+    if (!selection) return; // User cancelled
+
+    const index = parseInt(selection) - 1;
+    if (index < 0 || index >= maps.length) {
+      alert('Invalid selection.');
+      return;
+    }
+
+    const selectedMap = maps[index];
+    const confirmed = confirm(`Delete map "${selectedMap.name}"? This cannot be undone.`);
+    if (!confirmed) return;
+
+    const deleted = this.mapStorage.deleteMap(selectedMap.id);
+    if (deleted) {
+      alert(`Map "${selectedMap.name}" deleted.`);
+    } else {
+      alert('Failed to delete map.');
     }
   }
 
@@ -1027,6 +1150,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.terrainGrid.importState(state);
       this.updateSpawnMarker();
       this.updateExitMarker();
+      this.runPathValidation();
       this.currentMapName = selectedMap.name;
       alert(`Map "${selectedMap.name}" loaded successfully!`);
     } else {
@@ -1040,6 +1164,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.terrainGrid.importState(state);
       this.updateSpawnMarker();
       this.updateExitMarker();
+      this.runPathValidation();
 
       const currentId = this.mapStorage.getCurrentMapId();
       if (currentId) {
@@ -1076,7 +1201,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.brushPreviewMeshes.forEach(mesh => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      this.disposeMaterial(mesh.material);
+      disposeMaterial(mesh.material);
     });
     this.brushPreviewMeshes = [];
 
@@ -1087,12 +1212,16 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         for (let dz = -halfSize; dz <= halfSize; dz++) {
           if (dx === 0 && dz === 0) continue; // Skip center (main brush indicator shows it)
 
-          const geometry = new THREE.RingGeometry(0.35, 0.4, 32);
+          const geometry = new THREE.RingGeometry(
+            EDITOR_BRUSH_PREVIEW.innerRadius,
+            EDITOR_BRUSH_PREVIEW.outerRadius,
+            EDITOR_BRUSH_PREVIEW.segments
+          );
           const material = new THREE.MeshBasicMaterial({
-            color: 0x9a8ab0,
+            color: EDITOR_BRUSH_PREVIEW.color,
             side: THREE.DoubleSide,
             transparent: true,
-            opacity: 0.5,
+            opacity: EDITOR_BRUSH_PREVIEW.opacity,
             depthTest: false
           });
           const mesh = new THREE.Mesh(geometry, material);
@@ -1131,7 +1260,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
       if (tile) {
         mesh.position.copy(tile.mesh.position);
-        mesh.position.y = tile.mesh.position.y + 0.15;
+        mesh.position.y = tile.mesh.position.y + EDITOR_BRUSH_PREVIEW.yOffset;
         mesh.visible = true;
       } else {
         mesh.visible = false;
@@ -1200,7 +1329,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     const visited = new Set<string>();
     const queue: [number, number][] = [[startX, startZ]];
-    const maxIterations = 625; // Max 25x25 grid
+    const maxIterations = EDITOR_FLOOD_FILL_MAX_ITERATIONS; // Max 25x25 grid
     let iterations = 0;
 
     while (queue.length > 0 && iterations < maxIterations) {
@@ -1248,6 +1377,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         (x, z, type) => this.terrainGrid.paintTile(x, z, type)
       );
       this.editHistory.record(command);
+      this.runPathValidation();
     }
   }
 
@@ -1322,6 +1452,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       }
     }
 
+    if (affectedTiles.length > 0 && this.editMode === 'paint') {
+      this.runPathValidation();
+    }
+
     this.clearRectanglePreview();
     this.rectangleStartTile = null;
   }
@@ -1359,18 +1493,22 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       for (let z = minZ; z <= maxZ; z++) {
         const tile = this.terrainGrid.getTileAt(x, z);
         if (tile) {
-          const geometry = new THREE.RingGeometry(0.35, 0.4, 32);
+          const geometry = new THREE.RingGeometry(
+            EDITOR_RECTANGLE_PREVIEW.innerRadius,
+            EDITOR_RECTANGLE_PREVIEW.outerRadius,
+            EDITOR_RECTANGLE_PREVIEW.segments
+          );
           const material = new THREE.MeshBasicMaterial({
-            color: 0xffaa00,
+            color: EDITOR_RECTANGLE_PREVIEW.color,
             side: THREE.DoubleSide,
             transparent: true,
-            opacity: 0.6,
+            opacity: EDITOR_RECTANGLE_PREVIEW.opacity,
             depthTest: false
           });
           const mesh = new THREE.Mesh(geometry, material);
           mesh.rotation.x = -Math.PI / 2;
           mesh.position.copy(tile.mesh.position);
-          mesh.position.y = tile.mesh.position.y + 0.2;
+          mesh.position.y = tile.mesh.position.y + EDITOR_RECTANGLE_PREVIEW.yOffset;
           mesh.renderOrder = 998;
           this.scene.add(mesh);
           this.rectanglePreviewMeshes.push(mesh);
@@ -1383,7 +1521,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.rectanglePreviewMeshes.forEach(mesh => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      this.disposeMaterial(mesh.material);
+      disposeMaterial(mesh.material);
     });
     this.rectanglePreviewMeshes = [];
   }
@@ -1443,6 +1581,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       // Update markers if spawn/exit was undone
       this.updateSpawnMarker();
       this.updateExitMarker();
+      this.runPathValidation();
     }
   }
 
@@ -1455,6 +1594,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       // Update markers if spawn/exit was redone
       this.updateSpawnMarker();
       this.updateExitMarker();
+      this.runPathValidation();
     }
   }
 
@@ -1466,11 +1606,28 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
-   * Check if the map is ready to play (has both spawn and exit points)
+   * Run BFS path validation and cache the result.
+   * Call after any terrain paint, spawn/exit placement, or map load.
+   */
+  private runPathValidation(): void {
+    if (!this.terrainGrid) {
+      this.pathValidationResult = { valid: false };
+      return;
+    }
+    const state = this.terrainGrid.exportState();
+    this.pathValidationResult = this.pathValidation.validate(state);
+  }
+
+  /**
+   * Check if the map is ready to play: has both spawn and exit points
+   * AND a valid walkable path exists between them.
    */
   public get canPlayMap(): boolean {
     if (!this.terrainGrid) return false;
-    return this.terrainGrid.getSpawnPoint() !== null && this.terrainGrid.getExitPoint() !== null;
+    const hasPoints =
+      this.terrainGrid.getSpawnPoint() !== null &&
+      this.terrainGrid.getExitPoint() !== null;
+    return hasPoints && this.pathValidationResult.valid;
   }
 
   /**
@@ -1508,6 +1665,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.terrainGrid.importState(state);
         this.updateSpawnMarker();
         this.updateExitMarker();
+        this.runPathValidation();
         const metadata = this.mapStorage.getMapMetadata(mapId);
         if (metadata) {
           this.currentMapName = metadata.name;
@@ -1531,35 +1689,35 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Animate brush indicator for crisp, noticeable feedback
     if (this.brushIndicator && this.brushIndicator.visible) {
-      const pulse = Math.sin(Date.now() * 0.005) * 0.1 + 0.9;
+      const pulse = Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * EDITOR_ANIMATION.brushPulseAmplitude + 0.9;
       this.brushIndicator.scale.set(pulse, pulse, 1);
       const material = this.brushIndicator.material as THREE.MeshBasicMaterial;
-      material.opacity = 0.6 + Math.sin(Date.now() * 0.005) * 0.2;
+      material.opacity = 0.6 + Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * 0.2;
     }
 
     // Animate spawn/exit markers
     if (this.spawnMarker) {
-      const bounce = Math.abs(Math.sin(Date.now() * 0.003)) * 0.2;
+      const bounce = Math.abs(Math.sin(Date.now() * EDITOR_ANIMATION.markerBounceSpeed)) * EDITOR_ANIMATION.markerBounceAmplitude;
       const spawn = this.terrainGrid.getSpawnPoint();
       if (spawn) {
         const tile = this.terrainGrid.getTileAt(spawn.x, spawn.z);
         if (tile) {
-          this.spawnMarker.position.y = tile.mesh.position.y + 0.8 + bounce;
+          this.spawnMarker.position.y = tile.mesh.position.y + EDITOR_SPAWN_MARKER.yBase + bounce;
         }
       }
-      this.spawnMarker.rotation.y += 0.01;
+      this.spawnMarker.rotation.y += EDITOR_ANIMATION.spawnRotationSpeed;
     }
 
     if (this.exitMarker) {
-      const bounce = Math.abs(Math.sin(Date.now() * 0.003 + Math.PI)) * 0.2;
+      const bounce = Math.abs(Math.sin(Date.now() * EDITOR_ANIMATION.markerBounceSpeed + EDITOR_ANIMATION.exitBouncePhaseOffset)) * EDITOR_ANIMATION.markerBounceAmplitude;
       const exit = this.terrainGrid.getExitPoint();
       if (exit) {
         const tile = this.terrainGrid.getTileAt(exit.x, exit.z);
         if (tile) {
-          this.exitMarker.position.y = tile.mesh.position.y + 0.8 + bounce;
+          this.exitMarker.position.y = tile.mesh.position.y + EDITOR_EXIT_MARKER.yBase + bounce;
         }
       }
-      this.exitMarker.rotation.y -= 0.01;
+      this.exitMarker.rotation.y += EDITOR_ANIMATION.exitRotationSpeed;
     }
 
     if (this.particles) {
@@ -1574,15 +1732,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     if (this.composer) {
       this.composer.render();
-    }
-  }
-
-  /** Dispose a Three.js material, handling both single and array forms. */
-  private disposeMaterial(material: THREE.Material | THREE.Material[]): void {
-    if (Array.isArray(material)) {
-      material.forEach(mat => mat.dispose());
-    } else {
-      material.dispose();
     }
   }
 
@@ -1625,7 +1774,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.brushPreviewMeshes.forEach(mesh => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      this.disposeMaterial(mesh.material);
+      disposeMaterial(mesh.material);
     });
     this.brushPreviewMeshes = [];
 
@@ -1636,26 +1785,26 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (this.brushIndicator) {
       this.scene.remove(this.brushIndicator);
       this.brushIndicator.geometry.dispose();
-      this.disposeMaterial(this.brushIndicator.material);
+      disposeMaterial(this.brushIndicator.material);
     }
 
     // Clean up spawn/exit markers
     if (this.spawnMarker) {
       this.scene.remove(this.spawnMarker);
       this.spawnMarker.geometry.dispose();
-      this.disposeMaterial(this.spawnMarker.material);
+      disposeMaterial(this.spawnMarker.material);
     }
     if (this.exitMarker) {
       this.scene.remove(this.exitMarker);
       this.exitMarker.geometry.dispose();
-      this.disposeMaterial(this.exitMarker.material);
+      disposeMaterial(this.exitMarker.material);
     }
 
     // Clean up particles
     if (this.particles) {
       this.scene.remove(this.particles);
       this.particles.geometry.dispose();
-      this.disposeMaterial(this.particles.material);
+      disposeMaterial(this.particles.material);
       this.particles = null;
     }
 
@@ -1663,7 +1812,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (this.skybox) {
       this.scene.remove(this.skybox);
       this.skybox.geometry.dispose();
-      this.disposeMaterial(this.skybox.material);
+      disposeMaterial(this.skybox.material);
       this.skybox = undefined;
     }
 

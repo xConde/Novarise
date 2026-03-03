@@ -13,35 +13,26 @@ import { MapBridgeService } from './services/map-bridge.service';
 import { GameStateService } from './services/game-state.service';
 import { WaveService } from './services/wave.service';
 import { TowerCombatService } from './services/tower-combat.service';
+import { AudioService } from './services/audio.service';
+import { disposeMaterial } from './utils/three-utils';
 import { TowerType, TOWER_CONFIGS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
 import { GamePhase, GameState } from './models/game-state.model';
+import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants/rendering.constants';
+import { AMBIENT_LIGHT, DIRECTIONAL_LIGHT, UNDER_LIGHT, POINT_LIGHTS } from './constants/lighting.constants';
+import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
+import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
+import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
 
 @Component({
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [EnemyService, GameStateService, WaveService, TowerCombatService]
+  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
 
-  // Camera configuration constants - Top-down view
-  private readonly cameraDistance = 35;
-  private readonly cameraFov = 45;
-  private readonly cameraNear = 0.1;
-  private readonly cameraFar = 1000;
-
-  // Control configuration constants
-  private readonly controlsDampingFactor = 0.05;
-  private readonly minPolarAngle = 0;
-  private readonly maxPolarAngle = Math.PI / 2.5;
-
-  // Tower upgrade visual constants
-  private readonly towerScaleBase = 1.4;
-  private readonly towerScaleIncrement = 0.15;
-  private readonly towerEmissiveBase = 0.7;
-  private readonly towerEmissiveIncrement = 0.25;
 
   // Scene objects
   private scene!: THREE.Scene;
@@ -82,12 +73,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Animation
   private lastTime = 0;
+  private defeatSoundPlayed = false;
+  private victorySoundPlayed = false;
   private keyboardHandler: (event: KeyboardEvent) => void;
   private mousemoveHandler: (event: MouseEvent) => void = () => {};
   private clickHandler: (event: MouseEvent) => void = () => {};
   private animationFrameId = 0;
   private resizeHandler: () => void = () => {};
   private stateSubscription: Subscription | null = null;
+
+  // Audio state exposed to template
+  get audioMuted(): boolean { return this.audioService.isMuted; }
 
   constructor(
     private router: Router,
@@ -96,7 +92,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private mapBridge: MapBridgeService,
     private gameStateService: GameStateService,
     private waveService: WaveService,
-    private towerCombatService: TowerCombatService
+    private towerCombatService: TowerCombatService,
+    private audioService: AudioService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -145,6 +142,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return Array(Math.max(0, count)).fill(0);
   }
 
+  toggleAudio(): void {
+    this.audioService.toggleMute();
+  }
+
   selectTowerType(type: TowerType): void {
     this.selectedTowerType = type;
     this.deselectTower();
@@ -162,18 +163,19 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Confirm upgrade succeeds BEFORE spending gold — prevents gold loss on service rejection
     if (!this.towerCombatService.upgradeTower(this.selectedTowerInfo.id)) return;
     this.gameStateService.spendGold(cost);
+    this.audioService.playTowerUpgrade();
 
     // Scale tower mesh to reflect upgrade level
     const towerMesh = this.towerMeshes.get(this.selectedTowerInfo.id);
     if (towerMesh) {
       const newLevel = this.selectedTowerInfo.level;
-      const scale = this.towerScaleBase + (newLevel - 1) * this.towerScaleIncrement;
+      const scale = TOWER_VISUAL_CONFIG.scaleBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
       towerMesh.scale.set(scale, scale, scale);
 
       // Boost emissive intensity on upgrade
       towerMesh.traverse(child => {
         if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
-          child.material.emissiveIntensity = this.towerEmissiveBase + (newLevel - 1) * this.towerEmissiveIncrement;
+          child.material.emissiveIntensity = TOWER_VISUAL_CONFIG.emissiveBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.emissiveIncrement;
         }
       });
     }
@@ -194,6 +196,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const refund = getSellValue(soldTower.totalInvested);
     this.gameStateService.addGold(refund);
+    this.audioService.playTowerSell();
 
     // Remove mesh from scene
     const towerMesh = this.towerMeshes.get(this.selectedTowerInfo.id);
@@ -202,7 +205,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       towerMesh.traverse(child => {
         if (child instanceof THREE.Mesh) {
           child.geometry.dispose();
-          this.disposeMaterial(child.material);
+          disposeMaterial(child.material);
         }
       });
       this.towerMeshes.delete(this.selectedTowerInfo.id);
@@ -253,12 +256,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const stats = getEffectiveStats(tower.type, tower.level);
     const radius = stats.range;
 
-    const geometry = new THREE.RingGeometry(radius - 0.05, radius, 64);
+    const geometry = new THREE.RingGeometry(radius - RANGE_PREVIEW_CONFIG.ringThickness, radius, RANGE_PREVIEW_CONFIG.segments);
     geometry.rotateX(-Math.PI / 2); // Lay flat on XZ plane
     const material = new THREE.MeshBasicMaterial({
       color: stats.color,
       transparent: true,
-      opacity: 0.35,
+      opacity: RANGE_PREVIEW_CONFIG.opacity,
       side: THREE.DoubleSide,
       depthWrite: false
     });
@@ -271,7 +274,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const x = (tower.col - boardWidth / 2) * tileSize;
     const z = (tower.row - boardHeight / 2) * tileSize;
 
-    this.rangePreviewMesh.position.set(x, 0.35, z);
+    this.rangePreviewMesh.position.set(x, RANGE_PREVIEW_CONFIG.yPosition, z);
     this.scene.add(this.rangePreviewMesh);
   }
 
@@ -279,7 +282,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.rangePreviewMesh) {
       this.scene.remove(this.rangePreviewMesh);
       this.rangePreviewMesh.geometry.dispose();
-      this.disposeMaterial(this.rangePreviewMesh.material);
+      disposeMaterial(this.rangePreviewMesh.material);
       this.rangePreviewMesh = null;
     }
   }
@@ -295,6 +298,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.gameStateService.startWave();
     this.waveService.startWave(this.gameStateService.getState().wave, this.scene);
+    this.audioService.playWaveStart();
   }
 
   restartGame(): void {
@@ -307,6 +311,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Reset services
     this.waveService.reset();
     this.gameStateService.reset();
+    this.defeatSoundPlayed = false;
+    this.victorySoundPlayed = false;
 
     if (this.mapBridge.hasEditorMap()) {
       const state = this.mapBridge.getEditorMapState()!;
@@ -325,14 +331,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.lastTime = 0;
   }
 
-  /** Dispose a Three.js material, handling both single and array forms. */
-  private disposeMaterial(material: THREE.Material | THREE.Material[]): void {
-    if (Array.isArray(material)) {
-      material.forEach(mat => mat.dispose());
-    } else {
-      material.dispose();
-    }
-  }
 
   /** Shared cleanup for game objects — used by both restartGame() and ngOnDestroy(). */
   private cleanupGameObjects(): void {
@@ -355,7 +353,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       group.traverse(child => {
         if (child instanceof THREE.Mesh) {
           child.geometry.dispose();
-          this.disposeMaterial(child.material);
+          disposeMaterial(child.material);
         }
       });
     });
@@ -365,7 +363,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.tileMeshes.forEach(mesh => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      this.disposeMaterial(mesh.material);
+      disposeMaterial(mesh.material);
     });
     this.tileMeshes.clear();
 
@@ -375,7 +373,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.gridLines.traverse(child => {
         if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
           child.geometry.dispose();
-          this.disposeMaterial(child.material);
+          disposeMaterial(child.material);
         }
       });
       this.gridLines = null;
@@ -385,7 +383,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.particles) {
       this.scene.remove(this.particles);
       this.particles.geometry.dispose();
-      this.disposeMaterial(this.particles.material);
+      disposeMaterial(this.particles.material);
       this.particles = null;
     }
 
@@ -393,7 +391,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.skybox) {
       this.scene.remove(this.skybox);
       this.skybox.geometry.dispose();
-      this.disposeMaterial(this.skybox.material);
+      disposeMaterial(this.skybox.material);
       this.skybox = undefined;
     }
   }
@@ -402,19 +400,19 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private initializeScene(): void {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0a0a14);
-    this.scene.fog = new THREE.FogExp2(0x0a0a14, 0.008);
+    this.scene.background = new THREE.Color(SCENE_CONFIG.backgroundColor);
+    this.scene.fog = new THREE.FogExp2(SCENE_CONFIG.fogColor, SCENE_CONFIG.fogDensity);
   }
 
   private initializeCamera(): void {
     const aspectRatio = window.innerWidth / window.innerHeight;
     this.camera = new THREE.PerspectiveCamera(
-      this.cameraFov,
+      CAMERA_CONFIG.fov,
       aspectRatio,
-      this.cameraNear,
-      this.cameraFar
+      CAMERA_CONFIG.near,
+      CAMERA_CONFIG.far
     );
-    this.camera.position.set(0, this.cameraDistance, this.cameraDistance * 0.5);
+    this.camera.position.set(0, CAMERA_CONFIG.distance, CAMERA_CONFIG.distance * CAMERA_CONFIG.zOffsetFactor);
     this.camera.lookAt(0, 0, 0);
   }
 
@@ -428,7 +426,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.8;
+    this.renderer.toneMappingExposure = SCENE_CONFIG.toneMappingExposure;
 
     this.canvasContainer.nativeElement.appendChild(this.renderer.domElement);
 
@@ -453,15 +451,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.6, 0.8, 0.7
+      POST_PROCESSING_CONFIG.bloom.strength,
+      POST_PROCESSING_CONFIG.bloom.radius,
+      POST_PROCESSING_CONFIG.bloom.threshold
     );
     this.composer.addPass(this.bloomPass);
 
     const vignetteShader = {
       uniforms: {
         tDiffuse: { value: null },
-        offset: { value: 1.1 },
-        darkness: { value: 0.8 }
+        offset: { value: POST_PROCESSING_CONFIG.vignette.offset },
+        darkness: { value: POST_PROCESSING_CONFIG.vignette.darkness }
       },
       vertexShader: `
         varying vec2 vUv;
@@ -492,32 +492,30 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private initializeLights(): void {
-    const ambientLight = new THREE.AmbientLight(0x5a4a6a, 0.6);
+    const ambientLight = new THREE.AmbientLight(AMBIENT_LIGHT.color, AMBIENT_LIGHT.intensity);
     this.scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xc0b0d0, 0.9);
-    directionalLight.position.set(10, 20, 10);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.camera.left = -20;
-    directionalLight.shadow.camera.right = 20;
-    directionalLight.shadow.camera.top = 20;
-    directionalLight.shadow.camera.bottom = -20;
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
-    directionalLight.shadow.bias = -0.0001;
+    const directionalLight = new THREE.DirectionalLight(DIRECTIONAL_LIGHT.color, DIRECTIONAL_LIGHT.intensity);
+    directionalLight.position.set(...DIRECTIONAL_LIGHT.position!);
+    directionalLight.castShadow = DIRECTIONAL_LIGHT.castShadow!;
+    directionalLight.shadow.camera.left = -DIRECTIONAL_LIGHT.shadow.bounds;
+    directionalLight.shadow.camera.right = DIRECTIONAL_LIGHT.shadow.bounds;
+    directionalLight.shadow.camera.top = DIRECTIONAL_LIGHT.shadow.bounds;
+    directionalLight.shadow.camera.bottom = -DIRECTIONAL_LIGHT.shadow.bounds;
+    directionalLight.shadow.mapSize.width = DIRECTIONAL_LIGHT.shadow.mapSize;
+    directionalLight.shadow.mapSize.height = DIRECTIONAL_LIGHT.shadow.mapSize;
+    directionalLight.shadow.bias = DIRECTIONAL_LIGHT.shadow.bias;
     this.scene.add(directionalLight);
 
-    const underLight = new THREE.PointLight(0x6a5a8a, 0.7, 80);
-    underLight.position.set(0, -5, 0);
+    const underLight = new THREE.PointLight(UNDER_LIGHT.color, UNDER_LIGHT.intensity, UNDER_LIGHT.range);
+    underLight.position.set(...UNDER_LIGHT.position!);
     this.scene.add(underLight);
 
-    const accent1 = new THREE.PointLight(0x8a6aaa, 0.6, 50);
-    accent1.position.set(-15, 5, -10);
-    this.scene.add(accent1);
-
-    const accent2 = new THREE.PointLight(0x6a8aaa, 0.6, 50);
-    accent2.position.set(15, 5, 10);
-    this.scene.add(accent2);
+    for (const cfg of POINT_LIGHTS) {
+      const light = new THREE.PointLight(cfg.color, cfg.intensity, cfg.range);
+      light.position.set(...cfg.position!);
+      this.scene.add(light);
+    }
   }
 
   private renderGameBoard(): void {
@@ -550,7 +548,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private addSkybox(): void {
-    const starfieldGeometry = new THREE.SphereGeometry(500, 32, 32);
+    const starfieldGeometry = new THREE.SphereGeometry(SKYBOX_CONFIG.radius, SKYBOX_CONFIG.widthSegments, SKYBOX_CONFIG.heightSegments);
 
     const starfieldMaterial = new THREE.ShaderMaterial({
       uniforms: {
@@ -606,23 +604,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private initializeParticles(): void {
-    const particleCount = 400;
+    const particleCount = PARTICLE_CONFIG.count;
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
 
     for (let i = 0; i < particleCount; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 50;
-      positions[i * 3 + 1] = Math.random() * 30 + 2;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 50;
+      positions[i * 3] = (Math.random() - 0.5) * PARTICLE_CONFIG.spread;
+      positions[i * 3 + 1] = Math.random() * PARTICLE_CONFIG.heightRange + PARTICLE_CONFIG.heightMin;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * PARTICLE_CONFIG.spread;
 
       const colorChoice = Math.random();
-      if (colorChoice < 0.4) {
-        colors[i * 3] = 0.4; colors[i * 3 + 1] = 0.5; colors[i * 3 + 2] = 0.7;
-      } else if (colorChoice < 0.7) {
-        colors[i * 3] = 0.5; colors[i * 3 + 1] = 0.3; colors[i * 3 + 2] = 0.6;
-      } else {
-        colors[i * 3] = 0.3; colors[i * 3 + 1] = 0.6; colors[i * 3 + 2] = 0.5;
+      let colorEntry = PARTICLE_COLORS[PARTICLE_COLORS.length - 1];
+      for (const entry of PARTICLE_COLORS) {
+        if (colorChoice < entry.threshold) { colorEntry = entry; break; }
       }
+      colors[i * 3] = colorEntry.r;
+      colors[i * 3 + 1] = colorEntry.g;
+      colors[i * 3 + 2] = colorEntry.b;
     }
 
     const particleGeometry = new THREE.BufferGeometry();
@@ -630,10 +628,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const particleMaterial = new THREE.PointsMaterial({
-      size: 0.18,
+      size: PARTICLE_CONFIG.size,
       vertexColors: true,
       transparent: true,
-      opacity: 0.6,
+      opacity: PARTICLE_CONFIG.opacity,
       sizeAttenuation: true,
       blending: THREE.AdditiveBlending
     });
@@ -645,12 +643,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private initializeControls(): void {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
-    this.controls.dampingFactor = this.controlsDampingFactor;
+    this.controls.dampingFactor = CONTROLS_CONFIG.dampingFactor;
     this.controls.screenSpacePanning = false;
-    this.controls.minDistance = this.cameraDistance / 2;
-    this.controls.maxDistance = this.cameraDistance * 3;
-    this.controls.minPolarAngle = this.minPolarAngle;
-    this.controls.maxPolarAngle = this.maxPolarAngle;
+    this.controls.minDistance = CAMERA_CONFIG.distance * CONTROLS_CONFIG.minDistanceFactor;
+    this.controls.maxDistance = CAMERA_CONFIG.distance * CONTROLS_CONFIG.maxDistanceFactor;
+    this.controls.minPolarAngle = CONTROLS_CONFIG.minPolarAngle;
+    this.controls.maxPolarAngle = CONTROLS_CONFIG.maxPolarAngle;
     this.controls.target.set(0, 0, 0);
     this.controls.update();
   }
@@ -671,7 +669,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.hoveredTile && this.hoveredTile !== this.getSelectedTileMesh()) {
         const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
         const tileType = this.hoveredTile.userData['tile'].type;
-        material.emissiveIntensity = tileType === BlockType.BASE ? 0.15 : tileType === BlockType.WALL ? 0.1 : 0.4;
+        material.emissiveIntensity = tileType === BlockType.BASE ? TILE_EMISSIVE.base : tileType === BlockType.WALL ? TILE_EMISSIVE.wall : TILE_EMISSIVE.special;
       }
 
       if (intersects.length > 0) {
@@ -679,7 +677,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         if (mesh !== this.getSelectedTileMesh()) {
           this.hoveredTile = mesh;
           const material = mesh.material as THREE.MeshStandardMaterial;
-          material.emissiveIntensity = 0.5;
+          material.emissiveIntensity = TILE_EMISSIVE.hover;
           canvas.style.cursor = 'pointer';
         }
       } else {
@@ -725,7 +723,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       if (prevSelected) {
         const material = prevSelected.material as THREE.MeshStandardMaterial;
         const tileType = prevSelected.userData['tile'].type;
-        material.emissiveIntensity = tileType === BlockType.BASE ? 0.15 : tileType === BlockType.WALL ? 0.1 : 0.4;
+        material.emissiveIntensity = tileType === BlockType.BASE ? TILE_EMISSIVE.base : tileType === BlockType.WALL ? TILE_EMISSIVE.wall : TILE_EMISSIVE.special;
       }
 
       if (intersects.length > 0) {
@@ -736,7 +734,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.selectedTile = { row, col };
 
         const material = mesh.material as THREE.MeshStandardMaterial;
-        material.emissiveIntensity = 0.8;
+        material.emissiveIntensity = TILE_EMISSIVE.selected;
 
         this.deselectTower();
         this.tryPlaceTower(row, col);
@@ -773,6 +771,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Register tower with combat service
       this.towerCombatService.registerTower(row, col, this.selectedTowerType, towerMesh);
+      this.audioService.playTowerPlace();
 
       // Clear enemy path cache since board layout changed
       this.enemyService.clearPathCache();
@@ -819,10 +818,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       const positionAttribute = this.particles.geometry.attributes['position'] as THREE.BufferAttribute;
       const positions = positionAttribute.array as Float32Array;
       for (let i = 0; i < positions.length; i += 3) {
-        positions[i + 1] += Math.sin(time * 0.001 + i) * 0.002;
+        positions[i + 1] += Math.sin(time * PARTICLE_CONFIG.animSpeedTime + i) * PARTICLE_CONFIG.animSpeedWave;
       }
       positionAttribute.needsUpdate = true;
-      this.particles.rotation.y += 0.0002;
+      this.particles.rotation.y += PARTICLE_CONFIG.rotationSpeed;
     }
 
     // Gameplay tick
@@ -833,14 +832,26 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         // Wave spawning
         this.waveService.update(deltaTime, this.scene);
 
-        // Tower combat — returns IDs of enemies killed by towers
-        const killedByTowers = this.towerCombatService.update(deltaTime, this.scene);
+        // Tower combat — returns IDs of enemies killed, tower types that fired, and hit count
+        const { killed: killedByTowers, fired: firedTowerTypes, hitCount } = this.towerCombatService.update(deltaTime, this.scene);
+
+        // Play tower fire sounds
+        for (const towerType of firedTowerTypes) {
+          this.audioService.playTowerFire(towerType);
+        }
+
+        // Play enemy hit sound (throttled inside AudioService)
+        if (hitCount > 0) {
+          this.audioService.playEnemyHit();
+        }
 
         // Collect gold from tower kills and remove dead enemies
         for (const enemyId of killedByTowers) {
           const enemy = this.enemyService.getEnemies().get(enemyId);
           if (enemy) {
             this.gameStateService.addGold(enemy.value);
+            this.audioService.playGoldEarned();
+            this.audioService.playEnemyDeath();
             this.enemyService.removeEnemy(enemyId, this.scene);
           }
         }
@@ -860,11 +871,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         // Check wave completion: no spawning and no enemies alive
         // Re-read phase — loseLife() above may have set DEFEAT mid-frame
         const currentPhase = this.gameStateService.getState().phase;
+        if (currentPhase === GamePhase.DEFEAT && !this.defeatSoundPlayed) {
+          this.defeatSoundPlayed = true;
+          this.audioService.playDefeat();
+        }
         if (currentPhase === GamePhase.COMBAT &&
             !this.waveService.isSpawning() &&
             this.enemyService.getEnemies().size === 0) {
           const reward = this.waveService.getWaveReward(state.wave);
           this.gameStateService.completeWave(reward);
+          // Check if completeWave triggered VICTORY
+          const postWavePhase = this.gameStateService.getState().phase;
+          if (postWavePhase === GamePhase.VICTORY && !this.victorySoundPlayed) {
+            this.victorySoundPlayed = true;
+            this.audioService.playVictory();
+          } else if (postWavePhase === GamePhase.INTERMISSION) {
+            this.audioService.playWaveClear();
+          }
         }
       }
     }
@@ -920,5 +943,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.renderer) {
       this.renderer.dispose();
     }
+
+    this.audioService.cleanup();
   }
 }

@@ -4,6 +4,7 @@ import { Enemy } from '../models/enemy.model';
 import { PlacedTower, TowerType, TowerStats, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats } from '../models/tower.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
+import { PROJECTILE_CONFIG } from '../constants/ui.constants';
 
 interface Projectile {
   id: string;
@@ -60,9 +61,10 @@ export class TowerCombatService {
     return tower;
   }
 
-  update(deltaTime: number, scene: THREE.Scene): string[] {
+  update(deltaTime: number, scene: THREE.Scene): { killed: string[]; fired: TowerType[]; hitCount: number } {
     this.gameTime += deltaTime;
     const killedEnemyIds: string[] = [];
+    const firedTowerTypes: TowerType[] = [];
 
     // Tower targeting and firing — resolve stats per-tower using level
     this.placedTowers.forEach(tower => {
@@ -76,10 +78,12 @@ export class TowerCombatService {
 
       tower.lastFireTime = this.gameTime;
       this.fireProjectile(tower, target, stats, scene);
+      firedTowerTypes.push(tower.type);
     });
 
     // Update projectiles
     const survivingProjectiles: Projectile[] = [];
+    let hitCount = 0;
     for (const proj of this.projectiles) {
       const enemy = this.enemyService.getEnemies().get(proj.targetId);
 
@@ -99,6 +103,7 @@ export class TowerCombatService {
         // Hit — apply damage before disposing mesh (applyDamage reads proj.mesh.position)
         const kills = this.applyDamage(proj, scene);
         killedEnemyIds.push(...kills);
+        hitCount++;
         this.removeProjectileMesh(proj, scene);
       } else {
         // Move toward target
@@ -111,7 +116,7 @@ export class TowerCombatService {
     }
     this.projectiles = survivingProjectiles;
 
-    return killedEnemyIds;
+    return { killed: killedEnemyIds, fired: firedTowerTypes, hitCount };
   }
 
   private findTarget(tower: PlacedTower, stats: TowerStats): Enemy | null {
@@ -148,14 +153,14 @@ export class TowerCombatService {
     const towerWorldX = (tower.col - boardWidth / 2) * tileSize;
     const towerWorldZ = (tower.row - boardHeight / 2) * tileSize;
 
-    const geometry = new THREE.SphereGeometry(0.08, 6, 6);
+    const geometry = new THREE.SphereGeometry(PROJECTILE_CONFIG.radius, PROJECTILE_CONFIG.segments, PROJECTILE_CONFIG.segments);
     const material = new THREE.MeshBasicMaterial({
       color: stats.color,
       transparent: true,
-      opacity: 0.9
+      opacity: PROJECTILE_CONFIG.opacity
     });
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(towerWorldX, 0.8, towerWorldZ);
+    mesh.position.set(towerWorldX, PROJECTILE_CONFIG.spawnHeight, towerWorldZ);
     scene.add(mesh);
 
     this.projectiles.push({

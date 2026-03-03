@@ -109,8 +109,8 @@ describe('TowerCombatService', () => {
       const enemy = createEnemy('e1', 20, 20);
       enemyMap.set('e1', enemy);
 
-      const kills = service.update(2.0, mockScene);
-      expect(kills.length).toBe(0);
+      const result = service.update(2.0, mockScene);
+      expect(result.killed.length).toBe(0);
       // Enemy health should be unchanged
       expect(enemy.health).toBe(100);
     });
@@ -223,8 +223,8 @@ describe('TowerCombatService', () => {
       enemyMap.set('e1', enemy);
 
       // First update: tower fires AND projectile hits (dist=0) → kill
-      const kills = service.update(0.016, mockScene);
-      expect(kills).toContain('e1');
+      const result = service.update(0.016, mockScene);
+      expect(result.killed).toContain('e1');
     });
 
     it('should not report kill for surviving enemy', () => {
@@ -233,8 +233,8 @@ describe('TowerCombatService', () => {
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
       enemyMap.set('e1', enemy);
 
-      const kills = service.update(0.016, mockScene);
-      expect(kills).not.toContain('e1');
+      const result = service.update(0.016, mockScene);
+      expect(result.killed).not.toContain('e1');
     });
   });
 
@@ -297,8 +297,8 @@ describe('TowerCombatService', () => {
 
       // Next update: projectile should detect missing target and self-destruct
       // No crash expected
-      const kills = service.update(0.016, mockScene);
-      expect(kills.length).toBe(0);
+      const result = service.update(0.016, mockScene);
+      expect(result.killed.length).toBe(0);
     });
 
     it('should not crash on rapid fire and miss cycle', () => {
@@ -404,14 +404,14 @@ describe('TowerCombatService', () => {
       const enemy = createEnemy('e1', 0, 0);
       enemyMap.set('e1', enemy);
 
-      const kills = service.update(1.0, mockScene);
-      expect(kills.length).toBe(0);
+      const result = service.update(1.0, mockScene);
+      expect(result.killed.length).toBe(0);
     });
 
     it('should handle update with no enemies', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-      const kills = service.update(1.0, mockScene);
-      expect(kills.length).toBe(0);
+      const result = service.update(1.0, mockScene);
+      expect(result.killed.length).toBe(0);
     });
 
     it('should handle zero deltaTime', () => {
@@ -419,8 +419,8 @@ describe('TowerCombatService', () => {
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z);
       enemyMap.set('e1', enemy);
 
-      const kills = service.update(0, mockScene);
-      expect(kills.length).toBe(0);
+      const result = service.update(0, mockScene);
+      expect(result.killed.length).toBe(0);
     });
 
     it('should not double-count kills from multiple projectiles in same frame', () => {
@@ -432,10 +432,10 @@ describe('TowerCombatService', () => {
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1);
       enemyMap.set('e1', enemy);
 
-      const kills = service.update(0.016, mockScene);
+      const result = service.update(0.016, mockScene);
 
       // Should only report the kill once (second projectile sees health <= 0)
-      const e1Kills = kills.filter(id => id === 'e1');
+      const e1Kills = result.killed.filter((id: string) => id === 'e1');
       expect(e1Kills.length).toBe(1);
     });
   });
