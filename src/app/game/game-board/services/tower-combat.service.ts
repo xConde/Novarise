@@ -61,9 +61,10 @@ export class TowerCombatService {
     return tower;
   }
 
-  update(deltaTime: number, scene: THREE.Scene): string[] {
+  update(deltaTime: number, scene: THREE.Scene): { killed: string[]; fired: TowerType[]; hitCount: number } {
     this.gameTime += deltaTime;
     const killedEnemyIds: string[] = [];
+    const firedTowerTypes: TowerType[] = [];
 
     // Tower targeting and firing — resolve stats per-tower using level
     this.placedTowers.forEach(tower => {
@@ -77,10 +78,12 @@ export class TowerCombatService {
 
       tower.lastFireTime = this.gameTime;
       this.fireProjectile(tower, target, stats, scene);
+      firedTowerTypes.push(tower.type);
     });
 
     // Update projectiles
     const survivingProjectiles: Projectile[] = [];
+    let hitCount = 0;
     for (const proj of this.projectiles) {
       const enemy = this.enemyService.getEnemies().get(proj.targetId);
 
@@ -100,6 +103,7 @@ export class TowerCombatService {
         // Hit — apply damage before disposing mesh (applyDamage reads proj.mesh.position)
         const kills = this.applyDamage(proj, scene);
         killedEnemyIds.push(...kills);
+        hitCount++;
         this.removeProjectileMesh(proj, scene);
       } else {
         // Move toward target
@@ -112,7 +116,7 @@ export class TowerCombatService {
     }
     this.projectiles = survivingProjectiles;
 
-    return killedEnemyIds;
+    return { killed: killedEnemyIds, fired: firedTowerTypes, hitCount };
   }
 
   private findTarget(tower: PlacedTower, stats: TowerStats): Enemy | null {

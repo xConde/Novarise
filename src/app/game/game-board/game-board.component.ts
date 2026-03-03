@@ -13,6 +13,7 @@ import { MapBridgeService } from './services/map-bridge.service';
 import { GameStateService } from './services/game-state.service';
 import { WaveService } from './services/wave.service';
 import { TowerCombatService } from './services/tower-combat.service';
+import { AudioService } from './services/audio.service';
 import { disposeMaterial } from './utils/three-utils';
 import { TowerType, TOWER_CONFIGS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
@@ -27,7 +28,7 @@ import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG } from './constants/ui.consta
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [EnemyService, GameStateService, WaveService, TowerCombatService]
+  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -72,12 +73,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Animation
   private lastTime = 0;
+  private defeatSoundPlayed = false;
+  private victorySoundPlayed = false;
   private keyboardHandler: (event: KeyboardEvent) => void;
   private mousemoveHandler: (event: MouseEvent) => void = () => {};
   private clickHandler: (event: MouseEvent) => void = () => {};
   private animationFrameId = 0;
   private resizeHandler: () => void = () => {};
   private stateSubscription: Subscription | null = null;
+
+  // Audio state exposed to template
+  get audioMuted(): boolean { return this.audioService.isMuted; }
 
   constructor(
     private router: Router,
@@ -86,7 +92,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private mapBridge: MapBridgeService,
     private gameStateService: GameStateService,
     private waveService: WaveService,
-    private towerCombatService: TowerCombatService
+    private towerCombatService: TowerCombatService,
+    private audioService: AudioService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -135,6 +142,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return Array(Math.max(0, count)).fill(0);
   }
 
+  toggleAudio(): void {
+    this.audioService.toggleMute();
+  }
+
   selectTowerType(type: TowerType): void {
     this.selectedTowerType = type;
     this.deselectTower();
@@ -152,6 +163,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Confirm upgrade succeeds BEFORE spending gold — prevents gold loss on service rejection
     if (!this.towerCombatService.upgradeTower(this.selectedTowerInfo.id)) return;
     this.gameStateService.spendGold(cost);
+    this.audioService.playTowerUpgrade();
 
     // Scale tower mesh to reflect upgrade level
     const towerMesh = this.towerMeshes.get(this.selectedTowerInfo.id);
@@ -184,6 +196,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const refund = getSellValue(soldTower.totalInvested);
     this.gameStateService.addGold(refund);
+    this.audioService.playTowerSell();
 
     // Remove mesh from scene
     const towerMesh = this.towerMeshes.get(this.selectedTowerInfo.id);
@@ -285,6 +298,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.gameStateService.startWave();
     this.waveService.startWave(this.gameStateService.getState().wave, this.scene);
+    this.audioService.playWaveStart();
   }
 
   restartGame(): void {
@@ -297,6 +311,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Reset services
     this.waveService.reset();
     this.gameStateService.reset();
+    this.defeatSoundPlayed = false;
+    this.victorySoundPlayed = false;
 
     if (this.mapBridge.hasEditorMap()) {
       const state = this.mapBridge.getEditorMapState()!;
@@ -755,6 +771,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Register tower with combat service
       this.towerCombatService.registerTower(row, col, this.selectedTowerType, towerMesh);
+      this.audioService.playTowerPlace();
 
       // Clear enemy path cache since board layout changed
       this.enemyService.clearPathCache();
@@ -815,14 +832,26 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         // Wave spawning
         this.waveService.update(deltaTime, this.scene);
 
-        // Tower combat — returns IDs of enemies killed by towers
-        const killedByTowers = this.towerCombatService.update(deltaTime, this.scene);
+        // Tower combat — returns IDs of enemies killed, tower types that fired, and hit count
+        const { killed: killedByTowers, fired: firedTowerTypes, hitCount } = this.towerCombatService.update(deltaTime, this.scene);
+
+        // Play tower fire sounds
+        for (const towerType of firedTowerTypes) {
+          this.audioService.playTowerFire(towerType);
+        }
+
+        // Play enemy hit sound (throttled inside AudioService)
+        if (hitCount > 0) {
+          this.audioService.playEnemyHit();
+        }
 
         // Collect gold from tower kills and remove dead enemies
         for (const enemyId of killedByTowers) {
           const enemy = this.enemyService.getEnemies().get(enemyId);
           if (enemy) {
             this.gameStateService.addGold(enemy.value);
+            this.audioService.playGoldEarned();
+            this.audioService.playEnemyDeath();
             this.enemyService.removeEnemy(enemyId, this.scene);
           }
         }
@@ -842,11 +871,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         // Check wave completion: no spawning and no enemies alive
         // Re-read phase — loseLife() above may have set DEFEAT mid-frame
         const currentPhase = this.gameStateService.getState().phase;
+        if (currentPhase === GamePhase.DEFEAT && !this.defeatSoundPlayed) {
+          this.defeatSoundPlayed = true;
+          this.audioService.playDefeat();
+        }
         if (currentPhase === GamePhase.COMBAT &&
             !this.waveService.isSpawning() &&
             this.enemyService.getEnemies().size === 0) {
           const reward = this.waveService.getWaveReward(state.wave);
           this.gameStateService.completeWave(reward);
+          // Check if completeWave triggered VICTORY
+          const postWavePhase = this.gameStateService.getState().phase;
+          if (postWavePhase === GamePhase.VICTORY && !this.victorySoundPlayed) {
+            this.victorySoundPlayed = true;
+            this.audioService.playVictory();
+          } else if (postWavePhase === GamePhase.INTERMISSION) {
+            this.audioService.playWaveClear();
+          }
         }
       }
     }
@@ -902,5 +943,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.renderer) {
       this.renderer.dispose();
     }
+
+    this.audioService.cleanup();
   }
 }
