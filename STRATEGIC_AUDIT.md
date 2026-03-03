@@ -95,17 +95,54 @@ src/app/games/novarise/
 
 ## Master Sprint Roadmap
 
-### Sprint 0: Hygiene (1 session)
-**Goal:** Clean foundation before building on it.
+### Sprint 0A: Repo Cleanup (1 session)
+**Goal:** Zero-risk cleanup. No logic changes, no refactors. Just pruning and fixing the one known bug.
+**Risk:** None — branch deletion and a one-liner leak fix.
 
-- [ ] Fix TerrainGrid memory leak (add `dispose()` call in `novarise.component.ngOnDestroy`)
+- [ ] Fix TerrainGrid memory leak (add `terrainGrid.dispose()` in `novarise.component.ngOnDestroy`)
 - [ ] Prune merged local branches (5 feat/velocity-* branches)
 - [ ] Prune dead remote claude/* branches (8 branches)
 - [ ] Upgrade stale deps (rxjs 7.4→7.8, zone.js 0.11→0.13, @types/node 12→20)
-- [ ] Extract `disposeMaterial()` to shared utility (duplicated in 3 files)
-- [ ] Extract coordinate conversion helper to `GameBoardService`
-- [ ] Create `board.constants.ts` — extract board size, tile size, tile height, spawner ranges (compute from board dims)
-- [ ] Make spawner range coordinates derived from `BOARD_WIDTH`/`BOARD_HEIGHT` instead of hardcoded `[23,24]`, `[18,19]`
+- [ ] Run full test suite — confirm 579/579 still green after dep upgrades
+
+---
+
+### Sprint 0B: Constants Foundation (1 session)
+**Goal:** Create the constants architecture that skills and CLAUDE.md reference. After this sprint, the repo matches the tooling.
+**Risk:** Medium — rewiring GameBoardService to use constants could break board generation. Full test suite required per commit.
+
+- [ ] Create `src/app/game/game-board/constants/board.constants.ts` — `BOARD_CONFIG { width, height, tileSize, tileHeight }`
+- [ ] Rewire `GameBoardService` to use `BOARD_CONFIG` instead of hardcoded `25, 20, 1, 0.2`
+- [ ] Make spawner ranges computed from `BOARD_CONFIG.width` / `BOARD_CONFIG.height` (not hardcoded `[23,24]`, `[18,19]`)
+- [ ] Extract `disposeMaterial()` to shared utility (currently duplicated in `game-board.component.ts`, `terrain-grid.class.ts`, `tower-combat.service.ts`)
+- [ ] Extract world↔grid coordinate conversion to `GameBoardService` helper (currently inline in multiple services)
+- [ ] Run full test suite — confirm 579/579 green
+
+---
+
+### Sprint 0C: Game-Side Magic Numbers (1-2 sessions)
+**Goal:** Extract the ~120 magic numbers from `game-board.component.ts` and game services into constants files. This is the highest-density file in the repo.
+**Risk:** Medium — touching rendering code risks visual regressions. Manual visual check required after each constants file.
+
+- [ ] Create `rendering.constants.ts` — scene background, fog density, tone mapping exposure, bloom params, vignette params
+- [ ] Create `lighting.constants.ts` — all 6 lights (ambient, directional, 3 point, under) with position/color/intensity/shadow configs
+- [ ] Create `camera.constants.ts` — FOV, near/far, distance, orbit bounds, damping, polar angle
+- [ ] Create `particle.constants.ts` — count (400), position ranges, color thresholds, size, opacity, animation speeds
+- [ ] Create `ui.constants.ts` — health bar dims/colors/thresholds, projectile sphere geometry, tower scale/emissive per level, range preview opacity
+- [ ] Wire all constants into `game-board.component.ts`, `enemy.service.ts`, `tower-combat.service.ts`
+- [ ] Run full test suite + manual visual check (game renders correctly with constants)
+
+---
+
+### Sprint 0D: Editor-Side Magic Numbers (1-2 sessions)
+**Goal:** Extract the ~80 magic numbers from `novarise.component.ts` and editor services into constants files.
+**Risk:** Same as 0C — visual regressions possible.
+
+- [ ] Create `editor-scene.constants.ts` — editor lighting (6+ lights), fog, skybox shader params, post-processing
+- [ ] Create `editor-camera.constants.ts` — camera speeds, bounds, angles from `camera-control.service.ts` (12 values)
+- [ ] Create `editor-ui.constants.ts` — brush indicator geometry, marker geometry/colors, edit throttle, grid size, height limits, smoothing factor
+- [ ] Wire all constants into `novarise.component.ts`, `camera-control.service.ts`, `terrain-grid.class.ts`
+- [ ] Run full test suite + manual visual check (editor renders correctly with constants)
 
 ---
 
@@ -230,37 +267,51 @@ src/app/games/novarise/
 
 ## Sprint Priority Matrix
 
-| Sprint | Impact | Effort | Dependency | Ship Without? |
-|--------|--------|--------|------------|---------------|
-| **0: Hygiene** | Low | Low | None | No — debt compounds |
-| **1: Editor Integrity** | High | Medium | S0 | No — broken maps = broken game |
-| **2: Game Feel** | **Critical** | Medium | S0 | No — this IS the game |
-| **3: Player Control** | High | Low | S0 | Maybe — but frustrating |
-| **4: Replayability** | High | Medium | S1, S2 | Yes — but no retention |
-| **5: Content** | Medium | High | S2 | Yes — 3 towers works for v1 |
-| **6: Editor Pro** | Medium | Medium | S1 | Yes — editor works today |
-| **7: Mobile** | Medium | Medium | S2, S3 | Yes — desktop-first is fine |
-| **8: Progression** | Medium | Medium | S4 | Yes — nice-to-have for v1 |
-| **9: Infrastructure** | Low | Medium | Any | Yes — manual deploy works |
+| Sprint | Impact | Effort | Risk | Dependency | Ship Without? |
+|--------|--------|--------|------|------------|---------------|
+| **0A: Repo Cleanup** | Low | Low | None | None | No — leak + stale deps |
+| **0B: Constants Foundation** | **Critical** | Medium | Medium | 0A | No — skills reference it |
+| **0C: Game Magic Numbers** | High | Medium | Medium | 0B | Technically yes — but drift accelerates |
+| **0D: Editor Magic Numbers** | High | Medium | Medium | 0B | Same as 0C |
+| **1: Editor Integrity** | High | Medium | Low | 0A, 0B | No — broken maps = broken game |
+| **2: Game Feel** | **Critical** | Medium | Low | 0A, 0B | No — this IS the game |
+| **3: Player Control** | High | Low | Low | 0A | Maybe — but frustrating |
+| **4: Replayability** | High | Medium | Low | S1, S2 | Yes — but no retention |
+| **5: Content** | Medium | High | Low | S2 | Yes — 3 towers works for v1 |
+| **6: Editor Pro** | Medium | Medium | Low | S1 | Yes — editor works today |
+| **7: Mobile** | Medium | Medium | Medium | S2, S3 | Yes — desktop-first is fine |
+| **8: Progression** | Medium | Medium | Low | S4 | Yes — nice-to-have for v1 |
+| **9: Infrastructure** | Low | Medium | Low | Any | Yes — manual deploy works |
 
 ---
 
 ## Recommended Order
 
 ```
-S0 (Hygiene) → S1 (Editor Integrity) → S2 (Game Feel)
-                                             ↓
-                                        S3 (Player Control)
-                                             ↓
-                                        S4 (Replayability)
-                                             ↓
-                               S5 (Content) + S6 (Editor Pro)  ← parallel
-                                             ↓
-                                   S7 (Mobile) + S8 (Progression) ← parallel
-                                             ↓
-                                     S9 (Infrastructure)
+S0A (Cleanup) → S0B (Constants Foundation)
+                        ↓
+            ┌── S0C (Game Magic Numbers)      ← can parallel with 0D
+            └── S0D (Editor Magic Numbers)    ← can parallel with 0C
+                        ↓
+               S1 (Editor Integrity) → S2 (Game Feel)
+                                            ↓
+                                       S3 (Player Control)
+                                            ↓
+                                       S4 (Replayability)
+                                            ↓
+                              S5 (Content) + S6 (Editor Pro)  ← parallel
+                                            ↓
+                                  S7 (Mobile) + S8 (Progression) ← parallel
+                                            ↓
+                                    S9 (Infrastructure)
 ```
 
-**"Playable demo" milestone:** After S0 + S1 + S2 + S3
+**"Repo aligned with tooling" milestone:** After S0A + S0B
+**"Magic number debt cleared" milestone:** After S0C + S0D
+**"Playable demo" milestone:** After S1 + S2 + S3
 **"Show someone" milestone:** After S4
 **"Ship it" milestone:** After S7 + S9
+
+### Sprint 0C and 0D: Parallel or Sequential?
+
+0C and 0D touch completely different files (game/ vs novarise/). They CAN run in parallel if using separate branches. But if you want to go slow and review each constants extraction carefully, run them sequentially. Either way, they both depend on 0B (the constants architecture must exist before you populate it).
