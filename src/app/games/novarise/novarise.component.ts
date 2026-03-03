@@ -33,7 +33,9 @@ import {
   EDITOR_ANIMATION,
   EDITOR_HOVER_EMISSIVE,
   EDITOR_FLOOD_FILL_MAX_ITERATIONS,
+  EDITOR_PATH_INVALID_FLASH_MS,
 } from './constants/editor-ui.constants';
+import { PathValidationService, PathValidationResult } from './core/path-validation.service';
 
 // Re-export types for template compatibility
 export { EditMode, BrushTool } from './core/editor-state.service';
@@ -113,6 +115,16 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private get currentMapName(): string { return this.editorState.getCurrentMapName(); }
   private set currentMapName(name: string) { this.editorState.setCurrentMapName(name); }
 
+  // Path validation state
+  private pathValidationResult: PathValidationResult = { valid: false };
+  /** Whether the current map has a valid walkable path from spawn to exit. */
+  public get isPathValid(): boolean { return this.pathValidationResult.valid; }
+  /** Whether both spawn and exit points have been placed (regardless of path validity). */
+  public get hasSpawnAndExit(): boolean {
+    if (!this.terrainGrid) return false;
+    return this.terrainGrid.getSpawnPoint() !== null && this.terrainGrid.getExitPoint() !== null;
+  }
+
   // Title display
   public title = 'Novarise';
 
@@ -133,7 +145,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     private editHistory: EditHistoryService,
     private cameraControl: CameraControlService,
     private editorState: EditorStateService,
-    private mapBridge: MapBridgeService
+    private mapBridge: MapBridgeService,
+    private pathValidation: PathValidationService
   ) {
     this.keyboardHandler = this.handleKeyDown.bind(this);
     this.keyUpHandler = this.handleKeyUp.bind(this);
@@ -661,6 +674,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         (x, z, type) => this.terrainGrid.paintTile(x, z, type)
       );
       this.editHistory.record(command);
+      this.runPathValidation();
     } else if (this.editMode === 'height' && this.currentStrokeTiles.size > 0) {
       const tiles = Array.from(this.currentStrokeTiles.values());
       const command = new HeightCommand(
@@ -712,6 +726,18 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           this.flashTileEdit(tile.mesh);
         }
       } else if (this.editMode === 'spawn') {
+        // Reject placement on non-walkable terrain
+        const tile = this.terrainGrid.getTileAt(x, z);
+        if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
+          this.flashMarkerRejection(this.spawnMarker);
+          return;
+        }
+        // Reject placement on same tile as exit
+        const currentExit = this.terrainGrid.getExitPoint();
+        if (currentExit && currentExit.x === x && currentExit.z === z) {
+          this.flashMarkerRejection(this.spawnMarker);
+          return;
+        }
         // Record spawn point change for undo
         const previousSpawn = this.terrainGrid.getSpawnPoint();
         this.terrainGrid.setSpawnPoint(x, z);
@@ -727,7 +753,20 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           }
         );
         this.editHistory.record(command);
+        this.runPathValidation();
       } else if (this.editMode === 'exit') {
+        // Reject placement on non-walkable terrain
+        const tile = this.terrainGrid.getTileAt(x, z);
+        if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
+          this.flashMarkerRejection(this.exitMarker);
+          return;
+        }
+        // Reject placement on same tile as spawn
+        const currentSpawn = this.terrainGrid.getSpawnPoint();
+        if (currentSpawn && currentSpawn.x === x && currentSpawn.z === z) {
+          this.flashMarkerRejection(this.exitMarker);
+          return;
+        }
         // Record exit point change for undo
         const previousExit = this.terrainGrid.getExitPoint();
         this.terrainGrid.setExitPoint(x, z);
@@ -743,6 +782,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           }
         );
         this.editHistory.record(command);
+        this.runPathValidation();
       }
     });
   }
@@ -799,6 +839,18 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         }
       }, 100);
     }, 50);
+  }
+
+  /**
+   * Flash a marker red briefly to signal a rejected spawn/exit placement.
+   */
+  private flashMarkerRejection(marker: THREE.Mesh): void {
+    const material = marker.material as THREE.MeshBasicMaterial;
+    const originalColor = material.color.getHex();
+    material.color.setHex(0xff2222);
+    setTimeout(() => {
+      material.color.setHex(originalColor);
+    }, EDITOR_PATH_INVALID_FLASH_MS);
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
@@ -1013,6 +1065,44 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /**
+   * Prompt the user to select and delete a saved map (with confirmation).
+   */
+  public deleteMap(): void {
+    const maps = this.mapStorage.getAllMaps();
+
+    if (maps.length === 0) {
+      alert('No saved maps to delete.');
+      return;
+    }
+
+    let message = 'Select a map to delete:\n\n';
+    maps.forEach((map, index) => {
+      const date = new Date(map.updatedAt).toLocaleString();
+      message += `${index + 1}. ${map.name} (${date})\n`;
+    });
+
+    const selection = prompt(message + '\nEnter number:');
+    if (!selection) return; // User cancelled
+
+    const index = parseInt(selection) - 1;
+    if (index < 0 || index >= maps.length) {
+      alert('Invalid selection.');
+      return;
+    }
+
+    const selectedMap = maps[index];
+    const confirmed = confirm(`Delete map "${selectedMap.name}"? This cannot be undone.`);
+    if (!confirmed) return;
+
+    const deleted = this.mapStorage.deleteMap(selectedMap.id);
+    if (deleted) {
+      alert(`Map "${selectedMap.name}" deleted.`);
+    } else {
+      alert('Failed to delete map.');
+    }
+  }
+
   private saveGridState(): void {
     // Get current map name or prompt for new one
     const mapName = prompt('Enter map name:', this.currentMapName);
@@ -1059,6 +1149,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.terrainGrid.importState(state);
       this.updateSpawnMarker();
       this.updateExitMarker();
+      this.runPathValidation();
       this.currentMapName = selectedMap.name;
       alert(`Map "${selectedMap.name}" loaded successfully!`);
     } else {
@@ -1072,6 +1163,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.terrainGrid.importState(state);
       this.updateSpawnMarker();
       this.updateExitMarker();
+      this.runPathValidation();
 
       const currentId = this.mapStorage.getCurrentMapId();
       if (currentId) {
@@ -1284,6 +1376,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         (x, z, type) => this.terrainGrid.paintTile(x, z, type)
       );
       this.editHistory.record(command);
+      this.runPathValidation();
     }
   }
 
@@ -1356,6 +1449,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         );
         this.editHistory.record(command);
       }
+    }
+
+    if (affectedTiles.length > 0 && this.editMode === 'paint') {
+      this.runPathValidation();
     }
 
     this.clearRectanglePreview();
@@ -1483,6 +1580,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       // Update markers if spawn/exit was undone
       this.updateSpawnMarker();
       this.updateExitMarker();
+      this.runPathValidation();
     }
   }
 
@@ -1495,6 +1593,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       // Update markers if spawn/exit was redone
       this.updateSpawnMarker();
       this.updateExitMarker();
+      this.runPathValidation();
     }
   }
 
@@ -1506,11 +1605,28 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
-   * Check if the map is ready to play (has both spawn and exit points)
+   * Run BFS path validation and cache the result.
+   * Call after any terrain paint, spawn/exit placement, or map load.
+   */
+  private runPathValidation(): void {
+    if (!this.terrainGrid) {
+      this.pathValidationResult = { valid: false };
+      return;
+    }
+    const state = this.terrainGrid.exportState();
+    this.pathValidationResult = this.pathValidation.validate(state);
+  }
+
+  /**
+   * Check if the map is ready to play: has both spawn and exit points
+   * AND a valid walkable path exists between them.
    */
   public get canPlayMap(): boolean {
     if (!this.terrainGrid) return false;
-    return this.terrainGrid.getSpawnPoint() !== null && this.terrainGrid.getExitPoint() !== null;
+    const hasPoints =
+      this.terrainGrid.getSpawnPoint() !== null &&
+      this.terrainGrid.getExitPoint() !== null;
+    return hasPoints && this.pathValidationResult.valid;
   }
 
   /**
@@ -1548,6 +1664,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.terrainGrid.importState(state);
         this.updateSpawnMarker();
         this.updateExitMarker();
+        this.runPathValidation();
         const metadata = this.mapStorage.getMapMetadata(mapId);
         if (metadata) {
           this.currentMapName = metadata.name;

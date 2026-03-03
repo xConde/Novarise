@@ -104,6 +104,10 @@ export const EDITOR_GRID_LINES = {
   yOffset: 0.01,
 } as const;
 
+// ── Path validation ───────────────────────────────────────────────────────────
+/** Duration (ms) of the red flash shown when a spawn/exit placement is rejected. */
+export const EDITOR_PATH_INVALID_FLASH_MS = 600;
+
 // ── Height limits (terrain-grid.class.ts) ────────────────────────────────────
 export const EDITOR_HEIGHT = {
   min: 0,

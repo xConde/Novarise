@@ -79,6 +79,35 @@
   color: var(--theme-purple-light);
   text-align: center;
 }
+.delete-map-btn {
+  width: 100%;
+  padding: 8px 16px;
+  background: rgba(180,20,20,.2);
+  border: 1px solid rgba(220,50,50,.4);
+  border-radius: 6px;
+  color: #ff6666;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  &:hover {
+    background: rgba(220,20,20,.3);
+    border-color: rgba(255,60,60,.6);
+    box-shadow: 0 0 8px rgba(255,50,50,.2);
+  }
+}
+.path-status {
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+.path-valid {
+  color: #50ff88;
+}
+.path-invalid {
+  color: #ff4444;
+}
 
 @media (max-width: 768px) {
   .reopen-button { top: 10px; bottom: auto; left: 50%; transform: translateX(-50%); right: auto; padding: 10px 20px; font-size: 12px; min-height: 44px; }

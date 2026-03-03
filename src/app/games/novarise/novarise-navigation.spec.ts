@@ -4,7 +4,9 @@ import { RouterTestingModule } from '@angular/router/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { NovariseComponent } from './novarise.component';
 import { MapStorageService } from './core/map-storage.service';
+import { PathValidationService } from './core/path-validation.service';
 import { TerrainGridState } from './features/terrain-editor/terrain-grid-state.interface';
+import { TerrainType } from './models/terrain-types.enum';
 
 /**
  * Typed access to private members needed for test setup/assertion.
@@ -20,23 +22,36 @@ interface TestableNovarise {
   renderer: { domElement: HTMLElement; dispose(): void };
   scene: { remove(): void };
   keysPressed: Set<string>;
+  pathValidationResult: { valid: boolean };
   handleKeyDown(event: KeyboardEvent): void;
+}
+
+/** Build a fully-walkable NxN tile grid (all BEDROCK). */
+function buildBedrockTiles(gridSize: number): TerrainType[][] {
+  return Array.from({ length: gridSize }, () =>
+    Array(gridSize).fill(TerrainType.BEDROCK)
+  );
 }
 
 /**
  * Minimal mock that satisfies ngOnDestroy's terrainGrid access.
+ * Uses a small 6x6 all-BEDROCK grid so path validation succeeds
+ * when both spawn and exit are set.
  */
 function mockTerrainGrid(
   spawn: { x: number; z: number } | null,
-  exit: { x: number; z: number } | null
+  exit: { x: number; z: number } | null,
+  gridSize: number = 6
 ): TestableNovarise['terrainGrid'] {
+  const tiles = buildBedrockTiles(gridSize);
+  const heightMap = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
   return {
     getSpawnPoint: () => spawn,
     getExitPoint: () => exit,
     exportState: () => ({
-      gridSize: 25,
-      tiles: [],
-      heightMap: [],
+      gridSize,
+      tiles,
+      heightMap,
       spawnPoint: spawn,
       exitPoint: exit,
       version: '1.0.0'
@@ -75,7 +90,8 @@ describe('NovariseComponent Navigation', () => {
       declarations: [NovariseComponent],
       imports: [RouterTestingModule],
       providers: [
-        { provide: MapStorageService, useValue: mockMapStorageService }
+        { provide: MapStorageService, useValue: mockMapStorageService },
+        PathValidationService
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();
@@ -111,21 +127,37 @@ describe('NovariseComponent Navigation', () => {
       expect(component.canPlayMap).toBe(false);
     });
 
-    it('should return true when both spawn and exit are set', () => {
+    it('should return true when both spawn and exit are set and path is valid', () => {
       testable.terrainGrid = mockTerrainGrid({ x: 0, z: 0 }, { x: 5, z: 5 });
+      // Simulate path validation having run and found a valid path
+      testable.pathValidationResult = { valid: true };
       expect(component.canPlayMap).toBe(true);
+    });
+
+    it('should return false when both spawn and exit are set but path is invalid', () => {
+      testable.terrainGrid = mockTerrainGrid({ x: 0, z: 0 }, { x: 5, z: 5 });
+      testable.pathValidationResult = { valid: false };
+      expect(component.canPlayMap).toBe(false);
     });
   });
 
   describe('playMap', () => {
-    it('should navigate to /play when map has spawn and exit', () => {
+    it('should navigate to /play when map has spawn, exit, and valid path', () => {
       testable.terrainGrid = mockTerrainGrid({ x: 0, z: 0 }, { x: 5, z: 5 });
+      testable.pathValidationResult = { valid: true };
       component.playMap();
       expect(router.navigate).toHaveBeenCalledWith(['/play']);
     });
 
     it('should not navigate when spawn or exit is missing', () => {
       testable.terrainGrid = mockTerrainGrid(null, null);
+      component.playMap();
+      expect(router.navigate).not.toHaveBeenCalled();
+    });
+
+    it('should not navigate when path is invalid even with spawn and exit set', () => {
+      testable.terrainGrid = mockTerrainGrid({ x: 0, z: 0 }, { x: 5, z: 5 });
+      testable.pathValidationResult = { valid: false };
       component.playMap();
       expect(router.navigate).not.toHaveBeenCalled();
     });

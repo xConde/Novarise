@@ -4,6 +4,7 @@ import { RouterTestingModule } from '@angular/router/testing';
 import { NovariseComponent } from './novarise.component';
 import { MapStorageService } from './core/map-storage.service';
 import { CameraControlService, JoystickInput, MovementInput, RotationInput } from './core/camera-control.service';
+import { PathValidationService } from './core/path-validation.service';
 import { JoystickEvent } from './features/mobile-controls';
 
 /**
@@ -48,7 +49,8 @@ describe('NovariseComponent', () => {
       declarations: [NovariseComponent],
       imports: [RouterTestingModule],
       providers: [
-        { provide: MapStorageService, useValue: mockMapStorageService }
+        { provide: MapStorageService, useValue: mockMapStorageService },
+        PathValidationService
       ],
       schemas: [NO_ERRORS_SCHEMA] // Ignore unknown elements like app-virtual-joystick
     }).compileComponents();
