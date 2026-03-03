@@ -26,5 +26,15 @@ export const TOWER_VISUAL_CONFIG = {
 
 export const RANGE_PREVIEW_CONFIG = {
   opacity: 0.35,
-  yPosition: 0.35
+  yPosition: 0.35,
+  ringThickness: 0.05,
+  segments: 64,
+};
+
+export const TILE_EMISSIVE = {
+  base: 0.15,
+  wall: 0.1,
+  special: 0.4,
+  hover: 0.5,
+  selected: 0.8,
 };

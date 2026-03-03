@@ -9,6 +9,9 @@ export class AudioService {
   private _muted = false;
   private _volume = AUDIO_CONFIG.masterVolume;
   private lastEnemyHitTime = -Infinity;
+  private towerFiresThisFrame = 0;
+  private deathSoundsThisFrame = 0;
+  private frameResetScheduled = false;
 
   get isMuted(): boolean {
     return this._muted;
@@ -36,6 +39,17 @@ export class AudioService {
     return this.audioContext;
   }
 
+  /** Schedule a microtask to reset per-frame counters (runs once per JS task). */
+  private scheduleFrameReset(): void {
+    if (this.frameResetScheduled) return;
+    this.frameResetScheduled = true;
+    Promise.resolve().then(() => {
+      this.towerFiresThisFrame = 0;
+      this.deathSoundsThisFrame = 0;
+      this.frameResetScheduled = false;
+    });
+  }
+
   // --- Sound primitives ---
 
   private playTone(
@@ -43,7 +57,7 @@ export class AudioService {
     endFrequency: number,
     duration: number,
     oscillatorType: OscillatorType,
-    gain = 0.3,
+    gain: number,
     startDelay = 0
   ): void {
     const ctx = this.getContext();
@@ -65,6 +79,12 @@ export class AudioService {
 
       osc.start(ctx.currentTime + startDelay);
       osc.stop(ctx.currentTime + startDelay + duration + 0.01);
+
+      // Disconnect nodes after playback so they can be garbage collected
+      osc.onended = () => {
+        osc.disconnect();
+        envGain.disconnect();
+      };
     } catch {
       // Silently swallow — audio errors should never crash the game
     }
@@ -93,6 +113,12 @@ export class AudioService {
       envGain.connect(this.masterGain);
 
       source.start(ctx.currentTime + startDelay);
+
+      // Disconnect nodes after playback so they can be garbage collected
+      source.onended = () => {
+        source.disconnect();
+        envGain.disconnect();
+      };
     } catch {
       // Silently swallow
     }
@@ -103,7 +129,7 @@ export class AudioService {
     noteDuration: number,
     noteGap: number,
     oscillatorType: OscillatorType,
-    gain = 0.3
+    gain: number
   ): void {
     notes.forEach((freq, i) => {
       const startDelay = i * (noteDuration + noteGap);
@@ -116,7 +142,12 @@ export class AudioService {
   playTowerFire(towerType: TowerType): void {
     const cfg = AUDIO_CONFIG.towerFire[towerType];
     if (!cfg) return;
-    this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.oscillatorType, 0.2);
+
+    this.scheduleFrameReset();
+    if (this.towerFiresThisFrame >= AUDIO_CONFIG.maxTowerFiresPerFrame) return;
+    this.towerFiresThisFrame++;
+
+    this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.oscillatorType, cfg.gain);
   }
 
   playEnemyHit(): void {
@@ -125,28 +156,32 @@ export class AudioService {
     this.lastEnemyHitTime = now;
 
     const cfg = AUDIO_CONFIG.enemyHit;
-    this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.oscillatorType, 0.15);
+    this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.oscillatorType, cfg.gain);
   }
 
   playEnemyDeath(): void {
+    this.scheduleFrameReset();
+    if (this.deathSoundsThisFrame >= AUDIO_CONFIG.maxDeathSoundsPerFrame) return;
+    this.deathSoundsThisFrame++;
+
     const cfg = AUDIO_CONFIG.enemyDeath;
-    this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.oscillatorType, 0.25);
+    this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.oscillatorType, cfg.gain);
     this.playNoise(cfg.noiseGain, cfg.noiseDuration);
   }
 
   playWaveStart(): void {
     const cfg = AUDIO_CONFIG.waveStart;
-    this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.oscillatorType, 0.3);
+    this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.oscillatorType, cfg.gain);
   }
 
   playWaveClear(): void {
     const cfg = AUDIO_CONFIG.waveClear;
-    this.playArpeggio(cfg.notes, cfg.noteDuration, cfg.noteGap, cfg.oscillatorType, 0.3);
+    this.playArpeggio(cfg.notes, cfg.noteDuration, cfg.noteGap, cfg.oscillatorType, cfg.gain);
   }
 
   playGoldEarned(): void {
     const cfg = AUDIO_CONFIG.goldEarned;
-    this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.oscillatorType, 0.2);
+    this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.oscillatorType, cfg.gain);
   }
 
   playTowerPlace(): void {
@@ -156,12 +191,12 @@ export class AudioService {
 
   playTowerUpgrade(): void {
     const cfg = AUDIO_CONFIG.towerUpgrade;
-    this.playArpeggio(cfg.notes, cfg.noteDuration, cfg.noteGap, cfg.oscillatorType, 0.3);
+    this.playArpeggio(cfg.notes, cfg.noteDuration, cfg.noteGap, cfg.oscillatorType, cfg.gain);
   }
 
   playTowerSell(): void {
     const cfg = AUDIO_CONFIG.towerSell;
-    this.playArpeggio(cfg.notes, cfg.noteDuration, cfg.noteGap, cfg.oscillatorType, 0.3);
+    this.playArpeggio(cfg.notes, cfg.noteDuration, cfg.noteGap, cfg.oscillatorType, cfg.gain);
   }
 
   playDefeat(): void {
@@ -171,7 +206,7 @@ export class AudioService {
 
   playVictory(): void {
     const cfg = AUDIO_CONFIG.victory;
-    this.playArpeggio(cfg.notes, cfg.noteDuration, cfg.noteGap, cfg.oscillatorType, 0.35);
+    this.playArpeggio(cfg.notes, cfg.noteDuration, cfg.noteGap, cfg.oscillatorType, cfg.gain);
   }
 
   // --- Volume / mute ---

@@ -22,7 +22,7 @@ import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants
 import { AMBIENT_LIGHT, DIRECTIONAL_LIGHT, UNDER_LIGHT, POINT_LIGHTS } from './constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
-import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG } from './constants/ui.constants';
+import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
 
 @Component({
   selector: 'app-game-board',
@@ -256,7 +256,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const stats = getEffectiveStats(tower.type, tower.level);
     const radius = stats.range;
 
-    const geometry = new THREE.RingGeometry(radius - 0.05, radius, 64);
+    const geometry = new THREE.RingGeometry(radius - RANGE_PREVIEW_CONFIG.ringThickness, radius, RANGE_PREVIEW_CONFIG.segments);
     geometry.rotateX(-Math.PI / 2); // Lay flat on XZ plane
     const material = new THREE.MeshBasicMaterial({
       color: stats.color,
@@ -669,7 +669,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.hoveredTile && this.hoveredTile !== this.getSelectedTileMesh()) {
         const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
         const tileType = this.hoveredTile.userData['tile'].type;
-        material.emissiveIntensity = tileType === BlockType.BASE ? 0.15 : tileType === BlockType.WALL ? 0.1 : 0.4;
+        material.emissiveIntensity = tileType === BlockType.BASE ? TILE_EMISSIVE.base : tileType === BlockType.WALL ? TILE_EMISSIVE.wall : TILE_EMISSIVE.special;
       }
 
       if (intersects.length > 0) {
@@ -677,7 +677,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         if (mesh !== this.getSelectedTileMesh()) {
           this.hoveredTile = mesh;
           const material = mesh.material as THREE.MeshStandardMaterial;
-          material.emissiveIntensity = 0.5;
+          material.emissiveIntensity = TILE_EMISSIVE.hover;
           canvas.style.cursor = 'pointer';
         }
       } else {
@@ -723,7 +723,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       if (prevSelected) {
         const material = prevSelected.material as THREE.MeshStandardMaterial;
         const tileType = prevSelected.userData['tile'].type;
-        material.emissiveIntensity = tileType === BlockType.BASE ? 0.15 : tileType === BlockType.WALL ? 0.1 : 0.4;
+        material.emissiveIntensity = tileType === BlockType.BASE ? TILE_EMISSIVE.base : tileType === BlockType.WALL ? TILE_EMISSIVE.wall : TILE_EMISSIVE.special;
       }
 
       if (intersects.length > 0) {
@@ -734,7 +734,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.selectedTile = { row, col };
 
         const material = mesh.material as THREE.MeshStandardMaterial;
-        material.emissiveIntensity = 0.8;
+        material.emissiveIntensity = TILE_EMISSIVE.selected;
 
         this.deselectTower();
         this.tryPlaceTower(row, col);

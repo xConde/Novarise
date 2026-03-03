@@ -34,6 +34,7 @@ import {
   EDITOR_HOVER_EMISSIVE,
   EDITOR_FLOOD_FILL_MAX_ITERATIONS,
   EDITOR_PATH_INVALID_FLASH_MS,
+  EDITOR_PATH_INVALID_FLASH_COLOR,
 } from './constants/editor-ui.constants';
 import { PathValidationService, PathValidationResult } from './core/path-validation.service';
 
@@ -837,8 +838,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         if (this.hoveredTile !== mesh) {
           material.emissiveIntensity = originalIntensity;
         }
-      }, 100);
-    }, 50);
+      }, EDITOR_HOVER_EMISSIVE.flashFadeBackMs);
+    }, EDITOR_HOVER_EMISSIVE.flashFadeDelayMs);
   }
 
   /**
@@ -847,7 +848,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private flashMarkerRejection(marker: THREE.Mesh): void {
     const material = marker.material as THREE.MeshBasicMaterial;
     const originalColor = material.color.getHex();
-    material.color.setHex(0xff2222);
+    material.color.setHex(EDITOR_PATH_INVALID_FLASH_COLOR);
     setTimeout(() => {
       material.color.setHex(originalColor);
     }, EDITOR_PATH_INVALID_FLASH_MS);

@@ -90,6 +90,10 @@ export const EDITOR_HOVER_EMISSIVE = {
   flashMid: 0.9,
   /** Fallback emissive intensity used when no terrain config can be resolved. */
   defaultFallback: 0.2,
+  /** Delay (ms) before the flash-on-edit starts fading to mid intensity. */
+  flashFadeDelayMs: 50,
+  /** Delay (ms) for the second fade-back from mid to original intensity. */
+  flashFadeBackMs: 100,
 } as const;
 
 // ── Flood-fill iteration guard ────────────────────────────────────────────────
@@ -107,6 +111,8 @@ export const EDITOR_GRID_LINES = {
 // ── Path validation ───────────────────────────────────────────────────────────
 /** Duration (ms) of the red flash shown when a spawn/exit placement is rejected. */
 export const EDITOR_PATH_INVALID_FLASH_MS = 600;
+/** Color used for the rejection flash on spawn/exit markers. */
+export const EDITOR_PATH_INVALID_FLASH_COLOR = 0xff2222;
 
 // ── Height limits (terrain-grid.class.ts) ────────────────────────────────────
 export const EDITOR_HEIGHT = {
