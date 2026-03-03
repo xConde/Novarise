@@ -118,6 +118,8 @@ export const EDITOR_PATH_INVALID_FLASH_COLOR = 0xff2222;
 export const EDITOR_HEIGHT = {
   min: 0,
   max: 5,
+  /** Height change per brush stroke click. */
+  stepSize: 0.2,
   /** Height difference between a tile and a neighbour that triggers smoothing. */
   smoothingThreshold: 0.5,
   /** Fraction of the height difference applied to the neighbour during smoothing. */

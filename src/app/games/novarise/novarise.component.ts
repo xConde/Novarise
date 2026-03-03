@@ -35,6 +35,7 @@ import {
   EDITOR_FLOOD_FILL_MAX_ITERATIONS,
   EDITOR_PATH_INVALID_FLASH_MS,
   EDITOR_PATH_INVALID_FLASH_COLOR,
+  EDITOR_HEIGHT,
 } from './constants/editor-ui.constants';
 import { PathValidationService, PathValidationResult } from './core/path-validation.service';
 
@@ -717,8 +718,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       } else if (this.editMode === 'height') {
         // Track tile state before height change for undo
         this.trackTileForUndo(x, z);
-        const delta = 0.2;
-        this.terrainGrid.adjustHeight(x, z, delta);
+        this.terrainGrid.adjustHeight(x, z, EDITOR_HEIGHT.stepSize);
         const tile = this.terrainGrid.getTileAt(x, z);
         if (tile) {
           // Track new height after change
