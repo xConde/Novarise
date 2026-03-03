@@ -36,6 +36,23 @@
     Wave {{ gameState.wave }} in progress...
   </div>
 
+  <!-- Difficulty selector — only visible in SETUP before wave 0 starts -->
+  <div class="difficulty-selector" *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0">
+    <span class="difficulty-label">Difficulty</span>
+    <div class="difficulty-options">
+      <button
+        *ngFor="let level of difficultyLevels"
+        class="difficulty-btn"
+        [class.selected]="gameState.difficulty === level"
+        (click)="selectDifficulty(level)"
+        [attr.aria-label]="'Select ' + difficultyPresets[level].label + ' difficulty'"
+        [attr.aria-pressed]="gameState.difficulty === level">
+        <span class="difficulty-name">{{ difficultyPresets[level].label }}</span>
+        <span class="difficulty-desc">{{ difficultyPresets[level].description }}</span>
+      </button>
+    </div>
+  </div>
+
   <!-- Wave control -->
   <div class="wave-control" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
     <button
@@ -142,6 +159,39 @@
       <div class="tower-icon splash"></div>
       <span class="tower-name">Splash</span>
       <span class="tower-cost">{{ towerConfigs[TowerType.SPLASH].cost }}g</span>
+    </button>
+
+    <button
+      class="tower-btn"
+      [class.selected]="selectedTowerType === TowerType.SLOW"
+      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[TowerType.SLOW].cost"
+      (click)="selectTowerType(TowerType.SLOW)"
+      aria-label="Select Slow Tower">
+      <div class="tower-icon slow"></div>
+      <span class="tower-name">Slow</span>
+      <span class="tower-cost">{{ towerConfigs[TowerType.SLOW].cost }}g</span>
+    </button>
+
+    <button
+      class="tower-btn"
+      [class.selected]="selectedTowerType === TowerType.CHAIN"
+      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[TowerType.CHAIN].cost"
+      (click)="selectTowerType(TowerType.CHAIN)"
+      aria-label="Select Chain Tower">
+      <div class="tower-icon chain"></div>
+      <span class="tower-name">Chain</span>
+      <span class="tower-cost">{{ towerConfigs[TowerType.CHAIN].cost }}g</span>
+    </button>
+
+    <button
+      class="tower-btn"
+      [class.selected]="selectedTowerType === TowerType.MORTAR"
+      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[TowerType.MORTAR].cost"
+      (click)="selectTowerType(TowerType.MORTAR)"
+      aria-label="Select Mortar Tower">
+      <div class="tower-icon mortar"></div>
+      <span class="tower-name">Mortar</span>
+      <span class="tower-cost">{{ towerConfigs[TowerType.MORTAR].cost }}g</span>
     </button>
   </div>
 </div>

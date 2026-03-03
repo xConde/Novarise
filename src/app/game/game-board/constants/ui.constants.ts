@@ -38,3 +38,11 @@ export const TILE_EMISSIVE = {
   hover: 0.5,
   selected: 0.8,
 };
+
+export const SHIELD_VISUAL_CONFIG = {
+  color: 0x4488ff,       // Bright blue shield glow
+  opacity: 0.35,
+  radiusMultiplier: 1.6, // Shield sphere radius relative to enemy size
+  segments: 12,
+  emissiveIntensity: 0.5
+};

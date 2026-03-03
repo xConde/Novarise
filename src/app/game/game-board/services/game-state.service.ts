@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { GamePhase, GameState, INITIAL_GAME_STATE } from '../models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState, INITIAL_GAME_STATE } from '../models/game-state.model';
 
 @Injectable()
 export class GameStateService {
@@ -21,7 +21,9 @@ export class GameStateService {
   }
 
   startWave(): void {
-    if (this.state.wave >= this.state.maxWaves) return;
+    const hasMoreWaves =
+      this.state.wave < this.state.maxWaves || this.state.isEndless;
+    if (!hasMoreWaves) return;
     this.state.wave++;
     this.state.phase = GamePhase.COMBAT;
     this.emit();
@@ -32,11 +34,22 @@ export class GameStateService {
     this.state.gold += reward;
     this.state.score += reward;
 
-    if (this.state.wave >= this.state.maxWaves) {
+    if (this.state.isEndless) {
+      // In endless mode, track highest wave reached and never trigger VICTORY
+      if (this.state.wave > this.state.highestWave) {
+        this.state.highestWave = this.state.wave;
+      }
+      this.state.phase = GamePhase.INTERMISSION;
+    } else if (this.state.wave >= this.state.maxWaves) {
       this.state.phase = GamePhase.VICTORY;
     } else {
       this.state.phase = GamePhase.INTERMISSION;
     }
+    this.emit();
+  }
+
+  setEndlessMode(enabled: boolean): void {
+    this.state.isEndless = enabled;
     this.emit();
   }
 
@@ -70,6 +83,14 @@ export class GameStateService {
 
   addScore(points: number): void {
     this.state.score += points;
+    this.emit();
+  }
+
+  setDifficulty(difficulty: DifficultyLevel): void {
+    const preset = DIFFICULTY_PRESETS[difficulty];
+    this.state.difficulty = difficulty;
+    this.state.lives = preset.lives;
+    this.state.gold = preset.gold;
     this.emit();
   }
 

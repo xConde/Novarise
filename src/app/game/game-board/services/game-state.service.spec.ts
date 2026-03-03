@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { GameStateService } from './game-state.service';
-import { GamePhase, INITIAL_GAME_STATE } from '../models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, INITIAL_GAME_STATE } from '../models/game-state.model';
 
 describe('GameStateService', () => {
   let service: GameStateService;
@@ -331,6 +331,79 @@ describe('GameStateService', () => {
     });
   });
 
+  // --- setDifficulty ---
+
+  describe('setDifficulty', () => {
+    it('should update difficulty on state', () => {
+      service.setDifficulty(DifficultyLevel.HARD);
+      expect(service.getState().difficulty).toBe(DifficultyLevel.HARD);
+    });
+
+    it('should set lives from the preset when switching to Easy', () => {
+      service.setDifficulty(DifficultyLevel.EASY);
+      expect(service.getState().lives).toBe(DIFFICULTY_PRESETS[DifficultyLevel.EASY].lives);
+    });
+
+    it('should set gold from the preset when switching to Easy', () => {
+      service.setDifficulty(DifficultyLevel.EASY);
+      expect(service.getState().gold).toBe(DIFFICULTY_PRESETS[DifficultyLevel.EASY].gold);
+    });
+
+    it('should set lives from the preset when switching to Hard', () => {
+      service.setDifficulty(DifficultyLevel.HARD);
+      expect(service.getState().lives).toBe(DIFFICULTY_PRESETS[DifficultyLevel.HARD].lives);
+    });
+
+    it('should set gold from the preset when switching to Hard', () => {
+      service.setDifficulty(DifficultyLevel.HARD);
+      expect(service.getState().gold).toBe(DIFFICULTY_PRESETS[DifficultyLevel.HARD].gold);
+    });
+
+    it('should set lives from the preset when switching to Nightmare', () => {
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      expect(service.getState().lives).toBe(DIFFICULTY_PRESETS[DifficultyLevel.NIGHTMARE].lives);
+    });
+
+    it('should set gold from the preset when switching to Nightmare', () => {
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      expect(service.getState().gold).toBe(DIFFICULTY_PRESETS[DifficultyLevel.NIGHTMARE].gold);
+    });
+
+    it('should emit state change after difficulty update', (done) => {
+      let emitCount = 0;
+      service.getState$().subscribe(state => {
+        emitCount++;
+        if (emitCount === 2) {
+          expect(state.difficulty).toBe(DifficultyLevel.EASY);
+          expect(state.lives).toBe(DIFFICULTY_PRESETS[DifficultyLevel.EASY].lives);
+          done();
+        }
+      });
+      service.setDifficulty(DifficultyLevel.EASY);
+    });
+
+    it('should use NORMAL preset by default in initial state', () => {
+      expect(service.getState().difficulty).toBe(DifficultyLevel.NORMAL);
+      expect(service.getState().lives).toBe(DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].lives);
+      expect(service.getState().gold).toBe(DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].gold);
+    });
+
+    it('should not affect wave or score', () => {
+      service.startWave();
+      service.addScore(500);
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      expect(service.getState().wave).toBe(1);
+      expect(service.getState().score).toBe(500);
+    });
+
+    it('should restore Normal preset when switching back from Hard', () => {
+      service.setDifficulty(DifficultyLevel.HARD);
+      service.setDifficulty(DifficultyLevel.NORMAL);
+      expect(service.getState().lives).toBe(DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].lives);
+      expect(service.getState().gold).toBe(DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].gold);
+    });
+  });
+
   // --- reset ---
 
   describe('reset', () => {
@@ -390,6 +463,108 @@ describe('GameStateService', () => {
       // Same reference (live object)
       expect(state1).toBe(state2);
       expect(state1.wave).toBe(1);
+    });
+  });
+
+  // --- Endless Mode ---
+
+  describe('endless mode', () => {
+    it('should start with isEndless false', () => {
+      expect(service.getState().isEndless).toBeFalse();
+    });
+
+    it('should start with highestWave 0', () => {
+      expect(service.getState().highestWave).toBe(0);
+    });
+
+    it('setEndlessMode(true) should set isEndless to true', () => {
+      service.setEndlessMode(true);
+      expect(service.getState().isEndless).toBeTrue();
+    });
+
+    it('setEndlessMode(false) should set isEndless to false', () => {
+      service.setEndlessMode(true);
+      service.setEndlessMode(false);
+      expect(service.getState().isEndless).toBeFalse();
+    });
+
+    it('completeWave should go to INTERMISSION (not VICTORY) when endless mode is active at final wave', () => {
+      service.setEndlessMode(true);
+      const maxWaves = service.getState().maxWaves;
+      for (let i = 0; i < maxWaves; i++) {
+        service.startWave();
+      }
+      service.completeWave(250);
+      expect(service.getState().phase).toBe(GamePhase.INTERMISSION);
+    });
+
+    it('completeWave should NOT set VICTORY on any wave in endless mode', () => {
+      service.setEndlessMode(true);
+      const maxWaves = service.getState().maxWaves;
+      for (let i = 0; i < maxWaves + 5; i++) {
+        service.startWave();
+        service.completeWave(100);
+        expect(service.getState().phase).toBe(GamePhase.INTERMISSION);
+      }
+    });
+
+    it('completeWave should update highestWave when new wave is higher', () => {
+      service.setEndlessMode(true);
+      const maxWaves = service.getState().maxWaves;
+      for (let i = 0; i < maxWaves; i++) {
+        service.startWave();
+      }
+      service.completeWave(100);
+      expect(service.getState().highestWave).toBe(maxWaves);
+    });
+
+    it('highestWave should not decrease on subsequent waves', () => {
+      service.setEndlessMode(true);
+      const maxWaves = service.getState().maxWaves;
+      for (let i = 0; i < maxWaves; i++) {
+        service.startWave();
+      }
+      service.completeWave(100);
+      const firstHighest = service.getState().highestWave;
+
+      service.startWave();
+      service.completeWave(100);
+      expect(service.getState().highestWave).toBeGreaterThanOrEqual(firstHighest);
+    });
+
+    it('startWave should allow advancing beyond maxWaves in endless mode', () => {
+      service.setEndlessMode(true);
+      const maxWaves = service.getState().maxWaves;
+      for (let i = 0; i < maxWaves; i++) {
+        service.startWave();
+      }
+      service.completeWave(100); // INTERMISSION
+      service.startWave(); // wave maxWaves + 1
+      expect(service.getState().wave).toBe(maxWaves + 1);
+      expect(service.getState().phase).toBe(GamePhase.COMBAT);
+    });
+
+    it('startWave should NOT advance beyond maxWaves when endless mode is off', () => {
+      const maxWaves = service.getState().maxWaves;
+      for (let i = 0; i < maxWaves; i++) {
+        service.startWave();
+      }
+      service.completeWave(250); // VICTORY
+      service.startWave(); // should be no-op
+      expect(service.getState().wave).toBe(maxWaves);
+    });
+
+    it('reset should clear endless mode and highestWave', () => {
+      service.setEndlessMode(true);
+      const maxWaves = service.getState().maxWaves;
+      for (let i = 0; i < maxWaves; i++) {
+        service.startWave();
+      }
+      service.completeWave(100);
+
+      service.reset();
+      expect(service.getState().isEndless).toBeFalse();
+      expect(service.getState().highestWave).toBe(0);
     });
   });
 });

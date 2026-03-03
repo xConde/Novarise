@@ -3,7 +3,10 @@ import * as THREE from 'three';
 export enum TowerType {
   BASIC = 'basic',
   SNIPER = 'sniper',
-  SPLASH = 'splash'
+  SPLASH = 'splash',
+  SLOW = 'slow',
+  CHAIN = 'chain',
+  MORTAR = 'mortar'
 }
 
 export const MAX_TOWER_LEVEL = 3;
@@ -16,6 +19,16 @@ export interface TowerStats {
   projectileSpeed: number; // tiles per second
   splashRadius: number; // tiles, 0 for single-target
   color: number;        // hex color for projectile
+  // Slow tower
+  slowFactor?: number;    // Speed reduction multiplier (0.5 = 50% of base speed)
+  slowDuration?: number;  // Duration of slow effect in seconds
+  // Chain lightning tower
+  chainCount?: number;    // Number of chain bounces after primary target
+  chainRange?: number;    // World-unit radius to find next chain target
+  // Mortar tower
+  blastRadius?: number;   // Area-of-effect radius for mortar zones
+  dotDuration?: number;   // How long the mortar zone persists (seconds)
+  dotDamage?: number;     // Damage per second dealt by mortar zone
 }
 
 export interface PlacedTower {
@@ -57,6 +70,40 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
     projectileSpeed: 6,
     splashRadius: 1.5,
     color: 0x4ac47a
+  },
+  [TowerType.SLOW]: {
+    damage: 0,
+    range: 2.5,
+    fireRate: 0.5,   // Aura pulse interval; not used for projectile fire rate
+    cost: 75,
+    projectileSpeed: 0,
+    splashRadius: 0,
+    color: 0x4488ff,
+    slowFactor: 0.5,
+    slowDuration: 2
+  },
+  [TowerType.CHAIN]: {
+    damage: 15,
+    range: 3,
+    fireRate: 0.8,
+    cost: 150,
+    projectileSpeed: 12,
+    splashRadius: 0,
+    color: 0xffdd00,
+    chainCount: 3,
+    chainRange: 2
+  },
+  [TowerType.MORTAR]: {
+    damage: 8,
+    range: 4,
+    fireRate: 3.0,   // Slow-firing artillery
+    cost: 200,
+    projectileSpeed: 4,
+    splashRadius: 0,
+    color: 0xff6622,
+    blastRadius: 1.5,
+    dotDuration: 3,
+    dotDamage: 3
   }
 };
 

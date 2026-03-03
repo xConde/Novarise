@@ -50,9 +50,12 @@ export const AUDIO_CONFIG: AudioConfig = {
   maxDeathSoundsPerFrame: 2,
 
   towerFire: {
-    [TowerType.BASIC]:  { frequency: 220, endFrequency: 110, duration: 0.08, oscillatorType: 'square',   gain: 0.2 },
-    [TowerType.SNIPER]: { frequency: 440, endFrequency: 880, duration: 0.12, oscillatorType: 'sawtooth', gain: 0.2 },
-    [TowerType.SPLASH]: { frequency: 180, endFrequency: 80,  duration: 0.15, oscillatorType: 'triangle', gain: 0.2 },
+    [TowerType.BASIC]:   { frequency: 220, endFrequency: 110, duration: 0.08, oscillatorType: 'square',   gain: 0.2 },
+    [TowerType.SNIPER]:  { frequency: 440, endFrequency: 880, duration: 0.12, oscillatorType: 'sawtooth', gain: 0.2 },
+    [TowerType.SPLASH]:  { frequency: 180, endFrequency: 80,  duration: 0.15, oscillatorType: 'triangle', gain: 0.2 },
+    [TowerType.SLOW]:    { frequency: 160, endFrequency: 60,  duration: 0.20, oscillatorType: 'sine',     gain: 0.15 },
+    [TowerType.CHAIN]:   { frequency: 300, endFrequency: 600, duration: 0.06, oscillatorType: 'sawtooth', gain: 0.18 },
+    [TowerType.MORTAR]:  { frequency: 100, endFrequency: 50,  duration: 0.30, oscillatorType: 'triangle', gain: 0.25 },
   },
 
   enemyHit: {

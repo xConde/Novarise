@@ -3,7 +3,7 @@ import { WaveService } from './wave.service';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { EnemyType } from '../models/enemy.model';
-import { WAVE_DEFINITIONS } from '../models/wave.model';
+import { ENDLESS_CONFIG, WAVE_DEFINITIONS } from '../models/wave.model';
 import * as THREE from 'three';
 
 describe('WaveService', () => {
@@ -220,6 +220,143 @@ describe('WaveService', () => {
       service.update(5.0, mockScene);
 
       expect(enemyServiceSpy.spawnEnemy).not.toHaveBeenCalled();
+    });
+  });
+
+  // --- generateEndlessWave ---
+
+  describe('generateEndlessWave', () => {
+    it('should return a valid WaveDefinition with entries and reward', () => {
+      const wave = service.generateEndlessWave(11);
+      expect(wave).toBeDefined();
+      expect(Array.isArray(wave.entries)).toBeTrue();
+      expect(wave.entries.length).toBeGreaterThan(0);
+      expect(wave.reward).toBeGreaterThan(0);
+    });
+
+    it('each entry should have a valid EnemyType, positive count, and non-negative spawnInterval', () => {
+      const wave = service.generateEndlessWave(11);
+      const validTypes = Object.values(EnemyType) as string[];
+      for (const entry of wave.entries) {
+        expect(validTypes).toContain(entry.type);
+        expect(entry.count).toBeGreaterThan(0);
+        expect(entry.spawnInterval).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it('wave 20 should have more enemies than wave 11 (count scaling)', () => {
+      const wave11 = service.generateEndlessWave(11);
+      const wave20 = service.generateEndlessWave(20);
+      const count11 = wave11.entries.reduce((s, e) => s + e.count, 0);
+      const count20 = wave20.entries.reduce((s, e) => s + e.count, 0);
+      expect(count20).toBeGreaterThan(count11);
+    });
+
+    it('wave 20 should have faster spawns than wave 11 (speed scaling reduces interval)', () => {
+      const wave11 = service.generateEndlessWave(11);
+      const wave20 = service.generateEndlessWave(20);
+      // Primary entry (index 0 or 1, not boss) should have shorter spawn interval
+      const nonBoss11 = wave11.entries.filter(e => e.type !== EnemyType.BOSS);
+      const nonBoss20 = wave20.entries.filter(e => e.type !== EnemyType.BOSS);
+      const avgInterval11 =
+        nonBoss11.reduce((s, e) => s + e.spawnInterval, 0) / nonBoss11.length;
+      const avgInterval20 =
+        nonBoss20.reduce((s, e) => s + e.spawnInterval, 0) / nonBoss20.length;
+      expect(avgInterval20).toBeLessThanOrEqual(avgInterval11);
+    });
+
+    it('wave 20 should have a higher reward than wave 11', () => {
+      const wave11 = service.generateEndlessWave(11);
+      const wave20 = service.generateEndlessWave(20);
+      expect(wave20.reward).toBeGreaterThan(wave11.reward);
+    });
+
+    it('should include a BOSS entry on every bossInterval wave', () => {
+      const bossWaveNumber = ENDLESS_CONFIG.bossInterval; // e.g. wave 5
+      const wave = service.generateEndlessWave(bossWaveNumber);
+      const hasBoss = wave.entries.some(e => e.type === EnemyType.BOSS);
+      expect(hasBoss).toBeTrue();
+    });
+
+    it('should NOT include a BOSS entry on non-boss waves', () => {
+      // Wave 11 is not a boss wave (11 % 5 !== 0)
+      const wave = service.generateEndlessWave(11);
+      const hasBoss = wave.entries.some(e => e.type === EnemyType.BOSS);
+      expect(hasBoss).toBeFalse();
+    });
+
+    it('should produce a boss entry with count 1', () => {
+      const bossWave = service.generateEndlessWave(ENDLESS_CONFIG.bossInterval);
+      const bossEntry = bossWave.entries.find(e => e.type === EnemyType.BOSS);
+      expect(bossEntry).toBeDefined();
+      expect(bossEntry!.count).toBe(1);
+    });
+
+    it('should cycle through different primary enemy types across waves', () => {
+      const types = new Set<EnemyType>();
+      // Sample several consecutive waves to verify cycling
+      for (let w = 11; w <= 16; w++) {
+        const wave = service.generateEndlessWave(w);
+        const nonBoss = wave.entries.filter(e => e.type !== EnemyType.BOSS);
+        nonBoss.forEach(e => types.add(e.type));
+      }
+      // Should see more than one type across 6 consecutive waves
+      expect(types.size).toBeGreaterThan(1);
+    });
+
+    it('spawn interval should never drop below minimum (0.3s)', () => {
+      // Wave 100 — very high, speed multiplier is large, but floor should apply
+      const wave = service.generateEndlessWave(100);
+      for (const entry of wave.entries) {
+        if (entry.type !== EnemyType.BOSS) {
+          expect(entry.spawnInterval).toBeGreaterThanOrEqual(0.3);
+        }
+      }
+    });
+  });
+
+  // --- Endless mode: startWave integration ---
+
+  describe('endless mode startWave', () => {
+    it('setEndlessMode and isEndlessMode round-trip', () => {
+      service.setEndlessMode(true);
+      expect(service.isEndlessMode()).toBeTrue();
+      service.setEndlessMode(false);
+      expect(service.isEndlessMode()).toBeFalse();
+    });
+
+    it('should refuse to start wave beyond maxWaves when endless mode is off', () => {
+      const beyondMax = WAVE_DEFINITIONS.length + 1;
+      service.startWave(beyondMax, mockScene);
+      expect(service.isSpawning()).toBeFalse();
+    });
+
+    it('should start an endless wave beyond maxWaves when endless mode is on', () => {
+      service.setEndlessMode(true);
+      const beyondMax = WAVE_DEFINITIONS.length + 1;
+      service.startWave(beyondMax, mockScene);
+      expect(service.isSpawning()).toBeTrue();
+    });
+
+    it('should spawn enemies from a generated endless wave', () => {
+      service.setEndlessMode(true);
+      const beyondMax = WAVE_DEFINITIONS.length + 1;
+      service.startWave(beyondMax, mockScene);
+      service.update(0.016, mockScene); // first tick triggers immediate spawn
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalled();
+    });
+
+    it('should stop spawning after all endless wave enemies are exhausted', () => {
+      service.setEndlessMode(true);
+      const beyondMax = WAVE_DEFINITIONS.length + 1;
+      service.startWave(beyondMax, mockScene);
+
+      // Drain the queue — large deltaTime to bypass all intervals
+      for (let i = 0; i < 50; i++) {
+        service.update(5.0, mockScene);
+      }
+
+      expect(service.isSpawning()).toBeFalse();
     });
   });
 });

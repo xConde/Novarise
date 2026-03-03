@@ -1,9 +1,14 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { Enemy, EnemyType, ENEMY_STATS, GridNode } from '../models/enemy.model';
+import { Enemy, EnemyType, ENEMY_STATS, GridNode, MINI_SWARM_STATS } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { BlockType } from '../models/game-board-tile';
-import { HEALTH_BAR_CONFIG } from '../constants/ui.constants';
+import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG } from '../constants/ui.constants';
+
+export interface DamageResult {
+  killed: boolean;
+  spawnedEnemies: Enemy[]; // Mini-swarm enemies added to the scene on parent death
+}
 
 @Injectable()
 export class EnemyService {
@@ -60,6 +65,11 @@ export class EnemyService {
       pathIndex: 0,
       distanceTraveled: 0
     };
+
+    if (stats.maxShield !== undefined) {
+      enemy.shield = stats.maxShield;
+      enemy.maxShield = stats.maxShield;
+    }
 
     // Create mesh
     enemy.mesh = this.createEnemyMesh(enemy);
@@ -141,7 +151,7 @@ export class EnemyService {
     const enemy = this.enemies.get(enemyId);
     if (enemy) {
       if (enemy.mesh) {
-        // Dispose health bar children before removing
+        // Dispose health bar and shield children before removing
         enemy.mesh.children.forEach(child => {
           if (child instanceof THREE.Mesh) {
             child.geometry.dispose();
@@ -169,6 +179,254 @@ export class EnemyService {
    */
   getEnemies(): Map<string, Enemy> {
     return this.enemies;
+  }
+
+  /**
+   * Deal damage to a specific enemy.
+   *
+   * For SHIELDED enemies, damage is absorbed by the shield first. Once the shield
+   * is exhausted, remaining damage carries through to health. When the shield
+   * breaks the shield visual is removed from the mesh.
+   *
+   * For SWARM enemies that die, mini-swarm enemies are spawned at the parent's
+   * current path position. The spawned enemies are registered internally and
+   * returned so the caller can add their meshes to the scene.
+   *
+   * Returns a DamageResult with `killed` (true when health reaches 0) and
+   * `spawnedEnemies` (non-empty only when a SWARM enemy dies).
+   */
+  damageEnemy(enemyId: string, damage: number): DamageResult {
+    const noOp: DamageResult = { killed: false, spawnedEnemies: [] };
+    const enemy = this.enemies.get(enemyId);
+    if (!enemy || enemy.health <= 0) return noOp;
+
+    // --- Shield absorption (SHIELDED type) ---
+    if (enemy.shield !== undefined && enemy.shield > 0) {
+      if (damage <= enemy.shield) {
+        // Shield fully absorbs the hit
+        enemy.shield -= damage;
+        if (enemy.shield === 0) {
+          this.removeShieldMesh(enemy);
+        }
+        return noOp; // Health untouched
+      } else {
+        // Shield breaks; carry remainder to health
+        const remainder = damage - enemy.shield;
+        enemy.shield = 0;
+        this.removeShieldMesh(enemy);
+        damage = remainder;
+      }
+    }
+
+    // --- Apply to health ---
+    enemy.health -= damage;
+
+    if (enemy.health > 0) {
+      return { killed: false, spawnedEnemies: [] };
+    }
+
+    // --- Enemy died ---
+    const spawnedEnemies: Enemy[] = [];
+
+    // SWARM death: spawn mini-enemies (only if this is NOT already a mini-swarm)
+    if (enemy.type === EnemyType.SWARM && !enemy.isMiniSwarm) {
+      const parentStats = ENEMY_STATS[EnemyType.SWARM];
+      const spawnCount = parentStats.spawnOnDeath ?? 0;
+      for (let i = 0; i < spawnCount; i++) {
+        const mini = this.spawnMiniSwarm(enemy);
+        if (mini) {
+          spawnedEnemies.push(mini);
+        }
+      }
+    }
+
+    return { killed: true, spawnedEnemies };
+  }
+
+  /**
+   * Update all enemy health bars to reflect current health
+   */
+  updateHealthBars(): void {
+    this.enemies.forEach(enemy => {
+      if (!enemy.mesh) return;
+      // The health bar is stored in userData
+      const healthBarBg = enemy.mesh.userData?.['healthBarBg'] as THREE.Mesh | undefined;
+      const healthBarFg = enemy.mesh.userData?.['healthBarFg'] as THREE.Mesh | undefined;
+
+      if (healthBarBg && healthBarFg) {
+        const healthPct = Math.max(0, enemy.health / enemy.maxHealth);
+        healthBarFg.scale.x = healthPct;
+        healthBarFg.position.x = -(1 - healthPct) * 0.25;
+
+        // Color transitions: green -> yellow -> red
+        const mat = healthBarFg.material as THREE.MeshBasicMaterial;
+        if (healthPct > HEALTH_BAR_CONFIG.thresholdHigh) {
+          mat.color.setHex(HEALTH_BAR_CONFIG.colorGreen);
+        } else if (healthPct > HEALTH_BAR_CONFIG.thresholdLow) {
+          mat.color.setHex(HEALTH_BAR_CONFIG.colorYellow);
+        } else {
+          mat.color.setHex(HEALTH_BAR_CONFIG.colorRed);
+        }
+      }
+    });
+  }
+
+  /**
+   * Create a 3D mesh for an enemy
+   */
+  private createEnemyMesh(enemy: Enemy): THREE.Mesh {
+    const stats = ENEMY_STATS[enemy.type];
+
+    const geometry = new THREE.SphereGeometry(stats.size, 16, 16);
+    const material = new THREE.MeshLambertMaterial({
+      color: stats.color,
+      emissive: stats.color,
+      emissiveIntensity: 0.3
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(enemy.position.x, enemy.position.y, enemy.position.z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    // Add health bar above enemy
+    const barWidth = HEALTH_BAR_CONFIG.width;
+    const barHeight = HEALTH_BAR_CONFIG.height;
+    const barY = stats.size + HEALTH_BAR_CONFIG.yOffset;
+
+    const bgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
+    const bgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.bgColor, side: THREE.DoubleSide });
+    const healthBarBg = new THREE.Mesh(bgGeometry, bgMaterial);
+    healthBarBg.position.set(0, barY, 0);
+    healthBarBg.lookAt(0, barY, 1); // Face camera roughly
+
+    const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
+    const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
+    const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
+    healthBarFg.position.set(0, barY + 0.001, 0);
+    healthBarFg.lookAt(0, barY + 0.001, 1);
+
+    mesh.add(healthBarBg);
+    mesh.add(healthBarFg);
+    mesh.userData = { healthBarBg, healthBarFg };
+
+    // Add shield visual for SHIELDED enemies
+    if (enemy.type === EnemyType.SHIELDED && enemy.shield !== undefined && enemy.shield > 0) {
+      const shieldMesh = this.createShieldMesh(stats.size);
+      mesh.add(shieldMesh);
+      mesh.userData['shieldMesh'] = shieldMesh;
+    }
+
+    return mesh;
+  }
+
+  /**
+   * Create a semi-transparent sphere to represent the active shield.
+   */
+  private createShieldMesh(enemySize: number): THREE.Mesh {
+    const shieldRadius = enemySize * SHIELD_VISUAL_CONFIG.radiusMultiplier;
+    const shieldGeometry = new THREE.SphereGeometry(
+      shieldRadius,
+      SHIELD_VISUAL_CONFIG.segments,
+      SHIELD_VISUAL_CONFIG.segments
+    );
+    const shieldMaterial = new THREE.MeshLambertMaterial({
+      color: SHIELD_VISUAL_CONFIG.color,
+      emissive: SHIELD_VISUAL_CONFIG.color,
+      emissiveIntensity: SHIELD_VISUAL_CONFIG.emissiveIntensity,
+      transparent: true,
+      opacity: SHIELD_VISUAL_CONFIG.opacity,
+      side: THREE.FrontSide
+    });
+    return new THREE.Mesh(shieldGeometry, shieldMaterial);
+  }
+
+  /**
+   * Remove and dispose the shield visual when shield HP reaches 0.
+   */
+  private removeShieldMesh(enemy: Enemy): void {
+    if (!enemy.mesh) return;
+    const shieldMesh = enemy.mesh.userData['shieldMesh'] as THREE.Mesh | undefined;
+    if (!shieldMesh) return;
+
+    enemy.mesh.remove(shieldMesh);
+    shieldMesh.geometry.dispose();
+    if (Array.isArray(shieldMesh.material)) {
+      shieldMesh.material.forEach(mat => mat.dispose());
+    } else {
+      shieldMesh.material.dispose();
+    }
+    delete enemy.mesh.userData['shieldMesh'];
+  }
+
+  /**
+   * Spawn a mini-swarm enemy at the parent's current path position.
+   * The mini-enemy continues along the parent's remaining path.
+   * isMiniSwarm is set to true to prevent recursive spawning.
+   */
+  private spawnMiniSwarm(parent: Enemy): Enemy | null {
+    // Remaining path from the parent's current node onwards
+    const remainingPath = parent.path.slice(parent.pathIndex);
+    if (remainingPath.length === 0) return null;
+
+    const mini: Enemy = {
+      id: `enemy-${this.enemyCounter++}`,
+      type: EnemyType.SWARM,
+      position: { x: parent.position.x, y: MINI_SWARM_STATS.size, z: parent.position.z },
+      gridPosition: { ...parent.gridPosition },
+      health: MINI_SWARM_STATS.health,
+      maxHealth: MINI_SWARM_STATS.health,
+      speed: MINI_SWARM_STATS.speed,
+      value: MINI_SWARM_STATS.value,
+      path: remainingPath,
+      pathIndex: 0,
+      distanceTraveled: parent.distanceTraveled,
+      isMiniSwarm: true
+    };
+
+    mini.mesh = this.createMiniSwarmMesh(mini);
+    this.enemies.set(mini.id, mini);
+    return mini;
+  }
+
+  /**
+   * Create a scaled-down mesh for a mini-swarm enemy.
+   * Uses MINI_SWARM_STATS directly rather than ENEMY_STATS to produce the smaller visual.
+   */
+  private createMiniSwarmMesh(mini: Enemy): THREE.Mesh {
+    const geometry = new THREE.SphereGeometry(MINI_SWARM_STATS.size, 12, 12);
+    const material = new THREE.MeshLambertMaterial({
+      color: MINI_SWARM_STATS.color,
+      emissive: MINI_SWARM_STATS.color,
+      emissiveIntensity: 0.4
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(mini.position.x, mini.position.y, mini.position.z);
+    mesh.castShadow = true;
+
+    // Small health bar
+    const barWidth = HEALTH_BAR_CONFIG.width * 0.5;
+    const barHeight = HEALTH_BAR_CONFIG.height;
+    const barY = MINI_SWARM_STATS.size + HEALTH_BAR_CONFIG.yOffset;
+
+    const bgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
+    const bgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.bgColor, side: THREE.DoubleSide });
+    const healthBarBg = new THREE.Mesh(bgGeometry, bgMaterial);
+    healthBarBg.position.set(0, barY, 0);
+    healthBarBg.lookAt(0, barY, 1);
+
+    const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
+    const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
+    const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
+    healthBarFg.position.set(0, barY + 0.001, 0);
+    healthBarFg.lookAt(0, barY + 0.001, 1);
+
+    mesh.add(healthBarBg);
+    mesh.add(healthBarFg);
+    mesh.userData = { healthBarBg, healthBarFg };
+
+    return mesh;
   }
 
   /**
@@ -347,87 +605,6 @@ export class EnemyService {
     const z = (row - boardHeight / 2) * tileSize;
 
     return { x, z };
-  }
-
-  /**
-   * Deal damage to a specific enemy. Returns true if the enemy dies.
-   */
-  damageEnemy(enemyId: string, damage: number): boolean {
-    const enemy = this.enemies.get(enemyId);
-    if (!enemy || enemy.health <= 0) return false;
-    enemy.health -= damage;
-    return enemy.health <= 0;
-  }
-
-  /**
-   * Update all enemy health bars to reflect current health
-   */
-  updateHealthBars(): void {
-    this.enemies.forEach(enemy => {
-      if (!enemy.mesh) return;
-      // The health bar is the second child (index 1) of the enemy group
-      // but since we use a plain Mesh, we store the health bar as userData
-      const healthBarBg = enemy.mesh.userData?.['healthBarBg'] as THREE.Mesh | undefined;
-      const healthBarFg = enemy.mesh.userData?.['healthBarFg'] as THREE.Mesh | undefined;
-
-      if (healthBarBg && healthBarFg) {
-        const healthPct = Math.max(0, enemy.health / enemy.maxHealth);
-        healthBarFg.scale.x = healthPct;
-        healthBarFg.position.x = -(1 - healthPct) * 0.25;
-
-        // Color transitions: green -> yellow -> red
-        const mat = healthBarFg.material as THREE.MeshBasicMaterial;
-        if (healthPct > HEALTH_BAR_CONFIG.thresholdHigh) {
-          mat.color.setHex(HEALTH_BAR_CONFIG.colorGreen);
-        } else if (healthPct > HEALTH_BAR_CONFIG.thresholdLow) {
-          mat.color.setHex(HEALTH_BAR_CONFIG.colorYellow);
-        } else {
-          mat.color.setHex(HEALTH_BAR_CONFIG.colorRed);
-        }
-      }
-    });
-  }
-
-  /**
-   * Create a 3D mesh for an enemy
-   */
-  private createEnemyMesh(enemy: Enemy): THREE.Mesh {
-    const stats = ENEMY_STATS[enemy.type];
-
-    const geometry = new THREE.SphereGeometry(stats.size, 16, 16);
-    const material = new THREE.MeshLambertMaterial({
-      color: stats.color,
-      emissive: stats.color,
-      emissiveIntensity: 0.3
-    });
-
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(enemy.position.x, enemy.position.y, enemy.position.z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-
-    // Add health bar above enemy
-    const barWidth = HEALTH_BAR_CONFIG.width;
-    const barHeight = HEALTH_BAR_CONFIG.height;
-    const barY = stats.size + HEALTH_BAR_CONFIG.yOffset;
-
-    const bgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
-    const bgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.bgColor, side: THREE.DoubleSide });
-    const healthBarBg = new THREE.Mesh(bgGeometry, bgMaterial);
-    healthBarBg.position.set(0, barY, 0);
-    healthBarBg.lookAt(0, barY, 1); // Face camera roughly
-
-    const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
-    const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
-    const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
-    healthBarFg.position.set(0, barY + 0.001, 0);
-    healthBarFg.lookAt(0, barY + 0.001, 1);
-
-    mesh.add(healthBarBg);
-    mesh.add(healthBarFg);
-    mesh.userData = { healthBarBg, healthBarFg };
-
-    return mesh;
   }
 
   /**

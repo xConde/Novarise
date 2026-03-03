@@ -6,6 +6,24 @@ import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
 
+/** Decay factor applied to chain lightning damage per bounce. */
+const CHAIN_DAMAGE_FALLOFF = 0.7;
+
+/** Visual duration (seconds) for chain lightning arc lines. */
+const CHAIN_ARC_LIFETIME = 0.1;
+
+/** Y-position for chain arc lines and mortar zones. */
+const GROUND_EFFECT_Y = 0.05;
+
+/** Semi-transparent color for mortar blast zone overlay. */
+const MORTAR_ZONE_COLOR = 0xff4400;
+
+/** Opacity for mortar blast zone mesh. */
+const MORTAR_ZONE_OPACITY = 0.4;
+
+/** Segments for mortar zone circle geometry. */
+const MORTAR_ZONE_SEGMENTS = 32;
+
 interface Projectile {
   id: string;
   mesh: THREE.Mesh;
@@ -17,10 +35,37 @@ interface Projectile {
   towerType: TowerType;
 }
 
+/** A chain arc line that persists for a short visual duration before removal. */
+interface ChainArc {
+  line: THREE.Line;
+  expiresAt: number; // gameTime when this arc should be removed
+}
+
+/** A mortar blast zone that persists and deals DoT. */
+interface MortarZone {
+  mesh: THREE.Mesh;
+  centerX: number;
+  centerZ: number;
+  blastRadius: number;
+  dotDamage: number;
+  expiresAt: number;       // gameTime when zone expires
+  lastTickTime: number;    // gameTime of last DoT tick
+}
+
+/** Slow effect tracked per enemy. */
+interface SlowEffect {
+  enemyId: string;
+  originalSpeed: number;
+  expiresAt: number;
+}
+
 @Injectable()
 export class TowerCombatService {
   private placedTowers: Map<string, PlacedTower> = new Map();
   private projectiles: Projectile[] = [];
+  private chainArcs: ChainArc[] = [];
+  private mortarZones: MortarZone[] = [];
+  private slowEffects: Map<string, SlowEffect> = new Map();
   private projectileCounter = 0;
   private gameTime = 0;
 
@@ -66,6 +111,9 @@ export class TowerCombatService {
     const killedEnemyIds: string[] = [];
     const firedTowerTypes: TowerType[] = [];
 
+    // Expire slow effects before tower processing so towers see accurate speeds
+    this.expireSlowEffects();
+
     // Tower targeting and firing — resolve stats per-tower using level
     this.placedTowers.forEach(tower => {
       const stats = getEffectiveStats(tower.type, tower.level);
@@ -73,15 +121,34 @@ export class TowerCombatService {
 
       if (timeSinceLastFire < stats.fireRate) return;
 
+      if (tower.type === TowerType.SLOW) {
+        // Slow towers pulse an aura — no projectile, just apply slow to nearby enemies
+        this.applySlowAura(tower, stats);
+        tower.lastFireTime = this.gameTime;
+        firedTowerTypes.push(tower.type);
+        return;
+      }
+
       const target = this.findTarget(tower, stats);
       if (!target) return;
 
       tower.lastFireTime = this.gameTime;
-      this.fireProjectile(tower, target, stats, scene);
+
+      if (tower.type === TowerType.CHAIN) {
+        const kills = this.fireChainLightning(tower, target, stats, scene);
+        killedEnemyIds.push(...kills);
+        if (kills.length > 0) {
+          const t = this.placedTowers.get(tower.id);
+          if (t) t.kills += kills.length;
+        }
+      } else {
+        this.fireProjectile(tower, target, stats, scene);
+      }
+
       firedTowerTypes.push(tower.type);
     });
 
-    // Update projectiles
+    // Update standard projectiles
     const survivingProjectiles: Projectile[] = [];
     let hitCount = 0;
     for (const proj of this.projectiles) {
@@ -116,15 +183,68 @@ export class TowerCombatService {
     }
     this.projectiles = survivingProjectiles;
 
+    // Expire chain arc visuals
+    const survivingArcs: ChainArc[] = [];
+    for (const arc of this.chainArcs) {
+      if (this.gameTime >= arc.expiresAt) {
+        scene.remove(arc.line);
+        arc.line.geometry.dispose();
+        (arc.line.material as THREE.Material).dispose();
+      } else {
+        survivingArcs.push(arc);
+      }
+    }
+    this.chainArcs = survivingArcs;
+
+    // Update mortar zones: deal DoT and expire old zones
+    const survivingZones: MortarZone[] = [];
+    for (const zone of this.mortarZones) {
+      if (this.gameTime >= zone.expiresAt) {
+        scene.remove(zone.mesh);
+        zone.mesh.geometry.dispose();
+        (zone.mesh.material as THREE.Material).dispose();
+        continue;
+      }
+
+      // Tick DoT every second
+      if (this.gameTime - zone.lastTickTime >= 1.0) {
+        zone.lastTickTime = this.gameTime;
+        this.enemyService.getEnemies().forEach(enemy => {
+          if (enemy.health <= 0) return;
+          const dx = enemy.position.x - zone.centerX;
+          const dz = enemy.position.z - zone.centerZ;
+          if (Math.sqrt(dx * dx + dz * dz) <= zone.blastRadius) {
+            const result = this.enemyService.damageEnemy(enemy.id, zone.dotDamage);
+            if (result.killed) {
+              killedEnemyIds.push(enemy.id);
+            }
+            // Mini-swarm meshes from DoT kills are added to scene here
+            result.spawnedEnemies.forEach(mini => {
+              if (mini.mesh) scene.add(mini.mesh);
+            });
+          }
+        });
+      }
+
+      survivingZones.push(zone);
+    }
+    this.mortarZones = survivingZones;
+
     return { killed: killedEnemyIds, fired: firedTowerTypes, hitCount };
   }
 
-  private findTarget(tower: PlacedTower, stats: TowerStats): Enemy | null {
+  private getTowerWorldPos(tower: PlacedTower): { x: number; z: number } {
     const boardWidth = this.gameBoardService.getBoardWidth();
     const boardHeight = this.gameBoardService.getBoardHeight();
     const tileSize = this.gameBoardService.getTileSize();
-    const towerWorldX = (tower.col - boardWidth / 2) * tileSize;
-    const towerWorldZ = (tower.row - boardHeight / 2) * tileSize;
+    return {
+      x: (tower.col - boardWidth / 2) * tileSize,
+      z: (tower.row - boardHeight / 2) * tileSize
+    };
+  }
+
+  private findTarget(tower: PlacedTower, stats: TowerStats): Enemy | null {
+    const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
 
     let nearest: Enemy | null = null;
     let nearestDist = Infinity;
@@ -146,12 +266,152 @@ export class TowerCombatService {
     return nearest;
   }
 
+  private applySlowAura(tower: PlacedTower, stats: TowerStats): void {
+    const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
+    const slowFactor = stats.slowFactor ?? 0.5;
+    const slowDuration = stats.slowDuration ?? 2;
+
+    this.enemyService.getEnemies().forEach(enemy => {
+      if (enemy.health <= 0) return;
+
+      const dx = enemy.position.x - towerWorldX;
+      const dz = enemy.position.z - towerWorldZ;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+
+      if (dist > stats.range) return;
+
+      const existing = this.slowEffects.get(enemy.id);
+      if (existing) {
+        // Refresh duration — do not re-apply speed reduction (already slowed)
+        existing.expiresAt = this.gameTime + slowDuration;
+      } else {
+        // First application — record original speed and reduce it
+        const originalSpeed = enemy.speed;
+        enemy.speed = originalSpeed * slowFactor;
+        this.slowEffects.set(enemy.id, {
+          enemyId: enemy.id,
+          originalSpeed,
+          expiresAt: this.gameTime + slowDuration
+        });
+      }
+    });
+  }
+
+  private expireSlowEffects(): void {
+    for (const [enemyId, effect] of this.slowEffects) {
+      if (this.gameTime >= effect.expiresAt) {
+        // Restore speed if enemy is still alive
+        const enemy = this.enemyService.getEnemies().get(enemyId);
+        if (enemy && enemy.health > 0) {
+          enemy.speed = effect.originalSpeed;
+        }
+        this.slowEffects.delete(enemyId);
+      }
+    }
+  }
+
+  private fireChainLightning(
+    tower: PlacedTower,
+    primaryTarget: Enemy,
+    stats: TowerStats,
+    scene: THREE.Scene
+  ): string[] {
+    const chainCount = stats.chainCount ?? 3;
+    const chainRange = stats.chainRange ?? 2;
+    const kills: string[] = [];
+    const hitIds = new Set<string>();
+
+    let currentTarget: Enemy = primaryTarget;
+    let currentDamage = stats.damage;
+
+    for (let bounce = 0; bounce <= chainCount; bounce++) {
+      hitIds.add(currentTarget.id);
+
+      // Draw arc from previous position (tower on first bounce)
+      const fromX = bounce === 0
+        ? this.getTowerWorldPos(tower).x
+        : currentTarget.position.x;
+      const fromZ = bounce === 0
+        ? this.getTowerWorldPos(tower).z
+        : currentTarget.position.z;
+
+      const toX = currentTarget.position.x;
+      const toZ = currentTarget.position.z;
+
+      // Create visual arc line (tower → first target, then target → next target)
+      {
+        const arcGeom = new THREE.BufferGeometry();
+        const vertices = new Float32Array([
+          fromX, GROUND_EFFECT_Y + 0.5, fromZ,
+          toX,   GROUND_EFFECT_Y + 0.5, toZ
+        ]);
+        arcGeom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+        const arcMat = new THREE.LineBasicMaterial({
+          color: stats.color,
+          transparent: true,
+          opacity: 0.85
+        });
+        const arc = new THREE.Line(arcGeom, arcMat);
+        scene.add(arc);
+        this.chainArcs.push({ line: arc, expiresAt: this.gameTime + CHAIN_ARC_LIFETIME });
+      }
+
+      // Deal damage
+      const chainResult = this.enemyService.damageEnemy(currentTarget.id, currentDamage);
+      if (chainResult.killed) {
+        kills.push(currentTarget.id);
+      }
+      // Mini-swarm meshes from chain kills need to be tracked — caller adds to scene
+      // via killedEnemyIds which triggers removeEnemy; spawnedEnemies returned separately
+      chainResult.spawnedEnemies.forEach(mini => {
+        if (mini.mesh) scene.add(mini.mesh);
+      });
+
+      if (bounce === chainCount) break;
+
+      // Find next target: nearest enemy within chainRange not yet hit
+      const nextTarget = this.findChainTarget(currentTarget, chainRange, hitIds);
+      if (!nextTarget) break;
+
+      currentDamage = Math.round(currentDamage * CHAIN_DAMAGE_FALLOFF);
+      currentTarget = nextTarget;
+    }
+
+    return kills;
+  }
+
+  private findChainTarget(
+    from: Enemy,
+    chainRange: number,
+    excludeIds: Set<string>
+  ): Enemy | null {
+    let nearest: Enemy | null = null;
+    let nearestDist = Infinity;
+
+    this.enemyService.getEnemies().forEach(enemy => {
+      if (enemy.health <= 0 || excludeIds.has(enemy.id)) return;
+
+      const dx = enemy.position.x - from.position.x;
+      const dz = enemy.position.z - from.position.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+
+      if (dist <= chainRange && dist < nearestDist) {
+        nearest = enemy;
+        nearestDist = dist;
+      }
+    });
+
+    return nearest;
+  }
+
   private fireProjectile(tower: PlacedTower, target: Enemy, stats: TowerStats, scene: THREE.Scene): void {
-    const boardWidth = this.gameBoardService.getBoardWidth();
-    const boardHeight = this.gameBoardService.getBoardHeight();
-    const tileSize = this.gameBoardService.getTileSize();
-    const towerWorldX = (tower.col - boardWidth / 2) * tileSize;
-    const towerWorldZ = (tower.row - boardHeight / 2) * tileSize;
+    const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
+
+    if (tower.type === TowerType.MORTAR) {
+      // Mortar fires a slow arc projectile to the target's current position
+      this.fireMortarProjectile(tower, target, stats, towerWorldX, towerWorldZ, scene);
+      return;
+    }
 
     const geometry = new THREE.SphereGeometry(PROJECTILE_CONFIG.radius, PROJECTILE_CONFIG.segments, PROJECTILE_CONFIG.segments);
     const material = new THREE.MeshBasicMaterial({
@@ -175,10 +435,95 @@ export class TowerCombatService {
     });
   }
 
+  private fireMortarProjectile(
+    tower: PlacedTower,
+    target: Enemy,
+    stats: TowerStats,
+    towerWorldX: number,
+    towerWorldZ: number,
+    scene: THREE.Scene
+  ): void {
+    const geometry = new THREE.SphereGeometry(PROJECTILE_CONFIG.radius * 1.5, PROJECTILE_CONFIG.segments, PROJECTILE_CONFIG.segments);
+    const material = new THREE.MeshBasicMaterial({
+      color: stats.color,
+      transparent: true,
+      opacity: PROJECTILE_CONFIG.opacity
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(towerWorldX, PROJECTILE_CONFIG.spawnHeight, towerWorldZ);
+    scene.add(mesh);
+
+    this.projectiles.push({
+      id: `proj-${this.projectileCounter++}`,
+      mesh,
+      towerKey: tower.id,
+      targetId: target.id,
+      speed: stats.projectileSpeed,
+      damage: stats.damage,
+      splashRadius: 0,
+      towerType: TowerType.MORTAR
+    });
+  }
+
+  private createMortarZone(
+    impactX: number,
+    impactZ: number,
+    stats: TowerStats,
+    scene: THREE.Scene
+  ): void {
+    const blastRadius = stats.blastRadius ?? 1.5;
+    const dotDuration = stats.dotDuration ?? 3;
+    const dotDamage = stats.dotDamage ?? 3;
+
+    const geometry = new THREE.CircleGeometry(blastRadius, MORTAR_ZONE_SEGMENTS);
+    const material = new THREE.MeshBasicMaterial({
+      color: MORTAR_ZONE_COLOR,
+      transparent: true,
+      opacity: MORTAR_ZONE_OPACITY,
+      side: THREE.DoubleSide
+    });
+    const zoneMesh = new THREE.Mesh(geometry, material);
+    zoneMesh.rotation.x = -Math.PI / 2;
+    zoneMesh.position.set(impactX, GROUND_EFFECT_Y, impactZ);
+    scene.add(zoneMesh);
+
+    // Initial DoT tick — deal immediate damage on impact
+    // Kill tracking handled by the zone update loop; initial tick kills not attributed here
+    this.enemyService.getEnemies().forEach(enemy => {
+      if (enemy.health <= 0) return;
+      const dx = enemy.position.x - impactX;
+      const dz = enemy.position.z - impactZ;
+      if (Math.sqrt(dx * dx + dz * dz) <= blastRadius) {
+        const result = this.enemyService.damageEnemy(enemy.id, dotDamage);
+        result.spawnedEnemies.forEach(mini => {
+          if (mini.mesh) scene.add(mini.mesh);
+        });
+      }
+    });
+
+    this.mortarZones.push({
+      mesh: zoneMesh,
+      centerX: impactX,
+      centerZ: impactZ,
+      blastRadius,
+      dotDamage,
+      expiresAt: this.gameTime + dotDuration,
+      lastTickTime: this.gameTime
+    });
+  }
+
   private applyDamage(proj: Projectile, scene: THREE.Scene): string[] {
     const kills: string[] = [];
 
-    if (proj.splashRadius > 0) {
+    if (proj.towerType === TowerType.MORTAR) {
+      // Look up the mortar tower's stats to create the zone
+      const tower = this.placedTowers.get(proj.towerKey);
+      const stats = tower ? getEffectiveStats(tower.type, tower.level) : null;
+      if (stats) {
+        this.createMortarZone(proj.mesh.position.x, proj.mesh.position.z, stats, scene);
+      }
+      // Mortar splash kill tracking handled inside createMortarZone / zone update
+    } else if (proj.splashRadius > 0) {
       // Splash damage — hit all enemies within radius of impact point
       const impactX = proj.mesh.position.x;
       const impactZ = proj.mesh.position.z;
@@ -189,16 +534,24 @@ export class TowerCombatService {
         const dist = Math.sqrt(dx * dx + dz * dz);
 
         if (dist <= proj.splashRadius) {
-          if (this.enemyService.damageEnemy(enemy.id, proj.damage)) {
+          const result = this.enemyService.damageEnemy(enemy.id, proj.damage);
+          if (result.killed) {
             kills.push(enemy.id);
           }
+          result.spawnedEnemies.forEach(mini => {
+            if (mini.mesh) scene.add(mini.mesh);
+          });
         }
       });
     } else {
       // Single target damage
-      if (this.enemyService.damageEnemy(proj.targetId, proj.damage)) {
+      const result = this.enemyService.damageEnemy(proj.targetId, proj.damage);
+      if (result.killed) {
         kills.push(proj.targetId);
       }
+      result.spawnedEnemies.forEach(mini => {
+        if (mini.mesh) scene.add(mini.mesh);
+      });
     }
 
     // Track kills on the tower
@@ -235,6 +588,30 @@ export class TowerCombatService {
       this.removeProjectileMesh(proj, scene);
     }
     this.projectiles = [];
+
+    for (const arc of this.chainArcs) {
+      scene.remove(arc.line);
+      arc.line.geometry.dispose();
+      (arc.line.material as THREE.Material).dispose();
+    }
+    this.chainArcs = [];
+
+    for (const zone of this.mortarZones) {
+      scene.remove(zone.mesh);
+      zone.mesh.geometry.dispose();
+      (zone.mesh.material as THREE.Material).dispose();
+    }
+    this.mortarZones = [];
+
+    // Restore all slowed enemies to original speed
+    for (const effect of this.slowEffects.values()) {
+      const enemy = this.enemyService.getEnemies().get(effect.enemyId);
+      if (enemy && enemy.health > 0) {
+        enemy.speed = effect.originalSpeed;
+      }
+    }
+    this.slowEffects.clear();
+
     this.placedTowers.clear();
     this.projectileCounter = 0;
     this.gameTime = 0;

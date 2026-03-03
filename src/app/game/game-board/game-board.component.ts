@@ -17,7 +17,7 @@ import { AudioService } from './services/audio.service';
 import { disposeMaterial } from './utils/three-utils';
 import { TowerType, TOWER_CONFIGS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
-import { GamePhase, GameState } from './models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState } from './models/game-state.model';
 import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants/rendering.constants';
 import { AMBIENT_LIGHT, DIRECTIONAL_LIGHT, UNDER_LIGHT, POINT_LIGHTS } from './constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
@@ -70,6 +70,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   towerConfigs = TOWER_CONFIGS;
   TowerType = TowerType;
   GamePhase = GamePhase;
+  DifficultyLevel = DifficultyLevel;
+  difficultyPresets = DIFFICULTY_PRESETS;
+  difficultyLevels = Object.values(DifficultyLevel);
 
   // Animation
   private lastTime = 0;
@@ -144,6 +147,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   toggleAudio(): void {
     this.audioService.toggleMute();
+  }
+
+  selectDifficulty(difficulty: DifficultyLevel): void {
+    this.gameStateService.setDifficulty(difficulty);
   }
 
   selectTowerType(type: TowerType): void {

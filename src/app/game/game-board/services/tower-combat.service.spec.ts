@@ -1,8 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { TowerCombatService } from './tower-combat.service';
-import { EnemyService } from './enemy.service';
+import { EnemyService, DamageResult } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
-import { TowerType, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from '../models/tower.model';
+import { TowerType, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats } from '../models/tower.model';
 import { Enemy, EnemyType } from '../models/enemy.model';
 import * as THREE from 'three';
 
@@ -41,11 +41,12 @@ describe('TowerCombatService', () => {
 
     enemyServiceSpy = jasmine.createSpyObj('EnemyService', ['getEnemies', 'damageEnemy']);
     enemyServiceSpy.getEnemies.and.returnValue(enemyMap);
-    enemyServiceSpy.damageEnemy.and.callFake((id: string, damage: number) => {
+    enemyServiceSpy.damageEnemy.and.callFake((id: string, damage: number): DamageResult => {
+      const noOp: DamageResult = { killed: false, spawnedEnemies: [] };
       const enemy = enemyMap.get(id);
-      if (!enemy || enemy.health <= 0) return false;
+      if (!enemy || enemy.health <= 0) return noOp;
       enemy.health -= damage;
-      return enemy.health <= 0;
+      return { killed: enemy.health <= 0, spawnedEnemies: [] };
     });
 
     gameBoardServiceSpy = jasmine.createSpyObj('GameBoardService', [
@@ -526,6 +527,272 @@ describe('TowerCombatService', () => {
     });
   });
 
+  // --- Slow Tower ---
+
+  describe('Slow tower', () => {
+    it('should reduce enemy speed when within range', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 100);
+      const originalSpeed = enemy.speed;
+      enemyMap.set('e1', enemy);
+
+      service.update(0.6, mockScene); // past SLOW fireRate of 0.5s
+      const slowFactor = TOWER_CONFIGS[TowerType.SLOW].slowFactor!;
+      expect(enemy.speed).toBeCloseTo(originalSpeed * slowFactor);
+    });
+
+    it('should not reduce speed below slowFactor when aura pulses again before expiry', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 100);
+      const originalSpeed = enemy.speed;
+      enemyMap.set('e1', enemy);
+
+      service.update(0.6, mockScene); // first pulse
+      const speedAfterFirst = enemy.speed;
+      service.update(0.6, mockScene); // second pulse — should refresh duration, not stack
+      expect(enemy.speed).toBeCloseTo(speedAfterFirst); // same speed, not halved again
+    });
+
+    it('should restore enemy speed after slow expires when enemy leaves range', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 100);
+      const originalSpeed = enemy.speed;
+      enemyMap.set('e1', enemy);
+
+      service.update(0.6, mockScene); // apply slow (expires at gameTime=2.6)
+      expect(enemy.speed).toBeLessThan(originalSpeed);
+
+      // Move enemy out of tower range so the slow tower cannot re-apply the aura
+      // SLOW range is 2.5, so place enemy far outside
+      enemy.position.x = TOWER_WORLD_X + 10;
+
+      // Advance well past slowDuration (2s) — slow expires at 2.6, we advance to 3.1
+      service.update(2.5, mockScene);
+      expect(enemy.speed).toBeCloseTo(originalSpeed);
+    });
+
+    it('should not affect enemies outside range', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const farEnemy = createEnemy('far', 20, 20, 100);
+      const originalSpeed = farEnemy.speed;
+      enemyMap.set('far', farEnemy);
+
+      service.update(0.6, mockScene);
+      expect(farEnemy.speed).toBeCloseTo(originalSpeed); // unchanged
+    });
+
+    it('should restore all slow effects on cleanup', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 100);
+      const originalSpeed = enemy.speed;
+      enemyMap.set('e1', enemy);
+
+      service.update(0.6, mockScene);
+      expect(enemy.speed).toBeLessThan(originalSpeed);
+
+      service.cleanup(mockScene);
+      expect(enemy.speed).toBeCloseTo(originalSpeed);
+    });
+  });
+
+  // --- Chain Lightning Tower ---
+
+  describe('Chain tower', () => {
+    it('should deal damage to primary target on fire', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(1.0, mockScene); // past CHAIN fireRate of 0.8s
+      expect(e1.health).toBeLessThan(1000);
+    });
+
+    it('should chain to a second enemy within chainRange', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      const chainRange = TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      // e2 is within chainRange of e1
+      const e2 = createEnemy('e2', TOWER_WORLD_X + chainRange * 0.5, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      service.update(1.0, mockScene);
+      expect(e1.health).toBeLessThan(1000);
+      expect(e2.health).toBeLessThan(1000);
+    });
+
+    it('should not chain to an enemy outside chainRange', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      const chainRange = TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      // e2 is beyond chainRange of e1
+      const e2 = createEnemy('e2', TOWER_WORLD_X + chainRange * 2, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      service.update(1.0, mockScene);
+      expect(e1.health).toBeLessThan(1000);
+      expect(e2.health).toBe(1000); // out of chain range
+    });
+
+    it('should not chain to the same enemy twice', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      // Single enemy in range — chain should only hit it once
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(1.0, mockScene);
+      // Damage should equal exactly one hit (chainCount=3 but only one target)
+      const expectedDamage = TOWER_CONFIGS[TowerType.CHAIN].damage;
+      expect(e1.health).toBe(1000 - expectedDamage);
+    });
+
+    it('should apply damage falloff on second bounce', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      const chainRange = TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
+      const baseDamage = TOWER_CONFIGS[TowerType.CHAIN].damage;
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + chainRange * 0.5, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      service.update(1.0, mockScene);
+
+      const e1Damage = 1000 - e1.health;
+      const e2Damage = 1000 - e2.health;
+      // e2 should receive 70% of e1's damage (CHAIN_DAMAGE_FALLOFF)
+      expect(e1Damage).toBe(baseDamage);
+      expect(e2Damage).toBe(Math.round(baseDamage * 0.7));
+    });
+
+    it('should return kill IDs for chain-killed enemies', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      const chainRange = TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1); // dies from first hit
+      const e2 = createEnemy('e2', TOWER_WORLD_X + chainRange * 0.5, TOWER_WORLD_Z, 1);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      const result = service.update(1.0, mockScene);
+      expect(result.killed).toContain('e1');
+      expect(result.killed).toContain('e2');
+    });
+  });
+
+  // --- Mortar Tower ---
+
+  describe('Mortar tower', () => {
+    it('should fire a projectile toward target', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X + 3, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      // Fire — mortar projectile is slow (speed=4), not instant
+      const result = service.update(3.1, mockScene); // past fireRate of 3.0s
+      expect(result.fired).toContain(TowerType.MORTAR);
+    });
+
+    it('should create a blast zone on impact that deals DoT', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      // Enemy at tower position — mortar projectile hits instantly (dist=0)
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      // First update fires and hits instantly; zone is created; initial tick damages
+      service.update(3.1, mockScene);
+      expect(e1.health).toBeLessThan(1000);
+    });
+
+    it('should deal DoT per second for dotDuration seconds', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      // Fire and hit (instant at dist=0) — creates zone, initial tick deals dotDamage
+      service.update(3.1, mockScene);
+      const healthAfterImpact = e1.health;
+
+      // Advance slightly past 1 second to trigger next DoT tick (avoid floating-point boundary)
+      service.update(1.1, mockScene);
+      expect(e1.health).toBeLessThan(healthAfterImpact);
+    });
+
+    it('should stop dealing DoT after dotDuration expires', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      // Fire and hit at gameTime=3.1 — zone created, expires at 3.1+3=6.1
+      service.update(3.1, mockScene);
+      const healthAfterImpact = e1.health;
+
+      // Advance 1.1s to trigger one DoT tick (gameTime → 4.2, still within zone lifetime)
+      service.update(1.1, mockScene);
+      expect(e1.health).toBeLessThan(healthAfterImpact);
+
+      // Advance well past expiry (need gameTime > 6.1; currently 4.2 + 2.1 = 6.3 > 6.1)
+      // Move e1 far out of range to prevent new mortar shots from refiring
+      e1.position.x = TOWER_WORLD_X + 20;
+      service.update(2.1, mockScene); // gameTime = 6.3 > 6.1 — zone expires
+      const healthAfterExpiry = e1.health;
+
+      // No more ticks after expiry
+      service.update(2.0, mockScene);
+      expect(e1.health).toBe(healthAfterExpiry);
+    });
+
+    it('should damage multiple enemies within blastRadius', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const blastRadius = TOWER_CONFIGS[TowerType.MORTAR].blastRadius!;
+
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + blastRadius * 0.5, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      // Fire and impact at tower position
+      service.update(3.1, mockScene);
+
+      expect(e1.health).toBeLessThan(1000);
+      expect(e2.health).toBeLessThan(1000);
+    });
+
+    it('should not damage enemies outside blastRadius', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const blastRadius = TOWER_CONFIGS[TowerType.MORTAR].blastRadius!;
+
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      // Far enemy beyond blastRadius
+      const far = createEnemy('far', TOWER_WORLD_X + blastRadius * 3, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('far', far);
+
+      service.update(3.1, mockScene);
+
+      expect(e1.health).toBeLessThan(1000);
+      expect(far.health).toBe(1000);
+    });
+
+    it('should clean up mortar zones on cleanup()', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(3.1, mockScene); // creates zone
+
+      service.cleanup(mockScene); // should dispose zone mesh without throwing
+
+      // After cleanup, no more DoT
+      service.update(1.0, mockScene);
+      // No crash expected; health unchanged after cleanup
+    });
+  });
+
   // --- Full Lifecycle ---
 
   describe('full lifecycle: register → upgrade → upgrade → sell', () => {
@@ -679,6 +946,86 @@ describe('Tower Model Functions', () => {
         expect(lvl3.range).toBeGreaterThan(base.range);
         expect(lvl3.fireRate).toBeLessThan(base.fireRate);
       }
+    });
+
+    it('should return base stats at level 1 for SLOW, CHAIN, and MORTAR', () => {
+      for (const type of [TowerType.SLOW, TowerType.CHAIN, TowerType.MORTAR]) {
+        const stats = getEffectiveStats(type, 1);
+        expect(stats.range).toBe(TOWER_CONFIGS[type].range);
+        expect(stats.cost).toBe(TOWER_CONFIGS[type].cost);
+      }
+    });
+
+    it('should preserve SLOW-specific optional stats through getEffectiveStats', () => {
+      const stats = getEffectiveStats(TowerType.SLOW, 1);
+      expect(stats.slowFactor).toBe(TOWER_CONFIGS[TowerType.SLOW].slowFactor);
+      expect(stats.slowDuration).toBe(TOWER_CONFIGS[TowerType.SLOW].slowDuration);
+    });
+
+    it('should preserve CHAIN-specific optional stats through getEffectiveStats', () => {
+      const stats = getEffectiveStats(TowerType.CHAIN, 1);
+      expect(stats.chainCount).toBe(TOWER_CONFIGS[TowerType.CHAIN].chainCount);
+      expect(stats.chainRange).toBe(TOWER_CONFIGS[TowerType.CHAIN].chainRange);
+    });
+
+    it('should preserve MORTAR-specific optional stats through getEffectiveStats', () => {
+      const stats = getEffectiveStats(TowerType.MORTAR, 1);
+      expect(stats.blastRadius).toBe(TOWER_CONFIGS[TowerType.MORTAR].blastRadius);
+      expect(stats.dotDuration).toBe(TOWER_CONFIGS[TowerType.MORTAR].dotDuration);
+      expect(stats.dotDamage).toBe(TOWER_CONFIGS[TowerType.MORTAR].dotDamage);
+    });
+  });
+
+  describe('TOWER_CONFIGS — new tower types', () => {
+    it('should have SLOW tower config with required fields', () => {
+      const cfg = TOWER_CONFIGS[TowerType.SLOW];
+      expect(cfg).toBeTruthy();
+      expect(cfg.cost).toBeGreaterThan(0);
+      expect(cfg.range).toBeGreaterThan(0);
+      expect(cfg.slowFactor).toBeDefined();
+      expect(cfg.slowFactor!).toBeGreaterThan(0);
+      expect(cfg.slowFactor!).toBeLessThan(1);
+      expect(cfg.slowDuration).toBeDefined();
+      expect(cfg.slowDuration!).toBeGreaterThan(0);
+    });
+
+    it('should have CHAIN tower config with required fields', () => {
+      const cfg = TOWER_CONFIGS[TowerType.CHAIN];
+      expect(cfg).toBeTruthy();
+      expect(cfg.cost).toBeGreaterThan(0);
+      expect(cfg.damage).toBeGreaterThan(0);
+      expect(cfg.range).toBeGreaterThan(0);
+      expect(cfg.chainCount).toBeDefined();
+      expect(cfg.chainCount!).toBeGreaterThan(0);
+      expect(cfg.chainRange).toBeDefined();
+      expect(cfg.chainRange!).toBeGreaterThan(0);
+    });
+
+    it('should have MORTAR tower config with required fields', () => {
+      const cfg = TOWER_CONFIGS[TowerType.MORTAR];
+      expect(cfg).toBeTruthy();
+      expect(cfg.cost).toBeGreaterThan(0);
+      expect(cfg.damage).toBeGreaterThan(0);
+      expect(cfg.range).toBeGreaterThan(0);
+      expect(cfg.blastRadius).toBeDefined();
+      expect(cfg.blastRadius!).toBeGreaterThan(0);
+      expect(cfg.dotDuration).toBeDefined();
+      expect(cfg.dotDuration!).toBeGreaterThan(0);
+      expect(cfg.dotDamage).toBeDefined();
+      expect(cfg.dotDamage!).toBeGreaterThan(0);
+    });
+
+    it('MORTAR should cost more than BASIC and SPLASH', () => {
+      expect(TOWER_CONFIGS[TowerType.MORTAR].cost).toBeGreaterThan(TOWER_CONFIGS[TowerType.BASIC].cost);
+      expect(TOWER_CONFIGS[TowerType.MORTAR].cost).toBeGreaterThan(TOWER_CONFIGS[TowerType.SPLASH].cost);
+    });
+
+    it('CHAIN should cost more than BASIC', () => {
+      expect(TOWER_CONFIGS[TowerType.CHAIN].cost).toBeGreaterThan(TOWER_CONFIGS[TowerType.BASIC].cost);
+    });
+
+    it('SLOW damage should be 0 (aura, not projectile)', () => {
+      expect(TOWER_CONFIGS[TowerType.SLOW].damage).toBe(0);
     });
   });
 });
