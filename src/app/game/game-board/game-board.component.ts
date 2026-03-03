@@ -14,6 +14,11 @@ import { GameStateService } from './services/game-state.service';
 import { WaveService } from './services/wave.service';
 import { TowerCombatService } from './services/tower-combat.service';
 import { AudioService } from './services/audio.service';
+import { ParticleService } from './services/particle.service';
+import { ScreenShakeService } from './services/screen-shake.service';
+import { GoldPopupService } from './services/gold-popup.service';
+import { TowerPreviewService } from './services/tower-preview.service';
+import { FpsCounterService } from './services/fps-counter.service';
 import { disposeMaterial } from './utils/three-utils';
 import { TowerType, TOWER_CONFIGS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
@@ -23,12 +28,17 @@ import { AMBIENT_LIGHT, DIRECTIONAL_LIGHT, UNDER_LIGHT, POINT_LIGHTS } from './c
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
 import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
+import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
+import { ENEMY_STATS } from './models/enemy.model';
+
+const CAMERA_PAN_SPEED = 0.5;
+const VALID_SPEED_VALUES = [1, 2, 3];
 
 @Component({
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService]
+  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, TowerPreviewService, FpsCounterService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -88,6 +98,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Audio state exposed to template
   get audioMuted(): boolean { return this.audioService.isMuted; }
 
+  // FPS exposed to template
+  get fps(): number { return this.fpsCounterService.getFps(); }
+
+  // Camera pan state (tracks which keys are currently held)
+  private panKeys = new Set<string>();
+  private keydownPanHandler: (e: KeyboardEvent) => void = () => {};
+  private keyupPanHandler: (e: KeyboardEvent) => void = () => {};
+
   constructor(
     private router: Router,
     private gameBoardService: GameBoardService,
@@ -96,7 +114,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private gameStateService: GameStateService,
     private waveService: WaveService,
     private towerCombatService: TowerCombatService,
-    private audioService: AudioService
+    private audioService: AudioService,
+    private particleService: ParticleService,
+    private screenShakeService: ScreenShakeService,
+    private goldPopupService: GoldPopupService,
+    private towerPreviewService: TowerPreviewService,
+    private fpsCounterService: FpsCounterService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -828,6 +851,35 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private setupKeyboardControls(): void {
     window.addEventListener('keydown', this.keyboardHandler);
+
+    // Camera pan: WASD / arrow keys — track held keys
+    this.keydownPanHandler = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+        this.panKeys.add(key);
+      }
+    };
+    this.keyupPanHandler = (e: KeyboardEvent) => {
+      this.panKeys.delete(e.key.toLowerCase());
+    };
+    window.addEventListener('keydown', this.keydownPanHandler);
+    window.addEventListener('keyup', this.keyupPanHandler);
+  }
+
+  private updateCameraPan(): void {
+    if (this.panKeys.size === 0 || !this.controls) return;
+
+    let dx = 0;
+    let dz = 0;
+    if (this.panKeys.has('w') || this.panKeys.has('arrowup')) dz -= CAMERA_PAN_SPEED;
+    if (this.panKeys.has('s') || this.panKeys.has('arrowdown')) dz += CAMERA_PAN_SPEED;
+    if (this.panKeys.has('a') || this.panKeys.has('arrowleft')) dx -= CAMERA_PAN_SPEED;
+    if (this.panKeys.has('d') || this.panKeys.has('arrowright')) dx += CAMERA_PAN_SPEED;
+
+    this.camera.position.x += dx;
+    this.camera.position.z += dz;
+    this.controls.target.x += dx;
+    this.controls.target.z += dz;
   }
 
   // --- Game loop ---
@@ -839,11 +891,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const deltaTime = Math.min(rawDelta, 0.1); // Cap at 100ms to prevent tab-switch physics burst
     this.lastTime = time;
 
+    // FPS tracking
+    this.fpsCounterService.tick(time);
+
+    // Camera pan (WASD / arrows)
+    this.updateCameraPan();
+
     if (this.controls) {
       this.controls.update();
     }
 
-    // Animate particles
+    // Animate ambient particles
     if (this.particles) {
       const positionAttribute = this.particles.geometry.attributes['position'] as THREE.BufferAttribute;
       const positions = positionAttribute.array as Float32Array;
@@ -883,6 +941,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             this.gameStateService.addGold(enemy.value);
             this.audioService.playGoldEarned();
             this.audioService.playEnemyDeath();
+
+            // Visual effects on kill
+            const enemyColor = ENEMY_STATS[enemy.type]?.color ?? 0xff0000;
+            this.particleService.spawnDeathBurst(enemy.position, enemyColor);
+            this.goldPopupService.spawn(enemy.value, enemy.position, this.scene);
+
             this.enemyService.removeEnemy(enemyId, this.scene);
           }
         }
@@ -893,6 +957,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         // Enemies reaching the exit cost lives
         for (const enemyId of reachedExit) {
           this.gameStateService.loseLife(1);
+          this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
           this.enemyService.removeEnemy(enemyId, this.scene);
         }
 
@@ -923,6 +988,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
 
+    // Update visual effects (run every frame regardless of pause)
+    if (deltaTime > 0) {
+      this.particleService.addPendingToScene(this.scene);
+      this.particleService.update(deltaTime, this.scene);
+      this.goldPopupService.update(deltaTime);
+      this.screenShakeService.update(deltaTime, this.camera);
+    }
+
     // Render
     if (this.composer) {
       this.composer.render();
@@ -941,6 +1014,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     window.removeEventListener('keydown', this.keyboardHandler);
+    window.removeEventListener('keydown', this.keydownPanHandler);
+    window.removeEventListener('keyup', this.keyupPanHandler);
     window.removeEventListener('resize', this.resizeHandler);
 
     // Remove canvas event listeners (stored as named references)
@@ -976,5 +1051,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.audioService.cleanup();
+    this.particleService.cleanup(this.scene);
+    this.goldPopupService.cleanup(this.scene);
+    this.screenShakeService.cleanup(this.camera);
+    this.towerPreviewService.cleanup();
+    this.fpsCounterService.reset();
   }
 }

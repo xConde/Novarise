@@ -53,6 +53,17 @@
   }
 
   // --- Audio toggle button ---
+  .fps-counter {
+    position: absolute;
+    top: var(--spacing-md);
+    right: 4.5rem;
+    color: var(--theme-purple-mid);
+    font-family: "Orbitron", sans-serif;
+    font-size: 0.7rem;
+    opacity: 0.6;
+    z-index: var(--z-index-overlay);
+  }
+
   .audio-toggle-btn {
     @include glass-panel;
     position: absolute;

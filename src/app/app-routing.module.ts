@@ -4,7 +4,8 @@ import { RouterModule, Routes } from '@angular/router';
 const routes: Routes = [
   { path: '', redirectTo: '/edit', pathMatch: 'full' },
   { path: 'edit', loadChildren: () => import('./games/novarise/editor.module').then(m => m.EditorModule) },
-  { path: 'play', loadChildren: () => import('./game/game.module').then(m => m.GameModule) }
+  { path: 'play', loadChildren: () => import('./game/game.module').then(m => m.GameModule) },
+  { path: 'maps', loadChildren: () => import('./game/map-select/map-select.module').then(m => m.MapSelectModule) }
 ];
 
 @NgModule({
