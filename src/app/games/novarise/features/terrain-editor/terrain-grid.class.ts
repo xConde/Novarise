@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
+import { disposeMaterial } from '../../../../game/game-board/utils/three-utils';
 import { TerrainGridState } from './terrain-grid-state.interface';
 
 export interface TerrainTile {
@@ -237,7 +238,7 @@ export class TerrainGrid {
     // Remove old mesh and dispose its resources
     this.scene.remove(tile.mesh);
     tile.mesh.geometry.dispose();
-    this.disposeMaterial(tile.mesh.material);
+    disposeMaterial(tile.mesh.material);
 
     // Create new mesh with updated height
     const newMesh = this.createTileMesh(x, z, tile.type, height);
@@ -348,15 +349,6 @@ export class TerrainGrid {
     }
   }
 
-  /** Dispose a Three.js material, handling both single and array forms. */
-  private disposeMaterial(material: THREE.Material | THREE.Material[]): void {
-    if (Array.isArray(material)) {
-      material.forEach(mat => mat.dispose());
-    } else {
-      material.dispose();
-    }
-  }
-
   public dispose(): void {
     // Clean up all meshes
     for (let x = 0; x < this.gridSize; x++) {
@@ -364,7 +356,7 @@ export class TerrainGrid {
         const tile = this.tiles[x][z];
         this.scene.remove(tile.mesh);
         tile.mesh.geometry.dispose();
-        this.disposeMaterial(tile.mesh.material);
+        disposeMaterial(tile.mesh.material);
       }
     }
 
@@ -372,7 +364,7 @@ export class TerrainGrid {
     if (this.gridLines) {
       this.scene.remove(this.gridLines);
       this.gridLines.geometry.dispose();
-      this.disposeMaterial(this.gridLines.material);
+      disposeMaterial(this.gridLines.material);
     }
 
     // Clear caches

@@ -13,6 +13,7 @@ import { MapBridgeService } from './services/map-bridge.service';
 import { GameStateService } from './services/game-state.service';
 import { WaveService } from './services/wave.service';
 import { TowerCombatService } from './services/tower-combat.service';
+import { disposeMaterial } from './utils/three-utils';
 import { TowerType, TOWER_CONFIGS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
 import { GamePhase, GameState } from './models/game-state.model';
@@ -202,7 +203,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       towerMesh.traverse(child => {
         if (child instanceof THREE.Mesh) {
           child.geometry.dispose();
-          this.disposeMaterial(child.material);
+          disposeMaterial(child.material);
         }
       });
       this.towerMeshes.delete(this.selectedTowerInfo.id);
@@ -279,7 +280,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.rangePreviewMesh) {
       this.scene.remove(this.rangePreviewMesh);
       this.rangePreviewMesh.geometry.dispose();
-      this.disposeMaterial(this.rangePreviewMesh.material);
+      disposeMaterial(this.rangePreviewMesh.material);
       this.rangePreviewMesh = null;
     }
   }
@@ -325,14 +326,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.lastTime = 0;
   }
 
-  /** Dispose a Three.js material, handling both single and array forms. */
-  private disposeMaterial(material: THREE.Material | THREE.Material[]): void {
-    if (Array.isArray(material)) {
-      material.forEach(mat => mat.dispose());
-    } else {
-      material.dispose();
-    }
-  }
 
   /** Shared cleanup for game objects — used by both restartGame() and ngOnDestroy(). */
   private cleanupGameObjects(): void {
@@ -355,7 +348,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       group.traverse(child => {
         if (child instanceof THREE.Mesh) {
           child.geometry.dispose();
-          this.disposeMaterial(child.material);
+          disposeMaterial(child.material);
         }
       });
     });
@@ -365,7 +358,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.tileMeshes.forEach(mesh => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      this.disposeMaterial(mesh.material);
+      disposeMaterial(mesh.material);
     });
     this.tileMeshes.clear();
 
@@ -375,7 +368,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.gridLines.traverse(child => {
         if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
           child.geometry.dispose();
-          this.disposeMaterial(child.material);
+          disposeMaterial(child.material);
         }
       });
       this.gridLines = null;
@@ -385,7 +378,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.particles) {
       this.scene.remove(this.particles);
       this.particles.geometry.dispose();
-      this.disposeMaterial(this.particles.material);
+      disposeMaterial(this.particles.material);
       this.particles = null;
     }
 
@@ -393,7 +386,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.skybox) {
       this.scene.remove(this.skybox);
       this.skybox.geometry.dispose();
-      this.disposeMaterial(this.skybox.material);
+      disposeMaterial(this.skybox.material);
       this.skybox = undefined;
     }
   }

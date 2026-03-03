@@ -13,6 +13,7 @@ import { EditHistoryService, PaintCommand, HeightCommand, SpawnPointCommand, Exi
 import { CameraControlService, MovementInput, RotationInput, JoystickInput } from './core/camera-control.service';
 import { EditorStateService, EditMode, BrushTool } from './core/editor-state.service';
 import { MapBridgeService } from '../../game/game-board/services/map-bridge.service';
+import { disposeMaterial } from '../../game/game-board/utils/three-utils';
 import { JoystickEvent } from './features/mobile-controls';
 
 // Re-export types for template compatibility
@@ -1076,7 +1077,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.brushPreviewMeshes.forEach(mesh => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      this.disposeMaterial(mesh.material);
+      disposeMaterial(mesh.material);
     });
     this.brushPreviewMeshes = [];
 
@@ -1383,7 +1384,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.rectanglePreviewMeshes.forEach(mesh => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      this.disposeMaterial(mesh.material);
+      disposeMaterial(mesh.material);
     });
     this.rectanglePreviewMeshes = [];
   }
@@ -1577,15 +1578,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  /** Dispose a Three.js material, handling both single and array forms. */
-  private disposeMaterial(material: THREE.Material | THREE.Material[]): void {
-    if (Array.isArray(material)) {
-      material.forEach(mat => mat.dispose());
-    } else {
-      material.dispose();
-    }
-  }
-
   ngOnDestroy(): void {
     // Stop the animation loop first to prevent calls to disposed resources
     cancelAnimationFrame(this.animationFrameId);
@@ -1625,7 +1617,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.brushPreviewMeshes.forEach(mesh => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      this.disposeMaterial(mesh.material);
+      disposeMaterial(mesh.material);
     });
     this.brushPreviewMeshes = [];
 
@@ -1636,26 +1628,26 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (this.brushIndicator) {
       this.scene.remove(this.brushIndicator);
       this.brushIndicator.geometry.dispose();
-      this.disposeMaterial(this.brushIndicator.material);
+      disposeMaterial(this.brushIndicator.material);
     }
 
     // Clean up spawn/exit markers
     if (this.spawnMarker) {
       this.scene.remove(this.spawnMarker);
       this.spawnMarker.geometry.dispose();
-      this.disposeMaterial(this.spawnMarker.material);
+      disposeMaterial(this.spawnMarker.material);
     }
     if (this.exitMarker) {
       this.scene.remove(this.exitMarker);
       this.exitMarker.geometry.dispose();
-      this.disposeMaterial(this.exitMarker.material);
+      disposeMaterial(this.exitMarker.material);
     }
 
     // Clean up particles
     if (this.particles) {
       this.scene.remove(this.particles);
       this.particles.geometry.dispose();
-      this.disposeMaterial(this.particles.material);
+      disposeMaterial(this.particles.material);
       this.particles = null;
     }
 
@@ -1663,7 +1655,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (this.skybox) {
       this.scene.remove(this.skybox);
       this.skybox.geometry.dispose();
-      this.disposeMaterial(this.skybox.material);
+      disposeMaterial(this.skybox.material);
       this.skybox = undefined;
     }
 
