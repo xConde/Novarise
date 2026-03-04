@@ -29,6 +29,8 @@ export const RANGE_PREVIEW_CONFIG = {
   yPosition: 0.35,
   ringThickness: 0.05,
   segments: 64,
+  allRangesColor: 0x00ff88,
+  allRangesOpacityScale: 0.5,
 };
 
 export const TILE_EMISSIVE = {

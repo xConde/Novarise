@@ -102,6 +102,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Wave preview — shown during SETUP and INTERMISSION
   wavePreview: WavePreviewEntry[] = [];
+  showAllRanges = false;
+  private rangeRingMeshes: THREE.Mesh[] = [];
 
   // Animation
   private lastTime = 0;
@@ -451,8 +453,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Clean up tower combat state (projectiles)
     this.towerCombatService.cleanup(this.scene);
 
-    // Clean up range preview
+    // Clean up range preview and range toggle rings
     this.removeRangePreview();
+    for (const mesh of this.rangeRingMeshes) {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
+    this.rangeRingMeshes = [];
+    this.showAllRanges = false;
     this.selectedTowerInfo = null;
     this.selectedTowerStats = null;
 
@@ -1069,6 +1078,54 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }
 
+  get enemiesAlive(): number {
+    return this.enemyService.getEnemies().size;
+  }
+
+  get enemiesToSpawn(): number {
+    return this.waveService.getRemainingToSpawn();
+  }
+
+  toggleAllRanges(): void {
+    this.showAllRanges = !this.showAllRanges;
+
+    // Remove existing range rings
+    for (const mesh of this.rangeRingMeshes) {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
+    this.rangeRingMeshes = [];
+
+    if (this.showAllRanges) {
+      const boardWidth = this.gameBoardService.getBoardWidth();
+      const boardHeight = this.gameBoardService.getBoardHeight();
+      const tileSize = this.gameBoardService.getTileSize();
+
+      this.towerCombatService.getPlacedTowers().forEach(tower => {
+        const stats = getEffectiveStats(tower.type, tower.level);
+        const worldX = (tower.col - boardWidth / 2) * tileSize;
+        const worldZ = (tower.row - boardHeight / 2) * tileSize;
+        const geometry = new THREE.RingGeometry(
+          stats.range - RANGE_PREVIEW_CONFIG.ringThickness,
+          stats.range,
+          RANGE_PREVIEW_CONFIG.segments
+        );
+        const material = new THREE.MeshBasicMaterial({
+          color: RANGE_PREVIEW_CONFIG.allRangesColor,
+          transparent: true,
+          opacity: RANGE_PREVIEW_CONFIG.opacity * RANGE_PREVIEW_CONFIG.allRangesOpacityScale,
+          side: THREE.DoubleSide,
+        });
+        const ring = new THREE.Mesh(geometry, material);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(worldX, 0.02, worldZ);
+        this.scene.add(ring);
+        this.rangeRingMeshes.push(ring);
+      });
+    }
+  }
+
   private handleKeyboard(event: KeyboardEvent): void {
     const phase = this.gameStateService.getState().phase;
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
@@ -1097,6 +1154,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         event.preventDefault();
         this.selectedTowerType = TowerType.BASIC;
         this.deselectTower();
+        break;
+      case 'r':
+      case 'R':
+        // R key toggles all tower range indicators
+        event.preventDefault();
+        this.toggleAllRanges();
         break;
     }
   }

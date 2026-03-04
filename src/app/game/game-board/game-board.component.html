@@ -40,7 +40,7 @@
 
   <!-- Wave status indicator -->
   <div class="hud-wave-status" *ngIf="gameState.phase === GamePhase.COMBAT">
-    Wave {{ gameState.wave }} in progress...
+    Wave {{ gameState.wave }} in progress... ({{ enemiesAlive }} alive, {{ enemiesToSpawn }} queued)
   </div>
 
   <!-- Difficulty selector — only visible in SETUP before wave 0 starts -->
@@ -113,6 +113,13 @@
         {{ s }}x
       </button>
     </div>
+    <button
+      class="control-btn range-btn"
+      (click)="toggleAllRanges()"
+      [class.active]="showAllRanges"
+      aria-label="Toggle all tower ranges [R]">
+      &#9898; <span class="wave-hint">[R]</span>
+    </button>
   </div>
 
   <!-- Victory/Defeat overlay -->

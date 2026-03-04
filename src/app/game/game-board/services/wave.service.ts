@@ -160,6 +160,11 @@ export class WaveService {
     return this.active;
   }
 
+  /** Returns number of enemies still queued to spawn in current wave. */
+  getRemainingToSpawn(): number {
+    return this.spawnQueues.reduce((sum, q) => sum + Math.max(0, q.remaining), 0);
+  }
+
   getTotalEnemiesInWave(waveNumber: number): number {
     const index = waveNumber - 1;
     if (index < 0) return 0;
