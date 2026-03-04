@@ -6,10 +6,17 @@
     Edit Map
   </button>
 
-  <!-- Audio mute toggle -->
-  <button class="audio-toggle-btn" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
-    {{ audioMuted ? '&#128263;' : '&#128266;' }}
-  </button>
+  <!-- Top-right controls -->
+  <div class="top-right-controls">
+    <div class="fps-counter">{{ fps }} FPS</div>
+    <button class="help-btn" (click)="showHelpOverlay = !showHelpOverlay" aria-label="Show keyboard shortcuts">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </button>
+    <button class="audio-toggle-btn" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
+      <svg *ngIf="!audioMuted" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+      <svg *ngIf="audioMuted" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+    </button>
+  </div>
 
   <!-- Game HUD -->
   <div class="game-hud">
@@ -25,15 +32,55 @@
       <span class="hud-label">Wave</span>
       <span class="hud-value">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
     </div>
-    <div class="hud-stat">
+    <div class="hud-stat secondary">
       <span class="hud-label">Score</span>
       <span class="hud-value">{{ gameState.score }}</span>
+    </div>
+    <div class="hud-stat secondary">
+      <span class="hud-label">Time</span>
+      <span class="hud-value">{{ formattedTime }}</span>
     </div>
   </div>
 
   <!-- Wave status indicator -->
   <div class="hud-wave-status" *ngIf="gameState.phase === GamePhase.COMBAT">
-    Wave {{ gameState.wave }} in progress...
+    <span class="wave-enemy-count">{{ enemiesAlive + enemiesToSpawn }}</span> enemies remaining
+  </div>
+
+  <!-- Difficulty selector — only visible in SETUP before wave 0 starts -->
+  <div class="difficulty-selector" *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0">
+    <span class="difficulty-label">Difficulty</span>
+    <div class="difficulty-options">
+      <button
+        *ngFor="let level of difficultyLevels"
+        class="difficulty-btn"
+        [class.selected]="gameState.difficulty === level"
+        (click)="selectDifficulty(level)"
+        [attr.aria-label]="'Select ' + difficultyPresets[level].label + ' difficulty'"
+        [attr.aria-pressed]="gameState.difficulty === level">
+        <span class="difficulty-name">{{ difficultyPresets[level].label }}</span>
+        <span class="difficulty-desc">{{ difficultyPresets[level].description }}</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Wave preview panel — shown during SETUP and INTERMISSION -->
+  <div class="wave-preview"
+       *ngIf="(gameState.phase === GamePhase.SETUP || gameState.phase === GamePhase.INTERMISSION) && wavePreview.length > 0"
+       aria-label="Upcoming wave preview">
+    <div class="wave-preview-header">
+      Wave {{ gameState.wave + 1 }}
+    </div>
+    <ul class="wave-preview-list">
+      <li
+        *ngFor="let entry of wavePreview"
+        class="wave-preview-entry"
+        [attr.data-type]="entry.type.toLowerCase()">
+        <span class="enemy-dot" [attr.data-type]="entry.type.toLowerCase()"></span>
+        <span class="enemy-count">{{ entry.count }}x</span>
+        <span class="enemy-label">{{ entry.label }}</span>
+      </li>
+    </ul>
   </div>
 
   <!-- Wave control -->
@@ -45,7 +92,39 @@
       aria-label="Start next wave">
       <span *ngIf="gameState.wave === 0">Start Game</span>
       <span *ngIf="gameState.wave > 0">Next Wave</span>
-      <span class="wave-hint">[Space]</span>
+      <span class="wave-hint">Space</span>
+    </button>
+  </div>
+
+  <!-- Pause/Speed controls -->
+  <div class="game-controls" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
+    <button
+      class="control-btn pause-btn"
+      (click)="togglePause()"
+      [class.active]="isPaused"
+      [attr.aria-label]="isPaused ? 'Resume game' : 'Pause game'"
+      [attr.aria-pressed]="isPaused">
+      <svg *ngIf="isPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      <svg *ngIf="!isPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+    </button>
+    <div class="speed-controls">
+      <button
+        *ngFor="let s of [1, 2, 3]"
+        class="control-btn speed-btn"
+        [class.active]="gameSpeed === s"
+        (click)="setSpeed(s)"
+        [attr.aria-label]="s + 'x speed'"
+        [attr.aria-pressed]="gameSpeed === s">
+        {{ s }}x
+      </button>
+    </div>
+    <button
+      class="control-btn range-btn"
+      (click)="toggleAllRanges()"
+      [class.active]="showAllRanges"
+      aria-label="Toggle all tower ranges [R]">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+      <span class="wave-hint">R</span>
     </button>
   </div>
 
@@ -54,7 +133,45 @@
     <div class="overlay-content" [class.victory]="gameState.phase === GamePhase.VICTORY" [class.defeat]="gameState.phase === GamePhase.DEFEAT">
       <h2 *ngIf="gameState.phase === GamePhase.VICTORY">Victory</h2>
       <h2 *ngIf="gameState.phase === GamePhase.DEFEAT">Defeat</h2>
-      <p class="final-score">Score: {{ gameState.score }}</p>
+
+      <!-- Star rating -->
+      <div class="star-display" *ngIf="gameState.phase === GamePhase.VICTORY">
+        <span
+          *ngFor="let s of starArray; let i = index"
+          class="overlay-star"
+          [class.filled]="s === 'filled'"
+          [class.empty]="s === 'empty'"
+          [attr.aria-label]="s === 'filled' ? 'Star earned' : 'Star not earned'">
+          &#9733;
+        </span>
+      </div>
+
+      <!-- Score breakdown -->
+      <div class="score-breakdown" *ngIf="scoreBreakdown">
+        <div class="score-row">
+          <span class="score-label">Base Score</span>
+          <span class="score-value">{{ scoreBreakdown.baseScore }}</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">Difficulty</span>
+          <span class="score-value multiplier">x{{ scoreBreakdown.difficultyMultiplier }}</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">Waves Completed</span>
+          <span class="score-value">{{ scoreBreakdown.wavesCompleted }} / {{ gameState.maxWaves }}</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">Lives Remaining</span>
+          <span class="score-value">{{ scoreBreakdown.livesRemaining }} / {{ scoreBreakdown.livesTotal }}</span>
+        </div>
+        <div class="score-row final">
+          <span class="score-label">Final Score</span>
+          <span class="score-value final-value">{{ scoreBreakdown.finalScore }}</span>
+        </div>
+      </div>
+
+      <p class="final-score" *ngIf="!scoreBreakdown">Score: {{ gameState.score }}</p>
+
       <div class="overlay-actions">
         <button class="restart-btn" (click)="restartGame()">Play Again</button>
         <button class="edit-map-btn" (click)="goToEditor()">Edit Map</button>
@@ -102,9 +219,10 @@
       <span class="max-level-badge" *ngIf="selectedTowerInfo.level >= MAX_TOWER_LEVEL">MAX</span>
       <button
         class="sell-btn"
+        [class.confirm]="sellConfirmPending"
         (click)="sellTower()"
         aria-label="Sell tower">
-        Sell (+{{ selectedTowerSellValue }}g)
+        {{ sellConfirmPending ? 'Confirm Sell?' : 'Sell (+' + selectedTowerSellValue + 'g)' }}
       </button>
     </div>
   </div>
@@ -112,36 +230,41 @@
   <!-- Tower selection -->
   <div class="tower-selection" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
     <button
+      *ngFor="let tower of towerTypes"
       class="tower-btn"
-      [class.selected]="selectedTowerType === TowerType.BASIC"
-      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[TowerType.BASIC].cost"
-      (click)="selectTowerType(TowerType.BASIC)"
-      aria-label="Select Basic Tower">
-      <div class="tower-icon basic"></div>
-      <span class="tower-name">Basic</span>
-      <span class="tower-cost">{{ towerConfigs[TowerType.BASIC].cost }}g</span>
+      [class.selected]="selectedTowerType === tower.type"
+      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[tower.type].cost"
+      (click)="selectTowerType(tower.type)"
+      [attr.aria-label]="'Select ' + (tower.type | titlecase) + ' Tower'">
+      <div class="tower-tooltip" role="tooltip">
+        <div class="tooltip-stat"><span class="tooltip-label">Damage</span><span class="tooltip-val">{{ towerConfigs[tower.type].damage }}</span></div>
+        <div class="tooltip-stat"><span class="tooltip-label">Range</span><span class="tooltip-val">{{ towerConfigs[tower.type].range }}</span></div>
+        <div class="tooltip-stat"><span class="tooltip-label">Rate</span><span class="tooltip-val">{{ towerConfigs[tower.type].fireRate }}s</span></div>
+        <div class="tooltip-desc">{{ towerDescriptions[tower.type] }}</div>
+        <div class="tooltip-arrow"></div>
+      </div>
+      <div class="tower-icon" [ngClass]="tower.type"></div>
+      <span class="tower-name">{{ tower.type | titlecase }}</span>
+      <span class="tower-cost">{{ towerConfigs[tower.type].cost }}g</span>
+      <span class="tower-hotkey">{{ tower.hotkey }}</span>
     </button>
+  </div>
 
-    <button
-      class="tower-btn"
-      [class.selected]="selectedTowerType === TowerType.SNIPER"
-      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[TowerType.SNIPER].cost"
-      (click)="selectTowerType(TowerType.SNIPER)"
-      aria-label="Select Sniper Tower">
-      <div class="tower-icon sniper"></div>
-      <span class="tower-name">Sniper</span>
-      <span class="tower-cost">{{ towerConfigs[TowerType.SNIPER].cost }}g</span>
-    </button>
-
-    <button
-      class="tower-btn"
-      [class.selected]="selectedTowerType === TowerType.SPLASH"
-      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[TowerType.SPLASH].cost"
-      (click)="selectTowerType(TowerType.SPLASH)"
-      aria-label="Select Splash Tower">
-      <div class="tower-icon splash"></div>
-      <span class="tower-name">Splash</span>
-      <span class="tower-cost">{{ towerConfigs[TowerType.SPLASH].cost }}g</span>
-    </button>
+  <!-- Help overlay -->
+  <div class="help-overlay" *ngIf="showHelpOverlay" (click)="showHelpOverlay = false">
+    <div class="help-content" (click)="$event.stopPropagation()">
+      <h3>Keyboard Shortcuts</h3>
+      <div class="help-grid">
+        <span class="key">1-6</span><span>Select tower type</span>
+        <span class="key">Space</span><span>Start next wave</span>
+        <span class="key">P</span><span>Pause / Resume</span>
+        <span class="key">R</span><span>Toggle all range rings</span>
+        <span class="key">M</span><span>Toggle minimap</span>
+        <span class="key">Escape</span><span>Deselect tower</span>
+        <span class="key">WASD</span><span>Pan camera</span>
+        <span class="key">H</span><span>Toggle this help</span>
+      </div>
+      <p class="help-dismiss">Click anywhere or press H to close</p>
+    </div>
   </div>
 </div>

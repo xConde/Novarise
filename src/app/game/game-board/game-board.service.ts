@@ -425,6 +425,112 @@ export class GameBoardService {
         towerGroup.add(spStemBase, spStemMid, spCapBase, spCapTop, spSpore1, spSpore2, spSpore3);
         break;
 
+      case TowerType.SLOW:
+        // Ice/freeze pad — flat wide cylinder base with a raised ring on top
+        const iceBase = new THREE.CylinderGeometry(0.4, 0.45, 0.15, 12);
+        const icePillar = new THREE.CylinderGeometry(0.18, 0.22, 0.45, 8);
+        const iceRingOuter = new THREE.CylinderGeometry(0.42, 0.42, 0.08, 24);
+        const iceRingInner = new THREE.CylinderGeometry(0.32, 0.32, 0.09, 24);
+        const iceCrystal = new THREE.OctahedronGeometry(0.14, 0);
+
+        color = 0x4488ff; // Blue/ice
+        const slowMat = new THREE.MeshStandardMaterial({
+          color: color,
+          emissive: 0x2255cc,
+          emissiveIntensity: 0.8,
+          metalness: 0.5,
+          roughness: 0.3,
+          transparent: true,
+          opacity: 0.9
+        });
+
+        const slBase = new THREE.Mesh(iceBase, slowMat);
+        slBase.position.y = 0.075;
+
+        const slPillar = new THREE.Mesh(icePillar, slowMat);
+        slPillar.position.y = 0.375;
+
+        const slRingOuter = new THREE.Mesh(iceRingOuter, slowMat);
+        slRingOuter.position.y = 0.64;
+
+        const slRingInner = new THREE.Mesh(iceRingInner, slowMat);
+        slRingInner.position.y = 0.645;
+
+        const slCrystal = new THREE.Mesh(iceCrystal, slowMat);
+        slCrystal.position.y = 0.82;
+
+        towerGroup.add(slBase, slPillar, slRingOuter, slRingInner, slCrystal);
+        break;
+
+      case TowerType.CHAIN:
+        // Electric antenna — thin tall cylinder with sphere on top
+        const chainBase = new THREE.CylinderGeometry(0.3, 0.38, 0.2, 8);
+        const chainShaft = new THREE.CylinderGeometry(0.1, 0.14, 0.8, 6);
+        const chainOrb = new THREE.SphereGeometry(0.18, 10, 8);
+        const chainSpark1 = new THREE.SphereGeometry(0.06, 6, 6);
+        const chainSpark2 = new THREE.SphereGeometry(0.05, 6, 6);
+
+        color = 0xffdd00; // Yellow/electric
+        const chainMat = new THREE.MeshStandardMaterial({
+          color: color,
+          emissive: 0xddaa00,
+          emissiveIntensity: 1.0,
+          metalness: 0.6,
+          roughness: 0.2
+        });
+
+        const chBase = new THREE.Mesh(chainBase, chainMat);
+        chBase.position.y = 0.1;
+
+        const chShaft = new THREE.Mesh(chainShaft, chainMat);
+        chShaft.position.y = 0.6;
+
+        const chOrb = new THREE.Mesh(chainOrb, chainMat);
+        chOrb.position.y = 1.18;
+
+        const chSpark1 = new THREE.Mesh(chainSpark1, chainMat);
+        chSpark1.position.set(0.22, 1.25, 0);
+
+        const chSpark2 = new THREE.Mesh(chainSpark2, chainMat);
+        chSpark2.position.set(-0.18, 1.3, 0.14);
+
+        towerGroup.add(chBase, chShaft, chOrb, chSpark1, chSpark2);
+        break;
+
+      case TowerType.MORTAR:
+        // Dark cannon — wide squat cylinder base with angled barrel
+        const mortarBase = new THREE.CylinderGeometry(0.42, 0.48, 0.3, 10);
+        const mortarRing = new THREE.CylinderGeometry(0.36, 0.4, 0.15, 10);
+        const mortarBarrel = new THREE.CylinderGeometry(0.1, 0.15, 0.5, 8);
+        const mortarMuzzle = new THREE.CylinderGeometry(0.12, 0.1, 0.12, 8);
+
+        color = 0x664422; // Dark brown cannon
+        const mortarMat = new THREE.MeshStandardMaterial({
+          color: color,
+          emissive: 0x442200,
+          emissiveIntensity: 0.4,
+          metalness: 0.7,
+          roughness: 0.5
+        });
+
+        const moBase = new THREE.Mesh(mortarBase, mortarMat);
+        moBase.position.y = 0.15;
+
+        const moRing = new THREE.Mesh(mortarRing, mortarMat);
+        moRing.position.y = 0.375;
+
+        // Angled barrel tilted ~40 degrees
+        const moBarrel = new THREE.Mesh(mortarBarrel, mortarMat);
+        moBarrel.position.set(0.1, 0.72, 0);
+        moBarrel.rotation.z = -Math.PI / 4.5;
+
+        const moMuzzle = new THREE.Mesh(mortarMuzzle, mortarMat);
+        moMuzzle.position.set(0.25, 0.98, 0);
+        moMuzzle.rotation.z = -Math.PI / 4.5;
+
+        towerGroup.add(moBase, moRing, moBarrel, moMuzzle);
+        break;
+
       default:
         const defaultGeom = new THREE.CylinderGeometry(0.3, 0.35, 0.6, 6);
         color = 0xd47a3a;

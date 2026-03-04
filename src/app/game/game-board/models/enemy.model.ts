@@ -5,7 +5,10 @@ export enum EnemyType {
   FAST = 'FAST',
   HEAVY = 'HEAVY',
   SWIFT = 'SWIFT',
-  BOSS = 'BOSS'
+  BOSS = 'BOSS',
+  SHIELDED = 'SHIELDED',
+  SWARM = 'SWARM',
+  FLYING = 'FLYING'
 }
 
 export interface GridNode {
@@ -30,6 +33,10 @@ export interface Enemy {
   pathIndex: number;
   distanceTraveled: number;
   mesh?: THREE.Mesh; // 3D mesh representation
+  shield?: number;    // Current shield HP (SHIELDED type only)
+  maxShield?: number; // Starting shield HP (SHIELDED type only)
+  isMiniSwarm?: boolean; // True for mini-enemies spawned by SWARM death — prevents recursive spawning
+  isFlying?: boolean; // True for FLYING type — ignores terrain, immune to slow
 }
 
 export interface EnemyStats {
@@ -38,6 +45,8 @@ export interface EnemyStats {
   value: number;
   color: number; // Hex color for mesh
   size: number; // Sphere radius
+  maxShield?: number;   // Starting shield HP (SHIELDED type only)
+  spawnOnDeath?: number; // Number of mini-enemies to spawn on death (SWARM type only)
 }
 
 // Enemy type statistics
@@ -76,5 +85,44 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     value: 100,
     color: 0xff00ff, // Magenta
     size: 0.6
+  },
+  [EnemyType.SHIELDED]: {
+    health: 120,
+    speed: 1.2,
+    value: 25,
+    color: 0x4444ff, // Blue
+    size: 0.35,
+    maxShield: 60
+  },
+  [EnemyType.SWARM]: {
+    health: 40,
+    speed: 2.5,
+    value: 8,
+    color: 0xaaaa00, // Yellow-green
+    size: 0.25,
+    spawnOnDeath: 3
+  },
+  [EnemyType.FLYING]: {
+    health: 60,
+    speed: 2.5,
+    value: 20,
+    color: 0x88ccff, // Light blue
+    size: 0.3
   }
 };
+
+/** Y-position (world height) for flying enemies hovering above ground. */
+export const FLYING_ENEMY_HEIGHT = 1.5;
+
+/** Sphere geometry segments for enemy mesh rendering. */
+export const ENEMY_MESH_SEGMENTS = 16;
+export const MINI_SWARM_MESH_SEGMENTS = 12;
+
+/** Stats for mini-enemies spawned when a SWARM enemy dies. */
+export const MINI_SWARM_STATS = {
+  health: 15,
+  speed: 3,
+  value: 3,
+  color: 0xaaaa00, // Same yellow-green as parent
+  size: 0.15
+} as const;

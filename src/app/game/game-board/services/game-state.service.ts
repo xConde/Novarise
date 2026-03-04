@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { GamePhase, GameState, INITIAL_GAME_STATE } from '../models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, VALID_GAME_SPEEDS } from '../models/game-state.model';
 
 @Injectable()
 export class GameStateService {
@@ -21,7 +21,10 @@ export class GameStateService {
   }
 
   startWave(): void {
-    if (this.state.wave >= this.state.maxWaves) return;
+    if (this.state.phase === GamePhase.VICTORY || this.state.phase === GamePhase.DEFEAT) return;
+    const hasMoreWaves =
+      this.state.wave < this.state.maxWaves || this.state.isEndless;
+    if (!hasMoreWaves) return;
     this.state.wave++;
     this.state.phase = GamePhase.COMBAT;
     this.emit();
@@ -32,11 +35,22 @@ export class GameStateService {
     this.state.gold += reward;
     this.state.score += reward;
 
-    if (this.state.wave >= this.state.maxWaves) {
+    if (this.state.isEndless) {
+      // In endless mode, track highest wave reached and never trigger VICTORY
+      if (this.state.wave > this.state.highestWave) {
+        this.state.highestWave = this.state.wave;
+      }
+      this.state.phase = GamePhase.INTERMISSION;
+    } else if (this.state.wave >= this.state.maxWaves) {
       this.state.phase = GamePhase.VICTORY;
     } else {
       this.state.phase = GamePhase.INTERMISSION;
     }
+    this.emit();
+  }
+
+  setEndlessMode(enabled: boolean): void {
+    this.state.isEndless = enabled;
     this.emit();
   }
 
@@ -55,6 +69,25 @@ export class GameStateService {
     this.emit();
   }
 
+  /**
+   * Calculate and award interest on unspent gold.
+   * Called during INTERMISSION phase transition.
+   * Returns the interest amount awarded.
+   */
+  awardInterest(): number {
+    if (this.state.phase !== GamePhase.INTERMISSION) return 0;
+    const interest = Math.min(
+      Math.floor(this.state.gold * INTEREST_CONFIG.rate),
+      INTEREST_CONFIG.maxPayout
+    );
+    if (interest > 0) {
+      this.state.gold += interest;
+      this.state.score += interest;
+      this.emit();
+    }
+    return interest;
+  }
+
   spendGold(amount: number): boolean {
     if (amount <= 0 || this.state.gold < amount) {
       return false;
@@ -70,6 +103,33 @@ export class GameStateService {
 
   addScore(points: number): void {
     this.state.score += points;
+    this.emit();
+  }
+
+  togglePause(): void {
+    if (this.state.phase !== GamePhase.COMBAT) return;
+    this.state.isPaused = !this.state.isPaused;
+    this.emit();
+  }
+
+  setSpeed(speed: GameSpeed): void {
+    if (!VALID_GAME_SPEEDS.includes(speed)) return;
+    this.state.gameSpeed = speed;
+    this.emit();
+  }
+
+  setDifficulty(difficulty: DifficultyLevel): void {
+    if (this.state.phase !== GamePhase.SETUP || this.state.wave !== 0) return;
+    const preset = DIFFICULTY_PRESETS[difficulty];
+    this.state.difficulty = difficulty;
+    this.state.lives = preset.lives;
+    this.state.gold = preset.gold;
+    this.emit();
+  }
+
+  addElapsedTime(seconds: number): void {
+    if (this.state.phase !== GamePhase.COMBAT) return;
+    this.state.elapsedTime += seconds;
     this.emit();
   }
 

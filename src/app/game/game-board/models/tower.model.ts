@@ -3,10 +3,20 @@ import * as THREE from 'three';
 export enum TowerType {
   BASIC = 'basic',
   SNIPER = 'sniper',
-  SPLASH = 'splash'
+  SPLASH = 'splash',
+  SLOW = 'slow',
+  CHAIN = 'chain',
+  MORTAR = 'mortar'
 }
 
 export const MAX_TOWER_LEVEL = 3;
+
+export const UPGRADE_COST_CONFIG = {
+  baseMultiplier: 0.5,
+  levelScale: 0.25,
+} as const;
+
+export const SELL_REFUND_RATE = 0.5;
 
 export interface TowerStats {
   damage: number;
@@ -16,6 +26,16 @@ export interface TowerStats {
   projectileSpeed: number; // tiles per second
   splashRadius: number; // tiles, 0 for single-target
   color: number;        // hex color for projectile
+  // Slow tower
+  slowFactor?: number;    // Speed reduction multiplier (0.5 = 50% of base speed)
+  slowDuration?: number;  // Duration of slow effect in seconds
+  // Chain lightning tower
+  chainCount?: number;    // Number of chain bounces after primary target
+  chainRange?: number;    // World-unit radius to find next chain target
+  // Mortar tower
+  blastRadius?: number;   // Area-of-effect radius for mortar zones
+  dotDuration?: number;   // How long the mortar zone persists (seconds)
+  dotDamage?: number;     // Damage per second dealt by mortar zone
 }
 
 export interface PlacedTower {
@@ -57,6 +77,40 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
     projectileSpeed: 6,
     splashRadius: 1.5,
     color: 0x4ac47a
+  },
+  [TowerType.SLOW]: {
+    damage: 0,
+    range: 2.5,
+    fireRate: 0.5,   // Aura pulse interval; not used for projectile fire rate
+    cost: 75,
+    projectileSpeed: 0,
+    splashRadius: 0,
+    color: 0x4488ff,
+    slowFactor: 0.5,
+    slowDuration: 2
+  },
+  [TowerType.CHAIN]: {
+    damage: 15,
+    range: 3,
+    fireRate: 0.8,
+    cost: 150,
+    projectileSpeed: 12,
+    splashRadius: 0,
+    color: 0xffdd00,
+    chainCount: 3,
+    chainRange: 2
+  },
+  [TowerType.MORTAR]: {
+    damage: 8,
+    range: 4,
+    fireRate: 3.0,   // Slow-firing artillery
+    cost: 200,
+    projectileSpeed: 4,
+    splashRadius: 0,
+    color: 0xff6622,
+    blastRadius: 1.5,
+    dotDuration: 3,
+    dotDamage: 3
   }
 };
 
@@ -72,13 +126,23 @@ export const UPGRADE_MULTIPLIERS: { damage: number; range: number; fireRate: num
 export function getUpgradeCost(type: TowerType, currentLevel: number): number {
   if (currentLevel < 1 || currentLevel >= MAX_TOWER_LEVEL) return Infinity;
   const baseCost = TOWER_CONFIGS[type].cost;
-  return Math.round(baseCost * (0.5 + currentLevel * 0.25));
+  return Math.round(baseCost * (UPGRADE_COST_CONFIG.baseMultiplier + currentLevel * UPGRADE_COST_CONFIG.levelScale));
 }
 
 /** Get the sell refund (50% of total gold invested). */
 export function getSellValue(totalInvested: number): number {
-  return Math.round(totalInvested * 0.5);
+  return Math.round(totalInvested * SELL_REFUND_RATE);
 }
+
+/** One-line description of each tower's special ability, shown in hover tooltips. */
+export const TOWER_DESCRIPTIONS: Record<TowerType, string> = {
+  [TowerType.BASIC]:  'Balanced all-rounder',
+  [TowerType.SNIPER]: 'Long range, high damage, slow fire',
+  [TowerType.SPLASH]: 'Area damage in a radius',
+  [TowerType.SLOW]:   'Slows enemies, no damage',
+  [TowerType.CHAIN]:  'Lightning bounces between enemies',
+  [TowerType.MORTAR]: 'Creates damage zones on the ground',
+};
 
 /** Resolve effective stats for a tower at a given level (clamped to 1..MAX_TOWER_LEVEL). */
 export function getEffectiveStats(type: TowerType, level: number): TowerStats {

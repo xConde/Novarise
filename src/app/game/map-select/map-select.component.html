@@ -1,0 +1,17 @@
+<div class="map-select-container">
+  <h1 class="map-select-title">Select Map</h1>
+
+  <div class="map-grid" *ngIf="maps.length > 0">
+    <button class="map-card" *ngFor="let map of maps" (click)="selectMap(map)">
+      <span class="map-name">{{ map.name }}</span>
+      <span class="map-date">{{ map.updatedAt | date:'short' }}</span>
+    </button>
+  </div>
+
+  <div class="no-maps" *ngIf="maps.length === 0">
+    <p>No maps saved yet.</p>
+    <button class="create-map-btn" (click)="goToEditor()">Create a Map</button>
+  </div>
+
+  <button class="back-btn" (click)="goToEditor()">Back to Editor</button>
+</div>

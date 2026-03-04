@@ -29,6 +29,8 @@ export const RANGE_PREVIEW_CONFIG = {
   yPosition: 0.35,
   ringThickness: 0.05,
   segments: 64,
+  allRangesColor: 0x00ff88,
+  allRangesOpacityScale: 0.5,
 };
 
 export const TILE_EMISSIVE = {
@@ -37,4 +39,17 @@ export const TILE_EMISSIVE = {
   special: 0.4,
   hover: 0.5,
   selected: 0.8,
+};
+
+export const SHIELD_VISUAL_CONFIG = {
+  color: 0x4488ff,       // Bright blue shield glow
+  opacity: 0.35,
+  radiusMultiplier: 1.6, // Shield sphere radius relative to enemy size
+  segments: 12,
+  emissiveIntensity: 0.5
+};
+
+export const ENEMY_VISUAL_CONFIG = {
+  shieldedEmissive: 0.3,
+  miniSwarmEmissive: 0.4,
 };

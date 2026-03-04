@@ -11,6 +11,34 @@ export interface WaveDefinition {
   reward: number; // bonus gold for completing wave
 }
 
+export interface EndlessWaveConfig {
+  baseHealthMultiplier: number;
+  healthScalePerWave: number; // additive per-wave multiplier increase
+  baseSpeedMultiplier: number;
+  speedScalePerWave: number;
+  baseCountMultiplier: number;
+  countScalePerWave: number;
+  bossInterval: number; // boss wave every N waves (relative to endless wave number)
+}
+
+export const ENDLESS_CONFIG: EndlessWaveConfig = {
+  baseHealthMultiplier: 1.0,
+  healthScalePerWave: 0.15,
+  baseSpeedMultiplier: 1.0,
+  speedScalePerWave: 0.05,
+  baseCountMultiplier: 1.0,
+  countScalePerWave: 0.1,
+  bossInterval: 5
+};
+
+/** Base values for endless wave generation — scaled by ENDLESS_CONFIG multipliers. */
+export const ENDLESS_BASE_COUNT = 10;
+export const ENDLESS_BASE_SPAWN_INTERVAL = 0.8;
+export const ENDLESS_BASE_REWARD = 200;
+export const ENDLESS_REWARD_SCALE_PER_WAVE = 50;
+export const ENDLESS_BOSS_COUNT = 1;
+export const ENDLESS_BOSS_SPAWN_INTERVAL = 0;
+
 export const WAVE_DEFINITIONS: WaveDefinition[] = [
   // Wave 1: Easy intro
   {
@@ -59,38 +87,42 @@ export const WAVE_DEFINITIONS: WaveDefinition[] = [
     ],
     reward: 80
   },
-  // Wave 7: Heavy siege
+  // Wave 7: Heavy siege with shielded vanguard
   {
     entries: [
-      { type: EnemyType.HEAVY, count: 5, spawnInterval: 1.5 },
-      { type: EnemyType.BASIC, count: 10, spawnInterval: 0.8 }
+      { type: EnemyType.SHIELDED, count: 3, spawnInterval: 2.0 },
+      { type: EnemyType.HEAVY, count: 4, spawnInterval: 1.5 },
+      { type: EnemyType.BASIC, count: 8, spawnInterval: 0.8 }
     ],
     reward: 100
   },
-  // Wave 8: Speed rush
+  // Wave 8: Swarm rush with flying scouts
   {
     entries: [
-      { type: EnemyType.FAST, count: 12, spawnInterval: 0.4 },
-      { type: EnemyType.SWIFT, count: 6, spawnInterval: 0.5 }
+      { type: EnemyType.SWARM, count: 8, spawnInterval: 0.6 },
+      { type: EnemyType.FAST, count: 6, spawnInterval: 0.4 },
+      { type: EnemyType.FLYING, count: 3, spawnInterval: 1.2 }
     ],
     reward: 120
   },
-  // Wave 9: Pre-boss gauntlet
+  // Wave 9: Mixed shielded, swarm, and flying gauntlet
   {
     entries: [
-      { type: EnemyType.BASIC, count: 10, spawnInterval: 0.6 },
-      { type: EnemyType.HEAVY, count: 5, spawnInterval: 1.0 },
-      { type: EnemyType.FAST, count: 8, spawnInterval: 0.5 },
-      { type: EnemyType.SWIFT, count: 4, spawnInterval: 0.8 }
+      { type: EnemyType.SHIELDED, count: 4, spawnInterval: 1.5 },
+      { type: EnemyType.SWARM, count: 6, spawnInterval: 0.8 },
+      { type: EnemyType.HEAVY, count: 3, spawnInterval: 1.2 },
+      { type: EnemyType.FAST, count: 6, spawnInterval: 0.5 },
+      { type: EnemyType.FLYING, count: 4, spawnInterval: 1.0 }
     ],
     reward: 150
   },
-  // Wave 10: Boss wave
+  // Wave 10: Boss wave with shielded escort
   {
     entries: [
       { type: EnemyType.BOSS, count: 1, spawnInterval: 0 },
-      { type: EnemyType.HEAVY, count: 3, spawnInterval: 2.0 },
-      { type: EnemyType.BASIC, count: 8, spawnInterval: 1.0 }
+      { type: EnemyType.SHIELDED, count: 4, spawnInterval: 1.5 },
+      { type: EnemyType.SWARM, count: 4, spawnInterval: 1.0 },
+      { type: EnemyType.HEAVY, count: 2, spawnInterval: 2.0 }
     ],
     reward: 250
   }

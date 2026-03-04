@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
-import { EnemyType } from '../models/enemy.model';
+import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
 
 describe('EnemyService', () => {
@@ -82,13 +82,40 @@ describe('EnemyService', () => {
       expect(enemy?.mesh).toBeTruthy();
     });
 
+    it('should initialise shield for SHIELDED enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+
+      expect(enemy.shield).toBe(ENEMY_STATS[EnemyType.SHIELDED].maxShield);
+      expect(enemy.maxShield).toBe(ENEMY_STATS[EnemyType.SHIELDED].maxShield);
+    });
+
+    it('should add a shield mesh child to SHIELDED enemy mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+
+      expect(enemy.mesh!.userData['shieldMesh']).toBeTruthy();
+    });
+
+    it('should NOT initialise shield for non-shielded enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy.shield).toBeUndefined();
+      expect(enemy.maxShield).toBeUndefined();
+    });
+
+    it('should NOT set isMiniSwarm on normally spawned enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      expect(enemy.isMiniSwarm).toBeUndefined();
+    });
+
     it('should spawn all enemy types with correct stats', () => {
       const types: EnemyType[] = [
         EnemyType.BASIC,
         EnemyType.FAST,
         EnemyType.HEAVY,
         EnemyType.SWIFT,
-        EnemyType.BOSS
+        EnemyType.BOSS,
+        EnemyType.SHIELDED,
+        EnemyType.SWARM,
+        EnemyType.FLYING
       ];
 
       types.forEach(type => {
@@ -475,51 +502,51 @@ describe('EnemyService', () => {
   });
 
   describe('Damage System (damageEnemy)', () => {
-    it('should reduce enemy health and return false when alive', () => {
+    it('should reduce enemy health and return killed=false when alive', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       const initialHealth = enemy.health;
 
-      const killed = service.damageEnemy(enemy.id, 10);
+      const result = service.damageEnemy(enemy.id, 10);
 
-      expect(killed).toBe(false);
+      expect(result.killed).toBe(false);
       expect(enemy.health).toBe(initialHealth - 10);
     });
 
-    it('should return true when damage kills the enemy', () => {
+    it('should return killed=true when damage kills the enemy', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
 
-      const killed = service.damageEnemy(enemy.id, enemy.health);
+      const result = service.damageEnemy(enemy.id, enemy.health);
 
-      expect(killed).toBe(true);
+      expect(result.killed).toBe(true);
       expect(enemy.health).toBe(0);
     });
 
-    it('should return true when damage overkills the enemy', () => {
+    it('should return killed=true when damage overkills the enemy', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
 
-      const killed = service.damageEnemy(enemy.id, enemy.health + 100);
+      const result = service.damageEnemy(enemy.id, enemy.health + 100);
 
-      expect(killed).toBe(true);
+      expect(result.killed).toBe(true);
       expect(enemy.health).toBeLessThan(0);
     });
 
-    it('should return false for already-dead enemy', () => {
+    it('should return killed=false for already-dead enemy', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
 
       // Kill the enemy first
       service.damageEnemy(enemy.id, enemy.health);
       expect(enemy.health).toBe(0);
 
-      // Second damage should return false
-      const killed = service.damageEnemy(enemy.id, 10);
-      expect(killed).toBe(false);
+      // Second damage should return killed=false
+      const result = service.damageEnemy(enemy.id, 10);
+      expect(result.killed).toBe(false);
       // Health should not change further
       expect(enemy.health).toBe(0);
     });
 
-    it('should return false for non-existent enemy ID', () => {
-      const killed = service.damageEnemy('non-existent-id', 50);
-      expect(killed).toBe(false);
+    it('should return killed=false for non-existent enemy ID', () => {
+      const result = service.damageEnemy('non-existent-id', 50);
+      expect(result.killed).toBe(false);
     });
 
     it('should handle multiple sequential damage calls', () => {
@@ -531,6 +558,188 @@ describe('EnemyService', () => {
       service.damageEnemy(enemy.id, 20);
 
       expect(enemy.health).toBe(initialHealth - 45);
+    });
+
+    describe('Shielded enemy damage', () => {
+      it('should absorb damage into shield before health', () => {
+        const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+        const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+
+        const result = service.damageEnemy(enemy.id, 20);
+
+        expect(result.killed).toBe(false);
+        // Health should be untouched while shield absorbs
+        expect(enemy.health).toBe(ENEMY_STATS[EnemyType.SHIELDED].health);
+        expect(enemy.shield).toBe(maxShield - 20);
+      });
+
+      it('should not damage health until shield is broken', () => {
+        const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+        const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+
+        // Deal damage less than the shield
+        service.damageEnemy(enemy.id, maxShield - 1);
+        expect(enemy.health).toBe(ENEMY_STATS[EnemyType.SHIELDED].health);
+        expect(enemy.shield).toBe(1);
+      });
+
+      it('should carry overkill damage to health when shield breaks in one hit', () => {
+        const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+        const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+        const overshoot = 30;
+
+        service.damageEnemy(enemy.id, maxShield + overshoot);
+
+        expect(enemy.shield).toBe(0);
+        expect(enemy.health).toBe(ENEMY_STATS[EnemyType.SHIELDED].health - overshoot);
+      });
+
+      it('should remove shield mesh from userData when shield breaks', () => {
+        const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+        const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+
+        // Shield mesh should exist before break
+        expect(enemy.mesh!.userData['shieldMesh']).toBeTruthy();
+
+        service.damageEnemy(enemy.id, maxShield);
+
+        expect(enemy.shield).toBe(0);
+        expect(enemy.mesh!.userData['shieldMesh']).toBeUndefined();
+      });
+
+      it('should remove shield mesh from enemy mesh children when shield breaks', () => {
+        const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+        const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+        const childrenBefore = enemy.mesh!.children.length;
+
+        service.damageEnemy(enemy.id, maxShield);
+
+        expect(enemy.mesh!.children.length).toBe(childrenBefore - 1);
+      });
+
+      it('should apply full damage to health after shield is already broken', () => {
+        const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+        const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+
+        // Break shield
+        service.damageEnemy(enemy.id, maxShield);
+        const healthAfterShieldBreak = enemy.health;
+
+        // Next hit goes straight to health
+        service.damageEnemy(enemy.id, 10);
+        expect(enemy.health).toBe(healthAfterShieldBreak - 10);
+      });
+
+      it('should kill shielded enemy when health reaches 0 after shield breaks', () => {
+        const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+        const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+        const totalHealth = ENEMY_STATS[EnemyType.SHIELDED].health;
+
+        const result = service.damageEnemy(enemy.id, maxShield + totalHealth);
+
+        expect(result.killed).toBe(true);
+      });
+    });
+
+    describe('Swarm enemy death spawning', () => {
+      it('should spawn mini-enemies when a SWARM enemy dies', () => {
+        const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+        const spawnCount = ENEMY_STATS[EnemyType.SWARM].spawnOnDeath!;
+
+        const result = service.damageEnemy(swarm.id, swarm.health);
+
+        expect(result.killed).toBe(true);
+        expect(result.spawnedEnemies.length).toBe(spawnCount);
+      });
+
+      it('should register spawned mini-enemies in the enemies map', () => {
+        const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+        const spawnCount = ENEMY_STATS[EnemyType.SWARM].spawnOnDeath!;
+        const sizeBeforeDeath = service.getEnemies().size;
+
+        service.damageEnemy(swarm.id, swarm.health);
+
+        // Mini-swarm enemies should be registered (parent still in map until removeEnemy is called)
+        expect(service.getEnemies().size).toBe(sizeBeforeDeath + spawnCount);
+      });
+
+      it('should create mini-swarm meshes for spawned enemies', () => {
+        const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+
+        const result = service.damageEnemy(swarm.id, swarm.health);
+
+        result.spawnedEnemies.forEach(mini => {
+          expect(mini.mesh).toBeTruthy();
+        });
+      });
+
+      it('should set isMiniSwarm=true on spawned mini-enemies', () => {
+        const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+
+        const result = service.damageEnemy(swarm.id, swarm.health);
+
+        result.spawnedEnemies.forEach(mini => {
+          expect(mini.isMiniSwarm).toBe(true);
+        });
+      });
+
+      it('should use MINI_SWARM_STATS for spawned mini-enemies', () => {
+        const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+
+        const result = service.damageEnemy(swarm.id, swarm.health);
+
+        result.spawnedEnemies.forEach(mini => {
+          expect(mini.health).toBe(MINI_SWARM_STATS.health);
+          expect(mini.maxHealth).toBe(MINI_SWARM_STATS.health);
+          expect(mini.speed).toBe(MINI_SWARM_STATS.speed);
+          expect(mini.value).toBe(MINI_SWARM_STATS.value);
+        });
+      });
+
+      it('mini-swarm enemies should NOT spawn more enemies on death (no recursion)', () => {
+        const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+        const killResult = service.damageEnemy(swarm.id, swarm.health);
+        const mini = killResult.spawnedEnemies[0];
+
+        // Killing a mini-swarm should not spawn further enemies
+        const miniKillResult = service.damageEnemy(mini.id, mini.health);
+
+        expect(miniKillResult.killed).toBe(true);
+        expect(miniKillResult.spawnedEnemies.length).toBe(0);
+      });
+
+      it('should not spawn mini-enemies when SWARM enemy is damaged but not killed', () => {
+        const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+
+        const result = service.damageEnemy(swarm.id, 1);
+
+        expect(result.killed).toBe(false);
+        expect(result.spawnedEnemies.length).toBe(0);
+      });
+
+      it('spawned mini-enemies should start at the parent path index position', () => {
+        const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+        // Advance swarm along path
+        swarm.pathIndex = 3;
+
+        const result = service.damageEnemy(swarm.id, swarm.health);
+
+        result.spawnedEnemies.forEach(mini => {
+          // Mini path starts at parent's pathIndex node (pathIndex 0 = parent's node 3)
+          expect(mini.path[0]).toBe(swarm.path[3]);
+        });
+      });
+    });
+
+    describe('BASIC enemy returns empty spawnedEnemies', () => {
+      it('should return empty spawnedEnemies for non-swarm kill', () => {
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+        const result = service.damageEnemy(enemy.id, enemy.health);
+
+        expect(result.killed).toBe(true);
+        expect(result.spawnedEnemies.length).toBe(0);
+      });
     });
   });
 
@@ -622,6 +831,65 @@ describe('EnemyService', () => {
       const reachedExit = service.updateEnemies(0.1);
 
       expect(reachedExit).not.toContain(enemy.id);
+    });
+  });
+
+  describe('cleanup()', () => {
+    it('should remove all enemies from the map', () => {
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+      service.spawnEnemy(EnemyType.HEAVY, mockScene);
+
+      service.cleanup(mockScene);
+
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('should remove all enemy meshes from the scene', () => {
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+      const initialCount = mockScene.children.length;
+      expect(initialCount).toBe(2);
+
+      service.cleanup(mockScene);
+
+      expect(mockScene.children.length).toBe(0);
+    });
+
+    it('should dispose geometries and materials for all enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const geometry = enemy.mesh!.geometry;
+      const material = enemy.mesh!.material as THREE.Material;
+
+      spyOn(geometry, 'dispose');
+      spyOn(material, 'dispose');
+
+      service.cleanup(mockScene);
+
+      expect(geometry.dispose).toHaveBeenCalled();
+      expect(material.dispose).toHaveBeenCalled();
+    });
+
+    it('should be a no-op when called with no enemies', () => {
+      expect(() => service.cleanup(mockScene)).not.toThrow();
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('should handle SHIELDED enemies and dispose shield meshes', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      expect(enemy.mesh!.userData['shieldMesh']).toBeTruthy();
+
+      expect(() => service.cleanup(mockScene)).not.toThrow();
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('should allow spawning new enemies after cleanup', () => {
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.cleanup(mockScene);
+
+      const newEnemy = service.spawnEnemy(EnemyType.FAST, mockScene);
+      expect(newEnemy).toBeTruthy();
+      expect(service.getEnemies().size).toBe(1);
     });
   });
 

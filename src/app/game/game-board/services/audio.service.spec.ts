@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { AudioService } from './audio.service';
 import { TowerType } from '../models/tower.model';
-import { AUDIO_CONFIG } from '../constants/audio.constants';
+import { AUDIO_CONFIG, SFX_CONFIGS, isSfxSequenceConfig, SfxConfig } from '../constants/audio.constants';
 
 describe('AudioService', () => {
   let service: AudioService;
@@ -214,5 +214,214 @@ describe('AudioService', () => {
         service.playEnemyHit();
       }
     }).not.toThrow();
+  });
+
+  // --- playSfx / playSequence ---
+
+  it('playSfx() should not throw for an unknown key', () => {
+    expect(() => service.playSfx('nonExistentKey')).not.toThrow();
+  });
+
+  it('playSfx() should not throw for chainZap', () => {
+    expect(() => service.playSfx('chainZap')).not.toThrow();
+  });
+
+  it('playSfx() should not throw for mortarExplosion', () => {
+    expect(() => service.playSfx('mortarExplosion')).not.toThrow();
+  });
+
+  it('playSfx() should not throw for slowAura', () => {
+    expect(() => service.playSfx('slowAura')).not.toThrow();
+  });
+
+  it('playSfx() should not throw for waveComplete', () => {
+    expect(() => service.playSfx('waveComplete')).not.toThrow();
+  });
+
+  it('playSfx() should not throw for gameOver', () => {
+    expect(() => service.playSfx('gameOver')).not.toThrow();
+  });
+
+  it('playSfx() should not throw for towerUpgrade sfx key', () => {
+    expect(() => service.playSfx('towerUpgrade')).not.toThrow();
+  });
+
+  it('playSequence() should not throw with an empty notes array', () => {
+    expect(() => service.playSequence([])).not.toThrow();
+  });
+
+  it('playSequence() should not throw with multiple notes', () => {
+    expect(() => service.playSequence([
+      { freq: 440, duration: 0.1 },
+      { freq: 554, duration: 0.1 },
+      { freq: 880, duration: 0.2 },
+    ])).not.toThrow();
+  });
+});
+
+// --- SFX_CONFIGS shape validation ---
+
+describe('SFX_CONFIGS', () => {
+  const SINGLE_TONE_KEYS: string[] = ['chainZap', 'mortarExplosion', 'slowAura', 'gameOver', 'towerUpgrade'];
+  const SEQUENCE_KEYS: string[] = ['waveComplete'];
+  const ALL_KEYS = [...SINGLE_TONE_KEYS, ...SEQUENCE_KEYS];
+
+  it('should contain all required keys', () => {
+    for (const key of ALL_KEYS) {
+      expect(SFX_CONFIGS[key]).toBeDefined(`SFX_CONFIGS missing key: ${key}`);
+    }
+  });
+
+  SINGLE_TONE_KEYS.forEach(key => {
+    describe(`${key}`, () => {
+      it('should have required SfxConfig properties', () => {
+        const cfg = SFX_CONFIGS[key];
+        expect(cfg).toBeDefined();
+        expect(isSfxSequenceConfig(cfg)).toBeFalse();
+        const tone = cfg as SfxConfig;
+        expect(typeof tone.type).toBe('string');
+        expect(typeof tone.frequency).toBe('number');
+        expect(typeof tone.endFrequency).toBe('number');
+        expect(typeof tone.duration).toBe('number');
+        expect(typeof tone.volume).toBe('number');
+      });
+
+      it('should have positive frequency', () => {
+        const tone = SFX_CONFIGS[key] as SfxConfig;
+        expect(tone.frequency).toBeGreaterThan(0);
+      });
+
+      it('should have positive duration', () => {
+        const tone = SFX_CONFIGS[key] as SfxConfig;
+        expect(tone.duration).toBeGreaterThan(0);
+      });
+
+      it('should have volume in (0, 1] range', () => {
+        const tone = SFX_CONFIGS[key] as SfxConfig;
+        expect(tone.volume).toBeGreaterThan(0);
+        expect(tone.volume).toBeLessThanOrEqual(1);
+      });
+    });
+  });
+
+  describe('chainZap', () => {
+    it('should use square oscillator type', () => {
+      const cfg = SFX_CONFIGS['chainZap'] as SfxConfig;
+      expect(cfg.type).toBe('square');
+    });
+
+    it('should have high starting frequency (~880)', () => {
+      const cfg = SFX_CONFIGS['chainZap'] as SfxConfig;
+      expect(cfg.frequency).toBeGreaterThanOrEqual(800);
+    });
+
+    it('should have very short duration (~0.05s)', () => {
+      const cfg = SFX_CONFIGS['chainZap'] as SfxConfig;
+      expect(cfg.duration).toBeLessThanOrEqual(0.1);
+    });
+  });
+
+  describe('mortarExplosion', () => {
+    it('should use sine oscillator type', () => {
+      const cfg = SFX_CONFIGS['mortarExplosion'] as SfxConfig;
+      expect(cfg.type).toBe('sine');
+    });
+
+    it('should have low starting frequency (~80)', () => {
+      const cfg = SFX_CONFIGS['mortarExplosion'] as SfxConfig;
+      expect(cfg.frequency).toBeLessThanOrEqual(100);
+    });
+
+    it('should have medium duration (~0.3s)', () => {
+      const cfg = SFX_CONFIGS['mortarExplosion'] as SfxConfig;
+      expect(cfg.duration).toBeGreaterThanOrEqual(0.2);
+      expect(cfg.duration).toBeLessThanOrEqual(0.5);
+    });
+  });
+
+  describe('slowAura', () => {
+    it('should use sine oscillator type', () => {
+      const cfg = SFX_CONFIGS['slowAura'] as SfxConfig;
+      expect(cfg.type).toBe('sine');
+    });
+
+    it('should have mid frequency (~220)', () => {
+      const cfg = SFX_CONFIGS['slowAura'] as SfxConfig;
+      expect(cfg.frequency).toBeGreaterThanOrEqual(180);
+      expect(cfg.frequency).toBeLessThanOrEqual(280);
+    });
+
+    it('should have low volume', () => {
+      const cfg = SFX_CONFIGS['slowAura'] as SfxConfig;
+      expect(cfg.volume).toBeLessThanOrEqual(0.15);
+    });
+  });
+
+  describe('waveComplete', () => {
+    it('should be a sequence config', () => {
+      const cfg = SFX_CONFIGS['waveComplete'];
+      expect(isSfxSequenceConfig(cfg)).toBeTrue();
+    });
+
+    it('should have at least 3 notes', () => {
+      const cfg = SFX_CONFIGS['waveComplete'];
+      if (isSfxSequenceConfig(cfg)) {
+        expect(cfg.notes.length).toBeGreaterThanOrEqual(3);
+      }
+    });
+
+    it('should have ascending note frequencies', () => {
+      const cfg = SFX_CONFIGS['waveComplete'];
+      if (isSfxSequenceConfig(cfg)) {
+        const freqs = cfg.notes.map(n => n.freq);
+        expect(freqs[freqs.length - 1]).toBeGreaterThan(freqs[0]);
+      }
+    });
+
+    it('should have required properties: type, notes, volume', () => {
+      const cfg = SFX_CONFIGS['waveComplete'];
+      if (isSfxSequenceConfig(cfg)) {
+        expect(typeof cfg.type).toBe('string');
+        expect(Array.isArray(cfg.notes)).toBeTrue();
+        expect(typeof cfg.volume).toBe('number');
+      }
+    });
+  });
+
+  describe('gameOver', () => {
+    it('should use sine oscillator type', () => {
+      const cfg = SFX_CONFIGS['gameOver'] as SfxConfig;
+      expect(cfg.type).toBe('sine');
+    });
+
+    it('should start at 440Hz and descend', () => {
+      const cfg = SFX_CONFIGS['gameOver'] as SfxConfig;
+      expect(cfg.frequency).toBe(440);
+      expect(cfg.endFrequency).toBeLessThan(cfg.frequency);
+    });
+
+    it('should have duration around 0.5s', () => {
+      const cfg = SFX_CONFIGS['gameOver'] as SfxConfig;
+      expect(cfg.duration).toBeGreaterThanOrEqual(0.3);
+      expect(cfg.duration).toBeLessThanOrEqual(0.8);
+    });
+  });
+
+  describe('towerUpgrade (sfx)', () => {
+    it('should use square oscillator type', () => {
+      const cfg = SFX_CONFIGS['towerUpgrade'] as SfxConfig;
+      expect(cfg.type).toBe('square');
+    });
+
+    it('should ascend from ~300 to ~600Hz', () => {
+      const cfg = SFX_CONFIGS['towerUpgrade'] as SfxConfig;
+      expect(cfg.frequency).toBeGreaterThanOrEqual(250);
+      expect(cfg.endFrequency).toBeGreaterThan(cfg.frequency);
+    });
+
+    it('should have short duration (~0.15s)', () => {
+      const cfg = SFX_CONFIGS['towerUpgrade'] as SfxConfig;
+      expect(cfg.duration).toBeLessThanOrEqual(0.25);
+    });
   });
 });

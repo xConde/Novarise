@@ -36,12 +36,37 @@
   --nav-bg-a60: rgba(10, 5, 21, 0.6);
   --nav-bg-a90: rgba(10, 5, 21, 0.9);
 
+  /* Action button colors */
+  --action-success: #50ff88;
+  --action-success-bg: rgba(0, 180, 80, 0.25);
+  --action-success-border: rgba(0, 220, 100, 0.5);
+  --action-danger: #ff6666;
+  --action-danger-bg: rgba(180, 20, 20, 0.2);
+  --action-danger-border: rgba(220, 50, 50, 0.4);
+
   /* Game-specific colors */
   --game-primary: #444444;
   --game-secondary: #666666;
   --game-accent-orange: #FF9A66;
   --game-success: #00AA00;
   --game-error: #AA0000;
+
+  /* Enemy type colors */
+  --enemy-color-basic: #ff4444;
+  --enemy-color-fast: #ffff00;
+  --enemy-color-heavy: #4444ff;
+  --enemy-color-flying: #44ffff;
+  --enemy-color-shield: #4488ff;
+  --enemy-color-boss: #ff00ff;
+  --enemy-color-swarm: #44ff44;
+
+  /* Tower type colors */
+  --tower-color-basic: #ff6600;
+  --tower-color-sniper: #9900ff;
+  --tower-color-splash: #00ff00;
+  --tower-color-slow: #4488ff;
+  --tower-color-chain: #ffdd00;
+  --tower-color-mortar: #664422;
 
   /* Rainbow effect colors */
   --rainbow-red: #FF0000;

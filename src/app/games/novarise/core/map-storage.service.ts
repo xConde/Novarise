@@ -52,7 +52,11 @@ export class MapStorageService {
     };
 
     // Save the map data
-    localStorage.setItem(this.STORAGE_PREFIX + mapId, JSON.stringify(savedMap));
+    try {
+      localStorage.setItem(this.STORAGE_PREFIX + mapId, JSON.stringify(savedMap));
+    } catch (e) {
+      console.error('Failed to save map — localStorage may be full or unavailable:', e);
+    }
 
     // Update metadata index
     this.updateMetadataIndex(metadata);
@@ -132,7 +136,11 @@ export class MapStorageService {
     // Remove from metadata index
     const maps = this.getAllMaps();
     const filtered = maps.filter(m => m.id !== id);
-    localStorage.setItem(this.METADATA_KEY, JSON.stringify(filtered));
+    try {
+      localStorage.setItem(this.METADATA_KEY, JSON.stringify(filtered));
+    } catch (e) {
+      console.error('Failed to update metadata index:', e);
+    }
 
     // Clear current map if it was this one
     if (this.getCurrentMapId() === id) {
@@ -356,7 +364,11 @@ export class MapStorageService {
   }
 
   private setCurrentMapId(id: string): void {
-    localStorage.setItem(this.CURRENT_MAP_KEY, id);
+    try {
+      localStorage.setItem(this.CURRENT_MAP_KEY, id);
+    } catch (e) {
+      console.error('Failed to set current map ID:', e);
+    }
   }
 
   private updateMetadataIndex(metadata: MapMetadata): void {
@@ -374,6 +386,10 @@ export class MapStorageService {
     // Sort by updated date (most recent first)
     maps.sort((a, b) => b.updatedAt - a.updatedAt);
 
-    localStorage.setItem(this.METADATA_KEY, JSON.stringify(maps));
+    try {
+      localStorage.setItem(this.METADATA_KEY, JSON.stringify(maps));
+    } catch (e) {
+      console.error('Failed to update metadata index:', e);
+    }
   }
 }
