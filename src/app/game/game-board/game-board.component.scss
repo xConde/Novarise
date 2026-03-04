@@ -243,13 +243,13 @@
       border-radius: 50%;
       flex-shrink: 0;
 
-      &[data-type='basic']    { background: var(--enemy-color-basic);   box-shadow: 0 0 4px rgba(255, 68, 68, 0.6); }
-      &[data-type='fast']     { background: var(--enemy-color-fast);    box-shadow: 0 0 4px rgba(255, 255, 0, 0.6); }
-      &[data-type='heavy']    { background: var(--enemy-color-heavy);   box-shadow: 0 0 4px rgba(68, 68, 255, 0.6); }
-      &[data-type='swift']    { background: var(--enemy-color-flying);  box-shadow: 0 0 4px rgba(68, 255, 255, 0.6); }
-      &[data-type='boss']     { background: var(--enemy-color-boss);    box-shadow: 0 0 4px rgba(255, 0, 255, 0.7); }
-      &[data-type='shielded'] { background: var(--enemy-color-shield);  box-shadow: 0 0 4px rgba(68, 136, 255, 0.6); }
-      &[data-type='swarm']    { background: var(--enemy-color-swarm);   box-shadow: 0 0 4px rgba(68, 255, 68, 0.6); }
+      &[data-type='basic']    { background: var(--enemy-color-basic);   box-shadow: 0 0 4px var(--enemy-glow-basic); }
+      &[data-type='fast']     { background: var(--enemy-color-fast);    box-shadow: 0 0 4px var(--enemy-glow-fast); }
+      &[data-type='heavy']    { background: var(--enemy-color-heavy);   box-shadow: 0 0 4px var(--enemy-glow-heavy); }
+      &[data-type='swift']    { background: var(--enemy-color-flying);  box-shadow: 0 0 4px var(--enemy-glow-flying); }
+      &[data-type='boss']     { background: var(--enemy-color-boss);    box-shadow: 0 0 4px var(--enemy-glow-boss); }
+      &[data-type='shielded'] { background: var(--enemy-color-shield);  box-shadow: 0 0 4px var(--enemy-glow-shielded); }
+      &[data-type='swarm']    { background: var(--enemy-color-swarm);   box-shadow: 0 0 4px var(--enemy-glow-swarm); }
     }
 
     .enemy-count {
@@ -419,7 +419,7 @@
             font-weight: 600;
 
             &.multiplier {
-              color: #88aaff;
+              color: var(--score-multiplier);
             }
 
             &.final-value {
@@ -885,7 +885,7 @@
           height: 1.25rem;
           background: var(--tower-color-basic);
           border-radius: 50%;
-          box-shadow: 0 0 var(--spacing-xs) rgba(255, 102, 0, 0.5);
+          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-basic);
         }
 
         &.sniper::before {
@@ -896,7 +896,7 @@
           border-right: 0.75rem solid transparent;
           border-bottom: 1.5rem solid var(--tower-color-sniper);
           // CSS border triangles don't support box-shadow — use filter instead
-          filter: drop-shadow(0 0 4px rgba(153, 0, 255, 0.5));
+          filter: drop-shadow(0 0 4px var(--tower-glow-sniper));
         }
 
         &.splash::before {
@@ -904,7 +904,7 @@
           width: 1.25rem;
           height: 1.25rem;
           background: var(--tower-color-splash);
-          box-shadow: 0 0 var(--spacing-xs) rgba(0, 255, 0, 0.5);
+          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-splash);
         }
 
         &.slow::before {
@@ -913,7 +913,7 @@
           height: 0.9rem;
           background: var(--tower-color-slow);
           transform: rotate(45deg);
-          box-shadow: 0 0 var(--spacing-xs) rgba(68, 136, 255, 0.6);
+          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-slow);
         }
 
         &.chain::before {
@@ -922,7 +922,7 @@
           height: 1.5rem;
           background: var(--tower-color-chain);
           border-radius: 0.125rem;
-          box-shadow: 0 0 var(--spacing-xs) rgba(255, 221, 0, 0.7);
+          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-chain);
         }
 
         &.mortar::before {
@@ -931,7 +931,7 @@
           height: 0.75rem;
           background: var(--tower-color-mortar);
           border-radius: 0.1rem;
-          box-shadow: 0 0 var(--spacing-xs) rgba(255, 100, 34, 0.4);
+          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-mortar);
         }
       }
 

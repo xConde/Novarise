@@ -69,6 +69,15 @@
   --enemy-color-boss: #ff00ff;
   --enemy-color-swarm: #44ff44;
 
+  /* Enemy glow colors */
+  --enemy-glow-basic: rgba(255, 68, 68, 0.6);
+  --enemy-glow-fast: rgba(255, 255, 0, 0.6);
+  --enemy-glow-heavy: rgba(68, 68, 255, 0.6);
+  --enemy-glow-flying: rgba(68, 255, 255, 0.6);
+  --enemy-glow-boss: rgba(255, 0, 255, 0.7);
+  --enemy-glow-shielded: rgba(68, 136, 255, 0.6);
+  --enemy-glow-swarm: rgba(68, 255, 68, 0.6);
+
   /* Tower type colors */
   --tower-color-basic: #ff6600;
   --tower-color-sniper: #9900ff;
@@ -76,6 +85,18 @@
   --tower-color-slow: #4488ff;
   --tower-color-chain: #ffdd00;
   --tower-color-mortar: #664422;
+
+  /* Tower glow colors */
+  --tower-glow-basic: rgba(255, 102, 0, 0.5);
+  --tower-glow-sniper: rgba(153, 0, 255, 0.5);
+  --tower-glow-splash: rgba(0, 255, 0, 0.5);
+  --tower-glow-slow: rgba(68, 136, 255, 0.6);
+  --tower-glow-chain: rgba(255, 221, 0, 0.7);
+  --tower-glow-mortar: rgba(255, 100, 34, 0.4);
+
+  /* Misc UI colors */
+  --score-multiplier: #88aaff;
+  --text-disabled: #6a6a7a;
 
   /* Rainbow effect colors */
   --rainbow-red: #FF0000;

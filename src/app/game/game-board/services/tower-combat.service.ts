@@ -437,7 +437,7 @@ export class TowerCombatService {
     towerWorldZ: number,
     scene: THREE.Scene
   ): void {
-    const geometry = new THREE.SphereGeometry(PROJECTILE_CONFIG.radius * 1.5, PROJECTILE_CONFIG.segments, PROJECTILE_CONFIG.segments);
+    const geometry = new THREE.SphereGeometry(PROJECTILE_CONFIG.radius * PROJECTILE_CONFIG.mortarRadiusMultiplier, PROJECTILE_CONFIG.segments, PROJECTILE_CONFIG.segments);
     const material = new THREE.MeshBasicMaterial({
       color: stats.color,
       transparent: true,

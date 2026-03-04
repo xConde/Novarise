@@ -4,7 +4,7 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background-color: #000;
+  background-color: var(--bg-color);
   border: var(--border-width-thick) solid var(--theme-purple);
   padding: var(--spacing-sm);
   box-shadow: 0 8px 16px var(--theme-purple-glow);
