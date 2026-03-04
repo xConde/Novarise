@@ -12,3 +12,9 @@ export const MORTAR_VISUAL_CONFIG = {
 } as const;
 
 export const GROUND_EFFECT_Y = 0.05;
+
+/** Visual tint applied to enemy meshes while slowed or frozen. */
+export const SLOW_VISUAL_CONFIG = {
+  tintColor: 0x4488ff,
+  tintEmissive: 0x2244aa,
+} as const;

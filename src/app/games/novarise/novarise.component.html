@@ -38,6 +38,20 @@
       (openMapManagerClick)="openMapManager()">
     </app-edit-controls>
 
+    <!-- Validation status bar -->
+    <div class="editor-validation-bar"
+         [class.valid]="canPlayMap"
+         [class.warning]="hasSpawnAndExit && !isPathValid"
+         [class.error]="!canPlayMap && !(hasSpawnAndExit && !isPathValid)">
+      <span class="validation-icon" *ngIf="canPlayMap">&#10003;</span>
+      <span class="validation-icon" *ngIf="!canPlayMap">&#9888;</span>
+      <span class="validation-text" *ngIf="!isTerrainReady">Loading...</span>
+      <span class="validation-text" *ngIf="isTerrainReady && !hasSpawnPoint">Place a spawn point</span>
+      <span class="validation-text" *ngIf="isTerrainReady && hasSpawnPoint && !hasExitPoint">Place an exit point</span>
+      <span class="validation-text" *ngIf="isTerrainReady && hasSpawnAndExit && !isPathValid">No valid path from spawn to exit</span>
+      <span class="validation-text" *ngIf="canPlayMap">Map ready to play</span>
+    </div>
+
     <!-- Navigation links -->
     <div class="editor-nav-links">
       <button class="nav-btn" (click)="goToCampaign()">Campaign</button>

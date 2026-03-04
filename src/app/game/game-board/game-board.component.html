@@ -196,6 +196,36 @@
 
       <p class="final-score" *ngIf="!scoreBreakdown">Score: {{ gameState.score }}</p>
 
+      <!-- Detailed game stats -->
+      <div class="game-stats-detail" *ngIf="gameStats">
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-number">{{ gameStats.towersBuilt || 0 }}</span>
+            <span class="stat-desc">Towers Built</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-number">{{ totalEnemiesKilled }}</span>
+            <span class="stat-desc">Enemies Killed</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-number">{{ gameStats.totalDamageDealt || 0 }}</span>
+            <span class="stat-desc">Damage Dealt</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-number">{{ gameStats.totalGoldEarned || 0 }}</span>
+            <span class="stat-desc">Gold Earned</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-number">{{ gameStats.shotsFired || 0 }}</span>
+            <span class="stat-desc">Shots Fired</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-number">{{ gameStats.enemiesLeaked || 0 }}</span>
+            <span class="stat-desc">Leaked</span>
+          </div>
+        </div>
+      </div>
+
       <div class="overlay-actions">
         <button class="restart-btn" (click)="restartGame()">Play Again</button>
         <button class="edit-map-btn" (click)="goToEditor()">Edit Map</button>

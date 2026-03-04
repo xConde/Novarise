@@ -1289,6 +1289,175 @@ describe('TowerCombatService — ability system', () => {
     });
   });
 
+  // --- Slow/Freeze Visual Tint ---
+
+  describe('slow visual tint', () => {
+    function createEnemyWithMesh(id: string, x: number, z: number, health = 100): Enemy {
+      const geo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+      const mat = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+      const mesh = new THREE.Mesh(geo, mat);
+      const enemy = createEnemy(id, x, z, health);
+      enemy.mesh = mesh;
+      return enemy;
+    }
+
+    afterEach(() => {
+      // Dispose any Three.js objects created in tests
+      mockScene.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          if (Array.isArray(child.material)) {
+            child.material.forEach(m => m.dispose());
+          } else {
+            (child.material as THREE.Material).dispose();
+          }
+        }
+      });
+    });
+
+    it('should tint enemy mesh blue when slow is first applied', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const enemy = createEnemyWithMesh('e1', TOWER_WORLD_X, TOWER_WORLD_Z);
+      enemyMap.set('e1', enemy);
+
+      service.update(0.6, mockScene);
+
+      const mat = enemy.mesh!.material as THREE.MeshLambertMaterial;
+      expect(mat.color.getHex()).toBe(0x4488ff);
+      expect(mat.emissive.getHex()).toBe(0x2244aa);
+    });
+
+    it('should store the original color in userData before tinting', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const enemy = createEnemyWithMesh('e1', TOWER_WORLD_X, TOWER_WORLD_Z);
+      enemyMap.set('e1', enemy);
+
+      service.update(0.6, mockScene);
+
+      expect(enemy.mesh!.userData['originalColor']).toBe(0xff0000);
+    });
+
+    it('should not re-store color on second aura pulse (refresh only extends duration)', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const enemy = createEnemyWithMesh('e1', TOWER_WORLD_X, TOWER_WORLD_Z);
+      enemyMap.set('e1', enemy);
+
+      service.update(0.6, mockScene); // first pulse — stores 0xff0000
+      // Force a second pulse by advancing past fireRate again
+      service.update(0.6, mockScene); // second pulse — refresh branch, must NOT overwrite stored color
+
+      // Stored color should still be the original red, not the blue tint
+      expect(enemy.mesh!.userData['originalColor']).toBe(0xff0000);
+    });
+
+    it('should restore original color when slow expires', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const enemy = createEnemyWithMesh('e1', TOWER_WORLD_X, TOWER_WORLD_Z);
+      enemyMap.set('e1', enemy);
+
+      service.update(0.6, mockScene); // apply slow
+
+      // Move enemy out of range so aura does not re-apply
+      enemy.position.x = TOWER_WORLD_X + 10;
+
+      // Advance past slowDuration (2s) — slow expires
+      service.update(2.5, mockScene);
+
+      const mat = enemy.mesh!.material as THREE.MeshLambertMaterial;
+      expect(mat.color.getHex()).toBe(0xff0000);
+      expect(enemy.mesh!.userData['originalColor']).toBeUndefined();
+    });
+
+    it('should restore color on cleanup', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const enemy = createEnemyWithMesh('e1', TOWER_WORLD_X, TOWER_WORLD_Z);
+      enemyMap.set('e1', enemy);
+
+      service.update(0.6, mockScene);
+      service.cleanup(mockScene);
+
+      const mat = enemy.mesh!.material as THREE.MeshLambertMaterial;
+      expect(mat.color.getHex()).toBe(0xff0000);
+    });
+
+    it('should not throw when enemy has no mesh during slow application', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z); // no mesh
+      enemyMap.set('e1', enemy);
+
+      expect(() => service.update(0.6, mockScene)).not.toThrow();
+    });
+  });
+
+  describe('freeze visual tint', () => {
+    function createEnemyWithMesh(id: string, x: number, z: number, health = 100): Enemy {
+      const geo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+      const mat = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
+      const mesh = new THREE.Mesh(geo, mat);
+      const enemy = createEnemy(id, x, z, health);
+      enemy.mesh = mesh;
+      return enemy;
+    }
+
+    afterEach(() => {
+      mockScene.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          if (Array.isArray(child.material)) {
+            child.material.forEach(m => m.dispose());
+          } else {
+            (child.material as THREE.Material).dispose();
+          }
+        }
+      });
+    });
+
+    it('should tint enemy mesh blue when freeze ability is activated', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      const enemy = createEnemyWithMesh('e1', TOWER_WORLD_X, TOWER_WORLD_Z);
+      enemyMap.set('e1', enemy);
+
+      service.activateAbility(key);
+
+      const mat = enemy.mesh!.material as THREE.MeshLambertMaterial;
+      expect(mat.color.getHex()).toBe(0x4488ff);
+      expect(mat.emissive.getHex()).toBe(0x2244aa);
+    });
+
+    it('should store original color in userData when freeze is applied', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      const enemy = createEnemyWithMesh('e1', TOWER_WORLD_X, TOWER_WORLD_Z);
+      enemyMap.set('e1', enemy);
+
+      service.activateAbility(key);
+
+      expect(enemy.mesh!.userData['originalColor']).toBe(0x00ff00);
+    });
+
+    it('should restore color when freeze expires via expireFreezeEffect', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      const enemy = createEnemyWithMesh('e1', TOWER_WORLD_X, TOWER_WORLD_Z);
+      enemyMap.set('e1', enemy);
+
+      service.activateAbility(key); // sets abilityActiveEnd = freezeDuration
+      const freezeDuration = TOWER_ABILITIES[TowerType.SLOW].duration;
+
+      // Move enemy far out of range before advancing time, so the slow aura
+      // does not re-apply after the freeze expires (SLOW range is 2.5)
+      enemy.position.x = TOWER_WORLD_X + 10;
+
+      // Advance past freeze duration — update() calls expireFreezeEffect
+      service.update(freezeDuration + 0.1, mockScene);
+
+      const mat = enemy.mesh!.material as THREE.MeshLambertMaterial;
+      expect(mat.color.getHex()).toBe(0x00ff00);
+      expect(enemy.mesh!.userData['originalColor']).toBeUndefined();
+    });
+  });
+
   // --- Targeting Priority ---
 
   describe('targetingPriority', () => {

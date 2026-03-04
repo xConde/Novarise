@@ -126,6 +126,18 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (!this.terrainGrid) return false;
     return this.terrainGrid.getSpawnPoint() !== null && this.terrainGrid.getExitPoint() !== null;
   }
+  /** Whether a spawn point has been placed. */
+  public get hasSpawnPoint(): boolean {
+    return this.terrainGrid?.getSpawnPoint() != null;
+  }
+  /** Whether an exit point has been placed. */
+  public get hasExitPoint(): boolean {
+    return this.terrainGrid?.getExitPoint() != null;
+  }
+  /** Whether the terrain grid has been initialized. */
+  public get isTerrainReady(): boolean {
+    return this.terrainGrid != null;
+  }
 
   // Title display
   public title = 'Novarise';

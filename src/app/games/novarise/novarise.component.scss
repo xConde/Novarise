@@ -93,6 +93,56 @@
   }
 }
 
+// Validation status bar
+.editor-validation-bar {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.4rem 1.2rem;
+  border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 20;
+  backdrop-filter: blur(4px);
+  transition: background var(--transition-fast) ease, color var(--transition-fast) ease;
+  white-space: nowrap;
+  pointer-events: none;
+
+  &.valid {
+    background: var(--action-green-bg);
+    border: 1px solid var(--action-green-border);
+    border-bottom: none;
+    color: var(--action-green);
+  }
+
+  &.warning {
+    background: var(--action-yellow-bg);
+    border: 1px solid var(--action-yellow-border);
+    border-bottom: none;
+    color: var(--action-yellow);
+  }
+
+  &.error {
+    background: var(--action-danger-bg);
+    border: 1px solid var(--action-danger-border);
+    border-bottom: none;
+    color: var(--action-danger);
+  }
+
+  .validation-icon {
+    font-size: 0.9rem;
+    line-height: 1;
+  }
+
+  .validation-text {
+    font-family: 'Orbitron', sans-serif;
+    letter-spacing: 0.05em;
+  }
+}
+
 // Editor navigation links (Campaign / My Maps)
 .editor-nav-links {
   position: absolute;

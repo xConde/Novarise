@@ -34,6 +34,12 @@ export const RANGE_PREVIEW_CONFIG = {
   allRangesOpacityScale: 0.5,
 };
 
+export const HOVER_RANGE_PREVIEW_CONFIG = {
+  /** Opacity of the hover range ring — more transparent than the placed-tower ring. */
+  opacity: 0.15,
+  yPosition: 0.02,
+};
+
 export const TILE_EMISSIVE = {
   base: 0.15,
   wall: 0.1,

@@ -17,7 +17,7 @@ import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
-import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y } from '../constants/combat.constants';
+import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y, SLOW_VISUAL_CONFIG } from '../constants/combat.constants';
 
 interface Projectile {
   id: string;
@@ -366,6 +366,14 @@ export class TowerCombatService {
           originalSpeed,
           expiresAt: this.gameTime + slowDuration
         });
+        // Visual: tint mesh blue to indicate slow
+        if (enemy.mesh) {
+          const mat = enemy.mesh.material as THREE.MeshLambertMaterial;
+          enemy.mesh.userData['originalColor'] = mat.color.getHex();
+          enemy.mesh.userData['originalEmissive'] = mat.emissive.getHex();
+          mat.color.setHex(SLOW_VISUAL_CONFIG.tintColor);
+          mat.emissive.setHex(SLOW_VISUAL_CONFIG.tintEmissive);
+        }
       }
     });
   }
@@ -395,6 +403,14 @@ export class TowerCombatService {
           originalSpeed,
           expiresAt: this.gameTime + freezeDuration,
         });
+        // Visual: tint mesh blue to indicate freeze
+        if (enemy.mesh) {
+          const mat = enemy.mesh.material as THREE.MeshLambertMaterial;
+          enemy.mesh.userData['originalColor'] = mat.color.getHex();
+          enemy.mesh.userData['originalEmissive'] = mat.emissive.getHex();
+          mat.color.setHex(SLOW_VISUAL_CONFIG.tintColor);
+          mat.emissive.setHex(SLOW_VISUAL_CONFIG.tintEmissive);
+        }
       }
     });
   }
@@ -413,6 +429,16 @@ export class TowerCombatService {
       const effect = this.slowEffects.get(enemy.id);
       if (effect && enemy.speed === ABILITY_CONFIG.freezeSpeedFactor) {
         enemy.speed = effect.originalSpeed;
+        // Visual: restore original mesh color
+        if (enemy.mesh) {
+          const mat = enemy.mesh.material as THREE.MeshLambertMaterial;
+          const origColor = enemy.mesh.userData['originalColor'];
+          const origEmissive = enemy.mesh.userData['originalEmissive'];
+          if (origColor !== undefined) mat.color.setHex(origColor);
+          if (origEmissive !== undefined) mat.emissive.setHex(origEmissive);
+          delete enemy.mesh.userData['originalColor'];
+          delete enemy.mesh.userData['originalEmissive'];
+        }
         this.slowEffects.delete(enemy.id);
       }
     });
@@ -424,6 +450,16 @@ export class TowerCombatService {
         const enemy = this.enemyService.getEnemies().get(enemyId);
         if (enemy && enemy.health > 0) {
           enemy.speed = effect.originalSpeed;
+          // Visual: restore original mesh color
+          if (enemy.mesh) {
+            const mat = enemy.mesh.material as THREE.MeshLambertMaterial;
+            const origColor = enemy.mesh.userData['originalColor'];
+            const origEmissive = enemy.mesh.userData['originalEmissive'];
+            if (origColor !== undefined) mat.color.setHex(origColor);
+            if (origEmissive !== undefined) mat.emissive.setHex(origEmissive);
+            delete enemy.mesh.userData['originalColor'];
+            delete enemy.mesh.userData['originalEmissive'];
+          }
         }
         this.slowEffects.delete(enemyId);
       }
@@ -791,6 +827,15 @@ export class TowerCombatService {
       const enemy = this.enemyService.getEnemies().get(effect.enemyId);
       if (enemy && enemy.health > 0) {
         enemy.speed = effect.originalSpeed;
+        if (enemy.mesh) {
+          const mat = enemy.mesh.material as THREE.MeshLambertMaterial;
+          const origColor = enemy.mesh.userData['originalColor'];
+          const origEmissive = enemy.mesh.userData['originalEmissive'];
+          if (origColor !== undefined) mat.color.setHex(origColor);
+          if (origEmissive !== undefined) mat.emissive.setHex(origEmissive);
+          delete enemy.mesh.userData['originalColor'];
+          delete enemy.mesh.userData['originalEmissive'];
+        }
       }
     }
     this.slowEffects.clear();
@@ -820,6 +865,15 @@ export class TowerCombatService {
       const enemy = this.enemyService.getEnemies().get(effect.enemyId);
       if (enemy && enemy.health > 0) {
         enemy.speed = effect.originalSpeed;
+        if (enemy.mesh) {
+          const mat = enemy.mesh.material as THREE.MeshLambertMaterial;
+          const origColor = enemy.mesh.userData['originalColor'];
+          const origEmissive = enemy.mesh.userData['originalEmissive'];
+          if (origColor !== undefined) mat.color.setHex(origColor);
+          if (origEmissive !== undefined) mat.emissive.setHex(origEmissive);
+          delete enemy.mesh.userData['originalColor'];
+          delete enemy.mesh.userData['originalEmissive'];
+        }
       }
     }
     this.slowEffects.clear();

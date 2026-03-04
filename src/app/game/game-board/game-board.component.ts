@@ -34,7 +34,7 @@ import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants
 import { AMBIENT_LIGHT, DIRECTIONAL_LIGHT, UNDER_LIGHT, POINT_LIGHTS } from './constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
-import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
+import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, HOVER_RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG } from './constants/touch.constants';
 import { ENEMY_STATS } from './models/enemy.model';
@@ -86,6 +86,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private towerMeshes: Map<string, THREE.Group> = new Map();
   private gridLines: THREE.Group | null = null;
   private rangePreviewMesh: THREE.Mesh | null = null;
+  private hoverRangeMesh: THREE.Mesh | null = null;
+  /** Tracks which tower type the hover ring geometry was built for; triggers rebuild on change. */
+  private hoverRangeMeshTowerType: TowerType | null = null;
   selectedTowerType: TowerType = TowerType.BASIC;
 
   // Tower info panel state (exposed to template)
@@ -169,6 +172,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Game stats exposed to score screen
   get gameStats() { return this.gameStatsService.getStats(); }
+
+  get totalEnemiesKilled(): number {
+    const stats = this.gameStatsService.getStats();
+    return Object.values(stats.killsByTowerType).reduce((sum, n) => sum + n, 0);
+  }
 
   // Camera pan state (tracks which keys are currently held)
   private panKeys = new Set<string>();
@@ -499,6 +507,78 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  /**
+   * Shows a semi-transparent range ring on tiles where a tower could be placed,
+   * while the player is hovering over them.  The ring is hidden when the tile is
+   * invalid, when a tower info panel is already open, or when the game is paused
+   * / in a terminal phase.
+   */
+  private updateHoverRangePreview(row: number, col: number): void {
+    // Only show during active game phases (not paused, not terminal)
+    const phase = this.gameState.phase;
+    const isTerminal = phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT;
+    if (isTerminal || this.gameState.isPaused) {
+      this.removeHoverRangePreview();
+      return;
+    }
+
+    // Suppress if a placed-tower info panel is already showing its own ring
+    if (this.selectedTowerInfo) {
+      this.removeHoverRangePreview();
+      return;
+    }
+
+    // Delegate validity check to the service — covers bounds, tile type, occupied
+    if (!this.gameBoardService.canPlaceTower(row, col)) {
+      this.removeHoverRangePreview();
+      return;
+    }
+
+    const boardWidth = this.gameBoardService.getBoardWidth();
+    const boardHeight = this.gameBoardService.getBoardHeight();
+    const tileSize = this.gameBoardService.getTileSize();
+    const worldX = (col - boardWidth / 2) * tileSize;
+    const worldZ = (row - boardHeight / 2) * tileSize;
+
+    const config = TOWER_CONFIGS[this.selectedTowerType];
+    const range = getEffectiveStats(this.selectedTowerType, 1).range;
+
+    // Rebuild geometry when tower type changes (different range radius)
+    if (this.hoverRangeMesh && this.hoverRangeMeshTowerType !== this.selectedTowerType) {
+      this.removeHoverRangePreview();
+    }
+
+    if (!this.hoverRangeMesh) {
+      const geometry = new THREE.RingGeometry(
+        range - RANGE_PREVIEW_CONFIG.ringThickness,
+        range,
+        RANGE_PREVIEW_CONFIG.segments
+      );
+      const material = new THREE.MeshBasicMaterial({
+        color: config.color,
+        transparent: true,
+        opacity: HOVER_RANGE_PREVIEW_CONFIG.opacity,
+        side: THREE.DoubleSide,
+      });
+      this.hoverRangeMesh = new THREE.Mesh(geometry, material);
+      this.hoverRangeMesh.rotation.x = -Math.PI / 2;
+      this.scene.add(this.hoverRangeMesh);
+      this.hoverRangeMeshTowerType = this.selectedTowerType;
+    }
+
+    this.hoverRangeMesh.position.set(worldX, HOVER_RANGE_PREVIEW_CONFIG.yPosition, worldZ);
+  }
+
+  private removeHoverRangePreview(): void {
+    if (this.hoverRangeMesh) {
+      this.scene.remove(this.hoverRangeMesh);
+      this.hoverRangeMesh.geometry.dispose();
+      disposeMaterial(this.hoverRangeMesh.material);
+      this.hoverRangeMesh = null;
+      this.hoverRangeMeshTowerType = null;
+    }
+  }
+
   goToEditor(): void {
     if (this.gameState.phase === GamePhase.COMBAT && !confirm('Leave the game? Progress will be lost.')) {
       return;
@@ -584,8 +664,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Clean up minimap
     this.minimapService.cleanup();
 
-    // Clean up range preview and range toggle rings
+    // Clean up range preview, hover range preview, and range toggle rings
     this.removeRangePreview();
+    this.removeHoverRangePreview();
     for (const mesh of this.rangeRingMeshes) {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
@@ -950,9 +1031,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           material.emissiveIntensity = TILE_EMISSIVE.hover;
           canvas.style.cursor = 'pointer';
         }
+        const row = (intersects[0].object as THREE.Mesh).userData['row'];
+        const col = (intersects[0].object as THREE.Mesh).userData['col'];
+        this.updateHoverRangePreview(row, col);
       } else {
         this.hoveredTile = null;
         canvas.style.cursor = 'default';
+        this.removeHoverRangePreview();
       }
     };
 
