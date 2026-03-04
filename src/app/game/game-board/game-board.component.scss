@@ -158,7 +158,7 @@
         color: var(--text-color);
 
         &.lives {
-          color: #ff4444;
+          color: var(--game-health);
 
           &.critical {
             animation: pulse-critical 0.5s ease-in-out infinite alternate;
@@ -166,7 +166,7 @@
         }
 
         &.gold {
-          color: #ffd700;
+          color: var(--game-gold);
         }
       }
     }
@@ -189,7 +189,7 @@
 
     .wave-enemy-count {
       font-weight: 700;
-      color: #ff8888;
+      color: var(--game-wave-text);
     }
   }
 
@@ -330,7 +330,7 @@
         border: var(--border-width-medium) solid rgba(0, 255, 0, 0.4);
         box-shadow: 0 0 2.5rem rgba(0, 255, 0, 0.15);
 
-        h2 { color: #00ff88; }
+        h2 { color: var(--game-victory); }
       }
 
       &.defeat {
@@ -338,7 +338,7 @@
         border: var(--border-width-medium) solid rgba(255, 0, 0, 0.4);
         box-shadow: 0 0 2.5rem rgba(255, 0, 0, 0.15);
 
-        h2 { color: #ff4444; }
+        h2 { color: var(--game-defeat); }
       }
 
       h2 {
@@ -352,7 +352,7 @@
       .final-score {
         font-family: "Orbitron", sans-serif;
         font-size: var(--font-size-large);
-        color: #ffd700;
+        color: var(--game-gold);
         margin-bottom: var(--spacing-lg);
       }
 
@@ -369,12 +369,12 @@
           transition: transform 0.2s ease;
 
           &.filled {
-            color: #ffd700;
+            color: var(--game-star-filled);
             text-shadow: 0 0 0.75rem rgba(255, 215, 0, 0.6);
           }
 
           &.empty {
-            color: rgba(255, 255, 255, 0.2);
+            color: var(--game-star-empty);
           }
         }
       }
@@ -423,7 +423,7 @@
             }
 
             &.final-value {
-              color: #ffd700;
+              color: var(--game-gold);
               font-size: var(--font-size-large);
               font-weight: 700;
             }
@@ -507,10 +507,10 @@
 
         .level-star {
           font-size: 0.75rem;
-          color: #ffd700;
+          color: var(--game-star-filled);
 
           &.empty {
-            color: rgba(255, 255, 255, 0.2);
+            color: var(--game-star-empty);
           }
         }
       }
@@ -583,14 +583,14 @@
         &.unaffordable {
           opacity: 0.4;
           cursor: not-allowed;
-          color: #ff4444;
+          color: var(--game-health);
         }
       }
 
       .sell-btn {
         background: rgba(100, 50, 0, 0.3);
         border-color: rgba(255, 200, 0, 0.3);
-        color: #ffd700;
+        color: var(--game-gold);
 
         &:hover {
           background: rgba(150, 75, 0, 0.4);
@@ -600,7 +600,7 @@
         &.confirm {
           background: rgba(200, 50, 0, 0.5);
           border-color: rgba(255, 100, 0, 0.8);
-          color: #ff4444;
+          color: var(--game-health);
           animation: pulse-warn 0.5s ease-in-out infinite alternate;
         }
       }
@@ -616,7 +616,7 @@
         align-items: center;
         justify-content: center;
         font-size: 0.6875rem;
-        color: #ffd700;
+        color: var(--game-gold);
         text-transform: uppercase;
         letter-spacing: 0.0625rem;
       }
@@ -793,7 +793,7 @@
       &.active {
         background: rgba(255, 200, 0, 0.15);
         border-color: rgba(255, 200, 0, 0.5);
-        color: #ffd700;
+        color: var(--game-gold);
         box-shadow: 0 0 var(--spacing-xs) rgba(255, 200, 0, 0.3);
       }
     }
@@ -862,7 +862,7 @@
       &.unaffordable {
         opacity: 0.4;
 
-        .tower-cost { color: #ff4444; }
+        .tower-cost { color: var(--game-health); }
       }
 
       .tower-icon {
@@ -949,7 +949,7 @@
 
       .tower-cost {
         font-size: 0.6875rem;
-        color: #ffd700;
+        color: var(--game-gold);
         font-family: "Orbitron", sans-serif;
       }
 

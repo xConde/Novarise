@@ -51,6 +51,15 @@
   --game-success: #00AA00;
   --game-error: #AA0000;
 
+  /* Game state colors */
+  --game-health: #ff4444;
+  --game-gold: #ffd700;
+  --game-victory: #00ff88;
+  --game-defeat: #ff4444;
+  --game-wave-text: #ff8888;
+  --game-star-filled: #ffd700;
+  --game-star-empty: rgba(255, 255, 255, 0.2);
+
   /* Enemy type colors */
   --enemy-color-basic: #ff4444;
   --enemy-color-fast: #ffff00;

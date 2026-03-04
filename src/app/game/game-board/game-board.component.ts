@@ -514,7 +514,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     for (const mesh of this.rangeRingMeshes) {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+      disposeMaterial(mesh.material);
     }
     this.rangeRingMeshes = [];
     this.showAllRanges = false;
@@ -1163,7 +1163,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     for (const mesh of this.rangeRingMeshes) {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+      disposeMaterial(mesh.material);
     }
     this.rangeRingMeshes = [];
 
