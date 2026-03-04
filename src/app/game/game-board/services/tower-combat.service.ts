@@ -384,6 +384,7 @@ export class TowerCombatService {
       previousZ = currentTarget.position.z;
 
       currentDamage = Math.round(currentDamage * CHAIN_DAMAGE_FALLOFF);
+      if (currentDamage <= 0) break;
       currentTarget = nextTarget;
     }
 

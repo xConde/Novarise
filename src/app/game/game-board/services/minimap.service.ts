@@ -49,7 +49,7 @@ export class MinimapService {
     terrain: MinimapTerrainData,
     entities: MinimapEntityData[]
   ): void {
-    if (!this.ctx || !this.canvas || !this.visible) {
+    if (!this.ctx || !this.canvas || !this.visible || terrain.gridSize <= 0) {
       return;
     }
 

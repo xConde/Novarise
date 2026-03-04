@@ -880,6 +880,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.touchMoveHandler = (event: TouchEvent) => {
       event.preventDefault();
+      if (!this.camera || !this.controls) return;
 
       if (event.touches.length === 1) {
         const touch = event.touches[0];
@@ -1118,7 +1119,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private updateCameraPan(): void {
-    if (this.panKeys.size === 0 || !this.controls) return;
+    if (this.panKeys.size === 0 || !this.camera || !this.controls) return;
 
     let dx = 0;
     let dz = 0;

@@ -65,7 +65,7 @@ export class MapShareService {
     // Accept gridSize (canonical) or width + height (task-spec alias)
     const gridSize = obj['gridSize'];
     const hasValidGridSize =
-      typeof gridSize === 'number' && gridSize > 0 && gridSize <= 100;
+      typeof gridSize === 'number' && Number.isInteger(gridSize) && gridSize >= 1 && gridSize <= 100;
     const hasWidthHeight =
       typeof obj['width'] === 'number' && typeof obj['height'] === 'number';
     const hasDimensions = hasValidGridSize || hasWidthHeight;

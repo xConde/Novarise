@@ -27,7 +27,8 @@ const ENDLESS_ENEMY_CYCLE: EnemyType[] = [
   EnemyType.HEAVY,
   EnemyType.SWIFT,
   EnemyType.SHIELDED,
-  EnemyType.SWARM
+  EnemyType.SWARM,
+  EnemyType.FLYING
 ];
 
 // Base count for endless wave generation — matches WaveService.ENDLESS_BASE_COUNT
