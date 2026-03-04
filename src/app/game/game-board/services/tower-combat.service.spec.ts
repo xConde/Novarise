@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { TowerCombatService } from './tower-combat.service';
 import { EnemyService, DamageResult } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
-import { TowerType, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats } from '../models/tower.model';
+import { TowerType, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TOWER_ABILITIES, ABILITY_CONFIG } from '../models/tower.model';
 import { Enemy, EnemyType } from '../models/enemy.model';
 import { AudioService } from './audio.service';
 import * as THREE from 'three';
@@ -1031,6 +1031,261 @@ describe('Tower Model Functions', () => {
 
     it('SLOW damage should be 0 (aura, not projectile)', () => {
       expect(TOWER_CONFIGS[TowerType.SLOW].damage).toBe(0);
+    });
+  });
+});
+
+// --- TOWER_ABILITIES and Ability System Tests ---
+
+describe('TOWER_ABILITIES config', () => {
+  it('should have an ability defined for every TowerType', () => {
+    for (const type of Object.values(TowerType)) {
+      expect(TOWER_ABILITIES[type]).toBeTruthy();
+    }
+  });
+
+  it('should have valid cooldown > 0 for all tower types', () => {
+    for (const type of Object.values(TowerType)) {
+      expect(TOWER_ABILITIES[type].cooldown).toBeGreaterThan(0);
+    }
+  });
+
+  it('should have non-empty name and description for all tower types', () => {
+    for (const type of Object.values(TowerType)) {
+      expect(TOWER_ABILITIES[type].name.length).toBeGreaterThan(0);
+      expect(TOWER_ABILITIES[type].description.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('TowerCombatService — ability system', () => {
+  let service: TowerCombatService;
+  let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
+  let gameBoardServiceSpy: jasmine.SpyObj<GameBoardService>;
+  let audioServiceSpy: jasmine.SpyObj<AudioService>;
+  let mockScene: THREE.Scene;
+  let enemyMap: Map<string, Enemy>;
+
+  const TOWER_ROW = 10;
+  const TOWER_COL = 12;
+  const TOWER_WORLD_X = -0.5;
+  const TOWER_WORLD_Z = 0;
+
+  function createEnemy(id: string, x: number, z: number, health = 100): Enemy {
+    return {
+      id,
+      type: EnemyType.BASIC,
+      position: { x, y: 0.3, z },
+      gridPosition: { row: 0, col: 0 },
+      health,
+      maxHealth: health,
+      speed: 2,
+      value: 10,
+      path: [],
+      pathIndex: 0,
+      distanceTraveled: 0
+    };
+  }
+
+  beforeEach(() => {
+    enemyMap = new Map();
+
+    enemyServiceSpy = jasmine.createSpyObj('EnemyService', ['getEnemies', 'damageEnemy']);
+    enemyServiceSpy.getEnemies.and.returnValue(enemyMap);
+    enemyServiceSpy.damageEnemy.and.callFake((id: string, damage: number): DamageResult => {
+      const noOp: DamageResult = { killed: false, spawnedEnemies: [] };
+      const enemy = enemyMap.get(id);
+      if (!enemy || enemy.health <= 0) return noOp;
+      enemy.health -= damage;
+      return { killed: enemy.health <= 0, spawnedEnemies: [] };
+    });
+
+    gameBoardServiceSpy = jasmine.createSpyObj('GameBoardService', [
+      'getBoardWidth', 'getBoardHeight', 'getTileSize'
+    ]);
+    gameBoardServiceSpy.getBoardWidth.and.returnValue(25);
+    gameBoardServiceSpy.getBoardHeight.and.returnValue(20);
+    gameBoardServiceSpy.getTileSize.and.returnValue(1);
+
+    audioServiceSpy = jasmine.createSpyObj('AudioService', ['playSfx']);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        { provide: EnemyService, useValue: enemyServiceSpy },
+        { provide: GameBoardService, useValue: gameBoardServiceSpy },
+        { provide: AudioService, useValue: audioServiceSpy }
+      ]
+    });
+    service = TestBed.inject(TowerCombatService);
+    mockScene = new THREE.Scene();
+  });
+
+  it('getGameTime() should return current game time', () => {
+    expect(service.getGameTime()).toBe(0);
+    service.update(1.5, mockScene);
+    expect(service.getGameTime()).toBeCloseTo(1.5);
+  });
+
+  describe('activateAbility()', () => {
+    it('should return false for a non-existent tower', () => {
+      expect(service.activateAbility('99-99')).toBeFalse();
+    });
+
+    it('should return true and set cooldown on first activation', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+      expect(service.activateAbility(key)).toBeTrue();
+
+      const tower = service.getTower(key)!;
+      expect(tower.abilityCooldownEnd).toBeGreaterThan(0);
+    });
+
+    it('should return false if ability is on cooldown', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+      service.activateAbility(key); // first activation
+      expect(service.activateAbility(key)).toBeFalse(); // still on cooldown
+    });
+
+    it('should return true again after cooldown expires', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      const cooldown = TOWER_ABILITIES[TowerType.BASIC].cooldown;
+
+      service.activateAbility(key);
+      service.update(cooldown + 1, mockScene); // advance past cooldown
+      expect(service.activateAbility(key)).toBeTrue();
+    });
+  });
+
+  describe('Rapid Fire (BASIC)', () => {
+    it('should set abilityActiveEnd when activated', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.activateAbility(key);
+      const tower = service.getTower(key)!;
+      expect(tower.abilityActiveEnd).toBeGreaterThan(0);
+    });
+
+    it('should fire more shots when Rapid Fire is active', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      // Normal fire rate: BASIC fires every 1.0s
+      // First shot happens immediately on first update
+      service.update(0.016, mockScene); // shot 1
+      const healthAfterShot1 = enemy.health;
+
+      service.update(0.5, mockScene); // 0.5s later — should NOT fire (normal rate is 1.0s)
+      expect(enemy.health).toBe(healthAfterShot1);
+
+      // Activate Rapid Fire — 0.5x fire rate (0.5s between shots)
+      service.activateAbility(key);
+
+      service.update(0.6, mockScene); // 0.6s — should fire (rapid rate is 0.5s)
+      expect(enemy.health).toBeLessThan(healthAfterShot1);
+    });
+  });
+
+  describe('Overcharge (SNIPER)', () => {
+    it('should set abilityPrimed when activated', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SNIPER, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.activateAbility(key);
+      const tower = service.getTower(key)!;
+      expect(tower.abilityPrimed).toBeTrue();
+    });
+
+    it('should deal 3x damage on next shot then clear the flag', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SNIPER, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      service.activateAbility(key);
+      // Fire — Sniper has fireRate 2.5s; advance past that
+      service.update(2.6, mockScene);
+
+      const baseDamage = getEffectiveStats(TowerType.SNIPER, 1).damage;
+      const expectedDamage = Math.round(baseDamage * ABILITY_CONFIG.overchargeMultiplier);
+      expect(enemy.health).toBe(10000 - expectedDamage);
+
+      // Ability should be cleared after one shot
+      expect(service.getTower(key)!.abilityPrimed).toBeFalse();
+    });
+  });
+
+  describe('Barrage (MORTAR)', () => {
+    it('should set abilityCharges when activated', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.activateAbility(key);
+      const tower = service.getTower(key)!;
+      expect(tower.abilityCharges).toBe(ABILITY_CONFIG.barrageCharges);
+    });
+
+    it('should fire faster when barrage charges remain', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      // Normal mortar: fires every 3.0s; fire first shot
+      service.update(3.1, mockScene);
+      const healthAfterFirst = enemy.health;
+
+      // Activate barrage — rapid fire rate 0.3s
+      service.activateAbility(key);
+
+      // 0.4s later should fire again (barrage rate is 0.3s, much faster than normal 3.0s)
+      service.update(0.4, mockScene);
+      expect(enemy.health).toBeLessThan(healthAfterFirst);
+    });
+  });
+
+  describe('Freeze (SLOW)', () => {
+    it('should set abilityActiveEnd when activated', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.activateAbility(key);
+      const tower = service.getTower(key)!;
+      expect(tower.abilityActiveEnd).toBeGreaterThan(0);
+    });
+
+    it('should set enemy speed to 0 for enemies in range', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 100);
+      enemyMap.set('e1', enemy);
+
+      service.activateAbility(key);
+      expect(enemy.speed).toBe(0);
+    });
+  });
+
+  describe('Overload (CHAIN)', () => {
+    it('should set abilityPrimed when activated', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.activateAbility(key);
+      const tower = service.getTower(key)!;
+      expect(tower.abilityPrimed).toBeTrue();
+    });
+
+    it('should clear abilityPrimed after firing', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', enemy);
+
+      service.activateAbility(key);
+      service.update(1.0, mockScene); // fire
+      expect(service.getTower(key)!.abilityPrimed).toBeFalse();
     });
   });
 });

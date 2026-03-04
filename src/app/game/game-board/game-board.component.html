@@ -225,6 +225,21 @@
         {{ sellConfirmPending ? 'Confirm Sell?' : 'Sell (+' + selectedTowerSellValue + 'g)' }}
       </button>
     </div>
+    <div class="tower-ability">
+      <button
+        class="ability-btn"
+        [class.on-cooldown]="isAbilityOnCooldown()"
+        [class.active]="isAbilityActive()"
+        (click)="activateAbility()"
+        [disabled]="isAbilityOnCooldown()"
+        [attr.aria-label]="'Activate ' + getAbilityName()">
+        <span class="ability-name">{{ getAbilityName() }}</span>
+        <span class="ability-cooldown" *ngIf="isAbilityOnCooldown()">
+          {{ getAbilityCooldownRemaining() | number:'1.0-0' }}s
+        </span>
+      </button>
+      <span class="ability-desc">{{ getAbilityDescription() }}</span>
+    </div>
   </div>
 
   <!-- Tower selection -->

@@ -23,6 +23,7 @@ export class EditControlsComponent implements OnInit, OnDestroy {
   @Output() activeToolChange = new EventEmitter<BrushTool>();
   @Output() playMapClick = new EventEmitter<void>();
   @Output() deleteMapClick = new EventEmitter<void>();
+  @Output() openMapManagerClick = new EventEmitter<void>();
 
   public terrainTypes = Object.values(TerrainType);
   public terrainConfigs = TERRAIN_CONFIGS;

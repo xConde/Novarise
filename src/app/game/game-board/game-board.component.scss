@@ -1341,4 +1341,56 @@
       text-align: center;
     }
   }
+
+  // --- Tower Ability ---
+
+  .tower-ability {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .ability-btn {
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    border-radius: var(--border-radius-md);
+    border: 1px solid var(--action-yellow);
+    background: rgba(234, 179, 8, 0.15);
+    color: var(--action-yellow);
+    cursor: pointer;
+    font-size: var(--font-size-small);
+    font-family: "Orbitron", sans-serif;
+    transition: background 0.15s ease, opacity 0.15s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    &:hover:not(:disabled) {
+      background: rgba(234, 179, 8, 0.3);
+    }
+
+    &:disabled, &.on-cooldown {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    &.active {
+      border-color: var(--action-green);
+      background: rgba(34, 197, 94, 0.2);
+      color: var(--action-green);
+      animation: abilityPulse 1s ease infinite;
+    }
+  }
+
+  .ability-desc {
+    display: block;
+    font-size: 0.65rem;
+    color: var(--theme-purple-mid);
+    margin-top: 0.25rem;
+  }
+
+  @keyframes abilityPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
 }

@@ -24,7 +24,7 @@ import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService, MinimapEntityData, MinimapTerrainData } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
 import { disposeMaterial } from './utils/three-utils';
-import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
+import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_ABILITIES, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
@@ -374,6 +374,38 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedTowerStats = null;
     this.sellConfirmPending = false;
     this.removeRangePreview();
+  }
+
+  // --- Ability methods ---
+
+  activateAbility(): void {
+    if (!this.selectedTowerInfo) return;
+    this.towerCombatService.activateAbility(this.selectedTowerInfo.id);
+  }
+
+  isAbilityOnCooldown(): boolean {
+    if (!this.selectedTowerInfo) return false;
+    return this.selectedTowerInfo.abilityCooldownEnd > this.towerCombatService.getGameTime();
+  }
+
+  isAbilityActive(): boolean {
+    if (!this.selectedTowerInfo) return false;
+    return this.selectedTowerInfo.abilityActiveEnd > this.towerCombatService.getGameTime();
+  }
+
+  getAbilityName(): string {
+    if (!this.selectedTowerInfo) return '';
+    return TOWER_ABILITIES[this.selectedTowerInfo.type].name;
+  }
+
+  getAbilityDescription(): string {
+    if (!this.selectedTowerInfo) return '';
+    return TOWER_ABILITIES[this.selectedTowerInfo.type].description;
+  }
+
+  getAbilityCooldownRemaining(): number {
+    if (!this.selectedTowerInfo) return 0;
+    return Math.max(0, this.selectedTowerInfo.abilityCooldownEnd - this.towerCombatService.getGameTime());
   }
 
   private selectPlacedTower(key: string): void {

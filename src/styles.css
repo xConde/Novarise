@@ -43,6 +43,8 @@
   --action-danger: #ff6666;
   --action-danger-bg: rgba(180, 20, 20, 0.2);
   --action-danger-border: rgba(220, 50, 50, 0.4);
+  --action-yellow: #eab308;
+  --action-green: #22c55e;
 
   /* Game-specific colors */
   --game-primary: #444444;

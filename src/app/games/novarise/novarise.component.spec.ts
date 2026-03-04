@@ -1,8 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { RouterTestingModule } from '@angular/router/testing';
+import { FormsModule } from '@angular/forms';
 import { NovariseComponent } from './novarise.component';
-import { MapStorageService } from './core/map-storage.service';
+import { MapStorageService, MapMetadata } from './core/map-storage.service';
 import { CameraControlService, JoystickInput, MovementInput, RotationInput } from './core/camera-control.service';
 import { PathValidationService } from './core/path-validation.service';
 import { JoystickEvent } from './features/mobile-controls';
@@ -37,17 +38,19 @@ describe('NovariseComponent', () => {
       'getMapMetadata',
       'saveMap',
       'loadMap',
-      'getAllMaps'
+      'getAllMaps',
+      'deleteMap'
     ]);
 
     mockMapStorageService.loadCurrentMap.and.returnValue(null);
     mockMapStorageService.getCurrentMapId.and.returnValue(null);
     mockMapStorageService.getMapMetadata.and.returnValue(null);
     mockMapStorageService.getAllMaps.and.returnValue([]);
+    mockMapStorageService.deleteMap.and.returnValue(true);
 
     await TestBed.configureTestingModule({
       declarations: [NovariseComponent],
-      imports: [RouterTestingModule],
+      imports: [RouterTestingModule, FormsModule],
       providers: [
         { provide: MapStorageService, useValue: mockMapStorageService },
         PathValidationService
@@ -342,6 +345,197 @@ describe('NovariseComponent', () => {
       const newPos = cameraControlService.getPosition();
       expect(newPos.x !== initialPos.x || newPos.z !== initialPos.z).toBe(true);
       expect(cameraControlService.getRotation().yaw).not.toBe(initialRot.yaw);
+    });
+  });
+
+  describe('Map Manager — openMapManager / closeMapManager', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should set mapManagerOpen to true when openMapManager is called', () => {
+      component.openMapManager();
+      expect(component.mapManagerOpen).toBe(true);
+    });
+
+    it('should populate savedMaps from storage when openMapManager is called', () => {
+      const fakeMaps: MapMetadata[] = [
+        { id: 'map1', name: 'Alpha', createdAt: 1000, updatedAt: 2000, version: '1.0.0', gridSize: 25 }
+      ];
+      mockMapStorageService.getAllMaps.and.returnValue(fakeMaps);
+
+      component.openMapManager();
+
+      expect(component.savedMaps).toEqual(fakeMaps);
+    });
+
+    it('should reset rename and delete state when opening the manager', () => {
+      component.renamingMapId = 'map1';
+      component.renameValue = 'old name';
+      component.deleteConfirmId = 'map1';
+
+      component.openMapManager();
+
+      expect(component.renamingMapId).toBeNull();
+      expect(component.renameValue).toBe('');
+      expect(component.deleteConfirmId).toBeNull();
+    });
+
+    it('should set mapManagerOpen to false when closeMapManager is called', () => {
+      component.mapManagerOpen = true;
+      component.closeMapManager();
+      expect(component.mapManagerOpen).toBe(false);
+    });
+
+    it('should reset rename and delete state when closing the manager', () => {
+      component.renamingMapId = 'map1';
+      component.renameValue = 'name';
+      component.deleteConfirmId = 'map1';
+
+      component.closeMapManager();
+
+      expect(component.renamingMapId).toBeNull();
+      expect(component.renameValue).toBe('');
+      expect(component.deleteConfirmId).toBeNull();
+    });
+  });
+
+  describe('Map Manager — confirmDelete / cancelDelete / deleteMap', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should set deleteConfirmId when confirmDelete is called', () => {
+      component.confirmDelete('map1');
+      expect(component.deleteConfirmId).toBe('map1');
+    });
+
+    it('should clear renamingMapId when confirmDelete is called', () => {
+      component.renamingMapId = 'map1';
+      component.confirmDelete('map1');
+      expect(component.renamingMapId).toBeNull();
+    });
+
+    it('should clear deleteConfirmId when cancelDelete is called', () => {
+      component.deleteConfirmId = 'map1';
+      component.cancelDelete();
+      expect(component.deleteConfirmId).toBeNull();
+    });
+
+    it('should call mapStorage.deleteMap with correct id', () => {
+      mockMapStorageService.getAllMaps.and.returnValue([]);
+      component.deleteMap('map1');
+      expect(mockMapStorageService.deleteMap).toHaveBeenCalledWith('map1');
+    });
+
+    it('should clear deleteConfirmId after deleteMap', () => {
+      component.deleteConfirmId = 'map1';
+      mockMapStorageService.getAllMaps.and.returnValue([]);
+      component.deleteMap('map1');
+      expect(component.deleteConfirmId).toBeNull();
+    });
+
+    it('should refresh savedMaps after deleteMap', () => {
+      const remaining: MapMetadata[] = [
+        { id: 'map2', name: 'Beta', createdAt: 1000, updatedAt: 2000, version: '1.0.0', gridSize: 25 }
+      ];
+      mockMapStorageService.getAllMaps.and.returnValue(remaining);
+
+      component.deleteMap('map1');
+
+      expect(component.savedMaps).toEqual(remaining);
+    });
+  });
+
+  describe('Map Manager — startRename / submitRename / cancelRename', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should set renamingMapId and renameValue when startRename is called', () => {
+      component.startRename('map1', 'My Map');
+      expect(component.renamingMapId).toBe('map1');
+      expect(component.renameValue).toBe('My Map');
+    });
+
+    it('should clear deleteConfirmId when startRename is called', () => {
+      component.deleteConfirmId = 'map1';
+      component.startRename('map1', 'My Map');
+      expect(component.deleteConfirmId).toBeNull();
+    });
+
+    it('should clear renamingMapId and renameValue when cancelRename is called', () => {
+      component.renamingMapId = 'map1';
+      component.renameValue = 'something';
+
+      component.cancelRename();
+
+      expect(component.renamingMapId).toBeNull();
+      expect(component.renameValue).toBe('');
+    });
+
+    it('should save with new name when submitRename is called with non-empty value', () => {
+      const fakeState = { gridSize: 25, tiles: [], heightMap: [], spawnPoint: null, exitPoint: null, version: '1.0.0' };
+      mockMapStorageService.loadMap.and.returnValue(fakeState as any);
+      mockMapStorageService.getAllMaps.and.returnValue([]);
+
+      component.renamingMapId = 'map1';
+      component.renameValue = 'New Name';
+
+      component.submitRename('map1');
+
+      expect(mockMapStorageService.saveMap).toHaveBeenCalledWith('New Name', fakeState as any, 'map1');
+    });
+
+    it('should not save when submitRename is called with whitespace-only value', () => {
+      mockMapStorageService.getAllMaps.and.returnValue([]);
+      component.renamingMapId = 'map1';
+      component.renameValue = '   ';
+
+      component.submitRename('map1');
+
+      expect(mockMapStorageService.saveMap).not.toHaveBeenCalled();
+    });
+
+    it('should not save when renamingMapId is null before submitRename', () => {
+      mockMapStorageService.getAllMaps.and.returnValue([]);
+      component.renamingMapId = null;
+      component.renameValue = 'Some Name';
+
+      component.submitRename('map1');
+
+      expect(mockMapStorageService.saveMap).not.toHaveBeenCalled();
+    });
+
+    it('should clear renamingMapId after submitRename', () => {
+      mockMapStorageService.loadMap.and.returnValue(null);
+      mockMapStorageService.getAllMaps.and.returnValue([]);
+      component.renamingMapId = 'map1';
+      component.renameValue = 'Name';
+
+      component.submitRename('map1');
+
+      expect(component.renamingMapId).toBeNull();
+    });
+
+    it('should refresh savedMaps after submitRename', () => {
+      const updated: MapMetadata[] = [
+        { id: 'map1', name: 'New Name', createdAt: 1000, updatedAt: 3000, version: '1.0.0', gridSize: 25 }
+      ];
+      mockMapStorageService.loadMap.and.returnValue(null);
+      mockMapStorageService.getAllMaps.and.returnValue(updated);
+      component.renamingMapId = 'map1';
+      component.renameValue = 'New Name';
+
+      component.submitRename('map1');
+
+      expect(component.savedMaps).toEqual(updated);
     });
   });
 });

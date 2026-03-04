@@ -130,6 +130,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   // Title display
   public title = 'Novarise';
 
+  // Map manager dialog state
+  public mapManagerOpen = false;
+  public savedMaps: import('./core/map-storage.service').MapMetadata[] = [];
+  public renamingMapId: string | null = null;
+  public renameValue = '';
+  public deleteConfirmId: string | null = null;
+
   // Undo/Redo state - expose for UI binding
   public get canUndo(): boolean { return this.editHistory.canUndo; }
   public get canRedo(): boolean { return this.editHistory.canRedo; }
@@ -1066,42 +1073,87 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  /**
-   * Prompt the user to select and delete a saved map (with confirmation).
-   */
-  public deleteMap(): void {
-    const maps = this.mapStorage.getAllMaps();
+  // ---------------------------------------------------------------------------
+  // Map Manager dialog
+  // ---------------------------------------------------------------------------
 
-    if (maps.length === 0) {
-      alert('No saved maps to delete.');
-      return;
+  /** Open the map manager overlay and refresh the map list. */
+  public openMapManager(): void {
+    this.savedMaps = this.mapStorage.getAllMaps();
+    this.renamingMapId = null;
+    this.renameValue = '';
+    this.deleteConfirmId = null;
+    this.mapManagerOpen = true;
+  }
+
+  /** Close the map manager overlay. */
+  public closeMapManager(): void {
+    this.mapManagerOpen = false;
+    this.renamingMapId = null;
+    this.renameValue = '';
+    this.deleteConfirmId = null;
+  }
+
+  /** Load a map from the manager list and close the dialog. */
+  public loadMapFromManager(mapId: string): void {
+    const state = this.mapStorage.loadMap(mapId);
+    if (state) {
+      this.terrainGrid.importState(state);
+      this.updateSpawnMarker();
+      this.updateExitMarker();
+      this.runPathValidation();
+      const metadata = this.mapStorage.getMapMetadata(mapId);
+      if (metadata) {
+        this.currentMapName = metadata.name;
+      }
     }
+    this.closeMapManager();
+  }
 
-    let message = 'Select a map to delete:\n\n';
-    maps.forEach((map, index) => {
-      const date = new Date(map.updatedAt).toLocaleString();
-      message += `${index + 1}. ${map.name} (${date})\n`;
-    });
+  /** Enter delete-confirm state for a map. */
+  public confirmDelete(mapId: string): void {
+    this.deleteConfirmId = mapId;
+    this.renamingMapId = null;
+  }
 
-    const selection = prompt(message + '\nEnter number:');
-    if (!selection) return; // User cancelled
+  /** Cancel the pending delete confirmation. */
+  public cancelDelete(): void {
+    this.deleteConfirmId = null;
+  }
 
-    const index = parseInt(selection) - 1;
-    if (index < 0 || index >= maps.length) {
-      alert('Invalid selection.');
-      return;
+  /** Delete the confirmed map and refresh the list. */
+  public deleteMap(mapId: string): void {
+    this.mapStorage.deleteMap(mapId);
+    this.deleteConfirmId = null;
+    this.savedMaps = this.mapStorage.getAllMaps();
+  }
+
+  /** Enter rename mode for a map. */
+  public startRename(mapId: string, currentName: string): void {
+    this.renamingMapId = mapId;
+    this.renameValue = currentName;
+    this.deleteConfirmId = null;
+  }
+
+  /** Commit the rename if the new name is non-empty, then refresh the list. */
+  public submitRename(mapId: string): void {
+    if (!this.renamingMapId) return;
+    const trimmed = this.renameValue.trim();
+    if (trimmed) {
+      const state = this.mapStorage.loadMap(mapId);
+      if (state) {
+        this.mapStorage.saveMap(trimmed, state, mapId);
+      }
     }
+    this.renamingMapId = null;
+    this.renameValue = '';
+    this.savedMaps = this.mapStorage.getAllMaps();
+  }
 
-    const selectedMap = maps[index];
-    const confirmed = confirm(`Delete map "${selectedMap.name}"? This cannot be undone.`);
-    if (!confirmed) return;
-
-    const deleted = this.mapStorage.deleteMap(selectedMap.id);
-    if (deleted) {
-      alert(`Map "${selectedMap.name}" deleted.`);
-    } else {
-      alert('Failed to delete map.');
-    }
+  /** Cancel rename without persisting changes. */
+  public cancelRename(): void {
+    this.renamingMapId = null;
+    this.renameValue = '';
   }
 
   private saveGridState(): void {

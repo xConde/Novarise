@@ -137,10 +137,10 @@
     <span class="path-status path-invalid" *ngIf="!isPathValid && hasSpawnAndExit">No valid path ✗</span>
     <span class="play-hint" *ngIf="!hasSpawnAndExit">Set spawn (P) and exit (X) first</span>
     <button
-      class="delete-map-btn"
-      (click)="deleteMapClick.emit()"
-      aria-label="Delete a saved map">
-      Delete Map
+      class="manage-maps-btn"
+      (click)="openMapManagerClick.emit()"
+      aria-label="Manage saved maps">
+      Manage Maps
     </button>
   </div>
 </div>

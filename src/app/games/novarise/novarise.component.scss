@@ -93,6 +93,222 @@
   }
 }
 
+// Map Manager Overlay
+.map-manager-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+}
+
+.map-manager-panel {
+  background: var(--nav-bg-a90);
+  border: 1px solid var(--theme-purple-a60);
+  border-radius: 12px;
+  padding: 20px;
+  width: 420px;
+  max-width: calc(100vw - 40px);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  backdrop-filter: blur(15px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.map-manager-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.map-manager-title {
+  margin: 0;
+  font-family: "Orbitron", sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--theme-purple-lighter);
+  letter-spacing: 1px;
+}
+
+.map-manager-close {
+  width: 32px;
+  height: 32px;
+  background: var(--theme-purple-dark-strong);
+  border: 1px solid var(--theme-purple-a50);
+  border-radius: 6px;
+  color: var(--theme-purple-lighter);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all var(--transition-fast) ease;
+  &:hover {
+    background: var(--action-danger-bg);
+    border-color: var(--action-danger-border);
+    color: var(--action-danger);
+  }
+}
+
+.map-manager-empty {
+  text-align: center;
+  padding: 24px;
+  color: var(--theme-purple-light);
+  font-size: 13px;
+}
+
+.map-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.map-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--theme-purple-dark);
+  border: 1px solid var(--theme-purple-a30);
+  border-radius: 8px;
+  min-height: 44px;
+  transition: border-color var(--transition-fast) ease;
+
+  &--confirm {
+    border-color: var(--action-danger-border);
+    background: var(--action-danger-bg);
+  }
+}
+
+.map-item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  &:hover .map-item-name {
+    color: var(--theme-purple-lighter);
+  }
+}
+
+.map-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--theme-purple-light);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+  transition: color var(--transition-fast) ease;
+}
+
+.map-item-date {
+  font-size: 10px;
+  color: var(--theme-purple-mid);
+}
+
+.map-rename-input {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--theme-purple-dark-strong);
+  border: 1px solid var(--theme-purple-a60);
+  border-radius: 6px;
+  color: var(--theme-purple-lighter);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  &:focus {
+    border-color: var(--theme-purple-light);
+    box-shadow: 0 0 6px var(--theme-purple-glow);
+  }
+}
+
+.map-delete-confirm-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--action-danger);
+  white-space: nowrap;
+}
+
+.map-item-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.map-action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast) ease;
+
+  &--rename {
+    background: var(--theme-purple-dark-strong);
+    border-color: var(--theme-purple-a50);
+    color: var(--theme-purple-light);
+    &:hover {
+      background: var(--theme-purple-dark-hover-strong);
+      border-color: var(--theme-purple-a70);
+      color: var(--theme-purple-lighter);
+    }
+  }
+
+  &--delete {
+    background: var(--theme-purple-dark-strong);
+    border-color: var(--theme-purple-a30);
+    color: var(--theme-purple-light);
+    &:hover {
+      background: var(--action-danger-bg);
+      border-color: var(--action-danger-border);
+      color: var(--action-danger);
+    }
+  }
+
+  &--danger {
+    background: var(--action-danger-bg);
+    border-color: var(--action-danger-border);
+    color: var(--action-danger);
+    &:hover {
+      background: rgba(220, 20, 20, 0.4);
+      box-shadow: 0 0 8px rgba(255, 50, 50, 0.3);
+    }
+  }
+
+  &--confirm-rename {
+    background: var(--action-success-bg);
+    border-color: var(--action-success-border);
+    color: var(--action-success);
+    &:hover {
+      background: rgba(0, 180, 80, 0.4);
+      box-shadow: 0 0 8px rgba(0, 255, 100, 0.2);
+    }
+  }
+
+  &--cancel {
+    background: var(--theme-purple-dark-strong);
+    border-color: var(--theme-purple-a30);
+    color: var(--theme-purple-light);
+    &:hover {
+      background: var(--theme-purple-dark-hover-strong);
+      border-color: var(--theme-purple-a50);
+      color: var(--theme-purple-lighter);
+    }
+  }
+}
+
 // Mobile responsive adjustments
 @media (max-width: 768px) {
   .game-container {

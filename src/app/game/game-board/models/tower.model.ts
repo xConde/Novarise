@@ -27,16 +27,73 @@ export interface TowerStats {
   splashRadius: number; // tiles, 0 for single-target
   color: number;        // hex color for projectile
   // Slow tower
-  slowFactor?: number;    // Speed reduction multiplier (0.5 = 50% of base speed)
-  slowDuration?: number;  // Duration of slow effect in seconds
+  slowFactor?: number;
+  slowDuration?: number;
   // Chain lightning tower
-  chainCount?: number;    // Number of chain bounces after primary target
-  chainRange?: number;    // World-unit radius to find next chain target
+  chainCount?: number;
+  chainRange?: number;
   // Mortar tower
-  blastRadius?: number;   // Area-of-effect radius for mortar zones
-  dotDuration?: number;   // How long the mortar zone persists (seconds)
-  dotDamage?: number;     // Damage per second dealt by mortar zone
+  blastRadius?: number;
+  dotDuration?: number;
+  dotDamage?: number;
 }
+
+export interface TowerAbility {
+  name: string;
+  description: string;
+  cooldown: number; // seconds
+  duration: number; // seconds (0 for instant / next-shot)
+}
+
+export const TOWER_ABILITIES: Record<TowerType, TowerAbility> = {
+  [TowerType.BASIC]: {
+    name: 'Rapid Fire',
+    description: 'Doubles fire rate for 5 seconds',
+    cooldown: 20,
+    duration: 5,
+  },
+  [TowerType.SNIPER]: {
+    name: 'Overcharge',
+    description: 'Next shot deals 3x damage',
+    cooldown: 15,
+    duration: 0,
+  },
+  [TowerType.SPLASH]: {
+    name: 'Napalm',
+    description: 'Next shot leaves a burning area for 5 seconds',
+    cooldown: 25,
+    duration: 0,
+  },
+  [TowerType.SLOW]: {
+    name: 'Freeze',
+    description: 'Completely stops all enemies in range for 3 seconds',
+    cooldown: 30,
+    duration: 3,
+  },
+  [TowerType.CHAIN]: {
+    name: 'Overload',
+    description: 'Next chain bounces to 6 targets instead of 3',
+    cooldown: 20,
+    duration: 0,
+  },
+  [TowerType.MORTAR]: {
+    name: 'Barrage',
+    description: 'Fires 3 mortars in quick succession',
+    cooldown: 25,
+    duration: 0,
+  },
+};
+
+/** Constants for ability mechanics to avoid magic numbers. */
+export const ABILITY_CONFIG = {
+  rapidFireMultiplier: 0.5,
+  overchargeMultiplier: 3,
+  overloadChainCount: 6,
+  barrageCharges: 3,
+  barrageFireRate: 0.3,
+  napalmDotDuration: 5,
+  freezeSpeedFactor: 0,
+} as const;
 
 export interface PlacedTower {
   id: string;
@@ -48,6 +105,10 @@ export interface PlacedTower {
   kills: number;
   totalInvested: number; // cumulative gold spent (placement + upgrades)
   mesh: THREE.Group | null;
+  abilityCooldownEnd: number;  // gameTime when ability becomes available again (0 = ready)
+  abilityActiveEnd: number;    // gameTime when active ability effect expires (0 = not active)
+  abilityCharges: number;      // remaining charges for multi-shot abilities like Barrage
+  abilityPrimed: boolean;      // true when a next-shot ability is pending
 }
 
 export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
@@ -81,7 +142,7 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
   [TowerType.SLOW]: {
     damage: 0,
     range: 2.5,
-    fireRate: 0.5,   // Aura pulse interval; not used for projectile fire rate
+    fireRate: 0.5,
     cost: 75,
     projectileSpeed: 0,
     splashRadius: 0,
@@ -103,7 +164,7 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
   [TowerType.MORTAR]: {
     damage: 8,
     range: 4,
-    fireRate: 3.0,   // Slow-firing artillery
+    fireRate: 3.0,
     cost: 200,
     projectileSpeed: 4,
     splashRadius: 0,
@@ -116,13 +177,12 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
 
 /** Per-level stat multipliers. Index 0 = level 1 (base), 1 = level 2, 2 = level 3. */
 export const UPGRADE_MULTIPLIERS: { damage: number; range: number; fireRate: number }[] = [
-  { damage: 1.0,  range: 1.0,  fireRate: 1.0  },  // Level 1 (base)
-  { damage: 1.5,  range: 1.15, fireRate: 0.85 },   // Level 2 (+50% dmg, +15% range, 15% faster)
-  { damage: 2.2,  range: 1.3,  fireRate: 0.7  },   // Level 3 (+120% dmg, +30% range, 30% faster)
+  { damage: 1.0,  range: 1.0,  fireRate: 1.0  },
+  { damage: 1.5,  range: 1.15, fireRate: 0.85 },
+  { damage: 2.2,  range: 1.3,  fireRate: 0.7  },
 ];
 
-/** Get the upgrade cost from current level to next level.
- *  Level 1→2: 75% of base cost; Level 2→3: 100% of base cost. */
+/** Get the upgrade cost from current level to next level. */
 export function getUpgradeCost(type: TowerType, currentLevel: number): number {
   if (currentLevel < 1 || currentLevel >= MAX_TOWER_LEVEL) return Infinity;
   const baseCost = TOWER_CONFIGS[type].cost;

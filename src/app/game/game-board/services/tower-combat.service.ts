@@ -1,7 +1,17 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy } from '../models/enemy.model';
-import { PlacedTower, TowerType, TowerStats, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats } from '../models/tower.model';
+import {
+  PlacedTower,
+  TowerType,
+  TowerStats,
+  TOWER_CONFIGS,
+  MAX_TOWER_LEVEL,
+  getUpgradeCost,
+  getEffectiveStats,
+  TOWER_ABILITIES,
+  ABILITY_CONFIG,
+} from '../models/tower.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
@@ -17,12 +27,13 @@ interface Projectile {
   damage: number;
   splashRadius: number;
   towerType: TowerType;
+  napalmActive?: boolean;
 }
 
 /** A chain arc line that persists for a short visual duration before removal. */
 interface ChainArc {
   line: THREE.Line;
-  expiresAt: number; // gameTime when this arc should be removed
+  expiresAt: number;
 }
 
 /** A mortar blast zone that persists and deals DoT. */
@@ -32,8 +43,8 @@ interface MortarZone {
   centerZ: number;
   blastRadius: number;
   dotDamage: number;
-  expiresAt: number;       // gameTime when zone expires
-  lastTickTime: number;    // gameTime of last DoT tick
+  expiresAt: number;
+  lastTickTime: number;
 }
 
 /** Slow effect tracked per enemy. */
@@ -70,8 +81,46 @@ export class TowerCombatService {
       lastFireTime: -Infinity,
       kills: 0,
       totalInvested: TOWER_CONFIGS[type].cost,
-      mesh
+      mesh,
+      abilityCooldownEnd: 0,
+      abilityActiveEnd: 0,
+      abilityCharges: 0,
+      abilityPrimed: false,
     });
+  }
+
+  /** Activate the tower's special ability. Returns false if not found or on cooldown. */
+  activateAbility(key: string): boolean {
+    const tower = this.placedTowers.get(key);
+    if (!tower) return false;
+    if (this.gameTime < tower.abilityCooldownEnd) return false;
+
+    const ability = TOWER_ABILITIES[tower.type];
+    tower.abilityCooldownEnd = this.gameTime + ability.cooldown;
+
+    switch (tower.type) {
+      case TowerType.BASIC:
+        tower.abilityActiveEnd = this.gameTime + ability.duration;
+        break;
+      case TowerType.SLOW:
+        tower.abilityActiveEnd = this.gameTime + ability.duration;
+        this.applyFreezeAura(tower);
+        break;
+      case TowerType.MORTAR:
+        tower.abilityCharges = ABILITY_CONFIG.barrageCharges;
+        break;
+      case TowerType.SNIPER:
+      case TowerType.SPLASH:
+      case TowerType.CHAIN:
+        tower.abilityPrimed = true;
+        break;
+    }
+
+    return true;
+  }
+
+  getGameTime(): number {
+    return this.gameTime;
   }
 
   upgradeTower(key: string): boolean {
@@ -96,18 +145,34 @@ export class TowerCombatService {
     const killedEnemyIds: string[] = [];
     const firedTowerTypes: TowerType[] = [];
 
-    // Expire slow effects before tower processing so towers see accurate speeds
     this.expireSlowEffects();
 
-    // Tower targeting and firing — resolve stats per-tower using level
     this.placedTowers.forEach(tower => {
       const stats = getEffectiveStats(tower.type, tower.level);
-      const timeSinceLastFire = this.gameTime - tower.lastFireTime;
 
-      if (timeSinceLastFire < stats.fireRate) return;
+      // Expire Freeze ability
+      if (tower.type === TowerType.SLOW && tower.abilityActiveEnd > 0 && this.gameTime >= tower.abilityActiveEnd) {
+        this.expireFreezeEffect(tower);
+        tower.abilityActiveEnd = 0;
+      }
+
+      // Expire Rapid Fire visual state
+      if (tower.type === TowerType.BASIC && tower.abilityActiveEnd > 0 && this.gameTime >= tower.abilityActiveEnd) {
+        tower.abilityActiveEnd = 0;
+      }
+
+      // Determine effective fire rate accounting for abilities
+      let effectiveFireRate = stats.fireRate;
+      if (tower.type === TowerType.BASIC && tower.abilityActiveEnd > this.gameTime) {
+        effectiveFireRate = stats.fireRate * ABILITY_CONFIG.rapidFireMultiplier;
+      } else if (tower.type === TowerType.MORTAR && tower.abilityCharges > 0) {
+        effectiveFireRate = ABILITY_CONFIG.barrageFireRate;
+      }
+
+      const timeSinceLastFire = this.gameTime - tower.lastFireTime;
+      if (timeSinceLastFire < effectiveFireRate) return;
 
       if (tower.type === TowerType.SLOW) {
-        // Slow towers pulse an aura — no projectile, just apply slow to nearby enemies
         this.applySlowAura(tower, stats);
         tower.lastFireTime = this.gameTime;
         firedTowerTypes.push(tower.type);
@@ -120,7 +185,9 @@ export class TowerCombatService {
       tower.lastFireTime = this.gameTime;
 
       if (tower.type === TowerType.CHAIN) {
-        const kills = this.fireChainLightning(tower, target, stats, scene);
+        const chainCountOverride = tower.abilityPrimed ? ABILITY_CONFIG.overloadChainCount : undefined;
+        const kills = this.fireChainLightning(tower, target, stats, scene, chainCountOverride);
+        if (tower.abilityPrimed) tower.abilityPrimed = false;
         killedEnemyIds.push(...kills);
         if (kills.length > 0) {
           const t = this.placedTowers.get(tower.id);
@@ -128,37 +195,35 @@ export class TowerCombatService {
         }
       } else {
         this.fireProjectile(tower, target, stats, scene);
+        if (tower.type === TowerType.MORTAR && tower.abilityCharges > 0) {
+          tower.abilityCharges--;
+        }
       }
 
       firedTowerTypes.push(tower.type);
     });
 
-    // Update standard projectiles
     const survivingProjectiles: Projectile[] = [];
     let hitCount = 0;
     for (const proj of this.projectiles) {
       const enemy = this.enemyService.getEnemies().get(proj.targetId);
 
-      // Target dead or removed — remove projectile
       if (!enemy) {
         this.removeProjectileMesh(proj, scene);
         continue;
       }
 
-      // Move projectile toward enemy
       const dx = enemy.position.x - proj.mesh.position.x;
       const dz = enemy.position.z - proj.mesh.position.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
       const moveDistance = proj.speed * deltaTime;
 
       if (moveDistance >= dist) {
-        // Hit — apply damage before disposing mesh (applyDamage reads proj.mesh.position)
         const kills = this.applyDamage(proj, scene);
         killedEnemyIds.push(...kills);
         hitCount++;
         this.removeProjectileMesh(proj, scene);
       } else {
-        // Move toward target
         const nx = dx / dist;
         const nz = dz / dist;
         proj.mesh.position.x += nx * moveDistance;
@@ -168,7 +233,6 @@ export class TowerCombatService {
     }
     this.projectiles = survivingProjectiles;
 
-    // Expire chain arc visuals
     const survivingArcs: ChainArc[] = [];
     for (const arc of this.chainArcs) {
       if (this.gameTime >= arc.expiresAt) {
@@ -181,7 +245,6 @@ export class TowerCombatService {
     }
     this.chainArcs = survivingArcs;
 
-    // Update mortar zones: deal DoT and expire old zones
     const survivingZones: MortarZone[] = [];
     for (const zone of this.mortarZones) {
       if (this.gameTime >= zone.expiresAt) {
@@ -191,7 +254,6 @@ export class TowerCombatService {
         continue;
       }
 
-      // Tick DoT every second
       if (this.gameTime - zone.lastTickTime >= MORTAR_VISUAL_CONFIG.tickInterval) {
         zone.lastTickTime = this.gameTime;
         this.enemyService.getEnemies().forEach(enemy => {
@@ -203,7 +265,6 @@ export class TowerCombatService {
             if (result.killed) {
               killedEnemyIds.push(enemy.id);
             }
-            // Mini-swarm meshes from DoT kills are added to scene here
             result.spawnedEnemies.forEach(mini => {
               if (mini.mesh) scene.add(mini.mesh);
             });
@@ -241,7 +302,6 @@ export class TowerCombatService {
       const dz = enemy.position.z - towerWorldZ;
       const dist = Math.sqrt(dx * dx + dz * dz);
 
-      // Range check in world units (tileSize = 1, so range in tiles = range in world units)
       if (dist <= stats.range && dist < nearestDist) {
         nearest = enemy;
         nearestDist = dist;
@@ -267,10 +327,8 @@ export class TowerCombatService {
 
       const existing = this.slowEffects.get(enemy.id);
       if (existing) {
-        // Refresh duration — do not re-apply speed reduction (already slowed)
         existing.expiresAt = this.gameTime + slowDuration;
       } else {
-        // First application — record original speed and reduce it
         const originalSpeed = enemy.speed;
         enemy.speed = originalSpeed * slowFactor;
         this.slowEffects.set(enemy.id, {
@@ -282,10 +340,57 @@ export class TowerCombatService {
     });
   }
 
+  /** Apply Freeze ability: set all enemies in range to speed 0. */
+  private applyFreezeAura(tower: PlacedTower): void {
+    const stats = getEffectiveStats(tower.type, tower.level);
+    const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
+    const freezeDuration = TOWER_ABILITIES[tower.type].duration;
+
+    this.enemyService.getEnemies().forEach(enemy => {
+      if (enemy.health <= 0) return;
+
+      const dx = enemy.position.x - towerWorldX;
+      const dz = enemy.position.z - towerWorldZ;
+      if (Math.sqrt(dx * dx + dz * dz) > stats.range) return;
+
+      const existing = this.slowEffects.get(enemy.id);
+      if (existing) {
+        existing.expiresAt = this.gameTime + freezeDuration;
+        enemy.speed = ABILITY_CONFIG.freezeSpeedFactor;
+      } else {
+        const originalSpeed = enemy.speed;
+        enemy.speed = ABILITY_CONFIG.freezeSpeedFactor;
+        this.slowEffects.set(enemy.id, {
+          enemyId: enemy.id,
+          originalSpeed,
+          expiresAt: this.gameTime + freezeDuration,
+        });
+      }
+    });
+  }
+
+  /** Restore freeze-affected enemies to their original speed. */
+  private expireFreezeEffect(tower: PlacedTower): void {
+    const stats = getEffectiveStats(tower.type, tower.level);
+    const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
+
+    this.enemyService.getEnemies().forEach(enemy => {
+      if (enemy.health <= 0) return;
+      const dx = enemy.position.x - towerWorldX;
+      const dz = enemy.position.z - towerWorldZ;
+      if (Math.sqrt(dx * dx + dz * dz) > stats.range) return;
+
+      const effect = this.slowEffects.get(enemy.id);
+      if (effect && enemy.speed === ABILITY_CONFIG.freezeSpeedFactor) {
+        enemy.speed = effect.originalSpeed;
+        this.slowEffects.delete(enemy.id);
+      }
+    });
+  }
+
   private expireSlowEffects(): void {
     for (const [enemyId, effect] of this.slowEffects) {
       if (this.gameTime >= effect.expiresAt) {
-        // Restore speed if enemy is still alive
         const enemy = this.enemyService.getEnemies().get(enemyId);
         if (enemy && enemy.health > 0) {
           enemy.speed = effect.originalSpeed;
@@ -299,9 +404,10 @@ export class TowerCombatService {
     tower: PlacedTower,
     primaryTarget: Enemy,
     stats: TowerStats,
-    scene: THREE.Scene
+    scene: THREE.Scene,
+    chainCountOverride?: number
   ): string[] {
-    const chainCount = stats.chainCount ?? 3;
+    const chainCount = chainCountOverride ?? (stats.chainCount ?? 3);
     const chainRange = stats.chainRange ?? 2;
     const kills: string[] = [];
     const hitIds = new Set<string>();
@@ -311,8 +417,6 @@ export class TowerCombatService {
     let currentTarget: Enemy = primaryTarget;
     let currentDamage = stats.damage;
 
-    // Track the position we draw each arc *from* — starts at the tower, then
-    // advances to each hit target's position after processing that bounce.
     const towerPos = this.getTowerWorldPos(tower);
     let previousX = towerPos.x;
     let previousZ = towerPos.z;
@@ -320,14 +424,11 @@ export class TowerCombatService {
     for (let bounce = 0; bounce <= chainCount; bounce++) {
       hitIds.add(currentTarget.id);
 
-      // Draw arc from previousPosition → currentTarget
       const fromX = previousX;
       const fromZ = previousZ;
-
       const toX = currentTarget.position.x;
       const toZ = currentTarget.position.z;
 
-      // Create visual arc line (tower → first target, then target → next target)
       {
         const arcGeom = new THREE.BufferGeometry();
         const vertices = new Float32Array([
@@ -345,24 +446,19 @@ export class TowerCombatService {
         this.chainArcs.push({ line: arc, expiresAt: this.gameTime + CHAIN_LIGHTNING_CONFIG.arcLifetime });
       }
 
-      // Deal damage
       const chainResult = this.enemyService.damageEnemy(currentTarget.id, currentDamage);
       if (chainResult.killed) {
         kills.push(currentTarget.id);
       }
-      // Mini-swarm meshes from chain kills need to be tracked — caller adds to scene
-      // via killedEnemyIds which triggers removeEnemy; spawnedEnemies returned separately
       chainResult.spawnedEnemies.forEach(mini => {
         if (mini.mesh) scene.add(mini.mesh);
       });
 
       if (bounce === chainCount) break;
 
-      // Find next target: nearest enemy within chainRange not yet hit
       const nextTarget = this.findChainTarget(currentTarget, chainRange, hitIds);
       if (!nextTarget) break;
 
-      // Advance "from" position to the current hit before moving to next target
       previousX = currentTarget.position.x;
       previousZ = currentTarget.position.z;
 
@@ -402,10 +498,22 @@ export class TowerCombatService {
     const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
 
     if (tower.type === TowerType.MORTAR) {
-      // Mortar fires a slow arc projectile to the target's current position
-      this.fireMortarProjectile(tower, target, stats, towerWorldX, towerWorldZ, scene);
+      const napalmActive = tower.abilityPrimed;
+      if (napalmActive) tower.abilityPrimed = false;
+      this.fireMortarProjectile(tower, target, stats, towerWorldX, towerWorldZ, scene, napalmActive);
       return;
     }
+
+    // Overcharge: triple damage on next Sniper shot
+    let effectiveDamage = stats.damage;
+    if (tower.type === TowerType.SNIPER && tower.abilityPrimed) {
+      effectiveDamage = Math.round(stats.damage * ABILITY_CONFIG.overchargeMultiplier);
+      tower.abilityPrimed = false;
+    }
+
+    // Napalm: next Splash shot creates a burning zone on impact
+    const napalmActive = tower.type === TowerType.SPLASH && tower.abilityPrimed;
+    if (napalmActive) tower.abilityPrimed = false;
 
     const geometry = new THREE.SphereGeometry(PROJECTILE_CONFIG.radius, PROJECTILE_CONFIG.segments, PROJECTILE_CONFIG.segments);
     const material = new THREE.MeshBasicMaterial({
@@ -423,9 +531,10 @@ export class TowerCombatService {
       towerKey: tower.id,
       targetId: target.id,
       speed: stats.projectileSpeed,
-      damage: stats.damage,
+      damage: effectiveDamage,
       splashRadius: stats.splashRadius,
-      towerType: tower.type
+      towerType: tower.type,
+      napalmActive,
     });
   }
 
@@ -435,7 +544,8 @@ export class TowerCombatService {
     stats: TowerStats,
     towerWorldX: number,
     towerWorldZ: number,
-    scene: THREE.Scene
+    scene: THREE.Scene,
+    napalmActive = false
   ): void {
     const geometry = new THREE.SphereGeometry(PROJECTILE_CONFIG.radius * PROJECTILE_CONFIG.mortarRadiusMultiplier, PROJECTILE_CONFIG.segments, PROJECTILE_CONFIG.segments);
     const material = new THREE.MeshBasicMaterial({
@@ -455,7 +565,8 @@ export class TowerCombatService {
       speed: stats.projectileSpeed,
       damage: stats.damage,
       splashRadius: 0,
-      towerType: TowerType.MORTAR
+      towerType: TowerType.MORTAR,
+      napalmActive,
     });
   }
 
@@ -463,10 +574,11 @@ export class TowerCombatService {
     impactX: number,
     impactZ: number,
     stats: TowerStats,
-    scene: THREE.Scene
+    scene: THREE.Scene,
+    dotDurationOverride?: number
   ): string[] {
     const blastRadius = stats.blastRadius ?? 1.5;
-    const dotDuration = stats.dotDuration ?? 3;
+    const dotDuration = dotDurationOverride ?? (stats.dotDuration ?? 3);
     const dotDamage = stats.dotDamage ?? 3;
 
     const geometry = new THREE.CircleGeometry(blastRadius, MORTAR_VISUAL_CONFIG.zoneSegments);
@@ -483,7 +595,6 @@ export class TowerCombatService {
 
     this.audioService.playSfx('mortarExplosion');
 
-    // Initial blast — deal immediate damage on impact and track kills
     const initialKills: string[] = [];
     this.enemyService.getEnemies().forEach(enemy => {
       if (enemy.health <= 0) return;
@@ -517,16 +628,58 @@ export class TowerCombatService {
     const kills: string[] = [];
 
     if (proj.towerType === TowerType.MORTAR) {
-      // Look up the mortar tower's stats to create the zone
       const tower = this.placedTowers.get(proj.towerKey);
       const stats = tower ? getEffectiveStats(tower.type, tower.level) : null;
       if (stats) {
-        const initialKills = this.createMortarZone(proj.mesh.position.x, proj.mesh.position.z, stats, scene);
+        const dotDurationOverride = proj.napalmActive ? ABILITY_CONFIG.napalmDotDuration : undefined;
+        const initialKills = this.createMortarZone(proj.mesh.position.x, proj.mesh.position.z, stats, scene, dotDurationOverride);
         kills.push(...initialKills);
       }
-      // Further DoT kills are tracked in the zone update loop
+    } else if (proj.napalmActive) {
+      // Napalm: Splash projectile that also creates a burning zone on impact
+      const impactX = proj.mesh.position.x;
+      const impactZ = proj.mesh.position.z;
+
+      this.enemyService.getEnemies().forEach(enemy => {
+        const dx = enemy.position.x - impactX;
+        const dz = enemy.position.z - impactZ;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+
+        if (dist <= proj.splashRadius) {
+          const result = this.enemyService.damageEnemy(enemy.id, proj.damage);
+          if (result.killed) {
+            kills.push(enemy.id);
+          }
+          result.spawnedEnemies.forEach(mini => {
+            if (mini.mesh) scene.add(mini.mesh);
+          });
+        }
+      });
+
+      // Create burning zone at impact
+      const napalmGeom = new THREE.CircleGeometry(proj.splashRadius, MORTAR_VISUAL_CONFIG.zoneSegments);
+      const napalmMat = new THREE.MeshBasicMaterial({
+        color: MORTAR_VISUAL_CONFIG.zoneColor,
+        transparent: true,
+        opacity: MORTAR_VISUAL_CONFIG.zoneOpacity,
+        side: THREE.DoubleSide
+      });
+      const napalmMesh = new THREE.Mesh(napalmGeom, napalmMat);
+      napalmMesh.rotation.x = -Math.PI / 2;
+      napalmMesh.position.set(impactX, GROUND_EFFECT_Y, impactZ);
+      scene.add(napalmMesh);
+
+      const dotDamage = Math.max(1, Math.round(proj.damage * 0.5));
+      this.mortarZones.push({
+        mesh: napalmMesh,
+        centerX: impactX,
+        centerZ: impactZ,
+        blastRadius: proj.splashRadius,
+        dotDamage,
+        expiresAt: this.gameTime + ABILITY_CONFIG.napalmDotDuration,
+        lastTickTime: this.gameTime,
+      });
     } else if (proj.splashRadius > 0) {
-      // Splash damage — hit all enemies within radius of impact point
       const impactX = proj.mesh.position.x;
       const impactZ = proj.mesh.position.z;
 
@@ -546,7 +699,6 @@ export class TowerCombatService {
         }
       });
     } else {
-      // Single target damage
       const result = this.enemyService.damageEnemy(proj.targetId, proj.damage);
       if (result.killed) {
         kills.push(proj.targetId);
@@ -556,7 +708,6 @@ export class TowerCombatService {
       });
     }
 
-    // Track kills on the tower
     if (kills.length > 0) {
       const tower = this.placedTowers.get(proj.towerKey);
       if (tower) {
@@ -585,6 +736,36 @@ export class TowerCombatService {
     return this.placedTowers;
   }
 
+  /** Clear in-flight combat effects without removing towers. Used by wave restart. */
+  clearProjectiles(scene: THREE.Scene): void {
+    for (const proj of this.projectiles) {
+      this.removeProjectileMesh(proj, scene);
+    }
+    this.projectiles = [];
+
+    for (const arc of this.chainArcs) {
+      scene.remove(arc.line);
+      arc.line.geometry.dispose();
+      (arc.line.material as THREE.Material).dispose();
+    }
+    this.chainArcs = [];
+
+    for (const zone of this.mortarZones) {
+      scene.remove(zone.mesh);
+      zone.mesh.geometry.dispose();
+      (zone.mesh.material as THREE.Material).dispose();
+    }
+    this.mortarZones = [];
+
+    for (const effect of this.slowEffects.values()) {
+      const enemy = this.enemyService.getEnemies().get(effect.enemyId);
+      if (enemy && enemy.health > 0) {
+        enemy.speed = effect.originalSpeed;
+      }
+    }
+    this.slowEffects.clear();
+  }
+
   cleanup(scene: THREE.Scene): void {
     for (const proj of this.projectiles) {
       this.removeProjectileMesh(proj, scene);
@@ -605,7 +786,6 @@ export class TowerCombatService {
     }
     this.mortarZones = [];
 
-    // Restore all slowed enemies to original speed
     for (const effect of this.slowEffects.values()) {
       const enemy = this.enemyService.getEnemies().get(effect.enemyId);
       if (enemy && enemy.health > 0) {
@@ -614,7 +794,6 @@ export class TowerCombatService {
     }
     this.slowEffects.clear();
 
-    // Dispose and remove all tower meshes from scene
     this.placedTowers.forEach(tower => {
       if (tower.mesh) {
         scene.remove(tower.mesh);
