@@ -911,7 +911,13 @@
       gap: var(--spacing-sm);
       padding: var(--spacing-xs);
       width: 90%;
-      justify-content: center;
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      // Scrollbar hidden but still scrollable
+      scrollbar-width: none;
+      &::-webkit-scrollbar { display: none; }
     }
 
     .tower-btn {
@@ -930,6 +936,7 @@
 
       @media screen and (max-width: 768px) {
         min-width: 4rem;
+        flex-shrink: 0;
         padding: var(--spacing-xs);
       }
 
@@ -1063,6 +1070,10 @@
         color: rgba(255, 255, 255, 0.25);
         font-family: "Orbitron", sans-serif;
         letter-spacing: 0.0313rem;
+
+        @media screen and (max-width: 768px) {
+          display: none;
+        }
       }
 
       // --- Hover tooltip ---
@@ -1413,6 +1424,11 @@
     padding: var(--spacing-lg) var(--spacing-xl);
     max-width: 20rem;
 
+    @media screen and (max-width: 480px) {
+      max-width: 90vw;
+      padding: var(--spacing-md);
+    }
+
     h3 {
       margin: 0 0 var(--spacing-sm);
       color: var(--theme-purple-light);
@@ -1498,4 +1514,37 @@
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
   }
+}
+
+// Interest notification — floats up and fades out between waves
+.interest-notification {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 0.5rem 1.2rem;
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid var(--action-yellow, #eab308);
+  border-radius: var(--border-radius-md);
+  color: var(--action-yellow, #eab308);
+  font-size: 1.2rem;
+  font-weight: 700;
+  font-family: "Orbitron", sans-serif;
+  z-index: 60;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  animation: interestFloat 3s ease forwards;
+
+  .interest-icon {
+    font-size: 1rem;
+  }
+}
+
+@keyframes interestFloat {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+  15% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  70% { opacity: 1; transform: translate(-50%, -70%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -80%) scale(0.9); }
 }

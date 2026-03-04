@@ -83,6 +83,12 @@
     </ul>
   </div>
 
+  <!-- Interest notification — shown briefly after interest is awarded between waves -->
+  <div class="interest-notification" *ngIf="showInterestNotification" aria-live="polite">
+    <span class="interest-icon">&#9733;</span>
+    +{{ interestAmount }}g interest
+  </div>
+
   <!-- Wave control -->
   <div class="wave-control" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
     <button
@@ -92,7 +98,7 @@
       aria-label="Start next wave">
       <span *ngIf="gameState.wave === 0">Start Game</span>
       <span *ngIf="gameState.wave > 0">Next Wave</span>
-      <span class="wave-hint">Space</span>
+      <span class="wave-hint" *ngIf="!isMobileDevice">Space</span>
     </button>
   </div>
 
@@ -124,7 +130,7 @@
       [class.active]="showAllRanges"
       aria-label="Toggle all tower ranges [R]">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-      <span class="wave-hint">R</span>
+      <span class="wave-hint" *ngIf="!isMobileDevice">R</span>
     </button>
     <button
       class="control-btn restart-wave-btn"
@@ -133,7 +139,7 @@
       [class.disabled]="gameState.lives <= 1"
       aria-label="Restart current wave (costs 1 life) [Q]">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-      <span class="wave-hint">Q</span>
+      <span class="wave-hint" *ngIf="!isMobileDevice">Q</span>
     </button>
   </div>
 
@@ -141,7 +147,7 @@
 <div class="pause-overlay" *ngIf="isPaused" (click)="togglePause()">
   <div class="pause-content" (click)="$event.stopPropagation()">
     <h2 class="pause-title">Paused</h2>
-    <p class="pause-hint">Press P or click backdrop to resume</p>
+    <p class="pause-hint">{{ isMobileDevice ? 'Tap backdrop to resume' : 'Press P or click backdrop to resume' }}</p>
     <button class="resume-btn" (click)="togglePause()">Resume</button>
   </div>
 </div>
@@ -301,19 +307,33 @@
   <!-- Help overlay -->
   <div class="help-overlay" *ngIf="showHelpOverlay" (click)="showHelpOverlay = false">
     <div class="help-content" (click)="$event.stopPropagation()">
-      <h3>Keyboard Shortcuts</h3>
-      <div class="help-grid">
-        <span class="key">1-6</span><span>Select tower type</span>
-        <span class="key">Space</span><span>Start next wave</span>
-        <span class="key">P</span><span>Pause / Resume</span>
-        <span class="key">Q</span><span>Restart wave (-1 life)</span>
-        <span class="key">R</span><span>Toggle all range rings</span>
-        <span class="key">M</span><span>Toggle minimap</span>
-        <span class="key">Escape</span><span>Deselect tower</span>
-        <span class="key">WASD</span><span>Pan camera</span>
-        <span class="key">H</span><span>Toggle this help</span>
-      </div>
-      <p class="help-dismiss">Click anywhere or press H to close</p>
+      <ng-container *ngIf="!isMobileDevice">
+        <h3>Keyboard Shortcuts</h3>
+        <div class="help-grid">
+          <span class="key">1-6</span><span>Select tower type</span>
+          <span class="key">Space</span><span>Start next wave</span>
+          <span class="key">P</span><span>Pause / Resume</span>
+          <span class="key">Q</span><span>Restart wave (-1 life)</span>
+          <span class="key">R</span><span>Toggle all range rings</span>
+          <span class="key">M</span><span>Toggle minimap</span>
+          <span class="key">Escape</span><span>Deselect tower</span>
+          <span class="key">WASD</span><span>Pan camera</span>
+          <span class="key">H</span><span>Toggle this help</span>
+        </div>
+        <p class="help-dismiss">Click anywhere or press H to close</p>
+      </ng-container>
+      <ng-container *ngIf="isMobileDevice">
+        <h3>Touch Controls</h3>
+        <div class="help-grid">
+          <span class="key">Tap tile</span><span>Place tower</span>
+          <span class="key">Tap tower</span><span>Select tower</span>
+          <span class="key">Drag</span><span>Pan camera</span>
+          <span class="key">Pinch</span><span>Zoom camera</span>
+          <span class="key">Tap btn</span><span>Start next wave</span>
+          <span class="key">&#x23F8;</span><span>Pause / Resume</span>
+        </div>
+        <p class="help-dismiss">Tap anywhere to close</p>
+      </ng-container>
     </div>
   </div>
 </div>

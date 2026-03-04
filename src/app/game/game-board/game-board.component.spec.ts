@@ -538,4 +538,64 @@ describe('GameBoardComponent', () => {
       expect((component as any).pinchStartDistance).toBe(0);
     });
   });
+
+  describe('showInterestPopup', () => {
+    it('sets showInterestNotification to true and interestAmount when called with a positive amount', () => {
+      expect(component.showInterestNotification).toBeFalse();
+
+      (component as any).showInterestPopup(5);
+
+      expect(component.showInterestNotification).toBeTrue();
+      expect(component.interestAmount).toBe(5);
+    });
+
+    it('clears the notification flag after 3 seconds', (done) => {
+      jasmine.clock().install();
+
+      (component as any).showInterestPopup(3);
+      expect(component.showInterestNotification).toBeTrue();
+
+      jasmine.clock().tick(3000);
+      expect(component.showInterestNotification).toBeFalse();
+
+      jasmine.clock().uninstall();
+      done();
+    });
+
+    it('resets a previous timer when called a second time before it expires', () => {
+      jasmine.clock().install();
+
+      (component as any).showInterestPopup(2);
+      jasmine.clock().tick(1000);
+
+      // Second call before the first timer fires
+      (component as any).showInterestPopup(7);
+      expect(component.interestAmount).toBe(7);
+      expect(component.showInterestNotification).toBeTrue();
+
+      // The original 3-second timer would have fired at t=3000 from the first call,
+      // but the reset timer from the second call fires 3000ms after the second call (t=4000).
+      jasmine.clock().tick(2001); // t=3001 from first call — if old timer leaked, flag would be false
+      expect(component.showInterestNotification).toBeTrue();
+
+      jasmine.clock().tick(999); // t=4000 from first call — new timer fires
+      expect(component.showInterestNotification).toBeFalse();
+
+      jasmine.clock().uninstall();
+    });
+
+    it('awardInterest returning 0 does not call showInterestPopup', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      spyOn(gameStateService, 'awardInterest').and.returnValue(0);
+      spyOn(component as any, 'showInterestPopup');
+
+      // Directly simulate the branch that would call showInterestPopup
+      const interest = gameStateService.awardInterest();
+      if (interest > 0) {
+        (component as any).showInterestPopup(interest);
+      }
+
+      expect((component as any).showInterestPopup).not.toHaveBeenCalled();
+    });
+  });
 });

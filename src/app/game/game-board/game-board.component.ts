@@ -123,6 +123,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   showAllRanges = false;
   sellConfirmPending = false;
   showHelpOverlay = false;
+
+  // Interest notification — shown briefly when interest is awarded at end of wave
+  showInterestNotification = false;
+  interestAmount = 0;
+  private interestNotificationTimer: ReturnType<typeof setTimeout> | null = null;
   private rangeRingMeshes: THREE.Mesh[] = [];
 
   // Animation
@@ -146,6 +151,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private touchStartTime = 0;
   private touchIsDragging = false;
   private pinchStartDistance = 0;
+
+  /** True when the device supports touch — used to swap keyboard hints for touch instructions. */
+  readonly isMobileDevice: boolean = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
   // Audio state exposed to template
   get audioMuted(): boolean { return this.audioService.isMuted; }
@@ -1200,6 +1208,18 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.tileMeshes.get(`${this.selectedTile.row}-${this.selectedTile.col}`) || null;
   }
 
+  showInterestPopup(amount: number): void {
+    if (this.interestNotificationTimer !== null) {
+      clearTimeout(this.interestNotificationTimer);
+    }
+    this.interestAmount = amount;
+    this.showInterestNotification = true;
+    this.interestNotificationTimer = setTimeout(() => {
+      this.showInterestNotification = false;
+      this.interestNotificationTimer = null;
+    }, 3000);
+  }
+
   togglePause(): void {
     this.gameStateService.togglePause();
   }
@@ -1470,7 +1490,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             this.audioService.playVictory();
           } else if (postWavePhase === GamePhase.INTERMISSION) {
             this.audioService.playWaveClear();
-            this.gameStateService.awardInterest();
+            const interest = this.gameStateService.awardInterest();
+            if (interest > 0) {
+              this.showInterestPopup(interest);
+            }
           }
 
           // Record game end stats for profile (VICTORY or DEFEAT, fires once per game)
@@ -1554,6 +1577,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     cancelAnimationFrame(this.animationFrameId);
+
+    if (this.interestNotificationTimer !== null) {
+      clearTimeout(this.interestNotificationTimer);
+      this.interestNotificationTimer = null;
+    }
 
     if (this.stateSubscription) {
       this.stateSubscription.unsubscribe();
