@@ -95,6 +95,27 @@ export const ABILITY_CONFIG = {
   freezeSpeedFactor: 0,
 } as const;
 
+export const enum TargetingPriority {
+  FIRST = 0,     // Closest to exit (most distanceTraveled)
+  LAST = 1,      // Farthest from exit (least distanceTraveled)
+  STRONGEST = 2, // Most current HP
+  WEAKEST = 3    // Least current HP
+}
+
+export const TARGETING_LABELS: Record<TargetingPriority, string> = {
+  [TargetingPriority.FIRST]: 'First',
+  [TargetingPriority.LAST]: 'Last',
+  [TargetingPriority.STRONGEST]: 'Strong',
+  [TargetingPriority.WEAKEST]: 'Weak',
+};
+
+export const TARGETING_PRIORITIES = [
+  TargetingPriority.FIRST,
+  TargetingPriority.LAST,
+  TargetingPriority.STRONGEST,
+  TargetingPriority.WEAKEST,
+] as const;
+
 export interface PlacedTower {
   id: string;
   type: TowerType;
@@ -109,6 +130,7 @@ export interface PlacedTower {
   abilityActiveEnd: number;    // gameTime when active ability effect expires (0 = not active)
   abilityCharges: number;      // remaining charges for multi-shot abilities like Barrage
   abilityPrimed: boolean;      // true when a next-shot ability is pending
+  targetingPriority: TargetingPriority; // which enemies this tower prefers to target
 }
 
 export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {

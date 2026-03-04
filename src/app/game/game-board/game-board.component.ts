@@ -25,7 +25,7 @@ import { MinimapService, MinimapEntityData, MinimapTerrainData } from './service
 import { SettingsService } from './services/settings.service';
 import { TowerUnlockService } from './services/tower-unlock.service';
 import { disposeMaterial } from './utils/three-utils';
-import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_ABILITIES, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
+import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_ABILITIES, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TargetingPriority, TARGETING_LABELS } from './models/tower.model';
 import { TOWER_UNLOCK_CONDITIONS } from './models/tower-unlock.model';
 import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
@@ -100,6 +100,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   towerConfigs = TOWER_CONFIGS;
   towerDescriptions = TOWER_DESCRIPTIONS;
   TowerType = TowerType;
+  targetingLabels = TARGETING_LABELS;
   GamePhase = GamePhase;
   DifficultyLevel = DifficultyLevel;
   difficultyPresets = DIFFICULTY_PRESETS;
@@ -302,6 +303,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.isTowerLocked(type)) return;
     this.selectedTowerType = type;
     this.deselectTower();
+  }
+
+  cycleTargeting(): void {
+    if (!this.selectedTowerInfo) return;
+    this.towerCombatService.cycleTargetingPriority(this.selectedTowerInfo.id);
   }
 
   upgradeTower(): void {

@@ -225,6 +225,12 @@
         <span class="stat-label">Kills</span>
         <span class="stat-value">{{ selectedTowerInfo.kills }}</span>
       </div>
+      <div class="stat-row targeting-row">
+        <span class="stat-label">Target</span>
+        <button class="targeting-btn" (click)="cycleTargeting()" aria-label="Cycle targeting priority">
+          {{ targetingLabels[selectedTowerInfo.targetingPriority] }}
+        </button>
+      </div>
     </div>
     <div class="tower-info-actions">
       <button

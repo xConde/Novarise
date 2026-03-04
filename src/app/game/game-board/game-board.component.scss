@@ -611,6 +611,26 @@
           font-weight: 600;
         }
       }
+
+      .targeting-row {
+        align-items: center;
+
+        .targeting-btn {
+          padding: 0.15rem 0.5rem;
+          border-radius: var(--border-radius-sm, 4px);
+          border: 1px solid var(--border-color);
+          background: var(--theme-purple-dark);
+          color: var(--theme-purple-lighter);
+          font-size: var(--font-size-small);
+          font-family: "Orbitron", sans-serif;
+          cursor: pointer;
+          transition: background var(--transition-fast) ease;
+
+          &:hover {
+            background: var(--theme-purple-dark-hover);
+          }
+        }
+      }
     }
 
     .tower-info-actions {

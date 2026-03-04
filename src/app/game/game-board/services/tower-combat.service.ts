@@ -11,6 +11,7 @@ import {
   getEffectiveStats,
   TOWER_ABILITIES,
   ABILITY_CONFIG,
+  TargetingPriority,
 } from '../models/tower.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
@@ -86,6 +87,7 @@ export class TowerCombatService {
       abilityActiveEnd: 0,
       abilityCharges: 0,
       abilityPrimed: false,
+      targetingPriority: TargetingPriority.FIRST,
     });
   }
 
@@ -292,8 +294,8 @@ export class TowerCombatService {
   private findTarget(tower: PlacedTower, stats: TowerStats): Enemy | null {
     const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
 
-    let nearest: Enemy | null = null;
-    let nearestDist = Infinity;
+    let best: Enemy | null = null;
+    let bestScore = -Infinity;
 
     this.enemyService.getEnemies().forEach(enemy => {
       if (enemy.health <= 0) return;
@@ -302,13 +304,41 @@ export class TowerCombatService {
       const dz = enemy.position.z - towerWorldZ;
       const dist = Math.sqrt(dx * dx + dz * dz);
 
-      if (dist <= stats.range && dist < nearestDist) {
-        nearest = enemy;
-        nearestDist = dist;
+      if (dist > stats.range) return;
+
+      let score: number;
+      switch (tower.targetingPriority) {
+        case TargetingPriority.FIRST:
+          score = enemy.distanceTraveled; // Higher = closer to exit
+          break;
+        case TargetingPriority.LAST:
+          score = -enemy.distanceTraveled; // Lower distance = farthest from exit
+          break;
+        case TargetingPriority.STRONGEST:
+          score = enemy.health;
+          break;
+        case TargetingPriority.WEAKEST:
+          score = -enemy.health; // Negate so lowest HP wins
+          break;
+        default:
+          score = enemy.distanceTraveled;
+      }
+
+      if (score > bestScore) {
+        best = enemy;
+        bestScore = score;
       }
     });
 
-    return nearest;
+    return best;
+  }
+
+  /** Cycle a tower's targeting priority to the next value. Returns new priority or null if tower not found. */
+  cycleTargetingPriority(key: string): TargetingPriority | null {
+    const tower = this.placedTowers.get(key);
+    if (!tower) return null;
+    tower.targetingPriority = ((tower.targetingPriority + 1) % 4) as TargetingPriority;
+    return tower.targetingPriority;
   }
 
   private applySlowAura(tower: PlacedTower, stats: TowerStats): void {

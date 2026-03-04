@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { TowerCombatService } from './tower-combat.service';
 import { EnemyService, DamageResult } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
-import { TowerType, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TOWER_ABILITIES, ABILITY_CONFIG } from '../models/tower.model';
+import { TowerType, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TOWER_ABILITIES, ABILITY_CONFIG, TargetingPriority } from '../models/tower.model';
 import { Enemy, EnemyType } from '../models/enemy.model';
 import { AudioService } from './audio.service';
 import * as THREE from 'three';
@@ -1286,6 +1286,78 @@ describe('TowerCombatService — ability system', () => {
       service.activateAbility(key);
       service.update(1.0, mockScene); // fire
       expect(service.getTower(key)!.abilityPrimed).toBeFalse();
+    });
+  });
+
+  // --- Targeting Priority ---
+
+  describe('targetingPriority', () => {
+    it('should default to FIRST targeting priority on register', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const tower = service.getTower(`${TOWER_ROW}-${TOWER_COL}`)!;
+      expect(tower.targetingPriority).toBe(TargetingPriority.FIRST);
+    });
+
+    it('should cycle through all 4 targeting priorities', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+      expect(service.cycleTargetingPriority(key)).toBe(TargetingPriority.LAST);
+      expect(service.cycleTargetingPriority(key)).toBe(TargetingPriority.STRONGEST);
+      expect(service.cycleTargetingPriority(key)).toBe(TargetingPriority.WEAKEST);
+      expect(service.cycleTargetingPriority(key)).toBe(TargetingPriority.FIRST); // wraps back
+    });
+
+    it('should return null for cycleTargetingPriority when tower does not exist', () => {
+      expect(service.cycleTargetingPriority('99-99')).toBeNull();
+    });
+
+    it('should target enemy with most distanceTraveled when priority is FIRST', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      // Ensure FIRST priority
+      const tower = service.getTower(key)!;
+      expect(tower.targetingPriority).toBe(TargetingPriority.FIRST);
+
+      // Two enemies in range — nearLeader has traveled more (closer to exit)
+      const laggard = createEnemy('laggard', TOWER_WORLD_X, TOWER_WORLD_Z, 100);
+      laggard.distanceTraveled = 2;
+      const leader = createEnemy('leader', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 100);
+      leader.distanceTraveled = 10;
+
+      enemyMap.set('laggard', laggard);
+      enemyMap.set('leader', leader);
+
+      // Fire once; projectile for leader hits on next tick since it is 1 unit away
+      service.update(0.016, mockScene);
+      service.update(2.0, mockScene);
+
+      // Leader (most distanceTraveled) should take damage; laggard should not
+      expect(leader.health).toBeLessThan(100);
+      expect(laggard.health).toBe(100);
+    });
+
+    it('should target enemy with least health when priority is WEAKEST', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      // Cycle to WEAKEST (FIRST → LAST → STRONGEST → WEAKEST)
+      service.cycleTargetingPriority(key); // LAST
+      service.cycleTargetingPriority(key); // STRONGEST
+      service.cycleTargetingPriority(key); // WEAKEST
+
+      const healthy = createEnemy('healthy', TOWER_WORLD_X, TOWER_WORLD_Z, 200);
+      const wounded = createEnemy('wounded', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 10);
+
+      enemyMap.set('healthy', healthy);
+      enemyMap.set('wounded', wounded);
+
+      // First update fires; second update advances projectile to hit
+      service.update(0.016, mockScene);
+      service.update(2.0, mockScene);
+
+      // Wounded (least HP) should be targeted; healthy should be untouched
+      expect(wounded.health).toBeLessThan(10);
+      expect(healthy.health).toBe(200);
     });
   });
 });
