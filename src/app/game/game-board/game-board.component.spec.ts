@@ -7,6 +7,11 @@ import { GameBoardComponent } from './game-board.component';
 import { GameBoardService } from './game-board.service';
 import { MapBridgeService } from './services/map-bridge.service';
 import { GameStateService } from './services/game-state.service';
+import { GameStatsService } from './services/game-stats.service';
+import { PlayerProfileService } from './services/player-profile.service';
+import { DamagePopupService } from './services/damage-popup.service';
+import { MinimapService } from './services/minimap.service';
+import { SettingsService } from './services/settings.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase } from './models/game-state.model';
 import { TowerType } from './models/tower.model';
 import { ScoreBreakdown, calculateScoreBreakdown } from './models/score.model';
@@ -14,12 +19,39 @@ import { ScoreBreakdown, calculateScoreBreakdown } from './models/score.model';
 describe('GameBoardComponent', () => {
   let component: GameBoardComponent;
   let fixture: ComponentFixture<GameBoardComponent>;
+  let gameStatsSpy: jasmine.SpyObj<GameStatsService>;
+  let playerProfileSpy: jasmine.SpyObj<PlayerProfileService>;
+  let damagePopupSpy: jasmine.SpyObj<DamagePopupService>;
+  let minimapSpy: jasmine.SpyObj<MinimapService>;
+  let settingsSpy: jasmine.SpyObj<SettingsService>;
 
   beforeEach(async () => {
+    gameStatsSpy = jasmine.createSpyObj('GameStatsService', ['recordKill', 'recordDamage', 'recordGoldEarned', 'recordEnemyLeaked', 'recordTowerBuilt', 'recordTowerSold', 'recordShot', 'getStats', 'reset']);
+    gameStatsSpy.getStats.and.returnValue({ killsByTowerType: {} as any, totalDamageDealt: 0, totalGoldEarned: 0, enemiesLeaked: 0, towersBuilt: 0, towersSold: 0, shotsFired: 0 });
+
+    playerProfileSpy = jasmine.createSpyObj('PlayerProfileService', ['recordGameEnd', 'getProfile']);
+    playerProfileSpy.recordGameEnd.and.returnValue([]);
+
+    damagePopupSpy = jasmine.createSpyObj('DamagePopupService', ['spawn', 'update', 'cleanup']);
+
+    minimapSpy = jasmine.createSpyObj('MinimapService', ['init', 'update', 'cleanup', 'toggleVisibility']);
+
+    settingsSpy = jasmine.createSpyObj('SettingsService', ['get', 'update', 'reset']);
+    settingsSpy.get.and.returnValue({ audioMuted: false, difficulty: 'normal' as any, gameSpeed: 1 });
+
     await TestBed.configureTestingModule({
       declarations: [ GameBoardComponent ],
       imports: [ RouterTestingModule ],
-      providers: [ GameBoardService, MapBridgeService, GameStateService ]
+      providers: [
+        GameBoardService,
+        MapBridgeService,
+        GameStateService,
+        { provide: GameStatsService, useValue: gameStatsSpy },
+        { provide: PlayerProfileService, useValue: playerProfileSpy },
+        { provide: DamagePopupService, useValue: damagePopupSpy },
+        { provide: MinimapService, useValue: minimapSpy },
+        { provide: SettingsService, useValue: settingsSpy },
+      ]
     })
     .compileComponents();
   });
