@@ -140,8 +140,9 @@
   .hud-wave-status {
     @include glass-panel;
     position: absolute;
-    top: var(--spacing-md);
-    right: var(--spacing-md);
+    top: calc(var(--spacing-md) + 3rem); // below HUD bar
+    left: 50%;
+    transform: translateX(-50%);
     padding: var(--spacing-xs) var(--spacing-md);
     border: var(--border-width-thin) solid rgba(255, 100, 100, 0.3);
     color: #ff8888;

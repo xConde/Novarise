@@ -224,117 +224,23 @@
   <!-- Tower selection -->
   <div class="tower-selection" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
     <button
+      *ngFor="let tower of towerTypes"
       class="tower-btn"
-      [class.selected]="selectedTowerType === TowerType.BASIC"
-      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[TowerType.BASIC].cost"
-      (click)="selectTowerType(TowerType.BASIC)"
-      aria-label="Select Basic Tower">
+      [class.selected]="selectedTowerType === tower.type"
+      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[tower.type].cost"
+      (click)="selectTowerType(tower.type)"
+      [attr.aria-label]="'Select ' + (tower.type | titlecase) + ' Tower'">
       <div class="tower-tooltip" role="tooltip">
-        <div class="tooltip-stat"><span class="tooltip-label">DMG</span><span class="tooltip-val">{{ towerConfigs[TowerType.BASIC].damage }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">RNG</span><span class="tooltip-val">{{ towerConfigs[TowerType.BASIC].range }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">RATE</span><span class="tooltip-val">{{ towerConfigs[TowerType.BASIC].fireRate }}s</span></div>
-        <div class="tooltip-desc">{{ towerDescriptions[TowerType.BASIC] }}</div>
+        <div class="tooltip-stat"><span class="tooltip-label">DMG</span><span class="tooltip-val">{{ towerConfigs[tower.type].damage }}</span></div>
+        <div class="tooltip-stat"><span class="tooltip-label">RNG</span><span class="tooltip-val">{{ towerConfigs[tower.type].range }}</span></div>
+        <div class="tooltip-stat"><span class="tooltip-label">RATE</span><span class="tooltip-val">{{ towerConfigs[tower.type].fireRate }}s</span></div>
+        <div class="tooltip-desc">{{ towerDescriptions[tower.type] }}</div>
         <div class="tooltip-arrow"></div>
       </div>
-      <div class="tower-icon basic"></div>
-      <span class="tower-name">Basic</span>
-      <span class="tower-cost">{{ towerConfigs[TowerType.BASIC].cost }}g</span>
-      <span class="tower-hotkey">[1]</span>
-    </button>
-
-    <button
-      class="tower-btn"
-      [class.selected]="selectedTowerType === TowerType.SNIPER"
-      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[TowerType.SNIPER].cost"
-      (click)="selectTowerType(TowerType.SNIPER)"
-      aria-label="Select Sniper Tower">
-      <div class="tower-tooltip" role="tooltip">
-        <div class="tooltip-stat"><span class="tooltip-label">DMG</span><span class="tooltip-val">{{ towerConfigs[TowerType.SNIPER].damage }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">RNG</span><span class="tooltip-val">{{ towerConfigs[TowerType.SNIPER].range }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">RATE</span><span class="tooltip-val">{{ towerConfigs[TowerType.SNIPER].fireRate }}s</span></div>
-        <div class="tooltip-desc">{{ towerDescriptions[TowerType.SNIPER] }}</div>
-        <div class="tooltip-arrow"></div>
-      </div>
-      <div class="tower-icon sniper"></div>
-      <span class="tower-name">Sniper</span>
-      <span class="tower-cost">{{ towerConfigs[TowerType.SNIPER].cost }}g</span>
-      <span class="tower-hotkey">[2]</span>
-    </button>
-
-    <button
-      class="tower-btn"
-      [class.selected]="selectedTowerType === TowerType.SPLASH"
-      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[TowerType.SPLASH].cost"
-      (click)="selectTowerType(TowerType.SPLASH)"
-      aria-label="Select Splash Tower">
-      <div class="tower-tooltip" role="tooltip">
-        <div class="tooltip-stat"><span class="tooltip-label">DMG</span><span class="tooltip-val">{{ towerConfigs[TowerType.SPLASH].damage }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">RNG</span><span class="tooltip-val">{{ towerConfigs[TowerType.SPLASH].range }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">RATE</span><span class="tooltip-val">{{ towerConfigs[TowerType.SPLASH].fireRate }}s</span></div>
-        <div class="tooltip-desc">{{ towerDescriptions[TowerType.SPLASH] }}</div>
-        <div class="tooltip-arrow"></div>
-      </div>
-      <div class="tower-icon splash"></div>
-      <span class="tower-name">Splash</span>
-      <span class="tower-cost">{{ towerConfigs[TowerType.SPLASH].cost }}g</span>
-      <span class="tower-hotkey">[3]</span>
-    </button>
-
-    <button
-      class="tower-btn"
-      [class.selected]="selectedTowerType === TowerType.SLOW"
-      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[TowerType.SLOW].cost"
-      (click)="selectTowerType(TowerType.SLOW)"
-      aria-label="Select Slow Tower">
-      <div class="tower-tooltip" role="tooltip">
-        <div class="tooltip-stat"><span class="tooltip-label">DMG</span><span class="tooltip-val">{{ towerConfigs[TowerType.SLOW].damage }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">RNG</span><span class="tooltip-val">{{ towerConfigs[TowerType.SLOW].range }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">RATE</span><span class="tooltip-val">{{ towerConfigs[TowerType.SLOW].fireRate }}s</span></div>
-        <div class="tooltip-desc">{{ towerDescriptions[TowerType.SLOW] }}</div>
-        <div class="tooltip-arrow"></div>
-      </div>
-      <div class="tower-icon slow"></div>
-      <span class="tower-name">Slow</span>
-      <span class="tower-cost">{{ towerConfigs[TowerType.SLOW].cost }}g</span>
-      <span class="tower-hotkey">[4]</span>
-    </button>
-
-    <button
-      class="tower-btn"
-      [class.selected]="selectedTowerType === TowerType.CHAIN"
-      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[TowerType.CHAIN].cost"
-      (click)="selectTowerType(TowerType.CHAIN)"
-      aria-label="Select Chain Tower">
-      <div class="tower-tooltip" role="tooltip">
-        <div class="tooltip-stat"><span class="tooltip-label">DMG</span><span class="tooltip-val">{{ towerConfigs[TowerType.CHAIN].damage }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">RNG</span><span class="tooltip-val">{{ towerConfigs[TowerType.CHAIN].range }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">RATE</span><span class="tooltip-val">{{ towerConfigs[TowerType.CHAIN].fireRate }}s</span></div>
-        <div class="tooltip-desc">{{ towerDescriptions[TowerType.CHAIN] }}</div>
-        <div class="tooltip-arrow"></div>
-      </div>
-      <div class="tower-icon chain"></div>
-      <span class="tower-name">Chain</span>
-      <span class="tower-cost">{{ towerConfigs[TowerType.CHAIN].cost }}g</span>
-      <span class="tower-hotkey">[5]</span>
-    </button>
-
-    <button
-      class="tower-btn"
-      [class.selected]="selectedTowerType === TowerType.MORTAR"
-      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[TowerType.MORTAR].cost"
-      (click)="selectTowerType(TowerType.MORTAR)"
-      aria-label="Select Mortar Tower">
-      <div class="tower-tooltip" role="tooltip">
-        <div class="tooltip-stat"><span class="tooltip-label">DMG</span><span class="tooltip-val">{{ towerConfigs[TowerType.MORTAR].damage }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">RNG</span><span class="tooltip-val">{{ towerConfigs[TowerType.MORTAR].range }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">RATE</span><span class="tooltip-val">{{ towerConfigs[TowerType.MORTAR].fireRate }}s</span></div>
-        <div class="tooltip-desc">{{ towerDescriptions[TowerType.MORTAR] }}</div>
-        <div class="tooltip-arrow"></div>
-      </div>
-      <div class="tower-icon mortar"></div>
-      <span class="tower-name">Mortar</span>
-      <span class="tower-cost">{{ towerConfigs[TowerType.MORTAR].cost }}g</span>
-      <span class="tower-hotkey">[6]</span>
+      <div class="tower-icon" [ngClass]="tower.type"></div>
+      <span class="tower-name">{{ tower.type | titlecase }}</span>
+      <span class="tower-cost">{{ towerConfigs[tower.type].cost }}g</span>
+      <span class="tower-hotkey">[{{ tower.hotkey }}]</span>
     </button>
   </div>
 

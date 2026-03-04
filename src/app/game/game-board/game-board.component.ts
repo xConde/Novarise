@@ -100,6 +100,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   DifficultyLevel = DifficultyLevel;
   difficultyPresets = DIFFICULTY_PRESETS;
   difficultyLevels = Object.values(DifficultyLevel);
+  towerTypes: { type: TowerType; hotkey: string }[] = Object.entries(TOWER_HOTKEYS).map(
+    ([key, type]) => ({ type, hotkey: key })
+  );
 
   // Score breakdown — populated when game ends (VICTORY or DEFEAT)
   scoreBreakdown: ScoreBreakdown | null = null;
