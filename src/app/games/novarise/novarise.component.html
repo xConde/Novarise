@@ -38,6 +38,12 @@
       (openMapManagerClick)="openMapManager()">
     </app-edit-controls>
 
+    <!-- Navigation links -->
+    <div class="editor-nav-links">
+      <button class="nav-btn" (click)="goToCampaign()">Campaign</button>
+      <button class="nav-btn" (click)="goToMaps()">My Maps</button>
+    </div>
+
     <!-- Map Manager Dialog -->
     <div class="map-manager-overlay" *ngIf="mapManagerOpen" (click)="closeMapManager()">
       <div class="map-manager-panel" (click)="$event.stopPropagation()">

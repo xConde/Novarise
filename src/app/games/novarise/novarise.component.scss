@@ -93,6 +93,41 @@
   }
 }
 
+// Editor navigation links (Campaign / My Maps)
+.editor-nav-links {
+  position: absolute;
+  top: var(--spacing-md);
+  left: var(--spacing-md);
+  display: flex;
+  gap: var(--spacing-sm);
+  z-index: 100;
+}
+
+.nav-btn {
+  background: rgba(0, 0, 0, 0.75);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
+  border-radius: var(--border-radius-md);
+  backdrop-filter: blur(0.625rem);
+  color: var(--theme-purple-mid);
+  font-size: var(--font-size-small);
+  font-family: 'Orbitron', sans-serif;
+  padding: var(--spacing-xs) var(--spacing-md);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast) ease;
+
+  &:hover {
+    background: var(--theme-purple-a30);
+    border-color: var(--theme-purple-a80);
+    color: var(--theme-purple-lighter);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--theme-purple-lighter);
+    outline-offset: 2px;
+  }
+}
+
 // Map Manager Overlay
 .map-manager-overlay {
   position: absolute;

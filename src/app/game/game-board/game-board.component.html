@@ -193,6 +193,7 @@
       <div class="overlay-actions">
         <button class="restart-btn" (click)="restartGame()">Play Again</button>
         <button class="edit-map-btn" (click)="goToEditor()">Edit Map</button>
+        <button class="campaign-btn" (click)="goToCampaign()">Campaign</button>
       </div>
     </div>
   </div>
@@ -266,19 +267,27 @@
       *ngFor="let tower of towerTypes"
       class="tower-btn"
       [class.selected]="selectedTowerType === tower.type"
-      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[tower.type].cost"
+      [class.unaffordable]="!isTowerLocked(tower.type) && (!gameState || gameState.gold < towerConfigs[tower.type].cost)"
+      [class.locked]="isTowerLocked(tower.type)"
       (click)="selectTowerType(tower.type)"
-      [attr.aria-label]="'Select ' + (tower.type | titlecase) + ' Tower'">
+      [attr.aria-label]="isTowerLocked(tower.type) ? getUnlockHint(tower.type) : 'Select ' + (tower.type | titlecase) + ' Tower'"
+      [attr.aria-disabled]="isTowerLocked(tower.type)">
       <div class="tower-tooltip" role="tooltip">
-        <div class="tooltip-stat"><span class="tooltip-label">Damage</span><span class="tooltip-val">{{ towerConfigs[tower.type].damage }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">Range</span><span class="tooltip-val">{{ towerConfigs[tower.type].range }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">Rate</span><span class="tooltip-val">{{ towerConfigs[tower.type].fireRate }}s</span></div>
-        <div class="tooltip-desc">{{ towerDescriptions[tower.type] }}</div>
+        <ng-container *ngIf="!isTowerLocked(tower.type)">
+          <div class="tooltip-stat"><span class="tooltip-label">Damage</span><span class="tooltip-val">{{ towerConfigs[tower.type].damage }}</span></div>
+          <div class="tooltip-stat"><span class="tooltip-label">Range</span><span class="tooltip-val">{{ towerConfigs[tower.type].range }}</span></div>
+          <div class="tooltip-stat"><span class="tooltip-label">Rate</span><span class="tooltip-val">{{ towerConfigs[tower.type].fireRate }}s</span></div>
+          <div class="tooltip-desc">{{ towerDescriptions[tower.type] }}</div>
+        </ng-container>
+        <ng-container *ngIf="isTowerLocked(tower.type)">
+          <div class="tooltip-desc locked-desc">{{ getUnlockHint(tower.type) }}</div>
+        </ng-container>
         <div class="tooltip-arrow"></div>
       </div>
       <div class="tower-icon" [ngClass]="tower.type"></div>
       <span class="tower-name">{{ tower.type | titlecase }}</span>
-      <span class="tower-cost">{{ towerConfigs[tower.type].cost }}g</span>
+      <span class="tower-cost" *ngIf="!isTowerLocked(tower.type)">{{ towerConfigs[tower.type].cost }}g</span>
+      <span class="tower-lock-hint" *ngIf="isTowerLocked(tower.type)">{{ getUnlockHint(tower.type) }}</span>
       <span class="tower-hotkey">{{ tower.hotkey }}</span>
     </button>
   </div>

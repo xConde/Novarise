@@ -32,4 +32,8 @@ export class MapSelectComponent implements OnInit {
   goToEditor(): void {
     this.router.navigate(['/edit']);
   }
+
+  goToCampaign(): void {
+    this.router.navigate(['/campaign']);
+  }
 }

@@ -1690,6 +1690,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.router.navigate(['/play']);
   }
 
+  public goToCampaign(): void {
+    this.router.navigate(['/campaign']);
+  }
+
+  public goToMaps(): void {
+    this.router.navigate(['/maps']);
+  }
+
   /**
    * Export current map to a downloadable file
    */

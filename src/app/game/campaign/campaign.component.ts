@@ -52,6 +52,10 @@ export class CampaignComponent implements OnInit {
     this.router.navigate(['/edit']);
   }
 
+  goToMaps(): void {
+    this.router.navigate(['/maps']);
+  }
+
   resetProgress(): void {
     const confirmed = window.confirm(
       'Reset all campaign progress? This cannot be undone.'

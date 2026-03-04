@@ -23,8 +23,10 @@ import { PlayerProfileService, GameEndStats } from './services/player-profile.se
 import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService, MinimapEntityData, MinimapTerrainData } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
+import { TowerUnlockService } from './services/tower-unlock.service';
 import { disposeMaterial } from './utils/three-utils';
 import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_ABILITIES, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
+import { TOWER_UNLOCK_CONDITIONS } from './models/tower-unlock.model';
 import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
@@ -181,7 +183,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private playerProfileService: PlayerProfileService,
     private damagePopupService: DamagePopupService,
     private minimapService: MinimapService,
-    private settingsService: SettingsService
+    private settingsService: SettingsService,
+    private towerUnlockService: TowerUnlockService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -287,7 +290,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.settingsService.update({ difficulty });
   }
 
+  isTowerLocked(type: TowerType): boolean {
+    return !this.towerUnlockService.isTowerUnlocked(type);
+  }
+
+  getUnlockHint(type: TowerType): string {
+    return TOWER_UNLOCK_CONDITIONS[type].description;
+  }
+
   selectTowerType(type: TowerType): void {
+    if (this.isTowerLocked(type)) return;
     this.selectedTowerType = type;
     this.deselectTower();
   }
@@ -478,6 +490,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
     this.router.navigate(['/edit']);
+  }
+
+  goToCampaign(): void {
+    if (this.gameState.phase === GamePhase.COMBAT && !confirm('Leave the game? Progress will be lost.')) {
+      return;
+    }
+    this.router.navigate(['/campaign']);
   }
 
   startWave(): void {
@@ -1141,6 +1160,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
 
     if (!this.gameBoardService.canPlaceTower(row, col)) return;
+
+    // Prevent placing locked towers (guard against direct/keyboard/touch paths)
+    if (this.isTowerLocked(this.selectedTowerType)) return;
 
     const towerStats = TOWER_CONFIGS[this.selectedTowerType];
 

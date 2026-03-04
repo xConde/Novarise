@@ -226,6 +226,7 @@ $number-circle-size: 2.5rem;
 }
 
 .back-btn,
+.maps-btn,
 .reset-btn {
   padding: 0.6rem 1.5rem;
   border-radius: var(--border-radius-md);
@@ -239,7 +240,8 @@ $number-circle-size: 2.5rem;
   }
 }
 
-.back-btn {
+.back-btn,
+.maps-btn {
   border: var(--border-width-thin) solid var(--theme-purple);
   background: var(--theme-purple-a20);
   color: var(--theme-purple-lighter);
