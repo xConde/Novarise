@@ -52,13 +52,19 @@
     }
   }
 
-  // --- Help button ---
-  .help-btn {
-    @include glass-panel;
+  // --- Top-right controls cluster ---
+  .top-right-controls {
     position: absolute;
     top: var(--spacing-md);
-    // calc: audio btn width (~2.5rem) + gap, keeping them from overlapping
-    right: calc(var(--spacing-md) + 3rem);
+    right: var(--spacing-md);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    z-index: var(--z-index-overlay);
+  }
+
+  .help-btn {
+    @include glass-panel;
     width: 2rem;
     height: 2rem;
     padding: 0;
@@ -81,22 +87,14 @@
 
   // --- FPS counter ---
   .fps-counter {
-    position: absolute;
-    top: var(--spacing-md);
-    // calc: audio btn (~2.5rem) + help btn (2rem) + two gaps, keeping FPS left of help
-    right: calc(var(--spacing-md) + 5.5rem);
     color: var(--theme-purple-mid);
     font-family: "Orbitron", sans-serif;
     font-size: 0.7rem;
     opacity: 0.6;
-    z-index: var(--z-index-overlay);
   }
 
   .audio-toggle-btn {
     @include glass-panel;
-    position: absolute;
-    top: var(--spacing-md);
-    right: var(--spacing-md);
     padding: var(--spacing-xs) var(--spacing-sm);
     border: var(--border-width-thin) solid var(--theme-purple-a50);
     color: var(--theme-purple-mid);
@@ -176,22 +174,22 @@
   }
 
   .hud-wave-status {
-    @include glass-panel;
     position: absolute;
-    top: calc(var(--spacing-md) + 3rem); // below HUD bar
+    top: calc(var(--spacing-md) + 3.5rem);
     left: 50%;
     transform: translateX(-50%);
-    padding: var(--spacing-xs) var(--spacing-md);
-    border: var(--border-width-thin) solid rgba(255, 100, 100, 0.3);
-    color: #ff8888;
-    font-size: var(--font-size-small);
-    animation: pulse-glow 2s ease-in-out infinite;
+    padding: 0.25rem var(--spacing-md);
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: var(--border-radius-md);
+    color: rgba(255, 136, 136, 0.8);
+    font-family: "Orbitron", sans-serif;
+    font-size: 0.7rem;
     white-space: nowrap;
+    z-index: var(--z-index-overlay);
 
     .wave-enemy-count {
-      font-size: var(--font-size-base);
       font-weight: 700;
-      color: var(--text-color);
+      color: #ff8888;
     }
   }
 
