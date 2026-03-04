@@ -37,7 +37,7 @@
     color: var(--theme-purple-mid);
     font-size: var(--font-size-small);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast) ease;
     white-space: nowrap;
 
     &:hover {
@@ -57,7 +57,8 @@
     @include glass-panel;
     position: absolute;
     top: var(--spacing-md);
-    right: 6.5rem;
+    // calc: audio btn width (~2.5rem) + gap, keeping them from overlapping
+    right: calc(var(--spacing-md) + 3rem);
     width: 2rem;
     height: 2rem;
     padding: 0;
@@ -65,7 +66,7 @@
     color: var(--theme-purple-mid);
     line-height: 0;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast) ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -82,7 +83,8 @@
   .fps-counter {
     position: absolute;
     top: var(--spacing-md);
-    right: 9rem; // right of: help btn (6.5rem) + audio btn (spacing-md)
+    // calc: audio btn (~2.5rem) + help btn (2rem) + two gaps, keeping FPS left of help
+    right: calc(var(--spacing-md) + 5.5rem);
     color: var(--theme-purple-mid);
     font-family: "Orbitron", sans-serif;
     font-size: 0.7rem;
@@ -99,7 +101,7 @@
     border: var(--border-width-thin) solid var(--theme-purple-a50);
     color: var(--theme-purple-mid);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast) ease;
     line-height: 0;
     display: flex;
     align-items: center;
@@ -883,7 +885,7 @@
           content: '';
           width: 1.25rem;
           height: 1.25rem;
-          background: #ff6600;
+          background: var(--tower-color-basic);
           border-radius: 50%;
           box-shadow: 0 0 var(--spacing-xs) rgba(255, 102, 0, 0.5);
         }
@@ -894,24 +896,25 @@
           height: 0;
           border-left: 0.75rem solid transparent;
           border-right: 0.75rem solid transparent;
-          border-bottom: 1.5rem solid #9900ff;
-          box-shadow: 0 0 var(--spacing-xs) rgba(153, 0, 255, 0.5);
+          border-bottom: 1.5rem solid var(--tower-color-sniper);
+          // CSS border triangles don't support box-shadow — use filter instead
+          filter: drop-shadow(0 0 4px rgba(153, 0, 255, 0.5));
         }
 
         &.splash::before {
           content: '';
           width: 1.25rem;
           height: 1.25rem;
-          background: #00ff00;
+          background: var(--tower-color-splash);
           box-shadow: 0 0 var(--spacing-xs) rgba(0, 255, 0, 0.5);
         }
 
         &.slow::before {
           content: '';
-          width: 1.25rem;
-          height: 1.25rem;
-          background: #4488ff;
-          border-radius: 50%;
+          width: 0.9rem;
+          height: 0.9rem;
+          background: var(--tower-color-slow);
+          transform: rotate(45deg);
           box-shadow: 0 0 var(--spacing-xs) rgba(68, 136, 255, 0.6);
         }
 
@@ -919,7 +922,7 @@
           content: '';
           width: 0.25rem;
           height: 1.5rem;
-          background: #ffdd00;
+          background: var(--tower-color-chain);
           border-radius: 0.125rem;
           box-shadow: 0 0 var(--spacing-xs) rgba(255, 221, 0, 0.7);
         }
@@ -928,7 +931,7 @@
           content: '';
           width: 1.4rem;
           height: 0.75rem;
-          background: #664422;
+          background: var(--tower-color-mortar);
           border-radius: 0.1rem;
           box-shadow: 0 0 var(--spacing-xs) rgba(255, 100, 34, 0.4);
         }
@@ -989,7 +992,6 @@
 
           .tooltip-label {
             color: rgba(255, 255, 255, 0.45);
-            text-transform: uppercase;
             letter-spacing: 0.0625rem;
           }
 

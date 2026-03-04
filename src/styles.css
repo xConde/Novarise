@@ -52,6 +52,14 @@
   --enemy-color-boss: #ff00ff;
   --enemy-color-swarm: #44ff44;
 
+  /* Tower type colors */
+  --tower-color-basic: #ff6600;
+  --tower-color-sniper: #9900ff;
+  --tower-color-splash: #00ff00;
+  --tower-color-slow: #4488ff;
+  --tower-color-chain: #ffdd00;
+  --tower-color-mortar: #664422;
+
   /* Rainbow effect colors */
   --rainbow-red: #FF0000;
   --rainbow-orange: #FFA500;
