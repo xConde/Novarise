@@ -52,11 +52,38 @@
     }
   }
 
-  // --- Audio toggle button ---
+  // --- Help button ---
+  .help-btn {
+    @include glass-panel;
+    position: absolute;
+    top: var(--spacing-md);
+    right: 6.5rem;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: var(--border-width-thin) solid var(--theme-purple-a50);
+    color: var(--theme-purple-mid);
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+
+    &:hover {
+      background: var(--theme-purple-a30);
+      border-color: var(--theme-purple-a80);
+      color: var(--theme-purple-lighter);
+    }
+  }
+
+  // --- FPS counter ---
   .fps-counter {
     position: absolute;
     top: var(--spacing-md);
-    right: 4.5rem;
+    right: 9rem; // right of: help btn (6.5rem) + audio btn (spacing-md)
     color: var(--theme-purple-mid);
     font-family: "Orbitron", sans-serif;
     font-size: 0.7rem;
@@ -109,6 +136,14 @@
       align-items: center;
       gap: 0.125rem;
 
+      &.secondary {
+        opacity: 0.55;
+
+        .hud-value {
+          font-size: var(--font-size-small);
+        }
+      }
+
       .hud-label {
         font-size: 0.625rem;
         text-transform: uppercase;
@@ -149,6 +184,12 @@
     font-size: var(--font-size-small);
     animation: pulse-glow 2s ease-in-out infinite;
     white-space: nowrap;
+
+    .wave-enemy-count {
+      font-size: var(--font-size-base);
+      font-weight: 700;
+      color: var(--text-color);
+    }
   }
 
   // --- Wave preview panel ---

@@ -11,6 +11,17 @@
 - **Boss mechanics** — Unique boss abilities per wave (shields, speed bursts, minion spawns)
 - **Tower synergies** — Adjacent tower bonuses (e.g., Slow + Sniper = guaranteed crit)
 
+### Game Design / UX
+- **Sell confirmation redesign** — Replace double-click pattern with explicit modal or undo. Current pulsing red state reads as "error" not "confirm"
+- **Tower placement undo** — Free undo immediately after placing (standard TD pattern). Currently requires sell at a loss
+- **Wave preview threat indicators** — Show HP/speed per enemy type, not just composition. Useless until player memorizes roster
+- **Difficulty as onboarding step** — Present as a focused first choice, not ambient UI competing with the board
+- **Skip intermission button** — Let player fast-forward to next wave during INTERMISSION
+- **"No gold" feedback** — Contextual message when player can't afford any tower and enemies are leaking
+- **Tower icon differentiation** — Basic and Slow both use circles. Need distinct shapes
+- **Map card metadata** — Show grid size or complexity indicator on map select cards
+- **Fire rate label clarity** — "Rate: 0.5s" is ambiguous. Consider "Attack Speed" or "shots/sec"
+
 ### Editor Features
 - **Template picker UI** — In-editor panel to browse and apply map templates
 - **Symmetry tools** — Mirror/rotate brushes for balanced map design

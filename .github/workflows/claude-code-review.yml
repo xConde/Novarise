@@ -54,7 +54,7 @@ jobs:
           FILES_CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | wc -l)
           echo "Files changed: $FILES_CHANGED"
 
-          if [ $FILES_CHANGED -gt 50 ]; then
+          if [ $FILES_CHANGED -gt 100 ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "PR has $FILES_CHANGED changed files (limit: 50). Claude review skipped." >> $GITHUB_STEP_SUMMARY
           else

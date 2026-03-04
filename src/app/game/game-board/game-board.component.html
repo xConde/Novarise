@@ -6,6 +6,9 @@
     Edit Map
   </button>
 
+  <!-- Help button -->
+  <button class="help-btn" (click)="showHelpOverlay = !showHelpOverlay" aria-label="Show keyboard shortcuts">?</button>
+
   <!-- Audio mute toggle -->
   <button class="audio-toggle-btn" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
     {{ audioMuted ? '&#128263;' : '&#128266;' }}
@@ -28,11 +31,11 @@
       <span class="hud-label">Wave</span>
       <span class="hud-value">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
     </div>
-    <div class="hud-stat">
+    <div class="hud-stat secondary">
       <span class="hud-label">Score</span>
       <span class="hud-value">{{ gameState.score }}</span>
     </div>
-    <div class="hud-stat">
+    <div class="hud-stat secondary">
       <span class="hud-label">Time</span>
       <span class="hud-value">{{ formattedTime }}</span>
     </div>
@@ -40,7 +43,7 @@
 
   <!-- Wave status indicator -->
   <div class="hud-wave-status" *ngIf="gameState.phase === GamePhase.COMBAT">
-    Wave {{ gameState.wave }} in progress... ({{ enemiesAlive }} alive, {{ enemiesToSpawn }} queued)
+    <span class="wave-enemy-count">{{ enemiesAlive + enemiesToSpawn }}</span> enemies remaining
   </div>
 
   <!-- Difficulty selector — only visible in SETUP before wave 0 starts -->
@@ -231,9 +234,9 @@
       (click)="selectTowerType(tower.type)"
       [attr.aria-label]="'Select ' + (tower.type | titlecase) + ' Tower'">
       <div class="tower-tooltip" role="tooltip">
-        <div class="tooltip-stat"><span class="tooltip-label">DMG</span><span class="tooltip-val">{{ towerConfigs[tower.type].damage }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">RNG</span><span class="tooltip-val">{{ towerConfigs[tower.type].range }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">RATE</span><span class="tooltip-val">{{ towerConfigs[tower.type].fireRate }}s</span></div>
+        <div class="tooltip-stat"><span class="tooltip-label">Damage</span><span class="tooltip-val">{{ towerConfigs[tower.type].damage }}</span></div>
+        <div class="tooltip-stat"><span class="tooltip-label">Range</span><span class="tooltip-val">{{ towerConfigs[tower.type].range }}</span></div>
+        <div class="tooltip-stat"><span class="tooltip-label">Rate</span><span class="tooltip-val">{{ towerConfigs[tower.type].fireRate }}s</span></div>
         <div class="tooltip-desc">{{ towerDescriptions[tower.type] }}</div>
         <div class="tooltip-arrow"></div>
       </div>
