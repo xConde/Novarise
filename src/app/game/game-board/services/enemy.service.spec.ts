@@ -114,7 +114,8 @@ describe('EnemyService', () => {
         EnemyType.SWIFT,
         EnemyType.BOSS,
         EnemyType.SHIELDED,
-        EnemyType.SWARM
+        EnemyType.SWARM,
+        EnemyType.FLYING
       ];
 
       types.forEach(type => {

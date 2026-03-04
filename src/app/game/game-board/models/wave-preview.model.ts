@@ -16,7 +16,8 @@ const ENEMY_TYPE_LABELS: Record<EnemyType, string> = {
   [EnemyType.SWIFT]: 'Swift',
   [EnemyType.BOSS]: 'Boss',
   [EnemyType.SHIELDED]: 'Shielded',
-  [EnemyType.SWARM]: 'Swarm'
+  [EnemyType.SWARM]: 'Swarm',
+  [EnemyType.FLYING]: 'Flying'
 };
 
 // Enemy types that cycle in endless waves — matches WaveService.ENDLESS_ENEMY_CYCLE

@@ -7,7 +7,8 @@ export enum EnemyType {
   SWIFT = 'SWIFT',
   BOSS = 'BOSS',
   SHIELDED = 'SHIELDED',
-  SWARM = 'SWARM'
+  SWARM = 'SWARM',
+  FLYING = 'FLYING'
 }
 
 export interface GridNode {
@@ -35,6 +36,7 @@ export interface Enemy {
   shield?: number;    // Current shield HP (SHIELDED type only)
   maxShield?: number; // Starting shield HP (SHIELDED type only)
   isMiniSwarm?: boolean; // True for mini-enemies spawned by SWARM death — prevents recursive spawning
+  isFlying?: boolean; // True for FLYING type — ignores terrain, immune to slow
 }
 
 export interface EnemyStats {
@@ -99,6 +101,13 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     color: 0xaaaa00, // Yellow-green
     size: 0.25,
     spawnOnDeath: 3
+  },
+  [EnemyType.FLYING]: {
+    health: 60,
+    speed: 2.5,
+    value: 20,
+    color: 0x88ccff, // Light blue
+    size: 0.3
   }
 };
 

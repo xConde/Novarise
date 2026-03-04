@@ -4,6 +4,7 @@ import { Enemy } from '../models/enemy.model';
 import { PlacedTower, TowerType, TowerStats, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats } from '../models/tower.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
+import { AudioService } from './audio.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
 
 /** Decay factor applied to chain lightning damage per bounce. */
@@ -71,7 +72,8 @@ export class TowerCombatService {
 
   constructor(
     private enemyService: EnemyService,
-    private gameBoardService: GameBoardService
+    private gameBoardService: GameBoardService,
+    private audioService: AudioService
   ) {}
 
   registerTower(row: number, col: number, type: TowerType, mesh: THREE.Group): void {
@@ -321,6 +323,8 @@ export class TowerCombatService {
     const kills: string[] = [];
     const hitIds = new Set<string>();
 
+    this.audioService.playSfx('chainZap');
+
     let currentTarget: Enemy = primaryTarget;
     let currentDamage = stats.damage;
 
@@ -492,6 +496,8 @@ export class TowerCombatService {
     zoneMesh.rotation.x = -Math.PI / 2;
     zoneMesh.position.set(impactX, GROUND_EFFECT_Y, impactZ);
     scene.add(zoneMesh);
+
+    this.audioService.playSfx('mortarExplosion');
 
     // Initial blast — deal immediate damage on impact and track kills
     const initialKills: string[] = [];

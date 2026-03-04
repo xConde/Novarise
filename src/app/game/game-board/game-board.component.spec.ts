@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
+import * as THREE from 'three';
 
 import { GameBoardComponent } from './game-board.component';
 import { GameBoardService } from './game-board.service';
@@ -307,6 +308,195 @@ describe('GameBoardComponent', () => {
         component.scoreBreakdown = { stars } as ScoreBreakdown;
         expect(component.starArray.length).toBe(3);
       }
+    });
+  });
+
+  describe('touch handler lifecycle', () => {
+    let mockCanvas: HTMLElement;
+    let addEventSpy: jasmine.Spy;
+    let removeEventSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      mockCanvas = document.createElement('canvas');
+      addEventSpy = spyOn(mockCanvas, 'addEventListener').and.callThrough();
+      removeEventSpy = spyOn(mockCanvas, 'removeEventListener').and.callThrough();
+
+      // Inject mock canvas via renderer stub on the private renderer field
+      (component as any).renderer = {
+        domElement: mockCanvas,
+        dispose: () => {}
+      };
+    });
+
+    it('setupTouchInteraction registers touchstart, touchmove, and touchend handlers', () => {
+      (component as any).setupTouchInteraction();
+
+      const registeredEvents = addEventSpy.calls.allArgs().map((args: unknown[]) => args[0]);
+      expect(registeredEvents).toContain('touchstart');
+      expect(registeredEvents).toContain('touchmove');
+      expect(registeredEvents).toContain('touchend');
+    });
+
+    it('touch handlers are registered as named references, not anonymous functions', () => {
+      (component as any).setupTouchInteraction();
+
+      const touchStartRef = (component as any).touchStartHandler;
+      const touchMoveRef = (component as any).touchMoveHandler;
+      const touchEndRef = (component as any).touchEndHandler;
+
+      expect(typeof touchStartRef).toBe('function');
+      expect(typeof touchMoveRef).toBe('function');
+      expect(typeof touchEndRef).toBe('function');
+      // They must not be the default no-op stubs (which are empty arrow functions sharing the same ref pattern)
+      // Confirm setup overwrote the placeholders
+      const calls = addEventSpy.calls.allArgs();
+      const startCall = calls.find((args: unknown[]) => args[0] === 'touchstart');
+      const moveCall = calls.find((args: unknown[]) => args[0] === 'touchmove');
+      const endCall = calls.find((args: unknown[]) => args[0] === 'touchend');
+
+      expect(startCall?.[1]).toBe(touchStartRef);
+      expect(moveCall?.[1]).toBe(touchMoveRef);
+      expect(endCall?.[1]).toBe(touchEndRef);
+    });
+
+    it('ngOnDestroy removes touchstart, touchmove, and touchend handlers', () => {
+      (component as any).setupTouchInteraction();
+
+      // Simulate ngOnDestroy canvas listener removal path
+      const canvas = (component as any).renderer.domElement as HTMLElement;
+      canvas.removeEventListener('touchstart', (component as any).touchStartHandler);
+      canvas.removeEventListener('touchmove', (component as any).touchMoveHandler);
+      canvas.removeEventListener('touchend', (component as any).touchEndHandler);
+
+      const removedEvents = removeEventSpy.calls.allArgs().map((args: unknown[]) => args[0]);
+      expect(removedEvents).toContain('touchstart');
+      expect(removedEvents).toContain('touchmove');
+      expect(removedEvents).toContain('touchend');
+    });
+
+    it('touchStartHandler records start position and resets drag flag', () => {
+      (component as any).setupTouchInteraction();
+      (component as any).touchIsDragging = true;
+
+      const touch = { clientX: 150, clientY: 200 } as Touch;
+      const event = { preventDefault: () => {}, touches: [touch] } as unknown as TouchEvent;
+
+      (component as any).touchStartHandler(event);
+
+      expect((component as any).touchStartX).toBe(150);
+      expect((component as any).touchStartY).toBe(200);
+      expect((component as any).touchIsDragging).toBeFalse();
+    });
+
+    it('touchStartHandler records pinch start distance for two-finger touch', () => {
+      (component as any).setupTouchInteraction();
+
+      const t0 = { clientX: 0, clientY: 0 } as Touch;
+      const t1 = { clientX: 30, clientY: 40 } as Touch;
+      const event = { preventDefault: () => {}, touches: [t0, t1] } as unknown as TouchEvent;
+
+      (component as any).touchStartHandler(event);
+
+      // distance = sqrt(30^2 + 40^2) = sqrt(900+1600) = 50
+      expect((component as any).pinchStartDistance).toBe(50);
+    });
+
+    it('touchMoveHandler sets touchIsDragging to true when movement exceeds threshold', () => {
+      (component as any).setupTouchInteraction();
+      (component as any).touchStartX = 0;
+      (component as any).touchStartY = 0;
+      (component as any).camera = { position: new THREE.Vector3(0, 10, 0) };
+      (component as any).controls = { target: new THREE.Vector3(0, 0, 0), dispose: () => {} };
+
+      const touch = { clientX: 20, clientY: 20 } as Touch;
+      const event = { preventDefault: () => {}, touches: [touch] } as unknown as TouchEvent;
+
+      (component as any).touchMoveHandler(event);
+
+      expect((component as any).touchIsDragging).toBeTrue();
+
+      // Prevent cleanup crash — reset partial mocks
+      (component as any).camera = null;
+      (component as any).controls = null;
+    });
+
+    it('touchMoveHandler does not set touchIsDragging when movement is within threshold', () => {
+      (component as any).setupTouchInteraction();
+      (component as any).touchStartX = 0;
+      (component as any).touchStartY = 0;
+      (component as any).touchIsDragging = false;
+
+      // Move only 5px total — below 10px threshold
+      const touch = { clientX: 3, clientY: 4 } as Touch;
+      const event = { preventDefault: () => {}, touches: [touch] } as unknown as TouchEvent;
+
+      (component as any).touchMoveHandler(event);
+
+      expect((component as any).touchIsDragging).toBeFalse();
+    });
+
+    it('touchEndHandler calls handleTapAsClick for a short tap with no drag', () => {
+      (component as any).setupTouchInteraction();
+      (component as any).touchStartX = 100;
+      (component as any).touchStartY = 200;
+      (component as any).touchStartTime = performance.now() - 50; // 50ms ago — within 300ms threshold
+      (component as any).touchIsDragging = false;
+
+      spyOn(component as any, 'handleTapAsClick');
+
+      const touch = { clientX: 100, clientY: 200 } as Touch;
+      const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
+
+      (component as any).touchEndHandler(event);
+
+      expect((component as any).handleTapAsClick).toHaveBeenCalledWith(100, 200);
+    });
+
+    it('touchEndHandler does not call handleTapAsClick when drag occurred', () => {
+      (component as any).setupTouchInteraction();
+      (component as any).touchStartTime = performance.now() - 50;
+      (component as any).touchIsDragging = true;
+
+      spyOn(component as any, 'handleTapAsClick');
+
+      const touch = { clientX: 100, clientY: 200 } as Touch;
+      const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
+
+      (component as any).touchEndHandler(event);
+
+      expect((component as any).handleTapAsClick).not.toHaveBeenCalled();
+    });
+
+    it('touchEndHandler does not call handleTapAsClick when tap duration exceeds threshold', () => {
+      (component as any).setupTouchInteraction();
+      (component as any).touchStartTime = performance.now() - 500; // 500ms — exceeds 300ms threshold
+      (component as any).touchIsDragging = false;
+
+      spyOn(component as any, 'handleTapAsClick');
+
+      const touch = { clientX: 100, clientY: 200 } as Touch;
+      const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
+
+      (component as any).touchEndHandler(event);
+
+      expect((component as any).handleTapAsClick).not.toHaveBeenCalled();
+    });
+
+    it('touchEndHandler resets touchIsDragging and pinchStartDistance', () => {
+      (component as any).setupTouchInteraction();
+      (component as any).touchIsDragging = true;
+      (component as any).pinchStartDistance = 50;
+
+      // Long press — no tap
+      (component as any).touchStartTime = performance.now() - 500;
+
+      const touch = { clientX: 0, clientY: 0 } as Touch;
+      const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
+
+      (component as any).touchEndHandler(event);
+
+      expect((component as any).touchIsDragging).toBeFalse();
+      expect((component as any).pinchStartDistance).toBe(0);
     });
   });
 });

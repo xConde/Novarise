@@ -30,6 +30,7 @@ import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
 import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
+import { TOUCH_CONFIG } from './constants/touch.constants';
 import { ENEMY_STATS } from './models/enemy.model';
 import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
 
@@ -113,6 +114,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private animationFrameId = 0;
   private resizeHandler: () => void = () => {};
   private stateSubscription: Subscription | null = null;
+
+  // Touch interaction
+  private touchStartHandler: (event: TouchEvent) => void = () => {};
+  private touchMoveHandler: (event: TouchEvent) => void = () => {};
+  private touchEndHandler: (event: TouchEvent) => void = () => {};
+  private touchStartX = 0;
+  private touchStartY = 0;
+  private touchStartTime = 0;
+  private touchIsDragging = false;
+  private pinchStartDistance = 0;
 
   // Audio state exposed to template
   get audioMuted(): boolean { return this.audioService.isMuted; }
@@ -222,6 +233,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.initializePostProcessing();
     this.initializeControls();
     this.setupMouseInteraction();
+    this.setupTouchInteraction();
     this.setupKeyboardControls();
     this.animate();
   }
@@ -845,6 +857,156 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     canvas.addEventListener('click', this.clickHandler);
   }
 
+  private setupTouchInteraction(): void {
+    const canvas = this.renderer.domElement;
+
+    this.touchStartHandler = (event: TouchEvent) => {
+      event.preventDefault();
+
+      if (event.touches.length === 1) {
+        // Single-finger: record start position and time for tap/drag detection
+        const touch = event.touches[0];
+        this.touchStartX = touch.clientX;
+        this.touchStartY = touch.clientY;
+        this.touchStartTime = performance.now();
+        this.touchIsDragging = false;
+      } else if (event.touches.length === 2) {
+        // Two-finger: record initial pinch distance for zoom
+        const dx = event.touches[0].clientX - event.touches[1].clientX;
+        const dy = event.touches[0].clientY - event.touches[1].clientY;
+        this.pinchStartDistance = Math.sqrt(dx * dx + dy * dy);
+      }
+    };
+
+    this.touchMoveHandler = (event: TouchEvent) => {
+      event.preventDefault();
+
+      if (event.touches.length === 1) {
+        const touch = event.touches[0];
+        const dx = touch.clientX - this.touchStartX;
+        const dy = touch.clientY - this.touchStartY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist > TOUCH_CONFIG.tapThresholdPx) {
+          this.touchIsDragging = true;
+        }
+
+        if (this.touchIsDragging) {
+          // Pan camera: map drag delta to world-space pan
+          const panX = -dx * TOUCH_CONFIG.dragSensitivity;
+          const panZ = -dy * TOUCH_CONFIG.dragSensitivity;
+          this.camera.position.x += panX;
+          this.camera.position.z += panZ;
+          this.controls.target.x += panX;
+          this.controls.target.z += panZ;
+
+          // Update start for incremental panning each move event
+          this.touchStartX = touch.clientX;
+          this.touchStartY = touch.clientY;
+        }
+      } else if (event.touches.length === 2) {
+        // Pinch zoom: compare current distance to start distance
+        const dx = event.touches[0].clientX - event.touches[1].clientX;
+        const dy = event.touches[0].clientY - event.touches[1].clientY;
+        const currentDistance = Math.sqrt(dx * dx + dy * dy);
+
+        if (this.pinchStartDistance > 0) {
+          const delta = this.pinchStartDistance - currentDistance;
+          const zoomDelta = delta * TOUCH_CONFIG.pinchZoomSpeed;
+          const dir = new THREE.Vector3()
+            .subVectors(this.camera.position, this.controls.target)
+            .normalize();
+          const newPos = this.camera.position.clone().addScaledVector(dir, zoomDelta);
+          const newDist = newPos.distanceTo(this.controls.target);
+
+          if (newDist >= TOUCH_CONFIG.minZoom && newDist <= TOUCH_CONFIG.maxZoom) {
+            this.camera.position.copy(newPos);
+          }
+        }
+
+        this.pinchStartDistance = currentDistance;
+      }
+    };
+
+    this.touchEndHandler = (event: TouchEvent) => {
+      event.preventDefault();
+
+      if (event.changedTouches.length === 1 && !this.touchIsDragging) {
+        const elapsed = performance.now() - this.touchStartTime;
+        if (elapsed < TOUCH_CONFIG.tapThresholdMs) {
+          // Short tap with no drag — treat as a click at the original touch position
+          this.handleTapAsClick(this.touchStartX, this.touchStartY);
+        }
+      }
+
+      this.touchIsDragging = false;
+      this.pinchStartDistance = 0;
+    };
+
+    canvas.addEventListener('touchstart', this.touchStartHandler, { passive: false });
+    canvas.addEventListener('touchmove', this.touchMoveHandler, { passive: false });
+    canvas.addEventListener('touchend', this.touchEndHandler, { passive: false });
+  }
+
+  /** Converts a canvas-relative touch position to NDC and runs the same raycasting as a mouse click. */
+  private handleTapAsClick(clientX: number, clientY: number): void {
+    const canvas = this.renderer.domElement;
+    const rect = canvas.getBoundingClientRect();
+    this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+
+    // Check for tower mesh taps first
+    const towerGroups = Array.from(this.towerMeshes.values());
+    const towerChildren: THREE.Object3D[] = [];
+    towerGroups.forEach(g => g.traverse(child => { if (child instanceof THREE.Mesh) towerChildren.push(child); }));
+    const towerHits = this.raycaster.intersectObjects(towerChildren);
+
+    if (towerHits.length > 0) {
+      let hitObj: THREE.Object3D | null = towerHits[0].object;
+      let foundKey: string | null = null;
+      while (hitObj) {
+        for (const [key, group] of this.towerMeshes) {
+          if (group === hitObj) { foundKey = key; break; }
+        }
+        if (foundKey) break;
+        hitObj = hitObj.parent;
+      }
+      if (foundKey) {
+        this.selectPlacedTower(foundKey);
+        return;
+      }
+    }
+
+    // Check tile taps
+    const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
+
+    const prevSelected = this.getSelectedTileMesh();
+    if (prevSelected) {
+      const material = prevSelected.material as THREE.MeshStandardMaterial;
+      const tileType = prevSelected.userData['tile'].type;
+      material.emissiveIntensity = tileType === BlockType.BASE ? TILE_EMISSIVE.base : tileType === BlockType.WALL ? TILE_EMISSIVE.wall : TILE_EMISSIVE.special;
+    }
+
+    if (intersects.length > 0) {
+      const mesh = intersects[0].object as THREE.Mesh;
+      const row = mesh.userData['row'];
+      const col = mesh.userData['col'];
+
+      this.selectedTile = { row, col };
+
+      const material = mesh.material as THREE.MeshStandardMaterial;
+      material.emissiveIntensity = TILE_EMISSIVE.selected;
+
+      this.deselectTower();
+      this.tryPlaceTower(row, col);
+    } else {
+      this.selectedTile = null;
+      this.deselectTower();
+    }
+  }
+
   private tryPlaceTower(row: number, col: number): void {
     const phase = this.gameStateService.getState().phase;
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
@@ -1120,6 +1282,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       const canvas = this.renderer.domElement;
       canvas.removeEventListener('mousemove', this.mousemoveHandler);
       canvas.removeEventListener('click', this.clickHandler);
+      canvas.removeEventListener('touchstart', this.touchStartHandler);
+      canvas.removeEventListener('touchmove', this.touchMoveHandler);
+      canvas.removeEventListener('touchend', this.touchEndHandler);
     }
 
     if (this.controls) {

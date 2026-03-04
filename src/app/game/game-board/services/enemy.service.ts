@@ -41,7 +41,12 @@ export class EnemyService {
 
     // Use first exit tile as target (they're grouped in center)
     const exitTile = exitTiles[0];
-    const path = this.findPath({ x: col, y: row }, { x: exitTile.col, y: exitTile.row });
+
+    // FLYING enemies bypass terrain — use a 2-node straight-line path
+    const isFlying = type === EnemyType.FLYING;
+    const path = isFlying
+      ? this.buildStraightPath({ x: col, y: row }, { x: exitTile.col, y: exitTile.row })
+      : this.findPath({ x: col, y: row }, { x: exitTile.col, y: exitTile.row });
 
     if (path.length === 0) {
       console.warn('No valid path found from spawner to exit');
@@ -52,10 +57,14 @@ export class EnemyService {
     const stats = ENEMY_STATS[type];
     const worldPos = this.gridToWorld(row, col);
 
+    // FLYING enemies hover above ground
+    const FLYING_Y = 1.5;
+    const yPos = isFlying ? FLYING_Y : stats.size;
+
     const enemy: Enemy = {
       id: `enemy-${this.enemyCounter++}`,
       type,
-      position: { x: worldPos.x, y: stats.size, z: worldPos.z },
+      position: { x: worldPos.x, y: yPos, z: worldPos.z },
       gridPosition: { row, col },
       health: stats.health,
       maxHealth: stats.health,
@@ -65,6 +74,10 @@ export class EnemyService {
       pathIndex: 0,
       distanceTraveled: 0
     };
+
+    if (isFlying) {
+      enemy.isFlying = true;
+    }
 
     if (stats.maxShield !== undefined) {
       enemy.shield = stats.maxShield;
@@ -272,16 +285,39 @@ export class EnemyService {
   }
 
   /**
-   * Create a 3D mesh for an enemy
+   * Create a 3D mesh for an enemy.
+   * FLYING enemies use a flat diamond (kite) shape made of 2 triangles,
+   * rotated to lie flat in the XZ plane.
+   * All other enemies use a sphere.
    */
   private createEnemyMesh(enemy: Enemy): THREE.Mesh {
     const stats = ENEMY_STATS[enemy.type];
 
-    const geometry = new THREE.SphereGeometry(stats.size, 16, 16);
+    let geometry: THREE.BufferGeometry;
+    if (enemy.isFlying) {
+      // Diamond: 4 vertices forming a rhombus in the XZ plane, 2 triangles
+      const s = stats.size;
+      const diamondGeom = new THREE.BufferGeometry();
+      const vertices = new Float32Array([
+         0,  0, -s * 2,  // front tip
+         s,  0,  0,      // right
+         0,  0,  s * 2,  // back tip
+        -s,  0,  0       // left
+      ]);
+      const indices = new Uint16Array([0, 1, 3, 1, 2, 3]);
+      diamondGeom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+      diamondGeom.setIndex(new THREE.BufferAttribute(indices, 1));
+      diamondGeom.computeVertexNormals();
+      geometry = diamondGeom;
+    } else {
+      geometry = new THREE.SphereGeometry(stats.size, 16, 16);
+    }
+
     const material = new THREE.MeshLambertMaterial({
       color: stats.color,
       emissive: stats.color,
-      emissiveIntensity: 0.3
+      emissiveIntensity: 0.3,
+      side: enemy.isFlying ? THREE.DoubleSide : THREE.FrontSide
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -605,6 +641,20 @@ export class EnemyService {
     const z = (row - boardHeight / 2) * tileSize;
 
     return { x, z };
+  }
+
+  /**
+   * Build a direct 2-node path from start to end, ignoring terrain.
+   * Used for FLYING enemies that bypass ground obstacles.
+   */
+  private buildStraightPath(
+    start: { x: number; y: number },
+    end: { x: number; y: number }
+  ): GridNode[] {
+    return [
+      { x: start.x, y: start.y, g: 0, h: 0, f: 0 },
+      { x: end.x,   y: end.y,   g: 0, h: 0, f: 0 }
+    ];
   }
 
   /**

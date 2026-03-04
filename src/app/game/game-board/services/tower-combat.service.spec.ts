@@ -4,12 +4,14 @@ import { EnemyService, DamageResult } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { TowerType, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats } from '../models/tower.model';
 import { Enemy, EnemyType } from '../models/enemy.model';
+import { AudioService } from './audio.service';
 import * as THREE from 'three';
 
 describe('TowerCombatService', () => {
   let service: TowerCombatService;
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
   let gameBoardServiceSpy: jasmine.SpyObj<GameBoardService>;
+  let audioServiceSpy: jasmine.SpyObj<AudioService>;
   let mockScene: THREE.Scene;
   let enemyMap: Map<string, Enemy>;
 
@@ -56,11 +58,14 @@ describe('TowerCombatService', () => {
     gameBoardServiceSpy.getBoardHeight.and.returnValue(20);
     gameBoardServiceSpy.getTileSize.and.returnValue(1);
 
+    audioServiceSpy = jasmine.createSpyObj('AudioService', ['playSfx']);
+
     TestBed.configureTestingModule({
       providers: [
         TowerCombatService,
         { provide: EnemyService, useValue: enemyServiceSpy },
-        { provide: GameBoardService, useValue: gameBoardServiceSpy }
+        { provide: GameBoardService, useValue: gameBoardServiceSpy },
+        { provide: AudioService, useValue: audioServiceSpy }
       ]
     });
     service = TestBed.inject(TowerCombatService);

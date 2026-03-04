@@ -2,7 +2,7 @@ import { EnemyType, ENEMY_STATS, Enemy, GridNode, MINI_SWARM_STATS } from './ene
 
 describe('Enemy Model', () => {
   describe('EnemyType Enum', () => {
-    it('should have all 7 enemy types defined', () => {
+    it('should have all 8 enemy types defined', () => {
       expect(EnemyType.BASIC).toBe('BASIC');
       expect(EnemyType.FAST).toBe('FAST');
       expect(EnemyType.HEAVY).toBe('HEAVY');
@@ -10,6 +10,7 @@ describe('Enemy Model', () => {
       expect(EnemyType.BOSS).toBe('BOSS');
       expect(EnemyType.SHIELDED).toBe('SHIELDED');
       expect(EnemyType.SWARM).toBe('SWARM');
+      expect(EnemyType.FLYING).toBe('FLYING');
     });
   });
 
@@ -22,6 +23,7 @@ describe('Enemy Model', () => {
       expect(ENEMY_STATS[EnemyType.BOSS]).toBeDefined();
       expect(ENEMY_STATS[EnemyType.SHIELDED]).toBeDefined();
       expect(ENEMY_STATS[EnemyType.SWARM]).toBeDefined();
+      expect(ENEMY_STATS[EnemyType.FLYING]).toBeDefined();
     });
 
     it('should have valid health values', () => {
@@ -245,8 +247,8 @@ describe('Enemy Model', () => {
         colors.add(stats.color);
       });
 
-      // All 7 enemy types should have unique colors
-      expect(colors.size).toBe(7);
+      // All 8 enemy types should have unique colors
+      expect(colors.size).toBe(8);
     });
 
     it('should have distinct sizes for visibility', () => {
@@ -357,6 +359,43 @@ describe('Enemy Model', () => {
       // Wave 7+ use SHIELDED and SWARM — this test verifies the enum values exist
       expect(EnemyType.SHIELDED).toBeDefined();
       expect(EnemyType.SWARM).toBeDefined();
+    });
+  });
+
+  describe('FLYING enemy stats', () => {
+    it('should have correct base stats', () => {
+      const flying = ENEMY_STATS[EnemyType.FLYING];
+      expect(flying.health).toBe(60);
+      expect(flying.speed).toBe(2.5);
+      expect(flying.value).toBe(20);
+      expect(flying.color).toBe(0x88ccff); // Light blue
+      expect(flying.size).toBe(0.3);
+    });
+
+    it('should not have maxShield', () => {
+      expect(ENEMY_STATS[EnemyType.FLYING].maxShield).toBeUndefined();
+    });
+
+    it('should not have spawnOnDeath', () => {
+      expect(ENEMY_STATS[EnemyType.FLYING].spawnOnDeath).toBeUndefined();
+    });
+
+    it('should have higher value than BASIC (unique threat via terrain bypass)', () => {
+      expect(ENEMY_STATS[EnemyType.FLYING].value).toBeGreaterThan(ENEMY_STATS[EnemyType.BASIC].value);
+    });
+
+    it('should have a distinct color from all other enemy types', () => {
+      const otherColors = Object.entries(ENEMY_STATS)
+        .filter(([type]) => type !== EnemyType.FLYING)
+        .map(([, stats]) => stats.color);
+      expect(otherColors).not.toContain(ENEMY_STATS[EnemyType.FLYING].color);
+    });
+  });
+
+  describe('Wave Definitions include FLYING enemy type', () => {
+    it('FLYING enum value should exist', () => {
+      expect(EnemyType.FLYING).toBeDefined();
+      expect(EnemyType.FLYING).toBe('FLYING');
     });
   });
 });
