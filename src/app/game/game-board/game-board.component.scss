@@ -158,7 +158,7 @@
         color: var(--text-color);
 
         &.lives {
-          color: #ff4444;
+          color: var(--game-health);
 
           &.critical {
             animation: pulse-critical 0.5s ease-in-out infinite alternate;
@@ -166,7 +166,7 @@
         }
 
         &.gold {
-          color: #ffd700;
+          color: var(--game-gold);
         }
       }
     }
@@ -189,7 +189,7 @@
 
     .wave-enemy-count {
       font-weight: 700;
-      color: #ff8888;
+      color: var(--game-wave-text);
     }
   }
 
@@ -243,13 +243,13 @@
       border-radius: 50%;
       flex-shrink: 0;
 
-      &[data-type='basic']    { background: var(--enemy-color-basic);   box-shadow: 0 0 4px rgba(255, 68, 68, 0.6); }
-      &[data-type='fast']     { background: var(--enemy-color-fast);    box-shadow: 0 0 4px rgba(255, 255, 0, 0.6); }
-      &[data-type='heavy']    { background: var(--enemy-color-heavy);   box-shadow: 0 0 4px rgba(68, 68, 255, 0.6); }
-      &[data-type='swift']    { background: var(--enemy-color-flying);  box-shadow: 0 0 4px rgba(68, 255, 255, 0.6); }
-      &[data-type='boss']     { background: var(--enemy-color-boss);    box-shadow: 0 0 4px rgba(255, 0, 255, 0.7); }
-      &[data-type='shielded'] { background: var(--enemy-color-shield);  box-shadow: 0 0 4px rgba(68, 136, 255, 0.6); }
-      &[data-type='swarm']    { background: var(--enemy-color-swarm);   box-shadow: 0 0 4px rgba(68, 255, 68, 0.6); }
+      &[data-type='basic']    { background: var(--enemy-color-basic);   box-shadow: 0 0 4px var(--enemy-glow-basic); }
+      &[data-type='fast']     { background: var(--enemy-color-fast);    box-shadow: 0 0 4px var(--enemy-glow-fast); }
+      &[data-type='heavy']    { background: var(--enemy-color-heavy);   box-shadow: 0 0 4px var(--enemy-glow-heavy); }
+      &[data-type='swift']    { background: var(--enemy-color-flying);  box-shadow: 0 0 4px var(--enemy-glow-flying); }
+      &[data-type='boss']     { background: var(--enemy-color-boss);    box-shadow: 0 0 4px var(--enemy-glow-boss); }
+      &[data-type='shielded'] { background: var(--enemy-color-shield);  box-shadow: 0 0 4px var(--enemy-glow-shielded); }
+      &[data-type='swarm']    { background: var(--enemy-color-swarm);   box-shadow: 0 0 4px var(--enemy-glow-swarm); }
     }
 
     .enemy-count {
@@ -330,7 +330,7 @@
         border: var(--border-width-medium) solid rgba(0, 255, 0, 0.4);
         box-shadow: 0 0 2.5rem rgba(0, 255, 0, 0.15);
 
-        h2 { color: #00ff88; }
+        h2 { color: var(--game-victory); }
       }
 
       &.defeat {
@@ -338,7 +338,7 @@
         border: var(--border-width-medium) solid rgba(255, 0, 0, 0.4);
         box-shadow: 0 0 2.5rem rgba(255, 0, 0, 0.15);
 
-        h2 { color: #ff4444; }
+        h2 { color: var(--game-defeat); }
       }
 
       h2 {
@@ -352,7 +352,7 @@
       .final-score {
         font-family: "Orbitron", sans-serif;
         font-size: var(--font-size-large);
-        color: #ffd700;
+        color: var(--game-gold);
         margin-bottom: var(--spacing-lg);
       }
 
@@ -369,12 +369,12 @@
           transition: transform 0.2s ease;
 
           &.filled {
-            color: #ffd700;
+            color: var(--game-star-filled);
             text-shadow: 0 0 0.75rem rgba(255, 215, 0, 0.6);
           }
 
           &.empty {
-            color: rgba(255, 255, 255, 0.2);
+            color: var(--game-star-empty);
           }
         }
       }
@@ -419,11 +419,11 @@
             font-weight: 600;
 
             &.multiplier {
-              color: #88aaff;
+              color: var(--score-multiplier);
             }
 
             &.final-value {
-              color: #ffd700;
+              color: var(--game-gold);
               font-size: var(--font-size-large);
               font-weight: 700;
             }
@@ -507,10 +507,10 @@
 
         .level-star {
           font-size: 0.75rem;
-          color: #ffd700;
+          color: var(--game-star-filled);
 
           &.empty {
-            color: rgba(255, 255, 255, 0.2);
+            color: var(--game-star-empty);
           }
         }
       }
@@ -583,14 +583,14 @@
         &.unaffordable {
           opacity: 0.4;
           cursor: not-allowed;
-          color: #ff4444;
+          color: var(--game-health);
         }
       }
 
       .sell-btn {
         background: rgba(100, 50, 0, 0.3);
         border-color: rgba(255, 200, 0, 0.3);
-        color: #ffd700;
+        color: var(--game-gold);
 
         &:hover {
           background: rgba(150, 75, 0, 0.4);
@@ -600,7 +600,7 @@
         &.confirm {
           background: rgba(200, 50, 0, 0.5);
           border-color: rgba(255, 100, 0, 0.8);
-          color: #ff4444;
+          color: var(--game-health);
           animation: pulse-warn 0.5s ease-in-out infinite alternate;
         }
       }
@@ -616,7 +616,7 @@
         align-items: center;
         justify-content: center;
         font-size: 0.6875rem;
-        color: #ffd700;
+        color: var(--game-gold);
         text-transform: uppercase;
         letter-spacing: 0.0625rem;
       }
@@ -793,7 +793,7 @@
       &.active {
         background: rgba(255, 200, 0, 0.15);
         border-color: rgba(255, 200, 0, 0.5);
-        color: #ffd700;
+        color: var(--game-gold);
         box-shadow: 0 0 var(--spacing-xs) rgba(255, 200, 0, 0.3);
       }
     }
@@ -862,7 +862,7 @@
       &.unaffordable {
         opacity: 0.4;
 
-        .tower-cost { color: #ff4444; }
+        .tower-cost { color: var(--game-health); }
       }
 
       .tower-icon {
@@ -885,7 +885,7 @@
           height: 1.25rem;
           background: var(--tower-color-basic);
           border-radius: 50%;
-          box-shadow: 0 0 var(--spacing-xs) rgba(255, 102, 0, 0.5);
+          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-basic);
         }
 
         &.sniper::before {
@@ -896,7 +896,7 @@
           border-right: 0.75rem solid transparent;
           border-bottom: 1.5rem solid var(--tower-color-sniper);
           // CSS border triangles don't support box-shadow — use filter instead
-          filter: drop-shadow(0 0 4px rgba(153, 0, 255, 0.5));
+          filter: drop-shadow(0 0 4px var(--tower-glow-sniper));
         }
 
         &.splash::before {
@@ -904,7 +904,7 @@
           width: 1.25rem;
           height: 1.25rem;
           background: var(--tower-color-splash);
-          box-shadow: 0 0 var(--spacing-xs) rgba(0, 255, 0, 0.5);
+          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-splash);
         }
 
         &.slow::before {
@@ -913,7 +913,7 @@
           height: 0.9rem;
           background: var(--tower-color-slow);
           transform: rotate(45deg);
-          box-shadow: 0 0 var(--spacing-xs) rgba(68, 136, 255, 0.6);
+          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-slow);
         }
 
         &.chain::before {
@@ -922,7 +922,7 @@
           height: 1.5rem;
           background: var(--tower-color-chain);
           border-radius: 0.125rem;
-          box-shadow: 0 0 var(--spacing-xs) rgba(255, 221, 0, 0.7);
+          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-chain);
         }
 
         &.mortar::before {
@@ -931,7 +931,7 @@
           height: 0.75rem;
           background: var(--tower-color-mortar);
           border-radius: 0.1rem;
-          box-shadow: 0 0 var(--spacing-xs) rgba(255, 100, 34, 0.4);
+          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-mortar);
         }
       }
 
@@ -949,7 +949,7 @@
 
       .tower-cost {
         font-size: 0.6875rem;
-        color: #ffd700;
+        color: var(--game-gold);
         font-family: "Orbitron", sans-serif;
       }
 

@@ -69,7 +69,7 @@
   &.disabled {
     opacity: 0.35;
     cursor: not-allowed;
-    color: #6a6a7a;
+    color: var(--text-disabled);
     border-color: var(--theme-purple-a30);
     background: var(--theme-purple-dark);
   }

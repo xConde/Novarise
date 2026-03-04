@@ -66,6 +66,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private skybox?: THREE.Mesh;
   private ambientLight?: THREE.AmbientLight;
   private directionalLight?: THREE.DirectionalLight;
+  private underLight?: THREE.PointLight;
+  private pointLights: THREE.PointLight[] = [];
   private bloomPass?: UnrealBloomPass;
   private vignettePass?: ShaderPass;
   private renderPass?: RenderPass;
@@ -514,7 +516,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     for (const mesh of this.rangeRingMeshes) {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+      disposeMaterial(mesh.material);
     }
     this.rangeRingMeshes = [];
     this.showAllRanges = false;
@@ -579,6 +581,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.scene.remove(this.directionalLight);
       this.directionalLight = undefined;
     }
+    if (this.underLight) {
+      this.scene.remove(this.underLight);
+      this.underLight = undefined;
+    }
+    for (const light of this.pointLights) {
+      this.scene.remove(light);
+    }
+    this.pointLights = [];
   }
 
   // --- Scene setup ---
@@ -693,14 +703,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.directionalLight = directionalLight;
     this.scene.add(this.directionalLight);
 
-    const underLight = new THREE.PointLight(UNDER_LIGHT.color, UNDER_LIGHT.intensity, UNDER_LIGHT.range);
-    underLight.position.set(...UNDER_LIGHT.position!);
-    this.scene.add(underLight);
+    this.underLight = new THREE.PointLight(UNDER_LIGHT.color, UNDER_LIGHT.intensity, UNDER_LIGHT.range);
+    this.underLight.position.set(...UNDER_LIGHT.position!);
+    this.scene.add(this.underLight);
 
     for (const cfg of POINT_LIGHTS) {
       const light = new THREE.PointLight(cfg.color, cfg.intensity, cfg.range);
       light.position.set(...cfg.position!);
       this.scene.add(light);
+      this.pointLights.push(light);
     }
   }
 
@@ -1163,7 +1174,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     for (const mesh of this.rangeRingMeshes) {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+      disposeMaterial(mesh.material);
     }
     this.rangeRingMeshes = [];
 
@@ -1521,7 +1532,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     if (this.renderer) {
-      this.renderer.domElement.remove();
+      if (this.renderer.domElement?.parentElement) {
+        this.renderer.domElement.remove();
+      }
       this.renderer.dispose();
     }
   }
