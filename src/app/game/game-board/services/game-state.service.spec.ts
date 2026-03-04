@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { GameStateService } from './game-state.service';
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, INITIAL_GAME_STATE } from '../models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, INITIAL_GAME_STATE, INTEREST_CONFIG } from '../models/game-state.model';
 
 describe('GameStateService', () => {
   let service: GameStateService;
@@ -776,6 +776,65 @@ describe('GameStateService', () => {
       service.reset();
       expect(service.getState().isEndless).toBeFalse();
       expect(service.getState().highestWave).toBe(0);
+    });
+  });
+
+  // --- Interest System ---
+  describe('awardInterest', () => {
+    function enterIntermission(): void {
+      service.startWave();
+      service.completeWave(0);
+      expect(service.getState().phase).toBe(GamePhase.INTERMISSION);
+    }
+
+    it('should award interest based on current gold during INTERMISSION', () => {
+      enterIntermission();
+      const goldBefore = service.getState().gold;
+      const expectedInterest = Math.min(
+        Math.floor(goldBefore * INTEREST_CONFIG.rate),
+        INTEREST_CONFIG.maxPayout
+      );
+      const result = service.awardInterest();
+      expect(result).toBe(expectedInterest);
+      expect(service.getState().gold).toBe(goldBefore + expectedInterest);
+    });
+
+    it('should add interest to score', () => {
+      enterIntermission();
+      const scoreBefore = service.getState().score;
+      const interest = service.awardInterest();
+      expect(service.getState().score).toBe(scoreBefore + interest);
+    });
+
+    it('should return 0 if not in INTERMISSION phase', () => {
+      expect(service.getState().phase).toBe(GamePhase.SETUP);
+      const result = service.awardInterest();
+      expect(result).toBe(0);
+    });
+
+    it('should return 0 during COMBAT phase', () => {
+      service.startWave();
+      expect(service.getState().phase).toBe(GamePhase.COMBAT);
+      const result = service.awardInterest();
+      expect(result).toBe(0);
+    });
+
+    it('should cap interest at maxPayout', () => {
+      enterIntermission();
+      // Set gold high enough that rate * gold > maxPayout
+      const highGold = Math.ceil(INTEREST_CONFIG.maxPayout / INTEREST_CONFIG.rate) + 1000;
+      (service as any).state.gold = highGold;
+      const result = service.awardInterest();
+      expect(result).toBe(INTEREST_CONFIG.maxPayout);
+    });
+
+    it('should return 0 and not emit when gold is 0', () => {
+      enterIntermission();
+      (service as any).state.gold = 0;
+      const emitSpy = spyOn(service as any, 'emit');
+      const result = service.awardInterest();
+      expect(result).toBe(0);
+      expect(emitSpy).not.toHaveBeenCalled();
     });
   });
 });

@@ -104,6 +104,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   wavePreview: WavePreviewEntry[] = [];
   showAllRanges = false;
   sellConfirmPending = false;
+  showHelpOverlay = false;
   private rangeRingMeshes: THREE.Mesh[] = [];
 
   // Animation
@@ -1170,6 +1171,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         event.preventDefault();
         this.toggleAllRanges();
         break;
+      case 'h':
+      case 'H':
+        // H key toggles help overlay
+        event.preventDefault();
+        this.showHelpOverlay = !this.showHelpOverlay;
+        break;
     }
   }
 
@@ -1315,6 +1322,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             this.audioService.playVictory();
           } else if (postWavePhase === GamePhase.INTERMISSION) {
             this.audioService.playWaveClear();
+            this.gameStateService.awardInterest();
           }
         }
       }

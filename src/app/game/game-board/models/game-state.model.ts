@@ -67,6 +67,14 @@ export interface GameState {
   elapsedTime: number; // total seconds spent in COMBAT phase
 }
 
+/** Economy settings for the interest system */
+export const INTEREST_CONFIG = {
+  /** Percentage of unspent gold earned as bonus between waves */
+  rate: 0.05,
+  /** Maximum interest payout per wave */
+  maxPayout: 50,
+} as const;
+
 export const INITIAL_GAME_STATE: GameState = {
   phase: GamePhase.SETUP,
   wave: 0,

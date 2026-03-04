@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, INITIAL_GAME_STATE, VALID_GAME_SPEEDS } from '../models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, VALID_GAME_SPEEDS } from '../models/game-state.model';
 
 @Injectable()
 export class GameStateService {
@@ -66,6 +66,25 @@ export class GameStateService {
     this.state.gold += amount;
     this.state.score += amount;
     this.emit();
+  }
+
+  /**
+   * Calculate and award interest on unspent gold.
+   * Called during INTERMISSION phase transition.
+   * Returns the interest amount awarded.
+   */
+  awardInterest(): number {
+    if (this.state.phase !== GamePhase.INTERMISSION) return 0;
+    const interest = Math.min(
+      Math.floor(this.state.gold * INTEREST_CONFIG.rate),
+      INTEREST_CONFIG.maxPayout
+    );
+    if (interest > 0) {
+      this.state.gold += interest;
+      this.state.score += interest;
+      this.emit();
+    }
+    return interest;
   }
 
   spendGold(amount: number): boolean {

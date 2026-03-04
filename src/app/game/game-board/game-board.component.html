@@ -337,4 +337,21 @@
       <span class="tower-hotkey">[6]</span>
     </button>
   </div>
+
+  <!-- Help overlay -->
+  <div class="help-overlay" *ngIf="showHelpOverlay" (click)="showHelpOverlay = false">
+    <div class="help-content" (click)="$event.stopPropagation()">
+      <h3>Keyboard Shortcuts</h3>
+      <div class="help-grid">
+        <span class="key">1-6</span><span>Select tower type</span>
+        <span class="key">Space</span><span>Start next wave</span>
+        <span class="key">P</span><span>Pause / Resume</span>
+        <span class="key">R</span><span>Toggle all range rings</span>
+        <span class="key">Escape</span><span>Deselect tower</span>
+        <span class="key">WASD</span><span>Pan camera</span>
+        <span class="key">H</span><span>Toggle this help</span>
+      </div>
+      <p class="help-dismiss">Click anywhere or press H to close</p>
+    </div>
+  </div>
 </div>
