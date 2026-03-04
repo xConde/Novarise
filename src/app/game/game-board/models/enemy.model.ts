@@ -114,6 +114,10 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
 /** Y-position (world height) for flying enemies hovering above ground. */
 export const FLYING_ENEMY_HEIGHT = 1.5;
 
+/** Sphere geometry segments for enemy mesh rendering. */
+export const ENEMY_MESH_SEGMENTS = 16;
+export const MINI_SWARM_MESH_SEGMENTS = 12;
+
 /** Stats for mini-enemies spawned when a SWARM enemy dies. */
 export const MINI_SWARM_STATS = {
   health: 15,

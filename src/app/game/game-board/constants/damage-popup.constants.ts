@@ -12,4 +12,6 @@ export const DAMAGE_POPUP_CONFIG = {
   canvasHeight: 32,
   spriteScale: 0.5,
   criticalThreshold: 50,
+  jitterRange: 0.3,
+  spawnHeightOffset: 0.5,
 } as const;

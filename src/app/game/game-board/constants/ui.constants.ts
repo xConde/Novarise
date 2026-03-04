@@ -48,3 +48,8 @@ export const SHIELD_VISUAL_CONFIG = {
   segments: 12,
   emissiveIntensity: 0.5
 };
+
+export const ENEMY_VISUAL_CONFIG = {
+  shieldedEmissive: 0.3,
+  miniSwarmEmissive: 0.4,
+};

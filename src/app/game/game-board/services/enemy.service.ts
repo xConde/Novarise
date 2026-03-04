@@ -1,9 +1,9 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { Enemy, EnemyType, ENEMY_STATS, GridNode, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT } from '../models/enemy.model';
+import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_MESH_SEGMENTS, GridNode, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { BlockType } from '../models/game-board-tile';
-import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG } from '../constants/ui.constants';
+import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 
 export interface DamageResult {
   killed: boolean;
@@ -309,13 +309,13 @@ export class EnemyService {
       diamondGeom.computeVertexNormals();
       geometry = diamondGeom;
     } else {
-      geometry = new THREE.SphereGeometry(stats.size, 16, 16);
+      geometry = new THREE.SphereGeometry(stats.size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
     }
 
     const material = new THREE.MeshLambertMaterial({
       color: stats.color,
       emissive: stats.color,
-      emissiveIntensity: 0.3,
+      emissiveIntensity: ENEMY_VISUAL_CONFIG.shieldedEmissive,
       side: enemy.isFlying ? THREE.DoubleSide : THREE.FrontSide
     });
 
@@ -429,11 +429,11 @@ export class EnemyService {
    * Uses MINI_SWARM_STATS directly rather than ENEMY_STATS to produce the smaller visual.
    */
   private createMiniSwarmMesh(mini: Enemy): THREE.Mesh {
-    const geometry = new THREE.SphereGeometry(MINI_SWARM_STATS.size, 12, 12);
+    const geometry = new THREE.SphereGeometry(MINI_SWARM_STATS.size, MINI_SWARM_MESH_SEGMENTS, MINI_SWARM_MESH_SEGMENTS);
     const material = new THREE.MeshLambertMaterial({
       color: MINI_SWARM_STATS.color,
       emissive: MINI_SWARM_STATS.color,
-      emissiveIntensity: 0.4
+      emissiveIntensity: ENEMY_VISUAL_CONFIG.miniSwarmEmissive
     });
 
     const mesh = new THREE.Mesh(geometry, material);

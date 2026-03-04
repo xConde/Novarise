@@ -192,7 +192,7 @@ export class TowerCombatService {
       }
 
       // Tick DoT every second
-      if (this.gameTime - zone.lastTickTime >= 1.0) {
+      if (this.gameTime - zone.lastTickTime >= MORTAR_VISUAL_CONFIG.tickInterval) {
         zone.lastTickTime = this.gameTime;
         this.enemyService.getEnemies().forEach(enemy => {
           if (enemy.health <= 0) return;

@@ -1399,6 +1399,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     if (this.renderer) {
+      this.renderer.domElement.remove();
       this.renderer.dispose();
     }
   }

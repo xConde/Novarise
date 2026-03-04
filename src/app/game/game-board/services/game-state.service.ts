@@ -21,6 +21,7 @@ export class GameStateService {
   }
 
   startWave(): void {
+    if (this.state.phase === GamePhase.VICTORY || this.state.phase === GamePhase.DEFEAT) return;
     const hasMoreWaves =
       this.state.wave < this.state.maxWaves || this.state.isEndless;
     if (!hasMoreWaves) return;

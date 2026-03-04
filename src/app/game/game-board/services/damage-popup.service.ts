@@ -61,8 +61,8 @@ export class DamagePopupService {
     const sprite = new THREE.Sprite(material);
     sprite.scale.set(DAMAGE_POPUP_CONFIG.spriteScale, DAMAGE_POPUP_CONFIG.spriteScale / 2, 1);
     // Offset slightly upward and add random x jitter to prevent overlap
-    const jitterX = (Math.random() - 0.5) * 0.3;
-    sprite.position.set(position.x + jitterX, position.y + 0.5, position.z);
+    const jitterX = (Math.random() - 0.5) * DAMAGE_POPUP_CONFIG.jitterRange;
+    sprite.position.set(position.x + jitterX, position.y + DAMAGE_POPUP_CONFIG.spawnHeightOffset, position.z);
 
     scene.add(sprite);
     this.popups.push({ sprite, texture, age: 0 });
