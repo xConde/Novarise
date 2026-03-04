@@ -17,7 +17,6 @@ import { AudioService } from './services/audio.service';
 import { ParticleService } from './services/particle.service';
 import { ScreenShakeService } from './services/screen-shake.service';
 import { GoldPopupService } from './services/gold-popup.service';
-import { TowerPreviewService } from './services/tower-preview.service';
 import { FpsCounterService } from './services/fps-counter.service';
 import { GameStatsService } from './services/game-stats.service';
 import { PlayerProfileService, GameEndStats } from './services/player-profile.service';
@@ -52,7 +51,7 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, TowerPreviewService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService]
+  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -170,7 +169,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private particleService: ParticleService,
     private screenShakeService: ScreenShakeService,
     private goldPopupService: GoldPopupService,
-    private towerPreviewService: TowerPreviewService,
     private fpsCounterService: FpsCounterService,
     private gameStatsService: GameStatsService,
     private playerProfileService: PlayerProfileService,
@@ -395,31 +393,35 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedTowerSellValue = getSellValue(tower.totalInvested);
   }
 
+  private createRangeRing(radius: number, color: number, opacity: number, x: number, z: number): THREE.Mesh {
+    const geometry = new THREE.RingGeometry(
+      radius - RANGE_PREVIEW_CONFIG.ringThickness,
+      radius,
+      RANGE_PREVIEW_CONFIG.segments
+    );
+    const material = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      side: THREE.DoubleSide,
+    });
+    const ring = new THREE.Mesh(geometry, material);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(x, RANGE_PREVIEW_CONFIG.yPosition, z);
+    return ring;
+  }
+
   private showRangePreview(tower: PlacedTower): void {
     this.removeRangePreview();
 
     const stats = getEffectiveStats(tower.type, tower.level);
-    const radius = stats.range;
-
-    const geometry = new THREE.RingGeometry(radius - RANGE_PREVIEW_CONFIG.ringThickness, radius, RANGE_PREVIEW_CONFIG.segments);
-    geometry.rotateX(-Math.PI / 2); // Lay flat on XZ plane
-    const material = new THREE.MeshBasicMaterial({
-      color: stats.color,
-      transparent: true,
-      opacity: RANGE_PREVIEW_CONFIG.opacity,
-      side: THREE.DoubleSide,
-      depthWrite: false
-    });
-
-    this.rangePreviewMesh = new THREE.Mesh(geometry, material);
-
     const boardWidth = this.gameBoardService.getBoardWidth();
     const boardHeight = this.gameBoardService.getBoardHeight();
     const tileSize = this.gameBoardService.getTileSize();
     const x = (tower.col - boardWidth / 2) * tileSize;
     const z = (tower.row - boardHeight / 2) * tileSize;
 
-    this.rangePreviewMesh.position.set(x, RANGE_PREVIEW_CONFIG.yPosition, z);
+    this.rangePreviewMesh = this.createRangeRing(stats.range, stats.color, RANGE_PREVIEW_CONFIG.opacity, x, z);
     this.scene.add(this.rangePreviewMesh);
   }
 
@@ -1154,20 +1156,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const stats = getEffectiveStats(tower.type, tower.level);
         const worldX = (tower.col - boardWidth / 2) * tileSize;
         const worldZ = (tower.row - boardHeight / 2) * tileSize;
-        const geometry = new THREE.RingGeometry(
-          stats.range - RANGE_PREVIEW_CONFIG.ringThickness,
+        const ring = this.createRangeRing(
           stats.range,
-          RANGE_PREVIEW_CONFIG.segments
+          RANGE_PREVIEW_CONFIG.allRangesColor,
+          RANGE_PREVIEW_CONFIG.opacity * RANGE_PREVIEW_CONFIG.allRangesOpacityScale,
+          worldX,
+          worldZ
         );
-        const material = new THREE.MeshBasicMaterial({
-          color: RANGE_PREVIEW_CONFIG.allRangesColor,
-          transparent: true,
-          opacity: RANGE_PREVIEW_CONFIG.opacity * RANGE_PREVIEW_CONFIG.allRangesOpacityScale,
-          side: THREE.DoubleSide,
-        });
-        const ring = new THREE.Mesh(geometry, material);
-        ring.rotation.x = -Math.PI / 2;
-        ring.position.set(worldX, RANGE_PREVIEW_CONFIG.yPosition, worldZ);
         this.scene.add(ring);
         this.rangeRingMeshes.push(ring);
       });
@@ -1485,7 +1480,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.particleService.cleanup(this.scene);
     this.goldPopupService.cleanup(this.scene);
     this.screenShakeService.cleanup(this.camera);
-    this.towerPreviewService.cleanup(this.scene);
     this.fpsCounterService.reset();
 
     if (this.vignettePass) {
