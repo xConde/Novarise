@@ -43,6 +43,15 @@
   --game-success: #00AA00;
   --game-error: #AA0000;
 
+  /* Enemy type colors */
+  --enemy-color-basic: #ff4444;
+  --enemy-color-fast: #ffff00;
+  --enemy-color-heavy: #4444ff;
+  --enemy-color-flying: #44ffff;
+  --enemy-color-shield: #4488ff;
+  --enemy-color-boss: #ff00ff;
+  --enemy-color-swarm: #44ff44;
+
   /* Rainbow effect colors */
   --rainbow-red: #FF0000;
   --rainbow-orange: #FFA500;
