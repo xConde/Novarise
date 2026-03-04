@@ -181,20 +181,17 @@ describe('ParticleService', () => {
       expect(sceneCountAfterFirst).toBe(2); // sanity: first burst was present
     });
 
-    it('disposes geometry and material of expired particles', () => {
+    it('disposes material of expired particles (geometry is shared)', () => {
       service.spawnDeathBurst({ x: 0, y: 0, z: 0 }, 0xff0000, 1);
       service.addPendingToScene(scene);
 
       const mesh = scene.children[0] as THREE.Mesh;
-      const geo = mesh.geometry;
       const mat = mesh.material as THREE.MeshBasicMaterial;
 
-      spyOn(geo, 'dispose').and.callThrough();
       spyOn(mat, 'dispose').and.callThrough();
 
       service.update(DEATH_BURST_CONFIG.lifetime + 0.01, scene);
 
-      expect(geo.dispose).toHaveBeenCalled();
       expect(mat.dispose).toHaveBeenCalled();
     });
   });
@@ -249,19 +246,20 @@ describe('ParticleService', () => {
       expect(scene.children.length).toBe(0);
     });
 
-    it('disposes geometry and material for all particles', () => {
+    it('disposes materials for all particles and shared geometry on cleanup', () => {
       service.spawnDeathBurst({ x: 0, y: 0, z: 0 }, 0xff0000, 2);
       service.addPendingToScene(scene);
 
       const meshes = scene.children.map(c => c as THREE.Mesh);
-      const geoSpies = meshes.map(m => spyOn(m.geometry, 'dispose').and.callThrough());
+      const sharedGeo = meshes[0].geometry;
+      const geoSpy = spyOn(sharedGeo, 'dispose').and.callThrough();
       const matSpies = meshes.map(m =>
         spyOn(m.material as THREE.MeshBasicMaterial, 'dispose').and.callThrough()
       );
 
       service.cleanup(scene);
 
-      geoSpies.forEach(s => expect(s).toHaveBeenCalled());
+      expect(geoSpy).toHaveBeenCalledTimes(1);
       matSpies.forEach(s => expect(s).toHaveBeenCalled());
     });
 

@@ -64,6 +64,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private controls!: OrbitControls;
   private particles: THREE.Points | null = null;
   private skybox?: THREE.Mesh;
+  private ambientLight?: THREE.AmbientLight;
+  private directionalLight?: THREE.DirectionalLight;
   private bloomPass?: UnrealBloomPass;
   private vignettePass?: ShaderPass;
   private renderPass?: RenderPass;
@@ -560,6 +562,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       disposeMaterial(this.skybox.material);
       this.skybox = undefined;
     }
+
+    // Clean up lights
+    if (this.ambientLight) {
+      this.scene.remove(this.ambientLight);
+      this.ambientLight = undefined;
+    }
+    if (this.directionalLight) {
+      this.directionalLight.shadow.map?.dispose();
+      this.scene.remove(this.directionalLight);
+      this.directionalLight = undefined;
+    }
   }
 
   // --- Scene setup ---
@@ -658,8 +671,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private initializeLights(): void {
-    const ambientLight = new THREE.AmbientLight(AMBIENT_LIGHT.color, AMBIENT_LIGHT.intensity);
-    this.scene.add(ambientLight);
+    this.ambientLight = new THREE.AmbientLight(AMBIENT_LIGHT.color, AMBIENT_LIGHT.intensity);
+    this.scene.add(this.ambientLight);
 
     const directionalLight = new THREE.DirectionalLight(DIRECTIONAL_LIGHT.color, DIRECTIONAL_LIGHT.intensity);
     directionalLight.position.set(...DIRECTIONAL_LIGHT.position!);
@@ -671,7 +684,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     directionalLight.shadow.mapSize.width = DIRECTIONAL_LIGHT.shadow.mapSize;
     directionalLight.shadow.mapSize.height = DIRECTIONAL_LIGHT.shadow.mapSize;
     directionalLight.shadow.bias = DIRECTIONAL_LIGHT.shadow.bias;
-    this.scene.add(directionalLight);
+    this.directionalLight = directionalLight;
+    this.scene.add(this.directionalLight);
 
     const underLight = new THREE.PointLight(UNDER_LIGHT.color, UNDER_LIGHT.intensity, UNDER_LIGHT.range);
     underLight.position.set(...UNDER_LIGHT.position!);
@@ -1497,6 +1511,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.composer) {
       this.composer.renderTarget1.dispose();
       this.composer.renderTarget2.dispose();
+      this.composer.dispose();
     }
 
     if (this.renderer) {

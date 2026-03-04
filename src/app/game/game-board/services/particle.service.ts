@@ -11,6 +11,14 @@ interface Particle {
 @Injectable()
 export class ParticleService {
   private particles: Particle[] = [];
+  private sharedGeometry: THREE.SphereGeometry | null = null;
+
+  private getSharedGeometry(): THREE.SphereGeometry {
+    if (!this.sharedGeometry) {
+      this.sharedGeometry = new THREE.SphereGeometry(DEATH_BURST_CONFIG.radius, 4, 4);
+    }
+    return this.sharedGeometry;
+  }
 
   /**
    * Spawns a burst of particles at the given world position, using the provided
@@ -21,8 +29,8 @@ export class ParticleService {
     color: number,
     count: number = DEATH_BURST_CONFIG.defaultCount
   ): void {
+    const geometry = this.getSharedGeometry();
     for (let i = 0; i < count; i++) {
-      const geometry = new THREE.SphereGeometry(DEATH_BURST_CONFIG.radius, 4, 4);
       const material = new THREE.MeshBasicMaterial({
         color,
         transparent: true,
@@ -109,6 +117,11 @@ export class ParticleService {
       this.disposeParticle(particle);
     }
     this.particles = [];
+
+    if (this.sharedGeometry) {
+      this.sharedGeometry.dispose();
+      this.sharedGeometry = null;
+    }
   }
 
   /** Returns the number of currently tracked particles (for testing). */
@@ -136,7 +149,7 @@ export class ParticleService {
   }
 
   private disposeParticle(particle: Particle): void {
-    particle.mesh.geometry.dispose();
+    // Geometry is shared — disposed in cleanup(), not per-particle
     const mat = particle.mesh.material;
     if (Array.isArray(mat)) {
       mat.forEach(m => m.dispose());
