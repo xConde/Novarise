@@ -63,8 +63,7 @@
     padding: 0;
     border: var(--border-width-thin) solid var(--theme-purple-a50);
     color: var(--theme-purple-mid);
-    font-size: var(--font-size-base);
-    font-weight: 700;
+    line-height: 0;
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
@@ -99,10 +98,12 @@
     padding: var(--spacing-xs) var(--spacing-sm);
     border: var(--border-width-thin) solid var(--theme-purple-a50);
     color: var(--theme-purple-mid);
-    font-size: var(--font-size-base);
     cursor: pointer;
     transition: all 0.2s ease;
-    line-height: 1;
+    line-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 
     &:hover {
       background: var(--theme-purple-a30);
@@ -299,8 +300,8 @@
       }
 
       .wave-hint {
-        font-size: var(--font-size-small);
-        color: rgba(255, 255, 255, 0.6);
+        font-size: 0.5625rem;
+        color: rgba(255, 255, 255, 0.3);
       }
     }
 
@@ -786,8 +787,8 @@
     }
 
     .pause-btn {
-      font-size: var(--font-size-base);
       min-width: 2.5rem;
+      line-height: 0;
 
       &.active {
         background: rgba(255, 200, 0, 0.15);
@@ -795,6 +796,11 @@
         color: #ffd700;
         box-shadow: 0 0 var(--spacing-xs) rgba(255, 200, 0, 0.3);
       }
+    }
+
+    .wave-hint {
+      font-size: 0.5625rem;
+      color: rgba(255, 255, 255, 0.3);
     }
   }
 
@@ -947,8 +953,8 @@
       }
 
       .tower-hotkey {
-        font-size: 0.5625rem;
-        color: rgba(255, 255, 255, 0.3);
+        font-size: 0.5rem;
+        color: rgba(255, 255, 255, 0.25);
         font-family: "Orbitron", sans-serif;
         letter-spacing: 0.0313rem;
       }
@@ -1188,7 +1194,7 @@
       .pause-btn {
         min-width: 2.75rem;
         min-height: 2.75rem;
-        font-size: var(--font-size-small);
+        line-height: 0;
       }
 
       .speed-controls {

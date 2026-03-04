@@ -7,11 +7,14 @@
   </button>
 
   <!-- Help button -->
-  <button class="help-btn" (click)="showHelpOverlay = !showHelpOverlay" aria-label="Show keyboard shortcuts">?</button>
+  <button class="help-btn" (click)="showHelpOverlay = !showHelpOverlay" aria-label="Show keyboard shortcuts">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  </button>
 
   <!-- Audio mute toggle -->
   <button class="audio-toggle-btn" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
-    {{ audioMuted ? '&#128263;' : '&#128266;' }}
+    <svg *ngIf="!audioMuted" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+    <svg *ngIf="audioMuted" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
   </button>
 
   <!-- FPS counter -->
@@ -91,7 +94,7 @@
       aria-label="Start next wave">
       <span *ngIf="gameState.wave === 0">Start Game</span>
       <span *ngIf="gameState.wave > 0">Next Wave</span>
-      <span class="wave-hint">[Space]</span>
+      <span class="wave-hint">Space</span>
     </button>
   </div>
 
@@ -103,7 +106,8 @@
       [class.active]="isPaused"
       [attr.aria-label]="isPaused ? 'Resume game' : 'Pause game'"
       [attr.aria-pressed]="isPaused">
-      {{ isPaused ? '&#9654;' : '&#9646;&#9646;' }}
+      <svg *ngIf="isPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      <svg *ngIf="!isPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
     </button>
     <div class="speed-controls">
       <button
@@ -121,7 +125,8 @@
       (click)="toggleAllRanges()"
       [class.active]="showAllRanges"
       aria-label="Toggle all tower ranges [R]">
-      &#9898; <span class="wave-hint">[R]</span>
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+      <span class="wave-hint">R</span>
     </button>
   </div>
 
@@ -243,7 +248,7 @@
       <div class="tower-icon" [ngClass]="tower.type"></div>
       <span class="tower-name">{{ tower.type | titlecase }}</span>
       <span class="tower-cost">{{ towerConfigs[tower.type].cost }}g</span>
-      <span class="tower-hotkey">[{{ tower.hotkey }}]</span>
+      <span class="tower-hotkey">{{ tower.hotkey }}</span>
     </button>
   </div>
 
