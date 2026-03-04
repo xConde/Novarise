@@ -490,6 +490,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.audioService.playWaveStart();
   }
 
+  restartCurrentWave(): void {
+    if (!this.gameStateService.restartWave()) return;
+    this.enemyService.cleanup(this.scene);
+    this.towerCombatService.clearProjectiles(this.scene);
+    this.waveService.startWave(this.gameState.wave, this.scene);
+    this.audioService.playSfx('waveStart');
+  }
+
   restartGame(): void {
     // Reset interaction state — old references point to disposed meshes
     this.hoveredTile = null;
@@ -1278,6 +1286,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         // M key toggles minimap
         event.preventDefault();
         this.minimapService.toggleVisibility();
+        break;
+      case 'q':
+      case 'Q':
+        if (this.gameState.phase === GamePhase.COMBAT) {
+          event.preventDefault();
+          this.restartCurrentWave();
+        }
         break;
     }
   }

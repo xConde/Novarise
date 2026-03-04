@@ -19,7 +19,8 @@ const ENDLESS_ENEMY_CYCLE: EnemyType[] = [
   EnemyType.SWIFT,
   EnemyType.SHIELDED,
   EnemyType.SWARM,
-  EnemyType.FLYING
+  EnemyType.FLYING,
+  EnemyType.HEALER
 ];
 
 

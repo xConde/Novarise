@@ -779,6 +779,73 @@ describe('GameStateService', () => {
     });
   });
 
+  // --- restartWave ---
+
+  describe('restartWave', () => {
+    it('should return false when not in COMBAT phase', () => {
+      expect(service.getState().phase).toBe(GamePhase.SETUP);
+      expect(service.restartWave()).toBeFalse();
+    });
+
+    it('should return false when in INTERMISSION phase', () => {
+      service.startWave();
+      service.completeWave(0); // → INTERMISSION
+      expect(service.restartWave()).toBeFalse();
+    });
+
+    it('should return false when lives <= 1', () => {
+      service.startWave(); // → COMBAT
+      service.loseLife(INITIAL_GAME_STATE.lives - 1); // leaves exactly 1 life
+      expect(service.getState().lives).toBe(1);
+      expect(service.restartWave()).toBeFalse();
+    });
+
+    it('should return false when lives === 0', () => {
+      service.loseLife(INITIAL_GAME_STATE.lives); // → DEFEAT
+      // Also now in DEFEAT phase, so the phase guard fires first
+      expect(service.restartWave()).toBeFalse();
+    });
+
+    it('should deduct 1 life on success', () => {
+      service.startWave(); // → COMBAT
+      const livesBefore = service.getState().lives;
+      service.restartWave();
+      expect(service.getState().lives).toBe(livesBefore - 1);
+    });
+
+    it('should return true on success', () => {
+      service.startWave(); // → COMBAT
+      expect(service.restartWave()).toBeTrue();
+    });
+
+    it('should keep the same wave number', () => {
+      service.startWave(); // wave = 1
+      const waveBefore = service.getState().wave;
+      service.restartWave();
+      expect(service.getState().wave).toBe(waveBefore);
+    });
+
+    it('should stay in COMBAT phase after restart', () => {
+      service.startWave(); // → COMBAT
+      service.restartWave();
+      expect(service.getState().phase).toBe(GamePhase.COMBAT);
+    });
+
+    it('should emit state after deducting life', (done) => {
+      service.startWave();
+      const livesBefore = service.getState().lives;
+      let emitCount = 0;
+      service.getState$().subscribe(state => {
+        emitCount++;
+        if (emitCount === 2) {
+          expect(state.lives).toBe(livesBefore - 1);
+          done();
+        }
+      });
+      service.restartWave();
+    });
+  });
+
   // --- Interest System ---
   describe('awardInterest', () => {
     function enterIntermission(): void {

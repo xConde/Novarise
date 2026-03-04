@@ -118,6 +118,14 @@ export class GameStateService {
     this.emit();
   }
 
+  restartWave(): boolean {
+    if (this.state.phase !== GamePhase.COMBAT) return false;
+    if (this.state.lives <= 1) return false;
+    this.state.lives -= 1;
+    this.emit();
+    return true;
+  }
+
   setDifficulty(difficulty: DifficultyLevel): void {
     if (this.state.phase !== GamePhase.SETUP || this.state.wave !== 0) return;
     const preset = DIFFICULTY_PRESETS[difficulty];

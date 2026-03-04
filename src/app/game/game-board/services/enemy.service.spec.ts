@@ -106,6 +106,16 @@ describe('EnemyService', () => {
       expect(enemy.isMiniSwarm).toBeUndefined();
     });
 
+    it('should set isHealer=true on HEALER enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      expect(enemy.isHealer).toBe(true);
+    });
+
+    it('should NOT set isHealer on non-healer enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy.isHealer).toBeUndefined();
+    });
+
     it('should spawn all enemy types with correct stats', () => {
       const types: EnemyType[] = [
         EnemyType.BASIC,
@@ -115,7 +125,8 @@ describe('EnemyService', () => {
         EnemyType.BOSS,
         EnemyType.SHIELDED,
         EnemyType.SWARM,
-        EnemyType.FLYING
+        EnemyType.FLYING,
+        EnemyType.HEALER
       ];
 
       types.forEach(type => {
@@ -802,6 +813,97 @@ describe('EnemyService', () => {
       enemy.mesh = undefined as any;
 
       expect(() => service.updateHealthBars()).not.toThrow();
+    });
+  });
+
+  describe('healNearbyEnemies()', () => {
+    it('should heal a nearby damaged ally', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Place ally at same position as healer so they are within heal range
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+      ally.mesh!.position.set(ally.position.x, ally.position.y, ally.position.z);
+
+      // Damage ally so it has room to be healed
+      service.damageEnemy(ally.id, 30);
+      const healthAfterDamage = ally.health;
+
+      service.healNearbyEnemies(1.0);
+
+      expect(ally.health).toBeGreaterThan(healthAfterDamage);
+    });
+
+    it('should not heal allies beyond maxHealth', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+
+      // Ally at full health — heal should not push above max
+      service.healNearbyEnemies(1.0);
+
+      expect(ally.health).toBe(ally.maxHealth);
+    });
+
+    it('should not heal dead allies', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+
+      service.damageEnemy(ally.id, ally.maxHealth); // kill ally
+      const healthAfterDeath = ally.health;
+
+      service.healNearbyEnemies(1.0);
+
+      expect(ally.health).toBe(healthAfterDeath); // unchanged
+    });
+
+    it('should not heal allies outside healRange', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const distant = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Place distant enemy far beyond healRange (>3 tiles away at tileSize=1)
+      distant.position.x = healer.position.x + 100;
+      distant.position.z = healer.position.z + 100;
+
+      service.damageEnemy(distant.id, 30);
+      const healthBeforeHeal = distant.health;
+
+      service.healNearbyEnemies(1.0);
+
+      expect(distant.health).toBe(healthBeforeHeal); // not healed
+    });
+
+    it('should not heal self', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+
+      service.damageEnemy(healer.id, 20);
+      const healthAfterDamage = healer.health;
+
+      service.healNearbyEnemies(1.0);
+
+      expect(healer.health).toBe(healthAfterDamage); // unchanged
+    });
+
+    it('should be called automatically inside updateEnemies', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+      ally.mesh!.position.set(ally.position.x, ally.position.y, ally.position.z);
+
+      service.damageEnemy(ally.id, 30);
+      const healthAfterDamage = ally.health;
+
+      service.updateEnemies(1.0);
+
+      expect(ally.health).toBeGreaterThan(healthAfterDamage);
     });
   });
 

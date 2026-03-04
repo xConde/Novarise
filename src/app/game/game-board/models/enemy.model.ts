@@ -8,7 +8,8 @@ export enum EnemyType {
   BOSS = 'BOSS',
   SHIELDED = 'SHIELDED',
   SWARM = 'SWARM',
-  FLYING = 'FLYING'
+  FLYING = 'FLYING',
+  HEALER = 'HEALER'
 }
 
 export interface GridNode {
@@ -37,6 +38,7 @@ export interface Enemy {
   maxShield?: number; // Starting shield HP (SHIELDED type only)
   isMiniSwarm?: boolean; // True for mini-enemies spawned by SWARM death — prevents recursive spawning
   isFlying?: boolean; // True for FLYING type — ignores terrain, immune to slow
+  isHealer?: boolean; // True for HEALER type — periodically restores health to nearby allies
 }
 
 export interface EnemyStats {
@@ -47,6 +49,8 @@ export interface EnemyStats {
   size: number; // Sphere radius
   maxShield?: number;   // Starting shield HP (SHIELDED type only)
   spawnOnDeath?: number; // Number of mini-enemies to spawn on death (SWARM type only)
+  healRange?: number;   // Heal radius in tiles (HEALER type only)
+  healRate?: number;    // HP per second restored to nearby allies (HEALER type only)
 }
 
 // Enemy type statistics
@@ -108,6 +112,15 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     value: 20,
     color: 0x88ccff, // Light blue
     size: 0.3
+  },
+  [EnemyType.HEALER]: {
+    health: 80,
+    speed: 1.5,
+    value: 35,
+    color: 0x22cc44, // Green — healer (distinct from all other colors)
+    size: 0.3,
+    healRange: 3,
+    healRate: 10
   }
 };
 

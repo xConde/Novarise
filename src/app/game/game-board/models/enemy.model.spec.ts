@@ -2,7 +2,7 @@ import { EnemyType, ENEMY_STATS, Enemy, GridNode, MINI_SWARM_STATS } from './ene
 
 describe('Enemy Model', () => {
   describe('EnemyType Enum', () => {
-    it('should have all 8 enemy types defined', () => {
+    it('should have all 9 enemy types defined', () => {
       expect(EnemyType.BASIC).toBe('BASIC');
       expect(EnemyType.FAST).toBe('FAST');
       expect(EnemyType.HEAVY).toBe('HEAVY');
@@ -11,6 +11,7 @@ describe('Enemy Model', () => {
       expect(EnemyType.SHIELDED).toBe('SHIELDED');
       expect(EnemyType.SWARM).toBe('SWARM');
       expect(EnemyType.FLYING).toBe('FLYING');
+      expect(EnemyType.HEALER).toBe('HEALER');
     });
   });
 
@@ -24,6 +25,7 @@ describe('Enemy Model', () => {
       expect(ENEMY_STATS[EnemyType.SHIELDED]).toBeDefined();
       expect(ENEMY_STATS[EnemyType.SWARM]).toBeDefined();
       expect(ENEMY_STATS[EnemyType.FLYING]).toBeDefined();
+      expect(ENEMY_STATS[EnemyType.HEALER]).toBeDefined();
     });
 
     it('should have valid health values', () => {
@@ -247,8 +249,8 @@ describe('Enemy Model', () => {
         colors.add(stats.color);
       });
 
-      // All 8 enemy types should have unique colors
-      expect(colors.size).toBe(8);
+      // All 9 enemy types should have unique colors
+      expect(colors.size).toBe(9);
     });
 
     it('should have distinct sizes for visibility', () => {

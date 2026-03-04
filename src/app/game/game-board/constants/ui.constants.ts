@@ -53,4 +53,11 @@ export const SHIELD_VISUAL_CONFIG = {
 export const ENEMY_VISUAL_CONFIG = {
   shieldedEmissive: 0.3,
   miniSwarmEmissive: 0.4,
+  healerEmissive: 0.5,
 };
+
+export const HEALER_CROSS_CONFIG = {
+  armLength: 0.4,
+  armWidth: 0.12,
+  armHeight: 0.12,
+} as const;

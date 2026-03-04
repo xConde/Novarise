@@ -126,7 +126,25 @@
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
       <span class="wave-hint">R</span>
     </button>
+    <button
+      class="control-btn restart-wave-btn"
+      *ngIf="gameState.phase === GamePhase.COMBAT"
+      (click)="restartCurrentWave()"
+      [class.disabled]="gameState.lives <= 1"
+      aria-label="Restart current wave (costs 1 life) [Q]">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+      <span class="wave-hint">Q</span>
+    </button>
   </div>
+
+  <!-- Pause overlay -->
+<div class="pause-overlay" *ngIf="isPaused" (click)="togglePause()">
+  <div class="pause-content" (click)="$event.stopPropagation()">
+    <h2 class="pause-title">Paused</h2>
+    <p class="pause-hint">Press P or click backdrop to resume</p>
+    <button class="resume-btn" (click)="togglePause()">Resume</button>
+  </div>
+</div>
 
   <!-- Victory/Defeat overlay -->
   <div class="game-overlay" *ngIf="gameState.phase === GamePhase.VICTORY || gameState.phase === GamePhase.DEFEAT">
@@ -273,6 +291,7 @@
         <span class="key">1-6</span><span>Select tower type</span>
         <span class="key">Space</span><span>Start next wave</span>
         <span class="key">P</span><span>Pause / Resume</span>
+        <span class="key">Q</span><span>Restart wave (-1 life)</span>
         <span class="key">R</span><span>Toggle all range rings</span>
         <span class="key">M</span><span>Toggle minimap</span>
         <span class="key">Escape</span><span>Deselect tower</span>

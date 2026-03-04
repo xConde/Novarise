@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_MESH_SEGMENTS, GridNode, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { BlockType } from '../models/game-board-tile';
-import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
+import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG, HEALER_CROSS_CONFIG } from '../constants/ui.constants';
 
 export interface DamageResult {
   killed: boolean;
@@ -78,6 +78,10 @@ export class EnemyService {
       enemy.isFlying = true;
     }
 
+    if (type === EnemyType.HEALER) {
+      enemy.isHealer = true;
+    }
+
     if (stats.maxShield !== undefined) {
       enemy.shield = stats.maxShield;
       enemy.maxShield = stats.maxShield;
@@ -94,8 +98,43 @@ export class EnemyService {
   /**
    * Update all enemies - move along paths
    */
+  /**
+   * Heal nearby allies for all active HEALER enemies.
+   * Called at the start of each updateEnemies tick before movement.
+   * Does not heal self, dead enemies, or enemies beyond healRange tiles.
+   */
+  healNearbyEnemies(deltaTime: number): void {
+    const tileSize = this.gameBoardService.getTileSize();
+
+    this.enemies.forEach(healer => {
+      if (!healer.isHealer || healer.health <= 0) return;
+
+      const healerStats = ENEMY_STATS[EnemyType.HEALER];
+      const healRange = healerStats.healRange ?? 3;
+      const healRate = healerStats.healRate ?? 10;
+      const healAmount = healRate * deltaTime;
+      const rangeWorld = healRange * tileSize;
+
+      this.enemies.forEach(ally => {
+        if (ally.id === healer.id) return; // Skip self
+        if (ally.health <= 0) return;       // Skip dead
+        if (ally.health >= ally.maxHealth) return; // Already full
+
+        const dx = ally.position.x - healer.position.x;
+        const dz = ally.position.z - healer.position.z;
+        const distSq = dx * dx + dz * dz;
+
+        if (distSq <= rangeWorld * rangeWorld) {
+          ally.health = Math.min(ally.maxHealth, ally.health + healAmount);
+        }
+      });
+    });
+  }
+
   updateEnemies(deltaTime: number): string[] {
     if (deltaTime <= 0) return [];
+
+    this.healNearbyEnemies(deltaTime);
 
     const reachedExit: string[] = [];
 
@@ -308,6 +347,30 @@ export class EnemyService {
       diamondGeom.setIndex(new THREE.BufferAttribute(indices, 1));
       diamondGeom.computeVertexNormals();
       geometry = diamondGeom;
+    } else if (enemy.isHealer) {
+      // Cross shape: two merged BoxGeometry arms (horizontal + vertical)
+      const hGeom = new THREE.BoxGeometry(
+        HEALER_CROSS_CONFIG.armLength,
+        HEALER_CROSS_CONFIG.armHeight,
+        HEALER_CROSS_CONFIG.armWidth
+      );
+      const vGeom = new THREE.BoxGeometry(
+        HEALER_CROSS_CONFIG.armWidth,
+        HEALER_CROSS_CONFIG.armHeight,
+        HEALER_CROSS_CONFIG.armLength
+      );
+      // Merge by copying attributes into a single BufferGeometry
+      const crossGeom = new THREE.BufferGeometry();
+      const hPos = hGeom.getAttribute('position') as THREE.BufferAttribute;
+      const vPos = vGeom.getAttribute('position') as THREE.BufferAttribute;
+      const merged = new Float32Array(hPos.array.length + vPos.array.length);
+      merged.set(hPos.array as Float32Array, 0);
+      merged.set(vPos.array as Float32Array, hPos.array.length);
+      crossGeom.setAttribute('position', new THREE.BufferAttribute(merged, 3));
+      crossGeom.computeVertexNormals();
+      hGeom.dispose();
+      vGeom.dispose();
+      geometry = crossGeom;
     } else {
       geometry = new THREE.SphereGeometry(stats.size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
     }
@@ -315,7 +378,9 @@ export class EnemyService {
     const material = new THREE.MeshLambertMaterial({
       color: stats.color,
       emissive: stats.color,
-      emissiveIntensity: ENEMY_VISUAL_CONFIG.shieldedEmissive,
+      emissiveIntensity: enemy.isHealer
+        ? ENEMY_VISUAL_CONFIG.healerEmissive
+        : ENEMY_VISUAL_CONFIG.shieldedEmissive,
       side: enemy.isFlying ? THREE.DoubleSide : THREE.FrontSide
     });
 
