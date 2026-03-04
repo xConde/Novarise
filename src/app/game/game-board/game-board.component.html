@@ -213,9 +213,10 @@
       <span class="max-level-badge" *ngIf="selectedTowerInfo.level >= MAX_TOWER_LEVEL">MAX</span>
       <button
         class="sell-btn"
+        [class.confirm]="sellConfirmPending"
         (click)="sellTower()"
         aria-label="Sell tower">
-        Sell (+{{ selectedTowerSellValue }}g)
+        {{ sellConfirmPending ? 'Confirm Sell?' : 'Sell (+' + selectedTowerSellValue + 'g)' }}
       </button>
     </div>
   </div>

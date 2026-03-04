@@ -103,6 +103,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Wave preview — shown during SETUP and INTERMISSION
   wavePreview: WavePreviewEntry[] = [];
   showAllRanges = false;
+  sellConfirmPending = false;
   private rangeRingMeshes: THREE.Mesh[] = [];
 
   // Animation
@@ -298,6 +299,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const phase = this.gameStateService.getState().phase;
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
 
+    // First click sets confirm pending; second click within same selection executes sell
+    if (!this.sellConfirmPending) {
+      this.sellConfirmPending = true;
+      return;
+    }
+    this.sellConfirmPending = false;
+
     // Confirm unregistration succeeds BEFORE refunding gold — prevents free gold on stale reference
     const soldTower = this.towerCombatService.unregisterTower(this.selectedTowerInfo.id);
     if (!soldTower) return;
@@ -331,6 +339,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   deselectTower(): void {
     this.selectedTowerInfo = null;
     this.selectedTowerStats = null;
+    this.sellConfirmPending = false;
     this.removeRangePreview();
   }
 
