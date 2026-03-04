@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { Enemy, EnemyType, ENEMY_STATS, GridNode, MINI_SWARM_STATS } from '../models/enemy.model';
+import { Enemy, EnemyType, ENEMY_STATS, GridNode, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { BlockType } from '../models/game-board-tile';
 import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG } from '../constants/ui.constants';
@@ -58,8 +58,7 @@ export class EnemyService {
     const worldPos = this.gridToWorld(row, col);
 
     // FLYING enemies hover above ground
-    const FLYING_Y = 1.5;
-    const yPos = isFlying ? FLYING_Y : stats.size;
+    const yPos = isFlying ? FLYING_ENEMY_HEIGHT : stats.size;
 
     const enemy: Enemy = {
       id: `enemy-${this.enemyCounter++}`,

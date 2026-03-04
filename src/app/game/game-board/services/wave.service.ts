@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { EnemyType } from '../models/enemy.model';
-import { WaveDefinition, WaveEntry, WAVE_DEFINITIONS, ENDLESS_CONFIG } from '../models/wave.model';
+import { WaveDefinition, WaveEntry, WAVE_DEFINITIONS, ENDLESS_CONFIG, ENDLESS_BASE_COUNT, ENDLESS_BASE_SPAWN_INTERVAL, ENDLESS_BASE_REWARD, ENDLESS_REWARD_SCALE_PER_WAVE, ENDLESS_BOSS_COUNT, ENDLESS_BOSS_SPAWN_INTERVAL } from '../models/wave.model';
 import { EnemyService } from './enemy.service';
 
 interface SpawnQueue {
@@ -18,16 +18,10 @@ const ENDLESS_ENEMY_CYCLE: EnemyType[] = [
   EnemyType.HEAVY,
   EnemyType.SWIFT,
   EnemyType.SHIELDED,
-  EnemyType.SWARM
+  EnemyType.SWARM,
+  EnemyType.FLYING
 ];
 
-// Base values for endless wave generation — scaled by ENDLESS_CONFIG multipliers
-const ENDLESS_BASE_COUNT = 10;
-const ENDLESS_BASE_SPAWN_INTERVAL = 0.8;
-const ENDLESS_BASE_REWARD = 200;
-const ENDLESS_REWARD_SCALE_PER_WAVE = 50;
-const ENDLESS_BOSS_COUNT = 1;
-const ENDLESS_BOSS_SPAWN_INTERVAL = 0;
 
 @Injectable()
 export class WaveService {

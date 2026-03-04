@@ -1254,8 +1254,8 @@
   z-index: 50;
 
   .help-content {
-    background: rgba(20, 10, 40, 0.95);
-    border: 1px solid var(--theme-purple, #8a5cf6);
+    background: var(--nav-bg-a90);
+    border: 1px solid var(--theme-purple);
     border-radius: 8px;
     padding: 20px 24px;
     max-width: 320px;
@@ -1278,7 +1278,7 @@
         border-radius: 3px;
         text-align: center;
         font-family: monospace;
-        color: #fff;
+        color: var(--text-color);
       }
 
       span:not(.key) {

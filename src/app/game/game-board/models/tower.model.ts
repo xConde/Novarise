@@ -11,6 +11,13 @@ export enum TowerType {
 
 export const MAX_TOWER_LEVEL = 3;
 
+export const UPGRADE_COST_CONFIG = {
+  baseMultiplier: 0.5,
+  levelScale: 0.25,
+} as const;
+
+export const SELL_REFUND_RATE = 0.5;
+
 export interface TowerStats {
   damage: number;
   range: number;        // tiles
@@ -119,12 +126,12 @@ export const UPGRADE_MULTIPLIERS: { damage: number; range: number; fireRate: num
 export function getUpgradeCost(type: TowerType, currentLevel: number): number {
   if (currentLevel < 1 || currentLevel >= MAX_TOWER_LEVEL) return Infinity;
   const baseCost = TOWER_CONFIGS[type].cost;
-  return Math.round(baseCost * (0.5 + currentLevel * 0.25));
+  return Math.round(baseCost * (UPGRADE_COST_CONFIG.baseMultiplier + currentLevel * UPGRADE_COST_CONFIG.levelScale));
 }
 
 /** Get the sell refund (50% of total gold invested). */
 export function getSellValue(totalInvested: number): number {
-  return Math.round(totalInvested * 0.5);
+  return Math.round(totalInvested * SELL_REFUND_RATE);
 }
 
 /** One-line description of each tower's special ability, shown in hover tooltips. */

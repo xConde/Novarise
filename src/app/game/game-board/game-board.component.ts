@@ -34,8 +34,6 @@ import { TOUCH_CONFIG } from './constants/touch.constants';
 import { ENEMY_STATS } from './models/enemy.model';
 import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
 
-const CAMERA_PAN_SPEED = 0.5;
-
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
   '2': TowerType.SNIPER,
@@ -1129,7 +1127,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         });
         const ring = new THREE.Mesh(geometry, material);
         ring.rotation.x = -Math.PI / 2;
-        ring.position.set(worldX, 0.02, worldZ);
+        ring.position.set(worldX, RANGE_PREVIEW_CONFIG.yPosition, worldZ);
         this.scene.add(ring);
         this.rangeRingMeshes.push(ring);
       });
@@ -1202,10 +1200,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     let dx = 0;
     let dz = 0;
-    if (this.panKeys.has('w') || this.panKeys.has('arrowup')) dz -= CAMERA_PAN_SPEED;
-    if (this.panKeys.has('s') || this.panKeys.has('arrowdown')) dz += CAMERA_PAN_SPEED;
-    if (this.panKeys.has('a') || this.panKeys.has('arrowleft')) dx -= CAMERA_PAN_SPEED;
-    if (this.panKeys.has('d') || this.panKeys.has('arrowright')) dx += CAMERA_PAN_SPEED;
+    if (this.panKeys.has('w') || this.panKeys.has('arrowup')) dz -= CAMERA_CONFIG.panSpeed;
+    if (this.panKeys.has('s') || this.panKeys.has('arrowdown')) dz += CAMERA_CONFIG.panSpeed;
+    if (this.panKeys.has('a') || this.panKeys.has('arrowleft')) dx -= CAMERA_CONFIG.panSpeed;
+    if (this.panKeys.has('d') || this.panKeys.has('arrowright')) dx += CAMERA_CONFIG.panSpeed;
 
     this.camera.position.x += dx;
     this.camera.position.z += dz;

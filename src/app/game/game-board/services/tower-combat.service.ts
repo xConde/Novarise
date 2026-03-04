@@ -6,24 +6,7 @@ import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
-
-/** Decay factor applied to chain lightning damage per bounce. */
-const CHAIN_DAMAGE_FALLOFF = 0.7;
-
-/** Visual duration (seconds) for chain lightning arc lines. */
-const CHAIN_ARC_LIFETIME = 0.1;
-
-/** Y-position for chain arc lines and mortar zones. */
-const GROUND_EFFECT_Y = 0.05;
-
-/** Semi-transparent color for mortar blast zone overlay. */
-const MORTAR_ZONE_COLOR = 0xff4400;
-
-/** Opacity for mortar blast zone mesh. */
-const MORTAR_ZONE_OPACITY = 0.4;
-
-/** Segments for mortar zone circle geometry. */
-const MORTAR_ZONE_SEGMENTS = 32;
+import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y } from '../constants/combat.constants';
 
 interface Projectile {
   id: string;
@@ -348,8 +331,8 @@ export class TowerCombatService {
       {
         const arcGeom = new THREE.BufferGeometry();
         const vertices = new Float32Array([
-          fromX, GROUND_EFFECT_Y + 0.5, fromZ,
-          toX,   GROUND_EFFECT_Y + 0.5, toZ
+          fromX, GROUND_EFFECT_Y + CHAIN_LIGHTNING_CONFIG.arcHeightOffset, fromZ,
+          toX,   GROUND_EFFECT_Y + CHAIN_LIGHTNING_CONFIG.arcHeightOffset, toZ
         ]);
         arcGeom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
         const arcMat = new THREE.LineBasicMaterial({
@@ -359,7 +342,7 @@ export class TowerCombatService {
         });
         const arc = new THREE.Line(arcGeom, arcMat);
         scene.add(arc);
-        this.chainArcs.push({ line: arc, expiresAt: this.gameTime + CHAIN_ARC_LIFETIME });
+        this.chainArcs.push({ line: arc, expiresAt: this.gameTime + CHAIN_LIGHTNING_CONFIG.arcLifetime });
       }
 
       // Deal damage
@@ -383,7 +366,7 @@ export class TowerCombatService {
       previousX = currentTarget.position.x;
       previousZ = currentTarget.position.z;
 
-      currentDamage = Math.round(currentDamage * CHAIN_DAMAGE_FALLOFF);
+      currentDamage = Math.round(currentDamage * CHAIN_LIGHTNING_CONFIG.damageFalloff);
       if (currentDamage <= 0) break;
       currentTarget = nextTarget;
     }
@@ -486,11 +469,11 @@ export class TowerCombatService {
     const dotDuration = stats.dotDuration ?? 3;
     const dotDamage = stats.dotDamage ?? 3;
 
-    const geometry = new THREE.CircleGeometry(blastRadius, MORTAR_ZONE_SEGMENTS);
+    const geometry = new THREE.CircleGeometry(blastRadius, MORTAR_VISUAL_CONFIG.zoneSegments);
     const material = new THREE.MeshBasicMaterial({
-      color: MORTAR_ZONE_COLOR,
+      color: MORTAR_VISUAL_CONFIG.zoneColor,
       transparent: true,
-      opacity: MORTAR_ZONE_OPACITY,
+      opacity: MORTAR_VISUAL_CONFIG.zoneOpacity,
       side: THREE.DoubleSide
     });
     const zoneMesh = new THREE.Mesh(geometry, material);

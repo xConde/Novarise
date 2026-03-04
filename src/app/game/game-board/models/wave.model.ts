@@ -31,6 +31,14 @@ export const ENDLESS_CONFIG: EndlessWaveConfig = {
   bossInterval: 5
 };
 
+/** Base values for endless wave generation — scaled by ENDLESS_CONFIG multipliers. */
+export const ENDLESS_BASE_COUNT = 10;
+export const ENDLESS_BASE_SPAWN_INTERVAL = 0.8;
+export const ENDLESS_BASE_REWARD = 200;
+export const ENDLESS_REWARD_SCALE_PER_WAVE = 50;
+export const ENDLESS_BOSS_COUNT = 1;
+export const ENDLESS_BOSS_SPAWN_INTERVAL = 0;
+
 export const WAVE_DEFINITIONS: WaveDefinition[] = [
   // Wave 1: Easy intro
   {

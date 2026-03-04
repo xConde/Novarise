@@ -1,6 +1,5 @@
 import { EnemyType } from './enemy.model';
-import { WAVE_DEFINITIONS } from './wave.model';
-import { ENDLESS_CONFIG } from './wave.model';
+import { WAVE_DEFINITIONS, ENDLESS_CONFIG, ENDLESS_BASE_COUNT } from './wave.model';
 
 export interface WavePreviewEntry {
   type: EnemyType;
@@ -31,8 +30,7 @@ const ENDLESS_ENEMY_CYCLE: EnemyType[] = [
   EnemyType.FLYING
 ];
 
-// Base count for endless wave generation — matches WaveService.ENDLESS_BASE_COUNT
-const ENDLESS_PREVIEW_BASE_COUNT = 10;
+
 
 /**
  * Returns a list of WavePreviewEntry objects for the given wave index (1-based).
@@ -80,7 +78,7 @@ export function getWavePreview(waveIndex: number, isEndless: boolean): WavePrevi
   const primaryType = ENDLESS_ENEMY_CYCLE[cycleIndex];
   const secondaryType = ENDLESS_ENEMY_CYCLE[(cycleIndex + 1) % ENDLESS_ENEMY_CYCLE.length];
 
-  const baseCount = Math.round(ENDLESS_PREVIEW_BASE_COUNT * countMult);
+  const baseCount = Math.round(ENDLESS_BASE_COUNT * countMult);
   const primaryCount = Math.ceil(baseCount * 0.6);
   const secondaryCount = Math.floor(baseCount * 0.4);
 

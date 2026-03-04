@@ -3,7 +3,8 @@ export const CAMERA_CONFIG = {
   near: 0.1,
   far: 1000,
   distance: 35,
-  zOffsetFactor: 0.5
+  zOffsetFactor: 0.5,
+  panSpeed: 0.5,
 };
 
 export const CONTROLS_CONFIG = {
