@@ -1,6 +1,6 @@
 <div class="game-container">
   <div class="title">
-    <div class="letter" *ngFor="let letter of title.split(''); let i = index">
+    <div class="letter" *ngFor="let letter of title.split(''); let i = index; trackBy: trackByIndex">
       {{ letter }}
     </div>
   </div>
@@ -74,8 +74,13 @@
     </div>
 
     <!-- Map Manager Dialog -->
-    <div class="map-manager-overlay" *ngIf="mapManagerOpen" (click)="closeMapManager()">
-      <div class="map-manager-panel" (click)="$event.stopPropagation()">
+    <div class="map-manager-overlay" *ngIf="mapManagerOpen" (click)="closeMapManager()"
+         tabindex="-1"
+         role="dialog"
+         aria-modal="true"
+         aria-label="Saved Maps"
+         (keydown.escape)="closeMapManager()">
+      <div class="map-manager-panel" #mapManagerPanel (click)="$event.stopPropagation()" tabindex="-1">
         <div class="map-manager-header">
           <h2 class="map-manager-title">Saved Maps</h2>
           <button class="map-manager-close" (click)="closeMapManager()" aria-label="Close map manager">✕</button>
@@ -86,7 +91,7 @@
         </div>
 
         <ul class="map-list" *ngIf="savedMaps.length > 0">
-          <li *ngFor="let map of savedMaps" class="map-list-item"
+          <li *ngFor="let map of savedMaps; trackBy: trackByMapId" class="map-list-item"
               [class.map-list-item--confirm]="deleteConfirmId === map.id">
 
             <!-- Rename input (active when renaming this map) -->

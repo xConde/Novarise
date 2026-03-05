@@ -79,4 +79,12 @@ export class CampaignComponent implements OnInit {
 
   /** Helper to produce [1, 2, 3] for star rendering — avoids inline array literals in template. */
   readonly starIndices = [1, 2, 3];
+
+  trackByLevelId(index: number, level: CampaignLevel): number {
+    return level.id;
+  }
+
+  trackByIndex(index: number): number {
+    return index;
+  }
 }

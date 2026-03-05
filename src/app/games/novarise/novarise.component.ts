@@ -51,6 +51,7 @@ export { EditMode, BrushTool } from './core/editor-state.service';
 export class NovariseComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
   @ViewChild('minimapCanvas', { static: false }) minimapCanvasRef?: ElementRef<HTMLCanvasElement>;
+  @ViewChild('mapManagerPanel') mapManagerPanel?: ElementRef<HTMLElement>;
 
   // Edit state - delegated to EditorStateService
   public get editMode(): EditMode { return this.editorState.getEditMode(); }
@@ -1121,6 +1122,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.renameValue = '';
     this.deleteConfirmId = null;
     this.mapManagerOpen = true;
+    setTimeout(() => this.mapManagerPanel?.nativeElement?.focus(), 0);
   }
 
   /** Close the map manager overlay. */
@@ -2039,5 +2041,15 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
 
     this.renderer.dispose();
+  }
+
+  // --- trackBy functions for *ngFor directives ---
+
+  trackByIndex(index: number): number {
+    return index;
+  }
+
+  trackByMapId(index: number, map: import('./core/map-storage.service').MapMetadata): string {
+    return map.id;
   }
 }

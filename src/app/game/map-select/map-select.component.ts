@@ -76,4 +76,12 @@ export class MapSelectComponent implements OnInit {
   goToCampaign(): void {
     this.router.navigate(['/campaign']);
   }
+
+  trackByDifficulty(index: number, level: DifficultyLevel): DifficultyLevel {
+    return level;
+  }
+
+  trackByMapId(index: number, map: MapMetadata): string {
+    return map.id;
+  }
 }

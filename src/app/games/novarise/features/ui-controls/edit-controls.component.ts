@@ -85,4 +85,12 @@ export class EditControlsComponent implements OnInit, OnDestroy {
   public getTerrainColor(type: TerrainType): string {
     return `#${TERRAIN_CONFIGS[type].color.toString(16).padStart(6, '0')}`;
   }
+
+  trackByIndex(index: number): number {
+    return index;
+  }
+
+  trackByTerrainType(index: number, type: TerrainType): TerrainType {
+    return type;
+  }
 }

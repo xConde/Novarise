@@ -67,6 +67,9 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
+  @ViewChild('pauseOverlay') pauseOverlay?: ElementRef<HTMLElement>;
+  @ViewChild('helpOverlay') helpOverlay?: ElementRef<HTMLElement>;
+  @ViewChild('gameOverlay') gameOverlay?: ElementRef<HTMLElement>;
 
 
   // Scene objects
@@ -276,6 +279,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             this.campaignService.completeLevel(campaignLevelId, this.scoreBreakdown.stars, this.scoreBreakdown.finalScore);
           }
         }
+
+        // Focus the game overlay (victory/defeat) after *ngIf renders it
+        setTimeout(() => this.gameOverlay?.nativeElement?.focus(), 0);
       }
 
       // Refresh wave preview when entering SETUP/INTERMISSION or when the wave number changes
@@ -361,6 +367,24 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   levelStars(count: number): number[] {
     return Array(Math.max(0, count)).fill(0);
+  }
+
+  // --- trackBy functions for *ngFor directives ---
+
+  trackByIndex(index: number): number {
+    return index;
+  }
+
+  trackByTowerType(index: number, tower: { type: TowerType; hotkey: string }): TowerType {
+    return tower.type;
+  }
+
+  trackByDifficulty(index: number, level: DifficultyLevel): DifficultyLevel {
+    return level;
+  }
+
+  trackByWaveEntry(index: number, entry: WavePreviewEntry): string {
+    return `${entry.type}-${index}`;
   }
 
   /**
@@ -1494,8 +1518,19 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.showComboBanner = false;
   }
 
+  toggleHelpOverlay(): void {
+    this.showHelpOverlay = !this.showHelpOverlay;
+    if (this.showHelpOverlay) {
+      setTimeout(() => this.helpOverlay?.nativeElement?.focus(), 0);
+    }
+  }
+
   togglePause(): void {
     this.gameStateService.togglePause();
+    if (this.isPaused) {
+      // Focus the pause overlay after *ngIf renders it (next microtask)
+      setTimeout(() => this.pauseOverlay?.nativeElement?.focus(), 0);
+    }
   }
 
   setSpeed(speed: number): void {
@@ -1601,7 +1636,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       case 'H':
         // H key toggles help overlay
         event.preventDefault();
-        this.showHelpOverlay = !this.showHelpOverlay;
+        this.toggleHelpOverlay();
         break;
       case 'm':
       case 'M':

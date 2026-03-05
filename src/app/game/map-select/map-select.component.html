@@ -6,7 +6,7 @@
     <h2 class="difficulty-heading" id="difficulty-heading">Difficulty</h2>
     <div class="difficulty-options" role="group" aria-label="Select difficulty">
       <button
-        *ngFor="let level of difficultyLevels"
+        *ngFor="let level of difficultyLevels; trackBy: trackByDifficulty"
         class="difficulty-btn"
         [class.selected]="selectedDifficulty === level"
         (click)="selectDifficulty(level)"
@@ -25,7 +25,7 @@
   <div class="map-grid" *ngIf="maps.length > 0">
     <button
       class="map-card"
-      *ngFor="let map of maps"
+      *ngFor="let map of maps; trackBy: trackByMapId"
       [class.map-card--invalid]="!isMapPlayable(map)"
       [disabled]="!isMapPlayable(map)"
       [attr.aria-disabled]="!isMapPlayable(map)"

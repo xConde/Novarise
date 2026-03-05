@@ -9,7 +9,7 @@
   <!-- Top-right controls -->
   <div class="top-right-controls">
     <div class="fps-counter">{{ fps }} FPS</div>
-    <button class="help-btn" (click)="showHelpOverlay = !showHelpOverlay" aria-label="Show keyboard shortcuts">
+    <button class="help-btn" (click)="toggleHelpOverlay()" aria-label="Show keyboard shortcuts">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
     </button>
     <button class="audio-toggle-btn" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
@@ -71,7 +71,7 @@
     <div class="wave-composition-body" *ngIf="waveCompositionExpanded">
       <ul class="wave-composition-list" *ngIf="waveComposition.current.length > 0">
         <li
-          *ngFor="let entry of waveComposition.current"
+          *ngFor="let entry of waveComposition.current; trackBy: trackByWaveEntry"
           class="wave-composition-entry"
           [attr.data-type]="entry.type.toLowerCase()">
           <span class="enemy-dot" [attr.data-type]="entry.type.toLowerCase()"></span>
@@ -84,7 +84,7 @@
         <div class="wave-next-header">Next: Wave {{ gameState.wave + 1 }}</div>
         <ul class="wave-composition-list">
           <li
-            *ngFor="let entry of waveComposition.next"
+            *ngFor="let entry of waveComposition.next; trackBy: trackByWaveEntry"
             class="wave-composition-entry"
             [attr.data-type]="entry.type.toLowerCase()">
             <span class="enemy-dot" [attr.data-type]="entry.type.toLowerCase()"></span>
@@ -101,7 +101,7 @@
     <span class="difficulty-label">Difficulty</span>
     <div class="difficulty-options">
       <button
-        *ngFor="let level of difficultyLevels"
+        *ngFor="let level of difficultyLevels; trackBy: trackByDifficulty"
         class="difficulty-btn"
         [class.selected]="gameState.difficulty === level"
         (click)="selectDifficulty(level)"
@@ -122,7 +122,7 @@
     </div>
     <ul class="wave-preview-list">
       <li
-        *ngFor="let entry of wavePreview"
+        *ngFor="let entry of wavePreview; trackBy: trackByWaveEntry"
         class="wave-preview-entry"
         [attr.data-type]="entry.type.toLowerCase()">
         <span class="enemy-dot" [attr.data-type]="entry.type.toLowerCase()"></span>
@@ -177,7 +177,7 @@
     </button>
     <div class="speed-controls">
       <button
-        *ngFor="let s of [1, 2, 3]"
+        *ngFor="let s of [1, 2, 3]; trackBy: trackByIndex"
         class="control-btn speed-btn"
         [class.active]="gameSpeed === s"
         (click)="setSpeed(s)"
@@ -207,7 +207,13 @@
   </div>
 
   <!-- Pause overlay -->
-<div class="pause-overlay" *ngIf="isPaused" (click)="togglePause()">
+<div class="pause-overlay" *ngIf="isPaused" (click)="togglePause()"
+     #pauseOverlay
+     tabindex="-1"
+     (keydown.escape)="togglePause()"
+     role="dialog"
+     aria-modal="true"
+     aria-label="Game paused">
   <div class="pause-content" (click)="$event.stopPropagation()">
     <h2 class="pause-title">Paused</h2>
     <p class="pause-hint">{{ isMobileDevice ? 'Tap backdrop to resume' : 'Press P or click backdrop to resume' }}</p>
@@ -216,7 +222,13 @@
 </div>
 
   <!-- Victory/Defeat overlay -->
-  <div class="game-overlay" *ngIf="gameState.phase === GamePhase.VICTORY || gameState.phase === GamePhase.DEFEAT">
+  <div class="game-overlay" *ngIf="gameState.phase === GamePhase.VICTORY || gameState.phase === GamePhase.DEFEAT"
+       #gameOverlay
+       tabindex="-1"
+       role="dialog"
+       aria-modal="true"
+       [attr.aria-label]="gameState.phase === GamePhase.VICTORY ? 'Victory' : 'Defeat'"
+       (keydown.escape)="restartGame()">
     <div class="overlay-content" [class.victory]="gameState.phase === GamePhase.VICTORY" [class.defeat]="gameState.phase === GamePhase.DEFEAT">
       <h2 *ngIf="gameState.phase === GamePhase.VICTORY">Victory</h2>
       <h2 *ngIf="gameState.phase === GamePhase.DEFEAT">Defeat</h2>
@@ -224,7 +236,7 @@
       <!-- Star rating -->
       <div class="star-display" *ngIf="gameState.phase === GamePhase.VICTORY">
         <span
-          *ngFor="let s of starArray; let i = index"
+          *ngFor="let s of starArray; let i = index; trackBy: trackByIndex"
           class="overlay-star"
           [class.filled]="s === 'filled'"
           [class.empty]="s === 'empty'"
@@ -302,8 +314,8 @@
     <div class="tower-info-header">
       <span class="tower-info-name">{{ selectedTowerInfo.type | titlecase }}</span>
       <span class="tower-info-level">
-        <span *ngFor="let star of levelStars(selectedTowerInfo.level)" class="level-star">&#9733;</span>
-        <span *ngFor="let star of levelStars(MAX_TOWER_LEVEL - selectedTowerInfo.level)" class="level-star empty">&#9733;</span>
+        <span *ngFor="let star of levelStars(selectedTowerInfo.level); trackBy: trackByIndex" class="level-star">&#9733;</span>
+        <span *ngFor="let star of levelStars(MAX_TOWER_LEVEL - selectedTowerInfo.level); trackBy: trackByIndex" class="level-star empty">&#9733;</span>
       </span>
       <button class="tower-info-close" (click)="deselectTower()" aria-label="Close tower info">&times;</button>
     </div>
@@ -370,7 +382,7 @@
   <!-- Tower selection -->
   <div class="tower-selection" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
     <button
-      *ngFor="let tower of towerTypes"
+      *ngFor="let tower of towerTypes; trackBy: trackByTowerType"
       class="tower-btn"
       [class.selected]="selectedTowerType === tower.type"
       [class.unaffordable]="!isTowerLocked(tower.type) && (!gameState || gameState.gold < towerConfigs[tower.type].cost)"
@@ -400,7 +412,13 @@
   </div>
 
   <!-- Help overlay -->
-  <div class="help-overlay" *ngIf="showHelpOverlay" (click)="showHelpOverlay = false">
+  <div class="help-overlay" *ngIf="showHelpOverlay" (click)="showHelpOverlay = false"
+       #helpOverlay
+       tabindex="-1"
+       role="dialog"
+       aria-modal="true"
+       aria-label="Keyboard shortcuts"
+       (keydown.escape)="showHelpOverlay = false">
     <div class="help-content" (click)="$event.stopPropagation()">
       <ng-container *ngIf="!isMobileDevice">
         <h3>Keyboard Shortcuts</h3>
