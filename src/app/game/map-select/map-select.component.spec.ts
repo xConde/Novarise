@@ -17,6 +17,15 @@ const MOCK_TERRAIN_STATE: TerrainGridState = {
   gridSize: 1,
   tiles: [[TerrainType.BEDROCK]],
   heightMap: [[0]],
+  spawnPoint: { x: 0, z: 0 },
+  exitPoint: { x: 1, z: 1 },
+  version: '1.0.0'
+};
+
+const MOCK_INVALID_TERRAIN_STATE: TerrainGridState = {
+  gridSize: 1,
+  tiles: [[TerrainType.BEDROCK]],
+  heightMap: [[0]],
   spawnPoint: null,
   exitPoint: null,
   version: '1.0.0'
@@ -108,7 +117,7 @@ describe('MapSelectComponent', () => {
   it('selectMap should load map data and pass to MapBridgeService then navigate to /play', () => {
     fixture.detectChanges();
     component.selectMap(MOCK_MAPS[0]);
-    expect(mapStorageSpy.loadMap).toHaveBeenCalledOnceWith('map_1');
+    expect(mapStorageSpy.loadMap).toHaveBeenCalledWith('map_1');
     expect(mapBridgeSpy.setEditorMapState).toHaveBeenCalledOnceWith(MOCK_TERRAIN_STATE);
     expect(mapBridgeSpy.setCampaignLevelId).toHaveBeenCalledOnceWith(null);
     expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/play']);
@@ -120,6 +129,40 @@ describe('MapSelectComponent', () => {
     component.selectMap(MOCK_MAPS[0]);
     expect(mapBridgeSpy.setEditorMapState).not.toHaveBeenCalled();
     expect(routerSpy.navigate).not.toHaveBeenCalled();
+  });
+
+  it('selectMap should not navigate when map has no spawn or exit point', () => {
+    mapStorageSpy.loadMap.and.returnValue(MOCK_INVALID_TERRAIN_STATE);
+    fixture.detectChanges();
+    component.selectMap(MOCK_MAPS[0]);
+    expect(mapBridgeSpy.setEditorMapState).not.toHaveBeenCalled();
+    expect(routerSpy.navigate).not.toHaveBeenCalled();
+  });
+
+  it('isMapPlayable should return false when map has no spawn point', () => {
+    const noSpawn: TerrainGridState = { ...MOCK_TERRAIN_STATE, spawnPoint: null };
+    mapStorageSpy.loadMap.and.returnValue(noSpawn);
+    fixture.detectChanges();
+    expect(component.isMapPlayable(MOCK_MAPS[0])).toBeFalse();
+  });
+
+  it('isMapPlayable should return false when map has no exit point', () => {
+    const noExit: TerrainGridState = { ...MOCK_TERRAIN_STATE, exitPoint: null };
+    mapStorageSpy.loadMap.and.returnValue(noExit);
+    fixture.detectChanges();
+    expect(component.isMapPlayable(MOCK_MAPS[0])).toBeFalse();
+  });
+
+  it('isMapPlayable should return true when map has both spawn and exit points', () => {
+    mapStorageSpy.loadMap.and.returnValue(MOCK_TERRAIN_STATE);
+    fixture.detectChanges();
+    expect(component.isMapPlayable(MOCK_MAPS[0])).toBeTrue();
+  });
+
+  it('isMapPlayable should return false when loadMap returns null', () => {
+    mapStorageSpy.loadMap.and.returnValue(null);
+    fixture.detectChanges();
+    expect(component.isMapPlayable(MOCK_MAPS[0])).toBeFalse();
   });
 
   it('goToEditor should navigate to /edit', () => {

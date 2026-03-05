@@ -701,6 +701,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.router.navigate(['/campaign']);
   }
 
+  /** Returns the campaign level id when playing a campaign level, or null in freeplay. */
+  getCampaignLevelId(): number | null {
+    return this.mapBridge.getCampaignLevelId();
+  }
+
   startWave(): void {
     const state = this.gameStateService.getState();
     if (state.phase === GamePhase.COMBAT) return;
@@ -1235,8 +1240,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const material = mesh.material as THREE.MeshStandardMaterial;
         material.emissiveIntensity = TILE_EMISSIVE.selected;
 
-        this.deselectTower();
-        this.tryPlaceTower(row, col);
+        // If the tile already holds a tower, select it instead of trying to place.
+        // This prevents double-click from closing the tower info panel when the
+        // tile mesh is hit instead of the tower mesh.
+        const tileKey = `${row}-${col}`;
+        if (this.towerMeshes.has(tileKey)) {
+          this.selectPlacedTower(tileKey);
+        } else {
+          this.deselectTower();
+          this.tryPlaceTower(row, col);
+        }
       } else {
         this.selectedTile = null;
         this.deselectTower();
@@ -1390,8 +1403,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       const material = mesh.material as THREE.MeshStandardMaterial;
       material.emissiveIntensity = TILE_EMISSIVE.selected;
 
-      this.deselectTower();
-      this.tryPlaceTower(row, col);
+      // If the tile already holds a tower, select it instead of trying to place.
+      const tileKey = `${row}-${col}`;
+      if (this.towerMeshes.has(tileKey)) {
+        this.selectPlacedTower(tileKey);
+      } else {
+        this.deselectTower();
+        this.tryPlaceTower(row, col);
+      }
     } else {
       this.selectedTile = null;
       this.deselectTower();
@@ -1741,9 +1760,18 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
         // Enemies reaching the exit cost lives
         for (const enemyId of reachedExit) {
+          const preLeakPhase = this.gameStateService.getState().phase;
+          if (preLeakPhase === GamePhase.DEFEAT || preLeakPhase === GamePhase.VICTORY) {
+            this.enemyService.removeEnemy(enemyId, this.scene);
+            continue;
+          }
           this.gameStateService.loseLife(1);
           this.gameStatsService.recordEnemyLeaked();
-          this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
+          // Only shake on the life-loss that triggered this; skip if loseLife() itself set DEFEAT
+          const postLeakPhase = this.gameStateService.getState().phase;
+          if (postLeakPhase !== GamePhase.DEFEAT && postLeakPhase !== GamePhase.VICTORY) {
+            this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
+          }
           this.enemyService.removeEnemy(enemyId, this.scene);
         }
 

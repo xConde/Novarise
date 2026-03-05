@@ -292,7 +292,7 @@
       <div class="overlay-actions">
         <button class="restart-btn" (click)="restartGame()">Play Again</button>
         <button class="edit-map-btn" (click)="goToEditor()">Edit Map</button>
-        <button class="campaign-btn" (click)="goToCampaign()">Campaign</button>
+        <button class="campaign-btn" *ngIf="getCampaignLevelId() !== null" (click)="goToCampaign()">Campaign</button>
       </div>
     </div>
   </div>
