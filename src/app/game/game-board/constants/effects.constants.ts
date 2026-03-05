@@ -33,6 +33,8 @@ export const TOWER_UPGRADE_VISUAL_CONFIG = {
     opacity: 0.8,
     size: 1.5,
     duration: 0.3,
+    /** Y-offset above the tower position at which the flash sprite spawns. */
+    spawnYOffset: 0.5,
   },
   /** Base glow ring settings */
   glowRing: {
@@ -41,5 +43,7 @@ export const TOWER_UPGRADE_VISUAL_CONFIG = {
     color: 0x8a5cf6,
     opacity: 0.4,
     segments: 32,
+    /** World-space Y position of the glow ring — just above the board surface. */
+    groundY: 0.02,
   },
 } as const;

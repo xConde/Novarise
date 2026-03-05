@@ -34,7 +34,7 @@ import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
 import { getDifficultyGoldMultiplier } from './models/difficulty.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
-import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants/rendering.constants';
+import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG, DELTA_TIME_CAP_S } from './constants/rendering.constants';
 import { AMBIENT_LIGHT, DIRECTIONAL_LIGHT, UNDER_LIGHT, POINT_LIGHTS } from './constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
@@ -1700,7 +1700,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     const rawDelta = (time - this.lastTime) / 1000;
-    const deltaTime = Math.min(rawDelta, 0.1); // Cap at 100ms to prevent tab-switch physics burst
+    const deltaTime = Math.min(rawDelta, DELTA_TIME_CAP_S); // Cap to prevent tab-switch physics burst
     this.lastTime = time;
 
     // FPS tracking

@@ -36,7 +36,7 @@ export class TowerUpgradeVisualService {
 
     const sprite = new THREE.Sprite(material);
     sprite.scale.set(config.size, config.size, 1);
-    sprite.position.set(position.x, position.y + 0.5, position.z);
+    sprite.position.set(position.x, position.y + config.spawnYOffset, position.z);
 
     scene.add(sprite);
     this.flashes.push({ sprite, age: 0 });
@@ -61,7 +61,7 @@ export class TowerUpgradeVisualService {
 
     const ring = new THREE.Mesh(geometry, material);
     ring.rotation.x = -Math.PI / 2; // Lay flat on ground
-    ring.position.set(position.x, 0.02, position.z);
+    ring.position.set(position.x, config.groundY, position.z);
 
     scene.add(ring);
     this.glowRings.set(towerId, ring);

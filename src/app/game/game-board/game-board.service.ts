@@ -2,7 +2,8 @@ import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { BlockType, GameBoardTile, SpawnerType } from './models/game-board-tile';
 import { TowerType } from './models/tower.model';
-import { BOARD_CONFIG } from './constants/board.constants';
+import { BOARD_CONFIG, TILE_RENDER_CONFIG, GRID_LINE_CONFIG, TILE_COLORS } from './constants/board.constants';
+import { TILE_EMISSIVE, TOWER_VISUAL_CONFIG } from './constants/ui.constants';
 
 @Injectable()
 export class GameBoardService {
@@ -17,12 +18,11 @@ export class GameBoardService {
     [9, 11], [9, 12], [10, 11], [10, 12]
   ];
 
-  // Colors for different tile types
-  private readonly colorBase = 0x3a3a4a;
-  private readonly colorSpawner = 0x00ffff;
-  private readonly colorExit = 0xff00ff;
-  private readonly colorWall = 0x2a2540;
-  private readonly colorGrid = 0x444444;
+  // Colors for different tile types — sourced from TILE_COLORS constant
+  private readonly colorBase = TILE_COLORS.base;
+  private readonly colorSpawner = TILE_COLORS.spawner;
+  private readonly colorExit = TILE_COLORS.exit;
+  private readonly colorWall = TILE_COLORS.wall;
 
   // State
   private gameBoard: GameBoardTile[][] = [];
@@ -93,7 +93,8 @@ export class GameBoardService {
 
   // Create a visible tile mesh using BoxGeometry
   createTileMesh(row: number, col: number, type: BlockType): THREE.Mesh {
-    const geometry = new THREE.BoxGeometry(this.tileSize * 0.95, this.tileHeight, this.tileSize * 0.95);
+    const tileEdge = this.tileSize * TILE_RENDER_CONFIG.tileGapRatio;
+    const geometry = new THREE.BoxGeometry(tileEdge, this.tileHeight, tileEdge);
     const color = this.getTileColor(type);
 
     // Organic cave rock material
@@ -102,11 +103,11 @@ export class GameBoardService {
     const isSubdued = isBase || isWall;
     const material = new THREE.MeshStandardMaterial({
       color: color,
-      emissive: isSubdued ? 0x2a2548 : color,
-      emissiveIntensity: isBase ? 0.15 : isWall ? 0.1 : 0.4,
-      metalness: isWall ? 0.4 : 0.1,
-      roughness: isBase ? 0.75 : isWall ? 0.9 : 0.7,
-      envMapIntensity: 0.3
+      emissive: isSubdued ? TILE_RENDER_CONFIG.subduedEmissive : color,
+      emissiveIntensity: isBase ? TILE_EMISSIVE.base : isWall ? TILE_EMISSIVE.wall : TILE_EMISSIVE.special,
+      metalness: isWall ? TILE_RENDER_CONFIG.metalness.wall : TILE_RENDER_CONFIG.metalness.base,
+      roughness: isBase ? TILE_RENDER_CONFIG.roughness.base : isWall ? TILE_RENDER_CONFIG.roughness.wall : TILE_RENDER_CONFIG.roughness.special,
+      envMapIntensity: TILE_RENDER_CONFIG.envMapIntensity
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -128,9 +129,9 @@ export class GameBoardService {
 
     // Subtle bioluminescent veins
     const gridMaterial = new THREE.LineBasicMaterial({
-      color: 0x7a6a9a,
+      color: GRID_LINE_CONFIG.color,
       transparent: true,
-      opacity: 0.45,
+      opacity: GRID_LINE_CONFIG.opacity,
       linewidth: 1
     });
 
@@ -144,8 +145,8 @@ export class GameBoardService {
       const z2 = (this.gameBoardHeight / 2 - 1) * this.tileSize;
 
       const vertices = new Float32Array([
-        x, 0.01, z1,
-        x, 0.01, z2
+        x, GRID_LINE_CONFIG.yOffset, z1,
+        x, GRID_LINE_CONFIG.yOffset, z2
       ]);
 
       geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
@@ -163,8 +164,8 @@ export class GameBoardService {
       const x2 = (this.gameBoardWidth / 2 - 1) * this.tileSize;
 
       const vertices = new Float32Array([
-        x1, 0.01, z,
-        x2, 0.01, z
+        x1, GRID_LINE_CONFIG.yOffset, z,
+        x2, GRID_LINE_CONFIG.yOffset, z
       ]);
 
       geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
@@ -550,7 +551,7 @@ export class GameBoardService {
     const x = (col - this.gameBoardWidth / 2) * this.tileSize;
     const z = (row - this.gameBoardHeight / 2) * this.tileSize;
 
-    towerGroup.scale.set(1.4, 1.4, 1.4);
+    towerGroup.scale.set(TOWER_VISUAL_CONFIG.scaleBase, TOWER_VISUAL_CONFIG.scaleBase, TOWER_VISUAL_CONFIG.scaleBase);
     towerGroup.position.set(x, tileTop, z);
     towerGroup.castShadow = true;
     towerGroup.receiveShadow = true;

@@ -39,6 +39,15 @@ export const ENDLESS_REWARD_SCALE_PER_WAVE = 50;
 export const ENDLESS_BOSS_COUNT = 1;
 export const ENDLESS_BOSS_SPAWN_INTERVAL = 0;
 
+/** Fraction of the base count assigned to the primary enemy type in an endless wave. */
+export const ENDLESS_PRIMARY_SPLIT = 0.6;
+/** Fraction of the base count assigned to the secondary enemy type in an endless wave. */
+export const ENDLESS_SECONDARY_SPLIT = 0.4;
+/** Minimum spawn interval (seconds) — floor applied after speed scaling. */
+export const ENDLESS_MIN_SPAWN_INTERVAL = 0.3;
+/** Secondary-type spawn interval multiplier relative to the primary interval. */
+export const ENDLESS_SECONDARY_INTERVAL_MULTIPLIER = 1.2;
+
 /** Enemy types that cycle in endless waves. Excludes BOSS — added separately at boss intervals. */
 export const ENDLESS_ENEMY_CYCLE: EnemyType[] = [
   EnemyType.BASIC,

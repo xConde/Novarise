@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { EnemyType } from '../models/enemy.model';
-import { WaveDefinition, WaveEntry, WAVE_DEFINITIONS, ENDLESS_CONFIG, ENDLESS_BASE_COUNT, ENDLESS_BASE_SPAWN_INTERVAL, ENDLESS_BASE_REWARD, ENDLESS_REWARD_SCALE_PER_WAVE, ENDLESS_BOSS_COUNT, ENDLESS_BOSS_SPAWN_INTERVAL, ENDLESS_ENEMY_CYCLE } from '../models/wave.model';
+import { WaveDefinition, WaveEntry, WAVE_DEFINITIONS, ENDLESS_CONFIG, ENDLESS_BASE_COUNT, ENDLESS_BASE_SPAWN_INTERVAL, ENDLESS_BASE_REWARD, ENDLESS_REWARD_SCALE_PER_WAVE, ENDLESS_BOSS_COUNT, ENDLESS_BOSS_SPAWN_INTERVAL, ENDLESS_ENEMY_CYCLE, ENDLESS_PRIMARY_SPLIT, ENDLESS_SECONDARY_SPLIT, ENDLESS_MIN_SPAWN_INTERVAL, ENDLESS_SECONDARY_INTERVAL_MULTIPLIER } from '../models/wave.model';
 import { EnemyService } from './enemy.service';
 
 /** After this many consecutive failed spawn attempts the queue entry is discarded,
@@ -65,16 +65,16 @@ export class WaveService {
       ENDLESS_ENEMY_CYCLE[(cycleIndex + 1) % ENDLESS_ENEMY_CYCLE.length];
 
     const baseCount = Math.round(ENDLESS_BASE_COUNT * countMult);
-    const primaryCount = Math.ceil(baseCount * 0.6);
-    const secondaryCount = Math.floor(baseCount * 0.4);
+    const primaryCount = Math.ceil(baseCount * ENDLESS_PRIMARY_SPLIT);
+    const secondaryCount = Math.floor(baseCount * ENDLESS_SECONDARY_SPLIT);
     const spawnInterval = Math.max(
-      0.3,
+      ENDLESS_MIN_SPAWN_INTERVAL,
       ENDLESS_BASE_SPAWN_INTERVAL / speedMult
     );
 
     const entries: WaveEntry[] = [
       { type: primaryType, count: primaryCount, spawnInterval },
-      { type: secondaryType, count: secondaryCount, spawnInterval: spawnInterval * 1.2 }
+      { type: secondaryType, count: secondaryCount, spawnInterval: spawnInterval * ENDLESS_SECONDARY_INTERVAL_MULTIPLIER }
     ];
 
     if (isBossWave) {

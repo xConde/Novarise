@@ -12,6 +12,11 @@ export const HEALTH_BAR_CONFIG = {
   fgZOffset: 0.001,
   /** Width scale for mini-swarm health bars relative to the standard width. */
   miniSwarmWidthScale: 0.5,
+  /**
+   * X-position offset applied to the foreground bar as it shrinks, so the bar
+   * drains from the right. Equals width / 2.
+   */
+  get fgPositionHalfWidth(): number { return this.width / 2; },
 };
 
 export const PROJECTILE_CONFIG = {

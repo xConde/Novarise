@@ -353,7 +353,7 @@ export class EnemyService {
       if (healthBarBg && healthBarFg) {
         const healthPct = Math.max(0, enemy.health / enemy.maxHealth);
         healthBarFg.scale.x = healthPct;
-        healthBarFg.position.x = -(1 - healthPct) * 0.25;
+        healthBarFg.position.x = -(1 - healthPct) * HEALTH_BAR_CONFIG.fgPositionHalfWidth;
 
         // Color transitions: green -> yellow -> red
         const mat = healthBarFg.material as THREE.MeshBasicMaterial;
