@@ -15,6 +15,89 @@
   text-shadow: 0 0 12px var(--theme-purple-glow);
 }
 
+// --- Difficulty selector ---
+
+.difficulty-section {
+  width: 100%;
+  max-width: 900px;
+  margin-bottom: var(--spacing-xl);
+}
+
+.difficulty-heading {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--theme-purple-mid);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--spacing-sm);
+}
+
+.difficulty-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--spacing-sm);
+}
+
+.difficulty-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--theme-purple-dark);
+  border: var(--border-width-thin) solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  color: var(--text-color);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast) ease, border-color var(--transition-fast) ease, box-shadow var(--transition-fast) ease;
+
+  &:hover {
+    background: var(--theme-purple-dark-hover);
+    border-color: var(--theme-purple-light);
+    box-shadow: 0 0 8px var(--theme-purple-glow);
+  }
+
+  &.selected {
+    background: var(--theme-purple-a20);
+    border-color: var(--theme-purple-lighter);
+    box-shadow: 0 0 10px var(--theme-purple-glow);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--theme-purple-lighter);
+    outline-offset: 2px;
+  }
+}
+
+.difficulty-name {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--theme-purple-lighter);
+}
+
+.difficulty-desc {
+  font-size: var(--font-size-small);
+  color: var(--theme-purple-mid);
+  line-height: 1.3;
+}
+
+.difficulty-stats {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: 0.25rem;
+}
+
+.stat-item {
+  font-size: var(--font-size-small);
+  color: var(--theme-purple-light);
+  background: var(--theme-purple-a20);
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--border-radius-sm);
+}
+
+// --- Map grid ---
+
 .map-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

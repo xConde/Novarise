@@ -17,10 +17,12 @@ import { AudioService } from './services/audio.service';
 import { ParticleService } from './services/particle.service';
 import { ScreenShakeService } from './services/screen-shake.service';
 import { GoldPopupService } from './services/gold-popup.service';
+import { PathVisualizationService } from './services/path-visualization.service';
 import { FpsCounterService } from './services/fps-counter.service';
 import { GameStatsService } from './services/game-stats.service';
 import { PlayerProfileService, GameEndStats } from './services/player-profile.service';
 import { DamagePopupService } from './services/damage-popup.service';
+import { DamageNumberService } from './services/damage-number.service';
 import { MinimapService, MinimapEntityData, MinimapTerrainData } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
 import { TowerUnlockService } from './services/tower-unlock.service';
@@ -39,6 +41,8 @@ import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG } from './constants/touch.constants';
 import { ENEMY_STATS } from './models/enemy.model';
 import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
+import { ComboService, ComboState } from './services/combo.service';
+import { COMBO_BANNER_DISPLAY_MS } from './constants/combo.constants';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -53,7 +57,7 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService]
+  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, PathVisualizationService, FpsCounterService, GameStatsService, DamagePopupService, DamageNumberService, MinimapService, ComboService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -131,7 +135,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   showInterestNotification = false;
   interestAmount = 0;
   private interestNotificationTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Combo HUD state (exposed to template)
+  comboState: ComboState = { count: 0, totalBonusGold: 0, tierLabel: null, lastKillBonus: 0 };
+  showComboBanner = false;
+  comboBannerBonus = 0;
+  private comboBannerTimer: ReturnType<typeof setTimeout> | null = null;
+  private comboSubscription: import('rxjs').Subscription | null = null;
   private rangeRingMeshes: THREE.Mesh[] = [];
+
+  // Path preview line — visible during SETUP phase only
+  private pathPreviewVisible = false;
 
   // Animation
   private lastTime = 0;
@@ -195,19 +209,27 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private particleService: ParticleService,
     private screenShakeService: ScreenShakeService,
     private goldPopupService: GoldPopupService,
+    private pathVisualizationService: PathVisualizationService,
     private fpsCounterService: FpsCounterService,
     private gameStatsService: GameStatsService,
     private playerProfileService: PlayerProfileService,
     private damagePopupService: DamagePopupService,
+    private damageNumberService: DamageNumberService,
     private minimapService: MinimapService,
     private settingsService: SettingsService,
-    private towerUnlockService: TowerUnlockService
+    private towerUnlockService: TowerUnlockService,
+    private comboService: ComboService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
   }
 
   ngOnInit(): void {
+    // Subscribe to combo state for HUD updates
+    this.comboSubscription = this.comboService.getState$().subscribe(state => {
+      this.comboState = state;
+    });
+
     // Subscribe to game state changes
     this.stateSubscription = this.gameStateService.getState$().subscribe(state => {
       const prevPhase = this.gameState.phase;
@@ -246,6 +268,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const nextWave = state.wave + 1;
         this.wavePreview = getWavePreview(nextWave, state.isEndless);
       }
+
+      // Show path preview only during SETUP phase; hide it for all other phases
+      if (phaseChanged && this.scene) {
+        if (state.phase === GamePhase.SETUP) {
+          this.updatePathPreview();
+        } else {
+          this.hidePathPreview();
+        }
+      }
     });
 
     // Import editor map if it has spawn and exit points; otherwise use default board
@@ -261,6 +292,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.gameBoardService.resetBoard();
     }
 
+    // Apply difficulty selected on the map-select screen.
+    // setDifficulty() is guarded to only run during SETUP wave=0 so it's safe to call here.
+    const bridgeDifficulty = this.mapBridge.getDifficulty();
+    this.gameStateService.setDifficulty(bridgeDifficulty);
+    this.enemyService.setDifficulty(bridgeDifficulty);
+
     this.initializeScene();
     this.initializeCamera();
     this.initializeLights();
@@ -268,6 +305,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.initializeParticles();
     this.renderGameBoard();
     this.addGridLines();
+    // Show path preview immediately — game always starts in SETUP phase
+    this.updatePathPreview();
 
     // Load saved settings
     const savedSettings = this.settingsService.get();
@@ -304,6 +343,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   selectDifficulty(difficulty: DifficultyLevel): void {
     this.gameStateService.setDifficulty(difficulty);
+    this.enemyService.setDifficulty(difficulty);
     this.settingsService.update({ difficulty });
   }
 
@@ -400,6 +440,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Clear path cache since board changed
     this.enemyService.clearPathCache();
 
+    // Refresh path preview — removed tower may have opened a shorter route
+    const sellPhase = this.gameStateService.getState().phase;
+    if (sellPhase === GamePhase.SETUP) {
+      this.updatePathPreview();
+    }
+
     this.deselectTower();
   }
 
@@ -408,6 +454,28 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedTowerStats = null;
     this.sellConfirmPending = false;
     this.removeRangePreview();
+  }
+
+  // --- Path preview ---
+
+  /** Compute and render the enemy path preview line for the SETUP phase. */
+  private updatePathPreview(): void {
+    const worldPath = this.enemyService.computePreviewPath();
+    if (worldPath.length < 2) {
+      // No valid path — hide any existing line
+      this.hidePathPreview();
+      return;
+    }
+    this.pathVisualizationService.showPath(worldPath, this.scene);
+    this.pathPreviewVisible = true;
+  }
+
+  /** Remove the path preview line from the scene. */
+  private hidePathPreview(): void {
+    if (this.pathPreviewVisible) {
+      this.pathVisualizationService.hidePath(this.scene);
+      this.pathPreviewVisible = false;
+    }
   }
 
   // --- Ability methods ---
@@ -622,6 +690,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.waveService.reset();
     this.gameStateService.reset();
     this.gameStatsService.reset();
+    this.comboService.reset();
+    this.clearComboBanner();
     this.scoreBreakdown = null;
     this.newlyUnlockedAchievements = [];
     this.gameEndRecorded = false;
@@ -642,6 +712,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.renderGameBoard();
     this.addGridLines();
+    this.updatePathPreview();
     this.enemyService.clearPathCache();
     this.lastTime = 0;
     this.elapsedTimeAccumulator = 0;
@@ -661,8 +732,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Clean up damage popups
     this.damagePopupService.cleanup(this.scene);
 
+    // Clean up damage numbers
+    this.damageNumberService.cleanup(this.scene);
+
     // Clean up minimap
     this.minimapService.cleanup();
+
+    // Clean up path preview line
+    this.hidePathPreview();
+    this.pathVisualizationService.cleanup();
+    this.pathPreviewVisible = false;
 
     // Clean up range preview, hover range preview, and range toggle rings
     this.removeRangePreview();
@@ -1285,6 +1364,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Clear enemy path cache since board layout changed
       this.enemyService.clearPathCache();
+
+      // Refresh path preview — new tower may have altered the A* route
+      const phase = this.gameStateService.getState().phase;
+      if (phase === GamePhase.SETUP) {
+        this.updatePathPreview();
+      }
     }
   }
 
@@ -1303,6 +1388,26 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.showInterestNotification = false;
       this.interestNotificationTimer = null;
     }, 3000);
+  }
+
+  showComboBannerPopup(bonusGold: number): void {
+    if (this.comboBannerTimer !== null) {
+      clearTimeout(this.comboBannerTimer);
+    }
+    this.comboBannerBonus = bonusGold;
+    this.showComboBanner = true;
+    this.comboBannerTimer = setTimeout(() => {
+      this.showComboBanner = false;
+      this.comboBannerTimer = null;
+    }, COMBO_BANNER_DISPLAY_MS);
+  }
+
+  clearComboBanner(): void {
+    if (this.comboBannerTimer !== null) {
+      clearTimeout(this.comboBannerTimer);
+      this.comboBannerTimer = null;
+    }
+    this.showComboBanner = false;
   }
 
   togglePause(): void {
@@ -1511,7 +1616,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.waveService.update(scaledDelta, this.scene);
 
         // Tower combat — returns IDs of enemies killed, tower types that fired, and hit count
-        const { killed: killedByTowers, fired: firedTowerTypes, hitCount } = this.towerCombatService.update(scaledDelta, this.scene);
+        // Tower combat — returns IDs of enemies killed, tower types that fired, hit count, and hit events
+        const { killed: killedByTowers, fired: firedTowerTypes, hitCount, hits } = this.towerCombatService.update(scaledDelta, this.scene);
+
+        // Spawn floating damage numbers for each hit
+        for (const hit of hits) {
+          this.damageNumberService.showDamage(hit.position, hit.damage, hit.type, this.scene);
+        }
 
         // Play tower fire sounds
         for (const towerType of firedTowerTypes) {
@@ -1529,6 +1640,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           if (enemy) {
             this.gameStateService.addGold(enemy.value);
             this.gameStatsService.recordGoldEarned(enemy.value);
+
+            // Combo tracking — bonus gold for rapid kills
+            const comboBonus = this.comboService.recordKill(Date.now());
+            if (comboBonus > 0) {
+              this.gameStateService.addGold(comboBonus);
+              this.gameStatsService.recordGoldEarned(comboBonus);
+              this.showComboBannerPopup(comboBonus);
+            }
+
             this.audioService.playGoldEarned();
             this.audioService.playEnemyDeath();
 
@@ -1574,6 +1694,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             this.victorySoundPlayed = true;
             this.audioService.playVictory();
           } else if (postWavePhase === GamePhase.INTERMISSION) {
+            this.comboService.reset();
+            this.clearComboBanner();
             this.audioService.playWaveClear();
             const interest = this.gameStateService.awardInterest();
             if (interest > 0) {
@@ -1623,10 +1745,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Update visual effects (run every frame regardless of pause)
     if (deltaTime > 0) {
+      this.comboService.tick(Date.now());
       this.particleService.addPendingToScene(this.scene);
       this.particleService.update(deltaTime, this.scene);
       this.goldPopupService.update(deltaTime);
       this.damagePopupService.update(deltaTime);
+      this.damageNumberService.update(deltaTime);
       this.screenShakeService.update(deltaTime, this.camera);
     }
 
@@ -1668,8 +1792,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.interestNotificationTimer = null;
     }
 
+    this.clearComboBanner();
+
     if (this.stateSubscription) {
       this.stateSubscription.unsubscribe();
+    }
+
+    if (this.comboSubscription) {
+      this.comboSubscription.unsubscribe();
     }
 
     window.removeEventListener('keydown', this.keyboardHandler);

@@ -1,6 +1,27 @@
 <div class="map-select-container">
   <h1 class="map-select-title">Select Map</h1>
 
+  <!-- Difficulty selector -->
+  <section class="difficulty-section" aria-labelledby="difficulty-heading">
+    <h2 class="difficulty-heading" id="difficulty-heading">Difficulty</h2>
+    <div class="difficulty-options" role="group" aria-label="Select difficulty">
+      <button
+        *ngFor="let level of difficultyLevels"
+        class="difficulty-btn"
+        [class.selected]="selectedDifficulty === level"
+        (click)="selectDifficulty(level)"
+        [attr.aria-pressed]="selectedDifficulty === level"
+        [attr.aria-label]="'Select ' + difficultyPresets[level].label + ' difficulty'">
+        <span class="difficulty-name">{{ difficultyPresets[level].label }}</span>
+        <span class="difficulty-desc">{{ difficultyPresets[level].description }}</span>
+        <span class="difficulty-stats">
+          <span class="stat-item">{{ difficultyPresets[level].lives }} lives</span>
+          <span class="stat-item">{{ difficultyPresets[level].gold }}g start</span>
+        </span>
+      </button>
+    </div>
+  </section>
+
   <div class="map-grid" *ngIf="maps.length > 0">
     <button class="map-card" *ngFor="let map of maps" (click)="selectMap(map)">
       <span class="map-name">{{ map.name }}</span>

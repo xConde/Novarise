@@ -173,6 +173,40 @@
 
   }
 
+  .difficulty-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--border-radius-sm);
+    font-size: var(--font-size-small);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+
+    &[data-difficulty='easy'] {
+      background: rgba(72, 199, 116, 0.2);
+      color: #48c774;
+      border: 1px solid rgba(72, 199, 116, 0.4);
+    }
+
+    &[data-difficulty='normal'] {
+      background: var(--theme-purple-a20);
+      color: var(--theme-purple-lighter);
+      border: 1px solid var(--border-color);
+    }
+
+    &[data-difficulty='hard'] {
+      background: rgba(255, 136, 0, 0.2);
+      color: #ff8800;
+      border: 1px solid rgba(255, 136, 0, 0.4);
+    }
+
+    &[data-difficulty='nightmare'] {
+      background: rgba(255, 56, 56, 0.2);
+      color: #ff3838;
+      border: 1px solid rgba(255, 56, 56, 0.4);
+    }
+  }
+
   .hud-wave-status {
     position: absolute;
     top: calc(var(--spacing-md) + 3.5rem);
@@ -1586,4 +1620,76 @@
   15% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   70% { opacity: 1; transform: translate(-50%, -70%) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -80%) scale(0.9); }
+}
+
+// --- Combo counter HUD ---
+
+.combo-counter {
+  position: absolute;
+  top: 5.5rem;
+  right: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.35rem 0.75rem;
+  background: rgba(0, 0, 0, 0.7);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
+  border-radius: var(--border-radius-md);
+  backdrop-filter: blur(0.5rem);
+  font-family: "Orbitron", sans-serif;
+  z-index: var(--z-index-overlay);
+  pointer-events: none;
+  transition: border-color var(--transition-fast) ease;
+
+  &.combo-pulse {
+    animation: comboPulse 0.4s ease;
+  }
+
+  .combo-label {
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--theme-purple-mid);
+    text-transform: uppercase;
+  }
+
+  .combo-count {
+    font-size: 1.2rem;
+    font-weight: 900;
+    color: var(--theme-purple-lighter, #d0b4f5);
+    line-height: 1;
+  }
+}
+
+// --- Combo bonus banner ---
+
+.combo-banner {
+  position: absolute;
+  top: 9rem;
+  right: var(--spacing-md);
+  padding: 0.25rem 0.7rem;
+  background: rgba(168, 85, 247, 0.15);
+  border: var(--border-width-thin) solid var(--theme-purple-a80, rgba(168, 85, 247, 0.8));
+  border-radius: var(--border-radius-md);
+  color: var(--theme-purple-lighter, #d0b4f5);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: "Orbitron", sans-serif;
+  z-index: var(--z-index-overlay);
+  pointer-events: none;
+  animation: comboBannerFade 1.8s ease forwards;
+}
+
+@keyframes comboPulse {
+  0%   { border-color: var(--theme-purple-a80, rgba(168, 85, 247, 0.8)); transform: scale(1); }
+  30%  { border-color: var(--theme-purple-lighter, #d0b4f5); transform: scale(1.08); }
+  100% { border-color: var(--theme-purple-a50); transform: scale(1); }
+}
+
+@keyframes comboBannerFade {
+  0%   { opacity: 0; transform: translateY(4px); }
+  15%  { opacity: 1; transform: translateY(0); }
+  70%  { opacity: 1; transform: translateY(-4px); }
+  100% { opacity: 0; transform: translateY(-10px); }
 }

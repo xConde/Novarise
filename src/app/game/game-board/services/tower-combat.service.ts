@@ -18,6 +18,14 @@ import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
 import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y, SLOW_VISUAL_CONFIG } from '../constants/combat.constants';
+import { DamageNumberType } from '../constants/damage-number.constants';
+
+/** A single projectile or effect hit that produced visible damage. */
+export interface HitEvent {
+  position: { x: number; y: number; z: number };
+  damage: number;
+  type: DamageNumberType;
+}
 
 interface Projectile {
   id: string;
@@ -142,10 +150,11 @@ export class TowerCombatService {
     return tower;
   }
 
-  update(deltaTime: number, scene: THREE.Scene): { killed: string[]; fired: TowerType[]; hitCount: number } {
+  update(deltaTime: number, scene: THREE.Scene): { killed: string[]; fired: TowerType[]; hitCount: number; hits: HitEvent[] } {
     this.gameTime += deltaTime;
     const killedEnemyIds: string[] = [];
     const firedTowerTypes: TowerType[] = [];
+    const hitEvents: HitEvent[] = [];
 
     this.expireSlowEffects();
 
@@ -188,9 +197,10 @@ export class TowerCombatService {
 
       if (tower.type === TowerType.CHAIN) {
         const chainCountOverride = tower.abilityPrimed ? ABILITY_CONFIG.overloadChainCount : undefined;
-        const kills = this.fireChainLightning(tower, target, stats, scene, chainCountOverride);
+        const { kills, hits } = this.fireChainLightning(tower, target, stats, scene, chainCountOverride);
         if (tower.abilityPrimed) tower.abilityPrimed = false;
         killedEnemyIds.push(...kills);
+        hitEvents.push(...hits);
         if (kills.length > 0) {
           const t = this.placedTowers.get(tower.id);
           if (t) t.kills += kills.length;
@@ -221,8 +231,9 @@ export class TowerCombatService {
       const moveDistance = proj.speed * deltaTime;
 
       if (moveDistance >= dist) {
-        const kills = this.applyDamage(proj, scene);
+        const { kills, hits } = this.applyDamage(proj, scene);
         killedEnemyIds.push(...kills);
+        hitEvents.push(...hits);
         hitCount++;
         this.removeProjectileMesh(proj, scene);
       } else {
@@ -278,7 +289,7 @@ export class TowerCombatService {
     }
     this.mortarZones = survivingZones;
 
-    return { killed: killedEnemyIds, fired: firedTowerTypes, hitCount };
+    return { killed: killedEnemyIds, fired: firedTowerTypes, hitCount, hits: hitEvents };
   }
 
   private getTowerWorldPos(tower: PlacedTower): { x: number; z: number } {
@@ -472,10 +483,11 @@ export class TowerCombatService {
     stats: TowerStats,
     scene: THREE.Scene,
     chainCountOverride?: number
-  ): string[] {
+  ): { kills: string[]; hits: HitEvent[] } {
     const chainCount = chainCountOverride ?? (stats.chainCount ?? 3);
     const chainRange = stats.chainRange ?? 2;
     const kills: string[] = [];
+    const hits: HitEvent[] = [];
     const hitIds = new Set<string>();
 
     this.audioService.playSfx('chainZap');
@@ -516,6 +528,11 @@ export class TowerCombatService {
       if (chainResult.killed) {
         kills.push(currentTarget.id);
       }
+      hits.push({
+        position: { x: currentTarget.position.x, y: currentTarget.position.y, z: currentTarget.position.z },
+        damage: currentDamage,
+        type: 'chain',
+      });
       chainResult.spawnedEnemies.forEach(mini => {
         if (mini.mesh) scene.add(mini.mesh);
       });
@@ -533,7 +550,7 @@ export class TowerCombatService {
       currentTarget = nextTarget;
     }
 
-    return kills;
+    return { kills, hits };
   }
 
   private findChainTarget(
@@ -690,8 +707,9 @@ export class TowerCombatService {
     return initialKills;
   }
 
-  private applyDamage(proj: Projectile, scene: THREE.Scene): string[] {
+  private applyDamage(proj: Projectile, scene: THREE.Scene): { kills: string[]; hits: HitEvent[] } {
     const kills: string[] = [];
+    const hits: HitEvent[] = [];
 
     if (proj.towerType === TowerType.MORTAR) {
       const tower = this.placedTowers.get(proj.towerKey);
@@ -701,6 +719,12 @@ export class TowerCombatService {
         const initialKills = this.createMortarZone(proj.mesh.position.x, proj.mesh.position.z, stats, scene, dotDurationOverride);
         kills.push(...initialKills);
       }
+      // Emit a single hit at the impact point for the mortar visual — DoT ticks are silent
+      hits.push({
+        position: { x: proj.mesh.position.x, y: GROUND_EFFECT_Y, z: proj.mesh.position.z },
+        damage: proj.damage,
+        type: 'splash',
+      });
     } else if (proj.napalmActive) {
       // Napalm: Splash projectile that also creates a burning zone on impact
       const impactX = proj.mesh.position.x;
@@ -716,6 +740,11 @@ export class TowerCombatService {
           if (result.killed) {
             kills.push(enemy.id);
           }
+          hits.push({
+            position: { x: enemy.position.x, y: enemy.position.y, z: enemy.position.z },
+            damage: proj.damage,
+            type: 'splash',
+          });
           result.spawnedEnemies.forEach(mini => {
             if (mini.mesh) scene.add(mini.mesh);
           });
@@ -759,15 +788,28 @@ export class TowerCombatService {
           if (result.killed) {
             kills.push(enemy.id);
           }
+          hits.push({
+            position: { x: enemy.position.x, y: enemy.position.y, z: enemy.position.z },
+            damage: proj.damage,
+            type: 'splash',
+          });
           result.spawnedEnemies.forEach(mini => {
             if (mini.mesh) scene.add(mini.mesh);
           });
         }
       });
     } else {
+      const target = this.enemyService.getEnemies().get(proj.targetId);
       const result = this.enemyService.damageEnemy(proj.targetId, proj.damage);
       if (result.killed) {
         kills.push(proj.targetId);
+      }
+      if (target !== undefined) {
+        hits.push({
+          position: { x: target.position.x, y: target.position.y, z: target.position.z },
+          damage: proj.damage,
+          type: 'normal',
+        });
       }
       result.spawnedEnemies.forEach(mini => {
         if (mini.mesh) scene.add(mini.mesh);
@@ -781,7 +823,7 @@ export class TowerCombatService {
       }
     }
 
-    return kills;
+    return { kills, hits };
   }
 
   private removeProjectileMesh(proj: Projectile, scene: THREE.Scene): void {

@@ -40,6 +40,14 @@
       <span class="hud-label">Time</span>
       <span class="hud-value">{{ formattedTime }}</span>
     </div>
+    <div class="hud-stat secondary">
+      <span
+        class="difficulty-badge"
+        [attr.data-difficulty]="gameState.difficulty"
+        [attr.aria-label]="'Difficulty: ' + difficultyPresets[gameState.difficulty].label">
+        {{ difficultyPresets[gameState.difficulty].label }}
+      </span>
+    </div>
   </div>
 
   <!-- Wave status indicator -->
@@ -87,6 +95,17 @@
   <div class="interest-notification" *ngIf="showInterestNotification" aria-live="polite">
     <span class="interest-icon">&#9733;</span>
     +{{ interestAmount }}g interest
+  </div>
+
+  <!-- Combo counter HUD — shown during active combo streaks -->
+  <div class="combo-counter" *ngIf="comboState.count >= 2" aria-live="polite" [class.combo-pulse]="showComboBanner">
+    <span class="combo-label">{{ comboState.tierLabel ?? 'STREAK' }}</span>
+    <span class="combo-count">x{{ comboState.count }}</span>
+  </div>
+
+  <!-- Combo bonus banner — flashes briefly when bonus gold is awarded -->
+  <div class="combo-banner" *ngIf="showComboBanner" aria-live="assertive">
+    +{{ comboBannerBonus }}g bonus!
   </div>
 
   <!-- Wave control -->

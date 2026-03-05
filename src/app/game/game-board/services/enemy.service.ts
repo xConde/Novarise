@@ -4,6 +4,7 @@ import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_MESH_SEG
 import { GameBoardService } from '../game-board.service';
 import { BlockType } from '../models/game-board-tile';
 import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG, HEALER_CROSS_CONFIG } from '../constants/ui.constants';
+import { DEFAULT_DIFFICULTY, DifficultyLevel, getDifficultyHealthMultiplier, getDifficultySpeedMultiplier } from '../models/difficulty.model';
 
 export interface DamageResult {
   killed: boolean;
@@ -15,8 +16,22 @@ export class EnemyService {
   private enemies: Map<string, Enemy> = new Map();
   private enemyCounter = 0;
   private pathCache: Map<string, GridNode[]> = new Map();
+  private difficulty: DifficultyLevel = DEFAULT_DIFFICULTY;
 
   constructor(private gameBoardService: GameBoardService) {}
+
+  /**
+   * Set the active difficulty level. Must be called before the first wave
+   * starts so that spawned enemies receive the correct health/speed scaling.
+   */
+  setDifficulty(difficulty: DifficultyLevel): void {
+    this.difficulty = difficulty;
+  }
+
+  /** Returns the active difficulty level. */
+  getDifficulty(): DifficultyLevel {
+    return this.difficulty;
+  }
 
   /**
    * Spawn a new enemy at a random spawner tile
@@ -60,14 +75,20 @@ export class EnemyService {
     // FLYING enemies hover above ground
     const yPos = isFlying ? FLYING_ENEMY_HEIGHT : stats.size;
 
+    // Apply difficulty scaling to health and speed
+    const healthMult = getDifficultyHealthMultiplier(this.difficulty);
+    const speedMult = getDifficultySpeedMultiplier(this.difficulty);
+    const scaledHealth = Math.round(stats.health * healthMult);
+    const scaledSpeed = stats.speed * speedMult;
+
     const enemy: Enemy = {
       id: `enemy-${this.enemyCounter++}`,
       type,
       position: { x: worldPos.x, y: yPos, z: worldPos.z },
       gridPosition: { row, col },
-      health: stats.health,
-      maxHealth: stats.health,
-      speed: stats.speed,
+      health: scaledHealth,
+      maxHealth: scaledHealth,
+      speed: scaledSpeed,
       value: stats.value,
       path,
       pathIndex: 0,
@@ -83,8 +104,9 @@ export class EnemyService {
     }
 
     if (stats.maxShield !== undefined) {
-      enemy.shield = stats.maxShield;
-      enemy.maxShield = stats.maxShield;
+      const scaledShield = Math.round(stats.maxShield * healthMult);
+      enemy.shield = scaledShield;
+      enemy.maxShield = scaledShield;
     }
 
     // Create mesh
@@ -726,6 +748,29 @@ export class EnemyService {
    */
   clearPathCache(): void {
     this.pathCache.clear();
+  }
+
+  /**
+   * Compute the world-space path from the first available spawner to the first
+   * exit tile. Returns an array of {x, z} points suitable for path visualization.
+   * Returns an empty array if no spawner or exit tile exists, or if A* finds no path.
+   */
+  computePreviewPath(): { x: number; z: number }[] {
+    const spawnerTiles = this.getSpawnerTiles();
+    if (spawnerTiles.length === 0) return [];
+
+    const exitTiles = this.getExitTiles();
+    if (exitTiles.length === 0) return [];
+
+    const start = spawnerTiles[0];
+    const exit = exitTiles[0];
+
+    const gridPath = this.findPath(
+      { x: start.col, y: start.row },
+      { x: exit.col, y: exit.row }
+    );
+
+    return gridPath.map(node => this.gridToWorld(node.y, node.x));
   }
 
   /**

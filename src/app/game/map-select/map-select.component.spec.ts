@@ -6,6 +6,7 @@ import { MapStorageService, MapMetadata } from '../../games/novarise/core/map-st
 import { MapBridgeService } from '../game-board/services/map-bridge.service';
 import { TerrainGridState } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
+import { DifficultyLevel } from '../game-board/models/difficulty.model';
 
 const MOCK_MAPS: MapMetadata[] = [
   { id: 'map_1', name: 'First Map', createdAt: 1000, updatedAt: 2000, version: '1.0.0', gridSize: 25 },
@@ -30,11 +31,16 @@ describe('MapSelectComponent', () => {
 
   beforeEach(async () => {
     mapStorageSpy = jasmine.createSpyObj('MapStorageService', ['getAllMaps', 'loadMap']);
-    mapBridgeSpy = jasmine.createSpyObj('MapBridgeService', ['setEditorMapState']);
+    mapBridgeSpy = jasmine.createSpyObj('MapBridgeService', [
+      'setEditorMapState',
+      'getDifficulty',
+      'setDifficulty'
+    ]);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     mapStorageSpy.getAllMaps.and.returnValue(MOCK_MAPS);
     mapStorageSpy.loadMap.and.returnValue(MOCK_TERRAIN_STATE);
+    mapBridgeSpy.getDifficulty.and.returnValue(DifficultyLevel.NORMAL);
     routerSpy.navigate.and.returnValue(Promise.resolve(true));
 
     await TestBed.configureTestingModule({
@@ -64,6 +70,12 @@ describe('MapSelectComponent', () => {
     expect(component.maps).toEqual(MOCK_MAPS);
   });
 
+  it('should restore difficulty from MapBridgeService on init', () => {
+    mapBridgeSpy.getDifficulty.and.returnValue(DifficultyLevel.HARD);
+    fixture.detectChanges();
+    expect(component.selectedDifficulty).toBe(DifficultyLevel.HARD);
+  });
+
   it('should show map cards when maps are available', () => {
     fixture.detectChanges();
     const cards = fixture.nativeElement.querySelectorAll('.map-card');
@@ -83,6 +95,13 @@ describe('MapSelectComponent', () => {
     fixture.detectChanges();
     const noMaps = fixture.nativeElement.querySelector('.no-maps');
     expect(noMaps).toBeNull();
+  });
+
+  it('selectDifficulty should update selectedDifficulty and call mapBridge.setDifficulty', () => {
+    fixture.detectChanges();
+    component.selectDifficulty(DifficultyLevel.EASY);
+    expect(component.selectedDifficulty).toBe(DifficultyLevel.EASY);
+    expect(mapBridgeSpy.setDifficulty).toHaveBeenCalledOnceWith(DifficultyLevel.EASY);
   });
 
   it('selectMap should load map data and pass to MapBridgeService then navigate to /play', () => {

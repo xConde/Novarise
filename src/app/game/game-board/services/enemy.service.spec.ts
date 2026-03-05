@@ -4,6 +4,7 @@ import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
+import { DifficultyLevel, DEFAULT_DIFFICULTY, DIFFICULTY_PRESETS } from '../models/difficulty.model';
 
 describe('EnemyService', () => {
   let service: EnemyService;
@@ -992,6 +993,163 @@ describe('EnemyService', () => {
       const newEnemy = service.spawnEnemy(EnemyType.FAST, mockScene);
       expect(newEnemy).toBeTruthy();
       expect(service.getEnemies().size).toBe(1);
+    });
+  });
+
+  // --- Difficulty scaling ---
+  describe('Difficulty scaling', () => {
+    it('should default to NORMAL difficulty', () => {
+      expect(service.getDifficulty()).toBe(DEFAULT_DIFFICULTY);
+    });
+
+    it('should update difficulty via setDifficulty()', () => {
+      service.setDifficulty(DifficultyLevel.HARD);
+      expect(service.getDifficulty()).toBe(DifficultyLevel.HARD);
+    });
+
+    it('should spawn enemy with unmodified health on NORMAL difficulty', () => {
+      service.setDifficulty(DifficultyLevel.NORMAL);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy.health).toBe(ENEMY_STATS[EnemyType.BASIC].health);
+      expect(enemy.maxHealth).toBe(ENEMY_STATS[EnemyType.BASIC].health);
+    });
+
+    it('should spawn enemy with unmodified speed on NORMAL difficulty', () => {
+      service.setDifficulty(DifficultyLevel.NORMAL);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy.speed).toBe(ENEMY_STATS[EnemyType.BASIC].speed);
+    });
+
+    it('should reduce enemy health on EASY difficulty', () => {
+      service.setDifficulty(DifficultyLevel.EASY);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const expectedHealth = Math.round(
+        ENEMY_STATS[EnemyType.BASIC].health * DIFFICULTY_PRESETS[DifficultyLevel.EASY].healthMultiplier
+      );
+      expect(enemy.health).toBe(expectedHealth);
+      expect(enemy.maxHealth).toBe(expectedHealth);
+    });
+
+    it('should reduce enemy speed on EASY difficulty', () => {
+      service.setDifficulty(DifficultyLevel.EASY);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const expectedSpeed =
+        ENEMY_STATS[EnemyType.BASIC].speed * DIFFICULTY_PRESETS[DifficultyLevel.EASY].speedMultiplier;
+      expect(enemy.speed).toBeCloseTo(expectedSpeed, 5);
+    });
+
+    it('should increase enemy health on HARD difficulty', () => {
+      service.setDifficulty(DifficultyLevel.HARD);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const expectedHealth = Math.round(
+        ENEMY_STATS[EnemyType.BASIC].health * DIFFICULTY_PRESETS[DifficultyLevel.HARD].healthMultiplier
+      );
+      expect(enemy.health).toBe(expectedHealth);
+      expect(enemy.maxHealth).toBe(expectedHealth);
+    });
+
+    it('should increase enemy speed on HARD difficulty', () => {
+      service.setDifficulty(DifficultyLevel.HARD);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const expectedSpeed =
+        ENEMY_STATS[EnemyType.BASIC].speed * DIFFICULTY_PRESETS[DifficultyLevel.HARD].speedMultiplier;
+      expect(enemy.speed).toBeCloseTo(expectedSpeed, 5);
+    });
+
+    it('should scale enemy health higher on NIGHTMARE than HARD', () => {
+      service.setDifficulty(DifficultyLevel.HARD);
+      const hardEnemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.cleanup(mockScene);
+
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      const nightmareEnemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      expect(nightmareEnemy.health).toBeGreaterThan(hardEnemy.health);
+    });
+
+    it('should scale SHIELDED enemy shield HP along with health on HARD', () => {
+      service.setDifficulty(DifficultyLevel.HARD);
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const baseShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      const expectedShield = Math.round(
+        baseShield * DIFFICULTY_PRESETS[DifficultyLevel.HARD].healthMultiplier
+      );
+      expect(enemy.shield).toBe(expectedShield);
+      expect(enemy.maxShield).toBe(expectedShield);
+    });
+
+    it('should apply new difficulty to enemies spawned after setDifficulty() is called', () => {
+      service.setDifficulty(DifficultyLevel.NORMAL);
+      const normalEnemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.cleanup(mockScene);
+
+      service.setDifficulty(DifficultyLevel.HARD);
+      const hardEnemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      expect(hardEnemy.health).toBeGreaterThan(normalEnemy.health);
+    });
+  });
+
+  // --- computePreviewPath ---
+  describe('computePreviewPath', () => {
+    it('returns an array with at least 2 world-space points when a valid path exists', () => {
+      const path = service.computePreviewPath();
+      expect(path.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('each returned point has numeric x and z properties', () => {
+      const path = service.computePreviewPath();
+      for (const pt of path) {
+        expect(typeof pt.x).toBe('number');
+        expect(typeof pt.z).toBe('number');
+      }
+    });
+
+    it('returns an empty array when there are no spawner tiles', () => {
+      const noSpawnerBoard = createMockBoard();
+      noSpawnerBoard[0][0] = GameBoardTile.createBase(0, 0);
+      gameBoardService.getGameBoard.and.returnValue(noSpawnerBoard);
+
+      const path = service.computePreviewPath();
+      expect(path.length).toBe(0);
+    });
+
+    it('returns an empty array when there are no exit tiles', () => {
+      const noExitBoard = createMockBoard();
+      noExitBoard[9][9] = GameBoardTile.createBase(9, 9);
+      gameBoardService.getGameBoard.and.returnValue(noExitBoard);
+
+      const path = service.computePreviewPath();
+      expect(path.length).toBe(0);
+    });
+
+    it('returns an empty array when the path is completely blocked', () => {
+      const blockedCells: { row: number; col: number }[] = [];
+      for (let row = 0; row < 10; row++) {
+        blockedCells.push({ row, col: 1 });
+      }
+      for (let col = 1; col < 10; col++) {
+        blockedCells.push({ row: 0, col });
+      }
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard(blockedCells));
+      service.clearPathCache();
+
+      const path = service.computePreviewPath();
+      expect(path.length).toBe(0);
+    });
+
+    it('path starts near the spawner world position and ends near the exit', () => {
+      const path = service.computePreviewPath();
+      expect(path.length).toBeGreaterThanOrEqual(2);
+
+      const first = path[0];
+      const last = path[path.length - 1];
+
+      expect(first.x).toBeCloseTo(-5);
+      expect(first.z).toBeCloseTo(-5);
+
+      expect(last.x).toBeCloseTo(4);
+      expect(last.z).toBeCloseTo(4);
     });
   });
 
