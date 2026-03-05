@@ -1091,6 +1091,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.spawnMarker.position.y += EDITOR_SPAWN_MARKER.yBase;
         this.spawnMarker.visible = true;
       }
+    } else if (this.spawnMarker) {
+      this.spawnMarker.visible = false;
     }
   }
 
@@ -1103,6 +1105,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.exitMarker.position.y += EDITOR_EXIT_MARKER.yBase;
         this.exitMarker.visible = true;
       }
+    } else if (this.exitMarker) {
+      this.exitMarker.visible = false;
     }
   }
 
@@ -1510,7 +1514,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           if (this.editMode === 'paint') {
             this.terrainGrid.paintTile(x, z, this.selectedTerrainType);
           } else if (this.editMode === 'height') {
-            this.terrainGrid.adjustHeight(x, z, 0.2);
+            this.terrainGrid.adjustHeight(x, z, EDITOR_HEIGHT.stepSize);
             // Track new height after change
             const updatedTile = this.terrainGrid.getTileAt(x, z);
             if (updatedTile) {
@@ -1575,10 +1579,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const minZ = Math.min(z1, z2);
     const maxZ = Math.max(z1, z2);
 
-    // Performance limit: don't create more than 100 preview meshes
+    // Performance limit: cap at full 25x25 grid (625 tiles).
+    // Highlighting 625 meshes is fine on modern GPUs and avoids invisible previews
+    // when the user drags a large rectangle selection.
     const tileCount = (maxX - minX + 1) * (maxZ - minZ + 1);
-    if (tileCount > 100) {
-      // For large selections, only show corner/edge previews
+    if (tileCount > 625) {
       return;
     }
 
@@ -1730,6 +1735,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
    */
   public playMap(): void {
     if (!this.canPlayMap) return;
+    // Set bridge state BEFORE navigating so the game receives it synchronously.
+    // ngOnDestroy fires after navigation begins — relying on it is a race condition.
+    if (this.terrainGrid) {
+      const state = this.terrainGrid.exportState();
+      this.mapBridge.setEditorMapState(state);
+    }
     this.router.navigate(['/play']);
   }
 
@@ -1934,15 +1945,16 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     canvas.removeEventListener('touchcancel', this.touchEndHandler);
 
     // Snapshot terrain state for the game to consume on /play navigation
-    // and auto-save to localStorage to prevent data loss
+    // and auto-save to localStorage to prevent data loss.
+    // Only auto-save if a map entry already exists — creating a new entry on
+    // every navigation would produce duplicate maps.
     if (this.terrainGrid) {
       const state = this.terrainGrid.exportState();
       this.mapBridge.setEditorMapState(state);
-      this.mapStorage.saveMap(
-        this.currentMapName,
-        state,
-        this.mapStorage.getCurrentMapId() || undefined
-      );
+      const existingId = this.mapStorage.getCurrentMapId();
+      if (existingId) {
+        this.mapStorage.saveMap(this.currentMapName, state, existingId);
+      }
     }
 
     // Clear undo/redo history to prevent stale closures referencing disposed TerrainGrid

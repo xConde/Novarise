@@ -936,6 +936,8 @@ describe('GameBoardComponent', () => {
 
   describe('activateAbility', () => {
     it('calls towerCombatService.activateAbility with selectedTowerInfo.id', () => {
+      const gss = fixture.debugElement.injector.get(GameStateService);
+      gss.setPhase(GamePhase.COMBAT);
       const tcs = fixture.debugElement.injector.get(TowerCombatService);
       spyOn(tcs, 'activateAbility');
       (component as any).selectedTowerInfo = makeTower({ id: 'hero' });
@@ -943,7 +945,18 @@ describe('GameBoardComponent', () => {
       expect(tcs.activateAbility).toHaveBeenCalledWith('hero');
     });
 
+    it('does nothing when phase is not COMBAT', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'activateAbility');
+      (component as any).selectedTowerInfo = makeTower({ id: 'hero' });
+      // Phase defaults to SETUP — ability should be blocked
+      component.activateAbility();
+      expect(tcs.activateAbility).not.toHaveBeenCalled();
+    });
+
     it('does nothing when selectedTowerInfo is null', () => {
+      const gss = fixture.debugElement.injector.get(GameStateService);
+      gss.setPhase(GamePhase.COMBAT);
       const tcs = fixture.debugElement.injector.get(TowerCombatService);
       spyOn(tcs, 'activateAbility');
       (component as any).selectedTowerInfo = null;

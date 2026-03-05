@@ -38,6 +38,13 @@ interface Projectile {
   splashRadius: number;
   towerType: TowerType;
   napalmActive?: boolean;
+  /** Mortar-specific: blast zone radius captured at fire time so the zone
+   *  still fires correctly even if the tower is sold before impact. */
+  blastRadius?: number;
+  /** Mortar-specific: DoT duration captured at fire time (seconds). */
+  dotDuration?: number;
+  /** Mortar-specific: DoT damage per tick captured at fire time. */
+  dotDamage?: number;
 }
 
 /** A chain arc line that persists for a short visual duration before removal. */
@@ -651,6 +658,11 @@ export class TowerCombatService {
       splashRadius: 0,
       towerType: TowerType.MORTAR,
       napalmActive,
+      // Capture mortar zone parameters at fire time so the explosion still
+      // fires correctly if the tower is sold before the projectile lands.
+      blastRadius: stats.blastRadius ?? TOWER_CONFIGS[TowerType.MORTAR].blastRadius!,
+      dotDuration: stats.dotDuration ?? TOWER_CONFIGS[TowerType.MORTAR].dotDuration!,
+      dotDamage: stats.dotDamage ?? TOWER_CONFIGS[TowerType.MORTAR].dotDamage!,
     });
   }
 
@@ -715,9 +727,17 @@ export class TowerCombatService {
     if (proj.towerType === TowerType.MORTAR) {
       const tower = this.placedTowers.get(proj.towerKey);
       const stats = tower ? getEffectiveStats(tower.type, tower.level) : null;
-      if (stats) {
+      // Use tower stats if available; fall back to values captured at fire time
+      // so the explosion still fires even when the tower has been sold.
+      const effectiveStats: TowerStats | null = stats ?? (proj.blastRadius != null ? {
+        ...TOWER_CONFIGS[TowerType.MORTAR],
+        blastRadius: proj.blastRadius,
+        dotDuration: proj.dotDuration ?? TOWER_CONFIGS[TowerType.MORTAR].dotDuration!,
+        dotDamage: proj.dotDamage ?? TOWER_CONFIGS[TowerType.MORTAR].dotDamage!,
+      } : null);
+      if (effectiveStats) {
         const dotDurationOverride = proj.napalmActive ? ABILITY_CONFIG.napalmDotDuration : undefined;
-        const initialKills = this.createMortarZone(proj.mesh.position.x, proj.mesh.position.z, stats, scene, dotDurationOverride);
+        const initialKills = this.createMortarZone(proj.mesh.position.x, proj.mesh.position.z, effectiveStats, scene, dotDurationOverride);
         kills.push(...initialKills);
       }
       // Emit a single hit at the impact point for the mortar visual — DoT ticks are silent

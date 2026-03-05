@@ -168,6 +168,8 @@
       class="control-btn pause-btn"
       (click)="togglePause()"
       [class.active]="isPaused"
+      [class.dimmed]="gameState.phase !== 'combat'"
+      [disabled]="gameState.phase !== 'combat'"
       [attr.aria-label]="isPaused ? 'Resume game' : 'Pause game'"
       [attr.aria-pressed]="isPaused">
       <svg *ngIf="isPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -197,6 +199,7 @@
       *ngIf="gameState.phase === GamePhase.COMBAT"
       (click)="restartCurrentWave()"
       [class.disabled]="gameState.lives <= 1"
+      [disabled]="gameState.lives <= 1"
       aria-label="Restart current wave (costs 1 life) [Q]">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
       <span class="wave-hint" *ngIf="!isMobileDevice">Q</span>
@@ -333,6 +336,7 @@
         class="upgrade-btn"
         *ngIf="selectedTowerInfo.level < MAX_TOWER_LEVEL"
         [class.unaffordable]="!gameState || gameState.gold < selectedTowerUpgradeCost"
+        [disabled]="!gameState || selectedTowerUpgradeCost > gameState.gold"
         (click)="upgradeTower()"
         aria-label="Upgrade tower">
         Upgrade ({{ selectedTowerUpgradeCost }}g)

@@ -32,6 +32,7 @@ import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_ABILITIES, PlacedTo
 import { TOWER_UNLOCK_CONDITIONS } from './models/tower-unlock.model';
 import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
+import { getDifficultyGoldMultiplier } from './models/difficulty.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
 import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants/rendering.constants';
 import { AMBIENT_LIGHT, DIRECTIONAL_LIGHT, UNDER_LIGHT, POINT_LIGHTS } from './constants/lighting.constants';
@@ -519,6 +520,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // --- Ability methods ---
 
   activateAbility(): void {
+    if (this.gameState.phase !== GamePhase.COMBAT) return;
     if (!this.selectedTowerInfo) return;
     this.towerCombatService.activateAbility(this.selectedTowerInfo.id);
   }
@@ -727,6 +729,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   restartGame(): void {
+    // Capture difficulty before reset — gameStateService.reset() restores defaults synchronously,
+    // so this.gameState (bound to state$) would already reflect defaults by the time we re-apply.
+    const currentDifficulty = this.gameStateService.getState().difficulty;
+
     // Reset interaction state — old references point to disposed meshes
     this.hoveredTile = null;
     this.selectedTile = null;
@@ -753,10 +759,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.defeatSoundPlayed = false;
     this.victorySoundPlayed = false;
 
-    // Re-apply difficulty after reset (gameStateService.reset() restores INITIAL_GAME_STATE defaults)
-    const bridgeDifficulty = this.mapBridge.getDifficulty();
-    this.gameStateService.setDifficulty(bridgeDifficulty);
-    this.enemyService.setDifficulty(bridgeDifficulty);
+    // Re-apply difficulty after reset (captured above before gameStateService.reset())
+    this.gameStateService.setDifficulty(currentDifficulty);
+    this.enemyService.setDifficulty(currentDifficulty);
 
     if (this.mapBridge.hasEditorMap()) {
       const state = this.mapBridge.getEditorMapState()!;
@@ -1633,7 +1638,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private animate = (time: number = 0): void => {
     this.animationFrameId = requestAnimationFrame(this.animate);
 
-    const rawDelta = this.lastTime === 0 ? 0 : (time - this.lastTime) / 1000;
+    // On the very first frame, seed lastTime and skip the tick so frame 2
+    // doesn't inherit a huge delta computed from time=0.
+    if (this.lastTime === 0) {
+      this.lastTime = time;
+      return;
+    }
+
+    const rawDelta = (time - this.lastTime) / 1000;
     const deltaTime = Math.min(rawDelta, 0.1); // Cap at 100ms to prevent tab-switch physics burst
     this.lastTime = time;
 
@@ -1695,11 +1707,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         }
 
         // Collect gold from tower kills and remove dead enemies
+        const goldMultiplier = getDifficultyGoldMultiplier(this.gameStateService.getState().difficulty);
         for (const enemyId of killedByTowers) {
           const enemy = this.enemyService.getEnemies().get(enemyId);
           if (enemy) {
-            this.gameStateService.addGold(enemy.value);
-            this.gameStatsService.recordGoldEarned(enemy.value);
+            const killGold = Math.round(enemy.value * goldMultiplier);
+            this.gameStateService.addGold(killGold);
+            this.gameStatsService.recordGoldEarned(killGold);
 
             // Combo tracking — bonus gold for rapid kills
             const comboBonus = this.comboService.recordKill(Date.now());
@@ -1715,7 +1729,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             // Visual effects on kill
             const enemyColor = ENEMY_STATS[enemy.type]?.color ?? ENEMY_FALLBACK_COLOR;
             this.particleService.spawnDeathBurst(enemy.position, enemyColor);
-            this.goldPopupService.spawn(enemy.value, enemy.position, this.scene);
+            this.goldPopupService.spawn(killGold, enemy.position, this.scene);
             this.damagePopupService.spawn(enemy.maxHealth, enemy.position, this.scene);
 
             this.enemyService.removeEnemy(enemyId, this.scene);
@@ -1735,6 +1749,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
         // Update health bars
         this.enemyService.updateHealthBars();
+        this.enemyService.updateHealthBarFacing(this.camera);
 
         // Check wave completion: no spawning and no enemies alive
         // Re-read phase — loseLife() above may have set DEFEAT mid-frame
@@ -1746,7 +1761,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         if (currentPhase === GamePhase.COMBAT &&
             !this.waveService.isSpawning() &&
             this.enemyService.getEnemies().size === 0) {
-          const reward = this.waveService.getWaveReward(state.wave);
+          const baseReward = this.waveService.getWaveReward(state.wave);
+          const reward = Math.round(baseReward * getDifficultyGoldMultiplier(this.gameStateService.getState().difficulty));
           this.gameStateService.completeWave(reward);
           // Check if completeWave triggered VICTORY
           const postWavePhase = this.gameStateService.getState().phase;
@@ -1815,11 +1831,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Combat-spawned popups and particles freeze when the game is paused
       if (!isGamePaused) {
+        // Scale popup lifetime by game speed so they don't linger at 2x/3x
+        const visualScaledDelta = deltaTime * visualState.gameSpeed;
         this.particleService.addPendingToScene(this.scene);
         this.particleService.update(deltaTime, this.scene);
-        this.goldPopupService.update(deltaTime);
-        this.damagePopupService.update(deltaTime);
-        this.damageNumberService.update(deltaTime);
+        this.goldPopupService.update(visualScaledDelta);
+        this.damagePopupService.update(visualScaledDelta);
+        this.damageNumberService.update(visualScaledDelta);
         this.screenShakeService.update(deltaTime, this.camera);
       }
     }

@@ -4,11 +4,16 @@ import { EnemyType } from '../models/enemy.model';
 import { WaveDefinition, WaveEntry, WAVE_DEFINITIONS, ENDLESS_CONFIG, ENDLESS_BASE_COUNT, ENDLESS_BASE_SPAWN_INTERVAL, ENDLESS_BASE_REWARD, ENDLESS_REWARD_SCALE_PER_WAVE, ENDLESS_BOSS_COUNT, ENDLESS_BOSS_SPAWN_INTERVAL, ENDLESS_ENEMY_CYCLE } from '../models/wave.model';
 import { EnemyService } from './enemy.service';
 
+/** After this many consecutive failed spawn attempts the queue entry is discarded,
+ *  preventing an infinite soft-lock when no valid spawn path exists. */
+const MAX_SPAWN_RETRIES = 60;
+
 interface SpawnQueue {
   type: EnemyType;
   spawnInterval: number;
   remaining: number;
   timeSinceLastSpawn: number;
+  retryCount: number;
 }
 
 
@@ -107,7 +112,8 @@ export class WaveService {
       type: entry.type,
       spawnInterval: entry.spawnInterval,
       remaining: entry.count,
-      timeSinceLastSpawn: entry.spawnInterval // spawn first immediately
+      timeSinceLastSpawn: entry.spawnInterval, // spawn first immediately
+      retryCount: 0,
     }));
 
     this.active = true;
@@ -129,8 +135,16 @@ export class WaveService {
         if (spawned) {
           queue.remaining--;
           queue.timeSinceLastSpawn = 0;
+          queue.retryCount = 0;
+        } else {
+          // Spawn failed (no valid path) — count consecutive failures.
+          // If failures reach the limit, discard the remaining enemies to
+          // prevent the wave from soft-locking indefinitely.
+          queue.retryCount++;
+          if (queue.retryCount >= MAX_SPAWN_RETRIES) {
+            queue.remaining = 0;
+          }
         }
-        // If spawn failed (no valid path), keep in queue and retry next tick
       }
     }
 

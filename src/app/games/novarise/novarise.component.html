@@ -61,7 +61,7 @@
     <!-- Minimap overlay -->
     <div class="minimap-container" [class.minimap-hidden]="!minimapVisible">
       <button class="minimap-toggle" (click)="toggleMinimap()" [title]="minimapVisible ? 'Hide minimap' : 'Show minimap'">
-        {{ minimapVisible ? 'M' : 'M' }}
+        {{ minimapVisible ? '▼' : '▲' }}
       </button>
       <canvas
         *ngIf="minimapVisible"

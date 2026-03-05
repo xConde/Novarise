@@ -1192,18 +1192,19 @@ describe('TowerCombatService — ability system', () => {
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
       enemyMap.set('e1', enemy);
 
-      // Normal fire rate: BASIC fires every 1.0s
-      // First shot happens immediately on first update
-      service.update(0.016, mockScene); // shot 1
+      // Normal fire rate: BASIC fires every 1.0s.
+      // Use a large deltaTime so any in-flight projectile hits in the same tick.
+      service.update(0.5, mockScene); // shot 1 fires and hits
       const healthAfterShot1 = enemy.health;
+      expect(healthAfterShot1).toBeLessThan(10000); // sanity: shot 1 landed
 
-      service.update(0.5, mockScene); // 0.5s later — should NOT fire (normal rate is 1.0s)
+      service.update(0.4, mockScene); // 0.4s more (0.9s total) — should NOT fire again (rate is 1.0s)
       expect(enemy.health).toBe(healthAfterShot1);
 
       // Activate Rapid Fire — 0.5x fire rate (0.5s between shots)
       service.activateAbility(key);
 
-      service.update(0.6, mockScene); // 0.6s — should fire (rapid rate is 0.5s)
+      service.update(0.6, mockScene); // 0.6s — should fire (rapid rate is 0.5s; 0.9+0.6=1.5s total)
       expect(enemy.health).toBeLessThan(healthAfterShot1);
     });
   });

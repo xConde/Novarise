@@ -319,6 +319,24 @@ export class EnemyService {
   }
 
   /**
+   * Update health bar planes to face the camera each frame (billboard effect).
+   * Call this from the animate() loop after updateEnemies().
+   */
+  updateHealthBarFacing(camera: THREE.Camera): void {
+    this.enemies.forEach(enemy => {
+      if (!enemy.mesh) return;
+      const healthBarBg = enemy.mesh.userData?.['healthBarBg'] as THREE.Mesh | undefined;
+      const healthBarFg = enemy.mesh.userData?.['healthBarFg'] as THREE.Mesh | undefined;
+      if (healthBarBg) {
+        healthBarBg.lookAt(camera.position);
+      }
+      if (healthBarFg) {
+        healthBarFg.lookAt(camera.position);
+      }
+    });
+  }
+
+  /**
    * Update all enemy health bars to reflect current health
    */
   updateHealthBars(): void {
