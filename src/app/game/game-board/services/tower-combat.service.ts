@@ -439,42 +439,43 @@ export class TowerCombatService {
 
   /** Restore freeze-affected enemies to their original speed. */
   private expireFreezeEffect(_tower: PlacedTower): void {
-    // Iterate all tracked slow/freeze effects whose expiresAt has passed.
-    // Do NOT filter by range — enemies that moved out of range while frozen
-    // must still be unfrozen when the effect expires.
+    // When the Freeze ability duration ends, enemies that are still frozen
+    // (speed === freezeSpeedFactor) need to be restored.  There are two cases:
+    //   1. A slow tower refreshed the slowEffects entry AFTER the freeze was applied
+    //      — expiresAt is in the future, meaning slow is still active.  Restore to
+    //      slowed speed (not full speed) and keep the visual tint.
+    //   2. No active slow — fully restore speed and appearance, remove the entry.
+    // Do NOT filter by range — enemies that moved out of range while frozen must
+    // still be unfrozen when the freeze ability expires.
     for (const [enemyId, effect] of this.slowEffects) {
-      if (this.gameTime < effect.expiresAt) continue;
-
       const enemy = this.enemyService.getEnemies().get(enemyId);
-      if (enemy && enemy.health > 0 && enemy.speed === ABILITY_CONFIG.freezeSpeedFactor) {
-        // Check if this enemy still has an active slow effect (expiresAt in the
-        // future means the slow tower is still keeping the effect alive).  The
-        // freeze and slow share a single slowEffects entry, so a still-active
-        // entry means a refreshed slow beat the freeze duration.
-        const stillSlowed = effect.expiresAt > this.gameTime;
-        if (stillSlowed) {
-          // Restore to slowed speed and keep slow tint — userData keys stay.
-          enemy.speed = effect.originalSpeed * (TOWER_CONFIGS[TowerType.SLOW].slowFactor ?? 1);
-          if (enemy.mesh) {
-            const mat = enemy.mesh.material as THREE.MeshLambertMaterial;
-            mat.color.setHex(SLOW_VISUAL_CONFIG.tintColor);
-            mat.emissive.setHex(SLOW_VISUAL_CONFIG.tintEmissive);
-          }
-          // Do NOT remove from slowEffects — let expireSlowEffects handle it.
-        } else {
-          // No remaining effects — fully restore original appearance.
-          enemy.speed = effect.originalSpeed;
-          if (enemy.mesh) {
-            const mat = enemy.mesh.material as THREE.MeshLambertMaterial;
-            const origColor = enemy.mesh.userData['originalColor'];
-            const origEmissive = enemy.mesh.userData['originalEmissive'];
-            if (origColor !== undefined) mat.color.setHex(origColor);
-            if (origEmissive !== undefined) mat.emissive.setHex(origEmissive);
-            delete enemy.mesh.userData['originalColor'];
-            delete enemy.mesh.userData['originalEmissive'];
-          }
-          this.slowEffects.delete(enemyId);
+      if (!enemy || enemy.health <= 0 || enemy.speed !== ABILITY_CONFIG.freezeSpeedFactor) continue;
+
+      // Check if a slow tower is still keeping this entry alive (expiresAt is
+      // in the future because applySlowAura refreshed it after the freeze).
+      const slowStillActive = effect.expiresAt > this.gameTime;
+      if (slowStillActive) {
+        // Restore to slowed speed and keep slow tint — userData keys stay.
+        // Do NOT remove from slowEffects — let expireSlowEffects handle it.
+        enemy.speed = effect.originalSpeed * (TOWER_CONFIGS[TowerType.SLOW].slowFactor ?? 1);
+        if (enemy.mesh) {
+          const mat = enemy.mesh.material as THREE.MeshLambertMaterial;
+          mat.color.setHex(SLOW_VISUAL_CONFIG.tintColor);
+          mat.emissive.setHex(SLOW_VISUAL_CONFIG.tintEmissive);
         }
+      } else {
+        // Both freeze and slow have expired — fully restore original appearance.
+        enemy.speed = effect.originalSpeed;
+        if (enemy.mesh) {
+          const mat = enemy.mesh.material as THREE.MeshLambertMaterial;
+          const origColor = enemy.mesh.userData['originalColor'];
+          const origEmissive = enemy.mesh.userData['originalEmissive'];
+          if (origColor !== undefined) mat.color.setHex(origColor);
+          if (origEmissive !== undefined) mat.emissive.setHex(origEmissive);
+          delete enemy.mesh.userData['originalColor'];
+          delete enemy.mesh.userData['originalEmissive'];
+        }
+        this.slowEffects.delete(enemyId);
       }
     }
   }
