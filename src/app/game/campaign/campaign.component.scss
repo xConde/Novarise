@@ -253,7 +253,7 @@ $number-circle-size: 2.5rem;
   margin-left: auto;
 
   &:hover {
-    background: rgba(180, 20, 20, 0.35);
-    box-shadow: 0 0 8px rgba(220, 50, 50, 0.3);
+    background: var(--reset-btn-bg-hover);
+    box-shadow: 0 0 8px var(--reset-btn-shadow-hover);
   }
 }

@@ -1,4 +1,5 @@
 import { Component, OnInit } from '@angular/core';
+import { Location } from '@angular/common';
 import { Router } from '@angular/router';
 import { CampaignService, CampaignLevel } from './campaign.service';
 import { MapBridgeService } from '../game-board/services/map-bridge.service';
@@ -16,7 +17,8 @@ export class CampaignComponent implements OnInit {
   constructor(
     private campaignService: CampaignService,
     private mapBridge: MapBridgeService,
-    private router: Router
+    private router: Router,
+    private location: Location
   ) {}
 
   ngOnInit(): void {
@@ -51,7 +53,7 @@ export class CampaignComponent implements OnInit {
   }
 
   goBack(): void {
-    this.router.navigate(['/edit']);
+    this.location.back();
   }
 
   goToMaps(): void {

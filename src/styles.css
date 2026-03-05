@@ -46,14 +46,18 @@
   --action-danger-border: rgba(220, 50, 50, 0.4);
   --action-yellow: #eab308;
   --action-yellow-bg: rgba(234, 179, 8, 0.15);
+  --action-yellow-bg-hover: rgba(234, 179, 8, 0.3);
   --action-yellow-border: rgba(234, 179, 8, 0.3);
   --action-green: #22c55e;
   --action-green-bg: rgba(34, 197, 94, 0.15);
+  --action-green-bg-active: rgba(34, 197, 94, 0.2);
   --action-green-border: rgba(34, 197, 94, 0.3);
   --action-danger-bg-hover: rgba(220, 20, 20, 0.4);
   --action-danger-shadow-hover: rgba(255, 50, 50, 0.3);
   --action-success-bg-hover: rgba(0, 180, 80, 0.4);
   --action-success-shadow-hover: rgba(0, 255, 100, 0.2);
+  --reset-btn-bg-hover: rgba(180, 20, 20, 0.35);
+  --reset-btn-shadow-hover: rgba(220, 50, 50, 0.3);
 
   /* Game-specific colors */
   --game-primary: #444444;
@@ -61,6 +65,11 @@
   --game-accent-orange: #FF9A66;
   --game-success: #00AA00;
   --game-error: #AA0000;
+
+  /* Game gold alpha variants */
+  --game-gold-a15: rgba(255, 200, 0, 0.15);
+  --game-gold-a30: rgba(255, 200, 0, 0.3);
+  --game-gold-a50: rgba(255, 200, 0, 0.5);
 
   /* Game state colors */
   --game-health: #ff4444;
@@ -144,6 +153,7 @@
 
   /* Overlay / backdrop colors */
   --overlay-dim: rgba(0, 0, 0, 0.6);
+  --overlay-dim-70: rgba(0, 0, 0, 0.7);
   --overlay-panel-shadow: rgba(0, 0, 0, 0.5);
   --glass-bg: rgba(0, 0, 0, 0.75);
 

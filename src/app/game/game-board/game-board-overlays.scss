@@ -11,12 +11,12 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--overlay-dim);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: var(--z-index-modal);
-    backdrop-filter: blur(2px);
+    backdrop-filter: blur(0.125rem);
     animation: fade-in 0.2s ease;
   }
 
@@ -69,7 +69,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.7);
+    background: var(--overlay-dim-70);
     z-index: var(--z-index-modal);
     animation: fade-in 0.5s ease;
 
@@ -358,7 +358,7 @@
         .targeting-btn {
           padding: 0.15rem 0.5rem;
           border-radius: var(--border-radius-sm, 4px);
-          border: 1px solid var(--border-color);
+          border: var(--border-width-thin) solid var(--border-color);
           background: var(--theme-purple-dark);
           color: var(--theme-purple-lighter);
           font-size: var(--font-size-small);
@@ -444,15 +444,15 @@
     .tower-ability {
       margin-top: 0.5rem;
       padding-top: 0.5rem;
-      border-top: 1px solid var(--border-color);
+      border-top: var(--border-width-thin) solid var(--border-color);
     }
 
     .ability-btn {
       width: 100%;
       padding: 0.4rem 0.6rem;
       border-radius: var(--border-radius-md);
-      border: 1px solid var(--action-yellow);
-      background: rgba(234, 179, 8, 0.15);
+      border: var(--border-width-thin) solid var(--action-yellow);
+      background: var(--action-yellow-bg);
       color: var(--action-yellow);
       cursor: pointer;
       font-size: var(--font-size-small);
@@ -463,7 +463,7 @@
       align-items: center;
 
       &:hover:not(:disabled) {
-        background: rgba(234, 179, 8, 0.3);
+        background: var(--action-yellow-bg-hover);
       }
 
       &:disabled, &.on-cooldown {
@@ -473,7 +473,7 @@
 
       &.active {
         border-color: var(--action-green);
-        background: rgba(34, 197, 94, 0.2);
+        background: var(--action-green-bg-active);
         color: var(--action-green);
         animation: abilityPulse 1s ease infinite;
       }

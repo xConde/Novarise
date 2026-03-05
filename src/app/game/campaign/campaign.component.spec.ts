@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Location } from '@angular/common';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { CampaignComponent } from './campaign.component';
@@ -25,6 +26,7 @@ describe('CampaignComponent', () => {
   let campaignServiceSpy: jasmine.SpyObj<CampaignService>;
   let mapBridgeSpy: jasmine.SpyObj<MapBridgeService>;
   let routerSpy: jasmine.SpyObj<Router>;
+  let locationSpy: jasmine.SpyObj<Location>;
 
   const fakeLevels = [
     { id: 1, name: 'The Gauntlet', description: 'Easy straight path', difficulty: DifficultyLevel.EASY, mapBuilder: makeFakeMap },
@@ -40,6 +42,7 @@ describe('CampaignComponent', () => {
     ]);
     mapBridgeSpy = jasmine.createSpyObj<MapBridgeService>('MapBridgeService', ['setEditorMapState', 'setDifficulty', 'setCampaignLevelId']);
     routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate']);
+    locationSpy = jasmine.createSpyObj<Location>('Location', ['back']);
 
     campaignServiceSpy.getLevels.and.returnValue(fakeLevels);
     campaignServiceSpy.getProgress.and.returnValue({ unlockedLevel: 1, stars: {}, bestScores: {} });
@@ -54,6 +57,7 @@ describe('CampaignComponent', () => {
         { provide: CampaignService, useValue: campaignServiceSpy },
         { provide: MapBridgeService, useValue: mapBridgeSpy },
         { provide: Router, useValue: routerSpy },
+        { provide: Location, useValue: locationSpy },
       ]
     }).compileComponents();
 
@@ -118,10 +122,10 @@ describe('CampaignComponent', () => {
     expect(routerSpy.navigate).not.toHaveBeenCalled();
   });
 
-  it('goBack should navigate to /edit', () => {
+  it('goBack should call location.back()', () => {
     component.goBack();
 
-    expect(routerSpy.navigate).toHaveBeenCalledWith(['/edit']);
+    expect(locationSpy.back).toHaveBeenCalled();
   });
 
   it('goToMaps should navigate to /maps', () => {

@@ -56,7 +56,7 @@
   bottom: var(--spacing-lg);
   left: var(--spacing-lg);
   background: var(--nav-bg-a90);
-  border: 1px solid var(--theme-purple-a50);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
   border-radius: 8px;
   padding: var(--spacing-md) var(--spacing-lg);
   backdrop-filter: blur(0.625rem);
@@ -80,7 +80,7 @@
   letter-spacing: 1px;
   color: var(--theme-purple-mid);
   margin-bottom: 4px;
-  border-bottom: 1px solid var(--theme-purple-a30);
+  border-bottom: var(--border-width-thin) solid var(--theme-purple-a30);
   padding-bottom: 4px;
 }
 
@@ -113,21 +113,21 @@
 
   &.valid {
     background: var(--action-green-bg);
-    border: 1px solid var(--action-green-border);
+    border: var(--border-width-thin) solid var(--action-green-border);
     border-bottom: none;
     color: var(--action-green);
   }
 
   &.warning {
     background: var(--action-yellow-bg);
-    border: 1px solid var(--action-yellow-border);
+    border: var(--border-width-thin) solid var(--action-yellow-border);
     border-bottom: none;
     color: var(--action-yellow);
   }
 
   &.error {
     background: var(--action-danger-bg);
-    border: 1px solid var(--action-danger-border);
+    border: var(--border-width-thin) solid var(--action-danger-border);
     border-bottom: none;
     color: var(--action-danger);
   }
@@ -192,7 +192,7 @@
 
 .map-manager-panel {
   background: var(--nav-bg-a90);
-  border: 1px solid var(--theme-purple-a60);
+  border: var(--border-width-thin) solid var(--theme-purple-a60);
   border-radius: 12px;
   padding: 20px;
   width: 420px;
@@ -224,7 +224,7 @@
   width: 32px;
   height: 32px;
   background: var(--theme-purple-dark-strong);
-  border: 1px solid var(--theme-purple-a50);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
   border-radius: 6px;
   color: var(--theme-purple-lighter);
   font-size: 16px;
@@ -260,7 +260,7 @@
   gap: 8px;
   padding: 8px 10px;
   background: var(--theme-purple-dark);
-  border: 1px solid var(--theme-purple-a30);
+  border: var(--border-width-thin) solid var(--theme-purple-a30);
   border-radius: 8px;
   min-height: 44px;
   transition: border-color var(--transition-fast) ease;
@@ -302,7 +302,7 @@
   flex: 1;
   padding: 6px 10px;
   background: var(--theme-purple-dark-strong);
-  border: 1px solid var(--theme-purple-a60);
+  border: var(--border-width-thin) solid var(--theme-purple-a60);
   border-radius: 6px;
   color: var(--theme-purple-lighter);
   font-size: 13px;
@@ -332,7 +332,7 @@
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  border: 1px solid transparent;
+  border: var(--border-width-thin) solid transparent;
   cursor: pointer;
   font-size: 14px;
   display: flex;
@@ -415,7 +415,7 @@
 
 .minimap-toggle {
   background: var(--nav-bg-a90);
-  border: 1px solid var(--theme-purple-a50);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
   border-radius: 4px;
   color: var(--theme-purple-light);
   font-family: 'Orbitron', sans-serif;
@@ -438,7 +438,7 @@
 .minimap-canvas {
   width: 150px;
   height: 150px;
-  border: 1px solid var(--theme-purple-a50);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
   border-radius: 4px;
   display: block;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
