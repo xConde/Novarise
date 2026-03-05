@@ -3,6 +3,8 @@
   flex-direction: column;
   align-items: center;
   min-height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
   padding: var(--spacing-xl);
   background-color: var(--bg-color);
   color: var(--text-color);

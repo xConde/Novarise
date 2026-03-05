@@ -377,7 +377,8 @@
       [class.locked]="isTowerLocked(tower.type)"
       (click)="selectTowerType(tower.type)"
       [attr.aria-label]="isTowerLocked(tower.type) ? getUnlockHint(tower.type) : 'Select ' + (tower.type | titlecase) + ' Tower'"
-      [attr.aria-disabled]="isTowerLocked(tower.type)">
+      [attr.aria-disabled]="isTowerLocked(tower.type)"
+      [attr.tabindex]="isTowerLocked(tower.type) ? -1 : 0">
       <div class="tower-tooltip" role="tooltip">
         <ng-container *ngIf="!isTowerLocked(tower.type)">
           <div class="tooltip-stat"><span class="tooltip-label">Damage</span><span class="tooltip-val">{{ towerConfigs[tower.type].damage }}</span></div>

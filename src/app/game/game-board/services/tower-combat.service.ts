@@ -447,18 +447,34 @@ export class TowerCombatService {
 
       const enemy = this.enemyService.getEnemies().get(enemyId);
       if (enemy && enemy.health > 0 && enemy.speed === ABILITY_CONFIG.freezeSpeedFactor) {
-        enemy.speed = effect.originalSpeed;
-        // Visual: restore original mesh color
-        if (enemy.mesh) {
-          const mat = enemy.mesh.material as THREE.MeshLambertMaterial;
-          const origColor = enemy.mesh.userData['originalColor'];
-          const origEmissive = enemy.mesh.userData['originalEmissive'];
-          if (origColor !== undefined) mat.color.setHex(origColor);
-          if (origEmissive !== undefined) mat.emissive.setHex(origEmissive);
-          delete enemy.mesh.userData['originalColor'];
-          delete enemy.mesh.userData['originalEmissive'];
+        // Check if this enemy still has an active slow effect (expiresAt in the
+        // future means the slow tower is still keeping the effect alive).  The
+        // freeze and slow share a single slowEffects entry, so a still-active
+        // entry means a refreshed slow beat the freeze duration.
+        const stillSlowed = effect.expiresAt > this.gameTime;
+        if (stillSlowed) {
+          // Restore to slowed speed and keep slow tint — userData keys stay.
+          enemy.speed = effect.originalSpeed * (TOWER_CONFIGS[TowerType.SLOW].slowFactor ?? 1);
+          if (enemy.mesh) {
+            const mat = enemy.mesh.material as THREE.MeshLambertMaterial;
+            mat.color.setHex(SLOW_VISUAL_CONFIG.tintColor);
+            mat.emissive.setHex(SLOW_VISUAL_CONFIG.tintEmissive);
+          }
+          // Do NOT remove from slowEffects — let expireSlowEffects handle it.
+        } else {
+          // No remaining effects — fully restore original appearance.
+          enemy.speed = effect.originalSpeed;
+          if (enemy.mesh) {
+            const mat = enemy.mesh.material as THREE.MeshLambertMaterial;
+            const origColor = enemy.mesh.userData['originalColor'];
+            const origEmissive = enemy.mesh.userData['originalEmissive'];
+            if (origColor !== undefined) mat.color.setHex(origColor);
+            if (origEmissive !== undefined) mat.emissive.setHex(origEmissive);
+            delete enemy.mesh.userData['originalColor'];
+            delete enemy.mesh.userData['originalEmissive'];
+          }
+          this.slowEffects.delete(enemyId);
         }
-        this.slowEffects.delete(enemyId);
       }
     }
   }
@@ -506,20 +522,27 @@ export class TowerCombatService {
     const towerPos = this.getTowerWorldPos(tower);
     let previousX = towerPos.x;
     let previousZ = towerPos.z;
+    // The first arc segment originates from the tower (ground level).
+    let previousY = GROUND_EFFECT_Y + CHAIN_LIGHTNING_CONFIG.arcHeightOffset;
 
     for (let bounce = 0; bounce <= chainCount; bounce++) {
       hitIds.add(currentTarget.id);
 
       const fromX = previousX;
       const fromZ = previousZ;
+      const fromY = previousY;
       const toX = currentTarget.position.x;
       const toZ = currentTarget.position.z;
+      // Use the enemy's actual Y position so arcs connect correctly to flying enemies.
+      const toY = currentTarget.position.y > 0
+        ? currentTarget.position.y
+        : GROUND_EFFECT_Y + CHAIN_LIGHTNING_CONFIG.arcHeightOffset;
 
       {
         const arcGeom = new THREE.BufferGeometry();
         const vertices = new Float32Array([
-          fromX, GROUND_EFFECT_Y + CHAIN_LIGHTNING_CONFIG.arcHeightOffset, fromZ,
-          toX,   GROUND_EFFECT_Y + CHAIN_LIGHTNING_CONFIG.arcHeightOffset, toZ
+          fromX, fromY, fromZ,
+          toX,   toY,   toZ
         ]);
         arcGeom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
         const arcMat = new THREE.LineBasicMaterial({
@@ -552,6 +575,7 @@ export class TowerCombatService {
 
       previousX = currentTarget.position.x;
       previousZ = currentTarget.position.z;
+      previousY = toY;
 
       currentDamage = Math.round(currentDamage * CHAIN_LIGHTNING_CONFIG.damageFalloff);
       if (currentDamage < 1) break;
