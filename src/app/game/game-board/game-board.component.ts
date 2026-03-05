@@ -1741,9 +1741,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         // Wave spawning
         this.waveService.update(scaledDelta, this.scene);
 
-        // Tower combat — returns IDs of enemies killed, tower types that fired, and hit count
-        // Tower combat — returns IDs of enemies killed, tower types that fired, hit count, and hit events
-        const { killed: killedByTowers, fired: firedTowerTypes, hitCount, hits } = this.towerCombatService.update(scaledDelta, this.scene);
+        // Tower combat — returns IDs of enemies killed (with tower types), tower types that fired, hit count, and hit events
+        const { killed: killedByTowers, killedWithTypes, fired: firedTowerTypes, hitCount, hits } = this.towerCombatService.update(scaledDelta, this.scene);
 
         // Spawn floating damage numbers for each hit
         for (const hit of hits) {
@@ -1758,6 +1757,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         // Play enemy hit sound (throttled inside AudioService)
         if (hitCount > 0) {
           this.audioService.playEnemyHit();
+        }
+
+        // Record kills per tower type for end-game stats
+        for (const { towerType } of killedWithTypes) {
+          this.gameStatsService.recordKill(towerType);
         }
 
         // Collect gold from tower kills and remove dead enemies

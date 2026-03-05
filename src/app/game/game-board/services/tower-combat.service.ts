@@ -62,6 +62,8 @@ interface MortarZone {
   dotDamage: number;
   expiresAt: number;
   lastTickTime: number;
+  /** The tower type responsible for this zone (used to attribute DoT kills). */
+  towerType: TowerType;
 }
 
 /** Slow effect tracked per enemy. */
@@ -158,9 +160,10 @@ export class TowerCombatService {
     return tower;
   }
 
-  update(deltaTime: number, scene: THREE.Scene): { killed: string[]; fired: TowerType[]; hitCount: number; hits: HitEvent[] } {
+  update(deltaTime: number, scene: THREE.Scene): { killed: string[]; killedWithTypes: { enemyId: string; towerType: TowerType }[]; fired: TowerType[]; hitCount: number; hits: HitEvent[] } {
     this.gameTime += deltaTime;
     const killedEnemyIds: string[] = [];
+    const killedWithTypes: { enemyId: string; towerType: TowerType }[] = [];
     const firedTowerTypes: TowerType[] = [];
     const hitEvents: HitEvent[] = [];
 
@@ -208,6 +211,7 @@ export class TowerCombatService {
         const { kills, hits } = this.fireChainLightning(tower, target, stats, scene, chainCountOverride);
         if (tower.abilityPrimed) tower.abilityPrimed = false;
         killedEnemyIds.push(...kills);
+        kills.forEach(id => killedWithTypes.push({ enemyId: id, towerType: TowerType.CHAIN }));
         hitEvents.push(...hits);
         if (kills.length > 0) {
           const t = this.placedTowers.get(tower.id);
@@ -241,6 +245,7 @@ export class TowerCombatService {
       if (moveDistance >= dist) {
         const { kills, hits } = this.applyDamage(proj, scene);
         killedEnemyIds.push(...kills);
+        kills.forEach(id => killedWithTypes.push({ enemyId: id, towerType: proj.towerType }));
         hitEvents.push(...hits);
         hitCount++;
         this.removeProjectileMesh(proj, scene);
@@ -285,6 +290,7 @@ export class TowerCombatService {
             const result = this.enemyService.damageEnemy(enemy.id, zone.dotDamage);
             if (result.killed) {
               killedEnemyIds.push(enemy.id);
+              killedWithTypes.push({ enemyId: enemy.id, towerType: zone.towerType });
             }
             result.spawnedEnemies.forEach(mini => {
               if (mini.mesh) scene.add(mini.mesh);
@@ -297,7 +303,7 @@ export class TowerCombatService {
     }
     this.mortarZones = survivingZones;
 
-    return { killed: killedEnemyIds, fired: firedTowerTypes, hitCount, hits: hitEvents };
+    return { killed: killedEnemyIds, killedWithTypes, fired: firedTowerTypes, hitCount, hits: hitEvents };
   }
 
   private getTowerWorldPos(tower: PlacedTower): { x: number; z: number } {
@@ -739,7 +745,8 @@ export class TowerCombatService {
       blastRadius,
       dotDamage,
       expiresAt: this.gameTime + dotDuration,
-      lastTickTime: this.gameTime
+      lastTickTime: this.gameTime,
+      towerType: TowerType.MORTAR,
     });
 
     return initialKills;
@@ -819,6 +826,7 @@ export class TowerCombatService {
         dotDamage,
         expiresAt: this.gameTime + ABILITY_CONFIG.napalmDotDuration,
         lastTickTime: this.gameTime,
+        towerType: proj.towerType,
       });
     } else if (proj.splashRadius > 0) {
       const impactX = proj.mesh.position.x;
