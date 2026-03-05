@@ -1861,6 +1861,149 @@ describe('TowerCombatService — ability system', () => {
     });
   });
 
+  // --- Splash / Napalm dead-enemy guard ---
+
+  describe('splash dead-enemy guard', () => {
+    it('should not call damageEnemy on a dead enemy within splash radius', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SPLASH, new THREE.Group());
+
+      const alive = createEnemy('alive', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      const dead = createEnemy('dead', TOWER_WORLD_X + 0.5, TOWER_WORLD_Z, 0); // already dead
+      dead.health = 0;
+      enemyMap.set('alive', alive);
+      enemyMap.set('dead', dead);
+
+      // Fire and hit instantly (dist=0 for alive)
+      service.update(1.6, mockScene);
+
+      // damageEnemy should only have been called for the alive enemy, not the dead one
+      const callsForDead = (enemyServiceSpy.damageEnemy.calls.all() as jasmine.CallInfo<any>[])
+        .filter(c => c.args[0] === 'dead');
+      expect(callsForDead.length).toBe(0);
+    });
+
+    it('should not call damageEnemy on a dead enemy within napalm splash radius', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SPLASH, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+      const alive = createEnemy('alive', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      const dead = createEnemy('dead', TOWER_WORLD_X + 0.5, TOWER_WORLD_Z, 0);
+      dead.health = 0;
+      enemyMap.set('alive', alive);
+      enemyMap.set('dead', dead);
+
+      service.activateAbility(key); // prime Napalm
+      // Fire and hit instantly (SPLASH fireRate=1.5s)
+      service.update(1.6, mockScene);
+
+      const callsForDead = (enemyServiceSpy.damageEnemy.calls.all() as jasmine.CallInfo<any>[])
+        .filter(c => c.args[0] === 'dead');
+      expect(callsForDead.length).toBe(0);
+    });
+  });
+
+  // --- killedWithTypes return value ---
+
+  describe('killedWithTypes return value', () => {
+    it('should include towerType alongside enemyId for projectile kills', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1); // dies in one hit
+      enemyMap.set('e1', enemy);
+
+      const result = service.update(0.016, mockScene);
+      expect(result.killedWithTypes).toContain(
+        jasmine.objectContaining({ enemyId: 'e1', towerType: TowerType.BASIC })
+      );
+    });
+
+    it('should include towerType for chain lightning kills', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const chainRange = TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1); // dies on primary hit
+      const e2 = createEnemy('e2', TOWER_WORLD_X + chainRange * 0.5, TOWER_WORLD_Z, 1);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      const result = service.update(1.0, mockScene);
+      expect(result.killedWithTypes.every(k => k.towerType === TowerType.CHAIN)).toBeTrue();
+      expect(result.killedWithTypes.map(k => k.enemyId)).toContain('e1');
+      expect(result.killedWithTypes.map(k => k.enemyId)).toContain('e2');
+    });
+  });
+
+  // --- clearProjectiles chain arc cleanup ---
+
+  describe('clearProjectiles chain arc cleanup', () => {
+    it('should remove chain arc lines from the scene when clearProjectiles is called', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      // Fire — chain fires instantly, arc line added to scene
+      service.update(1.0, mockScene);
+
+      // At least one object (arc line) was added
+      expect(mockScene.children.length).toBeGreaterThan(0);
+
+      service.clearProjectiles(mockScene);
+      expect(mockScene.children.length).toBe(0);
+    });
+  });
+
+  // --- Mortar zone DoT skips dead enemies ---
+
+  describe('mortar zone DoT skips dead enemies', () => {
+    it('should not damage an enemy that died between impact and first DoT tick', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      // Enemy at tower position — mortar hits instantly
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      // Fire and create zone + initial tick
+      service.update(3.1, mockScene);
+      // Kill the enemy manually (simulating another tower killing it)
+      e1.health = 0;
+
+      // Reset spy call count to isolate the next tick
+      enemyServiceSpy.damageEnemy.calls.reset();
+
+      // Advance past the zone tick interval — dead enemy should not receive damageEnemy call
+      service.update(1.1, mockScene);
+
+      const callsForE1 = (enemyServiceSpy.damageEnemy.calls.all() as jasmine.CallInfo<any>[])
+        .filter(c => c.args[0] === 'e1');
+      expect(callsForE1.length).toBe(0);
+    });
+  });
+
+  // --- Mortar fires after tower sold (blastRadius fallback) ---
+
+  describe('mortar fires after tower is sold', () => {
+    it('should still create a blast zone if projectile lands after tower is unregistered', () => {
+      // MORTAR speed=4, blastRadius=1.5. Enemy at 1.0 unit away (within blastRadius).
+      // With dt=0.016: projectile moves 4*0.016=0.064 units → 0.064 < 1.0 → in-flight.
+      // When it hits (next large dt), blast zone centre is ~0.064 from tower.
+      // Enemy at 1.0 unit from tower → 0.936 from blast centre < 1.5 blastRadius → takes damage.
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X + 1.0, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      // Fire with tiny dt so projectile is in-flight (0.064 units traveled)
+      service.update(0.016, mockScene);
+      expect(e1.health).toBe(1000); // projectile still traveling
+
+      // Sell tower while projectile is mid-flight
+      service.unregisterTower(`${TOWER_ROW}-${TOWER_COL}`);
+      expect(service.getTower(`${TOWER_ROW}-${TOWER_COL}`)).toBeUndefined();
+
+      // Advance enough for projectile to travel remaining ~0.936 units at speed 4 (>0.234s)
+      service.update(0.5, mockScene);
+
+      // Enemy is within blastRadius of the impact point — should have taken damage
+      expect(e1.health).toBeLessThan(1000);
+    });
+  });
+
   // --- clearProjectiles slow-effect restoration ---
 
   describe('clearProjectiles slow-effect restoration', () => {
