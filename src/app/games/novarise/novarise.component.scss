@@ -154,7 +154,7 @@
 }
 
 .nav-btn {
-  background: rgba(0, 0, 0, 0.75);
+  background: var(--glass-bg);
   border: var(--border-width-thin) solid var(--theme-purple-a50);
   border-radius: var(--border-radius-md);
   backdrop-filter: blur(0.625rem);
@@ -182,7 +182,7 @@
 .map-manager-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--overlay-dim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -202,7 +202,7 @@
   flex-direction: column;
   gap: 12px;
   backdrop-filter: blur(15px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 32px var(--overlay-panel-shadow);
 }
 
 .map-manager-header {
@@ -367,8 +367,8 @@
     border-color: var(--action-danger-border);
     color: var(--action-danger);
     &:hover {
-      background: rgba(220, 20, 20, 0.4);
-      box-shadow: 0 0 8px rgba(255, 50, 50, 0.3);
+      background: var(--action-danger-bg-hover);
+      box-shadow: 0 0 8px var(--action-danger-shadow-hover);
     }
   }
 
@@ -377,8 +377,8 @@
     border-color: var(--action-success-border);
     color: var(--action-success);
     &:hover {
-      background: rgba(0, 180, 80, 0.4);
-      box-shadow: 0 0 8px rgba(0, 255, 100, 0.2);
+      background: var(--action-success-bg-hover);
+      box-shadow: 0 0 8px var(--action-success-shadow-hover);
     }
   }
 

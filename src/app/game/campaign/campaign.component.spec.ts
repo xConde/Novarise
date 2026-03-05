@@ -124,6 +124,12 @@ describe('CampaignComponent', () => {
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/edit']);
   });
 
+  it('goToMaps should navigate to /maps', () => {
+    component.goToMaps();
+
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/maps']);
+  });
+
   it('resetProgress should call service.resetProgress when confirmed', () => {
     spyOn(window, 'confirm').and.returnValue(true);
     component.resetProgress();

@@ -370,6 +370,111 @@ describe('WaveService', () => {
     });
   });
 
+  // --- Boss wave boundary ---
+
+  describe('boss wave boundary', () => {
+    it('wave at bossInterval should be a boss wave', () => {
+      const bossWave = service.generateEndlessWave(ENDLESS_CONFIG.bossInterval);
+      const hasBoss = bossWave.entries.some(e => e.type === EnemyType.BOSS);
+      expect(hasBoss).toBeTrue();
+    });
+
+    it('wave at bossInterval - 1 should NOT be a boss wave', () => {
+      const nonBossWave = service.generateEndlessWave(ENDLESS_CONFIG.bossInterval - 1);
+      const hasBoss = nonBossWave.entries.some(e => e.type === EnemyType.BOSS);
+      expect(hasBoss).toBeFalse();
+    });
+
+    it('wave 10 (bossInterval * 2) should be a boss wave', () => {
+      const bossWave = service.generateEndlessWave(ENDLESS_CONFIG.bossInterval * 2);
+      const hasBoss = bossWave.entries.some(e => e.type === EnemyType.BOSS);
+      expect(hasBoss).toBeTrue();
+    });
+  });
+
+  // --- Wave 50 / 100 scaling sanity ---
+
+  describe('high wave number scaling', () => {
+    it('wave 50 should produce no NaN or Infinity in entry counts', () => {
+      const wave = service.generateEndlessWave(50);
+      for (const entry of wave.entries) {
+        expect(isNaN(entry.count)).toBeFalse();
+        expect(isFinite(entry.count)).toBeTrue();
+        expect(entry.count).toBeGreaterThan(0);
+      }
+    });
+
+    it('wave 50 should produce no NaN or Infinity in spawn intervals', () => {
+      const wave = service.generateEndlessWave(50);
+      for (const entry of wave.entries) {
+        expect(isNaN(entry.spawnInterval)).toBeFalse();
+        expect(isFinite(entry.spawnInterval)).toBeTrue();
+        expect(entry.spawnInterval).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it('wave 50 reward should be finite and positive', () => {
+      const reward = service.generateEndlessWave(50).reward;
+      expect(isFinite(reward)).toBeTrue();
+      expect(reward).toBeGreaterThan(0);
+    });
+
+    it('wave 100 should produce no NaN or Infinity in entry counts', () => {
+      const wave = service.generateEndlessWave(100);
+      for (const entry of wave.entries) {
+        expect(isNaN(entry.count)).toBeFalse();
+        expect(isFinite(entry.count)).toBeTrue();
+        expect(entry.count).toBeGreaterThan(0);
+      }
+    });
+
+    it('wave 100 reward should be finite and positive', () => {
+      const reward = service.generateEndlessWave(100).reward;
+      expect(isFinite(reward)).toBeTrue();
+      expect(reward).toBeGreaterThan(0);
+    });
+
+    it('wave 100 should scale higher than wave 50', () => {
+      const w50 = service.generateEndlessWave(50);
+      const w100 = service.generateEndlessWave(100);
+      const count50 = w50.entries.reduce((s, e) => s + e.count, 0);
+      const count100 = w100.entries.reduce((s, e) => s + e.count, 0);
+      expect(count100).toBeGreaterThan(count50);
+      expect(w100.reward).toBeGreaterThan(w50.reward);
+    });
+  });
+
+  // --- getMaxWaves exact value ---
+
+  describe('getMaxWaves', () => {
+    it('should return WAVE_DEFINITIONS.length', () => {
+      expect(service.getMaxWaves()).toBe(WAVE_DEFINITIONS.length);
+    });
+
+    it('should return a positive number', () => {
+      expect(service.getMaxWaves()).toBeGreaterThan(0);
+    });
+  });
+
+  // --- reset clears all state ---
+
+  describe('reset clears all state', () => {
+    it('should reset currentWaveIndex so invalid waves remain invalid after reset', () => {
+      service.startWave(1, mockScene);
+      service.reset();
+      // After reset, starting an invalid wave should still be rejected
+      service.startWave(-1, mockScene);
+      expect(service.isSpawning()).toBeFalse();
+    });
+
+    it('should not spawn after reset when update is called', () => {
+      service.startWave(1, mockScene);
+      service.reset();
+      service.update(10.0, mockScene);
+      expect(enemyServiceSpy.spawnEnemy).not.toHaveBeenCalled();
+    });
+  });
+
   // --- Endless mode: startWave integration ---
 
   describe('endless mode startWave', () => {

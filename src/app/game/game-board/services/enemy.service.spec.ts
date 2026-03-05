@@ -372,6 +372,55 @@ describe('EnemyService', () => {
       expect(enemy2!.distanceTraveled).toBeGreaterThan(enemy3!.distanceTraveled);
     });
 
+    it('should snap enemy position to next waypoint when movement overshoots it', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Use a very large deltaTime so the enemy overshoots the first waypoint
+      // The board is 10x10 with tileSize=1, so adjacent nodes are 1 unit apart.
+      // A deltaTime of 5s at BASIC speed will clearly overshoot the first node.
+      service.updateEnemies(5.0);
+
+      // After overshooting, pathIndex must have advanced and the position must
+      // match the grid node at the new pathIndex, not some floating intermediate.
+      const newPathIndex = enemy.pathIndex;
+      expect(newPathIndex).toBeGreaterThan(0);
+
+      // World position of the current path node
+      const currentNode = enemy.path[newPathIndex];
+      const boardWidth = 10;
+      const boardHeight = 10;
+      const tileSize = 1;
+      const expectedX = (currentNode.x - boardWidth / 2) * tileSize;
+      const expectedZ = (currentNode.y - boardHeight / 2) * tileSize;
+
+      expect(enemy.position.x).toBeCloseTo(expectedX, 5);
+      expect(enemy.position.z).toBeCloseTo(expectedZ, 5);
+    });
+
+    it('should report enemy as reaching exit when movement advances to the final path node', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Advance the enemy to the second-to-last node so one more step reaches the exit.
+      // Position the enemy exactly at that node so the next updateEnemies call will snap
+      // it to path.length - 1 (the exit node) via the overshoot branch.
+      enemy.pathIndex = enemy.path.length - 2;
+      const boardWidth = 10;
+      const boardHeight = 10;
+      const tileSize = 1;
+      const secondLastNode = enemy.path[enemy.pathIndex];
+      enemy.position.x = (secondLastNode.x - boardWidth / 2) * tileSize;
+      enemy.position.z = (secondLastNode.y - boardHeight / 2) * tileSize;
+
+      // First call: large deltaTime snaps the enemy to the final node (pathIndex advances to path.length - 1).
+      // The exit check runs at the TOP of each forEach iteration, so it fires in the NEXT call.
+      service.updateEnemies(10.0);
+      expect(enemy.pathIndex).toBe(enemy.path.length - 1);
+
+      // Second call: enemy is now at the exit node — it is reported as having leaked.
+      const reachedExit = service.updateEnemies(0.1);
+      expect(reachedExit).toContain(enemy.id);
+    });
+
     it('should maintain consistent speed regardless of frame rate', () => {
       // Test each frame rate in isolation to avoid cross-contamination
 
@@ -945,6 +994,68 @@ describe('EnemyService', () => {
       service.healNearbyEnemies(1.0);
       expect(ally.health).toBeGreaterThan(healthAfterDamage); // heals once unfrozen
     });
+
+    it('should heal proportionally to deltaTime', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+      ally.mesh!.position.set(ally.position.x, ally.position.y, ally.position.z);
+
+      service.damageEnemy(ally.id, 50);
+      const healthAfterDamage = ally.health;
+
+      // Heal for 0.5s — should recover healRate * 0.5 HP
+      service.healNearbyEnemies(0.5);
+      const healedAmount = ally.health - healthAfterDamage;
+
+      const expectedHeal = ENEMY_STATS[EnemyType.HEALER].healRate! * 0.5;
+      expect(healedAmount).toBeCloseTo(expectedHeal, 5);
+    });
+
+    it('should allow multiple healers to stack healing on the same target', () => {
+      const healer1 = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const healer2 = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Place both healers and the ally at the same position
+      healer2.position.x = healer1.position.x;
+      healer2.position.z = healer1.position.z;
+      ally.position.x = healer1.position.x;
+      ally.position.z = healer1.position.z;
+      ally.mesh!.position.set(ally.position.x, ally.position.y, ally.position.z);
+
+      service.damageEnemy(ally.id, 80);
+      const healthAfterDamage = ally.health;
+
+      service.healNearbyEnemies(1.0);
+      const healedAmount = ally.health - healthAfterDamage;
+
+      // Two healers should apply twice the single-healer rate
+      const singleHealerRate = ENEMY_STATS[EnemyType.HEALER].healRate!;
+      expect(healedAmount).toBeCloseTo(singleHealerRate * 2, 5);
+    });
+
+    it('should NOT heal allies when the healer itself is dead (health <= 0)', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+      ally.mesh!.position.set(ally.position.x, ally.position.y, ally.position.z);
+
+      // Kill the healer
+      service.damageEnemy(healer.id, healer.maxHealth);
+      expect(healer.health).toBeLessThanOrEqual(0);
+
+      service.damageEnemy(ally.id, 30);
+      const healthAfterDamage = ally.health;
+
+      service.healNearbyEnemies(1.0);
+
+      expect(ally.health).toBe(healthAfterDamage); // dead healer cannot heal
+    });
   });
 
   describe("Dead Enemy Movement Guard", () => {
@@ -1126,6 +1237,24 @@ describe('EnemyService', () => {
       const hardEnemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
 
       expect(hardEnemy.health).toBeGreaterThan(normalEnemy.health);
+    });
+
+    it('should apply 2.0x health multiplier on NIGHTMARE difficulty', () => {
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const expectedHealth = Math.round(
+        ENEMY_STATS[EnemyType.BASIC].health * DIFFICULTY_PRESETS[DifficultyLevel.NIGHTMARE].healthMultiplier
+      );
+      expect(enemy.health).toBe(expectedHealth);
+      expect(enemy.maxHealth).toBe(expectedHealth);
+    });
+
+    it('should apply 1.5x speed multiplier on NIGHTMARE difficulty', () => {
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const expectedSpeed =
+        ENEMY_STATS[EnemyType.BASIC].speed * DIFFICULTY_PRESETS[DifficultyLevel.NIGHTMARE].speedMultiplier;
+      expect(enemy.speed).toBeCloseTo(expectedSpeed, 5);
     });
   });
 

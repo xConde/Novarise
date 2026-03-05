@@ -1,10 +1,13 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA, ElementRef } from '@angular/core';
 import { RouterTestingModule } from '@angular/router/testing';
+import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { NovariseComponent } from './novarise.component';
 import { MapStorageService, MapMetadata } from './core/map-storage.service';
 import { CameraControlService, JoystickInput, MovementInput, RotationInput } from './core/camera-control.service';
+import { EditHistoryService } from './core/edit-history.service';
+import { EditorStateService, EditMode, BrushTool } from './core/editor-state.service';
 import { PathValidationService } from './core/path-validation.service';
 import { JoystickEvent } from './features/mobile-controls';
 import { TerrainType, TERRAIN_CONFIGS } from './models/terrain-types.enum';
@@ -121,7 +124,7 @@ describe('NovariseComponent', () => {
   function mockThreeJsFields(comp: NovariseComponent): void {
     const t = comp as unknown as TestableNovarise;
     t.renderer = { domElement: document.createElement('canvas'), dispose: () => {} };
-    t.scene = { remove: () => {} };
+    t.scene = { remove: () => {}, add: () => {} } as unknown as TestableNovarise['scene'];
   }
 
   describe('Joystick State Initialization', () => {
@@ -863,6 +866,263 @@ describe('NovariseComponent', () => {
       it('should use red for exit color', () => {
         expect(MINIMAP_CONFIG.exitColor).toBe('#ff5050');
       });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Editor State Delegation
+  // ---------------------------------------------------------------------------
+
+  describe('setEditMode()', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should delegate to EditorStateService.setEditMode', () => {
+      const editorState = TestBed.inject(EditorStateService);
+      const spy = spyOn(editorState, 'setEditMode');
+      component.setEditMode('height');
+      expect(spy).toHaveBeenCalledWith('height');
+    });
+
+    it('should update the editMode getter after the call', () => {
+      component.setEditMode('spawn');
+      expect(component.editMode).toBe('spawn');
+    });
+
+    it('should update to exit mode', () => {
+      component.setEditMode('exit');
+      expect(component.editMode).toBe('exit');
+    });
+  });
+
+  describe('setTerrainType()', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should delegate to EditorStateService.setTerrainType', () => {
+      const editorState = TestBed.inject(EditorStateService);
+      const spy = spyOn(editorState, 'setTerrainType');
+      component.setTerrainType(TerrainType.CRYSTAL);
+      expect(spy).toHaveBeenCalledWith(TerrainType.CRYSTAL);
+    });
+
+    it('should update the selectedTerrainType getter after the call', () => {
+      component.setTerrainType(TerrainType.MOSS);
+      expect(component.selectedTerrainType).toBe(TerrainType.MOSS);
+    });
+  });
+
+  describe('setBrushSize()', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should delegate to EditorStateService.setBrushSize', () => {
+      const editorState = TestBed.inject(EditorStateService);
+      const spy = spyOn(editorState, 'setBrushSize');
+      component.setBrushSize(3);
+      expect(spy).toHaveBeenCalledWith(3);
+    });
+
+    it('should update the brushSize getter after the call', () => {
+      component.setBrushSize(3);
+      expect(component.brushSize).toBe(3);
+    });
+  });
+
+  describe('setActiveTool()', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should delegate to EditorStateService.setActiveTool', () => {
+      const editorState = TestBed.inject(EditorStateService);
+      const spy = spyOn(editorState, 'setActiveTool');
+      component.setActiveTool('fill');
+      expect(spy).toHaveBeenCalledWith('fill');
+    });
+
+    it('should update the activeTool getter after the call', () => {
+      component.setActiveTool('rectangle');
+      expect(component.activeTool).toBe('rectangle');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Undo / Redo
+  // ---------------------------------------------------------------------------
+
+  describe('undo()', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should call EditHistoryService.undo', () => {
+      const editHistory = TestBed.inject(EditHistoryService);
+      const spy = spyOn(editHistory, 'undo').and.returnValue(null);
+      component.undo();
+      expect(spy).toHaveBeenCalled();
+    });
+
+    it('should not throw when editHistory.undo returns null', () => {
+      const editHistory = TestBed.inject(EditHistoryService);
+      spyOn(editHistory, 'undo').and.returnValue(null);
+      expect(() => component.undo()).not.toThrow();
+    });
+  });
+
+  describe('redo()', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should call EditHistoryService.redo', () => {
+      const editHistory = TestBed.inject(EditHistoryService);
+      const spy = spyOn(editHistory, 'redo').and.returnValue(null);
+      component.redo();
+      expect(spy).toHaveBeenCalled();
+    });
+
+    it('should not throw when editHistory.redo returns null', () => {
+      const editHistory = TestBed.inject(EditHistoryService);
+      spyOn(editHistory, 'redo').and.returnValue(null);
+      expect(() => component.redo()).not.toThrow();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Navigation
+  // ---------------------------------------------------------------------------
+
+  describe('goToCampaign()', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should navigate to /campaign', () => {
+      const router = TestBed.inject(Router);
+      const spy = spyOn(router, 'navigate');
+      component.goToCampaign();
+      expect(spy).toHaveBeenCalledWith(['/campaign']);
+    });
+  });
+
+  describe('goToMaps()', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should navigate to /maps', () => {
+      const router = TestBed.inject(Router);
+      const spy = spyOn(router, 'navigate');
+      component.goToMaps();
+      expect(spy).toHaveBeenCalledWith(['/maps']);
+    });
+  });
+
+  describe('playMap()', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should navigate to /play when canPlayMap is true', () => {
+      const router = TestBed.inject(Router);
+      const navSpy = spyOn(router, 'navigate');
+      // Force canPlayMap to be true by bypassing via private member cast
+      spyOnProperty(component, 'canPlayMap', 'get').and.returnValue(true);
+      component.playMap();
+      expect(navSpy).toHaveBeenCalledWith(['/play']);
+    });
+
+    it('should NOT navigate when canPlayMap is false', () => {
+      const router = TestBed.inject(Router);
+      const navSpy = spyOn(router, 'navigate');
+      spyOnProperty(component, 'canPlayMap', 'get').and.returnValue(false);
+      component.playMap();
+      expect(navSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // exportCurrentMap
+  // ---------------------------------------------------------------------------
+
+  describe('exportCurrentMap()', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should call mapStorage.downloadMapAsFile when a map id is available', () => {
+      mockMapStorageService.getCurrentMapId.and.returnValue('map-123');
+      (mockMapStorageService as any).downloadMapAsFile = jasmine.createSpy('downloadMapAsFile').and.returnValue(true);
+      component.exportCurrentMap();
+      expect((mockMapStorageService as any).downloadMapAsFile).toHaveBeenCalledWith('map-123');
+    });
+
+    it('should not call downloadMapAsFile when no map id is set', () => {
+      mockMapStorageService.getCurrentMapId.and.returnValue(null);
+      (mockMapStorageService as any).downloadMapAsFile = jasmine.createSpy('downloadMapAsFile').and.returnValue(true);
+      spyOn(window, 'alert');
+      component.exportCurrentMap();
+      expect((mockMapStorageService as any).downloadMapAsFile).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // canPlayMap getter
+  // ---------------------------------------------------------------------------
+
+  describe('canPlayMap getter', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should return false when terrainGrid is not initialized', () => {
+      // terrainGrid is undefined until ngAfterViewInit runs (which we skip)
+      expect(component.canPlayMap).toBe(false);
+    });
+
+    it('should return false when terrainGrid has spawn but no exit', () => {
+      const t = component as unknown as TestableNovarise;
+      t.terrainGrid = buildMockTerrainGrid({ spawn: { x: 0, z: 0 }, exit: null });
+      expect(component.canPlayMap).toBe(false);
+    });
+
+    it('should return false when terrainGrid has exit but no spawn', () => {
+      const t = component as unknown as TestableNovarise;
+      t.terrainGrid = buildMockTerrainGrid({ spawn: null, exit: { x: 4, z: 4 } });
+      expect(component.canPlayMap).toBe(false);
+    });
+
+    it('should return false when both points exist but path is not valid', () => {
+      const t = component as unknown as TestableNovarise;
+      t.terrainGrid = buildMockTerrainGrid({ spawn: { x: 0, z: 0 }, exit: { x: 4, z: 4 } });
+      // pathValidationResult defaults to { valid: false } — no runPathValidation called
+      expect(component.canPlayMap).toBe(false);
     });
   });
 });

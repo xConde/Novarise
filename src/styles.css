@@ -49,6 +49,10 @@
   --action-green: #22c55e;
   --action-green-bg: rgba(34, 197, 94, 0.15);
   --action-green-border: rgba(34, 197, 94, 0.3);
+  --action-danger-bg-hover: rgba(220, 20, 20, 0.4);
+  --action-danger-shadow-hover: rgba(255, 50, 50, 0.3);
+  --action-success-bg-hover: rgba(0, 180, 80, 0.4);
+  --action-success-shadow-hover: rgba(0, 255, 100, 0.2);
 
   /* Game-specific colors */
   --game-primary: #444444;
@@ -101,6 +105,46 @@
   --tower-glow-slow: rgba(68, 136, 255, 0.6);
   --tower-glow-chain: rgba(255, 221, 0, 0.7);
   --tower-glow-mortar: rgba(255, 100, 34, 0.4);
+
+  /* Difficulty level colors */
+  --difficulty-easy-color: #50ff88;
+  --difficulty-easy-bg: rgba(80, 255, 136, 0.2);
+  --difficulty-easy-border: rgba(80, 255, 136, 0.4);
+  --difficulty-normal-color: #6a5a9a;
+  --difficulty-normal-bg: rgba(106, 90, 154, 0.2);
+  --difficulty-normal-border: rgba(106, 90, 154, 0.4);
+  --difficulty-hard-color: #ff8800;
+  --difficulty-hard-bg: rgba(255, 136, 0, 0.2);
+  --difficulty-hard-border: rgba(255, 136, 0, 0.4);
+  --difficulty-nightmare-color: #ff3838;
+  --difficulty-nightmare-bg: rgba(255, 56, 56, 0.2);
+  --difficulty-nightmare-border: rgba(255, 56, 56, 0.4);
+
+  /* Game modal state colors */
+  --modal-victory-bg: rgba(0, 100, 0, 0.3);
+  --modal-victory-border: rgba(0, 255, 0, 0.4);
+  --modal-victory-shadow: rgba(0, 255, 0, 0.15);
+  --modal-defeat-bg: rgba(100, 0, 0, 0.3);
+  --modal-defeat-border: rgba(255, 0, 0, 0.4);
+  --modal-defeat-shadow: rgba(255, 0, 0, 0.15);
+
+  /* Tower action button colors */
+  --upgrade-btn-bg: rgba(0, 100, 0, 0.3);
+  --upgrade-btn-bg-hover: rgba(0, 150, 0, 0.4);
+  --upgrade-btn-border: rgba(0, 255, 0, 0.3);
+  --upgrade-btn-border-hover: rgba(0, 255, 0, 0.6);
+  --upgrade-btn-color: #88ff88;
+  --sell-btn-bg: rgba(100, 50, 0, 0.3);
+  --sell-btn-bg-hover: rgba(150, 75, 0, 0.4);
+  --sell-btn-border: rgba(255, 200, 0, 0.3);
+  --sell-btn-border-hover: rgba(255, 200, 0, 0.6);
+  --sell-btn-confirm-bg: rgba(200, 50, 0, 0.5);
+  --sell-btn-confirm-border: rgba(255, 100, 0, 0.8);
+
+  /* Overlay / backdrop colors */
+  --overlay-dim: rgba(0, 0, 0, 0.6);
+  --overlay-panel-shadow: rgba(0, 0, 0, 0.5);
+  --glass-bg: rgba(0, 0, 0, 0.75);
 
   /* Misc UI colors */
   --score-multiplier: #88aaff;

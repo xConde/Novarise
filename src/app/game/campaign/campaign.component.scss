@@ -1,13 +1,3 @@
-// Campaign difficulty badge color tokens
-$difficulty-easy-color: #50ff88;
-$difficulty-easy-bg: rgba(0, 180, 80, 0.2);
-$difficulty-normal-color: #4488ff;
-$difficulty-normal-bg: rgba(68, 136, 255, 0.2);
-$difficulty-hard-color: #ff9a66;
-$difficulty-hard-bg: rgba(255, 100, 50, 0.2);
-$difficulty-nightmare-color: #ff6666;
-$difficulty-nightmare-bg: rgba(200, 30, 30, 0.2);
-
 // Connector line width
 $connector-width: 2px;
 $connector-color: var(--border-color);
@@ -154,23 +144,27 @@ $number-circle-size: 2.5rem;
   width: fit-content;
 
   &[data-difficulty='easy'] {
-    color: $difficulty-easy-color;
-    background: $difficulty-easy-bg;
+    color: var(--difficulty-easy-color);
+    background: var(--difficulty-easy-bg);
+    border: var(--border-width-thin) solid var(--difficulty-easy-border);
   }
 
   &[data-difficulty='normal'] {
-    color: $difficulty-normal-color;
-    background: $difficulty-normal-bg;
+    color: var(--difficulty-normal-color);
+    background: var(--difficulty-normal-bg);
+    border: var(--border-width-thin) solid var(--difficulty-normal-border);
   }
 
   &[data-difficulty='hard'] {
-    color: $difficulty-hard-color;
-    background: $difficulty-hard-bg;
+    color: var(--difficulty-hard-color);
+    background: var(--difficulty-hard-bg);
+    border: var(--border-width-thin) solid var(--difficulty-hard-border);
   }
 
   &[data-difficulty='nightmare'] {
-    color: $difficulty-nightmare-color;
-    background: $difficulty-nightmare-bg;
+    color: var(--difficulty-nightmare-color);
+    background: var(--difficulty-nightmare-bg);
+    border: var(--border-width-thin) solid var(--difficulty-nightmare-border);
   }
 }
 

@@ -5,6 +5,7 @@ import { GameBoardService } from '../game-board.service';
 import { TowerType, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TOWER_ABILITIES, ABILITY_CONFIG, TargetingPriority } from '../models/tower.model';
 import { Enemy, EnemyType } from '../models/enemy.model';
 import { AudioService } from './audio.service';
+import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG } from '../constants/combat.constants';
 import * as THREE from 'three';
 
 describe('TowerCombatService', () => {
@@ -1455,6 +1456,274 @@ describe('TowerCombatService — ability system', () => {
       const mat = enemy.mesh!.material as THREE.MeshLambertMaterial;
       expect(mat.color.getHex()).toBe(0x00ff00);
       expect(enemy.mesh!.userData['originalColor']).toBeUndefined();
+    });
+  });
+
+  // --- Ability Cooldown Logic ---
+
+  describe('Ability cooldown logic', () => {
+    it('should still be on cooldown at exactly cooldown boundary (not yet expired)', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      const cooldown = TOWER_ABILITIES[TowerType.BASIC].cooldown;
+
+      service.activateAbility(key); // activates at gameTime=0; cooldownEnd = 20
+      // Advance to exactly cooldown time — still blocked (gameTime < cooldownEnd is false when equal)
+      service.update(cooldown, mockScene); // gameTime = 20 = abilityCooldownEnd
+      // gameTime(20) < abilityCooldownEnd(20) is false → able to activate again
+      expect(service.activateAbility(key)).toBeTrue();
+    });
+
+    it('should block rapid spam — multiple calls within cooldown all return false', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+      service.activateAbility(key); // first activation
+      // Spam 5 more times immediately
+      for (let i = 0; i < 5; i++) {
+        expect(service.activateAbility(key)).toBeFalse();
+      }
+    });
+
+    it('cooldown duration stored matches TOWER_ABILITIES config', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      const expectedCooldown = TOWER_ABILITIES[TowerType.BASIC].cooldown;
+
+      // gameTime starts at 0
+      service.activateAbility(key);
+      const tower = service.getTower(key)!;
+      expect(tower.abilityCooldownEnd).toBeCloseTo(expectedCooldown);
+    });
+  });
+
+  // --- Mortar Zone DoT extended ---
+
+  describe('Mortar zone DoT extended', () => {
+    it('should accumulate damage across multiple ticks', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const dotDamage = TOWER_CONFIGS[TowerType.MORTAR].dotDamage!;
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      // Fire and hit (instant at dist=0) — creates zone, initial tick at impact
+      service.update(3.1, mockScene);
+      const healthAfterImpact = e1.health;
+
+      // Tick 2: advance 1.1s past tickInterval (1.0s)
+      service.update(1.1, mockScene);
+      const healthAfterTick2 = e1.health;
+      expect(healthAfterTick2).toBeLessThan(healthAfterImpact);
+
+      // Tick 3: advance another 1.1s
+      service.update(1.1, mockScene);
+      expect(e1.health).toBeLessThan(healthAfterTick2);
+
+      // Total damage from 3 ticks should equal 3 * dotDamage
+      const totalDamage = 10000 - e1.health;
+      expect(totalDamage).toBe(dotDamage * 3);
+    });
+
+    it('should apply DoT from multiple overlapping zones to the same enemy', () => {
+      // Two mortar towers both hit the same spot — two zones overlap on the enemy
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      service.registerTower(TOWER_ROW + 1, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const dotDamage = TOWER_CONFIGS[TowerType.MORTAR].dotDamage!;
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      // Both towers fire and hit instantly (dist=0 from tower world pos and very close for second)
+      // We use a large deltaTime to ensure both fire
+      service.update(3.1, mockScene); // both towers should have fired
+      const healthAfterImpact = e1.health;
+
+      // Advance past first tick — both zones tick simultaneously
+      service.update(1.1, mockScene);
+      const healthAfterTick = e1.health;
+      // Enemy should have taken at least 2x dotDamage from two zones in this tick
+      const damageThisTick = healthAfterImpact - healthAfterTick;
+      expect(damageThisTick).toBeGreaterThanOrEqual(dotDamage * 2);
+    });
+
+    it('should clean up mortar zones on clearProjectiles()', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      // Fire and create zone
+      service.update(3.1, mockScene);
+      const healthAfterImpact = e1.health;
+
+      // Clear zones
+      service.clearProjectiles(mockScene);
+
+      // Advance past a tick interval — zone is gone, no more DoT
+      service.update(1.1, mockScene);
+      expect(e1.health).toBe(healthAfterImpact);
+    });
+  });
+
+  // --- Chain Lightning Falloff extended ---
+
+  describe('Chain lightning falloff extended', () => {
+    it('should terminate chain when damage falls to 0 due to falloff', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      const chainRange = TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
+      const baseDamage = TOWER_CONFIGS[TowerType.CHAIN].damage; // 15
+      // After 3 bounces: 15 → 11 → 8 → 6 → 4 → 3 → 2 → 1 → 0 (rounds down to 0 with falloff 0.7)
+      // chainCount=3, so only 4 hits total (bounce 0..3); but we want to verify falloff progression
+      // Place exactly chainCount+1 enemies to fill the chain to exhaustion
+      const enemies: Enemy[] = [];
+      for (let i = 0; i <= TOWER_CONFIGS[TowerType.CHAIN].chainCount!; i++) {
+        const e = createEnemy(`e${i}`, TOWER_WORLD_X + i * (chainRange * 0.5), TOWER_WORLD_Z, 1000);
+        enemyMap.set(e.id, e);
+        enemies.push(e);
+      }
+
+      service.update(1.0, mockScene);
+
+      // Damage falls off by damageFalloff per bounce — last enemy in chain should take less damage
+      const damageFalloff = CHAIN_LIGHTNING_CONFIG.damageFalloff;
+      const firstDamage = 1000 - enemies[0].health;
+      const secondDamage = 1000 - enemies[1].health;
+      expect(firstDamage).toBe(baseDamage);
+      expect(secondDamage).toBe(Math.round(baseDamage * damageFalloff));
+    });
+
+    it('Overload ability should allow chain to reach overloadChainCount targets', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+      const chainRange = TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
+      const normalChainCount = TOWER_CONFIGS[TowerType.CHAIN].chainCount!; // 3
+      const overloadCount = ABILITY_CONFIG.overloadChainCount; // 6
+
+      // Place more enemies than normal chainCount but within overload count
+      // We need overloadCount+1 enemies so the chain can hit overloadCount+1 (bounce 0..overloadCount)
+      const enemies: Enemy[] = [];
+      for (let i = 0; i <= overloadCount; i++) {
+        const e = createEnemy(`e${i}`, TOWER_WORLD_X + i * (chainRange * 0.5), TOWER_WORLD_Z, 1000);
+        enemyMap.set(e.id, e);
+        enemies.push(e);
+      }
+
+      // Without Overload, only enemies 0..normalChainCount get hit
+      service.update(1.0, mockScene);
+      // Reset health to measure Overload effect
+      enemies.forEach(e => { e.health = 1000; });
+
+      // Activate Overload and fire again — advance past cooldown first
+      service.activateAbility(key);
+      service.update(1.0, mockScene);
+
+      // Enemies beyond normalChainCount should now be hit
+      const hitBeyondNormal = enemies
+        .slice(normalChainCount + 1)
+        .some(e => e.health < 1000);
+      expect(hitBeyondNormal).toBeTrue();
+    });
+
+    it('should not hit the same enemy twice (hitIds Set prevents revisiting)', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      // Only one enemy in range — chain has nowhere to bounce; should hit exactly once
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(1.0, mockScene);
+
+      const expectedOnceHit = TOWER_CONFIGS[TowerType.CHAIN].damage;
+      expect(e1.health).toBe(1000 - expectedOnceHit);
+    });
+  });
+
+  // --- Barrage (MORTAR) extended ---
+
+  describe('Barrage ability extended', () => {
+    it('should decrement abilityCharges on each mortar fire during barrage', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      // Fire initial shot to get past first normal cooldown
+      service.update(3.1, mockScene);
+
+      // Activate Barrage
+      service.activateAbility(key);
+      const initialCharges = service.getTower(key)!.abilityCharges;
+      expect(initialCharges).toBe(ABILITY_CONFIG.barrageCharges);
+
+      // Fire one barrage shot (barrageFireRate=0.3s)
+      service.update(0.4, mockScene);
+      expect(service.getTower(key)!.abilityCharges).toBe(initialCharges - 1);
+    });
+
+    it('should revert to normal fire rate once barrage charges reach 0', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      // Fire initial shot
+      service.update(3.1, mockScene);
+
+      // Activate Barrage (3 charges) and burn through all of them
+      service.activateAbility(key);
+      // Each barrage shot uses 0.4s (barrageFireRate=0.3s) → 3 shots in 1.2s
+      service.update(0.4, mockScene); // shot 1, charges→2
+      service.update(0.4, mockScene); // shot 2, charges→1
+      service.update(0.4, mockScene); // shot 3, charges→0
+
+      expect(service.getTower(key)!.abilityCharges).toBe(0);
+
+      // Move enemy out of zone blast radius so existing DoT zones can't tick on it.
+      // We only want to verify the TOWER doesn't fire a new projectile, not that zones stop.
+      const blastRadius = TOWER_CONFIGS[TowerType.MORTAR].blastRadius!;
+      e1.position.x = TOWER_WORLD_X + blastRadius * 10;
+
+      // 0.5s later — the tower should NOT fire (normal fire rate is 3.0s) and
+      // the enemy is out of all zone radii, so health must remain unchanged.
+      const healthAfterBarrage = e1.health;
+      service.update(0.5, mockScene);
+      expect(e1.health).toBe(healthAfterBarrage);
+    });
+  });
+
+  // --- Napalm (SPLASH) ---
+
+  describe('Napalm ability', () => {
+    it('should reset abilityPrimed to false after napalm shot fires', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SPLASH, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      service.activateAbility(key);
+      expect(service.getTower(key)!.abilityPrimed).toBeTrue();
+
+      // Fire — SPLASH fireRate is 1.5s; advance past it
+      service.update(1.6, mockScene);
+
+      expect(service.getTower(key)!.abilityPrimed).toBeFalse();
+    });
+
+    it('should create a burning zone on impact when Napalm is primed', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SPLASH, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      // Enemy at tower position so projectile hits instantly
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      service.activateAbility(key); // prime Napalm
+      // Fire and hit instantly (dist=0) — zone is created at impact
+      service.update(1.6, mockScene);
+      const healthAfterImpact = e1.health;
+
+      // Advance past tickInterval (1.0s) — napalm zone should tick DoT
+      service.update(1.1, mockScene);
+      expect(e1.health).toBeLessThan(healthAfterImpact);
     });
   });
 

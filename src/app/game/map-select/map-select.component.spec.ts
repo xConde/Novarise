@@ -127,4 +127,10 @@ describe('MapSelectComponent', () => {
     component.goToEditor();
     expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/edit']);
   });
+
+  it('goToCampaign should navigate to /campaign', () => {
+    fixture.detectChanges();
+    component.goToCampaign();
+    expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/campaign']);
+  });
 });

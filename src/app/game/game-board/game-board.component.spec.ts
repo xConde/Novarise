@@ -14,8 +14,12 @@ import { MinimapService } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
 import { TowerUnlockService } from './services/tower-unlock.service';
 import { CampaignService } from '../campaign/campaign.service';
+import { TowerCombatService } from './services/tower-combat.service';
+import { WaveService } from './services/wave.service';
+import { AudioService } from './services/audio.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase } from './models/game-state.model';
-import { TowerType } from './models/tower.model';
+import { TowerType, TOWER_ABILITIES, MAX_TOWER_LEVEL, PlacedTower, TargetingPriority } from './models/tower.model';
+import { TOWER_UNLOCK_CONDITIONS } from './models/tower-unlock.model';
 import { ScoreBreakdown, calculateScoreBreakdown } from './models/score.model';
 
 describe('GameBoardComponent', () => {
@@ -691,6 +695,541 @@ describe('GameBoardComponent', () => {
       }
 
       expect((component as any).showInterestPopup).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── Helpers ────────────────────────────────────────────────────────────────
+
+  /** Build a minimal PlacedTower for test use. */
+  function makeTower(overrides: Partial<PlacedTower> = {}): PlacedTower {
+    return {
+      id: 'tower-1',
+      type: TowerType.BASIC,
+      level: 1,
+      row: 0,
+      col: 0,
+      lastFireTime: 0,
+      kills: 0,
+      totalInvested: 50,
+      mesh: null,
+      abilityCooldownEnd: 0,
+      abilityActiveEnd: 0,
+      abilityCharges: 0,
+      abilityPrimed: false,
+      targetingPriority: TargetingPriority.FIRST,
+      ...overrides,
+    };
+  }
+
+  // ─── Tower Management ────────────────────────────────────────────────────────
+
+  describe('isTowerLocked', () => {
+    it('returns true when towerUnlockService reports the tower is not unlocked', () => {
+      towerUnlockSpy.isTowerUnlocked.and.returnValue(false);
+      expect(component.isTowerLocked(TowerType.SNIPER)).toBeTrue();
+    });
+
+    it('returns false when towerUnlockService reports the tower is unlocked', () => {
+      towerUnlockSpy.isTowerUnlocked.and.returnValue(true);
+      expect(component.isTowerLocked(TowerType.BASIC)).toBeFalse();
+    });
+
+    it('delegates to towerUnlockService with the given tower type', () => {
+      component.isTowerLocked(TowerType.MORTAR);
+      expect(towerUnlockSpy.isTowerUnlocked).toHaveBeenCalledWith(TowerType.MORTAR);
+    });
+  });
+
+  describe('getUnlockHint', () => {
+    it('returns the description from TOWER_UNLOCK_CONDITIONS for the given type', () => {
+      const hint = component.getUnlockHint(TowerType.SNIPER);
+      expect(hint).toBe(TOWER_UNLOCK_CONDITIONS[TowerType.SNIPER].description);
+    });
+
+    it('returns "Available from the start" for BASIC tower', () => {
+      expect(component.getUnlockHint(TowerType.BASIC)).toBe('Available from the start');
+    });
+  });
+
+  describe('selectTowerType', () => {
+    it('sets selectedTowerType when the tower is unlocked', () => {
+      towerUnlockSpy.isTowerUnlocked.and.returnValue(true);
+      component.selectTowerType(TowerType.SNIPER);
+      expect(component.selectedTowerType).toBe(TowerType.SNIPER);
+    });
+
+    it('does not change selectedTowerType when the tower is locked', () => {
+      towerUnlockSpy.isTowerUnlocked.and.returnValue(false);
+      component.selectedTowerType = TowerType.BASIC;
+      component.selectTowerType(TowerType.MORTAR);
+      expect(component.selectedTowerType).toBe(TowerType.BASIC);
+    });
+
+    it('clears selectedTowerInfo (deselects placed tower) when a new type is picked', () => {
+      towerUnlockSpy.isTowerUnlocked.and.returnValue(true);
+      (component as any).selectedTowerInfo = makeTower();
+      component.selectTowerType(TowerType.SNIPER);
+      expect(component.selectedTowerInfo).toBeNull();
+    });
+  });
+
+  describe('deselectTower', () => {
+    it('clears selectedTowerInfo and selectedTowerStats', () => {
+      (component as any).selectedTowerInfo = makeTower();
+      (component as any).selectedTowerStats = { damage: 25, range: 3, fireRate: 1 };
+      component.deselectTower();
+      expect(component.selectedTowerInfo).toBeNull();
+      expect(component.selectedTowerStats).toBeNull();
+    });
+
+    it('resets sellConfirmPending', () => {
+      (component as any).sellConfirmPending = true;
+      component.deselectTower();
+      expect((component as any).sellConfirmPending).toBeFalse();
+    });
+  });
+
+  describe('cycleTargeting', () => {
+    it('calls towerCombatService.cycleTargetingPriority with selectedTowerInfo.id', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'cycleTargetingPriority');
+      (component as any).selectedTowerInfo = makeTower({ id: 'abc' });
+      component.cycleTargeting();
+      expect(tcs.cycleTargetingPriority).toHaveBeenCalledWith('abc');
+    });
+
+    it('does nothing when selectedTowerInfo is null', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'cycleTargetingPriority');
+      (component as any).selectedTowerInfo = null;
+      component.cycleTargeting();
+      expect(tcs.cycleTargetingPriority).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('upgradeTower', () => {
+    it('does nothing when selectedTowerInfo is null', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'upgradeTower');
+      (component as any).selectedTowerInfo = null;
+      component.upgradeTower();
+      expect(tcs.upgradeTower).not.toHaveBeenCalled();
+    });
+
+    it('does nothing in VICTORY phase', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'upgradeTower');
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.VICTORY);
+      (component as any).selectedTowerInfo = makeTower();
+      component.upgradeTower();
+      expect(tcs.upgradeTower).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when tower is already at max level', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'upgradeTower');
+      (component as any).selectedTowerInfo = makeTower({ level: MAX_TOWER_LEVEL });
+      component.upgradeTower();
+      expect(tcs.upgradeTower).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when player cannot afford the upgrade', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'upgradeTower');
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      const state = gameStateService.getState();
+      gameStateService.spendGold(state.gold);
+      (component as any).selectedTowerInfo = makeTower({ level: 1 });
+      component.upgradeTower();
+      expect(tcs.upgradeTower).not.toHaveBeenCalled();
+    });
+
+    it('calls towerCombatService.upgradeTower and spends gold on success', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'upgradeTower').and.returnValue(true);
+      // Stub scene-dependent methods invoked after the spend
+      spyOn(component as any, 'refreshTowerInfoPanel');
+      spyOn(component as any, 'showRangePreview');
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.addGold(500);
+      (component as any).selectedTowerInfo = makeTower({ id: 'tower-1', level: 1 });
+      const goldBefore = gameStateService.getState().gold;
+      component.upgradeTower();
+      expect(tcs.upgradeTower).toHaveBeenCalledWith('tower-1');
+      expect(gameStateService.getState().gold).toBeLessThan(goldBefore);
+    });
+
+    it('does not spend gold when towerCombatService.upgradeTower returns false', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'upgradeTower').and.returnValue(false);
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.addGold(500);
+      (component as any).selectedTowerInfo = makeTower({ level: 1 });
+      const goldBefore = gameStateService.getState().gold;
+      component.upgradeTower();
+      expect(gameStateService.getState().gold).toBe(goldBefore);
+    });
+  });
+
+  describe('sellTower', () => {
+    it('does nothing when selectedTowerInfo is null', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'unregisterTower');
+      (component as any).selectedTowerInfo = null;
+      component.sellTower();
+      expect(tcs.unregisterTower).not.toHaveBeenCalled();
+    });
+
+    it('does nothing in DEFEAT phase', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'unregisterTower');
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.DEFEAT);
+      (component as any).selectedTowerInfo = makeTower();
+      component.sellTower();
+      expect(tcs.unregisterTower).not.toHaveBeenCalled();
+    });
+
+    it('first call sets sellConfirmPending without selling', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'unregisterTower');
+      (component as any).selectedTowerInfo = makeTower();
+      (component as any).sellConfirmPending = false;
+      component.sellTower();
+      expect((component as any).sellConfirmPending).toBeTrue();
+      expect(tcs.unregisterTower).not.toHaveBeenCalled();
+    });
+
+    it('second call executes the sell when confirm is pending', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      const gameBoardService = fixture.debugElement.injector.get(GameBoardService);
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      const tower = makeTower({ id: 'sell-me', totalInvested: 100 });
+      spyOn(tcs, 'unregisterTower').and.returnValue(tower);
+      // Stub board/path methods that need an initialized scene/board
+      spyOn(gameBoardService, 'removeTower');
+      spyOn(component as any, 'updatePathPreview');
+      (component as any).selectedTowerInfo = tower;
+      (component as any).sellConfirmPending = true;
+      const goldBefore = gameStateService.getState().gold;
+      component.sellTower();
+      expect(tcs.unregisterTower).toHaveBeenCalledWith('sell-me');
+      // Sell value is 50% of totalInvested = 50
+      expect(gameStateService.getState().gold).toBe(goldBefore + 50);
+      expect(component.selectedTowerInfo).toBeNull();
+    });
+
+    it('does not add gold when unregisterTower returns undefined (stale reference)', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'unregisterTower').and.returnValue(undefined);
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      (component as any).selectedTowerInfo = makeTower();
+      (component as any).sellConfirmPending = true;
+      const goldBefore = gameStateService.getState().gold;
+      component.sellTower();
+      expect(gameStateService.getState().gold).toBe(goldBefore);
+    });
+  });
+
+  // ─── Ability System ──────────────────────────────────────────────────────────
+
+  describe('activateAbility', () => {
+    it('calls towerCombatService.activateAbility with selectedTowerInfo.id', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'activateAbility');
+      (component as any).selectedTowerInfo = makeTower({ id: 'hero' });
+      component.activateAbility();
+      expect(tcs.activateAbility).toHaveBeenCalledWith('hero');
+    });
+
+    it('does nothing when selectedTowerInfo is null', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'activateAbility');
+      (component as any).selectedTowerInfo = null;
+      component.activateAbility();
+      expect(tcs.activateAbility).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('isAbilityOnCooldown', () => {
+    it('returns false when selectedTowerInfo is null', () => {
+      (component as any).selectedTowerInfo = null;
+      expect(component.isAbilityOnCooldown()).toBeFalse();
+    });
+
+    it('returns true when abilityCooldownEnd is in the future', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'getGameTime').and.returnValue(5);
+      (component as any).selectedTowerInfo = makeTower({ abilityCooldownEnd: 10 });
+      expect(component.isAbilityOnCooldown()).toBeTrue();
+    });
+
+    it('returns false when abilityCooldownEnd is in the past', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'getGameTime').and.returnValue(15);
+      (component as any).selectedTowerInfo = makeTower({ abilityCooldownEnd: 10 });
+      expect(component.isAbilityOnCooldown()).toBeFalse();
+    });
+  });
+
+  describe('isAbilityActive', () => {
+    it('returns false when selectedTowerInfo is null', () => {
+      (component as any).selectedTowerInfo = null;
+      expect(component.isAbilityActive()).toBeFalse();
+    });
+
+    it('returns true when abilityActiveEnd is in the future', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'getGameTime').and.returnValue(3);
+      (component as any).selectedTowerInfo = makeTower({ abilityActiveEnd: 8 });
+      expect(component.isAbilityActive()).toBeTrue();
+    });
+
+    it('returns false when abilityActiveEnd has elapsed', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'getGameTime').and.returnValue(10);
+      (component as any).selectedTowerInfo = makeTower({ abilityActiveEnd: 8 });
+      expect(component.isAbilityActive()).toBeFalse();
+    });
+  });
+
+  describe('getAbilityName', () => {
+    it('returns empty string when selectedTowerInfo is null', () => {
+      (component as any).selectedTowerInfo = null;
+      expect(component.getAbilityName()).toBe('');
+    });
+
+    it('returns the ability name from TOWER_ABILITIES for the selected tower type', () => {
+      (component as any).selectedTowerInfo = makeTower({ type: TowerType.BASIC });
+      expect(component.getAbilityName()).toBe(TOWER_ABILITIES[TowerType.BASIC].name);
+    });
+
+    it('returns the correct name for SNIPER tower', () => {
+      (component as any).selectedTowerInfo = makeTower({ type: TowerType.SNIPER });
+      expect(component.getAbilityName()).toBe(TOWER_ABILITIES[TowerType.SNIPER].name);
+    });
+  });
+
+  describe('getAbilityDescription', () => {
+    it('returns empty string when selectedTowerInfo is null', () => {
+      (component as any).selectedTowerInfo = null;
+      expect(component.getAbilityDescription()).toBe('');
+    });
+
+    it('returns the ability description from TOWER_ABILITIES', () => {
+      (component as any).selectedTowerInfo = makeTower({ type: TowerType.SPLASH });
+      expect(component.getAbilityDescription()).toBe(TOWER_ABILITIES[TowerType.SPLASH].description);
+    });
+  });
+
+  describe('getAbilityCooldownRemaining', () => {
+    it('returns 0 when selectedTowerInfo is null', () => {
+      (component as any).selectedTowerInfo = null;
+      expect(component.getAbilityCooldownRemaining()).toBe(0);
+    });
+
+    it('returns remaining seconds when cooldown is active', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'getGameTime').and.returnValue(5);
+      (component as any).selectedTowerInfo = makeTower({ abilityCooldownEnd: 15 });
+      expect(component.getAbilityCooldownRemaining()).toBe(10);
+    });
+
+    it('returns 0 (not negative) when cooldown has already expired', () => {
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(tcs, 'getGameTime').and.returnValue(20);
+      (component as any).selectedTowerInfo = makeTower({ abilityCooldownEnd: 15 });
+      expect(component.getAbilityCooldownRemaining()).toBe(0);
+    });
+  });
+
+  // ─── Game Control ────────────────────────────────────────────────────────────
+
+  describe('startWave', () => {
+    it('calls gameStateService.startWave and waveService.startWave when in SETUP phase', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      const waveService = fixture.debugElement.injector.get(WaveService);
+      spyOn(gameStateService, 'startWave').and.callThrough();
+      spyOn(waveService, 'startWave');
+      gameStateService.setPhase(GamePhase.SETUP);
+      component.startWave();
+      expect(gameStateService.startWave).toHaveBeenCalled();
+      expect(waveService.startWave).toHaveBeenCalled();
+    });
+
+    it('does nothing when phase is already COMBAT', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      spyOn(gameStateService, 'startWave').and.callThrough();
+      gameStateService.setPhase(GamePhase.COMBAT);
+      component.startWave();
+      expect(gameStateService.startWave).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when phase is VICTORY', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      spyOn(gameStateService, 'startWave').and.callThrough();
+      gameStateService.setPhase(GamePhase.VICTORY);
+      component.startWave();
+      expect(gameStateService.startWave).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('restartCurrentWave', () => {
+    it('does nothing when gameStateService.restartWave returns false', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      const waveService = fixture.debugElement.injector.get(WaveService);
+      spyOn(gameStateService, 'restartWave').and.returnValue(false);
+      spyOn(waveService, 'startWave');
+      component.restartCurrentWave();
+      expect(waveService.startWave).not.toHaveBeenCalled();
+    });
+
+    it('calls clearProjectiles and waveService.startWave when restartWave succeeds', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      const waveService = fixture.debugElement.injector.get(WaveService);
+      const tcs = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(gameStateService, 'restartWave').and.returnValue(true);
+      spyOn(waveService, 'startWave');
+      spyOn(tcs, 'clearProjectiles');
+      component.restartCurrentWave();
+      expect(tcs.clearProjectiles).toHaveBeenCalled();
+      expect(waveService.startWave).toHaveBeenCalled();
+    });
+
+    it('clears combo banner when restarting wave', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      const waveService = fixture.debugElement.injector.get(WaveService);
+      spyOn(gameStateService, 'restartWave').and.returnValue(true);
+      spyOn(waveService, 'startWave');
+      (component as any).showComboBanner = true;
+      component.restartCurrentWave();
+      expect(component.showComboBanner).toBeFalse();
+    });
+  });
+
+  describe('toggleAllRanges', () => {
+    it('toggles showAllRanges from false to true', () => {
+      (component as any).showAllRanges = false;
+      // scene is needed by the toggling logic; patch it with a minimal stub
+      (component as any).scene = { children: [], remove: () => {}, add: () => {} };
+      (component as any).gameBoardService = {
+        getBoardWidth: () => 0, getBoardHeight: () => 0, getTileSize: () => 1,
+        getBoard: () => [], getBoardTile: () => null
+      };
+      component.toggleAllRanges();
+      expect((component as any).showAllRanges).toBeTrue();
+    });
+
+    it('toggles showAllRanges from true to false', () => {
+      (component as any).showAllRanges = true;
+      (component as any).rangeRingMeshes = [];
+      (component as any).scene = { children: [], remove: () => {}, add: () => {} };
+      component.toggleAllRanges();
+      expect((component as any).showAllRanges).toBeFalse();
+    });
+  });
+
+  // ─── Navigation ──────────────────────────────────────────────────────────────
+
+  describe('goToCampaign', () => {
+    it('navigates to /campaign when not in COMBAT phase', () => {
+      const router = TestBed.inject(Router);
+      spyOn(router, 'navigate');
+      component.goToCampaign();
+      expect(router.navigate).toHaveBeenCalledWith(['/campaign']);
+    });
+
+    it('navigates to /campaign from SETUP phase without confirm dialog', () => {
+      const router = TestBed.inject(Router);
+      spyOn(router, 'navigate');
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.SETUP);
+      component.goToCampaign();
+      expect(router.navigate).toHaveBeenCalledWith(['/campaign']);
+    });
+  });
+
+  // ─── UI / Notifications ──────────────────────────────────────────────────────
+
+  describe('toggleAudio', () => {
+    it('calls audioService.toggleMute', () => {
+      const audioService = fixture.debugElement.injector.get(AudioService);
+      spyOn(audioService, 'toggleMute');
+      component.toggleAudio();
+      expect(audioService.toggleMute).toHaveBeenCalled();
+    });
+
+    it('updates settings with the new muted state', () => {
+      const audioService = fixture.debugElement.injector.get(AudioService);
+      spyOn(audioService, 'toggleMute');
+      component.toggleAudio();
+      expect(settingsSpy.update).toHaveBeenCalledWith(jasmine.objectContaining({ audioMuted: false }));
+    });
+  });
+
+  describe('levelStars', () => {
+    it('returns an array of the given length', () => {
+      expect(component.levelStars(3).length).toBe(3);
+      expect(component.levelStars(1).length).toBe(1);
+    });
+
+    it('returns an empty array for 0', () => {
+      expect(component.levelStars(0)).toEqual([]);
+    });
+
+    it('returns an empty array for negative values (clamps to 0)', () => {
+      expect(component.levelStars(-5)).toEqual([]);
+    });
+  });
+
+  describe('showComboBannerPopup', () => {
+    it('sets showComboBanner to true and records bonusGold', () => {
+      (component as any).showComboBannerPopup(30);
+      expect(component.showComboBanner).toBeTrue();
+      expect(component.comboBannerBonus).toBe(30);
+    });
+
+    it('auto-clears showComboBanner after the display timeout', () => {
+      jasmine.clock().install();
+      (component as any).showComboBannerPopup(10);
+      expect(component.showComboBanner).toBeTrue();
+      jasmine.clock().tick(5000); // COMBO_BANNER_DISPLAY_MS
+      expect(component.showComboBanner).toBeFalse();
+      jasmine.clock().uninstall();
+    });
+
+    it('resets existing timer when called a second time before timeout fires', () => {
+      jasmine.clock().install();
+      (component as any).showComboBannerPopup(5);
+      jasmine.clock().tick(1000);
+      (component as any).showComboBannerPopup(99);
+      expect(component.comboBannerBonus).toBe(99);
+      expect(component.showComboBanner).toBeTrue();
+      jasmine.clock().uninstall();
+    });
+  });
+
+  describe('clearComboBanner', () => {
+    it('sets showComboBanner to false', () => {
+      (component as any).showComboBanner = true;
+      (component as any).clearComboBanner();
+      expect(component.showComboBanner).toBeFalse();
+    });
+
+    it('cancels the pending timer so it does not fire later', () => {
+      jasmine.clock().install();
+      (component as any).showComboBannerPopup(20);
+      (component as any).clearComboBanner();
+      jasmine.clock().tick(5000);
+      // Banner should remain false because the timer was cancelled
+      expect(component.showComboBanner).toBeFalse();
+      jasmine.clock().uninstall();
+    });
+
+    it('is safe to call when no timer is pending', () => {
+      (component as any).comboBannerTimer = null;
+      expect(() => (component as any).clearComboBanner()).not.toThrow();
     });
   });
 });

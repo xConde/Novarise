@@ -183,27 +183,27 @@
     letter-spacing: 0.06em;
 
     &[data-difficulty='easy'] {
-      background: rgba(72, 199, 116, 0.2);
-      color: #48c774;
-      border: 1px solid rgba(72, 199, 116, 0.4);
+      background: var(--difficulty-easy-bg);
+      color: var(--difficulty-easy-color);
+      border: var(--border-width-thin) solid var(--difficulty-easy-border);
     }
 
     &[data-difficulty='normal'] {
-      background: var(--theme-purple-a20);
-      color: var(--theme-purple-lighter);
-      border: 1px solid var(--border-color);
+      background: var(--difficulty-normal-bg);
+      color: var(--difficulty-normal-color);
+      border: var(--border-width-thin) solid var(--difficulty-normal-border);
     }
 
     &[data-difficulty='hard'] {
-      background: rgba(255, 136, 0, 0.2);
-      color: #ff8800;
-      border: 1px solid rgba(255, 136, 0, 0.4);
+      background: var(--difficulty-hard-bg);
+      color: var(--difficulty-hard-color);
+      border: var(--border-width-thin) solid var(--difficulty-hard-border);
     }
 
     &[data-difficulty='nightmare'] {
-      background: rgba(255, 56, 56, 0.2);
-      color: #ff3838;
-      border: 1px solid rgba(255, 56, 56, 0.4);
+      background: var(--difficulty-nightmare-bg);
+      color: var(--difficulty-nightmare-color);
+      border: var(--border-width-thin) solid var(--difficulty-nightmare-border);
     }
   }
 
@@ -319,6 +319,12 @@
     @media screen and (max-width: 768px) {
       min-width: 7.5rem;
       max-width: 10rem;
+    }
+
+    @media (max-width: 480px) {
+      min-width: 6rem;
+      max-width: 8rem;
+      font-size: 0.75rem;
     }
 
     .wave-composition-header {
@@ -538,17 +544,17 @@
       animation: scale-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 
       &.victory {
-        background: rgba(0, 100, 0, 0.3);
-        border: var(--border-width-medium) solid rgba(0, 255, 0, 0.4);
-        box-shadow: 0 0 2.5rem rgba(0, 255, 0, 0.15);
+        background: var(--modal-victory-bg);
+        border: var(--border-width-medium) solid var(--modal-victory-border);
+        box-shadow: 0 0 2.5rem var(--modal-victory-shadow);
 
         h2 { color: var(--game-victory); }
       }
 
       &.defeat {
-        background: rgba(100, 0, 0, 0.3);
-        border: var(--border-width-medium) solid rgba(255, 0, 0, 0.4);
-        box-shadow: 0 0 2.5rem rgba(255, 0, 0, 0.15);
+        background: var(--modal-defeat-bg);
+        border: var(--border-width-medium) solid var(--modal-defeat-border);
+        box-shadow: 0 0 2.5rem var(--modal-defeat-shadow);
 
         h2 { color: var(--game-defeat); }
       }
@@ -842,13 +848,13 @@
       }
 
       .upgrade-btn {
-        background: rgba(0, 100, 0, 0.3);
-        border-color: rgba(0, 255, 0, 0.3);
-        color: #88ff88;
+        background: var(--upgrade-btn-bg);
+        border-color: var(--upgrade-btn-border);
+        color: var(--upgrade-btn-color);
 
         &:hover {
-          background: rgba(0, 150, 0, 0.4);
-          border-color: rgba(0, 255, 0, 0.6);
+          background: var(--upgrade-btn-bg-hover);
+          border-color: var(--upgrade-btn-border-hover);
         }
 
         &.unaffordable {
@@ -859,18 +865,18 @@
       }
 
       .sell-btn {
-        background: rgba(100, 50, 0, 0.3);
-        border-color: rgba(255, 200, 0, 0.3);
+        background: var(--sell-btn-bg);
+        border-color: var(--sell-btn-border);
         color: var(--game-gold);
 
         &:hover {
-          background: rgba(150, 75, 0, 0.4);
-          border-color: rgba(255, 200, 0, 0.6);
+          background: var(--sell-btn-bg-hover);
+          border-color: var(--sell-btn-border-hover);
         }
 
         &.confirm {
-          background: rgba(200, 50, 0, 0.5);
-          border-color: rgba(255, 100, 0, 0.8);
+          background: var(--sell-btn-confirm-bg);
+          border-color: var(--sell-btn-confirm-border);
           color: var(--game-health);
           animation: pulse-warn 0.5s ease-in-out infinite alternate;
         }
@@ -1779,6 +1785,18 @@
     font-weight: 900;
     color: var(--theme-purple-lighter, #d0b4f5);
     line-height: 1;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.2rem 0.5rem;
+
+    .combo-label {
+      font-size: 0.45rem;
+    }
+
+    .combo-count {
+      font-size: 1rem;
+    }
   }
 }
 
