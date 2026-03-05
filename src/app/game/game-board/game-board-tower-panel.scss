@@ -7,7 +7,7 @@
 .board-container {
   // --- Pause / Speed controls ---
   .game-controls {
-    background: rgba(0, 0, 0, 0.75);
+    background: var(--glass-bg);
     border-radius: var(--border-radius-md);
     backdrop-filter: blur(0.625rem);
     z-index: var(--z-index-overlay);
@@ -55,6 +55,11 @@
         padding: var(--spacing-xs) 0.25rem;
       }
 
+      @media (pointer: coarse) {
+        min-width: 44px;
+        min-height: 44px;
+      }
+
       &:hover {
         background: var(--theme-purple-a20);
         border-color: var(--theme-purple-a80);
@@ -97,8 +102,8 @@
         pointer-events: none;
       }
       &:hover:not(.disabled) {
-        border-color: var(--action-red, #ef4444);
-        background: rgba(239, 68, 68, 0.15);
+        border-color: var(--action-red);
+        background: var(--action-danger-bg);
       }
     }
   }
@@ -154,7 +159,7 @@
       }
 
       &:hover {
-        background: rgba(255, 255, 255, 0.1);
+        background: var(--border-color-subtle);
         border-color: var(--border-color-strong);
         transform: translateY(-0.125rem);
       }
@@ -297,7 +302,7 @@
         transform: translateX(-50%);
         min-width: 9rem;
         padding: var(--spacing-sm) var(--spacing-md);
-        background: var(--nav-bg, rgba(10, 5, 20, 0.96));
+        background: var(--nav-bg);
         border: var(--border-width-thin) solid var(--theme-purple-a50);
         border-radius: var(--border-radius-md);
         backdrop-filter: blur(0.75rem);
@@ -307,7 +312,7 @@
         transition: opacity 0.15s ease, visibility 0.15s ease;
         z-index: calc(var(--z-index-overlay) + 10);
         white-space: nowrap;
-        box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.6), 0 0 0.5rem var(--theme-purple-a30, rgba(128, 0, 255, 0.2));
+        box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.6), 0 0 0.5rem var(--theme-purple-a30);
 
         .tooltip-stat {
           display: flex;
@@ -318,7 +323,7 @@
           margin-bottom: 0.1875rem;
 
           .tooltip-label {
-            color: rgba(255, 255, 255, 0.45);
+            color: var(--border-color-strong);
             letter-spacing: 0.0625rem;
           }
 
@@ -331,10 +336,10 @@
         .tooltip-desc {
           margin-top: var(--spacing-xs);
           padding-top: var(--spacing-xs);
-          border-top: var(--border-width-thin) solid rgba(255, 255, 255, 0.1);
+          border-top: var(--border-width-thin) solid var(--border-color-subtle);
           font-family: "Orbitron", sans-serif;
           font-size: 0.5rem;
-          color: var(--theme-purple-mid, rgba(160, 100, 255, 0.8));
+          color: var(--theme-purple-mid);
           text-align: center;
           line-height: 1.4;
           white-space: normal;
@@ -348,7 +353,7 @@
           transform: translateX(-50%) rotate(45deg);
           width: 0.375rem;
           height: 0.375rem;
-          background: var(--nav-bg, rgba(10, 5, 20, 0.96));
+          background: var(--nav-bg);
           border-right: var(--border-width-thin) solid var(--theme-purple-a50);
           border-bottom: var(--border-width-thin) solid var(--theme-purple-a50);
         }
@@ -399,7 +404,7 @@
         font-size: var(--font-size-small);
 
         .key {
-          background: rgba(255, 255, 255, 0.1);
+          background: var(--border-color-subtle);
           padding: 2px var(--spacing-xs);
           border-radius: var(--border-radius-sm);
           text-align: center;
@@ -495,11 +500,13 @@
       }
     }
 
-    // Game HUD: further reduce on mobile
+    // Game HUD: further reduce on mobile, hide secondary stats to prevent overflow
     .game-hud {
-      gap: var(--spacing-sm);
+      gap: var(--spacing-xs);
       padding: var(--spacing-xs) var(--spacing-sm);
       font-size: 0.625rem;
+      max-width: calc(100vw - 8rem); // leave room for nav-back-btn on left and controls on right
+      overflow: hidden;
 
       .hud-stat {
         .hud-label {
@@ -510,7 +517,16 @@
         .hud-value {
           font-size: 0.6875rem;
         }
+
+        &.secondary {
+          display: none; // hide Score, Time, Difficulty badge at 480px to prevent overflow
+        }
       }
+    }
+
+    // Wave composition panel: collapse by default on tiny screens to not block gameplay
+    .wave-composition {
+      display: none;
     }
 
     // Wave control button: larger tap target (min 44px touch target)
@@ -586,9 +602,9 @@
   transform: translate(-50%, -50%);
   padding: 0.5rem 1.2rem;
   background: var(--action-yellow-bg);
-  border: var(--border-width-thin) solid var(--action-yellow, #eab308);
+  border: var(--border-width-thin) solid var(--action-yellow);
   border-radius: var(--border-radius-md);
-  color: var(--action-yellow, #eab308);
+  color: var(--action-yellow);
   font-size: 1.2rem;
   font-weight: 700;
   font-family: "Orbitron", sans-serif;
@@ -646,7 +662,7 @@
   .combo-count {
     font-size: 1.2rem;
     font-weight: 900;
-    color: var(--theme-purple-lighter, #d0b4f5);
+    color: var(--theme-purple-lighter);
     line-height: 1;
   }
 
@@ -671,9 +687,9 @@
   right: var(--spacing-md);
   padding: 0.25rem 0.7rem;
   background: rgba(168, 85, 247, 0.15);
-  border: var(--border-width-thin) solid var(--theme-purple-a80, rgba(168, 85, 247, 0.8));
+  border: var(--border-width-thin) solid var(--theme-purple-a80);
   border-radius: var(--border-radius-md);
-  color: var(--theme-purple-lighter, #d0b4f5);
+  color: var(--theme-purple-lighter);
   font-size: 0.85rem;
   font-weight: 700;
   font-family: "Orbitron", sans-serif;
@@ -683,8 +699,8 @@
 }
 
 @keyframes comboPulse {
-  0%   { border-color: var(--theme-purple-a80, rgba(168, 85, 247, 0.8)); transform: scale(1); }
-  30%  { border-color: var(--theme-purple-lighter, #d0b4f5); transform: scale(1.08); }
+  0%   { border-color: var(--theme-purple-a80); transform: scale(1); }
+  30%  { border-color: var(--theme-purple-lighter); transform: scale(1.08); }
   100% { border-color: var(--theme-purple-a50); transform: scale(1); }
 }
 

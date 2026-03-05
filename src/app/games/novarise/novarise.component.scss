@@ -462,6 +462,19 @@
   }
 }
 
+// Touch target enforcement — buttons that are visually small need 44×44 touch area on touch screens.
+@media (pointer: coarse) {
+  .map-action-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .minimap-toggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
 // Landscape mode on mobile - minimize chrome
 @media (max-width: 768px) and (orientation: landscape) {
   .game-container {

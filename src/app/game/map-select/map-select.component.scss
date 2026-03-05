@@ -217,3 +217,63 @@
     outline-offset: 2px;
   }
 }
+
+// --- Responsive ---
+
+@media screen and (max-width: 768px) {
+  .map-select-container {
+    padding: var(--spacing-lg);
+  }
+
+  .map-select-title {
+    font-size: var(--font-size-title);
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .map-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--spacing-sm);
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .map-select-container {
+    padding: var(--spacing-md);
+  }
+
+  .map-select-title {
+    font-size: var(--font-size-base);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .difficulty-options {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .map-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-xs);
+  }
+
+  .map-card {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  .map-select-actions {
+    flex-direction: column;
+    align-self: stretch;
+    gap: var(--spacing-sm);
+
+    button {
+      width: 100%;
+      min-height: 2.75rem; // 44px tap target
+    }
+  }
+
+  .create-map-btn,
+  .back-btn,
+  .campaign-btn {
+    width: 100%;
+    min-height: 2.75rem;
+  }
+}

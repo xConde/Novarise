@@ -78,6 +78,11 @@
     justify-content: center;
     border-radius: 50%;
 
+    @media (pointer: coarse) {
+      min-width: 44px;
+      min-height: 44px;
+    }
+
     &:hover {
       background: var(--theme-purple-a30);
       border-color: var(--theme-purple-a80);
@@ -104,6 +109,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
+
+    @media (pointer: coarse) {
+      min-width: 44px;
+      min-height: 44px;
+    }
 
     &:hover {
       background: var(--theme-purple-a30);
@@ -149,7 +159,7 @@
         font-size: 0.625rem;
         text-transform: uppercase;
         letter-spacing: 0.0625rem;
-        color: rgba(255, 255, 255, 0.5);
+        color: var(--text-muted);
       }
 
       .hud-value {
@@ -250,7 +260,7 @@
       font-size: 0.625rem;
       text-transform: uppercase;
       letter-spacing: 0.125rem;
-      color: rgba(255, 255, 255, 0.5);
+      color: var(--text-muted);
       margin-bottom: var(--spacing-xs);
       text-align: center;
     }
@@ -342,7 +352,7 @@
       font-size: 0.625rem;
       text-transform: uppercase;
       letter-spacing: 0.125rem;
-      color: rgba(255, 255, 255, 0.5);
+      color: var(--text-muted);
     }
 
     .wave-composition-toggle {
@@ -354,6 +364,12 @@
       line-height: 0;
       display: flex;
       align-items: center;
+
+      @media (pointer: coarse) {
+        min-width: 44px;
+        min-height: 44px;
+        justify-content: center;
+      }
 
       &:hover {
         color: rgba(255, 255, 255, 0.8);
@@ -383,7 +399,7 @@
     }
 
     .wave-composition-next {
-      border-top: var(--border-width-thin) solid rgba(255, 255, 255, 0.1);
+      border-top: var(--border-width-thin) solid var(--border-color-subtle);
       padding-top: var(--spacing-xs);
     }
 
@@ -441,7 +457,7 @@
       flex-direction: column;
       align-items: center;
       gap: var(--spacing-xs);
-      @include glass-panel(rgba(0, 0, 0, 0.85));
+      @include glass-panel(var(--panel-bg));
       padding: var(--spacing-md) var(--spacing-xl);
       border: var(--border-width-medium) solid rgba(255, 255, 255, 0.3);
       border-radius: var(--border-radius-lg);
@@ -451,7 +467,7 @@
       transition: all var(--transition-medium) ease;
 
       &:hover {
-        background: rgba(255, 255, 255, 0.1);
+        background: var(--border-color-subtle);
         border-color: rgba(255, 255, 255, 0.6);
         transform: scale(1.05);
       }

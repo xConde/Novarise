@@ -78,6 +78,7 @@
   --game-defeat: #ff4444;
   --game-wave-text: #ff8888;
   --game-star-filled: #ffd700;
+  --game-star-glow: rgba(255, 215, 0, 0.6);
   --game-star-empty: rgba(255, 255, 255, 0.2);
 
   /* Enemy type colors */
@@ -156,10 +157,12 @@
   --overlay-dim-70: rgba(0, 0, 0, 0.7);
   --overlay-panel-shadow: rgba(0, 0, 0, 0.5);
   --glass-bg: rgba(0, 0, 0, 0.75);
+  --panel-bg: rgba(0, 0, 0, 0.85);
 
   /* Misc UI colors */
   --score-multiplier: #88aaff;
   --text-disabled: #6a6a7a;
+  --text-muted: rgba(255, 255, 255, 0.5);
 
   /* Rainbow effect colors */
   --rainbow-red: #FF0000;
