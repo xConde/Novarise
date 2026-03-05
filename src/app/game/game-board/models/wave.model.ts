@@ -39,6 +39,18 @@ export const ENDLESS_REWARD_SCALE_PER_WAVE = 50;
 export const ENDLESS_BOSS_COUNT = 1;
 export const ENDLESS_BOSS_SPAWN_INTERVAL = 0;
 
+/** Enemy types that cycle in endless waves. Excludes BOSS — added separately at boss intervals. */
+export const ENDLESS_ENEMY_CYCLE: EnemyType[] = [
+  EnemyType.BASIC,
+  EnemyType.FAST,
+  EnemyType.HEAVY,
+  EnemyType.SWIFT,
+  EnemyType.SHIELDED,
+  EnemyType.SWARM,
+  EnemyType.FLYING,
+  EnemyType.HEALER
+];
+
 export const WAVE_DEFINITIONS: WaveDefinition[] = [
   // Wave 1: Easy intro
   {

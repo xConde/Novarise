@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { EnemyType } from '../models/enemy.model';
-import { WaveDefinition, WaveEntry, WAVE_DEFINITIONS, ENDLESS_CONFIG, ENDLESS_BASE_COUNT, ENDLESS_BASE_SPAWN_INTERVAL, ENDLESS_BASE_REWARD, ENDLESS_REWARD_SCALE_PER_WAVE, ENDLESS_BOSS_COUNT, ENDLESS_BOSS_SPAWN_INTERVAL } from '../models/wave.model';
+import { WaveDefinition, WaveEntry, WAVE_DEFINITIONS, ENDLESS_CONFIG, ENDLESS_BASE_COUNT, ENDLESS_BASE_SPAWN_INTERVAL, ENDLESS_BASE_REWARD, ENDLESS_REWARD_SCALE_PER_WAVE, ENDLESS_BOSS_COUNT, ENDLESS_BOSS_SPAWN_INTERVAL, ENDLESS_ENEMY_CYCLE } from '../models/wave.model';
 import { EnemyService } from './enemy.service';
 
 interface SpawnQueue {
@@ -10,18 +10,6 @@ interface SpawnQueue {
   remaining: number;
   timeSinceLastSpawn: number;
 }
-
-// Enemy types that cycle in endless waves (excludes BOSS — added separately at intervals)
-const ENDLESS_ENEMY_CYCLE: EnemyType[] = [
-  EnemyType.BASIC,
-  EnemyType.FAST,
-  EnemyType.HEAVY,
-  EnemyType.SWIFT,
-  EnemyType.SHIELDED,
-  EnemyType.SWARM,
-  EnemyType.FLYING,
-  EnemyType.HEALER
-];
 
 
 @Injectable()
@@ -53,9 +41,9 @@ export class WaveService {
    * Boss wave: waveNumber % bossInterval === 0
    */
   generateEndlessWave(waveNumber: number): WaveDefinition {
-    const healthMult =
-      ENDLESS_CONFIG.baseHealthMultiplier +
-      ENDLESS_CONFIG.healthScalePerWave * (waveNumber - 1);
+    // Health scaling for endless waves is handled via DifficultyLevel multipliers
+    // applied at spawn time in EnemyService.spawnEnemy(). There is no healthMultiplier
+    // field on WaveDefinition, so we do not compute or apply one here.
     const speedMult =
       ENDLESS_CONFIG.baseSpeedMultiplier +
       ENDLESS_CONFIG.speedScalePerWave * (waveNumber - 1);

@@ -249,8 +249,8 @@ describe('Enemy Model', () => {
         colors.add(stats.color);
       });
 
-      // All 9 enemy types should have unique colors
-      expect(colors.size).toBe(9);
+      // All enemy types should have unique colors
+      expect(colors.size).toBe(Object.values(EnemyType).length);
     });
 
     it('should have distinct sizes for visibility', () => {
@@ -398,6 +398,18 @@ describe('Enemy Model', () => {
     it('FLYING enum value should exist', () => {
       expect(EnemyType.FLYING).toBeDefined();
       expect(EnemyType.FLYING).toBe('FLYING');
+    });
+  });
+
+  describe('HEALER enemy stats', () => {
+    const stats = ENEMY_STATS[EnemyType.HEALER];
+    it('should have healRate defined and positive', () => {
+      expect(stats.healRate).toBeDefined();
+      expect(stats.healRate).toBeGreaterThan(0);
+    });
+    it('should have healRange defined and positive', () => {
+      expect(stats.healRange).toBeDefined();
+      expect(stats.healRange).toBeGreaterThan(0);
     });
   });
 });

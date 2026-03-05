@@ -135,6 +135,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Wave composition panel — shown during COMBAT and INTERMISSION
   waveCompositionExpanded = true;
+  waveComposition: { current: WavePreviewEntry[]; next: WavePreviewEntry[] } = { current: [], next: [] };
 
   showAllRanges = false;
   sellConfirmPending = false;
@@ -266,6 +267,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           state.wave,
           state.phase === GamePhase.VICTORY
         );
+
+        // Advance campaign progress on VICTORY — scoreBreakdown is guaranteed populated here
+        if (state.phase === GamePhase.VICTORY) {
+          const campaignLevelId = this.mapBridge.getCampaignLevelId();
+          if (campaignLevelId !== null) {
+            this.campaignService.completeLevel(campaignLevelId, this.scoreBreakdown.stars, this.scoreBreakdown.finalScore);
+          }
+        }
       }
 
       // Refresh wave preview when entering SETUP/INTERMISSION or when the wave number changes
@@ -277,6 +286,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         // Preview shows the NEXT wave that is about to start (wave + 1)
         const nextWave = state.wave + 1;
         this.wavePreview = getWavePreview(nextWave, state.isEndless);
+      }
+
+      // Refresh wave composition cache when wave number or phase changes
+      if (waveChanged || phaseChanged) {
+        const current = getWavePreview(state.wave, state.isEndless);
+        const next = getWavePreview(state.wave + 1, state.isEndless);
+        this.waveComposition = { current, next };
       }
 
       // Show path preview only during SETUP phase; hide it for all other phases
@@ -701,7 +717,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.damageNumberService.cleanup(this.scene);
     this.damagePopupService.cleanup(this.scene);
     this.goldPopupService.cleanup(this.scene);
-    this.waveService.startWave(this.gameState.wave, this.scene);
+    // Read authoritative wave number from service — this.gameState may be stale
+    const currentWave = this.gameStateService.getState().wave;
+    this.waveService.startWave(currentWave, this.scene);
     // Reset combo — kills from the previous attempt must not carry into the retry
     this.comboService.reset();
     this.clearComboBanner();
@@ -1760,14 +1778,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
             };
             this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
-
-            // Advance campaign progress on VICTORY — only if this session was a campaign level
-            if (postWavePhase === GamePhase.VICTORY) {
-              const campaignLevelId = this.mapBridge.getCampaignLevelId();
-              if (campaignLevelId !== null && this.scoreBreakdown !== null) {
-                this.campaignService.completeLevel(campaignLevelId, this.scoreBreakdown.stars, this.scoreBreakdown.finalScore);
-              }
-            }
+            // Campaign completeLevel is called in the state subscription where scoreBreakdown
+            // is guaranteed to be populated, eliminating the frame-perfect race condition.
           }
         }
 
@@ -1844,6 +1856,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     cancelAnimationFrame(this.animationFrameId);
+    // Clear stale campaign context so freeplay sessions don't trigger campaign progress
+    this.mapBridge.setCampaignLevelId(null);
 
     if (this.interestNotificationTimer !== null) {
       clearTimeout(this.interestNotificationTimer);

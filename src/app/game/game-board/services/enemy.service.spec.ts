@@ -66,6 +66,17 @@ describe('EnemyService', () => {
     service.getEnemies().forEach((enemy, id) => {
       service.removeEnemy(id, mockScene);
     });
+    mockScene.traverse((child: any) => {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach((m: any) => m.dispose());
+        } else {
+          child.material.dispose();
+        }
+      }
+    });
+    mockScene.clear();
   });
 
   describe('Enemy Spawning', () => {

@@ -405,6 +405,9 @@ export class TowerCombatService {
 
       const existing = this.slowEffects.get(enemy.id);
       if (existing) {
+        // Update expiresAt but do NOT overwrite originalSpeed — it must retain
+        // the base (pre-slow) speed so that when the freeze expires the enemy
+        // restores to its true unmodified speed, not the already-slowed speed.
         existing.expiresAt = this.gameTime + freezeDuration;
         enemy.speed = ABILITY_CONFIG.freezeSpeedFactor;
       } else {
@@ -428,18 +431,15 @@ export class TowerCombatService {
   }
 
   /** Restore freeze-affected enemies to their original speed. */
-  private expireFreezeEffect(tower: PlacedTower): void {
-    const stats = getEffectiveStats(tower.type, tower.level);
-    const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
+  private expireFreezeEffect(_tower: PlacedTower): void {
+    // Iterate all tracked slow/freeze effects whose expiresAt has passed.
+    // Do NOT filter by range — enemies that moved out of range while frozen
+    // must still be unfrozen when the effect expires.
+    for (const [enemyId, effect] of this.slowEffects) {
+      if (this.gameTime < effect.expiresAt) continue;
 
-    this.enemyService.getEnemies().forEach(enemy => {
-      if (enemy.health <= 0) return;
-      const dx = enemy.position.x - towerWorldX;
-      const dz = enemy.position.z - towerWorldZ;
-      if (Math.sqrt(dx * dx + dz * dz) > stats.range) return;
-
-      const effect = this.slowEffects.get(enemy.id);
-      if (effect && enemy.speed === ABILITY_CONFIG.freezeSpeedFactor) {
+      const enemy = this.enemyService.getEnemies().get(enemyId);
+      if (enemy && enemy.health > 0 && enemy.speed === ABILITY_CONFIG.freezeSpeedFactor) {
         enemy.speed = effect.originalSpeed;
         // Visual: restore original mesh color
         if (enemy.mesh) {
@@ -451,9 +451,9 @@ export class TowerCombatService {
           delete enemy.mesh.userData['originalColor'];
           delete enemy.mesh.userData['originalEmissive'];
         }
-        this.slowEffects.delete(enemy.id);
+        this.slowEffects.delete(enemyId);
       }
-    });
+    }
   }
 
   private expireSlowEffects(): void {
@@ -547,7 +547,7 @@ export class TowerCombatService {
       previousZ = currentTarget.position.z;
 
       currentDamage = Math.round(currentDamage * CHAIN_LIGHTNING_CONFIG.damageFalloff);
-      if (currentDamage <= 0) break;
+      if (currentDamage < 1) break;
       currentTarget = nextTarget;
     }
 

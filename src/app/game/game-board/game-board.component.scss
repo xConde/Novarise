@@ -281,6 +281,7 @@
       &[data-type='fast']     { background: var(--enemy-color-fast);    box-shadow: 0 0 4px var(--enemy-glow-fast); }
       &[data-type='heavy']    { background: var(--enemy-color-heavy);   box-shadow: 0 0 4px var(--enemy-glow-heavy); }
       &[data-type='swift']    { background: var(--enemy-color-flying);  box-shadow: 0 0 4px var(--enemy-glow-flying); }
+      &[data-type='flying']   { background: var(--enemy-color-flying);  box-shadow: 0 0 4px var(--enemy-glow-flying); }
       &[data-type='boss']     { background: var(--enemy-color-boss);    box-shadow: 0 0 4px var(--enemy-glow-boss); }
       &[data-type='shielded'] { background: var(--enemy-color-shield);  box-shadow: 0 0 4px var(--enemy-glow-shielded); }
       &[data-type='swarm']    { background: var(--enemy-color-swarm);   box-shadow: 0 0 4px var(--enemy-glow-swarm); }

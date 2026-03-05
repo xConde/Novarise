@@ -130,8 +130,8 @@ export class EnemyService {
 
     this.enemies.forEach(healer => {
       if (!healer.isHealer || healer.health <= 0) return;
-      // Frozen healers (speed === 0 from Freeze ability) cannot heal allies
-      if (healer.speed === 0) return;
+      // Frozen healers (speed <= 0 from Freeze ability) cannot heal allies
+      if (healer.speed <= 0) return;
 
       const healerStats = ENEMY_STATS[EnemyType.HEALER];
       const healRange = healerStats.healRange!;

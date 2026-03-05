@@ -69,9 +69,9 @@
       </button>
     </div>
     <div class="wave-composition-body" *ngIf="waveCompositionExpanded">
-      <ul class="wave-composition-list" *ngIf="getWaveComposition().current.length > 0">
+      <ul class="wave-composition-list" *ngIf="waveComposition.current.length > 0">
         <li
-          *ngFor="let entry of getWaveComposition().current"
+          *ngFor="let entry of waveComposition.current"
           class="wave-composition-entry"
           [attr.data-type]="entry.type.toLowerCase()">
           <span class="enemy-dot" [attr.data-type]="entry.type.toLowerCase()"></span>
@@ -80,11 +80,11 @@
         </li>
       </ul>
       <div class="wave-composition-next"
-           *ngIf="gameState.phase === GamePhase.INTERMISSION && getWaveComposition().next.length > 0">
+           *ngIf="gameState.phase === GamePhase.INTERMISSION && waveComposition.next.length > 0">
         <div class="wave-next-header">Next: Wave {{ gameState.wave + 1 }}</div>
         <ul class="wave-composition-list">
           <li
-            *ngFor="let entry of getWaveComposition().next"
+            *ngFor="let entry of waveComposition.next"
             class="wave-composition-entry"
             [attr.data-type]="entry.type.toLowerCase()">
             <span class="enemy-dot" [attr.data-type]="entry.type.toLowerCase()"></span>

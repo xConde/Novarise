@@ -73,6 +73,21 @@ describe('TowerCombatService', () => {
     mockScene = new THREE.Scene();
   });
 
+  afterEach(() => {
+    service.cleanup(mockScene);
+    mockScene.traverse((child: any) => {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach((m: any) => m.dispose());
+        } else {
+          child.material.dispose();
+        }
+      }
+    });
+    mockScene.clear();
+  });
+
   it('should be created', () => {
     expect(service).toBeTruthy();
   });
