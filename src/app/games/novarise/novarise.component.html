@@ -58,6 +58,21 @@
       <button class="nav-btn" (click)="goToMaps()">My Maps</button>
     </div>
 
+    <!-- Minimap overlay -->
+    <div class="minimap-container" [class.minimap-hidden]="!minimapVisible">
+      <button class="minimap-toggle" (click)="toggleMinimap()" [title]="minimapVisible ? 'Hide minimap' : 'Show minimap'">
+        {{ minimapVisible ? 'M' : 'M' }}
+      </button>
+      <canvas
+        *ngIf="minimapVisible"
+        #minimapCanvas
+        class="minimap-canvas"
+        width="150"
+        height="150"
+        aria-label="Terrain minimap">
+      </canvas>
+    </div>
+
     <!-- Map Manager Dialog -->
     <div class="map-manager-overlay" *ngIf="mapManagerOpen" (click)="closeMapManager()">
       <div class="map-manager-panel" (click)="$event.stopPropagation()">

@@ -127,6 +127,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Wave preview — shown during SETUP and INTERMISSION
   wavePreview: WavePreviewEntry[] = [];
+
+  // Wave composition panel — shown during COMBAT and INTERMISSION
+  waveCompositionExpanded = true;
+
   showAllRanges = false;
   sellConfirmPending = false;
   showHelpOverlay = false;
@@ -334,6 +338,18 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   levelStars(count: number): number[] {
     return Array(Math.max(0, count)).fill(0);
+  }
+
+  /**
+   * Returns current and next wave composition for the wave composition panel.
+   * Shown during COMBAT (current wave only) and INTERMISSION (current + next if available).
+   */
+  getWaveComposition(): { current: WavePreviewEntry[]; next: WavePreviewEntry[] } {
+    const wave = this.gameState.wave;
+    const isEndless = this.gameState.isEndless;
+    const current = getWavePreview(wave, isEndless);
+    const next = getWavePreview(wave + 1, isEndless);
+    return { current, next };
   }
 
   toggleAudio(): void {

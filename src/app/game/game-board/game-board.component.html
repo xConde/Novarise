@@ -55,6 +55,47 @@
     <span class="wave-enemy-count">{{ enemiesAlive + enemiesToSpawn }}</span> enemies remaining
   </div>
 
+  <!-- Wave composition panel — shown during COMBAT and INTERMISSION -->
+  <div class="wave-composition"
+       *ngIf="gameState.phase === GamePhase.COMBAT || gameState.phase === GamePhase.INTERMISSION"
+       aria-label="Wave composition">
+    <div class="wave-composition-header" (click)="waveCompositionExpanded = !waveCompositionExpanded">
+      <span class="wave-composition-title">Wave {{ gameState.wave }}</span>
+      <button class="wave-composition-toggle"
+              [attr.aria-label]="waveCompositionExpanded ? 'Collapse wave info' : 'Expand wave info'"
+              [attr.aria-expanded]="waveCompositionExpanded">
+        <svg *ngIf="waveCompositionExpanded" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+        <svg *ngIf="!waveCompositionExpanded" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+    </div>
+    <div class="wave-composition-body" *ngIf="waveCompositionExpanded">
+      <ul class="wave-composition-list" *ngIf="getWaveComposition().current.length > 0">
+        <li
+          *ngFor="let entry of getWaveComposition().current"
+          class="wave-composition-entry"
+          [attr.data-type]="entry.type.toLowerCase()">
+          <span class="enemy-dot" [attr.data-type]="entry.type.toLowerCase()"></span>
+          <span class="enemy-count">{{ entry.count }}x</span>
+          <span class="enemy-label">{{ entry.label }}</span>
+        </li>
+      </ul>
+      <div class="wave-composition-next"
+           *ngIf="gameState.phase === GamePhase.INTERMISSION && getWaveComposition().next.length > 0">
+        <div class="wave-next-header">Next: Wave {{ gameState.wave + 1 }}</div>
+        <ul class="wave-composition-list">
+          <li
+            *ngFor="let entry of getWaveComposition().next"
+            class="wave-composition-entry"
+            [attr.data-type]="entry.type.toLowerCase()">
+            <span class="enemy-dot" [attr.data-type]="entry.type.toLowerCase()"></span>
+            <span class="enemy-count">{{ entry.count }}x</span>
+            <span class="enemy-label">{{ entry.label }}</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <!-- Difficulty selector — only visible in SETUP before wave 0 starts -->
   <div class="difficulty-selector" *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0">
     <span class="difficulty-label">Difficulty</span>

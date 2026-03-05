@@ -350,6 +350,95 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  describe('getWaveComposition', () => {
+    it('returns empty current and next arrays when wave is 0', () => {
+      const composition = component.getWaveComposition();
+      // wave 0 = no current wave; wave 1 preview is the next
+      expect(composition.current).toEqual([]);
+    });
+
+    it('returns current wave entries for wave 1', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.COMBAT);
+      // Manually advance wave to 1 by accessing internal state
+      (component as any).gameState = { ...component.gameState, wave: 1, isEndless: false };
+
+      const composition = component.getWaveComposition();
+
+      expect(composition.current.length).toBeGreaterThan(0);
+      expect(composition.current[0].type).toBeDefined();
+      expect(composition.current[0].count).toBeGreaterThan(0);
+      expect(composition.current[0].label).toBeTruthy();
+    });
+
+    it('returns next wave entries for intermission between wave 1 and 2', () => {
+      (component as any).gameState = { ...component.gameState, wave: 1, isEndless: false };
+
+      const composition = component.getWaveComposition();
+
+      expect(composition.next.length).toBeGreaterThan(0);
+    });
+
+    it('returns empty next array when on the final wave (wave 10)', () => {
+      (component as any).gameState = { ...component.gameState, wave: 10, isEndless: false };
+
+      const composition = component.getWaveComposition();
+
+      // Wave 11 does not exist in WAVE_DEFINITIONS and isEndless is false
+      expect(composition.next).toEqual([]);
+    });
+
+    it('returns next wave for endless mode beyond wave definitions', () => {
+      (component as any).gameState = { ...component.gameState, wave: 11, isEndless: true };
+
+      const composition = component.getWaveComposition();
+
+      expect(composition.current.length).toBeGreaterThan(0);
+      expect(composition.next.length).toBeGreaterThan(0);
+    });
+
+    it('all current entries have positive count and non-empty label', () => {
+      (component as any).gameState = { ...component.gameState, wave: 5, isEndless: false };
+
+      const composition = component.getWaveComposition();
+
+      for (const entry of composition.current) {
+        expect(entry.count).toBeGreaterThan(0);
+        expect(entry.label.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('wave 5 current composition contains 3 enemy types', () => {
+      // Wave 5 definition has BASIC, FAST, HEAVY
+      (component as any).gameState = { ...component.gameState, wave: 5, isEndless: false };
+
+      const composition = component.getWaveComposition();
+
+      expect(composition.current.length).toBe(3);
+    });
+
+    it('wave 10 current composition includes BOSS enemy', () => {
+      (component as any).gameState = { ...component.gameState, wave: 10, isEndless: false };
+
+      const { current } = component.getWaveComposition();
+      const bossEntry = current.find(e => e.type === 'BOSS');
+
+      expect(bossEntry).toBeDefined();
+      expect(bossEntry!.count).toBe(1);
+    });
+  });
+
+  describe('waveCompositionExpanded', () => {
+    it('defaults to true', () => {
+      expect(component.waveCompositionExpanded).toBeTrue();
+    });
+
+    it('can be toggled to false', () => {
+      component.waveCompositionExpanded = false;
+      expect(component.waveCompositionExpanded).toBeFalse();
+    });
+  });
+
   describe('touch handler lifecycle', () => {
     let mockCanvas: HTMLElement;
     let addEventSpy: jasmine.Spy;

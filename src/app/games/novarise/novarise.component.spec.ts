@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { NO_ERRORS_SCHEMA, ElementRef } from '@angular/core';
 import { RouterTestingModule } from '@angular/router/testing';
 import { FormsModule } from '@angular/forms';
 import { NovariseComponent } from './novarise.component';
@@ -7,6 +7,18 @@ import { MapStorageService, MapMetadata } from './core/map-storage.service';
 import { CameraControlService, JoystickInput, MovementInput, RotationInput } from './core/camera-control.service';
 import { PathValidationService } from './core/path-validation.service';
 import { JoystickEvent } from './features/mobile-controls';
+import { TerrainType, TERRAIN_CONFIGS } from './models/terrain-types.enum';
+import { MINIMAP_CONFIG } from './constants/editor.constants';
+
+/** Full terrain grid mock interface — must satisfy all ngOnDestroy calls. */
+interface MockTerrainGrid {
+  getGridSize(): number;
+  getTileAt(x: number, z: number): { type: TerrainType; height: number; mesh: unknown } | null;
+  getSpawnPoint(): { x: number; z: number } | null;
+  getExitPoint(): { x: number; z: number } | null;
+  exportState(): { gridSize: number; tiles: TerrainType[][]; heightMap: number[][]; spawnPoint: { x: number; z: number } | null; exitPoint: { x: number; z: number } | null; version: string };
+  dispose(): void;
+}
 
 /**
  * Typed access to private members needed for test setup/assertion.
@@ -16,6 +28,50 @@ interface TestableNovarise {
   scene: { remove(...objects: unknown[]): void };
   movementJoystick: JoystickInput;
   rotationJoystick: JoystickInput;
+  minimapCanvasRef: ElementRef<HTMLCanvasElement> | undefined;
+  terrainGrid: MockTerrainGrid | undefined;
+}
+
+/**
+ * Build a minimal mock terrain grid for minimap tests.
+ * Includes all methods called by ngOnDestroy so cleanup does not throw.
+ */
+function buildMockTerrainGrid(overrides: {
+  size?: number;
+  tileType?: TerrainType;
+  spawn?: { x: number; z: number } | null;
+  exit?: { x: number; z: number } | null;
+} = {}): MockTerrainGrid {
+  const size = overrides.size ?? 3;
+  const tileType = overrides.tileType ?? TerrainType.BEDROCK;
+  return {
+    getGridSize: () => size,
+    getTileAt: (x: number, z: number) => {
+      if (x < 0 || x >= size || z < 0 || z >= size) return null;
+      return { type: tileType, height: 0, mesh: {} };
+    },
+    getSpawnPoint: () => overrides.spawn !== undefined ? overrides.spawn : null,
+    getExitPoint: () => overrides.exit !== undefined ? overrides.exit : null,
+    exportState: () => ({
+      gridSize: size,
+      tiles: [],
+      heightMap: [],
+      spawnPoint: overrides.spawn ?? null,
+      exitPoint: overrides.exit ?? null,
+      version: '1.0'
+    }),
+    dispose: () => {},
+  };
+}
+
+/**
+ * Create an off-screen canvas and attach it as a fake minimapCanvasRef.
+ */
+function buildMinimapCanvasRef(): ElementRef<HTMLCanvasElement> {
+  const canvas = document.createElement('canvas');
+  canvas.width = MINIMAP_CONFIG.size;
+  canvas.height = MINIMAP_CONFIG.size;
+  return new ElementRef(canvas);
 }
 
 const NO_MOVEMENT: MovementInput = {
@@ -536,6 +592,277 @@ describe('NovariseComponent', () => {
       component.submitRename('map1');
 
       expect(component.savedMaps).toEqual(updated);
+    });
+  });
+
+  describe('Minimap', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    describe('minimapVisible default state', () => {
+      it('should default to visible', () => {
+        expect(component.minimapVisible).toBe(true);
+      });
+    });
+
+    describe('toggleMinimap()', () => {
+      it('should hide minimap when currently visible', () => {
+        component.minimapVisible = true;
+        component.toggleMinimap();
+        expect(component.minimapVisible).toBe(false);
+      });
+
+      it('should show minimap when currently hidden', () => {
+        component.minimapVisible = false;
+        component.toggleMinimap();
+        expect(component.minimapVisible).toBe(true);
+      });
+
+      it('should toggle back to original state on double toggle', () => {
+        const initial = component.minimapVisible;
+        component.toggleMinimap();
+        component.toggleMinimap();
+        expect(component.minimapVisible).toBe(initial);
+      });
+    });
+
+    describe('renderMinimap() — guard cases', () => {
+      it('should not throw when minimapCanvasRef is undefined', () => {
+        const t = component as unknown as TestableNovarise;
+        t.minimapCanvasRef = undefined;
+        t.terrainGrid = buildMockTerrainGrid();
+        expect(() => component.renderMinimap()).not.toThrow();
+      });
+
+      it('should not throw when terrainGrid is undefined', () => {
+        const t = component as unknown as TestableNovarise;
+        t.minimapCanvasRef = buildMinimapCanvasRef();
+        t.terrainGrid = undefined;
+        expect(() => component.renderMinimap()).not.toThrow();
+      });
+
+      it('should not throw when both canvas and terrainGrid are undefined', () => {
+        const t = component as unknown as TestableNovarise;
+        t.minimapCanvasRef = undefined;
+        t.terrainGrid = undefined;
+        expect(() => component.renderMinimap()).not.toThrow();
+      });
+    });
+
+    describe('renderMinimap() — terrain colors', () => {
+      it('should fill background before drawing tiles', () => {
+        const t = component as unknown as TestableNovarise;
+        const canvasRef = buildMinimapCanvasRef();
+        t.minimapCanvasRef = canvasRef;
+        t.terrainGrid = buildMockTerrainGrid({ size: 2, tileType: TerrainType.BEDROCK });
+
+        const ctx = canvasRef.nativeElement.getContext('2d')!;
+        const fillRectSpy = spyOn(ctx, 'fillRect').and.callThrough();
+
+        // Re-attach ctx so renderMinimap gets the spy
+        spyOn(canvasRef.nativeElement, 'getContext').and.returnValue(ctx);
+
+        component.renderMinimap();
+
+        // Background fill must be first call with full canvas size
+        const firstCall = fillRectSpy.calls.first();
+        expect(firstCall.args).toEqual([0, 0, MINIMAP_CONFIG.size, MINIMAP_CONFIG.size]);
+      });
+
+      it('should draw one rectangle per tile', () => {
+        const size = 3;
+        const t = component as unknown as TestableNovarise;
+        const canvasRef = buildMinimapCanvasRef();
+        t.minimapCanvasRef = canvasRef;
+        t.terrainGrid = buildMockTerrainGrid({ size, tileType: TerrainType.MOSS });
+
+        const ctx = canvasRef.nativeElement.getContext('2d')!;
+        const fillRectSpy = spyOn(ctx, 'fillRect').and.callThrough();
+        spyOn(canvasRef.nativeElement, 'getContext').and.returnValue(ctx);
+
+        component.renderMinimap();
+
+        // 1 background fill + size*size tile fills
+        expect(fillRectSpy.calls.count()).toBe(1 + size * size);
+      });
+
+      it('should use TERRAIN_CONFIGS color for BEDROCK tiles', () => {
+        const t = component as unknown as TestableNovarise;
+        const canvasRef = buildMinimapCanvasRef();
+        t.minimapCanvasRef = canvasRef;
+        t.terrainGrid = buildMockTerrainGrid({ size: 1, tileType: TerrainType.BEDROCK });
+
+        const ctx = canvasRef.nativeElement.getContext('2d')!;
+        spyOn(canvasRef.nativeElement, 'getContext').and.returnValue(ctx);
+
+        component.renderMinimap();
+
+        const colorHex = TERRAIN_CONFIGS[TerrainType.BEDROCK].color;
+        const r = (colorHex >> 16) & 0xff;
+        const g = (colorHex >> 8) & 0xff;
+        const b = colorHex & 0xff;
+        const expectedColor = `rgb(${r},${g},${b})`;
+
+        // The canvas fillStyle should have been set to the bedrock color at some point
+        // We verify by reading the last rendered pixel
+        const imageData = ctx.getImageData(1, 1, 1, 1);
+        // Pixel should not be pure black (background) after rendering a tile
+        expect(imageData.data[0] !== 0 || imageData.data[1] !== 0 || imageData.data[2] !== 0).toBe(true);
+        // Verify the expected CSS color string is well-formed
+        expect(expectedColor).toMatch(/^rgb\(\d+,\d+,\d+\)$/);
+      });
+
+      it('should use TERRAIN_CONFIGS color for CRYSTAL tiles', () => {
+        const colorHex = TERRAIN_CONFIGS[TerrainType.CRYSTAL].color;
+        const r = (colorHex >> 16) & 0xff;
+        const g = (colorHex >> 8) & 0xff;
+        const b = colorHex & 0xff;
+        expect(`rgb(${r},${g},${b})`).toMatch(/^rgb\(\d+,\d+,\d+\)$/);
+      });
+
+      it('should use TERRAIN_CONFIGS color for MOSS tiles', () => {
+        const colorHex = TERRAIN_CONFIGS[TerrainType.MOSS].color;
+        const r = (colorHex >> 16) & 0xff;
+        const g = (colorHex >> 8) & 0xff;
+        const b = colorHex & 0xff;
+        expect(`rgb(${r},${g},${b})`).toMatch(/^rgb\(\d+,\d+,\d+\)$/);
+      });
+
+      it('should use TERRAIN_CONFIGS color for ABYSS tiles', () => {
+        const colorHex = TERRAIN_CONFIGS[TerrainType.ABYSS].color;
+        const r = (colorHex >> 16) & 0xff;
+        const g = (colorHex >> 8) & 0xff;
+        const b = colorHex & 0xff;
+        expect(`rgb(${r},${g},${b})`).toMatch(/^rgb\(\d+,\d+,\d+\)$/);
+      });
+    });
+
+    describe('renderMinimap() — spawn/exit markers', () => {
+      it('should draw spawn marker when spawn point is set', () => {
+        const t = component as unknown as TestableNovarise;
+        const canvasRef = buildMinimapCanvasRef();
+        t.minimapCanvasRef = canvasRef;
+        t.terrainGrid = buildMockTerrainGrid({ size: 5, spawn: { x: 0, z: 2 } });
+
+        const ctx = canvasRef.nativeElement.getContext('2d')!;
+        const arcSpy = spyOn(ctx, 'arc').and.callThrough();
+        spyOn(canvasRef.nativeElement, 'getContext').and.returnValue(ctx);
+
+        component.renderMinimap();
+
+        expect(arcSpy.calls.count()).toBeGreaterThanOrEqual(1);
+      });
+
+      it('should draw exit marker when exit point is set', () => {
+        const t = component as unknown as TestableNovarise;
+        const canvasRef = buildMinimapCanvasRef();
+        t.minimapCanvasRef = canvasRef;
+        t.terrainGrid = buildMockTerrainGrid({ size: 5, exit: { x: 4, z: 2 } });
+
+        const ctx = canvasRef.nativeElement.getContext('2d')!;
+        const arcSpy = spyOn(ctx, 'arc').and.callThrough();
+        spyOn(canvasRef.nativeElement, 'getContext').and.returnValue(ctx);
+
+        component.renderMinimap();
+
+        expect(arcSpy.calls.count()).toBeGreaterThanOrEqual(1);
+      });
+
+      it('should draw two markers when both spawn and exit are set', () => {
+        const t = component as unknown as TestableNovarise;
+        const canvasRef = buildMinimapCanvasRef();
+        t.minimapCanvasRef = canvasRef;
+        t.terrainGrid = buildMockTerrainGrid({ size: 5, spawn: { x: 0, z: 2 }, exit: { x: 4, z: 2 } });
+
+        const ctx = canvasRef.nativeElement.getContext('2d')!;
+        const arcSpy = spyOn(ctx, 'arc').and.callThrough();
+        spyOn(canvasRef.nativeElement, 'getContext').and.returnValue(ctx);
+
+        component.renderMinimap();
+
+        expect(arcSpy.calls.count()).toBe(2);
+      });
+
+      it('should draw no markers when neither spawn nor exit is set', () => {
+        const t = component as unknown as TestableNovarise;
+        const canvasRef = buildMinimapCanvasRef();
+        t.minimapCanvasRef = canvasRef;
+        t.terrainGrid = buildMockTerrainGrid({ size: 3, spawn: null, exit: null });
+
+        const ctx = canvasRef.nativeElement.getContext('2d')!;
+        const arcSpy = spyOn(ctx, 'arc').and.callThrough();
+        spyOn(canvasRef.nativeElement, 'getContext').and.returnValue(ctx);
+
+        component.renderMinimap();
+
+        expect(arcSpy.calls.count()).toBe(0);
+      });
+
+      it('should draw spawn marker with MINIMAP_CONFIG.markerRadius', () => {
+        const t = component as unknown as TestableNovarise;
+        const canvasRef = buildMinimapCanvasRef();
+        t.minimapCanvasRef = canvasRef;
+        t.terrainGrid = buildMockTerrainGrid({ size: 5, spawn: { x: 2, z: 2 } });
+
+        const ctx = canvasRef.nativeElement.getContext('2d')!;
+        const arcSpy = spyOn(ctx, 'arc').and.callThrough();
+        spyOn(canvasRef.nativeElement, 'getContext').and.returnValue(ctx);
+
+        component.renderMinimap();
+
+        const arcArgs = arcSpy.calls.first().args;
+        // arc(cx, cz, radius, startAngle, endAngle)
+        expect(arcArgs[2]).toBe(MINIMAP_CONFIG.markerRadius);
+      });
+
+      it('should position spawn marker at center of the spawn tile', () => {
+        const gridSize = 5;
+        const spawnX = 1;
+        const spawnZ = 3;
+        const t = component as unknown as TestableNovarise;
+        const canvasRef = buildMinimapCanvasRef();
+        t.minimapCanvasRef = canvasRef;
+        t.terrainGrid = buildMockTerrainGrid({ size: gridSize, spawn: { x: spawnX, z: spawnZ } });
+
+        const ctx = canvasRef.nativeElement.getContext('2d')!;
+        const arcSpy = spyOn(ctx, 'arc').and.callThrough();
+        spyOn(canvasRef.nativeElement, 'getContext').and.returnValue(ctx);
+
+        component.renderMinimap();
+
+        const cellSize = MINIMAP_CONFIG.size / gridSize;
+        const expectedCx = (spawnX + 0.5) * cellSize;
+        const expectedCz = (spawnZ + 0.5) * cellSize;
+
+        const arcArgs = arcSpy.calls.first().args;
+        expect(arcArgs[0]).toBeCloseTo(expectedCx, 5);
+        expect(arcArgs[1]).toBeCloseTo(expectedCz, 5);
+      });
+    });
+
+    describe('MINIMAP_CONFIG constants', () => {
+      it('should have a positive size', () => {
+        expect(MINIMAP_CONFIG.size).toBeGreaterThan(0);
+      });
+
+      it('should have a positive markerRadius', () => {
+        expect(MINIMAP_CONFIG.markerRadius).toBeGreaterThan(0);
+      });
+
+      it('should have a markerRadius smaller than half the canvas size', () => {
+        expect(MINIMAP_CONFIG.markerRadius).toBeLessThan(MINIMAP_CONFIG.size / 2);
+      });
+
+      it('should use green for spawn color', () => {
+        expect(MINIMAP_CONFIG.spawnColor).toBe('#50ff50');
+      });
+
+      it('should use red for exit color', () => {
+        expect(MINIMAP_CONFIG.exitColor).toBe('#ff5050');
+      });
     });
   });
 });

@@ -300,6 +300,124 @@
     }
   }
 
+  // --- Wave composition panel (COMBAT / INTERMISSION) ---
+  .wave-composition {
+    @include glass-panel(rgba(0, 0, 0, 0.82));
+    position: absolute;
+    top: var(--spacing-md);
+    right: var(--spacing-md);
+    // Offset down below the top-right controls cluster (FPS + audio + help buttons)
+    margin-top: 2.5rem;
+    min-width: 9rem;
+    max-width: 12rem;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border: var(--border-width-thin) solid var(--theme-purple-a50);
+    z-index: var(--z-index-overlay);
+    animation: scale-in 0.2s ease-out;
+
+    @media screen and (max-width: 768px) {
+      min-width: 7.5rem;
+      max-width: 10rem;
+    }
+
+    .wave-composition-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+      gap: var(--spacing-xs);
+      padding-bottom: var(--spacing-xs);
+    }
+
+    .wave-composition-title {
+      font-size: 0.625rem;
+      text-transform: uppercase;
+      letter-spacing: 0.125rem;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .wave-composition-toggle {
+      background: none;
+      border: none;
+      padding: 0;
+      color: rgba(255, 255, 255, 0.4);
+      cursor: pointer;
+      line-height: 0;
+      display: flex;
+      align-items: center;
+
+      &:hover {
+        color: rgba(255, 255, 255, 0.8);
+      }
+    }
+
+    .wave-composition-body {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+    }
+
+    .wave-composition-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .wave-composition-entry {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+      font-size: var(--font-size-small);
+    }
+
+    .wave-composition-next {
+      border-top: var(--border-width-thin) solid rgba(255, 255, 255, 0.1);
+      padding-top: var(--spacing-xs);
+    }
+
+    .wave-next-header {
+      font-size: 0.5625rem;
+      text-transform: uppercase;
+      letter-spacing: 0.0625rem;
+      color: rgba(255, 255, 255, 0.35);
+      margin-bottom: 0.25rem;
+    }
+
+    // Shared dot + label styles (mirrors .wave-preview)
+    .enemy-dot {
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 50%;
+      flex-shrink: 0;
+
+      &[data-type='basic']    { background: var(--enemy-color-basic);   box-shadow: 0 0 4px var(--enemy-glow-basic); }
+      &[data-type='fast']     { background: var(--enemy-color-fast);    box-shadow: 0 0 4px var(--enemy-glow-fast); }
+      &[data-type='heavy']    { background: var(--enemy-color-heavy);   box-shadow: 0 0 4px var(--enemy-glow-heavy); }
+      &[data-type='swift']    { background: var(--enemy-color-flying);  box-shadow: 0 0 4px var(--enemy-glow-flying); }
+      &[data-type='boss']     { background: var(--enemy-color-boss);    box-shadow: 0 0 4px var(--enemy-glow-boss); }
+      &[data-type='shielded'] { background: var(--enemy-color-shield);  box-shadow: 0 0 4px var(--enemy-glow-shielded); }
+      &[data-type='swarm']    { background: var(--enemy-color-swarm);   box-shadow: 0 0 4px var(--enemy-glow-swarm); }
+      &[data-type='flying']   { background: var(--enemy-color-flying);  box-shadow: 0 0 4px var(--enemy-glow-flying); }
+    }
+
+    .enemy-count {
+      color: var(--text-color);
+      font-weight: 700;
+      min-width: 2rem;
+      text-align: right;
+    }
+
+    .enemy-label {
+      color: rgba(255, 255, 255, 0.75);
+      text-transform: uppercase;
+      letter-spacing: 0.03125rem;
+    }
+  }
+
   // --- Wave control ---
   .wave-control {
     position: absolute;

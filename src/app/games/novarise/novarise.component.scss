@@ -394,6 +394,57 @@
   }
 }
 
+// Minimap overlay
+.minimap-container {
+  position: absolute;
+  bottom: var(--spacing-lg);
+  right: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--spacing-xs, 4px);
+  z-index: 10;
+  pointer-events: auto;
+
+  &.minimap-hidden {
+    .minimap-canvas {
+      display: none;
+    }
+  }
+}
+
+.minimap-toggle {
+  background: var(--nav-bg-a90);
+  border: 1px solid var(--theme-purple-a50);
+  border-radius: 4px;
+  color: var(--theme-purple-light);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  cursor: pointer;
+  line-height: 1.4;
+  backdrop-filter: blur(0.25rem);
+  transition: background 0.15s ease, border-color 0.15s ease;
+  text-transform: uppercase;
+
+  &:hover {
+    background: var(--theme-purple-a30, rgba(106, 90, 154, 0.3));
+    border-color: var(--theme-purple);
+  }
+}
+
+.minimap-canvas {
+  width: 150px;
+  height: 150px;
+  border: 1px solid var(--theme-purple-a50);
+  border-radius: 4px;
+  display: block;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  image-rendering: pixelated;
+}
+
 // Mobile responsive adjustments
 @media (max-width: 768px) {
   .game-container {

@@ -37,6 +37,7 @@ import {
   EDITOR_PATH_INVALID_FLASH_COLOR,
   EDITOR_HEIGHT,
 } from './constants/editor-ui.constants';
+import { MINIMAP_CONFIG } from './constants/editor.constants';
 import { PathValidationService, PathValidationResult } from './core/path-validation.service';
 
 // Re-export types for template compatibility
@@ -49,6 +50,7 @@ export { EditMode, BrushTool } from './core/editor-state.service';
 })
 export class NovariseComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
+  @ViewChild('minimapCanvas', { static: false }) minimapCanvasRef?: ElementRef<HTMLCanvasElement>;
 
   // Edit state - delegated to EditorStateService
   public get editMode(): EditMode { return this.editorState.getEditMode(); }
@@ -142,6 +144,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   // Title display
   public title = 'Novarise';
 
+  // Minimap toggle state
+  public minimapVisible = true;
+
   // Map manager dialog state
   public mapManagerOpen = false;
   public savedMaps: import('./core/map-storage.service').MapMetadata[] = [];
@@ -210,6 +215,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.setupInteraction();
     this.setupKeyboardControls();
     this.animate();
+
+    // Initial minimap render (deferred one frame so the canvas ViewChild is ready)
+    requestAnimationFrame(() => this.renderMinimap());
   }
 
   private initializeScene(): void {
@@ -708,6 +716,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     this.currentStrokeTiles.clear();
     this.currentStrokeNewHeights.clear();
+    this.renderMinimap();
   }
 
   private applyEdit(mesh: THREE.Mesh): void {
@@ -774,6 +783,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         );
         this.editHistory.record(command);
         this.runPathValidation();
+        this.renderMinimap();
       } else if (this.editMode === 'exit') {
         // Reject placement on non-walkable terrain
         const tile = this.terrainGrid.getTileAt(x, z);
@@ -803,6 +813,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         );
         this.editHistory.record(command);
         this.runPathValidation();
+        this.renderMinimap();
       }
     });
   }
@@ -1114,6 +1125,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.updateSpawnMarker();
       this.updateExitMarker();
       this.runPathValidation();
+      this.renderMinimap();
       const metadata = this.mapStorage.getMapMetadata(mapId);
       if (metadata) {
         this.currentMapName = metadata.name;
@@ -1215,6 +1227,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.updateSpawnMarker();
       this.updateExitMarker();
       this.runPathValidation();
+      this.renderMinimap();
       this.currentMapName = selectedMap.name;
       alert(`Map "${selectedMap.name}" loaded successfully!`);
     } else {
@@ -1229,6 +1242,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.updateSpawnMarker();
       this.updateExitMarker();
       this.runPathValidation();
+      this.renderMinimap();
 
       const currentId = this.mapStorage.getCurrentMapId();
       if (currentId) {
@@ -1442,6 +1456,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       );
       this.editHistory.record(command);
       this.runPathValidation();
+      this.renderMinimap();
     }
   }
 
@@ -1518,6 +1533,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     if (affectedTiles.length > 0 && this.editMode === 'paint') {
       this.runPathValidation();
+    }
+
+    if (affectedTiles.length > 0) {
+      this.renderMinimap();
     }
 
     this.clearRectanglePreview();
@@ -1646,6 +1665,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.updateSpawnMarker();
       this.updateExitMarker();
       this.runPathValidation();
+      this.renderMinimap();
     }
   }
 
@@ -1659,6 +1679,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.updateSpawnMarker();
       this.updateExitMarker();
       this.runPathValidation();
+      this.renderMinimap();
     }
   }
 
@@ -1746,6 +1767,81 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.editHistory.clear();
         alert(`Map "${this.currentMapName}" imported successfully!`);
       }
+    }
+  }
+
+  // ── Minimap ────────────────────────────────────────────────────────────────
+
+  /**
+   * Toggle the minimap visibility.
+   */
+  public toggleMinimap(): void {
+    this.minimapVisible = !this.minimapVisible;
+    if (this.minimapVisible) {
+      // Re-render on show so it's never stale
+      requestAnimationFrame(() => this.renderMinimap());
+    }
+  }
+
+  /**
+   * Render a 2D overhead view of the terrain grid onto the minimap canvas.
+   * Color-codes each tile by TerrainType and overlays spawn/exit point markers.
+   * Safe to call even when the canvas element is not yet in the DOM.
+   */
+  public renderMinimap(): void {
+    if (!this.minimapCanvasRef || !this.terrainGrid) return;
+    const canvas = this.minimapCanvasRef.nativeElement;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const size = MINIMAP_CONFIG.size;
+    const gridSize = this.terrainGrid.getGridSize();
+    const cellSize = size / gridSize;
+
+    // Background
+    ctx.fillStyle = MINIMAP_CONFIG.backgroundColor;
+    ctx.fillRect(0, 0, size, size);
+
+    // Draw terrain tiles — editor uses tiles[x][z] (column-major)
+    for (let x = 0; x < gridSize; x++) {
+      for (let z = 0; z < gridSize; z++) {
+        const tile = this.terrainGrid.getTileAt(x, z);
+        if (!tile) continue;
+        const colorHex = TERRAIN_CONFIGS[tile.type].color;
+        // Convert Three.js hex to CSS color string
+        const r = (colorHex >> 16) & 0xff;
+        const g = (colorHex >> 8) & 0xff;
+        const b = colorHex & 0xff;
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(
+          Math.floor(x * cellSize),
+          Math.floor(z * cellSize),
+          Math.ceil(cellSize),
+          Math.ceil(cellSize)
+        );
+      }
+    }
+
+    // Draw spawn marker (green dot)
+    const spawn = this.terrainGrid.getSpawnPoint();
+    if (spawn) {
+      const cx = (spawn.x + 0.5) * cellSize;
+      const cz = (spawn.z + 0.5) * cellSize;
+      ctx.beginPath();
+      ctx.arc(cx, cz, MINIMAP_CONFIG.markerRadius, 0, Math.PI * 2);
+      ctx.fillStyle = MINIMAP_CONFIG.spawnColor;
+      ctx.fill();
+    }
+
+    // Draw exit marker (red dot)
+    const exit = this.terrainGrid.getExitPoint();
+    if (exit) {
+      const cx = (exit.x + 0.5) * cellSize;
+      const cz = (exit.z + 0.5) * cellSize;
+      ctx.beginPath();
+      ctx.arc(cx, cz, MINIMAP_CONFIG.markerRadius, 0, Math.PI * 2);
+      ctx.fillStyle = MINIMAP_CONFIG.exitColor;
+      ctx.fill();
     }
   }
 
