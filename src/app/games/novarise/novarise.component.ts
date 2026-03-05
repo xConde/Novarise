@@ -1880,10 +1880,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Animate brush indicator for crisp, noticeable feedback
     if (this.brushIndicator && this.brushIndicator.visible) {
-      const pulse = Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * EDITOR_ANIMATION.brushPulseAmplitude + 0.9;
+      const pulse = Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * EDITOR_ANIMATION.brushPulseAmplitude + EDITOR_ANIMATION.brushScaleBase;
       this.brushIndicator.scale.set(pulse, pulse, 1);
       const material = this.brushIndicator.material as THREE.MeshBasicMaterial;
-      material.opacity = 0.6 + Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * 0.2;
+      material.opacity = EDITOR_ANIMATION.brushOpacityBase + Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * EDITOR_ANIMATION.brushOpacityAmplitude;
     }
 
     // Animate spawn/exit markers
@@ -1915,10 +1915,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       const positionAttribute = this.particles.geometry.attributes['position'] as THREE.BufferAttribute;
       const positions = positionAttribute.array as Float32Array;
       for (let i = 0; i < positions.length; i += 3) {
-        positions[i + 1] += Math.sin(Date.now() * 0.001 + i) * 0.002;
+        positions[i + 1] += Math.sin(Date.now() * EDITOR_ANIMATION.particleOscillationFrequency + i) * EDITOR_ANIMATION.particleOscillationAmplitude;
       }
       positionAttribute.needsUpdate = true;
-      this.particles.rotation.y += 0.0002;
+      this.particles.rotation.y += EDITOR_ANIMATION.particleRotationSpeed;
     }
 
     if (this.composer) {
