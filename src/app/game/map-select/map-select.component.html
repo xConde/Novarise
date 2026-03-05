@@ -1,10 +1,38 @@
 <div class="map-select-container">
   <h1 class="map-select-title">Select Map</h1>
 
+  <!-- Difficulty selector -->
+  <section class="difficulty-section" aria-labelledby="difficulty-heading">
+    <h2 class="difficulty-heading" id="difficulty-heading">Difficulty</h2>
+    <div class="difficulty-options" role="group" aria-label="Select difficulty">
+      <button
+        *ngFor="let level of difficultyLevels; trackBy: trackByDifficulty"
+        class="difficulty-btn"
+        [class.selected]="selectedDifficulty === level"
+        (click)="selectDifficulty(level)"
+        [attr.aria-pressed]="selectedDifficulty === level"
+        [attr.aria-label]="'Select ' + difficultyPresets[level].label + ' difficulty'">
+        <span class="difficulty-name">{{ difficultyPresets[level].label }}</span>
+        <span class="difficulty-desc">{{ difficultyPresets[level].description }}</span>
+        <span class="difficulty-stats">
+          <span class="stat-item">{{ difficultyPresets[level].lives }} lives</span>
+          <span class="stat-item">{{ difficultyPresets[level].gold }}g start</span>
+        </span>
+      </button>
+    </div>
+  </section>
+
   <div class="map-grid" *ngIf="maps.length > 0">
-    <button class="map-card" *ngFor="let map of maps" (click)="selectMap(map)">
+    <button
+      class="map-card"
+      *ngFor="let map of maps; trackBy: trackByMapId"
+      [class.map-card--invalid]="!isMapPlayable(map)"
+      [disabled]="!isMapPlayable(map)"
+      [attr.aria-disabled]="!isMapPlayable(map)"
+      (click)="selectMap(map)">
       <span class="map-name">{{ map.name }}</span>
       <span class="map-date">{{ map.updatedAt | date:'short' }}</span>
+      <span class="map-invalid-badge" *ngIf="!isMapPlayable(map)">Needs setup</span>
     </button>
   </div>
 
@@ -13,5 +41,8 @@
     <button class="create-map-btn" (click)="goToEditor()">Create a Map</button>
   </div>
 
-  <button class="back-btn" (click)="goToEditor()">Back to Editor</button>
+  <div class="map-select-actions">
+    <button class="back-btn" (click)="goToEditor()">Back to Editor</button>
+    <button class="campaign-btn" (click)="goToCampaign()">Campaign</button>
+  </div>
 </div>

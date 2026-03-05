@@ -1,5 +1,5 @@
 import { EnemyType } from './enemy.model';
-import { WAVE_DEFINITIONS, ENDLESS_CONFIG, ENDLESS_BASE_COUNT } from './wave.model';
+import { WAVE_DEFINITIONS, ENDLESS_CONFIG, ENDLESS_BASE_COUNT, ENDLESS_ENEMY_CYCLE } from './wave.model';
 
 export interface WavePreviewEntry {
   type: EnemyType;
@@ -16,19 +16,9 @@ const ENEMY_TYPE_LABELS: Record<EnemyType, string> = {
   [EnemyType.BOSS]: 'Boss',
   [EnemyType.SHIELDED]: 'Shielded',
   [EnemyType.SWARM]: 'Swarm',
-  [EnemyType.FLYING]: 'Flying'
+  [EnemyType.FLYING]: 'Flying',
+  [EnemyType.HEALER]: 'Healer'
 };
-
-// Enemy types that cycle in endless waves — matches WaveService.ENDLESS_ENEMY_CYCLE
-const ENDLESS_ENEMY_CYCLE: EnemyType[] = [
-  EnemyType.BASIC,
-  EnemyType.FAST,
-  EnemyType.HEAVY,
-  EnemyType.SWIFT,
-  EnemyType.SHIELDED,
-  EnemyType.SWARM,
-  EnemyType.FLYING
-];
 
 
 

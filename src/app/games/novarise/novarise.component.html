@@ -1,6 +1,6 @@
 <div class="game-container">
   <div class="title">
-    <div class="letter" *ngFor="let letter of title.split(''); let i = index">
+    <div class="letter" *ngFor="let letter of title.split(''); let i = index; trackBy: trackByIndex">
       {{ letter }}
     </div>
   </div>
@@ -35,7 +35,106 @@
       (brushSizeChange)="setBrushSize($event)"
       (activeToolChange)="setActiveTool($event)"
       (playMapClick)="playMap()"
-      (deleteMapClick)="deleteMap()">
+      (openMapManagerClick)="openMapManager()">
     </app-edit-controls>
+
+    <!-- Validation status bar -->
+    <div class="editor-validation-bar"
+         [class.valid]="canPlayMap"
+         [class.warning]="hasSpawnAndExit && !isPathValid"
+         [class.error]="!canPlayMap && !(hasSpawnAndExit && !isPathValid)">
+      <span class="validation-icon" *ngIf="canPlayMap">&#10003;</span>
+      <span class="validation-icon" *ngIf="!canPlayMap">&#9888;</span>
+      <span class="validation-text" *ngIf="!isTerrainReady">Loading...</span>
+      <span class="validation-text" *ngIf="isTerrainReady && !hasSpawnPoint">Place a spawn point</span>
+      <span class="validation-text" *ngIf="isTerrainReady && hasSpawnPoint && !hasExitPoint">Place an exit point</span>
+      <span class="validation-text" *ngIf="isTerrainReady && hasSpawnAndExit && !isPathValid">No valid path from spawn to exit</span>
+      <span class="validation-text" *ngIf="canPlayMap">Map ready to play</span>
+    </div>
+
+    <!-- Navigation links -->
+    <div class="editor-nav-links">
+      <button class="nav-btn" (click)="goToCampaign()">Campaign</button>
+      <button class="nav-btn" (click)="goToMaps()">My Maps</button>
+    </div>
+
+    <!-- Minimap overlay -->
+    <div class="minimap-container" [class.minimap-hidden]="!minimapVisible">
+      <button class="minimap-toggle" (click)="toggleMinimap()" [title]="minimapVisible ? 'Hide minimap' : 'Show minimap'">
+        {{ minimapVisible ? '▼' : '▲' }}
+      </button>
+      <canvas
+        *ngIf="minimapVisible"
+        #minimapCanvas
+        class="minimap-canvas"
+        width="150"
+        height="150"
+        aria-label="Terrain minimap">
+      </canvas>
+    </div>
+
+    <!-- Map Manager Dialog -->
+    <div class="map-manager-overlay" *ngIf="mapManagerOpen" (click)="closeMapManager()"
+         tabindex="-1"
+         role="dialog"
+         aria-modal="true"
+         aria-label="Saved Maps"
+         (keydown.escape)="closeMapManager()">
+      <div class="map-manager-panel" #mapManagerPanel (click)="$event.stopPropagation()" tabindex="-1">
+        <div class="map-manager-header">
+          <h2 class="map-manager-title">Saved Maps</h2>
+          <button class="map-manager-close" (click)="closeMapManager()" aria-label="Close map manager">✕</button>
+        </div>
+
+        <div class="map-manager-empty" *ngIf="savedMaps.length === 0">
+          No saved maps yet. Use G to save your current map.
+        </div>
+
+        <ul class="map-list" *ngIf="savedMaps.length > 0">
+          <li *ngFor="let map of savedMaps; trackBy: trackByMapId" class="map-list-item"
+              [class.map-list-item--confirm]="deleteConfirmId === map.id">
+
+            <!-- Rename input (active when renaming this map) -->
+            <ng-container *ngIf="renamingMapId === map.id; else displayMode">
+              <input
+                class="map-rename-input"
+                type="text"
+                [(ngModel)]="renameValue"
+                (keydown.enter)="submitRename(map.id)"
+                (keydown.escape)="cancelRename()"
+                (blur)="submitRename(map.id)"
+                maxlength="50"
+                aria-label="Rename map"
+                #renameInput>
+              <div class="map-item-actions">
+                <button class="map-action-btn map-action-btn--confirm-rename" (click)="submitRename(map.id)" aria-label="Confirm rename">✓</button>
+                <button class="map-action-btn map-action-btn--cancel" (click)="cancelRename()" aria-label="Cancel rename">✕</button>
+              </div>
+            </ng-container>
+
+            <!-- Normal display mode -->
+            <ng-template #displayMode>
+              <div class="map-item-info" (click)="loadMapFromManager(map.id)">
+                <span class="map-item-name">{{ map.name }}</span>
+                <span class="map-item-date">{{ map.updatedAt | date:'short' }}</span>
+              </div>
+              <div class="map-item-actions">
+                <!-- Delete confirm state -->
+                <ng-container *ngIf="deleteConfirmId === map.id; else normalActions">
+                  <span class="map-delete-confirm-label">Delete?</span>
+                  <button class="map-action-btn map-action-btn--danger" (click)="deleteMap(map.id)" aria-label="Confirm delete">✓</button>
+                  <button class="map-action-btn map-action-btn--cancel" (click)="cancelDelete()" aria-label="Cancel delete">✕</button>
+                </ng-container>
+
+                <ng-template #normalActions>
+                  <button class="map-action-btn map-action-btn--rename" (click)="startRename(map.id, map.name)" aria-label="Rename map">✎</button>
+                  <button class="map-action-btn map-action-btn--delete" (click)="confirmDelete(map.id)" aria-label="Delete map">✕</button>
+                </ng-template>
+              </div>
+            </ng-template>
+          </li>
+        </ul>
+      </div>
+    </div>
   </div>
 </div>

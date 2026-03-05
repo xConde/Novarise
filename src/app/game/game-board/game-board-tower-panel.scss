@@ -1,0 +1,712 @@
+// =============================================================================
+// game-board-tower-panel.scss
+// Game controls, tower selection panel, help overlay, combo HUD,
+// responsive breakpoints for tower panel, animations
+// =============================================================================
+
+.board-container {
+  // --- Pause / Speed controls ---
+  .game-controls {
+    background: var(--glass-bg);
+    border-radius: var(--border-radius-md);
+    backdrop-filter: blur(0.625rem);
+    z-index: var(--z-index-overlay);
+    font-family: "Orbitron", sans-serif;
+    position: absolute;
+    bottom: var(--spacing-lg);
+    right: var(--spacing-lg);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border: var(--border-width-thin) solid var(--border-color);
+
+    @media screen and (max-width: 768px) {
+      bottom: var(--spacing-md);
+      right: var(--spacing-md);
+      gap: var(--spacing-xs);
+      padding: var(--spacing-xs);
+    }
+
+    .speed-controls {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .control-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--spacing-xs) var(--spacing-sm);
+      background: transparent;
+      border: var(--border-width-thin) solid var(--border-color);
+      border-radius: var(--border-radius-sm);
+      color: rgba(255, 255, 255, 0.6);
+      font-family: "Orbitron", sans-serif;
+      font-size: var(--font-size-small);
+      cursor: pointer;
+      transition: all var(--transition-medium) ease;
+      min-width: 2.25rem;
+      line-height: 1;
+
+      @media screen and (max-width: 768px) {
+        min-width: 1.875rem;
+        font-size: 0.625rem;
+        padding: var(--spacing-xs) 0.25rem;
+      }
+
+      @media (pointer: coarse) {
+        min-width: 44px;
+        min-height: 44px;
+      }
+
+      &:hover {
+        background: var(--theme-purple-a20);
+        border-color: var(--theme-purple-a80);
+        color: var(--theme-purple-lighter);
+      }
+
+      &:active {
+        transform: scale(0.95);
+      }
+
+      &.active {
+        background: var(--theme-purple-a30);
+        border-color: var(--theme-purple);
+        color: var(--theme-purple-lighter);
+        box-shadow: 0 0 var(--spacing-xs) var(--theme-purple-a50);
+      }
+    }
+
+    .pause-btn {
+      min-width: 2.5rem;
+      line-height: 0;
+
+      &.active {
+        background: var(--game-gold-a15);
+        border-color: var(--game-gold-a50);
+        color: var(--game-gold);
+        box-shadow: 0 0 var(--spacing-xs) var(--game-gold-a30);
+      }
+    }
+
+    .wave-hint {
+      font-size: 0.5625rem;
+      color: rgba(255, 255, 255, 0.3);
+    }
+
+    .restart-wave-btn {
+      &.disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        pointer-events: none;
+      }
+      &:hover:not(.disabled) {
+        border-color: var(--action-red);
+        background: var(--action-danger-bg);
+      }
+    }
+  }
+
+  // --- Tower selection ---
+  .tower-selection {
+    background: rgba(0, 0, 0, 0.8);
+    border-radius: var(--border-radius-md);
+    backdrop-filter: blur(0.625rem);
+    z-index: var(--z-index-overlay);
+    font-family: "Orbitron", sans-serif;
+    position: absolute;
+    bottom: var(--spacing-lg);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm);
+    border: var(--border-width-thin) solid var(--border-color);
+
+    @media screen and (max-width: 768px) {
+      bottom: var(--spacing-md);
+      gap: var(--spacing-sm);
+      padding: var(--spacing-xs);
+      width: 90%;
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      // Scrollbar hidden but still scrollable
+      scrollbar-width: none;
+      &::-webkit-scrollbar { display: none; }
+    }
+
+    .tower-btn {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--spacing-xs);
+      padding: var(--spacing-sm);
+      background: transparent;
+      border: var(--border-width-medium) solid var(--border-color);
+      border-radius: var(--border-radius-sm);
+      cursor: pointer;
+      transition: all var(--transition-medium) cubic-bezier(0.4, 0, 0.2, 1);
+      min-width: 5rem;
+
+      @media screen and (max-width: 768px) {
+        min-width: 4rem;
+        flex-shrink: 0;
+        padding: var(--spacing-xs);
+      }
+
+      &:hover {
+        background: var(--border-color-subtle);
+        border-color: var(--border-color-strong);
+        transform: translateY(-0.125rem);
+      }
+
+      &:active {
+        transform: translateY(0.0625rem);
+      }
+
+      &.selected {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: var(--text-color);
+        box-shadow: 0 0 var(--spacing-sm) rgba(255, 255, 255, 0.3);
+      }
+
+      &.unaffordable {
+        opacity: 0.4;
+
+        .tower-cost { color: var(--game-health); }
+      }
+
+      &.locked {
+        opacity: 0.4;
+        cursor: not-allowed;
+        pointer-events: none;
+        position: relative;
+      }
+
+      .tower-lock-hint {
+        font-size: 0.55rem;
+        color: var(--theme-purple-mid);
+        text-align: center;
+        display: block;
+        line-height: 1.2;
+      }
+
+      .tower-icon {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: var(--border-radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+
+        @media screen and (max-width: 768px) {
+          width: 2rem;
+          height: 2rem;
+        }
+
+        &.basic::before {
+          content: '';
+          width: 1.25rem;
+          height: 1.25rem;
+          background: var(--tower-color-basic);
+          border-radius: 50%;
+          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-basic);
+        }
+
+        &.sniper::before {
+          content: '';
+          width: 0;
+          height: 0;
+          border-left: 0.75rem solid transparent;
+          border-right: 0.75rem solid transparent;
+          border-bottom: 1.5rem solid var(--tower-color-sniper);
+          // CSS border triangles don't support box-shadow — use filter instead
+          filter: drop-shadow(0 0 4px var(--tower-glow-sniper));
+        }
+
+        &.splash::before {
+          content: '';
+          width: 1.25rem;
+          height: 1.25rem;
+          background: var(--tower-color-splash);
+          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-splash);
+        }
+
+        &.slow::before {
+          content: '';
+          width: 0.9rem;
+          height: 0.9rem;
+          background: var(--tower-color-slow);
+          transform: rotate(45deg);
+          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-slow);
+        }
+
+        &.chain::before {
+          content: '';
+          width: 0.25rem;
+          height: 1.5rem;
+          background: var(--tower-color-chain);
+          border-radius: 0.125rem;
+          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-chain);
+        }
+
+        &.mortar::before {
+          content: '';
+          width: 1.4rem;
+          height: 0.75rem;
+          background: var(--tower-color-mortar);
+          border-radius: 0.1rem;
+          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-mortar);
+        }
+      }
+
+      .tower-name {
+        font-size: var(--font-size-small);
+        color: var(--text-color);
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.0313rem;
+
+        @media screen and (max-width: 768px) {
+          font-size: 0.75rem;
+        }
+      }
+
+      .tower-cost {
+        font-size: 0.6875rem;
+        color: var(--game-gold);
+        font-family: "Orbitron", sans-serif;
+      }
+
+      .tower-hotkey {
+        font-size: 0.5rem;
+        color: rgba(255, 255, 255, 0.25);
+        font-family: "Orbitron", sans-serif;
+        letter-spacing: 0.0313rem;
+
+        @media screen and (max-width: 768px) {
+          display: none;
+        }
+      }
+
+      // --- Hover tooltip ---
+      .tower-tooltip {
+        position: absolute;
+        bottom: calc(100% + 0.625rem);
+        left: 50%;
+        transform: translateX(-50%);
+        min-width: 9rem;
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--nav-bg);
+        border: var(--border-width-thin) solid var(--theme-purple-a50);
+        border-radius: var(--border-radius-md);
+        backdrop-filter: blur(0.75rem);
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.15s ease, visibility 0.15s ease;
+        z-index: calc(var(--z-index-overlay) + 10);
+        white-space: nowrap;
+        box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.6), 0 0 0.5rem var(--theme-purple-a30);
+
+        .tooltip-stat {
+          display: flex;
+          justify-content: space-between;
+          gap: var(--spacing-md);
+          font-family: "Orbitron", sans-serif;
+          font-size: 0.5625rem;
+          margin-bottom: 0.1875rem;
+
+          .tooltip-label {
+            color: var(--border-color-strong);
+            letter-spacing: 0.0625rem;
+          }
+
+          .tooltip-val {
+            color: var(--text-color);
+            font-weight: 600;
+          }
+        }
+
+        .tooltip-desc {
+          margin-top: var(--spacing-xs);
+          padding-top: var(--spacing-xs);
+          border-top: var(--border-width-thin) solid var(--border-color-subtle);
+          font-family: "Orbitron", sans-serif;
+          font-size: 0.5rem;
+          color: var(--theme-purple-mid);
+          text-align: center;
+          line-height: 1.4;
+          white-space: normal;
+        }
+
+        // Downward-pointing caret
+        .tooltip-arrow {
+          position: absolute;
+          bottom: -0.3125rem;
+          left: 50%;
+          transform: translateX(-50%) rotate(45deg);
+          width: 0.375rem;
+          height: 0.375rem;
+          background: var(--nav-bg);
+          border-right: var(--border-width-thin) solid var(--theme-purple-a50);
+          border-bottom: var(--border-width-thin) solid var(--theme-purple-a50);
+        }
+      }
+
+      &:hover .tower-tooltip {
+        opacity: 1;
+        visibility: visible;
+      }
+    }
+  }
+
+  // --- Help overlay ---
+  .help-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--overlay-dim-70);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: var(--z-index-modal);
+
+    .help-content {
+      background: var(--nav-bg-a90);
+      border: var(--border-width-thin) solid var(--theme-purple);
+      border-radius: var(--border-radius-lg);
+      padding: var(--spacing-lg) var(--spacing-xl);
+      max-width: 20rem;
+
+      @media screen and (max-width: 480px) {
+        max-width: 90vw;
+        padding: var(--spacing-md);
+      }
+
+      h3 {
+        margin: 0 0 var(--spacing-sm);
+        color: var(--theme-purple-light);
+        font-size: var(--font-size-base);
+      }
+
+      .help-grid {
+        display: grid;
+        grid-template-columns: 4.375rem 1fr;
+        gap: var(--spacing-xs) var(--spacing-sm);
+        font-size: var(--font-size-small);
+
+        .key {
+          background: var(--border-color-subtle);
+          padding: 2px var(--spacing-xs);
+          border-radius: var(--border-radius-sm);
+          text-align: center;
+          font-family: monospace;
+          color: var(--text-color);
+        }
+
+        span:not(.key) {
+          color: rgba(255, 255, 255, 0.7);
+        }
+      }
+
+      .help-dismiss {
+        margin: var(--spacing-sm) 0 0;
+        font-size: 0.6875rem;
+        color: rgba(255, 255, 255, 0.4);
+        text-align: center;
+      }
+    }
+  }
+}
+
+// --- Responsive breakpoints (tower panel sections) ---
+
+// Tablet (max-width: 768px)
+@media screen and (max-width: 768px) {
+  .board-container {
+    // Game controls: stack vertically on tablet
+    .game-controls {
+      flex-direction: column;
+      align-items: stretch;
+
+      .speed-controls {
+        justify-content: center;
+      }
+    }
+
+    // Wave control button: ensure minimum 44px tap target
+    .wave-control .wave-btn {
+      min-height: 2.75rem; // 44px
+    }
+
+    // HUD: shrink label + value sizes
+    .game-hud .hud-stat {
+      .hud-label {
+        font-size: 0.5625rem;
+      }
+
+      .hud-value {
+        font-size: var(--font-size-small);
+      }
+    }
+  }
+}
+
+// Mobile (max-width: 480px)
+@media screen and (max-width: 480px) {
+  .board-container {
+    // Tower selection: switch to 3-column grid
+    .tower-selection {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      bottom: 0;
+      left: 0;
+      right: 0;
+      transform: none;
+      width: 100%;
+      border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
+      padding: var(--spacing-sm);
+      gap: var(--spacing-xs);
+      border-left: none;
+      border-right: none;
+      border-bottom: none;
+
+      .tower-btn {
+        min-width: unset;
+        width: 100%;
+        padding: var(--spacing-xs);
+        gap: 0.125rem;
+
+        .tower-icon {
+          width: 1.75rem;
+          height: 1.75rem;
+        }
+
+        .tower-name {
+          font-size: 0.625rem;
+        }
+
+        .tower-cost {
+          font-size: 0.5625rem;
+        }
+      }
+    }
+
+    // Game HUD: further reduce on mobile, hide secondary stats to prevent overflow
+    .game-hud {
+      gap: var(--spacing-xs);
+      padding: var(--spacing-xs) var(--spacing-sm);
+      font-size: 0.625rem;
+      max-width: calc(100vw - 8rem); // leave room for nav-back-btn on left and controls on right
+      overflow: hidden;
+
+      .hud-stat {
+        .hud-label {
+          font-size: 0.5rem;
+          letter-spacing: 0;
+        }
+
+        .hud-value {
+          font-size: 0.6875rem;
+        }
+
+        &.secondary {
+          display: none; // hide Score, Time, Difficulty badge at 480px to prevent overflow
+        }
+      }
+    }
+
+    // Wave composition panel: collapse by default on tiny screens to not block gameplay
+    .wave-composition {
+      display: none;
+    }
+
+    // Wave control button: larger tap target (min 44px touch target)
+    .wave-control .wave-btn {
+      min-height: 2.75rem; // 44px
+      padding: var(--spacing-sm) var(--spacing-lg);
+      font-size: var(--font-size-base);
+    }
+
+    // Game controls: stack vertically, right side
+    .game-controls {
+      flex-direction: column;
+      align-items: stretch;
+      bottom: calc(var(--spacing-sm) + 8.5rem); // above tower grid
+      right: var(--spacing-sm);
+      gap: var(--spacing-xs);
+      padding: var(--spacing-xs);
+
+      .control-btn {
+        min-width: 2.75rem; // 44px tap target
+        min-height: 2.75rem;
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: 0.625rem;
+        justify-content: center;
+      }
+
+      .pause-btn {
+        min-width: 2.75rem;
+        min-height: 2.75rem;
+        line-height: 0;
+      }
+
+      .speed-controls {
+        flex-direction: column;
+        gap: var(--spacing-xs);
+      }
+    }
+  }
+}
+
+// --- Animations ---
+@keyframes pulse-critical {
+  from { opacity: 1; }
+  to { opacity: 0.5; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { border-color: rgba(255, 100, 100, 0.3); }
+  50% { border-color: rgba(255, 100, 100, 0.6); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+// Interest notification — floats up and fades out between waves
+.interest-notification {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 0.5rem 1.2rem;
+  background: var(--action-yellow-bg);
+  border: var(--border-width-thin) solid var(--action-yellow);
+  border-radius: var(--border-radius-md);
+  color: var(--action-yellow);
+  font-size: 1.2rem;
+  font-weight: 700;
+  font-family: "Orbitron", sans-serif;
+  z-index: calc(var(--z-index-overlay) + 5);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  animation: interestFloat 3s ease forwards;
+
+  .interest-icon {
+    font-size: 1rem;
+  }
+}
+
+@keyframes interestFloat {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+  15% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  70% { opacity: 1; transform: translate(-50%, -70%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -80%) scale(0.9); }
+}
+
+// --- Combo counter HUD ---
+
+.combo-counter {
+  position: absolute;
+  top: 5.5rem;
+  right: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.35rem 0.75rem;
+  background: var(--overlay-dim-70);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
+  border-radius: var(--border-radius-md);
+  backdrop-filter: blur(0.5rem);
+  font-family: "Orbitron", sans-serif;
+  z-index: calc(var(--z-index-overlay) + 5);
+  pointer-events: none;
+  transition: border-color var(--transition-fast) ease;
+
+  &.combo-pulse {
+    animation: comboPulse 0.4s ease;
+  }
+
+  .combo-label {
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--theme-purple-mid);
+    text-transform: uppercase;
+  }
+
+  .combo-count {
+    font-size: 1.2rem;
+    font-weight: 900;
+    color: var(--theme-purple-lighter);
+    line-height: 1;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.2rem 0.5rem;
+
+    .combo-label {
+      font-size: 0.45rem;
+    }
+
+    .combo-count {
+      font-size: 1rem;
+    }
+  }
+}
+
+// --- Combo bonus banner ---
+
+.combo-banner {
+  position: absolute;
+  top: 9rem;
+  right: var(--spacing-md);
+  padding: 0.25rem 0.7rem;
+  background: rgba(168, 85, 247, 0.15);
+  border: var(--border-width-thin) solid var(--theme-purple-a80);
+  border-radius: var(--border-radius-md);
+  color: var(--theme-purple-lighter);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: "Orbitron", sans-serif;
+  z-index: var(--z-index-overlay);
+  pointer-events: none;
+  animation: comboBannerFade 1.8s ease forwards;
+}
+
+@keyframes comboPulse {
+  0%   { border-color: var(--theme-purple-a80); transform: scale(1); }
+  30%  { border-color: var(--theme-purple-lighter); transform: scale(1.08); }
+  100% { border-color: var(--theme-purple-a50); transform: scale(1); }
+}
+
+@keyframes comboBannerFade {
+  0%   { opacity: 0; transform: translateY(4px); }
+  15%  { opacity: 1; transform: translateY(0); }
+  70%  { opacity: 1; transform: translateY(-4px); }
+  100% { opacity: 0; transform: translateY(-10px); }
+}

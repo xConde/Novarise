@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_MESH_SEGMENTS, GridNode, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { BlockType } from '../models/game-board-tile';
-import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
+import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG, HEALER_CROSS_CONFIG } from '../constants/ui.constants';
+import { DEFAULT_DIFFICULTY, DifficultyLevel, getDifficultyHealthMultiplier, getDifficultySpeedMultiplier } from '../models/difficulty.model';
 
 export interface DamageResult {
   killed: boolean;
@@ -15,8 +16,22 @@ export class EnemyService {
   private enemies: Map<string, Enemy> = new Map();
   private enemyCounter = 0;
   private pathCache: Map<string, GridNode[]> = new Map();
+  private difficulty: DifficultyLevel = DEFAULT_DIFFICULTY;
 
   constructor(private gameBoardService: GameBoardService) {}
+
+  /**
+   * Set the active difficulty level. Must be called before the first wave
+   * starts so that spawned enemies receive the correct health/speed scaling.
+   */
+  setDifficulty(difficulty: DifficultyLevel): void {
+    this.difficulty = difficulty;
+  }
+
+  /** Returns the active difficulty level. */
+  getDifficulty(): DifficultyLevel {
+    return this.difficulty;
+  }
 
   /**
    * Spawn a new enemy at a random spawner tile
@@ -60,14 +75,20 @@ export class EnemyService {
     // FLYING enemies hover above ground
     const yPos = isFlying ? FLYING_ENEMY_HEIGHT : stats.size;
 
+    // Apply difficulty scaling to health and speed
+    const healthMult = getDifficultyHealthMultiplier(this.difficulty);
+    const speedMult = getDifficultySpeedMultiplier(this.difficulty);
+    const scaledHealth = Math.round(stats.health * healthMult);
+    const scaledSpeed = stats.speed * speedMult;
+
     const enemy: Enemy = {
       id: `enemy-${this.enemyCounter++}`,
       type,
       position: { x: worldPos.x, y: yPos, z: worldPos.z },
       gridPosition: { row, col },
-      health: stats.health,
-      maxHealth: stats.health,
-      speed: stats.speed,
+      health: scaledHealth,
+      maxHealth: scaledHealth,
+      speed: scaledSpeed,
       value: stats.value,
       path,
       pathIndex: 0,
@@ -78,9 +99,14 @@ export class EnemyService {
       enemy.isFlying = true;
     }
 
+    if (type === EnemyType.HEALER) {
+      enemy.isHealer = true;
+    }
+
     if (stats.maxShield !== undefined) {
-      enemy.shield = stats.maxShield;
-      enemy.maxShield = stats.maxShield;
+      const scaledShield = Math.round(stats.maxShield * healthMult);
+      enemy.shield = scaledShield;
+      enemy.maxShield = scaledShield;
     }
 
     // Create mesh
@@ -94,8 +120,45 @@ export class EnemyService {
   /**
    * Update all enemies - move along paths
    */
+  /**
+   * Heal nearby allies for all active HEALER enemies.
+   * Called at the start of each updateEnemies tick before movement.
+   * Does not heal self, dead enemies, or enemies beyond healRange tiles.
+   */
+  healNearbyEnemies(deltaTime: number): void {
+    const tileSize = this.gameBoardService.getTileSize();
+
+    this.enemies.forEach(healer => {
+      if (!healer.isHealer || healer.health <= 0) return;
+      // Frozen healers (speed <= 0 from Freeze ability) cannot heal allies
+      if (healer.speed <= 0) return;
+
+      const healerStats = ENEMY_STATS[EnemyType.HEALER];
+      const healRange = healerStats.healRange!;
+      const healRate = healerStats.healRate!;
+      const healAmount = healRate * deltaTime;
+      const rangeWorld = healRange * tileSize;
+
+      this.enemies.forEach(ally => {
+        if (ally.id === healer.id) return; // Skip self
+        if (ally.health <= 0) return;       // Skip dead
+        if (ally.health >= ally.maxHealth) return; // Already full
+
+        const dx = ally.position.x - healer.position.x;
+        const dz = ally.position.z - healer.position.z;
+        const distSq = dx * dx + dz * dz;
+
+        if (distSq <= rangeWorld * rangeWorld) {
+          ally.health = Math.min(ally.maxHealth, ally.health + healAmount);
+        }
+      });
+    });
+  }
+
   updateEnemies(deltaTime: number): string[] {
     if (deltaTime <= 0) return [];
+
+    this.healNearbyEnemies(deltaTime);
 
     const reachedExit: string[] = [];
 
@@ -109,42 +172,46 @@ export class EnemyService {
         return;
       }
 
-      // Get current and next path nodes
-      const currentNode = enemy.path[enemy.pathIndex];
-      const nextNode = enemy.path[enemy.pathIndex + 1];
+      // Multi-hop movement: consume the full movement budget this tick, advancing
+      // through as many waypoints as needed. This prevents fast/nightmare enemies
+      // from being capped to one node per tick, which caused them to lag behind
+      // their correct position at high speeds or large deltaTime values.
+      let remainingMove = enemy.speed * deltaTime;
 
-      // Convert grid positions to world positions
-      const currentWorld = this.gridToWorld(currentNode.y, currentNode.x);
-      const nextWorld = this.gridToWorld(nextNode.y, nextNode.x);
+      while (remainingMove > 0 && enemy.pathIndex < enemy.path.length - 1) {
+        const nextNode = enemy.path[enemy.pathIndex + 1];
+        const nextWorld = this.gridToWorld(nextNode.y, nextNode.x);
 
-      // Calculate direction and distance
-      const direction = new THREE.Vector3(
-        nextWorld.x - currentWorld.x,
-        0,
-        nextWorld.z - currentWorld.z
-      ).normalize();
+        // Distance from current position to the next waypoint
+        const distanceToNext = Math.sqrt(
+          Math.pow(nextWorld.x - enemy.position.x, 2) +
+          Math.pow(nextWorld.z - enemy.position.z, 2)
+        );
 
-      const moveDistance = enemy.speed * deltaTime;
+        if (remainingMove >= distanceToNext) {
+          // Snap to this waypoint and continue consuming budget
+          enemy.position.x = nextWorld.x;
+          enemy.position.z = nextWorld.z;
+          enemy.gridPosition.row = nextNode.y;
+          enemy.gridPosition.col = nextNode.x;
+          enemy.pathIndex++;
+          enemy.distanceTraveled += distanceToNext;
+          remainingMove -= distanceToNext;
+        } else {
+          // Budget exhausted before reaching next node — interpolate
+          const currentNode = enemy.path[enemy.pathIndex];
+          const currentWorld = this.gridToWorld(currentNode.y, currentNode.x);
+          const direction = new THREE.Vector3(
+            nextWorld.x - currentWorld.x,
+            0,
+            nextWorld.z - currentWorld.z
+          ).normalize();
 
-      // Calculate distance to next node
-      const distanceToNext = Math.sqrt(
-        Math.pow(nextWorld.x - enemy.position.x, 2) +
-        Math.pow(nextWorld.z - enemy.position.z, 2)
-      );
-
-      if (moveDistance >= distanceToNext) {
-        // Reached next node - snap to it
-        enemy.position.x = nextWorld.x;
-        enemy.position.z = nextWorld.z;
-        enemy.gridPosition.row = nextNode.y;
-        enemy.gridPosition.col = nextNode.x;
-        enemy.pathIndex++;
-        enemy.distanceTraveled += distanceToNext;
-      } else {
-        // Move towards next node
-        enemy.position.x += direction.x * moveDistance;
-        enemy.position.z += direction.z * moveDistance;
-        enemy.distanceTraveled += moveDistance;
+          enemy.position.x += direction.x * remainingMove;
+          enemy.position.z += direction.z * remainingMove;
+          enemy.distanceTraveled += remainingMove;
+          remainingMove = 0;
+        }
       }
 
       // Update mesh position
@@ -256,6 +323,24 @@ export class EnemyService {
   }
 
   /**
+   * Update health bar planes to face the camera each frame (billboard effect).
+   * Call this from the animate() loop after updateEnemies().
+   */
+  updateHealthBarFacing(camera: THREE.Camera): void {
+    this.enemies.forEach(enemy => {
+      if (!enemy.mesh) return;
+      const healthBarBg = enemy.mesh.userData?.['healthBarBg'] as THREE.Mesh | undefined;
+      const healthBarFg = enemy.mesh.userData?.['healthBarFg'] as THREE.Mesh | undefined;
+      if (healthBarBg) {
+        healthBarBg.lookAt(camera.position);
+      }
+      if (healthBarFg) {
+        healthBarFg.lookAt(camera.position);
+      }
+    });
+  }
+
+  /**
    * Update all enemy health bars to reflect current health
    */
   updateHealthBars(): void {
@@ -268,7 +353,7 @@ export class EnemyService {
       if (healthBarBg && healthBarFg) {
         const healthPct = Math.max(0, enemy.health / enemy.maxHealth);
         healthBarFg.scale.x = healthPct;
-        healthBarFg.position.x = -(1 - healthPct) * 0.25;
+        healthBarFg.position.x = -(1 - healthPct) * HEALTH_BAR_CONFIG.fgPositionHalfWidth;
 
         // Color transitions: green -> yellow -> red
         const mat = healthBarFg.material as THREE.MeshBasicMaterial;
@@ -308,6 +393,30 @@ export class EnemyService {
       diamondGeom.setIndex(new THREE.BufferAttribute(indices, 1));
       diamondGeom.computeVertexNormals();
       geometry = diamondGeom;
+    } else if (enemy.isHealer) {
+      // Cross shape: two merged BoxGeometry arms (horizontal + vertical)
+      const hGeom = new THREE.BoxGeometry(
+        HEALER_CROSS_CONFIG.armLength,
+        HEALER_CROSS_CONFIG.armHeight,
+        HEALER_CROSS_CONFIG.armWidth
+      );
+      const vGeom = new THREE.BoxGeometry(
+        HEALER_CROSS_CONFIG.armWidth,
+        HEALER_CROSS_CONFIG.armHeight,
+        HEALER_CROSS_CONFIG.armLength
+      );
+      // Merge by copying attributes into a single BufferGeometry
+      const crossGeom = new THREE.BufferGeometry();
+      const hPos = hGeom.getAttribute('position') as THREE.BufferAttribute;
+      const vPos = vGeom.getAttribute('position') as THREE.BufferAttribute;
+      const merged = new Float32Array(hPos.array.length + vPos.array.length);
+      merged.set(hPos.array as Float32Array, 0);
+      merged.set(vPos.array as Float32Array, hPos.array.length);
+      crossGeom.setAttribute('position', new THREE.BufferAttribute(merged, 3));
+      crossGeom.computeVertexNormals();
+      hGeom.dispose();
+      vGeom.dispose();
+      geometry = crossGeom;
     } else {
       geometry = new THREE.SphereGeometry(stats.size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
     }
@@ -315,7 +424,9 @@ export class EnemyService {
     const material = new THREE.MeshLambertMaterial({
       color: stats.color,
       emissive: stats.color,
-      emissiveIntensity: ENEMY_VISUAL_CONFIG.shieldedEmissive,
+      emissiveIntensity: enemy.isHealer
+        ? ENEMY_VISUAL_CONFIG.healerEmissive
+        : ENEMY_VISUAL_CONFIG.shieldedEmissive,
       side: enemy.isFlying ? THREE.DoubleSide : THREE.FrontSide
     });
 
@@ -338,8 +449,8 @@ export class EnemyService {
     const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
     const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
     const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
-    healthBarFg.position.set(0, barY + 0.001, 0);
-    healthBarFg.lookAt(0, barY + 0.001, 1);
+    healthBarFg.position.set(0, barY + HEALTH_BAR_CONFIG.fgZOffset, 0);
+    healthBarFg.lookAt(0, barY + HEALTH_BAR_CONFIG.fgZOffset, 1);
 
     mesh.add(healthBarBg);
     mesh.add(healthBarFg);
@@ -404,6 +515,10 @@ export class EnemyService {
     const remainingPath = parent.path.slice(parent.pathIndex);
     if (remainingPath.length === 0) return null;
 
+    // Apply the same difficulty speed multiplier as the parent so nightmare-mode
+    // mini-swarms aren't unexpectedly slow after the parent dies.
+    const speedMult = getDifficultySpeedMultiplier(this.difficulty);
+
     const mini: Enemy = {
       id: `enemy-${this.enemyCounter++}`,
       type: EnemyType.SWARM,
@@ -411,7 +526,7 @@ export class EnemyService {
       gridPosition: { ...parent.gridPosition },
       health: MINI_SWARM_STATS.health,
       maxHealth: MINI_SWARM_STATS.health,
-      speed: MINI_SWARM_STATS.speed,
+      speed: MINI_SWARM_STATS.speed * speedMult,
       value: MINI_SWARM_STATS.value,
       path: remainingPath,
       pathIndex: 0,
@@ -441,7 +556,7 @@ export class EnemyService {
     mesh.castShadow = true;
 
     // Small health bar
-    const barWidth = HEALTH_BAR_CONFIG.width * 0.5;
+    const barWidth = HEALTH_BAR_CONFIG.width * HEALTH_BAR_CONFIG.miniSwarmWidthScale;
     const barHeight = HEALTH_BAR_CONFIG.height;
     const barY = MINI_SWARM_STATS.size + HEALTH_BAR_CONFIG.yOffset;
 
@@ -454,8 +569,8 @@ export class EnemyService {
     const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
     const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
     const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
-    healthBarFg.position.set(0, barY + 0.001, 0);
-    healthBarFg.lookAt(0, barY + 0.001, 1);
+    healthBarFg.position.set(0, barY + HEALTH_BAR_CONFIG.fgZOffset, 0);
+    healthBarFg.lookAt(0, barY + HEALTH_BAR_CONFIG.fgZOffset, 1);
 
     mesh.add(healthBarBg);
     mesh.add(healthBarFg);
@@ -661,6 +776,29 @@ export class EnemyService {
    */
   clearPathCache(): void {
     this.pathCache.clear();
+  }
+
+  /**
+   * Compute the world-space path from the first available spawner to the first
+   * exit tile. Returns an array of {x, z} points suitable for path visualization.
+   * Returns an empty array if no spawner or exit tile exists, or if A* finds no path.
+   */
+  computePreviewPath(): { x: number; z: number }[] {
+    const spawnerTiles = this.getSpawnerTiles();
+    if (spawnerTiles.length === 0) return [];
+
+    const exitTiles = this.getExitTiles();
+    if (exitTiles.length === 0) return [];
+
+    const start = spawnerTiles[0];
+    const exit = exitTiles[0];
+
+    const gridPath = this.findPath(
+      { x: start.col, y: start.row },
+      { x: exit.col, y: exit.row }
+    );
+
+    return gridPath.map(node => this.gridToWorld(node.y, node.x));
   }
 
   /**

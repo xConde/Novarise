@@ -68,6 +68,12 @@ export const EDITOR_ANIMATION = {
   brushPulseSpeed: 0.005,
   /** Amplitude of the brush scale pulse (scale = 1 ± amplitude). */
   brushPulseAmplitude: 0.1,
+  /** Base scale applied to the brush indicator before adding the pulse delta. */
+  brushScaleBase: 0.9,
+  /** Base opacity for the brush indicator before adding the opacity pulse delta. */
+  brushOpacityBase: 0.6,
+  /** Amplitude of the brush opacity pulse (opacity = base ± amplitude). */
+  brushOpacityAmplitude: 0.2,
   /** Frequency used for the spawn/exit marker vertical bounce. */
   markerBounceSpeed: 0.003,
   /** Maximum vertical bounce amplitude added on top of the base Y. */
@@ -78,6 +84,12 @@ export const EDITOR_ANIMATION = {
   exitRotationSpeed: -0.01,
   /** Phase offset (radians) for exit marker bounce so it is out-of-phase with spawn. */
   exitBouncePhaseOffset: Math.PI,
+  /** Frequency multiplier for particle Y-oscillation (Date.now() * freq). */
+  particleOscillationFrequency: 0.001,
+  /** Per-frame Y displacement amplitude for individual particles. */
+  particleOscillationAmplitude: 0.002,
+  /** Per-frame Y-rotation increment for the entire particle system. */
+  particleRotationSpeed: 0.0002,
 } as const;
 
 // ── Hover emissive intensities ────────────────────────────────────────────────

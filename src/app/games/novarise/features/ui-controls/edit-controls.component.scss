@@ -79,21 +79,21 @@
   color: var(--theme-purple-light);
   text-align: center;
 }
-.delete-map-btn {
+.manage-maps-btn {
   width: 100%;
   padding: 8px 16px;
-  background: var(--action-danger-bg);
-  border: 1px solid var(--action-danger-border);
+  background: var(--theme-purple-dark-strong);
+  border: 1px solid var(--theme-purple-a50);
   border-radius: 6px;
-  color: var(--action-danger);
+  color: var(--theme-purple-lighter);
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--transition-fast) ease;
   &:hover {
-    background: rgba(220,20,20,.3);
-    border-color: rgba(255,60,60,.6);
-    box-shadow: 0 0 8px rgba(255,50,50,.2);
+    background: var(--theme-purple-dark-hover-strong);
+    border-color: var(--theme-purple-a70);
+    box-shadow: 0 0 8px var(--theme-purple-glow);
   }
 }
 .path-status {
@@ -116,7 +116,7 @@
   .tab-navigation, .panel-section { margin-bottom: 6px; }
   .tab-navigation { gap: 4px; padding-bottom: 4px; }
   .tab-button, .mode-button, .tool-button, .size-button, .terrain-button-compact { padding: 6px 4px; font-size: 10px; }
-  .tab-button { min-height: 32px; }
+  .tab-button { min-height: 44px; }
   .section-title, .shortcut-title { font-size: 9px; margin: 0 0 4px; padding-bottom: 2px; }
   .mode-toggle-grid, .tool-toggle, .brush-size-selector, .shortcut-grid { gap: 4px; }
   .terrain-selector-compact { grid-template-columns: repeat(2, 1fr); }

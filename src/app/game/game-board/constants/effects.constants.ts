@@ -1,3 +1,9 @@
+/** Duration in milliseconds to show the wave-end interest award notification. */
+export const INTEREST_NOTIFICATION_MS = 3000;
+
+/** Fallback color used when an enemy type has no color defined (should never occur in practice). */
+export const ENEMY_FALLBACK_COLOR = 0xff0000;
+
 export const SCREEN_SHAKE_CONFIG = {
   bossHitIntensity: 0.15,
   bossHitDuration: 0.2,
@@ -27,6 +33,8 @@ export const TOWER_UPGRADE_VISUAL_CONFIG = {
     opacity: 0.8,
     size: 1.5,
     duration: 0.3,
+    /** Y-offset above the tower position at which the flash sprite spawns. */
+    spawnYOffset: 0.5,
   },
   /** Base glow ring settings */
   glowRing: {
@@ -35,5 +43,7 @@ export const TOWER_UPGRADE_VISUAL_CONFIG = {
     color: 0x8a5cf6,
     opacity: 0.4,
     segments: 32,
+    /** World-space Y position of the glow ring — just above the board surface. */
+    groundY: 0.02,
   },
 } as const;

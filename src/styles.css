@@ -37,12 +37,27 @@
   --nav-bg-a90: rgba(10, 5, 21, 0.9);
 
   /* Action button colors */
+  --action-red: #ef4444;
   --action-success: #50ff88;
   --action-success-bg: rgba(0, 180, 80, 0.25);
   --action-success-border: rgba(0, 220, 100, 0.5);
   --action-danger: #ff6666;
   --action-danger-bg: rgba(180, 20, 20, 0.2);
   --action-danger-border: rgba(220, 50, 50, 0.4);
+  --action-yellow: #eab308;
+  --action-yellow-bg: rgba(234, 179, 8, 0.15);
+  --action-yellow-bg-hover: rgba(234, 179, 8, 0.3);
+  --action-yellow-border: rgba(234, 179, 8, 0.3);
+  --action-green: #22c55e;
+  --action-green-bg: rgba(34, 197, 94, 0.15);
+  --action-green-bg-active: rgba(34, 197, 94, 0.2);
+  --action-green-border: rgba(34, 197, 94, 0.3);
+  --action-danger-bg-hover: rgba(220, 20, 20, 0.4);
+  --action-danger-shadow-hover: rgba(255, 50, 50, 0.3);
+  --action-success-bg-hover: rgba(0, 180, 80, 0.4);
+  --action-success-shadow-hover: rgba(0, 255, 100, 0.2);
+  --reset-btn-bg-hover: rgba(180, 20, 20, 0.35);
+  --reset-btn-shadow-hover: rgba(220, 50, 50, 0.3);
 
   /* Game-specific colors */
   --game-primary: #444444;
@@ -51,6 +66,11 @@
   --game-success: #00AA00;
   --game-error: #AA0000;
 
+  /* Game gold alpha variants */
+  --game-gold-a15: rgba(255, 200, 0, 0.15);
+  --game-gold-a30: rgba(255, 200, 0, 0.3);
+  --game-gold-a50: rgba(255, 200, 0, 0.5);
+
   /* Game state colors */
   --game-health: #ff4444;
   --game-gold: #ffd700;
@@ -58,6 +78,7 @@
   --game-defeat: #ff4444;
   --game-wave-text: #ff8888;
   --game-star-filled: #ffd700;
+  --game-star-glow: rgba(255, 215, 0, 0.6);
   --game-star-empty: rgba(255, 255, 255, 0.2);
 
   /* Enemy type colors */
@@ -68,6 +89,7 @@
   --enemy-color-shield: #4488ff;
   --enemy-color-boss: #ff00ff;
   --enemy-color-swarm: #44ff44;
+  --enemy-color-healer: #22cc44;
 
   /* Enemy glow colors */
   --enemy-glow-basic: rgba(255, 68, 68, 0.6);
@@ -77,6 +99,7 @@
   --enemy-glow-boss: rgba(255, 0, 255, 0.7);
   --enemy-glow-shielded: rgba(68, 136, 255, 0.6);
   --enemy-glow-swarm: rgba(68, 255, 68, 0.6);
+  --enemy-glow-healer: rgba(34, 204, 68, 0.6);
 
   /* Tower type colors */
   --tower-color-basic: #ff6600;
@@ -94,9 +117,52 @@
   --tower-glow-chain: rgba(255, 221, 0, 0.7);
   --tower-glow-mortar: rgba(255, 100, 34, 0.4);
 
+  /* Difficulty level colors */
+  --difficulty-easy-color: #50ff88;
+  --difficulty-easy-bg: rgba(80, 255, 136, 0.2);
+  --difficulty-easy-border: rgba(80, 255, 136, 0.4);
+  --difficulty-normal-color: #6a5a9a;
+  --difficulty-normal-bg: rgba(106, 90, 154, 0.2);
+  --difficulty-normal-border: rgba(106, 90, 154, 0.4);
+  --difficulty-hard-color: #ff8800;
+  --difficulty-hard-bg: rgba(255, 136, 0, 0.2);
+  --difficulty-hard-border: rgba(255, 136, 0, 0.4);
+  --difficulty-nightmare-color: #ff3838;
+  --difficulty-nightmare-bg: rgba(255, 56, 56, 0.2);
+  --difficulty-nightmare-border: rgba(255, 56, 56, 0.4);
+
+  /* Game modal state colors */
+  --modal-victory-bg: rgba(0, 100, 0, 0.3);
+  --modal-victory-border: rgba(0, 255, 0, 0.4);
+  --modal-victory-shadow: rgba(0, 255, 0, 0.15);
+  --modal-defeat-bg: rgba(100, 0, 0, 0.3);
+  --modal-defeat-border: rgba(255, 0, 0, 0.4);
+  --modal-defeat-shadow: rgba(255, 0, 0, 0.15);
+
+  /* Tower action button colors */
+  --upgrade-btn-bg: rgba(0, 100, 0, 0.3);
+  --upgrade-btn-bg-hover: rgba(0, 150, 0, 0.4);
+  --upgrade-btn-border: rgba(0, 255, 0, 0.3);
+  --upgrade-btn-border-hover: rgba(0, 255, 0, 0.6);
+  --upgrade-btn-color: #88ff88;
+  --sell-btn-bg: rgba(100, 50, 0, 0.3);
+  --sell-btn-bg-hover: rgba(150, 75, 0, 0.4);
+  --sell-btn-border: rgba(255, 200, 0, 0.3);
+  --sell-btn-border-hover: rgba(255, 200, 0, 0.6);
+  --sell-btn-confirm-bg: rgba(200, 50, 0, 0.5);
+  --sell-btn-confirm-border: rgba(255, 100, 0, 0.8);
+
+  /* Overlay / backdrop colors */
+  --overlay-dim: rgba(0, 0, 0, 0.6);
+  --overlay-dim-70: rgba(0, 0, 0, 0.7);
+  --overlay-panel-shadow: rgba(0, 0, 0, 0.5);
+  --glass-bg: rgba(0, 0, 0, 0.75);
+  --panel-bg: rgba(0, 0, 0, 0.85);
+
   /* Misc UI colors */
   --score-multiplier: #88aaff;
   --text-disabled: #6a6a7a;
+  --text-muted: rgba(255, 255, 255, 0.5);
 
   /* Rainbow effect colors */
   --rainbow-red: #FF0000;

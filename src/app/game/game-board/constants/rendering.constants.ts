@@ -22,3 +22,10 @@ export const SKYBOX_CONFIG = {
   widthSegments: 32,
   heightSegments: 32
 };
+
+/**
+ * Maximum delta-time (seconds) applied per game loop tick.
+ * Prevents physics bursts after tab switches or long pauses.
+ * Equivalent to 100 ms.
+ */
+export const DELTA_TIME_CAP_S = 0.1;

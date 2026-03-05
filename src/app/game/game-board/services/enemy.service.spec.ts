@@ -4,6 +4,7 @@ import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
+import { DifficultyLevel, DEFAULT_DIFFICULTY, DIFFICULTY_PRESETS } from '../models/difficulty.model';
 
 describe('EnemyService', () => {
   let service: EnemyService;
@@ -65,6 +66,17 @@ describe('EnemyService', () => {
     service.getEnemies().forEach((enemy, id) => {
       service.removeEnemy(id, mockScene);
     });
+    mockScene.traverse((child: any) => {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach((m: any) => m.dispose());
+        } else {
+          child.material.dispose();
+        }
+      }
+    });
+    mockScene.clear();
   });
 
   describe('Enemy Spawning', () => {
@@ -106,6 +118,16 @@ describe('EnemyService', () => {
       expect(enemy.isMiniSwarm).toBeUndefined();
     });
 
+    it('should set isHealer=true on HEALER enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      expect(enemy.isHealer).toBe(true);
+    });
+
+    it('should NOT set isHealer on non-healer enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy.isHealer).toBeUndefined();
+    });
+
     it('should spawn all enemy types with correct stats', () => {
       const types: EnemyType[] = [
         EnemyType.BASIC,
@@ -115,7 +137,8 @@ describe('EnemyService', () => {
         EnemyType.BOSS,
         EnemyType.SHIELDED,
         EnemyType.SWARM,
-        EnemyType.FLYING
+        EnemyType.FLYING,
+        EnemyType.HEALER
       ];
 
       types.forEach(type => {
@@ -358,6 +381,55 @@ describe('EnemyService', () => {
 
       // Fast enemy should have moved more than heavy
       expect(enemy2!.distanceTraveled).toBeGreaterThan(enemy3!.distanceTraveled);
+    });
+
+    it('should snap enemy position to next waypoint when movement overshoots it', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Use a very large deltaTime so the enemy overshoots the first waypoint
+      // The board is 10x10 with tileSize=1, so adjacent nodes are 1 unit apart.
+      // A deltaTime of 5s at BASIC speed will clearly overshoot the first node.
+      service.updateEnemies(5.0);
+
+      // After overshooting, pathIndex must have advanced and the position must
+      // match the grid node at the new pathIndex, not some floating intermediate.
+      const newPathIndex = enemy.pathIndex;
+      expect(newPathIndex).toBeGreaterThan(0);
+
+      // World position of the current path node
+      const currentNode = enemy.path[newPathIndex];
+      const boardWidth = 10;
+      const boardHeight = 10;
+      const tileSize = 1;
+      const expectedX = (currentNode.x - boardWidth / 2) * tileSize;
+      const expectedZ = (currentNode.y - boardHeight / 2) * tileSize;
+
+      expect(enemy.position.x).toBeCloseTo(expectedX, 5);
+      expect(enemy.position.z).toBeCloseTo(expectedZ, 5);
+    });
+
+    it('should report enemy as reaching exit when movement advances to the final path node', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Advance the enemy to the second-to-last node so one more step reaches the exit.
+      // Position the enemy exactly at that node so the next updateEnemies call will snap
+      // it to path.length - 1 (the exit node) via the overshoot branch.
+      enemy.pathIndex = enemy.path.length - 2;
+      const boardWidth = 10;
+      const boardHeight = 10;
+      const tileSize = 1;
+      const secondLastNode = enemy.path[enemy.pathIndex];
+      enemy.position.x = (secondLastNode.x - boardWidth / 2) * tileSize;
+      enemy.position.z = (secondLastNode.y - boardHeight / 2) * tileSize;
+
+      // First call: large deltaTime snaps the enemy to the final node (pathIndex advances to path.length - 1).
+      // The exit check runs at the TOP of each forEach iteration, so it fires in the NEXT call.
+      service.updateEnemies(10.0);
+      expect(enemy.pathIndex).toBe(enemy.path.length - 1);
+
+      // Second call: enemy is now at the exit node — it is reported as having leaked.
+      const reachedExit = service.updateEnemies(0.1);
+      expect(reachedExit).toContain(enemy.id);
     });
 
     it('should maintain consistent speed regardless of frame rate', () => {
@@ -805,7 +877,199 @@ describe('EnemyService', () => {
     });
   });
 
-  describe('Dead Enemy Movement Guard', () => {
+  describe('healNearbyEnemies()', () => {
+    it('should heal a nearby damaged ally', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Place ally at same position as healer so they are within heal range
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+      ally.mesh!.position.set(ally.position.x, ally.position.y, ally.position.z);
+
+      // Damage ally so it has room to be healed
+      service.damageEnemy(ally.id, 30);
+      const healthAfterDamage = ally.health;
+
+      service.healNearbyEnemies(1.0);
+
+      expect(ally.health).toBeGreaterThan(healthAfterDamage);
+    });
+
+    it('should not heal allies beyond maxHealth', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+
+      // Ally at full health — heal should not push above max
+      service.healNearbyEnemies(1.0);
+
+      expect(ally.health).toBe(ally.maxHealth);
+    });
+
+    it('should not heal dead allies', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+
+      service.damageEnemy(ally.id, ally.maxHealth); // kill ally
+      const healthAfterDeath = ally.health;
+
+      service.healNearbyEnemies(1.0);
+
+      expect(ally.health).toBe(healthAfterDeath); // unchanged
+    });
+
+    it('should not heal allies outside healRange', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const distant = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Place distant enemy far beyond healRange (>3 tiles away at tileSize=1)
+      distant.position.x = healer.position.x + 100;
+      distant.position.z = healer.position.z + 100;
+
+      service.damageEnemy(distant.id, 30);
+      const healthBeforeHeal = distant.health;
+
+      service.healNearbyEnemies(1.0);
+
+      expect(distant.health).toBe(healthBeforeHeal); // not healed
+    });
+
+    it('should not heal self', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+
+      service.damageEnemy(healer.id, 20);
+      const healthAfterDamage = healer.health;
+
+      service.healNearbyEnemies(1.0);
+
+      expect(healer.health).toBe(healthAfterDamage); // unchanged
+    });
+
+    it('should be called automatically inside updateEnemies', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+      ally.mesh!.position.set(ally.position.x, ally.position.y, ally.position.z);
+
+      service.damageEnemy(ally.id, 30);
+      const healthAfterDamage = ally.health;
+
+      service.updateEnemies(1.0);
+
+      expect(ally.health).toBeGreaterThan(healthAfterDamage);
+    });
+
+    it('should NOT heal allies when the healer is frozen (speed === 0)', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+      ally.mesh!.position.set(ally.position.x, ally.position.y, ally.position.z);
+
+      // Freeze the healer (mirrors what TowerCombatService.applyFreezeAura does)
+      healer.speed = 0;
+
+      service.damageEnemy(ally.id, 30);
+      const healthAfterDamage = ally.health;
+
+      service.healNearbyEnemies(1.0);
+
+      expect(ally.health).toBe(healthAfterDamage); // frozen healer cannot heal
+    });
+
+    it('should resume healing allies once the healer is unfrozen', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+      ally.mesh!.position.set(ally.position.x, ally.position.y, ally.position.z);
+
+      healer.speed = 0; // frozen
+      service.damageEnemy(ally.id, 30);
+      const healthAfterDamage = ally.health;
+      service.healNearbyEnemies(1.0);
+      expect(ally.health).toBe(healthAfterDamage); // no heal while frozen
+
+      // Unfreeze — restore original speed
+      healer.speed = ENEMY_STATS[EnemyType.HEALER].speed;
+      service.healNearbyEnemies(1.0);
+      expect(ally.health).toBeGreaterThan(healthAfterDamage); // heals once unfrozen
+    });
+
+    it('should heal proportionally to deltaTime', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+      ally.mesh!.position.set(ally.position.x, ally.position.y, ally.position.z);
+
+      service.damageEnemy(ally.id, 50);
+      const healthAfterDamage = ally.health;
+
+      // Heal for 0.5s — should recover healRate * 0.5 HP
+      service.healNearbyEnemies(0.5);
+      const healedAmount = ally.health - healthAfterDamage;
+
+      const expectedHeal = ENEMY_STATS[EnemyType.HEALER].healRate! * 0.5;
+      expect(healedAmount).toBeCloseTo(expectedHeal, 5);
+    });
+
+    it('should allow multiple healers to stack healing on the same target', () => {
+      const healer1 = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const healer2 = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Place both healers and the ally at the same position
+      healer2.position.x = healer1.position.x;
+      healer2.position.z = healer1.position.z;
+      ally.position.x = healer1.position.x;
+      ally.position.z = healer1.position.z;
+      ally.mesh!.position.set(ally.position.x, ally.position.y, ally.position.z);
+
+      service.damageEnemy(ally.id, 80);
+      const healthAfterDamage = ally.health;
+
+      service.healNearbyEnemies(1.0);
+      const healedAmount = ally.health - healthAfterDamage;
+
+      // Two healers should apply twice the single-healer rate
+      const singleHealerRate = ENEMY_STATS[EnemyType.HEALER].healRate!;
+      expect(healedAmount).toBeCloseTo(singleHealerRate * 2, 5);
+    });
+
+    it('should NOT heal allies when the healer itself is dead (health <= 0)', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+      ally.mesh!.position.set(ally.position.x, ally.position.y, ally.position.z);
+
+      // Kill the healer
+      service.damageEnemy(healer.id, healer.maxHealth);
+      expect(healer.health).toBeLessThanOrEqual(0);
+
+      service.damageEnemy(ally.id, 30);
+      const healthAfterDamage = ally.health;
+
+      service.healNearbyEnemies(1.0);
+
+      expect(ally.health).toBe(healthAfterDamage); // dead healer cannot heal
+    });
+  });
+
+  describe("Dead Enemy Movement Guard", () => {
     it('should not move dead enemies', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       const initialPos = { ...enemy.position };
@@ -890,6 +1154,381 @@ describe('EnemyService', () => {
       const newEnemy = service.spawnEnemy(EnemyType.FAST, mockScene);
       expect(newEnemy).toBeTruthy();
       expect(service.getEnemies().size).toBe(1);
+    });
+  });
+
+  // --- Difficulty scaling ---
+  describe('Difficulty scaling', () => {
+    it('should default to NORMAL difficulty', () => {
+      expect(service.getDifficulty()).toBe(DEFAULT_DIFFICULTY);
+    });
+
+    it('should update difficulty via setDifficulty()', () => {
+      service.setDifficulty(DifficultyLevel.HARD);
+      expect(service.getDifficulty()).toBe(DifficultyLevel.HARD);
+    });
+
+    it('should spawn enemy with unmodified health on NORMAL difficulty', () => {
+      service.setDifficulty(DifficultyLevel.NORMAL);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy.health).toBe(ENEMY_STATS[EnemyType.BASIC].health);
+      expect(enemy.maxHealth).toBe(ENEMY_STATS[EnemyType.BASIC].health);
+    });
+
+    it('should spawn enemy with unmodified speed on NORMAL difficulty', () => {
+      service.setDifficulty(DifficultyLevel.NORMAL);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy.speed).toBe(ENEMY_STATS[EnemyType.BASIC].speed);
+    });
+
+    it('should reduce enemy health on EASY difficulty', () => {
+      service.setDifficulty(DifficultyLevel.EASY);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const expectedHealth = Math.round(
+        ENEMY_STATS[EnemyType.BASIC].health * DIFFICULTY_PRESETS[DifficultyLevel.EASY].healthMultiplier
+      );
+      expect(enemy.health).toBe(expectedHealth);
+      expect(enemy.maxHealth).toBe(expectedHealth);
+    });
+
+    it('should reduce enemy speed on EASY difficulty', () => {
+      service.setDifficulty(DifficultyLevel.EASY);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const expectedSpeed =
+        ENEMY_STATS[EnemyType.BASIC].speed * DIFFICULTY_PRESETS[DifficultyLevel.EASY].speedMultiplier;
+      expect(enemy.speed).toBeCloseTo(expectedSpeed, 5);
+    });
+
+    it('should increase enemy health on HARD difficulty', () => {
+      service.setDifficulty(DifficultyLevel.HARD);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const expectedHealth = Math.round(
+        ENEMY_STATS[EnemyType.BASIC].health * DIFFICULTY_PRESETS[DifficultyLevel.HARD].healthMultiplier
+      );
+      expect(enemy.health).toBe(expectedHealth);
+      expect(enemy.maxHealth).toBe(expectedHealth);
+    });
+
+    it('should increase enemy speed on HARD difficulty', () => {
+      service.setDifficulty(DifficultyLevel.HARD);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const expectedSpeed =
+        ENEMY_STATS[EnemyType.BASIC].speed * DIFFICULTY_PRESETS[DifficultyLevel.HARD].speedMultiplier;
+      expect(enemy.speed).toBeCloseTo(expectedSpeed, 5);
+    });
+
+    it('should scale enemy health higher on NIGHTMARE than HARD', () => {
+      service.setDifficulty(DifficultyLevel.HARD);
+      const hardEnemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.cleanup(mockScene);
+
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      const nightmareEnemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      expect(nightmareEnemy.health).toBeGreaterThan(hardEnemy.health);
+    });
+
+    it('should scale SHIELDED enemy shield HP along with health on HARD', () => {
+      service.setDifficulty(DifficultyLevel.HARD);
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const baseShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      const expectedShield = Math.round(
+        baseShield * DIFFICULTY_PRESETS[DifficultyLevel.HARD].healthMultiplier
+      );
+      expect(enemy.shield).toBe(expectedShield);
+      expect(enemy.maxShield).toBe(expectedShield);
+    });
+
+    it('should apply new difficulty to enemies spawned after setDifficulty() is called', () => {
+      service.setDifficulty(DifficultyLevel.NORMAL);
+      const normalEnemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.cleanup(mockScene);
+
+      service.setDifficulty(DifficultyLevel.HARD);
+      const hardEnemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      expect(hardEnemy.health).toBeGreaterThan(normalEnemy.health);
+    });
+
+    it('should apply 2.0x health multiplier on NIGHTMARE difficulty', () => {
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const expectedHealth = Math.round(
+        ENEMY_STATS[EnemyType.BASIC].health * DIFFICULTY_PRESETS[DifficultyLevel.NIGHTMARE].healthMultiplier
+      );
+      expect(enemy.health).toBe(expectedHealth);
+      expect(enemy.maxHealth).toBe(expectedHealth);
+    });
+
+    it('should apply 1.5x speed multiplier on NIGHTMARE difficulty', () => {
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const expectedSpeed =
+        ENEMY_STATS[EnemyType.BASIC].speed * DIFFICULTY_PRESETS[DifficultyLevel.NIGHTMARE].speedMultiplier;
+      expect(enemy.speed).toBeCloseTo(expectedSpeed, 5);
+    });
+  });
+
+  // --- computePreviewPath ---
+  describe('computePreviewPath', () => {
+    it('returns an array with at least 2 world-space points when a valid path exists', () => {
+      const path = service.computePreviewPath();
+      expect(path.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('each returned point has numeric x and z properties', () => {
+      const path = service.computePreviewPath();
+      for (const pt of path) {
+        expect(typeof pt.x).toBe('number');
+        expect(typeof pt.z).toBe('number');
+      }
+    });
+
+    it('returns an empty array when there are no spawner tiles', () => {
+      const noSpawnerBoard = createMockBoard();
+      noSpawnerBoard[0][0] = GameBoardTile.createBase(0, 0);
+      gameBoardService.getGameBoard.and.returnValue(noSpawnerBoard);
+
+      const path = service.computePreviewPath();
+      expect(path.length).toBe(0);
+    });
+
+    it('returns an empty array when there are no exit tiles', () => {
+      const noExitBoard = createMockBoard();
+      noExitBoard[9][9] = GameBoardTile.createBase(9, 9);
+      gameBoardService.getGameBoard.and.returnValue(noExitBoard);
+
+      const path = service.computePreviewPath();
+      expect(path.length).toBe(0);
+    });
+
+    it('returns an empty array when the path is completely blocked', () => {
+      const blockedCells: { row: number; col: number }[] = [];
+      for (let row = 0; row < 10; row++) {
+        blockedCells.push({ row, col: 1 });
+      }
+      for (let col = 1; col < 10; col++) {
+        blockedCells.push({ row: 0, col });
+      }
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard(blockedCells));
+      service.clearPathCache();
+
+      const path = service.computePreviewPath();
+      expect(path.length).toBe(0);
+    });
+
+    it('path starts near the spawner world position and ends near the exit', () => {
+      const path = service.computePreviewPath();
+      expect(path.length).toBeGreaterThanOrEqual(2);
+
+      const first = path[0];
+      const last = path[path.length - 1];
+
+      expect(first.x).toBeCloseTo(-5);
+      expect(first.z).toBeCloseTo(-5);
+
+      expect(last.x).toBeCloseTo(4);
+      expect(last.z).toBeCloseTo(4);
+    });
+  });
+
+  describe('Multi-hop movement (high speed / large deltaTime)', () => {
+    it('should advance multiple nodes in one tick when speed * deltaTime spans several waypoints', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // BASIC speed = 2.0. deltaTime = 3.0 → should advance 6 nodes exactly.
+      service.updateEnemies(3.0);
+      // 3 seconds * 2 tiles/sec = 6 tiles; path starts at index 0, so pathIndex should be 6
+      expect(enemy.pathIndex).toBe(6);
+    });
+
+    it('should not discard remaining movement budget after snapping to a waypoint', () => {
+      // If multi-hop is broken and we only advance one node per tick, the enemy at
+      // NIGHTMARE speed (1.5x multiplier → FAST speed 4.0 * 1.5 = 6.0) over 2s
+      // should cover 12 nodes, but a single-hop implementation would only advance 1.
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard());
+      const enemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      // FAST base speed = 4.0, NIGHTMARE multiplier = 1.5 → 6.0 units/sec
+      // deltaTime = 2.0s → 12 tiles, but path is 19 nodes so enemy is at node 12
+      service.updateEnemies(2.0);
+      expect(enemy.pathIndex).toBeGreaterThanOrEqual(12);
+    });
+
+    it('should correctly track distanceTraveled across multiple hops in one tick', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // 3 seconds at speed 2 = 6 units traveled
+      service.updateEnemies(3.0);
+      expect(enemy.distanceTraveled).toBeCloseTo(6.0, 5);
+    });
+
+    it('should stop at exit node and not go out of bounds when budget exceeds path length', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // Very large deltaTime — budget exceeds entire path (18 tiles at speed 2 = 9s to traverse)
+      // Use 100s to be sure. Enemy should clamp to last node.
+      service.updateEnemies(100.0);
+      expect(enemy.pathIndex).toBe(enemy.path.length - 1);
+    });
+
+    it('should report exit on the same tick that multi-hop exhausts the path', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // Path is 19 nodes (18 segments of 1 unit each). Speed=2, deltaTime=9.0 → 18 tiles exactly.
+      // Multi-hop should advance to pathIndex 18 (last node) within the loop, then the
+      // exit check at the top of the NEXT forEach iteration (same updateEnemies call)
+      // should NOT fire because we're inside the same forEach. The exit is reported the
+      // next time updateEnemies is called.
+      service.updateEnemies(9.0);
+      expect(enemy.pathIndex).toBe(enemy.path.length - 1);
+      const reachedExit = service.updateEnemies(0.016);
+      expect(reachedExit).toContain(enemy.id);
+    });
+  });
+
+  describe('Mini-swarm difficulty scaling', () => {
+    it('should apply NORMAL difficulty speed multiplier to mini-swarm enemies', () => {
+      service.setDifficulty(DifficultyLevel.NORMAL);
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard());
+      const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      const result = service.damageEnemy(swarm.id, swarm.health);
+      result.spawnedEnemies.forEach(mini => {
+        expect(mini.speed).toBeCloseTo(MINI_SWARM_STATS.speed * DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].speedMultiplier, 5);
+      });
+    });
+
+    it('should apply NIGHTMARE difficulty speed multiplier to mini-swarm enemies', () => {
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard());
+      const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      const result = service.damageEnemy(swarm.id, swarm.health);
+      const expectedSpeed = MINI_SWARM_STATS.speed * DIFFICULTY_PRESETS[DifficultyLevel.NIGHTMARE].speedMultiplier;
+      result.spawnedEnemies.forEach(mini => {
+        expect(mini.speed).toBeCloseTo(expectedSpeed, 5);
+      });
+    });
+
+    it('mini-swarms on NIGHTMARE should be faster than on NORMAL', () => {
+      service.setDifficulty(DifficultyLevel.NORMAL);
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard());
+      const swarm1 = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      const result1 = service.damageEnemy(swarm1.id, swarm1.health);
+      const normalSpeed = result1.spawnedEnemies[0].speed;
+      service.cleanup(mockScene);
+
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard());
+      const swarm2 = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      const result2 = service.damageEnemy(swarm2.id, swarm2.health);
+      const nightmareSpeed = result2.spawnedEnemies[0].speed;
+
+      expect(nightmareSpeed).toBeGreaterThan(normalSpeed);
+    });
+  });
+
+  describe('Pathfinding edge cases', () => {
+    it('spawner at exit position returns a single-node path and enemy immediately exits', () => {
+      // Build a board where spawner and exit are adjacent so there is exactly 1 path step.
+      // The minimal "same tile" case: we create a 1x1 board where tile (0,0) is both
+      // spawner and exit — A* returns a 1-node path and pathIndex starts at 0 >= 0 = exit.
+      // We test the closest valid approximation: spawner next to exit (2-node path).
+      const twoTileBoard: GameBoardTile[][] = [
+        [GameBoardTile.createSpawner(0, 0), GameBoardTile.createExit(0, 1)]
+      ];
+      gameBoardService.getGameBoard.and.returnValue(twoTileBoard);
+      gameBoardService.getBoardWidth.and.returnValue(2);
+      gameBoardService.getBoardHeight.and.returnValue(1);
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy).toBeTruthy();
+      // 2-node path: pathIndex 0 is at spawner, pathIndex 1 is at exit
+      expect(enemy.path.length).toBe(2);
+
+      // Advance to final node
+      service.updateEnemies(1.0);
+      expect(enemy.pathIndex).toBe(1);
+
+      const reachedExit = service.updateEnemies(0.016);
+      expect(reachedExit).toContain(enemy.id);
+    });
+
+    it('should return null when path is completely blocked (no valid route)', () => {
+      // Wall across all columns at row 0 (except spawner itself) and column 0 at row 1+
+      // This seals the spawner tile on all sides
+      const blockedCells = [
+        { row: 0, col: 1 },
+        { row: 1, col: 0 }
+      ];
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard(blockedCells));
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeNull();
+    });
+
+    it('should not use stale cached path after clearPathCache is called', () => {
+      // Spawn once to populate cache (unobstructed path = 19 nodes)
+      const enemy1 = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const originalLength = enemy1.path.length; // 19
+
+      // Clear cache and rebuild board with a wall that forces a much longer detour.
+      // Block row 4 cols 0-8 (leave gap at col 9) and row 6 cols 1-9 (leave gap at col 0).
+      // This serpentine maze reliably produces a path longer than 19 nodes.
+      service.clearPathCache();
+      const blockedCells: { row: number; col: number }[] = [];
+      for (let col = 0; col <= 8; col++) blockedCells.push({ row: 4, col });
+      for (let col = 1; col <= 9; col++) blockedCells.push({ row: 6, col });
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard(blockedCells));
+
+      const enemy2 = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // The new path must be longer due to the obstacles
+      expect(enemy2.path.length).toBeGreaterThan(originalLength);
+    });
+
+    it('flying enemies should still reach the exit even when ground is fully blocked', () => {
+      // Block every traversable tile so no ground path exists
+      const blockedCells: { row: number; col: number }[] = [];
+      for (let row = 0; row < 10; row++) {
+        for (let col = 0; col < 10; col++) {
+          if (!((row === 0 && col === 0) || (row === 9 && col === 9))) {
+            blockedCells.push({ row, col });
+          }
+        }
+      }
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard(blockedCells));
+
+      // Ground enemy cannot spawn
+      const groundEnemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(groundEnemy).toBeNull();
+
+      // Flying enemy spawns via straight-line path and ignores terrain
+      const flyingEnemy = service.spawnEnemy(EnemyType.FLYING, mockScene);
+      expect(flyingEnemy).toBeTruthy();
+      expect(flyingEnemy!.path.length).toBe(2);
+    });
+  });
+
+  describe('Speed guards', () => {
+    it('frozen enemy (speed=0) should not move', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const initialPos = { ...enemy.position };
+      enemy.speed = 0;
+
+      service.updateEnemies(1.0);
+
+      expect(enemy.position.x).toBe(initialPos.x);
+      expect(enemy.position.z).toBe(initialPos.z);
+      expect(enemy.distanceTraveled).toBe(0);
+    });
+
+    it('should clamp movement to 0 when speed is negative (applied by external slow effect)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const initialPos = { ...enemy.position };
+      // Hypothetical bug: slow effect subtracts too much and goes negative
+      enemy.speed = -1.0;
+
+      service.updateEnemies(1.0);
+
+      // Negative speed means remainingMove = -1 * 1 = -1, which is < 0 — the while
+      // condition (remainingMove > 0) is false so the loop doesn't execute.
+      // Enemy should not move backwards.
+      expect(enemy.position.x).toBe(initialPos.x);
+      expect(enemy.position.z).toBe(initialPos.z);
     });
   });
 

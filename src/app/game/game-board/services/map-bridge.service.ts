@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
 import { TerrainGridState } from '../../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
+import { DEFAULT_DIFFICULTY, DifficultyLevel } from '../models/difficulty.model';
 
 /** @deprecated Use TerrainGridState directly. Kept as alias for backward compatibility. */
 export type EditorMapState = TerrainGridState;
@@ -29,6 +30,9 @@ export interface ConvertedBoard {
 })
 export class MapBridgeService {
   private editorMapState: EditorMapState | null = null;
+  private selectedDifficulty: DifficultyLevel = DEFAULT_DIFFICULTY;
+  /** Campaign level ID for the active session, or null when playing a custom map. */
+  private currentCampaignLevelId: number | null = null;
 
   /**
    * Store editor map state for cross-route transfer.
@@ -57,6 +61,47 @@ export class MapBridgeService {
    */
   clearEditorMap(): void {
     this.editorMapState = null;
+  }
+
+  /**
+   * Store the player's selected difficulty so GameBoardComponent can apply it
+   * when initializing the game state after route navigation.
+   */
+  setDifficulty(difficulty: DifficultyLevel): void {
+    this.selectedDifficulty = difficulty;
+  }
+
+  /**
+   * Retrieve the stored difficulty selection.
+   * Returns DEFAULT_DIFFICULTY if no selection has been made.
+   */
+  getDifficulty(): DifficultyLevel {
+    return this.selectedDifficulty;
+  }
+
+  /**
+   * Reset difficulty back to the default.
+   * Call alongside clearEditorMap() when tearing down a game session.
+   */
+  resetDifficulty(): void {
+    this.selectedDifficulty = DEFAULT_DIFFICULTY;
+  }
+
+  /**
+   * Store the campaign level ID that is about to be played.
+   * Set to null when launching a custom map so the game knows not to report
+   * campaign progress on completion.
+   */
+  setCampaignLevelId(levelId: number | null): void {
+    this.currentCampaignLevelId = levelId;
+  }
+
+  /**
+   * Retrieve the active campaign level ID.
+   * Returns null when the current session is not a campaign level.
+   */
+  getCampaignLevelId(): number | null {
+    return this.currentCampaignLevelId;
   }
 
   /**

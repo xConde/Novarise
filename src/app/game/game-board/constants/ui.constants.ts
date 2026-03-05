@@ -7,7 +7,16 @@ export const HEALTH_BAR_CONFIG = {
   colorYellow: 0xffff00,
   colorRed: 0xff0000,
   thresholdHigh: 0.6,
-  thresholdLow: 0.3
+  thresholdLow: 0.3,
+  /** Z-depth offset applied to the foreground bar so it renders on top of the background bar. */
+  fgZOffset: 0.001,
+  /** Width scale for mini-swarm health bars relative to the standard width. */
+  miniSwarmWidthScale: 0.5,
+  /**
+   * X-position offset applied to the foreground bar as it shrinks, so the bar
+   * drains from the right. Equals width / 2.
+   */
+  get fgPositionHalfWidth(): number { return this.width / 2; },
 };
 
 export const PROJECTILE_CONFIG = {
@@ -34,6 +43,12 @@ export const RANGE_PREVIEW_CONFIG = {
   allRangesOpacityScale: 0.5,
 };
 
+export const HOVER_RANGE_PREVIEW_CONFIG = {
+  /** Opacity of the hover range ring — more transparent than the placed-tower ring. */
+  opacity: 0.15,
+  yPosition: 0.02,
+};
+
 export const TILE_EMISSIVE = {
   base: 0.15,
   wall: 0.1,
@@ -53,4 +68,11 @@ export const SHIELD_VISUAL_CONFIG = {
 export const ENEMY_VISUAL_CONFIG = {
   shieldedEmissive: 0.3,
   miniSwarmEmissive: 0.4,
+  healerEmissive: 0.5,
 };
+
+export const HEALER_CROSS_CONFIG = {
+  armLength: 0.4,
+  armWidth: 0.12,
+  armHeight: 0.12,
+} as const;

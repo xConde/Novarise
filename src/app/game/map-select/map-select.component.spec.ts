@@ -6,6 +6,7 @@ import { MapStorageService, MapMetadata } from '../../games/novarise/core/map-st
 import { MapBridgeService } from '../game-board/services/map-bridge.service';
 import { TerrainGridState } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
+import { DifficultyLevel } from '../game-board/models/difficulty.model';
 
 const MOCK_MAPS: MapMetadata[] = [
   { id: 'map_1', name: 'First Map', createdAt: 1000, updatedAt: 2000, version: '1.0.0', gridSize: 25 },
@@ -13,6 +14,15 @@ const MOCK_MAPS: MapMetadata[] = [
 ];
 
 const MOCK_TERRAIN_STATE: TerrainGridState = {
+  gridSize: 1,
+  tiles: [[TerrainType.BEDROCK]],
+  heightMap: [[0]],
+  spawnPoint: { x: 0, z: 0 },
+  exitPoint: { x: 1, z: 1 },
+  version: '1.0.0'
+};
+
+const MOCK_INVALID_TERRAIN_STATE: TerrainGridState = {
   gridSize: 1,
   tiles: [[TerrainType.BEDROCK]],
   heightMap: [[0]],
@@ -30,11 +40,17 @@ describe('MapSelectComponent', () => {
 
   beforeEach(async () => {
     mapStorageSpy = jasmine.createSpyObj('MapStorageService', ['getAllMaps', 'loadMap']);
-    mapBridgeSpy = jasmine.createSpyObj('MapBridgeService', ['setEditorMapState']);
+    mapBridgeSpy = jasmine.createSpyObj('MapBridgeService', [
+      'setEditorMapState',
+      'getDifficulty',
+      'setDifficulty',
+      'setCampaignLevelId'
+    ]);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     mapStorageSpy.getAllMaps.and.returnValue(MOCK_MAPS);
     mapStorageSpy.loadMap.and.returnValue(MOCK_TERRAIN_STATE);
+    mapBridgeSpy.getDifficulty.and.returnValue(DifficultyLevel.NORMAL);
     routerSpy.navigate.and.returnValue(Promise.resolve(true));
 
     await TestBed.configureTestingModule({
@@ -64,6 +80,12 @@ describe('MapSelectComponent', () => {
     expect(component.maps).toEqual(MOCK_MAPS);
   });
 
+  it('should restore difficulty from MapBridgeService on init', () => {
+    mapBridgeSpy.getDifficulty.and.returnValue(DifficultyLevel.HARD);
+    fixture.detectChanges();
+    expect(component.selectedDifficulty).toBe(DifficultyLevel.HARD);
+  });
+
   it('should show map cards when maps are available', () => {
     fixture.detectChanges();
     const cards = fixture.nativeElement.querySelectorAll('.map-card');
@@ -85,11 +107,19 @@ describe('MapSelectComponent', () => {
     expect(noMaps).toBeNull();
   });
 
+  it('selectDifficulty should update selectedDifficulty and call mapBridge.setDifficulty', () => {
+    fixture.detectChanges();
+    component.selectDifficulty(DifficultyLevel.EASY);
+    expect(component.selectedDifficulty).toBe(DifficultyLevel.EASY);
+    expect(mapBridgeSpy.setDifficulty).toHaveBeenCalledOnceWith(DifficultyLevel.EASY);
+  });
+
   it('selectMap should load map data and pass to MapBridgeService then navigate to /play', () => {
     fixture.detectChanges();
     component.selectMap(MOCK_MAPS[0]);
-    expect(mapStorageSpy.loadMap).toHaveBeenCalledOnceWith('map_1');
+    expect(mapStorageSpy.loadMap).toHaveBeenCalledWith('map_1');
     expect(mapBridgeSpy.setEditorMapState).toHaveBeenCalledOnceWith(MOCK_TERRAIN_STATE);
+    expect(mapBridgeSpy.setCampaignLevelId).toHaveBeenCalledOnceWith(null);
     expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/play']);
   });
 
@@ -101,9 +131,49 @@ describe('MapSelectComponent', () => {
     expect(routerSpy.navigate).not.toHaveBeenCalled();
   });
 
+  it('selectMap should not navigate when map has no spawn or exit point', () => {
+    mapStorageSpy.loadMap.and.returnValue(MOCK_INVALID_TERRAIN_STATE);
+    fixture.detectChanges();
+    component.selectMap(MOCK_MAPS[0]);
+    expect(mapBridgeSpy.setEditorMapState).not.toHaveBeenCalled();
+    expect(routerSpy.navigate).not.toHaveBeenCalled();
+  });
+
+  it('isMapPlayable should return false when map has no spawn point', () => {
+    const noSpawn: TerrainGridState = { ...MOCK_TERRAIN_STATE, spawnPoint: null };
+    mapStorageSpy.loadMap.and.returnValue(noSpawn);
+    fixture.detectChanges();
+    expect(component.isMapPlayable(MOCK_MAPS[0])).toBeFalse();
+  });
+
+  it('isMapPlayable should return false when map has no exit point', () => {
+    const noExit: TerrainGridState = { ...MOCK_TERRAIN_STATE, exitPoint: null };
+    mapStorageSpy.loadMap.and.returnValue(noExit);
+    fixture.detectChanges();
+    expect(component.isMapPlayable(MOCK_MAPS[0])).toBeFalse();
+  });
+
+  it('isMapPlayable should return true when map has both spawn and exit points', () => {
+    mapStorageSpy.loadMap.and.returnValue(MOCK_TERRAIN_STATE);
+    fixture.detectChanges();
+    expect(component.isMapPlayable(MOCK_MAPS[0])).toBeTrue();
+  });
+
+  it('isMapPlayable should return false when loadMap returns null', () => {
+    mapStorageSpy.loadMap.and.returnValue(null);
+    fixture.detectChanges();
+    expect(component.isMapPlayable(MOCK_MAPS[0])).toBeFalse();
+  });
+
   it('goToEditor should navigate to /edit', () => {
     fixture.detectChanges();
     component.goToEditor();
     expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/edit']);
+  });
+
+  it('goToCampaign should navigate to /campaign', () => {
+    fixture.detectChanges();
+    component.goToCampaign();
+    expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/campaign']);
   });
 });

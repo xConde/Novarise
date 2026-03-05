@@ -1,0 +1,54 @@
+<div class="campaign-container">
+  <h1 class="campaign-title">Campaign</h1>
+  <p class="campaign-subtitle">Complete each level to unlock the next</p>
+
+  <div class="level-list">
+    <div
+      *ngFor="let level of levels; trackBy: trackByLevelId"
+      class="level-card"
+      [class.locked]="!isUnlocked(level.id)"
+      [class.completed]="getStars(level.id) > 0"
+      (click)="playLevel(level)"
+      [attr.aria-disabled]="!isUnlocked(level.id)"
+      role="button"
+      [tabindex]="isUnlocked(level.id) ? 0 : -1"
+      (keydown.enter)="playLevel(level)"
+      (keydown.space)="playLevel(level)"
+    >
+      <div class="level-number">{{ level.id }}</div>
+
+      <div class="level-info">
+        <span class="level-name">{{ level.name }}</span>
+        <span class="level-desc">{{ level.description }}</span>
+        <span class="level-difficulty" [attr.data-difficulty]="level.difficulty">
+          {{ level.difficulty | titlecase }}
+        </span>
+      </div>
+
+      <div class="level-status">
+        <div class="level-stars" *ngIf="getStars(level.id) > 0">
+          <span
+            *ngFor="let s of starIndices; trackBy: trackByIndex"
+            class="star"
+            [class.filled]="s <= getStars(level.id)"
+          >&#9733;</span>
+        </div>
+        <div class="level-score" *ngIf="getBestScore(level.id) > 0">
+          {{ getBestScore(level.id) }} pts
+        </div>
+        <div class="level-lock" *ngIf="!isUnlocked(level.id)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-label="Locked">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="campaign-actions">
+    <button class="back-btn" (click)="goBack()">Back to Editor</button>
+    <button class="maps-btn" (click)="goToMaps()">My Maps</button>
+    <button class="reset-btn" (click)="resetProgress()">Reset Progress</button>
+  </div>
+</div>

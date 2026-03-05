@@ -20,6 +20,12 @@ export interface DifficultyPreset {
   gold: number;
   label: string;
   description: string;
+  /** Multiplier applied to base enemy health on spawn (1.0 = unmodified) */
+  healthMultiplier: number;
+  /** Multiplier applied to base enemy speed on spawn (1.0 = unmodified) */
+  speedMultiplier: number;
+  /** Multiplier applied to gold rewards earned during the game (1.0 = unmodified) */
+  goldMultiplier: number;
 }
 
 export const DIFFICULTY_PRESETS: Record<DifficultyLevel, DifficultyPreset> = {
@@ -27,25 +33,37 @@ export const DIFFICULTY_PRESETS: Record<DifficultyLevel, DifficultyPreset> = {
     lives: 30,
     gold: 300,
     label: 'Easy',
-    description: 'More lives and gold to learn the ropes'
+    description: 'More lives and gold to learn the ropes',
+    healthMultiplier: 0.75,
+    speedMultiplier: 0.9,
+    goldMultiplier: 1.5
   },
   [DifficultyLevel.NORMAL]: {
     lives: 20,
     gold: 200,
     label: 'Normal',
-    description: 'The intended experience'
+    description: 'The intended experience',
+    healthMultiplier: 1.0,
+    speedMultiplier: 1.0,
+    goldMultiplier: 1.0
   },
   [DifficultyLevel.HARD]: {
     lives: 10,
     gold: 100,
     label: 'Hard',
-    description: 'Tight resources, every tower counts'
+    description: 'Tight resources, every tower counts',
+    healthMultiplier: 1.5,
+    speedMultiplier: 1.2,
+    goldMultiplier: 0.75
   },
   [DifficultyLevel.NIGHTMARE]: {
     lives: 5,
     gold: 50,
     label: 'Nightmare',
-    description: 'One mistake and it is over'
+    description: 'One mistake and it is over',
+    healthMultiplier: 2.0,
+    speedMultiplier: 1.5,
+    goldMultiplier: 0.5
   }
 };
 

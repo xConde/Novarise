@@ -57,7 +57,7 @@
     <div class="panel-section" *ngIf="activeTool === 'brush'">
       <h3 class="section-title">Size</h3>
       <div class="brush-size-selector">
-        <button *ngFor="let size of brushSizes" class="size-button" [class.active]="brushSize === size" (click)="setBrushSize(size)">
+        <button *ngFor="let size of brushSizes; trackBy: trackByIndex" class="size-button" [class.active]="brushSize === size" (click)="setBrushSize(size)">
           {{ size }}x{{ size }}
         </button>
       </div>
@@ -66,7 +66,7 @@
     <div class="panel-section" *ngIf="editMode === 'paint'">
       <h3 class="section-title">Terrain</h3>
       <div class="terrain-selector-compact">
-        <button *ngFor="let type of terrainTypes; let i = index" class="terrain-button-compact"
+        <button *ngFor="let type of terrainTypes; let i = index; trackBy: trackByTerrainType" class="terrain-button-compact"
           [class.active]="selectedTerrainType === type" (click)="selectTerrain(type)">
           <div class="terrain-preview-compact" [style.background-color]="getTerrainColor(type)"></div>
           <span class="terrain-label">{{ terrainConfigs[type].label.substring(0, 3) }}</span>
@@ -137,10 +137,10 @@
     <span class="path-status path-invalid" *ngIf="!isPathValid && hasSpawnAndExit">No valid path ✗</span>
     <span class="play-hint" *ngIf="!hasSpawnAndExit">Set spawn (P) and exit (X) first</span>
     <button
-      class="delete-map-btn"
-      (click)="deleteMapClick.emit()"
-      aria-label="Delete a saved map">
-      Delete Map
+      class="manage-maps-btn"
+      (click)="openMapManagerClick.emit()"
+      aria-label="Manage saved maps">
+      Manage Maps
     </button>
   </div>
 </div>

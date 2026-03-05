@@ -37,6 +37,7 @@ import {
   EDITOR_PATH_INVALID_FLASH_COLOR,
   EDITOR_HEIGHT,
 } from './constants/editor-ui.constants';
+import { MINIMAP_CONFIG } from './constants/editor.constants';
 import { PathValidationService, PathValidationResult } from './core/path-validation.service';
 
 // Re-export types for template compatibility
@@ -49,6 +50,8 @@ export { EditMode, BrushTool } from './core/editor-state.service';
 })
 export class NovariseComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
+  @ViewChild('minimapCanvas', { static: false }) minimapCanvasRef?: ElementRef<HTMLCanvasElement>;
+  @ViewChild('mapManagerPanel') mapManagerPanel?: ElementRef<HTMLElement>;
 
   // Edit state - delegated to EditorStateService
   public get editMode(): EditMode { return this.editorState.getEditMode(); }
@@ -67,8 +70,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private renderer!: THREE.WebGLRenderer;
   private controls!: OrbitControls;
   private composer!: EffectComposer;
+  private renderPass?: RenderPass;
   private bloomPass?: UnrealBloomPass;
   private vignettePass?: ShaderPass;
+  private lights: THREE.Light[] = [];
   private skybox?: THREE.Mesh;
   private particles: THREE.Points | null = null;
 
@@ -126,9 +131,31 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (!this.terrainGrid) return false;
     return this.terrainGrid.getSpawnPoint() !== null && this.terrainGrid.getExitPoint() !== null;
   }
+  /** Whether a spawn point has been placed. */
+  public get hasSpawnPoint(): boolean {
+    return this.terrainGrid?.getSpawnPoint() != null;
+  }
+  /** Whether an exit point has been placed. */
+  public get hasExitPoint(): boolean {
+    return this.terrainGrid?.getExitPoint() != null;
+  }
+  /** Whether the terrain grid has been initialized. */
+  public get isTerrainReady(): boolean {
+    return this.terrainGrid != null;
+  }
 
   // Title display
   public title = 'Novarise';
+
+  // Minimap toggle state
+  public minimapVisible = true;
+
+  // Map manager dialog state
+  public mapManagerOpen = false;
+  public savedMaps: import('./core/map-storage.service').MapMetadata[] = [];
+  public renamingMapId: string | null = null;
+  public renameValue = '';
+  public deleteConfirmId: string | null = null;
 
   // Undo/Redo state - expose for UI binding
   public get canUndo(): boolean { return this.editHistory.canUndo; }
@@ -191,6 +218,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.setupInteraction();
     this.setupKeyboardControls();
     this.animate();
+
+    // Initial minimap render (deferred one frame so the canvas ViewChild is ready)
+    requestAnimationFrame(() => this.renderMinimap());
   }
 
   private initializeScene(): void {
@@ -272,8 +302,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   private initializePostProcessing(): void {
     this.composer = new EffectComposer(this.renderer);
-    const renderPass = new RenderPass(this.scene, this.camera);
-    this.composer.addPass(renderPass);
+    this.renderPass = new RenderPass(this.scene, this.camera);
+    this.composer.addPass(this.renderPass);
 
     // Reduced bloom for better visibility
     const { width, height } = this.getViewportSize();
@@ -326,6 +356,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       EDITOR_LIGHTS.ambient.intensity
     );
     this.scene.add(ambientLight);
+    this.lights.push(ambientLight);
 
     // Multiple strong directional lights for even coverage
     const [dl1Cfg, dl2Cfg, dl3Cfg, dl4Cfg] = EDITOR_LIGHTS.directional;
@@ -340,21 +371,25 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     directionalLight1.shadow.mapSize.width = dl1Cfg.shadowMapSize!;
     directionalLight1.shadow.mapSize.height = dl1Cfg.shadowMapSize!;
     this.scene.add(directionalLight1);
+    this.lights.push(directionalLight1);
 
     // Second directional light from opposite angle
     const directionalLight2 = new THREE.DirectionalLight(dl2Cfg.color, dl2Cfg.intensity);
     directionalLight2.position.set(...dl2Cfg.position);
     this.scene.add(directionalLight2);
+    this.lights.push(directionalLight2);
 
     // Third directional light from side
     const directionalLight3 = new THREE.DirectionalLight(dl3Cfg.color, dl3Cfg.intensity);
     directionalLight3.position.set(...dl3Cfg.position);
     this.scene.add(directionalLight3);
+    this.lights.push(directionalLight3);
 
     // Fourth directional light from opposite side
     const directionalLight4 = new THREE.DirectionalLight(dl4Cfg.color, dl4Cfg.intensity);
     directionalLight4.position.set(...dl4Cfg.position);
     this.scene.add(directionalLight4);
+    this.lights.push(directionalLight4);
 
     // Bright light from below for complete visibility
     const blCfg = EDITOR_LIGHTS.bottomLight;
@@ -362,6 +397,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     bottomLight.position.set(...blCfg.position);
     bottomLight.lookAt(0, 0, 0);
     this.scene.add(bottomLight);
+    this.lights.push(bottomLight);
 
     // Hemisphere light for natural fill
     const hemiLight = new THREE.HemisphereLight(
@@ -370,12 +406,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       EDITOR_LIGHTS.hemisphere.intensity
     );
     this.scene.add(hemiLight);
+    this.lights.push(hemiLight);
 
     // Point lights for extra brightness at key positions
     for (const cfg of EDITOR_LIGHTS.point) {
       const pl = new THREE.PointLight(cfg.color, cfg.intensity, cfg.distance);
       pl.position.set(...cfg.position);
       this.scene.add(pl);
+      this.lights.push(pl);
     }
   }
 
@@ -689,6 +727,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     this.currentStrokeTiles.clear();
     this.currentStrokeNewHeights.clear();
+    this.renderMinimap();
   }
 
   private applyEdit(mesh: THREE.Mesh): void {
@@ -755,6 +794,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         );
         this.editHistory.record(command);
         this.runPathValidation();
+        this.renderMinimap();
       } else if (this.editMode === 'exit') {
         // Reject placement on non-walkable terrain
         const tile = this.terrainGrid.getTileAt(x, z);
@@ -784,6 +824,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         );
         this.editHistory.record(command);
         this.runPathValidation();
+        this.renderMinimap();
       }
     });
   }
@@ -1051,6 +1092,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.spawnMarker.position.y += EDITOR_SPAWN_MARKER.yBase;
         this.spawnMarker.visible = true;
       }
+    } else if (this.spawnMarker) {
+      this.spawnMarker.visible = false;
     }
   }
 
@@ -1063,45 +1106,94 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.exitMarker.position.y += EDITOR_EXIT_MARKER.yBase;
         this.exitMarker.visible = true;
       }
+    } else if (this.exitMarker) {
+      this.exitMarker.visible = false;
     }
   }
 
-  /**
-   * Prompt the user to select and delete a saved map (with confirmation).
-   */
-  public deleteMap(): void {
-    const maps = this.mapStorage.getAllMaps();
+  // ---------------------------------------------------------------------------
+  // Map Manager dialog
+  // ---------------------------------------------------------------------------
 
-    if (maps.length === 0) {
-      alert('No saved maps to delete.');
-      return;
+  /** Open the map manager overlay and refresh the map list. */
+  public openMapManager(): void {
+    this.savedMaps = this.mapStorage.getAllMaps();
+    this.renamingMapId = null;
+    this.renameValue = '';
+    this.deleteConfirmId = null;
+    this.mapManagerOpen = true;
+    setTimeout(() => this.mapManagerPanel?.nativeElement?.focus(), 0);
+  }
+
+  /** Close the map manager overlay. */
+  public closeMapManager(): void {
+    this.mapManagerOpen = false;
+    this.renamingMapId = null;
+    this.renameValue = '';
+    this.deleteConfirmId = null;
+  }
+
+  /** Load a map from the manager list and close the dialog. */
+  public loadMapFromManager(mapId: string): void {
+    const state = this.mapStorage.loadMap(mapId);
+    if (state) {
+      this.terrainGrid.importState(state);
+      this.updateSpawnMarker();
+      this.updateExitMarker();
+      this.runPathValidation();
+      this.renderMinimap();
+      const metadata = this.mapStorage.getMapMetadata(mapId);
+      if (metadata) {
+        this.currentMapName = metadata.name;
+      }
     }
+    this.closeMapManager();
+  }
 
-    let message = 'Select a map to delete:\n\n';
-    maps.forEach((map, index) => {
-      const date = new Date(map.updatedAt).toLocaleString();
-      message += `${index + 1}. ${map.name} (${date})\n`;
-    });
+  /** Enter delete-confirm state for a map. */
+  public confirmDelete(mapId: string): void {
+    this.deleteConfirmId = mapId;
+    this.renamingMapId = null;
+  }
 
-    const selection = prompt(message + '\nEnter number:');
-    if (!selection) return; // User cancelled
+  /** Cancel the pending delete confirmation. */
+  public cancelDelete(): void {
+    this.deleteConfirmId = null;
+  }
 
-    const index = parseInt(selection) - 1;
-    if (index < 0 || index >= maps.length) {
-      alert('Invalid selection.');
-      return;
+  /** Delete the confirmed map and refresh the list. */
+  public deleteMap(mapId: string): void {
+    this.mapStorage.deleteMap(mapId);
+    this.deleteConfirmId = null;
+    this.savedMaps = this.mapStorage.getAllMaps();
+  }
+
+  /** Enter rename mode for a map. */
+  public startRename(mapId: string, currentName: string): void {
+    this.renamingMapId = mapId;
+    this.renameValue = currentName;
+    this.deleteConfirmId = null;
+  }
+
+  /** Commit the rename if the new name is non-empty, then refresh the list. */
+  public submitRename(mapId: string): void {
+    if (!this.renamingMapId) return;
+    const trimmed = this.renameValue.trim();
+    if (trimmed) {
+      const state = this.mapStorage.loadMap(mapId);
+      if (state) {
+        this.mapStorage.saveMap(trimmed, state, mapId);
+      }
     }
+    this.renamingMapId = null;
+    this.renameValue = '';
+    this.savedMaps = this.mapStorage.getAllMaps();
+  }
 
-    const selectedMap = maps[index];
-    const confirmed = confirm(`Delete map "${selectedMap.name}"? This cannot be undone.`);
-    if (!confirmed) return;
-
-    const deleted = this.mapStorage.deleteMap(selectedMap.id);
-    if (deleted) {
-      alert(`Map "${selectedMap.name}" deleted.`);
-    } else {
-      alert('Failed to delete map.');
-    }
+  /** Cancel rename without persisting changes. */
+  public cancelRename(): void {
+    this.renamingMapId = null;
+    this.renameValue = '';
   }
 
   private saveGridState(): void {
@@ -1151,6 +1243,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.updateSpawnMarker();
       this.updateExitMarker();
       this.runPathValidation();
+      this.renderMinimap();
       this.currentMapName = selectedMap.name;
       alert(`Map "${selectedMap.name}" loaded successfully!`);
     } else {
@@ -1165,6 +1258,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.updateSpawnMarker();
       this.updateExitMarker();
       this.runPathValidation();
+      this.renderMinimap();
 
       const currentId = this.mapStorage.getCurrentMapId();
       if (currentId) {
@@ -1378,6 +1472,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       );
       this.editHistory.record(command);
       this.runPathValidation();
+      this.renderMinimap();
     }
   }
 
@@ -1421,7 +1516,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           if (this.editMode === 'paint') {
             this.terrainGrid.paintTile(x, z, this.selectedTerrainType);
           } else if (this.editMode === 'height') {
-            this.terrainGrid.adjustHeight(x, z, 0.2);
+            this.terrainGrid.adjustHeight(x, z, EDITOR_HEIGHT.stepSize);
             // Track new height after change
             const updatedTile = this.terrainGrid.getTileAt(x, z);
             if (updatedTile) {
@@ -1456,6 +1551,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.runPathValidation();
     }
 
+    if (affectedTiles.length > 0) {
+      this.renderMinimap();
+    }
+
     this.clearRectanglePreview();
     this.rectangleStartTile = null;
   }
@@ -1482,10 +1581,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const minZ = Math.min(z1, z2);
     const maxZ = Math.max(z1, z2);
 
-    // Performance limit: don't create more than 100 preview meshes
+    // Performance limit: cap at full 25x25 grid (625 tiles).
+    // Highlighting 625 meshes is fine on modern GPUs and avoids invisible previews
+    // when the user drags a large rectangle selection.
     const tileCount = (maxX - minX + 1) * (maxZ - minZ + 1);
-    if (tileCount > 100) {
-      // For large selections, only show corner/edge previews
+    if (tileCount > 625) {
       return;
     }
 
@@ -1582,6 +1682,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.updateSpawnMarker();
       this.updateExitMarker();
       this.runPathValidation();
+      this.renderMinimap();
     }
   }
 
@@ -1595,6 +1696,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.updateSpawnMarker();
       this.updateExitMarker();
       this.runPathValidation();
+      this.renderMinimap();
     }
   }
 
@@ -1635,7 +1737,21 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
    */
   public playMap(): void {
     if (!this.canPlayMap) return;
+    // Set bridge state BEFORE navigating so the game receives it synchronously.
+    // ngOnDestroy fires after navigation begins — relying on it is a race condition.
+    if (this.terrainGrid) {
+      const state = this.terrainGrid.exportState();
+      this.mapBridge.setEditorMapState(state);
+    }
     this.router.navigate(['/play']);
+  }
+
+  public goToCampaign(): void {
+    this.router.navigate(['/campaign']);
+  }
+
+  public goToMaps(): void {
+    this.router.navigate(['/maps']);
   }
 
   /**
@@ -1677,6 +1793,81 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  // ── Minimap ────────────────────────────────────────────────────────────────
+
+  /**
+   * Toggle the minimap visibility.
+   */
+  public toggleMinimap(): void {
+    this.minimapVisible = !this.minimapVisible;
+    if (this.minimapVisible) {
+      // Re-render on show so it's never stale
+      requestAnimationFrame(() => this.renderMinimap());
+    }
+  }
+
+  /**
+   * Render a 2D overhead view of the terrain grid onto the minimap canvas.
+   * Color-codes each tile by TerrainType and overlays spawn/exit point markers.
+   * Safe to call even when the canvas element is not yet in the DOM.
+   */
+  public renderMinimap(): void {
+    if (!this.minimapCanvasRef || !this.terrainGrid) return;
+    const canvas = this.minimapCanvasRef.nativeElement;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const size = MINIMAP_CONFIG.size;
+    const gridSize = this.terrainGrid.getGridSize();
+    const cellSize = size / gridSize;
+
+    // Background
+    ctx.fillStyle = MINIMAP_CONFIG.backgroundColor;
+    ctx.fillRect(0, 0, size, size);
+
+    // Draw terrain tiles — editor uses tiles[x][z] (column-major)
+    for (let x = 0; x < gridSize; x++) {
+      for (let z = 0; z < gridSize; z++) {
+        const tile = this.terrainGrid.getTileAt(x, z);
+        if (!tile) continue;
+        const colorHex = TERRAIN_CONFIGS[tile.type].color;
+        // Convert Three.js hex to CSS color string
+        const r = (colorHex >> 16) & 0xff;
+        const g = (colorHex >> 8) & 0xff;
+        const b = colorHex & 0xff;
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(
+          Math.floor(x * cellSize),
+          Math.floor(z * cellSize),
+          Math.ceil(cellSize),
+          Math.ceil(cellSize)
+        );
+      }
+    }
+
+    // Draw spawn marker (green dot)
+    const spawn = this.terrainGrid.getSpawnPoint();
+    if (spawn) {
+      const cx = (spawn.x + 0.5) * cellSize;
+      const cz = (spawn.z + 0.5) * cellSize;
+      ctx.beginPath();
+      ctx.arc(cx, cz, MINIMAP_CONFIG.markerRadius, 0, Math.PI * 2);
+      ctx.fillStyle = MINIMAP_CONFIG.spawnColor;
+      ctx.fill();
+    }
+
+    // Draw exit marker (red dot)
+    const exit = this.terrainGrid.getExitPoint();
+    if (exit) {
+      const cx = (exit.x + 0.5) * cellSize;
+      const cz = (exit.z + 0.5) * cellSize;
+      ctx.beginPath();
+      ctx.arc(cx, cz, MINIMAP_CONFIG.markerRadius, 0, Math.PI * 2);
+      ctx.fillStyle = MINIMAP_CONFIG.exitColor;
+      ctx.fill();
+    }
+  }
+
   private animate = (): void => {
     this.animationFrameId = requestAnimationFrame(this.animate);
 
@@ -1689,10 +1880,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Animate brush indicator for crisp, noticeable feedback
     if (this.brushIndicator && this.brushIndicator.visible) {
-      const pulse = Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * EDITOR_ANIMATION.brushPulseAmplitude + 0.9;
+      const pulse = Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * EDITOR_ANIMATION.brushPulseAmplitude + EDITOR_ANIMATION.brushScaleBase;
       this.brushIndicator.scale.set(pulse, pulse, 1);
       const material = this.brushIndicator.material as THREE.MeshBasicMaterial;
-      material.opacity = 0.6 + Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * 0.2;
+      material.opacity = EDITOR_ANIMATION.brushOpacityBase + Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * EDITOR_ANIMATION.brushOpacityAmplitude;
     }
 
     // Animate spawn/exit markers
@@ -1724,10 +1915,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       const positionAttribute = this.particles.geometry.attributes['position'] as THREE.BufferAttribute;
       const positions = positionAttribute.array as Float32Array;
       for (let i = 0; i < positions.length; i += 3) {
-        positions[i + 1] += Math.sin(Date.now() * 0.001 + i) * 0.002;
+        positions[i + 1] += Math.sin(Date.now() * EDITOR_ANIMATION.particleOscillationFrequency + i) * EDITOR_ANIMATION.particleOscillationAmplitude;
       }
       positionAttribute.needsUpdate = true;
-      this.particles.rotation.y += 0.0002;
+      this.particles.rotation.y += EDITOR_ANIMATION.particleRotationSpeed;
     }
 
     if (this.composer) {
@@ -1756,15 +1947,16 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     canvas.removeEventListener('touchcancel', this.touchEndHandler);
 
     // Snapshot terrain state for the game to consume on /play navigation
-    // and auto-save to localStorage to prevent data loss
+    // and auto-save to localStorage to prevent data loss.
+    // Only auto-save if a map entry already exists — creating a new entry on
+    // every navigation would produce duplicate maps.
     if (this.terrainGrid) {
       const state = this.terrainGrid.exportState();
       this.mapBridge.setEditorMapState(state);
-      this.mapStorage.saveMap(
-        this.currentMapName,
-        state,
-        this.mapStorage.getCurrentMapId() || undefined
-      );
+      const existingId = this.mapStorage.getCurrentMapId();
+      if (existingId) {
+        this.mapStorage.saveMap(this.currentMapName, state, existingId);
+      }
     }
 
     // Clear undo/redo history to prevent stale closures referencing disposed TerrainGrid
@@ -1825,7 +2017,17 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.controls.dispose();
     }
 
+    // Dispose lights and their shadow maps
+    for (const light of this.lights) {
+      this.scene.remove(light);
+      light.shadow?.map?.dispose();
+    }
+    this.lights = [];
+
     // Dispose post-processing passes (frees GPU framebuffers)
+    if (this.renderPass) {
+      this.renderPass.dispose();
+    }
     if (this.vignettePass) {
       this.vignettePass.dispose();
     }
@@ -1835,8 +2037,19 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (this.composer) {
       this.composer.renderTarget1.dispose();
       this.composer.renderTarget2.dispose();
+      this.composer.dispose();
     }
 
     this.renderer.dispose();
+  }
+
+  // --- trackBy functions for *ngFor directives ---
+
+  trackByIndex(index: number): number {
+    return index;
+  }
+
+  trackByMapId(index: number, map: import('./core/map-storage.service').MapMetadata): string {
+    return map.id;
   }
 }

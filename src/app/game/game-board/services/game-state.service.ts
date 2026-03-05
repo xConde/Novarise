@@ -6,6 +6,8 @@ import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, I
 export class GameStateService {
   private state: GameState = { ...INITIAL_GAME_STATE };
   private state$ = new BehaviorSubject<GameState>(this.state);
+  /** True after awardInterest() fires for the current INTERMISSION; cleared on next startWave()/reset(). */
+  private interestAwardedThisIntermission = false;
 
   getState$(): Observable<GameState> {
     return this.state$.asObservable();
@@ -21,19 +23,27 @@ export class GameStateService {
   }
 
   startWave(): void {
-    if (this.state.phase === GamePhase.VICTORY || this.state.phase === GamePhase.DEFEAT) return;
+    if (
+      this.state.phase === GamePhase.VICTORY ||
+      this.state.phase === GamePhase.DEFEAT ||
+      this.state.phase === GamePhase.COMBAT
+    ) return;
     const hasMoreWaves =
       this.state.wave < this.state.maxWaves || this.state.isEndless;
     if (!hasMoreWaves) return;
     this.state.wave++;
+    this.state.isPaused = false;
     this.state.phase = GamePhase.COMBAT;
+    this.interestAwardedThisIntermission = false;
     this.emit();
   }
 
   completeWave(reward: number): void {
     if (this.state.phase !== GamePhase.COMBAT) return;
-    this.state.gold += reward;
-    this.state.score += reward;
+    const safeReward = Math.max(0, reward);
+    this.state.gold += safeReward;
+    this.state.score += safeReward;
+    this.state.isPaused = false;
 
     if (this.state.isEndless) {
       // In endless mode, track highest wave reached and never trigger VICTORY
@@ -64,6 +74,7 @@ export class GameStateService {
   }
 
   addGold(amount: number): void {
+    if (amount <= 0) return;
     this.state.gold += amount;
     this.state.score += amount;
     this.emit();
@@ -72,10 +83,15 @@ export class GameStateService {
   /**
    * Calculate and award interest on unspent gold.
    * Called during INTERMISSION phase transition.
+   * Idempotent: a second call in the same intermission returns 0 without
+   * awarding additional gold, preventing double-payment if the caller fires
+   * twice on the same frame.
    * Returns the interest amount awarded.
    */
   awardInterest(): number {
     if (this.state.phase !== GamePhase.INTERMISSION) return 0;
+    if (this.interestAwardedThisIntermission) return 0;
+    this.interestAwardedThisIntermission = true;
     const interest = Math.min(
       Math.floor(this.state.gold * INTEREST_CONFIG.rate),
       INTEREST_CONFIG.maxPayout
@@ -102,6 +118,7 @@ export class GameStateService {
   }
 
   addScore(points: number): void {
+    if (points <= 0) return;
     this.state.score += points;
     this.emit();
   }
@@ -116,6 +133,14 @@ export class GameStateService {
     if (!VALID_GAME_SPEEDS.includes(speed)) return;
     this.state.gameSpeed = speed;
     this.emit();
+  }
+
+  restartWave(): boolean {
+    if (this.state.phase !== GamePhase.COMBAT) return false;
+    if (this.state.lives <= 1) return false;
+    this.state.lives -= 1;
+    this.emit();
+    return true;
   }
 
   setDifficulty(difficulty: DifficultyLevel): void {
@@ -135,6 +160,7 @@ export class GameStateService {
 
   reset(): void {
     this.state = { ...INITIAL_GAME_STATE };
+    this.interestAwardedThisIntermission = false;
     this.emit();
   }
 

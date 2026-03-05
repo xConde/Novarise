@@ -47,10 +47,14 @@ export class PathVisualizationService {
   }
 
   /**
-   * Disposes geometry and material, nulls all references.
-   * Must be called in ngOnDestroy to prevent GPU memory leaks.
+   * Removes the path line from the scene (if provided) then disposes geometry and
+   * material and nulls all references.  Pass the scene when calling from ngOnDestroy
+   * or any path where hidePath() has not already been called.
    */
-  cleanup(): void {
+  cleanup(scene?: THREE.Scene): void {
+    if (scene) {
+      this.removeLine(scene);
+    }
     this.disposeResources();
   }
 

@@ -1,0 +1,313 @@
+// Connector line width
+$connector-width: 2px;
+$connector-color: var(--border-color);
+$number-circle-size: 2.5rem;
+
+.campaign-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: var(--spacing-xl);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  overflow-y: auto;
+}
+
+.campaign-title {
+  font-size: var(--font-size-large);
+  color: var(--theme-purple-lighter);
+  margin: 0 0 var(--spacing-xs);
+  text-shadow: 0 0 12px var(--theme-purple-glow);
+}
+
+.campaign-subtitle {
+  font-size: var(--font-size-small);
+  color: var(--theme-purple-mid);
+  margin: 0 0 var(--spacing-xl);
+}
+
+// ---------------------------------------------------------------------------
+// Level list — vertical progress chain
+// ---------------------------------------------------------------------------
+
+.level-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 640px;
+  position: relative;
+
+  // Vertical connector line running through all cards
+  &::before {
+    content: '';
+    position: absolute;
+    left: calc(#{$number-circle-size} / 2 + var(--spacing-md) - #{$connector-width} / 2);
+    top: calc(#{$number-circle-size} / 2);
+    bottom: calc(#{$number-circle-size} / 2);
+    width: $connector-width;
+    background: $connector-color;
+    z-index: 0;
+  }
+}
+
+.level-card {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) 1.25rem;
+  background: var(--theme-purple-dark);
+  border: var(--border-width-thin) solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  cursor: pointer;
+  text-align: left;
+  margin-bottom: var(--spacing-md);
+  position: relative;
+  z-index: 1;
+  transition:
+    background var(--transition-fast) ease,
+    border-color var(--transition-fast) ease,
+    box-shadow var(--transition-fast) ease;
+
+  &:hover:not(.locked) {
+    background: var(--theme-purple-dark-hover);
+    border-color: var(--theme-purple-light);
+    box-shadow: 0 0 10px var(--theme-purple-glow);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--theme-purple-lighter);
+    outline-offset: 2px;
+  }
+
+  // Completed card: subtle glow border
+  &.completed {
+    border-color: var(--theme-purple-light);
+    box-shadow: 0 0 6px var(--theme-purple-glow);
+  }
+
+  // Locked card: dimmed appearance, no pointer
+  &.locked {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Level number circle
+// ---------------------------------------------------------------------------
+
+.level-number {
+  flex-shrink: 0;
+  width: $number-circle-size;
+  height: $number-circle-size;
+  border-radius: 50%;
+  background: var(--theme-purple-a30);
+  border: var(--border-width-thin) solid var(--theme-purple-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: var(--font-size-base);
+  color: var(--theme-purple-lighter);
+}
+
+// ---------------------------------------------------------------------------
+// Level info — name, description, difficulty badge
+// ---------------------------------------------------------------------------
+
+.level-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.level-name {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--theme-purple-lighter);
+}
+
+.level-desc {
+  font-size: var(--font-size-small);
+  color: var(--theme-purple-mid);
+  line-height: 1.4;
+}
+
+.level-difficulty {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--border-radius-sm);
+  width: fit-content;
+
+  &[data-difficulty='easy'] {
+    color: var(--difficulty-easy-color);
+    background: var(--difficulty-easy-bg);
+    border: var(--border-width-thin) solid var(--difficulty-easy-border);
+  }
+
+  &[data-difficulty='normal'] {
+    color: var(--difficulty-normal-color);
+    background: var(--difficulty-normal-bg);
+    border: var(--border-width-thin) solid var(--difficulty-normal-border);
+  }
+
+  &[data-difficulty='hard'] {
+    color: var(--difficulty-hard-color);
+    background: var(--difficulty-hard-bg);
+    border: var(--border-width-thin) solid var(--difficulty-hard-border);
+  }
+
+  &[data-difficulty='nightmare'] {
+    color: var(--difficulty-nightmare-color);
+    background: var(--difficulty-nightmare-bg);
+    border: var(--border-width-thin) solid var(--difficulty-nightmare-border);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Level status — stars, score, lock icon
+// ---------------------------------------------------------------------------
+
+.level-status {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  min-width: 4rem;
+}
+
+.level-stars {
+  display: flex;
+  gap: 0.1rem;
+}
+
+.star {
+  font-size: 1.1rem;
+  color: var(--game-star-empty);
+
+  &.filled {
+    color: var(--game-star-filled);
+    text-shadow: 0 0 6px rgba(255, 215, 0, 0.6);
+  }
+}
+
+.level-score {
+  font-size: var(--font-size-small);
+  color: var(--theme-purple-mid);
+}
+
+.level-lock {
+  color: var(--theme-purple-mid);
+  opacity: 0.7;
+}
+
+// ---------------------------------------------------------------------------
+// Actions row
+// ---------------------------------------------------------------------------
+
+.campaign-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-xl);
+  align-self: stretch;
+  max-width: 640px;
+  width: 100%;
+}
+
+.back-btn,
+.maps-btn,
+.reset-btn {
+  padding: 0.6rem 1.5rem;
+  border-radius: var(--border-radius-md);
+  font-size: var(--font-size-base);
+  cursor: pointer;
+  transition: background var(--transition-fast) ease, box-shadow var(--transition-fast) ease;
+
+  &:focus-visible {
+    outline: 2px solid var(--theme-purple-lighter);
+    outline-offset: 2px;
+  }
+}
+
+.back-btn,
+.maps-btn {
+  border: var(--border-width-thin) solid var(--theme-purple);
+  background: var(--theme-purple-a20);
+  color: var(--theme-purple-lighter);
+
+  &:hover {
+    background: var(--theme-purple-a50);
+    box-shadow: 0 0 8px var(--theme-purple-glow);
+  }
+}
+
+.reset-btn {
+  border: var(--border-width-thin) solid var(--action-danger-border);
+  background: var(--action-danger-bg);
+  color: var(--action-danger);
+  margin-left: auto;
+
+  &:hover {
+    background: var(--reset-btn-bg-hover);
+    box-shadow: 0 0 8px var(--reset-btn-shadow-hover);
+  }
+}
+
+// --- Responsive ---
+
+@media screen and (max-width: 768px) {
+  .campaign-container {
+    padding: var(--spacing-lg);
+  }
+
+  .campaign-title {
+    font-size: var(--font-size-title);
+  }
+
+  .level-list {
+    max-width: 100%;
+  }
+
+  .campaign-actions {
+    max-width: 100%;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .campaign-container {
+    padding: var(--spacing-md);
+  }
+
+  .campaign-title {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+  }
+
+  .level-card {
+    padding: var(--spacing-sm) var(--spacing-md);
+    gap: var(--spacing-sm);
+  }
+
+  .level-desc {
+    display: none; // hide description on very small screens to save space
+  }
+
+  .campaign-actions {
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+
+    .back-btn,
+    .maps-btn,
+    .reset-btn {
+      flex: 1;
+      min-width: 0;
+      min-height: 2.75rem; // 44px tap target
+      margin-left: 0;
+    }
+  }
+}

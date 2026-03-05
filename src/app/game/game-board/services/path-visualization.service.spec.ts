@@ -23,7 +23,7 @@ describe('PathVisualizationService', () => {
   });
 
   afterEach(() => {
-    service.cleanup();
+    service.cleanup(scene);
     scene.clear();
   });
 
@@ -160,16 +160,31 @@ describe('PathVisualizationService', () => {
 
     it('can be called multiple times without error', () => {
       service.showPath(SAMPLE_PATH, scene);
-      service.cleanup();
-      expect(() => service.cleanup()).not.toThrow();
+      service.cleanup(scene);
+      expect(() => service.cleanup(scene)).not.toThrow();
     });
 
     it('after cleanup, showPath still works', () => {
       service.showPath(SAMPLE_PATH, scene);
       service.hidePath(scene);
-      service.cleanup();
+      service.cleanup(scene);
       service.showPath(SAMPLE_PATH, scene);
       expect(scene.children.length).toBe(1);
+    });
+
+    it('removes the line from the scene when scene is provided', () => {
+      service.showPath(SAMPLE_PATH, scene);
+      expect(scene.children.length).toBe(1);
+      service.cleanup(scene);
+      expect(scene.children.length).toBe(0);
+    });
+
+    it('does not throw without a scene argument even when a path is active', () => {
+      service.showPath(SAMPLE_PATH, scene);
+      // cleanup without scene: geometry/material disposed but line left in scene
+      expect(() => service.cleanup()).not.toThrow();
+      // manually remove the orphaned line to avoid leaking in the test
+      scene.clear();
     });
   });
 });

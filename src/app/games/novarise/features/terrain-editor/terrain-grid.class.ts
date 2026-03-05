@@ -297,6 +297,10 @@ export class TerrainGrid {
     return this.buildableGrid[x][z];
   }
 
+  public getGridSize(): number {
+    return this.gridSize;
+  }
+
   // State Management - Export/Import for saving maps
 
   public exportState(): TerrainGridState {

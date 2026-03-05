@@ -60,10 +60,12 @@ describe('GameStateService', () => {
       expect(service.getState().phase).toBe(GamePhase.COMBAT);
     });
 
-    it('should increment wave on each call', () => {
-      service.startWave();
-      service.startWave();
-      service.startWave();
+    it('should increment wave on each call (requires INTERMISSION between starts)', () => {
+      service.startWave();           // wave 1 COMBAT
+      service.completeWave(0);       // → INTERMISSION
+      service.startWave();           // wave 2 COMBAT
+      service.completeWave(0);       // → INTERMISSION
+      service.startWave();           // wave 3 COMBAT
       expect(service.getState().wave).toBe(3);
     });
 
@@ -82,13 +84,14 @@ describe('GameStateService', () => {
 
     it('should not increment wave past maxWaves', () => {
       const maxWaves = service.getState().maxWaves;
-      // Advance through all waves via startWave + completeWave cycle
+      // Advance through all waves via proper startWave + completeWave cycle
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        service.completeWave(0); // → INTERMISSION (or VICTORY on final)
       }
       expect(service.getState().wave).toBe(maxWaves);
 
-      // Try to go past — should be a no-op
+      // Try to go past — should be a no-op (now in VICTORY)
       service.startWave();
       expect(service.getState().wave).toBe(maxWaves);
     });
@@ -97,6 +100,7 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0); // → INTERMISSION
       }
       // Complete the final wave → VICTORY
       service.completeWave(100);
@@ -105,6 +109,16 @@ describe('GameStateService', () => {
       // startWave should not override VICTORY
       service.startWave();
       expect(service.getState().phase).toBe(GamePhase.VICTORY);
+    });
+
+    it('should clear isPaused when starting a new wave from INTERMISSION', () => {
+      service.startWave();
+      service.togglePause(); // pause during first COMBAT
+      service.completeWave(0); // → INTERMISSION (also clears pause, but test startWave independently)
+      // Manually set isPaused to simulate a stale pause state
+      (service as unknown as { state: { isPaused: boolean } }).state.isPaused = true;
+      service.startWave(); // next wave
+      expect(service.getState().isPaused).toBeFalse();
     });
   });
 
@@ -133,11 +147,16 @@ describe('GameStateService', () => {
     });
 
     it('should transition to VICTORY on final wave', () => {
-      // Advance to max waves
+      // beforeEach already started wave 1 (COMBAT).
+      // Complete it to INTERMISSION, then cycle through remaining waves.
       const maxWaves = service.getState().maxWaves;
-      for (let i = 1; i < maxWaves; i++) {
+      service.completeWave(0); // wave 1 → INTERMISSION
+      for (let i = 1; i < maxWaves - 1; i++) {
         service.startWave();
+        service.completeWave(0); // → INTERMISSION
       }
+      // Now on wave maxWaves - 1 in INTERMISSION, start the final wave
+      service.startWave();
       expect(service.getState().wave).toBe(maxWaves);
 
       service.completeWave(250);
@@ -168,11 +187,15 @@ describe('GameStateService', () => {
     });
 
     it('should be a no-op when called in VICTORY phase', () => {
+      // beforeEach already started wave 1 (COMBAT). Complete it first, then cycle.
       const maxWaves = service.getState().maxWaves;
-      for (let i = 1; i < maxWaves; i++) {
+      service.completeWave(0); // wave 1 → INTERMISSION
+      for (let i = 1; i < maxWaves - 1; i++) {
         service.startWave();
+        service.completeWave(0); // → INTERMISSION
       }
-      service.completeWave(100); // final wave → VICTORY
+      service.startWave(); // final wave
+      service.completeWave(100); // → VICTORY
       expect(service.getState().phase).toBe(GamePhase.VICTORY);
       const goldBefore = service.getState().gold;
       service.completeWave(999); // should be ignored
@@ -185,6 +208,13 @@ describe('GameStateService', () => {
       service.completeWave(999);
       expect(service.getState().gold).toBe(goldBefore);
       expect(service.getState().phase).toBe(GamePhase.DEFEAT);
+    });
+
+    it('should clear isPaused when completing a wave (togglePause race condition)', () => {
+      service.togglePause(); // pause during COMBAT
+      expect(service.getState().isPaused).toBeTrue();
+      service.completeWave(25); // wave ends on same frame
+      expect(service.getState().isPaused).toBeFalse();
     });
   });
 
@@ -229,8 +259,9 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        service.completeWave(0); // → INTERMISSION (VICTORY on last)
       }
-      service.completeWave(100); // → VICTORY
+      // Already in VICTORY after final completeWave
       const livesBefore = service.getState().lives;
       service.loseLife(5);
       expect(service.getState().lives).toBe(livesBefore);
@@ -430,8 +461,9 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        service.completeWave(0); // → INTERMISSION (VICTORY on last)
       }
-      service.completeWave(100); // → VICTORY
+      // Already VICTORY after the loop's final completeWave
       const livesBefore = service.getState().lives;
 
       service.setDifficulty(DifficultyLevel.NIGHTMARE);
@@ -617,8 +649,9 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        service.completeWave(0); // → INTERMISSION (VICTORY on last)
       }
-      service.completeWave(100); // → VICTORY
+      // Already VICTORY
       service.addElapsedTime(10);
       expect(service.getState().elapsedTime).toBe(0);
     });
@@ -704,7 +737,9 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0); // → INTERMISSION between waves
       }
+      // Now on the last normal wave, in COMBAT
       service.completeWave(250);
       expect(service.getState().phase).toBe(GamePhase.INTERMISSION);
     });
@@ -724,7 +759,9 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0); // → INTERMISSION
       }
+      // On final wave in COMBAT
       service.completeWave(100);
       expect(service.getState().highestWave).toBe(maxWaves);
     });
@@ -734,8 +771,9 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
       }
-      service.completeWave(100);
+      service.completeWave(100); // completes wave maxWaves → INTERMISSION
       const firstHighest = service.getState().highestWave;
 
       service.startWave();
@@ -748,8 +786,9 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
       }
-      service.completeWave(100); // INTERMISSION
+      service.completeWave(100); // final normal wave → INTERMISSION
       service.startWave(); // wave maxWaves + 1
       expect(service.getState().wave).toBe(maxWaves + 1);
       expect(service.getState().phase).toBe(GamePhase.COMBAT);
@@ -759,8 +798,9 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        service.completeWave(0); // → INTERMISSION (VICTORY on last)
       }
-      service.completeWave(250); // VICTORY
+      // Now in VICTORY
       service.startWave(); // should be no-op
       expect(service.getState().wave).toBe(maxWaves);
     });
@@ -770,12 +810,80 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
       }
       service.completeWave(100);
 
       service.reset();
       expect(service.getState().isEndless).toBeFalse();
       expect(service.getState().highestWave).toBe(0);
+    });
+  });
+
+  // --- restartWave ---
+
+  describe('restartWave', () => {
+    it('should return false when not in COMBAT phase', () => {
+      expect(service.getState().phase).toBe(GamePhase.SETUP);
+      expect(service.restartWave()).toBeFalse();
+    });
+
+    it('should return false when in INTERMISSION phase', () => {
+      service.startWave();
+      service.completeWave(0); // → INTERMISSION
+      expect(service.restartWave()).toBeFalse();
+    });
+
+    it('should return false when lives <= 1', () => {
+      service.startWave(); // → COMBAT
+      service.loseLife(INITIAL_GAME_STATE.lives - 1); // leaves exactly 1 life
+      expect(service.getState().lives).toBe(1);
+      expect(service.restartWave()).toBeFalse();
+    });
+
+    it('should return false when lives === 0', () => {
+      service.loseLife(INITIAL_GAME_STATE.lives); // → DEFEAT
+      // Also now in DEFEAT phase, so the phase guard fires first
+      expect(service.restartWave()).toBeFalse();
+    });
+
+    it('should deduct 1 life on success', () => {
+      service.startWave(); // → COMBAT
+      const livesBefore = service.getState().lives;
+      service.restartWave();
+      expect(service.getState().lives).toBe(livesBefore - 1);
+    });
+
+    it('should return true on success', () => {
+      service.startWave(); // → COMBAT
+      expect(service.restartWave()).toBeTrue();
+    });
+
+    it('should keep the same wave number', () => {
+      service.startWave(); // wave = 1
+      const waveBefore = service.getState().wave;
+      service.restartWave();
+      expect(service.getState().wave).toBe(waveBefore);
+    });
+
+    it('should stay in COMBAT phase after restart', () => {
+      service.startWave(); // → COMBAT
+      service.restartWave();
+      expect(service.getState().phase).toBe(GamePhase.COMBAT);
+    });
+
+    it('should emit state after deducting life', (done) => {
+      service.startWave();
+      const livesBefore = service.getState().lives;
+      let emitCount = 0;
+      service.getState$().subscribe(state => {
+        emitCount++;
+        if (emitCount === 2) {
+          expect(state.lives).toBe(livesBefore - 1);
+          done();
+        }
+      });
+      service.restartWave();
     });
   });
 
@@ -835,6 +943,113 @@ describe('GameStateService', () => {
       const result = service.awardInterest();
       expect(result).toBe(0);
       expect(emitSpy).not.toHaveBeenCalled();
+    });
+
+    it('should be idempotent — a second call in the same intermission returns 0', () => {
+      enterIntermission();
+      (service as any).state.gold = 1000;
+      const first = service.awardInterest();
+      expect(first).toBeGreaterThan(0);
+      const goldAfterFirst = service.getState().gold;
+
+      const second = service.awardInterest();
+      expect(second).toBe(0);
+      expect(service.getState().gold).toBe(goldAfterFirst); // no change
+    });
+
+    it('should allow a fresh award on the next intermission after startWave resets the flag', () => {
+      enterIntermission();
+      service.awardInterest(); // first intermission
+      service.startWave();     // → COMBAT, resets flag
+      service.completeWave(0); // → INTERMISSION again
+
+      const goldBefore = service.getState().gold;
+      const interest = service.awardInterest();
+      expect(interest).toBeGreaterThan(0);
+      expect(service.getState().gold).toBe(goldBefore + interest);
+    });
+
+    it('should allow a fresh award after reset', () => {
+      enterIntermission();
+      service.awardInterest(); // exhaust the flag
+      service.reset();
+
+      service.startWave();
+      service.completeWave(0); // → INTERMISSION
+      const interest = service.awardInterest();
+      // Fresh intermission should yield interest again
+      expect(interest).toBeGreaterThanOrEqual(0); // gold may be different post-reset
+    });
+  });
+
+  // --- addGold / addScore negative guards ---
+
+  describe('addGold negative guard', () => {
+    it('should be a no-op when amount is negative', () => {
+      const goldBefore = service.getState().gold;
+      const scoreBefore = service.getState().score;
+      service.addGold(-100);
+      expect(service.getState().gold).toBe(goldBefore);
+      expect(service.getState().score).toBe(scoreBefore);
+    });
+
+    it('should be a no-op when amount is zero', () => {
+      const goldBefore = service.getState().gold;
+      service.addGold(0);
+      expect(service.getState().gold).toBe(goldBefore);
+    });
+
+    it('should not allow score to go negative via addGold', () => {
+      service.addGold(-9999);
+      expect(service.getState().score).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('addScore negative guard', () => {
+    it('should be a no-op when points is negative', () => {
+      service.addScore(100);
+      const scoreBefore = service.getState().score;
+      service.addScore(-50);
+      expect(service.getState().score).toBe(scoreBefore);
+    });
+
+    it('should be a no-op when points is zero', () => {
+      service.addScore(100);
+      const scoreBefore = service.getState().score;
+      service.addScore(0);
+      expect(service.getState().score).toBe(scoreBefore);
+    });
+  });
+
+  // --- completeWave negative reward guard ---
+
+  describe('completeWave negative reward guard', () => {
+    it('should not deduct gold or score when reward is negative', () => {
+      service.startWave(); // → COMBAT
+      const goldBefore = service.getState().gold;
+      const scoreBefore = service.getState().score;
+      service.completeWave(-500);
+      expect(service.getState().gold).toBe(goldBefore);
+      expect(service.getState().score).toBe(scoreBefore);
+    });
+  });
+
+  // --- startWave COMBAT guard (double-start race) ---
+
+  describe('startWave COMBAT guard', () => {
+    it('should be a no-op when already in COMBAT phase', () => {
+      service.startWave(); // wave 1, COMBAT
+      const waveBefore = service.getState().wave;
+      service.startWave(); // should be ignored
+      expect(service.getState().wave).toBe(waveBefore);
+      expect(service.getState().phase).toBe(GamePhase.COMBAT);
+    });
+
+    it('rapid double-tap cannot skip waves', () => {
+      service.startWave(); // wave 1
+      service.startWave(); // no-op
+      service.startWave(); // no-op
+      expect(service.getState().wave).toBe(1);
     });
   });
 });

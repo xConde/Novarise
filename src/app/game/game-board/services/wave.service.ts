@@ -1,26 +1,20 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { EnemyType } from '../models/enemy.model';
-import { WaveDefinition, WaveEntry, WAVE_DEFINITIONS, ENDLESS_CONFIG, ENDLESS_BASE_COUNT, ENDLESS_BASE_SPAWN_INTERVAL, ENDLESS_BASE_REWARD, ENDLESS_REWARD_SCALE_PER_WAVE, ENDLESS_BOSS_COUNT, ENDLESS_BOSS_SPAWN_INTERVAL } from '../models/wave.model';
+import { WaveDefinition, WaveEntry, WAVE_DEFINITIONS, ENDLESS_CONFIG, ENDLESS_BASE_COUNT, ENDLESS_BASE_SPAWN_INTERVAL, ENDLESS_BASE_REWARD, ENDLESS_REWARD_SCALE_PER_WAVE, ENDLESS_BOSS_COUNT, ENDLESS_BOSS_SPAWN_INTERVAL, ENDLESS_ENEMY_CYCLE, ENDLESS_PRIMARY_SPLIT, ENDLESS_SECONDARY_SPLIT, ENDLESS_MIN_SPAWN_INTERVAL, ENDLESS_SECONDARY_INTERVAL_MULTIPLIER } from '../models/wave.model';
 import { EnemyService } from './enemy.service';
+
+/** After this many consecutive failed spawn attempts the queue entry is discarded,
+ *  preventing an infinite soft-lock when no valid spawn path exists. */
+const MAX_SPAWN_RETRIES = 60;
 
 interface SpawnQueue {
   type: EnemyType;
   spawnInterval: number;
   remaining: number;
   timeSinceLastSpawn: number;
+  retryCount: number;
 }
-
-// Enemy types that cycle in endless waves (excludes BOSS — added separately at intervals)
-const ENDLESS_ENEMY_CYCLE: EnemyType[] = [
-  EnemyType.BASIC,
-  EnemyType.FAST,
-  EnemyType.HEAVY,
-  EnemyType.SWIFT,
-  EnemyType.SHIELDED,
-  EnemyType.SWARM,
-  EnemyType.FLYING
-];
 
 
 @Injectable()
@@ -52,9 +46,9 @@ export class WaveService {
    * Boss wave: waveNumber % bossInterval === 0
    */
   generateEndlessWave(waveNumber: number): WaveDefinition {
-    const healthMult =
-      ENDLESS_CONFIG.baseHealthMultiplier +
-      ENDLESS_CONFIG.healthScalePerWave * (waveNumber - 1);
+    // Health scaling for endless waves is handled via DifficultyLevel multipliers
+    // applied at spawn time in EnemyService.spawnEnemy(). There is no healthMultiplier
+    // field on WaveDefinition, so we do not compute or apply one here.
     const speedMult =
       ENDLESS_CONFIG.baseSpeedMultiplier +
       ENDLESS_CONFIG.speedScalePerWave * (waveNumber - 1);
@@ -71,16 +65,16 @@ export class WaveService {
       ENDLESS_ENEMY_CYCLE[(cycleIndex + 1) % ENDLESS_ENEMY_CYCLE.length];
 
     const baseCount = Math.round(ENDLESS_BASE_COUNT * countMult);
-    const primaryCount = Math.ceil(baseCount * 0.6);
-    const secondaryCount = Math.floor(baseCount * 0.4);
+    const primaryCount = Math.ceil(baseCount * ENDLESS_PRIMARY_SPLIT);
+    const secondaryCount = Math.floor(baseCount * ENDLESS_SECONDARY_SPLIT);
     const spawnInterval = Math.max(
-      0.3,
+      ENDLESS_MIN_SPAWN_INTERVAL,
       ENDLESS_BASE_SPAWN_INTERVAL / speedMult
     );
 
     const entries: WaveEntry[] = [
       { type: primaryType, count: primaryCount, spawnInterval },
-      { type: secondaryType, count: secondaryCount, spawnInterval: spawnInterval * 1.2 }
+      { type: secondaryType, count: secondaryCount, spawnInterval: spawnInterval * ENDLESS_SECONDARY_INTERVAL_MULTIPLIER }
     ];
 
     if (isBossWave) {
@@ -118,7 +112,8 @@ export class WaveService {
       type: entry.type,
       spawnInterval: entry.spawnInterval,
       remaining: entry.count,
-      timeSinceLastSpawn: entry.spawnInterval // spawn first immediately
+      timeSinceLastSpawn: entry.spawnInterval, // spawn first immediately
+      retryCount: 0,
     }));
 
     this.active = true;
@@ -140,8 +135,16 @@ export class WaveService {
         if (spawned) {
           queue.remaining--;
           queue.timeSinceLastSpawn = 0;
+          queue.retryCount = 0;
+        } else {
+          // Spawn failed (no valid path) — count consecutive failures.
+          // If failures reach the limit, discard the remaining enemies to
+          // prevent the wave from soft-locking indefinitely.
+          queue.retryCount++;
+          if (queue.retryCount >= MAX_SPAWN_RETRIES) {
+            queue.remaining = 0;
+          }
         }
-        // If spawn failed (no valid path), keep in queue and retry next tick
       }
     }
 
