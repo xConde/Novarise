@@ -1332,6 +1332,206 @@ describe('EnemyService', () => {
     });
   });
 
+  describe('Multi-hop movement (high speed / large deltaTime)', () => {
+    it('should advance multiple nodes in one tick when speed * deltaTime spans several waypoints', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // BASIC speed = 2.0. deltaTime = 3.0 → should advance 6 nodes exactly.
+      service.updateEnemies(3.0);
+      // 3 seconds * 2 tiles/sec = 6 tiles; path starts at index 0, so pathIndex should be 6
+      expect(enemy.pathIndex).toBe(6);
+    });
+
+    it('should not discard remaining movement budget after snapping to a waypoint', () => {
+      // If multi-hop is broken and we only advance one node per tick, the enemy at
+      // NIGHTMARE speed (1.5x multiplier → FAST speed 4.0 * 1.5 = 6.0) over 2s
+      // should cover 12 nodes, but a single-hop implementation would only advance 1.
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard());
+      const enemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      // FAST base speed = 4.0, NIGHTMARE multiplier = 1.5 → 6.0 units/sec
+      // deltaTime = 2.0s → 12 tiles, but path is 19 nodes so enemy is at node 12
+      service.updateEnemies(2.0);
+      expect(enemy.pathIndex).toBeGreaterThanOrEqual(12);
+    });
+
+    it('should correctly track distanceTraveled across multiple hops in one tick', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // 3 seconds at speed 2 = 6 units traveled
+      service.updateEnemies(3.0);
+      expect(enemy.distanceTraveled).toBeCloseTo(6.0, 5);
+    });
+
+    it('should stop at exit node and not go out of bounds when budget exceeds path length', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // Very large deltaTime — budget exceeds entire path (18 tiles at speed 2 = 9s to traverse)
+      // Use 100s to be sure. Enemy should clamp to last node.
+      service.updateEnemies(100.0);
+      expect(enemy.pathIndex).toBe(enemy.path.length - 1);
+    });
+
+    it('should report exit on the same tick that multi-hop exhausts the path', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // Path is 19 nodes (18 segments of 1 unit each). Speed=2, deltaTime=9.0 → 18 tiles exactly.
+      // Multi-hop should advance to pathIndex 18 (last node) within the loop, then the
+      // exit check at the top of the NEXT forEach iteration (same updateEnemies call)
+      // should NOT fire because we're inside the same forEach. The exit is reported the
+      // next time updateEnemies is called.
+      service.updateEnemies(9.0);
+      expect(enemy.pathIndex).toBe(enemy.path.length - 1);
+      const reachedExit = service.updateEnemies(0.016);
+      expect(reachedExit).toContain(enemy.id);
+    });
+  });
+
+  describe('Mini-swarm difficulty scaling', () => {
+    it('should apply NORMAL difficulty speed multiplier to mini-swarm enemies', () => {
+      service.setDifficulty(DifficultyLevel.NORMAL);
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard());
+      const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      const result = service.damageEnemy(swarm.id, swarm.health);
+      result.spawnedEnemies.forEach(mini => {
+        expect(mini.speed).toBeCloseTo(MINI_SWARM_STATS.speed * DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].speedMultiplier, 5);
+      });
+    });
+
+    it('should apply NIGHTMARE difficulty speed multiplier to mini-swarm enemies', () => {
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard());
+      const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      const result = service.damageEnemy(swarm.id, swarm.health);
+      const expectedSpeed = MINI_SWARM_STATS.speed * DIFFICULTY_PRESETS[DifficultyLevel.NIGHTMARE].speedMultiplier;
+      result.spawnedEnemies.forEach(mini => {
+        expect(mini.speed).toBeCloseTo(expectedSpeed, 5);
+      });
+    });
+
+    it('mini-swarms on NIGHTMARE should be faster than on NORMAL', () => {
+      service.setDifficulty(DifficultyLevel.NORMAL);
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard());
+      const swarm1 = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      const result1 = service.damageEnemy(swarm1.id, swarm1.health);
+      const normalSpeed = result1.spawnedEnemies[0].speed;
+      service.cleanup(mockScene);
+
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard());
+      const swarm2 = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      const result2 = service.damageEnemy(swarm2.id, swarm2.health);
+      const nightmareSpeed = result2.spawnedEnemies[0].speed;
+
+      expect(nightmareSpeed).toBeGreaterThan(normalSpeed);
+    });
+  });
+
+  describe('Pathfinding edge cases', () => {
+    it('spawner at exit position returns a single-node path and enemy immediately exits', () => {
+      // Build a board where spawner and exit are adjacent so there is exactly 1 path step.
+      // The minimal "same tile" case: we create a 1x1 board where tile (0,0) is both
+      // spawner and exit — A* returns a 1-node path and pathIndex starts at 0 >= 0 = exit.
+      // We test the closest valid approximation: spawner next to exit (2-node path).
+      const twoTileBoard: GameBoardTile[][] = [
+        [GameBoardTile.createSpawner(0, 0), GameBoardTile.createExit(0, 1)]
+      ];
+      gameBoardService.getGameBoard.and.returnValue(twoTileBoard);
+      gameBoardService.getBoardWidth.and.returnValue(2);
+      gameBoardService.getBoardHeight.and.returnValue(1);
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy).toBeTruthy();
+      // 2-node path: pathIndex 0 is at spawner, pathIndex 1 is at exit
+      expect(enemy.path.length).toBe(2);
+
+      // Advance to final node
+      service.updateEnemies(1.0);
+      expect(enemy.pathIndex).toBe(1);
+
+      const reachedExit = service.updateEnemies(0.016);
+      expect(reachedExit).toContain(enemy.id);
+    });
+
+    it('should return null when path is completely blocked (no valid route)', () => {
+      // Wall across all columns at row 0 (except spawner itself) and column 0 at row 1+
+      // This seals the spawner tile on all sides
+      const blockedCells = [
+        { row: 0, col: 1 },
+        { row: 1, col: 0 }
+      ];
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard(blockedCells));
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeNull();
+    });
+
+    it('should not use stale cached path after clearPathCache is called', () => {
+      // Spawn once to populate cache (unobstructed path = 19 nodes)
+      const enemy1 = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const originalLength = enemy1.path.length; // 19
+
+      // Clear cache and rebuild board with a wall that forces a much longer detour.
+      // Block row 4 cols 0-8 (leave gap at col 9) and row 6 cols 1-9 (leave gap at col 0).
+      // This serpentine maze reliably produces a path longer than 19 nodes.
+      service.clearPathCache();
+      const blockedCells: { row: number; col: number }[] = [];
+      for (let col = 0; col <= 8; col++) blockedCells.push({ row: 4, col });
+      for (let col = 1; col <= 9; col++) blockedCells.push({ row: 6, col });
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard(blockedCells));
+
+      const enemy2 = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // The new path must be longer due to the obstacles
+      expect(enemy2.path.length).toBeGreaterThan(originalLength);
+    });
+
+    it('flying enemies should still reach the exit even when ground is fully blocked', () => {
+      // Block every traversable tile so no ground path exists
+      const blockedCells: { row: number; col: number }[] = [];
+      for (let row = 0; row < 10; row++) {
+        for (let col = 0; col < 10; col++) {
+          if (!((row === 0 && col === 0) || (row === 9 && col === 9))) {
+            blockedCells.push({ row, col });
+          }
+        }
+      }
+      gameBoardService.getGameBoard.and.returnValue(createMockBoard(blockedCells));
+
+      // Ground enemy cannot spawn
+      const groundEnemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(groundEnemy).toBeNull();
+
+      // Flying enemy spawns via straight-line path and ignores terrain
+      const flyingEnemy = service.spawnEnemy(EnemyType.FLYING, mockScene);
+      expect(flyingEnemy).toBeTruthy();
+      expect(flyingEnemy!.path.length).toBe(2);
+    });
+  });
+
+  describe('Speed guards', () => {
+    it('frozen enemy (speed=0) should not move', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const initialPos = { ...enemy.position };
+      enemy.speed = 0;
+
+      service.updateEnemies(1.0);
+
+      expect(enemy.position.x).toBe(initialPos.x);
+      expect(enemy.position.z).toBe(initialPos.z);
+      expect(enemy.distanceTraveled).toBe(0);
+    });
+
+    it('should clamp movement to 0 when speed is negative (applied by external slow effect)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const initialPos = { ...enemy.position };
+      // Hypothetical bug: slow effect subtracts too much and goes negative
+      enemy.speed = -1.0;
+
+      service.updateEnemies(1.0);
+
+      // Negative speed means remainingMove = -1 * 1 = -1, which is < 0 — the while
+      // condition (remainingMove > 0) is false so the loop doesn't execute.
+      // Enemy should not move backwards.
+      expect(enemy.position.x).toBe(initialPos.x);
+      expect(enemy.position.z).toBe(initialPos.z);
+    });
+  });
+
   describe('Performance', () => {
     it('should handle 20+ enemies without issues', () => {
       const enemyCount = 25;

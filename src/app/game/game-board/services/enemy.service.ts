@@ -172,42 +172,46 @@ export class EnemyService {
         return;
       }
 
-      // Get current and next path nodes
-      const currentNode = enemy.path[enemy.pathIndex];
-      const nextNode = enemy.path[enemy.pathIndex + 1];
+      // Multi-hop movement: consume the full movement budget this tick, advancing
+      // through as many waypoints as needed. This prevents fast/nightmare enemies
+      // from being capped to one node per tick, which caused them to lag behind
+      // their correct position at high speeds or large deltaTime values.
+      let remainingMove = enemy.speed * deltaTime;
 
-      // Convert grid positions to world positions
-      const currentWorld = this.gridToWorld(currentNode.y, currentNode.x);
-      const nextWorld = this.gridToWorld(nextNode.y, nextNode.x);
+      while (remainingMove > 0 && enemy.pathIndex < enemy.path.length - 1) {
+        const nextNode = enemy.path[enemy.pathIndex + 1];
+        const nextWorld = this.gridToWorld(nextNode.y, nextNode.x);
 
-      // Calculate direction and distance
-      const direction = new THREE.Vector3(
-        nextWorld.x - currentWorld.x,
-        0,
-        nextWorld.z - currentWorld.z
-      ).normalize();
+        // Distance from current position to the next waypoint
+        const distanceToNext = Math.sqrt(
+          Math.pow(nextWorld.x - enemy.position.x, 2) +
+          Math.pow(nextWorld.z - enemy.position.z, 2)
+        );
 
-      const moveDistance = enemy.speed * deltaTime;
+        if (remainingMove >= distanceToNext) {
+          // Snap to this waypoint and continue consuming budget
+          enemy.position.x = nextWorld.x;
+          enemy.position.z = nextWorld.z;
+          enemy.gridPosition.row = nextNode.y;
+          enemy.gridPosition.col = nextNode.x;
+          enemy.pathIndex++;
+          enemy.distanceTraveled += distanceToNext;
+          remainingMove -= distanceToNext;
+        } else {
+          // Budget exhausted before reaching next node — interpolate
+          const currentNode = enemy.path[enemy.pathIndex];
+          const currentWorld = this.gridToWorld(currentNode.y, currentNode.x);
+          const direction = new THREE.Vector3(
+            nextWorld.x - currentWorld.x,
+            0,
+            nextWorld.z - currentWorld.z
+          ).normalize();
 
-      // Calculate distance to next node
-      const distanceToNext = Math.sqrt(
-        Math.pow(nextWorld.x - enemy.position.x, 2) +
-        Math.pow(nextWorld.z - enemy.position.z, 2)
-      );
-
-      if (moveDistance >= distanceToNext) {
-        // Reached next node - snap to it
-        enemy.position.x = nextWorld.x;
-        enemy.position.z = nextWorld.z;
-        enemy.gridPosition.row = nextNode.y;
-        enemy.gridPosition.col = nextNode.x;
-        enemy.pathIndex++;
-        enemy.distanceTraveled += distanceToNext;
-      } else {
-        // Move towards next node
-        enemy.position.x += direction.x * moveDistance;
-        enemy.position.z += direction.z * moveDistance;
-        enemy.distanceTraveled += moveDistance;
+          enemy.position.x += direction.x * remainingMove;
+          enemy.position.z += direction.z * remainingMove;
+          enemy.distanceTraveled += remainingMove;
+          remainingMove = 0;
+        }
       }
 
       // Update mesh position
@@ -511,6 +515,10 @@ export class EnemyService {
     const remainingPath = parent.path.slice(parent.pathIndex);
     if (remainingPath.length === 0) return null;
 
+    // Apply the same difficulty speed multiplier as the parent so nightmare-mode
+    // mini-swarms aren't unexpectedly slow after the parent dies.
+    const speedMult = getDifficultySpeedMultiplier(this.difficulty);
+
     const mini: Enemy = {
       id: `enemy-${this.enemyCounter++}`,
       type: EnemyType.SWARM,
@@ -518,7 +526,7 @@ export class EnemyService {
       gridPosition: { ...parent.gridPosition },
       health: MINI_SWARM_STATS.health,
       maxHealth: MINI_SWARM_STATS.health,
-      speed: MINI_SWARM_STATS.speed,
+      speed: MINI_SWARM_STATS.speed * speedMult,
       value: MINI_SWARM_STATS.value,
       path: remainingPath,
       pathIndex: 0,
