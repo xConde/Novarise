@@ -57,7 +57,11 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
 @Component({
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
-  styleUrls: ['./game-board.component.scss'],
+  styleUrls: [
+    './game-board.component.scss',
+    './game-board-overlays.scss',
+    './game-board-tower-panel.scss',
+  ],
   providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, PathVisualizationService, FpsCounterService, GameStatsService, DamagePopupService, DamageNumberService, MinimapService, ComboService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
