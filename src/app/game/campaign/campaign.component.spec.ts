@@ -38,7 +38,7 @@ describe('CampaignComponent', () => {
     campaignServiceSpy = jasmine.createSpyObj<CampaignService>('CampaignService', [
       'getLevels', 'getProgress', 'isLevelUnlocked', 'getMapForLevel', 'resetProgress'
     ]);
-    mapBridgeSpy = jasmine.createSpyObj<MapBridgeService>('MapBridgeService', ['setEditorMapState']);
+    mapBridgeSpy = jasmine.createSpyObj<MapBridgeService>('MapBridgeService', ['setEditorMapState', 'setDifficulty', 'setCampaignLevelId']);
     routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate']);
 
     campaignServiceSpy.getLevels.and.returnValue(fakeLevels);
@@ -104,6 +104,8 @@ describe('CampaignComponent', () => {
     component.playLevel(fakeLevels[0]);
 
     expect(mapBridgeSpy.setEditorMapState).toHaveBeenCalled();
+    expect(mapBridgeSpy.setDifficulty).toHaveBeenCalledWith(fakeLevels[0].difficulty);
+    expect(mapBridgeSpy.setCampaignLevelId).toHaveBeenCalledWith(fakeLevels[0].id);
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/play']);
   });
 
@@ -111,6 +113,8 @@ describe('CampaignComponent', () => {
     component.playLevel(fakeLevels[1]); // level 2 is locked
 
     expect(mapBridgeSpy.setEditorMapState).not.toHaveBeenCalled();
+    expect(mapBridgeSpy.setDifficulty).not.toHaveBeenCalled();
+    expect(mapBridgeSpy.setCampaignLevelId).not.toHaveBeenCalled();
     expect(routerSpy.navigate).not.toHaveBeenCalled();
   });
 

@@ -284,6 +284,7 @@
       &[data-type='boss']     { background: var(--enemy-color-boss);    box-shadow: 0 0 4px var(--enemy-glow-boss); }
       &[data-type='shielded'] { background: var(--enemy-color-shield);  box-shadow: 0 0 4px var(--enemy-glow-shielded); }
       &[data-type='swarm']    { background: var(--enemy-color-swarm);   box-shadow: 0 0 4px var(--enemy-glow-swarm); }
+      &[data-type='healer']   { background: var(--enemy-color-healer);  box-shadow: 0 0 4px var(--enemy-glow-healer); }
     }
 
     .enemy-count {
@@ -402,6 +403,7 @@
       &[data-type='shielded'] { background: var(--enemy-color-shield);  box-shadow: 0 0 4px var(--enemy-glow-shielded); }
       &[data-type='swarm']    { background: var(--enemy-color-swarm);   box-shadow: 0 0 4px var(--enemy-glow-swarm); }
       &[data-type='flying']   { background: var(--enemy-color-flying);  box-shadow: 0 0 4px var(--enemy-glow-flying); }
+      &[data-type='healer']   { background: var(--enemy-color-healer);  box-shadow: 0 0 4px var(--enemy-glow-healer); }
     }
 
     .enemy-count {

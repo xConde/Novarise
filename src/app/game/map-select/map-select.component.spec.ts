@@ -34,7 +34,8 @@ describe('MapSelectComponent', () => {
     mapBridgeSpy = jasmine.createSpyObj('MapBridgeService', [
       'setEditorMapState',
       'getDifficulty',
-      'setDifficulty'
+      'setDifficulty',
+      'setCampaignLevelId'
     ]);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
@@ -109,6 +110,7 @@ describe('MapSelectComponent', () => {
     component.selectMap(MOCK_MAPS[0]);
     expect(mapStorageSpy.loadMap).toHaveBeenCalledOnceWith('map_1');
     expect(mapBridgeSpy.setEditorMapState).toHaveBeenCalledOnceWith(MOCK_TERRAIN_STATE);
+    expect(mapBridgeSpy.setCampaignLevelId).toHaveBeenCalledOnceWith(null);
     expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/play']);
   });
 

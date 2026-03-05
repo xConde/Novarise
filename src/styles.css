@@ -74,6 +74,7 @@
   --enemy-color-shield: #4488ff;
   --enemy-color-boss: #ff00ff;
   --enemy-color-swarm: #44ff44;
+  --enemy-color-healer: #22cc44;
 
   /* Enemy glow colors */
   --enemy-glow-basic: rgba(255, 68, 68, 0.6);
@@ -83,6 +84,7 @@
   --enemy-glow-boss: rgba(255, 0, 255, 0.7);
   --enemy-glow-shielded: rgba(68, 136, 255, 0.6);
   --enemy-glow-swarm: rgba(68, 255, 68, 0.6);
+  --enemy-glow-healer: rgba(34, 204, 68, 0.6);
 
   /* Tower type colors */
   --tower-color-basic: #ff6600;

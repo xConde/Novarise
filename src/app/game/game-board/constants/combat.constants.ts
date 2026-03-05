@@ -2,6 +2,7 @@ export const CHAIN_LIGHTNING_CONFIG = {
   damageFalloff: 0.7,
   arcLifetime: 0.1,
   arcHeightOffset: 0.5,
+  arcOpacity: 0.85,
 } as const;
 
 export const MORTAR_VISUAL_CONFIG = {

@@ -93,6 +93,8 @@ export const ABILITY_CONFIG = {
   barrageFireRate: 0.3,
   napalmDotDuration: 5,
   freezeSpeedFactor: 0,
+  /** Fraction of projectile damage used as napalm zone DoT damage per tick. */
+  napalmDotDamageFraction: 0.5,
 } as const;
 
 export const enum TargetingPriority {

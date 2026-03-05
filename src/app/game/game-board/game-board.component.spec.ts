@@ -13,6 +13,7 @@ import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
 import { TowerUnlockService } from './services/tower-unlock.service';
+import { CampaignService } from '../campaign/campaign.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase } from './models/game-state.model';
 import { TowerType } from './models/tower.model';
 import { ScoreBreakdown, calculateScoreBreakdown } from './models/score.model';
@@ -26,6 +27,7 @@ describe('GameBoardComponent', () => {
   let minimapSpy: jasmine.SpyObj<MinimapService>;
   let settingsSpy: jasmine.SpyObj<SettingsService>;
   let towerUnlockSpy: jasmine.SpyObj<TowerUnlockService>;
+  let campaignSpy: jasmine.SpyObj<CampaignService>;
 
   beforeEach(async () => {
     gameStatsSpy = jasmine.createSpyObj('GameStatsService', ['recordKill', 'recordDamage', 'recordGoldEarned', 'recordEnemyLeaked', 'recordTowerBuilt', 'recordTowerSold', 'recordShot', 'getStats', 'reset']);
@@ -45,6 +47,9 @@ describe('GameBoardComponent', () => {
     towerUnlockSpy = jasmine.createSpyObj('TowerUnlockService', ['isTowerUnlocked', 'getUnlockedTowers', 'getLockedTowers', 'getUnlockCondition', 'allUnlocked']);
     towerUnlockSpy.isTowerUnlocked.and.returnValue(true);
 
+    campaignSpy = jasmine.createSpyObj('CampaignService', ['getLevels', 'getProgress', 'isLevelUnlocked', 'getMapForLevel', 'completeLevel', 'resetProgress']);
+    campaignSpy.getProgress.and.returnValue({ unlockedLevel: 1, stars: {}, bestScores: {} });
+
     await TestBed.configureTestingModule({
       declarations: [ GameBoardComponent ],
       imports: [ RouterTestingModule ],
@@ -58,6 +63,7 @@ describe('GameBoardComponent', () => {
         { provide: MinimapService, useValue: minimapSpy },
         { provide: SettingsService, useValue: settingsSpy },
         { provide: TowerUnlockService, useValue: towerUnlockSpy },
+        { provide: CampaignService, useValue: campaignSpy },
       ]
     })
     .compileComponents();

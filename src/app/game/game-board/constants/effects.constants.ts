@@ -1,3 +1,9 @@
+/** Duration in milliseconds to show the wave-end interest award notification. */
+export const INTEREST_NOTIFICATION_MS = 3000;
+
+/** Fallback color used when an enemy type has no color defined (should never occur in practice). */
+export const ENEMY_FALLBACK_COLOR = 0xff0000;
+
 export const SCREEN_SHAKE_CONFIG = {
   bossHitIntensity: 0.15,
   bossHitDuration: 0.2,

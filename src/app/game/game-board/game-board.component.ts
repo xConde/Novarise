@@ -26,6 +26,7 @@ import { DamageNumberService } from './services/damage-number.service';
 import { MinimapService, MinimapEntityData, MinimapTerrainData } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
 import { TowerUnlockService } from './services/tower-unlock.service';
+import { CampaignService } from '../campaign/campaign.service';
 import { disposeMaterial } from './utils/three-utils';
 import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_ABILITIES, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TargetingPriority, TARGETING_LABELS } from './models/tower.model';
 import { TOWER_UNLOCK_CONDITIONS } from './models/tower-unlock.model';
@@ -37,7 +38,7 @@ import { AMBIENT_LIGHT, DIRECTIONAL_LIGHT, UNDER_LIGHT, POINT_LIGHTS } from './c
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
 import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, HOVER_RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
-import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
+import { SCREEN_SHAKE_CONFIG, INTEREST_NOTIFICATION_MS, ENEMY_FALLBACK_COLOR } from './constants/effects.constants';
 import { TOUCH_CONFIG } from './constants/touch.constants';
 import { ENEMY_STATS } from './models/enemy.model';
 import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
@@ -222,7 +223,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private minimapService: MinimapService,
     private settingsService: SettingsService,
     private towerUnlockService: TowerUnlockService,
-    private comboService: ComboService
+    private comboService: ComboService,
+    private campaignService: CampaignService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -691,7 +693,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!this.gameStateService.restartWave()) return;
     this.enemyService.cleanup(this.scene);
     this.towerCombatService.clearProjectiles(this.scene);
+    // Remove stale floating sprites so they don't linger into the retry
+    this.damageNumberService.cleanup(this.scene);
+    this.damagePopupService.cleanup(this.scene);
+    this.goldPopupService.cleanup(this.scene);
     this.waveService.startWave(this.gameState.wave, this.scene);
+    // Reset combo — kills from the previous attempt must not carry into the retry
+    this.comboService.reset();
+    this.clearComboBanner();
     this.audioService.playSfx('waveStart');
   }
 
@@ -708,12 +717,24 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gameStatsService.reset();
     this.comboService.reset();
     this.clearComboBanner();
+    // Cancel any pending interest notification timer from the previous game
+    if (this.interestNotificationTimer !== null) {
+      clearTimeout(this.interestNotificationTimer);
+      this.interestNotificationTimer = null;
+    }
+    this.showInterestNotification = false;
+    this.interestAmount = 0;
     this.scoreBreakdown = null;
     this.newlyUnlockedAchievements = [];
     this.gameEndRecorded = false;
     this.wavePreview = [];
     this.defeatSoundPlayed = false;
     this.victorySoundPlayed = false;
+
+    // Re-apply difficulty after reset (gameStateService.reset() restores INITIAL_GAME_STATE defaults)
+    const bridgeDifficulty = this.mapBridge.getDifficulty();
+    this.gameStateService.setDifficulty(bridgeDifficulty);
+    this.enemyService.setDifficulty(bridgeDifficulty);
 
     if (this.mapBridge.hasEditorMap()) {
       const state = this.mapBridge.getEditorMapState()!;
@@ -754,9 +775,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Clean up minimap
     this.minimapService.cleanup();
 
-    // Clean up path preview line
+    // Clean up path preview line — pass scene so cleanup() can remove the line even
+    // if hidePathPreview() skipped it because pathPreviewVisible was already false
     this.hidePathPreview();
-    this.pathVisualizationService.cleanup();
+    this.pathVisualizationService.cleanup(this.scene);
     this.pathPreviewVisible = false;
 
     // Clean up range preview, hover range preview, and range toggle rings
@@ -1403,7 +1425,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.interestNotificationTimer = setTimeout(() => {
       this.showInterestNotification = false;
       this.interestNotificationTimer = null;
-    }, 3000);
+    }, INTEREST_NOTIFICATION_MS);
   }
 
   showComboBannerPopup(bonusGold: number): void {
@@ -1669,7 +1691,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             this.audioService.playEnemyDeath();
 
             // Visual effects on kill
-            const enemyColor = ENEMY_STATS[enemy.type]?.color ?? 0xff0000;
+            const enemyColor = ENEMY_STATS[enemy.type]?.color ?? ENEMY_FALLBACK_COLOR;
             this.particleService.spawnDeathBurst(enemy.position, enemyColor);
             this.goldPopupService.spawn(enemy.value, enemy.position, this.scene);
             this.damagePopupService.spawn(enemy.maxHealth, enemy.position, this.scene);
@@ -1734,6 +1756,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
             };
             this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
+
+            // Advance campaign progress on VICTORY — only if this session was a campaign level
+            if (postWavePhase === GamePhase.VICTORY) {
+              const campaignLevelId = this.mapBridge.getCampaignLevelId();
+              if (campaignLevelId !== null && this.scoreBreakdown !== null) {
+                this.campaignService.completeLevel(campaignLevelId, this.scoreBreakdown.stars, this.scoreBreakdown.finalScore);
+              }
+            }
           }
         }
 
@@ -1759,15 +1789,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
 
-    // Update visual effects (run every frame regardless of pause)
+    // Update visual effects
     if (deltaTime > 0) {
+      // Combo timer always tracks wall-clock time — must run even when paused
       this.comboService.tick(Date.now());
-      this.particleService.addPendingToScene(this.scene);
-      this.particleService.update(deltaTime, this.scene);
-      this.goldPopupService.update(deltaTime);
-      this.damagePopupService.update(deltaTime);
-      this.damageNumberService.update(deltaTime);
-      this.screenShakeService.update(deltaTime, this.camera);
+
+      const visualState = this.gameStateService.getState();
+      const isGamePaused = visualState.isPaused;
+
+      // Combat-spawned popups and particles freeze when the game is paused
+      if (!isGamePaused) {
+        this.particleService.addPendingToScene(this.scene);
+        this.particleService.update(deltaTime, this.scene);
+        this.goldPopupService.update(deltaTime);
+        this.damagePopupService.update(deltaTime);
+        this.damageNumberService.update(deltaTime);
+        this.screenShakeService.update(deltaTime, this.camera);
+      }
     }
 
     // Render

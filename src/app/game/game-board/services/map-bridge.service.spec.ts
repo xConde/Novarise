@@ -223,6 +223,29 @@ describe('MapBridgeService', () => {
     expect(board[2][4].type).toBe(BlockType.EXIT);
   });
 
+  // --- Campaign Level ID ---
+
+  it('should return null for campaignLevelId by default', () => {
+    expect(service.getCampaignLevelId()).toBeNull();
+  });
+
+  it('should store and retrieve a campaign level ID', () => {
+    service.setCampaignLevelId(3);
+    expect(service.getCampaignLevelId()).toBe(3);
+  });
+
+  it('should clear campaign level ID when set to null', () => {
+    service.setCampaignLevelId(2);
+    service.setCampaignLevelId(null);
+    expect(service.getCampaignLevelId()).toBeNull();
+  });
+
+  it('should overwrite previous campaign level ID', () => {
+    service.setCampaignLevelId(1);
+    service.setCampaignLevelId(5);
+    expect(service.getCampaignLevelId()).toBe(5);
+  });
+
   // --- Edge Cases ---
 
   it('should handle out-of-bounds spawn point without crashing', () => {

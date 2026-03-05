@@ -130,10 +130,12 @@ export class EnemyService {
 
     this.enemies.forEach(healer => {
       if (!healer.isHealer || healer.health <= 0) return;
+      // Frozen healers (speed === 0 from Freeze ability) cannot heal allies
+      if (healer.speed === 0) return;
 
       const healerStats = ENEMY_STATS[EnemyType.HEALER];
-      const healRange = healerStats.healRange ?? 3;
-      const healRate = healerStats.healRate ?? 10;
+      const healRange = healerStats.healRange!;
+      const healRate = healerStats.healRate!;
       const healAmount = healRate * deltaTime;
       const rangeWorld = healRange * tileSize;
 
@@ -425,8 +427,8 @@ export class EnemyService {
     const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
     const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
     const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
-    healthBarFg.position.set(0, barY + 0.001, 0);
-    healthBarFg.lookAt(0, barY + 0.001, 1);
+    healthBarFg.position.set(0, barY + HEALTH_BAR_CONFIG.fgZOffset, 0);
+    healthBarFg.lookAt(0, barY + HEALTH_BAR_CONFIG.fgZOffset, 1);
 
     mesh.add(healthBarBg);
     mesh.add(healthBarFg);
@@ -528,7 +530,7 @@ export class EnemyService {
     mesh.castShadow = true;
 
     // Small health bar
-    const barWidth = HEALTH_BAR_CONFIG.width * 0.5;
+    const barWidth = HEALTH_BAR_CONFIG.width * HEALTH_BAR_CONFIG.miniSwarmWidthScale;
     const barHeight = HEALTH_BAR_CONFIG.height;
     const barY = MINI_SWARM_STATS.size + HEALTH_BAR_CONFIG.yOffset;
 
@@ -541,8 +543,8 @@ export class EnemyService {
     const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
     const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
     const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
-    healthBarFg.position.set(0, barY + 0.001, 0);
-    healthBarFg.lookAt(0, barY + 0.001, 1);
+    healthBarFg.position.set(0, barY + HEALTH_BAR_CONFIG.fgZOffset, 0);
+    healthBarFg.lookAt(0, barY + HEALTH_BAR_CONFIG.fgZOffset, 1);
 
     mesh.add(healthBarBg);
     mesh.add(healthBarFg);

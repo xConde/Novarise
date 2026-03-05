@@ -31,6 +31,8 @@ export interface ConvertedBoard {
 export class MapBridgeService {
   private editorMapState: EditorMapState | null = null;
   private selectedDifficulty: DifficultyLevel = DEFAULT_DIFFICULTY;
+  /** Campaign level ID for the active session, or null when playing a custom map. */
+  private currentCampaignLevelId: number | null = null;
 
   /**
    * Store editor map state for cross-route transfer.
@@ -83,6 +85,23 @@ export class MapBridgeService {
    */
   resetDifficulty(): void {
     this.selectedDifficulty = DEFAULT_DIFFICULTY;
+  }
+
+  /**
+   * Store the campaign level ID that is about to be played.
+   * Set to null when launching a custom map so the game knows not to report
+   * campaign progress on completion.
+   */
+  setCampaignLevelId(levelId: number | null): void {
+    this.currentCampaignLevelId = levelId;
+  }
+
+  /**
+   * Retrieve the active campaign level ID.
+   * Returns null when the current session is not a campaign level.
+   */
+  getCampaignLevelId(): number | null {
+    return this.currentCampaignLevelId;
   }
 
   /**

@@ -51,6 +51,9 @@ export class MapSelectComponent implements OnInit {
     const mapData = this.mapStorage.loadMap(map.id);
     if (mapData) {
       this.mapBridge.setEditorMapState(mapData);
+      // Clear any stale campaign level so the game does not report campaign
+      // progress when playing a custom map.
+      this.mapBridge.setCampaignLevelId(null);
       // Difficulty is already stored in the bridge via selectDifficulty()
       this.router.navigate(['/play']);
     }

@@ -12,6 +12,7 @@ import {
   TOWER_ABILITIES,
   ABILITY_CONFIG,
   TargetingPriority,
+  TARGETING_PRIORITIES,
 } from '../models/tower.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
@@ -348,14 +349,14 @@ export class TowerCombatService {
   cycleTargetingPriority(key: string): TargetingPriority | null {
     const tower = this.placedTowers.get(key);
     if (!tower) return null;
-    tower.targetingPriority = ((tower.targetingPriority + 1) % 4) as TargetingPriority;
+    tower.targetingPriority = ((tower.targetingPriority + 1) % TARGETING_PRIORITIES.length) as TargetingPriority;
     return tower.targetingPriority;
   }
 
   private applySlowAura(tower: PlacedTower, stats: TowerStats): void {
     const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
-    const slowFactor = stats.slowFactor ?? 0.5;
-    const slowDuration = stats.slowDuration ?? 2;
+    const slowFactor = stats.slowFactor ?? TOWER_CONFIGS[TowerType.SLOW].slowFactor!;
+    const slowDuration = stats.slowDuration ?? TOWER_CONFIGS[TowerType.SLOW].slowDuration!;
 
     this.enemyService.getEnemies().forEach(enemy => {
       if (enemy.health <= 0) return;
@@ -484,8 +485,8 @@ export class TowerCombatService {
     scene: THREE.Scene,
     chainCountOverride?: number
   ): { kills: string[]; hits: HitEvent[] } {
-    const chainCount = chainCountOverride ?? (stats.chainCount ?? 3);
-    const chainRange = stats.chainRange ?? 2;
+    const chainCount = chainCountOverride ?? (stats.chainCount ?? TOWER_CONFIGS[TowerType.CHAIN].chainCount!);
+    const chainRange = stats.chainRange ?? TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
     const kills: string[] = [];
     const hits: HitEvent[] = [];
     const hitIds = new Set<string>();
@@ -517,7 +518,7 @@ export class TowerCombatService {
         const arcMat = new THREE.LineBasicMaterial({
           color: stats.color,
           transparent: true,
-          opacity: 0.85
+          opacity: CHAIN_LIGHTNING_CONFIG.arcOpacity
         });
         const arc = new THREE.Line(arcGeom, arcMat);
         scene.add(arc);
@@ -660,9 +661,9 @@ export class TowerCombatService {
     scene: THREE.Scene,
     dotDurationOverride?: number
   ): string[] {
-    const blastRadius = stats.blastRadius ?? 1.5;
-    const dotDuration = dotDurationOverride ?? (stats.dotDuration ?? 3);
-    const dotDamage = stats.dotDamage ?? 3;
+    const blastRadius = stats.blastRadius ?? TOWER_CONFIGS[TowerType.MORTAR].blastRadius!;
+    const dotDuration = dotDurationOverride ?? (stats.dotDuration ?? TOWER_CONFIGS[TowerType.MORTAR].dotDuration!);
+    const dotDamage = stats.dotDamage ?? TOWER_CONFIGS[TowerType.MORTAR].dotDamage!;
 
     const geometry = new THREE.CircleGeometry(blastRadius, MORTAR_VISUAL_CONFIG.zoneSegments);
     const material = new THREE.MeshBasicMaterial({
@@ -764,7 +765,7 @@ export class TowerCombatService {
       napalmMesh.position.set(impactX, GROUND_EFFECT_Y, impactZ);
       scene.add(napalmMesh);
 
-      const dotDamage = Math.max(1, Math.round(proj.damage * 0.5));
+      const dotDamage = Math.max(1, Math.round(proj.damage * ABILITY_CONFIG.napalmDotDamageFraction));
       this.mortarZones.push({
         mesh: napalmMesh,
         centerX: impactX,

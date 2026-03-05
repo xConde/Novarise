@@ -906,9 +906,48 @@ describe('EnemyService', () => {
 
       expect(ally.health).toBeGreaterThan(healthAfterDamage);
     });
+
+    it('should NOT heal allies when the healer is frozen (speed === 0)', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+      ally.mesh!.position.set(ally.position.x, ally.position.y, ally.position.z);
+
+      // Freeze the healer (mirrors what TowerCombatService.applyFreezeAura does)
+      healer.speed = 0;
+
+      service.damageEnemy(ally.id, 30);
+      const healthAfterDamage = ally.health;
+
+      service.healNearbyEnemies(1.0);
+
+      expect(ally.health).toBe(healthAfterDamage); // frozen healer cannot heal
+    });
+
+    it('should resume healing allies once the healer is unfrozen', () => {
+      const healer = service.spawnEnemy(EnemyType.HEALER, mockScene)!;
+      const ally = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      ally.position.x = healer.position.x;
+      ally.position.z = healer.position.z;
+      ally.mesh!.position.set(ally.position.x, ally.position.y, ally.position.z);
+
+      healer.speed = 0; // frozen
+      service.damageEnemy(ally.id, 30);
+      const healthAfterDamage = ally.health;
+      service.healNearbyEnemies(1.0);
+      expect(ally.health).toBe(healthAfterDamage); // no heal while frozen
+
+      // Unfreeze — restore original speed
+      healer.speed = ENEMY_STATS[EnemyType.HEALER].speed;
+      service.healNearbyEnemies(1.0);
+      expect(ally.health).toBeGreaterThan(healthAfterDamage); // heals once unfrozen
+    });
   });
 
-  describe('Dead Enemy Movement Guard', () => {
+  describe("Dead Enemy Movement Guard", () => {
     it('should not move dead enemies', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       const initialPos = { ...enemy.position };

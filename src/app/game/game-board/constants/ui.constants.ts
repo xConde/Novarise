@@ -7,7 +7,11 @@ export const HEALTH_BAR_CONFIG = {
   colorYellow: 0xffff00,
   colorRed: 0xff0000,
   thresholdHigh: 0.6,
-  thresholdLow: 0.3
+  thresholdLow: 0.3,
+  /** Z-depth offset applied to the foreground bar so it renders on top of the background bar. */
+  fgZOffset: 0.001,
+  /** Width scale for mini-swarm health bars relative to the standard width. */
+  miniSwarmWidthScale: 0.5,
 };
 
 export const PROJECTILE_CONFIG = {

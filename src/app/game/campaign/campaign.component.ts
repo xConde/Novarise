@@ -45,6 +45,8 @@ export class CampaignComponent implements OnInit {
       return;
     }
     this.mapBridge.setEditorMapState(map);
+    this.mapBridge.setDifficulty(level.difficulty);
+    this.mapBridge.setCampaignLevelId(level.id);
     this.router.navigate(['/play']);
   }
 
