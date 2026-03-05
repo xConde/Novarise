@@ -1404,32 +1404,32 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const towerStats = TOWER_CONFIGS[this.selectedTowerType];
 
-    // Check if player can afford tower
-    if (!this.gameStateService.canAfford(towerStats.cost)) return;
+    // Spend gold first — atomic with placement to eliminate TOCTOU gap
+    if (!this.gameStateService.spendGold(towerStats.cost)) return;
 
-    if (this.gameBoardService.placeTower(row, col, this.selectedTowerType)) {
-      // Deduct gold
-      this.gameStateService.spendGold(towerStats.cost);
+    if (!this.gameBoardService.placeTower(row, col, this.selectedTowerType)) {
+      // Placement failed — refund the gold that was already spent
+      this.gameStateService.addGold(towerStats.cost);
+      return;
+    }
 
-      // Create tower mesh
-      const towerMesh = this.gameBoardService.createTowerMesh(row, col, this.selectedTowerType);
-      const key = `${row}-${col}`;
-      this.towerMeshes.set(key, towerMesh);
-      this.scene.add(towerMesh);
+    // Create tower mesh
+    const towerMesh = this.gameBoardService.createTowerMesh(row, col, this.selectedTowerType);
+    const key = `${row}-${col}`;
+    this.towerMeshes.set(key, towerMesh);
+    this.scene.add(towerMesh);
 
-      // Register tower with combat service
-      this.towerCombatService.registerTower(row, col, this.selectedTowerType, towerMesh);
-      this.audioService.playTowerPlace();
-      this.gameStatsService.recordTowerBuilt();
+    // Register tower with combat service
+    this.towerCombatService.registerTower(row, col, this.selectedTowerType, towerMesh);
+    this.audioService.playTowerPlace();
+    this.gameStatsService.recordTowerBuilt();
 
-      // Clear enemy path cache since board layout changed
-      this.enemyService.clearPathCache();
+    // Clear enemy path cache since board layout changed
+    this.enemyService.clearPathCache();
 
-      // Refresh path preview — new tower may have altered the A* route
-      const phase = this.gameStateService.getState().phase;
-      if (phase === GamePhase.SETUP) {
-        this.updatePathPreview();
-      }
+    // Refresh path preview — new tower may have altered the A* route
+    if (phase === GamePhase.SETUP) {
+      this.updatePathPreview();
     }
   }
 

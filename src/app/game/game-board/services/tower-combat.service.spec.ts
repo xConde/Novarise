@@ -1812,5 +1812,127 @@ describe('TowerCombatService — ability system', () => {
       expect(wounded.health).toBeLessThan(10);
       expect(healthy.health).toBe(200);
     });
+
+    it('should target enemy with least distanceTraveled when priority is LAST', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      // Cycle to LAST (FIRST → LAST)
+      service.cycleTargetingPriority(key); // LAST
+
+      // laggard has traveled less — it is farthest from the exit
+      const laggard = createEnemy('laggard', TOWER_WORLD_X, TOWER_WORLD_Z, 100);
+      laggard.distanceTraveled = 1;
+      const leader = createEnemy('leader', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 100);
+      leader.distanceTraveled = 10;
+
+      enemyMap.set('laggard', laggard);
+      enemyMap.set('leader', leader);
+
+      // Fire once; projectile for laggard hits instantly (dist=0)
+      service.update(0.016, mockScene);
+      service.update(2.0, mockScene);
+
+      // Laggard (least distanceTraveled) should be targeted; leader untouched
+      expect(laggard.health).toBeLessThan(100);
+      expect(leader.health).toBe(100);
+    });
+
+    it('should target enemy with highest health when priority is STRONGEST', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      // Cycle to STRONGEST (FIRST → LAST → STRONGEST)
+      service.cycleTargetingPriority(key); // LAST
+      service.cycleTargetingPriority(key); // STRONGEST
+
+      const strong = createEnemy('strong', TOWER_WORLD_X, TOWER_WORLD_Z, 500);
+      const weak = createEnemy('weak', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 10);
+
+      enemyMap.set('strong', strong);
+      enemyMap.set('weak', weak);
+
+      // Fire; projectile for strong hits instantly (dist=0)
+      service.update(0.016, mockScene);
+      service.update(2.0, mockScene);
+
+      // Strong (highest HP) should be targeted; weak untouched
+      expect(strong.health).toBeLessThan(500);
+      expect(weak.health).toBe(10);
+    });
+  });
+
+  // --- clearProjectiles slow-effect restoration ---
+
+  describe('clearProjectiles slow-effect restoration', () => {
+    function createEnemyWithMesh(id: string, x: number, z: number, health = 100): Enemy {
+      const geo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+      const mat = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+      const mesh = new THREE.Mesh(geo, mat);
+      const enemy = createEnemy(id, x, z, health);
+      enemy.mesh = mesh;
+      return enemy;
+    }
+
+    afterEach(() => {
+      mockScene.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          if (Array.isArray(child.material)) {
+            child.material.forEach(m => m.dispose());
+          } else {
+            (child.material as THREE.Material).dispose();
+          }
+        }
+      });
+    });
+
+    it('should restore original speed for a slowed enemy when clearProjectiles is called', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const enemy = createEnemyWithMesh('e1', TOWER_WORLD_X, TOWER_WORLD_Z);
+      const originalSpeed = enemy.speed;
+      enemyMap.set('e1', enemy);
+
+      // Apply slow aura
+      service.update(0.6, mockScene);
+      expect(enemy.speed).toBeLessThan(originalSpeed);
+
+      // Clear — speed must be restored
+      service.clearProjectiles(mockScene);
+      expect(enemy.speed).toBe(originalSpeed);
+    });
+
+    it('should restore speed to original for a frozen (speed=0) enemy when clearProjectiles is called', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const enemy = createEnemyWithMesh('e1', TOWER_WORLD_X, TOWER_WORLD_Z);
+      const originalSpeed = enemy.speed;
+      enemyMap.set('e1', enemy);
+
+      // Activate freeze ability → speed set to ABILITY_CONFIG.freezeSpeedFactor (0)
+      service.activateAbility(`${TOWER_ROW}-${TOWER_COL}`);
+      expect(enemy.speed).toBe(ABILITY_CONFIG.freezeSpeedFactor);
+
+      service.clearProjectiles(mockScene);
+      expect(enemy.speed).toBe(originalSpeed);
+    });
+
+    it('should remove in-flight projectiles from the scene when clearProjectiles is called', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      // Place enemy within BASIC tower range (3 units) but far enough from the
+      // tower that the projectile (speed=8, dt=0.016 → 0.128 units) won't
+      // reach it in one tick (enemy is 2.5 units away).
+      const enemy = createEnemy('in-range', TOWER_WORLD_X + 2.5, TOWER_WORLD_Z, 100);
+      enemyMap.set('in-range', enemy);
+
+      // Fire — projectile is created but won't reach the enemy in this tick
+      service.update(0.016, mockScene);
+
+      // Confirm at least one object was added to the scene (the projectile mesh)
+      const countBefore = mockScene.children.length;
+      expect(countBefore).toBeGreaterThan(0);
+
+      service.clearProjectiles(mockScene);
+
+      // All projectile meshes removed
+      expect(mockScene.children.length).toBe(0);
+    });
   });
 });

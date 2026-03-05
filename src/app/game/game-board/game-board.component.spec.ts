@@ -1132,6 +1132,60 @@ describe('GameBoardComponent', () => {
 
   // ─── Navigation ──────────────────────────────────────────────────────────────
 
+  describe('campaign progress on VICTORY', () => {
+    // The subscription is wired in ngOnInit. Stub all canvas-dependent init
+    // methods so we can call ngOnInit safely without a real WebGL renderer.
+    function stubCanvasInits(comp: GameBoardComponent): void {
+      const noOp = () => {};
+      spyOn(comp as any, 'initializeScene').and.callFake(noOp);
+      spyOn(comp as any, 'initializeCamera').and.callFake(noOp);
+      spyOn(comp as any, 'initializeLights').and.callFake(noOp);
+      spyOn(comp as any, 'addSkybox').and.callFake(noOp);
+      spyOn(comp as any, 'initializeParticles').and.callFake(noOp);
+      spyOn(comp as any, 'renderGameBoard').and.callFake(noOp);
+      spyOn(comp as any, 'addGridLines').and.callFake(noOp);
+      spyOn(comp as any, 'updatePathPreview').and.callFake(noOp);
+      spyOn(comp as any, 'hidePathPreview').and.callFake(noOp);
+    }
+
+    it('calls campaignService.completeLevel with the correct id, stars, and score when VICTORY phase is entered', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+
+      stubCanvasInits(component);
+      component.ngOnInit();
+
+      // Set up a campaign level id so the component knows this is a campaign run
+      mapBridge.setCampaignLevelId(3);
+
+      // Transition: SETUP → COMBAT so prevPhase is non-terminal, then VICTORY
+      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.setPhase(GamePhase.VICTORY);
+
+      expect(campaignSpy.completeLevel).toHaveBeenCalledWith(
+        3,
+        jasmine.any(Number),
+        jasmine.any(Number)
+      );
+    });
+
+    it('does not call campaignService.completeLevel when there is no campaign level id', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+
+      stubCanvasInits(component);
+      component.ngOnInit();
+
+      // Ensure no campaign level is set (custom map scenario)
+      mapBridge.setCampaignLevelId(null);
+
+      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.setPhase(GamePhase.VICTORY);
+
+      expect(campaignSpy.completeLevel).not.toHaveBeenCalled();
+    });
+  });
+
   describe('goToCampaign', () => {
     it('navigates to /campaign when not in COMBAT phase', () => {
       const router = TestBed.inject(Router);

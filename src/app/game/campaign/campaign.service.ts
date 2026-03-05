@@ -100,10 +100,10 @@ function buildSerpentsPass(): TerrainGridState {
   paintV(tiles, 16, 4, 12);
   paintH(tiles, 12, 8, 16);
   paintV(tiles, 8, 12, 20);
-  paintH(tiles, 20, 8, 24);
+  paintH(tiles, 20, 8, CAMPAIGN_GRID_SIZE - 1);
 
   state.spawnPoint = { x: 0, z: 4 };
-  state.exitPoint = { x: 24, z: 20 };
+  state.exitPoint = { x: CAMPAIGN_GRID_SIZE - 1, z: 20 };
 
   return state;
 }
@@ -123,14 +123,14 @@ function buildCrossroads(): TerrainGridState {
   // Spawn connector — vertical x=0 z=6..18
   paintV(tiles, 0, 6, 18);
   // Top path
-  paintH(tiles, 6, 0, 24);
+  paintH(tiles, 6, 0, CAMPAIGN_GRID_SIZE - 1);
   // Bottom path
-  paintH(tiles, 18, 0, 24);
+  paintH(tiles, 18, 0, CAMPAIGN_GRID_SIZE - 1);
   // Exit connector — vertical x=24 z=6..18
-  paintV(tiles, 24, 6, 18);
+  paintV(tiles, CAMPAIGN_GRID_SIZE - 1, 6, 18);
 
   state.spawnPoint = { x: 0, z: 12 };
-  state.exitPoint = { x: 24, z: 12 };
+  state.exitPoint = { x: CAMPAIGN_GRID_SIZE - 1, z: 12 };
 
   return state;
 }
@@ -160,10 +160,10 @@ function buildLabyrinth(): TerrainGridState {
   // Turn up x=4, z=16..20
   paintV(tiles, 4, 16, 20);
   // Final leg x=4..24, z=16 — exit on right edge
-  paintH(tiles, 16, 4, 24);
+  paintH(tiles, 16, 4, CAMPAIGN_GRID_SIZE - 1);
 
   state.spawnPoint = { x: 0, z: 2 };
-  state.exitPoint = { x: 24, z: 16 };
+  state.exitPoint = { x: CAMPAIGN_GRID_SIZE - 1, z: 16 };
 
   return state;
 }

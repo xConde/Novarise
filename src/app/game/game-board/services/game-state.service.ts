@@ -26,6 +26,7 @@ export class GameStateService {
       this.state.wave < this.state.maxWaves || this.state.isEndless;
     if (!hasMoreWaves) return;
     this.state.wave++;
+    this.state.isPaused = false;
     this.state.phase = GamePhase.COMBAT;
     this.emit();
   }
@@ -34,6 +35,7 @@ export class GameStateService {
     if (this.state.phase !== GamePhase.COMBAT) return;
     this.state.gold += reward;
     this.state.score += reward;
+    this.state.isPaused = false;
 
     if (this.state.isEndless) {
       // In endless mode, track highest wave reached and never trigger VICTORY

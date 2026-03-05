@@ -106,6 +106,16 @@ describe('GameStateService', () => {
       service.startWave();
       expect(service.getState().phase).toBe(GamePhase.VICTORY);
     });
+
+    it('should clear isPaused when starting a new wave from INTERMISSION', () => {
+      service.startWave();
+      service.togglePause(); // pause during first COMBAT
+      service.completeWave(0); // → INTERMISSION (also clears pause, but test startWave independently)
+      // Manually set isPaused to simulate a stale pause state
+      (service as unknown as { state: { isPaused: boolean } }).state.isPaused = true;
+      service.startWave(); // next wave
+      expect(service.getState().isPaused).toBeFalse();
+    });
   });
 
   // --- completeWave ---
@@ -185,6 +195,13 @@ describe('GameStateService', () => {
       service.completeWave(999);
       expect(service.getState().gold).toBe(goldBefore);
       expect(service.getState().phase).toBe(GamePhase.DEFEAT);
+    });
+
+    it('should clear isPaused when completing a wave (togglePause race condition)', () => {
+      service.togglePause(); // pause during COMBAT
+      expect(service.getState().isPaused).toBeTrue();
+      service.completeWave(25); // wave ends on same frame
+      expect(service.getState().isPaused).toBeFalse();
     });
   });
 

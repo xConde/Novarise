@@ -69,8 +69,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private renderer!: THREE.WebGLRenderer;
   private controls!: OrbitControls;
   private composer!: EffectComposer;
+  private renderPass?: RenderPass;
   private bloomPass?: UnrealBloomPass;
   private vignettePass?: ShaderPass;
+  private lights: THREE.Light[] = [];
   private skybox?: THREE.Mesh;
   private particles: THREE.Points | null = null;
 
@@ -299,8 +301,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   private initializePostProcessing(): void {
     this.composer = new EffectComposer(this.renderer);
-    const renderPass = new RenderPass(this.scene, this.camera);
-    this.composer.addPass(renderPass);
+    this.renderPass = new RenderPass(this.scene, this.camera);
+    this.composer.addPass(this.renderPass);
 
     // Reduced bloom for better visibility
     const { width, height } = this.getViewportSize();
@@ -353,6 +355,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       EDITOR_LIGHTS.ambient.intensity
     );
     this.scene.add(ambientLight);
+    this.lights.push(ambientLight);
 
     // Multiple strong directional lights for even coverage
     const [dl1Cfg, dl2Cfg, dl3Cfg, dl4Cfg] = EDITOR_LIGHTS.directional;
@@ -367,21 +370,25 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     directionalLight1.shadow.mapSize.width = dl1Cfg.shadowMapSize!;
     directionalLight1.shadow.mapSize.height = dl1Cfg.shadowMapSize!;
     this.scene.add(directionalLight1);
+    this.lights.push(directionalLight1);
 
     // Second directional light from opposite angle
     const directionalLight2 = new THREE.DirectionalLight(dl2Cfg.color, dl2Cfg.intensity);
     directionalLight2.position.set(...dl2Cfg.position);
     this.scene.add(directionalLight2);
+    this.lights.push(directionalLight2);
 
     // Third directional light from side
     const directionalLight3 = new THREE.DirectionalLight(dl3Cfg.color, dl3Cfg.intensity);
     directionalLight3.position.set(...dl3Cfg.position);
     this.scene.add(directionalLight3);
+    this.lights.push(directionalLight3);
 
     // Fourth directional light from opposite side
     const directionalLight4 = new THREE.DirectionalLight(dl4Cfg.color, dl4Cfg.intensity);
     directionalLight4.position.set(...dl4Cfg.position);
     this.scene.add(directionalLight4);
+    this.lights.push(directionalLight4);
 
     // Bright light from below for complete visibility
     const blCfg = EDITOR_LIGHTS.bottomLight;
@@ -389,6 +396,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     bottomLight.position.set(...blCfg.position);
     bottomLight.lookAt(0, 0, 0);
     this.scene.add(bottomLight);
+    this.lights.push(bottomLight);
 
     // Hemisphere light for natural fill
     const hemiLight = new THREE.HemisphereLight(
@@ -397,12 +405,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       EDITOR_LIGHTS.hemisphere.intensity
     );
     this.scene.add(hemiLight);
+    this.lights.push(hemiLight);
 
     // Point lights for extra brightness at key positions
     for (const cfg of EDITOR_LIGHTS.point) {
       const pl = new THREE.PointLight(cfg.color, cfg.intensity, cfg.distance);
       pl.position.set(...cfg.position);
       this.scene.add(pl);
+      this.lights.push(pl);
     }
   }
 
@@ -1993,7 +2003,17 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.controls.dispose();
     }
 
+    // Dispose lights and their shadow maps
+    for (const light of this.lights) {
+      this.scene.remove(light);
+      light.shadow?.map?.dispose();
+    }
+    this.lights = [];
+
     // Dispose post-processing passes (frees GPU framebuffers)
+    if (this.renderPass) {
+      this.renderPass.dispose();
+    }
     if (this.vignettePass) {
       this.vignettePass.dispose();
     }
@@ -2003,6 +2023,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (this.composer) {
       this.composer.renderTarget1.dispose();
       this.composer.renderTarget2.dispose();
+      this.composer.dispose();
     }
 
     this.renderer.dispose();

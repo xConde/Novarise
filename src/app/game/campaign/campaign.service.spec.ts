@@ -152,6 +152,14 @@ describe('CampaignService', () => {
     expect(freshService.getProgress().bestScores[2]).toBe(800);
   });
 
+  it('should fall back to default progress when localStorage has invalid JSON', () => {
+    localStorage.setItem(STORAGE_KEY, 'not-valid-json');
+    const freshService = new CampaignService();
+    const progress = freshService.getProgress();
+    expect(progress.unlockedLevel).toBe(1);
+    expect(progress.stars).toEqual({});
+  });
+
   // ---------------------------------------------------------------------------
   // resetProgress
   // ---------------------------------------------------------------------------
