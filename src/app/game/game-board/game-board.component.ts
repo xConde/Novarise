@@ -507,6 +507,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.wavePreview = [];
     this.defeatSoundPlayed = false;
     this.victorySoundPlayed = false;
+    this.showHelpOverlay = false;
+    this.pathBlocked = false;
+    if (this.pathBlockedTimerId !== null) {
+      clearTimeout(this.pathBlockedTimerId);
+      this.pathBlockedTimerId = null;
+    }
 
     if (this.mapBridge.hasEditorMap()) {
       const state = this.mapBridge.getEditorMapState()!;
