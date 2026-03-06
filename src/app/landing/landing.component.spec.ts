@@ -45,19 +45,16 @@ describe('LandingComponent', () => {
     expect(buttons.length).toBe(3);
   });
 
-  it('should have a Create Map button', () => {
+  it('should have Quick Play as the primary CTA', () => {
     const buttons = fixture.nativeElement.querySelectorAll('.landing-btn');
-    expect(buttons[0].textContent).toContain('Create Map');
+    expect(buttons[0].textContent).toContain('Quick Play');
+    expect(buttons[0].classList).toContain('landing-btn--primary');
   });
 
-  it('should have a Play button', () => {
+  it('should have Select Map and Create Map buttons', () => {
     const buttons = fixture.nativeElement.querySelectorAll('.landing-btn');
-    expect(buttons[1].textContent).toContain('Play');
-  });
-
-  it('should have a Quick Play button', () => {
-    const buttons = fixture.nativeElement.querySelectorAll('.landing-btn');
-    expect(buttons[2].textContent).toContain('Quick Play');
+    expect(buttons[1].textContent).toContain('Select Map');
+    expect(buttons[2].textContent).toContain('Create Map');
   });
 
   it('should navigate to /edit when Create Map is clicked', () => {
@@ -65,7 +62,7 @@ describe('LandingComponent', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/edit']);
   });
 
-  it('should navigate to /maps when Play is clicked', () => {
+  it('should navigate to /maps when Select Map is clicked', () => {
     component.goToMapSelect();
     expect(router.navigate).toHaveBeenCalledWith(['/maps']);
   });
