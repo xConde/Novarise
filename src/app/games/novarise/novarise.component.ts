@@ -1186,6 +1186,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   public loadTemplate(templateId: string): void {
+    if (this.editHistory.canUndo && !confirm('Load template? Unsaved changes will be lost.')) return;
     const state = this.mapTemplateService.loadTemplate(templateId);
     if (!state) return;
     this.terrainGrid.importState(state);
@@ -1193,6 +1194,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.updateExitMarker();
     this.runPathValidation();
     this.editHistory.clear();
+    this.mapStorage.clearCurrentMapId();
     this.currentMapName = '';
   }
 
