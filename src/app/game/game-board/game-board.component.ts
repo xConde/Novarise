@@ -12,7 +12,7 @@ import { EnemyService } from './services/enemy.service';
 import { MapBridgeService } from './services/map-bridge.service';
 import { GameStateService } from './services/game-state.service';
 import { WaveService } from './services/wave.service';
-import { TowerCombatService } from './services/tower-combat.service';
+import { TowerCombatService, KillInfo } from './services/tower-combat.service';
 import { AudioService } from './services/audio.service';
 import { ParticleService } from './services/particle.service';
 import { ScreenShakeService } from './services/screen-shake.service';
@@ -496,7 +496,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.cleanupGameObjects();
 
-    // Reset services
+    // Reset services — enemyService.reset() clears counter + path cache
+    this.enemyService.reset(this.scene);
     this.waveService.reset();
     this.gameStateService.reset();
     this.gameStatsService.reset();
@@ -527,7 +528,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.renderGameBoard();
     this.addGridLines();
-    this.enemyService.clearPathCache();
     this.lastPreviewKey = '';
     this.lastTime = 0;
     this.elapsedTimeAccumulator = 0;
@@ -1386,6 +1386,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const deltaTime = Math.min(rawDelta, 0.1); // Cap at 100ms to prevent tab-switch physics burst
     this.lastTime = time;
 
+    // Reset per-frame SFX counters so throttle limits apply per animation frame
+    this.audioService.resetFrameCounters();
+
     // FPS tracking
     this.fpsCounterService.tick(time);
 
@@ -1438,8 +1441,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         }
 
         // Collect gold from tower kills and remove dead enemies
-        for (const enemyId of killedByTowers) {
-          const enemy = this.enemyService.getEnemies().get(enemyId);
+        for (const killInfo of killedByTowers) {
+          const enemy = this.enemyService.getEnemies().get(killInfo.id);
           if (enemy) {
             this.gameStateService.addGold(enemy.value);
             this.gameStatsService.recordGoldEarned(enemy.value);
@@ -1450,9 +1453,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             const enemyColor = ENEMY_STATS[enemy.type]?.color ?? 0xff0000;
             this.particleService.spawnDeathBurst(enemy.position, enemyColor);
             this.goldPopupService.spawn(enemy.value, enemy.position, this.scene);
-            this.damagePopupService.spawn(enemy.maxHealth, enemy.position, this.scene);
+            this.damagePopupService.spawn(killInfo.damage, enemy.position, this.scene);
 
-            this.enemyService.removeEnemy(enemyId, this.scene);
+            this.enemyService.removeEnemy(killInfo.id, this.scene);
           }
         }
 

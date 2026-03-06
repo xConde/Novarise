@@ -893,6 +893,39 @@ describe('EnemyService', () => {
     });
   });
 
+  describe('reset()', () => {
+    it('should reset enemy counter to 0', () => {
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+
+      service.reset(mockScene);
+
+      // Next spawned enemy should have id 'enemy-0' (counter reset)
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy!.id).toBe('enemy-0');
+    });
+
+    it('should clear all enemies from the map', () => {
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+      service.spawnEnemy(EnemyType.HEAVY, mockScene);
+
+      service.reset(mockScene);
+
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('should clear the path cache', () => {
+      spyOn(service, 'clearPathCache').and.callThrough();
+
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+
+      service.reset(mockScene);
+
+      expect(service.clearPathCache).toHaveBeenCalled();
+    });
+  });
+
   describe('Performance', () => {
     it('should handle 20+ enemies without issues', () => {
       const enemyCount = 25;

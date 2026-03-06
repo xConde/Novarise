@@ -211,3 +211,23 @@
     outline-offset: 2px;
   }
 }
+
+// --- Mobile breakpoint ---
+@media (max-width: 480px) {
+  .map-select-container {
+    padding: var(--spacing-md);
+  }
+
+  .map-select-title {
+    font-size: var(--font-size-title);
+  }
+
+  .map-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .map-card {
+    padding: var(--spacing-sm) var(--spacing-md);
+    padding-top: 2rem;
+  }
+}

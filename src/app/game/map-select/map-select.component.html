@@ -20,6 +20,7 @@
           class="card-action-btn delete-btn"
           [class.confirm]="deleteConfirmId === map.id"
           [title]="deleteConfirmId === map.id ? 'Click again to confirm' : 'Delete map'"
+          [attr.aria-label]="deleteConfirmId === map.id ? 'Confirm delete ' + map.name : 'Delete ' + map.name"
           (click)="deleteMap(map.id, $event)">
           {{ deleteConfirmId === map.id ? '?' : '&#10005;' }}
         </button>

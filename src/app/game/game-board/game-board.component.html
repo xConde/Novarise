@@ -145,7 +145,7 @@
   </div>
 
   <!-- Victory/Defeat overlay -->
-  <div class="game-overlay" *ngIf="gameState.phase === GamePhase.VICTORY || gameState.phase === GamePhase.DEFEAT">
+  <div class="game-overlay" *ngIf="gameState.phase === GamePhase.VICTORY || gameState.phase === GamePhase.DEFEAT" role="alertdialog" [attr.aria-label]="gameState.phase === GamePhase.VICTORY ? 'Victory' : 'Defeat'">
     <div class="overlay-content" [class.victory]="gameState.phase === GamePhase.VICTORY" [class.defeat]="gameState.phase === GamePhase.DEFEAT">
       <h2 *ngIf="gameState.phase === GamePhase.VICTORY">Victory</h2>
       <h2 *ngIf="gameState.phase === GamePhase.DEFEAT">Defeat</h2>

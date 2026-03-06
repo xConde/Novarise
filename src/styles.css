@@ -14,7 +14,7 @@
   --theme-purple: #6a4a8a;
   --theme-purple-glow: rgba(106, 74, 138, 0.4);
   --theme-purple-light: #9a8ab0;
-  --theme-purple-mid: #b0a0c0;
+  --theme-purple-mid: #c4b8d8;
   --theme-purple-lighter: #e0d0f0;
   --nav-bg: #0a0515;
 
@@ -96,7 +96,7 @@
 
   /* Misc UI colors */
   --score-multiplier: #88aaff;
-  --text-disabled: #6a6a7a;
+  --text-disabled: #8a8a9a;
 
   /* Rainbow effect colors */
   --rainbow-red: #FF0000;

@@ -664,6 +664,16 @@ export class EnemyService {
   }
 
   /**
+   * Full reset: remove all enemies from the scene, reset the ID counter,
+   * and clear the path cache. Call on game restart to prevent stale state.
+   */
+  reset(scene: THREE.Scene): void {
+    this.cleanup(scene);
+    this.enemyCounter = 0;
+    this.clearPathCache();
+  }
+
+  /**
    * Remove all enemies from the scene, dispose their geometries/materials,
    * and clear the internal enemies map. Call on game restart or route teardown.
    */

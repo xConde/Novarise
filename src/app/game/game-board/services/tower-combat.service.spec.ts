@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { TowerCombatService } from './tower-combat.service';
+import { TowerCombatService, KillInfo } from './tower-combat.service';
 import { EnemyService, DamageResult } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { TowerType, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats } from '../models/tower.model';
@@ -230,7 +230,20 @@ describe('TowerCombatService', () => {
 
       // First update: tower fires AND projectile hits (dist=0) → kill
       const result = service.update(0.016, mockScene);
-      expect(result.killed).toContain('e1');
+      expect(result.killed.map((k: KillInfo) => k.id)).toContain('e1');
+    });
+
+    it('should include the damage dealt in KillInfo', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy with exactly lethal health
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 25);
+      enemyMap.set('e1', enemy);
+
+      const result = service.update(0.016, mockScene);
+      const kill = result.killed.find((k: KillInfo) => k.id === 'e1');
+      expect(kill).toBeDefined();
+      expect(kill!.damage).toBe(TOWER_CONFIGS[TowerType.BASIC].damage);
     });
 
     it('should not report kill for surviving enemy', () => {
@@ -240,7 +253,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e1', enemy);
 
       const result = service.update(0.016, mockScene);
-      expect(result.killed).not.toContain('e1');
+      expect(result.killed.map((k: KillInfo) => k.id)).not.toContain('e1');
     });
   });
 
@@ -441,7 +454,7 @@ describe('TowerCombatService', () => {
       const result = service.update(0.016, mockScene);
 
       // Should only report the kill once (second projectile sees health <= 0)
-      const e1Kills = result.killed.filter((id: string) => id === 'e1');
+      const e1Kills = result.killed.filter((k: KillInfo) => k.id === 'e1');
       expect(e1Kills.length).toBe(1);
     });
   });
@@ -684,8 +697,9 @@ describe('TowerCombatService', () => {
       enemyMap.set('e2', e2);
 
       const result = service.update(1.0, mockScene);
-      expect(result.killed).toContain('e1');
-      expect(result.killed).toContain('e2');
+      const killedIds = result.killed.map((k: KillInfo) => k.id);
+      expect(killedIds).toContain('e1');
+      expect(killedIds).toContain('e2');
     });
   });
 
