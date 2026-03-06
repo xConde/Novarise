@@ -25,4 +25,8 @@ export class LandingComponent {
     this.mapBridge.clearEditorMap();
     this.router.navigate(['/play'], { queryParams: { quickplay: 'true' } });
   }
+
+  goToProfile(): void {
+    this.router.navigate(['/profile']);
+  }
 }

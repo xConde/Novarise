@@ -40,9 +40,9 @@ describe('LandingComponent', () => {
     expect(subtitle.textContent).toContain('Tower Defense');
   });
 
-  it('should render three navigation buttons', () => {
+  it('should render four navigation buttons', () => {
     const buttons = fixture.nativeElement.querySelectorAll('.landing-btn');
-    expect(buttons.length).toBe(3);
+    expect(buttons.length).toBe(4);
   });
 
   it('should have Quick Play as the primary CTA', () => {
@@ -71,5 +71,10 @@ describe('LandingComponent', () => {
     component.quickPlay();
     expect(mapBridge.clearEditorMap).toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledWith(['/play'], { queryParams: { quickplay: 'true' } });
+  });
+
+  it('should navigate to /profile when Profile is clicked', () => {
+    component.goToProfile();
+    expect(router.navigate).toHaveBeenCalledWith(['/profile']);
   });
 });

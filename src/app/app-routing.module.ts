@@ -6,7 +6,8 @@ const routes: Routes = [
   { path: '', loadChildren: () => import('./landing/landing.module').then(m => m.LandingModule) },
   { path: 'edit', loadChildren: () => import('./games/novarise/editor.module').then(m => m.EditorModule) },
   { path: 'play', loadChildren: () => import('./game/game.module').then(m => m.GameModule), canActivate: [GameGuard] },
-  { path: 'maps', loadChildren: () => import('./game/map-select/map-select.module').then(m => m.MapSelectModule) }
+  { path: 'maps', loadChildren: () => import('./game/map-select/map-select.module').then(m => m.MapSelectModule) },
+  { path: 'profile', loadChildren: () => import('./profile/profile.module').then(m => m.ProfileModule) }
 ];
 
 @NgModule({
