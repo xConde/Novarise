@@ -86,6 +86,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private gridLines: THREE.Group | null = null;
   private rangePreviewMesh: THREE.Mesh | null = null;
   selectedTowerType: TowerType = TowerType.BASIC;
+  private lastPreviewKey = ''; // "row-col-towerType" — skip BFS when unchanged
 
   // Tower info panel state (exposed to template)
   selectedTowerInfo: PlacedTower | null = null;
@@ -367,8 +368,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Restore tile to BASE
     this.gameBoardService.removeTower(this.selectedTowerInfo.row, this.selectedTowerInfo.col);
 
-    // Clear path cache since board changed
+    // Clear path cache and BFS preview cache since board changed
     this.enemyService.clearPathCache();
+    this.lastPreviewKey = '';
 
     this.deselectTower();
   }
@@ -891,15 +893,21 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const phase = this.gameStateService.getState().phase;
         const isTerminal = phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT;
         if (!isTerminal && !this.selectedTowerInfo) {
-          const canPlace = this.gameBoardService.canPlaceTower(row, col)
-            && this.gameStateService.canAfford(TOWER_CONFIGS[this.selectedTowerType].cost);
-          this.towerPreviewService.showPreview(this.selectedTowerType, row, col, canPlace, this.scene);
+          const previewKey = `${row}-${col}-${this.selectedTowerType}`;
+          if (previewKey !== this.lastPreviewKey) {
+            this.lastPreviewKey = previewKey;
+            const canPlace = this.gameBoardService.canPlaceTower(row, col)
+              && this.gameStateService.canAfford(TOWER_CONFIGS[this.selectedTowerType].cost);
+            this.towerPreviewService.showPreview(this.selectedTowerType, row, col, canPlace, this.scene);
+          }
         } else {
+          this.lastPreviewKey = '';
           this.towerPreviewService.hidePreview(this.scene);
         }
       } else {
         this.hoveredTile = null;
         canvas.style.cursor = 'default';
+        this.lastPreviewKey = '';
         this.towerPreviewService.hidePreview(this.scene);
       }
     };
@@ -1164,7 +1172,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.audioService.playTowerPlace();
       this.gameStatsService.recordTowerBuilt();
 
-      // Hide preview — tower was placed on this tile
+      // Hide preview and invalidate BFS cache — board layout changed
+      this.lastPreviewKey = '';
       this.towerPreviewService.hidePreview(this.scene);
 
       // Clear enemy path cache since board layout changed
