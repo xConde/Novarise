@@ -1,0 +1,79 @@
+.landing-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
+.landing-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-lg);
+}
+
+.landing-title {
+  font-size: 4rem;
+  font-weight: 700;
+  letter-spacing: 0.4em;
+  color: var(--theme-purple-lighter);
+  text-shadow: 0 0 20px var(--theme-purple-glow),
+               0 0 40px var(--theme-purple-glow);
+  margin: 0;
+}
+
+.landing-subtitle {
+  font-size: var(--font-size-title);
+  color: var(--theme-purple-mid);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.landing-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  width: 100%;
+  max-width: 280px;
+  margin-top: var(--spacing-xl);
+}
+
+.landing-btn {
+  padding: 0.8rem var(--spacing-lg);
+  border-radius: var(--border-radius-lg);
+  border: var(--border-width-thin) solid var(--theme-purple);
+  background: var(--theme-purple-a20);
+  color: var(--theme-purple-lighter);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: background var(--transition-fast) ease,
+              box-shadow var(--transition-fast) ease,
+              border-color var(--transition-fast) ease;
+
+  &:hover {
+    background: var(--theme-purple-a50);
+    border-color: var(--theme-purple-light);
+    box-shadow: 0 0 12px var(--theme-purple-glow);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--theme-purple-lighter);
+    outline-offset: 2px;
+  }
+
+  &--primary {
+    background: var(--theme-purple-a50);
+    border-color: var(--theme-purple-light);
+    box-shadow: 0 0 8px var(--theme-purple-glow);
+
+    &:hover {
+      background: var(--theme-purple-a70);
+      box-shadow: 0 0 16px var(--theme-purple-glow);
+    }
+  }
+}

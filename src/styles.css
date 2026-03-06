@@ -174,7 +174,7 @@ html, body {
 }
 
 /* Routed component fills remaining space */
-app-novarise, app-game {
+app-novarise, app-game, app-landing {
   flex: 1;
   overflow: hidden;
   display: block;
