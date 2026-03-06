@@ -252,6 +252,14 @@ export class GameBoardService {
     this.generateSpawner();
   }
 
+  getSpawnerTiles(): number[][] {
+    return this.spawnerTiles;
+  }
+
+  getExitTiles(): number[][] {
+    return this.exitTiles;
+  }
+
   // Tower placement
   canPlaceTower(row: number, col: number): boolean {
     if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
@@ -261,7 +269,108 @@ export class GameBoardService {
     const tile = this.gameBoard[row][col];
 
     // Can only place on BASE tiles that are purchasable
-    return tile.type === BlockType.BASE && tile.isPurchasable && tile.towerType === null;
+    if (tile.type !== BlockType.BASE || !tile.isPurchasable || tile.towerType !== null) {
+      return false;
+    }
+
+    // Reject placement if it would block all paths from spawners to exits
+    if (this.wouldBlockPath(row, col)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Check whether placing a tower at (row, col) would block every path
+   * from any spawner to any exit. Uses BFS with the same traversability
+   * logic as EnemyService.findPath.
+   */
+  wouldBlockPath(row: number, col: number): boolean {
+    if (this.spawnerTiles.length === 0 || this.exitTiles.length === 0) {
+      return false;
+    }
+
+    // Temporarily mark the tile as non-traversable
+    const originalTile = this.gameBoard[row][col];
+    this.gameBoard[row][col] = new GameBoardTile(
+      originalTile.x,
+      originalTile.y,
+      BlockType.TOWER,
+      false,
+      false,
+      originalTile.cost,
+      TowerType.BASIC // placeholder — type doesn't matter for traversability
+    );
+
+    // Build a set of exit positions for fast lookup
+    const exitSet = new Set<string>();
+    for (const [eRow, eCol] of this.exitTiles) {
+      exitSet.add(`${eRow},${eCol}`);
+    }
+
+    // BFS from each spawner to any exit. If ANY spawner cannot reach
+    // ANY exit, the placement blocks the path.
+    let blocked = false;
+    for (const [sRow, sCol] of this.spawnerTiles) {
+      if (!this.bfsCanReachExit(sRow, sCol, exitSet)) {
+        blocked = true;
+        break;
+      }
+    }
+
+    // Restore the original tile
+    this.gameBoard[row][col] = originalTile;
+    return blocked;
+  }
+
+  /**
+   * BFS from (startRow, startCol) to any tile in exitSet.
+   * Traversability: tile.isTraversable OR tile.type === EXIT.
+   * Matches EnemyService.findPath neighbor logic.
+   */
+  private bfsCanReachExit(startRow: number, startCol: number, exitSet: Set<string>): boolean {
+    const visited = new Set<string>();
+    const queue: [number, number][] = [];
+
+    // Spawner tiles are non-traversable; seed BFS from their traversable neighbors
+    const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    for (const [dr, dc] of directions) {
+      const nr = startRow + dr;
+      const nc = startCol + dc;
+      if (nr < 0 || nr >= this.gameBoardHeight || nc < 0 || nc >= this.gameBoardWidth) continue;
+      const neighbor = this.gameBoard[nr][nc];
+      if (neighbor.isTraversable || neighbor.type === BlockType.EXIT) {
+        const key = `${nr},${nc}`;
+        if (!visited.has(key)) {
+          visited.add(key);
+          if (exitSet.has(key)) return true;
+          queue.push([nr, nc]);
+        }
+      }
+    }
+
+    while (queue.length > 0) {
+      const [r, c] = queue.shift()!;
+
+      for (const [dr, dc] of directions) {
+        const nr = r + dr;
+        const nc = c + dc;
+        if (nr < 0 || nr >= this.gameBoardHeight || nc < 0 || nc >= this.gameBoardWidth) continue;
+
+        const key = `${nr},${nc}`;
+        if (visited.has(key)) continue;
+
+        const tile = this.gameBoard[nr][nc];
+        if (!tile.isTraversable && tile.type !== BlockType.EXIT) continue;
+
+        visited.add(key);
+        if (exitSet.has(key)) return true;
+        queue.push([nr, nc]);
+      }
+    }
+
+    return false;
   }
 
   placeTower(row: number, col: number, towerType: TowerType): boolean {

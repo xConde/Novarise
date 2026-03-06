@@ -47,6 +47,11 @@
     <span class="wave-enemy-count">{{ enemiesAlive + enemiesToSpawn }}</span> enemies remaining
   </div>
 
+  <!-- Path blocked warning -->
+  <div class="path-blocked-warning" *ngIf="pathBlocked">
+    Placement blocked — enemies need a path to the exit
+  </div>
+
   <!-- Difficulty selector — only visible in SETUP before wave 0 starts -->
   <div class="difficulty-selector" *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0">
     <span class="difficulty-label">Difficulty</span>

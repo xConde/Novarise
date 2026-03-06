@@ -120,6 +120,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   showAllRanges = false;
   sellConfirmPending = false;
   showHelpOverlay = false;
+  pathBlocked = false;
+  private pathBlockedTimerId: ReturnType<typeof setTimeout> | null = null;
   private rangeRingMeshes: THREE.Mesh[] = [];
 
   // Animation
@@ -1096,11 +1098,32 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  private static readonly PATH_BLOCKED_DISMISS_MS = 2000;
+
+  private showPathBlockedWarning(): void {
+    this.pathBlocked = true;
+    if (this.pathBlockedTimerId !== null) {
+      clearTimeout(this.pathBlockedTimerId);
+    }
+    this.pathBlockedTimerId = setTimeout(() => {
+      this.pathBlocked = false;
+      this.pathBlockedTimerId = null;
+    }, GameBoardComponent.PATH_BLOCKED_DISMISS_MS);
+  }
+
   private tryPlaceTower(row: number, col: number): void {
     const phase = this.gameStateService.getState().phase;
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
 
-    if (!this.gameBoardService.canPlaceTower(row, col)) return;
+    if (!this.gameBoardService.canPlaceTower(row, col)) {
+      // Check specifically if this was a path-blocking rejection
+      const tile = this.gameBoardService.getGameBoard()[row]?.[col];
+      if (tile && tile.type === BlockType.BASE && tile.isPurchasable && tile.towerType === null) {
+        // Tile is otherwise valid — blocked due to path check
+        this.showPathBlockedWarning();
+      }
+      return;
+    }
 
     const towerStats = TOWER_CONFIGS[this.selectedTowerType];
 
@@ -1479,6 +1502,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     cancelAnimationFrame(this.animationFrameId);
+
+    if (this.pathBlockedTimerId !== null) {
+      clearTimeout(this.pathBlockedTimerId);
+      this.pathBlockedTimerId = null;
+    }
 
     if (this.stateSubscription) {
       this.stateSubscription.unsubscribe();

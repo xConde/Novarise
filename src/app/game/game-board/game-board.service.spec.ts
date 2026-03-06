@@ -84,13 +84,21 @@ describe('GameBoardService', () => {
     });
 
     it('should fully reset state when called multiple times', () => {
-      // Place a tower to dirty the state
+      // Import a custom board with a tower, then reset and verify clean state
+      const board = createTestBoard(10, 10);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[9][9] = GameBoardTile.createExit(9, 9);
+      service.importBoard(board, 10, 10);
       service.placeTower(5, 5, TowerType.BASIC);
       expect(service.getGameBoard()[5][5].type).toBe(BlockType.TOWER);
 
-      // Reset and verify tower is gone
+      // Reset restores default 25x20 board — all internal state is cleared
       service.resetBoard();
-      expect(service.getGameBoard()[5][5].type).toBe(BlockType.BASE);
+      const freshBoard = service.getGameBoard();
+      expect(freshBoard.length).toBe(20);
+      expect(freshBoard[0].length).toBe(25);
+      // The imported tower is gone — tile (5,5) is BASE on the fresh board
+      expect(freshBoard[5][5].type).toBe(BlockType.BASE);
     });
   });
 
@@ -148,8 +156,11 @@ describe('GameBoardService', () => {
     });
 
     it('should clear previous state when importing', () => {
-      // First, set up default board with towers
-      service.resetBoard();
+      // First, set up a board with a tower
+      const prevBoard = createTestBoard(10, 10);
+      prevBoard[0][0] = GameBoardTile.createSpawner(0, 0);
+      prevBoard[9][9] = GameBoardTile.createExit(9, 9);
+      service.importBoard(prevBoard, 10, 10);
       service.placeTower(5, 5, TowerType.BASIC);
 
       // Import a clean board
@@ -167,41 +178,31 @@ describe('GameBoardService', () => {
 
   describe('canPlaceTower', () => {
     beforeEach(() => {
-      service.resetBoard();
+      // Use a deterministic board with known spawner/exit so path validation is predictable
+      const board = createTestBoard(10, 10);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[9][9] = GameBoardTile.createExit(9, 9);
+      service.importBoard(board, 10, 10);
     });
 
     it('should allow placement on BASE purchasable tiles', () => {
-      // Find a base tile (avoid spawner/exit areas)
+      // Tile (5, 5) is BASE and won't block the path on a 10x10 open board
       expect(service.canPlaceTower(5, 5)).toBeTrue();
     });
 
     it('should reject placement on EXIT tiles', () => {
-      // Exit tiles at [9,11], [9,12], [10,11], [10,12]
-      expect(service.canPlaceTower(9, 11)).toBeFalse();
+      expect(service.canPlaceTower(9, 9)).toBeFalse();
     });
 
     it('should reject placement on SPAWNER tiles', () => {
-      const board = service.getGameBoard();
-      // Find a spawner tile
-      let spawnerRow = -1, spawnerCol = -1;
-      for (let row = 0; row < 20 && spawnerRow === -1; row++) {
-        for (let col = 0; col < 25; col++) {
-          if (board[row][col].type === BlockType.SPAWNER) {
-            spawnerRow = row;
-            spawnerCol = col;
-            break;
-          }
-        }
-      }
-      expect(spawnerRow).toBeGreaterThanOrEqual(0);
-      expect(service.canPlaceTower(spawnerRow, spawnerCol)).toBeFalse();
+      expect(service.canPlaceTower(0, 0)).toBeFalse();
     });
 
     it('should reject out-of-bounds positions', () => {
       expect(service.canPlaceTower(-1, 0)).toBeFalse();
       expect(service.canPlaceTower(0, -1)).toBeFalse();
-      expect(service.canPlaceTower(20, 0)).toBeFalse();
-      expect(service.canPlaceTower(0, 25)).toBeFalse();
+      expect(service.canPlaceTower(10, 0)).toBeFalse();
+      expect(service.canPlaceTower(0, 10)).toBeFalse();
     });
 
     it('should reject placement on already-occupied tiles', () => {
@@ -216,13 +217,166 @@ describe('GameBoardService', () => {
 
       expect(service.canPlaceTower(2, 2)).toBeFalse();
     });
+
+    it('should reject placement that would block the only path', () => {
+      // 5-wide corridor: spawner at (0,0), exit at (0,4), path along row 0
+      // Walls block rows 1-2 except the corridor at row 0
+      const board = createTestBoard(5, 3);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[0][4] = GameBoardTile.createExit(0, 4);
+      // Wall off row 1 and 2 entirely
+      for (let col = 0; col < 5; col++) {
+        board[1][col] = GameBoardTile.createWall(1, col);
+        board[2][col] = GameBoardTile.createWall(2, col);
+      }
+      service.importBoard(board, 5, 3);
+
+      // Blocking tile (0,2) would cut the only path
+      expect(service.canPlaceTower(0, 2)).toBeFalse();
+    });
+
+    it('should allow placement when alternative paths exist', () => {
+      // Open board with spawner and exit — placing one tower won't block
+      const board = createTestBoard(5, 5);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[4][4] = GameBoardTile.createExit(4, 4);
+      service.importBoard(board, 5, 5);
+
+      // Placing at (2,2) should be fine — many paths around
+      expect(service.canPlaceTower(2, 2)).toBeTrue();
+    });
+  });
+
+  // --- wouldBlockPath ---
+
+  describe('wouldBlockPath', () => {
+    it('should return true when tile blocks the only path in a narrow corridor', () => {
+      // Row 0: S . X . E  (X = tile under test)
+      // Row 1: W W W W W
+      const board = createTestBoard(5, 2);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[0][4] = GameBoardTile.createExit(0, 4);
+      for (let col = 0; col < 5; col++) {
+        board[1][col] = GameBoardTile.createWall(1, col);
+      }
+      service.importBoard(board, 5, 2);
+
+      expect(service.wouldBlockPath(0, 2)).toBeTrue();
+    });
+
+    it('should return false when alternative paths exist', () => {
+      const board = createTestBoard(5, 5);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[4][4] = GameBoardTile.createExit(4, 4);
+      service.importBoard(board, 5, 5);
+
+      // Center tile — plenty of paths around
+      expect(service.wouldBlockPath(2, 2)).toBeFalse();
+    });
+
+    it('should return false when there are no spawners', () => {
+      const board = createTestBoard(5, 5);
+      board[4][4] = GameBoardTile.createExit(4, 4);
+      service.importBoard(board, 5, 5);
+
+      expect(service.wouldBlockPath(2, 2)).toBeFalse();
+    });
+
+    it('should return false when there are no exits', () => {
+      const board = createTestBoard(5, 5);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      service.importBoard(board, 5, 5);
+
+      expect(service.wouldBlockPath(2, 2)).toBeFalse();
+    });
+
+    it('should detect blocking next to spawner', () => {
+      // S X E
+      // W W W
+      const board = createTestBoard(3, 2);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[0][2] = GameBoardTile.createExit(0, 2);
+      board[1][0] = GameBoardTile.createWall(1, 0);
+      board[1][1] = GameBoardTile.createWall(1, 1);
+      board[1][2] = GameBoardTile.createWall(1, 2);
+      service.importBoard(board, 3, 2);
+
+      // Blocking (0,1) cuts spawner from exit
+      expect(service.wouldBlockPath(0, 1)).toBeTrue();
+    });
+
+    it('should detect blocking next to exit', () => {
+      // S . X E
+      // W W W W
+      const board = createTestBoard(4, 2);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[0][3] = GameBoardTile.createExit(0, 3);
+      for (let col = 0; col < 4; col++) {
+        board[1][col] = GameBoardTile.createWall(1, col);
+      }
+      service.importBoard(board, 4, 2);
+
+      // Blocking (0,2) — right next to exit — cuts the path
+      expect(service.wouldBlockPath(0, 2)).toBeTrue();
+    });
+
+    it('should restore tile state after check', () => {
+      const board = createTestBoard(5, 5);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[4][4] = GameBoardTile.createExit(4, 4);
+      service.importBoard(board, 5, 5);
+
+      const tileBefore = service.getGameBoard()[2][2];
+      service.wouldBlockPath(2, 2);
+      const tileAfter = service.getGameBoard()[2][2];
+
+      expect(tileAfter).toBe(tileBefore);
+      expect(tileAfter.type).toBe(BlockType.BASE);
+    });
+
+    it('should handle multiple spawners — blocks if any spawner loses path', () => {
+      // Two spawners on opposite sides, one narrow corridor
+      // S1 . X . S2
+      // W  W W W W
+      // .  . . . .
+      // .  . E . .
+      const board = createTestBoard(5, 4);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[0][4] = GameBoardTile.createSpawner(0, 4);
+      board[3][2] = GameBoardTile.createExit(3, 2);
+      for (let col = 0; col < 5; col++) {
+        board[1][col] = GameBoardTile.createWall(1, col);
+      }
+      service.importBoard(board, 5, 4);
+
+      // Blocking (0,2) cuts the corridor for both top spawners
+      expect(service.wouldBlockPath(0, 2)).toBeTrue();
+    });
+
+    it('should allow placement when only one of multiple paths is blocked', () => {
+      // S . . .
+      // . X . .
+      // . . . .
+      // . . . E
+      const board = createTestBoard(4, 4);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[3][3] = GameBoardTile.createExit(3, 3);
+      service.importBoard(board, 4, 4);
+
+      // Wide open board, blocking (1,1) still leaves paths
+      expect(service.wouldBlockPath(1, 1)).toBeFalse();
+    });
   });
 
   // --- placeTower ---
 
   describe('placeTower', () => {
     beforeEach(() => {
-      service.resetBoard();
+      // Deterministic board with spawner/exit for path validation
+      const board = createTestBoard(10, 10);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[9][9] = GameBoardTile.createExit(9, 9);
+      service.importBoard(board, 10, 10);
     });
 
     it('should place a tower on a valid tile', () => {
@@ -264,7 +418,11 @@ describe('GameBoardService', () => {
 
   describe('removeTower', () => {
     beforeEach(() => {
-      service.resetBoard();
+      // Deterministic board with spawner/exit for path validation
+      const board = createTestBoard(10, 10);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[9][9] = GameBoardTile.createExit(9, 9);
+      service.importBoard(board, 10, 10);
     });
 
     it('should remove a tower and restore BASE tile', () => {
@@ -285,8 +443,8 @@ describe('GameBoardService', () => {
     it('should return false for out-of-bounds', () => {
       expect(service.removeTower(-1, 0)).toBeFalse();
       expect(service.removeTower(0, -1)).toBeFalse();
-      expect(service.removeTower(20, 0)).toBeFalse();
-      expect(service.removeTower(0, 25)).toBeFalse();
+      expect(service.removeTower(10, 0)).toBeFalse();
+      expect(service.removeTower(0, 10)).toBeFalse();
     });
 
     it('should allow re-placement after removal', () => {

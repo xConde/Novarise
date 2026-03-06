@@ -193,6 +193,30 @@
     }
   }
 
+  .path-blocked-warning {
+    position: absolute;
+    top: calc(var(--spacing-md) + 5rem);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.4rem var(--spacing-lg);
+    background: rgba(180, 40, 40, 0.85);
+    border: 1px solid rgba(255, 80, 80, 0.6);
+    border-radius: var(--border-radius-md);
+    color: #fff;
+    font-family: "Orbitron", sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    z-index: var(--z-index-overlay);
+    animation: path-blocked-fade-in 0.15s ease-out;
+    pointer-events: none;
+  }
+
+  @keyframes path-blocked-fade-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
   // --- Wave preview panel ---
   .wave-preview {
     @include glass-panel(rgba(0, 0, 0, 0.82));
