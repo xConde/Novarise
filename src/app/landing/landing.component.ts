@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
 import { MapBridgeService } from '../game/game-board/services/map-bridge.service';
+import { QUICK_PLAY_PARAM } from '../game/guards/game.guard';
 
 @Component({
   selector: 'app-landing',
@@ -23,7 +24,7 @@ export class LandingComponent {
 
   quickPlay(): void {
     this.mapBridge.clearEditorMap();
-    this.router.navigate(['/play'], { queryParams: { quickplay: 'true' } });
+    this.router.navigate(['/play'], { queryParams: { [QUICK_PLAY_PARAM]: 'true' } });
   }
 
   goToProfile(): void {

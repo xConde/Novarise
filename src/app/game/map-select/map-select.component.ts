@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { MapStorageService, MapMetadata } from '../../games/novarise/core/map-storage.service';
 import { MapBridgeService } from '../game-board/services/map-bridge.service';
+import { QUICK_PLAY_PARAM } from '../guards/game.guard';
 
 const DELETE_CONFIRM_TIMEOUT_MS = 3000;
 
@@ -34,12 +35,14 @@ export class MapSelectComponent implements OnInit, OnDestroy {
     if (mapData) {
       this.mapBridge.setEditorMapState(mapData);
       this.router.navigate(['/play']);
+    } else {
+      this.maps = this.maps.filter(m => m.id !== map.id);
     }
   }
 
   quickPlay(): void {
     this.mapBridge.clearEditorMap();
-    this.router.navigate(['/play'], { queryParams: { quickplay: 'true' } });
+    this.router.navigate(['/play'], { queryParams: { [QUICK_PLAY_PARAM]: 'true' } });
   }
 
   editMap(map: MapMetadata, event: Event): void {
@@ -48,6 +51,8 @@ export class MapSelectComponent implements OnInit, OnDestroy {
     if (mapData) {
       this.mapBridge.setEditorMapState(mapData);
       this.router.navigate(['/edit']);
+    } else {
+      this.maps = this.maps.filter(m => m.id !== map.id);
     }
   }
 

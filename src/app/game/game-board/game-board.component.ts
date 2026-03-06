@@ -113,6 +113,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Achievements unlocked at game end
   newlyUnlockedAchievements: string[] = [];
+  achievementDetails: Achievement[] = [];
 
   // Guard: prevents recordGameEnd from firing more than once per game
   private gameEndRecorded = false;
@@ -158,8 +159,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** Resolves newly unlocked achievement IDs to their name/description for display. */
-  get achievementDetails(): Achievement[] {
-    return this.newlyUnlockedAchievements
+  private updateAchievementDetails(): void {
+    this.achievementDetails = this.newlyUnlockedAchievements
       .map(id => ACHIEVEMENTS.find(a => a.id === id))
       .filter((a): a is Achievement => a != null);
   }
@@ -455,15 +456,25 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   goToEditor(): void {
-    if (this.gameState.phase === GamePhase.COMBAT && !confirm('Leave the game? Progress will be lost.')) {
-      return;
+    if (this.gameState.phase === GamePhase.COMBAT) {
+      const wasPaused = this.isPaused;
+      if (!wasPaused) this.togglePause();
+      if (!confirm('Leave the game? Progress will be lost.')) {
+        if (!wasPaused) this.togglePause();
+        return;
+      }
     }
     this.router.navigate(['/edit']);
   }
 
   goHome(): void {
-    if (this.gameState.phase === GamePhase.COMBAT && !confirm('Leave the game? Progress will be lost.')) {
-      return;
+    if (this.gameState.phase === GamePhase.COMBAT) {
+      const wasPaused = this.isPaused;
+      if (!wasPaused) this.togglePause();
+      if (!confirm('Leave the game? Progress will be lost.')) {
+        if (!wasPaused) this.togglePause();
+        return;
+      }
     }
     this.router.navigate(['/']);
   }
@@ -491,6 +502,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gameStatsService.reset();
     this.scoreBreakdown = null;
     this.newlyUnlockedAchievements = [];
+    this.achievementDetails = [];
     this.gameEndRecorded = false;
     this.wavePreview = [];
     this.defeatSoundPlayed = false;
@@ -908,7 +920,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const phase = this.gameStateService.getState().phase;
         const isTerminal = phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT;
         if (!isTerminal && !this.selectedTowerInfo) {
-          const previewKey = `${row}-${col}-${this.selectedTowerType}`;
+          const previewKey = `${row}-${col}-${this.selectedTowerType}-${this.gameState.gold}`;
           if (previewKey !== this.lastPreviewKey) {
             this.lastPreviewKey = previewKey;
             const canPlace = this.gameBoardService.canPlaceTower(row, col)
@@ -1489,6 +1501,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
             };
             this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
+            this.updateAchievementDetails();
           }
         }
 
@@ -1507,6 +1520,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
           };
           this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
+          this.updateAchievementDetails();
         }
 
         // Update minimap

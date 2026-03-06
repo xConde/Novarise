@@ -544,6 +544,7 @@ describe('GameBoardComponent', () => {
       // Use real achievement IDs from the ACHIEVEMENTS constant
       const realIds = ACHIEVEMENTS.slice(0, 2).map(a => a.id);
       component.newlyUnlockedAchievements = realIds;
+      (component as any).updateAchievementDetails();
 
       const details = component.achievementDetails;
 
@@ -557,6 +558,7 @@ describe('GameBoardComponent', () => {
     it('should filter out unknown achievement IDs', () => {
       const realId = ACHIEVEMENTS[0].id;
       component.newlyUnlockedAchievements = [realId, 'nonexistent_achievement', 'also_fake'];
+      (component as any).updateAchievementDetails();
 
       const details = component.achievementDetails;
 

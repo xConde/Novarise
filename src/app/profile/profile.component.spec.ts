@@ -74,6 +74,7 @@ describe('ProfileComponent', () => {
       achievements: [],
     });
     const newFixture = TestBed.createComponent(ProfileComponent);
+    newFixture.detectChanges();
     const newComponent = newFixture.componentInstance;
     expect(newComponent.winRate).toBe('0');
   });

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { PlayerProfileService, PlayerProfile, Achievement, ACHIEVEMENTS } from '../game/game-board/services/player-profile.service';
 
@@ -7,14 +7,16 @@ import { PlayerProfileService, PlayerProfile, Achievement, ACHIEVEMENTS } from '
   templateUrl: './profile.component.html',
   styleUrls: ['./profile.component.scss']
 })
-export class ProfileComponent {
-  profile: PlayerProfile;
+export class ProfileComponent implements OnInit {
+  profile!: PlayerProfile;
   allAchievements: Achievement[] = ACHIEVEMENTS;
 
   constructor(
     private profileService: PlayerProfileService,
     private router: Router
-  ) {
+  ) {}
+
+  ngOnInit(): void {
     this.profile = this.profileService.getProfile();
   }
 
