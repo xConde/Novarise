@@ -28,6 +28,27 @@
 .tool-button { padding: 10px 6px; }
 .size-button { padding: 12px 8px; }
 
+.template-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.template-btn {
+  padding: 10px 8px;
+  background: var(--theme-purple-dark-strong);
+  border: 2px solid var(--theme-purple-glow);
+  border-radius: 8px;
+  color: var(--theme-purple-light);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: "Orbitron", sans-serif;
+  cursor: pointer;
+  transition: all var(--transition-fast) ease;
+  &:hover {
+    background: var(--theme-purple-dark-hover-strong);
+    border-color: var(--theme-purple-a70);
+    box-shadow: 0 0 8px var(--theme-purple-a30);
+    transform: translateY(-1px);
+  }
+  &:active { transform: translateY(1px); }
+}
+
 .shortcuts-tab { display: flex; flex-direction: column; gap: 12px; }
 .shortcut-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .shortcut-column { background: var(--theme-purple-dark); border-radius: 6px; padding: 8px 10px; border-left: 2px solid var(--theme-purple-a50); &.full-width { grid-column: 1 / -1; } }

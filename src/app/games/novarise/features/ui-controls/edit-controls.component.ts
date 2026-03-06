@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, Output, OnInit, OnDestroy } from '@angular/core';
 import { EditMode, BrushTool } from '../../novarise.component';
 import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
+import { MapTemplate } from '../../core/map-template.model';
 
 @Component({
   selector: 'app-edit-controls',
@@ -16,8 +17,10 @@ export class EditControlsComponent implements OnInit, OnDestroy {
   @Input() isPathValid: boolean = false;
   /** True when both spawn and exit points exist (regardless of path validity). */
   @Input() hasSpawnAndExit: boolean = false;
+  @Input() templates: MapTemplate[] = [];
 
   @Output() editModeChange = new EventEmitter<EditMode>();
+  @Output() templateSelect = new EventEmitter<string>();
   @Output() terrainTypeChange = new EventEmitter<TerrainType>();
   @Output() brushSizeChange = new EventEmitter<number>();
   @Output() activeToolChange = new EventEmitter<BrushTool>();
@@ -80,6 +83,10 @@ export class EditControlsComponent implements OnInit, OnDestroy {
 
   public setTool(tool: BrushTool): void {
     this.activeToolChange.emit(tool);
+  }
+
+  public selectTemplate(id: string): void {
+    this.templateSelect.emit(id);
   }
 
   public getTerrainColor(type: TerrainType): string {
