@@ -461,6 +461,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.router.navigate(['/edit']);
   }
 
+  goHome(): void {
+    if (this.gameState.phase === GamePhase.COMBAT && !confirm('Leave the game? Progress will be lost.')) {
+      return;
+    }
+    this.router.navigate(['/']);
+  }
+
   startWave(): void {
     const state = this.gameStateService.getState();
     if (state.phase === GamePhase.COMBAT) return;

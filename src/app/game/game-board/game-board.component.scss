@@ -26,12 +26,18 @@
     overflow: hidden;
   }
 
-  // --- Nav back button ---
-  .nav-back-btn {
-    @include glass-panel;
+  // --- Nav buttons ---
+  .nav-buttons {
     position: absolute;
     top: var(--spacing-md);
     left: var(--spacing-md);
+    display: flex;
+    gap: var(--spacing-xs);
+    z-index: var(--z-index-hud);
+  }
+
+  .nav-back-btn {
+    @include glass-panel;
     padding: var(--spacing-xs) var(--spacing-md);
     border: var(--border-width-thin) solid var(--theme-purple-a50);
     color: var(--theme-purple-mid);

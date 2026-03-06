@@ -1,10 +1,15 @@
 <div class="board-container">
   <div class="canvas-container" #canvasContainer></div>
 
-  <!-- Back to Editor -->
-  <button class="nav-back-btn" (click)="goToEditor()" aria-label="Back to Editor">
-    Edit Map
-  </button>
+  <!-- Navigation -->
+  <div class="nav-buttons">
+    <button class="nav-back-btn" (click)="goHome()" aria-label="Back to Home">
+      Home
+    </button>
+    <button class="nav-back-btn" (click)="goToEditor()" aria-label="Back to Editor">
+      Edit Map
+    </button>
+  </div>
 
   <!-- Top-right controls -->
   <div class="top-right-controls">
@@ -30,7 +35,8 @@
     </div>
     <div class="hud-stat">
       <span class="hud-label">Wave</span>
-      <span class="hud-value">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
+      <span class="hud-value" *ngIf="!gameState.isEndless">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
+      <span class="hud-value" *ngIf="gameState.isEndless">{{ gameState.wave }}</span>
     </div>
     <div class="hud-stat secondary">
       <span class="hud-label">Score</span>
@@ -199,6 +205,7 @@
       <div class="overlay-actions">
         <button class="restart-btn" (click)="restartGame()">Play Again</button>
         <button class="edit-map-btn" (click)="goToEditor()">Edit Map</button>
+        <button class="edit-map-btn" (click)="goHome()">Home</button>
       </div>
     </div>
   </div>
