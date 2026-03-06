@@ -15,6 +15,8 @@ import { SettingsService } from './services/settings.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase } from './models/game-state.model';
 import { TowerType } from './models/tower.model';
 import { ScoreBreakdown, calculateScoreBreakdown } from './models/score.model';
+import { ACHIEVEMENTS, Achievement } from './services/player-profile.service';
+import { WaveService } from './services/wave.service';
 
 describe('GameBoardComponent', () => {
   let component: GameBoardComponent;
@@ -529,6 +531,97 @@ describe('GameBoardComponent', () => {
 
       expect((component as any).touchIsDragging).toBeFalse();
       expect((component as any).pinchStartDistance).toBe(0);
+    });
+  });
+
+  describe('achievementDetails', () => {
+    it('should return empty array when no achievements unlocked', () => {
+      component.newlyUnlockedAchievements = [];
+      expect(component.achievementDetails).toEqual([]);
+    });
+
+    it('should resolve achievement IDs to Achievement objects', () => {
+      // Use real achievement IDs from the ACHIEVEMENTS constant
+      const realIds = ACHIEVEMENTS.slice(0, 2).map(a => a.id);
+      component.newlyUnlockedAchievements = realIds;
+
+      const details = component.achievementDetails;
+
+      expect(details.length).toBe(2);
+      expect(details[0].id).toBe(realIds[0]);
+      expect(details[1].id).toBe(realIds[1]);
+      expect(details[0].name).toBe(ACHIEVEMENTS[0].name);
+      expect(details[1].name).toBe(ACHIEVEMENTS[1].name);
+    });
+
+    it('should filter out unknown achievement IDs', () => {
+      const realId = ACHIEVEMENTS[0].id;
+      component.newlyUnlockedAchievements = [realId, 'nonexistent_achievement', 'also_fake'];
+
+      const details = component.achievementDetails;
+
+      expect(details.length).toBe(1);
+      expect(details[0].id).toBe(realId);
+    });
+  });
+
+  describe('toggleEndless', () => {
+    it('should call setEndlessMode on both services', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      const waveService = fixture.debugElement.injector.get(WaveService);
+      spyOn(gameStateService, 'setEndlessMode');
+      spyOn(waveService, 'setEndlessMode');
+
+      component.toggleEndless();
+
+      expect(gameStateService.setEndlessMode).toHaveBeenCalled();
+      expect(waveService.setEndlessMode).toHaveBeenCalled();
+    });
+
+    it('should toggle from false to true', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      // Initial state: isEndless is false
+      expect(gameStateService.getState().isEndless).toBeFalse();
+
+      component.toggleEndless();
+
+      expect(gameStateService.getState().isEndless).toBeTrue();
+    });
+
+    it('should toggle from true to false', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      // Set endless to true first
+      gameStateService.setEndlessMode(true);
+      // Update component's gameState reference
+      component.gameState = gameStateService.getState();
+      expect(gameStateService.getState().isEndless).toBeTrue();
+
+      component.toggleEndless();
+
+      expect(gameStateService.getState().isEndless).toBeFalse();
+    });
+  });
+
+  describe('pause overlay state', () => {
+    it('isPaused should return gameState.isPaused value', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+
+      // Default: not paused
+      expect(component.isPaused).toBeFalse();
+
+      // Enter COMBAT and pause
+      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.togglePause();
+      // Update component's gameState reference
+      component.gameState = gameStateService.getState();
+
+      expect(component.isPaused).toBeTrue();
+
+      // Unpause
+      gameStateService.togglePause();
+      component.gameState = gameStateService.getState();
+
+      expect(component.isPaused).toBeFalse();
     });
   });
 });

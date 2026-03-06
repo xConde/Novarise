@@ -19,7 +19,7 @@ import { ScreenShakeService } from './services/screen-shake.service';
 import { GoldPopupService } from './services/gold-popup.service';
 import { FpsCounterService } from './services/fps-counter.service';
 import { GameStatsService } from './services/game-stats.service';
-import { PlayerProfileService, GameEndStats } from './services/player-profile.service';
+import { PlayerProfileService, GameEndStats, ACHIEVEMENTS, Achievement } from './services/player-profile.service';
 import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService, MinimapEntityData, MinimapTerrainData } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
@@ -155,6 +155,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   get starArray(): Array<'filled' | 'empty'> {
     const stars = this.scoreBreakdown?.stars ?? 0;
     return [0, 1, 2].map(i => (i < stars ? 'filled' : 'empty')) as Array<'filled' | 'empty'>;
+  }
+
+  /** Resolves newly unlocked achievement IDs to their name/description for display. */
+  get achievementDetails(): Achievement[] {
+    return this.newlyUnlockedAchievements
+      .map(id => ACHIEVEMENTS.find(a => a.id === id))
+      .filter((a): a is Achievement => a != null);
   }
 
   // FPS exposed to template
@@ -1199,6 +1206,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   get isPaused(): boolean {
     return this.gameState.isPaused;
+  }
+
+  toggleEndless(): void {
+    const newValue = !this.gameState.isEndless;
+    this.gameStateService.setEndlessMode(newValue);
+    this.waveService.setEndlessMode(newValue);
   }
 
   get gameSpeed(): number {

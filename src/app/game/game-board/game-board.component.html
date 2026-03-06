@@ -67,6 +67,11 @@
         <span class="difficulty-desc">{{ difficultyPresets[level].description }}</span>
       </button>
     </div>
+    <label class="endless-toggle">
+      <input type="checkbox" [checked]="gameState.isEndless" (change)="toggleEndless()">
+      <span class="endless-label">Endless Mode</span>
+      <span class="endless-desc">Waves continue indefinitely after wave {{ gameState.maxWaves }}</span>
+    </label>
   </div>
 
   <!-- Wave preview panel — shown during SETUP and INTERMISSION -->
@@ -177,10 +182,32 @@
 
       <p class="final-score" *ngIf="!scoreBreakdown">Score: {{ gameState.score }}</p>
 
+      <!-- Newly unlocked achievements -->
+      <div class="achievements-unlocked" *ngIf="newlyUnlockedAchievements.length > 0">
+        <h3 class="achievements-title">Achievements Unlocked</h3>
+        <div class="achievement-list">
+          <div class="achievement-badge" *ngFor="let ach of achievementDetails">
+            <span class="achievement-icon">&#127942;</span>
+            <div class="achievement-info">
+              <span class="achievement-name">{{ ach.name }}</span>
+              <span class="achievement-desc">{{ ach.description }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="overlay-actions">
         <button class="restart-btn" (click)="restartGame()">Play Again</button>
         <button class="edit-map-btn" (click)="goToEditor()">Edit Map</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Pause overlay -->
+  <div class="pause-overlay" *ngIf="isPaused && gameState.phase === GamePhase.COMBAT" (click)="togglePause()">
+    <div class="pause-content">
+      <h2 class="pause-title">PAUSED</h2>
+      <p class="pause-hint">Click or press P to resume</p>
     </div>
   </div>
 
