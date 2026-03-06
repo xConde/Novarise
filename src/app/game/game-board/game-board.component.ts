@@ -23,6 +23,7 @@ import { PlayerProfileService, GameEndStats } from './services/player-profile.se
 import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService, MinimapEntityData, MinimapTerrainData } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
+import { TowerPreviewService } from './services/tower-preview.service';
 import { disposeMaterial } from './utils/three-utils';
 import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
@@ -51,7 +52,7 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService]
+  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -183,7 +184,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private playerProfileService: PlayerProfileService,
     private damagePopupService: DamagePopupService,
     private minimapService: MinimapService,
-    private settingsService: SettingsService
+    private settingsService: SettingsService,
+    private towerPreviewService: TowerPreviewService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -506,6 +508,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Clean up tower combat state (projectiles)
     this.towerCombatService.cleanup(this.scene);
+
+    // Clean up tower placement preview
+    this.towerPreviewService.cleanup(this.scene);
 
     // Clean up damage popups
     this.damagePopupService.cleanup(this.scene);
@@ -879,9 +884,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           material.emissiveIntensity = TILE_EMISSIVE.hover;
           canvas.style.cursor = 'pointer';
         }
+
+        // Tower placement preview — show ghost tower + range ring on hovered tile
+        const row = mesh.userData['row'];
+        const col = mesh.userData['col'];
+        const phase = this.gameStateService.getState().phase;
+        const isTerminal = phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT;
+        if (!isTerminal && !this.selectedTowerInfo) {
+          const canPlace = this.gameBoardService.canPlaceTower(row, col)
+            && this.gameStateService.canAfford(TOWER_CONFIGS[this.selectedTowerType].cost);
+          this.towerPreviewService.showPreview(this.selectedTowerType, row, col, canPlace, this.scene);
+        } else {
+          this.towerPreviewService.hidePreview(this.scene);
+        }
       } else {
         this.hoveredTile = null;
         canvas.style.cursor = 'default';
+        this.towerPreviewService.hidePreview(this.scene);
       }
     };
 
@@ -1144,6 +1163,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.towerCombatService.registerTower(row, col, this.selectedTowerType, towerMesh);
       this.audioService.playTowerPlace();
       this.gameStatsService.recordTowerBuilt();
+
+      // Hide preview — tower was placed on this tile
+      this.towerPreviewService.hidePreview(this.scene);
 
       // Clear enemy path cache since board layout changed
       this.enemyService.clearPathCache();
