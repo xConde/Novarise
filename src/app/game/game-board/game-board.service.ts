@@ -303,25 +303,28 @@ export class GameBoardService {
       TowerType.BASIC // placeholder — type doesn't matter for traversability
     );
 
-    // Build a set of exit positions for fast lookup
-    const exitSet = new Set<string>();
-    for (const [eRow, eCol] of this.exitTiles) {
-      exitSet.add(`${eRow},${eCol}`);
-    }
-
-    // BFS from each spawner to any exit. If ANY spawner cannot reach
-    // ANY exit, the placement blocks the path.
-    let blocked = false;
-    for (const [sRow, sCol] of this.spawnerTiles) {
-      if (!this.bfsCanReachExit(sRow, sCol, exitSet)) {
-        blocked = true;
-        break;
+    try {
+      // Build a set of exit positions for fast lookup
+      const exitSet = new Set<string>();
+      for (const [eRow, eCol] of this.exitTiles) {
+        exitSet.add(`${eRow},${eCol}`);
       }
-    }
 
-    // Restore the original tile
-    this.gameBoard[row][col] = originalTile;
-    return blocked;
+      // BFS from each spawner to any exit. If ANY spawner cannot reach
+      // ANY exit, the placement blocks the path.
+      let blocked = false;
+      for (const [sRow, sCol] of this.spawnerTiles) {
+        if (!this.bfsCanReachExit(sRow, sCol, exitSet)) {
+          blocked = true;
+          break;
+        }
+      }
+
+      return blocked;
+    } finally {
+      // Always restore the original tile, even if BFS throws
+      this.gameBoard[row][col] = originalTile;
+    }
   }
 
   /**

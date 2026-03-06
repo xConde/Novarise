@@ -510,6 +510,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.renderGameBoard();
     this.addGridLines();
     this.enemyService.clearPathCache();
+    this.lastPreviewKey = '';
     this.lastTime = 0;
     this.elapsedTimeAccumulator = 0;
   }
@@ -1216,6 +1217,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   toggleEndless(): void {
+    if (this.gameState.phase !== GamePhase.SETUP) return;
     const newValue = !this.gameState.isEndless;
     this.gameStateService.setEndlessMode(newValue);
     this.waveService.setEndlessMode(newValue);
