@@ -112,4 +112,39 @@ describe('ProfileComponent', () => {
     component.goHome();
     expect(router.navigate).toHaveBeenCalledWith(['/']);
   });
+
+  it('should not show first-time hint when games have been played', () => {
+    const hint = fixture.nativeElement.querySelector('.first-time-hint');
+    expect(hint).toBeNull();
+  });
+
+  it('should show first-time hint when no games played', () => {
+    profileService.getProfile.and.returnValue({
+      ...mockProfile,
+      totalGamesPlayed: 0,
+      totalVictories: 0,
+      totalDefeats: 0,
+      achievements: [],
+    });
+    const newFixture = TestBed.createComponent(ProfileComponent);
+    newFixture.detectChanges();
+    const hint = newFixture.nativeElement.querySelector('.first-time-hint');
+    expect(hint).toBeTruthy();
+    expect(hint.textContent).toContain('Play your first game');
+  });
+
+  it('should show "How to unlock:" hint on locked achievement cards', () => {
+    const lockedCards = fixture.nativeElement.querySelectorAll('.achievement-card.locked');
+    expect(lockedCards.length).toBeGreaterThan(0);
+    const hints = lockedCards[0].querySelectorAll('.achievement-hint');
+    expect(hints.length).toBe(1);
+    expect(hints[0].textContent).toContain('How to unlock');
+  });
+
+  it('should not show "How to unlock:" hint on unlocked achievement cards', () => {
+    const unlockedCards = fixture.nativeElement.querySelectorAll('.achievement-card.unlocked');
+    expect(unlockedCards.length).toBeGreaterThan(0);
+    const hints = unlockedCards[0].querySelectorAll('.achievement-hint');
+    expect(hints.length).toBe(0);
+  });
 });

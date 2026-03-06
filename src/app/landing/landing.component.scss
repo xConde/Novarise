@@ -7,6 +7,7 @@
   color: var(--text-color);
   position: relative;
   overflow: hidden;
+  padding: var(--spacing-md);
 
   // Subtle radial gradient behind content
   &::before {
@@ -14,8 +15,8 @@
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 600px;
-    height: 600px;
+    width: min(600px, 80vw);
+    height: min(600px, 80vw);
     transform: translate(-50%, -50%);
     background: radial-gradient(circle, var(--theme-purple-glow) 0%, transparent 70%);
     pointer-events: none;
@@ -114,4 +115,45 @@
   font-size: 0.7rem;
   color: var(--theme-purple-mid);
   opacity: 0.5;
+}
+
+// Responsive
+@media (max-width: 768px) {
+  .landing-title {
+    font-size: var(--font-size-hero); // 3rem
+  }
+
+  .landing-content {
+    gap: var(--spacing-md);
+  }
+
+  .landing-actions {
+    margin-top: var(--spacing-lg);
+  }
+}
+
+@media (max-width: 480px) {
+  .landing-title {
+    font-size: var(--font-size-large); // 2rem
+    letter-spacing: 0.2em;
+    text-indent: 0.2em;
+  }
+
+  .landing-subtitle {
+    letter-spacing: 0.15em;
+    text-indent: 0.15em;
+  }
+
+  .landing-content {
+    gap: var(--spacing-sm);
+  }
+
+  .landing-actions {
+    max-width: min(280px, 80vw);
+    margin-top: var(--spacing-md);
+  }
+
+  .landing-btn {
+    padding: 0.75rem var(--spacing-md);
+  }
 }

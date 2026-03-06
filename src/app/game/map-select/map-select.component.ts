@@ -74,6 +74,10 @@ export class MapSelectComponent implements OnInit, OnDestroy {
     }
   }
 
+  goToEditor(): void {
+    this.router.navigate(['/edit']);
+  }
+
   goHome(): void {
     this.router.navigate(['/']);
   }

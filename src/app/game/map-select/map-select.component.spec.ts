@@ -114,6 +114,28 @@ describe('MapSelectComponent', () => {
     expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/']);
   });
 
+  it('goToEditor should navigate to /edit', () => {
+    fixture.detectChanges();
+    component.goToEditor();
+    expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/edit']);
+  });
+
+  it('should show create CTA button in empty state', () => {
+    mapStorageSpy.getAllMaps.and.returnValue([]);
+    fixture.detectChanges();
+    const createBtn = fixture.nativeElement.querySelector('.no-maps .create-btn');
+    expect(createBtn).toBeTruthy();
+    expect(createBtn.textContent).toContain('Create Your First Map');
+  });
+
+  it('should navigate to editor when create CTA is clicked', () => {
+    mapStorageSpy.getAllMaps.and.returnValue([]);
+    fixture.detectChanges();
+    const createBtn = fixture.nativeElement.querySelector('.no-maps .create-btn');
+    createBtn.click();
+    expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/edit']);
+  });
+
   describe('quickPlay', () => {
     it('should clear editor map and navigate to /play with quickplay param', () => {
       fixture.detectChanges();

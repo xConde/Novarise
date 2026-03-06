@@ -2,6 +2,10 @@
   <div class="profile-content">
     <h1 class="profile-title">PROFILE</h1>
 
+    <p class="first-time-hint" *ngIf="profile.totalGamesPlayed === 0">
+      Play your first game to start tracking stats!
+    </p>
+
     <section class="stats-section">
       <div class="stats-grid">
         <div class="stat-card">
@@ -50,6 +54,7 @@
         >
           <span class="achievement-icon">{{ isUnlocked(achievement.id) ? '&#127942;' : '&#128274;' }}</span>
           <span class="achievement-name">{{ achievement.name }}</span>
+          <span class="achievement-hint" *ngIf="!isUnlocked(achievement.id)">How to unlock:</span>
           <span class="achievement-desc">{{ achievement.description }}</span>
         </div>
       </div>

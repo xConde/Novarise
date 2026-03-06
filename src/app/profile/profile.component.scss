@@ -15,8 +15,8 @@
     position: fixed;
     top: 50%;
     left: 50%;
-    width: 600px;
-    height: 600px;
+    width: min(600px, 80vw);
+    height: min(600px, 80vw);
     transform: translate(-50%, -50%);
     background: radial-gradient(circle, var(--theme-purple-glow) 0%, transparent 70%);
     pointer-events: none;
@@ -32,7 +32,7 @@
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 800px;
+  max-width: min(800px, 100vw - var(--spacing-lg) * 2);
 }
 
 .profile-title {
@@ -45,6 +45,17 @@
                0 0 40px var(--theme-purple-glow);
   margin: 0;
   text-indent: 0.3em;
+}
+
+// First-time hint
+.first-time-hint {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  color: var(--theme-purple-mid);
+  text-align: center;
+  margin: 0;
+  opacity: 0.8;
+  letter-spacing: 0.05em;
 }
 
 // Stats Section
@@ -65,6 +76,7 @@
   align-items: center;
   gap: var(--spacing-xs);
   padding: var(--spacing-lg) var(--spacing-md);
+  min-width: 0;
   background: var(--theme-purple-a20);
   border: var(--border-width-thin) solid var(--theme-purple);
   border-radius: var(--border-radius-lg);
@@ -137,6 +149,7 @@
   align-items: center;
   gap: var(--spacing-xs);
   padding: var(--spacing-md);
+  min-width: 0;
   background: var(--theme-purple-a20);
   border: var(--border-width-thin) solid var(--theme-purple);
   border-radius: var(--border-radius-lg);
@@ -165,6 +178,14 @@
   font-weight: 600;
   color: var(--theme-purple-lighter);
   letter-spacing: 0.05em;
+}
+
+.achievement-hint {
+  font-size: 0.6rem;
+  color: var(--theme-purple-mid);
+  font-style: italic;
+  opacity: 0.7;
+  margin-top: var(--spacing-xs);
 }
 
 .achievement-desc {
