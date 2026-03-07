@@ -1013,7 +1013,7 @@
       }
 
       .modifier-desc {
-        font-size: 0.6rem;
+        font-size: var(--font-size-2xs);
         color: var(--text-dimmer);
         text-align: center;
         line-height: 1.2;

@@ -56,7 +56,12 @@ export class TowerCombatService {
   private projectileCounter = 0;
   private gameTime = 0;
   private spatialGrid = new SpatialGrid();
+  private towerDamageMultiplier = 1;
   private projectilePool: ObjectPool<THREE.Mesh>;
+
+  setTowerDamageMultiplier(mult: number): void {
+    this.towerDamageMultiplier = mult;
+  }
 
   constructor(
     private enemyService: EnemyService,
@@ -157,7 +162,10 @@ export class TowerCombatService {
 
     // Tower targeting and firing — resolve stats per-tower using level
     this.placedTowers.forEach(tower => {
-      const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
+      const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
+      const stats = this.towerDamageMultiplier !== 1
+        ? { ...baseStats, damage: Math.round(baseStats.damage * this.towerDamageMultiplier) }
+        : baseStats;
       const timeSinceLastFire = this.gameTime - tower.lastFireTime;
 
       if (timeSinceLastFire < stats.fireRate) return;
@@ -360,7 +368,7 @@ export class TowerCombatService {
       if (dist > stats.range) continue;
 
       // StatusEffectService handles immunity (flying), duration refresh, and speed mutation
-      this.statusEffectService.apply(enemy.id, StatusEffectType.SLOW, this.gameTime);
+      this.statusEffectService.apply(enemy.id, StatusEffectType.SLOW, this.gameTime, stats.slowFactor);
     }
   }
 
@@ -717,5 +725,6 @@ export class TowerCombatService {
     this.placedTowers.clear();
     this.projectileCounter = 0;
     this.gameTime = 0;
+    this.towerDamageMultiplier = 1;
   }
 }

@@ -1123,44 +1123,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.updateExitMarkers();
   }
 
-  /**
-   * Prompt the user to select and delete a saved map (with confirmation).
-   */
-  public deleteMap(): void {
-    const maps = this.mapStorage.getAllMaps();
-
-    if (maps.length === 0) {
-      alert('No saved maps to delete.');
-      return;
-    }
-
-    let message = 'Select a map to delete:\n\n';
-    maps.forEach((map, index) => {
-      const date = new Date(map.updatedAt).toLocaleString();
-      message += `${index + 1}. ${map.name} (${date})\n`;
-    });
-
-    const selection = prompt(message + '\nEnter number:');
-    if (!selection) return; // User cancelled
-
-    const index = parseInt(selection) - 1;
-    if (index < 0 || index >= maps.length) {
-      alert('Invalid selection.');
-      return;
-    }
-
-    const selectedMap = maps[index];
-    const confirmed = confirm(`Delete map "${selectedMap.name}"? This cannot be undone.`);
-    if (!confirmed) return;
-
-    const deleted = this.mapStorage.deleteMap(selectedMap.id);
-    if (deleted) {
-      alert(`Map "${selectedMap.name}" deleted.`);
-    } else {
-      alert('Failed to delete map.');
-    }
-  }
-
   private saveGridState(): void {
     // Get current map name or prompt for new one
     const mapName = prompt('Enter map name:', this.currentMapName);

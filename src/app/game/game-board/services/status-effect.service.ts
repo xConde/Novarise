@@ -22,7 +22,7 @@ export class StatusEffectService {
    * If the effect already exists and doesn't stack, refreshes duration.
    * Returns false if enemy is immune (e.g., flying enemies immune to SLOW).
    */
-  apply(enemyId: string, effectType: StatusEffectType, gameTime: number): boolean {
+  apply(enemyId: string, effectType: StatusEffectType, gameTime: number, speedMultiplierOverride?: number): boolean {
     const enemy = this.enemyService.getEnemies().get(enemyId);
     if (!enemy || enemy.health <= 0) return false;
 
@@ -52,9 +52,10 @@ export class StatusEffectService {
     };
 
     // SLOW: mutate enemy speed, store original
-    if (effectType === StatusEffectType.SLOW && config.speedMultiplier !== undefined) {
+    if (effectType === StatusEffectType.SLOW) {
+      const slowFactor = speedMultiplierOverride ?? config.speedMultiplier ?? 1;
       active.originalSpeed = enemy.speed;
-      enemy.speed = enemy.speed * config.speedMultiplier;
+      enemy.speed = enemy.speed * slowFactor;
     }
 
     enemyEffects.set(effectType, active);

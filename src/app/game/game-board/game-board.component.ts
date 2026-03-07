@@ -332,6 +332,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.gameStateService.getModifierEffects(),
       this.activeModifiers
     );
+    this.towerCombatService.setTowerDamageMultiplier(this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1);
+  }
+
+  getEffectiveTowerCost(type: TowerType): number {
+    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+    return Math.round(TOWER_CONFIGS[type].cost * costMult);
   }
 
   selectTowerType(type: TowerType): void {
@@ -345,7 +351,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
     if (this.selectedTowerInfo.level >= MAX_TOWER_LEVEL) return;
 
-    const cost = getUpgradeCost(this.selectedTowerInfo.type, this.selectedTowerInfo.level);
+    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+    const cost = getUpgradeCost(this.selectedTowerInfo.type, this.selectedTowerInfo.level, costMult);
     if (!this.gameStateService.canAfford(cost)) return;
 
     if (this.selectedTowerInfo.level === MAX_TOWER_LEVEL - 1) {
@@ -479,7 +486,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const tower = this.selectedTowerInfo;
     const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
     this.selectedTowerStats = { damage: stats.damage, range: stats.range, fireRate: stats.fireRate };
-    this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level);
+    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+    this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level, costMult);
     this.selectedTowerSellValue = getSellValue(tower.totalInvested);
   }
 
@@ -536,18 +544,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.router.navigate(['/edit']);
   }
 
-  goHome(): void {
-    if (this.gameState.phase === GamePhase.COMBAT) {
-      const wasPaused = this.isPaused;
-      if (!wasPaused) this.togglePause();
-      if (!confirm('Leave the game? Progress will be lost.')) {
-        if (!wasPaused) this.togglePause();
-        return;
-      }
-    }
-    this.router.navigate(['/']);
-  }
-
   startWave(): void {
     const state = this.gameStateService.getState();
     if (state.phase === GamePhase.COMBAT) return;
@@ -564,7 +560,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.gameStateService.startWave();
-    const waveCountMult = this.gameStateService.getModifierEffects().waveCountMultiplier ?? 1;
+    const modEffects = this.gameStateService.getModifierEffects();
+    const waveCountMult = modEffects.waveCountMultiplier ?? 1;
+    this.towerCombatService.setTowerDamageMultiplier(modEffects.towerDamageMultiplier ?? 1);
     this.waveService.startWave(this.gameStateService.getState().wave, this.scene, waveCountMult);
     this.audioService.playWaveStart();
   }
@@ -1019,7 +1017,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           if (previewKey !== this.lastPreviewKey) {
             this.lastPreviewKey = previewKey;
             const canPlace = this.gameBoardService.canPlaceTower(row, col)
-              && this.gameStateService.canAfford(TOWER_CONFIGS[this.selectedTowerType].cost);
+              && this.gameStateService.canAfford(this.getEffectiveTowerCost(this.selectedTowerType));
             this.towerPreviewService.showPreview(this.selectedTowerType, row, col, canPlace, this.scene);
           }
         } else {
@@ -1275,13 +1273,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     const towerStats = TOWER_CONFIGS[this.selectedTowerType];
+    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+    const effectiveCost = Math.round(towerStats.cost * costMult);
 
     // Check if player can afford tower
-    if (!this.gameStateService.canAfford(towerStats.cost)) return;
+    if (!this.gameStateService.canAfford(effectiveCost)) return;
 
     if (this.gameBoardService.placeTower(row, col, this.selectedTowerType)) {
       // Deduct gold
-      this.gameStateService.spendGold(towerStats.cost);
+      this.gameStateService.spendGold(effectiveCost);
 
       // Create tower mesh
       const towerMesh = this.gameBoardService.createTowerMesh(row, col, this.selectedTowerType);

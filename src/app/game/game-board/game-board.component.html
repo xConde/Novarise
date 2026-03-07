@@ -303,6 +303,7 @@
         *ngFor="let opt of specOptions"
         class="spec-btn"
         [class.unaffordable]="!gameState || gameState.gold < selectedTowerUpgradeCost"
+        [disabled]="!gameState || gameState.gold < selectedTowerUpgradeCost"
         (click)="selectSpecialization(opt.spec)"
         [attr.aria-label]="'Specialize: ' + opt.label">
         <span class="spec-label">{{ opt.label }}</span>
@@ -319,7 +320,7 @@
       *ngFor="let tower of towerTypes"
       class="tower-btn"
       [class.selected]="selectedTowerType === tower.type"
-      [class.unaffordable]="!gameState || gameState.gold < towerConfigs[tower.type].cost"
+      [class.unaffordable]="!gameState || gameState.gold < getEffectiveTowerCost(tower.type)"
       (click)="selectTowerType(tower.type)"
       [attr.aria-label]="'Select ' + (tower.type | titlecase) + ' Tower'">
       <div class="tower-tooltip" role="tooltip">
@@ -331,7 +332,7 @@
       </div>
       <div class="tower-icon" [ngClass]="tower.type"></div>
       <span class="tower-name">{{ tower.type | titlecase }}</span>
-      <span class="tower-cost">{{ towerConfigs[tower.type].cost }}g</span>
+      <span class="tower-cost">{{ getEffectiveTowerCost(tower.type) }}g</span>
       <span class="tower-hotkey">{{ tower.hotkey }}</span>
     </button>
   </div>

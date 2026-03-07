@@ -190,7 +190,7 @@ export const TOWER_SPECIALIZATIONS: Record<TowerType, Record<TowerSpecialization
     },
     [TowerSpecialization.BETA]: {
       label: 'Frostbite',
-      description: 'Moderate slow but also deals damage',
+      description: 'Faster pulse rate, extended range',
       damage: 1.0, range: 1.3, fireRate: 0.7,
     },
   },
@@ -231,10 +231,10 @@ export const UPGRADE_MULTIPLIERS: { damage: number; range: number; fireRate: num
 
 /** Get the upgrade cost from current level to next level.
  *  Level 1→2: 75% of base cost; Level 2→3: 100% of base cost. */
-export function getUpgradeCost(type: TowerType, currentLevel: number): number {
+export function getUpgradeCost(type: TowerType, currentLevel: number, costMultiplier: number = 1): number {
   if (currentLevel < 1 || currentLevel >= MAX_TOWER_LEVEL) return Infinity;
   const baseCost = TOWER_CONFIGS[type].cost;
-  return Math.round(baseCost * (UPGRADE_COST_CONFIG.baseMultiplier + currentLevel * UPGRADE_COST_CONFIG.levelScale));
+  return Math.round(baseCost * (UPGRADE_COST_CONFIG.baseMultiplier + currentLevel * UPGRADE_COST_CONFIG.levelScale) * costMultiplier);
 }
 
 /** Get the sell refund (50% of total gold invested). */

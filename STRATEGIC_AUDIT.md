@@ -511,3 +511,56 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 **Location:** `edit-controls.component.scss:2`
 **Risk:** No element in the template uses `.close-button`. Dead code increases CSS budget.
 **Fix:** Remove the rule.
+
+## Red Team Pass 5 — Full Branch Audit (2026-03-07)
+
+### Finding 1: towerCostMultiplier and towerDamageMultiplier modifiers never applied (CRITICAL)
+**Location:** `game-board.component.ts:tryPlaceTower()`, `tower-combat.service.ts:fireProjectile()`
+**Risk:** EXPENSIVE_TOWERS and GLASS_CANNON modifiers are computed but never consumed. Players get free score bonus from these modifiers with zero gameplay effect. False contract with the player.
+**Fix:** Apply `towerCostMultiplier` in `tryPlaceTower()`, tower preview affordability, and upgrade cost. Apply `towerDamageMultiplier` in combat damage calculation.
+
+### Finding 2: Glacier specialization slowFactorOverride has no runtime effect (CRITICAL)
+**Location:** `tower-combat.service.ts:applySlowAura()`, `status-effect.constants.ts`
+**Risk:** Glacier sets `slowFactorOverride: 0.3` but `applySlowAura()` always uses global config `speedMultiplier: 0.5`. Investing gold in Glacier spec yields zero benefit over base slow tower.
+**Fix:** Pass tower-specific slow factor to `StatusEffectService.apply()`.
+
+### Finding 3: Frostbite specialization "deals damage" description is false (MEDIUM)
+**Location:** `tower.model.ts:191-195`
+**Risk:** Frostbite description says "deals damage" but base Slow has `damage: 0`, and `0 * 1.0 = 0`. Slow aura code path doesn't deal damage anyway.
+**Fix:** Change description to match reality — remove damage claim.
+
+### Finding 4: Specialization buttons missing [disabled] attribute (MEDIUM)
+**Location:** `game-board.component.html:304`
+**Risk:** `.spec-btn` has visual `.unaffordable` class but no `[disabled]` — screen readers/keyboard can still activate.
+**Fix:** Add `[disabled]` binding matching the unaffordable condition.
+
+### Finding 5: Dead deleteMapClick output + deleteMap() in editor (LOW)
+**Location:** `edit-controls.component.ts:28`, `novarise.component.ts:1129`, `novarise.component.html:39`
+**Risk:** Delete button removed from template but output binding, parent handler, and 150+ lines of deleteMap() logic remain as dead code.
+**Fix:** Remove output, binding, and method.
+
+### Finding 6: Dead goHome() in game-board component (LOW)
+**Location:** `game-board.component.ts:539`
+**Risk:** Nav buttons removed from template but method remains. Dead code.
+**Fix:** Remove method.
+
+### Finding 7: Magic number 0.6rem in modifier-desc (LOW)
+**Location:** `game-board.component.scss:1016`
+**Risk:** Violates no-magic-numbers rule. Should use `--font-size-2xs`.
+**Fix:** Replace with CSS variable.
+
+### Verified NOT bugs:
+- INITIAL_GAME_STATE.activeModifiers shared Set — reset() creates new Set
+- emit() mutable Set leak — cloned on emit
+- SPEED_DEMONS selective application — math decomposition is correct
+- ObjectPool drain() double-dispose — scene.remove() is safe no-op
+- StatusEffectService concurrent modification — deferred deletion after loop
+
+## Deployment Checklist — Red Team Pass 5
+- [x] Fix Finding 1: Wire towerCostMultiplier into placement, preview, and upgrades
+- [x] Fix Finding 2: Pass tower slow factor to StatusEffectService
+- [x] Fix Finding 3: Correct Frostbite description
+- [x] Fix Finding 4: Add [disabled] to spec buttons
+- [x] Fix Findings 5-6: Remove dead code (deleteMapClick, goHome)
+- [x] Fix Finding 7: Replace 0.6rem magic number
+- [x] Run full test suite (1656/1656), commit, push
