@@ -15,7 +15,9 @@ export const PROJECTILE_CONFIG = {
   segments: 6,
   opacity: 0.9,
   spawnHeight: 0.8,
-  mortarRadiusMultiplier: 1.5
+  mortarRadiusMultiplier: 1.5,
+  trailLength: 5,
+  trailOpacity: 0.6,
 };
 
 export const TOWER_VISUAL_CONFIG = {

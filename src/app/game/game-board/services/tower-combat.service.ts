@@ -16,6 +16,8 @@ import { ObjectPool } from '../utils/object-pool';
 interface Projectile {
   id: string;
   mesh: THREE.Mesh;
+  trail: THREE.Line | null;
+  trailPositions: THREE.Vector3[];
   towerKey: string;
   targetId: string;
   speed: number;
@@ -236,6 +238,43 @@ export class TowerCombatService {
         const nz = dz / dist;
         proj.mesh.position.x += nx * moveDistance;
         proj.mesh.position.z += nz * moveDistance;
+
+        // Update trail
+        proj.trailPositions.push(proj.mesh.position.clone());
+        if (proj.trailPositions.length > PROJECTILE_CONFIG.trailLength) {
+          proj.trailPositions.shift();
+        }
+
+        if (proj.trailPositions.length >= 2) {
+          // Dispose old trail geometry
+          if (proj.trail) {
+            proj.trail.geometry.dispose();
+          }
+
+          const positions = new Float32Array(proj.trailPositions.length * 3);
+          for (let i = 0; i < proj.trailPositions.length; i++) {
+            positions[i * 3] = proj.trailPositions[i].x;
+            positions[i * 3 + 1] = proj.trailPositions[i].y;
+            positions[i * 3 + 2] = proj.trailPositions[i].z;
+          }
+
+          const trailGeom = new THREE.BufferGeometry();
+          trailGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+          if (!proj.trail) {
+            const projColor = (proj.mesh.material as THREE.MeshBasicMaterial).color;
+            const trailMat = new THREE.LineBasicMaterial({
+              color: projColor,
+              transparent: true,
+              opacity: PROJECTILE_CONFIG.trailOpacity,
+            });
+            proj.trail = new THREE.Line(trailGeom, trailMat);
+            scene.add(proj.trail);
+          } else {
+            proj.trail.geometry = trailGeom;
+          }
+        }
+
         survivingProjectiles.push(proj);
       }
     }
@@ -539,6 +578,8 @@ export class TowerCombatService {
     this.projectiles.push({
       id: `proj-${this.projectileCounter++}`,
       mesh,
+      trail: null,
+      trailPositions: [],
       towerKey: tower.id,
       targetId: target.id,
       speed: stats.projectileSpeed,
@@ -569,6 +610,8 @@ export class TowerCombatService {
     this.projectiles.push({
       id: `proj-${this.projectileCounter++}`,
       mesh,
+      trail: null,
+      trailPositions: [],
       towerKey: tower.id,
       targetId: target.id,
       speed: stats.projectileSpeed,
@@ -711,6 +754,15 @@ export class TowerCombatService {
   }
 
   private removeProjectileMesh(proj: Projectile, scene: THREE.Scene): void {
+    // Clean up trail
+    if (proj.trail) {
+      scene.remove(proj.trail);
+      proj.trail.geometry.dispose();
+      (proj.trail.material as THREE.Material).dispose();
+      proj.trail = null;
+    }
+    proj.trailPositions = [];
+
     if (proj.towerType === TowerType.MORTAR) {
       // Mortar projectiles are not pooled — dispose normally
       scene.remove(proj.mesh);

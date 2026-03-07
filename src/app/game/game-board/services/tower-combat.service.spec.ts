@@ -461,6 +461,64 @@ describe('TowerCombatService', () => {
       service.update(0.5, mockScene);
       expect(newEnemy.health).toBeLessThan(1000);
     });
+
+    it('should initialize projectile with null trail and empty trailPositions', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy at distance so projectile stays in flight
+      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', enemy);
+
+      service.update(0.016, mockScene);
+
+      const projectiles = (service as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
+      expect(projectiles.length).toBeGreaterThan(0);
+      // After first update, trail is still null (needs >=2 positions), trailPositions has 1 entry
+      expect(projectiles[0].trail).toBeNull();
+    });
+
+    it('should create trail after projectile has moved at least 2 frames', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy within BASIC range (3) but far enough for multiple frames of travel
+      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      // Frame 1: fire + first move — 1 trail position, no trail line yet
+      service.update(0.016, mockScene);
+      // Frame 2: second move — 2 trail positions, trail created
+      service.update(0.016, mockScene);
+
+      const projectiles = (service as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
+      expect(projectiles.length).toBeGreaterThan(0);
+      expect(projectiles[0].trail).not.toBeNull();
+      expect(projectiles[0].trailPositions.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should clean up trail when projectile is removed', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy within BASIC range (3) but far enough for multiple frames of travel
+      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      // Build up a trail
+      service.update(0.016, mockScene);
+      service.update(0.016, mockScene);
+
+      const projectiles = (service as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
+      expect(projectiles.length).toBeGreaterThan(0);
+      const trail = projectiles[0].trail;
+      expect(trail).not.toBeNull();
+
+      // Remove enemy — projectile should be cleaned up including trail
+      enemyMap.delete('e1');
+      service.update(0.016, mockScene);
+
+      // Trail should have been removed from scene
+      expect(trail).toBeTruthy();
+      expect(mockScene.children).not.toContain(trail!);
+    });
   });
 
   // --- Kill Tracking ---
