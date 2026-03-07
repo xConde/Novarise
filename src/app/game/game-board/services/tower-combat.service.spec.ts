@@ -519,6 +519,50 @@ describe('TowerCombatService', () => {
       expect(trail).toBeTruthy();
       expect(mockScene.children).not.toContain(trail!);
     });
+
+    it('should reuse trail geometry reference and grow drawRange.count as trail builds', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy far enough to keep projectile in flight for several frames
+      const enemy = createEnemy('e1', TOWER_WORLD_X + 2.5, TOWER_WORLD_Z, 100000);
+      enemyMap.set('e1', enemy);
+
+      // Frame 1: fire projectile
+      service.update(0.016, mockScene);
+      // Frame 2: trail is created (2 positions)
+      service.update(0.016, mockScene);
+
+      const projectiles = (service as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
+      expect(projectiles.length).toBeGreaterThan(0);
+      const trail = projectiles[0].trail!;
+      expect(trail).not.toBeNull();
+
+      const geometryRef = trail.geometry;
+      const countAfter2 = trail.geometry.drawRange.count;
+      expect(countAfter2).toBeGreaterThanOrEqual(2);
+
+      // Record the position attribute version before next update
+      const posAttrBefore = trail.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const versionBefore = posAttrBefore.version;
+
+      // Frame 3: trail grows
+      service.update(0.016, mockScene);
+
+      const projectilesAfter = (service as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
+      expect(projectilesAfter.length).toBeGreaterThan(0);
+      const trailAfter = projectilesAfter[0].trail!;
+
+      // Geometry reference must be the same object (in-place update, not replaced)
+      expect(trailAfter.geometry).toBe(geometryRef);
+
+      // drawRange.count must have grown
+      const countAfter3 = trailAfter.geometry.drawRange.count;
+      expect(countAfter3).toBeGreaterThan(countAfter2);
+
+      // Position attribute version should have incremented (needsUpdate = true bumps version)
+      const posAttrAfter = trailAfter.geometry.getAttribute('position') as THREE.BufferAttribute;
+      expect(posAttrAfter.version).toBeGreaterThan(versionBefore);
+    });
   });
 
   // --- Kill Tracking ---
@@ -1181,6 +1225,58 @@ describe('TowerCombatService', () => {
 
       const remainingFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
       expect(remainingFlashes.length).toBe(0);
+    });
+
+    it('should share the same geometry reference across multiple impact flashes', () => {
+      // Register two towers so two projectiles can fire simultaneously
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      service.registerTower(TOWER_ROW + 1, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Two enemies — each at its tower's position for instant hit
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      // Second tower is at row+1 → world Z offset by 1 tile
+      const e2 = createEnemy('e2', TOWER_WORLD_X, TOWER_WORLD_Z + 1, 1000);
+      enemyMap.set('e2', e2);
+
+      service.update(2.0, mockScene);
+
+      const impactFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      expect(impactFlashes.length).toBeGreaterThanOrEqual(2);
+
+      // Both flash meshes should share the same geometry instance (shared pool)
+      expect(impactFlashes[0].mesh.geometry).toBe(impactFlashes[1].mesh.geometry);
+    });
+
+    it('should re-create flash geometry after cleanup disposes it', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // First flash — instant hit
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+      service.update(2.0, mockScene);
+
+      const flashesBefore = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      expect(flashesBefore.length).toBeGreaterThan(0);
+      const geometryBeforeCleanup = flashesBefore[0].mesh.geometry;
+
+      // Cleanup disposes the shared geometry and sets it to null
+      service.cleanup(mockScene);
+
+      // Re-register tower and create a new flash
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const e2 = createEnemy('e2', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e2', e2);
+      service.update(2.0, mockScene);
+
+      const flashesAfter = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      expect(flashesAfter.length).toBeGreaterThan(0);
+      const geometryAfterCleanup = flashesAfter[0].mesh.geometry;
+
+      // New geometry must be a different reference (old one was disposed)
+      expect(geometryAfterCleanup).not.toBe(geometryBeforeCleanup);
+      expect(geometryAfterCleanup).toBeInstanceOf(THREE.SphereGeometry);
     });
   });
 });

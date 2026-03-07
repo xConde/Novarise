@@ -19,12 +19,6 @@ export const HEMISPHERE_LIGHT: HemisphereLightConfig = {
   intensity: 0.7
 };
 
-/** Kept for editor or fallback use; game scene relies on hemisphere light for ambient fill */
-export const AMBIENT_LIGHT: LightConfig = {
-  color: 0x8888aa,
-  intensity: 0.3
-};
-
 export const KEY_LIGHT: LightConfig & {
   castShadow: boolean;
   shadow: { mapSize: number; bias: number; bounds: number };

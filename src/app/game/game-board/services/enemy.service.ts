@@ -21,6 +21,8 @@ export class EnemyService {
   private pathCache: Map<string, GridNode[]> = new Map();
   private modifierEffects: ModifierEffects = {};
   private activeModifiers: Set<GameModifier> = new Set();
+  /** Scratch quaternion reused each frame to avoid per-enemy allocation in billboarding. */
+  private billboardScratchQuat = new THREE.Quaternion();
 
   constructor(private gameBoardService: GameBoardService) {}
 
@@ -329,10 +331,12 @@ export class EnemyService {
           mat.color.setHex(HEALTH_BAR_CONFIG.colorRed);
         }
 
-        // Billboard: face camera
+        // Billboard: face camera (compensate for parent enemy rotation)
         if (cameraQuaternion) {
-          healthBarBg.quaternion.copy(cameraQuaternion);
-          healthBarFg.quaternion.copy(cameraQuaternion);
+          enemy.mesh.getWorldQuaternion(this.billboardScratchQuat);
+          this.billboardScratchQuat.invert().premultiply(cameraQuaternion);
+          healthBarBg.quaternion.copy(this.billboardScratchQuat);
+          healthBarFg.quaternion.copy(this.billboardScratchQuat);
         }
       }
     });

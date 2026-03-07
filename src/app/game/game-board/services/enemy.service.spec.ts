@@ -851,6 +851,32 @@ describe('EnemyService', () => {
       expect(healthBarFg.quaternion.z).toBeCloseTo(quat.z, 5);
       expect(healthBarFg.quaternion.w).toBeCloseTo(quat.w, 5);
     });
+
+    it('should billboard health bars correctly when parent mesh is rotated', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const cameraQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 3, 0));
+
+      // Rotate the parent mesh to simulate an enemy facing a movement direction
+      enemy.mesh!.rotation.y = Math.PI / 4;
+      // Update the parent's world matrix so getWorldQuaternion reflects the rotation
+      enemy.mesh!.updateMatrixWorld(true);
+
+      service.updateHealthBars(cameraQuat);
+
+      const healthBarBg = enemy.mesh!.userData['healthBarBg'] as THREE.Mesh;
+      // Force world matrix update on the health bar
+      healthBarBg.updateMatrixWorld(true);
+
+      // The health bar's WORLD quaternion should equal the camera quaternion,
+      // regardless of the parent mesh rotation
+      const worldQuat = new THREE.Quaternion();
+      healthBarBg.getWorldQuaternion(worldQuat);
+
+      expect(worldQuat.x).toBeCloseTo(cameraQuat.x, 4);
+      expect(worldQuat.y).toBeCloseTo(cameraQuat.y, 4);
+      expect(worldQuat.z).toBeCloseTo(cameraQuat.z, 4);
+      expect(worldQuat.w).toBeCloseTo(cameraQuat.w, 4);
+    });
   });
 
   describe('Dead Enemy Movement Guard', () => {
@@ -1425,17 +1451,27 @@ describe('EnemyService', () => {
     it('should face correct direction for known path segment', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       expect(enemy).toBeTruthy();
+      expect(enemy.path.length).toBeGreaterThanOrEqual(2);
 
-      // The path from (0,0) to (9,9) on a 10x10 board — first move is along
-      // either +x or +z. After update, rotation.y should reflect that direction.
+      // Compute expected angle from the first path segment
+      // path nodes use {x: col, y: row} — gridToWorld(row, col) = (col - w/2, row - h/2)
+      const boardWidth = 10;
+      const boardHeight = 10;
+      const node0 = enemy.path[0]; // {x: col, y: row}
+      const node1 = enemy.path[1];
+      const world0x = (node0.x - boardWidth / 2);
+      const world0z = (node0.y - boardHeight / 2);
+      const world1x = (node1.x - boardWidth / 2);
+      const world1z = (node1.y - boardHeight / 2);
+      const dx = world1x - world0x;
+      const dz = world1z - world0z;
+      const expectedAngle = Math.atan2(dx, dz);
+
       service.updateEnemies(0.016);
       const rotY = enemy.mesh!.rotation.y;
 
-      // Rotation was computed via atan2(direction.x, direction.z)
-      // For a move along +z (row increases), direction.z > 0 → angle near 0
-      // For a move along +x (col increases), direction.x > 0 → angle near PI/2
-      // Either way it should be a finite number
-      expect(isFinite(rotY)).toBe(true);
+      // Rotation should match the expected angle from the path direction
+      expect(rotY).toBeCloseTo(expectedAngle, 1);
     });
   });
 
