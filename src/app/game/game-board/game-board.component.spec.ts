@@ -38,7 +38,7 @@ describe('GameBoardComponent', () => {
 
     damagePopupSpy = jasmine.createSpyObj('DamagePopupService', ['spawn', 'update', 'cleanup']);
 
-    minimapSpy = jasmine.createSpyObj('MinimapService', ['init', 'update', 'cleanup', 'toggleVisibility']);
+    minimapSpy = jasmine.createSpyObj('MinimapService', ['init', 'update', 'cleanup', 'toggleVisibility', 'show', 'hide']);
 
     settingsSpy = jasmine.createSpyObj('SettingsService', ['get', 'update', 'reset']);
     settingsSpy.get.and.returnValue({ audioMuted: false, difficulty: 'normal' as any, gameSpeed: 1 });

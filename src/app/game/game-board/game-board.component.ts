@@ -553,6 +553,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (state.phase === GamePhase.COMBAT) return;
     if (state.phase === GamePhase.VICTORY || state.phase === GamePhase.DEFEAT) return;
 
+    this.minimapService.show();
+
     // Ensure enemy service has current modifier effects before first wave
     if (state.wave === 0 && this.activeModifiers.size > 0) {
       this.enemyService.setModifierEffects(

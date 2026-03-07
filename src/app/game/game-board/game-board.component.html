@@ -1,16 +1,6 @@
 <div class="board-container">
   <div class="canvas-container" #canvasContainer></div>
 
-  <!-- Navigation -->
-  <div class="nav-buttons">
-    <button class="nav-back-btn" (click)="goHome()" aria-label="Back to Home">
-      Home
-    </button>
-    <button class="nav-back-btn" (click)="goToEditor()" aria-label="Back to Editor">
-      Edit Map
-    </button>
-  </div>
-
   <!-- Top-right controls -->
   <div class="top-right-controls">
     <div class="fps-counter">{{ fps }} FPS</div>
@@ -98,11 +88,14 @@
         Score: {{ modifierScoreMultiplier.toFixed(1) }}x
       </div>
     </div>
+    <button class="start-game-btn" (click)="startWave()" aria-label="Start the game">
+      Start Game
+    </button>
   </div>
 
   <!-- Wave preview panel — shown during SETUP and INTERMISSION -->
   <div class="wave-preview"
-       *ngIf="(gameState.phase === GamePhase.SETUP || gameState.phase === GamePhase.INTERMISSION) && wavePreview.length > 0"
+       *ngIf="gameState.phase === GamePhase.INTERMISSION && wavePreview.length > 0"
        aria-label="Upcoming wave preview">
     <div class="wave-preview-header">
       Wave {{ gameState.wave + 1 }}
@@ -120,14 +113,13 @@
   </div>
 
   <!-- Wave control -->
-  <div class="wave-control" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
+  <div class="wave-control" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT && gameState.wave > 0">
     <button
       class="wave-btn"
       *ngIf="gameState.phase !== GamePhase.COMBAT"
       (click)="startWave()"
       aria-label="Start next wave">
-      <span *ngIf="gameState.wave === 0">Start Game</span>
-      <span *ngIf="gameState.wave > 0">Next Wave</span>
+      <span>Next Wave</span>
       <span class="wave-hint">Space</span>
     </button>
   </div>
@@ -237,7 +229,6 @@
       <div class="overlay-actions">
         <button class="restart-btn" (click)="restartGame()">Play Again</button>
         <button class="edit-map-btn" (click)="goToEditor()">Edit Map</button>
-        <button class="edit-map-btn" (click)="goHome()">Home</button>
       </div>
     </div>
   </div>

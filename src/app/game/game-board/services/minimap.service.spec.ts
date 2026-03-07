@@ -54,11 +54,13 @@ describe('MinimapService', () => {
 
     it('should render without errors when initialized', () => {
       service.init(container);
+      service.show();
       expect(() => service.update(0, terrain, [])).not.toThrow();
     });
 
     it('should throttle updates based on updateIntervalMs', () => {
       service.init(container);
+      service.show();
       // First call renders
       service.update(0, terrain, []);
       // Immediate second call should be throttled (no error, just skipped)
@@ -69,6 +71,7 @@ describe('MinimapService', () => {
 
     it('should render entities without errors', () => {
       service.init(container);
+      service.show();
       const entities: MinimapEntityData[] = [
         { x: 5, z: 12, type: 'tower' },
         { x: 10, z: 12, type: 'enemy' },
@@ -79,30 +82,72 @@ describe('MinimapService', () => {
 
     it('should skip rendering when not visible', () => {
       service.init(container);
-      service.toggleVisibility(); // now hidden
-      // Should not throw, just skip
+      // Service starts with visible=false, so update should skip
       expect(() => service.update(0, terrain, [])).not.toThrow();
+    });
+  });
+
+  describe('show', () => {
+    it('should set visible to true', () => {
+      expect(service.isVisible()).toBe(false);
+      service.show();
+      expect(service.isVisible()).toBe(true);
+    });
+
+    it('should clear display style on canvas', () => {
+      service.init(container);
+      const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+      canvas.style.display = 'none';
+      service.show();
+      expect(canvas.style.display).toBe('');
+    });
+
+    it('should not throw without init', () => {
+      expect(() => service.show()).not.toThrow();
+    });
+  });
+
+  describe('hide', () => {
+    it('should set visible to false', () => {
+      service.show();
+      expect(service.isVisible()).toBe(true);
+      service.hide();
+      expect(service.isVisible()).toBe(false);
+    });
+
+    it('should set display none on canvas', () => {
+      service.init(container);
+      service.show();
+      service.hide();
+      const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+      expect(canvas.style.display).toBe('none');
+    });
+
+    it('should not throw without init', () => {
+      expect(() => service.hide()).not.toThrow();
     });
   });
 
   describe('toggleVisibility', () => {
     it('should toggle visible state', () => {
-      expect(service.isVisible()).toBe(true);
-      service.toggleVisibility();
       expect(service.isVisible()).toBe(false);
       service.toggleVisibility();
       expect(service.isVisible()).toBe(true);
+      service.toggleVisibility();
+      expect(service.isVisible()).toBe(false);
     });
 
-    it('should hide/show the canvas element', () => {
+    it('should show/hide the canvas element', () => {
       service.init(container);
       const canvas = container.querySelector('canvas') as HTMLCanvasElement;
 
-      service.toggleVisibility();
-      expect(canvas.style.display).toBe('none');
-
+      // Starts hidden (visible=false), toggle makes it visible
       service.toggleVisibility();
       expect(canvas.style.display).toBe('block');
+
+      // Toggle again hides it
+      service.toggleVisibility();
+      expect(canvas.style.display).toBe('none');
     });
   });
 

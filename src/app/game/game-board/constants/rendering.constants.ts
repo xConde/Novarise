@@ -13,7 +13,7 @@ export const POST_PROCESSING_CONFIG = {
   },
   vignette: {
     offset: 1.1,
-    darkness: 0.8
+    darkness: 0.4
   }
 };
 

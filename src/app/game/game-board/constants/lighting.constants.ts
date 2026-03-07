@@ -9,7 +9,7 @@ export interface LightConfig {
 
 export const AMBIENT_LIGHT: LightConfig = {
   color: 0x5a4a6a,
-  intensity: 0.6
+  intensity: 0.9
 };
 
 export const DIRECTIONAL_LIGHT: LightConfig & {
@@ -17,7 +17,7 @@ export const DIRECTIONAL_LIGHT: LightConfig & {
   shadow: { mapSize: number; bias: number; bounds: number };
 } = {
   color: 0xc0b0d0,
-  intensity: 0.9,
+  intensity: 1.2,
   position: [10, 20, 10],
   castShadow: true,
   shadow: {

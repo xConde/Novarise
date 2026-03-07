@@ -22,7 +22,7 @@ export interface MinimapTerrainData {
 export class MinimapService {
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
-  private visible = true;
+  private visible = false;
   private lastUpdateTime = 0;
 
   /**
@@ -109,6 +109,16 @@ export class MinimapService {
       this.ctx.arc(px, pz, dotSize, 0, Math.PI * 2);
       this.ctx.fill();
     }
+  }
+
+  show(): void {
+    this.visible = true;
+    if (this.canvas) this.canvas.style.display = '';
+  }
+
+  hide(): void {
+    this.visible = false;
+    if (this.canvas) this.canvas.style.display = 'none';
   }
 
   toggleVisibility(): void {
