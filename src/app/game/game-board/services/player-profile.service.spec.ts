@@ -372,4 +372,67 @@ describe('PlayerProfileService', () => {
       expect(service.getProfile().achievements).not.toContain('fake_achievement');
     });
   });
+
+  // ── isUnlocked (pre-computed Set) ─────────────────────────────────────────
+
+  describe('isUnlocked — pre-computed Set', () => {
+    it('returns false for all achievements on a fresh profile', () => {
+      for (const a of ACHIEVEMENTS) {
+        expect(service.isUnlocked(a.id)).toBe(false);
+      }
+    });
+
+    it('returns true after achievement is unlocked via recordGameEnd', () => {
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.isUnlocked('first_victory')).toBe(true);
+    });
+
+    it('returns false for achievements not yet unlocked', () => {
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.isUnlocked('veteran')).toBe(false);
+    });
+
+    it('resets to false for all achievements after reset()', () => {
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.isUnlocked('first_victory')).toBe(true);
+      service.reset();
+      expect(service.isUnlocked('first_victory')).toBe(false);
+    });
+
+    it('reflects achievements loaded from localStorage', () => {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          totalGamesPlayed: 1,
+          totalVictories: 1,
+          achievements: ['first_victory', 'high_scorer'],
+        })
+      );
+      const fresh = new PlayerProfileService();
+      expect(fresh.isUnlocked('first_victory')).toBe(true);
+      expect(fresh.isUnlocked('high_scorer')).toBe(true);
+      expect(fresh.isUnlocked('veteran')).toBe(false);
+    });
+
+    it('returns false for unknown achievement IDs', () => {
+      expect(service.isUnlocked('nonexistent_achievement')).toBe(false);
+    });
+  });
+
+  // ── save failure logging ──────────────────────────────────────────────────
+
+  describe('save failure logging', () => {
+    it('should log warning on QuotaExceededError', () => {
+      spyOn(localStorage, 'setItem').and.callFake(() => {
+        throw new DOMException('quota exceeded', 'QuotaExceededError');
+      });
+      spyOn(console, 'warn');
+
+      service.recordGameEnd(makeStats());
+
+      expect(console.warn).toHaveBeenCalledWith(
+        jasmine.stringContaining('quota exceeded')
+      );
+    });
+  });
 });

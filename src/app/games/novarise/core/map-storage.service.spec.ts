@@ -1111,4 +1111,56 @@ describe('MapStorageService', () => {
       expect(result.playable).toBe(true);
     });
   });
+
+  describe('quota error handling', () => {
+    it('should still return a mapId when localStorage.setItem throws QuotaExceededError', () => {
+      const quotaError = new DOMException('quota exceeded', 'QuotaExceededError');
+      (localStorage.setItem as jasmine.Spy).and.callFake((key: string) => {
+        throw quotaError;
+      });
+      spyOn(console, 'warn');
+
+      const mapId = service.saveMap('Test Map', testMapData());
+
+      expect(mapId).toBeTruthy();
+      expect(console.warn).toHaveBeenCalledWith(
+        jasmine.stringContaining('quota exceeded')
+      );
+    });
+
+    it('should log generic error for non-quota setItem failures', () => {
+      const genericError = new Error('SecurityError');
+      (localStorage.setItem as jasmine.Spy).and.callFake(() => {
+        throw genericError;
+      });
+      spyOn(console, 'error');
+
+      service.saveMap('Test Map', testMapData());
+
+      expect(console.error).toHaveBeenCalled();
+    });
+
+    it('importMapFromJson should return null when save does not persist', () => {
+      // Allow setItem to be called but do not actually store anything
+      (localStorage.setItem as jasmine.Spy).and.callFake(() => {
+        // no-op: simulates silent failure
+      });
+
+      const savedMap: SavedMap = {
+        metadata: {
+          id: 'old_id',
+          name: 'Imported',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          version: '1.0.0',
+          gridSize: 10
+        },
+        data: testMapData()
+      };
+
+      const mapId = service.importMapFromJson(JSON.stringify(savedMap));
+
+      expect(mapId).toBeNull();
+    });
+  });
 });

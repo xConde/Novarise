@@ -63,7 +63,11 @@ export class MapStorageService {
     try {
       localStorage.setItem(this.STORAGE_PREFIX + mapId, JSON.stringify(savedMap));
     } catch (e) {
-      console.error('Failed to save map — localStorage may be full or unavailable:', e);
+      if (this.isQuotaError(e)) {
+        console.warn('localStorage quota exceeded — cannot save map. Free space by deleting unused maps.');
+      } else {
+        console.error('Failed to save map — localStorage may be unavailable:', e);
+      }
     }
 
     // Update metadata index
@@ -147,7 +151,11 @@ export class MapStorageService {
     try {
       localStorage.setItem(this.METADATA_KEY, JSON.stringify(filtered));
     } catch (e) {
-      console.error('Failed to update metadata index:', e);
+      if (this.isQuotaError(e)) {
+        console.warn('localStorage quota exceeded while updating metadata index after deletion.');
+      } else {
+        console.error('Failed to update metadata index:', e);
+      }
     }
 
     // Clear current map if it was this one
@@ -266,7 +274,15 @@ export class MapStorageService {
       }
 
       const mapName = name || savedMap.metadata?.name || 'Imported Map';
-      return this.saveMap(mapName, savedMap.data);
+      const mapId = this.saveMap(mapName, savedMap.data);
+
+      // Verify the map actually persisted (guards against silent quota failure)
+      if (!localStorage.getItem(this.STORAGE_PREFIX + mapId)) {
+        console.warn('Import appeared to succeed but map was not persisted — storage may be full.');
+        return null;
+      }
+
+      return mapId;
     } catch (e) {
       console.error('Failed to import map:', e);
       return null;
@@ -500,7 +516,11 @@ export class MapStorageService {
     try {
       localStorage.setItem(this.CURRENT_MAP_KEY, id);
     } catch (e) {
-      console.error('Failed to set current map ID:', e);
+      if (this.isQuotaError(e)) {
+        console.warn('localStorage quota exceeded while setting current map ID.');
+      } else {
+        console.error('Failed to set current map ID:', e);
+      }
     }
   }
 
@@ -522,7 +542,22 @@ export class MapStorageService {
     try {
       localStorage.setItem(this.METADATA_KEY, JSON.stringify(maps));
     } catch (e) {
-      console.error('Failed to update metadata index:', e);
+      if (this.isQuotaError(e)) {
+        console.warn('localStorage quota exceeded while updating metadata index.');
+      } else {
+        console.error('Failed to update metadata index:', e);
+      }
     }
+  }
+
+  /**
+   * Detect whether an error is a localStorage QuotaExceededError.
+   * Checks both the standard name property and the legacy code property.
+   */
+  private isQuotaError(e: unknown): boolean {
+    if (e instanceof DOMException) {
+      return e.name === 'QuotaExceededError' || e.code === 22;
+    }
+    return false;
   }
 }
