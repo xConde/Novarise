@@ -1,0 +1,34 @@
+<!-- Game HUD -->
+<div class="game-hud" *ngIf="gameState.wave > 0">
+  <div class="hud-stat">
+    <span class="hud-label">Lives</span>
+    <span class="hud-value lives" [class.critical]="gameState.lives <= 5">{{ gameState.lives }}</span>
+  </div>
+  <div class="hud-stat">
+    <span class="hud-label">Gold</span>
+    <span class="hud-value gold">{{ gameState.gold }}</span>
+  </div>
+  <div class="hud-stat">
+    <span class="hud-label">Wave</span>
+    <span class="hud-value" *ngIf="!gameState.isEndless">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
+    <span class="hud-value" *ngIf="gameState.isEndless">{{ gameState.wave }}</span>
+  </div>
+  <div class="hud-stat secondary">
+    <span class="hud-label">Score</span>
+    <span class="hud-value">{{ gameState.score }}</span>
+  </div>
+  <div class="hud-stat secondary">
+    <span class="hud-label">Time</span>
+    <span class="hud-value">{{ formattedTime }}</span>
+  </div>
+</div>
+
+<!-- Wave status indicator -->
+<div class="hud-wave-status" *ngIf="gameState.phase === GamePhase.COMBAT">
+  <span class="wave-enemy-count">{{ enemiesAlive + enemiesToSpawn }}</span> enemies remaining
+</div>
+
+<!-- Path blocked warning -->
+<div class="path-blocked-warning" *ngIf="pathBlocked">
+  Placement blocked — enemies need a path to the exit
+</div>

@@ -23,40 +23,13 @@
     </button>
   </div>
 
-  <!-- Game HUD -->
-  <div class="game-hud" *ngIf="gameState.wave > 0">
-    <div class="hud-stat">
-      <span class="hud-label">Lives</span>
-      <span class="hud-value lives" [class.critical]="gameState.lives <= 5">{{ gameState.lives }}</span>
-    </div>
-    <div class="hud-stat">
-      <span class="hud-label">Gold</span>
-      <span class="hud-value gold">{{ gameState.gold }}</span>
-    </div>
-    <div class="hud-stat">
-      <span class="hud-label">Wave</span>
-      <span class="hud-value" *ngIf="!gameState.isEndless">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
-      <span class="hud-value" *ngIf="gameState.isEndless">{{ gameState.wave }}</span>
-    </div>
-    <div class="hud-stat secondary">
-      <span class="hud-label">Score</span>
-      <span class="hud-value">{{ gameState.score }}</span>
-    </div>
-    <div class="hud-stat secondary">
-      <span class="hud-label">Time</span>
-      <span class="hud-value">{{ formattedTime }}</span>
-    </div>
-  </div>
-
-  <!-- Wave status indicator -->
-  <div class="hud-wave-status" *ngIf="gameState.phase === GamePhase.COMBAT">
-    <span class="wave-enemy-count">{{ enemiesAlive + enemiesToSpawn }}</span> enemies remaining
-  </div>
-
-  <!-- Path blocked warning -->
-  <div class="path-blocked-warning" *ngIf="pathBlocked">
-    Placement blocked — enemies need a path to the exit
-  </div>
+  <app-game-hud
+    [gameState]="gameState"
+    [formattedTime]="formattedTime"
+    [enemiesAlive]="enemiesAlive"
+    [enemiesToSpawn]="enemiesToSpawn"
+    [pathBlocked]="pathBlocked">
+  </app-game-hud>
 
   <!-- Setup panel — right side on desktop, bottom sheet on mobile -->
   <div class="setup-panel" *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0">
@@ -171,74 +144,16 @@
     </button>
   </div>
 
-  <!-- Victory/Defeat overlay -->
-  <div class="game-overlay" *ngIf="gameState.phase === GamePhase.VICTORY || gameState.phase === GamePhase.DEFEAT" role="alertdialog" [attr.aria-label]="gameState.phase === GamePhase.VICTORY ? 'Victory' : 'Defeat'">
-    <div class="overlay-content" [class.victory]="gameState.phase === GamePhase.VICTORY" [class.defeat]="gameState.phase === GamePhase.DEFEAT">
-      <h2 *ngIf="gameState.phase === GamePhase.VICTORY">Victory</h2>
-      <h2 *ngIf="gameState.phase === GamePhase.DEFEAT">Defeat</h2>
-
-      <!-- Star rating -->
-      <div class="star-display" *ngIf="gameState.phase === GamePhase.VICTORY">
-        <span
-          *ngFor="let s of starArray; let i = index"
-          class="overlay-star"
-          [class.filled]="s === 'filled'"
-          [class.empty]="s === 'empty'"
-          [attr.aria-label]="s === 'filled' ? 'Star earned' : 'Star not earned'">
-          &#9733;
-        </span>
-      </div>
-
-      <!-- Score breakdown -->
-      <div class="score-breakdown" *ngIf="scoreBreakdown">
-        <div class="score-row">
-          <span class="score-label">Base Score</span>
-          <span class="score-value">{{ scoreBreakdown.baseScore }}</span>
-        </div>
-        <div class="score-row">
-          <span class="score-label">Difficulty</span>
-          <span class="score-value multiplier">x{{ scoreBreakdown.difficultyMultiplier }}</span>
-        </div>
-        <div class="score-row" *ngIf="scoreBreakdown.modifierMultiplier !== 1">
-          <span class="score-label">Modifiers</span>
-          <span class="score-value multiplier">x{{ scoreBreakdown.modifierMultiplier.toFixed(1) }}</span>
-        </div>
-        <div class="score-row">
-          <span class="score-label">Waves Completed</span>
-          <span class="score-value">{{ scoreBreakdown.wavesCompleted }} / {{ gameState.maxWaves }}</span>
-        </div>
-        <div class="score-row">
-          <span class="score-label">Lives Remaining</span>
-          <span class="score-value">{{ scoreBreakdown.livesRemaining }} / {{ scoreBreakdown.livesTotal }}</span>
-        </div>
-        <div class="score-row final">
-          <span class="score-label">Final Score</span>
-          <span class="score-value final-value">{{ scoreBreakdown.finalScore }}</span>
-        </div>
-      </div>
-
-      <p class="final-score" *ngIf="!scoreBreakdown">Score: {{ gameState.score }}</p>
-
-      <!-- Newly unlocked achievements -->
-      <div class="achievements-unlocked" *ngIf="newlyUnlockedAchievements.length > 0">
-        <h3 class="achievements-title">Achievements Unlocked</h3>
-        <div class="achievement-list">
-          <div class="achievement-badge" *ngFor="let ach of achievementDetails">
-            <span class="achievement-icon">&#127942;</span>
-            <div class="achievement-info">
-              <span class="achievement-name">{{ ach.name }}</span>
-              <span class="achievement-desc">{{ ach.description }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="overlay-actions">
-        <button class="restart-btn" (click)="restartGame()">Play Again</button>
-        <button class="edit-map-btn" (click)="goToEditor()">Edit Map</button>
-      </div>
-    </div>
-  </div>
+  <app-game-results
+    *ngIf="gameState.phase === GamePhase.VICTORY || gameState.phase === GamePhase.DEFEAT"
+    [gameState]="gameState"
+    [scoreBreakdown]="scoreBreakdown"
+    [starArray]="starArray"
+    [newlyUnlockedAchievements]="newlyUnlockedAchievements"
+    [achievementDetails]="achievementDetails"
+    (restart)="restartGame()"
+    (goToEditor)="goToEditor()">
+  </app-game-results>
 
   <!-- Pause overlay -->
   <div class="pause-overlay" *ngIf="isPaused && gameState.phase === GamePhase.COMBAT" (click)="togglePause()">

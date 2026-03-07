@@ -3,11 +3,15 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { GameComponent } from './game.component';
 import { GameBoardComponent } from './game-board/game-board.component';
+import { GameHUDComponent } from './game-board/components/game-hud/game-hud.component';
+import { GameResultsComponent } from './game-board/components/game-results/game-results.component';
 import { GameBoardService } from './game-board/game-board.service';
 @NgModule({
   declarations: [
     GameComponent,
-    GameBoardComponent
+    GameBoardComponent,
+    GameHUDComponent,
+    GameResultsComponent
   ],
   imports: [
     CommonModule,

@@ -4,6 +4,8 @@ import { RouterTestingModule } from '@angular/router/testing';
 import * as THREE from 'three';
 
 import { GameBoardComponent } from './game-board.component';
+import { GameHUDComponent } from './components/game-hud/game-hud.component';
+import { GameResultsComponent } from './components/game-results/game-results.component';
 import { GameBoardService } from './game-board.service';
 import { MapBridgeService } from './services/map-bridge.service';
 import { GameStateService } from './services/game-state.service';
@@ -44,7 +46,7 @@ describe('GameBoardComponent', () => {
     settingsSpy.get.and.returnValue({ audioMuted: false, difficulty: 'normal' as any, gameSpeed: 1 });
 
     await TestBed.configureTestingModule({
-      declarations: [ GameBoardComponent ],
+      declarations: [ GameBoardComponent, GameHUDComponent, GameResultsComponent ],
       imports: [ RouterTestingModule ],
       providers: [
         GameBoardService,
