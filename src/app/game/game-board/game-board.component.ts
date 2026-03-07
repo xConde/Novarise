@@ -82,6 +82,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
   private tileMeshes: Map<string, THREE.Mesh> = new Map();
+  private tileMeshArray: THREE.Mesh[] = [];
+  private towerChildrenArray: THREE.Object3D[] = [];
   private hoveredTile: THREE.Mesh | null = null;
   private selectedTile: { row: number, col: number } | null = null;
 
@@ -183,6 +185,35 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.achievementDetails = this.newlyUnlockedAchievements
       .map(id => ACHIEVEMENTS.find(a => a.id === id))
       .filter((a): a is Achievement => a != null);
+  }
+
+  /** Records game-end stats for player profile. Safe to call multiple times — fires once per game. */
+  /** Rebuilds the flat array of tower child meshes used for raycasting. Call after any tower add/remove. */
+  private rebuildTowerChildrenCache(): void {
+    this.towerChildrenArray = [];
+    this.towerMeshes.forEach(g => g.traverse(child => {
+      if (child instanceof THREE.Mesh) this.towerChildrenArray.push(child);
+    }));
+  }
+
+  private recordGameEndIfNeeded(): void {
+    const phase = this.gameStateService.getState().phase;
+    if ((phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) && !this.gameEndRecorded) {
+      this.gameEndRecorded = true;
+      const endState = this.gameStateService.getState();
+      const stats = this.gameStatsService.getStats();
+      const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
+      const gameEndStats: GameEndStats = {
+        isVictory: phase === GamePhase.VICTORY,
+        score: endState.score,
+        enemiesKilled: totalKills,
+        goldEarned: stats.totalGoldEarned,
+        wavesCompleted: endState.wave,
+        livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
+      };
+      this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
+      this.updateAchievementDetails();
+    }
   }
 
   // FPS exposed to template
@@ -410,6 +441,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Refresh info panel
     this.refreshTowerInfoPanel();
     this.showRangePreview(this.selectedTowerInfo);
+
+    // Refresh all-range overlay if active so rings reflect upgraded stats
+    if (this.showAllRanges) {
+      this.refreshAllRanges();
+    }
   }
 
   selectSpecialization(spec: TowerSpecialization): void {
@@ -448,6 +484,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       });
       this.towerMeshes.delete(this.selectedTowerInfo.id);
+      this.rebuildTowerChildrenCache();
     }
 
     // Restore tile to BASE
@@ -674,6 +711,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       });
     });
     this.towerMeshes.clear();
+    this.towerChildrenArray = [];
 
     // Clean up tile meshes
     this.tileMeshes.forEach(mesh => {
@@ -682,6 +720,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       disposeMaterial(mesh.material);
     });
     this.tileMeshes.clear();
+    this.tileMeshArray = [];
 
     // Clean up grid lines
     if (this.gridLines) {
@@ -872,6 +911,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.scene.add(mesh);
       });
     });
+
+    this.tileMeshArray = Array.from(this.tileMeshes.values());
   }
 
   private addGridLines(): void {
@@ -1007,7 +1048,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
       this.raycaster.setFromCamera(this.mouse, this.camera);
-      const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
+      const intersects = this.raycaster.intersectObjects(this.tileMeshArray);
 
       if (this.hoveredTile && this.hoveredTile !== this.getSelectedTileMesh()) {
         const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
@@ -1050,61 +1091,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     };
 
     this.clickHandler = (event: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-      this.raycaster.setFromCamera(this.mouse, this.camera);
-
-      // Check for tower mesh clicks first
-      const towerGroups = Array.from(this.towerMeshes.values());
-      const towerChildren: THREE.Object3D[] = [];
-      towerGroups.forEach(g => g.traverse(child => { if (child instanceof THREE.Mesh) towerChildren.push(child); }));
-      const towerHits = this.raycaster.intersectObjects(towerChildren);
-
-      if (towerHits.length > 0) {
-        // Walk up to find the tower group and its key
-        let hitObj: THREE.Object3D | null = towerHits[0].object;
-        let foundKey: string | null = null;
-        while (hitObj) {
-          for (const [key, group] of this.towerMeshes) {
-            if (group === hitObj) { foundKey = key; break; }
-          }
-          if (foundKey) break;
-          hitObj = hitObj.parent;
-        }
-        if (foundKey) {
-          this.selectPlacedTower(foundKey);
-          return;
-        }
-      }
-
-      // Check tile clicks
-      const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
-
-      const prevSelected = this.getSelectedTileMesh();
-      if (prevSelected) {
-        const material = prevSelected.material as THREE.MeshStandardMaterial;
-        const tileType = prevSelected.userData['tile'].type;
-        material.emissiveIntensity = tileType === BlockType.BASE ? TILE_EMISSIVE.base : tileType === BlockType.WALL ? TILE_EMISSIVE.wall : TILE_EMISSIVE.special;
-      }
-
-      if (intersects.length > 0) {
-        const mesh = intersects[0].object as THREE.Mesh;
-        const row = mesh.userData['row'];
-        const col = mesh.userData['col'];
-
-        this.selectedTile = { row, col };
-
-        const material = mesh.material as THREE.MeshStandardMaterial;
-        material.emissiveIntensity = TILE_EMISSIVE.selected;
-
-        this.deselectTower();
-        this.tryPlaceTower(row, col);
-      } else {
-        this.selectedTile = null;
-        this.deselectTower();
-      }
+      this.handleInteraction(event.clientX, event.clientY);
     };
 
     canvas.addEventListener('mousemove', this.mousemoveHandler);
@@ -1203,8 +1190,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     canvas.addEventListener('touchend', this.touchEndHandler, { passive: false });
   }
 
-  /** Converts a canvas-relative touch position to NDC and runs the same raycasting as a mouse click. */
-  private handleTapAsClick(clientX: number, clientY: number): void {
+  /** Shared raycasting logic for both mouse click and touch tap interactions. */
+  private handleInteraction(clientX: number, clientY: number): void {
     const canvas = this.renderer.domElement;
     const rect = canvas.getBoundingClientRect();
     this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
@@ -1212,13 +1199,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
-    // Check for tower mesh taps first
-    const towerGroups = Array.from(this.towerMeshes.values());
-    const towerChildren: THREE.Object3D[] = [];
-    towerGroups.forEach(g => g.traverse(child => { if (child instanceof THREE.Mesh) towerChildren.push(child); }));
-    const towerHits = this.raycaster.intersectObjects(towerChildren);
+    // Check for tower mesh clicks/taps first
+    const towerHits = this.raycaster.intersectObjects(this.towerChildrenArray);
 
     if (towerHits.length > 0) {
+      // Walk up to find the tower group and its key
       let hitObj: THREE.Object3D | null = towerHits[0].object;
       let foundKey: string | null = null;
       while (hitObj) {
@@ -1234,8 +1219,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
 
-    // Check tile taps
-    const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
+    // Check tile clicks/taps
+    const intersects = this.raycaster.intersectObjects(this.tileMeshArray);
 
     const prevSelected = this.getSelectedTileMesh();
     if (prevSelected) {
@@ -1260,6 +1245,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.selectedTile = null;
       this.deselectTower();
     }
+  }
+
+  /** Converts a canvas-relative touch position to NDC and runs the same raycasting as a mouse click. */
+  private handleTapAsClick(clientX: number, clientY: number): void {
+    this.handleInteraction(clientX, clientY);
   }
 
   private static readonly PATH_BLOCKED_DISMISS_MS = 2000;
@@ -1318,6 +1308,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // Clear enemy path cache since board layout changed
       this.enemyService.clearPathCache();
       this.refreshPathOverlay();
+
+      // Rebuild tower children cache for raycasting
+      this.rebuildTowerChildrenCache();
     }
   }
 
@@ -1370,7 +1363,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   toggleAllRanges(): void {
     this.showAllRanges = !this.showAllRanges;
+    this.refreshAllRanges();
+  }
 
+  /** Removes existing range rings and recreates them if showAllRanges is active. */
+  private refreshAllRanges(): void {
     // Remove existing range rings
     for (const mesh of this.rangeRingMeshes) {
       this.scene.remove(mesh);
@@ -1635,41 +1632,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             }
 
             // Record game end stats for profile (VICTORY or DEFEAT, fires once per game)
-            if ((postWavePhase === GamePhase.VICTORY || postWavePhase === GamePhase.DEFEAT) && !this.gameEndRecorded) {
-              this.gameEndRecorded = true;
-              const endState = this.gameStateService.getState();
-              const stats = this.gameStatsService.getStats();
-              const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
-              const gameEndStats: GameEndStats = {
-                isVictory: postWavePhase === GamePhase.VICTORY,
-                score: endState.score,
-                enemiesKilled: totalKills,
-                goldEarned: stats.totalGoldEarned,
-                wavesCompleted: endState.wave,
-                livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
-              };
-              this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
-              this.updateAchievementDetails();
-            }
+            this.recordGameEndIfNeeded();
           }
 
           // DEFEAT mid-frame (from loseLife) — record game end if not yet done
-          if (currentPhase === GamePhase.DEFEAT && !this.gameEndRecorded) {
-            this.gameEndRecorded = true;
-            const endState = this.gameStateService.getState();
-            const stats = this.gameStatsService.getStats();
-            const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
-            const gameEndStats: GameEndStats = {
-              isVictory: false,
-              score: endState.score,
-              enemiesKilled: totalKills,
-              goldEarned: stats.totalGoldEarned,
-              wavesCompleted: endState.wave,
-              livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
-            };
-            this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
-            this.updateAchievementDetails();
-          }
+          this.recordGameEndIfNeeded();
 
           this.physicsAccumulator -= PHYSICS_CONFIG.fixedTimestep;
           stepCount++;

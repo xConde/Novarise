@@ -4,11 +4,15 @@ import { EnemyType } from '../models/enemy.model';
 import { WaveDefinition, WaveEntry, WAVE_DEFINITIONS, ENDLESS_CONFIG, ENDLESS_BASE_COUNT, ENDLESS_BASE_SPAWN_INTERVAL, ENDLESS_BASE_REWARD, ENDLESS_REWARD_SCALE_PER_WAVE, ENDLESS_BOSS_COUNT, ENDLESS_BOSS_SPAWN_INTERVAL } from '../models/wave.model';
 import { EnemyService } from './enemy.service';
 
+/** Max consecutive spawn failures before skipping an enemy (5 seconds at 60Hz). */
+const SPAWN_MAX_RETRIES = 300;
+
 interface SpawnQueue {
   type: EnemyType;
   spawnInterval: number;
   remaining: number;
   timeSinceLastSpawn: number;
+  consecutiveFailures: number;
 }
 
 // Enemy types that cycle in endless waves (excludes BOSS — added separately at intervals)
@@ -120,7 +124,8 @@ export class WaveService {
       type: entry.type,
       spawnInterval: entry.spawnInterval,
       remaining: Math.round(entry.count * countMultiplier),
-      timeSinceLastSpawn: entry.spawnInterval // spawn first immediately
+      timeSinceLastSpawn: entry.spawnInterval, // spawn first immediately
+      consecutiveFailures: 0
     }));
 
     this.active = true;
@@ -142,8 +147,15 @@ export class WaveService {
         if (spawned) {
           queue.remaining--;
           queue.timeSinceLastSpawn = 0;
+          queue.consecutiveFailures = 0;
+        } else {
+          // Spawn failed (no valid path) — retry next tick, but skip after max retries
+          queue.consecutiveFailures++;
+          if (queue.consecutiveFailures >= SPAWN_MAX_RETRIES) {
+            queue.remaining--;
+            queue.consecutiveFailures = 0;
+          }
         }
-        // If spawn failed (no valid path), keep in queue and retry next tick
       }
     }
 
