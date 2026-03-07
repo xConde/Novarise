@@ -6,6 +6,8 @@ import { BlockType } from '../models/game-board-tile';
 import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { MinHeap } from '../utils/min-heap';
 import { GameModifier, ModifierEffects, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
+import { StatusEffectType } from '../constants/status-effect.constants';
+import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG, BOSS_CROWN_CONFIG } from '../constants/effects.constants';
 
 export interface DamageResult {
   killed: boolean;
@@ -19,6 +21,8 @@ export class EnemyService {
   private pathCache: Map<string, GridNode[]> = new Map();
   private modifierEffects: ModifierEffects = {};
   private activeModifiers: Set<GameModifier> = new Set();
+  /** Scratch quaternion reused each frame to avoid per-enemy allocation in billboarding. */
+  private billboardScratchQuat = new THREE.Quaternion();
 
   constructor(private gameBoardService: GameBoardService) {}
 
@@ -193,9 +197,10 @@ export class EnemyService {
         enemy.distanceTraveled += moveDistance;
       }
 
-      // Update mesh position
+      // Update mesh position and face movement direction
       if (enemy.mesh) {
         enemy.mesh.position.set(enemy.position.x, enemy.position.y, enemy.position.z);
+        enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
       }
     });
 
@@ -304,7 +309,7 @@ export class EnemyService {
   /**
    * Update all enemy health bars to reflect current health
    */
-  updateHealthBars(): void {
+  updateHealthBars(cameraQuaternion?: THREE.Quaternion): void {
     this.enemies.forEach(enemy => {
       if (!enemy.mesh) return;
       // The health bar is stored in userData
@@ -325,20 +330,94 @@ export class EnemyService {
         } else {
           mat.color.setHex(HEALTH_BAR_CONFIG.colorRed);
         }
+
+        // Billboard: face camera (compensate for parent enemy rotation)
+        if (cameraQuaternion) {
+          enemy.mesh.getWorldQuaternion(this.billboardScratchQuat);
+          this.billboardScratchQuat.invert().premultiply(cameraQuaternion);
+          healthBarBg.quaternion.copy(this.billboardScratchQuat);
+          healthBarFg.quaternion.copy(this.billboardScratchQuat);
+        }
       }
     });
+  }
+
+  /**
+   * Tint enemy mesh emissive color based on active status effects.
+   * Highest-priority effect wins (BURN > POISON > SLOW).
+   * Enemies with no active effects revert to their base emissive.
+   */
+  updateStatusVisuals(activeEffects: Map<string, StatusEffectType[]>): void {
+    this.enemies.forEach(enemy => {
+      if (!enemy.mesh) return;
+      const mat = enemy.mesh.material as THREE.MeshStandardMaterial;
+      if (!mat.emissive) return;
+
+      const effects = activeEffects.get(enemy.id);
+      if (effects && effects.length > 0) {
+        // Pick highest-priority active effect for visual
+        for (const priority of STATUS_EFFECT_PRIORITY) {
+          if (effects.includes(priority)) {
+            const visual = STATUS_EFFECT_VISUALS[priority];
+            mat.emissive.setHex(visual.emissiveColor);
+            mat.emissiveIntensity = visual.emissiveIntensity;
+            this.tintChildMeshes(enemy.mesh, visual.emissiveColor, visual.emissiveIntensity);
+            return;
+          }
+        }
+      }
+
+      // No effects — restore base emissive
+      const stats = ENEMY_STATS[enemy.type];
+      const baseIntensity = enemy.isMiniSwarm
+        ? ENEMY_VISUAL_CONFIG.miniSwarmEmissive
+        : ENEMY_VISUAL_CONFIG.baseEmissive;
+      mat.emissive.setHex(stats.color);
+      mat.emissiveIntensity = baseIntensity;
+      this.tintChildMeshes(enemy.mesh, stats.color, baseIntensity);
+    });
+  }
+
+  /**
+   * Spin boss crowns for visual flair. Called once per frame.
+   */
+  updateEnemyAnimations(deltaTime: number): void {
+    this.enemies.forEach(enemy => {
+      if (!enemy.mesh || enemy.health <= 0) return;
+      const crown = enemy.mesh.userData['bossCrown'] as THREE.Mesh | undefined;
+      if (crown) {
+        crown.rotation.z += ENEMY_ANIM_CONFIG.bossCrownSpinSpeed * deltaTime;
+      }
+    });
+  }
+
+  /**
+   * Apply emissive tint to child meshes that have MeshStandardMaterial (e.g., boss crown).
+   * Skips health bar children (MeshBasicMaterial) and shield mesh.
+   */
+  private tintChildMeshes(mesh: THREE.Mesh, color: number, intensity: number): void {
+    const crown = mesh.userData['bossCrown'] as THREE.Mesh | undefined;
+    if (crown) {
+      const crownMat = crown.material as THREE.MeshStandardMaterial;
+      if (crownMat.emissive) {
+        crownMat.emissive.setHex(color);
+        crownMat.emissiveIntensity = intensity;
+      }
+    }
   }
 
   /**
    * Create a 3D mesh for an enemy.
    * FLYING enemies use a flat diamond (kite) shape made of 2 triangles,
    * rotated to lie flat in the XZ plane.
-   * All other enemies use a sphere.
+   * All other enemies get a type-specific geometry for gameplay readability.
    */
   private createEnemyMesh(enemy: Enemy): THREE.Mesh {
     const stats = ENEMY_STATS[enemy.type];
 
     let geometry: THREE.BufferGeometry;
+    let materialSide: THREE.Side = THREE.FrontSide;
+
     if (enemy.isFlying) {
       // Diamond: 4 vertices forming a rhombus in the XZ plane, 2 triangles
       const s = stats.size;
@@ -354,15 +433,18 @@ export class EnemyService {
       diamondGeom.setIndex(new THREE.BufferAttribute(indices, 1));
       diamondGeom.computeVertexNormals();
       geometry = diamondGeom;
+      materialSide = THREE.DoubleSide;
     } else {
-      geometry = new THREE.SphereGeometry(stats.size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
+      geometry = this.createEnemyGeometry(enemy.type, stats.size);
     }
 
-    const material = new THREE.MeshLambertMaterial({
+    const material = new THREE.MeshStandardMaterial({
       color: stats.color,
       emissive: stats.color,
-      emissiveIntensity: ENEMY_VISUAL_CONFIG.shieldedEmissive,
-      side: enemy.isFlying ? THREE.DoubleSide : THREE.FrontSide
+      emissiveIntensity: ENEMY_VISUAL_CONFIG.baseEmissive,
+      roughness: ENEMY_VISUAL_CONFIG.roughness,
+      metalness: ENEMY_VISUAL_CONFIG.metalness,
+      side: materialSide
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -379,13 +461,11 @@ export class EnemyService {
     const bgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.bgColor, side: THREE.DoubleSide });
     const healthBarBg = new THREE.Mesh(bgGeometry, bgMaterial);
     healthBarBg.position.set(0, barY, 0);
-    healthBarBg.lookAt(0, barY, 1); // Face camera roughly
 
     const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
     const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
     const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
     healthBarFg.position.set(0, barY + 0.001, 0);
-    healthBarFg.lookAt(0, barY + 0.001, 1);
 
     mesh.add(healthBarBg);
     mesh.add(healthBarFg);
@@ -398,7 +478,77 @@ export class EnemyService {
       mesh.userData['shieldMesh'] = shieldMesh;
     }
 
+    // Add crown ring for BOSS enemies
+    if (enemy.type === EnemyType.BOSS) {
+      this.createBossCrown(mesh, stats.size, stats.color);
+    }
+
     return mesh;
+  }
+
+  /**
+   * Create type-specific geometry for each enemy.
+   * Each type gets a distinct silhouette for gameplay readability.
+   */
+  private createEnemyGeometry(type: EnemyType, size: number): THREE.BufferGeometry {
+    switch (type) {
+      case EnemyType.FAST:
+        // Elongated capsule — streamlined for speed
+        return new THREE.CapsuleGeometry(size * 0.6, size * 1.2, 4, ENEMY_MESH_SEGMENTS);
+
+      case EnemyType.HEAVY:
+        // Chunky cube — blocky and tanky
+        return new THREE.BoxGeometry(size * 1.6, size * 1.6, size * 1.6);
+
+      case EnemyType.SWIFT:
+        // Tetrahedron — angular, darting
+        return new THREE.TetrahedronGeometry(size * 1.2, 0);
+
+      case EnemyType.BOSS: {
+        // Large sphere merged with torus crown for imposing look
+        // Use sphere as base — the crown ring is added as a child mesh in createBossCrown()
+        return new THREE.SphereGeometry(size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
+      }
+
+      case EnemyType.SHIELDED:
+        // Icosahedron — faceted, armored look
+        return new THREE.IcosahedronGeometry(size, 0);
+
+      case EnemyType.SWARM:
+        // Octahedron — compact, gem-like
+        return new THREE.OctahedronGeometry(size, 0);
+
+      case EnemyType.BASIC:
+      default:
+        // Standard sphere
+        return new THREE.SphereGeometry(size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
+    }
+  }
+
+  /**
+   * Create and attach a torus crown ring to the Boss enemy mesh.
+   * Called after the mesh is created to add the distinctive crown.
+   */
+  private createBossCrown(mesh: THREE.Mesh, size: number, color: number): void {
+    const crownGeometry = new THREE.TorusGeometry(
+      size * BOSS_CROWN_CONFIG.radiusMultiplier,
+      size * BOSS_CROWN_CONFIG.tubeMultiplier,
+      BOSS_CROWN_CONFIG.radialSegments,
+      BOSS_CROWN_CONFIG.tubularSegments
+    );
+    const crownMaterial = new THREE.MeshStandardMaterial({
+      color: color,
+      emissive: color,
+      emissiveIntensity: BOSS_CROWN_CONFIG.emissiveIntensity,
+      roughness: BOSS_CROWN_CONFIG.roughness,
+      metalness: BOSS_CROWN_CONFIG.metalness
+    });
+    const crown = new THREE.Mesh(crownGeometry, crownMaterial);
+    crown.rotation.x = Math.PI / 2;
+    crown.position.y = size * BOSS_CROWN_CONFIG.yOffsetMultiplier;
+    crown.castShadow = true;
+    mesh.add(crown);
+    mesh.userData['bossCrown'] = crown;
   }
 
   /**
@@ -411,7 +561,7 @@ export class EnemyService {
       SHIELD_VISUAL_CONFIG.segments,
       SHIELD_VISUAL_CONFIG.segments
     );
-    const shieldMaterial = new THREE.MeshLambertMaterial({
+    const shieldMaterial = new THREE.MeshStandardMaterial({
       color: SHIELD_VISUAL_CONFIG.color,
       emissive: SHIELD_VISUAL_CONFIG.color,
       emissiveIntensity: SHIELD_VISUAL_CONFIG.emissiveIntensity,
@@ -476,11 +626,13 @@ export class EnemyService {
    * Uses MINI_SWARM_STATS directly rather than ENEMY_STATS to produce the smaller visual.
    */
   private createMiniSwarmMesh(mini: Enemy): THREE.Mesh {
-    const geometry = new THREE.SphereGeometry(MINI_SWARM_STATS.size, MINI_SWARM_MESH_SEGMENTS, MINI_SWARM_MESH_SEGMENTS);
-    const material = new THREE.MeshLambertMaterial({
+    const geometry = new THREE.OctahedronGeometry(MINI_SWARM_STATS.size, 0);
+    const material = new THREE.MeshStandardMaterial({
       color: MINI_SWARM_STATS.color,
       emissive: MINI_SWARM_STATS.color,
-      emissiveIntensity: ENEMY_VISUAL_CONFIG.miniSwarmEmissive
+      emissiveIntensity: ENEMY_VISUAL_CONFIG.miniSwarmEmissive,
+      roughness: ENEMY_VISUAL_CONFIG.roughness,
+      metalness: ENEMY_VISUAL_CONFIG.metalness,
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -496,13 +648,11 @@ export class EnemyService {
     const bgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.bgColor, side: THREE.DoubleSide });
     const healthBarBg = new THREE.Mesh(bgGeometry, bgMaterial);
     healthBarBg.position.set(0, barY, 0);
-    healthBarBg.lookAt(0, barY, 1);
 
     const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
     const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
     const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
     healthBarFg.position.set(0, barY + 0.001, 0);
-    healthBarFg.lookAt(0, barY + 0.001, 1);
 
     mesh.add(healthBarBg);
     mesh.add(healthBarFg);

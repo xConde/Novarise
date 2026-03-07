@@ -362,6 +362,63 @@ describe('StatusEffectService', () => {
     });
   });
 
+  // --- getAllActiveEffects ---
+
+  describe('getAllActiveEffects()', () => {
+    it('should return empty map when no effects', () => {
+      const result = service.getAllActiveEffects();
+
+      expect(result.size).toBe(0);
+    });
+
+    it('should return correct effects for enemies with active effects', () => {
+      const e1 = createEnemy('e1', 100, 4);
+      const e2 = createEnemy('e2', 100, 4);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      service.apply('e1', StatusEffectType.BURN, 0);
+      service.apply('e1', StatusEffectType.SLOW, 0);
+      service.apply('e2', StatusEffectType.POISON, 0);
+
+      const result = service.getAllActiveEffects();
+
+      expect(result.size).toBe(2);
+      expect(result.get('e1')).toContain(StatusEffectType.BURN);
+      expect(result.get('e1')).toContain(StatusEffectType.SLOW);
+      expect(result.get('e1')!.length).toBe(2);
+      expect(result.get('e2')).toContain(StatusEffectType.POISON);
+      expect(result.get('e2')!.length).toBe(1);
+    });
+
+    it('should return the same Map reference across calls (no per-frame allocation)', () => {
+      const e1 = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', e1);
+
+      service.apply('e1', StatusEffectType.BURN, 0);
+
+      const first = service.getAllActiveEffects();
+      const second = service.getAllActiveEffects();
+
+      expect(first).toBe(second);
+    });
+
+    it('should not include expired effects', () => {
+      const e1 = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', e1);
+
+      service.apply('e1', StatusEffectType.BURN, 0);
+
+      const burnDuration = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN].duration;
+      // Advance past expiry
+      service.update(burnDuration);
+
+      const result = service.getAllActiveEffects();
+
+      expect(result.size).toBe(0);
+    });
+  });
+
   // --- Constants validation ---
 
   describe('constants validation', () => {

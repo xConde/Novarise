@@ -14,6 +14,8 @@ interface ActiveEffect {
 export class StatusEffectService {
   /** Map<enemyId, Map<StatusEffectType, ActiveEffect>> */
   private effects = new Map<string, Map<StatusEffectType, ActiveEffect>>();
+  /** Reused return value for getAllActiveEffects() to avoid per-frame Map allocation */
+  private activeEffectsResult = new Map<string, StatusEffectType[]>();
 
   constructor(private enemyService: EnemyService) {}
 
@@ -149,6 +151,20 @@ export class StatusEffectService {
   }
 
   /**
+   * Get all active effects for all enemies, keyed by enemy ID.
+   * Used to drive visual tinting in the render loop.
+   */
+  getAllActiveEffects(): Map<string, StatusEffectType[]> {
+    this.activeEffectsResult.clear();
+    for (const [enemyId, enemyEffects] of this.effects) {
+      if (enemyEffects.size > 0) {
+        this.activeEffectsResult.set(enemyId, Array.from(enemyEffects.keys()));
+      }
+    }
+    return this.activeEffectsResult;
+  }
+
+  /**
    * Remove all effects from an enemy (call on death/removal).
    * Restores any modified stats (speed).
    */
@@ -182,5 +198,6 @@ export class StatusEffectService {
       }
     }
     this.effects.clear();
+    this.activeEffectsResult.clear();
   }
 }

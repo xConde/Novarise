@@ -6,6 +6,7 @@ interface Particle {
   mesh: THREE.Mesh;
   velocity: THREE.Vector3;
   age: number;
+  initialScale: number;
 }
 
 @Injectable()
@@ -31,17 +32,24 @@ export class ParticleService {
   ): void {
     const geometry = this.getSharedGeometry();
     for (let i = 0; i < count; i++) {
-      const material = new THREE.MeshBasicMaterial({
+      const material = new THREE.MeshStandardMaterial({
         color,
+        emissive: color,
+        emissiveIntensity: DEATH_BURST_CONFIG.emissiveIntensity,
+        roughness: DEATH_BURST_CONFIG.roughness,
+        metalness: DEATH_BURST_CONFIG.metalness,
         transparent: true,
         opacity: 1,
       });
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.set(position.x, position.y, position.z);
 
+      const initialScale = 1 - DEATH_BURST_CONFIG.sizeVariation / 2 + Math.random() * DEATH_BURST_CONFIG.sizeVariation;
+      mesh.scale.setScalar(initialScale);
+
       const velocity = this.randomVelocity();
 
-      this.particles.push({ mesh, velocity, age: 0 });
+      this.particles.push({ mesh, velocity, age: 0, initialScale });
     }
   }
 
@@ -74,8 +82,15 @@ export class ParticleService {
         particle.mesh.position.z += particle.velocity.z * deltaTime;
 
         // Fade out linearly over lifetime
-        const remaining = 1 - particle.age / DEATH_BURST_CONFIG.lifetime;
-        (particle.mesh.material as THREE.MeshBasicMaterial).opacity = remaining;
+        const progress = particle.age / DEATH_BURST_CONFIG.lifetime;
+        const remaining = 1 - progress;
+        const mat = particle.mesh.material as THREE.MeshStandardMaterial;
+        mat.opacity = remaining;
+        mat.emissiveIntensity = DEATH_BURST_CONFIG.emissiveIntensity * (1 - progress);
+
+        // Shrink over lifetime
+        const scale = particle.initialScale * (1 - progress * (1 - DEATH_BURST_CONFIG.scaleEnd));
+        particle.mesh.scale.setScalar(scale);
 
         alive.push(particle);
       }

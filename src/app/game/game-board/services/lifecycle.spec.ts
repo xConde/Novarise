@@ -542,7 +542,8 @@ describe('MinimapService lifecycle', () => {
   it('cleanup() should reset lastUpdateTime (update runs immediately after re-init)', () => {
     service.init(container);
     const terrain = {
-      gridSize: 10,
+      gridWidth: 10,
+      gridHeight: 10,
       isPath: () => false
     };
 

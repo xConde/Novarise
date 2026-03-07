@@ -5,6 +5,8 @@ import { GameBoardService } from '../game-board.service';
 import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, mergeModifierEffects } from '../models/game-modifier.model';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
+import { StatusEffectType } from '../constants/status-effect.constants';
+import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 
 describe('EnemyService', () => {
   let service: EnemyService;
@@ -831,6 +833,50 @@ describe('EnemyService', () => {
 
       expect(() => service.updateHealthBars()).not.toThrow();
     });
+
+    it('should billboard health bars to match camera quaternion', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 4, 0));
+
+      service.updateHealthBars(quat);
+
+      const healthBarBg = enemy.mesh!.userData['healthBarBg'] as THREE.Mesh;
+      const healthBarFg = enemy.mesh!.userData['healthBarFg'] as THREE.Mesh;
+      expect(healthBarBg.quaternion.x).toBeCloseTo(quat.x, 5);
+      expect(healthBarBg.quaternion.y).toBeCloseTo(quat.y, 5);
+      expect(healthBarBg.quaternion.z).toBeCloseTo(quat.z, 5);
+      expect(healthBarBg.quaternion.w).toBeCloseTo(quat.w, 5);
+      expect(healthBarFg.quaternion.x).toBeCloseTo(quat.x, 5);
+      expect(healthBarFg.quaternion.y).toBeCloseTo(quat.y, 5);
+      expect(healthBarFg.quaternion.z).toBeCloseTo(quat.z, 5);
+      expect(healthBarFg.quaternion.w).toBeCloseTo(quat.w, 5);
+    });
+
+    it('should billboard health bars correctly when parent mesh is rotated', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const cameraQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 3, 0));
+
+      // Rotate the parent mesh to simulate an enemy facing a movement direction
+      enemy.mesh!.rotation.y = Math.PI / 4;
+      // Update the parent's world matrix so getWorldQuaternion reflects the rotation
+      enemy.mesh!.updateMatrixWorld(true);
+
+      service.updateHealthBars(cameraQuat);
+
+      const healthBarBg = enemy.mesh!.userData['healthBarBg'] as THREE.Mesh;
+      // Force world matrix update on the health bar
+      healthBarBg.updateMatrixWorld(true);
+
+      // The health bar's WORLD quaternion should equal the camera quaternion,
+      // regardless of the parent mesh rotation
+      const worldQuat = new THREE.Quaternion();
+      healthBarBg.getWorldQuaternion(worldQuat);
+
+      expect(worldQuat.x).toBeCloseTo(cameraQuat.x, 4);
+      expect(worldQuat.y).toBeCloseTo(cameraQuat.y, 4);
+      expect(worldQuat.z).toBeCloseTo(cameraQuat.z, 4);
+      expect(worldQuat.w).toBeCloseTo(cameraQuat.w, 4);
+    });
   });
 
   describe('Dead Enemy Movement Guard', () => {
@@ -1095,6 +1141,241 @@ describe('EnemyService', () => {
     });
   });
 
+  describe('enemy mesh geometry', () => {
+    let meshesToDispose: THREE.Mesh[];
+
+    beforeEach(() => {
+      meshesToDispose = [];
+    });
+
+    afterEach(() => {
+      meshesToDispose.forEach(mesh => {
+        mesh.geometry.dispose();
+        const mat = mesh.material;
+        if (Array.isArray(mat)) {
+          mat.forEach(m => m.dispose());
+        } else {
+          (mat as THREE.Material).dispose();
+        }
+        // Dispose child meshes (health bars, crowns, shields)
+        mesh.children.forEach(child => {
+          const childMesh = child as THREE.Mesh;
+          if (childMesh.geometry) childMesh.geometry.dispose();
+          if (childMesh.material) {
+            const childMat = childMesh.material;
+            if (Array.isArray(childMat)) {
+              childMat.forEach(m => m.dispose());
+            } else {
+              (childMat as THREE.Material).dispose();
+            }
+          }
+        });
+      });
+    });
+
+    it('BASIC enemy creates a SphereGeometry mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.SphereGeometry);
+    });
+
+    it('FAST enemy creates a CapsuleGeometry mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.CapsuleGeometry);
+    });
+
+    it('HEAVY enemy creates a BoxGeometry mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.HEAVY, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.BoxGeometry);
+    });
+
+    it('SWIFT enemy creates a TetrahedronGeometry mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.SWIFT, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.TetrahedronGeometry);
+    });
+
+    it('BOSS enemy creates a SphereGeometry mesh with a bossCrown in userData', () => {
+      const enemy = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.SphereGeometry);
+      const crown = enemy.mesh!.userData['bossCrown'] as THREE.Mesh;
+      expect(crown).toBeTruthy();
+      expect(crown).toBeInstanceOf(THREE.Mesh);
+      expect(crown.geometry).toBeInstanceOf(THREE.TorusGeometry);
+    });
+
+    it('SHIELDED enemy creates an IcosahedronGeometry mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.IcosahedronGeometry);
+    });
+
+    it('SWARM enemy creates an OctahedronGeometry mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.OctahedronGeometry);
+    });
+
+    it('FLYING enemy creates a BufferGeometry (custom diamond)', () => {
+      const enemy = service.spawnEnemy(EnemyType.FLYING, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.BufferGeometry);
+      // Should NOT be one of the named geometry subclasses — it's a custom diamond
+      expect(enemy.mesh!.geometry).not.toBeInstanceOf(THREE.SphereGeometry);
+      expect(enemy.mesh!.geometry).not.toBeInstanceOf(THREE.BoxGeometry);
+    });
+
+    it('Mini-swarm mesh uses OctahedronGeometry', () => {
+      const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      const result = service.damageEnemy(swarm.id, swarm.health);
+
+      expect(result.spawnedEnemies.length).toBeGreaterThan(0);
+      const mini = result.spawnedEnemies[0];
+      meshesToDispose.push(mini.mesh!);
+
+      expect(mini.mesh!.geometry).toBeInstanceOf(THREE.OctahedronGeometry);
+    });
+  });
+
+  describe('updateStatusVisuals', () => {
+    let enemy: NonNullable<ReturnType<typeof service.spawnEnemy>>;
+    let mesh: THREE.Mesh;
+
+    beforeEach(() => {
+      enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      mesh = enemy.mesh!;
+    });
+
+    it('enemy with BURN effect gets emissive color 0xff6622', () => {
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusVisuals(activeEffects);
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(0xff6622);
+    });
+
+    it('enemy with POISON effect gets emissive color 0x44ff22', () => {
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.POISON]);
+
+      service.updateStatusVisuals(activeEffects);
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(0x44ff22);
+    });
+
+    it('enemy with SLOW effect gets emissive color 0x4488ff', () => {
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.SLOW]);
+
+      service.updateStatusVisuals(activeEffects);
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(0x4488ff);
+    });
+
+    it('enemy with no effects reverts to base emissive color', () => {
+      const baseColor = ENEMY_STATS[EnemyType.BASIC].color;
+
+      // First apply an effect
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+      service.updateStatusVisuals(activeEffects);
+
+      // Then clear effects
+      const noEffects = new Map<string, StatusEffectType[]>();
+      service.updateStatusVisuals(noEffects);
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(baseColor);
+    });
+
+    it('BURN takes priority over POISON when both active', () => {
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.POISON, StatusEffectType.BURN]);
+
+      service.updateStatusVisuals(activeEffects);
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(0xff6622);
+    });
+
+    it('BURN takes priority over SLOW when both active', () => {
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.SLOW, StatusEffectType.BURN]);
+
+      service.updateStatusVisuals(activeEffects);
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(0xff6622);
+    });
+
+    it('boss crown mesh is tinted along with body', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(boss.id, [StatusEffectType.BURN]);
+      service.updateStatusVisuals(activeEffects);
+
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      expect(crown).toBeTruthy();
+      const crownMat = crown.material as THREE.MeshStandardMaterial;
+      expect(crownMat.emissive.getHex()).toBe(0xff6622);
+    });
+
+    it('boss crown reverts to base color when effects expire', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+
+      // Apply then clear
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(boss.id, [StatusEffectType.BURN]);
+      service.updateStatusVisuals(activeEffects);
+
+      const noEffects = new Map<string, StatusEffectType[]>();
+      service.updateStatusVisuals(noEffects);
+
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      const crownMat = crown.material as THREE.MeshStandardMaterial;
+      expect(crownMat.emissive.getHex()).toBe(ENEMY_STATS[EnemyType.BOSS].color);
+    });
+
+    it('mini-swarm uses correct base emissive intensity on revert', () => {
+      // Spawn a swarm and kill it to get minis
+      const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      const result = service.damageEnemy(swarm.id, 9999);
+      result.spawnedEnemies.forEach(mini => {
+        if (mini.mesh) mockScene.add(mini.mesh);
+      });
+
+      const mini = result.spawnedEnemies[0];
+      if (mini && mini.mesh) {
+        // Apply then clear effect
+        const activeEffects = new Map<string, StatusEffectType[]>();
+        activeEffects.set(mini.id, [StatusEffectType.POISON]);
+        service.updateStatusVisuals(activeEffects);
+
+        const noEffects = new Map<string, StatusEffectType[]>();
+        service.updateStatusVisuals(noEffects);
+
+        const mat = mini.mesh.material as THREE.MeshStandardMaterial;
+        expect(mat.emissiveIntensity).toBe(ENEMY_VISUAL_CONFIG.miniSwarmEmissive);
+      }
+    });
+  });
+
   describe('getPathToExit', () => {
     it('should return world coordinates from spawner to exit', () => {
       const path = service.getPathToExit();
@@ -1143,6 +1424,86 @@ describe('EnemyService', () => {
 
       const path = service.getPathToExit();
       expect(path.length).toBe(0);
+    });
+  });
+
+  describe('enemy facing direction', () => {
+    it('should rotate enemy mesh to face movement direction', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy).toBeTruthy();
+      expect(enemy.mesh).toBeTruthy();
+
+      // Initial rotation should be 0 (default)
+      const initialRotY = enemy.mesh!.rotation.y;
+      expect(initialRotY).toBe(0);
+
+      // Update enemies to move them along path — rotation should change
+      service.updateEnemies(0.016);
+
+      // The enemy should now face its movement direction
+      // Path goes from (0,0) toward (9,9), so rotation should be non-zero
+      // unless the first segment happens to align with default facing
+      const afterRotY = enemy.mesh!.rotation.y;
+      // atan2 of some direction vector — just verify it was set (not NaN)
+      expect(isNaN(afterRotY)).toBe(false);
+    });
+
+    it('should face correct direction for known path segment', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy).toBeTruthy();
+      expect(enemy.path.length).toBeGreaterThanOrEqual(2);
+
+      // Compute expected angle from the first path segment
+      // path nodes use {x: col, y: row} — gridToWorld(row, col) = (col - w/2, row - h/2)
+      const boardWidth = 10;
+      const boardHeight = 10;
+      const node0 = enemy.path[0]; // {x: col, y: row}
+      const node1 = enemy.path[1];
+      const world0x = (node0.x - boardWidth / 2);
+      const world0z = (node0.y - boardHeight / 2);
+      const world1x = (node1.x - boardWidth / 2);
+      const world1z = (node1.y - boardHeight / 2);
+      const dx = world1x - world0x;
+      const dz = world1z - world0z;
+      const expectedAngle = Math.atan2(dx, dz);
+
+      service.updateEnemies(0.016);
+      const rotY = enemy.mesh!.rotation.y;
+
+      // Rotation should match the expected angle from the path direction
+      expect(rotY).toBeCloseTo(expectedAngle, 1);
+    });
+  });
+
+  describe('updateEnemyAnimations', () => {
+    it('should spin boss crown over time', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      expect(boss).toBeTruthy();
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      expect(crown).toBeTruthy();
+
+      const initialRotZ = crown.rotation.z;
+      service.updateEnemyAnimations(0.5);
+
+      expect(crown.rotation.z).toBeGreaterThan(initialRotZ);
+    });
+
+    it('should not throw for enemies without crowns', () => {
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(() => service.updateEnemyAnimations(0.016)).not.toThrow();
+    });
+
+    it('should skip dead enemies', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      const initialRotZ = crown.rotation.z;
+
+      // Kill the boss
+      service.damageEnemy(boss.id, boss.maxHealth + 100);
+      service.updateEnemyAnimations(0.5);
+
+      // Crown should not have rotated
+      expect(crown.rotation.z).toBe(initialRotZ);
     });
   });
 });

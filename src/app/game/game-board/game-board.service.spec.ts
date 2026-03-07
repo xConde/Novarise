@@ -366,6 +366,24 @@ describe('GameBoardService', () => {
       // Wide open board, blocking (1,1) still leaves paths
       expect(service.wouldBlockPath(1, 1)).toBeFalse();
     });
+
+    it('should handle 2x2 spawner at board corner (all neighbors OOB or spawner)', () => {
+      // 20 rows x 10 cols board with 2x2 spawner at bottom-left corner
+      // and exit at top-right. The corner tile [19,0] has all 4 neighbors
+      // either OOB or SPAWNER — BFS must walk the spawner group to find
+      // traversable neighbors from [18,1] or [19,1].
+      const board = createTestBoard(10, 20);
+      // 2x2 spawner block at bottom-left: rows 18-19, cols 0-1
+      board[18][0] = GameBoardTile.createSpawner(18, 0);
+      board[18][1] = GameBoardTile.createSpawner(18, 1);
+      board[19][0] = GameBoardTile.createSpawner(19, 0);
+      board[19][1] = GameBoardTile.createSpawner(19, 1);
+      board[0][9] = GameBoardTile.createExit(0, 9);
+      service.importBoard(board, 10, 20);
+
+      // Should NOT block — middle of the board is wide open
+      expect(service.wouldBlockPath(10, 5)).toBeFalse();
+    });
   });
 
   // --- placeTower ---

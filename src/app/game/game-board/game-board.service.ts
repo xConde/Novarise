@@ -331,21 +331,39 @@ export class GameBoardService {
    * BFS from (startRow, startCol) to any tile in exitSet.
    * Traversability: tile.isTraversable OR tile.type === EXIT.
    * Matches EnemyService.findPath neighbor logic.
+   *
+   * Phase 1: Walk through the connected spawner group to find ALL traversable
+   * neighbors of the entire group — not just the single start tile. This fixes
+   * corner spawners whose individual neighbors are all OOB or other spawner tiles.
+   *
+   * Phase 2: Standard BFS from the seeded traversable neighbors.
    */
   private bfsCanReachExit(startRow: number, startCol: number, exitSet: Set<string>): boolean {
     const visited = new Set<string>();
     const queue: [number, number][] = [];
+    const directions: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 
-    // Spawner tiles are non-traversable; seed BFS from their traversable neighbors
-    const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-    for (const [dr, dc] of directions) {
-      const nr = startRow + dr;
-      const nc = startCol + dc;
-      if (nr < 0 || nr >= this.gameBoardHeight || nc < 0 || nc >= this.gameBoardWidth) continue;
-      const neighbor = this.gameBoard[nr][nc];
-      if (neighbor.isTraversable || neighbor.type === BlockType.EXIT) {
+    // Phase 1: Walk through connected spawner tiles to find ALL traversable neighbors
+    // of the spawner group (not just the single start tile).
+    const spawnerVisited = new Set<string>();
+    const spawnerQueue: [number, number][] = [[startRow, startCol]];
+    spawnerVisited.add(`${startRow},${startCol}`);
+
+    while (spawnerQueue.length > 0) {
+      const [sr, sc] = spawnerQueue.shift()!;
+      for (const [dr, dc] of directions) {
+        const nr = sr + dr;
+        const nc = sc + dc;
+        if (nr < 0 || nr >= this.gameBoardHeight || nc < 0 || nc >= this.gameBoardWidth) continue;
         const key = `${nr},${nc}`;
-        if (!visited.has(key)) {
+        const neighbor = this.gameBoard[nr][nc];
+
+        if (neighbor.type === BlockType.SPAWNER && !spawnerVisited.has(key)) {
+          // Connected spawner tile — expand the group
+          spawnerVisited.add(key);
+          spawnerQueue.push([nr, nc]);
+        } else if ((neighbor.isTraversable || neighbor.type === BlockType.EXIT) && !visited.has(key)) {
+          // Traversable neighbor of the spawner group — seed BFS
           visited.add(key);
           if (exitSet.has(key)) return true;
           queue.push([nr, nc]);
@@ -353,9 +371,9 @@ export class GameBoardService {
       }
     }
 
+    // Phase 2: Standard BFS from all seeded traversable neighbors
     while (queue.length > 0) {
       const [r, c] = queue.shift()!;
-
       for (const [dr, dc] of directions) {
         const nr = r + dr;
         const nc = c + dc;
@@ -452,6 +470,7 @@ export class GameBoardService {
         oTop.rotation.y = Math.PI / 6;
 
         const oCrystal = new THREE.Mesh(crystal, basicMat);
+        oCrystal.name = 'crystal';
         oCrystal.position.y = 1.35;
 
         towerGroup.add(oBase, oMid1, oMid2, oTop, oCrystal);
@@ -489,6 +508,7 @@ export class GameBoardService {
         snTip.position.y = 1.55;
 
         const snPoint = new THREE.Mesh(spikePoint, sniperMat);
+        snPoint.name = 'tip';
         snPoint.position.y = 2.0;
 
         towerGroup.add(snBase, snShaft1, snShaft2, snTip, snPoint);
@@ -526,12 +546,15 @@ export class GameBoardService {
         spCapTop.position.y = 0.85;
 
         const spSpore1 = new THREE.Mesh(spore1, splashMat);
+        spSpore1.name = 'spore';
         spSpore1.position.set(0.15, 0.95, 0.1);
 
         const spSpore2 = new THREE.Mesh(spore2, splashMat);
+        spSpore2.name = 'spore';
         spSpore2.position.set(-0.12, 0.9, -0.08);
 
         const spSpore3 = new THREE.Mesh(spore3, splashMat);
+        spSpore3.name = 'spore';
         spSpore3.position.set(0.08, 1.0, -0.15);
 
         towerGroup.add(spStemBase, spStemMid, spCapBase, spCapTop, spSpore1, spSpore2, spSpore3);
@@ -569,6 +592,7 @@ export class GameBoardService {
         slRingInner.position.y = 0.645;
 
         const slCrystal = new THREE.Mesh(iceCrystal, slowMat);
+        slCrystal.name = 'crystal';
         slCrystal.position.y = 0.82;
 
         towerGroup.add(slBase, slPillar, slRingOuter, slRingInner, slCrystal);
@@ -598,12 +622,15 @@ export class GameBoardService {
         chShaft.position.y = 0.6;
 
         const chOrb = new THREE.Mesh(chainOrb, chainMat);
+        chOrb.name = 'orb';
         chOrb.position.y = 1.18;
 
         const chSpark1 = new THREE.Mesh(chainSpark1, chainMat);
+        chSpark1.name = 'spark';
         chSpark1.position.set(0.22, 1.25, 0);
 
         const chSpark2 = new THREE.Mesh(chainSpark2, chainMat);
+        chSpark2.name = 'spark';
         chSpark2.position.set(-0.18, 1.3, 0.14);
 
         towerGroup.add(chBase, chShaft, chOrb, chSpark1, chSpark2);
@@ -666,6 +693,7 @@ export class GameBoardService {
     towerGroup.position.set(x, tileTop, z);
     towerGroup.castShadow = true;
     towerGroup.receiveShadow = true;
+    towerGroup.userData['towerType'] = towerType;
 
     // Add shadow casting to all children
     towerGroup.traverse((child) => {

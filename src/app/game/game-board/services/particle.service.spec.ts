@@ -53,7 +53,7 @@ describe('ParticleService', () => {
 
       for (const child of scene.children) {
         const mesh = child as THREE.Mesh;
-        const mat = mesh.material as THREE.MeshBasicMaterial;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
         expect(mat.color.getHex()).toBe(color);
       }
     });
@@ -64,10 +64,31 @@ describe('ParticleService', () => {
 
       for (const child of scene.children) {
         const mesh = child as THREE.Mesh;
-        const mat = mesh.material as THREE.MeshBasicMaterial;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
         expect(mat.transparent).toBeTrue();
         expect(mat.opacity).toBeCloseTo(1);
       }
+    });
+
+    it('applies emissive glow matching particle color', () => {
+      const color = 0xab1234;
+      service.spawnDeathBurst({ x: 0, y: 0, z: 0 }, color, 4);
+      service.addPendingToScene(scene);
+
+      for (const child of scene.children) {
+        const mesh = child as THREE.Mesh;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        expect(mat.emissive.getHex()).toBe(color);
+      }
+    });
+
+    it('applies random size variation to each particle', () => {
+      service.spawnDeathBurst({ x: 0, y: 0, z: 0 }, 0xff0000, 20);
+      service.addPendingToScene(scene);
+
+      const scales = scene.children.map(c => (c as THREE.Mesh).scale.x);
+      const allIdentical = scales.every(s => s === scales[0]);
+      expect(allIdentical).toBeFalse();
     });
   });
 
@@ -118,9 +139,34 @@ describe('ParticleService', () => {
 
       service.update(DEATH_BURST_CONFIG.lifetime / 2, scene);
 
-      const mat = (scene.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
+      const mat = (scene.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial;
       expect(mat.opacity).toBeLessThan(1);
       expect(mat.opacity).toBeGreaterThan(0);
+    });
+
+    it('scales particles down over lifetime', () => {
+      service.spawnDeathBurst({ x: 0, y: 0, z: 0 }, 0xff0000, 1);
+      service.addPendingToScene(scene);
+
+      const mesh = scene.children[0] as THREE.Mesh;
+      const initialScale = mesh.scale.x;
+
+      service.update(DEATH_BURST_CONFIG.lifetime / 2, scene);
+
+      expect(mesh.scale.x).toBeLessThan(initialScale);
+    });
+
+    it('shrinks particles to scaleEnd at expiry boundary', () => {
+      service.spawnDeathBurst({ x: 0, y: 0, z: 0 }, 0xff0000, 1);
+      service.addPendingToScene(scene);
+
+      const mesh = scene.children[0] as THREE.Mesh;
+      const initialScale = mesh.scale.x;
+
+      service.update(DEATH_BURST_CONFIG.lifetime - 0.01, scene);
+
+      const expectedScale = initialScale * DEATH_BURST_CONFIG.scaleEnd;
+      expect(mesh.scale.x).toBeCloseTo(expectedScale, 1);
     });
 
     it('applies gravity — y velocity decreases over time', () => {
@@ -186,7 +232,7 @@ describe('ParticleService', () => {
       service.addPendingToScene(scene);
 
       const mesh = scene.children[0] as THREE.Mesh;
-      const mat = mesh.material as THREE.MeshBasicMaterial;
+      const mat = mesh.material as THREE.MeshStandardMaterial;
 
       spyOn(mat, 'dispose').and.callThrough();
 
@@ -254,7 +300,7 @@ describe('ParticleService', () => {
       const sharedGeo = meshes[0].geometry;
       const geoSpy = spyOn(sharedGeo, 'dispose').and.callThrough();
       const matSpies = meshes.map(m =>
-        spyOn(m.material as THREE.MeshBasicMaterial, 'dispose').and.callThrough()
+        spyOn(m.material as THREE.MeshStandardMaterial, 'dispose').and.callThrough()
       );
 
       service.cleanup(scene);

@@ -7,44 +7,63 @@ export interface LightConfig {
   shadow?: { mapSize: number; bias: number; bounds: number };
 }
 
-export const AMBIENT_LIGHT: LightConfig = {
-  color: 0x9090a0,
-  intensity: 1.1
+export interface HemisphereLightConfig {
+  skyColor: number;
+  groundColor: number;
+  intensity: number;
+}
+
+export const HEMISPHERE_LIGHT: HemisphereLightConfig = {
+  skyColor: 0x6060a0,
+  groundColor: 0x302848,
+  intensity: 0.7
 };
 
-export const DIRECTIONAL_LIGHT: LightConfig & {
+export const KEY_LIGHT: LightConfig & {
   castShadow: boolean;
   shadow: { mapSize: number; bias: number; bounds: number };
 } = {
-  color: 0xe0d8f0,
-  intensity: 1.4,
-  position: [10, 20, 10],
+  color: 0xeee8ff,
+  intensity: 2.0,
+  position: [15, 30, 12],
   castShadow: true,
   shadow: {
     mapSize: 2048,
     bias: -0.0001,
-    bounds: 20
+    bounds: 25
   }
 };
 
-export const UNDER_LIGHT: LightConfig = {
-  color: 0x8a7aaa,
+export const FILL_LIGHT: LightConfig = {
+  color: 0x8090c0,
   intensity: 0.8,
+  position: [-12, 15, -8]
+};
+
+export const RIM_LIGHT: LightConfig = {
+  color: 0xaa88ff,
+  intensity: 0.7,
+  position: [-5, 10, -20]
+};
+
+export const UNDER_LIGHT: LightConfig = {
+  color: 0x6a5a9a,
+  intensity: 0.3,
   range: 80,
   position: [0, -5, 0]
 };
 
-export const POINT_LIGHTS: LightConfig[] = [
+export const ACCENT_LIGHTS: LightConfig[] = [
   {
-    color: 0x9a7aba,
-    intensity: 0.7,
-    range: 50,
-    position: [-15, 5, -10]
+    color: 0x9a6abf,
+    intensity: 0.6,
+    range: 60,
+    position: [-18, 8, -12]
   },
   {
-    color: 0x7a9aba,
-    intensity: 0.7,
-    range: 50,
-    position: [15, 5, 10]
+    color: 0x6a8abf,
+    intensity: 0.6,
+    range: 60,
+    position: [18, 8, 12]
   }
 ];

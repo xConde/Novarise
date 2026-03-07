@@ -11,12 +11,17 @@ export const PARTICLE_CONFIG = {
 };
 
 export const DEATH_BURST_CONFIG = {
-  defaultCount: 8,
-  radius: 0.05,
+  defaultCount: 12,
+  radius: 0.06,
   minSpeed: 2,
   maxSpeed: 5,
-  lifetime: 0.5,
-  gravity: -5,
+  lifetime: 0.6,
+  gravity: -6,
+  scaleEnd: 0.1,
+  emissiveIntensity: 0.8,
+  roughness: 0.4,
+  metalness: 0.1,
+  sizeVariation: 0.5,
 } as const;
 
 export const PARTICLE_COLORS: Array<{ threshold: number; r: number; g: number; b: number }> = [
