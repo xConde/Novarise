@@ -14,6 +14,7 @@ import { CameraControlService, MovementInput, RotationInput, JoystickInput } fro
 import { EditorStateService, EditMode, BrushTool } from './core/editor-state.service';
 import { MapBridgeService } from '../../game/game-board/services/map-bridge.service';
 import { disposeMaterial } from '../../game/game-board/utils/three-utils';
+import { MOBILE_CONFIG } from '../../game/game-board/constants/mobile.constants';
 import { JoystickEvent } from './features/mobile-controls';
 import {
   EDITOR_SCENE_CONFIG,
@@ -248,7 +249,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, EDITOR_RENDERER_CONFIG.maxPixelRatio)); // Cap at 2 for performance
+    const mobileMaxRatio = window.innerWidth <= MOBILE_CONFIG.breakpoint ? MOBILE_CONFIG.maxPixelRatio : EDITOR_RENDERER_CONFIG.maxPixelRatio;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobileMaxRatio));
 
     // Initial size using proper viewport calculation
     const { width, height } = this.getViewportSize();
@@ -303,15 +305,17 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(renderPass);
 
-    // Reduced bloom for better visibility
+    // Skip bloom on phones — too expensive for low-end GPUs
     const { width, height } = this.getViewportSize();
-    this.bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(width, height),
-      EDITOR_POST_PROCESSING.bloom.strength,   // Reduced strength
-      EDITOR_POST_PROCESSING.bloom.radius,     // Reduced radius
-      EDITOR_POST_PROCESSING.bloom.threshold   // Higher threshold - only brightest elements
-    );
-    this.composer.addPass(this.bloomPass);
+    if (window.innerWidth > MOBILE_CONFIG.phoneBreakpoint) {
+      this.bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(width, height),
+        EDITOR_POST_PROCESSING.bloom.strength,
+        EDITOR_POST_PROCESSING.bloom.radius,
+        EDITOR_POST_PROCESSING.bloom.threshold
+      );
+      this.composer.addPass(this.bloomPass);
+    }
 
     // Lighter vignette for better edge visibility
     const vignetteShader = {
@@ -367,6 +371,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     directionalLight1.shadow.camera.bottom = -dl1Cfg.shadowCameraExtent!;
     directionalLight1.shadow.mapSize.width = dl1Cfg.shadowMapSize!;
     directionalLight1.shadow.mapSize.height = dl1Cfg.shadowMapSize!;
+    if (window.innerWidth <= MOBILE_CONFIG.breakpoint) {
+      directionalLight1.shadow.mapSize.width = Math.min(directionalLight1.shadow.mapSize.width, MOBILE_CONFIG.maxShadowMapSize);
+      directionalLight1.shadow.mapSize.height = Math.min(directionalLight1.shadow.mapSize.height, MOBILE_CONFIG.maxShadowMapSize);
+    }
     this.scene.add(directionalLight1);
 
     // Second directional light from opposite angle
@@ -456,7 +464,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private initializeParticles(): void {
-    const particleCount = EDITOR_PARTICLES.count;
+    const particleCount = window.innerWidth <= MOBILE_CONFIG.breakpoint
+      ? Math.floor(EDITOR_PARTICLES.count / MOBILE_CONFIG.particleDivisor)
+      : EDITOR_PARTICLES.count;
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
 

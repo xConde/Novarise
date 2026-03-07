@@ -38,6 +38,7 @@ import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './cons
 import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
+import { MOBILE_CONFIG } from './constants/mobile.constants';
 import { ENEMY_STATS } from './models/enemy.model';
 import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
@@ -804,7 +805,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       antialias: true,
       alpha: false
     });
-    this.renderer.setPixelRatio(window.devicePixelRatio);
+    const isMobile = window.innerWidth <= MOBILE_CONFIG.breakpoint;
+    const maxPixelRatio = isMobile ? MOBILE_CONFIG.maxPixelRatio : window.devicePixelRatio;
+    this.renderer.setPixelRatio(Math.min(maxPixelRatio, window.devicePixelRatio));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -832,13 +835,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(this.renderPass);
 
-    this.bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      POST_PROCESSING_CONFIG.bloom.strength,
-      POST_PROCESSING_CONFIG.bloom.radius,
-      POST_PROCESSING_CONFIG.bloom.threshold
-    );
-    this.composer.addPass(this.bloomPass);
+    if (window.innerWidth > MOBILE_CONFIG.phoneBreakpoint) {
+      this.bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        POST_PROCESSING_CONFIG.bloom.strength,
+        POST_PROCESSING_CONFIG.bloom.radius,
+        POST_PROCESSING_CONFIG.bloom.threshold
+      );
+      this.composer.addPass(this.bloomPass);
+    }
 
     const vignetteShader = {
       uniforms: {
@@ -887,6 +892,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     directionalLight.shadow.camera.bottom = -DIRECTIONAL_LIGHT.shadow.bounds;
     directionalLight.shadow.mapSize.width = DIRECTIONAL_LIGHT.shadow.mapSize;
     directionalLight.shadow.mapSize.height = DIRECTIONAL_LIGHT.shadow.mapSize;
+    if (window.innerWidth <= MOBILE_CONFIG.breakpoint) {
+      directionalLight.shadow.mapSize.width = Math.min(directionalLight.shadow.mapSize.width, MOBILE_CONFIG.maxShadowMapSize);
+      directionalLight.shadow.mapSize.height = Math.min(directionalLight.shadow.mapSize.height, MOBILE_CONFIG.maxShadowMapSize);
+    }
     directionalLight.shadow.bias = DIRECTIONAL_LIGHT.shadow.bias;
     this.directionalLight = directionalLight;
     this.scene.add(this.directionalLight);
@@ -991,7 +1000,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private initializeParticles(): void {
-    const particleCount = PARTICLE_CONFIG.count;
+    const particleCount = window.innerWidth <= MOBILE_CONFIG.breakpoint
+      ? Math.floor(PARTICLE_CONFIG.count / MOBILE_CONFIG.particleDivisor)
+      : PARTICLE_CONFIG.count;
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
 
