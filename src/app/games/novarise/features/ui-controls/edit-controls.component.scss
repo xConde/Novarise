@@ -1,5 +1,4 @@
 .reopen-button { position: absolute; top: 20px; right: 20px; padding: 12px 20px; background: var(--nav-bg-a90); border: 2px solid var(--theme-purple-a60); border-radius: 8px; color: var(--theme-purple-lighter); cursor: pointer; backdrop-filter: blur(15px); font-size: 12px; font-weight: 600; z-index: 1000; }
-.close-button { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; background: var(--theme-purple-a30); border: 2px solid var(--theme-purple-a50); border-radius: 6px; color: var(--theme-purple-lighter); font-size: 18px; cursor: pointer; z-index: 10; }
 .edit-controls-panel { position: absolute; top: 20px; right: 20px; width: min(280px, 35vw); max-height: 80vh; overflow-y: auto; display: flex; flex-direction: column; background: var(--nav-bg-a90); border: 1px solid var(--theme-purple-a60); border-radius: 12px; padding: 16px; backdrop-filter: blur(15px); color: var(--theme-purple-lighter); z-index: 1000; }
 .tab-navigation { display: flex; gap: 6px; margin-bottom: 16px; border-bottom: 1px solid var(--theme-purple-a30); padding-bottom: 8px; }
 .tab-button { flex: 1; padding: 8px 12px; background: var(--theme-purple-dark); border: 2px solid var(--theme-purple-a30); border-radius: 6px; color: var(--theme-purple-light); cursor: pointer; font-size: 12px; font-weight: 600;
@@ -180,7 +179,7 @@
 
   .mobile-play-btn {
     min-width: 2.75rem;
-    min-height: 2rem;
+    min-height: 2.75rem;
     padding: 4px 12px;
     background: var(--action-success-bg);
     border: 1px solid var(--action-success-border);
@@ -208,8 +207,8 @@
 
   .mobile-close-btn {
     margin-left: auto;
-    min-width: 2.25rem;
-    min-height: 2.25rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
     background: var(--theme-purple-a30);
     border: 1px solid var(--theme-purple-a50);
     border-radius: 6px;
@@ -237,7 +236,7 @@
   .mobile-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 
   .chip {
-    min-height: 2.5rem;
+    min-height: 2.75rem;
     padding: 6px 4px;
     background: var(--theme-purple-dark-strong);
     border: 1.5px solid var(--theme-purple-glow);
@@ -266,7 +265,7 @@
 
   .template-select {
     width: 100%;
-    min-height: 2.5rem;
+    min-height: 2.75rem;
     padding: 6px 10px;
     background: var(--theme-purple-dark-strong);
     border: 1.5px solid var(--theme-purple-glow);

@@ -464,7 +464,7 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Step 2: Fix undefined --z-index-hud → --z-index-overlay
 - [x] Step 3: Mobile editor bottom-sheet + landscape height cap + test fixes
 - [x] Step 4: Run full test suite — confirm 1643 tests green
-- [ ] Step 5: Push to remote
+- [x] Step 5: Push to remote
 
 ---
 
@@ -489,3 +489,25 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - Status effects orphaned on death — already lazily cleaned in `StatusEffectService.update()` via `!enemy || enemy.health <= 0` check (line 78)
 - Physics accumulator dropping frames — intentional spiral-of-death prevention, not a bug
 - MinHeap bubbleUp bounds — `while (index > 0)` already prevents invalid parent access
+
+## Red Team Pass 4 — Mobile Editor Touch Targets (2026-03-07)
+
+### Finding 1: `.mobile-play-btn` min-height 2rem (MEDIUM)
+**Location:** `edit-controls.component.scss:183`
+**Risk:** 32px is below WCAG 44px minimum touch target. Users may mis-tap on small phones.
+**Fix:** Bump `min-height` from `2rem` to `2.75rem` (44px).
+
+### Finding 2: `.mobile-close-btn` min-height 2.25rem (MEDIUM)
+**Location:** `edit-controls.component.scss:212`
+**Risk:** 36px is below WCAG 44px minimum. Close button is a critical interaction point.
+**Fix:** Bump `min-height` from `2.25rem` to `2.75rem`.
+
+### Finding 3: `.chip` min-height 2.5rem (LOW)
+**Location:** `edit-controls.component.scss:240`
+**Risk:** 40px is marginally below 44px threshold. Chips are densely packed in grids.
+**Fix:** Bump `min-height` from `2.5rem` to `2.75rem`.
+
+### Finding 4: Dead `.close-button` CSS rule (LOW)
+**Location:** `edit-controls.component.scss:2`
+**Risk:** No element in the template uses `.close-button`. Dead code increases CSS budget.
+**Fix:** Remove the rule.
