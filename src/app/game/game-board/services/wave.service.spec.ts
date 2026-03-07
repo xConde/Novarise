@@ -3,7 +3,7 @@ import { WaveService } from './wave.service';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { EnemyType } from '../models/enemy.model';
-import { ENDLESS_CONFIG, WAVE_DEFINITIONS } from '../models/wave.model';
+import { ENDLESS_CONFIG, WAVE_DEFINITIONS, ENDLESS_BASE_REWARD, ENDLESS_REWARD_SCALE_PER_WAVE } from '../models/wave.model';
 import * as THREE from 'three';
 
 describe('WaveService', () => {
@@ -433,6 +433,112 @@ describe('WaveService', () => {
       }
 
       expect(service.isSpawning()).toBeFalse();
+    });
+  });
+
+  // --- Sprint 15: Edge case tests ---
+
+  describe('generateEndlessWave: specific wave validation', () => {
+    it('wave 11 should produce valid enemy types (no BOSS since 11 % 5 !== 0)', () => {
+      const wave = service.generateEndlessWave(11);
+      const nonBossEntries = wave.entries.filter(e => e.type !== EnemyType.BOSS);
+      expect(nonBossEntries.length).toBe(2); // primary + secondary
+      const validTypes = Object.values(EnemyType) as string[];
+      for (const entry of wave.entries) {
+        expect(validTypes).toContain(entry.type);
+        expect(entry.count).toBeGreaterThan(0);
+      }
+    });
+
+    it('wave 20 should include a BOSS entry (20 % 5 === 0)', () => {
+      const wave = service.generateEndlessWave(20);
+      const bossEntry = wave.entries.find(e => e.type === EnemyType.BOSS);
+      expect(bossEntry).toBeDefined();
+      expect(bossEntry!.count).toBe(1);
+    });
+
+    it('wave 50 should have significantly more enemies than wave 11', () => {
+      const wave11 = service.generateEndlessWave(11);
+      const wave50 = service.generateEndlessWave(50);
+      const count11 = wave11.entries.reduce((s, e) => s + e.count, 0);
+      const count50 = wave50.entries.reduce((s, e) => s + e.count, 0);
+      expect(count50).toBeGreaterThan(count11 * 2);
+    });
+  });
+
+  describe('endless wave scaling multipliers', () => {
+    it('health and speed multipliers should increase linearly with wave number', () => {
+      const wave11HealthMult = ENDLESS_CONFIG.baseHealthMultiplier + ENDLESS_CONFIG.healthScalePerWave * 10;
+      const wave20HealthMult = ENDLESS_CONFIG.baseHealthMultiplier + ENDLESS_CONFIG.healthScalePerWave * 19;
+      expect(wave20HealthMult).toBeGreaterThan(wave11HealthMult);
+      expect(wave20HealthMult - wave11HealthMult).toBeCloseTo(ENDLESS_CONFIG.healthScalePerWave * 9);
+
+      const wave11SpeedMult = ENDLESS_CONFIG.baseSpeedMultiplier + ENDLESS_CONFIG.speedScalePerWave * 10;
+      const wave50SpeedMult = ENDLESS_CONFIG.baseSpeedMultiplier + ENDLESS_CONFIG.speedScalePerWave * 49;
+      expect(wave50SpeedMult).toBeGreaterThan(wave11SpeedMult);
+    });
+  });
+
+  describe('getMaxWaves', () => {
+    it('should return WAVE_DEFINITIONS.length regardless of endless mode', () => {
+      expect(service.getMaxWaves()).toBe(WAVE_DEFINITIONS.length);
+      expect(service.getMaxWaves()).toBe(10);
+
+      service.setEndlessMode(true);
+      expect(service.getMaxWaves()).toBe(WAVE_DEFINITIONS.length);
+    });
+  });
+
+  describe('spawn queue retry: SPAWN_MAX_RETRIES', () => {
+    it('should skip an enemy after 300 consecutive spawn failures', () => {
+      service.startWave(1, mockScene);
+      const initialRemaining = service.getRemainingToSpawn(); // 5
+
+      // All spawns fail
+      enemyServiceSpy.spawnEnemy.and.returnValue(null);
+
+      // Each update call at sufficient interval triggers one spawn attempt.
+      // Need 300 consecutive failures to skip one enemy.
+      for (let i = 0; i < 300; i++) {
+        service.update(0.016, mockScene);
+      }
+
+      // After 300 failures, the enemy should be skipped (remaining decremented)
+      expect(service.getRemainingToSpawn()).toBe(initialRemaining - 1);
+    });
+
+    it('should reset failure counter when spawn succeeds', () => {
+      service.startWave(1, mockScene);
+
+      // First few spawns fail
+      enemyServiceSpy.spawnEnemy.and.returnValue(null);
+      for (let i = 0; i < 10; i++) {
+        service.update(0.016, mockScene);
+      }
+
+      // Then spawn succeeds — counter resets
+      enemyServiceSpy.spawnEnemy.and.returnValue({ id: 'e1' } as any);
+      service.update(1.6, mockScene); // past spawn interval
+      const remaining = service.getRemainingToSpawn();
+
+      // Fail again — should need another full 300 failures to skip
+      enemyServiceSpy.spawnEnemy.and.returnValue(null);
+      service.update(0.016, mockScene);
+      // Remaining should not have changed after just 1 failure
+      expect(service.getRemainingToSpawn()).toBe(remaining);
+    });
+  });
+
+  describe('wave reward scaling formula', () => {
+    it('should produce correct rewards: ENDLESS_BASE_REWARD + ENDLESS_REWARD_SCALE_PER_WAVE * (waveNumber - 1)', () => {
+      service.setEndlessMode(true);
+
+      // Wave 11: 200 + 50 * 10 = 700
+      expect(service.getWaveReward(11)).toBe(ENDLESS_BASE_REWARD + ENDLESS_REWARD_SCALE_PER_WAVE * 10);
+      expect(service.getWaveReward(11)).toBe(700);
+
+      // Wave 50: 200 + 50 * 49 = 2650
+      expect(service.getWaveReward(50)).toBe(ENDLESS_BASE_REWARD + ENDLESS_REWARD_SCALE_PER_WAVE * 49);
     });
   });
 });
