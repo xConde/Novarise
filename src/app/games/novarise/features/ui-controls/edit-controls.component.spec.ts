@@ -53,6 +53,9 @@ describe('EditControlsComponent', () => {
     it('should render template buttons when templates are provided', () => {
       component.templates = MOCK_TEMPLATES;
       fixture.detectChanges();
+      // Ensure panel is expanded after ngOnInit (mobile detection may collapse it)
+      component.isCollapsed = false;
+      fixture.detectChanges();
       const buttons = fixture.nativeElement.querySelectorAll('.template-btn');
       expect(buttons.length).toBe(2);
       expect(buttons[0].textContent.trim()).toBe('Classic');
@@ -62,12 +65,16 @@ describe('EditControlsComponent', () => {
     it('should set title attribute from template description', () => {
       component.templates = MOCK_TEMPLATES;
       fixture.detectChanges();
+      component.isCollapsed = false;
+      fixture.detectChanges();
       const buttons = fixture.nativeElement.querySelectorAll('.template-btn');
       expect(buttons[0].getAttribute('title')).toBe('A classic layout');
     });
 
     it('should emit templateSelect when a template button is clicked', () => {
       component.templates = MOCK_TEMPLATES;
+      fixture.detectChanges();
+      component.isCollapsed = false;
       fixture.detectChanges();
       spyOn(component.templateSelect, 'emit');
       const buttons = fixture.nativeElement.querySelectorAll('.template-btn');

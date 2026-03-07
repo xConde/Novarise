@@ -1,16 +1,6 @@
 <div class="board-container">
   <div class="canvas-container" #canvasContainer></div>
 
-  <!-- Navigation -->
-  <div class="nav-buttons">
-    <button class="nav-back-btn" (click)="goHome()" aria-label="Back to Home">
-      Home
-    </button>
-    <button class="nav-back-btn" (click)="goToEditor()" aria-label="Back to Editor">
-      Edit Map
-    </button>
-  </div>
-
   <!-- Top-right controls -->
   <div class="top-right-controls">
     <div class="fps-counter">{{ fps }} FPS</div>
@@ -23,8 +13,8 @@
     </button>
   </div>
 
-  <!-- Game HUD -->
-  <div class="game-hud">
+  <!-- Game HUD — hidden during initial setup -->
+  <div class="game-hud" *ngIf="gameState.wave > 0 || gameState.phase !== GamePhase.SETUP">
     <div class="hud-stat">
       <span class="hud-label">Lives</span>
       <span class="hud-value lives" [class.critical]="gameState.lives <= 5">{{ gameState.lives }}</span>
@@ -60,6 +50,9 @@
 
   <!-- Difficulty selector — only visible in SETUP before wave 0 starts -->
   <div class="difficulty-selector" *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0">
+    <div class="setup-gold">
+      <span class="setup-gold-value">{{ gameState.gold }}g</span>
+    </div>
     <span class="difficulty-label">Difficulty</span>
     <div class="difficulty-options">
       <button
@@ -80,9 +73,9 @@
     </label>
   </div>
 
-  <!-- Wave preview panel — shown during SETUP and INTERMISSION -->
+  <!-- Wave preview panel — shown during INTERMISSION (not initial SETUP) -->
   <div class="wave-preview"
-       *ngIf="(gameState.phase === GamePhase.SETUP || gameState.phase === GamePhase.INTERMISSION) && wavePreview.length > 0"
+       *ngIf="(gameState.phase === GamePhase.INTERMISSION || (gameState.phase === GamePhase.SETUP && gameState.wave > 0)) && wavePreview.length > 0"
        aria-label="Upcoming wave preview">
     <div class="wave-preview-header">
       Wave {{ gameState.wave + 1 }}
@@ -112,8 +105,8 @@
     </button>
   </div>
 
-  <!-- Pause/Speed controls -->
-  <div class="game-controls" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
+  <!-- Pause/Speed controls — hidden during initial setup -->
+  <div class="game-controls" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT && !(gameState.phase === GamePhase.SETUP && gameState.wave === 0)">
     <button
       class="control-btn pause-btn"
       (click)="togglePause()"
