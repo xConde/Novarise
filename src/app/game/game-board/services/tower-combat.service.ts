@@ -7,6 +7,7 @@ import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
 import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y } from '../constants/combat.constants';
+import { SpatialGrid } from '../utils/spatial-grid';
 
 interface Projectile {
   id: string;
@@ -58,6 +59,7 @@ export class TowerCombatService {
   private slowEffects: Map<string, SlowEffect> = new Map();
   private projectileCounter = 0;
   private gameTime = 0;
+  private spatialGrid = new SpatialGrid();
 
   constructor(
     private enemyService: EnemyService,
@@ -102,6 +104,14 @@ export class TowerCombatService {
     this.gameTime += deltaTime;
     const killedEnemies: KillInfo[] = [];
     const firedTowerTypes: TowerType[] = [];
+
+    // Rebuild spatial grid for this frame (broad-phase acceleration for range queries)
+    this.spatialGrid.clear();
+    this.enemyService.getEnemies().forEach(enemy => {
+      if (enemy.health > 0) {
+        this.spatialGrid.insert(enemy);
+      }
+    });
 
     // Expire slow effects before tower processing so towers see accurate speeds
     this.expireSlowEffects();
@@ -201,10 +211,12 @@ export class TowerCombatService {
       // Tick DoT every second
       if (this.gameTime - zone.lastTickTime >= MORTAR_VISUAL_CONFIG.tickInterval) {
         zone.lastTickTime = this.gameTime;
-        this.enemyService.getEnemies().forEach(enemy => {
-          if (enemy.health <= 0) return;
+        const candidates = this.spatialGrid.queryRadius(zone.centerX, zone.centerZ, zone.blastRadius);
+        for (const enemy of candidates) {
+          if (enemy.health <= 0) continue;
           const dx = enemy.position.x - zone.centerX;
           const dz = enemy.position.z - zone.centerZ;
+          // Narrow-phase range check
           if (Math.sqrt(dx * dx + dz * dz) <= zone.blastRadius) {
             const result = this.enemyService.damageEnemy(enemy.id, zone.dotDamage);
             if (result.killed) {
@@ -215,7 +227,7 @@ export class TowerCombatService {
               if (mini.mesh) scene.add(mini.mesh);
             });
           }
-        });
+        }
       }
 
       survivingZones.push(zone);
@@ -257,15 +269,16 @@ export class TowerCombatService {
     let best: Enemy | null = null;
     let bestScore = -Infinity;
 
-    this.enemyService.getEnemies().forEach(enemy => {
-      if (enemy.health <= 0) return;
+    const candidates = this.spatialGrid.queryRadius(towerWorldX, towerWorldZ, stats.range);
+    for (const enemy of candidates) {
+      if (enemy.health <= 0) continue;
 
       const dx = enemy.position.x - towerWorldX;
       const dz = enemy.position.z - towerWorldZ;
       const dist = Math.sqrt(dx * dx + dz * dz);
 
-      // Range check in world units (tileSize = 1, so range in tiles = range in world units)
-      if (dist > stats.range) return;
+      // Narrow-phase range check in world units
+      if (dist > stats.range) continue;
 
       let score: number;
       switch (tower.targetingMode) {
@@ -288,7 +301,7 @@ export class TowerCombatService {
         best = enemy;
         bestScore = score;
       }
-    });
+    }
 
     return best;
   }
@@ -298,15 +311,17 @@ export class TowerCombatService {
     const slowFactor = stats.slowFactor ?? 0.5;
     const slowDuration = stats.slowDuration ?? 2;
 
-    this.enemyService.getEnemies().forEach(enemy => {
-      if (enemy.health <= 0) return;
-      if (enemy.isFlying) return; // Flying enemies are immune to ground slow auras
+    const candidates = this.spatialGrid.queryRadius(towerWorldX, towerWorldZ, stats.range);
+    for (const enemy of candidates) {
+      if (enemy.health <= 0) continue;
+      if (enemy.isFlying) continue; // Flying enemies are immune to ground slow auras
 
       const dx = enemy.position.x - towerWorldX;
       const dz = enemy.position.z - towerWorldZ;
       const dist = Math.sqrt(dx * dx + dz * dz);
 
-      if (dist > stats.range) return;
+      // Narrow-phase range check
+      if (dist > stats.range) continue;
 
       const existing = this.slowEffects.get(enemy.id);
       if (existing) {
@@ -322,7 +337,7 @@ export class TowerCombatService {
           expiresAt: this.gameTime + slowDuration
         });
       }
-    });
+    }
   }
 
   private expireSlowEffects(): void {
@@ -425,18 +440,20 @@ export class TowerCombatService {
     let nearest: Enemy | null = null;
     let nearestDist = Infinity;
 
-    this.enemyService.getEnemies().forEach(enemy => {
-      if (enemy.health <= 0 || excludeIds.has(enemy.id)) return;
+    const candidates = this.spatialGrid.queryRadius(from.position.x, from.position.z, chainRange);
+    for (const enemy of candidates) {
+      if (enemy.health <= 0 || excludeIds.has(enemy.id)) continue;
 
       const dx = enemy.position.x - from.position.x;
       const dz = enemy.position.z - from.position.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
 
+      // Narrow-phase range check
       if (dist <= chainRange && dist < nearestDist) {
         nearest = enemy;
         nearestDist = dist;
       }
-    });
+    }
 
     return nearest;
   }
@@ -528,10 +545,12 @@ export class TowerCombatService {
 
     // Initial blast — deal immediate damage on impact and track kills
     const initialKills: KillInfo[] = [];
-    this.enemyService.getEnemies().forEach(enemy => {
-      if (enemy.health <= 0) return;
+    const blastCandidates = this.spatialGrid.queryRadius(impactX, impactZ, blastRadius);
+    for (const enemy of blastCandidates) {
+      if (enemy.health <= 0) continue;
       const dx = enemy.position.x - impactX;
       const dz = enemy.position.z - impactZ;
+      // Narrow-phase range check
       if (Math.sqrt(dx * dx + dz * dz) <= blastRadius) {
         const result = this.enemyService.damageEnemy(enemy.id, dotDamage);
         if (result.killed) {
@@ -541,7 +560,7 @@ export class TowerCombatService {
           if (mini.mesh) scene.add(mini.mesh);
         });
       }
-    });
+    }
 
     this.mortarZones.push({
       mesh: zoneMesh,
@@ -573,11 +592,13 @@ export class TowerCombatService {
       const impactX = proj.mesh.position.x;
       const impactZ = proj.mesh.position.z;
 
-      this.enemyService.getEnemies().forEach(enemy => {
+      const splashCandidates = this.spatialGrid.queryRadius(impactX, impactZ, proj.splashRadius);
+      for (const enemy of splashCandidates) {
         const dx = enemy.position.x - impactX;
         const dz = enemy.position.z - impactZ;
         const dist = Math.sqrt(dx * dx + dz * dz);
 
+        // Narrow-phase range check
         if (dist <= proj.splashRadius) {
           const result = this.enemyService.damageEnemy(enemy.id, proj.damage);
           if (result.killed) {
@@ -587,7 +608,7 @@ export class TowerCombatService {
             if (mini.mesh) scene.add(mini.mesh);
           });
         }
-      });
+      }
     } else {
       // Single target damage
       const result = this.enemyService.damageEnemy(proj.targetId, proj.damage);
