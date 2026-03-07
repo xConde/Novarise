@@ -18,8 +18,6 @@
       (click)="setTab('shortcuts')">
       Shortcuts
     </button>
-    <span class="path-badge path-valid" *ngIf="isPathValid">✓</span>
-    <span class="path-badge path-invalid" *ngIf="!isPathValid && hasSpawnAndExit">✗</span>
   </div>
 
   <div class="tab-content" *ngIf="activeTab === 'editor'">

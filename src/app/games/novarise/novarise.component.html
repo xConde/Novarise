@@ -21,8 +21,6 @@
       [selectedTerrainType]="selectedTerrainType"
       [brushSize]="brushSize"
       [activeTool]="activeTool"
-      [isPathValid]="isPathValid"
-      [hasSpawnAndExit]="hasSpawnAndExit"
       [templates]="templates"
       (editModeChange)="setEditMode($event)"
       (terrainTypeChange)="setTerrainType($event)"
@@ -30,5 +28,12 @@
       (activeToolChange)="setActiveTool($event)"
       (templateSelect)="loadTemplate($event)">
     </app-edit-controls>
+
+    <!-- Path status indicator -->
+    <div class="path-indicator" *ngIf="hasSpawnAndExit || isPathValid">
+      <span class="path-indicator-status" [class.valid]="isPathValid" [class.invalid]="!isPathValid">
+        {{ isPathValid ? 'Path OK ✓' : 'No Path ✗' }}
+      </span>
+    </div>
   </div>
 </div>

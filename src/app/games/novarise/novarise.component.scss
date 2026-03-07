@@ -23,6 +23,33 @@
   }
 }
 
+.path-indicator {
+  position: absolute;
+  bottom: var(--spacing-md);
+  right: var(--spacing-md);
+  z-index: 10;
+}
+
+.path-indicator-status {
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--border-radius-md);
+  backdrop-filter: blur(0.625rem);
+  background: rgba(0, 0, 0, 0.6);
+
+  &.valid {
+    color: var(--action-success);
+    border: 1px solid var(--action-success-border);
+  }
+
+  &.invalid {
+    color: var(--action-danger);
+    border: 1px solid var(--action-danger-border);
+  }
+}
+
 .canvas-container {
   position: absolute;
   top: 0;
