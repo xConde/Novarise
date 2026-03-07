@@ -60,9 +60,11 @@ describe('GameStateService', () => {
       expect(service.getState().phase).toBe(GamePhase.COMBAT);
     });
 
-    it('should increment wave on each call', () => {
+    it('should increment wave on each start/complete cycle', () => {
       service.startWave();
+      service.completeWave(0);
       service.startWave();
+      service.completeWave(0);
       service.startWave();
       expect(service.getState().wave).toBe(3);
     });
@@ -85,18 +87,31 @@ describe('GameStateService', () => {
       // Advance through all waves via startWave + completeWave cycle
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
       }
       expect(service.getState().wave).toBe(maxWaves);
 
-      // Try to go past — should be a no-op
+      // Complete final wave → VICTORY, then try to go past — should be a no-op
+      service.completeWave(0);
       service.startWave();
       expect(service.getState().wave).toBe(maxWaves);
+    });
+
+    it('should not advance wave when startWave called during COMBAT', () => {
+      service.startWave(); // wave 1, COMBAT
+      expect(service.getState().phase).toBe(GamePhase.COMBAT);
+      const waveBefore = service.getState().wave;
+
+      service.startWave(); // should be a no-op
+      expect(service.getState().wave).toBe(waveBefore);
+      expect(service.getState().phase).toBe(GamePhase.COMBAT);
     });
 
     it('should not change phase when called past maxWaves', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
       }
       // Complete the final wave → VICTORY
       service.completeWave(100);
@@ -133,9 +148,10 @@ describe('GameStateService', () => {
     });
 
     it('should transition to VICTORY on final wave', () => {
-      // Advance to max waves
+      // Advance to max waves (beforeEach already called startWave → wave 1)
       const maxWaves = service.getState().maxWaves;
       for (let i = 1; i < maxWaves; i++) {
+        service.completeWave(0);
         service.startWave();
       }
       expect(service.getState().wave).toBe(maxWaves);
@@ -170,6 +186,7 @@ describe('GameStateService', () => {
     it('should be a no-op when called in VICTORY phase', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 1; i < maxWaves; i++) {
+        service.completeWave(0);
         service.startWave();
       }
       service.completeWave(100); // final wave → VICTORY
@@ -229,6 +246,7 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
       }
       service.completeWave(100); // → VICTORY
       const livesBefore = service.getState().lives;
@@ -430,6 +448,7 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
       }
       service.completeWave(100); // → VICTORY
       const livesBefore = service.getState().lives;
@@ -617,6 +636,7 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
       }
       service.completeWave(100); // → VICTORY
       service.addElapsedTime(10);
@@ -704,6 +724,7 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
       }
       service.completeWave(250);
       expect(service.getState().phase).toBe(GamePhase.INTERMISSION);
@@ -724,6 +745,7 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
       }
       service.completeWave(100);
       expect(service.getState().highestWave).toBe(maxWaves);
@@ -734,6 +756,7 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
       }
       service.completeWave(100);
       const firstHighest = service.getState().highestWave;
@@ -748,6 +771,7 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
       }
       service.completeWave(100); // INTERMISSION
       service.startWave(); // wave maxWaves + 1
@@ -759,6 +783,7 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
       }
       service.completeWave(250); // VICTORY
       service.startWave(); // should be no-op
@@ -770,6 +795,7 @@ describe('GameStateService', () => {
       const maxWaves = service.getState().maxWaves;
       for (let i = 0; i < maxWaves; i++) {
         service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
       }
       service.completeWave(100);
 

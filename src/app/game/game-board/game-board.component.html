@@ -254,7 +254,7 @@
         <span class="stat-value">{{ selectedTowerInfo.kills }}</span>
       </div>
     </div>
-    <div class="tower-info-targeting">
+    <div class="tower-info-targeting" *ngIf="selectedTowerInfo && selectedTowerInfo.type !== TowerType.SLOW">
       <button
         class="targeting-btn"
         (click)="cycleTargeting()"

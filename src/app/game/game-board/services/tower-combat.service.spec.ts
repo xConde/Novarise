@@ -276,6 +276,18 @@ describe('TowerCombatService', () => {
       expect(strong.health).toBeLessThan(500);
       expect(weak.health).toBe(50);
     });
+
+    it('should preserve targeting mode across upgrade', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+      service.setTargetingMode(key, 'strongest');
+      expect(service.getTower(key)!.targetingMode).toBe('strongest');
+
+      const upgraded = service.upgradeTower(key);
+      expect(upgraded).toBeTrue();
+      expect(service.getTower(key)!.targetingMode).toBe('strongest');
+    });
   });
 
   // --- Fire Rate ---

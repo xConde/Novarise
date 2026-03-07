@@ -42,10 +42,10 @@ export const DIFFICULTY_PRESETS: Record<DifficultyLevel, DifficultyPreset> = {
     description: 'Tight resources, every tower counts'
   },
   [DifficultyLevel.NIGHTMARE]: {
-    lives: 5,
+    lives: 7,
     gold: 50,
     label: 'Nightmare',
-    description: 'One mistake and it is over'
+    description: 'Razor-thin margins, every decision matters'
   }
 };
 

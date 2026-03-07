@@ -10,6 +10,7 @@ import { PlayerProfileService, PlayerProfile, Achievement, ACHIEVEMENTS } from '
 export class ProfileComponent implements OnInit {
   profile!: PlayerProfile;
   allAchievements: Achievement[] = ACHIEVEMENTS;
+  private unlockedSet = new Set<string>();
 
   constructor(
     private profileService: PlayerProfileService,
@@ -18,10 +19,11 @@ export class ProfileComponent implements OnInit {
 
   ngOnInit(): void {
     this.profile = this.profileService.getProfile();
+    this.unlockedSet = new Set(this.profile.achievements);
   }
 
   isUnlocked(achievementId: string): boolean {
-    return this.profile.achievements.includes(achievementId);
+    return this.unlockedSet.has(achievementId);
   }
 
   get winRate(): string {

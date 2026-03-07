@@ -240,6 +240,18 @@
   }
 }
 
+// --- Touch devices: always show card actions (no hover) ---
+@media (hover: none) {
+  .map-card .card-actions {
+    opacity: 1;
+  }
+
+  .card-action-btn {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+}
+
 // --- Mobile breakpoint ---
 @media (max-width: 480px) {
   .map-select-container {

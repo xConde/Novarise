@@ -82,6 +82,11 @@ describe('Gameplay Integration', () => {
   });
 
   afterEach(() => {
+    // Reset service state before disposing scene objects
+    enemyService.reset(scene);
+    towerCombatService.cleanup(scene);
+    waveService.reset();
+
     // Dispose Three.js scene children
     scene.traverse(child => {
       if (child instanceof THREE.Mesh) {
@@ -396,7 +401,7 @@ describe('Gameplay Integration', () => {
       const baseScore = 1000;
 
       const easyBreakdown = calculateScoreBreakdown(baseScore, 30, 30, DifficultyLevel.EASY, 10, true);
-      const nightmareBreakdown = calculateScoreBreakdown(baseScore, 5, 5, DifficultyLevel.NIGHTMARE, 10, true);
+      const nightmareBreakdown = calculateScoreBreakdown(baseScore, 7, 7, DifficultyLevel.NIGHTMARE, 10, true);
 
       expect(easyBreakdown.finalScore).toBe(Math.round(baseScore * 0.5));
       expect(nightmareBreakdown.finalScore).toBe(Math.round(baseScore * 2.0));

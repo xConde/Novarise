@@ -383,6 +383,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Clear path cache and BFS preview cache since board changed
     this.enemyService.clearPathCache();
     this.lastPreviewKey = '';
+    this.refreshPathOverlay();
 
     this.deselectTower();
   }
@@ -1226,6 +1227,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Clear enemy path cache since board layout changed
       this.enemyService.clearPathCache();
+      this.refreshPathOverlay();
     }
   }
 
@@ -1313,10 +1315,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.showPathOverlay = !this.showPathOverlay;
 
     if (this.showPathOverlay) {
-      const worldPath = this.enemyService.getPathToExit();
-      if (worldPath.length > 0) {
-        this.pathVisualizationService.showPath(worldPath, this.scene);
-      }
+      this.refreshPathOverlay();
+    } else {
+      this.pathVisualizationService.hidePath(this.scene);
+    }
+  }
+
+  private refreshPathOverlay(): void {
+    if (!this.showPathOverlay) return;
+    const worldPath = this.enemyService.getPathToExit();
+    if (worldPath.length > 0) {
+      this.pathVisualizationService.showPath(worldPath, this.scene);
     } else {
       this.pathVisualizationService.hidePath(this.scene);
     }

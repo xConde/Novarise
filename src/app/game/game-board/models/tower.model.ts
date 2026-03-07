@@ -115,7 +115,7 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
     damage: 8,
     range: 4,
     fireRate: 3.0,   // Slow-firing artillery
-    cost: 200,
+    cost: 175,
     projectileSpeed: 4,
     splashRadius: 0,
     color: 0xff6622,
