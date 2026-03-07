@@ -1,0 +1,40 @@
+<div class="setup-panel">
+  <span class="setup-section-label">Difficulty</span>
+  <div class="setup-difficulty-grid">
+    <button
+      *ngFor="let level of difficultyLevels"
+      class="setup-diff-btn"
+      [class.selected]="gameState.difficulty === level"
+      (click)="selectDifficulty.emit(level)"
+      [attr.aria-label]="'Select ' + difficultyPresets[level].label + ' difficulty'"
+      [attr.aria-pressed]="gameState.difficulty === level">
+      {{ difficultyPresets[level].label }}
+    </button>
+  </div>
+
+  <label class="setup-endless">
+    <input type="checkbox" [checked]="gameState.isEndless" (change)="toggleEndless.emit()">
+    <span>Endless Mode</span>
+  </label>
+
+  <span class="setup-section-label">Modifiers</span>
+  <div class="setup-modifier-grid">
+    <button
+      *ngFor="let mod of allModifiers"
+      class="setup-mod-btn"
+      [class.active]="activeModifiers.has(mod)"
+      (click)="toggleModifier.emit(mod)"
+      [title]="modifierConfigs[mod].description"
+      [attr.aria-label]="'Toggle modifier: ' + modifierConfigs[mod].label"
+      [attr.aria-pressed]="activeModifiers.has(mod)">
+      {{ modifierConfigs[mod].label }}
+    </button>
+  </div>
+  <div class="setup-score" *ngIf="activeModifiers.size > 0">
+    Score: {{ modifierScoreMultiplier.toFixed(1) }}x
+  </div>
+
+  <button class="setup-start-btn" (click)="startGame.emit()" aria-label="Start the game">
+    Start Game
+  </button>
+</div>

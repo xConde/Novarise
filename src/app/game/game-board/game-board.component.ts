@@ -314,10 +314,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // --- Public methods for template ---
 
-  levelStars(count: number): number[] {
-    return Array(Math.max(0, count)).fill(0);
-  }
-
   toggleAudio(): void {
     this.audioService.toggleMute();
     this.settingsService.update({ audioMuted: this.audioService.isMuted });
@@ -458,11 +454,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   cycleTargeting(): void {
     if (!this.selectedTowerInfo) return;
     this.towerCombatService.cycleTargetingMode(this.selectedTowerInfo.id);
-  }
-
-  specLabel(tower: PlacedTower): string {
-    if (!tower.specialization) return '';
-    return TOWER_SPECIALIZATIONS[tower.type][tower.specialization].label;
   }
 
   deselectTower(): void {

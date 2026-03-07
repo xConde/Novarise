@@ -31,47 +31,16 @@
     [pathBlocked]="pathBlocked">
   </app-game-hud>
 
-  <!-- Setup panel — right side on desktop, bottom sheet on mobile -->
-  <div class="setup-panel" *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0">
-    <span class="setup-section-label">Difficulty</span>
-    <div class="setup-difficulty-grid">
-      <button
-        *ngFor="let level of difficultyLevels"
-        class="setup-diff-btn"
-        [class.selected]="gameState.difficulty === level"
-        (click)="selectDifficulty(level)"
-        [attr.aria-label]="'Select ' + difficultyPresets[level].label + ' difficulty'"
-        [attr.aria-pressed]="gameState.difficulty === level">
-        {{ difficultyPresets[level].label }}
-      </button>
-    </div>
-
-    <label class="setup-endless">
-      <input type="checkbox" [checked]="gameState.isEndless" (change)="toggleEndless()">
-      <span>Endless Mode</span>
-    </label>
-
-    <span class="setup-section-label">Modifiers</span>
-    <div class="setup-modifier-grid">
-      <button
-        *ngFor="let mod of allModifiers"
-        class="setup-mod-btn"
-        [class.active]="activeModifiers.has(mod)"
-        (click)="toggleModifier(mod)"
-        [title]="modifierConfigs[mod].description"
-        [attr.aria-label]="'Toggle modifier: ' + modifierConfigs[mod].label"
-        [attr.aria-pressed]="activeModifiers.has(mod)">
-        {{ modifierConfigs[mod].label }}
-      </button>
-    </div>
-    <div class="setup-score" *ngIf="activeModifiers.size > 0">
-      Score: {{ modifierScoreMultiplier.toFixed(1) }}x
-    </div>
-
-    <button class="setup-start-btn" (click)="startWave()" aria-label="Start the game">
-      Start Game
-    </button>
-  </div>
+  <app-game-setup
+    *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0"
+    [gameState]="gameState"
+    [activeModifiers]="activeModifiers"
+    [modifierScoreMultiplier]="modifierScoreMultiplier"
+    (selectDifficulty)="selectDifficulty($event)"
+    (toggleModifier)="toggleModifier($event)"
+    (toggleEndless)="toggleEndless()"
+    (startGame)="startWave()">
+  </app-game-setup>
 
   <!-- Wave preview panel — shown during SETUP and INTERMISSION -->
   <div class="wave-preview"
@@ -163,78 +132,23 @@
     </div>
   </div>
 
-  <!-- Tower info panel -->
-  <div class="tower-info-panel" *ngIf="selectedTowerInfo && selectedTowerStats">
-    <div class="tower-info-header">
-      <span class="tower-info-name">{{ selectedTowerInfo.type | titlecase }}</span>
-      <span class="tower-info-level">
-        <span *ngFor="let star of levelStars(selectedTowerInfo.level)" class="level-star">&#9733;</span>
-        <span *ngFor="let star of levelStars(MAX_TOWER_LEVEL - selectedTowerInfo.level)" class="level-star empty">&#9733;</span>
-      </span>
-      <button class="tower-info-close" (click)="deselectTower()" aria-label="Close tower info">&times;</button>
-    </div>
-    <div class="tower-info-stats">
-      <div class="stat-row">
-        <span class="stat-label">Damage</span>
-        <span class="stat-value">{{ selectedTowerStats.damage }}</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">Range</span>
-        <span class="stat-value">{{ selectedTowerStats.range }}</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">Fire Rate</span>
-        <span class="stat-value">{{ selectedTowerStats.fireRate }}s</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">Kills</span>
-        <span class="stat-value">{{ selectedTowerInfo.kills }}</span>
-      </div>
-    </div>
-    <div class="tower-info-targeting" *ngIf="selectedTowerInfo && selectedTowerInfo.type !== TowerType.SLOW">
-      <button
-        class="targeting-btn"
-        (click)="cycleTargeting()"
-        [attr.aria-label]="'Targeting: ' + targetingModeLabels[selectedTowerInfo.targetingMode] + '. Click to cycle.'">
-        Target: {{ targetingModeLabels[selectedTowerInfo.targetingMode] }}
-      </button>
-    </div>
-    <div class="tower-info-actions" *ngIf="!showSpecializationChoice">
-      <button
-        class="upgrade-btn"
-        *ngIf="selectedTowerInfo.level < MAX_TOWER_LEVEL"
-        [class.unaffordable]="!gameState || gameState.gold < selectedTowerUpgradeCost"
-        (click)="upgradeTower()"
-        aria-label="Upgrade tower">
-        Upgrade ({{ selectedTowerUpgradeCost }}g)
-      </button>
-      <span class="max-level-badge" *ngIf="selectedTowerInfo.level >= MAX_TOWER_LEVEL">
-        {{ selectedTowerInfo.specialization ? (selectedTowerInfo.type | titlecase) + ' — ' + specLabel(selectedTowerInfo) : 'MAX' }}
-      </span>
-      <button
-        class="sell-btn"
-        [class.confirm]="sellConfirmPending"
-        (click)="sellTower()"
-        aria-label="Sell tower">
-        {{ sellConfirmPending ? 'Confirm Sell?' : 'Sell (+' + selectedTowerSellValue + 'g)' }}
-      </button>
-    </div>
-    <div class="spec-choice-panel" *ngIf="showSpecializationChoice">
-      <div class="spec-choice-header">Choose Specialization ({{ selectedTowerUpgradeCost }}g)</div>
-      <button
-        *ngFor="let opt of specOptions"
-        class="spec-btn"
-        [class.unaffordable]="!gameState || gameState.gold < selectedTowerUpgradeCost"
-        [disabled]="!gameState || gameState.gold < selectedTowerUpgradeCost"
-        (click)="selectSpecialization(opt.spec)"
-        [attr.aria-label]="'Specialize: ' + opt.label">
-        <span class="spec-label">{{ opt.label }}</span>
-        <span class="spec-desc">{{ opt.description }}</span>
-        <span class="spec-stats">DMG x{{ opt.damage }} | RNG x{{ opt.range }} | SPD x{{ opt.fireRate }}</span>
-      </button>
-      <button class="spec-cancel-btn" (click)="showSpecializationChoice = false" aria-label="Cancel specialization">Cancel</button>
-    </div>
-  </div>
+  <app-tower-info-panel
+    *ngIf="selectedTowerInfo && selectedTowerStats"
+    [selectedTowerInfo]="selectedTowerInfo"
+    [selectedTowerStats]="selectedTowerStats"
+    [upgradeCost]="selectedTowerUpgradeCost"
+    [sellValue]="selectedTowerSellValue"
+    [gold]="gameState.gold"
+    [showSpecializationChoice]="showSpecializationChoice"
+    [specOptions]="specOptions"
+    [sellConfirmPending]="sellConfirmPending"
+    (upgrade)="upgradeTower()"
+    (sell)="sellTower()"
+    (deselect)="deselectTower()"
+    (cycleTargeting)="cycleTargeting()"
+    (selectSpecialization)="selectSpecialization($event)"
+    (cancelSpecialization)="showSpecializationChoice = false">
+  </app-tower-info-panel>
 
   <!-- Tower selection -->
   <div class="tower-selection" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT && gameState.wave > 0">

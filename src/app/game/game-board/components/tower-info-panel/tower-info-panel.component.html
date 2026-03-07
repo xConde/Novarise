@@ -1,0 +1,71 @@
+<div class="tower-info-panel" *ngIf="selectedTowerInfo && selectedTowerStats">
+  <div class="tower-info-header">
+    <span class="tower-info-name">{{ selectedTowerInfo.type | titlecase }}</span>
+    <span class="tower-info-level">
+      <span *ngFor="let star of filledStars" class="level-star">&#9733;</span>
+      <span *ngFor="let star of emptyStars" class="level-star empty">&#9733;</span>
+    </span>
+    <button class="tower-info-close" (click)="deselect.emit()" aria-label="Close tower info">&times;</button>
+  </div>
+  <div class="tower-info-stats">
+    <div class="stat-row">
+      <span class="stat-label">Damage</span>
+      <span class="stat-value">{{ selectedTowerStats.damage }}</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Range</span>
+      <span class="stat-value">{{ selectedTowerStats.range }}</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Fire Rate</span>
+      <span class="stat-value">{{ selectedTowerStats.fireRate }}s</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Kills</span>
+      <span class="stat-value">{{ selectedTowerInfo.kills }}</span>
+    </div>
+  </div>
+  <div class="tower-info-targeting" *ngIf="selectedTowerInfo && selectedTowerInfo.type !== TowerType.SLOW">
+    <button
+      class="targeting-btn"
+      (click)="cycleTargeting.emit()"
+      [attr.aria-label]="'Targeting: ' + targetingModeLabels[selectedTowerInfo.targetingMode] + '. Click to cycle.'">
+      Target: {{ targetingModeLabels[selectedTowerInfo.targetingMode] }}
+    </button>
+  </div>
+  <div class="tower-info-actions" *ngIf="!showSpecializationChoice">
+    <button
+      class="upgrade-btn"
+      *ngIf="selectedTowerInfo.level < MAX_TOWER_LEVEL"
+      [class.unaffordable]="gold < upgradeCost"
+      (click)="upgrade.emit()"
+      aria-label="Upgrade tower">
+      Upgrade ({{ upgradeCost }}g)
+    </button>
+    <span class="max-level-badge" *ngIf="selectedTowerInfo.level >= MAX_TOWER_LEVEL">
+      {{ selectedTowerInfo.specialization ? (selectedTowerInfo.type | titlecase) + ' — ' + specLabel(selectedTowerInfo) : 'MAX' }}
+    </span>
+    <button
+      class="sell-btn"
+      [class.confirm]="sellConfirmPending"
+      (click)="sell.emit()"
+      aria-label="Sell tower">
+      {{ sellConfirmPending ? 'Confirm Sell?' : 'Sell (+' + sellValue + 'g)' }}
+    </button>
+  </div>
+  <div class="spec-choice-panel" *ngIf="showSpecializationChoice">
+    <div class="spec-choice-header">Choose Specialization ({{ upgradeCost }}g)</div>
+    <button
+      *ngFor="let opt of specOptions"
+      class="spec-btn"
+      [class.unaffordable]="gold < upgradeCost"
+      [disabled]="gold < upgradeCost"
+      (click)="selectSpecialization.emit(opt.spec)"
+      [attr.aria-label]="'Specialize: ' + opt.label">
+      <span class="spec-label">{{ opt.label }}</span>
+      <span class="spec-desc">{{ opt.description }}</span>
+      <span class="spec-stats">DMG x{{ opt.damage }} | RNG x{{ opt.range }} | SPD x{{ opt.fireRate }}</span>
+    </button>
+    <button class="spec-cancel-btn" (click)="cancelSpecialization.emit()" aria-label="Cancel specialization">Cancel</button>
+  </div>
+</div>
