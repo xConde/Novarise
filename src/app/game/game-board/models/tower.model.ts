@@ -1,5 +1,15 @@
 import * as THREE from 'three';
 
+export type TargetingMode = 'nearest' | 'first' | 'strongest';
+export const TARGETING_MODES: TargetingMode[] = ['nearest', 'first', 'strongest'];
+export const DEFAULT_TARGETING_MODE: TargetingMode = 'nearest';
+
+export const TARGETING_MODE_LABELS: Record<TargetingMode, string> = {
+  nearest: 'Nearest',
+  first: 'First',
+  strongest: 'Strongest',
+};
+
 export enum TowerType {
   BASIC = 'basic',
   SNIPER = 'sniper',
@@ -47,6 +57,7 @@ export interface PlacedTower {
   lastFireTime: number; // elapsed game time of last shot
   kills: number;
   totalInvested: number; // cumulative gold spent (placement + upgrades)
+  targetingMode: TargetingMode;
   mesh: THREE.Group | null;
 }
 
@@ -104,7 +115,7 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
     damage: 8,
     range: 4,
     fireRate: 3.0,   // Slow-firing artillery
-    cost: 200,
+    cost: 175,
     projectileSpeed: 4,
     splashRadius: 0,
     color: 0xff6622,

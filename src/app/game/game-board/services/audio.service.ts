@@ -11,7 +11,6 @@ export class AudioService {
   private lastEnemyHitTime = -Infinity;
   private towerFiresThisFrame = 0;
   private deathSoundsThisFrame = 0;
-  private frameResetScheduled = false;
 
   get isMuted(): boolean {
     return this._muted;
@@ -39,15 +38,10 @@ export class AudioService {
     return this.audioContext;
   }
 
-  /** Schedule a microtask to reset per-frame counters (runs once per JS task). */
-  private scheduleFrameReset(): void {
-    if (this.frameResetScheduled) return;
-    this.frameResetScheduled = true;
-    Promise.resolve().then(() => {
-      this.towerFiresThisFrame = 0;
-      this.deathSoundsThisFrame = 0;
-      this.frameResetScheduled = false;
-    });
+  /** Reset per-frame SFX counters. Call at the top of each animation frame. */
+  resetFrameCounters(): void {
+    this.towerFiresThisFrame = 0;
+    this.deathSoundsThisFrame = 0;
   }
 
   // --- Sound primitives ---
@@ -143,7 +137,6 @@ export class AudioService {
     const cfg = AUDIO_CONFIG.towerFire[towerType];
     if (!cfg) return;
 
-    this.scheduleFrameReset();
     if (this.towerFiresThisFrame >= AUDIO_CONFIG.maxTowerFiresPerFrame) return;
     this.towerFiresThisFrame++;
 
@@ -160,7 +153,6 @@ export class AudioService {
   }
 
   playEnemyDeath(): void {
-    this.scheduleFrameReset();
     if (this.deathSoundsThisFrame >= AUDIO_CONFIG.maxDeathSoundsPerFrame) return;
     this.deathSoundsThisFrame++;
 

@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy } from '../models/enemy.model';
-import { PlacedTower, TowerType, TowerStats, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats } from '../models/tower.model';
+import { PlacedTower, TowerType, TowerStats, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
@@ -43,6 +43,12 @@ interface SlowEffect {
   expiresAt: number;
 }
 
+/** Info about a tower kill — includes the damage of the final hit. */
+export interface KillInfo {
+  id: string;
+  damage: number;
+}
+
 @Injectable()
 export class TowerCombatService {
   private placedTowers: Map<string, PlacedTower> = new Map();
@@ -70,6 +76,7 @@ export class TowerCombatService {
       lastFireTime: -Infinity,
       kills: 0,
       totalInvested: TOWER_CONFIGS[type].cost,
+      targetingMode: DEFAULT_TARGETING_MODE,
       mesh
     });
   }
@@ -91,9 +98,9 @@ export class TowerCombatService {
     return tower;
   }
 
-  update(deltaTime: number, scene: THREE.Scene): { killed: string[]; fired: TowerType[]; hitCount: number } {
+  update(deltaTime: number, scene: THREE.Scene): { killed: KillInfo[]; fired: TowerType[]; hitCount: number } {
     this.gameTime += deltaTime;
-    const killedEnemyIds: string[] = [];
+    const killedEnemies: KillInfo[] = [];
     const firedTowerTypes: TowerType[] = [];
 
     // Expire slow effects before tower processing so towers see accurate speeds
@@ -121,7 +128,7 @@ export class TowerCombatService {
 
       if (tower.type === TowerType.CHAIN) {
         const kills = this.fireChainLightning(tower, target, stats, scene);
-        killedEnemyIds.push(...kills);
+        killedEnemies.push(...kills);
         if (kills.length > 0) {
           const t = this.placedTowers.get(tower.id);
           if (t) t.kills += kills.length;
@@ -154,7 +161,7 @@ export class TowerCombatService {
       if (moveDistance >= dist) {
         // Hit — apply damage before disposing mesh (applyDamage reads proj.mesh.position)
         const kills = this.applyDamage(proj, scene);
-        killedEnemyIds.push(...kills);
+        killedEnemies.push(...kills);
         hitCount++;
         this.removeProjectileMesh(proj, scene);
       } else {
@@ -201,7 +208,7 @@ export class TowerCombatService {
           if (Math.sqrt(dx * dx + dz * dz) <= zone.blastRadius) {
             const result = this.enemyService.damageEnemy(enemy.id, zone.dotDamage);
             if (result.killed) {
-              killedEnemyIds.push(enemy.id);
+              killedEnemies.push({ id: enemy.id, damage: zone.dotDamage });
             }
             // Mini-swarm meshes from DoT kills are added to scene here
             result.spawnedEnemies.forEach(mini => {
@@ -215,7 +222,7 @@ export class TowerCombatService {
     }
     this.mortarZones = survivingZones;
 
-    return { killed: killedEnemyIds, fired: firedTowerTypes, hitCount };
+    return { killed: killedEnemies, fired: firedTowerTypes, hitCount };
   }
 
   private getTowerWorldPos(tower: PlacedTower): { x: number; z: number } {
@@ -228,11 +235,27 @@ export class TowerCombatService {
     };
   }
 
+  setTargetingMode(towerId: string, mode: TargetingMode): boolean {
+    const tower = this.placedTowers.get(towerId);
+    if (!tower) return false;
+    tower.targetingMode = mode;
+    return true;
+  }
+
+  cycleTargetingMode(towerId: string): TargetingMode | null {
+    const tower = this.placedTowers.get(towerId);
+    if (!tower) return null;
+    const currentIndex = TARGETING_MODES.indexOf(tower.targetingMode);
+    const nextIndex = (currentIndex + 1) % TARGETING_MODES.length;
+    tower.targetingMode = TARGETING_MODES[nextIndex];
+    return tower.targetingMode;
+  }
+
   private findTarget(tower: PlacedTower, stats: TowerStats): Enemy | null {
     const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
 
-    let nearest: Enemy | null = null;
-    let nearestDist = Infinity;
+    let best: Enemy | null = null;
+    let bestScore = -Infinity;
 
     this.enemyService.getEnemies().forEach(enemy => {
       if (enemy.health <= 0) return;
@@ -242,13 +265,32 @@ export class TowerCombatService {
       const dist = Math.sqrt(dx * dx + dz * dz);
 
       // Range check in world units (tileSize = 1, so range in tiles = range in world units)
-      if (dist <= stats.range && dist < nearestDist) {
-        nearest = enemy;
-        nearestDist = dist;
+      if (dist > stats.range) return;
+
+      let score: number;
+      switch (tower.targetingMode) {
+        case 'first':
+          // Enemy furthest along path (highest distanceTraveled) is closest to exit
+          score = enemy.distanceTraveled;
+          break;
+        case 'strongest':
+          // Enemy with highest current health
+          score = enemy.health;
+          break;
+        case 'nearest':
+        default:
+          // Closest by distance (invert so closer = higher score)
+          score = -dist;
+          break;
+      }
+
+      if (score > bestScore) {
+        best = enemy;
+        bestScore = score;
       }
     });
 
-    return nearest;
+    return best;
   }
 
   private applySlowAura(tower: PlacedTower, stats: TowerStats): void {
@@ -300,10 +342,10 @@ export class TowerCombatService {
     primaryTarget: Enemy,
     stats: TowerStats,
     scene: THREE.Scene
-  ): string[] {
+  ): KillInfo[] {
     const chainCount = stats.chainCount ?? 3;
     const chainRange = stats.chainRange ?? 2;
-    const kills: string[] = [];
+    const kills: KillInfo[] = [];
     const hitIds = new Set<string>();
 
     this.audioService.playSfx('chainZap');
@@ -348,7 +390,7 @@ export class TowerCombatService {
       // Deal damage
       const chainResult = this.enemyService.damageEnemy(currentTarget.id, currentDamage);
       if (chainResult.killed) {
-        kills.push(currentTarget.id);
+        kills.push({ id: currentTarget.id, damage: currentDamage });
       }
       // Mini-swarm meshes from chain kills need to be tracked — caller adds to scene
       // via killedEnemyIds which triggers removeEnemy; spawnedEnemies returned separately
@@ -464,7 +506,7 @@ export class TowerCombatService {
     impactZ: number,
     stats: TowerStats,
     scene: THREE.Scene
-  ): string[] {
+  ): KillInfo[] {
     const blastRadius = stats.blastRadius ?? 1.5;
     const dotDuration = stats.dotDuration ?? 3;
     const dotDamage = stats.dotDamage ?? 3;
@@ -484,7 +526,7 @@ export class TowerCombatService {
     this.audioService.playSfx('mortarExplosion');
 
     // Initial blast — deal immediate damage on impact and track kills
-    const initialKills: string[] = [];
+    const initialKills: KillInfo[] = [];
     this.enemyService.getEnemies().forEach(enemy => {
       if (enemy.health <= 0) return;
       const dx = enemy.position.x - impactX;
@@ -492,7 +534,7 @@ export class TowerCombatService {
       if (Math.sqrt(dx * dx + dz * dz) <= blastRadius) {
         const result = this.enemyService.damageEnemy(enemy.id, dotDamage);
         if (result.killed) {
-          initialKills.push(enemy.id);
+          initialKills.push({ id: enemy.id, damage: dotDamage });
         }
         result.spawnedEnemies.forEach(mini => {
           if (mini.mesh) scene.add(mini.mesh);
@@ -513,8 +555,8 @@ export class TowerCombatService {
     return initialKills;
   }
 
-  private applyDamage(proj: Projectile, scene: THREE.Scene): string[] {
-    const kills: string[] = [];
+  private applyDamage(proj: Projectile, scene: THREE.Scene): KillInfo[] {
+    const kills: KillInfo[] = [];
 
     if (proj.towerType === TowerType.MORTAR) {
       // Look up the mortar tower's stats to create the zone
@@ -538,7 +580,7 @@ export class TowerCombatService {
         if (dist <= proj.splashRadius) {
           const result = this.enemyService.damageEnemy(enemy.id, proj.damage);
           if (result.killed) {
-            kills.push(enemy.id);
+            kills.push({ id: enemy.id, damage: proj.damage });
           }
           result.spawnedEnemies.forEach(mini => {
             if (mini.mesh) scene.add(mini.mesh);
@@ -549,7 +591,7 @@ export class TowerCombatService {
       // Single target damage
       const result = this.enemyService.damageEnemy(proj.targetId, proj.damage);
       if (result.killed) {
-        kills.push(proj.targetId);
+        kills.push({ id: proj.targetId, damage: proj.damage });
       }
       result.spawnedEnemies.forEach(mini => {
         if (mini.mesh) scene.add(mini.mesh);

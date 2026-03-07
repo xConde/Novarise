@@ -12,19 +12,20 @@ import { EnemyService } from './services/enemy.service';
 import { MapBridgeService } from './services/map-bridge.service';
 import { GameStateService } from './services/game-state.service';
 import { WaveService } from './services/wave.service';
-import { TowerCombatService } from './services/tower-combat.service';
+import { TowerCombatService, KillInfo } from './services/tower-combat.service';
 import { AudioService } from './services/audio.service';
 import { ParticleService } from './services/particle.service';
 import { ScreenShakeService } from './services/screen-shake.service';
 import { GoldPopupService } from './services/gold-popup.service';
 import { FpsCounterService } from './services/fps-counter.service';
 import { GameStatsService } from './services/game-stats.service';
-import { PlayerProfileService, GameEndStats } from './services/player-profile.service';
+import { PlayerProfileService, GameEndStats, ACHIEVEMENTS, Achievement } from './services/player-profile.service';
 import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService, MinimapEntityData, MinimapTerrainData } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
+import { TowerPreviewService } from './services/tower-preview.service';
 import { disposeMaterial } from './utils/three-utils';
-import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
+import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TARGETING_MODE_LABELS, TargetingMode } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
@@ -37,6 +38,7 @@ import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG } from './constants/touch.constants';
 import { ENEMY_STATS } from './models/enemy.model';
 import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
+import { PathVisualizationService } from './services/path-visualization.service';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -51,7 +53,7 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService]
+  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -85,6 +87,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private gridLines: THREE.Group | null = null;
   private rangePreviewMesh: THREE.Mesh | null = null;
   selectedTowerType: TowerType = TowerType.BASIC;
+  private lastPreviewKey = ''; // "row-col-towerType" — skip BFS when unchanged
 
   // Tower info panel state (exposed to template)
   selectedTowerInfo: PlacedTower | null = null;
@@ -111,6 +114,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Achievements unlocked at game end
   newlyUnlockedAchievements: string[] = [];
+  achievementDetails: Achievement[] = [];
 
   // Guard: prevents recordGameEnd from firing more than once per game
   private gameEndRecorded = false;
@@ -118,8 +122,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Wave preview — shown during SETUP and INTERMISSION
   wavePreview: WavePreviewEntry[] = [];
   showAllRanges = false;
+  showPathOverlay = false;
   sellConfirmPending = false;
+  targetingModeLabels = TARGETING_MODE_LABELS;
   showHelpOverlay = false;
+  pathBlocked = false;
+  private pathBlockedTimerId: ReturnType<typeof setTimeout> | null = null;
   private rangeRingMeshes: THREE.Mesh[] = [];
 
   // Animation
@@ -153,6 +161,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return [0, 1, 2].map(i => (i < stars ? 'filled' : 'empty')) as Array<'filled' | 'empty'>;
   }
 
+  /** Resolves newly unlocked achievement IDs to their name/description for display. */
+  private updateAchievementDetails(): void {
+    this.achievementDetails = this.newlyUnlockedAchievements
+      .map(id => ACHIEVEMENTS.find(a => a.id === id))
+      .filter((a): a is Achievement => a != null);
+  }
+
   // FPS exposed to template
   get fps(): number { return this.fpsCounterService.getFps(); }
 
@@ -181,7 +196,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private playerProfileService: PlayerProfileService,
     private damagePopupService: DamagePopupService,
     private minimapService: MinimapService,
-    private settingsService: SettingsService
+    private settingsService: SettingsService,
+    private towerPreviewService: TowerPreviewService,
+    private pathVisualizationService: PathVisualizationService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -363,10 +380,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Restore tile to BASE
     this.gameBoardService.removeTower(this.selectedTowerInfo.row, this.selectedTowerInfo.col);
 
-    // Clear path cache since board changed
+    // Clear path cache and BFS preview cache since board changed
     this.enemyService.clearPathCache();
+    this.lastPreviewKey = '';
+    this.refreshPathOverlay();
 
     this.deselectTower();
+  }
+
+  cycleTargeting(): void {
+    if (!this.selectedTowerInfo) return;
+    this.towerCombatService.cycleTargetingMode(this.selectedTowerInfo.id);
   }
 
   deselectTower(): void {
@@ -442,10 +466,27 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   goToEditor(): void {
-    if (this.gameState.phase === GamePhase.COMBAT && !confirm('Leave the game? Progress will be lost.')) {
-      return;
+    if (this.gameState.phase === GamePhase.COMBAT) {
+      const wasPaused = this.isPaused;
+      if (!wasPaused) this.togglePause();
+      if (!confirm('Leave the game? Progress will be lost.')) {
+        if (!wasPaused) this.togglePause();
+        return;
+      }
     }
     this.router.navigate(['/edit']);
+  }
+
+  goHome(): void {
+    if (this.gameState.phase === GamePhase.COMBAT) {
+      const wasPaused = this.isPaused;
+      if (!wasPaused) this.togglePause();
+      if (!confirm('Leave the game? Progress will be lost.')) {
+        if (!wasPaused) this.togglePause();
+        return;
+      }
+    }
+    this.router.navigate(['/']);
   }
 
   startWave(): void {
@@ -465,16 +506,25 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.cleanupGameObjects();
 
-    // Reset services
+    // Reset services — enemyService.reset() clears counter + path cache
+    this.enemyService.reset(this.scene);
     this.waveService.reset();
     this.gameStateService.reset();
     this.gameStatsService.reset();
     this.scoreBreakdown = null;
     this.newlyUnlockedAchievements = [];
+    this.achievementDetails = [];
     this.gameEndRecorded = false;
     this.wavePreview = [];
     this.defeatSoundPlayed = false;
     this.victorySoundPlayed = false;
+    this.showHelpOverlay = false;
+    this.showPathOverlay = false;
+    this.pathBlocked = false;
+    if (this.pathBlockedTimerId !== null) {
+      clearTimeout(this.pathBlockedTimerId);
+      this.pathBlockedTimerId = null;
+    }
 
     if (this.mapBridge.hasEditorMap()) {
       const state = this.mapBridge.getEditorMapState()!;
@@ -489,7 +539,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.renderGameBoard();
     this.addGridLines();
-    this.enemyService.clearPathCache();
+    this.lastPreviewKey = '';
     this.lastTime = 0;
     this.elapsedTimeAccumulator = 0;
   }
@@ -505,11 +555,19 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Clean up tower combat state (projectiles)
     this.towerCombatService.cleanup(this.scene);
 
+    // Clean up tower placement preview
+    this.towerPreviewService.cleanup(this.scene);
+
     // Clean up damage popups
     this.damagePopupService.cleanup(this.scene);
 
     // Clean up minimap
     this.minimapService.cleanup();
+
+    // Clean up path overlay
+    this.pathVisualizationService.hidePath(this.scene);
+    this.pathVisualizationService.cleanup();
+    this.showPathOverlay = false;
 
     // Clean up range preview and range toggle rings
     this.removeRangePreview();
@@ -877,9 +935,29 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           material.emissiveIntensity = TILE_EMISSIVE.hover;
           canvas.style.cursor = 'pointer';
         }
+
+        // Tower placement preview — show ghost tower + range ring on hovered tile
+        const row = mesh.userData['row'];
+        const col = mesh.userData['col'];
+        const phase = this.gameStateService.getState().phase;
+        const isTerminal = phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT;
+        if (!isTerminal && !this.selectedTowerInfo) {
+          const previewKey = `${row}-${col}-${this.selectedTowerType}-${this.gameState.gold}`;
+          if (previewKey !== this.lastPreviewKey) {
+            this.lastPreviewKey = previewKey;
+            const canPlace = this.gameBoardService.canPlaceTower(row, col)
+              && this.gameStateService.canAfford(TOWER_CONFIGS[this.selectedTowerType].cost);
+            this.towerPreviewService.showPreview(this.selectedTowerType, row, col, canPlace, this.scene);
+          }
+        } else {
+          this.lastPreviewKey = '';
+          this.towerPreviewService.hidePreview(this.scene);
+        }
       } else {
         this.hoveredTile = null;
         canvas.style.cursor = 'default';
+        this.lastPreviewKey = '';
+        this.towerPreviewService.hidePreview(this.scene);
       }
     };
 
@@ -1096,11 +1174,32 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  private static readonly PATH_BLOCKED_DISMISS_MS = 2000;
+
+  private showPathBlockedWarning(): void {
+    this.pathBlocked = true;
+    if (this.pathBlockedTimerId !== null) {
+      clearTimeout(this.pathBlockedTimerId);
+    }
+    this.pathBlockedTimerId = setTimeout(() => {
+      this.pathBlocked = false;
+      this.pathBlockedTimerId = null;
+    }, GameBoardComponent.PATH_BLOCKED_DISMISS_MS);
+  }
+
   private tryPlaceTower(row: number, col: number): void {
     const phase = this.gameStateService.getState().phase;
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
 
-    if (!this.gameBoardService.canPlaceTower(row, col)) return;
+    if (!this.gameBoardService.canPlaceTower(row, col)) {
+      // Check specifically if this was a path-blocking rejection
+      const tile = this.gameBoardService.getGameBoard()[row]?.[col];
+      if (tile && tile.type === BlockType.BASE && tile.isPurchasable && tile.towerType === null) {
+        // Tile is otherwise valid — blocked due to path check
+        this.showPathBlockedWarning();
+      }
+      return;
+    }
 
     const towerStats = TOWER_CONFIGS[this.selectedTowerType];
 
@@ -1122,8 +1221,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.audioService.playTowerPlace();
       this.gameStatsService.recordTowerBuilt();
 
+      // Hide preview and invalidate BFS cache — board layout changed
+      this.lastPreviewKey = '';
+      this.towerPreviewService.hidePreview(this.scene);
+
       // Clear enemy path cache since board layout changed
       this.enemyService.clearPathCache();
+      this.refreshPathOverlay();
     }
   }
 
@@ -1145,6 +1249,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   get isPaused(): boolean {
     return this.gameState.isPaused;
+  }
+
+  toggleEndless(): void {
+    if (this.gameState.phase !== GamePhase.SETUP) return;
+    const newValue = !this.gameState.isEndless;
+    this.gameStateService.setEndlessMode(newValue);
+    this.waveService.setEndlessMode(newValue);
   }
 
   get gameSpeed(): number {
@@ -1200,6 +1311,26 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  togglePathOverlay(): void {
+    this.showPathOverlay = !this.showPathOverlay;
+
+    if (this.showPathOverlay) {
+      this.refreshPathOverlay();
+    } else {
+      this.pathVisualizationService.hidePath(this.scene);
+    }
+  }
+
+  private refreshPathOverlay(): void {
+    if (!this.showPathOverlay) return;
+    const worldPath = this.enemyService.getPathToExit();
+    if (worldPath.length > 0) {
+      this.pathVisualizationService.showPath(worldPath, this.scene);
+    } else {
+      this.pathVisualizationService.hidePath(this.scene);
+    }
+  }
+
   private handleKeyboard(event: KeyboardEvent): void {
     const phase = this.gameStateService.getState().phase;
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
@@ -1247,6 +1378,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         event.preventDefault();
         this.minimapService.toggleVisibility();
         break;
+      case 'v':
+      case 'V':
+        // V key toggles path overlay
+        event.preventDefault();
+        this.togglePathOverlay();
+        break;
     }
   }
 
@@ -1291,6 +1428,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const rawDelta = this.lastTime === 0 ? 0 : (time - this.lastTime) / 1000;
     const deltaTime = Math.min(rawDelta, 0.1); // Cap at 100ms to prevent tab-switch physics burst
     this.lastTime = time;
+
+    // Reset per-frame SFX counters so throttle limits apply per animation frame
+    this.audioService.resetFrameCounters();
 
     // FPS tracking
     this.fpsCounterService.tick(time);
@@ -1344,8 +1484,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         }
 
         // Collect gold from tower kills and remove dead enemies
-        for (const enemyId of killedByTowers) {
-          const enemy = this.enemyService.getEnemies().get(enemyId);
+        for (const killInfo of killedByTowers) {
+          const enemy = this.enemyService.getEnemies().get(killInfo.id);
           if (enemy) {
             this.gameStateService.addGold(enemy.value);
             this.gameStatsService.recordGoldEarned(enemy.value);
@@ -1356,9 +1496,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             const enemyColor = ENEMY_STATS[enemy.type]?.color ?? 0xff0000;
             this.particleService.spawnDeathBurst(enemy.position, enemyColor);
             this.goldPopupService.spawn(enemy.value, enemy.position, this.scene);
-            this.damagePopupService.spawn(enemy.maxHealth, enemy.position, this.scene);
+            this.damagePopupService.spawn(killInfo.damage, enemy.position, this.scene);
 
-            this.enemyService.removeEnemy(enemyId, this.scene);
+            this.enemyService.removeEnemy(killInfo.id, this.scene);
           }
         }
 
@@ -1413,6 +1553,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
             };
             this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
+            this.updateAchievementDetails();
           }
         }
 
@@ -1431,6 +1572,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
           };
           this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
+          this.updateAchievementDetails();
         }
 
         // Update minimap
@@ -1479,6 +1621,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     cancelAnimationFrame(this.animationFrameId);
+
+    if (this.pathBlockedTimerId !== null) {
+      clearTimeout(this.pathBlockedTimerId);
+      this.pathBlockedTimerId = null;
+    }
 
     if (this.stateSubscription) {
       this.stateSubscription.unsubscribe();

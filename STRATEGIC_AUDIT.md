@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Stack:** Angular 15 + Three.js | 579/579 tests passing | Karma + headless Chrome
+**Stack:** Angular 15 + Three.js | 1332/1332 tests passing | Karma + headless Chrome
 **Two systems:** Map Editor (`/edit`) + Tower Defense Game (`/play`), lazy-loaded
 **Core loop:** 3 tower types, 5 enemy types, 10 waves, economy, upgrade/sell, A* pathfinding, victory/defeat
 **Visuals:** Bloom, vignette, skybox, particles, custom tower meshes, health bars
@@ -19,8 +19,8 @@ The game. The core TD loop is ~90% complete — you can place towers, fight 10 w
 - `feat/velocity-full-sweep`, `feat/velocity-gameplay-loop`, `feat/velocity-play-loop`, `feat/velocity-tech-debt`, `feat/velocity-tower-upgrades`
 - 8 remote `claude/*` experiment branches (dead)
 
-**One real bug:**
-- `novarise.component.ngOnDestroy()` never calls `terrainGrid.dispose()` — leaks 625 meshes on every `/edit` → `/play` navigation.
+**Resolved bugs:**
+- ~~`novarise.component.ngOnDestroy()` never calls `terrainGrid.dispose()`~~ — already fixed (line 1820).
 
 ---
 
@@ -306,11 +306,62 @@ S0A (Cleanup) → S0B (Constants Foundation)
                                     S9 (Infrastructure)
 ```
 
+**"Product foundations" milestone:** After feat/product-foundations (S3+S4+S8 subset)
 **"Repo aligned with tooling" milestone:** After S0A + S0B
 **"Magic number debt cleared" milestone:** After S0C + S0D
 **"Playable demo" milestone:** After S1 + S2 + S3
 **"Show someone" milestone:** After S4
 **"Ship it" milestone:** After S7 + S9
+
+---
+
+## Completed: Product Foundations (feat/product-foundations) — 2026-03-06
+
+### What shipped
+Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundamentals:
+
+| Feature | Sprint Origin | Status |
+|---------|--------------|--------|
+| Pause/resume (P key + overlay) | S3 | Done |
+| Difficulty selector (Easy/Normal/Hard/Nightmare) | S4 | Done |
+| Endless mode (procedural waves past wave 10) | S4 | Done |
+| Achievement system (8 achievements + unlock tracking) | S8 | Done |
+| Player profile page (`/profile`) | S8 | Done |
+| Map select screen (`/maps`) with edit/delete | S4 | Done |
+| Landing page with nav to all features | — | Done |
+| Map template selector in editor | S6 | Done |
+| Route guard on `/play` (requires map or quickplay param) | — | Done |
+| Settings persistence (difficulty, speed) | S8 | Done |
+| Game navigation (Home/Edit buttons with pause-before-confirm) | — | Done |
+
+### Red-Team Findings (5 parallel agents, 2026-03-06)
+
+**FIXED (HIGH/MEDIUM):**
+1. `achievementDetails` was a getter recomputing every CD cycle — changed to pre-computed field with explicit `updateAchievementDetails()` call
+2. `goHome()`/`goToEditor()` showed `confirm()` without pausing — enemies leak during synchronous dialog. Now pauses first, resumes if cancelled
+3. Preview cache key omitted gold — stale BFS result after spending gold. Added gold to cache key
+4. `'quickplay'` string duplicated in 3 files — consolidated to `QUICK_PLAY_PARAM` constant from game guard
+5. Map select `loadMap()` null return left stale cards in UI — now filters out missing maps
+6. Profile loaded data in constructor — moved to `ngOnInit` for fresh data on each navigation
+
+**ACCEPTED (LOW — deferred):**
+- Some CSS magic numbers in new SCSS files (spacing, font sizes) — extract when touching those files next
+- `CanActivate` interface deprecated in Angular 15.2+ — defer to Angular upgrade sprint (S9)
+- Game version string not externalized — low priority, defer to S9
+
+### Test delta
+- Before: 579 tests
+- After: 1332 tests (+753)
+- All passing, zero flakes
+
+### Sprint items now partially complete
+
+| Sprint | Items Done | Items Remaining |
+|--------|-----------|----------------|
+| S3: Player Control | Pause/resume | Speed controls, fast-forward, restart wave, camera pan |
+| S4: Replayability | Difficulty modes, endless mode, map select | Star rating, score breakdown, leaderboard |
+| S6: Editor Pro | Map templates | Symmetry tools, copy/paste, undo browser, sharing, thumbnails |
+| S8: Progression | Profile, achievements, settings | Unlock system, campaign mode |
 
 ### Sprint 0C and 0D: Parallel or Sequential?
 

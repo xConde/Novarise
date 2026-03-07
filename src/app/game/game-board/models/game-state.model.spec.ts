@@ -80,8 +80,8 @@ describe('game-state.model', () => {
     });
 
     describe('Nightmare preset', () => {
-      it('should have 5 lives', () => {
-        expect(DIFFICULTY_PRESETS[DifficultyLevel.NIGHTMARE].lives).toBe(5);
+      it('should have 7 lives', () => {
+        expect(DIFFICULTY_PRESETS[DifficultyLevel.NIGHTMARE].lives).toBe(7);
       });
 
       it('should have 50 gold', () => {

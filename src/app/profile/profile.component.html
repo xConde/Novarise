@@ -1,0 +1,65 @@
+<div class="profile-container">
+  <div class="profile-content">
+    <h1 class="profile-title">PROFILE</h1>
+
+    <p class="first-time-hint" *ngIf="profile.totalGamesPlayed === 0">
+      Play your first game to start tracking stats!
+    </p>
+
+    <section class="stats-section">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-label">Games Played</span>
+          <span class="stat-value">{{ profile.totalGamesPlayed }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Victories</span>
+          <span class="stat-value stat-value--victory">{{ profile.totalVictories }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Defeats</span>
+          <span class="stat-value stat-value--defeat">{{ profile.totalDefeats }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Win Rate</span>
+          <span class="stat-value">{{ winRate }}%</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Enemies Killed</span>
+          <span class="stat-value">{{ profile.totalEnemiesKilled }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Gold Earned</span>
+          <span class="stat-value stat-value--gold">{{ profile.totalGoldEarned }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Highest Wave</span>
+          <span class="stat-value">{{ profile.highestWaveReached }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Highest Score</span>
+          <span class="stat-value">{{ profile.highestScore }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="achievements-section">
+      <h2 class="achievements-title">Achievements <span class="achievements-count">{{ unlockedCount }} / {{ allAchievements.length }} Unlocked</span></h2>
+      <div class="achievements-grid">
+        <div
+          *ngFor="let achievement of allAchievements"
+          class="achievement-card"
+          [class.unlocked]="isUnlocked(achievement.id)"
+          [class.locked]="!isUnlocked(achievement.id)"
+        >
+          <span class="achievement-icon">{{ isUnlocked(achievement.id) ? '&#127942;' : '&#128274;' }}</span>
+          <span class="achievement-name">{{ achievement.name }}</span>
+          <span class="achievement-hint" *ngIf="!isUnlocked(achievement.id)">How to unlock:</span>
+          <span class="achievement-desc">{{ achievement.description }}</span>
+        </div>
+      </div>
+    </section>
+
+    <button class="back-btn" (click)="goHome()">Home</button>
+  </div>
+</div>

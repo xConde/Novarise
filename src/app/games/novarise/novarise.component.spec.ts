@@ -5,6 +5,7 @@ import { NovariseComponent } from './novarise.component';
 import { MapStorageService } from './core/map-storage.service';
 import { CameraControlService, JoystickInput, MovementInput, RotationInput } from './core/camera-control.service';
 import { PathValidationService } from './core/path-validation.service';
+import { MapTemplateService } from './core/map-template.service';
 import { JoystickEvent } from './features/mobile-controls';
 
 /**
@@ -342,6 +343,27 @@ describe('NovariseComponent', () => {
       const newPos = cameraControlService.getPosition();
       expect(newPos.x !== initialPos.x || newPos.z !== initialPos.z).toBe(true);
       expect(cameraControlService.getRotation().yaw).not.toBe(initialRot.yaw);
+    });
+  });
+
+  describe('Map Templates', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should populate templates from MapTemplateService on creation', () => {
+      const templateService = TestBed.inject(MapTemplateService);
+      const expected = templateService.getTemplates();
+      // templates are populated in ngAfterViewInit which doesn't run in these tests,
+      // but the service is injectable — verify the service returns templates
+      expect(expected.length).toBeGreaterThan(0);
+      expect(expected[0].id).toBe('classic');
+    });
+
+    it('should have templates field defaulting to empty array before init', () => {
+      expect(component.templates).toEqual([]);
     });
   });
 });

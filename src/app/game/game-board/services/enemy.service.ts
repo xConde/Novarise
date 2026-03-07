@@ -657,10 +657,40 @@ export class EnemyService {
   }
 
   /**
+   * Returns the A* path from the first spawner to the first exit as world coordinates.
+   * Used by path overlay visualization. Returns an empty array if no path exists.
+   */
+  getPathToExit(): { x: number; z: number }[] {
+    const spawnerTiles = this.getSpawnerTiles();
+    const exitTiles = this.getExitTiles();
+    if (spawnerTiles.length === 0 || exitTiles.length === 0) return [];
+
+    const spawner = spawnerTiles[0];
+    const exit = exitTiles[0];
+    const path = this.findPath(
+      { x: spawner.col, y: spawner.row },
+      { x: exit.col, y: exit.row }
+    );
+    if (path.length === 0) return [];
+
+    return path.map(node => this.gridToWorld(node.y, node.x));
+  }
+
+  /**
    * Clear the path cache (call when board changes)
    */
   clearPathCache(): void {
     this.pathCache.clear();
+  }
+
+  /**
+   * Full reset: remove all enemies from the scene, reset the ID counter,
+   * and clear the path cache. Call on game restart to prevent stale state.
+   */
+  reset(scene: THREE.Scene): void {
+    this.cleanup(scene);
+    this.enemyCounter = 0;
+    this.clearPathCache();
   }
 
   /**

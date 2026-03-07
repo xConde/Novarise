@@ -216,6 +216,34 @@ describe('AudioService', () => {
     }).not.toThrow();
   });
 
+  // --- Frame counter reset ---
+
+  it('resetFrameCounters() should not throw', () => {
+    expect(() => service.resetFrameCounters()).not.toThrow();
+  });
+
+  it('resetFrameCounters() should allow tower fires again after limit was reached', () => {
+    // Exhaust the per-frame limit
+    for (let i = 0; i < AUDIO_CONFIG.maxTowerFiresPerFrame + 5; i++) {
+      service.playTowerFire(TowerType.BASIC);
+    }
+
+    // Reset and verify we can fire again (no throw, no crash)
+    service.resetFrameCounters();
+    expect(() => service.playTowerFire(TowerType.BASIC)).not.toThrow();
+  });
+
+  it('resetFrameCounters() should allow enemy death sounds again after limit was reached', () => {
+    // Exhaust the per-frame limit
+    for (let i = 0; i < AUDIO_CONFIG.maxDeathSoundsPerFrame + 5; i++) {
+      service.playEnemyDeath();
+    }
+
+    // Reset and verify we can play death sounds again
+    service.resetFrameCounters();
+    expect(() => service.playEnemyDeath()).not.toThrow();
+  });
+
   // --- playSfx / playSequence ---
 
   it('playSfx() should not throw for an unknown key', () => {

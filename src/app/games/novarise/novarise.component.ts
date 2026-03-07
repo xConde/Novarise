@@ -38,6 +38,8 @@ import {
   EDITOR_HEIGHT,
 } from './constants/editor-ui.constants';
 import { PathValidationService, PathValidationResult } from './core/path-validation.service';
+import { MapTemplateService } from './core/map-template.service';
+import { MapTemplate } from './core/map-template.model';
 
 // Re-export types for template compatibility
 export { EditMode, BrushTool } from './core/editor-state.service';
@@ -130,6 +132,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   // Title display
   public title = 'Novarise';
 
+  // Map templates
+  public templates: MapTemplate[] = [];
+
   // Undo/Redo state - expose for UI binding
   public get canUndo(): boolean { return this.editHistory.canUndo; }
   public get canRedo(): boolean { return this.editHistory.canRedo; }
@@ -148,7 +153,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     private cameraControl: CameraControlService,
     private editorState: EditorStateService,
     private mapBridge: MapBridgeService,
-    private pathValidation: PathValidationService
+    private pathValidation: PathValidationService,
+    private mapTemplateService: MapTemplateService
   ) {
     this.keyboardHandler = this.handleKeyDown.bind(this);
     this.keyUpHandler = this.handleKeyUp.bind(this);
@@ -183,6 +189,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Initialize camera rotation to match initial camera view
     this.initializeCameraRotation();
+
+    // Load map templates for the editor UI
+    this.templates = this.mapTemplateService.getTemplates();
 
     // Try to migrate old format and load current map
     this.mapStorage.migrateOldFormat();
@@ -1174,6 +1183,19 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         }
       }
     }
+  }
+
+  public loadTemplate(templateId: string): void {
+    if (this.editHistory.canUndo && !confirm('Load template? Unsaved changes will be lost.')) return;
+    const state = this.mapTemplateService.loadTemplate(templateId);
+    if (!state) return;
+    this.terrainGrid.importState(state);
+    this.updateSpawnMarker();
+    this.updateExitMarker();
+    this.runPathValidation();
+    this.editHistory.clear();
+    this.mapStorage.clearCurrentMapId();
+    this.currentMapName = '';
   }
 
   private cycleBrushSize(direction: number): void {

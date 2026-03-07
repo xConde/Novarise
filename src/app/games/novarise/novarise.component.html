@@ -30,12 +30,14 @@
       [canPlayMap]="canPlayMap"
       [isPathValid]="isPathValid"
       [hasSpawnAndExit]="hasSpawnAndExit"
+      [templates]="templates"
       (editModeChange)="setEditMode($event)"
       (terrainTypeChange)="setTerrainType($event)"
       (brushSizeChange)="setBrushSize($event)"
       (activeToolChange)="setActiveTool($event)"
       (playMapClick)="playMap()"
-      (deleteMapClick)="deleteMap()">
+      (deleteMapClick)="deleteMap()"
+      (templateSelect)="loadTemplate($event)">
     </app-edit-controls>
   </div>
 </div>

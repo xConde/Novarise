@@ -158,6 +158,10 @@ export class MapStorageService {
     return localStorage.getItem(this.CURRENT_MAP_KEY);
   }
 
+  public clearCurrentMapId(): void {
+    localStorage.removeItem(this.CURRENT_MAP_KEY);
+  }
+
   /**
    * Load the current map
    * @returns Current map data or null

@@ -21,6 +21,15 @@
   </div>
 
   <div class="tab-content" *ngIf="activeTab === 'editor'">
+    <div class="panel-section" *ngIf="templates.length > 0">
+      <h3 class="section-title">Templates</h3>
+      <div class="template-grid">
+        <button *ngFor="let t of templates" class="template-btn" (click)="selectTemplate(t.id)" [title]="t.description">
+          {{ t.name }}
+        </button>
+      </div>
+    </div>
+
     <div class="panel-section">
       <h3 class="section-title">Mode</h3>
       <div class="mode-toggle-grid">

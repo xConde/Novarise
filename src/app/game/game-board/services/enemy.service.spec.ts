@@ -893,6 +893,39 @@ describe('EnemyService', () => {
     });
   });
 
+  describe('reset()', () => {
+    it('should reset enemy counter to 0', () => {
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+
+      service.reset(mockScene);
+
+      // Next spawned enemy should have id 'enemy-0' (counter reset)
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy!.id).toBe('enemy-0');
+    });
+
+    it('should clear all enemies from the map', () => {
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+      service.spawnEnemy(EnemyType.HEAVY, mockScene);
+
+      service.reset(mockScene);
+
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('should clear the path cache', () => {
+      spyOn(service, 'clearPathCache').and.callThrough();
+
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+
+      service.reset(mockScene);
+
+      expect(service.clearPathCache).toHaveBeenCalled();
+    });
+  });
+
   describe('Performance', () => {
     it('should handle 20+ enemies without issues', () => {
       const enemyCount = 25;
@@ -912,6 +945,57 @@ describe('EnemyService', () => {
       // Should complete in reasonable time (< 16ms for 60 FPS)
       expect(duration).toBeLessThan(100); // Allow 100ms for test overhead
       expect(service.getEnemies().size).toBe(enemyCount);
+    });
+  });
+
+  describe('getPathToExit', () => {
+    it('should return world coordinates from spawner to exit', () => {
+      const path = service.getPathToExit();
+
+      expect(path.length).toBeGreaterThan(0);
+      // First point should be near the spawner (0,0) in world coords
+      // worldX = (col - width/2) * tileSize = (0 - 5) * 1 = -5
+      // worldZ = (row - height/2) * tileSize = (0 - 5) * 1 = -5
+      expect(path[0].x).toBeCloseTo(-5);
+      expect(path[0].z).toBeCloseTo(-5);
+      // Last point should be near the exit (9,9) in world coords = (4, 4)
+      const last = path[path.length - 1];
+      expect(last.x).toBeCloseTo(4);
+      expect(last.z).toBeCloseTo(4);
+    });
+
+    it('should return empty array when no spawner tiles exist', () => {
+      // Board with no spawner
+      const board: GameBoardTile[][] = [];
+      for (let row = 0; row < 10; row++) {
+        board[row] = [];
+        for (let col = 0; col < 10; col++) {
+          board[row][col] = GameBoardTile.createBase(row, col);
+        }
+      }
+      gameBoardService.getGameBoard.and.returnValue(board);
+
+      const path = service.getPathToExit();
+      expect(path.length).toBe(0);
+    });
+
+    it('should return empty array when no exit tiles exist', () => {
+      // Board with spawner but no exit
+      const board: GameBoardTile[][] = [];
+      for (let row = 0; row < 10; row++) {
+        board[row] = [];
+        for (let col = 0; col < 10; col++) {
+          if (row === 0 && col === 0) {
+            board[row][col] = GameBoardTile.createSpawner(row, col);
+          } else {
+            board[row][col] = GameBoardTile.createBase(row, col);
+          }
+        }
+      }
+      gameBoardService.getGameBoard.and.returnValue(board);
+
+      const path = service.getPathToExit();
+      expect(path.length).toBe(0);
     });
   });
 });

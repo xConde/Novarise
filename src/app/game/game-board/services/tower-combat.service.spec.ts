@@ -1,8 +1,8 @@
 import { TestBed } from '@angular/core/testing';
-import { TowerCombatService } from './tower-combat.service';
+import { TowerCombatService, KillInfo } from './tower-combat.service';
 import { EnemyService, DamageResult } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
-import { TowerType, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats } from '../models/tower.model';
+import { TowerType, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { Enemy, EnemyType } from '../models/enemy.model';
 import { AudioService } from './audio.service';
 import * as THREE from 'three';
@@ -174,6 +174,122 @@ describe('TowerCombatService', () => {
     });
   });
 
+  // --- Targeting Modes ---
+
+  describe('targeting modes', () => {
+    it('should default to nearest targeting mode', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const tower = service.getTower(`${TOWER_ROW}-${TOWER_COL}`)!;
+      expect(tower.targetingMode).toBe(DEFAULT_TARGETING_MODE);
+      expect(tower.targetingMode).toBe('nearest');
+    });
+
+    it('should set targeting mode via setTargetingMode', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+      expect(service.setTargetingMode(key, 'first')).toBeTrue();
+      expect(service.getTower(key)!.targetingMode).toBe('first');
+
+      expect(service.setTargetingMode(key, 'strongest')).toBeTrue();
+      expect(service.getTower(key)!.targetingMode).toBe('strongest');
+    });
+
+    it('should return false for setTargetingMode on non-existent tower', () => {
+      expect(service.setTargetingMode('99-99', 'first')).toBeFalse();
+    });
+
+    it('should cycle targeting mode through all modes', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+      // Default is 'nearest' (index 0) → cycles to 'first' (index 1)
+      expect(service.cycleTargetingMode(key)).toBe('first');
+      expect(service.cycleTargetingMode(key)).toBe('strongest');
+      expect(service.cycleTargetingMode(key)).toBe('nearest'); // wraps around
+    });
+
+    it('should return null for cycleTargetingMode on non-existent tower', () => {
+      expect(service.cycleTargetingMode('99-99')).toBeNull();
+    });
+
+    it('findTarget with nearest returns closest enemy', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      // Default mode is 'nearest' — no need to set
+
+      // Close enemy
+      const close = createEnemy('close', TOWER_WORLD_X + 0.5, TOWER_WORLD_Z, 50);
+      close.distanceTraveled = 0;
+      // Far enemy (but within range=3)
+      const far = createEnemy('far', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 200);
+      far.distanceTraveled = 10;
+      enemyMap.set('close', close);
+      enemyMap.set('far', far);
+
+      service.update(2.0, mockScene);
+
+      // Nearest (close) should be targeted — takes damage first
+      expect(close.health).toBeLessThan(50);
+      expect(far.health).toBe(200);
+    });
+
+    it('findTarget with first returns enemy furthest along path', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.setTargetingMode(key, 'first');
+
+      // Close enemy but early in path
+      const close = createEnemy('close', TOWER_WORLD_X + 0.5, TOWER_WORLD_Z, 1000);
+      close.distanceTraveled = 2;
+      // Farther enemy but further along path
+      const far = createEnemy('far', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 1000);
+      far.distanceTraveled = 10;
+      enemyMap.set('close', close);
+      enemyMap.set('far', far);
+
+      service.update(2.0, mockScene);
+
+      // 'first' mode targets the enemy closest to exit (highest distanceTraveled)
+      // far enemy should be targeted — projectile at tower position travels toward far
+      expect(far.health).toBeLessThan(1000);
+      expect(close.health).toBe(1000);
+    });
+
+    it('findTarget with strongest returns enemy with highest health', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.setTargetingMode(key, 'strongest');
+
+      // Weak enemy right at tower
+      const weak = createEnemy('weak', TOWER_WORLD_X, TOWER_WORLD_Z, 50);
+      weak.distanceTraveled = 5;
+      // Strong enemy nearby (within range=3)
+      const strong = createEnemy('strong', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 500);
+      strong.distanceTraveled = 1;
+      enemyMap.set('weak', weak);
+      enemyMap.set('strong', strong);
+
+      service.update(2.0, mockScene);
+
+      // 'strongest' mode targets the enemy with highest current health
+      // strong (500hp) should be targeted, weak (50hp) should not
+      expect(strong.health).toBeLessThan(500);
+      expect(weak.health).toBe(50);
+    });
+
+    it('should preserve targeting mode across upgrade', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+      service.setTargetingMode(key, 'strongest');
+      expect(service.getTower(key)!.targetingMode).toBe('strongest');
+
+      const upgraded = service.upgradeTower(key);
+      expect(upgraded).toBeTrue();
+      expect(service.getTower(key)!.targetingMode).toBe('strongest');
+    });
+  });
+
   // --- Fire Rate ---
 
   describe('fire rate', () => {
@@ -230,7 +346,20 @@ describe('TowerCombatService', () => {
 
       // First update: tower fires AND projectile hits (dist=0) → kill
       const result = service.update(0.016, mockScene);
-      expect(result.killed).toContain('e1');
+      expect(result.killed.map((k: KillInfo) => k.id)).toContain('e1');
+    });
+
+    it('should include the damage dealt in KillInfo', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy with exactly lethal health
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 25);
+      enemyMap.set('e1', enemy);
+
+      const result = service.update(0.016, mockScene);
+      const kill = result.killed.find((k: KillInfo) => k.id === 'e1');
+      expect(kill).toBeDefined();
+      expect(kill!.damage).toBe(TOWER_CONFIGS[TowerType.BASIC].damage);
     });
 
     it('should not report kill for surviving enemy', () => {
@@ -240,7 +369,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e1', enemy);
 
       const result = service.update(0.016, mockScene);
-      expect(result.killed).not.toContain('e1');
+      expect(result.killed.map((k: KillInfo) => k.id)).not.toContain('e1');
     });
   });
 
@@ -441,7 +570,7 @@ describe('TowerCombatService', () => {
       const result = service.update(0.016, mockScene);
 
       // Should only report the kill once (second projectile sees health <= 0)
-      const e1Kills = result.killed.filter((id: string) => id === 'e1');
+      const e1Kills = result.killed.filter((k: KillInfo) => k.id === 'e1');
       expect(e1Kills.length).toBe(1);
     });
   });
@@ -684,8 +813,9 @@ describe('TowerCombatService', () => {
       enemyMap.set('e2', e2);
 
       const result = service.update(1.0, mockScene);
-      expect(result.killed).toContain('e1');
-      expect(result.killed).toContain('e2');
+      const killedIds = result.killed.map((k: KillInfo) => k.id);
+      expect(killedIds).toContain('e1');
+      expect(killedIds).toContain('e2');
     });
   });
 

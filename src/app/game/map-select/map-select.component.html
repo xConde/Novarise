@@ -1,17 +1,40 @@
 <div class="map-select-container">
   <h1 class="map-select-title">Select Map</h1>
 
-  <div class="map-grid" *ngIf="maps.length > 0">
-    <button class="map-card" *ngFor="let map of maps" (click)="selectMap(map)">
-      <span class="map-name">{{ map.name }}</span>
-      <span class="map-date">{{ map.updatedAt | date:'short' }}</span>
+  <div class="map-grid">
+    <button class="map-card quick-play-card" (click)="quickPlay()">
+      <span class="quick-play-icon">&#9654;</span>
+      <span class="map-name">Quick Play</span>
+      <span class="map-meta">Random default map</span>
     </button>
+
+    <div class="map-card" *ngFor="let map of maps" (click)="selectMap(map)">
+      <div class="card-actions">
+        <button
+          class="card-action-btn edit-btn"
+          title="Edit map"
+          (click)="editMap(map, $event)">
+          &#9998;
+        </button>
+        <button
+          class="card-action-btn delete-btn"
+          [class.confirm]="deleteConfirmId === map.id"
+          [title]="deleteConfirmId === map.id ? 'Click again to confirm' : 'Delete map'"
+          [attr.aria-label]="deleteConfirmId === map.id ? 'Confirm delete ' + map.name : 'Delete ' + map.name"
+          (click)="deleteMap(map.id, $event)">
+          {{ deleteConfirmId === map.id ? '?' : '&#10005;' }}
+        </button>
+      </div>
+      <span class="map-name">{{ map.name }}</span>
+      <span class="map-meta">{{ map.gridSize }} &times; {{ map.gridSize }}</span>
+      <span class="map-date">{{ map.updatedAt | date:'short' }}</span>
+    </div>
   </div>
 
   <div class="no-maps" *ngIf="maps.length === 0">
-    <p>No maps saved yet.</p>
-    <button class="create-map-btn" (click)="goToEditor()">Create a Map</button>
+    <p>No maps saved yet. Create one in the editor or hit Quick Play.</p>
+    <button class="action-btn create-btn" (click)="goToEditor()">Create Your First Map</button>
   </div>
 
-  <button class="back-btn" (click)="goToEditor()">Back to Editor</button>
+  <button class="back-btn" (click)="goHome()">Home</button>
 </div>
