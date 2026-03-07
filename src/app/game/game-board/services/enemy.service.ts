@@ -4,6 +4,7 @@ import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_MESH_SEG
 import { GameBoardService } from '../game-board.service';
 import { BlockType } from '../models/game-board-tile';
 import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
+import { MinHeap } from '../utils/min-heap';
 
 export interface DamageResult {
   killed: boolean;
@@ -474,8 +475,9 @@ export class EnemyService {
       return [...this.pathCache.get(cacheKey)!];
     }
 
-    const openSet: GridNode[] = [];
-    const closedSet: Set<string> = new Set();
+    const openHeap = new MinHeap();
+    const openMap = new Map<string, GridNode>(); // key -> best node for O(1) lookup
+    const closedSet = new Set<string>();
     const boardWidth = this.gameBoardService.getBoardWidth();
     const boardHeight = this.gameBoardService.getBoardHeight();
 
@@ -488,18 +490,20 @@ export class EnemyService {
       f: 0
     };
     startNode.f = startNode.g + startNode.h;
-    openSet.push(startNode);
 
-    while (openSet.length > 0) {
-      // Find node with lowest f cost
-      let currentIndex = 0;
-      for (let i = 1; i < openSet.length; i++) {
-        if (openSet[i].f < openSet[currentIndex].f) {
-          currentIndex = i;
-        }
+    const startKey = `${start.x},${start.y}`;
+    openHeap.insert(startNode);
+    openMap.set(startKey, startNode);
+
+    while (openHeap.size > 0) {
+      const current = openHeap.extractMin()!;
+      const currentKey = `${current.x},${current.y}`;
+
+      // Skip stale heap entries (superseded by a better path via re-insertion)
+      if (!openMap.has(currentKey) || openMap.get(currentKey) !== current) {
+        continue;
       }
-
-      const current = openSet[currentIndex];
+      openMap.delete(currentKey);
 
       // Check if we reached the goal
       if (current.x === end.x && current.y === end.y) {
@@ -508,9 +512,7 @@ export class EnemyService {
         return path;
       }
 
-      // Move current from open to closed
-      openSet.splice(currentIndex, 1);
-      closedSet.add(`${current.x},${current.y}`);
+      closedSet.add(currentKey);
 
       // Check all neighbors (4-directional)
       const neighbors = [
@@ -527,8 +529,9 @@ export class EnemyService {
           continue;
         }
 
-        // Check if already evaluated
         const neighborKey = `${neighbor.x},${neighbor.y}`;
+
+        // Check if already evaluated
         if (closedSet.has(neighborKey)) {
           continue;
         }
@@ -541,28 +544,26 @@ export class EnemyService {
 
         // Calculate costs
         const gScore = current.g + 1;
-        const hScore = this.heuristic(neighbor, end);
-        const fScore = gScore + hScore;
+        const existingNode = openMap.get(neighborKey);
 
-        // Check if this path to neighbor is better
-        const existingNode = openSet.find(n => n.x === neighbor.x && n.y === neighbor.y);
-        if (existingNode) {
-          if (gScore < existingNode.g) {
-            existingNode.g = gScore;
-            existingNode.h = hScore;
-            existingNode.f = fScore;
-            existingNode.parent = current;
-          }
-        } else {
-          openSet.push({
-            x: neighbor.x,
-            y: neighbor.y,
-            g: gScore,
-            h: hScore,
-            f: fScore,
-            parent: current
-          });
+        // Skip if existing path to this neighbor is already better
+        if (existingNode && gScore >= existingNode.g) {
+          continue;
         }
+
+        const hScore = this.heuristic(neighbor, end);
+        const newNode: GridNode = {
+          x: neighbor.x,
+          y: neighbor.y,
+          g: gScore,
+          h: hScore,
+          f: gScore + hScore,
+          parent: current
+        };
+
+        // Insert new entry; stale entries for this key are skipped on extraction
+        openMap.set(neighborKey, newNode);
+        openHeap.insert(newNode);
       }
     }
 
