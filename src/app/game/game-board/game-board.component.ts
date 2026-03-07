@@ -36,6 +36,7 @@ import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants
 import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG } from './constants/touch.constants';
+import { PHYSICS_CONFIG } from './constants/physics.constants';
 import { ENEMY_STATS } from './models/enemy.model';
 import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
@@ -133,6 +134,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Animation
   private lastTime = 0;
   private elapsedTimeAccumulator = 0;
+  private physicsAccumulator = 0;
   private defeatSoundPlayed = false;
   private victorySoundPlayed = false;
   private keyboardHandler: (event: KeyboardEvent) => void;
@@ -542,6 +544,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.lastPreviewKey = '';
     this.lastTime = 0;
     this.elapsedTimeAccumulator = 0;
+    this.physicsAccumulator = 0;
   }
 
 
@@ -1426,7 +1429,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.animationFrameId = requestAnimationFrame(this.animate);
 
     const rawDelta = this.lastTime === 0 ? 0 : (time - this.lastTime) / 1000;
-    const deltaTime = Math.min(rawDelta, 0.1); // Cap at 100ms to prevent tab-switch physics burst
+    const deltaTime = Math.min(rawDelta, PHYSICS_CONFIG.maxDeltaTime);
     this.lastTime = time;
 
     // Reset per-frame SFX counters so throttle limits apply per animation frame
@@ -1453,99 +1456,119 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.particles.rotation.y += PARTICLE_CONFIG.rotationSpeed;
     }
 
-    // Gameplay tick
+    // Gameplay tick — fixed timestep accumulator
     if (deltaTime > 0) {
       const state = this.gameStateService.getState();
 
       if (state.phase === GamePhase.COMBAT && !state.isPaused) {
-        const scaledDelta = deltaTime * state.gameSpeed;
+        this.physicsAccumulator += deltaTime * state.gameSpeed;
+        let stepCount = 0;
 
-        // Elapsed time tracking — accumulate locally, flush to service every ~1 second
+        // Elapsed time tracking — accumulate real (unscaled) time, flush every ~1 second
         this.elapsedTimeAccumulator += deltaTime;
         if (this.elapsedTimeAccumulator >= 1) {
           this.gameStateService.addElapsedTime(this.elapsedTimeAccumulator);
           this.elapsedTimeAccumulator = 0;
         }
 
-        // Wave spawning
-        this.waveService.update(scaledDelta, this.scene);
+        while (this.physicsAccumulator >= PHYSICS_CONFIG.fixedTimestep &&
+               stepCount < PHYSICS_CONFIG.maxStepsPerFrame) {
 
-        // Tower combat — returns IDs of enemies killed, tower types that fired, and hit count
-        const { killed: killedByTowers, fired: firedTowerTypes, hitCount } = this.towerCombatService.update(scaledDelta, this.scene);
+          // Wave spawning
+          this.waveService.update(PHYSICS_CONFIG.fixedTimestep, this.scene);
 
-        // Play tower fire sounds
-        for (const towerType of firedTowerTypes) {
-          this.audioService.playTowerFire(towerType);
-        }
+          // Tower combat — returns IDs of enemies killed, tower types that fired, and hit count
+          const { killed: killedByTowers, fired: firedTowerTypes, hitCount } = this.towerCombatService.update(PHYSICS_CONFIG.fixedTimestep, this.scene);
 
-        // Play enemy hit sound (throttled inside AudioService)
-        if (hitCount > 0) {
-          this.audioService.playEnemyHit();
-        }
-
-        // Collect gold from tower kills and remove dead enemies
-        for (const killInfo of killedByTowers) {
-          const enemy = this.enemyService.getEnemies().get(killInfo.id);
-          if (enemy) {
-            this.gameStateService.addGold(enemy.value);
-            this.gameStatsService.recordGoldEarned(enemy.value);
-            this.audioService.playGoldEarned();
-            this.audioService.playEnemyDeath();
-
-            // Visual effects on kill
-            const enemyColor = ENEMY_STATS[enemy.type]?.color ?? 0xff0000;
-            this.particleService.spawnDeathBurst(enemy.position, enemyColor);
-            this.goldPopupService.spawn(enemy.value, enemy.position, this.scene);
-            this.damagePopupService.spawn(killInfo.damage, enemy.position, this.scene);
-
-            this.enemyService.removeEnemy(killInfo.id, this.scene);
-          }
-        }
-
-        // Move enemies along paths
-        const reachedExit = this.enemyService.updateEnemies(scaledDelta);
-
-        // Enemies reaching the exit cost lives
-        for (const enemyId of reachedExit) {
-          this.gameStateService.loseLife(1);
-          this.gameStatsService.recordEnemyLeaked();
-          this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
-          this.enemyService.removeEnemy(enemyId, this.scene);
-        }
-
-        // Update health bars
-        this.enemyService.updateHealthBars();
-
-        // Check wave completion: no spawning and no enemies alive
-        // Re-read phase — loseLife() above may have set DEFEAT mid-frame
-        const currentPhase = this.gameStateService.getState().phase;
-        if (currentPhase === GamePhase.DEFEAT && !this.defeatSoundPlayed) {
-          this.defeatSoundPlayed = true;
-          this.audioService.playDefeat();
-        }
-        if (currentPhase === GamePhase.COMBAT &&
-            !this.waveService.isSpawning() &&
-            this.enemyService.getEnemies().size === 0) {
-          const reward = this.waveService.getWaveReward(state.wave);
-          this.gameStateService.completeWave(reward);
-          // Check if completeWave triggered VICTORY
-          const postWavePhase = this.gameStateService.getState().phase;
-          if (postWavePhase === GamePhase.VICTORY && !this.victorySoundPlayed) {
-            this.victorySoundPlayed = true;
-            this.audioService.playVictory();
-          } else if (postWavePhase === GamePhase.INTERMISSION) {
-            this.audioService.playWaveClear();
-            this.gameStateService.awardInterest();
+          // Play tower fire sounds
+          for (const towerType of firedTowerTypes) {
+            this.audioService.playTowerFire(towerType);
           }
 
-          // Record game end stats for profile (VICTORY or DEFEAT, fires once per game)
-          if ((postWavePhase === GamePhase.VICTORY || postWavePhase === GamePhase.DEFEAT) && !this.gameEndRecorded) {
+          // Play enemy hit sound (throttled inside AudioService)
+          if (hitCount > 0) {
+            this.audioService.playEnemyHit();
+          }
+
+          // Collect gold from tower kills and remove dead enemies
+          for (const killInfo of killedByTowers) {
+            const enemy = this.enemyService.getEnemies().get(killInfo.id);
+            if (enemy) {
+              this.gameStateService.addGold(enemy.value);
+              this.gameStatsService.recordGoldEarned(enemy.value);
+              this.audioService.playGoldEarned();
+              this.audioService.playEnemyDeath();
+
+              // Visual effects on kill
+              const enemyColor = ENEMY_STATS[enemy.type]?.color ?? 0xff0000;
+              this.particleService.spawnDeathBurst(enemy.position, enemyColor);
+              this.goldPopupService.spawn(enemy.value, enemy.position, this.scene);
+              this.damagePopupService.spawn(killInfo.damage, enemy.position, this.scene);
+
+              this.enemyService.removeEnemy(killInfo.id, this.scene);
+            }
+          }
+
+          // Move enemies along paths
+          const reachedExit = this.enemyService.updateEnemies(PHYSICS_CONFIG.fixedTimestep);
+
+          // Enemies reaching the exit cost lives
+          for (const enemyId of reachedExit) {
+            this.gameStateService.loseLife(1);
+            this.gameStatsService.recordEnemyLeaked();
+            this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
+            this.enemyService.removeEnemy(enemyId, this.scene);
+          }
+
+          // Check wave completion: no spawning and no enemies alive
+          // Re-read phase — loseLife() above may have set DEFEAT mid-frame
+          const currentPhase = this.gameStateService.getState().phase;
+          if (currentPhase === GamePhase.DEFEAT && !this.defeatSoundPlayed) {
+            this.defeatSoundPlayed = true;
+            this.audioService.playDefeat();
+          }
+          if (currentPhase === GamePhase.COMBAT &&
+              !this.waveService.isSpawning() &&
+              this.enemyService.getEnemies().size === 0) {
+            const reward = this.waveService.getWaveReward(state.wave);
+            this.gameStateService.completeWave(reward);
+            // Check if completeWave triggered VICTORY
+            const postWavePhase = this.gameStateService.getState().phase;
+            if (postWavePhase === GamePhase.VICTORY && !this.victorySoundPlayed) {
+              this.victorySoundPlayed = true;
+              this.audioService.playVictory();
+            } else if (postWavePhase === GamePhase.INTERMISSION) {
+              this.audioService.playWaveClear();
+              this.gameStateService.awardInterest();
+            }
+
+            // Record game end stats for profile (VICTORY or DEFEAT, fires once per game)
+            if ((postWavePhase === GamePhase.VICTORY || postWavePhase === GamePhase.DEFEAT) && !this.gameEndRecorded) {
+              this.gameEndRecorded = true;
+              const endState = this.gameStateService.getState();
+              const stats = this.gameStatsService.getStats();
+              const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
+              const gameEndStats: GameEndStats = {
+                isVictory: postWavePhase === GamePhase.VICTORY,
+                score: endState.score,
+                enemiesKilled: totalKills,
+                goldEarned: stats.totalGoldEarned,
+                wavesCompleted: endState.wave,
+                livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
+              };
+              this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
+              this.updateAchievementDetails();
+            }
+          }
+
+          // DEFEAT mid-frame (from loseLife) — record game end if not yet done
+          if (currentPhase === GamePhase.DEFEAT && !this.gameEndRecorded) {
             this.gameEndRecorded = true;
             const endState = this.gameStateService.getState();
             const stats = this.gameStatsService.getStats();
             const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
             const gameEndStats: GameEndStats = {
-              isVictory: postWavePhase === GamePhase.VICTORY,
+              isVictory: false,
               score: endState.score,
               enemiesKilled: totalKills,
               goldEarned: stats.totalGoldEarned,
@@ -1555,25 +1578,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
             this.updateAchievementDetails();
           }
+
+          this.physicsAccumulator -= PHYSICS_CONFIG.fixedTimestep;
+          stepCount++;
         }
 
-        // DEFEAT mid-frame (from loseLife) — record game end if not yet done
-        if (currentPhase === GamePhase.DEFEAT && !this.gameEndRecorded) {
-          this.gameEndRecorded = true;
-          const endState = this.gameStateService.getState();
-          const stats = this.gameStatsService.getStats();
-          const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
-          const gameEndStats: GameEndStats = {
-            isVictory: false,
-            score: endState.score,
-            enemiesKilled: totalKills,
-            goldEarned: stats.totalGoldEarned,
-            wavesCompleted: endState.wave,
-            livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
-          };
-          this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
-          this.updateAchievementDetails();
-        }
+        // Update health bars once per frame (visual only, not per physics step)
+        this.enemyService.updateHealthBars();
 
         // Update minimap
         this.updateMinimap(time);
