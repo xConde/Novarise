@@ -280,6 +280,8 @@ export class TerrainGrid {
 
     const existingIndex = this.spawnPoints.findIndex(p => p.x === x && p.z === z);
     if (existingIndex !== -1) {
+      // Prevent removing the last spawn point — map must always have at least one
+      if (this.spawnPoints.length <= 1) return false;
       // Toggle off — remove
       this.spawnPoints.splice(existingIndex, 1);
       // Restore buildability based on terrain type
@@ -308,6 +310,8 @@ export class TerrainGrid {
 
     const existingIndex = this.exitPoints.findIndex(p => p.x === x && p.z === z);
     if (existingIndex !== -1) {
+      // Prevent removing the last exit point — map must always have at least one
+      if (this.exitPoints.length <= 1) return false;
       // Toggle off — remove
       this.exitPoints.splice(existingIndex, 1);
       // Restore buildability based on terrain type

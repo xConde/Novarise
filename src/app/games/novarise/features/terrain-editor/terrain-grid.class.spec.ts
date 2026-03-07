@@ -314,21 +314,40 @@ describe('TerrainGrid', () => {
 
     it('should toggle off when adding an existing spawn point', () => {
       terrainGrid.setSpawnPoint(3, 3);
-      expect(terrainGrid.getSpawnPoints().length).toBe(1);
+      terrainGrid.addSpawnPoint(4, 4); // need 2 points so we can remove one
+      expect(terrainGrid.getSpawnPoints().length).toBe(2);
 
-      // Add same point — should toggle off (remove it)
       const added = terrainGrid.addSpawnPoint(3, 3);
       expect(added).toBe(false);
-      expect(terrainGrid.getSpawnPoints().length).toBe(0);
+      expect(terrainGrid.getSpawnPoints().length).toBe(1);
+    });
+
+    it('should not allow removing the last spawn point', () => {
+      terrainGrid.setSpawnPoint(3, 3);
+      expect(terrainGrid.getSpawnPoints().length).toBe(1);
+
+      const added = terrainGrid.addSpawnPoint(3, 3);
+      expect(added).toBe(false);
+      expect(terrainGrid.getSpawnPoints().length).toBe(1);
     });
 
     it('should toggle off when adding an existing exit point', () => {
+      terrainGrid.setExitPoint(3, 3);
+      terrainGrid.addExitPoint(4, 4); // need 2 points so we can remove one
+      expect(terrainGrid.getExitPoints().length).toBe(2);
+
+      const added = terrainGrid.addExitPoint(3, 3);
+      expect(added).toBe(false);
+      expect(terrainGrid.getExitPoints().length).toBe(1);
+    });
+
+    it('should not allow removing the last exit point', () => {
       terrainGrid.setExitPoint(3, 3);
       expect(terrainGrid.getExitPoints().length).toBe(1);
 
       const added = terrainGrid.addExitPoint(3, 3);
       expect(added).toBe(false);
-      expect(terrainGrid.getExitPoints().length).toBe(0);
+      expect(terrainGrid.getExitPoints().length).toBe(1);
     });
 
     it('should respect MAX_SPAWN_POINTS limit', () => {
@@ -367,6 +386,7 @@ describe('TerrainGrid', () => {
 
     it('should restore buildability when spawn point is toggled off', () => {
       terrainGrid.setSpawnPoint(3, 3);
+      terrainGrid.addSpawnPoint(5, 5); // need 2 so we can remove one
       expect(terrainGrid.isBuildable(3, 3)).toBe(false);
 
       terrainGrid.addSpawnPoint(3, 3); // toggle off
@@ -375,6 +395,7 @@ describe('TerrainGrid', () => {
 
     it('should restore buildability when exit point is toggled off', () => {
       terrainGrid.setExitPoint(4, 4);
+      terrainGrid.addExitPoint(5, 5); // need 2 so we can remove one
       expect(terrainGrid.isBuildable(4, 4)).toBe(false);
 
       terrainGrid.addExitPoint(4, 4); // toggle off

@@ -104,7 +104,10 @@ export class EnemyService {
         // Only apply FAST_ENEMIES portion (exclude SPEED_DEMONS' 2.0x)
         const speedDemonsMultiplier = GAME_MODIFIER_CONFIGS[GameModifier.SPEED_DEMONS].effects.enemySpeedMultiplier ?? 1;
         const totalMultiplier = this.modifierEffects.enemySpeedMultiplier ?? 1;
-        const nonDemonMultiplier = totalMultiplier / speedDemonsMultiplier;
+        // Guard against divide-by-zero (speedDemonsMultiplier should never be 0, but be safe)
+        const nonDemonMultiplier = speedDemonsMultiplier !== 0
+          ? totalMultiplier / speedDemonsMultiplier
+          : totalMultiplier;
         if (nonDemonMultiplier !== 1) {
           enemy.speed *= nonDemonMultiplier;
         }
