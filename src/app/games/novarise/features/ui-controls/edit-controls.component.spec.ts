@@ -141,11 +141,6 @@ describe('EditControlsComponent', () => {
       expect(fixture.nativeElement.querySelector('.tab-navigation')).toBeNull();
     });
 
-    it('should not render play section or delete button', () => {
-      initMobile();
-      expect(fixture.nativeElement.querySelector('.play-section')).toBeNull();
-      expect(fixture.nativeElement.querySelector('.delete-map-btn')).toBeNull();
-    });
   });
 
   describe('existing functionality', () => {

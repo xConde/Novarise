@@ -9,35 +9,6 @@
   color: var(--text-color);
 }
 
-// --- Navigation ---
-.map-select-nav {
-  align-self: flex-start;
-  margin-bottom: var(--spacing-lg);
-}
-
-.nav-link {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border: var(--border-width-thin) solid var(--border-color);
-  border-radius: var(--border-radius-md);
-  background: transparent;
-  color: var(--theme-purple-mid);
-  font-size: var(--font-size-small);
-  cursor: pointer;
-  transition:
-    color var(--transition-fast) ease,
-    border-color var(--transition-fast) ease;
-
-  &:hover {
-    color: var(--theme-purple-lighter);
-    border-color: var(--theme-purple);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--theme-purple-lighter);
-    outline-offset: 2px;
-  }
-}
-
 // --- Hero section ---
 .map-select-hero {
   display: flex;
@@ -59,14 +30,14 @@
 .quick-play-btn {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-2xl);
-  border: var(--border-width-medium) solid var(--action-success);
-  border-radius: var(--spacing-2xl);
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border: var(--border-width-thin) solid var(--action-success-border);
+  border-radius: var(--border-radius-md);
   background: var(--action-success-bg);
   color: var(--action-success);
   font-family: 'Orbitron', sans-serif;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-small);
   font-weight: 600;
   letter-spacing: 0.05em;
   cursor: pointer;
@@ -289,7 +260,6 @@
     min-height: 2.75rem;
   }
 
-  .nav-link,
   .quick-play-btn,
   .create-btn {
     min-height: 2.75rem;

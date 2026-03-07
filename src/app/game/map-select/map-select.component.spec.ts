@@ -108,12 +108,6 @@ describe('MapSelectComponent', () => {
     expect(routerSpy.navigate).not.toHaveBeenCalled();
   });
 
-  it('goHome should navigate to /', () => {
-    fixture.detectChanges();
-    component.goHome();
-    expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/']);
-  });
-
   it('goToEditor should navigate to /edit', () => {
     fixture.detectChanges();
     component.goToEditor();

@@ -78,10 +78,6 @@ export class MapSelectComponent implements OnInit, OnDestroy {
     this.router.navigate(['/edit']);
   }
 
-  goHome(): void {
-    this.router.navigate(['/']);
-  }
-
   private clearDeleteConfirmTimer(): void {
     if (this.deleteConfirmTimer !== null) {
       clearTimeout(this.deleteConfirmTimer);

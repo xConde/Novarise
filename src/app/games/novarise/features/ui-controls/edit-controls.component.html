@@ -195,25 +195,10 @@
     </div>
   </div>
 
-  <!-- DESKTOP PLAY SECTION (hidden on mobile — mobile has header play btn) -->
-  <div class="play-section" *ngIf="!isMobile">
-    <button
-      class="play-map-btn"
-      [class.disabled]="!canPlayMap"
-      [class.path-valid-btn]="canPlayMap"
-      [disabled]="!canPlayMap"
-      (click)="playMapClick.emit()"
-      aria-label="Play this map">
-      Play Map
-    </button>
+  <!-- DESKTOP PATH STATUS (play/delete actions live on /maps page) -->
+  <div class="path-status-section" *ngIf="!isMobile">
     <span class="path-status path-valid" *ngIf="isPathValid">Path OK ✓</span>
     <span class="path-status path-invalid" *ngIf="!isPathValid && hasSpawnAndExit">No valid path ✗</span>
-    <span class="play-hint" *ngIf="!hasSpawnAndExit">Set spawn (P) and exit (X) first</span>
-    <button
-      class="delete-map-btn"
-      (click)="deleteMapClick.emit()"
-      aria-label="Delete a saved map">
-      Delete Map
-    </button>
+    <span class="path-hint" *ngIf="!hasSpawnAndExit">Set spawn (P) and exit (X) first</span>
   </div>
 </div>
