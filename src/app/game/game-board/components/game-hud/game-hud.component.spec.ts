@@ -103,4 +103,29 @@ describe('GameHUDComponent', () => {
     const countEl = fixture.nativeElement.querySelector('.wave-enemy-count');
     expect(countEl.textContent?.trim()).toBe('8');
   });
+
+  describe('ARIA accessibility attributes', () => {
+    beforeEach(() => {
+      component.gameState = makeState({ wave: 1 });
+      fixture.detectChanges();
+    });
+
+    it('lives element has aria-live="polite"', () => {
+      const stats = fixture.nativeElement.querySelectorAll('.hud-stat');
+      const livesContainer = stats[0] as HTMLElement;
+      expect(livesContainer.getAttribute('aria-live')).toBe('polite');
+    });
+
+    it('gold element has aria-live="polite"', () => {
+      const stats = fixture.nativeElement.querySelectorAll('.hud-stat');
+      const goldContainer = stats[1] as HTMLElement;
+      expect(goldContainer.getAttribute('aria-live')).toBe('polite');
+    });
+
+    it('wave element has role="status"', () => {
+      const stats = fixture.nativeElement.querySelectorAll('.hud-stat');
+      const waveContainer = stats[2] as HTMLElement;
+      expect(waveContainer.getAttribute('role')).toBe('status');
+    });
+  });
 });

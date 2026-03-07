@@ -206,3 +206,47 @@ p {
   white-space: nowrap;
   border-width: 0;
 }
+
+:focus-visible {
+  outline: 2px solid var(--theme-purple-light);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  z-index: 999;
+}
+
+.skip-link:focus {
+  position: fixed;
+  top: var(--spacing-sm);
+  left: var(--spacing-sm);
+  width: auto;
+  height: auto;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--nav-bg);
+  color: var(--theme-purple-light);
+  border: 2px solid var(--theme-purple);
+  border-radius: var(--border-radius-md);
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--font-size-small);
+  z-index: 10000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

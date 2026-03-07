@@ -1,14 +1,14 @@
 <!-- Game HUD -->
 <div class="game-hud" *ngIf="gameState.wave > 0">
-  <div class="hud-stat">
+  <div class="hud-stat" aria-live="polite">
     <span class="hud-label">Lives</span>
     <span class="hud-value lives" [class.critical]="gameState.lives <= 5">{{ gameState.lives }}</span>
   </div>
-  <div class="hud-stat">
+  <div class="hud-stat" aria-live="polite">
     <span class="hud-label">Gold</span>
     <span class="hud-value gold">{{ gameState.gold }}</span>
   </div>
-  <div class="hud-stat">
+  <div class="hud-stat" role="status">
     <span class="hud-label">Wave</span>
     <span class="hud-value" *ngIf="!gameState.isEndless">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
     <span class="hud-value" *ngIf="gameState.isEndless">{{ gameState.wave }}</span>
