@@ -14,7 +14,7 @@
   </div>
 
   <!-- Game HUD -->
-  <div class="game-hud">
+  <div class="game-hud" *ngIf="gameState.wave > 0">
     <div class="hud-stat">
       <span class="hud-label">Lives</span>
       <span class="hud-value lives" [class.critical]="gameState.lives <= 5">{{ gameState.lives }}</span>
@@ -48,47 +48,44 @@
     Placement blocked — enemies need a path to the exit
   </div>
 
-  <!-- Difficulty selector — only visible in SETUP before wave 0 starts -->
-  <div class="difficulty-selector" *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0">
-    <span class="difficulty-label">Difficulty</span>
-    <div class="difficulty-options">
+  <!-- Setup panel — right side on desktop, bottom sheet on mobile -->
+  <div class="setup-panel" *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0">
+    <span class="setup-section-label">Difficulty</span>
+    <div class="setup-difficulty-grid">
       <button
         *ngFor="let level of difficultyLevels"
-        class="difficulty-btn"
+        class="setup-diff-btn"
         [class.selected]="gameState.difficulty === level"
         (click)="selectDifficulty(level)"
         [attr.aria-label]="'Select ' + difficultyPresets[level].label + ' difficulty'"
         [attr.aria-pressed]="gameState.difficulty === level">
-        <span class="difficulty-name">{{ difficultyPresets[level].label }}</span>
-        <span class="difficulty-desc">{{ difficultyPresets[level].description }}</span>
+        {{ difficultyPresets[level].label }}
       </button>
     </div>
-    <label class="endless-toggle">
+
+    <label class="setup-endless">
       <input type="checkbox" [checked]="gameState.isEndless" (change)="toggleEndless()">
-      <span class="endless-label">Endless Mode</span>
-      <span class="endless-desc">Waves continue indefinitely after wave {{ gameState.maxWaves }}</span>
+      <span>Endless Mode</span>
     </label>
 
-    <!-- Game Modifiers -->
-    <div class="modifiers-section">
-      <span class="modifiers-label">Modifiers</span>
-      <div class="modifier-options">
-        <button
-          *ngFor="let mod of allModifiers"
-          class="modifier-btn"
-          [class.active]="activeModifiers.has(mod)"
-          (click)="toggleModifier(mod)"
-          [attr.aria-label]="'Toggle modifier: ' + modifierConfigs[mod].label"
-          [attr.aria-pressed]="activeModifiers.has(mod)">
-          <span class="modifier-name">{{ modifierConfigs[mod].label }}</span>
-          <span class="modifier-desc">{{ modifierConfigs[mod].description }}</span>
-        </button>
-      </div>
-      <div class="modifier-score" *ngIf="activeModifiers.size > 0">
-        Score: {{ modifierScoreMultiplier.toFixed(1) }}x
-      </div>
+    <span class="setup-section-label">Modifiers</span>
+    <div class="setup-modifier-grid">
+      <button
+        *ngFor="let mod of allModifiers"
+        class="setup-mod-btn"
+        [class.active]="activeModifiers.has(mod)"
+        (click)="toggleModifier(mod)"
+        [title]="modifierConfigs[mod].description"
+        [attr.aria-label]="'Toggle modifier: ' + modifierConfigs[mod].label"
+        [attr.aria-pressed]="activeModifiers.has(mod)">
+        {{ modifierConfigs[mod].label }}
+      </button>
     </div>
-    <button class="start-game-btn" (click)="startWave()" aria-label="Start the game">
+    <div class="setup-score" *ngIf="activeModifiers.size > 0">
+      Score: {{ modifierScoreMultiplier.toFixed(1) }}x
+    </div>
+
+    <button class="setup-start-btn" (click)="startWave()" aria-label="Start the game">
       Start Game
     </button>
   </div>
@@ -125,7 +122,7 @@
   </div>
 
   <!-- Pause/Speed controls -->
-  <div class="game-controls" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
+  <div class="game-controls" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT && gameState.wave > 0">
     <button
       class="control-btn pause-btn"
       (click)="togglePause()"
@@ -315,7 +312,7 @@
   </div>
 
   <!-- Tower selection -->
-  <div class="tower-selection" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
+  <div class="tower-selection" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT && gameState.wave > 0">
     <button
       *ngFor="let tower of towerTypes"
       class="tower-btn"
