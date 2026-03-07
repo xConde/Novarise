@@ -1755,13 +1755,22 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private updateMinimap(timeMs: number): void {
     const boardWidth = this.gameBoardService.getBoardWidth();
+    const boardHeight = this.gameBoardService.getBoardHeight();
+
+    // Build spawn/exit point lists from the service
+    const spawnerTiles = this.gameBoardService.getSpawnerTiles();
+    const exitTiles = this.gameBoardService.getExitTiles();
+
     const terrain: MinimapTerrainData = {
-      gridSize: boardWidth,
+      gridWidth: boardWidth,
+      gridHeight: boardHeight,
       isPath: (row: number, col: number) => {
         const board = this.gameBoardService.getGameBoard();
         const tile = board?.[row]?.[col];
         return tile !== undefined && tile.type !== BlockType.WALL;
       },
+      spawnPoints: spawnerTiles.map(([row, col]) => ({ x: col, z: row })),
+      exitPoints: exitTiles.map(([row, col]) => ({ x: col, z: row })),
     };
     const entities: MinimapEntityData[] = [];
     this.towerCombatService.getPlacedTowers().forEach((tower) => {
