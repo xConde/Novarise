@@ -6,6 +6,8 @@ import { BlockType } from '../models/game-board-tile';
 import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { MinHeap } from '../utils/min-heap';
 import { GameModifier, ModifierEffects, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
+import { StatusEffectType } from '../constants/status-effect.constants';
+import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY } from '../constants/effects.constants';
 
 export interface DamageResult {
   killed: boolean;
@@ -326,6 +328,37 @@ export class EnemyService {
           mat.color.setHex(HEALTH_BAR_CONFIG.colorRed);
         }
       }
+    });
+  }
+
+  /**
+   * Tint enemy mesh emissive color based on active status effects.
+   * Highest-priority effect wins (BURN > POISON > SLOW).
+   * Enemies with no active effects revert to their base emissive.
+   */
+  updateStatusVisuals(activeEffects: Map<string, StatusEffectType[]>): void {
+    this.enemies.forEach(enemy => {
+      if (!enemy.mesh) return;
+      const mat = enemy.mesh.material as THREE.MeshStandardMaterial;
+      if (!mat.emissive) return;
+
+      const effects = activeEffects.get(enemy.id);
+      if (effects && effects.length > 0) {
+        // Pick highest-priority active effect for visual
+        for (const priority of STATUS_EFFECT_PRIORITY) {
+          if (effects.includes(priority)) {
+            const visual = STATUS_EFFECT_VISUALS[priority];
+            mat.emissive.setHex(visual.emissiveColor);
+            mat.emissiveIntensity = visual.emissiveIntensity;
+            return;
+          }
+        }
+      }
+
+      // No effects — restore base emissive
+      const stats = ENEMY_STATS[enemy.type];
+      mat.emissive.setHex(stats.color);
+      mat.emissiveIntensity = ENEMY_VISUAL_CONFIG.shieldedEmissive;
     });
   }
 

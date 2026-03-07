@@ -1,3 +1,18 @@
+import { StatusEffectType } from './status-effect.constants';
+
+export const STATUS_EFFECT_VISUALS: Record<StatusEffectType, { emissiveColor: number; emissiveIntensity: number }> = {
+  [StatusEffectType.SLOW]: { emissiveColor: 0x4488ff, emissiveIntensity: 0.7 },
+  [StatusEffectType.BURN]: { emissiveColor: 0xff6622, emissiveIntensity: 0.9 },
+  [StatusEffectType.POISON]: { emissiveColor: 0x44ff22, emissiveIntensity: 0.7 },
+};
+
+/** Priority order for resolving which visual takes precedence when multiple effects active */
+export const STATUS_EFFECT_PRIORITY: StatusEffectType[] = [
+  StatusEffectType.BURN,
+  StatusEffectType.POISON,
+  StatusEffectType.SLOW,
+];
+
 export const SCREEN_SHAKE_CONFIG = {
   bossHitIntensity: 0.15,
   bossHitDuration: 0.2,

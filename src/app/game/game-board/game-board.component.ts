@@ -216,7 +216,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private minimapService: MinimapService,
     private settingsService: SettingsService,
     private towerPreviewService: TowerPreviewService,
-    private pathVisualizationService: PathVisualizationService
+    private pathVisualizationService: PathVisualizationService,
+    private statusEffectService: StatusEffectService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -1706,8 +1707,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
         }
 
-        // Update health bars once per frame (visual only, not per physics step)
+        // Update health bars and status effect visuals once per frame
         this.enemyService.updateHealthBars();
+        this.enemyService.updateStatusVisuals(this.statusEffectService.getAllActiveEffects());
 
         // Update minimap
         this.updateMinimap(time);

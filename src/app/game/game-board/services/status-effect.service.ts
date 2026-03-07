@@ -149,6 +149,20 @@ export class StatusEffectService {
   }
 
   /**
+   * Get all active effects for all enemies, keyed by enemy ID.
+   * Used to drive visual tinting in the render loop.
+   */
+  getAllActiveEffects(): Map<string, StatusEffectType[]> {
+    const result = new Map<string, StatusEffectType[]>();
+    for (const [enemyId, enemyEffects] of this.effects) {
+      if (enemyEffects.size > 0) {
+        result.set(enemyId, Array.from(enemyEffects.keys()));
+      }
+    }
+    return result;
+  }
+
+  /**
    * Remove all effects from an enemy (call on death/removal).
    * Restores any modified stats (speed).
    */

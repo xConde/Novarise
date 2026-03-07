@@ -5,6 +5,7 @@ import { GameBoardService } from '../game-board.service';
 import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, mergeModifierEffects } from '../models/game-modifier.model';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
+import { StatusEffectType } from '../constants/status-effect.constants';
 
 describe('EnemyService', () => {
   let service: EnemyService;
@@ -1092,6 +1093,189 @@ describe('EnemyService', () => {
       // Health: 2x, Speed: only FAST_ENEMIES 1.5x (SPEED_DEMONS excluded for non-fast)
       expect(heavyEnemy.health).toBe(ENEMY_STATS[EnemyType.HEAVY].health * 2);
       expect(heavyEnemy.speed).toBeCloseTo(ENEMY_STATS[EnemyType.HEAVY].speed * 1.5);
+    });
+  });
+
+  describe('enemy mesh geometry', () => {
+    let meshesToDispose: THREE.Mesh[];
+
+    beforeEach(() => {
+      meshesToDispose = [];
+    });
+
+    afterEach(() => {
+      meshesToDispose.forEach(mesh => {
+        mesh.geometry.dispose();
+        const mat = mesh.material;
+        if (Array.isArray(mat)) {
+          mat.forEach(m => m.dispose());
+        } else {
+          (mat as THREE.Material).dispose();
+        }
+        // Dispose child meshes (health bars, crowns, shields)
+        mesh.children.forEach(child => {
+          const childMesh = child as THREE.Mesh;
+          if (childMesh.geometry) childMesh.geometry.dispose();
+          if (childMesh.material) {
+            const childMat = childMesh.material;
+            if (Array.isArray(childMat)) {
+              childMat.forEach(m => m.dispose());
+            } else {
+              (childMat as THREE.Material).dispose();
+            }
+          }
+        });
+      });
+    });
+
+    it('BASIC enemy creates a SphereGeometry mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.SphereGeometry);
+    });
+
+    it('FAST enemy creates a CapsuleGeometry mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.CapsuleGeometry);
+    });
+
+    it('HEAVY enemy creates a BoxGeometry mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.HEAVY, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.BoxGeometry);
+    });
+
+    it('SWIFT enemy creates a TetrahedronGeometry mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.SWIFT, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.TetrahedronGeometry);
+    });
+
+    it('BOSS enemy creates a SphereGeometry mesh with a bossCrown in userData', () => {
+      const enemy = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.SphereGeometry);
+      const crown = enemy.mesh!.userData['bossCrown'] as THREE.Mesh;
+      expect(crown).toBeTruthy();
+      expect(crown).toBeInstanceOf(THREE.Mesh);
+      expect(crown.geometry).toBeInstanceOf(THREE.TorusGeometry);
+    });
+
+    it('SHIELDED enemy creates an IcosahedronGeometry mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.IcosahedronGeometry);
+    });
+
+    it('SWARM enemy creates an OctahedronGeometry mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.OctahedronGeometry);
+    });
+
+    it('FLYING enemy creates a BufferGeometry (custom diamond)', () => {
+      const enemy = service.spawnEnemy(EnemyType.FLYING, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.BufferGeometry);
+      // Should NOT be one of the named geometry subclasses — it's a custom diamond
+      expect(enemy.mesh!.geometry).not.toBeInstanceOf(THREE.SphereGeometry);
+      expect(enemy.mesh!.geometry).not.toBeInstanceOf(THREE.BoxGeometry);
+    });
+
+    it('Mini-swarm mesh uses OctahedronGeometry', () => {
+      const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      const result = service.damageEnemy(swarm.id, swarm.health);
+
+      expect(result.spawnedEnemies.length).toBeGreaterThan(0);
+      const mini = result.spawnedEnemies[0];
+      meshesToDispose.push(mini.mesh!);
+
+      expect(mini.mesh!.geometry).toBeInstanceOf(THREE.OctahedronGeometry);
+    });
+  });
+
+  describe('updateStatusVisuals', () => {
+    let enemy: NonNullable<ReturnType<typeof service.spawnEnemy>>;
+    let mesh: THREE.Mesh;
+
+    beforeEach(() => {
+      enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      mesh = enemy.mesh!;
+    });
+
+    it('enemy with BURN effect gets emissive color 0xff6622', () => {
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusVisuals(activeEffects);
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(0xff6622);
+    });
+
+    it('enemy with POISON effect gets emissive color 0x44ff22', () => {
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.POISON]);
+
+      service.updateStatusVisuals(activeEffects);
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(0x44ff22);
+    });
+
+    it('enemy with SLOW effect gets emissive color 0x4488ff', () => {
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.SLOW]);
+
+      service.updateStatusVisuals(activeEffects);
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(0x4488ff);
+    });
+
+    it('enemy with no effects reverts to base emissive color', () => {
+      const baseColor = ENEMY_STATS[EnemyType.BASIC].color;
+
+      // First apply an effect
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+      service.updateStatusVisuals(activeEffects);
+
+      // Then clear effects
+      const noEffects = new Map<string, StatusEffectType[]>();
+      service.updateStatusVisuals(noEffects);
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(baseColor);
+    });
+
+    it('BURN takes priority over POISON when both active', () => {
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.POISON, StatusEffectType.BURN]);
+
+      service.updateStatusVisuals(activeEffects);
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(0xff6622);
+    });
+
+    it('BURN takes priority over SLOW when both active', () => {
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.SLOW, StatusEffectType.BURN]);
+
+      service.updateStatusVisuals(activeEffects);
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(0xff6622);
     });
   });
 
