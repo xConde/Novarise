@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { TowerCombatService, KillInfo } from './tower-combat.service';
 import { EnemyService, DamageResult } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
-import { TowerType, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
+import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_SPECIALIZATIONS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { Enemy, EnemyType } from '../models/enemy.model';
 import { AudioService } from './audio.service';
 import { StatusEffectService } from './status-effect.service';
@@ -608,12 +608,21 @@ describe('TowerCombatService', () => {
       expect(service.getTower('5-5')!.totalInvested).toBe(baseCost + upgradeCost);
     });
 
-    it('should cap at MAX_TOWER_LEVEL', () => {
+    it('should block upgradeTower at L2 (requires specialization)', () => {
       service.registerTower(5, 5, TowerType.BASIC, new THREE.Group());
       service.upgradeTower('5-5'); // 1 → 2
-      service.upgradeTower('5-5'); // 2 → 3
 
-      const result = service.upgradeTower('5-5'); // 3 → blocked
+      const result = service.upgradeTower('5-5'); // 2 → blocked (needs spec)
+      expect(result).toBeFalse();
+      expect(service.getTower('5-5')!.level).toBe(2);
+    });
+
+    it('should cap at MAX_TOWER_LEVEL via spec upgrade', () => {
+      service.registerTower(5, 5, TowerType.BASIC, new THREE.Group());
+      service.upgradeTower('5-5'); // 1 → 2
+      service.upgradeTowerWithSpec('5-5', TowerSpecialization.ALPHA); // 2 → 3
+
+      const result = service.upgradeTowerWithSpec('5-5', TowerSpecialization.BETA); // 3 → blocked
       expect(result).toBeFalse();
       expect(service.getTower('5-5')!.level).toBe(MAX_TOWER_LEVEL);
     });
@@ -634,6 +643,49 @@ describe('TowerCombatService', () => {
       // Level 2 BASIC: 25 * 1.5 = 38 (rounded)
       const expectedDamage = getEffectiveStats(TowerType.BASIC, 2).damage;
       expect(enemy.health).toBe(10000 - expectedDamage);
+    });
+  });
+
+  // --- Specialization Upgrades ---
+
+  describe('upgradeTowerWithSpec', () => {
+    it('should succeed from L2', () => {
+      service.registerTower(5, 5, TowerType.BASIC, new THREE.Group());
+      service.upgradeTower('5-5'); // 1 → 2
+      const result = service.upgradeTowerWithSpec('5-5', TowerSpecialization.ALPHA);
+      expect(result).toBeTrue();
+      expect(service.getTower('5-5')!.level).toBe(3);
+      expect(service.getTower('5-5')!.specialization).toBe(TowerSpecialization.ALPHA);
+    });
+
+    it('should fail from L1', () => {
+      service.registerTower(5, 5, TowerType.BASIC, new THREE.Group());
+      const result = service.upgradeTowerWithSpec('5-5', TowerSpecialization.ALPHA);
+      expect(result).toBeFalse();
+      expect(service.getTower('5-5')!.level).toBe(1);
+    });
+
+    it('should fail from L3', () => {
+      service.registerTower(5, 5, TowerType.BASIC, new THREE.Group());
+      service.upgradeTower('5-5'); // 1 → 2
+      service.upgradeTowerWithSpec('5-5', TowerSpecialization.ALPHA); // 2 → 3
+      const result = service.upgradeTowerWithSpec('5-5', TowerSpecialization.BETA);
+      expect(result).toBeFalse();
+    });
+
+    it('should accumulate totalInvested on spec upgrade', () => {
+      service.registerTower(5, 5, TowerType.BASIC, new THREE.Group());
+      const baseCost = TOWER_CONFIGS[TowerType.BASIC].cost;
+      const l1to2Cost = getUpgradeCost(TowerType.BASIC, 1);
+      const l2to3Cost = getUpgradeCost(TowerType.BASIC, 2);
+
+      service.upgradeTower('5-5');
+      service.upgradeTowerWithSpec('5-5', TowerSpecialization.BETA);
+      expect(service.getTower('5-5')!.totalInvested).toBe(baseCost + l1to2Cost + l2to3Cost);
+    });
+
+    it('should return false for non-existent tower', () => {
+      expect(service.upgradeTowerWithSpec('99-99', TowerSpecialization.ALPHA)).toBeFalse();
     });
   });
 
@@ -932,7 +984,7 @@ describe('TowerCombatService', () => {
 
   // --- Full Lifecycle ---
 
-  describe('full lifecycle: register → upgrade → upgrade → sell', () => {
+  describe('full lifecycle: register → upgrade → specialize → sell', () => {
     it('should track level and totalInvested through full lifecycle', () => {
       const mesh = new THREE.Group();
       service.registerTower(5, 5, TowerType.BASIC, mesh);
@@ -946,13 +998,16 @@ describe('TowerCombatService', () => {
       expect(service.getTower('5-5')!.level).toBe(2);
       expect(service.getTower('5-5')!.totalInvested).toBe(baseCost + upgrade1Cost);
 
-      // Upgrade 2→3
-      expect(service.upgradeTower('5-5')).toBeTrue();
+      // Upgrade 2→3 (requires specialization)
+      expect(service.upgradeTower('5-5')).toBeFalse(); // blocked without spec
+      expect(service.upgradeTowerWithSpec('5-5', TowerSpecialization.ALPHA)).toBeTrue();
       expect(service.getTower('5-5')!.level).toBe(3);
+      expect(service.getTower('5-5')!.specialization).toBe(TowerSpecialization.ALPHA);
       expect(service.getTower('5-5')!.totalInvested).toBe(baseCost + upgrade1Cost + upgrade2Cost);
 
-      // Max level — upgrade fails
+      // Max level — both upgrade methods fail
       expect(service.upgradeTower('5-5')).toBeFalse();
+      expect(service.upgradeTowerWithSpec('5-5', TowerSpecialization.BETA)).toBeFalse();
 
       // Sell
       const sold = service.unregisterTower('5-5')!;
@@ -966,7 +1021,7 @@ describe('TowerCombatService', () => {
       service.registerTower(5, 5, TowerType.BASIC, mesh);
 
       service.upgradeTower('5-5');
-      service.upgradeTower('5-5');
+      service.upgradeTowerWithSpec('5-5', TowerSpecialization.BETA);
 
       expect(service.getTower('5-5')!.mesh).toBe(mesh);
     });
@@ -1110,6 +1165,120 @@ describe('Tower Model Functions', () => {
       expect(stats.blastRadius).toBe(TOWER_CONFIGS[TowerType.MORTAR].blastRadius);
       expect(stats.dotDuration).toBe(TOWER_CONFIGS[TowerType.MORTAR].dotDuration);
       expect(stats.dotDamage).toBe(TOWER_CONFIGS[TowerType.MORTAR].dotDamage);
+    });
+  });
+
+  describe('TOWER_SPECIALIZATIONS', () => {
+    it('should have both ALPHA and BETA entries for every TowerType', () => {
+      for (const type of Object.values(TowerType)) {
+        const specs = TOWER_SPECIALIZATIONS[type as TowerType];
+        expect(specs).toBeDefined();
+        expect(specs[TowerSpecialization.ALPHA]).toBeDefined();
+        expect(specs[TowerSpecialization.BETA]).toBeDefined();
+      }
+    });
+
+    it('should have label and description for every specialization', () => {
+      for (const type of Object.values(TowerType)) {
+        for (const spec of [TowerSpecialization.ALPHA, TowerSpecialization.BETA]) {
+          const s = TOWER_SPECIALIZATIONS[type as TowerType][spec];
+          expect(s.label.length).toBeGreaterThan(0);
+          expect(s.description.length).toBeGreaterThan(0);
+        }
+      }
+    });
+
+    it('should have positive damage and range multipliers', () => {
+      for (const type of Object.values(TowerType)) {
+        for (const spec of [TowerSpecialization.ALPHA, TowerSpecialization.BETA]) {
+          const s = TOWER_SPECIALIZATIONS[type as TowerType][spec];
+          expect(s.damage).toBeGreaterThan(0);
+          expect(s.range).toBeGreaterThan(0);
+          expect(s.fireRate).toBeGreaterThan(0);
+        }
+      }
+    });
+
+    it('SPLASH ALPHA should have splashRadiusBonus', () => {
+      expect(TOWER_SPECIALIZATIONS[TowerType.SPLASH][TowerSpecialization.ALPHA].splashRadiusBonus).toBeDefined();
+      expect(TOWER_SPECIALIZATIONS[TowerType.SPLASH][TowerSpecialization.ALPHA].splashRadiusBonus!).toBeGreaterThan(0);
+    });
+
+    it('CHAIN ALPHA should have chainCountBonus', () => {
+      expect(TOWER_SPECIALIZATIONS[TowerType.CHAIN][TowerSpecialization.ALPHA].chainCountBonus).toBeDefined();
+      expect(TOWER_SPECIALIZATIONS[TowerType.CHAIN][TowerSpecialization.ALPHA].chainCountBonus!).toBeGreaterThan(0);
+    });
+
+    it('SLOW ALPHA should have slowFactorOverride', () => {
+      expect(TOWER_SPECIALIZATIONS[TowerType.SLOW][TowerSpecialization.ALPHA].slowFactorOverride).toBeDefined();
+    });
+
+    it('MORTAR ALPHA should have dotDamageMultiplier', () => {
+      expect(TOWER_SPECIALIZATIONS[TowerType.MORTAR][TowerSpecialization.ALPHA].dotDamageMultiplier).toBeDefined();
+      expect(TOWER_SPECIALIZATIONS[TowerType.MORTAR][TowerSpecialization.ALPHA].dotDamageMultiplier!).toBeGreaterThan(0);
+    });
+  });
+
+  describe('getEffectiveStats with specialization', () => {
+    it('should use spec multipliers at MAX_TOWER_LEVEL with specialization', () => {
+      const base = TOWER_CONFIGS[TowerType.BASIC];
+      const spec = TOWER_SPECIALIZATIONS[TowerType.BASIC][TowerSpecialization.ALPHA];
+      const stats = getEffectiveStats(TowerType.BASIC, MAX_TOWER_LEVEL, TowerSpecialization.ALPHA);
+      expect(stats.damage).toBe(Math.round(base.damage * spec.damage));
+      expect(stats.range).toBe(+(base.range * spec.range).toFixed(2));
+      expect(stats.fireRate).toBe(+(base.fireRate * spec.fireRate).toFixed(2));
+    });
+
+    it('should use standard L3 multipliers when no specialization is provided', () => {
+      const withoutSpec = getEffectiveStats(TowerType.BASIC, MAX_TOWER_LEVEL);
+      const withSpec = getEffectiveStats(TowerType.BASIC, MAX_TOWER_LEVEL, TowerSpecialization.ALPHA);
+      // They should differ because spec multipliers !== standard L3 multipliers
+      expect(withoutSpec.damage).not.toBe(withSpec.damage);
+    });
+
+    it('should apply splashRadiusBonus for SPLASH ALPHA spec', () => {
+      const base = TOWER_CONFIGS[TowerType.SPLASH];
+      const spec = TOWER_SPECIALIZATIONS[TowerType.SPLASH][TowerSpecialization.ALPHA];
+      const stats = getEffectiveStats(TowerType.SPLASH, MAX_TOWER_LEVEL, TowerSpecialization.ALPHA);
+      expect(stats.splashRadius).toBe(base.splashRadius + spec.splashRadiusBonus!);
+    });
+
+    it('should apply chainCountBonus for CHAIN ALPHA spec', () => {
+      const base = TOWER_CONFIGS[TowerType.CHAIN];
+      const spec = TOWER_SPECIALIZATIONS[TowerType.CHAIN][TowerSpecialization.ALPHA];
+      const stats = getEffectiveStats(TowerType.CHAIN, MAX_TOWER_LEVEL, TowerSpecialization.ALPHA);
+      expect(stats.chainCount).toBe(base.chainCount! + spec.chainCountBonus!);
+    });
+
+    it('should apply slowFactorOverride for SLOW ALPHA spec', () => {
+      const spec = TOWER_SPECIALIZATIONS[TowerType.SLOW][TowerSpecialization.ALPHA];
+      const stats = getEffectiveStats(TowerType.SLOW, MAX_TOWER_LEVEL, TowerSpecialization.ALPHA);
+      expect(stats.slowFactor).toBe(spec.slowFactorOverride);
+    });
+
+    it('should apply dotDamageMultiplier for MORTAR ALPHA spec', () => {
+      const base = TOWER_CONFIGS[TowerType.MORTAR];
+      const spec = TOWER_SPECIALIZATIONS[TowerType.MORTAR][TowerSpecialization.ALPHA];
+      const stats = getEffectiveStats(TowerType.MORTAR, MAX_TOWER_LEVEL, TowerSpecialization.ALPHA);
+      expect(stats.dotDamage).toBe(Math.round(base.dotDamage! * spec.dotDamageMultiplier!));
+    });
+
+    it('should not apply spec at L1 or L2 even if specialization is passed', () => {
+      const l1 = getEffectiveStats(TowerType.BASIC, 1, TowerSpecialization.ALPHA);
+      const l1NoSpec = getEffectiveStats(TowerType.BASIC, 1);
+      expect(l1.damage).toBe(l1NoSpec.damage);
+
+      const l2 = getEffectiveStats(TowerType.BASIC, 2, TowerSpecialization.ALPHA);
+      const l2NoSpec = getEffectiveStats(TowerType.BASIC, 2);
+      expect(l2.damage).toBe(l2NoSpec.damage);
+    });
+
+    it('BETA spec should produce different stats than ALPHA for same tower type', () => {
+      const alpha = getEffectiveStats(TowerType.SNIPER, MAX_TOWER_LEVEL, TowerSpecialization.ALPHA);
+      const beta = getEffectiveStats(TowerType.SNIPER, MAX_TOWER_LEVEL, TowerSpecialization.BETA);
+      // At least one stat should differ
+      const differs = alpha.damage !== beta.damage || alpha.range !== beta.range || alpha.fireRate !== beta.fireRate;
+      expect(differs).toBeTrue();
     });
   });
 

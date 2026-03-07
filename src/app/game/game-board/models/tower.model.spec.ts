@@ -1,4 +1,4 @@
-import { TowerType, TOWER_DESCRIPTIONS } from './tower.model';
+import { TowerType, TowerSpecialization, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS } from './tower.model';
 
 describe('Tower Model', () => {
   describe('TOWER_DESCRIPTIONS', () => {
@@ -39,6 +39,43 @@ describe('Tower Model', () => {
       const descriptionKeys = Object.keys(TOWER_DESCRIPTIONS);
       const towerTypeValues = Object.values(TowerType);
       expect(descriptionKeys.length).toBe(towerTypeValues.length);
+    });
+  });
+
+  describe('TOWER_SPECIALIZATIONS', () => {
+    it('should have entries for all tower types', () => {
+      const allTypes = Object.values(TowerType) as TowerType[];
+      allTypes.forEach(type => {
+        expect(TOWER_SPECIALIZATIONS[type]).toBeDefined();
+      });
+    });
+
+    it('should have both ALPHA and BETA for every tower type', () => {
+      const allTypes = Object.values(TowerType) as TowerType[];
+      allTypes.forEach(type => {
+        expect(TOWER_SPECIALIZATIONS[type][TowerSpecialization.ALPHA]).toBeDefined();
+        expect(TOWER_SPECIALIZATIONS[type][TowerSpecialization.BETA]).toBeDefined();
+      });
+    });
+
+    it('should have non-empty label and description for all specs', () => {
+      const allTypes = Object.values(TowerType) as TowerType[];
+      allTypes.forEach(type => {
+        [TowerSpecialization.ALPHA, TowerSpecialization.BETA].forEach(spec => {
+          const s = TOWER_SPECIALIZATIONS[type][spec];
+          expect(s.label.length).toBeGreaterThan(0);
+          expect(s.description.length).toBeGreaterThan(0);
+        });
+      });
+    });
+
+    it('ALPHA and BETA should have different labels for each tower type', () => {
+      const allTypes = Object.values(TowerType) as TowerType[];
+      allTypes.forEach(type => {
+        const alpha = TOWER_SPECIALIZATIONS[type][TowerSpecialization.ALPHA];
+        const beta = TOWER_SPECIALIZATIONS[type][TowerSpecialization.BETA];
+        expect(alpha.label).not.toBe(beta.label);
+      });
     });
   });
 });

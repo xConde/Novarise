@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy } from '../models/enemy.model';
-import { PlacedTower, TowerType, TowerStats, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
+import { PlacedTower, TowerType, TowerStats, TowerSpecialization, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
@@ -106,9 +106,22 @@ export class TowerCombatService {
   upgradeTower(key: string): boolean {
     const tower = this.placedTowers.get(key);
     if (!tower || tower.level >= MAX_TOWER_LEVEL) return false;
+    // L2->L3 requires specialization — use upgradeTowerWithSpec instead
+    if (tower.level === MAX_TOWER_LEVEL - 1) return false;
 
     const cost = getUpgradeCost(tower.type, tower.level);
     tower.level++;
+    tower.totalInvested += cost;
+    return true;
+  }
+
+  upgradeTowerWithSpec(key: string, spec: TowerSpecialization): boolean {
+    const tower = this.placedTowers.get(key);
+    if (!tower || tower.level !== MAX_TOWER_LEVEL - 1) return false;
+
+    const cost = getUpgradeCost(tower.type, tower.level);
+    tower.level++;
+    tower.specialization = spec;
     tower.totalInvested += cost;
     return true;
   }
@@ -139,7 +152,7 @@ export class TowerCombatService {
 
     // Tower targeting and firing — resolve stats per-tower using level
     this.placedTowers.forEach(tower => {
-      const stats = getEffectiveStats(tower.type, tower.level);
+      const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
       const timeSinceLastFire = this.gameTime - tower.lastFireTime;
 
       if (timeSinceLastFire < stats.fireRate) return;
@@ -572,7 +585,7 @@ export class TowerCombatService {
     if (proj.towerType === TowerType.MORTAR) {
       // Look up the mortar tower's stats to create the zone
       const tower = this.placedTowers.get(proj.towerKey);
-      const stats = tower ? getEffectiveStats(tower.type, tower.level) : null;
+      const stats = tower ? getEffectiveStats(tower.type, tower.level, tower.specialization) : null;
       if (stats) {
         const initialKills = this.createMortarZone(proj.mesh.position.x, proj.mesh.position.z, stats, scene);
         kills.push(...initialKills);

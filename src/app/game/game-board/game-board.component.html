@@ -262,7 +262,7 @@
         Target: {{ targetingModeLabels[selectedTowerInfo.targetingMode] }}
       </button>
     </div>
-    <div class="tower-info-actions">
+    <div class="tower-info-actions" *ngIf="!showSpecializationChoice">
       <button
         class="upgrade-btn"
         *ngIf="selectedTowerInfo.level < MAX_TOWER_LEVEL"
@@ -271,7 +271,9 @@
         aria-label="Upgrade tower">
         Upgrade ({{ selectedTowerUpgradeCost }}g)
       </button>
-      <span class="max-level-badge" *ngIf="selectedTowerInfo.level >= MAX_TOWER_LEVEL">MAX</span>
+      <span class="max-level-badge" *ngIf="selectedTowerInfo.level >= MAX_TOWER_LEVEL">
+        {{ selectedTowerInfo.specialization ? (selectedTowerInfo.type | titlecase) + ' — ' + specLabel(selectedTowerInfo) : 'MAX' }}
+      </span>
       <button
         class="sell-btn"
         [class.confirm]="sellConfirmPending"
@@ -279,6 +281,20 @@
         aria-label="Sell tower">
         {{ sellConfirmPending ? 'Confirm Sell?' : 'Sell (+' + selectedTowerSellValue + 'g)' }}
       </button>
+    </div>
+    <div class="spec-choice-panel" *ngIf="showSpecializationChoice">
+      <div class="spec-choice-header">Choose Specialization ({{ selectedTowerUpgradeCost }}g)</div>
+      <button
+        *ngFor="let opt of specOptions"
+        class="spec-btn"
+        [class.unaffordable]="!gameState || gameState.gold < selectedTowerUpgradeCost"
+        (click)="selectSpecialization(opt.spec)"
+        [attr.aria-label]="'Specialize: ' + opt.label">
+        <span class="spec-label">{{ opt.label }}</span>
+        <span class="spec-desc">{{ opt.description }}</span>
+        <span class="spec-stats">DMG x{{ opt.damage }} | RNG x{{ opt.range }} | SPD x{{ opt.fireRate }}</span>
+      </button>
+      <button class="spec-cancel-btn" (click)="showSpecializationChoice = false" aria-label="Cancel specialization">Cancel</button>
     </div>
   </div>
 

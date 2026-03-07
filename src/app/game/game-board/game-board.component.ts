@@ -25,7 +25,7 @@ import { MinimapService, MinimapEntityData, MinimapTerrainData } from './service
 import { SettingsService } from './services/settings.service';
 import { TowerPreviewService } from './services/tower-preview.service';
 import { disposeMaterial } from './utils/three-utils';
-import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TARGETING_MODE_LABELS, TargetingMode } from './models/tower.model';
+import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TARGETING_MODE_LABELS, TargetingMode, SpecializationStats } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
@@ -96,6 +96,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   selectedTowerUpgradeCost: number = 0;
   selectedTowerSellValue: number = 0;
   MAX_TOWER_LEVEL = MAX_TOWER_LEVEL;
+  TowerSpecialization = TowerSpecialization;
+
+  // Specialization choice state
+  showSpecializationChoice = false;
+  specOptions: { spec: TowerSpecialization; label: string; description: string; damage: number; range: number; fireRate: number }[] = [];
 
   // Game state exposed to template
   gameState: GameState;
@@ -311,7 +316,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.deselectTower();
   }
 
-  upgradeTower(): void {
+  upgradeTower(spec?: TowerSpecialization): void {
     if (!this.selectedTowerInfo) return;
     const phase = this.gameStateService.getState().phase;
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
@@ -320,8 +325,26 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const cost = getUpgradeCost(this.selectedTowerInfo.type, this.selectedTowerInfo.level);
     if (!this.gameStateService.canAfford(cost)) return;
 
-    // Confirm upgrade succeeds BEFORE spending gold — prevents gold loss on service rejection
-    if (!this.towerCombatService.upgradeTower(this.selectedTowerInfo.id)) return;
+    if (this.selectedTowerInfo.level === MAX_TOWER_LEVEL - 1) {
+      // L2->L3: needs specialization choice
+      if (!spec) {
+        const specs = TOWER_SPECIALIZATIONS[this.selectedTowerInfo.type];
+        this.specOptions = [
+          { spec: TowerSpecialization.ALPHA, ...specs[TowerSpecialization.ALPHA] },
+          { spec: TowerSpecialization.BETA, ...specs[TowerSpecialization.BETA] },
+        ];
+        this.showSpecializationChoice = true;
+        return;
+      }
+      // Player chose — execute spec upgrade
+      if (!this.towerCombatService.upgradeTowerWithSpec(this.selectedTowerInfo.id, spec)) return;
+      this.showSpecializationChoice = false;
+      this.specOptions = [];
+    } else {
+      // L1->L2: standard upgrade
+      if (!this.towerCombatService.upgradeTower(this.selectedTowerInfo.id)) return;
+    }
+
     this.gameStateService.spendGold(cost);
     this.audioService.playTowerUpgrade();
 
@@ -343,6 +366,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Refresh info panel
     this.refreshTowerInfoPanel();
     this.showRangePreview(this.selectedTowerInfo);
+  }
+
+  selectSpecialization(spec: TowerSpecialization): void {
+    this.upgradeTower(spec);
   }
 
   sellTower(): void {
@@ -395,10 +422,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.towerCombatService.cycleTargetingMode(this.selectedTowerInfo.id);
   }
 
+  specLabel(tower: PlacedTower): string {
+    if (!tower.specialization) return '';
+    return TOWER_SPECIALIZATIONS[tower.type][tower.specialization].label;
+  }
+
   deselectTower(): void {
     this.selectedTowerInfo = null;
     this.selectedTowerStats = null;
     this.sellConfirmPending = false;
+    this.showSpecializationChoice = false;
+    this.specOptions = [];
     this.removeRangePreview();
   }
 
@@ -420,7 +454,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private refreshTowerInfoPanel(): void {
     if (!this.selectedTowerInfo) return;
     const tower = this.selectedTowerInfo;
-    const stats = getEffectiveStats(tower.type, tower.level);
+    const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
     this.selectedTowerStats = { damage: stats.damage, range: stats.range, fireRate: stats.fireRate };
     this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level);
     this.selectedTowerSellValue = getSellValue(tower.totalInvested);
@@ -447,7 +481,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private showRangePreview(tower: PlacedTower): void {
     this.removeRangePreview();
 
-    const stats = getEffectiveStats(tower.type, tower.level);
+    const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
     const boardWidth = this.gameBoardService.getBoardWidth();
     const boardHeight = this.gameBoardService.getBoardHeight();
     const tileSize = this.gameBoardService.getTileSize();
@@ -1298,7 +1332,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       const tileSize = this.gameBoardService.getTileSize();
 
       this.towerCombatService.getPlacedTowers().forEach(tower => {
-        const stats = getEffectiveStats(tower.type, tower.level);
+        const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
         const worldX = (tower.col - boardWidth / 2) * tileSize;
         const worldZ = (tower.row - boardHeight / 2) * tileSize;
         const ring = this.createRangeRing(

@@ -767,6 +767,83 @@
         letter-spacing: 0.0625rem;
       }
     }
+
+    .spec-choice-panel {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+
+      .spec-choice-header {
+        font-size: var(--font-size-small);
+        color: var(--game-gold);
+        text-transform: uppercase;
+        letter-spacing: 0.0625rem;
+        text-align: center;
+        margin-bottom: var(--spacing-xs);
+      }
+
+      .spec-btn {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+        padding: var(--spacing-sm);
+        border: var(--border-width-thin) solid rgba(100, 200, 255, 0.3);
+        border-radius: var(--border-radius-sm);
+        background: rgba(20, 60, 120, 0.3);
+        font-family: "Orbitron", sans-serif;
+        cursor: pointer;
+        transition: all var(--transition-medium) ease;
+        text-align: left;
+        min-height: 2.75rem;
+
+        &:hover {
+          background: rgba(30, 90, 160, 0.45);
+          border-color: rgba(100, 200, 255, 0.6);
+        }
+
+        &.unaffordable {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+
+        .spec-label {
+          font-size: 0.75rem;
+          font-weight: 700;
+          color: #88ddff;
+          text-transform: uppercase;
+          letter-spacing: 0.0313rem;
+        }
+
+        .spec-desc {
+          font-size: 0.625rem;
+          color: rgba(255, 255, 255, 0.6);
+        }
+
+        .spec-stats {
+          font-size: 0.5625rem;
+          color: rgba(255, 255, 255, 0.4);
+          font-family: monospace;
+        }
+      }
+
+      .spec-cancel-btn {
+        padding: var(--spacing-xs);
+        border: var(--border-width-thin) solid var(--border-color);
+        border-radius: var(--border-radius-sm);
+        background: rgba(80, 80, 80, 0.3);
+        color: rgba(255, 255, 255, 0.5);
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.625rem;
+        cursor: pointer;
+        transition: all var(--transition-medium) ease;
+        min-height: 2.75rem;
+
+        &:hover {
+          background: rgba(120, 120, 120, 0.4);
+          color: var(--text-color);
+        }
+      }
+    }
   }
 
   // --- Difficulty selector ---
