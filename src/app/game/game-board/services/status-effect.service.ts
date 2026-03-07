@@ -14,6 +14,8 @@ interface ActiveEffect {
 export class StatusEffectService {
   /** Map<enemyId, Map<StatusEffectType, ActiveEffect>> */
   private effects = new Map<string, Map<StatusEffectType, ActiveEffect>>();
+  /** Reused return value for getAllActiveEffects() to avoid per-frame Map allocation */
+  private activeEffectsResult = new Map<string, StatusEffectType[]>();
 
   constructor(private enemyService: EnemyService) {}
 
@@ -153,13 +155,13 @@ export class StatusEffectService {
    * Used to drive visual tinting in the render loop.
    */
   getAllActiveEffects(): Map<string, StatusEffectType[]> {
-    const result = new Map<string, StatusEffectType[]>();
+    this.activeEffectsResult.clear();
     for (const [enemyId, enemyEffects] of this.effects) {
       if (enemyEffects.size > 0) {
-        result.set(enemyId, Array.from(enemyEffects.keys()));
+        this.activeEffectsResult.set(enemyId, Array.from(enemyEffects.keys()));
       }
     }
-    return result;
+    return this.activeEffectsResult;
   }
 
   /**
@@ -196,5 +198,6 @@ export class StatusEffectService {
       }
     }
     this.effects.clear();
+    this.activeEffectsResult.clear();
   }
 }

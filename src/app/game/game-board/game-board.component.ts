@@ -1787,7 +1787,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             if (towerType === TowerType.BASIC) {
               child.position.y = TOWER_ANIM_CONFIG.crystalBaseY
                 + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.crystalBobAmplitude;
-              child.rotation.y = t * 0.5;
+              child.rotation.y = t * TOWER_ANIM_CONFIG.basicCrystalRotSpeed;
             } else if (towerType === TowerType.SLOW) {
               child.position.y = TOWER_ANIM_CONFIG.slowCrystalBaseY
                 + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.slowCrystalBobAmplitude;
@@ -1806,14 +1806,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           case 'spark': {
             if (child.userData['baseY'] === undefined) child.userData['baseY'] = child.position.y;
             child.position.y = child.userData['baseY']
-              + Math.sin(t * TOWER_ANIM_CONFIG.sparkBobSpeed + child.position.x * 10) * 0.03;
+              + Math.sin(t * TOWER_ANIM_CONFIG.sparkBobSpeed + child.position.x * TOWER_ANIM_CONFIG.sparkPhaseScale) * TOWER_ANIM_CONFIG.sparkBobAmplitude;
             break;
           }
 
           case 'spore': {
             if (child.userData['baseY'] === undefined) child.userData['baseY'] = child.position.y;
             child.position.y = child.userData['baseY']
-              + Math.sin(t * TOWER_ANIM_CONFIG.sporeBobSpeed + child.position.x * 5) * TOWER_ANIM_CONFIG.sporeBobAmplitude;
+              + Math.sin(t * TOWER_ANIM_CONFIG.sporeBobSpeed + child.position.x * TOWER_ANIM_CONFIG.sporePhaseScale) * TOWER_ANIM_CONFIG.sporeBobAmplitude;
             break;
           }
 

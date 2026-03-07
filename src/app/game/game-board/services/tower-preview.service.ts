@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { TowerType, TOWER_CONFIGS, getEffectiveStats } from '../models/tower.model';
 import { PREVIEW_CONFIG } from '../constants/preview.constants';
+import { PREVIEW_GHOST_CONFIG, PREVIEW_GHOST_DEFAULT } from '../constants/ui.constants';
 
 /** Tracks which tower type the current preview meshes were built for. */
 type PreviewState = {
@@ -100,33 +101,18 @@ export class TowerPreviewService {
   }
 
   private createGhostGeometry(towerType: TowerType): { geometry: THREE.BufferGeometry; yCenter: number } {
-    switch (towerType) {
-      case TowerType.BASIC:
-        // Obelisk — hexagonal cone
-        return { geometry: new THREE.ConeGeometry(0.35, 1.3, 6), yCenter: 0.65 };
+    const config = PREVIEW_GHOST_CONFIG[towerType] ?? PREVIEW_GHOST_DEFAULT;
+    const geometry = this.buildGeometry(config.type, config.args);
+    return { geometry, yCenter: config.yCenter };
+  }
 
-      case TowerType.SNIPER:
-        // Tall spike
-        return { geometry: new THREE.ConeGeometry(0.25, 1.8, 6), yCenter: 0.9 };
-
-      case TowerType.SPLASH:
-        // Mushroom — wider top sphere on narrow stem
-        return { geometry: new THREE.SphereGeometry(0.4, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), yCenter: 0.7 };
-
-      case TowerType.SLOW:
-        // Low pad — flat wide cylinder
-        return { geometry: new THREE.CylinderGeometry(0.4, 0.45, 0.6, 12), yCenter: 0.3 };
-
-      case TowerType.CHAIN:
-        // Antenna — thin tall cylinder with sphere hint
-        return { geometry: new THREE.CylinderGeometry(0.12, 0.2, 1.2, 6), yCenter: 0.6 };
-
-      case TowerType.MORTAR:
-        // Squat cannon — wide short cylinder
-        return { geometry: new THREE.CylinderGeometry(0.35, 0.45, 0.7, 8), yCenter: 0.35 };
-
-      default:
-        return { geometry: new THREE.BoxGeometry(0.6, 1, 0.6), yCenter: 0.5 };
+  private buildGeometry(type: string, args: readonly number[]): THREE.BufferGeometry {
+    switch (type) {
+      case 'cone':     return new THREE.ConeGeometry(...(args as [number, number, number]));
+      case 'sphere':   return new THREE.SphereGeometry(...(args as [number, number, number, number, number, number, number]));
+      case 'cylinder': return new THREE.CylinderGeometry(...(args as [number, number, number, number]));
+      case 'box':      return new THREE.BoxGeometry(...(args as [number, number, number]));
+      default:         return new THREE.BoxGeometry(...(PREVIEW_GHOST_DEFAULT.args as [number, number, number]));
     }
   }
 

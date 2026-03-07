@@ -71,10 +71,16 @@ export const TOWER_ANIM_CONFIG = {
 
   /** Chain spark vertical bob speed (radians/sec) */
   sparkBobSpeed: 2.5,
+  sparkPhaseScale: 10,
+  sparkBobAmplitude: 0.03,
 
   /** Splash spore bob speed and amplitude */
   sporeBobSpeed: 1.8,
   sporeBobAmplitude: 0.04,
+  sporePhaseScale: 5,
+
+  /** Basic crystal rotation speed (radians/sec) */
+  basicCrystalRotSpeed: 0.5,
 
   /** Sniper tip glow pulse */
   tipGlowSpeed: 2.0,
@@ -84,6 +90,17 @@ export const TOWER_ANIM_CONFIG = {
 
 export const ENEMY_ANIM_CONFIG = {
   bossCrownSpinSpeed: 2.0,  // radians per second
+} as const;
+
+export const BOSS_CROWN_CONFIG = {
+  radiusMultiplier: 0.8,
+  tubeMultiplier: 0.12,
+  radialSegments: 8,
+  tubularSegments: 16,
+  emissiveIntensity: 0.8,
+  roughness: 0.3,
+  metalness: 0.5,
+  yOffsetMultiplier: 0.6,
 } as const;
 
 export const TILE_PULSE_CONFIG = {

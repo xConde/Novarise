@@ -632,3 +632,22 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Fix Finding 2: Wave preview max-height overflow protection
 - [x] Fix Finding 3: Card actions z-index for touch devices
 - [x] Run full test suite (1656/1656), commit, push
+
+---
+
+## Red Team Critique — feat/visual-overhaul (2026-03-07)
+
+### Finding 1: Per-frame allocation in getAllActiveEffects() (MEDIUM)
+**Location:** `status-effect.service.ts:155`, called from `game-board.component.ts:1727`
+**Risk:** Creates new `Map` + `Array.from()` per enemy every frame during combat. With 50+ enemies (swarm spawns, endless), this creates hundreds of short-lived objects/sec, pressuring GC during the render loop.
+**Fix:** Reuse a pre-allocated Map, clear-and-repopulate in-place.
+
+### Finding 2: Magic numbers in animations/crown/preview (MEDIUM)
+**Location:** `game-board.component.ts:1790,1809,1816`, `enemy.service.ts:529-539`, `tower-preview.service.ts:106-129`
+**Risk:** Raw numeric literals for crystal rotation speed, spark phase offset, boss crown geometry, and ghost preview dimensions bypass the constants layer.
+**Fix:** Add missing fields to TOWER_ANIM_CONFIG, create BOSS_CROWN_CONFIG, create PREVIEW_GHOST_CONFIG.
+
+### Finding 3: Trail geometry disposal ordering (LOW)
+**Location:** `tower-combat.service.ts:251,274`
+**Risk:** Geometry dispose and reassignment are separated by the creation block. With trailLength=5 this is safe, but colocating dispose with reassignment is more robust.
+**Fix:** Move dispose into the else branch immediately before reassignment.

@@ -246,11 +246,6 @@ export class TowerCombatService {
         }
 
         if (proj.trailPositions.length >= 2) {
-          // Dispose old trail geometry
-          if (proj.trail) {
-            proj.trail.geometry.dispose();
-          }
-
           const positions = new Float32Array(proj.trailPositions.length * 3);
           for (let i = 0; i < proj.trailPositions.length; i++) {
             positions[i * 3] = proj.trailPositions[i].x;
@@ -271,6 +266,7 @@ export class TowerCombatService {
             proj.trail = new THREE.Line(trailGeom, trailMat);
             scene.add(proj.trail);
           } else {
+            proj.trail.geometry.dispose(); // dispose RIGHT before replacing
             proj.trail.geometry = trailGeom;
           }
         }

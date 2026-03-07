@@ -7,7 +7,7 @@ import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '..
 import { MinHeap } from '../utils/min-heap';
 import { GameModifier, ModifierEffects, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
-import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG } from '../constants/effects.constants';
+import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG, BOSS_CROWN_CONFIG } from '../constants/effects.constants';
 
 export interface DamageResult {
   killed: boolean;
@@ -526,17 +526,22 @@ export class EnemyService {
    * Called after the mesh is created to add the distinctive crown.
    */
   private createBossCrown(mesh: THREE.Mesh, size: number, color: number): void {
-    const crownGeometry = new THREE.TorusGeometry(size * 0.8, size * 0.12, 8, 16);
+    const crownGeometry = new THREE.TorusGeometry(
+      size * BOSS_CROWN_CONFIG.radiusMultiplier,
+      size * BOSS_CROWN_CONFIG.tubeMultiplier,
+      BOSS_CROWN_CONFIG.radialSegments,
+      BOSS_CROWN_CONFIG.tubularSegments
+    );
     const crownMaterial = new THREE.MeshStandardMaterial({
       color: color,
       emissive: color,
-      emissiveIntensity: 0.8,
-      roughness: 0.3,
-      metalness: 0.5
+      emissiveIntensity: BOSS_CROWN_CONFIG.emissiveIntensity,
+      roughness: BOSS_CROWN_CONFIG.roughness,
+      metalness: BOSS_CROWN_CONFIG.metalness
     });
     const crown = new THREE.Mesh(crownGeometry, crownMaterial);
     crown.rotation.x = Math.PI / 2;
-    crown.position.y = size * 0.6;
+    crown.position.y = size * BOSS_CROWN_CONFIG.yOffsetMultiplier;
     crown.castShadow = true;
     mesh.add(crown);
     mesh.userData['bossCrown'] = crown;

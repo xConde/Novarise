@@ -391,6 +391,18 @@ describe('StatusEffectService', () => {
       expect(result.get('e2')!.length).toBe(1);
     });
 
+    it('should return the same Map reference across calls (no per-frame allocation)', () => {
+      const e1 = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', e1);
+
+      service.apply('e1', StatusEffectType.BURN, 0);
+
+      const first = service.getAllActiveEffects();
+      const second = service.getAllActiveEffects();
+
+      expect(first).toBe(second);
+    });
+
     it('should not include expired effects', () => {
       const e1 = createEnemy('e1', 100, 4);
       enemyMap.set('e1', e1);
