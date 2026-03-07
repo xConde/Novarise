@@ -1580,9 +1580,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           // Move enemies along paths
           const reachedExit = this.enemyService.updateEnemies(PHYSICS_CONFIG.fixedTimestep);
 
-          // Enemies reaching the exit cost lives (state mutation stays per-step)
+          // Enemies reaching the exit cost lives scaled by enemy type
           for (const enemyId of reachedExit) {
-            this.gameStateService.loseLife(1);
+            const leakedEnemy = this.enemyService.getEnemies().get(enemyId);
+            const leakCost = leakedEnemy?.leakDamage ?? 1;
+            this.gameStateService.loseLife(leakCost);
             this.gameStatsService.recordEnemyLeaked();
             frameExitCount++;
             this.enemyService.removeEnemy(enemyId, this.scene);

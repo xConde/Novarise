@@ -33,6 +33,7 @@ export interface Enemy {
   pathIndex: number;
   distanceTraveled: number;
   mesh?: THREE.Mesh; // 3D mesh representation
+  leakDamage: number; // Lives lost when this enemy reaches the exit
   shield?: number;    // Current shield HP (SHIELDED type only)
   maxShield?: number; // Starting shield HP (SHIELDED type only)
   isMiniSwarm?: boolean; // True for mini-enemies spawned by SWARM death — prevents recursive spawning
@@ -45,6 +46,7 @@ export interface EnemyStats {
   value: number;
   color: number; // Hex color for mesh
   size: number; // Sphere radius
+  leakDamage: number; // Lives lost when this enemy reaches the exit
   maxShield?: number;   // Starting shield HP (SHIELDED type only)
   spawnOnDeath?: number; // Number of mini-enemies to spawn on death (SWARM type only)
 }
@@ -56,35 +58,40 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     speed: 2.0, // tiles per second
     value: 10,
     color: 0xff0000, // Red
-    size: 0.3
+    size: 0.3,
+    leakDamage: 1
   },
   [EnemyType.FAST]: {
     health: 50,
     speed: 4.0,
     value: 15,
     color: 0xffff00, // Yellow
-    size: 0.25
+    size: 0.25,
+    leakDamage: 1
   },
   [EnemyType.HEAVY]: {
     health: 300,
     speed: 1.0,
     value: 30,
     color: 0x0000ff, // Blue
-    size: 0.4
+    size: 0.4,
+    leakDamage: 2
   },
   [EnemyType.SWIFT]: {
     health: 80,
     speed: 3.0,
     value: 20,
     color: 0x00ffff, // Cyan
-    size: 0.3
+    size: 0.3,
+    leakDamage: 1
   },
   [EnemyType.BOSS]: {
     health: 1000,
     speed: 0.5,
     value: 100,
     color: 0xff00ff, // Magenta
-    size: 0.6
+    size: 0.6,
+    leakDamage: 3
   },
   [EnemyType.SHIELDED]: {
     health: 120,
@@ -92,6 +99,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     value: 25,
     color: 0x4444ff, // Blue
     size: 0.35,
+    leakDamage: 2,
     maxShield: 60
   },
   [EnemyType.SWARM]: {
@@ -100,6 +108,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     value: 8,
     color: 0xaaaa00, // Yellow-green
     size: 0.25,
+    leakDamage: 1,
     spawnOnDeath: 3
   },
   [EnemyType.FLYING]: {
@@ -107,7 +116,8 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     speed: 2.5,
     value: 20,
     color: 0x88ccff, // Light blue
-    size: 0.3
+    size: 0.3,
+    leakDamage: 1
   }
 };
 
@@ -124,5 +134,6 @@ export const MINI_SWARM_STATS = {
   speed: 3,
   value: 3,
   color: 0xaaaa00, // Same yellow-green as parent
-  size: 0.15
+  size: 0.15,
+  leakDamage: 1
 } as const;

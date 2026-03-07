@@ -19,6 +19,7 @@ describe('StatusEffectService', () => {
       maxHealth: health,
       speed,
       value: 10,
+      leakDamage: 1,
       path: [],
       pathIndex: 0,
       distanceTraveled: 0,

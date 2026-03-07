@@ -62,6 +62,30 @@ describe('Enemy Model', () => {
       });
     });
 
+    it('should have valid leakDamage values (> 0) for all enemy types', () => {
+      Object.values(ENEMY_STATS).forEach(stats => {
+        expect(stats.leakDamage).toBeGreaterThan(0);
+        expect(typeof stats.leakDamage).toBe('number');
+      });
+    });
+
+    it('should have leakDamage=3 for BOSS (highest threat)', () => {
+      expect(ENEMY_STATS[EnemyType.BOSS].leakDamage).toBe(3);
+    });
+
+    it('should have leakDamage=2 for HEAVY and SHIELDED (tank types)', () => {
+      expect(ENEMY_STATS[EnemyType.HEAVY].leakDamage).toBe(2);
+      expect(ENEMY_STATS[EnemyType.SHIELDED].leakDamage).toBe(2);
+    });
+
+    it('should have leakDamage=1 for standard enemies', () => {
+      expect(ENEMY_STATS[EnemyType.BASIC].leakDamage).toBe(1);
+      expect(ENEMY_STATS[EnemyType.FAST].leakDamage).toBe(1);
+      expect(ENEMY_STATS[EnemyType.SWIFT].leakDamage).toBe(1);
+      expect(ENEMY_STATS[EnemyType.SWARM].leakDamage).toBe(1);
+      expect(ENEMY_STATS[EnemyType.FLYING].leakDamage).toBe(1);
+    });
+
     describe('BASIC enemy stats', () => {
       it('should have balanced stats', () => {
         const basic = ENEMY_STATS[EnemyType.BASIC];
@@ -165,6 +189,7 @@ describe('Enemy Model', () => {
         maxHealth: 100,
         speed: 2.0,
         value: 10,
+        leakDamage: 1,
         path: [],
         pathIndex: 0,
         distanceTraveled: 0
@@ -350,6 +375,10 @@ describe('Enemy Model', () => {
 
     it('should use the same color as the SWARM parent', () => {
       expect(MINI_SWARM_STATS.color as number).toBe(ENEMY_STATS[EnemyType.SWARM].color);
+    });
+
+    it('should have leakDamage of 1', () => {
+      expect(MINI_SWARM_STATS.leakDamage).toBe(1);
     });
   });
 

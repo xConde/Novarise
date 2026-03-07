@@ -79,6 +79,7 @@ export class EnemyService {
       maxHealth: stats.health,
       speed: stats.speed,
       value: stats.value,
+      leakDamage: stats.leakDamage,
       path,
       pathIndex: 0,
       distanceTraveled: 0
@@ -452,6 +453,7 @@ export class EnemyService {
       maxHealth: MINI_SWARM_STATS.health,
       speed: MINI_SWARM_STATS.speed,
       value: MINI_SWARM_STATS.value,
+      leakDamage: MINI_SWARM_STATS.leakDamage,
       path: remainingPath,
       pathIndex: 0,
       distanceTraveled: parent.distanceTraveled,

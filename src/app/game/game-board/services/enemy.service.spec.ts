@@ -107,6 +107,23 @@ describe('EnemyService', () => {
       expect(enemy.isMiniSwarm).toBeUndefined();
     });
 
+    it('should set leakDamage from ENEMY_STATS on spawned enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      expect(enemy.leakDamage).toBe(ENEMY_STATS[EnemyType.BOSS].leakDamage);
+    });
+
+    it('should set correct leakDamage for each enemy type', () => {
+      const types: EnemyType[] = [
+        EnemyType.BASIC, EnemyType.FAST, EnemyType.HEAVY,
+        EnemyType.SWIFT, EnemyType.BOSS, EnemyType.SHIELDED,
+        EnemyType.SWARM, EnemyType.FLYING
+      ];
+      types.forEach(type => {
+        const enemy = service.spawnEnemy(type, mockScene)!;
+        expect(enemy.leakDamage).toBe(ENEMY_STATS[type].leakDamage);
+      });
+    });
+
     it('should spawn all enemy types with correct stats', () => {
       const types: EnemyType[] = [
         EnemyType.BASIC,
@@ -694,6 +711,16 @@ describe('EnemyService', () => {
           expect(mini.maxHealth).toBe(MINI_SWARM_STATS.health);
           expect(mini.speed).toBe(MINI_SWARM_STATS.speed);
           expect(mini.value).toBe(MINI_SWARM_STATS.value);
+        });
+      });
+
+      it('should set leakDamage from MINI_SWARM_STATS on spawned mini-enemies', () => {
+        const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+
+        const result = service.damageEnemy(swarm.id, swarm.health);
+
+        result.spawnedEnemies.forEach(mini => {
+          expect(mini.leakDamage).toBe(MINI_SWARM_STATS.leakDamage);
         });
       });
 

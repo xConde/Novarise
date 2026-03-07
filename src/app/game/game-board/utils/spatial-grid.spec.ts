@@ -14,6 +14,7 @@ describe('SpatialGrid', () => {
       maxHealth: health,
       speed: 2,
       value: 10,
+      leakDamage: 1,
       path: [],
       pathIndex: 0,
       distanceTraveled: 0
