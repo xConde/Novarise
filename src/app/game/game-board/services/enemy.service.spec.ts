@@ -833,6 +833,24 @@ describe('EnemyService', () => {
 
       expect(() => service.updateHealthBars()).not.toThrow();
     });
+
+    it('should billboard health bars to match camera quaternion', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 4, 0));
+
+      service.updateHealthBars(quat);
+
+      const healthBarBg = enemy.mesh!.userData['healthBarBg'] as THREE.Mesh;
+      const healthBarFg = enemy.mesh!.userData['healthBarFg'] as THREE.Mesh;
+      expect(healthBarBg.quaternion.x).toBeCloseTo(quat.x, 5);
+      expect(healthBarBg.quaternion.y).toBeCloseTo(quat.y, 5);
+      expect(healthBarBg.quaternion.z).toBeCloseTo(quat.z, 5);
+      expect(healthBarBg.quaternion.w).toBeCloseTo(quat.w, 5);
+      expect(healthBarFg.quaternion.x).toBeCloseTo(quat.x, 5);
+      expect(healthBarFg.quaternion.y).toBeCloseTo(quat.y, 5);
+      expect(healthBarFg.quaternion.z).toBeCloseTo(quat.z, 5);
+      expect(healthBarFg.quaternion.w).toBeCloseTo(quat.w, 5);
+    });
   });
 
   describe('Dead Enemy Movement Guard', () => {

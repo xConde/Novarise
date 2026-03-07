@@ -306,7 +306,7 @@ export class EnemyService {
   /**
    * Update all enemy health bars to reflect current health
    */
-  updateHealthBars(): void {
+  updateHealthBars(cameraQuaternion?: THREE.Quaternion): void {
     this.enemies.forEach(enemy => {
       if (!enemy.mesh) return;
       // The health bar is stored in userData
@@ -326,6 +326,12 @@ export class EnemyService {
           mat.color.setHex(HEALTH_BAR_CONFIG.colorYellow);
         } else {
           mat.color.setHex(HEALTH_BAR_CONFIG.colorRed);
+        }
+
+        // Billboard: face camera
+        if (cameraQuaternion) {
+          healthBarBg.quaternion.copy(cameraQuaternion);
+          healthBarFg.quaternion.copy(cameraQuaternion);
         }
       }
     });
@@ -437,13 +443,11 @@ export class EnemyService {
     const bgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.bgColor, side: THREE.DoubleSide });
     const healthBarBg = new THREE.Mesh(bgGeometry, bgMaterial);
     healthBarBg.position.set(0, barY, 0);
-    healthBarBg.lookAt(0, barY, 1); // Face camera roughly
 
     const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
     const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
     const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
     healthBarFg.position.set(0, barY + 0.001, 0);
-    healthBarFg.lookAt(0, barY + 0.001, 1);
 
     mesh.add(healthBarBg);
     mesh.add(healthBarFg);
@@ -621,13 +625,11 @@ export class EnemyService {
     const bgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.bgColor, side: THREE.DoubleSide });
     const healthBarBg = new THREE.Mesh(bgGeometry, bgMaterial);
     healthBarBg.position.set(0, barY, 0);
-    healthBarBg.lookAt(0, barY, 1);
 
     const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
     const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
     const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
     healthBarFg.position.set(0, barY + 0.001, 0);
-    healthBarFg.lookAt(0, barY + 0.001, 1);
 
     mesh.add(healthBarBg);
     mesh.add(healthBarFg);

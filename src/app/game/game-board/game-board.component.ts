@@ -1720,7 +1720,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         }
 
         // Update health bars and status effect visuals once per frame
-        this.enemyService.updateHealthBars();
+        this.enemyService.updateHealthBars(this.camera.quaternion);
         this.enemyService.updateStatusVisuals(this.statusEffectService.getAllActiveEffects());
 
         // Update minimap
