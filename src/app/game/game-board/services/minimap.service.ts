@@ -39,6 +39,9 @@ export class MinimapService {
     this.canvas.style.borderRadius = '4px';
     this.canvas.style.zIndex = '100';
     this.canvas.style.pointerEvents = 'none';
+    if (!this.visible) {
+      this.canvas.style.display = 'none';
+    }
 
     this.ctx = this.canvas.getContext('2d');
     container.appendChild(this.canvas);
