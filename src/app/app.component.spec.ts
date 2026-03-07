@@ -30,6 +30,7 @@ describe('AppComponent', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const links = compiled.querySelectorAll('.app-nav a');
     expect(links.length).toBe(3);
+    expect(links[0].textContent).toContain('IV');
     expect(links[0].getAttribute('aria-label')).toBe('Home');
     expect(links[1].textContent).toContain('Editor');
     expect(links[2].textContent).toContain('Play');

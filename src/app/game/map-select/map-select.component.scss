@@ -216,30 +216,6 @@
   }
 }
 
-.back-btn {
-  padding: 0.6rem 1.5rem;
-  border-radius: var(--border-radius-md);
-  border: var(--border-width-thin) solid var(--theme-purple);
-  background: var(--theme-purple-a20);
-  color: var(--theme-purple-lighter);
-  font-size: var(--font-size-base);
-  cursor: pointer;
-  margin-top: auto;
-  transition:
-    background var(--transition-fast) ease,
-    box-shadow var(--transition-fast) ease;
-
-  &:hover {
-    background: var(--theme-purple-a50);
-    box-shadow: 0 0 8px var(--theme-purple-glow);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--theme-purple-lighter);
-    outline-offset: 2px;
-  }
-}
-
 // --- Touch devices: always show card actions (no hover) ---
 @media (hover: none) {
   .map-card .card-actions {

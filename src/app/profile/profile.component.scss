@@ -195,40 +195,6 @@
 }
 
 // Back Button
-.back-btn {
-  padding: 0.9rem var(--spacing-lg);
-  border-radius: var(--border-radius-lg);
-  border: var(--border-width-thin) solid var(--theme-purple);
-  background: var(--theme-purple-a20);
-  color: var(--theme-purple-lighter);
-  font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-small);
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  cursor: pointer;
-  min-width: 200px;
-  transition: background var(--transition-fast) ease,
-              box-shadow var(--transition-fast) ease,
-              border-color var(--transition-fast) ease,
-              transform var(--transition-fast) ease;
-
-  &:hover {
-    background: var(--theme-purple-a50);
-    border-color: var(--theme-purple-light);
-    box-shadow: 0 0 12px var(--theme-purple-glow);
-    transform: translateY(-1px);
-  }
-
-  &:active {
-    transform: translateY(0);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--theme-purple-lighter);
-    outline-offset: 2px;
-  }
-}
-
 // Responsive
 @media (max-width: 768px) {
   .stats-grid,
