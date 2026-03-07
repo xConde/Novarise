@@ -647,10 +647,26 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 **Risk:** Raw numeric literals for crystal rotation speed, spark phase offset, boss crown geometry, and ghost preview dimensions bypass the constants layer.
 **Fix:** Add missing fields to TOWER_ANIM_CONFIG, create BOSS_CROWN_CONFIG, create PREVIEW_GHOST_CONFIG.
 
-### Finding 3: Trail geometry disposal ordering (LOW)
+### Finding 3: Trail geometry disposal ordering (LOW — FIXED)
 **Location:** `tower-combat.service.ts:251,274`
-**Risk:** Geometry dispose and reassignment are separated by the creation block. With trailLength=5 this is safe, but colocating dispose with reassignment is more robust.
-**Fix:** Move dispose into the else branch immediately before reassignment.
+**Risk:** Dispose colocated with reassignment in red team pass 8.
+
+## Red Team Critique — feat/visual-overhaul Pass 2 (2026-03-07)
+
+### Finding 1: Trail creates new BufferGeometry per frame per projectile (MEDIUM — FIXED)
+**Location:** `tower-combat.service.ts:248-271`
+**Risk:** 360+ geometry create/dispose cycles/sec with 6 towers firing. GC + GPU churn.
+**Fix:** Pre-allocate fixed-size buffer, update in-place with needsUpdate + setDrawRange.
+
+### Finding 2: Impact flash creates new SphereGeometry per hit (MEDIUM — FIXED)
+**Location:** `tower-combat.service.ts:735-750`
+**Risk:** Identical geometry allocated per hit. Should share like ParticleService.
+**Fix:** Shared geometry field, dispose in cleanup().
+
+### Finding 3: getAllActiveEffects Array.from per enemy (LOW — ACCEPTED)
+**Location:** `status-effect.service.ts:161`
+**Risk:** 30 small array allocs/frame during waves. Low real-world impact.
+**Status:** Accepted. Consumer could iterate effects directly in future refactor.
 
 ## Deployment Checklist — feat/visual-overhaul
 - [x] Fix Finding 1: Reuse persistent Map in getAllActiveEffects()
@@ -659,3 +675,12 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Step 4: Final convention check (console.log, TODO, catch(e), hardcoded numbers)
 - [x] Step 5: Full test suite green (1696/1696, hard gate)
 - [x] Step 6: Push branch + create PR
+
+## Deployment Checklist — feat/visual-overhaul (Closer Pass 2)
+- [x] Fix red team pass 2 Finding 1: Pre-allocate trail BufferGeometry, update in-place
+- [x] Fix red team pass 2 Finding 2: Share impact flash SphereGeometry across all flashes
+- [x] Remove redundant ambient light (hemisphere provides ambient fill)
+- [x] Fix tower placement BFS for corner spawners (flood-fill spawner group)
+- [x] Fix minimap dimensions for rectangular boards (gridWidth/gridHeight)
+- [x] Full test suite green (1697/1697)
+- [x] Push to PR
