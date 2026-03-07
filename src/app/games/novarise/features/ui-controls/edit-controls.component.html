@@ -125,25 +125,12 @@
         <div class="shortcut-item">Ctrl+Z - Undo</div>
         <div class="shortcut-item">Ctrl+Y - Redo</div>
       </div>
-      <div class="shortcut-column">
-        <div class="shortcut-title">Game</div>
-        <div class="shortcut-item">Enter - Play Map</div>
-      </div>
     </div>
   </div>
 
-  <div class="play-section">
+  <div class="path-section">
     <span class="path-status path-valid" *ngIf="isPathValid">Path OK ✓</span>
     <span class="path-status path-invalid" *ngIf="!isPathValid && hasSpawnAndExit">No valid path ✗</span>
     <span class="play-hint" *ngIf="!hasSpawnAndExit">Set spawn (P) and exit (X) first</span>
-    <button
-      class="play-map-btn"
-      [class.disabled]="!canPlayMap"
-      [class.path-valid-btn]="canPlayMap"
-      [disabled]="!canPlayMap"
-      (click)="playMapClick.emit()"
-      aria-label="Play this map (Enter)">
-      Play Map
-    </button>
   </div>
 </div>

@@ -21,7 +21,6 @@
       [selectedTerrainType]="selectedTerrainType"
       [brushSize]="brushSize"
       [activeTool]="activeTool"
-      [canPlayMap]="canPlayMap"
       [isPathValid]="isPathValid"
       [hasSpawnAndExit]="hasSpawnAndExit"
       [templates]="templates"
@@ -29,7 +28,6 @@
       (terrainTypeChange)="setTerrainType($event)"
       (brushSizeChange)="setBrushSize($event)"
       (activeToolChange)="setActiveTool($event)"
-      (playMapClick)="playMap()"
       (templateSelect)="loadTemplate($event)">
     </app-edit-controls>
   </div>
