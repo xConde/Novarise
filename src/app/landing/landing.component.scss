@@ -1,6 +1,6 @@
 .landing-container {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   min-height: 100vh;
   background-color: var(--bg-color);
@@ -8,6 +8,7 @@
   position: relative;
   overflow: hidden;
   padding: var(--spacing-md);
+  padding-top: 12vh;
 
   // Subtle radial gradient behind content
   &::before {

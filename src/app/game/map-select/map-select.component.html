@@ -1,5 +1,8 @@
 <div class="map-select-container">
-  <h1 class="map-select-title">Select Map</h1>
+  <h1 class="map-select-title">
+    <a class="back-arrow" (click)="goHome()" aria-label="Back to home">&larr;</a>
+    Select Map
+  </h1>
 
   <div class="map-grid">
     <button class="map-card quick-play-card" (click)="quickPlay()">

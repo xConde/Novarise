@@ -44,7 +44,24 @@
   text-shadow: 0 0 20px var(--theme-purple-glow),
                0 0 40px var(--theme-purple-glow);
   margin: 0;
-  text-indent: 0.3em;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.back-arrow {
+  color: var(--theme-purple-light);
+  font-size: var(--font-size-hero);
+  cursor: pointer;
+  transition: color var(--transition-fast) ease, transform var(--transition-fast) ease;
+  line-height: 1;
+  text-decoration: none;
+  letter-spacing: 0;
+
+  &:hover {
+    color: var(--theme-purple-lighter);
+    transform: translateX(-4px);
+  }
 }
 
 // First-time hint

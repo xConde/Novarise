@@ -1,6 +1,9 @@
 <div class="profile-container">
   <div class="profile-content">
-    <h1 class="profile-title">PROFILE</h1>
+    <h1 class="profile-title">
+      <a class="back-arrow" (click)="goHome()" aria-label="Back to home">&larr;</a>
+      PROFILE
+    </h1>
 
     <p class="first-time-hint" *ngIf="profile.totalGamesPlayed === 0">
       Play your first game to start tracking stats!
