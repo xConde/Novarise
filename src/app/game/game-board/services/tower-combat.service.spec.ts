@@ -5,6 +5,7 @@ import { GameBoardService } from '../game-board.service';
 import { TowerType, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { Enemy, EnemyType } from '../models/enemy.model';
 import { AudioService } from './audio.service';
+import { StatusEffectService } from './status-effect.service';
 import * as THREE from 'three';
 
 describe('TowerCombatService', () => {
@@ -63,6 +64,7 @@ describe('TowerCombatService', () => {
     TestBed.configureTestingModule({
       providers: [
         TowerCombatService,
+        StatusEffectService,
         { provide: EnemyService, useValue: enemyServiceSpy },
         { provide: GameBoardService, useValue: gameBoardServiceSpy },
         { provide: AudioService, useValue: audioServiceSpy }

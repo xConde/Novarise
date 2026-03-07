@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { EnemyService, DamageResult } from './enemy.service';
 import { TowerCombatService } from './tower-combat.service';
+import { StatusEffectService } from './status-effect.service';
 import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
 import { EnemyType, ENEMY_STATS, FLYING_ENEMY_HEIGHT, Enemy } from '../models/enemy.model';
@@ -284,6 +285,7 @@ describe('Flying Enemy', () => {
         TestBed.configureTestingModule({
           providers: [
             TowerCombatService,
+            StatusEffectService,
             { provide: EnemyService, useValue: enemySpy },
             { provide: GameBoardService, useValue: gameBoardServiceForCombat },
             { provide: AudioService, useValue: audioServiceSpy }

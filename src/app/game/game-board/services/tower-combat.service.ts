@@ -8,6 +8,8 @@ import { AudioService } from './audio.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
 import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y } from '../constants/combat.constants';
 import { PROJECTILE_POOL_CONFIG } from '../constants/physics.constants';
+import { StatusEffectType } from '../constants/status-effect.constants';
+import { StatusEffectService } from './status-effect.service';
 import { SpatialGrid } from '../utils/spatial-grid';
 import { ObjectPool } from '../utils/object-pool';
 
@@ -39,13 +41,6 @@ interface MortarZone {
   lastTickTime: number;    // gameTime of last DoT tick
 }
 
-/** Slow effect tracked per enemy. */
-interface SlowEffect {
-  enemyId: string;
-  originalSpeed: number;
-  expiresAt: number;
-}
-
 /** Info about a tower kill — includes the damage of the final hit. */
 export interface KillInfo {
   id: string;
@@ -58,7 +53,6 @@ export class TowerCombatService {
   private projectiles: Projectile[] = [];
   private chainArcs: ChainArc[] = [];
   private mortarZones: MortarZone[] = [];
-  private slowEffects: Map<string, SlowEffect> = new Map();
   private projectileCounter = 0;
   private gameTime = 0;
   private spatialGrid = new SpatialGrid();
@@ -67,7 +61,8 @@ export class TowerCombatService {
   constructor(
     private enemyService: EnemyService,
     private gameBoardService: GameBoardService,
-    private audioService: AudioService
+    private audioService: AudioService,
+    private statusEffectService: StatusEffectService
   ) {
     this.projectilePool = new ObjectPool<THREE.Mesh>(
       () => this.createPooledProjectileMesh(),
@@ -138,8 +133,9 @@ export class TowerCombatService {
       }
     });
 
-    // Expire slow effects before tower processing so towers see accurate speeds
-    this.expireSlowEffects();
+    // Tick status effects (expire SLOW, deal DoT damage) before tower processing
+    const dotKills = this.statusEffectService.update(this.gameTime);
+    killedEnemies.push(...dotKills);
 
     // Tower targeting and firing — resolve stats per-tower using level
     this.placedTowers.forEach(tower => {
@@ -333,13 +329,10 @@ export class TowerCombatService {
 
   private applySlowAura(tower: PlacedTower, stats: TowerStats): void {
     const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
-    const slowFactor = stats.slowFactor ?? 0.5;
-    const slowDuration = stats.slowDuration ?? 2;
 
     const candidates = this.spatialGrid.queryRadius(towerWorldX, towerWorldZ, stats.range);
     for (const enemy of candidates) {
       if (enemy.health <= 0) continue;
-      if (enemy.isFlying) continue; // Flying enemies are immune to ground slow auras
 
       const dx = enemy.position.x - towerWorldX;
       const dz = enemy.position.z - towerWorldZ;
@@ -348,33 +341,8 @@ export class TowerCombatService {
       // Narrow-phase range check
       if (dist > stats.range) continue;
 
-      const existing = this.slowEffects.get(enemy.id);
-      if (existing) {
-        // Refresh duration — do not re-apply speed reduction (already slowed)
-        existing.expiresAt = this.gameTime + slowDuration;
-      } else {
-        // First application — record original speed and reduce it
-        const originalSpeed = enemy.speed;
-        enemy.speed = originalSpeed * slowFactor;
-        this.slowEffects.set(enemy.id, {
-          enemyId: enemy.id,
-          originalSpeed,
-          expiresAt: this.gameTime + slowDuration
-        });
-      }
-    }
-  }
-
-  private expireSlowEffects(): void {
-    for (const [enemyId, effect] of this.slowEffects) {
-      if (this.gameTime >= effect.expiresAt) {
-        // Restore speed if enemy is still alive
-        const enemy = this.enemyService.getEnemies().get(enemyId);
-        if (enemy && enemy.health > 0) {
-          enemy.speed = effect.originalSpeed;
-        }
-        this.slowEffects.delete(enemyId);
-      }
+      // StatusEffectService handles immunity (flying), duration refresh, and speed mutation
+      this.statusEffectService.apply(enemy.id, StatusEffectType.SLOW, this.gameTime);
     }
   }
 
@@ -709,14 +677,8 @@ export class TowerCombatService {
     }
     this.mortarZones = [];
 
-    // Restore all slowed enemies to original speed
-    for (const effect of this.slowEffects.values()) {
-      const enemy = this.enemyService.getEnemies().get(effect.enemyId);
-      if (enemy && enemy.health > 0) {
-        enemy.speed = effect.originalSpeed;
-      }
-    }
-    this.slowEffects.clear();
+    // Restore all status effects (slow speed, etc.)
+    this.statusEffectService.cleanup();
 
     // Dispose and remove all tower meshes from scene
     this.placedTowers.forEach(tower => {
