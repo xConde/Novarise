@@ -676,6 +676,20 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Step 5: Full test suite green (1696/1696, hard gate)
 - [x] Step 6: Push branch + create PR
 
+## Red Team Critique — feat/visual-overhaul Pass 3 (2026-03-07)
+
+### Finding 1: Health bar billboarding broken by enemy facing rotation (CRITICAL — FIXED)
+**Location:** `enemy.service.ts:332-336`
+**Risk:** `quaternion.copy(cameraQuat)` sets LOCAL quaternion on a child of a rotated parent. World quaternion becomes `parentRot * cameraQuat` — health bars tilt/rotate with enemy facing direction.
+**Fix:** Invert parent world quaternion: `getWorldQuaternion().invert().premultiply(cameraQuat)`.
+
+### Finding 2: Dead export AMBIENT_LIGHT (LOW — FIXED)
+**Location:** `lighting.constants.ts:23`
+**Fix:** Removed — no consumers after ambient light was removed from game scene.
+
+### Finding 3: Test gaps — trail reuse, flash sharing, facing angle, billboard rotation (HIGH — FIXED)
+**Fix:** Added 4 new tests in tower-combat.service.spec.ts (trail setDrawRange reuse, shared flash geometry identity, flash re-creation after cleanup) and strengthened 2 tests in enemy.service.spec.ts (correct facing angle, billboard with rotated parent). 1697→1701 tests.
+
 ## Deployment Checklist — feat/visual-overhaul (Closer Pass 2)
 - [x] Fix red team pass 2 Finding 1: Pre-allocate trail BufferGeometry, update in-place
 - [x] Fix red team pass 2 Finding 2: Share impact flash SphereGeometry across all flashes
