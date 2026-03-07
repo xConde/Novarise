@@ -18,6 +18,8 @@
       (click)="setTab('shortcuts')">
       Shortcuts
     </button>
+    <span class="path-badge path-valid" *ngIf="isPathValid">✓</span>
+    <span class="path-badge path-invalid" *ngIf="!isPathValid && hasSpawnAndExit">✗</span>
   </div>
 
   <div class="tab-content" *ngIf="activeTab === 'editor'">
@@ -128,9 +130,4 @@
     </div>
   </div>
 
-  <div class="path-section">
-    <span class="path-status path-valid" *ngIf="isPathValid">Path OK ✓</span>
-    <span class="path-status path-invalid" *ngIf="!isPathValid && hasSpawnAndExit">No valid path ✗</span>
-    <span class="play-hint" *ngIf="!hasSpawnAndExit">Set spawn (P) and exit (X) first</span>
-  </div>
 </div>
