@@ -52,3 +52,32 @@ export const TOWER_UPGRADE_VISUAL_CONFIG = {
     segments: 32,
   },
 } as const;
+
+export const TOWER_ANIM_CONFIG = {
+  /** Basic crystal float: vertical bobbing */
+  crystalBobSpeed: 2.0,
+  crystalBobAmplitude: 0.05,
+  crystalBaseY: 1.35,
+
+  /** Slow crystal rotation speed (radians/sec) */
+  slowCrystalRotSpeed: 1.5,
+  slowCrystalBaseY: 0.82,
+  slowCrystalBobAmplitude: 0.03,
+
+  /** Chain orb pulse: scale oscillation */
+  orbPulseSpeed: 3.0,
+  orbPulseMin: 0.9,
+  orbPulseMax: 1.15,
+
+  /** Chain spark orbit speed (radians/sec) */
+  sparkOrbitSpeed: 2.5,
+
+  /** Splash spore bob speed and amplitude */
+  sporeBobSpeed: 1.8,
+  sporeBobAmplitude: 0.04,
+
+  /** Sniper tip glow pulse */
+  tipGlowSpeed: 2.0,
+  tipGlowMin: 0.6,
+  tipGlowMax: 1.2,
+} as const;

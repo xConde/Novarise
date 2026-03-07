@@ -35,7 +35,7 @@ import { AMBIENT_LIGHT, KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LI
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
 import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
-import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
+import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
 import { ENEMY_STATS } from './models/enemy.model';
@@ -1716,6 +1716,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
 
+    // Animate tower idle effects
+    this.updateTowerAnimations(time);
+
     // Update visual effects (run every frame regardless of pause)
     if (deltaTime > 0) {
       this.particleService.addPendingToScene(this.scene);
@@ -1751,6 +1754,64 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       entities.push({ x: enemy.gridPosition.col, z: enemy.gridPosition.row, type: 'enemy' });
     });
     this.minimapService.update(timeMs, terrain, entities);
+  }
+
+  private updateTowerAnimations(time: number): void {
+    const t = time * 0.001; // Convert ms to seconds
+    for (const group of this.towerMeshes.values()) {
+      const towerType = group.userData['towerType'] as TowerType | undefined;
+      if (!towerType) continue;
+
+      group.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+
+        switch (child.name) {
+          case 'crystal':
+            if (towerType === TowerType.BASIC) {
+              child.position.y = TOWER_ANIM_CONFIG.crystalBaseY
+                + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.crystalBobAmplitude;
+              child.rotation.y = t * 0.5;
+            } else if (towerType === TowerType.SLOW) {
+              child.position.y = TOWER_ANIM_CONFIG.slowCrystalBaseY
+                + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.slowCrystalBobAmplitude;
+              child.rotation.y = t * TOWER_ANIM_CONFIG.slowCrystalRotSpeed;
+            }
+            break;
+
+          case 'orb': {
+            const pulseScale = TOWER_ANIM_CONFIG.orbPulseMin
+              + (Math.sin(t * TOWER_ANIM_CONFIG.orbPulseSpeed) * 0.5 + 0.5)
+              * (TOWER_ANIM_CONFIG.orbPulseMax - TOWER_ANIM_CONFIG.orbPulseMin);
+            child.scale.setScalar(pulseScale);
+            break;
+          }
+
+          case 'spark': {
+            if (child.userData['baseY'] === undefined) child.userData['baseY'] = child.position.y;
+            child.position.y = child.userData['baseY']
+              + Math.sin(t * TOWER_ANIM_CONFIG.sparkOrbitSpeed + child.position.x * 10) * 0.03;
+            break;
+          }
+
+          case 'spore': {
+            if (child.userData['baseY'] === undefined) child.userData['baseY'] = child.position.y;
+            child.position.y = child.userData['baseY']
+              + Math.sin(t * TOWER_ANIM_CONFIG.sporeBobSpeed + child.position.x * 5) * TOWER_ANIM_CONFIG.sporeBobAmplitude;
+            break;
+          }
+
+          case 'tip': {
+            const mat = child.material as THREE.MeshStandardMaterial;
+            if (mat.emissiveIntensity !== undefined) {
+              mat.emissiveIntensity = TOWER_ANIM_CONFIG.tipGlowMin
+                + (Math.sin(t * TOWER_ANIM_CONFIG.tipGlowSpeed) * 0.5 + 0.5)
+                * (TOWER_ANIM_CONFIG.tipGlowMax - TOWER_ANIM_CONFIG.tipGlowMin);
+            }
+            break;
+          }
+        }
+      });
+    }
   }
 
   // --- Cleanup ---

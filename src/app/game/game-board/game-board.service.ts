@@ -452,6 +452,7 @@ export class GameBoardService {
         oTop.rotation.y = Math.PI / 6;
 
         const oCrystal = new THREE.Mesh(crystal, basicMat);
+        oCrystal.name = 'crystal';
         oCrystal.position.y = 1.35;
 
         towerGroup.add(oBase, oMid1, oMid2, oTop, oCrystal);
@@ -489,6 +490,7 @@ export class GameBoardService {
         snTip.position.y = 1.55;
 
         const snPoint = new THREE.Mesh(spikePoint, sniperMat);
+        snPoint.name = 'tip';
         snPoint.position.y = 2.0;
 
         towerGroup.add(snBase, snShaft1, snShaft2, snTip, snPoint);
@@ -526,12 +528,15 @@ export class GameBoardService {
         spCapTop.position.y = 0.85;
 
         const spSpore1 = new THREE.Mesh(spore1, splashMat);
+        spSpore1.name = 'spore';
         spSpore1.position.set(0.15, 0.95, 0.1);
 
         const spSpore2 = new THREE.Mesh(spore2, splashMat);
+        spSpore2.name = 'spore';
         spSpore2.position.set(-0.12, 0.9, -0.08);
 
         const spSpore3 = new THREE.Mesh(spore3, splashMat);
+        spSpore3.name = 'spore';
         spSpore3.position.set(0.08, 1.0, -0.15);
 
         towerGroup.add(spStemBase, spStemMid, spCapBase, spCapTop, spSpore1, spSpore2, spSpore3);
@@ -569,6 +574,7 @@ export class GameBoardService {
         slRingInner.position.y = 0.645;
 
         const slCrystal = new THREE.Mesh(iceCrystal, slowMat);
+        slCrystal.name = 'crystal';
         slCrystal.position.y = 0.82;
 
         towerGroup.add(slBase, slPillar, slRingOuter, slRingInner, slCrystal);
@@ -598,12 +604,15 @@ export class GameBoardService {
         chShaft.position.y = 0.6;
 
         const chOrb = new THREE.Mesh(chainOrb, chainMat);
+        chOrb.name = 'orb';
         chOrb.position.y = 1.18;
 
         const chSpark1 = new THREE.Mesh(chainSpark1, chainMat);
+        chSpark1.name = 'spark';
         chSpark1.position.set(0.22, 1.25, 0);
 
         const chSpark2 = new THREE.Mesh(chainSpark2, chainMat);
+        chSpark2.name = 'spark';
         chSpark2.position.set(-0.18, 1.3, 0.14);
 
         towerGroup.add(chBase, chShaft, chOrb, chSpark1, chSpark2);
@@ -633,10 +642,12 @@ export class GameBoardService {
 
         // Angled barrel tilted ~40 degrees
         const moBarrel = new THREE.Mesh(mortarBarrel, mortarMat);
+        moBarrel.name = 'barrel';
         moBarrel.position.set(0.1, 0.72, 0);
         moBarrel.rotation.z = -Math.PI / 4.5;
 
         const moMuzzle = new THREE.Mesh(mortarMuzzle, mortarMat);
+        moMuzzle.name = 'muzzle';
         moMuzzle.position.set(0.25, 0.98, 0);
         moMuzzle.rotation.z = -Math.PI / 4.5;
 
@@ -666,6 +677,7 @@ export class GameBoardService {
     towerGroup.position.set(x, tileTop, z);
     towerGroup.castShadow = true;
     towerGroup.receiveShadow = true;
+    towerGroup.userData['towerType'] = towerType;
 
     // Add shadow casting to all children
     towerGroup.traverse((child) => {
