@@ -35,7 +35,7 @@ import { AMBIENT_LIGHT, KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LI
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
 import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
-import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG } from './constants/effects.constants';
+import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
 import { ENEMY_STATS } from './models/enemy.model';
@@ -1717,8 +1717,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
 
-    // Animate tower idle effects
+    // Animate tower idle effects and tile pulses
     this.updateTowerAnimations(time);
+    this.updateTilePulse(time);
 
     // Update visual effects (run every frame regardless of pause)
     if (deltaTime > 0) {
@@ -1810,6 +1811,20 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           }
         }
       });
+    }
+  }
+
+  private updateTilePulse(time: number): void {
+    const t = time * 0.001;
+    const intensity = TILE_PULSE_CONFIG.min
+      + (Math.sin(t * TILE_PULSE_CONFIG.speed) * 0.5 + 0.5)
+      * (TILE_PULSE_CONFIG.max - TILE_PULSE_CONFIG.min);
+
+    for (const mesh of this.tileMeshes.values()) {
+      const tileType = mesh.userData?.['tile']?.type;
+      if (tileType === BlockType.SPAWNER || tileType === BlockType.EXIT) {
+        (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = intensity;
+      }
     }
   }
 

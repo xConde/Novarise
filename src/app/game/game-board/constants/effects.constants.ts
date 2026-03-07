@@ -81,3 +81,10 @@ export const TOWER_ANIM_CONFIG = {
   tipGlowMin: 0.6,
   tipGlowMax: 1.2,
 } as const;
+
+export const TILE_PULSE_CONFIG = {
+  /** Emissive intensity oscillation for spawner/exit tiles */
+  speed: 1.5,
+  min: 0.3,
+  max: 0.7,
+} as const;
