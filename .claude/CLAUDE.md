@@ -2,9 +2,11 @@
 
 ## Project Overview
 Angular 15 + Three.js tower defense game with a map editor.
+- **`/`** — Landing page (LandingModule, lazy-loaded)
 - **`/edit`** — Map editor (EditorModule, lazy-loaded)
-- **`/play`** — Tower defense game (GameModule, lazy-loaded)
-- **Tests:** `npm test` (Karma, 579 tests, headless Chrome)
+- **`/maps`** — Map select (MapSelectModule, lazy-loaded)
+- **`/play`** — Tower defense game (GameModule, lazy-loaded, guarded)
+- **Tests:** `npm test` (Karma, 1656 tests, headless Chrome)
 - **Deploy:** Cloudflare Pages
 
 ## Code Conventions
@@ -87,14 +89,17 @@ When adding new towers, enemies, or waves, follow the established config-driven 
 ## Key Files
 | File | Purpose |
 |------|---------|
-| `game-board.component.ts` | Game renderer, loop, UI (924 LOC — complex but well-delegated) |
-| `novarise.component.ts` | Editor renderer, interactions (1,693 LOC) |
+| `game-board.component.ts` | Game renderer, loop, UI (~1,800 LOC) |
+| `novarise.component.ts` | Editor renderer, interactions (~1,880 LOC) |
 | `tower.model.ts` | Tower configs, upgrade math |
 | `enemy.model.ts` | Enemy configs, pathfinding types |
 | `wave.model.ts` | Wave definitions |
 | `game-state.model.ts` | Game phase enum, initial state |
 | `map-bridge.service.ts` | Editor→Game map conversion (root injectable) |
-| `STRATEGIC_AUDIT.md` | Master sprint roadmap |
+| `game-modifier.model.ts` | Modifier configs, merge logic, score multipliers |
+| `status-effect.service.ts` | SLOW/BURN/POISON effects, immunity, speed restoration |
+| `tower-combat.service.ts` | Targeting, projectiles, chain, mortar, spatial grid |
+| `STRATEGIC_AUDIT.md` | Master sprint roadmap + red team findings |
 
 ## Sprint Workflow
 
