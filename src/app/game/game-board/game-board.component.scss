@@ -785,11 +785,11 @@
       .spec-btn {
         display: flex;
         flex-direction: column;
-        gap: 0.125rem;
+        gap: var(--border-width-medium);
         padding: var(--spacing-sm);
-        border: var(--border-width-thin) solid rgba(100, 200, 255, 0.3);
+        border: var(--border-width-thin) solid var(--panel-blue-border);
         border-radius: var(--border-radius-sm);
-        background: rgba(20, 60, 120, 0.3);
+        background: var(--panel-blue-bg);
         font-family: "Orbitron", sans-serif;
         cursor: pointer;
         transition: all var(--transition-medium) ease;
@@ -797,8 +797,8 @@
         min-height: 2.75rem;
 
         &:hover {
-          background: rgba(30, 90, 160, 0.45);
-          border-color: rgba(100, 200, 255, 0.6);
+          background: var(--panel-blue-hover);
+          border-color: var(--panel-blue-border-hover);
         }
 
         &.unaffordable {
@@ -807,21 +807,21 @@
         }
 
         .spec-label {
-          font-size: 0.75rem;
+          font-size: var(--font-size-xs);
           font-weight: 700;
-          color: #88ddff;
+          color: var(--panel-blue-accent);
           text-transform: uppercase;
           letter-spacing: 0.0313rem;
         }
 
         .spec-desc {
-          font-size: 0.625rem;
-          color: rgba(255, 255, 255, 0.6);
+          font-size: var(--font-size-2xs);
+          color: var(--text-muted);
         }
 
         .spec-stats {
-          font-size: 0.5625rem;
-          color: rgba(255, 255, 255, 0.4);
+          font-size: var(--font-size-3xs);
+          color: var(--text-faint);
           font-family: monospace;
         }
       }
@@ -830,16 +830,16 @@
         padding: var(--spacing-xs);
         border: var(--border-width-thin) solid var(--border-color);
         border-radius: var(--border-radius-sm);
-        background: rgba(80, 80, 80, 0.3);
-        color: rgba(255, 255, 255, 0.5);
+        background: var(--panel-neutral-bg);
+        color: var(--text-dim);
         font-family: "Orbitron", sans-serif;
-        font-size: 0.625rem;
+        font-size: var(--font-size-2xs);
         cursor: pointer;
         transition: all var(--transition-medium) ease;
         min-height: 2.75rem;
 
         &:hover {
-          background: rgba(120, 120, 120, 0.4);
+          background: var(--panel-neutral-hover);
           color: var(--text-color);
         }
       }
@@ -987,10 +987,10 @@
     }
 
     .modifiers-label {
-      font-size: 0.625rem;
+      font-size: var(--font-size-2xs);
       text-transform: uppercase;
       letter-spacing: 0.125rem;
-      color: rgba(255, 255, 255, 0.5);
+      color: var(--text-dim);
     }
 
     .modifier-options {
@@ -1005,7 +1005,7 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.125rem;
+      gap: var(--border-width-medium);
       padding: var(--spacing-xs) var(--spacing-sm);
       background: transparent;
       border: var(--border-width-thin) solid var(--border-color);
@@ -1036,7 +1036,7 @@
 
       .modifier-name {
         font-family: "Orbitron", sans-serif;
-        font-size: 0.625rem;
+        font-size: var(--font-size-2xs);
         font-weight: 700;
         color: var(--text-color);
         text-transform: uppercase;
@@ -1045,8 +1045,8 @@
       }
 
       .modifier-desc {
-        font-size: 0.5625rem;
-        color: rgba(255, 255, 255, 0.55);
+        font-size: var(--font-size-3xs);
+        color: var(--text-dimmer);
         text-align: center;
         line-height: 1.2;
         max-width: 6rem;

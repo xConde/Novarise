@@ -380,3 +380,35 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 **Location:** `tower-combat.service.ts:684` (drain in cleanup)
 **Risk:** Pre-warmed pool meshes (created in constructor) are never added to a scene. `drain()` calls `scene.remove(mesh)` on them — this is a Three.js no-op for non-children. No memory leak, no error, just a wasted call.
 **Status:** Accepted. Cost is negligible (20 no-op calls on cleanup).
+
+---
+
+## Red Team Pass 1 — feat/engine-depth Sprints 6-10 (2026-03-07)
+
+**FIXED:**
+1. **Last spawn/exit removal** — editor allowed toggling off the only spawn/exit point, leaving an unplayable map. Added `length <= 1` guard in `addSpawnPoint()`/`addExitPoint()`.
+2. **Speed division fragility** — SPEED_DEMONS selective application divided by modifier value without zero guard. Added `!== 0` check.
+
+**VERIFIED NOT BUGS:**
+- Double-specialization: `upgradeTowerWithSpec()` already guards `level !== MAX_TOWER_LEVEL - 1`
+- DoT+leak race: kill processing runs before `updateEnemies()`, dead enemies removed first
+
+## Red Team Pass 2 — All 10 Sprints (2026-03-07)
+
+**FIXED:**
+1. **MIN_ENEMY_SPEED floor** — no guard prevented `enemy.speed` from going to zero/negative with extreme modifier stacking. Added `MIN_ENEMY_SPEED = 0.1` constant and `Math.max()` floor after all modifier application.
+2. **Modifier combo test coverage** — added triple-modifier combo test (ARMORED+FAST+SPEED_DEMONS) and speed floor test.
+
+**ACCEPTED (LOW — deferred):**
+- SCSS magic numbers in new UI panels (spec choice, modifier selector) — cosmetic, not runtime risk
+- Mortar projectiles not pooled (fresh geometry per fire) — cleanup is correct, just less efficient
+- `projectileCounter` increments without upper bound — resets on cleanup, fine per session
+
+---
+
+## Deployment Checklist
+
+- [x] Step 1: Extract SCSS magic numbers in new UI panels to CSS custom properties
+- [ ] Step 2: Update STRATEGIC_AUDIT.md with completed engine-depth sprint summary
+- [ ] Step 3: Run full test suite — confirm all 1638+ tests green
+- [ ] Step 4: Update MEMORY.md with final branch state

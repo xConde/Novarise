@@ -105,12 +105,31 @@
   --rainbow-green: #008000;
   --rainbow-gold: gold;
 
+  /* Panel backgrounds (glass panels with colored tints) */
+  --panel-blue-bg: rgba(20, 60, 120, 0.3);
+  --panel-blue-hover: rgba(30, 90, 160, 0.45);
+  --panel-blue-border: rgba(100, 200, 255, 0.3);
+  --panel-blue-border-hover: rgba(100, 200, 255, 0.6);
+  --panel-blue-accent: #88ddff;
+  --panel-neutral-bg: rgba(80, 80, 80, 0.3);
+  --panel-neutral-hover: rgba(120, 120, 120, 0.4);
+
+  /* Text opacity variants */
+  --text-muted: rgba(255, 255, 255, 0.6);
+  --text-dim: rgba(255, 255, 255, 0.5);
+  --text-faint: rgba(255, 255, 255, 0.4);
+  --text-subtle: rgba(255, 255, 255, 0.45);
+  --text-dimmer: rgba(255, 255, 255, 0.55);
+
   /* Typography Scale */
   --font-size-hero: 3rem;
   --font-size-large: 2rem;
   --font-size-title: 1.5rem;
   --font-size-base: 1rem;
   --font-size-small: 0.875rem;
+  --font-size-xs: 0.75rem;
+  --font-size-2xs: 0.625rem;
+  --font-size-3xs: 0.5625rem;
 
   /* Spacing System */
   --spacing-xs: 0.3125rem;   /* 5px */
