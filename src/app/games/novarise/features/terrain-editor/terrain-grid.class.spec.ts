@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { TerrainGrid } from './terrain-grid.class';
 import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
+import { MAX_SPAWN_POINTS, MAX_EXIT_POINTS } from '../../constants/editor-ui.constants';
 
 describe('TerrainGrid', () => {
   let scene: THREE.Scene;
@@ -59,6 +60,14 @@ describe('TerrainGrid', () => {
       expect(exitPoint).toBeTruthy();
       expect(exitPoint!.x).toBe(defaultGridSize - 1);
       expect(exitPoint!.z).toBe(Math.floor(defaultGridSize / 2));
+    });
+
+    it('should have exactly one default spawn point', () => {
+      expect(terrainGrid.getSpawnPoints().length).toBe(1);
+    });
+
+    it('should have exactly one default exit point', () => {
+      expect(terrainGrid.getExitPoints().length).toBe(1);
     });
 
     it('should create meshes with correct userData', () => {
@@ -224,8 +233,8 @@ describe('TerrainGrid', () => {
     });
   });
 
-  describe('Spawn and Exit Points', () => {
-    it('should set spawn point', () => {
+  describe('Spawn and Exit Points (Legacy Single-Point API)', () => {
+    it('should set spawn point via setSpawnPoint', () => {
       terrainGrid.setSpawnPoint(3, 3);
 
       const spawn = terrainGrid.getSpawnPoint();
@@ -233,7 +242,7 @@ describe('TerrainGrid', () => {
       expect(spawn!.z).toBe(3);
     });
 
-    it('should set exit point', () => {
+    it('should set exit point via setExitPoint', () => {
       terrainGrid.setExitPoint(7, 7);
 
       const exit = terrainGrid.getExitPoint();
@@ -267,6 +276,140 @@ describe('TerrainGrid', () => {
       terrainGrid.setExitPoint(defaultGridSize, 0);
 
       expect(terrainGrid.getExitPoint()).toEqual(originalExit);
+    });
+
+    it('setSpawnPoint replaces all existing spawn points', () => {
+      terrainGrid.addSpawnPoint(1, 1);
+      terrainGrid.addSpawnPoint(2, 2);
+      expect(terrainGrid.getSpawnPoints().length).toBeGreaterThanOrEqual(2);
+
+      terrainGrid.setSpawnPoint(5, 5);
+      expect(terrainGrid.getSpawnPoints().length).toBe(1);
+      expect(terrainGrid.getSpawnPoint()).toEqual({ x: 5, z: 5 });
+    });
+
+    it('setExitPoint replaces all existing exit points', () => {
+      terrainGrid.addExitPoint(1, 1);
+      terrainGrid.addExitPoint(2, 2);
+      expect(terrainGrid.getExitPoints().length).toBeGreaterThanOrEqual(2);
+
+      terrainGrid.setExitPoint(5, 5);
+      expect(terrainGrid.getExitPoints().length).toBe(1);
+      expect(terrainGrid.getExitPoint()).toEqual({ x: 5, z: 5 });
+    });
+  });
+
+  describe('Multi-Spawn/Exit Points (addSpawnPoint / addExitPoint)', () => {
+    it('should add multiple spawn points', () => {
+      // Clear default spawn by setting to known position
+      terrainGrid.setSpawnPoint(0, 0);
+      expect(terrainGrid.getSpawnPoints().length).toBe(1);
+
+      terrainGrid.addSpawnPoint(1, 1);
+      expect(terrainGrid.getSpawnPoints().length).toBe(2);
+
+      terrainGrid.addSpawnPoint(2, 2);
+      expect(terrainGrid.getSpawnPoints().length).toBe(3);
+    });
+
+    it('should toggle off when adding an existing spawn point', () => {
+      terrainGrid.setSpawnPoint(3, 3);
+      terrainGrid.addSpawnPoint(4, 4); // need 2 points so we can remove one
+      expect(terrainGrid.getSpawnPoints().length).toBe(2);
+
+      const added = terrainGrid.addSpawnPoint(3, 3);
+      expect(added).toBe(false);
+      expect(terrainGrid.getSpawnPoints().length).toBe(1);
+    });
+
+    it('should not allow removing the last spawn point', () => {
+      terrainGrid.setSpawnPoint(3, 3);
+      expect(terrainGrid.getSpawnPoints().length).toBe(1);
+
+      const added = terrainGrid.addSpawnPoint(3, 3);
+      expect(added).toBe(false);
+      expect(terrainGrid.getSpawnPoints().length).toBe(1);
+    });
+
+    it('should toggle off when adding an existing exit point', () => {
+      terrainGrid.setExitPoint(3, 3);
+      terrainGrid.addExitPoint(4, 4); // need 2 points so we can remove one
+      expect(terrainGrid.getExitPoints().length).toBe(2);
+
+      const added = terrainGrid.addExitPoint(3, 3);
+      expect(added).toBe(false);
+      expect(terrainGrid.getExitPoints().length).toBe(1);
+    });
+
+    it('should not allow removing the last exit point', () => {
+      terrainGrid.setExitPoint(3, 3);
+      expect(terrainGrid.getExitPoints().length).toBe(1);
+
+      const added = terrainGrid.addExitPoint(3, 3);
+      expect(added).toBe(false);
+      expect(terrainGrid.getExitPoints().length).toBe(1);
+    });
+
+    it('should respect MAX_SPAWN_POINTS limit', () => {
+      // Clear and add up to max
+      terrainGrid.setSpawnPoint(0, 0);
+      for (let i = 1; i < MAX_SPAWN_POINTS; i++) {
+        terrainGrid.addSpawnPoint(i, i);
+      }
+      expect(terrainGrid.getSpawnPoints().length).toBe(MAX_SPAWN_POINTS);
+
+      // Try to exceed
+      const added = terrainGrid.addSpawnPoint(8, 8);
+      expect(added).toBe(false);
+      expect(terrainGrid.getSpawnPoints().length).toBe(MAX_SPAWN_POINTS);
+    });
+
+    it('should respect MAX_EXIT_POINTS limit', () => {
+      terrainGrid.setExitPoint(0, 0);
+      for (let i = 1; i < MAX_EXIT_POINTS; i++) {
+        terrainGrid.addExitPoint(i, i);
+      }
+      expect(terrainGrid.getExitPoints().length).toBe(MAX_EXIT_POINTS);
+
+      const added = terrainGrid.addExitPoint(8, 8);
+      expect(added).toBe(false);
+      expect(terrainGrid.getExitPoints().length).toBe(MAX_EXIT_POINTS);
+    });
+
+    it('should mark all spawn points as not buildable', () => {
+      terrainGrid.setSpawnPoint(1, 1);
+      terrainGrid.addSpawnPoint(2, 2);
+
+      expect(terrainGrid.isBuildable(1, 1)).toBe(false);
+      expect(terrainGrid.isBuildable(2, 2)).toBe(false);
+    });
+
+    it('should restore buildability when spawn point is toggled off', () => {
+      terrainGrid.setSpawnPoint(3, 3);
+      terrainGrid.addSpawnPoint(5, 5); // need 2 so we can remove one
+      expect(terrainGrid.isBuildable(3, 3)).toBe(false);
+
+      terrainGrid.addSpawnPoint(3, 3); // toggle off
+      expect(terrainGrid.isBuildable(3, 3)).toBe(true);
+    });
+
+    it('should restore buildability when exit point is toggled off', () => {
+      terrainGrid.setExitPoint(4, 4);
+      terrainGrid.addExitPoint(5, 5); // need 2 so we can remove one
+      expect(terrainGrid.isBuildable(4, 4)).toBe(false);
+
+      terrainGrid.addExitPoint(4, 4); // toggle off
+      expect(terrainGrid.isBuildable(4, 4)).toBe(true);
+    });
+
+    it('should return false for addSpawnPoint on invalid position', () => {
+      const added = terrainGrid.addSpawnPoint(-1, 0);
+      expect(added).toBe(false);
+    });
+
+    it('should return false for addExitPoint on invalid position', () => {
+      const added = terrainGrid.addExitPoint(0, defaultGridSize);
+      expect(added).toBe(false);
     });
   });
 
@@ -302,9 +445,9 @@ describe('TerrainGrid', () => {
       expect(state.gridSize).toBe(defaultGridSize);
     });
 
-    it('should export version', () => {
+    it('should export version 2.0.0', () => {
       const state = terrainGrid.exportState();
-      expect(state.version).toBe('1.0.0');
+      expect(state.version).toBe('2.0.0');
     });
 
     it('should export tile types', () => {
@@ -325,20 +468,40 @@ describe('TerrainGrid', () => {
       expect(state.heightMap[3][3]).toBeGreaterThan(0);
     });
 
-    it('should export spawn point', () => {
+    it('should export spawn points as array', () => {
       terrainGrid.setSpawnPoint(2, 4);
 
       const state = terrainGrid.exportState();
 
-      expect(state.spawnPoint).toEqual({ x: 2, z: 4 });
+      expect(state.spawnPoints).toEqual([{ x: 2, z: 4 }]);
     });
 
-    it('should export exit point', () => {
+    it('should export exit points as array', () => {
       terrainGrid.setExitPoint(8, 6);
 
       const state = terrainGrid.exportState();
 
-      expect(state.exitPoint).toEqual({ x: 8, z: 6 });
+      expect(state.exitPoints).toEqual([{ x: 8, z: 6 }]);
+    });
+
+    it('should export multiple spawn points', () => {
+      terrainGrid.setSpawnPoint(1, 1);
+      terrainGrid.addSpawnPoint(2, 2);
+
+      const state = terrainGrid.exportState();
+
+      expect(state.spawnPoints.length).toBe(2);
+      expect(state.spawnPoints).toContain(jasmine.objectContaining({ x: 1, z: 1 }));
+      expect(state.spawnPoints).toContain(jasmine.objectContaining({ x: 2, z: 2 }));
+    });
+
+    it('should export multiple exit points', () => {
+      terrainGrid.setExitPoint(3, 3);
+      terrainGrid.addExitPoint(4, 4);
+
+      const state = terrainGrid.exportState();
+
+      expect(state.exitPoints.length).toBe(2);
     });
   });
 
@@ -363,22 +526,42 @@ describe('TerrainGrid', () => {
       expect(terrainGrid.getTileAt(4, 4)!.height).toBe(3.0);
     });
 
-    it('should import spawn point', () => {
+    it('should import spawn points from v2 format', () => {
       const state = terrainGrid.exportState();
-      state.spawnPoint = { x: 1, z: 1 };
+      state.spawnPoints = [{ x: 1, z: 1 }, { x: 2, z: 2 }];
 
       terrainGrid.importState(state);
 
+      expect(terrainGrid.getSpawnPoints().length).toBe(2);
       expect(terrainGrid.getSpawnPoint()).toEqual({ x: 1, z: 1 });
     });
 
-    it('should import exit point', () => {
+    it('should import exit points from v2 format', () => {
       const state = terrainGrid.exportState();
-      state.exitPoint = { x: 8, z: 8 };
+      state.exitPoints = [{ x: 8, z: 8 }, { x: 7, z: 7 }];
 
       terrainGrid.importState(state);
 
+      expect(terrainGrid.getExitPoints().length).toBe(2);
       expect(terrainGrid.getExitPoint()).toEqual({ x: 8, z: 8 });
+    });
+
+    it('should import spawn point from v1 format (backward compat)', () => {
+      const v1State = {
+        gridSize: defaultGridSize,
+        tiles: terrainGrid.exportState().tiles,
+        heightMap: terrainGrid.exportState().heightMap,
+        spawnPoint: { x: 3, z: 3 },
+        exitPoint: { x: 7, z: 7 },
+        version: '1.0.0'
+      } as any;
+
+      terrainGrid.importState(v1State);
+
+      expect(terrainGrid.getSpawnPoint()).toEqual({ x: 3, z: 3 });
+      expect(terrainGrid.getExitPoint()).toEqual({ x: 7, z: 7 });
+      expect(terrainGrid.getSpawnPoints().length).toBe(1);
+      expect(terrainGrid.getExitPoints().length).toBe(1);
     });
 
     it('should reject state with mismatched grid size', () => {
@@ -386,9 +569,9 @@ describe('TerrainGrid', () => {
         gridSize: 50, // Different from our 10x10 grid
         tiles: [],
         heightMap: [],
-        spawnPoint: { x: 0, z: 0 },
-        exitPoint: { x: 1, z: 1 },
-        version: '1.0.0'
+        spawnPoints: [{ x: 0, z: 0 }],
+        exitPoints: [{ x: 1, z: 1 }],
+        version: '2.0.0'
       };
 
       // Should not throw but should not import

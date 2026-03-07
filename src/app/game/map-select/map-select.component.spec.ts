@@ -16,9 +16,9 @@ const MOCK_TERRAIN_STATE: TerrainGridState = {
   gridSize: 1,
   tiles: [[TerrainType.BEDROCK]],
   heightMap: [[0]],
-  spawnPoint: null,
-  exitPoint: null,
-  version: '1.0.0'
+  spawnPoints: [],
+  exitPoints: [],
+  version: '2.0.0'
 };
 
 describe('MapSelectComponent', () => {
@@ -67,29 +67,29 @@ describe('MapSelectComponent', () => {
 
   it('should show map cards when maps are available', () => {
     fixture.detectChanges();
-    const cards = fixture.nativeElement.querySelectorAll('.map-card:not(.quick-play-card)');
+    const cards = fixture.nativeElement.querySelectorAll('.map-card');
     expect(cards.length).toBe(2);
   });
 
-  it('should always show the quick play card', () => {
+  it('should always show the quick play button', () => {
     fixture.detectChanges();
-    const quickPlay = fixture.nativeElement.querySelector('.quick-play-card');
+    const quickPlay = fixture.nativeElement.querySelector('.quick-play-btn');
     expect(quickPlay).toBeTruthy();
   });
 
-  it('should show "no maps" message when maps array is empty', () => {
+  it('should show empty state when maps array is empty', () => {
     mapStorageSpy.getAllMaps.and.returnValue([]);
     fixture.detectChanges();
-    const noMaps = fixture.nativeElement.querySelector('.no-maps');
-    expect(noMaps).toBeTruthy();
-    const cards = fixture.nativeElement.querySelectorAll('.map-card:not(.quick-play-card)');
+    const emptyState = fixture.nativeElement.querySelector('.empty-state');
+    expect(emptyState).toBeTruthy();
+    const cards = fixture.nativeElement.querySelectorAll('.map-card');
     expect(cards.length).toBe(0);
   });
 
-  it('should not show "no maps" message when maps are present', () => {
+  it('should not show empty state when maps are present', () => {
     fixture.detectChanges();
-    const noMaps = fixture.nativeElement.querySelector('.no-maps');
-    expect(noMaps).toBeNull();
+    const emptyState = fixture.nativeElement.querySelector('.empty-state');
+    expect(emptyState).toBeNull();
   });
 
   it('selectMap should load map data and pass to MapBridgeService then navigate to /play', () => {
@@ -108,12 +108,6 @@ describe('MapSelectComponent', () => {
     expect(routerSpy.navigate).not.toHaveBeenCalled();
   });
 
-  it('goHome should navigate to /', () => {
-    fixture.detectChanges();
-    component.goHome();
-    expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/']);
-  });
-
   it('goToEditor should navigate to /edit', () => {
     fixture.detectChanges();
     component.goToEditor();
@@ -123,15 +117,15 @@ describe('MapSelectComponent', () => {
   it('should show create CTA button in empty state', () => {
     mapStorageSpy.getAllMaps.and.returnValue([]);
     fixture.detectChanges();
-    const createBtn = fixture.nativeElement.querySelector('.no-maps .create-btn');
+    const createBtn = fixture.nativeElement.querySelector('.empty-state .create-btn');
     expect(createBtn).toBeTruthy();
-    expect(createBtn.textContent).toContain('Create Your First Map');
+    expect(createBtn.textContent).toContain('Create a Map');
   });
 
   it('should navigate to editor when create CTA is clicked', () => {
     mapStorageSpy.getAllMaps.and.returnValue([]);
     fixture.detectChanges();
-    const createBtn = fixture.nativeElement.querySelector('.no-maps .create-btn');
+    const createBtn = fixture.nativeElement.querySelector('.empty-state .create-btn');
     createBtn.click();
     expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/edit']);
   });
@@ -144,10 +138,10 @@ describe('MapSelectComponent', () => {
       expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/play'], { queryParams: { quickplay: 'true' } });
     });
 
-    it('should render quick play card that triggers quickPlay', () => {
+    it('should render quick play button that triggers quickPlay', () => {
       fixture.detectChanges();
-      const quickPlayCard = fixture.nativeElement.querySelector('.quick-play-card');
-      quickPlayCard.click();
+      const quickPlayBtn = fixture.nativeElement.querySelector('.quick-play-btn');
+      quickPlayBtn.click();
       expect(mapBridgeSpy.clearEditorMap).toHaveBeenCalled();
     });
   });
@@ -231,7 +225,7 @@ describe('MapSelectComponent', () => {
   describe('grid size display', () => {
     it('should display grid size on map cards', () => {
       fixture.detectChanges();
-      const metaElements = fixture.nativeElement.querySelectorAll('.map-card:not(.quick-play-card) .map-meta');
+      const metaElements = fixture.nativeElement.querySelectorAll('.map-card .map-meta');
       expect(metaElements.length).toBe(2);
       expect(metaElements[0].textContent).toContain('25');
       expect(metaElements[1].textContent).toContain('30');

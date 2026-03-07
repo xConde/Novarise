@@ -1,11 +1,13 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, VALID_GAME_SPEEDS } from '../models/game-state.model';
+import { GameModifier, ModifierEffects, mergeModifierEffects, calculateModifierScoreMultiplier } from '../models/game-modifier.model';
 
 @Injectable()
 export class GameStateService {
-  private state: GameState = { ...INITIAL_GAME_STATE };
+  private state: GameState = { ...INITIAL_GAME_STATE, activeModifiers: new Set<GameModifier>() };
   private state$ = new BehaviorSubject<GameState>(this.state);
+  private modifierEffects: ModifierEffects = {};
 
   getState$(): Observable<GameState> {
     return this.state$.asObservable();
@@ -77,6 +79,7 @@ export class GameStateService {
    */
   awardInterest(): number {
     if (this.state.phase !== GamePhase.INTERMISSION) return 0;
+    if (this.modifierEffects.disableInterest) return 0;
     const interest = Math.min(
       Math.floor(this.state.gold * INTEREST_CONFIG.rate),
       INTEREST_CONFIG.maxPayout
@@ -119,12 +122,37 @@ export class GameStateService {
     this.emit();
   }
 
+  /**
+   * Set active game modifiers. Only allowed during SETUP phase before wave 1.
+   */
+  setModifiers(modifiers: Set<GameModifier>): void {
+    if (this.state.phase !== GamePhase.SETUP || this.state.wave !== 0) return;
+    this.state.activeModifiers = new Set(modifiers);
+    this.modifierEffects = mergeModifierEffects(this.state.activeModifiers);
+    // Re-apply starting gold with modifier
+    const preset = DIFFICULTY_PRESETS[this.state.difficulty];
+    const goldMultiplier = this.modifierEffects.startingGoldMultiplier ?? 1;
+    this.state.gold = Math.floor(preset.gold * goldMultiplier);
+    this.emit();
+  }
+
+  /** Returns the merged modifier effects from all active modifiers. */
+  getModifierEffects(): ModifierEffects {
+    return this.modifierEffects;
+  }
+
+  /** Returns the score multiplier from active modifiers (1.0 = no change). */
+  getModifierScoreMultiplier(): number {
+    return calculateModifierScoreMultiplier(this.state.activeModifiers);
+  }
+
   setDifficulty(difficulty: DifficultyLevel): void {
     if (this.state.phase !== GamePhase.SETUP || this.state.wave !== 0) return;
     const preset = DIFFICULTY_PRESETS[difficulty];
     this.state.difficulty = difficulty;
     this.state.lives = preset.lives;
-    this.state.gold = preset.gold;
+    const goldMultiplier = this.modifierEffects.startingGoldMultiplier ?? 1;
+    this.state.gold = Math.floor(preset.gold * goldMultiplier);
     this.emit();
   }
 
@@ -135,11 +163,12 @@ export class GameStateService {
   }
 
   reset(): void {
-    this.state = { ...INITIAL_GAME_STATE };
+    this.state = { ...INITIAL_GAME_STATE, activeModifiers: new Set<GameModifier>() };
+    this.modifierEffects = {};
     this.emit();
   }
 
   private emit(): void {
-    this.state$.next({ ...this.state });
+    this.state$.next({ ...this.state, activeModifiers: new Set(this.state.activeModifiers) });
   }
 }

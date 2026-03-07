@@ -11,9 +11,9 @@ function minimalState(overrides: Partial<TerrainGridState> = {}): TerrainGridSta
       [TerrainType.MOSS, TerrainType.CRYSTAL]
     ],
     heightMap: [[0, 0], [0, 0]],
-    spawnPoint: { x: 0, z: 0 },
-    exitPoint: { x: 4, z: 4 },
-    version: '1.0.0',
+    spawnPoints: [{ x: 0, z: 0 }],
+    exitPoints: [{ x: 4, z: 4 }],
+    version: '2.0.0',
     ...overrides
   };
 }
@@ -62,8 +62,8 @@ describe('MapShareService', () => {
       expect(decoded).not.toBeNull();
       expect(decoded?.gridSize).toBe(original.gridSize);
       expect(decoded?.version).toBe(original.version);
-      expect(decoded?.spawnPoint).toEqual(original.spawnPoint);
-      expect(decoded?.exitPoint).toEqual(original.exitPoint);
+      expect(decoded?.spawnPoints).toEqual(original.spawnPoints);
+      expect(decoded?.exitPoints).toEqual(original.exitPoints);
       expect(decoded?.tiles).toEqual(original.tiles);
       expect(decoded?.heightMap).toEqual(original.heightMap);
     });

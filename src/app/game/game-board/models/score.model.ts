@@ -24,6 +24,7 @@ export interface ScoreBreakdown {
   livesTotal: number;
   livesPercent: number;
   difficultyMultiplier: number;
+  modifierMultiplier: number;
   difficulty: DifficultyLevel;
   finalScore: number;
   stars: number;
@@ -47,10 +48,11 @@ export function calculateScoreBreakdown(
   livesTotal: number,
   difficulty: DifficultyLevel,
   wavesCompleted: number,
-  isVictory: boolean
+  isVictory: boolean,
+  modifierMultiplier: number = 1.0
 ): ScoreBreakdown {
   const difficultyMultiplier = DIFFICULTY_SCORE_MULTIPLIER[difficulty];
-  const finalScore = Math.round(baseScore * difficultyMultiplier);
+  const finalScore = Math.round(baseScore * difficultyMultiplier * modifierMultiplier);
   const stars = isVictory ? calculateStars(livesRemaining, livesTotal) : 0;
   const livesPercent = livesTotal > 0 ? livesRemaining / livesTotal : 0;
 
@@ -60,6 +62,7 @@ export function calculateScoreBreakdown(
     livesTotal,
     livesPercent,
     difficultyMultiplier,
+    modifierMultiplier,
     difficulty,
     finalScore,
     stars,

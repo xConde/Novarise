@@ -3,9 +3,25 @@
 </button>
 
 <div class="edit-controls-panel" *ngIf="!isCollapsed">
-  <button class="close-button" *ngIf="isMobile" (click)="closePanel()" aria-label="Close">✕</button>
+  <!-- MOBILE HEADER BAR -->
+  <div class="mobile-header" *ngIf="isMobile">
+    <span class="mobile-title">Editor</span>
+    <button
+      class="mobile-play-btn"
+      [class.disabled]="!canPlayMap"
+      [disabled]="!canPlayMap"
+      (click)="playMapClick.emit()"
+      aria-label="Play this map">
+      ▶
+    </button>
+    <span class="mobile-path-status path-valid" *ngIf="isPathValid">✓</span>
+    <span class="mobile-path-status path-invalid" *ngIf="!isPathValid && hasSpawnAndExit">✗</span>
+    <span class="mobile-path-status path-hint" *ngIf="!hasSpawnAndExit">No path</span>
+    <button class="mobile-close-btn" (click)="closePanel()" aria-label="Close">✕</button>
+  </div>
 
-  <div class="tab-navigation">
+  <!-- DESKTOP TAB NAVIGATION (hidden on mobile) -->
+  <div class="tab-navigation" *ngIf="!isMobile">
     <button
       class="tab-button"
       [class.active]="activeTab === 'editor'"
@@ -20,7 +36,53 @@
     </button>
   </div>
 
-  <div class="tab-content" *ngIf="activeTab === 'editor'">
+  <!-- MOBILE EDITOR CONTENT (always shown when panel open on mobile) -->
+  <div class="mobile-editor-content" *ngIf="isMobile">
+    <div class="mobile-section">
+      <div class="mode-toggle-grid mobile-grid-4">
+        <button class="chip" [class.active]="editMode === 'paint'" (click)="setMode('paint')">Paint</button>
+        <button class="chip" [class.active]="editMode === 'height'" (click)="setMode('height')">Height</button>
+        <button class="chip" [class.active]="editMode === 'spawn'" (click)="setMode('spawn')">Spawn</button>
+        <button class="chip" [class.active]="editMode === 'exit'" (click)="setMode('exit')">Exit</button>
+      </div>
+    </div>
+
+    <div class="mobile-section">
+      <div class="tool-toggle mobile-grid-3">
+        <button class="chip" [class.active]="activeTool === 'brush'" (click)="setTool('brush')">Brush</button>
+        <button class="chip" [class.active]="activeTool === 'fill'" (click)="setTool('fill')">Fill</button>
+        <button class="chip" [class.active]="activeTool === 'rectangle'" (click)="setTool('rectangle')">Rect</button>
+      </div>
+    </div>
+
+    <div class="mobile-section" *ngIf="activeTool === 'brush'">
+      <div class="brush-size-selector mobile-grid-4">
+        <button *ngFor="let size of brushSizes" class="chip" [class.active]="brushSize === size" (click)="setBrushSize(size)">
+          {{ size }}x{{ size }}
+        </button>
+      </div>
+    </div>
+
+    <div class="mobile-section" *ngIf="editMode === 'paint'">
+      <div class="terrain-selector-compact mobile-grid-4">
+        <button *ngFor="let type of terrainTypes" class="chip terrain-chip"
+          [class.active]="selectedTerrainType === type" (click)="selectTerrain(type)">
+          <div class="terrain-preview-compact" [style.background-color]="getTerrainColor(type)"></div>
+          <span class="terrain-label">{{ terrainConfigs[type].label.substring(0, 3) }}</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="mobile-section" *ngIf="templates.length > 0">
+      <select class="template-select" (change)="onTemplateSelect($event)">
+        <option value="" disabled selected>Template...</option>
+        <option *ngFor="let t of templates" [value]="t.id">{{ t.name }}</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- DESKTOP TAB CONTENT (hidden on mobile) -->
+  <div class="tab-content" *ngIf="!isMobile && activeTab === 'editor'">
     <div class="panel-section" *ngIf="templates.length > 0">
       <h3 class="section-title">Templates</h3>
       <div class="template-grid">
@@ -84,7 +146,8 @@
     </div>
   </div>
 
-  <div class="tab-content shortcuts-tab" *ngIf="activeTab === 'shortcuts'">
+  <!-- DESKTOP SHORTCUTS TAB (hidden on mobile) -->
+  <div class="tab-content shortcuts-tab" *ngIf="!isMobile && activeTab === 'shortcuts'">
     <div class="shortcut-grid">
       <div class="shortcut-column">
         <div class="shortcut-title">Movement</div>
@@ -132,24 +195,10 @@
     </div>
   </div>
 
-  <div class="play-section">
-    <button
-      class="play-map-btn"
-      [class.disabled]="!canPlayMap"
-      [class.path-valid-btn]="canPlayMap"
-      [disabled]="!canPlayMap"
-      (click)="playMapClick.emit()"
-      aria-label="Play this map">
-      Play Map
-    </button>
+  <!-- DESKTOP PATH STATUS (play/delete actions live on /maps page) -->
+  <div class="path-status-section" *ngIf="!isMobile">
     <span class="path-status path-valid" *ngIf="isPathValid">Path OK ✓</span>
     <span class="path-status path-invalid" *ngIf="!isPathValid && hasSpawnAndExit">No valid path ✗</span>
-    <span class="play-hint" *ngIf="!hasSpawnAndExit">Set spawn (P) and exit (X) first</span>
-    <button
-      class="delete-map-btn"
-      (click)="deleteMapClick.emit()"
-      aria-label="Delete a saved map">
-      Delete Map
-    </button>
+    <span class="path-hint" *ngIf="!hasSpawnAndExit">Set spawn (P) and exit (X) first</span>
   </div>
 </div>

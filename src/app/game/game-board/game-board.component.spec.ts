@@ -17,6 +17,8 @@ import { TowerType } from './models/tower.model';
 import { ScoreBreakdown, calculateScoreBreakdown } from './models/score.model';
 import { ACHIEVEMENTS, Achievement } from './services/player-profile.service';
 import { WaveService } from './services/wave.service';
+import { StatusEffectService } from './services/status-effect.service';
+import { EnemyService } from './services/enemy.service';
 
 describe('GameBoardComponent', () => {
   let component: GameBoardComponent;
@@ -36,7 +38,7 @@ describe('GameBoardComponent', () => {
 
     damagePopupSpy = jasmine.createSpyObj('DamagePopupService', ['spawn', 'update', 'cleanup']);
 
-    minimapSpy = jasmine.createSpyObj('MinimapService', ['init', 'update', 'cleanup', 'toggleVisibility']);
+    minimapSpy = jasmine.createSpyObj('MinimapService', ['init', 'update', 'cleanup', 'toggleVisibility', 'show', 'hide']);
 
     settingsSpy = jasmine.createSpyObj('SettingsService', ['get', 'update', 'reset']);
     settingsSpy.get.and.returnValue({ audioMuted: false, difficulty: 'normal' as any, gameSpeed: 1 });
@@ -48,6 +50,8 @@ describe('GameBoardComponent', () => {
         GameBoardService,
         MapBridgeService,
         GameStateService,
+        EnemyService,
+        StatusEffectService,
         { provide: GameStatsService, useValue: gameStatsSpy },
         { provide: PlayerProfileService, useValue: playerProfileSpy },
         { provide: DamagePopupService, useValue: damagePopupSpy },

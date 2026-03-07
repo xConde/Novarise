@@ -10,7 +10,11 @@ export interface MinimapEntityData {
 export interface MinimapTerrainData {
   gridSize: number;
   isPath: (row: number, col: number) => boolean;
+  spawnPoints?: { x: number; z: number }[];
+  exitPoints?: { x: number; z: number }[];
+  /** @deprecated Use spawnPoints. Kept for backward compat. */
   spawnPoint?: { x: number; z: number };
+  /** @deprecated Use exitPoints. Kept for backward compat. */
   exitPoint?: { x: number; z: number };
 }
 
@@ -18,7 +22,7 @@ export interface MinimapTerrainData {
 export class MinimapService {
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
-  private visible = true;
+  private visible = false;
   private lastUpdateTime = 0;
 
   /**
@@ -35,6 +39,9 @@ export class MinimapService {
     this.canvas.style.borderRadius = '4px';
     this.canvas.style.zIndex = '100';
     this.canvas.style.pointerEvents = 'none';
+    if (!this.visible) {
+      this.canvas.style.display = 'none';
+    }
 
     this.ctx = this.canvas.getContext('2d');
     container.appendChild(this.canvas);
@@ -75,24 +82,18 @@ export class MinimapService {
       }
     }
 
-    // Spawn and exit points
-    if (terrain.spawnPoint) {
+    // Spawn points
+    const spawnPts = terrain.spawnPoints ?? (terrain.spawnPoint ? [terrain.spawnPoint] : []);
+    for (const sp of spawnPts) {
       this.ctx.fillStyle = MINIMAP_CONFIG.terrainColors.spawn;
-      this.ctx.fillRect(
-        terrain.spawnPoint.x * cellSize,
-        terrain.spawnPoint.z * cellSize,
-        cellSize,
-        cellSize
-      );
+      this.ctx.fillRect(sp.x * cellSize, sp.z * cellSize, cellSize, cellSize);
     }
-    if (terrain.exitPoint) {
+
+    // Exit points
+    const exitPts = terrain.exitPoints ?? (terrain.exitPoint ? [terrain.exitPoint] : []);
+    for (const ep of exitPts) {
       this.ctx.fillStyle = MINIMAP_CONFIG.terrainColors.exit;
-      this.ctx.fillRect(
-        terrain.exitPoint.x * cellSize,
-        terrain.exitPoint.z * cellSize,
-        cellSize,
-        cellSize
-      );
+      this.ctx.fillRect(ep.x * cellSize, ep.z * cellSize, cellSize, cellSize);
     }
 
     // Entities (towers and enemies)
@@ -111,6 +112,16 @@ export class MinimapService {
       this.ctx.arc(px, pz, dotSize, 0, Math.PI * 2);
       this.ctx.fill();
     }
+  }
+
+  show(): void {
+    this.visible = true;
+    if (this.canvas) this.canvas.style.display = '';
+  }
+
+  hide(): void {
+    this.visible = false;
+    if (this.canvas) this.canvas.style.display = 'none';
   }
 
   toggleVisibility(): void {

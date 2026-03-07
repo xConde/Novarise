@@ -95,6 +95,27 @@ describe('WaveService', () => {
       const callsAfterWave2Start = enemyServiceSpy.spawnEnemy.calls.count();
       expect(callsAfterWave2Start).toBeGreaterThan(callsAfterWave1Start);
     });
+
+    it('should apply waveCountMultiplier to enemy counts', () => {
+      // Wave 1: 5 BASIC enemies normally
+      service.startWave(1, mockScene, 2.0);
+
+      // Should now have 10 remaining (5 * 2)
+      expect(service.getRemainingToSpawn()).toBe(10);
+    });
+
+    it('should clamp waveCountMultiplier below 1 to 1', () => {
+      service.startWave(1, mockScene, 0.5);
+
+      // Should still have at least the base count (clamped to 1x)
+      expect(service.getRemainingToSpawn()).toBe(5);
+    });
+
+    it('should default waveCountMultiplier to 1 when not provided', () => {
+      service.startWave(1, mockScene);
+
+      expect(service.getRemainingToSpawn()).toBe(5);
+    });
   });
 
   // --- update (spawn processing) ---

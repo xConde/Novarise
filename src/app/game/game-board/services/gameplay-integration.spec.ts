@@ -5,6 +5,7 @@ import { GameStateService } from './game-state.service';
 import { WaveService } from './wave.service';
 import { EnemyService } from './enemy.service';
 import { TowerCombatService } from './tower-combat.service';
+import { StatusEffectService } from './status-effect.service';
 import { GameStatsService } from './game-stats.service';
 import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
@@ -60,6 +61,7 @@ describe('Gameplay Integration', () => {
         WaveService,
         EnemyService,
         TowerCombatService,
+        StatusEffectService,
         GameStatsService,
         GameBoardService,
         AudioService,

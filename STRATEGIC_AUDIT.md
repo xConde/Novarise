@@ -366,3 +366,269 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 ### Sprint 0C and 0D: Parallel or Sequential?
 
 0C and 0D touch completely different files (game/ vs novarise/). They CAN run in parallel if using separate branches. But if you want to go slow and review each constants extraction carefully, run them sequentially. Either way, they both depend on 0B (the constants architecture must exist before you populate it).
+
+---
+
+## Completed: Engine Depth (feat/engine-depth) — 2026-03-07
+
+### What shipped
+10 sprints of engine architecture and gameplay depth:
+
+| Sprint | Feature | Impact |
+|--------|---------|--------|
+| 1 | Fixed timestep physics (60Hz deterministic) | Framerate-independent gameplay |
+| 2 | A* pathfinding MinHeap + Map | O(n log n) vs O(n²) pathfinding |
+| 3 | Flying enemy slow immunity | 28 new tests, correct combat behavior |
+| 4 | Spatial grid for combat queries | O(1) amortized range checks |
+| 5 | Object pool for projectile meshes | Reduced GC pressure |
+| 6 | Status effects framework (SLOW/BURN/POISON) | Extensible effect system |
+| 7 | Multi-spawner/multi-exit maps (max 4 each) | Map variety, backward-compat v1 |
+| 8 | Tower L3 specialization branching (ALPHA/BETA) | Strategic depth per tower |
+| 9 | Game modifiers system (8 mutators) | Replayability, score multiplier |
+| 10 | Creep leak scaling (enemy-type life cost) | Prioritization pressure |
+
+### Red-Team Findings (2 passes, 2026-03-07)
+
+**Pass 1 (sprints 6-10) — FIXED:**
+1. Last spawn/exit removal guard — prevent unplayable maps
+2. Speed division hardening — divide-by-zero guard in SPEED_DEMONS
+
+**Pass 2 (all 10 sprints) — FIXED:**
+1. MIN_ENEMY_SPEED floor (0.1) — prevent zero/negative speed
+2. Modifier combo test coverage — triple-modifier stacking test
+
+**ACCEPTED (LOW):**
+- Pre-existing SCSS magic numbers outside branch scope
+- Mortar projectiles not pooled (correct disposal, just less efficient)
+
+### Test delta
+- Before: 1425 tests
+- After: 1638 tests (+213)
+- All passing, zero flakes
+
+### Sprint items now partially complete
+
+| Sprint | Items Done | Items Remaining |
+|--------|-----------|----------------|
+| S2: Game Feel | Audio SFX, screen shake, gold popup, kill feedback, preview | BGM, spatial audio |
+| S5: Content | 6 towers, 8 enemies, status effects, specialization | Tower abilities, wave editor |
+
+---
+
+## Red Team Critique — feat/engine-depth Sprints 1-5 (2026-03-06)
+
+### Finding 1: VFX/Audio Storm During Multi-Step Physics (HIGH)
+**Location:** `game-board.component.ts:1477-1520` (inside fixed timestep `while` loop)
+**Risk:** At 3x game speed, up to 5 physics steps fire per frame. Audio calls (`playTowerFire`, `playEnemyHit`, `playGoldEarned`, `playEnemyDeath`) and visual spawns (`spawnDeathBurst`, `goldPopupService.spawn`, `damagePopupService.spawn`) were called per-step, creating 5x expected popups/particles per frame. Screen shake also triggered per-exit per-step instead of once per frame.
+**Fix:** Accumulate kill events, fired tower types, hit counts, and exit counts across all physics steps. Process audio and visual feedback ONCE after the `while` loop exits. Enemy positions are snapshot before removal to ensure deferred popups render at correct locations.
+
+### Finding 2: Projectile Pool Pre-Warm Scene Orphans (LOW — accepted)
+**Location:** `tower-combat.service.ts:684` (drain in cleanup)
+**Risk:** Pre-warmed pool meshes (created in constructor) are never added to a scene. `drain()` calls `scene.remove(mesh)` on them — this is a Three.js no-op for non-children. No memory leak, no error, just a wasted call.
+**Status:** Accepted. Cost is negligible (20 no-op calls on cleanup).
+
+---
+
+## Red Team Pass 1 — feat/engine-depth Sprints 6-10 (2026-03-07)
+
+**FIXED:**
+1. **Last spawn/exit removal** — editor allowed toggling off the only spawn/exit point, leaving an unplayable map. Added `length <= 1` guard in `addSpawnPoint()`/`addExitPoint()`.
+2. **Speed division fragility** — SPEED_DEMONS selective application divided by modifier value without zero guard. Added `!== 0` check.
+
+**VERIFIED NOT BUGS:**
+- Double-specialization: `upgradeTowerWithSpec()` already guards `level !== MAX_TOWER_LEVEL - 1`
+- DoT+leak race: kill processing runs before `updateEnemies()`, dead enemies removed first
+
+## Red Team Pass 2 — All 10 Sprints (2026-03-07)
+
+**FIXED:**
+1. **MIN_ENEMY_SPEED floor** — no guard prevented `enemy.speed` from going to zero/negative with extreme modifier stacking. Added `MIN_ENEMY_SPEED = 0.1` constant and `Math.max()` floor after all modifier application.
+2. **Modifier combo test coverage** — added triple-modifier combo test (ARMORED+FAST+SPEED_DEMONS) and speed floor test.
+
+**ACCEPTED (LOW — deferred):**
+- SCSS magic numbers in new UI panels (spec choice, modifier selector) — cosmetic, not runtime risk
+- Mortar projectiles not pooled (fresh geometry per fire) — cleanup is correct, just less efficient
+- `projectileCounter` increments without upper bound — resets on cleanup, fine per session
+
+---
+
+## Deployment Checklist
+
+- [x] Step 1: Extract SCSS magic numbers in new UI panels to CSS custom properties
+- [x] Step 2: Update STRATEGIC_AUDIT.md with completed engine-depth sprint summary
+- [x] Step 3: Run full test suite — confirm all 1638+ tests green
+- [x] Step 4: Update MEMORY.md with final branch state
+
+## Deployment Checklist — Red Team Pass 3
+- [x] Step 1: Wire waveCountMultiplier into WaveService.startWave() + 3 tests
+- [x] Step 2: Fix undefined --z-index-hud → --z-index-overlay
+- [x] Step 3: Mobile editor bottom-sheet + landscape height cap + test fixes
+- [x] Step 4: Run full test suite — confirm 1643 tests green
+- [x] Step 5: Push to remote
+
+---
+
+## Red Team Pass 3 — Mobile Responsive + Full Branch Audit (2026-03-07)
+
+### Finding 1: DOUBLE_SPAWN modifier is dead code (CRITICAL)
+**Location:** `game-modifier.model.ts:66` defines `waveCountMultiplier: 2.0`, `game-modifier.model.ts:127-128` computes merged value
+**Risk:** `waveCountMultiplier` is computed by `mergeModifierEffects()` but **never consumed** anywhere. No wave service or game-board component reads it. Players who enable DOUBLE_SPAWN get a 40% score bonus for zero difficulty increase. This is an exploit — free score multiplier.
+**Fix:** Wire `waveCountMultiplier` into wave spawning logic, multiplying `entry.count` when building spawn queues.
+
+### Finding 2: `--z-index-hud` CSS variable undefined (MEDIUM)
+**Location:** `game-board.component.scss:36`
+**Risk:** `.nav-buttons` uses `z-index: var(--z-index-hud)` but only `--z-index-base` (1), `--z-index-overlay` (10), `--z-index-modal` (100) exist in `styles.css`. Browser resolves undefined custom property to `auto`, making nav button stacking order unpredictable. Could be hidden behind game overlays.
+**Fix:** Replace with `var(--z-index-overlay)`.
+
+### Finding 3: Landscape bottom-sheet too tall (MEDIUM)
+**Location:** `edit-controls.component.scss:154` — `max-height: 55vh` on mobile
+**Risk:** On landscape phones (400px viewport height), panel occupies 220px (55%), leaving only 180px for 3D canvas. Editor becomes nearly unusable in landscape.
+**Fix:** Add `@media (max-height: 500px)` rule reducing `max-height` to `40vh`.
+
+### Verified NOT bugs (agent overstated):
+- Status effects orphaned on death — already lazily cleaned in `StatusEffectService.update()` via `!enemy || enemy.health <= 0` check (line 78)
+- Physics accumulator dropping frames — intentional spiral-of-death prevention, not a bug
+- MinHeap bubbleUp bounds — `while (index > 0)` already prevents invalid parent access
+
+## Red Team Pass 4 — Mobile Editor Touch Targets (2026-03-07)
+
+### Finding 1: `.mobile-play-btn` min-height 2rem (MEDIUM)
+**Location:** `edit-controls.component.scss:183`
+**Risk:** 32px is below WCAG 44px minimum touch target. Users may mis-tap on small phones.
+**Fix:** Bump `min-height` from `2rem` to `2.75rem` (44px).
+
+### Finding 2: `.mobile-close-btn` min-height 2.25rem (MEDIUM)
+**Location:** `edit-controls.component.scss:212`
+**Risk:** 36px is below WCAG 44px minimum. Close button is a critical interaction point.
+**Fix:** Bump `min-height` from `2.25rem` to `2.75rem`.
+
+### Finding 3: `.chip` min-height 2.5rem (LOW)
+**Location:** `edit-controls.component.scss:240`
+**Risk:** 40px is marginally below 44px threshold. Chips are densely packed in grids.
+**Fix:** Bump `min-height` from `2.5rem` to `2.75rem`.
+
+### Finding 4: Dead `.close-button` CSS rule (LOW)
+**Location:** `edit-controls.component.scss:2`
+**Risk:** No element in the template uses `.close-button`. Dead code increases CSS budget.
+**Fix:** Remove the rule.
+
+## Red Team Pass 5 — Full Branch Audit (2026-03-07)
+
+### Finding 1: towerCostMultiplier and towerDamageMultiplier modifiers never applied (CRITICAL)
+**Location:** `game-board.component.ts:tryPlaceTower()`, `tower-combat.service.ts:fireProjectile()`
+**Risk:** EXPENSIVE_TOWERS and GLASS_CANNON modifiers are computed but never consumed. Players get free score bonus from these modifiers with zero gameplay effect. False contract with the player.
+**Fix:** Apply `towerCostMultiplier` in `tryPlaceTower()`, tower preview affordability, and upgrade cost. Apply `towerDamageMultiplier` in combat damage calculation.
+
+### Finding 2: Glacier specialization slowFactorOverride has no runtime effect (CRITICAL)
+**Location:** `tower-combat.service.ts:applySlowAura()`, `status-effect.constants.ts`
+**Risk:** Glacier sets `slowFactorOverride: 0.3` but `applySlowAura()` always uses global config `speedMultiplier: 0.5`. Investing gold in Glacier spec yields zero benefit over base slow tower.
+**Fix:** Pass tower-specific slow factor to `StatusEffectService.apply()`.
+
+### Finding 3: Frostbite specialization "deals damage" description is false (MEDIUM)
+**Location:** `tower.model.ts:191-195`
+**Risk:** Frostbite description says "deals damage" but base Slow has `damage: 0`, and `0 * 1.0 = 0`. Slow aura code path doesn't deal damage anyway.
+**Fix:** Change description to match reality — remove damage claim.
+
+### Finding 4: Specialization buttons missing [disabled] attribute (MEDIUM)
+**Location:** `game-board.component.html:304`
+**Risk:** `.spec-btn` has visual `.unaffordable` class but no `[disabled]` — screen readers/keyboard can still activate.
+**Fix:** Add `[disabled]` binding matching the unaffordable condition.
+
+### Finding 5: Dead deleteMapClick output + deleteMap() in editor (LOW)
+**Location:** `edit-controls.component.ts:28`, `novarise.component.ts:1129`, `novarise.component.html:39`
+**Risk:** Delete button removed from template but output binding, parent handler, and 150+ lines of deleteMap() logic remain as dead code.
+**Fix:** Remove output, binding, and method.
+
+### Finding 6: Dead goHome() in game-board component (LOW)
+**Location:** `game-board.component.ts:539`
+**Risk:** Nav buttons removed from template but method remains. Dead code.
+**Fix:** Remove method.
+
+### Finding 7: Magic number 0.6rem in modifier-desc (LOW)
+**Location:** `game-board.component.scss:1016`
+**Risk:** Violates no-magic-numbers rule. Should use `--font-size-2xs`.
+**Fix:** Replace with CSS variable.
+
+### Verified NOT bugs:
+- INITIAL_GAME_STATE.activeModifiers shared Set — reset() creates new Set
+- emit() mutable Set leak — cloned on emit
+- SPEED_DEMONS selective application — math decomposition is correct
+- ObjectPool drain() double-dispose — scene.remove() is safe no-op
+- StatusEffectService concurrent modification — deferred deletion after loop
+
+## Deployment Checklist — Red Team Pass 5
+- [x] Fix Finding 1: Wire towerCostMultiplier into placement, preview, and upgrades
+- [x] Fix Finding 2: Pass tower slow factor to StatusEffectService
+- [x] Fix Finding 3: Correct Frostbite description
+- [x] Fix Finding 4: Add [disabled] to spec buttons
+- [x] Fix Findings 5-6: Remove dead code (deleteMapClick, goHome)
+- [x] Fix Finding 7: Replace 0.6rem magic number
+- [x] Run full test suite (1656/1656), commit, push
+
+## Red Team Pass 6 — Final Branch Audit (2026-03-07)
+
+### Finding 1: Minimap permanently broken after restart (CRITICAL)
+**Location:** `game-board.component.ts:636` (cleanup) vs `:303` (init)
+**Risk:** `restartGame()` calls `minimapService.cleanup()` which destroys canvas+ctx. `init()` only runs in `ngAfterViewInit()` (one-time hook). Minimap is permanently dead after "Play Again".
+**Fix:** Call `minimapService.init(container)` in `restartGame()` after cleanup.
+
+### Finding 2: totalInvested tracks base cost, not modified cost (MEDIUM)
+**Location:** `tower-combat.service.ts:110` (registerTower)
+**Risk:** With EXPENSIVE_TOWERS/GLASS_CANNON, player pays modified cost but `totalInvested` records base cost. Sell refund is based on base, not actual spend — player loses gold.
+**Fix:** Pass actual cost spent to `registerTower()` and thread modified upgrade costs.
+
+### Finding 3: Mortar DoT damage ignores towerDamageMultiplier (MEDIUM)
+**Location:** `tower-combat.service.ts:601` (applyDamage → createMortarZone)
+**Risk:** Fresh `getEffectiveStats()` call bypasses the damage multiplier. Mortar zones always use base dotDamage. With GLASS_CANNON, mortar pays 2x cost for 1x DoT.
+**Fix:** Scale dotDamage by `towerDamageMultiplier` in the mortar zone creation path.
+
+### Finding 4: Undo/redo corrupts spawn/exit with multi-spawn maps (MEDIUM)
+**Location:** `novarise.component.ts:752-764`
+**Risk:** SpawnPointCommand snapshots single `previousSpawn` but maps can have multiple spawn points. Undo restores only one, losing the rest.
+**Fix:** Snapshot full `spawnPoints[]` array and restore on undo.
+
+### Verified NOT bugs:
+- towerDamageMultiplier resets on restart (cleanup sets to 1)
+- towerCostMultiplier applied in all 4 usage sites
+- CSS variables all defined in styles.css
+- PathVisualization cleanup/recreate cycle correct
+- ObjectPool drain/reuse correct
+- startingGoldMultiplier on difficulty change correct
+- Three.js disposal in spawn/exit markers correct
+
+## Deployment Checklist — Red Team Pass 6
+- [x] Fix Finding 1: Re-init minimap after restart
+- [x] Fix Finding 2: Thread actual cost into registerTower + upgrades
+- [x] Fix Finding 3: Scale mortar DoT by towerDamageMultiplier
+- [x] Fix Finding 4: Snapshot full spawn/exit arrays for undo
+- [x] Run full test suite (1656/1656), commit, push
+
+## Red Team Critique — 2026-03-07 (Pass 7)
+
+### Finding 1: Scene Too Dark — Compounding Light + Post-Processing (MEDIUM)
+**Location:** `constants/lighting.constants.ts`, `constants/rendering.constants.ts`, `game-board.service.ts:106`
+**Risk:** All light colors were dark purples (0x5a4a6a, 0xc0b0d0), bloom threshold too high (0.7) to trigger on dark scene, vignette darkness (0.4) further reduces brightness. Scene appears too dark for comfortable gameplay.
+**Fix:** Brighten light colors toward neutral (0x9090a0 ambient, 0xe0d8f0 directional), lower bloom threshold to 0.5, reduce vignette darkness to 0.25, boost tile emissive intensity from 0.15 to 0.25.
+
+### Finding 2: Wave Preview Overflow on Landscape Phones (LOW)
+**Location:** `game-board.component.scss:199`
+**Risk:** Wave preview panel has no max-height constraint. On landscape phones (~400px viewport height), wave list can overflow off-screen.
+**Fix:** Add `max-height: min(40vh, 300px); overflow-y: auto;` to `.wave-preview`.
+
+### Finding 3: Card Actions Z-Index on Touch Devices (LOW)
+**Location:** `map-select.component.scss:123`
+**Risk:** `.card-actions` positioned absolutely without z-index. On touch devices with long map names, action buttons may be visually occluded by sibling content.
+**Fix:** Add `z-index: 2` to `.card-actions`.
+
+### Verified NOT bugs:
+- SpawnPointCommand redo logic: toggle handles both add/remove correctly via previousSpawns snapshot
+- Mini-swarm slow inheritance: minis spawn at base speed by design, can be independently slowed
+- Modifier retroactivity: modifiers locked during COMBAT, no enemies exist during SETUP changes
+- Mortar DoT multiplier: already fixed in pass 6 (scales dotDamage before zone creation)
+- Targeting mode reset on sell: new tower at same location correctly gets default mode
+
+## Deployment Checklist — Red Team Pass 7
+- [x] Fix Finding 1: Brighten lighting constants + post-processing
+- [x] Fix Finding 2: Wave preview max-height overflow protection
+- [x] Fix Finding 3: Card actions z-index for touch devices
+- [x] Run full test suite (1656/1656), commit, push

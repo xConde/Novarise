@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { GameStateService } from './game-state.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, INITIAL_GAME_STATE, INTEREST_CONFIG } from '../models/game-state.model';
+import { GameModifier } from '../models/game-modifier.model';
 
 describe('GameStateService', () => {
   let service: GameStateService;
@@ -861,6 +862,162 @@ describe('GameStateService', () => {
       const result = service.awardInterest();
       expect(result).toBe(0);
       expect(emitSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // --- Game Modifiers ---
+  describe('game modifiers', () => {
+    describe('setModifiers', () => {
+      it('should store active modifiers during SETUP phase', () => {
+        const mods = new Set([GameModifier.ARMORED_ENEMIES, GameModifier.FAST_ENEMIES]);
+        service.setModifiers(mods);
+        expect(service.getState().activeModifiers.size).toBe(2);
+        expect(service.getState().activeModifiers.has(GameModifier.ARMORED_ENEMIES)).toBeTrue();
+        expect(service.getState().activeModifiers.has(GameModifier.FAST_ENEMIES)).toBeTrue();
+      });
+
+      it('should be a no-op during COMBAT phase', () => {
+        service.startWave(); // → COMBAT
+        const mods = new Set([GameModifier.ARMORED_ENEMIES]);
+        service.setModifiers(mods);
+        expect(service.getState().activeModifiers.size).toBe(0);
+      });
+
+      it('should be a no-op during INTERMISSION phase', () => {
+        service.startWave();
+        service.completeWave(0); // → INTERMISSION
+        const mods = new Set([GameModifier.ARMORED_ENEMIES]);
+        service.setModifiers(mods);
+        expect(service.getState().activeModifiers.size).toBe(0);
+      });
+
+      it('should emit state change', (done) => {
+        let emitCount = 0;
+        service.getState$().subscribe(state => {
+          emitCount++;
+          if (emitCount === 2) {
+            expect(state.activeModifiers.has(GameModifier.ARMORED_ENEMIES)).toBeTrue();
+            done();
+          }
+        });
+        service.setModifiers(new Set([GameModifier.ARMORED_ENEMIES]));
+      });
+
+      it('should create a defensive copy of the modifiers set', () => {
+        const mods = new Set([GameModifier.ARMORED_ENEMIES]);
+        service.setModifiers(mods);
+        mods.add(GameModifier.FAST_ENEMIES);
+        expect(service.getState().activeModifiers.size).toBe(1);
+      });
+    });
+
+    describe('getModifierEffects', () => {
+      it('should return empty object when no modifiers are active', () => {
+        const effects = service.getModifierEffects();
+        expect(Object.keys(effects).length).toBe(0);
+      });
+
+      it('should return merged effects when modifiers are active', () => {
+        service.setModifiers(new Set([GameModifier.ARMORED_ENEMIES]));
+        const effects = service.getModifierEffects();
+        expect(effects.enemyHealthMultiplier).toBe(2.0);
+      });
+
+      it('should update effects when modifiers change', () => {
+        service.setModifiers(new Set([GameModifier.ARMORED_ENEMIES]));
+        expect(service.getModifierEffects().enemyHealthMultiplier).toBe(2.0);
+
+        service.setModifiers(new Set([GameModifier.FAST_ENEMIES]));
+        expect(service.getModifierEffects().enemyHealthMultiplier).toBeUndefined();
+        expect(service.getModifierEffects().enemySpeedMultiplier).toBe(1.5);
+      });
+    });
+
+    describe('getModifierScoreMultiplier', () => {
+      it('should return 1.0 when no modifiers are active', () => {
+        expect(service.getModifierScoreMultiplier()).toBe(1.0);
+      });
+
+      it('should return increased multiplier with difficulty modifiers', () => {
+        service.setModifiers(new Set([GameModifier.ARMORED_ENEMIES]));
+        expect(service.getModifierScoreMultiplier()).toBeCloseTo(1.3);
+      });
+
+      it('should return decreased multiplier with WEALTHY_START', () => {
+        service.setModifiers(new Set([GameModifier.WEALTHY_START]));
+        expect(service.getModifierScoreMultiplier()).toBeCloseTo(0.8);
+      });
+    });
+
+    describe('awardInterest with NO_INTEREST modifier', () => {
+      function enterIntermission(): void {
+        service.startWave();
+        service.completeWave(0);
+        expect(service.getState().phase).toBe(GamePhase.INTERMISSION);
+      }
+
+      it('should skip interest when NO_INTEREST modifier is active', () => {
+        service.setModifiers(new Set([GameModifier.NO_INTEREST]));
+        // Manually transition through phases since setModifiers only works in SETUP
+        service.startWave();
+        service.completeWave(0); // → INTERMISSION
+        const goldBefore = service.getState().gold;
+        const result = service.awardInterest();
+        expect(result).toBe(0);
+        expect(service.getState().gold).toBe(goldBefore);
+      });
+
+      it('should award interest when NO_INTEREST is NOT active', () => {
+        service.setModifiers(new Set([GameModifier.ARMORED_ENEMIES]));
+        service.startWave();
+        service.completeWave(0);
+        const goldBefore = service.getState().gold;
+        const result = service.awardInterest();
+        expect(result).toBeGreaterThan(0);
+        expect(service.getState().gold).toBeGreaterThan(goldBefore);
+      });
+    });
+
+    describe('starting gold with WEALTHY_START modifier', () => {
+      it('should double starting gold when WEALTHY_START is active', () => {
+        const normalGold = DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].gold;
+        service.setModifiers(new Set([GameModifier.WEALTHY_START]));
+        expect(service.getState().gold).toBe(normalGold * 2);
+      });
+
+      it('should apply WEALTHY_START to difficulty-specific gold', () => {
+        service.setModifiers(new Set([GameModifier.WEALTHY_START]));
+        service.setDifficulty(DifficultyLevel.HARD);
+        const hardGold = DIFFICULTY_PRESETS[DifficultyLevel.HARD].gold;
+        expect(service.getState().gold).toBe(hardGold * 2);
+      });
+
+      it('should use normal gold when WEALTHY_START is removed', () => {
+        service.setModifiers(new Set([GameModifier.WEALTHY_START]));
+        service.setModifiers(new Set()); // Remove all modifiers
+        const normalGold = DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].gold;
+        expect(service.getState().gold).toBe(normalGold);
+      });
+    });
+
+    describe('reset clears modifiers', () => {
+      it('should clear active modifiers on reset', () => {
+        service.setModifiers(new Set([GameModifier.ARMORED_ENEMIES, GameModifier.FAST_ENEMIES]));
+        service.reset();
+        expect(service.getState().activeModifiers.size).toBe(0);
+      });
+
+      it('should clear modifier effects on reset', () => {
+        service.setModifiers(new Set([GameModifier.ARMORED_ENEMIES]));
+        service.reset();
+        expect(Object.keys(service.getModifierEffects()).length).toBe(0);
+      });
+
+      it('should reset score multiplier to 1.0 on reset', () => {
+        service.setModifiers(new Set([GameModifier.ARMORED_ENEMIES]));
+        service.reset();
+        expect(service.getModifierScoreMultiplier()).toBe(1.0);
+      });
     });
   });
 });

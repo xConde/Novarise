@@ -1,27 +1,47 @@
 # Novarise
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 13.0.3.
+A tower defense game built with Angular 15 and Three.js. Design custom maps in a 3D editor, then defend them with upgradeable towers against waves of enemies.
 
-## Development server
+## Routes
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The app will automatically reload if you change any of the source files.
+| Route | Description |
+|-------|-------------|
+| `/` | Landing page |
+| `/edit` | 3D map editor — paint terrain, set spawn/exit, save/load maps |
+| `/maps` | Map select — pick a map or quick play |
+| `/play` | Tower defense game (requires map or quick play) |
 
-## Code scaffolding
+## Stack
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+- **Framework:** Angular 15
+- **3D Engine:** Three.js (post-processing: bloom, vignette)
+- **Tests:** Karma + Jasmine (1656 specs)
+- **Deploy:** Cloudflare Pages
 
-## Build
+## Development
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
+```bash
+npm install
+ng serve          # http://localhost:4200
+npm test          # Run test suite (headless Chrome)
+ng build          # Production build → dist/
+```
 
-## Running unit tests
+## Game Features
 
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
+- 6 tower types with L3 specialization branching (Basic, Sniper, Splash, Slow, Chain, Mortar)
+- 8 enemy types including flying enemies immune to slow
+- 10 waves + endless mode, 4 difficulty levels
+- 8 pre-game modifiers with score multipliers
+- Tower targeting modes (nearest/first/strongest)
+- Status effects (slow, burn, poison)
+- Interest system, score breakdown, star rating
+- Deterministic fixed-timestep physics (60Hz)
 
-## Running end-to-end tests
+## Editor Features
 
-Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To use this command, you need to first add a package that implements end-to-end testing capabilities.
-
-## Further help
-
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+- 4 terrain types, 3 brush tools (brush/fill/rectangle)
+- Multi-spawn and multi-exit support (up to 4 each)
+- Undo/redo, save/load, export/import
+- Map templates (Classic, Maze, Spiral, Open Field)
+- Real-time path validation

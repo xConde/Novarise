@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
-import { TerrainGridState } from '../../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
+import { TerrainGridState, TerrainGridStateLegacy } from '../../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 
 /** @deprecated Use TerrainGridState directly. Kept as alias for backward compatibility. */
 export type EditorMapState = TerrainGridState;
@@ -21,8 +21,8 @@ export interface ConvertedBoard {
  * Terrain mapping:
  * - bedrock, moss → BASE (traversable, buildable)
  * - crystal, abyss → WALL (non-traversable, non-buildable)
- * - spawnPoint → SPAWNER tile
- * - exitPoint → EXIT tile
+ * - spawnPoints → SPAWNER tiles
+ * - exitPoints → EXIT tiles
  */
 @Injectable({
   providedIn: 'root'
@@ -65,6 +65,8 @@ export class MapBridgeService {
    * The editor stores tiles as tiles[x][z] (column-major) while the game
    * uses board[row][col] (row-major). This method handles the coordinate
    * transpose and terrain type conversion.
+   *
+   * Handles both v2 (spawnPoints/exitPoints arrays) and v1 (single point) formats.
    */
   convertToGameBoard(state: EditorMapState): ConvertedBoard {
     const gridSize = state.gridSize;
@@ -79,25 +81,49 @@ export class MapBridgeService {
       }
     }
 
-    // Override spawn point tile
-    if (state.spawnPoint) {
-      const row = state.spawnPoint.z;
-      const col = state.spawnPoint.x;
+    // Resolve spawn points — v2 arrays or v1 single point
+    const spawnPoints = this.resolveSpawnPoints(state);
+    for (const sp of spawnPoints) {
+      const row = sp.z;
+      const col = sp.x;
       if (this.isValidPosition(row, col, gridSize)) {
         board[row][col] = GameBoardTile.createSpawner(row, col);
       }
     }
 
-    // Override exit point tile
-    if (state.exitPoint) {
-      const row = state.exitPoint.z;
-      const col = state.exitPoint.x;
+    // Resolve exit points — v2 arrays or v1 single point
+    const exitPoints = this.resolveExitPoints(state);
+    for (const ep of exitPoints) {
+      const row = ep.z;
+      const col = ep.x;
       if (this.isValidPosition(row, col, gridSize)) {
         board[row][col] = GameBoardTile.createExit(row, col);
       }
     }
 
     return { board, width: gridSize, height: gridSize };
+  }
+
+  private resolveSpawnPoints(state: EditorMapState): { x: number; z: number }[] {
+    if (state.spawnPoints && Array.isArray(state.spawnPoints) && state.spawnPoints.length > 0) {
+      return state.spawnPoints;
+    }
+    const legacy = state as unknown as TerrainGridStateLegacy;
+    if (legacy.spawnPoint) {
+      return [legacy.spawnPoint];
+    }
+    return [];
+  }
+
+  private resolveExitPoints(state: EditorMapState): { x: number; z: number }[] {
+    if (state.exitPoints && Array.isArray(state.exitPoints) && state.exitPoints.length > 0) {
+      return state.exitPoints;
+    }
+    const legacy = state as unknown as TerrainGridStateLegacy;
+    if (legacy.exitPoint) {
+      return [legacy.exitPoint];
+    }
+    return [];
   }
 
   private convertTile(row: number, col: number, terrainType: string | undefined): GameBoardTile {

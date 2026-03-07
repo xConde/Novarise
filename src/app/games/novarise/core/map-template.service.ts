@@ -24,8 +24,8 @@ function createEmptyGrid(width: number, height: number, fill: TerrainType = Terr
     gridSize: width,
     tiles,
     heightMap,
-    spawnPoint: null,
-    exitPoint: null,
+    spawnPoints: [],
+    exitPoints: [],
     version: TEMPLATE_VERSION
   };
 }
@@ -72,8 +72,8 @@ function buildClassicTemplate(): TerrainGridState {
 
   paintHorizontalPath(state.tiles, midZ, 0, TEMPLATE_GRID_SIZE - 1);
 
-  state.spawnPoint = { x: 0, z: midZ };
-  state.exitPoint = { x: TEMPLATE_GRID_SIZE - 1, z: midZ };
+  state.spawnPoints = [{ x: 0, z: midZ }];
+  state.exitPoints = [{ x: TEMPLATE_GRID_SIZE - 1, z: midZ }];
 
   return state;
 }
@@ -101,8 +101,8 @@ function buildMazeTemplate(): TerrainGridState {
   // Leg 3: horizontal, z=20, x=7..24
   paintHorizontalPath(tiles, 20, 7, 24);
 
-  state.spawnPoint = { x: 0, z: 4 };
-  state.exitPoint = { x: 24, z: 20 };
+  state.spawnPoints = [{ x: 0, z: 4 }];
+  state.exitPoints = [{ x: 24, z: 20 }];
 
   return state;
 }
@@ -147,8 +147,8 @@ function buildSpiralTemplate(): TerrainGridState {
   // Centre exit arm — path from core to right edge
   paintHorizontalPath(tiles, 12, 6, 24);
 
-  state.spawnPoint = { x: 0, z: 0 };
-  state.exitPoint = { x: 24, z: 12 };
+  state.spawnPoints = [{ x: 0, z: 0 }];
+  state.exitPoints = [{ x: 24, z: 12 }];
 
   return state;
 }
@@ -161,8 +161,8 @@ function buildOpenFieldTemplate(): TerrainGridState {
   const state = createEmptyGrid(TEMPLATE_GRID_SIZE, TEMPLATE_GRID_SIZE, TerrainType.BEDROCK);
   const midZ = Math.floor(TEMPLATE_GRID_SIZE / 2);
 
-  state.spawnPoint = { x: 0, z: midZ };
-  state.exitPoint = { x: TEMPLATE_GRID_SIZE - 1, z: midZ };
+  state.spawnPoints = [{ x: 0, z: midZ }];
+  state.exitPoints = [{ x: TEMPLATE_GRID_SIZE - 1, z: midZ }];
 
   return state;
 }

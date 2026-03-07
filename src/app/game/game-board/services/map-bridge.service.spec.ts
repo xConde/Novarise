@@ -69,7 +69,6 @@ describe('MapBridgeService', () => {
     const state = createMinimalState(3);
     state.tiles[1][1] = TerrainType.BEDROCK;
     const { board } = service.convertToGameBoard(state);
-    // Editor tiles[col][row] → game board[row][col]
     expect(board[1][1].type).toBe(BlockType.BASE);
     expect(board[1][1].isTraversable).toBeTrue();
     expect(board[1][1].isPurchasable).toBeTrue();
@@ -87,7 +86,6 @@ describe('MapBridgeService', () => {
     const state = createMinimalState(3);
     state.tiles[2][1] = TerrainType.CRYSTAL;
     const { board } = service.convertToGameBoard(state);
-    // tiles[2][1] → board[1][2]
     expect(board[1][2].type).toBe(BlockType.WALL);
     expect(board[1][2].isTraversable).toBeFalse();
     expect(board[1][2].isPurchasable).toBeFalse();
@@ -97,7 +95,6 @@ describe('MapBridgeService', () => {
     const state = createMinimalState(3);
     state.tiles[0][2] = TerrainType.ABYSS;
     const { board } = service.convertToGameBoard(state);
-    // tiles[0][2] → board[2][0]
     expect(board[2][0].type).toBe(BlockType.WALL);
     expect(board[2][0].isTraversable).toBeFalse();
   });
@@ -112,24 +109,22 @@ describe('MapBridgeService', () => {
   // --- Board Conversion: Coordinate Transpose ---
 
   it('should correctly transpose editor [x][z] to game [row][col]', () => {
-    // Create a 4x4 grid with a known pattern:
-    // Editor tiles[col=0][row=3] = 'crystal' → game board[row=3][col=0] = WALL
     const state = createMinimalState(4);
     state.tiles[0][3] = TerrainType.CRYSTAL;
     state.tiles[3][0] = TerrainType.ABYSS;
 
     const { board } = service.convertToGameBoard(state);
-    expect(board[3][0].type).toBe(BlockType.WALL); // tiles[0][3] → board[3][0]
-    expect(board[0][3].type).toBe(BlockType.WALL); // tiles[3][0] → board[0][3]
-    expect(board[0][0].type).toBe(BlockType.BASE); // untouched
-    expect(board[3][3].type).toBe(BlockType.BASE); // untouched
+    expect(board[3][0].type).toBe(BlockType.WALL);
+    expect(board[0][3].type).toBe(BlockType.WALL);
+    expect(board[0][0].type).toBe(BlockType.BASE);
+    expect(board[3][3].type).toBe(BlockType.BASE);
   });
 
-  // --- Board Conversion: Spawn Point ---
+  // --- Board Conversion: Spawn Points ---
 
   it('should place SPAWNER tile at spawn point position', () => {
     const state = createMinimalState(5);
-    state.spawnPoint = { x: 0, z: 2 }; // col=0, row=2
+    state.spawnPoints = [{ x: 0, z: 2 }]; // col=0, row=2
 
     const { board } = service.convertToGameBoard(state);
     expect(board[2][0].type).toBe(BlockType.SPAWNER);
@@ -139,18 +134,17 @@ describe('MapBridgeService', () => {
   it('should override terrain at spawn point location', () => {
     const state = createMinimalState(5);
     state.tiles[1][1] = TerrainType.CRYSTAL; // Would be WALL
-    state.spawnPoint = { x: 1, z: 1 }; // Same position — SPAWNER wins
+    state.spawnPoints = [{ x: 1, z: 1 }]; // Same position — SPAWNER wins
 
     const { board } = service.convertToGameBoard(state);
     expect(board[1][1].type).toBe(BlockType.SPAWNER);
   });
 
-  it('should handle null spawn point gracefully', () => {
+  it('should handle empty spawn points gracefully', () => {
     const state = createMinimalState(3);
-    state.spawnPoint = null;
+    state.spawnPoints = [];
 
     const { board } = service.convertToGameBoard(state);
-    // No spawner tiles anywhere
     for (let row = 0; row < 3; row++) {
       for (let col = 0; col < 3; col++) {
         expect(board[row][col].type).not.toBe(BlockType.SPAWNER);
@@ -158,11 +152,20 @@ describe('MapBridgeService', () => {
     }
   });
 
-  // --- Board Conversion: Exit Point ---
+  it('should place multiple SPAWNER tiles', () => {
+    const state = createMinimalState(5);
+    state.spawnPoints = [{ x: 0, z: 1 }, { x: 0, z: 3 }];
+
+    const { board } = service.convertToGameBoard(state);
+    expect(board[1][0].type).toBe(BlockType.SPAWNER);
+    expect(board[3][0].type).toBe(BlockType.SPAWNER);
+  });
+
+  // --- Board Conversion: Exit Points ---
 
   it('should place EXIT tile at exit point position', () => {
     const state = createMinimalState(5);
-    state.exitPoint = { x: 4, z: 4 }; // col=4, row=4
+    state.exitPoints = [{ x: 4, z: 4 }]; // col=4, row=4
 
     const { board } = service.convertToGameBoard(state);
     expect(board[4][4].type).toBe(BlockType.EXIT);
@@ -172,15 +175,15 @@ describe('MapBridgeService', () => {
   it('should override terrain at exit point location', () => {
     const state = createMinimalState(5);
     state.tiles[3][3] = TerrainType.ABYSS; // Would be WALL
-    state.exitPoint = { x: 3, z: 3 }; // Same position — EXIT wins
+    state.exitPoints = [{ x: 3, z: 3 }]; // Same position — EXIT wins
 
     const { board } = service.convertToGameBoard(state);
     expect(board[3][3].type).toBe(BlockType.EXIT);
   });
 
-  it('should handle null exit point gracefully', () => {
+  it('should handle empty exit points gracefully', () => {
     const state = createMinimalState(3);
-    state.exitPoint = null;
+    state.exitPoints = [];
 
     const { board } = service.convertToGameBoard(state);
     for (let row = 0; row < 3; row++) {
@@ -190,35 +193,58 @@ describe('MapBridgeService', () => {
     }
   });
 
+  it('should place multiple EXIT tiles', () => {
+    const state = createMinimalState(5);
+    state.exitPoints = [{ x: 4, z: 1 }, { x: 4, z: 3 }];
+
+    const { board } = service.convertToGameBoard(state);
+    expect(board[1][4].type).toBe(BlockType.EXIT);
+    expect(board[3][4].type).toBe(BlockType.EXIT);
+  });
+
   // --- Board Conversion: Combined Scenario ---
 
   it('should produce a playable board with spawn, exit, walls, and traversable tiles', () => {
     const state = createMinimalState(5);
 
-    // Create a corridor: walls on sides, open path in middle
     for (let x = 0; x < 5; x++) {
-      state.tiles[x][0] = TerrainType.CRYSTAL; // Top wall row
-      state.tiles[x][4] = TerrainType.CRYSTAL; // Bottom wall row
+      state.tiles[x][0] = TerrainType.CRYSTAL;
+      state.tiles[x][4] = TerrainType.CRYSTAL;
     }
-    // Middle rows are bedrock (traversable) by default
 
-    state.spawnPoint = { x: 0, z: 2 };
-    state.exitPoint = { x: 4, z: 2 };
+    state.spawnPoints = [{ x: 0, z: 2 }];
+    state.exitPoints = [{ x: 4, z: 2 }];
 
     const { board, width, height } = service.convertToGameBoard(state);
 
     expect(width).toBe(5);
     expect(height).toBe(5);
 
-    // Top/bottom rows are walls
     expect(board[0][0].type).toBe(BlockType.WALL);
     expect(board[4][2].type).toBe(BlockType.WALL);
 
-    // Middle rows are traversable
     expect(board[2][1].type).toBe(BlockType.BASE);
     expect(board[2][1].isTraversable).toBeTrue();
 
-    // Spawn and exit are placed
+    expect(board[2][0].type).toBe(BlockType.SPAWNER);
+    expect(board[2][4].type).toBe(BlockType.EXIT);
+  });
+
+  // --- Backward Compatibility (v1 format) ---
+
+  it('should handle v1 format with single spawnPoint/exitPoint', () => {
+    const v1State = {
+      ...createMinimalState(5),
+      spawnPoint: { x: 0, z: 2 },
+      exitPoint: { x: 4, z: 2 },
+      spawnPoints: [] as any[],
+      exitPoints: [] as any[],
+    } as any;
+    // Clear arrays to simulate v1
+    delete v1State.spawnPoints;
+    delete v1State.exitPoints;
+
+    const { board } = service.convertToGameBoard(v1State);
     expect(board[2][0].type).toBe(BlockType.SPAWNER);
     expect(board[2][4].type).toBe(BlockType.EXIT);
   });
@@ -227,10 +253,9 @@ describe('MapBridgeService', () => {
 
   it('should handle out-of-bounds spawn point without crashing', () => {
     const state = createMinimalState(3);
-    state.spawnPoint = { x: 10, z: 10 }; // Out of bounds
+    state.spawnPoints = [{ x: 10, z: 10 }];
 
     const { board } = service.convertToGameBoard(state);
-    // Should not crash; no spawner placed
     for (let row = 0; row < 3; row++) {
       for (let col = 0; col < 3; col++) {
         expect(board[row][col].type).not.toBe(BlockType.SPAWNER);
@@ -240,7 +265,7 @@ describe('MapBridgeService', () => {
 
   it('should handle out-of-bounds exit point without crashing', () => {
     const state = createMinimalState(3);
-    state.exitPoint = { x: -1, z: -1 }; // Out of bounds
+    state.exitPoints = [{ x: -1, z: -1 }];
 
     const { board } = service.convertToGameBoard(state);
     for (let row = 0; row < 3; row++) {
@@ -283,8 +308,8 @@ function createMinimalState(gridSize: number): EditorMapState {
     gridSize,
     tiles,
     heightMap,
-    spawnPoint: null,
-    exitPoint: null,
-    version: '1.0.0'
+    spawnPoints: [],
+    exitPoints: [],
+    version: '2.0.0'
   };
 }

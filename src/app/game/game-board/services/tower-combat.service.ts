@@ -1,12 +1,17 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy } from '../models/enemy.model';
-import { PlacedTower, TowerType, TowerStats, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
+import { PlacedTower, TowerType, TowerStats, TowerSpecialization, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
 import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y } from '../constants/combat.constants';
+import { PROJECTILE_POOL_CONFIG } from '../constants/physics.constants';
+import { StatusEffectType } from '../constants/status-effect.constants';
+import { StatusEffectService } from './status-effect.service';
+import { SpatialGrid } from '../utils/spatial-grid';
+import { ObjectPool } from '../utils/object-pool';
 
 interface Projectile {
   id: string;
@@ -36,13 +41,6 @@ interface MortarZone {
   lastTickTime: number;    // gameTime of last DoT tick
 }
 
-/** Slow effect tracked per enemy. */
-interface SlowEffect {
-  enemyId: string;
-  originalSpeed: number;
-  expiresAt: number;
-}
-
 /** Info about a tower kill — includes the damage of the final hit. */
 export interface KillInfo {
   id: string;
@@ -55,17 +53,51 @@ export class TowerCombatService {
   private projectiles: Projectile[] = [];
   private chainArcs: ChainArc[] = [];
   private mortarZones: MortarZone[] = [];
-  private slowEffects: Map<string, SlowEffect> = new Map();
   private projectileCounter = 0;
   private gameTime = 0;
+  private spatialGrid = new SpatialGrid();
+  private towerDamageMultiplier = 1;
+  private projectilePool: ObjectPool<THREE.Mesh>;
+
+  setTowerDamageMultiplier(mult: number): void {
+    this.towerDamageMultiplier = mult;
+  }
 
   constructor(
     private enemyService: EnemyService,
     private gameBoardService: GameBoardService,
-    private audioService: AudioService
-  ) {}
+    private audioService: AudioService,
+    private statusEffectService: StatusEffectService
+  ) {
+    this.projectilePool = new ObjectPool<THREE.Mesh>(
+      () => this.createPooledProjectileMesh(),
+      (mesh) => { mesh.visible = false; },
+      PROJECTILE_POOL_CONFIG,
+      (mesh) => {
+        if (mesh.parent) mesh.parent.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      }
+    );
+  }
 
-  registerTower(row: number, col: number, type: TowerType, mesh: THREE.Group): void {
+  private createPooledProjectileMesh(): THREE.Mesh {
+    const geometry = new THREE.SphereGeometry(
+      PROJECTILE_CONFIG.radius,
+      PROJECTILE_CONFIG.segments,
+      PROJECTILE_CONFIG.segments
+    );
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: PROJECTILE_CONFIG.opacity
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.visible = false;
+    return mesh;
+  }
+
+  registerTower(row: number, col: number, type: TowerType, mesh: THREE.Group, actualCost: number = TOWER_CONFIGS[type].cost): void {
     const key = `${row}-${col}`;
     this.placedTowers.set(key, {
       id: key,
@@ -75,18 +107,31 @@ export class TowerCombatService {
       col,
       lastFireTime: -Infinity,
       kills: 0,
-      totalInvested: TOWER_CONFIGS[type].cost,
+      totalInvested: actualCost,
       targetingMode: DEFAULT_TARGETING_MODE,
       mesh
     });
   }
 
-  upgradeTower(key: string): boolean {
+  upgradeTower(key: string, actualCost?: number): boolean {
     const tower = this.placedTowers.get(key);
     if (!tower || tower.level >= MAX_TOWER_LEVEL) return false;
+    // L2->L3 requires specialization — use upgradeTowerWithSpec instead
+    if (tower.level === MAX_TOWER_LEVEL - 1) return false;
 
-    const cost = getUpgradeCost(tower.type, tower.level);
+    const cost = actualCost ?? getUpgradeCost(tower.type, tower.level);
     tower.level++;
+    tower.totalInvested += cost;
+    return true;
+  }
+
+  upgradeTowerWithSpec(key: string, spec: TowerSpecialization, actualCost?: number): boolean {
+    const tower = this.placedTowers.get(key);
+    if (!tower || tower.level !== MAX_TOWER_LEVEL - 1) return false;
+
+    const cost = actualCost ?? getUpgradeCost(tower.type, tower.level);
+    tower.level++;
+    tower.specialization = spec;
     tower.totalInvested += cost;
     return true;
   }
@@ -103,12 +148,24 @@ export class TowerCombatService {
     const killedEnemies: KillInfo[] = [];
     const firedTowerTypes: TowerType[] = [];
 
-    // Expire slow effects before tower processing so towers see accurate speeds
-    this.expireSlowEffects();
+    // Rebuild spatial grid for this frame (broad-phase acceleration for range queries)
+    this.spatialGrid.clear();
+    this.enemyService.getEnemies().forEach(enemy => {
+      if (enemy.health > 0) {
+        this.spatialGrid.insert(enemy);
+      }
+    });
+
+    // Tick status effects (expire SLOW, deal DoT damage) before tower processing
+    const dotKills = this.statusEffectService.update(this.gameTime);
+    killedEnemies.push(...dotKills);
 
     // Tower targeting and firing — resolve stats per-tower using level
     this.placedTowers.forEach(tower => {
-      const stats = getEffectiveStats(tower.type, tower.level);
+      const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
+      const stats = this.towerDamageMultiplier !== 1
+        ? { ...baseStats, damage: Math.round(baseStats.damage * this.towerDamageMultiplier) }
+        : baseStats;
       const timeSinceLastFire = this.gameTime - tower.lastFireTime;
 
       if (timeSinceLastFire < stats.fireRate) return;
@@ -201,10 +258,12 @@ export class TowerCombatService {
       // Tick DoT every second
       if (this.gameTime - zone.lastTickTime >= MORTAR_VISUAL_CONFIG.tickInterval) {
         zone.lastTickTime = this.gameTime;
-        this.enemyService.getEnemies().forEach(enemy => {
-          if (enemy.health <= 0) return;
+        const candidates = this.spatialGrid.queryRadius(zone.centerX, zone.centerZ, zone.blastRadius);
+        for (const enemy of candidates) {
+          if (enemy.health <= 0) continue;
           const dx = enemy.position.x - zone.centerX;
           const dz = enemy.position.z - zone.centerZ;
+          // Narrow-phase range check
           if (Math.sqrt(dx * dx + dz * dz) <= zone.blastRadius) {
             const result = this.enemyService.damageEnemy(enemy.id, zone.dotDamage);
             if (result.killed) {
@@ -215,7 +274,7 @@ export class TowerCombatService {
               if (mini.mesh) scene.add(mini.mesh);
             });
           }
-        });
+        }
       }
 
       survivingZones.push(zone);
@@ -257,15 +316,16 @@ export class TowerCombatService {
     let best: Enemy | null = null;
     let bestScore = -Infinity;
 
-    this.enemyService.getEnemies().forEach(enemy => {
-      if (enemy.health <= 0) return;
+    const candidates = this.spatialGrid.queryRadius(towerWorldX, towerWorldZ, stats.range);
+    for (const enemy of candidates) {
+      if (enemy.health <= 0) continue;
 
       const dx = enemy.position.x - towerWorldX;
       const dz = enemy.position.z - towerWorldZ;
       const dist = Math.sqrt(dx * dx + dz * dz);
 
-      // Range check in world units (tileSize = 1, so range in tiles = range in world units)
-      if (dist > stats.range) return;
+      // Narrow-phase range check in world units
+      if (dist > stats.range) continue;
 
       let score: number;
       switch (tower.targetingMode) {
@@ -288,52 +348,27 @@ export class TowerCombatService {
         best = enemy;
         bestScore = score;
       }
-    });
+    }
 
     return best;
   }
 
   private applySlowAura(tower: PlacedTower, stats: TowerStats): void {
     const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
-    const slowFactor = stats.slowFactor ?? 0.5;
-    const slowDuration = stats.slowDuration ?? 2;
 
-    this.enemyService.getEnemies().forEach(enemy => {
-      if (enemy.health <= 0) return;
+    const candidates = this.spatialGrid.queryRadius(towerWorldX, towerWorldZ, stats.range);
+    for (const enemy of candidates) {
+      if (enemy.health <= 0) continue;
 
       const dx = enemy.position.x - towerWorldX;
       const dz = enemy.position.z - towerWorldZ;
       const dist = Math.sqrt(dx * dx + dz * dz);
 
-      if (dist > stats.range) return;
+      // Narrow-phase range check
+      if (dist > stats.range) continue;
 
-      const existing = this.slowEffects.get(enemy.id);
-      if (existing) {
-        // Refresh duration — do not re-apply speed reduction (already slowed)
-        existing.expiresAt = this.gameTime + slowDuration;
-      } else {
-        // First application — record original speed and reduce it
-        const originalSpeed = enemy.speed;
-        enemy.speed = originalSpeed * slowFactor;
-        this.slowEffects.set(enemy.id, {
-          enemyId: enemy.id,
-          originalSpeed,
-          expiresAt: this.gameTime + slowDuration
-        });
-      }
-    });
-  }
-
-  private expireSlowEffects(): void {
-    for (const [enemyId, effect] of this.slowEffects) {
-      if (this.gameTime >= effect.expiresAt) {
-        // Restore speed if enemy is still alive
-        const enemy = this.enemyService.getEnemies().get(enemyId);
-        if (enemy && enemy.health > 0) {
-          enemy.speed = effect.originalSpeed;
-        }
-        this.slowEffects.delete(enemyId);
-      }
+      // StatusEffectService handles immunity (flying), duration refresh, and speed mutation
+      this.statusEffectService.apply(enemy.id, StatusEffectType.SLOW, this.gameTime, stats.slowFactor);
     }
   }
 
@@ -424,18 +459,20 @@ export class TowerCombatService {
     let nearest: Enemy | null = null;
     let nearestDist = Infinity;
 
-    this.enemyService.getEnemies().forEach(enemy => {
-      if (enemy.health <= 0 || excludeIds.has(enemy.id)) return;
+    const candidates = this.spatialGrid.queryRadius(from.position.x, from.position.z, chainRange);
+    for (const enemy of candidates) {
+      if (enemy.health <= 0 || excludeIds.has(enemy.id)) continue;
 
       const dx = enemy.position.x - from.position.x;
       const dz = enemy.position.z - from.position.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
 
+      // Narrow-phase range check
       if (dist <= chainRange && dist < nearestDist) {
         nearest = enemy;
         nearestDist = dist;
       }
-    });
+    }
 
     return nearest;
   }
@@ -449,15 +486,13 @@ export class TowerCombatService {
       return;
     }
 
-    const geometry = new THREE.SphereGeometry(PROJECTILE_CONFIG.radius, PROJECTILE_CONFIG.segments, PROJECTILE_CONFIG.segments);
-    const material = new THREE.MeshBasicMaterial({
-      color: stats.color,
-      transparent: true,
-      opacity: PROJECTILE_CONFIG.opacity
-    });
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = this.projectilePool.acquire();
+    (mesh.material as THREE.MeshBasicMaterial).color.set(stats.color);
     mesh.position.set(towerWorldX, PROJECTILE_CONFIG.spawnHeight, towerWorldZ);
-    scene.add(mesh);
+    mesh.visible = true;
+    if (!mesh.parent) {
+      scene.add(mesh);
+    }
 
     this.projectiles.push({
       id: `proj-${this.projectileCounter++}`,
@@ -527,10 +562,12 @@ export class TowerCombatService {
 
     // Initial blast — deal immediate damage on impact and track kills
     const initialKills: KillInfo[] = [];
-    this.enemyService.getEnemies().forEach(enemy => {
-      if (enemy.health <= 0) return;
+    const blastCandidates = this.spatialGrid.queryRadius(impactX, impactZ, blastRadius);
+    for (const enemy of blastCandidates) {
+      if (enemy.health <= 0) continue;
       const dx = enemy.position.x - impactX;
       const dz = enemy.position.z - impactZ;
+      // Narrow-phase range check
       if (Math.sqrt(dx * dx + dz * dz) <= blastRadius) {
         const result = this.enemyService.damageEnemy(enemy.id, dotDamage);
         if (result.killed) {
@@ -540,7 +577,7 @@ export class TowerCombatService {
           if (mini.mesh) scene.add(mini.mesh);
         });
       }
-    });
+    }
 
     this.mortarZones.push({
       mesh: zoneMesh,
@@ -561,9 +598,12 @@ export class TowerCombatService {
     if (proj.towerType === TowerType.MORTAR) {
       // Look up the mortar tower's stats to create the zone
       const tower = this.placedTowers.get(proj.towerKey);
-      const stats = tower ? getEffectiveStats(tower.type, tower.level) : null;
+      const stats = tower ? getEffectiveStats(tower.type, tower.level, tower.specialization) : null;
       if (stats) {
-        const initialKills = this.createMortarZone(proj.mesh.position.x, proj.mesh.position.z, stats, scene);
+        const modifiedStats = this.towerDamageMultiplier !== 1 && stats.dotDamage
+          ? { ...stats, dotDamage: Math.round(stats.dotDamage * this.towerDamageMultiplier) }
+          : stats;
+        const initialKills = this.createMortarZone(proj.mesh.position.x, proj.mesh.position.z, modifiedStats, scene);
         kills.push(...initialKills);
       }
       // Further DoT kills are tracked in the zone update loop
@@ -572,11 +612,13 @@ export class TowerCombatService {
       const impactX = proj.mesh.position.x;
       const impactZ = proj.mesh.position.z;
 
-      this.enemyService.getEnemies().forEach(enemy => {
+      const splashCandidates = this.spatialGrid.queryRadius(impactX, impactZ, proj.splashRadius);
+      for (const enemy of splashCandidates) {
         const dx = enemy.position.x - impactX;
         const dz = enemy.position.z - impactZ;
         const dist = Math.sqrt(dx * dx + dz * dz);
 
+        // Narrow-phase range check
         if (dist <= proj.splashRadius) {
           const result = this.enemyService.damageEnemy(enemy.id, proj.damage);
           if (result.killed) {
@@ -586,7 +628,7 @@ export class TowerCombatService {
             if (mini.mesh) scene.add(mini.mesh);
           });
         }
-      });
+      }
     } else {
       // Single target damage
       const result = this.enemyService.damageEnemy(proj.targetId, proj.damage);
@@ -610,12 +652,18 @@ export class TowerCombatService {
   }
 
   private removeProjectileMesh(proj: Projectile, scene: THREE.Scene): void {
-    scene.remove(proj.mesh);
-    proj.mesh.geometry.dispose();
-    if (Array.isArray(proj.mesh.material)) {
-      proj.mesh.material.forEach(mat => mat.dispose());
+    if (proj.towerType === TowerType.MORTAR) {
+      // Mortar projectiles are not pooled — dispose normally
+      scene.remove(proj.mesh);
+      proj.mesh.geometry.dispose();
+      if (Array.isArray(proj.mesh.material)) {
+        proj.mesh.material.forEach(mat => mat.dispose());
+      } else {
+        proj.mesh.material.dispose();
+      }
     } else {
-      proj.mesh.material.dispose();
+      // Standard projectiles: hide and return to pool (keep in scene)
+      this.projectilePool.release(proj.mesh);
     }
   }
 
@@ -633,6 +681,17 @@ export class TowerCombatService {
     }
     this.projectiles = [];
 
+    // Drain the projectile pool — dispose geometry and material for each pooled mesh
+    this.projectilePool.drain((mesh) => {
+      scene.remove(mesh);
+      mesh.geometry.dispose();
+      if (Array.isArray(mesh.material)) {
+        mesh.material.forEach(mat => mat.dispose());
+      } else {
+        mesh.material.dispose();
+      }
+    });
+
     for (const arc of this.chainArcs) {
       scene.remove(arc.line);
       arc.line.geometry.dispose();
@@ -647,14 +706,8 @@ export class TowerCombatService {
     }
     this.mortarZones = [];
 
-    // Restore all slowed enemies to original speed
-    for (const effect of this.slowEffects.values()) {
-      const enemy = this.enemyService.getEnemies().get(effect.enemyId);
-      if (enemy && enemy.health > 0) {
-        enemy.speed = effect.originalSpeed;
-      }
-    }
-    this.slowEffects.clear();
+    // Restore all status effects (slow speed, etc.)
+    this.statusEffectService.cleanup();
 
     // Dispose and remove all tower meshes from scene
     this.placedTowers.forEach(tower => {
@@ -675,5 +728,6 @@ export class TowerCombatService {
     this.placedTowers.clear();
     this.projectileCounter = 0;
     this.gameTime = 0;
+    this.towerDamageMultiplier = 1;
   }
 }

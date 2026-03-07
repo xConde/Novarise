@@ -25,7 +25,7 @@ export class EditControlsComponent implements OnInit, OnDestroy {
   @Output() brushSizeChange = new EventEmitter<number>();
   @Output() activeToolChange = new EventEmitter<BrushTool>();
   @Output() playMapClick = new EventEmitter<void>();
-  @Output() deleteMapClick = new EventEmitter<void>();
+
 
   public terrainTypes = Object.values(TerrainType);
   public terrainConfigs = TERRAIN_CONFIGS;
@@ -87,6 +87,14 @@ export class EditControlsComponent implements OnInit, OnDestroy {
 
   public selectTemplate(id: string): void {
     this.templateSelect.emit(id);
+  }
+
+  public onTemplateSelect(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    if (select.value) {
+      this.templateSelect.emit(select.value);
+      select.value = '';
+    }
   }
 
   public getTerrainColor(type: TerrainType): string {

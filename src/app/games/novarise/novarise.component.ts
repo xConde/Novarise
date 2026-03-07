@@ -92,9 +92,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private rectangleStartTile: THREE.Mesh | null = null;
   private rectanglePreviewMeshes: THREE.Mesh[] = [];
 
-  // Visual markers
-  private spawnMarker!: THREE.Mesh;
-  private exitMarker!: THREE.Mesh;
+  // Visual markers — arrays for multi-spawn/exit
+  private spawnMarkers: THREE.Mesh[] = [];
+  private exitMarkers: THREE.Mesh[] = [];
 
   // Camera movement - delegated to CameraControlService
   private keysPressed = new Set<string>();
@@ -123,10 +123,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private pathValidationResult: PathValidationResult = { valid: false };
   /** Whether the current map has a valid walkable path from spawn to exit. */
   public get isPathValid(): boolean { return this.pathValidationResult.valid; }
-  /** Whether both spawn and exit points have been placed (regardless of path validity). */
+  /** Whether at least one spawn and one exit point have been placed (regardless of path validity). */
   public get hasSpawnAndExit(): boolean {
     if (!this.terrainGrid) return false;
-    return this.terrainGrid.getSpawnPoint() !== null && this.terrainGrid.getExitPoint() !== null;
+    return this.terrainGrid.getSpawnPoints().length > 0 && this.terrainGrid.getExitPoints().length > 0;
   }
 
   // Title display
@@ -739,27 +739,31 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         // Reject placement on non-walkable terrain
         const tile = this.terrainGrid.getTileAt(x, z);
         if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
-          this.flashMarkerRejection(this.spawnMarker);
+          if (this.spawnMarkers.length > 0) this.flashMarkerRejection(this.spawnMarkers[0]);
           return;
         }
-        // Reject placement on same tile as exit
-        const currentExit = this.terrainGrid.getExitPoint();
-        if (currentExit && currentExit.x === x && currentExit.z === z) {
-          this.flashMarkerRejection(this.spawnMarker);
+        // Reject placement on same tile as any exit
+        const exitPoints = this.terrainGrid.getExitPoints();
+        if (exitPoints.some(ep => ep.x === x && ep.z === z)) {
+          if (this.spawnMarkers.length > 0) this.flashMarkerRejection(this.spawnMarkers[0]);
           return;
         }
-        // Record spawn point change for undo
-        const previousSpawn = this.terrainGrid.getSpawnPoint();
-        this.terrainGrid.setSpawnPoint(x, z);
-        this.updateSpawnMarker();
+        // Snapshot full spawn array before toggle for undo
+        const previousSpawns = this.terrainGrid.getSpawnPoints().map(p => ({ ...p }));
+        this.terrainGrid.addSpawnPoint(x, z);
+        this.updateSpawnMarkers();
         this.flashTileEdit(tileMesh);
         // Record command immediately (not part of stroke)
         const command = new SpawnPointCommand(
-          previousSpawn ? { ...previousSpawn } : null,
+          previousSpawns,
           { x, z },
+          (points) => {
+            this.terrainGrid.setSpawnPoints(points);
+            this.updateSpawnMarkers();
+          },
           (sx, sz) => {
-            this.terrainGrid.setSpawnPoint(sx, sz);
-            this.updateSpawnMarker();
+            this.terrainGrid.addSpawnPoint(sx, sz);
+            this.updateSpawnMarkers();
           }
         );
         this.editHistory.record(command);
@@ -768,27 +772,31 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         // Reject placement on non-walkable terrain
         const tile = this.terrainGrid.getTileAt(x, z);
         if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
-          this.flashMarkerRejection(this.exitMarker);
+          if (this.exitMarkers.length > 0) this.flashMarkerRejection(this.exitMarkers[0]);
           return;
         }
-        // Reject placement on same tile as spawn
-        const currentSpawn = this.terrainGrid.getSpawnPoint();
-        if (currentSpawn && currentSpawn.x === x && currentSpawn.z === z) {
-          this.flashMarkerRejection(this.exitMarker);
+        // Reject placement on same tile as any spawn
+        const spawnPoints = this.terrainGrid.getSpawnPoints();
+        if (spawnPoints.some(sp => sp.x === x && sp.z === z)) {
+          if (this.exitMarkers.length > 0) this.flashMarkerRejection(this.exitMarkers[0]);
           return;
         }
-        // Record exit point change for undo
-        const previousExit = this.terrainGrid.getExitPoint();
-        this.terrainGrid.setExitPoint(x, z);
-        this.updateExitMarker();
+        // Snapshot full exit array before toggle for undo
+        const previousExits = this.terrainGrid.getExitPoints().map(p => ({ ...p }));
+        this.terrainGrid.addExitPoint(x, z);
+        this.updateExitMarkers();
         this.flashTileEdit(tileMesh);
         // Record command immediately (not part of stroke)
         const command = new ExitPointCommand(
-          previousExit ? { ...previousExit } : null,
+          previousExits,
           { x, z },
+          (points) => {
+            this.terrainGrid.setExitPoints(points);
+            this.updateExitMarkers();
+          },
           (ex, ez) => {
-            this.terrainGrid.setExitPoint(ex, ez);
-            this.updateExitMarker();
+            this.terrainGrid.addExitPoint(ex, ez);
+            this.updateExitMarkers();
           }
         );
         this.editHistory.record(command);
@@ -1014,103 +1022,113 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private createSpawnExitMarkers(): void {
-    // Spawn marker - green cylinder
-    const spawnGeometry = new THREE.CylinderGeometry(
+    // Initial markers are created by updateSpawnMarkers/updateExitMarkers
+    this.updateSpawnMarkers();
+    this.updateExitMarkers();
+  }
+
+  private createSpawnMarkerMesh(): THREE.Mesh {
+    const geometry = new THREE.CylinderGeometry(
       EDITOR_SPAWN_MARKER.radiusTop,
       EDITOR_SPAWN_MARKER.radiusBottom,
       EDITOR_SPAWN_MARKER.height,
       EDITOR_SPAWN_MARKER.radialSegments
     );
-    const spawnMaterial = new THREE.MeshBasicMaterial({
+    const material = new THREE.MeshBasicMaterial({
       color: EDITOR_SPAWN_MARKER.color,
       transparent: true,
       opacity: EDITOR_SPAWN_MARKER.opacity
     });
-    this.spawnMarker = new THREE.Mesh(spawnGeometry, spawnMaterial);
-    this.spawnMarker.renderOrder = 999;
-    this.scene.add(this.spawnMarker);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.renderOrder = 999;
+    return mesh;
+  }
 
-    // Exit marker - red cylinder
-    const exitGeometry = new THREE.CylinderGeometry(
+  private createExitMarkerMesh(): THREE.Mesh {
+    const geometry = new THREE.CylinderGeometry(
       EDITOR_EXIT_MARKER.radiusTop,
       EDITOR_EXIT_MARKER.radiusBottom,
       EDITOR_EXIT_MARKER.height,
       EDITOR_EXIT_MARKER.radialSegments
     );
-    const exitMaterial = new THREE.MeshBasicMaterial({
+    const material = new THREE.MeshBasicMaterial({
       color: EDITOR_EXIT_MARKER.color,
       transparent: true,
       opacity: EDITOR_EXIT_MARKER.opacity
     });
-    this.exitMarker = new THREE.Mesh(exitGeometry, exitMaterial);
-    this.exitMarker.renderOrder = 999;
-    this.scene.add(this.exitMarker);
-
-    // Position markers at initial spawn/exit points
-    this.updateSpawnMarker();
-    this.updateExitMarker();
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.renderOrder = 999;
+    return mesh;
   }
 
+  /** Sync spawn marker meshes with the terrainGrid's spawnPoints array. */
+  private updateSpawnMarkers(): void {
+    const points = this.terrainGrid.getSpawnPoints();
+
+    // Remove excess markers
+    while (this.spawnMarkers.length > points.length) {
+      const marker = this.spawnMarkers.pop()!;
+      this.scene.remove(marker);
+      marker.geometry.dispose();
+      disposeMaterial(marker.material);
+    }
+
+    // Add missing markers
+    while (this.spawnMarkers.length < points.length) {
+      const marker = this.createSpawnMarkerMesh();
+      this.spawnMarkers.push(marker);
+      this.scene.add(marker);
+    }
+
+    // Position all markers
+    for (let i = 0; i < points.length; i++) {
+      const tile = this.terrainGrid.getTileAt(points[i].x, points[i].z);
+      if (tile) {
+        this.spawnMarkers[i].position.copy(tile.mesh.position);
+        this.spawnMarkers[i].position.y += EDITOR_SPAWN_MARKER.yBase;
+        this.spawnMarkers[i].visible = true;
+      }
+    }
+  }
+
+  /** Sync exit marker meshes with the terrainGrid's exitPoints array. */
+  private updateExitMarkers(): void {
+    const points = this.terrainGrid.getExitPoints();
+
+    // Remove excess markers
+    while (this.exitMarkers.length > points.length) {
+      const marker = this.exitMarkers.pop()!;
+      this.scene.remove(marker);
+      marker.geometry.dispose();
+      disposeMaterial(marker.material);
+    }
+
+    // Add missing markers
+    while (this.exitMarkers.length < points.length) {
+      const marker = this.createExitMarkerMesh();
+      this.exitMarkers.push(marker);
+      this.scene.add(marker);
+    }
+
+    // Position all markers
+    for (let i = 0; i < points.length; i++) {
+      const tile = this.terrainGrid.getTileAt(points[i].x, points[i].z);
+      if (tile) {
+        this.exitMarkers[i].position.copy(tile.mesh.position);
+        this.exitMarkers[i].position.y += EDITOR_EXIT_MARKER.yBase;
+        this.exitMarkers[i].visible = true;
+      }
+    }
+  }
+
+  /** @deprecated Backward-compatible alias — calls updateSpawnMarkers(). */
   private updateSpawnMarker(): void {
-    const spawn = this.terrainGrid.getSpawnPoint();
-    if (spawn) {
-      const tile = this.terrainGrid.getTileAt(spawn.x, spawn.z);
-      if (tile) {
-        this.spawnMarker.position.copy(tile.mesh.position);
-        this.spawnMarker.position.y += EDITOR_SPAWN_MARKER.yBase;
-        this.spawnMarker.visible = true;
-      }
-    }
+    this.updateSpawnMarkers();
   }
 
+  /** @deprecated Backward-compatible alias — calls updateExitMarkers(). */
   private updateExitMarker(): void {
-    const exit = this.terrainGrid.getExitPoint();
-    if (exit) {
-      const tile = this.terrainGrid.getTileAt(exit.x, exit.z);
-      if (tile) {
-        this.exitMarker.position.copy(tile.mesh.position);
-        this.exitMarker.position.y += EDITOR_EXIT_MARKER.yBase;
-        this.exitMarker.visible = true;
-      }
-    }
-  }
-
-  /**
-   * Prompt the user to select and delete a saved map (with confirmation).
-   */
-  public deleteMap(): void {
-    const maps = this.mapStorage.getAllMaps();
-
-    if (maps.length === 0) {
-      alert('No saved maps to delete.');
-      return;
-    }
-
-    let message = 'Select a map to delete:\n\n';
-    maps.forEach((map, index) => {
-      const date = new Date(map.updatedAt).toLocaleString();
-      message += `${index + 1}. ${map.name} (${date})\n`;
-    });
-
-    const selection = prompt(message + '\nEnter number:');
-    if (!selection) return; // User cancelled
-
-    const index = parseInt(selection) - 1;
-    if (index < 0 || index >= maps.length) {
-      alert('Invalid selection.');
-      return;
-    }
-
-    const selectedMap = maps[index];
-    const confirmed = confirm(`Delete map "${selectedMap.name}"? This cannot be undone.`);
-    if (!confirmed) return;
-
-    const deleted = this.mapStorage.deleteMap(selectedMap.id);
-    if (deleted) {
-      alert(`Map "${selectedMap.name}" deleted.`);
-    } else {
-      alert('Failed to delete map.');
-    }
+    this.updateExitMarkers();
   }
 
   private saveGridState(): void {
@@ -1647,8 +1665,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   public get canPlayMap(): boolean {
     if (!this.terrainGrid) return false;
     const hasPoints =
-      this.terrainGrid.getSpawnPoint() !== null &&
-      this.terrainGrid.getExitPoint() !== null;
+      this.terrainGrid.getSpawnPoints().length > 0 &&
+      this.terrainGrid.getExitPoints().length > 0;
     return hasPoints && this.pathValidationResult.valid;
   }
 
@@ -1717,29 +1735,26 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       material.opacity = 0.6 + Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * 0.2;
     }
 
-    // Animate spawn/exit markers
-    if (this.spawnMarker) {
+    // Animate spawn markers
+    const spawnPoints = this.terrainGrid.getSpawnPoints();
+    for (let i = 0; i < this.spawnMarkers.length && i < spawnPoints.length; i++) {
       const bounce = Math.abs(Math.sin(Date.now() * EDITOR_ANIMATION.markerBounceSpeed)) * EDITOR_ANIMATION.markerBounceAmplitude;
-      const spawn = this.terrainGrid.getSpawnPoint();
-      if (spawn) {
-        const tile = this.terrainGrid.getTileAt(spawn.x, spawn.z);
-        if (tile) {
-          this.spawnMarker.position.y = tile.mesh.position.y + EDITOR_SPAWN_MARKER.yBase + bounce;
-        }
+      const tile = this.terrainGrid.getTileAt(spawnPoints[i].x, spawnPoints[i].z);
+      if (tile) {
+        this.spawnMarkers[i].position.y = tile.mesh.position.y + EDITOR_SPAWN_MARKER.yBase + bounce;
       }
-      this.spawnMarker.rotation.y += EDITOR_ANIMATION.spawnRotationSpeed;
+      this.spawnMarkers[i].rotation.y += EDITOR_ANIMATION.spawnRotationSpeed;
     }
 
-    if (this.exitMarker) {
+    // Animate exit markers
+    const exitPointsAnim = this.terrainGrid.getExitPoints();
+    for (let i = 0; i < this.exitMarkers.length && i < exitPointsAnim.length; i++) {
       const bounce = Math.abs(Math.sin(Date.now() * EDITOR_ANIMATION.markerBounceSpeed + EDITOR_ANIMATION.exitBouncePhaseOffset)) * EDITOR_ANIMATION.markerBounceAmplitude;
-      const exit = this.terrainGrid.getExitPoint();
-      if (exit) {
-        const tile = this.terrainGrid.getTileAt(exit.x, exit.z);
-        if (tile) {
-          this.exitMarker.position.y = tile.mesh.position.y + EDITOR_EXIT_MARKER.yBase + bounce;
-        }
+      const tile = this.terrainGrid.getTileAt(exitPointsAnim[i].x, exitPointsAnim[i].z);
+      if (tile) {
+        this.exitMarkers[i].position.y = tile.mesh.position.y + EDITOR_EXIT_MARKER.yBase + bounce;
       }
-      this.exitMarker.rotation.y += EDITOR_ANIMATION.exitRotationSpeed;
+      this.exitMarkers[i].rotation.y += EDITOR_ANIMATION.exitRotationSpeed;
     }
 
     if (this.particles) {
@@ -1811,16 +1826,18 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
 
     // Clean up spawn/exit markers
-    if (this.spawnMarker) {
-      this.scene.remove(this.spawnMarker);
-      this.spawnMarker.geometry.dispose();
-      disposeMaterial(this.spawnMarker.material);
+    for (const marker of this.spawnMarkers) {
+      this.scene.remove(marker);
+      marker.geometry.dispose();
+      disposeMaterial(marker.material);
     }
-    if (this.exitMarker) {
-      this.scene.remove(this.exitMarker);
-      this.exitMarker.geometry.dispose();
-      disposeMaterial(this.exitMarker.material);
+    this.spawnMarkers = [];
+    for (const marker of this.exitMarkers) {
+      this.scene.remove(marker);
+      marker.geometry.dispose();
+      disposeMaterial(marker.material);
     }
+    this.exitMarkers = [];
 
     // Clean up particles
     if (this.particles) {

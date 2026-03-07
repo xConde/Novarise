@@ -25,9 +25,10 @@ import { MinimapService, MinimapEntityData, MinimapTerrainData } from './service
 import { SettingsService } from './services/settings.service';
 import { TowerPreviewService } from './services/tower-preview.service';
 import { disposeMaterial } from './utils/three-utils';
-import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TARGETING_MODE_LABELS, TargetingMode } from './models/tower.model';
+import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TARGETING_MODE_LABELS, TargetingMode, SpecializationStats } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
+import { GameModifier, GAME_MODIFIER_CONFIGS, GameModifierConfig, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
 import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants/rendering.constants';
 import { AMBIENT_LIGHT, DIRECTIONAL_LIGHT, UNDER_LIGHT, POINT_LIGHTS } from './constants/lighting.constants';
@@ -36,9 +37,11 @@ import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants
 import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG } from './constants/touch.constants';
+import { PHYSICS_CONFIG } from './constants/physics.constants';
 import { ENEMY_STATS } from './models/enemy.model';
 import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
+import { StatusEffectService } from './services/status-effect.service';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -53,7 +56,7 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService]
+  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -95,6 +98,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   selectedTowerUpgradeCost: number = 0;
   selectedTowerSellValue: number = 0;
   MAX_TOWER_LEVEL = MAX_TOWER_LEVEL;
+  TowerSpecialization = TowerSpecialization;
+
+  // Specialization choice state
+  showSpecializationChoice = false;
+  specOptions: { spec: TowerSpecialization; label: string; description: string; damage: number; range: number; fireRate: number }[] = [];
 
   // Game state exposed to template
   gameState: GameState;
@@ -105,6 +113,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   DifficultyLevel = DifficultyLevel;
   difficultyPresets = DIFFICULTY_PRESETS;
   difficultyLevels = Object.values(DifficultyLevel);
+
+  // Modifier state
+  modifierConfigs = GAME_MODIFIER_CONFIGS;
+  allModifiers = Object.values(GameModifier);
+  activeModifiers = new Set<GameModifier>();
+  modifierScoreMultiplier = 1.0;
   towerTypes: { type: TowerType; hotkey: string }[] = Object.entries(TOWER_HOTKEYS).map(
     ([key, type]) => ({ type, hotkey: key })
   );
@@ -133,6 +147,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Animation
   private lastTime = 0;
   private elapsedTimeAccumulator = 0;
+  private physicsAccumulator = 0;
   private defeatSoundPlayed = false;
   private victorySoundPlayed = false;
   private keyboardHandler: (event: KeyboardEvent) => void;
@@ -229,7 +244,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           livesTotal,
           state.difficulty,
           state.wave,
-          state.phase === GamePhase.VICTORY
+          state.phase === GamePhase.VICTORY,
+          this.gameStateService.getModifierScoreMultiplier()
         );
       }
 
@@ -248,7 +264,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Import editor map if it has spawn and exit points; otherwise use default board
     if (this.mapBridge.hasEditorMap()) {
       const state = this.mapBridge.getEditorMapState()!;
-      if (state.spawnPoint && state.exitPoint) {
+      if ((state.spawnPoints?.length > 0 || (state as any).spawnPoint) && (state.exitPoints?.length > 0 || (state as any).exitPoint)) {
         const { board, width, height } = this.mapBridge.convertToGameBoard(state);
         this.gameBoardService.importBoard(board, width, height);
       } else {
@@ -304,22 +320,61 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.settingsService.update({ difficulty });
   }
 
+  toggleModifier(modifier: GameModifier): void {
+    if (this.activeModifiers.has(modifier)) {
+      this.activeModifiers.delete(modifier);
+    } else {
+      this.activeModifiers.add(modifier);
+    }
+    this.modifierScoreMultiplier = calculateModifierScoreMultiplier(this.activeModifiers);
+    this.gameStateService.setModifiers(this.activeModifiers);
+    this.enemyService.setModifierEffects(
+      this.gameStateService.getModifierEffects(),
+      this.activeModifiers
+    );
+    this.towerCombatService.setTowerDamageMultiplier(this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1);
+  }
+
+  getEffectiveTowerCost(type: TowerType): number {
+    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+    return Math.round(TOWER_CONFIGS[type].cost * costMult);
+  }
+
   selectTowerType(type: TowerType): void {
     this.selectedTowerType = type;
     this.deselectTower();
   }
 
-  upgradeTower(): void {
+  upgradeTower(spec?: TowerSpecialization): void {
     if (!this.selectedTowerInfo) return;
     const phase = this.gameStateService.getState().phase;
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
     if (this.selectedTowerInfo.level >= MAX_TOWER_LEVEL) return;
 
-    const cost = getUpgradeCost(this.selectedTowerInfo.type, this.selectedTowerInfo.level);
+    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+    const cost = getUpgradeCost(this.selectedTowerInfo.type, this.selectedTowerInfo.level, costMult);
     if (!this.gameStateService.canAfford(cost)) return;
 
-    // Confirm upgrade succeeds BEFORE spending gold — prevents gold loss on service rejection
-    if (!this.towerCombatService.upgradeTower(this.selectedTowerInfo.id)) return;
+    if (this.selectedTowerInfo.level === MAX_TOWER_LEVEL - 1) {
+      // L2->L3: needs specialization choice
+      if (!spec) {
+        const specs = TOWER_SPECIALIZATIONS[this.selectedTowerInfo.type];
+        this.specOptions = [
+          { spec: TowerSpecialization.ALPHA, ...specs[TowerSpecialization.ALPHA] },
+          { spec: TowerSpecialization.BETA, ...specs[TowerSpecialization.BETA] },
+        ];
+        this.showSpecializationChoice = true;
+        return;
+      }
+      // Player chose — execute spec upgrade
+      if (!this.towerCombatService.upgradeTowerWithSpec(this.selectedTowerInfo.id, spec, cost)) return;
+      this.showSpecializationChoice = false;
+      this.specOptions = [];
+    } else {
+      // L1->L2: standard upgrade
+      if (!this.towerCombatService.upgradeTower(this.selectedTowerInfo.id, cost)) return;
+    }
+
     this.gameStateService.spendGold(cost);
     this.audioService.playTowerUpgrade();
 
@@ -341,6 +396,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Refresh info panel
     this.refreshTowerInfoPanel();
     this.showRangePreview(this.selectedTowerInfo);
+  }
+
+  selectSpecialization(spec: TowerSpecialization): void {
+    this.upgradeTower(spec);
   }
 
   sellTower(): void {
@@ -393,10 +452,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.towerCombatService.cycleTargetingMode(this.selectedTowerInfo.id);
   }
 
+  specLabel(tower: PlacedTower): string {
+    if (!tower.specialization) return '';
+    return TOWER_SPECIALIZATIONS[tower.type][tower.specialization].label;
+  }
+
   deselectTower(): void {
     this.selectedTowerInfo = null;
     this.selectedTowerStats = null;
     this.sellConfirmPending = false;
+    this.showSpecializationChoice = false;
+    this.specOptions = [];
     this.removeRangePreview();
   }
 
@@ -418,9 +484,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private refreshTowerInfoPanel(): void {
     if (!this.selectedTowerInfo) return;
     const tower = this.selectedTowerInfo;
-    const stats = getEffectiveStats(tower.type, tower.level);
+    const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
     this.selectedTowerStats = { damage: stats.damage, range: stats.range, fireRate: stats.fireRate };
-    this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level);
+    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+    this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level, costMult);
     this.selectedTowerSellValue = getSellValue(tower.totalInvested);
   }
 
@@ -445,7 +512,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private showRangePreview(tower: PlacedTower): void {
     this.removeRangePreview();
 
-    const stats = getEffectiveStats(tower.type, tower.level);
+    const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
     const boardWidth = this.gameBoardService.getBoardWidth();
     const boardHeight = this.gameBoardService.getBoardHeight();
     const tileSize = this.gameBoardService.getTileSize();
@@ -477,25 +544,26 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.router.navigate(['/edit']);
   }
 
-  goHome(): void {
-    if (this.gameState.phase === GamePhase.COMBAT) {
-      const wasPaused = this.isPaused;
-      if (!wasPaused) this.togglePause();
-      if (!confirm('Leave the game? Progress will be lost.')) {
-        if (!wasPaused) this.togglePause();
-        return;
-      }
-    }
-    this.router.navigate(['/']);
-  }
-
   startWave(): void {
     const state = this.gameStateService.getState();
     if (state.phase === GamePhase.COMBAT) return;
     if (state.phase === GamePhase.VICTORY || state.phase === GamePhase.DEFEAT) return;
 
+    this.minimapService.show();
+
+    // Ensure enemy service has current modifier effects before first wave
+    if (state.wave === 0 && this.activeModifiers.size > 0) {
+      this.enemyService.setModifierEffects(
+        this.gameStateService.getModifierEffects(),
+        this.activeModifiers
+      );
+    }
+
     this.gameStateService.startWave();
-    this.waveService.startWave(this.gameStateService.getState().wave, this.scene);
+    const modEffects = this.gameStateService.getModifierEffects();
+    const waveCountMult = modEffects.waveCountMultiplier ?? 1;
+    this.towerCombatService.setTowerDamageMultiplier(modEffects.towerDamageMultiplier ?? 1);
+    this.waveService.startWave(this.gameStateService.getState().wave, this.scene, waveCountMult);
     this.audioService.playWaveStart();
   }
 
@@ -515,6 +583,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.newlyUnlockedAchievements = [];
     this.achievementDetails = [];
     this.gameEndRecorded = false;
+    this.activeModifiers = new Set<GameModifier>();
+    this.modifierScoreMultiplier = 1.0;
     this.wavePreview = [];
     this.defeatSoundPlayed = false;
     this.victorySoundPlayed = false;
@@ -528,7 +598,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (this.mapBridge.hasEditorMap()) {
       const state = this.mapBridge.getEditorMapState()!;
-      if (state.spawnPoint && state.exitPoint) {
+      if ((state.spawnPoints?.length > 0 || (state as any).spawnPoint) && (state.exitPoints?.length > 0 || (state as any).exitPoint)) {
         const { board, width, height } = this.mapBridge.convertToGameBoard(state);
         this.gameBoardService.importBoard(board, width, height);
       } else {
@@ -539,9 +609,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.renderGameBoard();
     this.addGridLines();
+    this.minimapService.init(this.canvasContainer.nativeElement);
     this.lastPreviewKey = '';
     this.lastTime = 0;
     this.elapsedTimeAccumulator = 0;
+    this.physicsAccumulator = 0;
   }
 
 
@@ -946,7 +1018,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           if (previewKey !== this.lastPreviewKey) {
             this.lastPreviewKey = previewKey;
             const canPlace = this.gameBoardService.canPlaceTower(row, col)
-              && this.gameStateService.canAfford(TOWER_CONFIGS[this.selectedTowerType].cost);
+              && this.gameStateService.canAfford(this.getEffectiveTowerCost(this.selectedTowerType));
             this.towerPreviewService.showPreview(this.selectedTowerType, row, col, canPlace, this.scene);
           }
         } else {
@@ -1202,13 +1274,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     const towerStats = TOWER_CONFIGS[this.selectedTowerType];
+    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+    const effectiveCost = Math.round(towerStats.cost * costMult);
 
     // Check if player can afford tower
-    if (!this.gameStateService.canAfford(towerStats.cost)) return;
+    if (!this.gameStateService.canAfford(effectiveCost)) return;
 
     if (this.gameBoardService.placeTower(row, col, this.selectedTowerType)) {
       // Deduct gold
-      this.gameStateService.spendGold(towerStats.cost);
+      this.gameStateService.spendGold(effectiveCost);
 
       // Create tower mesh
       const towerMesh = this.gameBoardService.createTowerMesh(row, col, this.selectedTowerType);
@@ -1217,7 +1291,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.scene.add(towerMesh);
 
       // Register tower with combat service
-      this.towerCombatService.registerTower(row, col, this.selectedTowerType, towerMesh);
+      this.towerCombatService.registerTower(row, col, this.selectedTowerType, towerMesh, effectiveCost);
       this.audioService.playTowerPlace();
       this.gameStatsService.recordTowerBuilt();
 
@@ -1295,7 +1369,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       const tileSize = this.gameBoardService.getTileSize();
 
       this.towerCombatService.getPlacedTowers().forEach(tower => {
-        const stats = getEffectiveStats(tower.type, tower.level);
+        const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
         const worldX = (tower.col - boardWidth / 2) * tileSize;
         const worldZ = (tower.row - boardHeight / 2) * tileSize;
         const ring = this.createRangeRing(
@@ -1426,7 +1500,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.animationFrameId = requestAnimationFrame(this.animate);
 
     const rawDelta = this.lastTime === 0 ? 0 : (time - this.lastTime) / 1000;
-    const deltaTime = Math.min(rawDelta, 0.1); // Cap at 100ms to prevent tab-switch physics burst
+    const deltaTime = Math.min(rawDelta, PHYSICS_CONFIG.maxDeltaTime);
     this.lastTime = time;
 
     // Reset per-frame SFX counters so throttle limits apply per animation frame
@@ -1453,99 +1527,123 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.particles.rotation.y += PARTICLE_CONFIG.rotationSpeed;
     }
 
-    // Gameplay tick
+    // Gameplay tick — fixed timestep accumulator
     if (deltaTime > 0) {
       const state = this.gameStateService.getState();
 
       if (state.phase === GamePhase.COMBAT && !state.isPaused) {
-        const scaledDelta = deltaTime * state.gameSpeed;
+        this.physicsAccumulator += deltaTime * state.gameSpeed;
+        let stepCount = 0;
 
-        // Elapsed time tracking — accumulate locally, flush to service every ~1 second
+        // Elapsed time tracking — accumulate real (unscaled) time, flush every ~1 second
         this.elapsedTimeAccumulator += deltaTime;
         if (this.elapsedTimeAccumulator >= 1) {
           this.gameStateService.addElapsedTime(this.elapsedTimeAccumulator);
           this.elapsedTimeAccumulator = 0;
         }
 
-        // Wave spawning
-        this.waveService.update(scaledDelta, this.scene);
+        // Accumulate visual events across all physics steps — process once per frame
+        const frameKills: { damage: number; position: { x: number; y: number; z: number }; color: number; value: number }[] = [];
+        const frameFiredTypes: Set<TowerType> = new Set();
+        let frameHitCount = 0;
+        let frameExitCount = 0;
 
-        // Tower combat — returns IDs of enemies killed, tower types that fired, and hit count
-        const { killed: killedByTowers, fired: firedTowerTypes, hitCount } = this.towerCombatService.update(scaledDelta, this.scene);
+        while (this.physicsAccumulator >= PHYSICS_CONFIG.fixedTimestep &&
+               stepCount < PHYSICS_CONFIG.maxStepsPerFrame) {
 
-        // Play tower fire sounds
-        for (const towerType of firedTowerTypes) {
-          this.audioService.playTowerFire(towerType);
-        }
+          // Wave spawning
+          this.waveService.update(PHYSICS_CONFIG.fixedTimestep, this.scene);
 
-        // Play enemy hit sound (throttled inside AudioService)
-        if (hitCount > 0) {
-          this.audioService.playEnemyHit();
-        }
+          // Tower combat — returns IDs of enemies killed, tower types that fired, and hit count
+          const { killed: killedByTowers, fired: firedTowerTypes, hitCount } = this.towerCombatService.update(PHYSICS_CONFIG.fixedTimestep, this.scene);
 
-        // Collect gold from tower kills and remove dead enemies
-        for (const killInfo of killedByTowers) {
-          const enemy = this.enemyService.getEnemies().get(killInfo.id);
-          if (enemy) {
-            this.gameStateService.addGold(enemy.value);
-            this.gameStatsService.recordGoldEarned(enemy.value);
-            this.audioService.playGoldEarned();
-            this.audioService.playEnemyDeath();
-
-            // Visual effects on kill
-            const enemyColor = ENEMY_STATS[enemy.type]?.color ?? 0xff0000;
-            this.particleService.spawnDeathBurst(enemy.position, enemyColor);
-            this.goldPopupService.spawn(enemy.value, enemy.position, this.scene);
-            this.damagePopupService.spawn(killInfo.damage, enemy.position, this.scene);
-
-            this.enemyService.removeEnemy(killInfo.id, this.scene);
+          // Accumulate fired tower types and hit counts for audio (once per frame)
+          for (const towerType of firedTowerTypes) {
+            frameFiredTypes.add(towerType);
           }
-        }
+          frameHitCount += hitCount;
 
-        // Move enemies along paths
-        const reachedExit = this.enemyService.updateEnemies(scaledDelta);
+          // Collect gold from tower kills and remove dead enemies
+          for (const killInfo of killedByTowers) {
+            const enemy = this.enemyService.getEnemies().get(killInfo.id);
+            if (enemy) {
+              this.gameStateService.addGold(enemy.value);
+              this.gameStatsService.recordGoldEarned(enemy.value);
 
-        // Enemies reaching the exit cost lives
-        for (const enemyId of reachedExit) {
-          this.gameStateService.loseLife(1);
-          this.gameStatsService.recordEnemyLeaked();
-          this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
-          this.enemyService.removeEnemy(enemyId, this.scene);
-        }
+              // Snapshot visual data for deferred rendering (enemy removed below)
+              frameKills.push({
+                damage: killInfo.damage,
+                position: { ...enemy.position },
+                color: ENEMY_STATS[enemy.type]?.color ?? 0xff0000,
+                value: enemy.value,
+              });
 
-        // Update health bars
-        this.enemyService.updateHealthBars();
-
-        // Check wave completion: no spawning and no enemies alive
-        // Re-read phase — loseLife() above may have set DEFEAT mid-frame
-        const currentPhase = this.gameStateService.getState().phase;
-        if (currentPhase === GamePhase.DEFEAT && !this.defeatSoundPlayed) {
-          this.defeatSoundPlayed = true;
-          this.audioService.playDefeat();
-        }
-        if (currentPhase === GamePhase.COMBAT &&
-            !this.waveService.isSpawning() &&
-            this.enemyService.getEnemies().size === 0) {
-          const reward = this.waveService.getWaveReward(state.wave);
-          this.gameStateService.completeWave(reward);
-          // Check if completeWave triggered VICTORY
-          const postWavePhase = this.gameStateService.getState().phase;
-          if (postWavePhase === GamePhase.VICTORY && !this.victorySoundPlayed) {
-            this.victorySoundPlayed = true;
-            this.audioService.playVictory();
-          } else if (postWavePhase === GamePhase.INTERMISSION) {
-            this.audioService.playWaveClear();
-            this.gameStateService.awardInterest();
+              this.enemyService.removeEnemy(killInfo.id, this.scene);
+            }
           }
 
-          // Record game end stats for profile (VICTORY or DEFEAT, fires once per game)
-          if ((postWavePhase === GamePhase.VICTORY || postWavePhase === GamePhase.DEFEAT) && !this.gameEndRecorded) {
+          // Move enemies along paths
+          const reachedExit = this.enemyService.updateEnemies(PHYSICS_CONFIG.fixedTimestep);
+
+          // Enemies reaching the exit cost lives scaled by enemy type
+          for (const enemyId of reachedExit) {
+            const leakedEnemy = this.enemyService.getEnemies().get(enemyId);
+            const leakCost = leakedEnemy?.leakDamage ?? 1;
+            this.gameStateService.loseLife(leakCost);
+            this.gameStatsService.recordEnemyLeaked();
+            frameExitCount++;
+            this.enemyService.removeEnemy(enemyId, this.scene);
+          }
+
+          // Check wave completion: no spawning and no enemies alive
+          // Re-read phase — loseLife() above may have set DEFEAT mid-frame
+          const currentPhase = this.gameStateService.getState().phase;
+          if (currentPhase === GamePhase.DEFEAT && !this.defeatSoundPlayed) {
+            this.defeatSoundPlayed = true;
+            this.audioService.playDefeat();
+          }
+          if (currentPhase === GamePhase.COMBAT &&
+              !this.waveService.isSpawning() &&
+              this.enemyService.getEnemies().size === 0) {
+            const reward = this.waveService.getWaveReward(state.wave);
+            this.gameStateService.completeWave(reward);
+            // Check if completeWave triggered VICTORY
+            const postWavePhase = this.gameStateService.getState().phase;
+            if (postWavePhase === GamePhase.VICTORY && !this.victorySoundPlayed) {
+              this.victorySoundPlayed = true;
+              this.audioService.playVictory();
+            } else if (postWavePhase === GamePhase.INTERMISSION) {
+              this.audioService.playWaveClear();
+              this.gameStateService.awardInterest();
+            }
+
+            // Record game end stats for profile (VICTORY or DEFEAT, fires once per game)
+            if ((postWavePhase === GamePhase.VICTORY || postWavePhase === GamePhase.DEFEAT) && !this.gameEndRecorded) {
+              this.gameEndRecorded = true;
+              const endState = this.gameStateService.getState();
+              const stats = this.gameStatsService.getStats();
+              const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
+              const gameEndStats: GameEndStats = {
+                isVictory: postWavePhase === GamePhase.VICTORY,
+                score: endState.score,
+                enemiesKilled: totalKills,
+                goldEarned: stats.totalGoldEarned,
+                wavesCompleted: endState.wave,
+                livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
+              };
+              this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
+              this.updateAchievementDetails();
+            }
+          }
+
+          // DEFEAT mid-frame (from loseLife) — record game end if not yet done
+          if (currentPhase === GamePhase.DEFEAT && !this.gameEndRecorded) {
             this.gameEndRecorded = true;
             const endState = this.gameStateService.getState();
             const stats = this.gameStatsService.getStats();
             const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
             const gameEndStats: GameEndStats = {
-              isVictory: postWavePhase === GamePhase.VICTORY,
+              isVictory: false,
               score: endState.score,
               enemiesKilled: totalKills,
               goldEarned: stats.totalGoldEarned,
@@ -1555,25 +1653,31 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
             this.updateAchievementDetails();
           }
+
+          this.physicsAccumulator -= PHYSICS_CONFIG.fixedTimestep;
+          stepCount++;
         }
 
-        // DEFEAT mid-frame (from loseLife) — record game end if not yet done
-        if (currentPhase === GamePhase.DEFEAT && !this.gameEndRecorded) {
-          this.gameEndRecorded = true;
-          const endState = this.gameStateService.getState();
-          const stats = this.gameStatsService.getStats();
-          const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
-          const gameEndStats: GameEndStats = {
-            isVictory: false,
-            score: endState.score,
-            enemiesKilled: totalKills,
-            goldEarned: stats.totalGoldEarned,
-            wavesCompleted: endState.wave,
-            livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
-          };
-          this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
-          this.updateAchievementDetails();
+        // Process accumulated visual events once per frame (not per physics step)
+        for (const towerType of frameFiredTypes) {
+          this.audioService.playTowerFire(towerType);
         }
+        if (frameHitCount > 0) {
+          this.audioService.playEnemyHit();
+        }
+        for (const kill of frameKills) {
+          this.audioService.playGoldEarned();
+          this.audioService.playEnemyDeath();
+          this.particleService.spawnDeathBurst(kill.position, kill.color);
+          this.goldPopupService.spawn(kill.value, kill.position, this.scene);
+          this.damagePopupService.spawn(kill.damage, kill.position, this.scene);
+        }
+        if (frameExitCount > 0) {
+          this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
+        }
+
+        // Update health bars once per frame (visual only, not per physics step)
+        this.enemyService.updateHealthBars();
 
         // Update minimap
         this.updateMinimap(time);

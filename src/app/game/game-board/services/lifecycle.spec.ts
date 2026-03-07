@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { EnemyService, DamageResult } from './enemy.service';
 import { TowerCombatService } from './tower-combat.service';
+import { StatusEffectService } from './status-effect.service';
 import { AudioService } from './audio.service';
 import { GameStateService } from './game-state.service';
 import { WaveService } from './wave.service';
@@ -137,6 +138,7 @@ describe('TowerCombatService lifecycle', () => {
       maxHealth: health,
       speed: 2,
       value: 10,
+      leakDamage: 1,
       path: [],
       pathIndex: 0,
       distanceTraveled: 0
@@ -167,6 +169,7 @@ describe('TowerCombatService lifecycle', () => {
     TestBed.configureTestingModule({
       providers: [
         TowerCombatService,
+        StatusEffectService,
         { provide: EnemyService, useValue: enemyServiceSpy },
         { provide: GameBoardService, useValue: gameBoardServiceSpy },
         { provide: AudioService, useValue: audioServiceSpy }

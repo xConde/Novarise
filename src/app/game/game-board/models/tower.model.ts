@@ -19,6 +19,11 @@ export enum TowerType {
   MORTAR = 'mortar'
 }
 
+export enum TowerSpecialization {
+  ALPHA = 'alpha',
+  BETA = 'beta',
+}
+
 export const MAX_TOWER_LEVEL = 3;
 
 export const UPGRADE_COST_CONFIG = {
@@ -48,6 +53,18 @@ export interface TowerStats {
   dotDamage?: number;     // Damage per second dealt by mortar zone
 }
 
+export interface SpecializationStats {
+  label: string;
+  description: string;
+  damage: number;          // Multiplier on base damage at L3
+  range: number;           // Multiplier on base range at L3
+  fireRate: number;        // Multiplier on base fireRate at L3 (lower = faster)
+  splashRadiusBonus?: number;
+  chainCountBonus?: number;
+  slowFactorOverride?: number;
+  dotDamageMultiplier?: number;
+}
+
 export interface PlacedTower {
   id: string;
   type: TowerType;
@@ -59,6 +76,7 @@ export interface PlacedTower {
   totalInvested: number; // cumulative gold spent (placement + upgrades)
   targetingMode: TargetingMode;
   mesh: THREE.Group | null;
+  specialization?: TowerSpecialization; // Set when upgraded to L3
 }
 
 export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
@@ -125,6 +143,85 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
   }
 };
 
+export const TOWER_SPECIALIZATIONS: Record<TowerType, Record<TowerSpecialization, SpecializationStats>> = {
+  [TowerType.BASIC]: {
+    [TowerSpecialization.ALPHA]: {
+      label: 'Marksman',
+      description: 'High damage, slight range boost',
+      damage: 3.0, range: 1.2, fireRate: 0.8,
+    },
+    [TowerSpecialization.BETA]: {
+      label: 'Rapid',
+      description: 'Much faster fire rate, wider range',
+      damage: 1.8, range: 1.5, fireRate: 0.5,
+    },
+  },
+  [TowerType.SNIPER]: {
+    [TowerSpecialization.ALPHA]: {
+      label: 'Assassin',
+      description: 'Extreme damage, very long range',
+      damage: 3.5, range: 1.5, fireRate: 0.75,
+    },
+    [TowerSpecialization.BETA]: {
+      label: 'Sharpshooter',
+      description: 'Fast semi-auto, moderate range',
+      damage: 2.0, range: 1.2, fireRate: 0.45,
+    },
+  },
+  [TowerType.SPLASH]: {
+    [TowerSpecialization.ALPHA]: {
+      label: 'Bombardier',
+      description: 'Larger blast radius, more damage',
+      damage: 2.8, range: 1.2, fireRate: 0.8,
+      splashRadiusBonus: 0.5,
+    },
+    [TowerSpecialization.BETA]: {
+      label: 'Suppressor',
+      description: 'Rapid small explosions, wider range',
+      damage: 1.8, range: 1.5, fireRate: 0.5,
+    },
+  },
+  [TowerType.SLOW]: {
+    [TowerSpecialization.ALPHA]: {
+      label: 'Glacier',
+      description: 'Stronger slow effect, wider range',
+      damage: 1.0, range: 1.5, fireRate: 1.0,
+      slowFactorOverride: 0.3,
+    },
+    [TowerSpecialization.BETA]: {
+      label: 'Frostbite',
+      description: 'Faster pulse rate, extended range',
+      damage: 1.0, range: 1.3, fireRate: 0.7,
+    },
+  },
+  [TowerType.CHAIN]: {
+    [TowerSpecialization.ALPHA]: {
+      label: 'Tesla',
+      description: 'More bounces, longer chain range',
+      damage: 2.0, range: 1.2, fireRate: 0.8,
+      chainCountBonus: 2,
+    },
+    [TowerSpecialization.BETA]: {
+      label: 'Arc',
+      description: 'Faster arcs, higher damage per hit',
+      damage: 2.8, range: 1.3, fireRate: 0.5,
+    },
+  },
+  [TowerType.MORTAR]: {
+    [TowerSpecialization.ALPHA]: {
+      label: 'Siege',
+      description: 'Larger zones, stronger DoT',
+      damage: 2.5, range: 1.2, fireRate: 0.85,
+      dotDamageMultiplier: 2.0,
+    },
+    [TowerSpecialization.BETA]: {
+      label: 'Barrage',
+      description: 'Faster firing, more zones active',
+      damage: 1.8, range: 1.3, fireRate: 0.5,
+    },
+  },
+};
+
 /** Per-level stat multipliers. Index 0 = level 1 (base), 1 = level 2, 2 = level 3. */
 export const UPGRADE_MULTIPLIERS: { damage: number; range: number; fireRate: number }[] = [
   { damage: 1.0,  range: 1.0,  fireRate: 1.0  },  // Level 1 (base)
@@ -134,10 +231,10 @@ export const UPGRADE_MULTIPLIERS: { damage: number; range: number; fireRate: num
 
 /** Get the upgrade cost from current level to next level.
  *  Level 1→2: 75% of base cost; Level 2→3: 100% of base cost. */
-export function getUpgradeCost(type: TowerType, currentLevel: number): number {
+export function getUpgradeCost(type: TowerType, currentLevel: number, costMultiplier: number = 1): number {
   if (currentLevel < 1 || currentLevel >= MAX_TOWER_LEVEL) return Infinity;
   const baseCost = TOWER_CONFIGS[type].cost;
-  return Math.round(baseCost * (UPGRADE_COST_CONFIG.baseMultiplier + currentLevel * UPGRADE_COST_CONFIG.levelScale));
+  return Math.round(baseCost * (UPGRADE_COST_CONFIG.baseMultiplier + currentLevel * UPGRADE_COST_CONFIG.levelScale) * costMultiplier);
 }
 
 /** Get the sell refund (50% of total gold invested). */
@@ -155,9 +252,34 @@ export const TOWER_DESCRIPTIONS: Record<TowerType, string> = {
   [TowerType.MORTAR]: 'Creates damage zones on the ground',
 };
 
-/** Resolve effective stats for a tower at a given level (clamped to 1..MAX_TOWER_LEVEL). */
-export function getEffectiveStats(type: TowerType, level: number): TowerStats {
+/** Resolve effective stats for a tower at a given level (clamped to 1..MAX_TOWER_LEVEL).
+ *  At MAX_TOWER_LEVEL with a specialization, uses spec multipliers instead of standard L3. */
+export function getEffectiveStats(type: TowerType, level: number, specialization?: TowerSpecialization): TowerStats {
   const base = TOWER_CONFIGS[type];
+
+  if (level >= MAX_TOWER_LEVEL && specialization) {
+    const spec = TOWER_SPECIALIZATIONS[type][specialization];
+    const result: TowerStats = {
+      ...base,
+      damage: Math.round(base.damage * spec.damage),
+      range: +(base.range * spec.range).toFixed(2),
+      fireRate: +(base.fireRate * spec.fireRate).toFixed(2),
+    };
+    if (spec.splashRadiusBonus && result.splashRadius) {
+      result.splashRadius += spec.splashRadiusBonus;
+    }
+    if (spec.chainCountBonus && result.chainCount) {
+      result.chainCount += spec.chainCountBonus;
+    }
+    if (spec.slowFactorOverride !== undefined) {
+      result.slowFactor = spec.slowFactorOverride;
+    }
+    if (spec.dotDamageMultiplier && result.dotDamage) {
+      result.dotDamage = Math.round(result.dotDamage * spec.dotDamageMultiplier);
+    }
+    return result;
+  }
+
   const clampedIndex = Math.max(0, Math.min(level, MAX_TOWER_LEVEL) - 1);
   const mult = UPGRADE_MULTIPLIERS[clampedIndex];
   return {

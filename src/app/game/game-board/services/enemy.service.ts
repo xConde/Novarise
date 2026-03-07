@@ -1,9 +1,11 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_MESH_SEGMENTS, GridNode, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT } from '../models/enemy.model';
+import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_MESH_SEGMENTS, GridNode, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { BlockType } from '../models/game-board-tile';
 import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
+import { MinHeap } from '../utils/min-heap';
+import { GameModifier, ModifierEffects, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 
 export interface DamageResult {
   killed: boolean;
@@ -15,8 +17,16 @@ export class EnemyService {
   private enemies: Map<string, Enemy> = new Map();
   private enemyCounter = 0;
   private pathCache: Map<string, GridNode[]> = new Map();
+  private modifierEffects: ModifierEffects = {};
+  private activeModifiers: Set<GameModifier> = new Set();
 
   constructor(private gameBoardService: GameBoardService) {}
+
+  /** Set active modifier effects and the raw modifier set. Called by the component when modifiers change. */
+  setModifierEffects(effects: ModifierEffects, modifiers: Set<GameModifier>): void {
+    this.modifierEffects = effects;
+    this.activeModifiers = modifiers;
+  }
 
   /**
    * Spawn a new enemy at a random spawner tile
@@ -69,10 +79,46 @@ export class EnemyService {
       maxHealth: stats.health,
       speed: stats.speed,
       value: stats.value,
+      leakDamage: stats.leakDamage,
       path,
       pathIndex: 0,
       distanceTraveled: 0
     };
+
+    // Apply modifier effects to spawned enemy stats
+    if (this.modifierEffects.enemyHealthMultiplier !== undefined) {
+      enemy.health = Math.round(enemy.health * this.modifierEffects.enemyHealthMultiplier);
+      enemy.maxHealth = enemy.health;
+    }
+    // Speed modifiers: SPEED_DEMONS only applies to FAST/SWIFT types.
+    // If both FAST_ENEMIES and SPEED_DEMONS are active, compute the combined
+    // multiplier manually to apply SPEED_DEMONS selectively.
+    if (this.activeModifiers.has(GameModifier.SPEED_DEMONS)) {
+      const isFastOrSwift = type === EnemyType.FAST || type === EnemyType.SWIFT;
+      if (isFastOrSwift) {
+        // Apply the full merged speed multiplier (includes both modifiers)
+        if (this.modifierEffects.enemySpeedMultiplier !== undefined) {
+          enemy.speed *= this.modifierEffects.enemySpeedMultiplier;
+        }
+      } else {
+        // Only apply FAST_ENEMIES portion (exclude SPEED_DEMONS' 2.0x)
+        const speedDemonsMultiplier = GAME_MODIFIER_CONFIGS[GameModifier.SPEED_DEMONS].effects.enemySpeedMultiplier ?? 1;
+        const totalMultiplier = this.modifierEffects.enemySpeedMultiplier ?? 1;
+        // Guard against divide-by-zero (speedDemonsMultiplier should never be 0, but be safe)
+        const nonDemonMultiplier = speedDemonsMultiplier !== 0
+          ? totalMultiplier / speedDemonsMultiplier
+          : totalMultiplier;
+        if (nonDemonMultiplier !== 1) {
+          enemy.speed *= nonDemonMultiplier;
+        }
+      }
+    } else if (this.modifierEffects.enemySpeedMultiplier !== undefined) {
+      // No SPEED_DEMONS — apply speed multiplier to all types
+      enemy.speed *= this.modifierEffects.enemySpeedMultiplier;
+    }
+
+    // Floor speed to prevent zero/negative from extreme modifier stacking
+    enemy.speed = Math.max(MIN_ENEMY_SPEED, enemy.speed);
 
     if (isFlying) {
       enemy.isFlying = true;
@@ -413,6 +459,7 @@ export class EnemyService {
       maxHealth: MINI_SWARM_STATS.health,
       speed: MINI_SWARM_STATS.speed,
       value: MINI_SWARM_STATS.value,
+      leakDamage: MINI_SWARM_STATS.leakDamage,
       path: remainingPath,
       pathIndex: 0,
       distanceTraveled: parent.distanceTraveled,
@@ -474,8 +521,9 @@ export class EnemyService {
       return [...this.pathCache.get(cacheKey)!];
     }
 
-    const openSet: GridNode[] = [];
-    const closedSet: Set<string> = new Set();
+    const openHeap = new MinHeap();
+    const openMap = new Map<string, GridNode>(); // key -> best node for O(1) lookup
+    const closedSet = new Set<string>();
     const boardWidth = this.gameBoardService.getBoardWidth();
     const boardHeight = this.gameBoardService.getBoardHeight();
 
@@ -488,18 +536,20 @@ export class EnemyService {
       f: 0
     };
     startNode.f = startNode.g + startNode.h;
-    openSet.push(startNode);
 
-    while (openSet.length > 0) {
-      // Find node with lowest f cost
-      let currentIndex = 0;
-      for (let i = 1; i < openSet.length; i++) {
-        if (openSet[i].f < openSet[currentIndex].f) {
-          currentIndex = i;
-        }
+    const startKey = `${start.x},${start.y}`;
+    openHeap.insert(startNode);
+    openMap.set(startKey, startNode);
+
+    while (openHeap.size > 0) {
+      const current = openHeap.extractMin()!;
+      const currentKey = `${current.x},${current.y}`;
+
+      // Skip stale heap entries (superseded by a better path via re-insertion)
+      if (!openMap.has(currentKey) || openMap.get(currentKey) !== current) {
+        continue;
       }
-
-      const current = openSet[currentIndex];
+      openMap.delete(currentKey);
 
       // Check if we reached the goal
       if (current.x === end.x && current.y === end.y) {
@@ -508,9 +558,7 @@ export class EnemyService {
         return path;
       }
 
-      // Move current from open to closed
-      openSet.splice(currentIndex, 1);
-      closedSet.add(`${current.x},${current.y}`);
+      closedSet.add(currentKey);
 
       // Check all neighbors (4-directional)
       const neighbors = [
@@ -527,8 +575,9 @@ export class EnemyService {
           continue;
         }
 
-        // Check if already evaluated
         const neighborKey = `${neighbor.x},${neighbor.y}`;
+
+        // Check if already evaluated
         if (closedSet.has(neighborKey)) {
           continue;
         }
@@ -541,28 +590,26 @@ export class EnemyService {
 
         // Calculate costs
         const gScore = current.g + 1;
-        const hScore = this.heuristic(neighbor, end);
-        const fScore = gScore + hScore;
+        const existingNode = openMap.get(neighborKey);
 
-        // Check if this path to neighbor is better
-        const existingNode = openSet.find(n => n.x === neighbor.x && n.y === neighbor.y);
-        if (existingNode) {
-          if (gScore < existingNode.g) {
-            existingNode.g = gScore;
-            existingNode.h = hScore;
-            existingNode.f = fScore;
-            existingNode.parent = current;
-          }
-        } else {
-          openSet.push({
-            x: neighbor.x,
-            y: neighbor.y,
-            g: gScore,
-            h: hScore,
-            f: fScore,
-            parent: current
-          });
+        // Skip if existing path to this neighbor is already better
+        if (existingNode && gScore >= existingNode.g) {
+          continue;
         }
+
+        const hScore = this.heuristic(neighbor, end);
+        const newNode: GridNode = {
+          x: neighbor.x,
+          y: neighbor.y,
+          g: gScore,
+          h: hScore,
+          f: gScore + hScore,
+          parent: current
+        };
+
+        // Insert new entry; stale entries for this key are skipped on extraction
+        openMap.set(neighborKey, newNode);
+        openHeap.insert(newNode);
       }
     }
 
@@ -691,6 +738,8 @@ export class EnemyService {
     this.cleanup(scene);
     this.enemyCounter = 0;
     this.clearPathCache();
+    this.modifierEffects = {};
+    this.activeModifiers = new Set();
   }
 
   /**
