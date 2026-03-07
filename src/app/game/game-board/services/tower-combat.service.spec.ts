@@ -6,6 +6,7 @@ import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_SPECIALIZATIONS, M
 import { Enemy, EnemyType } from '../models/enemy.model';
 import { AudioService } from './audio.service';
 import { StatusEffectService } from './status-effect.service';
+import { CHAIN_LIGHTNING_CONFIG, IMPACT_FLASH_CONFIG } from '../constants/combat.constants';
 import * as THREE from 'three';
 
 describe('TowerCombatService', () => {
@@ -1025,6 +1026,103 @@ describe('TowerCombatService', () => {
       service.upgradeTowerWithSpec('5-5', TowerSpecialization.BETA);
 
       expect(service.getTower('5-5')!.mesh).toBe(mesh);
+    });
+  });
+
+  // --- Chain Lightning Zigzag ---
+
+  describe('chain lightning zigzag', () => {
+    it('should create arc with zigzagSegments + 1 vertices', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(1.0, mockScene); // past CHAIN fireRate
+
+      const chainArcs = (service as any)['chainArcs'] as { line: THREE.Line; expiresAt: number }[];
+      expect(chainArcs.length).toBeGreaterThan(0);
+
+      const expectedVertexCount = CHAIN_LIGHTNING_CONFIG.zigzagSegments + 1;
+      const posAttr = chainArcs[0].line.geometry.getAttribute('position');
+      expect(posAttr.count).toBe(expectedVertexCount);
+    });
+
+    it('should have endpoints that connect start and end positions without jitter', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      const targetX = TOWER_WORLD_X + 1;
+      const targetZ = TOWER_WORLD_Z + 1;
+      const e1 = createEnemy('e1', targetX, targetZ, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(1.0, mockScene);
+
+      const chainArcs = (service as any)['chainArcs'] as { line: THREE.Line; expiresAt: number }[];
+      expect(chainArcs.length).toBeGreaterThan(0);
+
+      const posAttr = chainArcs[0].line.geometry.getAttribute('position');
+      const segs = CHAIN_LIGHTNING_CONFIG.zigzagSegments;
+
+      // First vertex should be at the tower world position (arc starts from tower)
+      const firstX = posAttr.getX(0);
+      const firstZ = posAttr.getZ(0);
+      expect(firstX).toBeCloseTo(TOWER_WORLD_X, 2);
+      expect(firstZ).toBeCloseTo(TOWER_WORLD_Z, 2);
+
+      // Last vertex should be at the enemy position (arc ends at target)
+      const lastX = posAttr.getX(segs);
+      const lastZ = posAttr.getZ(segs);
+      expect(lastX).toBeCloseTo(targetX, 2);
+      expect(lastZ).toBeCloseTo(targetZ, 2);
+    });
+  });
+
+  // --- Impact Flash ---
+
+  describe('impact flash', () => {
+    it('should spawn an impact flash when a projectile hits an enemy', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy at tower position — projectile hits instantly (dist=0)
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(2.0, mockScene);
+
+      const impactFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      expect(impactFlashes.length).toBeGreaterThan(0);
+    });
+
+    it('should create flash with SphereGeometry', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(2.0, mockScene);
+
+      const impactFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      expect(impactFlashes.length).toBeGreaterThan(0);
+      expect(impactFlashes[0].mesh.geometry).toBeInstanceOf(THREE.SphereGeometry);
+    });
+
+    it('should clean up flash after its lifetime expires', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(2.0, mockScene); // fire + hit → flash spawned
+
+      const impactFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      expect(impactFlashes.length).toBeGreaterThan(0);
+
+      // Move enemy far away so no new flashes are spawned
+      e1.position.x = TOWER_WORLD_X + 20;
+
+      // Advance time past flash lifetime (IMPACT_FLASH_CONFIG.lifetime = 0.08s)
+      service.update(IMPACT_FLASH_CONFIG.lifetime + 0.01, mockScene);
+
+      const remainingFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      expect(remainingFlashes.length).toBe(0);
     });
   });
 });
