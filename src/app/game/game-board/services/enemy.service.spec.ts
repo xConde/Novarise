@@ -1069,6 +1069,30 @@ describe('EnemyService', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       expect(enemy.health).toBe(ENEMY_STATS[EnemyType.BASIC].health);
     });
+
+    it('should floor enemy speed at MIN_ENEMY_SPEED even with extreme modifiers', () => {
+      // Simulate a near-zero speed multiplier
+      service.setModifierEffects({ enemySpeedMultiplier: 0.001 }, new Set());
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy.speed).toBeGreaterThanOrEqual(0.1);
+    });
+
+    it('should apply ARMORED + FAST + SPEED_DEMONS combo correctly', () => {
+      const mods = new Set([GameModifier.ARMORED_ENEMIES, GameModifier.FAST_ENEMIES, GameModifier.SPEED_DEMONS]);
+      const effects = mergeModifierEffects(mods);
+      service.setModifierEffects(effects, mods);
+
+      const fastEnemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      // Health: 2x, Speed: 1.5x * 2.0x = 3.0x for FAST type
+      expect(fastEnemy.health).toBe(ENEMY_STATS[EnemyType.FAST].health * 2);
+      expect(fastEnemy.speed).toBeCloseTo(ENEMY_STATS[EnemyType.FAST].speed * 3.0);
+
+      const heavyEnemy = service.spawnEnemy(EnemyType.HEAVY, mockScene)!;
+      // Health: 2x, Speed: only FAST_ENEMIES 1.5x (SPEED_DEMONS excluded for non-fast)
+      expect(heavyEnemy.health).toBe(ENEMY_STATS[EnemyType.HEAVY].health * 2);
+      expect(heavyEnemy.speed).toBeCloseTo(ENEMY_STATS[EnemyType.HEAVY].speed * 1.5);
+    });
   });
 
   describe('getPathToExit', () => {

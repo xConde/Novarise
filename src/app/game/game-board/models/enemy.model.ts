@@ -124,6 +124,9 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
 /** Y-position (world height) for flying enemies hovering above ground. */
 export const FLYING_ENEMY_HEIGHT = 1.5;
 
+/** Minimum enemy speed after all modifier/effect application — prevents zero or negative speed. */
+export const MIN_ENEMY_SPEED = 0.1;
+
 /** Sphere geometry segments for enemy mesh rendering. */
 export const ENEMY_MESH_SEGMENTS = 16;
 export const MINI_SWARM_MESH_SEGMENTS = 12;
