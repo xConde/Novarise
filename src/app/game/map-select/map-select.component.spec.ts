@@ -6,6 +6,7 @@ import { MapStorageService, MapMetadata } from '../../games/novarise/core/map-st
 import { MapBridgeService } from '../game-board/services/map-bridge.service';
 import { TerrainGridState } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
+import { DEMO_MAPS } from '../game-board/models/demo-maps.model';
 
 const MOCK_MAPS: MapMetadata[] = [
   { id: 'map_1', name: 'First Map', createdAt: 1000, updatedAt: 2000, version: '1.0.0', gridSize: 25 },
@@ -68,7 +69,7 @@ describe('MapSelectComponent', () => {
 
   it('should show map cards when maps are available', () => {
     fixture.detectChanges();
-    const cards = fixture.nativeElement.querySelectorAll('.map-card');
+    const cards = fixture.nativeElement.querySelectorAll('.map-card:not(.demo-card)');
     expect(cards.length).toBe(2);
   });
 
@@ -83,7 +84,7 @@ describe('MapSelectComponent', () => {
     fixture.detectChanges();
     const emptyState = fixture.nativeElement.querySelector('.empty-state');
     expect(emptyState).toBeTruthy();
-    const cards = fixture.nativeElement.querySelectorAll('.map-card');
+    const cards = fixture.nativeElement.querySelectorAll('.map-card:not(.demo-card)');
     expect(cards.length).toBe(0);
   });
 
@@ -237,10 +238,94 @@ describe('MapSelectComponent', () => {
   describe('grid size display', () => {
     it('should display grid size on map cards', () => {
       fixture.detectChanges();
-      const metaElements = fixture.nativeElement.querySelectorAll('.map-card .map-meta');
+      const metaElements = fixture.nativeElement.querySelectorAll('.map-section:not(.demo-section) .map-card .map-meta');
       expect(metaElements.length).toBe(2);
       expect(metaElements[0].textContent).toContain('25');
       expect(metaElements[1].textContent).toContain('30');
+    });
+  });
+
+  describe('demo maps', () => {
+    it('should render demo map cards', () => {
+      fixture.detectChanges();
+      const demoCards = fixture.nativeElement.querySelectorAll('.demo-card');
+      expect(demoCards.length).toBe(DEMO_MAPS.length);
+    });
+
+    it('should show "Built-in Maps" section label', () => {
+      fixture.detectChanges();
+      const demoSection = fixture.nativeElement.querySelector('.demo-section .section-label');
+      expect(demoSection).toBeTruthy();
+      expect(demoSection.textContent).toContain('Built-in Maps');
+    });
+
+    it('should display demo map names', () => {
+      fixture.detectChanges();
+      const names = fixture.nativeElement.querySelectorAll('.demo-card .map-name');
+      expect(names.length).toBe(DEMO_MAPS.length);
+      for (let i = 0; i < DEMO_MAPS.length; i++) {
+        expect(names[i].textContent).toContain(DEMO_MAPS[i].name);
+      }
+    });
+
+    it('should display demo map descriptions', () => {
+      fixture.detectChanges();
+      const descriptions = fixture.nativeElement.querySelectorAll('.demo-card .map-description');
+      expect(descriptions.length).toBe(DEMO_MAPS.length);
+      for (let i = 0; i < DEMO_MAPS.length; i++) {
+        expect(descriptions[i].textContent).toContain(DEMO_MAPS[i].description);
+      }
+    });
+
+    it('should display demo map grid sizes', () => {
+      fixture.detectChanges();
+      const metas = fixture.nativeElement.querySelectorAll('.demo-card .map-meta');
+      expect(metas.length).toBe(DEMO_MAPS.length);
+      for (let i = 0; i < DEMO_MAPS.length; i++) {
+        expect(metas[i].textContent).toContain(String(DEMO_MAPS[i].state.gridSize));
+      }
+    });
+
+    it('should show BUILT-IN badge on demo cards', () => {
+      fixture.detectChanges();
+      const badges = fixture.nativeElement.querySelectorAll('.demo-card .demo-badge');
+      expect(badges.length).toBe(DEMO_MAPS.length);
+      expect(badges[0].textContent).toContain('BUILT-IN');
+    });
+
+    it('should NOT show edit or delete buttons on demo cards', () => {
+      fixture.detectChanges();
+      const demoCards = fixture.nativeElement.querySelectorAll('.demo-card');
+      for (let i = 0; i < demoCards.length; i++) {
+        const editBtn = demoCards[i].querySelector('.edit-btn');
+        const deleteBtn = demoCards[i].querySelector('.delete-btn');
+        expect(editBtn).toBeNull();
+        expect(deleteBtn).toBeNull();
+      }
+    });
+
+    it('should NOT show card-actions container on demo cards', () => {
+      fixture.detectChanges();
+      const demoCards = fixture.nativeElement.querySelectorAll('.demo-card');
+      for (let i = 0; i < demoCards.length; i++) {
+        const actions = demoCards[i].querySelector('.card-actions');
+        expect(actions).toBeNull();
+      }
+    });
+
+    it('selectDemoMap should set map state via bridge and navigate to /play', () => {
+      fixture.detectChanges();
+      component.selectDemoMap(DEMO_MAPS[0]);
+      expect(mapBridgeSpy.setEditorMapState).toHaveBeenCalledOnceWith(DEMO_MAPS[0].state);
+      expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/play']);
+    });
+
+    it('clicking a demo card should call selectDemoMap', () => {
+      fixture.detectChanges();
+      const demoCards = fixture.nativeElement.querySelectorAll('.demo-card');
+      spyOn(component, 'selectDemoMap');
+      demoCards[0].click();
+      expect(component.selectDemoMap).toHaveBeenCalledOnceWith(DEMO_MAPS[0]);
     });
   });
 });

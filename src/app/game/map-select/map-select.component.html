@@ -7,6 +7,18 @@
     </button>
   </div>
 
+  <div class="map-section demo-section" *ngIf="demoMaps.length > 0">
+    <h2 class="section-label">Built-in Maps</h2>
+    <div class="map-grid">
+      <div class="map-card demo-card" *ngFor="let demo of demoMaps" (click)="selectDemoMap(demo)">
+        <span class="demo-badge">BUILT-IN</span>
+        <span class="map-name">{{ demo.name }}</span>
+        <span class="map-description">{{ demo.description }}</span>
+        <span class="map-meta">{{ demo.state.gridSize }} &times; {{ demo.state.gridSize }}</span>
+      </div>
+    </div>
+  </div>
+
   <div class="map-section" *ngIf="maps.length > 0">
     <h2 class="section-label">Your Maps</h2>
     <div class="map-grid">

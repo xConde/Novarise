@@ -182,6 +182,43 @@
   to { box-shadow: 0 0 8px rgba(255, 102, 102, 0.5); }
 }
 
+// --- Demo map section ---
+.demo-section {
+  margin-bottom: var(--spacing-xl);
+}
+
+.demo-card {
+  border-color: var(--theme-purple) !important;
+  padding-top: var(--spacing-lg) !important;
+
+  &:hover {
+    border-color: var(--theme-purple-lighter) !important;
+    box-shadow: 0 0 18px var(--theme-purple-glow) !important;
+  }
+}
+
+.demo-badge {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  padding: 2px var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+  background: var(--theme-purple-a20);
+  border: var(--border-width-thin) solid var(--theme-purple);
+  color: var(--theme-purple-lighter);
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--font-size-3xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.map-description {
+  font-size: var(--font-size-small);
+  color: var(--theme-purple-mid);
+  line-height: 1.4;
+}
+
 // --- Map card text ---
 .map-name {
   font-size: var(--font-size-base);
