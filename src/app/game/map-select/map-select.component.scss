@@ -128,6 +128,7 @@
   gap: var(--spacing-xs);
   opacity: 0;
   transition: opacity var(--transition-fast) ease;
+  z-index: 2;
 }
 
 .card-action-btn {

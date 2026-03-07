@@ -602,3 +602,33 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Fix Finding 3: Scale mortar DoT by towerDamageMultiplier
 - [x] Fix Finding 4: Snapshot full spawn/exit arrays for undo
 - [x] Run full test suite (1656/1656), commit, push
+
+## Red Team Critique — 2026-03-07 (Pass 7)
+
+### Finding 1: Scene Too Dark — Compounding Light + Post-Processing (MEDIUM)
+**Location:** `constants/lighting.constants.ts`, `constants/rendering.constants.ts`, `game-board.service.ts:106`
+**Risk:** All light colors were dark purples (0x5a4a6a, 0xc0b0d0), bloom threshold too high (0.7) to trigger on dark scene, vignette darkness (0.4) further reduces brightness. Scene appears too dark for comfortable gameplay.
+**Fix:** Brighten light colors toward neutral (0x9090a0 ambient, 0xe0d8f0 directional), lower bloom threshold to 0.5, reduce vignette darkness to 0.25, boost tile emissive intensity from 0.15 to 0.25.
+
+### Finding 2: Wave Preview Overflow on Landscape Phones (LOW)
+**Location:** `game-board.component.scss:199`
+**Risk:** Wave preview panel has no max-height constraint. On landscape phones (~400px viewport height), wave list can overflow off-screen.
+**Fix:** Add `max-height: min(40vh, 300px); overflow-y: auto;` to `.wave-preview`.
+
+### Finding 3: Card Actions Z-Index on Touch Devices (LOW)
+**Location:** `map-select.component.scss:123`
+**Risk:** `.card-actions` positioned absolutely without z-index. On touch devices with long map names, action buttons may be visually occluded by sibling content.
+**Fix:** Add `z-index: 2` to `.card-actions`.
+
+### Verified NOT bugs:
+- SpawnPointCommand redo logic: toggle handles both add/remove correctly via previousSpawns snapshot
+- Mini-swarm slow inheritance: minis spawn at base speed by design, can be independently slowed
+- Modifier retroactivity: modifiers locked during COMBAT, no enemies exist during SETUP changes
+- Mortar DoT multiplier: already fixed in pass 6 (scales dotDamage before zone creation)
+- Targeting mode reset on sell: new tower at same location correctly gets default mode
+
+## Deployment Checklist — Red Team Pass 7
+- [x] Fix Finding 1: Brighten lighting constants + post-processing
+- [x] Fix Finding 2: Wave preview max-height overflow protection
+- [x] Fix Finding 3: Card actions z-index for touch devices
+- [x] Run full test suite (1656/1656), commit, push

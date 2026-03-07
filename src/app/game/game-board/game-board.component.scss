@@ -209,6 +209,9 @@
     z-index: var(--z-index-overlay);
     pointer-events: none;
 
+    max-height: min(40vh, 300px);
+    overflow-y: auto;
+
     @media screen and (max-width: 768px) {
       min-width: 8rem;
       transform: translate(-50%, calc(-50% - 5rem));

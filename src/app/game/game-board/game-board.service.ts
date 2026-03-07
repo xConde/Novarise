@@ -103,7 +103,7 @@ export class GameBoardService {
     const material = new THREE.MeshStandardMaterial({
       color: color,
       emissive: isSubdued ? 0x2a2548 : color,
-      emissiveIntensity: isBase ? 0.15 : isWall ? 0.1 : 0.4,
+      emissiveIntensity: isBase ? 0.25 : isWall ? 0.15 : 0.45,
       metalness: isWall ? 0.4 : 0.1,
       roughness: isBase ? 0.75 : isWall ? 0.9 : 0.7,
       envMapIntensity: 0.3

@@ -7,13 +7,13 @@ export const SCENE_CONFIG = {
 
 export const POST_PROCESSING_CONFIG = {
   bloom: {
-    strength: 0.6,
+    strength: 0.7,
     radius: 0.8,
-    threshold: 0.7
+    threshold: 0.5
   },
   vignette: {
     offset: 1.1,
-    darkness: 0.4
+    darkness: 0.25
   }
 };
 
