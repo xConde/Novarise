@@ -350,6 +350,7 @@ export class EnemyService {
             const visual = STATUS_EFFECT_VISUALS[priority];
             mat.emissive.setHex(visual.emissiveColor);
             mat.emissiveIntensity = visual.emissiveIntensity;
+            this.tintChildMeshes(enemy.mesh, visual.emissiveColor, visual.emissiveIntensity);
             return;
           }
         }
@@ -357,9 +358,28 @@ export class EnemyService {
 
       // No effects — restore base emissive
       const stats = ENEMY_STATS[enemy.type];
+      const baseIntensity = enemy.isMiniSwarm
+        ? ENEMY_VISUAL_CONFIG.miniSwarmEmissive
+        : ENEMY_VISUAL_CONFIG.shieldedEmissive;
       mat.emissive.setHex(stats.color);
-      mat.emissiveIntensity = ENEMY_VISUAL_CONFIG.shieldedEmissive;
+      mat.emissiveIntensity = baseIntensity;
+      this.tintChildMeshes(enemy.mesh, stats.color, baseIntensity);
     });
+  }
+
+  /**
+   * Apply emissive tint to child meshes that have MeshStandardMaterial (e.g., boss crown).
+   * Skips health bar children (MeshBasicMaterial) and shield mesh.
+   */
+  private tintChildMeshes(mesh: THREE.Mesh, color: number, intensity: number): void {
+    const crown = mesh.userData['bossCrown'] as THREE.Mesh | undefined;
+    if (crown) {
+      const crownMat = crown.material as THREE.MeshStandardMaterial;
+      if (crownMat.emissive) {
+        crownMat.emissive.setHex(color);
+        crownMat.emissiveIntensity = intensity;
+      }
+    }
   }
 
   /**

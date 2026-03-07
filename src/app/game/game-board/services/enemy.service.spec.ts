@@ -6,6 +6,7 @@ import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model'
 import { GameModifier, GAME_MODIFIER_CONFIGS, mergeModifierEffects } from '../models/game-modifier.model';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
 import { StatusEffectType } from '../constants/status-effect.constants';
+import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 
 describe('EnemyService', () => {
   let service: EnemyService;
@@ -1276,6 +1277,58 @@ describe('EnemyService', () => {
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
       expect(mat.emissive.getHex()).toBe(0xff6622);
+    });
+
+    it('boss crown mesh is tinted along with body', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(boss.id, [StatusEffectType.BURN]);
+      service.updateStatusVisuals(activeEffects);
+
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      expect(crown).toBeTruthy();
+      const crownMat = crown.material as THREE.MeshStandardMaterial;
+      expect(crownMat.emissive.getHex()).toBe(0xff6622);
+    });
+
+    it('boss crown reverts to base color when effects expire', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+
+      // Apply then clear
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(boss.id, [StatusEffectType.BURN]);
+      service.updateStatusVisuals(activeEffects);
+
+      const noEffects = new Map<string, StatusEffectType[]>();
+      service.updateStatusVisuals(noEffects);
+
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      const crownMat = crown.material as THREE.MeshStandardMaterial;
+      expect(crownMat.emissive.getHex()).toBe(ENEMY_STATS[EnemyType.BOSS].color);
+    });
+
+    it('mini-swarm uses correct base emissive intensity on revert', () => {
+      // Spawn a swarm and kill it to get minis
+      const swarm = service.spawnEnemy(EnemyType.SWARM, mockScene)!;
+      const result = service.damageEnemy(swarm.id, 9999);
+      result.spawnedEnemies.forEach(mini => {
+        if (mini.mesh) mockScene.add(mini.mesh);
+      });
+
+      const mini = result.spawnedEnemies[0];
+      if (mini && mini.mesh) {
+        // Apply then clear effect
+        const activeEffects = new Map<string, StatusEffectType[]>();
+        activeEffects.set(mini.id, [StatusEffectType.POISON]);
+        service.updateStatusVisuals(activeEffects);
+
+        const noEffects = new Map<string, StatusEffectType[]>();
+        service.updateStatusVisuals(noEffects);
+
+        const mat = mini.mesh.material as THREE.MeshStandardMaterial;
+        expect(mat.emissiveIntensity).toBe(ENEMY_VISUAL_CONFIG.miniSwarmEmissive);
+      }
     });
   });
 

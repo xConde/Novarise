@@ -642,12 +642,10 @@ export class GameBoardService {
 
         // Angled barrel tilted ~40 degrees
         const moBarrel = new THREE.Mesh(mortarBarrel, mortarMat);
-        moBarrel.name = 'barrel';
         moBarrel.position.set(0.1, 0.72, 0);
         moBarrel.rotation.z = -Math.PI / 4.5;
 
         const moMuzzle = new THREE.Mesh(mortarMuzzle, mortarMat);
-        moMuzzle.name = 'muzzle';
         moMuzzle.position.set(0.25, 0.98, 0);
         moMuzzle.rotation.z = -Math.PI / 4.5;
 

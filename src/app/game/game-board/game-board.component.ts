@@ -389,9 +389,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       const scale = TOWER_VISUAL_CONFIG.scaleBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
       towerMesh.scale.set(scale, scale, scale);
 
-      // Boost emissive intensity on upgrade
+      // Boost emissive intensity on upgrade (skip animated children — their emissive is driven per-frame)
+      const animatedNames = new Set(['tip', 'orb']);
       towerMesh.traverse(child => {
-        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
+        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial && !animatedNames.has(child.name)) {
           child.material.emissiveIntensity = TOWER_VISUAL_CONFIG.emissiveBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.emissiveIncrement;
         }
       });
@@ -1789,7 +1790,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           case 'spark': {
             if (child.userData['baseY'] === undefined) child.userData['baseY'] = child.position.y;
             child.position.y = child.userData['baseY']
-              + Math.sin(t * TOWER_ANIM_CONFIG.sparkOrbitSpeed + child.position.x * 10) * 0.03;
+              + Math.sin(t * TOWER_ANIM_CONFIG.sparkBobSpeed + child.position.x * 10) * 0.03;
             break;
           }
 
@@ -1802,11 +1803,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
           case 'tip': {
             const mat = child.material as THREE.MeshStandardMaterial;
-            if (mat.emissiveIntensity !== undefined) {
-              mat.emissiveIntensity = TOWER_ANIM_CONFIG.tipGlowMin
-                + (Math.sin(t * TOWER_ANIM_CONFIG.tipGlowSpeed) * 0.5 + 0.5)
-                * (TOWER_ANIM_CONFIG.tipGlowMax - TOWER_ANIM_CONFIG.tipGlowMin);
-            }
+            mat.emissiveIntensity = TOWER_ANIM_CONFIG.tipGlowMin
+              + (Math.sin(t * TOWER_ANIM_CONFIG.tipGlowSpeed) * 0.5 + 0.5)
+              * (TOWER_ANIM_CONFIG.tipGlowMax - TOWER_ANIM_CONFIG.tipGlowMin);
             break;
           }
         }

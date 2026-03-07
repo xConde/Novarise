@@ -69,8 +69,8 @@ export const TOWER_ANIM_CONFIG = {
   orbPulseMin: 0.9,
   orbPulseMax: 1.15,
 
-  /** Chain spark orbit speed (radians/sec) */
-  sparkOrbitSpeed: 2.5,
+  /** Chain spark vertical bob speed (radians/sec) */
+  sparkBobSpeed: 2.5,
 
   /** Splash spore bob speed and amplitude */
   sporeBobSpeed: 1.8,
