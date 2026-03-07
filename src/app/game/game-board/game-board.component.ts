@@ -1471,6 +1471,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           this.elapsedTimeAccumulator = 0;
         }
 
+        // Accumulate visual events across all physics steps — process once per frame
+        const frameKills: { damage: number; position: { x: number; y: number; z: number }; color: number; value: number }[] = [];
+        const frameFiredTypes: Set<TowerType> = new Set();
+        let frameHitCount = 0;
+        let frameExitCount = 0;
+
         while (this.physicsAccumulator >= PHYSICS_CONFIG.fixedTimestep &&
                stepCount < PHYSICS_CONFIG.maxStepsPerFrame) {
 
@@ -1480,15 +1486,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           // Tower combat — returns IDs of enemies killed, tower types that fired, and hit count
           const { killed: killedByTowers, fired: firedTowerTypes, hitCount } = this.towerCombatService.update(PHYSICS_CONFIG.fixedTimestep, this.scene);
 
-          // Play tower fire sounds
+          // Accumulate fired tower types and hit counts for audio (once per frame)
           for (const towerType of firedTowerTypes) {
-            this.audioService.playTowerFire(towerType);
+            frameFiredTypes.add(towerType);
           }
-
-          // Play enemy hit sound (throttled inside AudioService)
-          if (hitCount > 0) {
-            this.audioService.playEnemyHit();
-          }
+          frameHitCount += hitCount;
 
           // Collect gold from tower kills and remove dead enemies
           for (const killInfo of killedByTowers) {
@@ -1496,14 +1498,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             if (enemy) {
               this.gameStateService.addGold(enemy.value);
               this.gameStatsService.recordGoldEarned(enemy.value);
-              this.audioService.playGoldEarned();
-              this.audioService.playEnemyDeath();
 
-              // Visual effects on kill
-              const enemyColor = ENEMY_STATS[enemy.type]?.color ?? 0xff0000;
-              this.particleService.spawnDeathBurst(enemy.position, enemyColor);
-              this.goldPopupService.spawn(enemy.value, enemy.position, this.scene);
-              this.damagePopupService.spawn(killInfo.damage, enemy.position, this.scene);
+              // Snapshot visual data for deferred rendering (enemy removed below)
+              frameKills.push({
+                damage: killInfo.damage,
+                position: { ...enemy.position },
+                color: ENEMY_STATS[enemy.type]?.color ?? 0xff0000,
+                value: enemy.value,
+              });
 
               this.enemyService.removeEnemy(killInfo.id, this.scene);
             }
@@ -1512,11 +1514,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           // Move enemies along paths
           const reachedExit = this.enemyService.updateEnemies(PHYSICS_CONFIG.fixedTimestep);
 
-          // Enemies reaching the exit cost lives
+          // Enemies reaching the exit cost lives (state mutation stays per-step)
           for (const enemyId of reachedExit) {
             this.gameStateService.loseLife(1);
             this.gameStatsService.recordEnemyLeaked();
-            this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
+            frameExitCount++;
             this.enemyService.removeEnemy(enemyId, this.scene);
           }
 
@@ -1581,6 +1583,24 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
           this.physicsAccumulator -= PHYSICS_CONFIG.fixedTimestep;
           stepCount++;
+        }
+
+        // Process accumulated visual events once per frame (not per physics step)
+        for (const towerType of frameFiredTypes) {
+          this.audioService.playTowerFire(towerType);
+        }
+        if (frameHitCount > 0) {
+          this.audioService.playEnemyHit();
+        }
+        for (const kill of frameKills) {
+          this.audioService.playGoldEarned();
+          this.audioService.playEnemyDeath();
+          this.particleService.spawnDeathBurst(kill.position, kill.color);
+          this.goldPopupService.spawn(kill.value, kill.position, this.scene);
+          this.damagePopupService.spawn(kill.damage, kill.position, this.scene);
+        }
+        if (frameExitCount > 0) {
+          this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
         }
 
         // Update health bars once per frame (visual only, not per physics step)

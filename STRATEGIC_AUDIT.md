@@ -366,3 +366,17 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 ### Sprint 0C and 0D: Parallel or Sequential?
 
 0C and 0D touch completely different files (game/ vs novarise/). They CAN run in parallel if using separate branches. But if you want to go slow and review each constants extraction carefully, run them sequentially. Either way, they both depend on 0B (the constants architecture must exist before you populate it).
+
+---
+
+## Red Team Critique — feat/engine-depth Sprints 1-5 (2026-03-06)
+
+### Finding 1: VFX/Audio Storm During Multi-Step Physics (HIGH)
+**Location:** `game-board.component.ts:1477-1520` (inside fixed timestep `while` loop)
+**Risk:** At 3x game speed, up to 5 physics steps fire per frame. Audio calls (`playTowerFire`, `playEnemyHit`, `playGoldEarned`, `playEnemyDeath`) and visual spawns (`spawnDeathBurst`, `goldPopupService.spawn`, `damagePopupService.spawn`) were called per-step, creating 5x expected popups/particles per frame. Screen shake also triggered per-exit per-step instead of once per frame.
+**Fix:** Accumulate kill events, fired tower types, hit counts, and exit counts across all physics steps. Process audio and visual feedback ONCE after the `while` loop exits. Enemy positions are snapshot before removal to ensure deferred popups render at correct locations.
+
+### Finding 2: Projectile Pool Pre-Warm Scene Orphans (LOW — accepted)
+**Location:** `tower-combat.service.ts:684` (drain in cleanup)
+**Risk:** Pre-warmed pool meshes (created in constructor) are never added to a scene. `drain()` calls `scene.remove(mesh)` on them — this is a Three.js no-op for non-children. No memory leak, no error, just a wasted call.
+**Status:** Accepted. Cost is negligible (20 no-op calls on cleanup).
