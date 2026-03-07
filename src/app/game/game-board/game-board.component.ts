@@ -266,10 +266,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.renderGameBoard();
     this.addGridLines();
 
-    // Load saved settings
+    // Load saved settings — restore persisted preferences
     const savedSettings = this.settingsService.get();
     if (savedSettings.audioMuted) {
       this.audioService.toggleMute();
+    }
+    if (savedSettings.difficulty !== DifficultyLevel.NORMAL) {
+      this.gameStateService.setDifficulty(savedSettings.difficulty);
+    }
+    if (savedSettings.gameSpeed !== 1) {
+      this.gameStateService.setSpeed(savedSettings.gameSpeed as GameSpeed);
     }
 
     // Seed initial wave preview for the first wave

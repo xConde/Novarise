@@ -109,6 +109,23 @@
   }
 }
 
+.landing-link {
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.75rem;
+  color: var(--theme-purple-mid);
+  cursor: pointer;
+  text-decoration: none;
+  letter-spacing: 0.05em;
+  margin-top: var(--spacing-lg);
+  transition: color var(--transition-fast) ease;
+  opacity: 0.7;
+
+  &:hover {
+    color: var(--theme-purple-lighter);
+    opacity: 1;
+  }
+}
+
 .landing-version {
   position: absolute;
   bottom: var(--spacing-md);
