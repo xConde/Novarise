@@ -141,6 +141,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   targetingModeLabels = TARGETING_MODE_LABELS;
   showHelpOverlay = false;
   pathBlocked = false;
+  initError: string | null = null;
   private pathBlockedTimerId: ReturnType<typeof setTimeout> | null = null;
   private rangeRingMeshes: THREE.Mesh[] = [];
 
@@ -294,14 +295,21 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
-    this.initializeRenderer();
-    this.initializePostProcessing();
-    this.initializeControls();
-    this.setupMouseInteraction();
-    this.setupTouchInteraction();
-    this.setupKeyboardControls();
-    this.minimapService.init(this.canvasContainer.nativeElement);
-    this.animate();
+    try {
+      this.initializeRenderer();
+      this.initializePostProcessing();
+      this.initializeControls();
+      this.setupMouseInteraction();
+      this.setupTouchInteraction();
+      this.setupKeyboardControls();
+      this.minimapService.init(this.canvasContainer.nativeElement);
+      this.animate();
+    } catch (error) {
+      this.initError = error instanceof Error
+        ? error.message
+        : 'Failed to initialize game renderer';
+      console.error('Game initialization failed:', error);
+    }
   }
 
   // --- Public methods for template ---
@@ -742,6 +750,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private initializeRenderer(): void {
+    const testCanvas = document.createElement('canvas');
+    const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
+    if (!gl) {
+      throw new Error('WebGL is not supported by your browser');
+    }
+
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: false
@@ -1497,6 +1511,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // --- Game loop ---
 
   private animate = (time: number = 0): void => {
+    if (!this.renderer || this.initError) return;
     this.animationFrameId = requestAnimationFrame(this.animate);
 
     const rawDelta = this.lastTime === 0 ? 0 : (time - this.lastTime) / 1000;
@@ -1756,12 +1771,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (this.scene) {
       this.cleanupGameObjects();
+      this.particleService.cleanup(this.scene);
+      this.goldPopupService.cleanup(this.scene);
     }
 
     this.audioService.cleanup();
-    this.particleService.cleanup(this.scene);
-    this.goldPopupService.cleanup(this.scene);
-    this.screenShakeService.cleanup(this.camera);
+    if (this.camera) {
+      this.screenShakeService.cleanup(this.camera);
+    }
     this.fpsCounterService.reset();
 
     if (this.vignettePass) {

@@ -1585,3 +1585,56 @@
     }
   }
 }
+
+.init-error-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.95);
+  z-index: 1000;
+  color: #fff;
+  font-family: 'Orbitron', sans-serif;
+}
+
+.init-error-content {
+  text-align: center;
+  max-width: 28rem;
+  padding: 2rem;
+
+  h2 {
+    color: #ff4444;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  p {
+    color: #ccc;
+    margin-bottom: 0.75rem;
+    font-family: sans-serif;
+    line-height: 1.4;
+  }
+
+  .init-error-hint {
+    font-size: 0.85rem;
+    color: #888;
+  }
+}
+
+.init-error-btn {
+  margin-top: 1.5rem;
+  padding: 0.75rem 2rem;
+  background: var(--theme-purple, #6a4a8a);
+  color: #fff;
+  border: none;
+  border-radius: 0.5rem;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+
+  &:hover {
+    opacity: 0.85;
+  }
+}

@@ -1,6 +1,16 @@
 <div class="board-container">
   <div class="canvas-container" #canvasContainer></div>
 
+  <!-- Init error fallback -->
+  <div class="init-error-overlay" *ngIf="initError">
+    <div class="init-error-content">
+      <h2>Unable to Start Game</h2>
+      <p>{{ initError }}</p>
+      <p class="init-error-hint">Try using a modern browser with WebGL support, or check your graphics drivers.</p>
+      <button class="init-error-btn" (click)="goToEditor()">Back to Maps</button>
+    </div>
+  </div>
+
   <!-- Top-right controls -->
   <div class="top-right-controls">
     <div class="fps-counter">{{ fps }} FPS</div>
