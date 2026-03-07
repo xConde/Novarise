@@ -1,4 +1,5 @@
 import { WAVE_DEFINITIONS } from './wave.model';
+import { GameModifier } from './game-modifier.model';
 
 export enum GamePhase {
   SETUP = 'setup',
@@ -65,6 +66,7 @@ export interface GameState {
   isPaused: boolean;
   gameSpeed: GameSpeed;
   elapsedTime: number; // total seconds spent in COMBAT phase
+  activeModifiers: Set<GameModifier>;
 }
 
 /** Economy settings for the interest system */
@@ -87,5 +89,6 @@ export const INITIAL_GAME_STATE: GameState = {
   highestWave: 0,
   isPaused: false,
   gameSpeed: 1,
-  elapsedTime: 0
+  elapsedTime: 0,
+  activeModifiers: new Set<GameModifier>()
 };

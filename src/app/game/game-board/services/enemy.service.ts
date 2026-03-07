@@ -5,6 +5,7 @@ import { GameBoardService } from '../game-board.service';
 import { BlockType } from '../models/game-board-tile';
 import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { MinHeap } from '../utils/min-heap';
+import { GameModifier, ModifierEffects, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 
 export interface DamageResult {
   killed: boolean;
@@ -16,8 +17,16 @@ export class EnemyService {
   private enemies: Map<string, Enemy> = new Map();
   private enemyCounter = 0;
   private pathCache: Map<string, GridNode[]> = new Map();
+  private modifierEffects: ModifierEffects = {};
+  private activeModifiers: Set<GameModifier> = new Set();
 
   constructor(private gameBoardService: GameBoardService) {}
+
+  /** Set active modifier effects and the raw modifier set. Called by the component when modifiers change. */
+  setModifierEffects(effects: ModifierEffects, modifiers: Set<GameModifier>): void {
+    this.modifierEffects = effects;
+    this.activeModifiers = modifiers;
+  }
 
   /**
    * Spawn a new enemy at a random spawner tile
@@ -74,6 +83,35 @@ export class EnemyService {
       pathIndex: 0,
       distanceTraveled: 0
     };
+
+    // Apply modifier effects to spawned enemy stats
+    if (this.modifierEffects.enemyHealthMultiplier !== undefined) {
+      enemy.health = Math.round(enemy.health * this.modifierEffects.enemyHealthMultiplier);
+      enemy.maxHealth = enemy.health;
+    }
+    // Speed modifiers: SPEED_DEMONS only applies to FAST/SWIFT types.
+    // If both FAST_ENEMIES and SPEED_DEMONS are active, compute the combined
+    // multiplier manually to apply SPEED_DEMONS selectively.
+    if (this.activeModifiers.has(GameModifier.SPEED_DEMONS)) {
+      const isFastOrSwift = type === EnemyType.FAST || type === EnemyType.SWIFT;
+      if (isFastOrSwift) {
+        // Apply the full merged speed multiplier (includes both modifiers)
+        if (this.modifierEffects.enemySpeedMultiplier !== undefined) {
+          enemy.speed *= this.modifierEffects.enemySpeedMultiplier;
+        }
+      } else {
+        // Only apply FAST_ENEMIES portion (exclude SPEED_DEMONS' 2.0x)
+        const speedDemonsMultiplier = GAME_MODIFIER_CONFIGS[GameModifier.SPEED_DEMONS].effects.enemySpeedMultiplier ?? 1;
+        const totalMultiplier = this.modifierEffects.enemySpeedMultiplier ?? 1;
+        const nonDemonMultiplier = totalMultiplier / speedDemonsMultiplier;
+        if (nonDemonMultiplier !== 1) {
+          enemy.speed *= nonDemonMultiplier;
+        }
+      }
+    } else if (this.modifierEffects.enemySpeedMultiplier !== undefined) {
+      // No SPEED_DEMONS — apply speed multiplier to all types
+      enemy.speed *= this.modifierEffects.enemySpeedMultiplier;
+    }
 
     if (isFlying) {
       enemy.isFlying = true;
@@ -692,6 +730,8 @@ export class EnemyService {
     this.cleanup(scene);
     this.enemyCounter = 0;
     this.clearPathCache();
+    this.modifierEffects = {};
+    this.activeModifiers = new Set();
   }
 
   /**

@@ -973,6 +973,93 @@
         color: rgba(255, 255, 255, 0.45);
       }
     }
+
+    // --- Modifiers ---
+    .modifiers-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--spacing-xs);
+      width: 100%;
+      border-top: var(--border-width-thin) solid var(--border-color);
+      padding-top: var(--spacing-sm);
+      margin-top: var(--spacing-xs);
+    }
+
+    .modifiers-label {
+      font-size: 0.625rem;
+      text-transform: uppercase;
+      letter-spacing: 0.125rem;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .modifier-options {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: var(--spacing-xs);
+      max-width: 100%;
+    }
+
+    .modifier-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.125rem;
+      padding: var(--spacing-xs) var(--spacing-sm);
+      background: transparent;
+      border: var(--border-width-thin) solid var(--border-color);
+      border-radius: var(--border-radius-sm);
+      cursor: pointer;
+      transition: all var(--transition-medium) ease;
+      min-width: 4.5rem;
+      min-height: 2.75rem;
+
+      &:hover {
+        background: var(--theme-purple-a20);
+        border-color: var(--theme-purple-a80);
+      }
+
+      &:active {
+        transform: scale(0.97);
+      }
+
+      &.active {
+        background: var(--theme-purple-a30);
+        border-color: var(--theme-purple);
+        box-shadow: 0 0 var(--spacing-xs) var(--theme-purple-a50);
+
+        .modifier-name {
+          color: var(--theme-purple-lighter);
+        }
+      }
+
+      .modifier-name {
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.625rem;
+        font-weight: 700;
+        color: var(--text-color);
+        text-transform: uppercase;
+        letter-spacing: 0.0313rem;
+        white-space: nowrap;
+      }
+
+      .modifier-desc {
+        font-size: 0.5625rem;
+        color: rgba(255, 255, 255, 0.55);
+        text-align: center;
+        line-height: 1.2;
+        max-width: 6rem;
+      }
+    }
+
+    .modifier-score {
+      font-family: "Orbitron", sans-serif;
+      font-size: var(--font-size-small);
+      font-weight: 700;
+      color: var(--theme-purple-lighter);
+      letter-spacing: 0.0625rem;
+    }
   }
 
   // --- Pause / Speed controls ---

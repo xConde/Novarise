@@ -28,6 +28,7 @@ import { disposeMaterial } from './utils/three-utils';
 import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TARGETING_MODE_LABELS, TargetingMode, SpecializationStats } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
+import { GameModifier, GAME_MODIFIER_CONFIGS, GameModifierConfig, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
 import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants/rendering.constants';
 import { AMBIENT_LIGHT, DIRECTIONAL_LIGHT, UNDER_LIGHT, POINT_LIGHTS } from './constants/lighting.constants';
@@ -111,6 +112,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   DifficultyLevel = DifficultyLevel;
   difficultyPresets = DIFFICULTY_PRESETS;
   difficultyLevels = Object.values(DifficultyLevel);
+
+  // Modifier state
+  modifierConfigs = GAME_MODIFIER_CONFIGS;
+  allModifiers = Object.values(GameModifier);
+  activeModifiers = new Set<GameModifier>();
+  modifierScoreMultiplier = 1.0;
   towerTypes: { type: TowerType; hotkey: string }[] = Object.entries(TOWER_HOTKEYS).map(
     ([key, type]) => ({ type, hotkey: key })
   );
@@ -236,7 +243,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           livesTotal,
           state.difficulty,
           state.wave,
-          state.phase === GamePhase.VICTORY
+          state.phase === GamePhase.VICTORY,
+          this.gameStateService.getModifierScoreMultiplier()
         );
       }
 
@@ -309,6 +317,20 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   selectDifficulty(difficulty: DifficultyLevel): void {
     this.gameStateService.setDifficulty(difficulty);
     this.settingsService.update({ difficulty });
+  }
+
+  toggleModifier(modifier: GameModifier): void {
+    if (this.activeModifiers.has(modifier)) {
+      this.activeModifiers.delete(modifier);
+    } else {
+      this.activeModifiers.add(modifier);
+    }
+    this.modifierScoreMultiplier = calculateModifierScoreMultiplier(this.activeModifiers);
+    this.gameStateService.setModifiers(this.activeModifiers);
+    this.enemyService.setModifierEffects(
+      this.gameStateService.getModifierEffects(),
+      this.activeModifiers
+    );
   }
 
   selectTowerType(type: TowerType): void {
@@ -530,6 +552,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (state.phase === GamePhase.COMBAT) return;
     if (state.phase === GamePhase.VICTORY || state.phase === GamePhase.DEFEAT) return;
 
+    // Ensure enemy service has current modifier effects before first wave
+    if (state.wave === 0 && this.activeModifiers.size > 0) {
+      this.enemyService.setModifierEffects(
+        this.gameStateService.getModifierEffects(),
+        this.activeModifiers
+      );
+    }
+
     this.gameStateService.startWave();
     this.waveService.startWave(this.gameStateService.getState().wave, this.scene);
     this.audioService.playWaveStart();
@@ -551,6 +581,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.newlyUnlockedAchievements = [];
     this.achievementDetails = [];
     this.gameEndRecorded = false;
+    this.activeModifiers = new Set<GameModifier>();
+    this.modifierScoreMultiplier = 1.0;
     this.wavePreview = [];
     this.defeatSoundPlayed = false;
     this.victorySoundPlayed = false;

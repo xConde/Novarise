@@ -78,6 +78,26 @@
       <span class="endless-label">Endless Mode</span>
       <span class="endless-desc">Waves continue indefinitely after wave {{ gameState.maxWaves }}</span>
     </label>
+
+    <!-- Game Modifiers -->
+    <div class="modifiers-section">
+      <span class="modifiers-label">Modifiers</span>
+      <div class="modifier-options">
+        <button
+          *ngFor="let mod of allModifiers"
+          class="modifier-btn"
+          [class.active]="activeModifiers.has(mod)"
+          (click)="toggleModifier(mod)"
+          [attr.aria-label]="'Toggle modifier: ' + modifierConfigs[mod].label"
+          [attr.aria-pressed]="activeModifiers.has(mod)">
+          <span class="modifier-name">{{ modifierConfigs[mod].label }}</span>
+          <span class="modifier-desc">{{ modifierConfigs[mod].description }}</span>
+        </button>
+      </div>
+      <div class="modifier-score" *ngIf="activeModifiers.size > 0">
+        Score: {{ modifierScoreMultiplier.toFixed(1) }}x
+      </div>
+    </div>
   </div>
 
   <!-- Wave preview panel — shown during SETUP and INTERMISSION -->
@@ -179,6 +199,10 @@
         <div class="score-row">
           <span class="score-label">Difficulty</span>
           <span class="score-value multiplier">x{{ scoreBreakdown.difficultyMultiplier }}</span>
+        </div>
+        <div class="score-row" *ngIf="scoreBreakdown.modifierMultiplier !== 1">
+          <span class="score-label">Modifiers</span>
+          <span class="score-value multiplier">x{{ scoreBreakdown.modifierMultiplier.toFixed(1) }}</span>
         </div>
         <div class="score-row">
           <span class="score-label">Waves Completed</span>
