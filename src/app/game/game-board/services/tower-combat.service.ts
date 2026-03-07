@@ -7,7 +7,9 @@ import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
 import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y } from '../constants/combat.constants';
+import { PROJECTILE_POOL_CONFIG } from '../constants/physics.constants';
 import { SpatialGrid } from '../utils/spatial-grid';
+import { ObjectPool } from '../utils/object-pool';
 
 interface Projectile {
   id: string;
@@ -60,12 +62,35 @@ export class TowerCombatService {
   private projectileCounter = 0;
   private gameTime = 0;
   private spatialGrid = new SpatialGrid();
+  private projectilePool: ObjectPool<THREE.Mesh>;
 
   constructor(
     private enemyService: EnemyService,
     private gameBoardService: GameBoardService,
     private audioService: AudioService
-  ) {}
+  ) {
+    this.projectilePool = new ObjectPool<THREE.Mesh>(
+      () => this.createPooledProjectileMesh(),
+      (mesh) => { mesh.visible = false; },
+      PROJECTILE_POOL_CONFIG
+    );
+  }
+
+  private createPooledProjectileMesh(): THREE.Mesh {
+    const geometry = new THREE.SphereGeometry(
+      PROJECTILE_CONFIG.radius,
+      PROJECTILE_CONFIG.segments,
+      PROJECTILE_CONFIG.segments
+    );
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: PROJECTILE_CONFIG.opacity
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.visible = false;
+    return mesh;
+  }
 
   registerTower(row: number, col: number, type: TowerType, mesh: THREE.Group): void {
     const key = `${row}-${col}`;
@@ -467,15 +492,13 @@ export class TowerCombatService {
       return;
     }
 
-    const geometry = new THREE.SphereGeometry(PROJECTILE_CONFIG.radius, PROJECTILE_CONFIG.segments, PROJECTILE_CONFIG.segments);
-    const material = new THREE.MeshBasicMaterial({
-      color: stats.color,
-      transparent: true,
-      opacity: PROJECTILE_CONFIG.opacity
-    });
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = this.projectilePool.acquire();
+    (mesh.material as THREE.MeshBasicMaterial).color.set(stats.color);
     mesh.position.set(towerWorldX, PROJECTILE_CONFIG.spawnHeight, towerWorldZ);
-    scene.add(mesh);
+    mesh.visible = true;
+    if (!mesh.parent) {
+      scene.add(mesh);
+    }
 
     this.projectiles.push({
       id: `proj-${this.projectileCounter++}`,
@@ -632,12 +655,18 @@ export class TowerCombatService {
   }
 
   private removeProjectileMesh(proj: Projectile, scene: THREE.Scene): void {
-    scene.remove(proj.mesh);
-    proj.mesh.geometry.dispose();
-    if (Array.isArray(proj.mesh.material)) {
-      proj.mesh.material.forEach(mat => mat.dispose());
+    if (proj.towerType === TowerType.MORTAR) {
+      // Mortar projectiles are not pooled — dispose normally
+      scene.remove(proj.mesh);
+      proj.mesh.geometry.dispose();
+      if (Array.isArray(proj.mesh.material)) {
+        proj.mesh.material.forEach(mat => mat.dispose());
+      } else {
+        proj.mesh.material.dispose();
+      }
     } else {
-      proj.mesh.material.dispose();
+      // Standard projectiles: hide and return to pool (keep in scene)
+      this.projectilePool.release(proj.mesh);
     }
   }
 
@@ -654,6 +683,17 @@ export class TowerCombatService {
       this.removeProjectileMesh(proj, scene);
     }
     this.projectiles = [];
+
+    // Drain the projectile pool — dispose geometry and material for each pooled mesh
+    this.projectilePool.drain((mesh) => {
+      scene.remove(mesh);
+      mesh.geometry.dispose();
+      if (Array.isArray(mesh.material)) {
+        mesh.material.forEach(mat => mat.dispose());
+      } else {
+        mesh.material.dispose();
+      }
+    });
 
     for (const arc of this.chainArcs) {
       scene.remove(arc.line);

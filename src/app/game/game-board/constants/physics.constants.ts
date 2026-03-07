@@ -12,3 +12,15 @@ export const PHYSICS_CONFIG: PhysicsConfig = {
   maxStepsPerFrame: 5,
   maxDeltaTime: 0.1,
 } as const;
+
+export interface PoolConfig {
+  /** Initial pool capacity */
+  readonly initialSize: number;
+  /** Maximum pool size (limits memory growth) */
+  readonly maxSize: number;
+}
+
+export const PROJECTILE_POOL_CONFIG: PoolConfig = {
+  initialSize: 20,
+  maxSize: 50,
+} as const;
