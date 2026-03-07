@@ -19,9 +19,10 @@ export const HEMISPHERE_LIGHT: HemisphereLightConfig = {
   intensity: 0.6
 };
 
+/** Kept for editor or fallback use; game scene relies on hemisphere light for ambient fill */
 export const AMBIENT_LIGHT: LightConfig = {
   color: 0x8888aa,
-  intensity: 0.5
+  intensity: 0.3
 };
 
 export const KEY_LIGHT: LightConfig & {
@@ -47,13 +48,13 @@ export const FILL_LIGHT: LightConfig = {
 
 export const RIM_LIGHT: LightConfig = {
   color: 0xaa88ff,
-  intensity: 1.2,
+  intensity: 0.7,
   position: [-5, 10, -20]
 };
 
 export const UNDER_LIGHT: LightConfig = {
   color: 0x6a5a9a,
-  intensity: 0.5,
+  intensity: 0.3,
   range: 80,
   position: [0, -5, 0]
 };
