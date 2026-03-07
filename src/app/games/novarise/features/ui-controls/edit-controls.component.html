@@ -133,23 +133,17 @@
   </div>
 
   <div class="play-section">
+    <span class="path-status path-valid" *ngIf="isPathValid">Path OK ✓</span>
+    <span class="path-status path-invalid" *ngIf="!isPathValid && hasSpawnAndExit">No valid path ✗</span>
+    <span class="play-hint" *ngIf="!hasSpawnAndExit">Set spawn (P) and exit (X) first</span>
     <button
       class="play-map-btn"
       [class.disabled]="!canPlayMap"
       [class.path-valid-btn]="canPlayMap"
       [disabled]="!canPlayMap"
       (click)="playMapClick.emit()"
-      aria-label="Play this map">
+      aria-label="Play this map (Enter)">
       Play Map
-    </button>
-    <span class="path-status path-valid" *ngIf="isPathValid">Path OK ✓</span>
-    <span class="path-status path-invalid" *ngIf="!isPathValid && hasSpawnAndExit">No valid path ✗</span>
-    <span class="play-hint" *ngIf="!hasSpawnAndExit">Set spawn (P) and exit (X) first</span>
-    <button
-      class="delete-map-btn"
-      (click)="deleteMapClick.emit()"
-      aria-label="Delete a saved map">
-      Delete Map
     </button>
   </div>
 </div>

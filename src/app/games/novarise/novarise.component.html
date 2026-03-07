@@ -1,10 +1,4 @@
 <div class="game-container">
-  <div class="title">
-    <div class="letter" *ngFor="let letter of title.split(''); let i = index">
-      {{ letter }}
-    </div>
-  </div>
-
   <div class="novarise-content">
     <div #canvasContainer class="canvas-container"></div>
 
@@ -36,7 +30,6 @@
       (brushSizeChange)="setBrushSize($event)"
       (activeToolChange)="setActiveTool($event)"
       (playMapClick)="playMap()"
-      (deleteMapClick)="deleteMap()"
       (templateSelect)="loadTemplate($event)">
     </app-edit-controls>
   </div>
