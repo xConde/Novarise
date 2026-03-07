@@ -31,7 +31,7 @@ import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, V
 import { GameModifier, GAME_MODIFIER_CONFIGS, GameModifierConfig, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
 import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants/rendering.constants';
-import { AMBIENT_LIGHT, DIRECTIONAL_LIGHT, UNDER_LIGHT, POINT_LIGHTS } from './constants/lighting.constants';
+import { AMBIENT_LIGHT, KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from './constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
 import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
@@ -70,9 +70,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private particles: THREE.Points | null = null;
   private skybox?: THREE.Mesh;
   private ambientLight?: THREE.AmbientLight;
-  private directionalLight?: THREE.DirectionalLight;
+  private hemisphereLight?: THREE.HemisphereLight;
+  private keyLight?: THREE.DirectionalLight;
+  private fillLight?: THREE.DirectionalLight;
+  private rimLight?: THREE.DirectionalLight;
   private underLight?: THREE.PointLight;
-  private pointLights: THREE.PointLight[] = [];
+  private accentLights: THREE.PointLight[] = [];
   private bloomPass?: UnrealBloomPass;
   private vignettePass?: ShaderPass;
   private renderPass?: RenderPass;
@@ -706,19 +709,31 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.scene.remove(this.ambientLight);
       this.ambientLight = undefined;
     }
-    if (this.directionalLight) {
-      this.directionalLight.shadow.map?.dispose();
-      this.scene.remove(this.directionalLight);
-      this.directionalLight = undefined;
+    if (this.hemisphereLight) {
+      this.scene.remove(this.hemisphereLight);
+      this.hemisphereLight = undefined;
+    }
+    if (this.keyLight) {
+      this.keyLight.shadow.map?.dispose();
+      this.scene.remove(this.keyLight);
+      this.keyLight = undefined;
+    }
+    if (this.fillLight) {
+      this.scene.remove(this.fillLight);
+      this.fillLight = undefined;
+    }
+    if (this.rimLight) {
+      this.scene.remove(this.rimLight);
+      this.rimLight = undefined;
     }
     if (this.underLight) {
       this.scene.remove(this.underLight);
       this.underLight = undefined;
     }
-    for (const light of this.pointLights) {
+    for (const light of this.accentLights) {
       this.scene.remove(light);
     }
-    this.pointLights = [];
+    this.accentLights = [];
   }
 
   // --- Scene setup ---
@@ -817,31 +832,46 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private initializeLights(): void {
+    this.hemisphereLight = new THREE.HemisphereLight(
+      HEMISPHERE_LIGHT.skyColor,
+      HEMISPHERE_LIGHT.groundColor,
+      HEMISPHERE_LIGHT.intensity
+    );
+    this.scene.add(this.hemisphereLight);
+
     this.ambientLight = new THREE.AmbientLight(AMBIENT_LIGHT.color, AMBIENT_LIGHT.intensity);
     this.scene.add(this.ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(DIRECTIONAL_LIGHT.color, DIRECTIONAL_LIGHT.intensity);
-    directionalLight.position.set(...DIRECTIONAL_LIGHT.position!);
-    directionalLight.castShadow = DIRECTIONAL_LIGHT.castShadow!;
-    directionalLight.shadow.camera.left = -DIRECTIONAL_LIGHT.shadow.bounds;
-    directionalLight.shadow.camera.right = DIRECTIONAL_LIGHT.shadow.bounds;
-    directionalLight.shadow.camera.top = DIRECTIONAL_LIGHT.shadow.bounds;
-    directionalLight.shadow.camera.bottom = -DIRECTIONAL_LIGHT.shadow.bounds;
-    directionalLight.shadow.mapSize.width = DIRECTIONAL_LIGHT.shadow.mapSize;
-    directionalLight.shadow.mapSize.height = DIRECTIONAL_LIGHT.shadow.mapSize;
-    directionalLight.shadow.bias = DIRECTIONAL_LIGHT.shadow.bias;
-    this.directionalLight = directionalLight;
-    this.scene.add(this.directionalLight);
+    const keyLight = new THREE.DirectionalLight(KEY_LIGHT.color, KEY_LIGHT.intensity);
+    keyLight.position.set(...KEY_LIGHT.position!);
+    keyLight.castShadow = KEY_LIGHT.castShadow;
+    keyLight.shadow.camera.left = -KEY_LIGHT.shadow.bounds;
+    keyLight.shadow.camera.right = KEY_LIGHT.shadow.bounds;
+    keyLight.shadow.camera.top = KEY_LIGHT.shadow.bounds;
+    keyLight.shadow.camera.bottom = -KEY_LIGHT.shadow.bounds;
+    keyLight.shadow.mapSize.width = KEY_LIGHT.shadow.mapSize;
+    keyLight.shadow.mapSize.height = KEY_LIGHT.shadow.mapSize;
+    keyLight.shadow.bias = KEY_LIGHT.shadow.bias;
+    this.keyLight = keyLight;
+    this.scene.add(this.keyLight);
+
+    this.fillLight = new THREE.DirectionalLight(FILL_LIGHT.color, FILL_LIGHT.intensity);
+    this.fillLight.position.set(...FILL_LIGHT.position!);
+    this.scene.add(this.fillLight);
+
+    this.rimLight = new THREE.DirectionalLight(RIM_LIGHT.color, RIM_LIGHT.intensity);
+    this.rimLight.position.set(...RIM_LIGHT.position!);
+    this.scene.add(this.rimLight);
 
     this.underLight = new THREE.PointLight(UNDER_LIGHT.color, UNDER_LIGHT.intensity, UNDER_LIGHT.range);
     this.underLight.position.set(...UNDER_LIGHT.position!);
     this.scene.add(this.underLight);
 
-    for (const cfg of POINT_LIGHTS) {
+    for (const cfg of ACCENT_LIGHTS) {
       const light = new THREE.PointLight(cfg.color, cfg.intensity, cfg.range);
       light.position.set(...cfg.position!);
       this.scene.add(light);
-      this.pointLights.push(light);
+      this.accentLights.push(light);
     }
   }
 
