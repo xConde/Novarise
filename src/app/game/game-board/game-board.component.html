@@ -61,57 +61,19 @@
     </ul>
   </div>
 
-  <!-- Wave control -->
-  <div class="wave-control" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT && gameState.wave > 0">
-    <button
-      class="wave-btn"
-      *ngIf="gameState.phase !== GamePhase.COMBAT"
-      (click)="startWave()"
-      aria-label="Start next wave">
-      <span>Next Wave</span>
-      <span class="wave-hint">Space</span>
-    </button>
-  </div>
-
-  <!-- Pause/Speed controls -->
-  <div class="game-controls" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT && gameState.wave > 0">
-    <button
-      class="control-btn pause-btn"
-      (click)="togglePause()"
-      [class.active]="isPaused"
-      [attr.aria-label]="isPaused ? 'Resume game' : 'Pause game'"
-      [attr.aria-pressed]="isPaused">
-      <svg *ngIf="isPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-      <svg *ngIf="!isPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-    </button>
-    <div class="speed-controls">
-      <button
-        *ngFor="let s of [1, 2, 3]"
-        class="control-btn speed-btn"
-        [class.active]="gameSpeed === s"
-        (click)="setSpeed(s)"
-        [attr.aria-label]="s + 'x speed'"
-        [attr.aria-pressed]="gameSpeed === s">
-        {{ s }}x
-      </button>
-    </div>
-    <button
-      class="control-btn range-btn"
-      (click)="toggleAllRanges()"
-      [class.active]="showAllRanges"
-      aria-label="Toggle all tower ranges [R]">
-      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-      <span class="wave-hint">R</span>
-    </button>
-    <button
-      class="control-btn path-btn"
-      (click)="togglePathOverlay()"
-      [class.active]="showPathOverlay"
-      aria-label="Toggle enemy path overlay [V]">
-      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      <span class="wave-hint">V</span>
-    </button>
-  </div>
+  <app-game-controls
+    *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT && gameState.wave > 0"
+    [phase]="gameState.phase"
+    [isPaused]="isPaused"
+    [gameSpeed]="gameSpeed"
+    [showAllRanges]="showAllRanges"
+    [showPathOverlay]="showPathOverlay"
+    (startWave)="startWave()"
+    (togglePause)="togglePause()"
+    (setSpeed)="setSpeed($event)"
+    (toggleAllRanges)="toggleAllRanges()"
+    (togglePathOverlay)="togglePathOverlay()">
+  </app-game-controls>
 
   <app-game-results
     *ngIf="gameState.phase === GamePhase.VICTORY || gameState.phase === GamePhase.DEFEAT"
@@ -150,28 +112,16 @@
     (cancelSpecialization)="showSpecializationChoice = false">
   </app-tower-info-panel>
 
-  <!-- Tower selection -->
-  <div class="tower-selection" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT && gameState.wave > 0">
-    <button
-      *ngFor="let tower of towerTypes"
-      class="tower-btn"
-      [class.selected]="selectedTowerType === tower.type"
-      [class.unaffordable]="!gameState || gameState.gold < getEffectiveTowerCost(tower.type)"
-      (click)="selectTowerType(tower.type)"
-      [attr.aria-label]="'Select ' + (tower.type | titlecase) + ' Tower'">
-      <div class="tower-tooltip" role="tooltip">
-        <div class="tooltip-stat"><span class="tooltip-label">Damage</span><span class="tooltip-val">{{ towerConfigs[tower.type].damage }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">Range</span><span class="tooltip-val">{{ towerConfigs[tower.type].range }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">Rate</span><span class="tooltip-val">{{ towerConfigs[tower.type].fireRate }}s</span></div>
-        <div class="tooltip-desc">{{ towerDescriptions[tower.type] }}</div>
-        <div class="tooltip-arrow"></div>
-      </div>
-      <div class="tower-icon" [ngClass]="tower.type"></div>
-      <span class="tower-name">{{ tower.type | titlecase }}</span>
-      <span class="tower-cost">{{ getEffectiveTowerCost(tower.type) }}g</span>
-      <span class="tower-hotkey">{{ tower.hotkey }}</span>
-    </button>
-  </div>
+  <app-tower-selection-bar
+    *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT && gameState.wave > 0"
+    [towerTypes]="towerTypes"
+    [selectedTowerType]="selectedTowerType"
+    [towerConfigs]="towerConfigs"
+    [towerDescriptions]="towerDescriptions"
+    [effectiveCosts]="effectiveTowerCosts"
+    [gold]="gameState.gold"
+    (selectTowerType)="selectTowerType($event)">
+  </app-tower-selection-bar>
 
   <!-- Help overlay -->
   <div class="help-overlay" *ngIf="showHelpOverlay" (click)="showHelpOverlay = false">

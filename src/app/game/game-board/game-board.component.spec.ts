@@ -8,6 +8,8 @@ import { GameHUDComponent } from './components/game-hud/game-hud.component';
 import { GameResultsComponent } from './components/game-results/game-results.component';
 import { GameSetupComponent } from './components/game-setup/game-setup.component';
 import { TowerInfoPanelComponent } from './components/tower-info-panel/tower-info-panel.component';
+import { TowerSelectionBarComponent } from './components/tower-selection-bar/tower-selection-bar.component';
+import { GameControlsComponent } from './components/game-controls/game-controls.component';
 import { GameBoardService } from './game-board.service';
 import { MapBridgeService } from './services/map-bridge.service';
 import { GameStateService } from './services/game-state.service';
@@ -48,7 +50,7 @@ describe('GameBoardComponent', () => {
     settingsSpy.get.and.returnValue({ audioMuted: false, difficulty: 'normal' as any, gameSpeed: 1 });
 
     await TestBed.configureTestingModule({
-      declarations: [ GameBoardComponent, GameHUDComponent, GameResultsComponent, GameSetupComponent, TowerInfoPanelComponent ],
+      declarations: [ GameBoardComponent, GameHUDComponent, GameResultsComponent, GameSetupComponent, TowerInfoPanelComponent, TowerSelectionBarComponent, GameControlsComponent ],
       imports: [ RouterTestingModule ],
       providers: [
         GameBoardService,

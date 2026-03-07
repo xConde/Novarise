@@ -1,0 +1,51 @@
+<!-- Wave control -->
+<div class="wave-control">
+  <button
+    class="wave-btn"
+    *ngIf="phase !== GamePhase.COMBAT"
+    (click)="startWave.emit()"
+    aria-label="Start next wave">
+    <span>Next Wave</span>
+    <span class="wave-hint">Space</span>
+  </button>
+</div>
+
+<!-- Pause/Speed controls -->
+<div class="game-controls">
+  <button
+    class="control-btn pause-btn"
+    (click)="togglePause.emit()"
+    [class.active]="isPaused"
+    [attr.aria-label]="isPaused ? 'Resume game' : 'Pause game'"
+    [attr.aria-pressed]="isPaused">
+    <svg *ngIf="isPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    <svg *ngIf="!isPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+  </button>
+  <div class="speed-controls">
+    <button
+      *ngFor="let s of speeds"
+      class="control-btn speed-btn"
+      [class.active]="gameSpeed === s"
+      (click)="setSpeed.emit(s)"
+      [attr.aria-label]="s + 'x speed'"
+      [attr.aria-pressed]="gameSpeed === s">
+      {{ s }}x
+    </button>
+  </div>
+  <button
+    class="control-btn range-btn"
+    (click)="toggleAllRanges.emit()"
+    [class.active]="showAllRanges"
+    aria-label="Toggle all tower ranges [R]">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+    <span class="wave-hint">R</span>
+  </button>
+  <button
+    class="control-btn path-btn"
+    (click)="togglePathOverlay.emit()"
+    [class.active]="showPathOverlay"
+    aria-label="Toggle enemy path overlay [V]">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    <span class="wave-hint">V</span>
+  </button>
+</div>

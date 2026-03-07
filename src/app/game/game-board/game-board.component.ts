@@ -119,6 +119,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   allModifiers = Object.values(GameModifier);
   activeModifiers = new Set<GameModifier>();
   modifierScoreMultiplier = 1.0;
+  effectiveTowerCosts = new Map<TowerType, number>();
   towerTypes: { type: TowerType; hotkey: string }[] = Object.entries(TOWER_HOTKEYS).map(
     ([key, type]) => ({ type, hotkey: key })
   );
@@ -292,6 +293,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Seed initial wave preview for the first wave
     const initialState = this.gameStateService.getState();
     this.wavePreview = getWavePreview(initialState.wave + 1, initialState.isEndless);
+
+    this.updateEffectiveCosts();
   }
 
   ngAfterViewInit(): void {
@@ -337,11 +340,18 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.activeModifiers
     );
     this.towerCombatService.setTowerDamageMultiplier(this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1);
+    this.updateEffectiveCosts();
+  }
+
+  private updateEffectiveCosts(): void {
+    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+    for (const type of Object.values(TowerType)) {
+      this.effectiveTowerCosts.set(type, Math.round(TOWER_CONFIGS[type].cost * costMult));
+    }
   }
 
   getEffectiveTowerCost(type: TowerType): number {
-    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-    return Math.round(TOWER_CONFIGS[type].cost * costMult);
+    return this.effectiveTowerCosts.get(type) ?? TOWER_CONFIGS[type].cost;
   }
 
   selectTowerType(type: TowerType): void {
@@ -613,6 +623,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.lastTime = 0;
     this.elapsedTimeAccumulator = 0;
     this.physicsAccumulator = 0;
+    this.updateEffectiveCosts();
   }
 
 

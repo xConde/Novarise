@@ -1,0 +1,21 @@
+<div class="tower-selection">
+  <button
+    *ngFor="let tower of towerTypes"
+    class="tower-btn"
+    [class.selected]="selectedTowerType === tower.type"
+    [class.unaffordable]="gold < (effectiveCosts.get(tower.type) ?? 0)"
+    (click)="selectTowerType.emit(tower.type)"
+    [attr.aria-label]="'Select ' + (tower.type | titlecase) + ' Tower'">
+    <div class="tower-tooltip" role="tooltip">
+      <div class="tooltip-stat"><span class="tooltip-label">Damage</span><span class="tooltip-val">{{ towerConfigs[tower.type].damage }}</span></div>
+      <div class="tooltip-stat"><span class="tooltip-label">Range</span><span class="tooltip-val">{{ towerConfigs[tower.type].range }}</span></div>
+      <div class="tooltip-stat"><span class="tooltip-label">Rate</span><span class="tooltip-val">{{ towerConfigs[tower.type].fireRate }}s</span></div>
+      <div class="tooltip-desc">{{ towerDescriptions[tower.type] }}</div>
+      <div class="tooltip-arrow"></div>
+    </div>
+    <div class="tower-icon" [ngClass]="tower.type"></div>
+    <span class="tower-name">{{ tower.type | titlecase }}</span>
+    <span class="tower-cost">{{ effectiveCosts.get(tower.type) ?? 0 }}g</span>
+    <span class="tower-hotkey">{{ tower.hotkey }}</span>
+  </button>
+</div>
