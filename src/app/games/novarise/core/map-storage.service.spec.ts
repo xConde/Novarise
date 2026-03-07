@@ -7,9 +7,9 @@ function testMapData(overrides?: Record<string, unknown>): TerrainGridState {
     gridSize: 25,
     tiles: [],
     heightMap: [],
-    spawnPoint: null,
-    exitPoint: null,
-    version: '1.0.0',
+    spawnPoints: [],
+    exitPoints: [],
+    version: '2.0.0',
     ...overrides
   } as TerrainGridState;
 }

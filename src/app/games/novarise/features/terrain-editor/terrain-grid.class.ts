@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
 import { disposeMaterial } from '../../../../game/game-board/utils/three-utils';
-import { TerrainGridState } from './terrain-grid-state.interface';
+import { TerrainGridState, TerrainGridStateLegacy } from './terrain-grid-state.interface';
 import { EDITOR_GRID_LINES, EDITOR_HEIGHT } from '../../constants/editor-ui.constants';
+import { MAX_SPAWN_POINTS, MAX_EXIT_POINTS } from '../../constants/editor-ui.constants';
 
 export interface TerrainTile {
   type: TerrainType;
@@ -21,9 +22,9 @@ export class TerrainGrid {
   private meshCache: THREE.Mesh[] = [];
   private gridLines!: THREE.LineSegments;
 
-  // Tower defense foundation
-  private spawnPoint: { x: number, z: number } | null = null;
-  private exitPoint: { x: number, z: number } | null = null;
+  // Tower defense foundation — multi-spawn/exit
+  private spawnPoints: { x: number, z: number }[] = [];
+  private exitPoints: { x: number, z: number }[] = [];
   private buildableGrid: boolean[][] = []; // Track which tiles can have towers
 
   constructor(scene: THREE.Scene, gridSize: number = 25) {
@@ -64,8 +65,8 @@ export class TerrainGrid {
     this.addGridLines();
 
     // Set default spawn and exit points for tower defense
-    this.setSpawnPoint(0, Math.floor(this.gridSize / 2));
-    this.setExitPoint(this.gridSize - 1, Math.floor(this.gridSize / 2));
+    this.addSpawnPoint(0, Math.floor(this.gridSize / 2));
+    this.addExitPoint(this.gridSize - 1, Math.floor(this.gridSize / 2));
   }
 
   private createTileMesh(x: number, z: number, type: TerrainType, height: number): THREE.Mesh {
@@ -268,28 +269,116 @@ export class TerrainGrid {
     return this.tiles[x][z];
   }
 
-  // Tower Defense Foundation Methods
+  // Tower Defense Foundation Methods — Multi-Spawn/Exit
 
-  public setSpawnPoint(x: number, z: number): void {
-    if (!this.isValidPosition(x, z)) return;
-    this.spawnPoint = { x, z };
+  /**
+   * Toggle a spawn point: adds if not present, removes if already present.
+   * Respects MAX_SPAWN_POINTS limit. Returns true if point was added, false if removed.
+   */
+  public addSpawnPoint(x: number, z: number): boolean {
+    if (!this.isValidPosition(x, z)) return false;
+
+    const existingIndex = this.spawnPoints.findIndex(p => p.x === x && p.z === z);
+    if (existingIndex !== -1) {
+      // Toggle off — remove
+      this.spawnPoints.splice(existingIndex, 1);
+      // Restore buildability based on terrain type
+      const tile = this.tiles[x]?.[z];
+      if (tile) {
+        this.buildableGrid[x][z] = (tile.type !== TerrainType.CRYSTAL && tile.type !== TerrainType.ABYSS);
+      }
+      return false;
+    }
+
+    // Check limit
+    if (this.spawnPoints.length >= MAX_SPAWN_POINTS) return false;
+
+    this.spawnPoints.push({ x, z });
     // Spawn tiles are not buildable
     this.buildableGrid[x][z] = false;
+    return true;
   }
 
-  public setExitPoint(x: number, z: number): void {
-    if (!this.isValidPosition(x, z)) return;
-    this.exitPoint = { x, z };
+  /**
+   * Toggle an exit point: adds if not present, removes if already present.
+   * Respects MAX_EXIT_POINTS limit. Returns true if point was added, false if removed.
+   */
+  public addExitPoint(x: number, z: number): boolean {
+    if (!this.isValidPosition(x, z)) return false;
+
+    const existingIndex = this.exitPoints.findIndex(p => p.x === x && p.z === z);
+    if (existingIndex !== -1) {
+      // Toggle off — remove
+      this.exitPoints.splice(existingIndex, 1);
+      // Restore buildability based on terrain type
+      const tile = this.tiles[x]?.[z];
+      if (tile) {
+        this.buildableGrid[x][z] = (tile.type !== TerrainType.CRYSTAL && tile.type !== TerrainType.ABYSS);
+      }
+      return false;
+    }
+
+    // Check limit
+    if (this.exitPoints.length >= MAX_EXIT_POINTS) return false;
+
+    this.exitPoints.push({ x, z });
     // Exit tiles are not buildable
+    this.buildableGrid[x][z] = false;
+    return true;
+  }
+
+  /**
+   * Backward-compatible: set a single spawn point (replaces all existing).
+   * Used by undo/redo commands that restore a specific spawn point.
+   */
+  public setSpawnPoint(x: number, z: number): void {
+    if (!this.isValidPosition(x, z)) return;
+    // Clear buildability on old spawn points
+    for (const p of this.spawnPoints) {
+      const tile = this.tiles[p.x]?.[p.z];
+      if (tile) {
+        this.buildableGrid[p.x][p.z] = (tile.type !== TerrainType.CRYSTAL && tile.type !== TerrainType.ABYSS);
+      }
+    }
+    this.spawnPoints = [{ x, z }];
     this.buildableGrid[x][z] = false;
   }
 
-  public getSpawnPoint(): { x: number, z: number } | null {
-    return this.spawnPoint;
+  /**
+   * Backward-compatible: set a single exit point (replaces all existing).
+   * Used by undo/redo commands that restore a specific exit point.
+   */
+  public setExitPoint(x: number, z: number): void {
+    if (!this.isValidPosition(x, z)) return;
+    // Clear buildability on old exit points
+    for (const p of this.exitPoints) {
+      const tile = this.tiles[p.x]?.[p.z];
+      if (tile) {
+        this.buildableGrid[p.x][p.z] = (tile.type !== TerrainType.CRYSTAL && tile.type !== TerrainType.ABYSS);
+      }
+    }
+    this.exitPoints = [{ x, z }];
+    this.buildableGrid[x][z] = false;
   }
 
+  /** Get the first spawn point, or null. Backward-compatible accessor. */
+  public getSpawnPoint(): { x: number, z: number } | null {
+    return this.spawnPoints[0] ?? null;
+  }
+
+  /** Get the first exit point, or null. Backward-compatible accessor. */
   public getExitPoint(): { x: number, z: number } | null {
-    return this.exitPoint;
+    return this.exitPoints[0] ?? null;
+  }
+
+  /** Get all spawn points. */
+  public getSpawnPoints(): { x: number, z: number }[] {
+    return this.spawnPoints;
+  }
+
+  /** Get all exit points. */
+  public getExitPoints(): { x: number, z: number }[] {
+    return this.exitPoints;
   }
 
   public isBuildable(x: number, z: number): boolean {
@@ -316,9 +405,9 @@ export class TerrainGrid {
       gridSize: this.gridSize,
       tiles,
       heightMap,
-      spawnPoint: this.spawnPoint ? { ...this.spawnPoint } : null,
-      exitPoint: this.exitPoint ? { ...this.exitPoint } : null,
-      version: '1.0.0'
+      spawnPoints: this.spawnPoints.map(p => ({ ...p })),
+      exitPoints: this.exitPoints.map(p => ({ ...p })),
+      version: '2.0.0'
     };
   }
 
@@ -341,12 +430,43 @@ export class TerrainGrid {
       }
     }
 
-    // Import spawn/exit points
-    if (state.spawnPoint) {
-      this.setSpawnPoint(state.spawnPoint.x, state.spawnPoint.z);
+    // Import spawn/exit points — handle both v2 (arrays) and v1 (single point) formats
+    const legacy = state as unknown as TerrainGridStateLegacy;
+
+    // Clear existing points first
+    this.spawnPoints = [];
+    this.exitPoints = [];
+
+    if (state.spawnPoints && Array.isArray(state.spawnPoints)) {
+      // v2 format
+      for (const p of state.spawnPoints) {
+        if (this.isValidPosition(p.x, p.z)) {
+          this.spawnPoints.push({ x: p.x, z: p.z });
+          this.buildableGrid[p.x][p.z] = false;
+        }
+      }
+    } else if (legacy.spawnPoint) {
+      // v1 format — single point
+      if (this.isValidPosition(legacy.spawnPoint.x, legacy.spawnPoint.z)) {
+        this.spawnPoints.push({ x: legacy.spawnPoint.x, z: legacy.spawnPoint.z });
+        this.buildableGrid[legacy.spawnPoint.x][legacy.spawnPoint.z] = false;
+      }
     }
-    if (state.exitPoint) {
-      this.setExitPoint(state.exitPoint.x, state.exitPoint.z);
+
+    if (state.exitPoints && Array.isArray(state.exitPoints)) {
+      // v2 format
+      for (const p of state.exitPoints) {
+        if (this.isValidPosition(p.x, p.z)) {
+          this.exitPoints.push({ x: p.x, z: p.z });
+          this.buildableGrid[p.x][p.z] = false;
+        }
+      }
+    } else if (legacy.exitPoint) {
+      // v1 format — single point
+      if (this.isValidPosition(legacy.exitPoint.x, legacy.exitPoint.z)) {
+        this.exitPoints.push({ x: legacy.exitPoint.x, z: legacy.exitPoint.z });
+        this.buildableGrid[legacy.exitPoint.x][legacy.exitPoint.z] = false;
+      }
     }
   }
 

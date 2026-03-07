@@ -16,6 +16,8 @@ interface TestableNovarise {
   terrainGrid: {
     getSpawnPoint(): { x: number; z: number } | null;
     getExitPoint(): { x: number; z: number } | null;
+    getSpawnPoints(): { x: number; z: number }[];
+    getExitPoints(): { x: number; z: number }[];
     exportState(): TerrainGridState;
     dispose(): void;
   } | null;
@@ -48,13 +50,15 @@ function mockTerrainGrid(
   return {
     getSpawnPoint: () => spawn,
     getExitPoint: () => exit,
+    getSpawnPoints: () => spawn ? [spawn] : [],
+    getExitPoints: () => exit ? [exit] : [],
     exportState: () => ({
       gridSize,
       tiles,
       heightMap,
-      spawnPoint: spawn,
-      exitPoint: exit,
-      version: '1.0.0'
+      spawnPoints: spawn ? [spawn] : [],
+      exitPoints: exit ? [exit] : [],
+      version: '2.0.0'
     } as TerrainGridState),
     dispose: () => {}
   };

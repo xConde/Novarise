@@ -85,15 +85,17 @@ describe('MapTemplateService', () => {
     });
 
     it(`${label}: has exactly one spawn point`, () => {
-      expect(state.spawnPoint).not.toBeNull();
+      expect(state.spawnPoints.length).toBeGreaterThan(0);
     });
 
     it(`${label}: has exactly one exit point`, () => {
-      expect(state.exitPoint).not.toBeNull();
+      expect(state.exitPoints.length).toBeGreaterThan(0);
     });
 
     it(`${label}: spawn and exit are different coordinates`, () => {
-      expect(state.spawnPoint).not.toEqual(state.exitPoint);
+      expect(state.spawnPoints[0]).toBeDefined();
+      expect(state.exitPoints[0]).toBeDefined();
+      expect(state.spawnPoints[0]).not.toEqual(state.exitPoints[0]);
     });
   }
 
@@ -119,15 +121,17 @@ describe('MapTemplateService', () => {
     });
 
     it('should have a spawn point', () => {
-      expect(state.spawnPoint).not.toBeNull();
+      expect(state.spawnPoints.length).toBeGreaterThan(0);
     });
 
     it('should have an exit point', () => {
-      expect(state.exitPoint).not.toBeNull();
+      expect(state.exitPoints.length).toBeGreaterThan(0);
     });
 
     it('should have spawn and exit at different positions', () => {
-      expect(state.spawnPoint).not.toEqual(state.exitPoint);
+      expect(state.spawnPoints[0]).toBeDefined();
+      expect(state.exitPoints[0]).toBeDefined();
+      expect(state.spawnPoints[0]).not.toEqual(state.exitPoints[0]);
     });
 
     it('should have a version string', () => {
@@ -135,15 +139,15 @@ describe('MapTemplateService', () => {
     });
 
     it('should set spawn on the left edge (x=0)', () => {
-      expect(state.spawnPoint?.x).toBe(0);
+      expect(state.spawnPoints[0]?.x).toBe(0);
     });
 
     it('should set exit on the right edge (x=24)', () => {
-      expect(state.exitPoint?.x).toBe(24);
+      expect(state.exitPoints[0]?.x).toBe(24);
     });
 
     it('should have spawn and exit at the same z row (straight path)', () => {
-      expect(state.spawnPoint?.z).toBe(state.exitPoint?.z);
+      expect(state.spawnPoints[0]?.z).toBe(state.exitPoints[0]?.z);
     });
 
     it('should contain path tiles along the horizontal corridor', () => {
@@ -182,15 +186,17 @@ describe('MapTemplateService', () => {
     });
 
     it('should have a spawn point', () => {
-      expect(state.spawnPoint).not.toBeNull();
+      expect(state.spawnPoints.length).toBeGreaterThan(0);
     });
 
     it('should have an exit point', () => {
-      expect(state.exitPoint).not.toBeNull();
+      expect(state.exitPoints.length).toBeGreaterThan(0);
     });
 
     it('should have spawn and exit at different positions', () => {
-      expect(state.spawnPoint).not.toEqual(state.exitPoint);
+      expect(state.spawnPoints[0]).toBeDefined();
+      expect(state.exitPoints[0]).toBeDefined();
+      expect(state.spawnPoints[0]).not.toEqual(state.exitPoints[0]);
     });
 
     it('should have a version string', () => {
@@ -198,11 +204,11 @@ describe('MapTemplateService', () => {
     });
 
     it('should have spawn at the left edge', () => {
-      expect(state.spawnPoint?.x).toBe(0);
+      expect(state.spawnPoints[0]?.x).toBe(0);
     });
 
     it('should have exit at the right edge', () => {
-      expect(state.exitPoint?.x).toBe(24);
+      expect(state.exitPoints[0]?.x).toBe(24);
     });
 
     it('should contain path tiles on at least two distinct z rows', () => {
@@ -239,15 +245,17 @@ describe('MapTemplateService', () => {
     });
 
     it('should have a spawn point', () => {
-      expect(state.spawnPoint).not.toBeNull();
+      expect(state.spawnPoints.length).toBeGreaterThan(0);
     });
 
     it('should have an exit point', () => {
-      expect(state.exitPoint).not.toBeNull();
+      expect(state.exitPoints.length).toBeGreaterThan(0);
     });
 
     it('should have spawn and exit at different positions', () => {
-      expect(state.spawnPoint).not.toEqual(state.exitPoint);
+      expect(state.spawnPoints[0]).toBeDefined();
+      expect(state.exitPoints[0]).toBeDefined();
+      expect(state.spawnPoints[0]).not.toEqual(state.exitPoints[0]);
     });
 
     it('should have a version string', () => {
@@ -288,15 +296,17 @@ describe('MapTemplateService', () => {
     });
 
     it('should have a spawn point', () => {
-      expect(state.spawnPoint).not.toBeNull();
+      expect(state.spawnPoints.length).toBeGreaterThan(0);
     });
 
     it('should have an exit point', () => {
-      expect(state.exitPoint).not.toBeNull();
+      expect(state.exitPoints.length).toBeGreaterThan(0);
     });
 
     it('should have spawn and exit at different positions', () => {
-      expect(state.spawnPoint).not.toEqual(state.exitPoint);
+      expect(state.spawnPoints[0]).toBeDefined();
+      expect(state.exitPoints[0]).toBeDefined();
+      expect(state.spawnPoints[0]).not.toEqual(state.exitPoints[0]);
     });
 
     it('should have a version string', () => {
@@ -314,11 +324,11 @@ describe('MapTemplateService', () => {
     });
 
     it('should have spawn on the left edge (x=0)', () => {
-      expect(state.spawnPoint?.x).toBe(0);
+      expect(state.spawnPoints[0]?.x).toBe(0);
     });
 
     it('should have exit on the right edge (x=24)', () => {
-      expect(state.exitPoint?.x).toBe(24);
+      expect(state.exitPoints[0]?.x).toBe(24);
     });
   });
 });

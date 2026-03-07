@@ -10,7 +10,11 @@ export interface MinimapEntityData {
 export interface MinimapTerrainData {
   gridSize: number;
   isPath: (row: number, col: number) => boolean;
+  spawnPoints?: { x: number; z: number }[];
+  exitPoints?: { x: number; z: number }[];
+  /** @deprecated Use spawnPoints. Kept for backward compat. */
   spawnPoint?: { x: number; z: number };
+  /** @deprecated Use exitPoints. Kept for backward compat. */
   exitPoint?: { x: number; z: number };
 }
 
@@ -75,24 +79,18 @@ export class MinimapService {
       }
     }
 
-    // Spawn and exit points
-    if (terrain.spawnPoint) {
+    // Spawn points
+    const spawnPts = terrain.spawnPoints ?? (terrain.spawnPoint ? [terrain.spawnPoint] : []);
+    for (const sp of spawnPts) {
       this.ctx.fillStyle = MINIMAP_CONFIG.terrainColors.spawn;
-      this.ctx.fillRect(
-        terrain.spawnPoint.x * cellSize,
-        terrain.spawnPoint.z * cellSize,
-        cellSize,
-        cellSize
-      );
+      this.ctx.fillRect(sp.x * cellSize, sp.z * cellSize, cellSize, cellSize);
     }
-    if (terrain.exitPoint) {
+
+    // Exit points
+    const exitPts = terrain.exitPoints ?? (terrain.exitPoint ? [terrain.exitPoint] : []);
+    for (const ep of exitPts) {
       this.ctx.fillStyle = MINIMAP_CONFIG.terrainColors.exit;
-      this.ctx.fillRect(
-        terrain.exitPoint.x * cellSize,
-        terrain.exitPoint.z * cellSize,
-        cellSize,
-        cellSize
-      );
+      this.ctx.fillRect(ep.x * cellSize, ep.z * cellSize, cellSize, cellSize);
     }
 
     // Entities (towers and enemies)

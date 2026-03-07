@@ -250,7 +250,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Import editor map if it has spawn and exit points; otherwise use default board
     if (this.mapBridge.hasEditorMap()) {
       const state = this.mapBridge.getEditorMapState()!;
-      if (state.spawnPoint && state.exitPoint) {
+      if ((state.spawnPoints?.length > 0 || (state as any).spawnPoint) && (state.exitPoints?.length > 0 || (state as any).exitPoint)) {
         const { board, width, height } = this.mapBridge.convertToGameBoard(state);
         this.gameBoardService.importBoard(board, width, height);
       } else {
@@ -530,7 +530,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (this.mapBridge.hasEditorMap()) {
       const state = this.mapBridge.getEditorMapState()!;
-      if (state.spawnPoint && state.exitPoint) {
+      if ((state.spawnPoints?.length > 0 || (state as any).spawnPoint) && (state.exitPoints?.length > 0 || (state as any).exitPoint)) {
         const { board, width, height } = this.mapBridge.convertToGameBoard(state);
         this.gameBoardService.importBoard(board, width, height);
       } else {

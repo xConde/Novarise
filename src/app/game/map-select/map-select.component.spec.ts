@@ -16,9 +16,9 @@ const MOCK_TERRAIN_STATE: TerrainGridState = {
   gridSize: 1,
   tiles: [[TerrainType.BEDROCK]],
   heightMap: [[0]],
-  spawnPoint: null,
-  exitPoint: null,
-  version: '1.0.0'
+  spawnPoints: [],
+  exitPoints: [],
+  version: '2.0.0'
 };
 
 describe('MapSelectComponent', () => {

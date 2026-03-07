@@ -114,6 +114,12 @@ export const EDITOR_PATH_INVALID_FLASH_MS = 600;
 /** Color used for the rejection flash on spawn/exit markers. */
 export const EDITOR_PATH_INVALID_FLASH_COLOR = 0xff2222;
 
+// ── Multi-spawn/exit limits ──────────────────────────────────────────────────
+/** Maximum number of spawn points allowed per map. */
+export const MAX_SPAWN_POINTS = 4;
+/** Maximum number of exit points allowed per map. */
+export const MAX_EXIT_POINTS = 4;
+
 // ── Height limits (terrain-grid.class.ts) ────────────────────────────────────
 export const EDITOR_HEIGHT = {
   min: 0,

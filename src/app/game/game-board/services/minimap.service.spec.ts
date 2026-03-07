@@ -9,8 +9,8 @@ describe('MinimapService', () => {
   const terrain: MinimapTerrainData = {
     gridSize: 25,
     isPath: (row: number, col: number) => row === 12,
-    spawnPoint: { x: 0, z: 12 },
-    exitPoint: { x: 24, z: 12 },
+    spawnPoints: [{ x: 0, z: 12 }],
+    exitPoints: [{ x: 24, z: 12 }],
   };
 
   beforeEach(() => {
