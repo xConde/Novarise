@@ -367,7 +367,7 @@ export class EnemyService {
       const stats = ENEMY_STATS[enemy.type];
       const baseIntensity = enemy.isMiniSwarm
         ? ENEMY_VISUAL_CONFIG.miniSwarmEmissive
-        : ENEMY_VISUAL_CONFIG.shieldedEmissive;
+        : ENEMY_VISUAL_CONFIG.baseEmissive;
       mat.emissive.setHex(stats.color);
       mat.emissiveIntensity = baseIntensity;
       this.tintChildMeshes(enemy.mesh, stats.color, baseIntensity);
@@ -437,9 +437,9 @@ export class EnemyService {
     const material = new THREE.MeshStandardMaterial({
       color: stats.color,
       emissive: stats.color,
-      emissiveIntensity: ENEMY_VISUAL_CONFIG.shieldedEmissive,
-      roughness: 0.6,
-      metalness: 0.2,
+      emissiveIntensity: ENEMY_VISUAL_CONFIG.baseEmissive,
+      roughness: ENEMY_VISUAL_CONFIG.roughness,
+      metalness: ENEMY_VISUAL_CONFIG.metalness,
       side: materialSide
     });
 
@@ -622,8 +622,8 @@ export class EnemyService {
       color: MINI_SWARM_STATS.color,
       emissive: MINI_SWARM_STATS.color,
       emissiveIntensity: ENEMY_VISUAL_CONFIG.miniSwarmEmissive,
-      roughness: 0.6,
-      metalness: 0.2
+      roughness: ENEMY_VISUAL_CONFIG.roughness,
+      metalness: ENEMY_VISUAL_CONFIG.metalness,
     });
 
     const mesh = new THREE.Mesh(geometry, material);

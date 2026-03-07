@@ -6,6 +6,7 @@ export const CHAIN_LIGHTNING_CONFIG = {
   zigzagSegments: 6,
   /** Maximum perpendicular offset for zigzag jitter */
   zigzagJitter: 0.25,
+  arcOpacity: 0.85,
 } as const;
 
 export const IMPACT_FLASH_CONFIG = {

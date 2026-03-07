@@ -496,7 +496,7 @@ export class TowerCombatService {
         const arcMat = new THREE.LineBasicMaterial({
           color: stats.color,
           transparent: true,
-          opacity: 0.85
+          opacity: CHAIN_LIGHTNING_CONFIG.arcOpacity
         });
         const arc = new THREE.Line(arcGeom, arcMat);
         scene.add(arc);

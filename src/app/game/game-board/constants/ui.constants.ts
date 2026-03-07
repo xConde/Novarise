@@ -53,6 +53,8 @@ export const SHIELD_VISUAL_CONFIG = {
 };
 
 export const ENEMY_VISUAL_CONFIG = {
-  shieldedEmissive: 0.3,
+  baseEmissive: 0.3,
   miniSwarmEmissive: 0.4,
+  roughness: 0.6,
+  metalness: 0.2,
 };

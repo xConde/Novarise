@@ -614,6 +614,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.renderGameBoard();
     this.addGridLines();
+    this.initializeLights();
+    this.addSkybox();
+    this.initializeParticles();
     this.minimapService.init(this.canvasContainer.nativeElement);
     this.lastPreviewKey = '';
     this.lastTime = 0;
