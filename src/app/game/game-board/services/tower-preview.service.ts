@@ -3,17 +3,12 @@ import * as THREE from 'three';
 import { TowerType, TOWER_CONFIGS, getEffectiveStats } from '../models/tower.model';
 import { PREVIEW_CONFIG } from '../constants/preview.constants';
 
-/** Ghost tower box geometry half-height (centered at y=0.5 for a 1-unit tall box). */
-const GHOST_BOX_SIZE = 0.6;
-
-/** Y-center of the ghost tower mesh (sits on the tile surface). */
-const GHOST_MESH_Y = 0.5;
-
 /** Tracks which tower type the current preview meshes were built for. */
 type PreviewState = {
   towerType: TowerType;
   ghostMesh: THREE.Mesh;
   ringMesh: THREE.Mesh;
+  yCenter: number;
 } | null;
 
 @Injectable()
@@ -48,7 +43,7 @@ export class TowerPreviewService {
       : PREVIEW_CONFIG.invalidColor;
     (ghostMesh.material as THREE.MeshBasicMaterial).color.setHex(ghostColor);
 
-    ghostMesh.position.set(worldX, GHOST_MESH_Y, worldZ);
+    ghostMesh.position.set(worldX, this.previewState!.yCenter, worldZ);
     ringMesh.position.set(worldX, PREVIEW_CONFIG.groundOffset, worldZ);
   }
 
@@ -73,8 +68,8 @@ export class TowerPreviewService {
     const color = TOWER_CONFIGS[towerType].color;
     const range = getEffectiveStats(towerType, 1).range;
 
-    // Ghost tower — simple box
-    const geometry = new THREE.BoxGeometry(GHOST_BOX_SIZE, 1, GHOST_BOX_SIZE);
+    // Ghost tower — type-specific silhouette
+    const { geometry, yCenter } = this.createGhostGeometry(towerType);
     const material = new THREE.MeshBasicMaterial({
       color,
       transparent: true,
@@ -101,7 +96,38 @@ export class TowerPreviewService {
     ringMesh.rotateX(-Math.PI / 2);
     scene.add(ringMesh);
 
-    return { towerType, ghostMesh, ringMesh };
+    return { towerType, ghostMesh, ringMesh, yCenter };
+  }
+
+  private createGhostGeometry(towerType: TowerType): { geometry: THREE.BufferGeometry; yCenter: number } {
+    switch (towerType) {
+      case TowerType.BASIC:
+        // Obelisk — hexagonal cone
+        return { geometry: new THREE.ConeGeometry(0.35, 1.3, 6), yCenter: 0.65 };
+
+      case TowerType.SNIPER:
+        // Tall spike
+        return { geometry: new THREE.ConeGeometry(0.25, 1.8, 6), yCenter: 0.9 };
+
+      case TowerType.SPLASH:
+        // Mushroom — wider top sphere on narrow stem
+        return { geometry: new THREE.SphereGeometry(0.4, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), yCenter: 0.7 };
+
+      case TowerType.SLOW:
+        // Low pad — flat wide cylinder
+        return { geometry: new THREE.CylinderGeometry(0.4, 0.45, 0.6, 12), yCenter: 0.3 };
+
+      case TowerType.CHAIN:
+        // Antenna — thin tall cylinder with sphere hint
+        return { geometry: new THREE.CylinderGeometry(0.12, 0.2, 1.2, 6), yCenter: 0.6 };
+
+      case TowerType.MORTAR:
+        // Squat cannon — wide short cylinder
+        return { geometry: new THREE.CylinderGeometry(0.35, 0.45, 0.7, 8), yCenter: 0.35 };
+
+      default:
+        return { geometry: new THREE.BoxGeometry(0.6, 1, 0.6), yCenter: 0.5 };
+    }
   }
 
   private removeMeshesFromScene(scene: THREE.Scene): void {
