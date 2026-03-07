@@ -333,12 +333,14 @@ export class EnemyService {
    * Create a 3D mesh for an enemy.
    * FLYING enemies use a flat diamond (kite) shape made of 2 triangles,
    * rotated to lie flat in the XZ plane.
-   * All other enemies use a sphere.
+   * All other enemies get a type-specific geometry for gameplay readability.
    */
   private createEnemyMesh(enemy: Enemy): THREE.Mesh {
     const stats = ENEMY_STATS[enemy.type];
 
     let geometry: THREE.BufferGeometry;
+    let materialSide: THREE.Side = THREE.FrontSide;
+
     if (enemy.isFlying) {
       // Diamond: 4 vertices forming a rhombus in the XZ plane, 2 triangles
       const s = stats.size;
@@ -354,15 +356,18 @@ export class EnemyService {
       diamondGeom.setIndex(new THREE.BufferAttribute(indices, 1));
       diamondGeom.computeVertexNormals();
       geometry = diamondGeom;
+      materialSide = THREE.DoubleSide;
     } else {
-      geometry = new THREE.SphereGeometry(stats.size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
+      geometry = this.createEnemyGeometry(enemy.type, stats.size);
     }
 
-    const material = new THREE.MeshLambertMaterial({
+    const material = new THREE.MeshStandardMaterial({
       color: stats.color,
       emissive: stats.color,
       emissiveIntensity: ENEMY_VISUAL_CONFIG.shieldedEmissive,
-      side: enemy.isFlying ? THREE.DoubleSide : THREE.FrontSide
+      roughness: 0.6,
+      metalness: 0.2,
+      side: materialSide
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -398,7 +403,72 @@ export class EnemyService {
       mesh.userData['shieldMesh'] = shieldMesh;
     }
 
+    // Add crown ring for BOSS enemies
+    if (enemy.type === EnemyType.BOSS) {
+      this.createBossCrown(mesh, stats.size, stats.color);
+    }
+
     return mesh;
+  }
+
+  /**
+   * Create type-specific geometry for each enemy.
+   * Each type gets a distinct silhouette for gameplay readability.
+   */
+  private createEnemyGeometry(type: EnemyType, size: number): THREE.BufferGeometry {
+    switch (type) {
+      case EnemyType.FAST:
+        // Elongated capsule — streamlined for speed
+        return new THREE.CapsuleGeometry(size * 0.6, size * 1.2, 4, ENEMY_MESH_SEGMENTS);
+
+      case EnemyType.HEAVY:
+        // Chunky cube — blocky and tanky
+        return new THREE.BoxGeometry(size * 1.6, size * 1.6, size * 1.6);
+
+      case EnemyType.SWIFT:
+        // Tetrahedron — angular, darting
+        return new THREE.TetrahedronGeometry(size * 1.2, 0);
+
+      case EnemyType.BOSS: {
+        // Large sphere merged with torus crown for imposing look
+        // Use sphere as base — the crown ring is added as a child mesh in createBossCrown()
+        return new THREE.SphereGeometry(size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
+      }
+
+      case EnemyType.SHIELDED:
+        // Icosahedron — faceted, armored look
+        return new THREE.IcosahedronGeometry(size, 0);
+
+      case EnemyType.SWARM:
+        // Octahedron — compact, gem-like
+        return new THREE.OctahedronGeometry(size, 0);
+
+      case EnemyType.BASIC:
+      default:
+        // Standard sphere
+        return new THREE.SphereGeometry(size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
+    }
+  }
+
+  /**
+   * Create and attach a torus crown ring to the Boss enemy mesh.
+   * Called after the mesh is created to add the distinctive crown.
+   */
+  private createBossCrown(mesh: THREE.Mesh, size: number, color: number): void {
+    const crownGeometry = new THREE.TorusGeometry(size * 0.8, size * 0.12, 8, 16);
+    const crownMaterial = new THREE.MeshStandardMaterial({
+      color: color,
+      emissive: color,
+      emissiveIntensity: 0.8,
+      roughness: 0.3,
+      metalness: 0.5
+    });
+    const crown = new THREE.Mesh(crownGeometry, crownMaterial);
+    crown.rotation.x = Math.PI / 2;
+    crown.position.y = size * 0.6;
+    crown.castShadow = true;
+    mesh.add(crown);
+    mesh.userData['bossCrown'] = crown;
   }
 
   /**
@@ -411,7 +481,7 @@ export class EnemyService {
       SHIELD_VISUAL_CONFIG.segments,
       SHIELD_VISUAL_CONFIG.segments
     );
-    const shieldMaterial = new THREE.MeshLambertMaterial({
+    const shieldMaterial = new THREE.MeshStandardMaterial({
       color: SHIELD_VISUAL_CONFIG.color,
       emissive: SHIELD_VISUAL_CONFIG.color,
       emissiveIntensity: SHIELD_VISUAL_CONFIG.emissiveIntensity,
@@ -476,11 +546,13 @@ export class EnemyService {
    * Uses MINI_SWARM_STATS directly rather than ENEMY_STATS to produce the smaller visual.
    */
   private createMiniSwarmMesh(mini: Enemy): THREE.Mesh {
-    const geometry = new THREE.SphereGeometry(MINI_SWARM_STATS.size, MINI_SWARM_MESH_SEGMENTS, MINI_SWARM_MESH_SEGMENTS);
-    const material = new THREE.MeshLambertMaterial({
+    const geometry = new THREE.OctahedronGeometry(MINI_SWARM_STATS.size, 0);
+    const material = new THREE.MeshStandardMaterial({
       color: MINI_SWARM_STATS.color,
       emissive: MINI_SWARM_STATS.color,
-      emissiveIntensity: ENEMY_VISUAL_CONFIG.miniSwarmEmissive
+      emissiveIntensity: ENEMY_VISUAL_CONFIG.miniSwarmEmissive,
+      roughness: 0.6,
+      metalness: 0.2
     });
 
     const mesh = new THREE.Mesh(geometry, material);
