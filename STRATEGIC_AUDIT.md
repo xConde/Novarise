@@ -369,6 +369,52 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 
 ---
 
+## Completed: Engine Depth (feat/engine-depth) — 2026-03-07
+
+### What shipped
+10 sprints of engine architecture and gameplay depth:
+
+| Sprint | Feature | Impact |
+|--------|---------|--------|
+| 1 | Fixed timestep physics (60Hz deterministic) | Framerate-independent gameplay |
+| 2 | A* pathfinding MinHeap + Map | O(n log n) vs O(n²) pathfinding |
+| 3 | Flying enemy slow immunity | 28 new tests, correct combat behavior |
+| 4 | Spatial grid for combat queries | O(1) amortized range checks |
+| 5 | Object pool for projectile meshes | Reduced GC pressure |
+| 6 | Status effects framework (SLOW/BURN/POISON) | Extensible effect system |
+| 7 | Multi-spawner/multi-exit maps (max 4 each) | Map variety, backward-compat v1 |
+| 8 | Tower L3 specialization branching (ALPHA/BETA) | Strategic depth per tower |
+| 9 | Game modifiers system (8 mutators) | Replayability, score multiplier |
+| 10 | Creep leak scaling (enemy-type life cost) | Prioritization pressure |
+
+### Red-Team Findings (2 passes, 2026-03-07)
+
+**Pass 1 (sprints 6-10) — FIXED:**
+1. Last spawn/exit removal guard — prevent unplayable maps
+2. Speed division hardening — divide-by-zero guard in SPEED_DEMONS
+
+**Pass 2 (all 10 sprints) — FIXED:**
+1. MIN_ENEMY_SPEED floor (0.1) — prevent zero/negative speed
+2. Modifier combo test coverage — triple-modifier stacking test
+
+**ACCEPTED (LOW):**
+- Pre-existing SCSS magic numbers outside branch scope
+- Mortar projectiles not pooled (correct disposal, just less efficient)
+
+### Test delta
+- Before: 1425 tests
+- After: 1638 tests (+213)
+- All passing, zero flakes
+
+### Sprint items now partially complete
+
+| Sprint | Items Done | Items Remaining |
+|--------|-----------|----------------|
+| S2: Game Feel | Audio SFX, screen shake, gold popup, kill feedback, preview | BGM, spatial audio |
+| S5: Content | 6 towers, 8 enemies, status effects, specialization | Tower abilities, wave editor |
+
+---
+
 ## Red Team Critique — feat/engine-depth Sprints 1-5 (2026-03-06)
 
 ### Finding 1: VFX/Audio Storm During Multi-Step Physics (HIGH)
@@ -409,6 +455,6 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 ## Deployment Checklist
 
 - [x] Step 1: Extract SCSS magic numbers in new UI panels to CSS custom properties
-- [ ] Step 2: Update STRATEGIC_AUDIT.md with completed engine-depth sprint summary
+- [x] Step 2: Update STRATEGIC_AUDIT.md with completed engine-depth sprint summary
 - [ ] Step 3: Run full test suite — confirm all 1638+ tests green
 - [ ] Step 4: Update MEMORY.md with final branch state
