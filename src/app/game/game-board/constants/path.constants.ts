@@ -6,3 +6,10 @@ export const PATH_LINE_CONFIG = {
   yOffset: 0.05,
   opacity: 0.6,
 } as const;
+
+export const PATH_OVERLAY_CONFIG = {
+  color: 0x00ff88,
+  opacity: 0.3,
+  yOffset: 0.15,
+  tileScale: 0.6,
+} as const;

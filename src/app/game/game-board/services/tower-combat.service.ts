@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy } from '../models/enemy.model';
-import { PlacedTower, TowerType, TowerStats, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats } from '../models/tower.model';
+import { PlacedTower, TowerType, TowerStats, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
@@ -76,6 +76,7 @@ export class TowerCombatService {
       lastFireTime: -Infinity,
       kills: 0,
       totalInvested: TOWER_CONFIGS[type].cost,
+      targetingMode: DEFAULT_TARGETING_MODE,
       mesh
     });
   }
@@ -234,11 +235,27 @@ export class TowerCombatService {
     };
   }
 
+  setTargetingMode(towerId: string, mode: TargetingMode): boolean {
+    const tower = this.placedTowers.get(towerId);
+    if (!tower) return false;
+    tower.targetingMode = mode;
+    return true;
+  }
+
+  cycleTargetingMode(towerId: string): TargetingMode | null {
+    const tower = this.placedTowers.get(towerId);
+    if (!tower) return null;
+    const currentIndex = TARGETING_MODES.indexOf(tower.targetingMode);
+    const nextIndex = (currentIndex + 1) % TARGETING_MODES.length;
+    tower.targetingMode = TARGETING_MODES[nextIndex];
+    return tower.targetingMode;
+  }
+
   private findTarget(tower: PlacedTower, stats: TowerStats): Enemy | null {
     const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
 
-    let nearest: Enemy | null = null;
-    let nearestDist = Infinity;
+    let best: Enemy | null = null;
+    let bestScore = -Infinity;
 
     this.enemyService.getEnemies().forEach(enemy => {
       if (enemy.health <= 0) return;
@@ -248,13 +265,32 @@ export class TowerCombatService {
       const dist = Math.sqrt(dx * dx + dz * dz);
 
       // Range check in world units (tileSize = 1, so range in tiles = range in world units)
-      if (dist <= stats.range && dist < nearestDist) {
-        nearest = enemy;
-        nearestDist = dist;
+      if (dist > stats.range) return;
+
+      let score: number;
+      switch (tower.targetingMode) {
+        case 'first':
+          // Enemy furthest along path (highest distanceTraveled) is closest to exit
+          score = enemy.distanceTraveled;
+          break;
+        case 'strongest':
+          // Enemy with highest current health
+          score = enemy.health;
+          break;
+        case 'nearest':
+        default:
+          // Closest by distance (invert so closer = higher score)
+          score = -dist;
+          break;
+      }
+
+      if (score > bestScore) {
+        best = enemy;
+        bestScore = score;
       }
     });
 
-    return nearest;
+    return best;
   }
 
   private applySlowAura(tower: PlacedTower, stats: TowerStats): void {

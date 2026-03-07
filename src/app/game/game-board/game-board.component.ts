@@ -25,7 +25,7 @@ import { MinimapService, MinimapEntityData, MinimapTerrainData } from './service
 import { SettingsService } from './services/settings.service';
 import { TowerPreviewService } from './services/tower-preview.service';
 import { disposeMaterial } from './utils/three-utils';
-import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats } from './models/tower.model';
+import { TowerType, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TARGETING_MODE_LABELS, TargetingMode } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
@@ -38,6 +38,7 @@ import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG } from './constants/touch.constants';
 import { ENEMY_STATS } from './models/enemy.model';
 import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
+import { PathVisualizationService } from './services/path-visualization.service';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -52,7 +53,7 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService]
+  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -121,7 +122,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Wave preview — shown during SETUP and INTERMISSION
   wavePreview: WavePreviewEntry[] = [];
   showAllRanges = false;
+  showPathOverlay = false;
   sellConfirmPending = false;
+  targetingModeLabels = TARGETING_MODE_LABELS;
   showHelpOverlay = false;
   pathBlocked = false;
   private pathBlockedTimerId: ReturnType<typeof setTimeout> | null = null;
@@ -194,7 +197,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private damagePopupService: DamagePopupService,
     private minimapService: MinimapService,
     private settingsService: SettingsService,
-    private towerPreviewService: TowerPreviewService
+    private towerPreviewService: TowerPreviewService,
+    private pathVisualizationService: PathVisualizationService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -383,6 +387,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.deselectTower();
   }
 
+  cycleTargeting(): void {
+    if (!this.selectedTowerInfo) return;
+    this.towerCombatService.cycleTargetingMode(this.selectedTowerInfo.id);
+  }
+
   deselectTower(): void {
     this.selectedTowerInfo = null;
     this.selectedTowerStats = null;
@@ -509,6 +518,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.defeatSoundPlayed = false;
     this.victorySoundPlayed = false;
     this.showHelpOverlay = false;
+    this.showPathOverlay = false;
     this.pathBlocked = false;
     if (this.pathBlockedTimerId !== null) {
       clearTimeout(this.pathBlockedTimerId);
@@ -552,6 +562,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Clean up minimap
     this.minimapService.cleanup();
+
+    // Clean up path overlay
+    this.pathVisualizationService.hidePath(this.scene);
+    this.pathVisualizationService.cleanup();
+    this.showPathOverlay = false;
 
     // Clean up range preview and range toggle rings
     this.removeRangePreview();
@@ -1294,6 +1309,19 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  togglePathOverlay(): void {
+    this.showPathOverlay = !this.showPathOverlay;
+
+    if (this.showPathOverlay) {
+      const worldPath = this.enemyService.getPathToExit();
+      if (worldPath.length > 0) {
+        this.pathVisualizationService.showPath(worldPath, this.scene);
+      }
+    } else {
+      this.pathVisualizationService.hidePath(this.scene);
+    }
+  }
+
   private handleKeyboard(event: KeyboardEvent): void {
     const phase = this.gameStateService.getState().phase;
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
@@ -1340,6 +1368,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         // M key toggles minimap
         event.preventDefault();
         this.minimapService.toggleVisibility();
+        break;
+      case 'v':
+      case 'V':
+        // V key toggles path overlay
+        event.preventDefault();
+        this.togglePathOverlay();
         break;
     }
   }

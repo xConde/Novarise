@@ -626,4 +626,78 @@ describe('GameBoardComponent', () => {
       expect(component.isPaused).toBeFalse();
     });
   });
+
+  describe('path overlay', () => {
+    it('showPathOverlay defaults to false', () => {
+      expect(component.showPathOverlay).toBeFalse();
+    });
+
+    it('togglePathOverlay flips showPathOverlay from false to true', () => {
+      // Stub scene + pathVisualizationService to avoid Three.js calls
+      (component as any).scene = new THREE.Scene();
+      const pvs = (component as any).pathVisualizationService;
+      spyOn(pvs, 'showPath');
+      spyOn(pvs, 'hidePath');
+      // Stub enemyService.getPathToExit to return empty (no path found)
+      spyOn((component as any).enemyService, 'getPathToExit').and.returnValue([]);
+
+      component.togglePathOverlay();
+
+      expect(component.showPathOverlay).toBeTrue();
+    });
+
+    it('togglePathOverlay flips showPathOverlay from true to false', () => {
+      (component as any).scene = new THREE.Scene();
+      const pvs = (component as any).pathVisualizationService;
+      spyOn(pvs, 'showPath');
+      spyOn(pvs, 'hidePath');
+      spyOn((component as any).enemyService, 'getPathToExit').and.returnValue([]);
+
+      component.showPathOverlay = true;
+      component.togglePathOverlay();
+
+      expect(component.showPathOverlay).toBeFalse();
+      expect(pvs.hidePath).toHaveBeenCalled();
+    });
+
+    it('togglePathOverlay calls showPath when path exists', () => {
+      (component as any).scene = new THREE.Scene();
+      const pvs = (component as any).pathVisualizationService;
+      spyOn(pvs, 'showPath');
+      spyOn(pvs, 'hidePath');
+      const fakePath = [{ x: 0, z: 0 }, { x: 1, z: 0 }];
+      spyOn((component as any).enemyService, 'getPathToExit').and.returnValue(fakePath);
+
+      component.togglePathOverlay();
+
+      expect(pvs.showPath).toHaveBeenCalledWith(fakePath, (component as any).scene);
+    });
+
+    it('togglePathOverlay does not call showPath when path is empty', () => {
+      (component as any).scene = new THREE.Scene();
+      const pvs = (component as any).pathVisualizationService;
+      spyOn(pvs, 'showPath');
+      spyOn(pvs, 'hidePath');
+      spyOn((component as any).enemyService, 'getPathToExit').and.returnValue([]);
+
+      component.togglePathOverlay();
+
+      expect(pvs.showPath).not.toHaveBeenCalled();
+    });
+
+    it('pressing V toggles path overlay', () => {
+      (component as any).scene = new THREE.Scene();
+      const pvs = (component as any).pathVisualizationService;
+      spyOn(pvs, 'showPath');
+      spyOn(pvs, 'hidePath');
+      spyOn((component as any).enemyService, 'getPathToExit').and.returnValue([]);
+
+      window.addEventListener('keydown', (component as any).keyboardHandler);
+      const event = new KeyboardEvent('keydown', { key: 'v', bubbles: true });
+      window.dispatchEvent(event);
+      window.removeEventListener('keydown', (component as any).keyboardHandler);
+
+      expect(component.showPathOverlay).toBeTrue();
+    });
+  });
 });

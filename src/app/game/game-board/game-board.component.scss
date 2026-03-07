@@ -678,6 +678,29 @@
       }
     }
 
+    .tower-info-targeting {
+      margin-bottom: var(--spacing-xs);
+
+      .targeting-btn {
+        width: 100%;
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border: var(--border-width-thin) solid rgba(100, 180, 255, 0.3);
+        border-radius: var(--border-radius-sm);
+        background: rgba(30, 80, 140, 0.3);
+        color: #88ccff;
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.6875rem;
+        cursor: pointer;
+        transition: all var(--transition-medium) ease;
+        text-align: center;
+
+        &:hover {
+          background: rgba(40, 100, 180, 0.45);
+          border-color: rgba(100, 180, 255, 0.6);
+        }
+      }
+    }
+
     .tower-info-actions {
       display: flex;
       gap: var(--spacing-sm);
@@ -950,6 +973,13 @@
         color: var(--game-gold);
         box-shadow: 0 0 var(--spacing-xs) rgba(255, 200, 0, 0.3);
       }
+    }
+
+    .path-btn.active {
+      background: rgba(0, 255, 136, 0.15);
+      border-color: rgba(0, 255, 136, 0.5);
+      color: #88ffbb;
+      box-shadow: 0 0 var(--spacing-xs) rgba(0, 255, 136, 0.3);
     }
 
     .wave-hint {
@@ -1431,11 +1461,6 @@
 @keyframes pulse-critical {
   from { opacity: 1; }
   to { opacity: 0.5; }
-}
-
-@keyframes pulse-glow {
-  0%, 100% { border-color: rgba(255, 100, 100, 0.3); }
-  50% { border-color: rgba(255, 100, 100, 0.6); }
 }
 
 @keyframes fade-in {
