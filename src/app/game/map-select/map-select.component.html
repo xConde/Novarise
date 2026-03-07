@@ -1,40 +1,49 @@
 <div class="map-select-container">
-  <h1 class="map-select-title">Select Map</h1>
+  <nav class="map-select-nav">
+    <button class="nav-link" (click)="goHome()" aria-label="Back to Home">Home</button>
+  </nav>
 
-  <div class="map-grid">
-    <button class="map-card quick-play-card" (click)="quickPlay()">
-      <span class="quick-play-icon">&#9654;</span>
-      <span class="map-name">Quick Play</span>
-      <span class="map-meta">Random default map</span>
+  <div class="map-select-hero">
+    <h1 class="map-select-title">Select Map</h1>
+    <button class="quick-play-btn" (click)="quickPlay()" aria-label="Quick Play with random map">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      <span class="quick-play-text">Quick Play</span>
     </button>
+  </div>
 
-    <div class="map-card" *ngFor="let map of maps" (click)="selectMap(map)">
-      <div class="card-actions">
-        <button
-          class="card-action-btn edit-btn"
-          title="Edit map"
-          (click)="editMap(map, $event)">
-          &#9998;
-        </button>
-        <button
-          class="card-action-btn delete-btn"
-          [class.confirm]="deleteConfirmId === map.id"
-          [title]="deleteConfirmId === map.id ? 'Click again to confirm' : 'Delete map'"
-          [attr.aria-label]="deleteConfirmId === map.id ? 'Confirm delete ' + map.name : 'Delete ' + map.name"
-          (click)="deleteMap(map.id, $event)">
-          {{ deleteConfirmId === map.id ? '?' : '&#10005;' }}
-        </button>
+  <div class="map-section" *ngIf="maps.length > 0">
+    <h2 class="section-label">Your Maps</h2>
+    <div class="map-grid">
+      <div class="map-card" *ngFor="let map of maps" (click)="selectMap(map)">
+        <div class="card-actions">
+          <button
+            class="card-action-btn edit-btn"
+            title="Edit map"
+            aria-label="Edit map"
+            (click)="editMap(map, $event)">
+            &#9998;
+          </button>
+          <button
+            class="card-action-btn delete-btn"
+            [class.confirm]="deleteConfirmId === map.id"
+            [title]="deleteConfirmId === map.id ? 'Click again to confirm' : 'Delete map'"
+            [attr.aria-label]="deleteConfirmId === map.id ? 'Confirm delete ' + map.name : 'Delete ' + map.name"
+            (click)="deleteMap(map.id, $event)">
+            {{ deleteConfirmId === map.id ? '?' : '&#10005;' }}
+          </button>
+        </div>
+        <span class="map-name">{{ map.name }}</span>
+        <span class="map-meta">{{ map.gridSize }} &times; {{ map.gridSize }}</span>
+        <span class="map-date">{{ map.updatedAt | date:'short' }}</span>
       </div>
-      <span class="map-name">{{ map.name }}</span>
-      <span class="map-meta">{{ map.gridSize }} &times; {{ map.gridSize }}</span>
-      <span class="map-date">{{ map.updatedAt | date:'short' }}</span>
     </div>
   </div>
 
-  <div class="no-maps" *ngIf="maps.length === 0">
-    <p>No maps saved yet. Create one in the editor or hit Quick Play.</p>
-    <button class="action-btn create-btn" (click)="goToEditor()">Create Your First Map</button>
+  <div class="empty-state" *ngIf="maps.length === 0">
+    <p class="empty-message">No maps saved yet</p>
+    <button class="create-btn" (click)="goToEditor()" aria-label="Create your first map">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Create a Map
+    </button>
   </div>
-
-  <button class="back-btn" (click)="goHome()">Home</button>
 </div>
