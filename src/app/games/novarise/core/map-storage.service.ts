@@ -1,5 +1,13 @@
 import { Injectable } from '@angular/core';
-import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
+import { TerrainGridState, TerrainGridStateLegacy } from '../features/terrain-editor/terrain-grid-state.interface';
+import { TerrainType } from '../models/terrain-types.enum';
+
+const MIN_GRID_SIZE = 5;
+const MAX_GRID_SIZE = 30;
+const MAX_SPAWN_POINTS = 4;
+const MAX_EXIT_POINTS = 4;
+
+const VALID_TERRAIN_VALUES = new Set<string>(Object.values(TerrainType));
 
 export interface MapMetadata {
   id: string;
@@ -266,7 +274,9 @@ export class MapStorageService {
   }
 
   /**
-   * Validate JSON string is a valid Novarise map
+   * Validate JSON string is a valid Novarise map.
+   * Performs structural validation: grid bounds, tile dimensions, terrain types,
+   * spawn/exit point coordinates and counts.
    * @param json JSON string to validate
    * @returns Validation result with map name if valid
    */
@@ -283,8 +293,79 @@ export class MapStorageService {
         return { valid: false, error: 'Invalid or missing grid size' };
       }
 
+      const gridSize = savedMap.data.gridSize;
+
+      if (gridSize < MIN_GRID_SIZE || gridSize > MAX_GRID_SIZE) {
+        return { valid: false, error: `Grid size must be between ${MIN_GRID_SIZE} and ${MAX_GRID_SIZE}, got ${gridSize}` };
+      }
+
       if (!savedMap.data.tiles || !Array.isArray(savedMap.data.tiles)) {
         return { valid: false, error: 'Invalid or missing tiles data' };
+      }
+
+      // Validate tile array dimensions
+      if (savedMap.data.tiles.length !== gridSize) {
+        return { valid: false, error: `Tiles array length (${savedMap.data.tiles.length}) does not match gridSize (${gridSize})` };
+      }
+
+      for (let x = 0; x < gridSize; x++) {
+        const column = savedMap.data.tiles[x];
+        if (!Array.isArray(column)) {
+          return { valid: false, error: `Tiles column ${x} is not an array` };
+        }
+        if (column.length !== gridSize) {
+          return { valid: false, error: `Tiles column ${x} has length ${column.length}, expected ${gridSize}` };
+        }
+        for (let z = 0; z < gridSize; z++) {
+          if (!VALID_TERRAIN_VALUES.has(column[z])) {
+            return { valid: false, error: `Invalid terrain type "${column[z]}" at tile [${x}][${z}]` };
+          }
+        }
+      }
+
+      // Validate spawn/exit points (v2 format: arrays)
+      const legacy = savedMap.data as unknown as TerrainGridStateLegacy;
+      const hasV2Spawn = Array.isArray(savedMap.data.spawnPoints);
+      const hasV2Exit = Array.isArray(savedMap.data.exitPoints);
+      const hasV1Spawn = !hasV2Spawn && legacy.spawnPoint != null;
+      const hasV1Exit = !hasV2Exit && legacy.exitPoint != null;
+
+      // Validate spawn points
+      if (hasV2Spawn) {
+        if (savedMap.data.spawnPoints.length > MAX_SPAWN_POINTS) {
+          return { valid: false, error: `Too many spawn points (${savedMap.data.spawnPoints.length}), maximum is ${MAX_SPAWN_POINTS}` };
+        }
+        for (const sp of savedMap.data.spawnPoints) {
+          if (typeof sp.x !== 'number' || typeof sp.z !== 'number' ||
+              sp.x < 0 || sp.x >= gridSize || sp.z < 0 || sp.z >= gridSize) {
+            return { valid: false, error: `Spawn point (${sp.x}, ${sp.z}) is out of bounds [0, ${gridSize})` };
+          }
+        }
+      } else if (hasV1Spawn) {
+        const sp = legacy.spawnPoint!;
+        if (typeof sp.x !== 'number' || typeof sp.z !== 'number' ||
+            sp.x < 0 || sp.x >= gridSize || sp.z < 0 || sp.z >= gridSize) {
+          return { valid: false, error: `Spawn point (${sp.x}, ${sp.z}) is out of bounds [0, ${gridSize})` };
+        }
+      }
+
+      // Validate exit points
+      if (hasV2Exit) {
+        if (savedMap.data.exitPoints.length > MAX_EXIT_POINTS) {
+          return { valid: false, error: `Too many exit points (${savedMap.data.exitPoints.length}), maximum is ${MAX_EXIT_POINTS}` };
+        }
+        for (const ep of savedMap.data.exitPoints) {
+          if (typeof ep.x !== 'number' || typeof ep.z !== 'number' ||
+              ep.x < 0 || ep.x >= gridSize || ep.z < 0 || ep.z >= gridSize) {
+            return { valid: false, error: `Exit point (${ep.x}, ${ep.z}) is out of bounds [0, ${gridSize})` };
+          }
+        }
+      } else if (hasV1Exit) {
+        const ep = legacy.exitPoint!;
+        if (typeof ep.x !== 'number' || typeof ep.z !== 'number' ||
+            ep.x < 0 || ep.x >= gridSize || ep.z < 0 || ep.z >= gridSize) {
+          return { valid: false, error: `Exit point (${ep.x}, ${ep.z}) is out of bounds [0, ${gridSize})` };
+        }
       }
 
       return {
@@ -294,6 +375,54 @@ export class MapStorageService {
     } catch (e) {
       return { valid: false, error: 'Invalid JSON format' };
     }
+  }
+
+  /**
+   * Validate that a map is ready for gameplay (not just structurally valid).
+   * Checks for spawn/exit presence, coordinate validity, and tile dimensions.
+   * @param state TerrainGridState to validate
+   * @returns Playability result with error message if not playable
+   */
+  public validateMapPlayability(state: TerrainGridState): { playable: boolean; error?: string } {
+    if (!state) {
+      return { playable: false, error: 'Map data is missing' };
+    }
+
+    if (typeof state.gridSize !== 'number' || state.gridSize < MIN_GRID_SIZE || state.gridSize > MAX_GRID_SIZE) {
+      return { playable: false, error: `Invalid grid size: ${state.gridSize}` };
+    }
+
+    if (!Array.isArray(state.tiles) || state.tiles.length !== state.gridSize) {
+      return { playable: false, error: 'Tiles array is missing or incorrectly dimensioned' };
+    }
+
+    // Resolve spawn/exit with legacy fallback
+    const legacy = state as unknown as TerrainGridStateLegacy;
+    const spawnPoints = (Array.isArray(state.spawnPoints) && state.spawnPoints.length > 0)
+      ? state.spawnPoints
+      : (legacy.spawnPoint ? [legacy.spawnPoint] : []);
+    const exitPoints = (Array.isArray(state.exitPoints) && state.exitPoints.length > 0)
+      ? state.exitPoints
+      : (legacy.exitPoint ? [legacy.exitPoint] : []);
+
+    if (spawnPoints.length === 0) {
+      return { playable: false, error: 'Map has no spawn points' };
+    }
+
+    if (exitPoints.length === 0) {
+      return { playable: false, error: 'Map has no exit points' };
+    }
+
+    // Check spawn != exit (all combinations)
+    for (const sp of spawnPoints) {
+      for (const ep of exitPoints) {
+        if (sp.x === ep.x && sp.z === ep.z) {
+          return { playable: false, error: `Spawn and exit overlap at (${sp.x}, ${sp.z})` };
+        }
+      }
+    }
+
+    return { playable: true };
   }
 
   /**

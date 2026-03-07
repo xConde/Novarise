@@ -55,11 +55,12 @@ describe('MapBridgeService', () => {
     board.forEach(row => expect(row.length).toBe(10));
   });
 
-  it('should handle small grids (1x1)', () => {
+  it('should clamp small grids (1x1) to minimum size (5)', () => {
     const state = createMinimalState(1);
     const { board, width, height } = service.convertToGameBoard(state);
-    expect(width).toBe(1);
-    expect(height).toBe(1);
+    expect(width).toBe(5);
+    expect(height).toBe(5);
+    // Board is filled with BASE tiles (missing tile columns default to BASE)
     expect(board[0][0].type).toBe(BlockType.BASE);
   });
 

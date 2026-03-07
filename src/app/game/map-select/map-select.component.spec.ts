@@ -29,13 +29,14 @@ describe('MapSelectComponent', () => {
   let routerSpy: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
-    mapStorageSpy = jasmine.createSpyObj('MapStorageService', ['getAllMaps', 'loadMap', 'deleteMap']);
+    mapStorageSpy = jasmine.createSpyObj('MapStorageService', ['getAllMaps', 'loadMap', 'deleteMap', 'validateMapPlayability']);
     mapBridgeSpy = jasmine.createSpyObj('MapBridgeService', ['setEditorMapState', 'clearEditorMap']);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     mapStorageSpy.getAllMaps.and.returnValue(MOCK_MAPS);
     mapStorageSpy.loadMap.and.returnValue(MOCK_TERRAIN_STATE);
     mapStorageSpy.deleteMap.and.returnValue(true);
+    mapStorageSpy.validateMapPlayability.and.returnValue({ playable: true });
     routerSpy.navigate.and.returnValue(Promise.resolve(true));
 
     await TestBed.configureTestingModule({
@@ -104,6 +105,17 @@ describe('MapSelectComponent', () => {
     mapStorageSpy.loadMap.and.returnValue(null);
     fixture.detectChanges();
     component.selectMap(MOCK_MAPS[0]);
+    expect(mapBridgeSpy.setEditorMapState).not.toHaveBeenCalled();
+    expect(routerSpy.navigate).not.toHaveBeenCalled();
+  });
+
+  it('selectMap should not navigate when map fails playability validation', () => {
+    mapStorageSpy.validateMapPlayability.and.returnValue({ playable: false, error: 'Map has no spawn points' });
+    spyOn(window, 'alert');
+    fixture.detectChanges();
+    component.selectMap(MOCK_MAPS[0]);
+    expect(mapStorageSpy.validateMapPlayability).toHaveBeenCalledOnceWith(MOCK_TERRAIN_STATE);
+    expect(window.alert).toHaveBeenCalledWith('This map cannot be played: Map has no spawn points');
     expect(mapBridgeSpy.setEditorMapState).not.toHaveBeenCalled();
     expect(routerSpy.navigate).not.toHaveBeenCalled();
   });

@@ -32,12 +32,19 @@ export class MapSelectComponent implements OnInit, OnDestroy {
 
   selectMap(map: MapMetadata): void {
     const mapData = this.mapStorage.loadMap(map.id);
-    if (mapData) {
-      this.mapBridge.setEditorMapState(mapData);
-      this.router.navigate(['/play']);
-    } else {
+    if (!mapData) {
       this.maps = this.maps.filter(m => m.id !== map.id);
+      return;
     }
+
+    const playability = this.mapStorage.validateMapPlayability(mapData);
+    if (!playability.playable) {
+      alert(`This map cannot be played: ${playability.error}`);
+      return;
+    }
+
+    this.mapBridge.setEditorMapState(mapData);
+    this.router.navigate(['/play']);
   }
 
   quickPlay(): void {

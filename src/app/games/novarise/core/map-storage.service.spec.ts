@@ -1,14 +1,28 @@
 import { TestBed } from '@angular/core/testing';
 import { MapStorageService, MapMetadata, SavedMap } from './map-storage.service';
 import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
+import { TerrainType } from '../models/terrain-types.enum';
+
+/** Build a valid NxN tile grid filled with BEDROCK. */
+function buildValidTiles(size: number): TerrainType[][] {
+  const tiles: TerrainType[][] = [];
+  for (let x = 0; x < size; x++) {
+    tiles[x] = [];
+    for (let z = 0; z < size; z++) {
+      tiles[x][z] = TerrainType.BEDROCK;
+    }
+  }
+  return tiles;
+}
 
 function testMapData(overrides?: Record<string, unknown>): TerrainGridState {
+  const gridSize = (overrides?.['gridSize'] as number) ?? 10;
   return {
-    gridSize: 25,
-    tiles: [],
+    gridSize,
+    tiles: buildValidTiles(gridSize),
     heightMap: [],
-    spawnPoints: [],
-    exitPoints: [],
+    spawnPoints: [{ x: 0, z: 0 }],
+    exitPoints: [{ x: gridSize - 1, z: gridSize - 1 }],
     version: '2.0.0',
     ...overrides
   } as TerrainGridState;
@@ -63,7 +77,7 @@ describe('MapStorageService', () => {
 
       const savedMap: SavedMap = JSON.parse(savedJson);
       expect(savedMap.metadata.name).toBe('Test Map');
-      expect(savedMap.data.gridSize).toBe(25);
+      expect(savedMap.data.gridSize).toBe(10);
     });
 
     it('should update metadata with correct timestamps', () => {
@@ -90,7 +104,7 @@ describe('MapStorageService', () => {
       const originalCreatedAt = originalMap.metadata.createdAt;
 
       // Wait a bit to ensure different timestamp
-      const updatedData = testMapData({ tiles: [1, 2, 3] });
+      const updatedData = testMapData({ gridSize: 8 });
       service.saveMap('Updated Name', updatedData, mapId);
 
       const updatedJson = localStorageMock['novarise_map_' + mapId];
@@ -98,7 +112,7 @@ describe('MapStorageService', () => {
 
       expect(updatedMap.metadata.name).toBe('Updated Name');
       expect(updatedMap.metadata.createdAt).toBe(originalCreatedAt);
-      expect(updatedMap.data.tiles as unknown).toEqual([1, 2, 3] as unknown);
+      expect(updatedMap.data.gridSize).toBe(8);
     });
 
     it('should set saved map as current map', () => {
@@ -123,14 +137,14 @@ describe('MapStorageService', () => {
 
   describe('loadMap', () => {
     it('should return map data when map exists', () => {
-      const mapData = testMapData({ tiles: [[1, 2]] });
+      const mapData = testMapData();
       const mapId = service.saveMap('Test Map', mapData);
 
       const loadedData = service.loadMap(mapId);
 
       expect(loadedData).toBeTruthy();
-      expect(loadedData!.gridSize).toBe(25);
-      expect(loadedData!.tiles as unknown).toEqual([[1, 2]]);
+      expect(loadedData!.gridSize).toBe(10);
+      expect(loadedData!.tiles.length).toBe(10);
     });
 
     it('should return null when map does not exist', () => {
@@ -265,13 +279,13 @@ describe('MapStorageService', () => {
 
   describe('loadCurrentMap', () => {
     it('should return current map data', () => {
-      const mapData = testMapData({ tiles: [[1]] });
+      const mapData = testMapData();
       service.saveMap('Test Map', mapData);
 
       const loadedData = service.loadCurrentMap();
 
       expect(loadedData).toBeTruthy();
-      expect(loadedData!.tiles as unknown).toEqual([[1]]);
+      expect(loadedData!.gridSize).toBe(10);
     });
 
     it('should return null when no current map', () => {
@@ -311,7 +325,7 @@ describe('MapStorageService', () => {
 
   describe('exportMapToJson', () => {
     it('should return JSON string for existing map', () => {
-      const mapData = testMapData({ tiles: [[1, 2, 3]] });
+      const mapData = testMapData();
       const mapId = service.saveMap('Test Map', mapData);
 
       const json = service.exportMapToJson(mapId);
@@ -337,9 +351,9 @@ describe('MapStorageService', () => {
           createdAt: Date.now(),
           updatedAt: Date.now(),
           version: '1.0.0',
-          gridSize: 25
+          gridSize: 10
         },
-        data: testMapData({ tiles: [[1, 2]] })
+        data: testMapData()
       };
 
       const mapId = service.importMapFromJson(JSON.stringify(savedMap));
@@ -348,7 +362,7 @@ describe('MapStorageService', () => {
       expect(mapId).not.toBe('old_id'); // Should generate new ID
 
       const loadedData = service.loadMap(mapId!);
-      expect(loadedData!.tiles as unknown).toEqual([[1, 2]]);
+      expect(loadedData!.gridSize).toBe(10);
     });
 
     it('should allow name override on import', () => {
@@ -359,7 +373,7 @@ describe('MapStorageService', () => {
           createdAt: Date.now(),
           updatedAt: Date.now(),
           version: '1.0.0',
-          gridSize: 25
+          gridSize: 10
         },
         data: testMapData()
       };
@@ -420,9 +434,9 @@ describe('MapStorageService', () => {
           createdAt: Date.now(),
           updatedAt: Date.now(),
           version: '1.0.0',
-          gridSize: 25
+          gridSize: 10
         },
-        data: testMapData({ tiles: [[1, 2, 3]] })
+        data: testMapData()
       };
 
       const result = service.validateMapJson(JSON.stringify(savedMap));
@@ -492,7 +506,7 @@ describe('MapStorageService', () => {
     it('should use "Unnamed Map" when metadata.name is missing', () => {
       const savedMap = {
         metadata: {},  // no name
-        data: { gridSize: 25, tiles: [] }
+        data: testMapData()
       };
 
       const result = service.validateMapJson(JSON.stringify(savedMap));
@@ -693,7 +707,7 @@ describe('MapStorageService', () => {
           createdAt: Date.now(),
           updatedAt: Date.now(),
           version: '1.0.0',
-          gridSize: 25
+          gridSize: 10
         },
         data: testMapData()
       };
@@ -756,7 +770,7 @@ describe('MapStorageService', () => {
           createdAt: Date.now(),
           updatedAt: Date.now(),
           version: '1.0.0',
-          gridSize: 25
+          gridSize: 10
         },
         data: testMapData({ gridSize: 'invalid' as unknown })
       };
@@ -774,7 +788,7 @@ describe('MapStorageService', () => {
           createdAt: Date.now(),
           updatedAt: Date.now(),
           version: '1.0.0',
-          gridSize: 25
+          gridSize: 10
         },
         data: testMapData()
       };
@@ -795,6 +809,306 @@ describe('MapStorageService', () => {
       const metadata = service.getMapMetadata(mapId!);
 
       expect(metadata!.name).toBe('Imported Map');
+    });
+  });
+
+  describe('validateMapJson (hardened)', () => {
+    it('should reject gridSize too small (< 5)', () => {
+      const savedMap = {
+        metadata: { name: 'Tiny' },
+        data: { gridSize: 3, tiles: buildValidTiles(3), spawnPoints: [], exitPoints: [], version: '2.0.0' }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Grid size must be between');
+      expect(result.error).toContain('3');
+    });
+
+    it('should reject gridSize too large (> 30)', () => {
+      const savedMap = {
+        metadata: { name: 'Huge' },
+        data: { gridSize: 50, tiles: buildValidTiles(50), spawnPoints: [], exitPoints: [], version: '2.0.0' }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Grid size must be between');
+      expect(result.error).toContain('50');
+    });
+
+    it('should reject jagged tile arrays (unequal column lengths)', () => {
+      const tiles = buildValidTiles(5);
+      tiles[2] = tiles[2].slice(0, 3); // make column 2 shorter
+      const savedMap = {
+        metadata: { name: 'Jagged' },
+        data: { gridSize: 5, tiles, spawnPoints: [], exitPoints: [], version: '2.0.0' }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('column 2');
+      expect(result.error).toContain('length 3');
+    });
+
+    it('should reject tiles array length mismatch with gridSize', () => {
+      const savedMap = {
+        metadata: { name: 'Short' },
+        data: { gridSize: 10, tiles: buildValidTiles(7), spawnPoints: [], exitPoints: [], version: '2.0.0' }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Tiles array length (7)');
+      expect(result.error).toContain('gridSize (10)');
+    });
+
+    it('should reject invalid terrain type values', () => {
+      const tiles = buildValidTiles(5);
+      tiles[1][2] = 'lava' as TerrainType;
+      const savedMap = {
+        metadata: { name: 'BadTerrain' },
+        data: { gridSize: 5, tiles, spawnPoints: [], exitPoints: [], version: '2.0.0' }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Invalid terrain type');
+      expect(result.error).toContain('lava');
+      expect(result.error).toContain('[1][2]');
+    });
+
+    it('should reject out-of-bounds spawn point coordinates', () => {
+      const savedMap = {
+        metadata: { name: 'OOB Spawn' },
+        data: { gridSize: 5, tiles: buildValidTiles(5), spawnPoints: [{ x: 10, z: 0 }], exitPoints: [{ x: 4, z: 4 }], version: '2.0.0' }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Spawn point');
+      expect(result.error).toContain('out of bounds');
+    });
+
+    it('should reject out-of-bounds exit point coordinates', () => {
+      const savedMap = {
+        metadata: { name: 'OOB Exit' },
+        data: { gridSize: 5, tiles: buildValidTiles(5), spawnPoints: [{ x: 0, z: 0 }], exitPoints: [{ x: -1, z: 2 }], version: '2.0.0' }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Exit point');
+      expect(result.error).toContain('out of bounds');
+    });
+
+    it('should reject excessive spawn points (> 4)', () => {
+      const spawnPoints = [
+        { x: 0, z: 0 }, { x: 0, z: 1 }, { x: 0, z: 2 },
+        { x: 0, z: 3 }, { x: 0, z: 4 }
+      ];
+      const savedMap = {
+        metadata: { name: 'Too many spawns' },
+        data: { gridSize: 5, tiles: buildValidTiles(5), spawnPoints, exitPoints: [{ x: 4, z: 4 }], version: '2.0.0' }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Too many spawn points');
+    });
+
+    it('should reject excessive exit points (> 4)', () => {
+      const exitPoints = [
+        { x: 4, z: 0 }, { x: 4, z: 1 }, { x: 4, z: 2 },
+        { x: 4, z: 3 }, { x: 4, z: 4 }
+      ];
+      const savedMap = {
+        metadata: { name: 'Too many exits' },
+        data: { gridSize: 5, tiles: buildValidTiles(5), spawnPoints: [{ x: 0, z: 0 }], exitPoints, version: '2.0.0' }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Too many exit points');
+    });
+
+    it('should accept minimum valid grid (5x5)', () => {
+      const savedMap = {
+        metadata: { name: 'Minimum' },
+        data: { gridSize: 5, tiles: buildValidTiles(5), spawnPoints: [{ x: 0, z: 0 }], exitPoints: [{ x: 4, z: 4 }], version: '2.0.0' }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(true);
+    });
+
+    it('should accept maximum valid grid (30x30)', () => {
+      const savedMap = {
+        metadata: { name: 'Maximum' },
+        data: { gridSize: 30, tiles: buildValidTiles(30), spawnPoints: [{ x: 0, z: 0 }], exitPoints: [{ x: 29, z: 29 }], version: '2.0.0' }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(true);
+    });
+
+    it('should accept legacy single spawnPoint/exitPoint format', () => {
+      const savedMap = {
+        metadata: { name: 'Legacy' },
+        data: {
+          gridSize: 5,
+          tiles: buildValidTiles(5),
+          spawnPoint: { x: 0, z: 0 },
+          exitPoint: { x: 4, z: 4 },
+          version: '1.0.0'
+        }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(true);
+    });
+
+    it('should reject legacy spawnPoint with out-of-bounds coordinates', () => {
+      const savedMap = {
+        metadata: { name: 'Legacy OOB' },
+        data: {
+          gridSize: 5,
+          tiles: buildValidTiles(5),
+          spawnPoint: { x: 5, z: 0 },
+          exitPoint: { x: 4, z: 4 },
+          version: '1.0.0'
+        }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Spawn point');
+      expect(result.error).toContain('out of bounds');
+    });
+
+    it('should reject legacy exitPoint with out-of-bounds coordinates', () => {
+      const savedMap = {
+        metadata: { name: 'Legacy OOB Exit' },
+        data: {
+          gridSize: 5,
+          tiles: buildValidTiles(5),
+          spawnPoint: { x: 0, z: 0 },
+          exitPoint: { x: 4, z: 99 },
+          version: '1.0.0'
+        }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Exit point');
+      expect(result.error).toContain('out of bounds');
+    });
+
+    it('should accept map with no spawn/exit points (empty arrays)', () => {
+      const savedMap = {
+        metadata: { name: 'No Points' },
+        data: { gridSize: 5, tiles: buildValidTiles(5), spawnPoints: [], exitPoints: [], version: '2.0.0' }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(true);
+    });
+
+    it('should accept all four terrain types', () => {
+      const tiles = buildValidTiles(5);
+      tiles[0][0] = TerrainType.BEDROCK;
+      tiles[1][0] = TerrainType.CRYSTAL;
+      tiles[2][0] = TerrainType.MOSS;
+      tiles[3][0] = TerrainType.ABYSS;
+      const savedMap = {
+        metadata: { name: 'All Types' },
+        data: { gridSize: 5, tiles, spawnPoints: [{ x: 0, z: 0 }], exitPoints: [{ x: 4, z: 4 }], version: '2.0.0' }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(true);
+    });
+
+    it('should reject non-array tiles column', () => {
+      const tiles = buildValidTiles(5);
+      (tiles as unknown[])[3] = 'not-an-array';
+      const savedMap = {
+        metadata: { name: 'BadCol' },
+        data: { gridSize: 5, tiles, spawnPoints: [], exitPoints: [], version: '2.0.0' }
+      };
+      const result = service.validateMapJson(JSON.stringify(savedMap));
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('column 3');
+      expect(result.error).toContain('not an array');
+    });
+  });
+
+  describe('validateMapPlayability', () => {
+    it('should return not playable for null state', () => {
+      const result = service.validateMapPlayability(null as unknown as TerrainGridState);
+      expect(result.playable).toBe(false);
+      expect(result.error).toContain('missing');
+    });
+
+    it('should return not playable for missing spawn points', () => {
+      const state = testMapData({ spawnPoints: [], exitPoints: [{ x: 9, z: 9 }] });
+      const result = service.validateMapPlayability(state);
+      expect(result.playable).toBe(false);
+      expect(result.error).toBe('Map has no spawn points');
+    });
+
+    it('should return not playable for missing exit points', () => {
+      const state = testMapData({ spawnPoints: [{ x: 0, z: 0 }], exitPoints: [] });
+      const result = service.validateMapPlayability(state);
+      expect(result.playable).toBe(false);
+      expect(result.error).toBe('Map has no exit points');
+    });
+
+    it('should return not playable when spawn and exit overlap', () => {
+      const state = testMapData({ spawnPoints: [{ x: 3, z: 3 }], exitPoints: [{ x: 3, z: 3 }] });
+      const result = service.validateMapPlayability(state);
+      expect(result.playable).toBe(false);
+      expect(result.error).toContain('overlap');
+    });
+
+    it('should return not playable for invalid gridSize', () => {
+      const state = testMapData({ gridSize: 2 });
+      const result = service.validateMapPlayability(state);
+      expect(result.playable).toBe(false);
+      expect(result.error).toContain('Invalid grid size');
+    });
+
+    it('should return not playable for tiles array mismatch', () => {
+      const state = testMapData();
+      state.tiles = buildValidTiles(5); // tiles of 5 but gridSize of 10
+      const result = service.validateMapPlayability(state);
+      expect(result.playable).toBe(false);
+      expect(result.error).toContain('incorrectly dimensioned');
+    });
+
+    it('should return playable for valid map', () => {
+      const state = testMapData();
+      const result = service.validateMapPlayability(state);
+      expect(result.playable).toBe(true);
+      expect(result.error).toBeUndefined();
+    });
+
+    it('should accept legacy single spawnPoint/exitPoint format', () => {
+      const state = {
+        gridSize: 10,
+        tiles: buildValidTiles(10),
+        heightMap: [],
+        spawnPoints: [] as { x: number; z: number }[],
+        exitPoints: [] as { x: number; z: number }[],
+        spawnPoint: { x: 0, z: 0 },
+        exitPoint: { x: 9, z: 9 },
+        version: '1.0.0'
+      } as unknown as TerrainGridState;
+      const result = service.validateMapPlayability(state);
+      expect(result.playable).toBe(true);
+    });
+
+    it('should detect overlap between any spawn/exit pair', () => {
+      const state = testMapData({
+        spawnPoints: [{ x: 0, z: 0 }, { x: 5, z: 5 }],
+        exitPoints: [{ x: 9, z: 9 }, { x: 5, z: 5 }]
+      });
+      const result = service.validateMapPlayability(state);
+      expect(result.playable).toBe(false);
+      expect(result.error).toContain('overlap at (5, 5)');
+    });
+
+    it('should return playable for multiple distinct spawn and exit points', () => {
+      const state = testMapData({
+        spawnPoints: [{ x: 0, z: 0 }, { x: 0, z: 1 }],
+        exitPoints: [{ x: 9, z: 8 }, { x: 9, z: 9 }]
+      });
+      const result = service.validateMapPlayability(state);
+      expect(result.playable).toBe(true);
     });
   });
 });
