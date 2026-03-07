@@ -458,3 +458,27 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Step 2: Update STRATEGIC_AUDIT.md with completed engine-depth sprint summary
 - [x] Step 3: Run full test suite — confirm all 1638+ tests green
 - [x] Step 4: Update MEMORY.md with final branch state
+
+---
+
+## Red Team Pass 3 — Mobile Responsive + Full Branch Audit (2026-03-07)
+
+### Finding 1: DOUBLE_SPAWN modifier is dead code (CRITICAL)
+**Location:** `game-modifier.model.ts:66` defines `waveCountMultiplier: 2.0`, `game-modifier.model.ts:127-128` computes merged value
+**Risk:** `waveCountMultiplier` is computed by `mergeModifierEffects()` but **never consumed** anywhere. No wave service or game-board component reads it. Players who enable DOUBLE_SPAWN get a 40% score bonus for zero difficulty increase. This is an exploit — free score multiplier.
+**Fix:** Wire `waveCountMultiplier` into wave spawning logic, multiplying `entry.count` when building spawn queues.
+
+### Finding 2: `--z-index-hud` CSS variable undefined (MEDIUM)
+**Location:** `game-board.component.scss:36`
+**Risk:** `.nav-buttons` uses `z-index: var(--z-index-hud)` but only `--z-index-base` (1), `--z-index-overlay` (10), `--z-index-modal` (100) exist in `styles.css`. Browser resolves undefined custom property to `auto`, making nav button stacking order unpredictable. Could be hidden behind game overlays.
+**Fix:** Replace with `var(--z-index-overlay)`.
+
+### Finding 3: Landscape bottom-sheet too tall (MEDIUM)
+**Location:** `edit-controls.component.scss:154` — `max-height: 55vh` on mobile
+**Risk:** On landscape phones (400px viewport height), panel occupies 220px (55%), leaving only 180px for 3D canvas. Editor becomes nearly unusable in landscape.
+**Fix:** Add `@media (max-height: 500px)` rule reducing `max-height` to `40vh`.
+
+### Verified NOT bugs (agent overstated):
+- Status effects orphaned on death — already lazily cleaned in `StatusEffectService.update()` via `!enemy || enemy.health <= 0` check (line 78)
+- Physics accumulator dropping frames — intentional spiral-of-death prevention, not a bug
+- MinHeap bubbleUp bounds — `while (index > 0)` already prevents invalid parent access

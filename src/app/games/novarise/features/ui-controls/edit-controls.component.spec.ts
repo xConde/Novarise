@@ -46,12 +46,16 @@ describe('EditControlsComponent', () => {
     it('should not render template section when templates is empty', () => {
       component.templates = [];
       fixture.detectChanges();
+      component.isCollapsed = false;
+      fixture.detectChanges();
       const el = fixture.nativeElement as HTMLElement;
       expect(el.querySelector('.template-grid')).toBeNull();
     });
 
     it('should render template buttons when templates are provided', () => {
       component.templates = MOCK_TEMPLATES;
+      fixture.detectChanges();
+      component.isCollapsed = false;
       fixture.detectChanges();
       const buttons = fixture.nativeElement.querySelectorAll('.template-btn');
       expect(buttons.length).toBe(2);
@@ -62,12 +66,16 @@ describe('EditControlsComponent', () => {
     it('should set title attribute from template description', () => {
       component.templates = MOCK_TEMPLATES;
       fixture.detectChanges();
+      component.isCollapsed = false;
+      fixture.detectChanges();
       const buttons = fixture.nativeElement.querySelectorAll('.template-btn');
       expect(buttons[0].getAttribute('title')).toBe('A classic layout');
     });
 
     it('should emit templateSelect when a template button is clicked', () => {
       component.templates = MOCK_TEMPLATES;
+      fixture.detectChanges();
+      component.isCollapsed = false;
       fixture.detectChanges();
       spyOn(component.templateSelect, 'emit');
       const buttons = fixture.nativeElement.querySelectorAll('.template-btn');

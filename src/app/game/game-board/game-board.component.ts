@@ -562,7 +562,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.gameStateService.startWave();
-    this.waveService.startWave(this.gameStateService.getState().wave, this.scene);
+    const waveCountMult = this.gameStateService.getModifierEffects().waveCountMultiplier ?? 1;
+    this.waveService.startWave(this.gameStateService.getState().wave, this.scene, waveCountMult);
     this.audioService.playWaveStart();
   }
 

@@ -33,7 +33,7 @@
     left: var(--spacing-md);
     display: flex;
     gap: var(--spacing-xs);
-    z-index: var(--z-index-hud);
+    z-index: var(--z-index-overlay);
   }
 
   .nav-back-btn {

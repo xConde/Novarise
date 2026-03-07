@@ -97,7 +97,7 @@ export class WaveService {
     return { entries, reward };
   }
 
-  startWave(waveNumber: number, scene: THREE.Scene): void {
+  startWave(waveNumber: number, scene: THREE.Scene, waveCountMultiplier: number = 1): void {
     const index = waveNumber - 1;
 
     let waveDef: WaveDefinition | undefined;
@@ -114,10 +114,12 @@ export class WaveService {
       return;
     }
 
+    const countMultiplier = Math.max(1, waveCountMultiplier);
+
     this.spawnQueues = waveDef.entries.map(entry => ({
       type: entry.type,
       spawnInterval: entry.spawnInterval,
-      remaining: entry.count,
+      remaining: Math.round(entry.count * countMultiplier),
       timeSinceLastSpawn: entry.spawnInterval // spawn first immediately
     }));
 
