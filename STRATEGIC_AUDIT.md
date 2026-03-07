@@ -564,3 +564,41 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Fix Findings 5-6: Remove dead code (deleteMapClick, goHome)
 - [x] Fix Finding 7: Replace 0.6rem magic number
 - [x] Run full test suite (1656/1656), commit, push
+
+## Red Team Pass 6 — Final Branch Audit (2026-03-07)
+
+### Finding 1: Minimap permanently broken after restart (CRITICAL)
+**Location:** `game-board.component.ts:636` (cleanup) vs `:303` (init)
+**Risk:** `restartGame()` calls `minimapService.cleanup()` which destroys canvas+ctx. `init()` only runs in `ngAfterViewInit()` (one-time hook). Minimap is permanently dead after "Play Again".
+**Fix:** Call `minimapService.init(container)` in `restartGame()` after cleanup.
+
+### Finding 2: totalInvested tracks base cost, not modified cost (MEDIUM)
+**Location:** `tower-combat.service.ts:110` (registerTower)
+**Risk:** With EXPENSIVE_TOWERS/GLASS_CANNON, player pays modified cost but `totalInvested` records base cost. Sell refund is based on base, not actual spend — player loses gold.
+**Fix:** Pass actual cost spent to `registerTower()` and thread modified upgrade costs.
+
+### Finding 3: Mortar DoT damage ignores towerDamageMultiplier (MEDIUM)
+**Location:** `tower-combat.service.ts:601` (applyDamage → createMortarZone)
+**Risk:** Fresh `getEffectiveStats()` call bypasses the damage multiplier. Mortar zones always use base dotDamage. With GLASS_CANNON, mortar pays 2x cost for 1x DoT.
+**Fix:** Scale dotDamage by `towerDamageMultiplier` in the mortar zone creation path.
+
+### Finding 4: Undo/redo corrupts spawn/exit with multi-spawn maps (MEDIUM)
+**Location:** `novarise.component.ts:752-764`
+**Risk:** SpawnPointCommand snapshots single `previousSpawn` but maps can have multiple spawn points. Undo restores only one, losing the rest.
+**Fix:** Snapshot full `spawnPoints[]` array and restore on undo.
+
+### Verified NOT bugs:
+- towerDamageMultiplier resets on restart (cleanup sets to 1)
+- towerCostMultiplier applied in all 4 usage sites
+- CSS variables all defined in styles.css
+- PathVisualization cleanup/recreate cycle correct
+- ObjectPool drain/reuse correct
+- startingGoldMultiplier on difficulty change correct
+- Three.js disposal in spawn/exit markers correct
+
+## Deployment Checklist — Red Team Pass 6
+- [x] Fix Finding 1: Re-init minimap after restart
+- [x] Fix Finding 2: Thread actual cost into registerTower + upgrades
+- [x] Fix Finding 3: Scale mortar DoT by towerDamageMultiplier
+- [x] Fix Finding 4: Snapshot full spawn/exit arrays for undo
+- [x] Run full test suite (1656/1656), commit, push

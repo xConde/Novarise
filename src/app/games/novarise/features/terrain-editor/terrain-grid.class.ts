@@ -385,6 +385,36 @@ export class TerrainGrid {
     return this.exitPoints;
   }
 
+  /** Replace all spawn points (used by undo/redo to restore full array). */
+  public setSpawnPoints(points: { x: number, z: number }[]): void {
+    // Clear buildability on old spawn points
+    for (const p of this.spawnPoints) {
+      const tile = this.tiles[p.x]?.[p.z];
+      if (tile) {
+        this.buildableGrid[p.x][p.z] = (tile.type !== TerrainType.CRYSTAL && tile.type !== TerrainType.ABYSS);
+      }
+    }
+    this.spawnPoints = points.filter(p => this.isValidPosition(p.x, p.z)).map(p => ({ ...p }));
+    for (const p of this.spawnPoints) {
+      this.buildableGrid[p.x][p.z] = false;
+    }
+  }
+
+  /** Replace all exit points (used by undo/redo to restore full array). */
+  public setExitPoints(points: { x: number, z: number }[]): void {
+    // Clear buildability on old exit points
+    for (const p of this.exitPoints) {
+      const tile = this.tiles[p.x]?.[p.z];
+      if (tile) {
+        this.buildableGrid[p.x][p.z] = (tile.type !== TerrainType.CRYSTAL && tile.type !== TerrainType.ABYSS);
+      }
+    }
+    this.exitPoints = points.filter(p => this.isValidPosition(p.x, p.z)).map(p => ({ ...p }));
+    for (const p of this.exitPoints) {
+      this.buildableGrid[p.x][p.z] = false;
+    }
+  }
+
   public isBuildable(x: number, z: number): boolean {
     if (!this.isValidPosition(x, z)) return false;
     return this.buildableGrid[x][z];

@@ -748,17 +748,21 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           if (this.spawnMarkers.length > 0) this.flashMarkerRejection(this.spawnMarkers[0]);
           return;
         }
-        // Snapshot before toggle for undo
-        const previousSpawn = this.terrainGrid.getSpawnPoint();
+        // Snapshot full spawn array before toggle for undo
+        const previousSpawns = this.terrainGrid.getSpawnPoints().map(p => ({ ...p }));
         this.terrainGrid.addSpawnPoint(x, z);
         this.updateSpawnMarkers();
         this.flashTileEdit(tileMesh);
         // Record command immediately (not part of stroke)
         const command = new SpawnPointCommand(
-          previousSpawn ? { ...previousSpawn } : null,
+          previousSpawns,
           { x, z },
+          (points) => {
+            this.terrainGrid.setSpawnPoints(points);
+            this.updateSpawnMarkers();
+          },
           (sx, sz) => {
-            this.terrainGrid.setSpawnPoint(sx, sz);
+            this.terrainGrid.addSpawnPoint(sx, sz);
             this.updateSpawnMarkers();
           }
         );
@@ -777,17 +781,21 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           if (this.exitMarkers.length > 0) this.flashMarkerRejection(this.exitMarkers[0]);
           return;
         }
-        // Snapshot before toggle for undo
-        const previousExit = this.terrainGrid.getExitPoint();
+        // Snapshot full exit array before toggle for undo
+        const previousExits = this.terrainGrid.getExitPoints().map(p => ({ ...p }));
         this.terrainGrid.addExitPoint(x, z);
         this.updateExitMarkers();
         this.flashTileEdit(tileMesh);
         // Record command immediately (not part of stroke)
         const command = new ExitPointCommand(
-          previousExit ? { ...previousExit } : null,
+          previousExits,
           { x, z },
+          (points) => {
+            this.terrainGrid.setExitPoints(points);
+            this.updateExitMarkers();
+          },
           (ex, ez) => {
-            this.terrainGrid.setExitPoint(ex, ez);
+            this.terrainGrid.addExitPoint(ex, ez);
             this.updateExitMarkers();
           }
         );

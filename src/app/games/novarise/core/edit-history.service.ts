@@ -113,19 +113,20 @@ export class SpawnPointCommand implements EditCommand {
   timestamp = Date.now();
 
   constructor(
-    private previousSpawn: GridPoint | null,
+    private previousSpawns: GridPoint[],
     private newSpawn: GridPoint,
-    private applySpawn: (x: number, z: number) => void
+    private applySpawns: (points: GridPoint[]) => void,
+    private toggleSpawn: (x: number, z: number) => void
   ) {}
 
   undo(): void {
-    if (this.previousSpawn) {
-      this.applySpawn(this.previousSpawn.x, this.previousSpawn.z);
-    }
+    this.applySpawns(this.previousSpawns);
   }
 
   redo(): void {
-    this.applySpawn(this.newSpawn.x, this.newSpawn.z);
+    // Restore previous state first, then toggle the new point
+    this.applySpawns(this.previousSpawns);
+    this.toggleSpawn(this.newSpawn.x, this.newSpawn.z);
   }
 }
 
@@ -138,19 +139,20 @@ export class ExitPointCommand implements EditCommand {
   timestamp = Date.now();
 
   constructor(
-    private previousExit: GridPoint | null,
+    private previousExits: GridPoint[],
     private newExit: GridPoint,
-    private applyExit: (x: number, z: number) => void
+    private applyExits: (points: GridPoint[]) => void,
+    private toggleExit: (x: number, z: number) => void
   ) {}
 
   undo(): void {
-    if (this.previousExit) {
-      this.applyExit(this.previousExit.x, this.previousExit.z);
-    }
+    this.applyExits(this.previousExits);
   }
 
   redo(): void {
-    this.applyExit(this.newExit.x, this.newExit.z);
+    // Restore previous state first, then toggle the new point
+    this.applyExits(this.previousExits);
+    this.toggleExit(this.newExit.x, this.newExit.z);
   }
 }
 

@@ -97,7 +97,7 @@ export class TowerCombatService {
     return mesh;
   }
 
-  registerTower(row: number, col: number, type: TowerType, mesh: THREE.Group): void {
+  registerTower(row: number, col: number, type: TowerType, mesh: THREE.Group, actualCost: number = TOWER_CONFIGS[type].cost): void {
     const key = `${row}-${col}`;
     this.placedTowers.set(key, {
       id: key,
@@ -107,29 +107,29 @@ export class TowerCombatService {
       col,
       lastFireTime: -Infinity,
       kills: 0,
-      totalInvested: TOWER_CONFIGS[type].cost,
+      totalInvested: actualCost,
       targetingMode: DEFAULT_TARGETING_MODE,
       mesh
     });
   }
 
-  upgradeTower(key: string): boolean {
+  upgradeTower(key: string, actualCost?: number): boolean {
     const tower = this.placedTowers.get(key);
     if (!tower || tower.level >= MAX_TOWER_LEVEL) return false;
     // L2->L3 requires specialization — use upgradeTowerWithSpec instead
     if (tower.level === MAX_TOWER_LEVEL - 1) return false;
 
-    const cost = getUpgradeCost(tower.type, tower.level);
+    const cost = actualCost ?? getUpgradeCost(tower.type, tower.level);
     tower.level++;
     tower.totalInvested += cost;
     return true;
   }
 
-  upgradeTowerWithSpec(key: string, spec: TowerSpecialization): boolean {
+  upgradeTowerWithSpec(key: string, spec: TowerSpecialization, actualCost?: number): boolean {
     const tower = this.placedTowers.get(key);
     if (!tower || tower.level !== MAX_TOWER_LEVEL - 1) return false;
 
-    const cost = getUpgradeCost(tower.type, tower.level);
+    const cost = actualCost ?? getUpgradeCost(tower.type, tower.level);
     tower.level++;
     tower.specialization = spec;
     tower.totalInvested += cost;
@@ -600,7 +600,10 @@ export class TowerCombatService {
       const tower = this.placedTowers.get(proj.towerKey);
       const stats = tower ? getEffectiveStats(tower.type, tower.level, tower.specialization) : null;
       if (stats) {
-        const initialKills = this.createMortarZone(proj.mesh.position.x, proj.mesh.position.z, stats, scene);
+        const modifiedStats = this.towerDamageMultiplier !== 1 && stats.dotDamage
+          ? { ...stats, dotDamage: Math.round(stats.dotDamage * this.towerDamageMultiplier) }
+          : stats;
+        const initialKills = this.createMortarZone(proj.mesh.position.x, proj.mesh.position.z, modifiedStats, scene);
         kills.push(...initialKills);
       }
       // Further DoT kills are tracked in the zone update loop

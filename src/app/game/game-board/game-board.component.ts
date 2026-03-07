@@ -367,12 +367,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         return;
       }
       // Player chose — execute spec upgrade
-      if (!this.towerCombatService.upgradeTowerWithSpec(this.selectedTowerInfo.id, spec)) return;
+      if (!this.towerCombatService.upgradeTowerWithSpec(this.selectedTowerInfo.id, spec, cost)) return;
       this.showSpecializationChoice = false;
       this.specOptions = [];
     } else {
       // L1->L2: standard upgrade
-      if (!this.towerCombatService.upgradeTower(this.selectedTowerInfo.id)) return;
+      if (!this.towerCombatService.upgradeTower(this.selectedTowerInfo.id, cost)) return;
     }
 
     this.gameStateService.spendGold(cost);
@@ -609,6 +609,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.renderGameBoard();
     this.addGridLines();
+    this.minimapService.init(this.canvasContainer.nativeElement);
     this.lastPreviewKey = '';
     this.lastTime = 0;
     this.elapsedTimeAccumulator = 0;
@@ -1290,7 +1291,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.scene.add(towerMesh);
 
       // Register tower with combat service
-      this.towerCombatService.registerTower(row, col, this.selectedTowerType, towerMesh);
+      this.towerCombatService.registerTower(row, col, this.selectedTowerType, towerMesh, effectiveCost);
       this.audioService.playTowerPlace();
       this.gameStatsService.recordTowerBuilt();
 

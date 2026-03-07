@@ -428,82 +428,88 @@ describe('HeightCommand', () => {
 });
 
 describe('SpawnPointCommand', () => {
-  let applySpawnSpy: jasmine.Spy;
+  let applySpawnsSpy: jasmine.Spy;
+  let toggleSpawnSpy: jasmine.Spy;
 
   beforeEach(() => {
-    applySpawnSpy = jasmine.createSpy('applySpawn');
+    applySpawnsSpy = jasmine.createSpy('applySpawns');
+    toggleSpawnSpy = jasmine.createSpy('toggleSpawn');
   });
 
   it('should have correct type', () => {
-    const command = new SpawnPointCommand(null, { x: 5, z: 5 }, applySpawnSpy);
+    const command = new SpawnPointCommand([], { x: 5, z: 5 }, applySpawnsSpy, toggleSpawnSpy);
     expect(command.type).toBe('spawn');
   });
 
   it('should have correct description', () => {
-    const command = new SpawnPointCommand(null, { x: 5, z: 5 }, applySpawnSpy);
+    const command = new SpawnPointCommand([], { x: 5, z: 5 }, applySpawnsSpy, toggleSpawnSpy);
     expect(command.description).toBe('Set spawn point');
   });
 
-  it('should restore previous spawn on undo', () => {
-    const previousSpawn: GridPoint = { x: 0, z: 0 };
+  it('should restore previous spawns array on undo', () => {
+    const previousSpawns: GridPoint[] = [{ x: 0, z: 0 }, { x: 3, z: 3 }];
     const newSpawn: GridPoint = { x: 5, z: 5 };
-    const command = new SpawnPointCommand(previousSpawn, newSpawn, applySpawnSpy);
+    const command = new SpawnPointCommand(previousSpawns, newSpawn, applySpawnsSpy, toggleSpawnSpy);
 
     command.undo();
 
-    expect(applySpawnSpy).toHaveBeenCalledWith(0, 0);
+    expect(applySpawnsSpy).toHaveBeenCalledWith(previousSpawns);
   });
 
-  it('should not call applySpawn on undo if no previous spawn', () => {
-    const command = new SpawnPointCommand(null, { x: 5, z: 5 }, applySpawnSpy);
+  it('should call applySpawns with empty array on undo if no previous spawns', () => {
+    const command = new SpawnPointCommand([], { x: 5, z: 5 }, applySpawnsSpy, toggleSpawnSpy);
 
     command.undo();
 
-    expect(applySpawnSpy).not.toHaveBeenCalled();
+    expect(applySpawnsSpy).toHaveBeenCalledWith([]);
   });
 
-  it('should apply new spawn on redo', () => {
-    const command = new SpawnPointCommand({ x: 0, z: 0 }, { x: 5, z: 5 }, applySpawnSpy);
+  it('should restore previous state then toggle new spawn on redo', () => {
+    const command = new SpawnPointCommand([{ x: 0, z: 0 }], { x: 5, z: 5 }, applySpawnsSpy, toggleSpawnSpy);
 
     command.redo();
 
-    expect(applySpawnSpy).toHaveBeenCalledWith(5, 5);
+    expect(applySpawnsSpy).toHaveBeenCalledWith([{ x: 0, z: 0 }]);
+    expect(toggleSpawnSpy).toHaveBeenCalledWith(5, 5);
   });
 });
 
 describe('ExitPointCommand', () => {
-  let applyExitSpy: jasmine.Spy;
+  let applyExitsSpy: jasmine.Spy;
+  let toggleExitSpy: jasmine.Spy;
 
   beforeEach(() => {
-    applyExitSpy = jasmine.createSpy('applyExit');
+    applyExitsSpy = jasmine.createSpy('applyExits');
+    toggleExitSpy = jasmine.createSpy('toggleExit');
   });
 
   it('should have correct type', () => {
-    const command = new ExitPointCommand(null, { x: 10, z: 10 }, applyExitSpy);
+    const command = new ExitPointCommand([], { x: 10, z: 10 }, applyExitsSpy, toggleExitSpy);
     expect(command.type).toBe('exit');
   });
 
   it('should have correct description', () => {
-    const command = new ExitPointCommand(null, { x: 10, z: 10 }, applyExitSpy);
+    const command = new ExitPointCommand([], { x: 10, z: 10 }, applyExitsSpy, toggleExitSpy);
     expect(command.description).toBe('Set exit point');
   });
 
-  it('should restore previous exit on undo', () => {
-    const previousExit: GridPoint = { x: 24, z: 12 };
+  it('should restore previous exits array on undo', () => {
+    const previousExits: GridPoint[] = [{ x: 24, z: 12 }];
     const newExit: GridPoint = { x: 10, z: 10 };
-    const command = new ExitPointCommand(previousExit, newExit, applyExitSpy);
+    const command = new ExitPointCommand(previousExits, newExit, applyExitsSpy, toggleExitSpy);
 
     command.undo();
 
-    expect(applyExitSpy).toHaveBeenCalledWith(24, 12);
+    expect(applyExitsSpy).toHaveBeenCalledWith(previousExits);
   });
 
-  it('should apply new exit on redo', () => {
-    const command = new ExitPointCommand({ x: 0, z: 0 }, { x: 10, z: 10 }, applyExitSpy);
+  it('should restore previous state then toggle new exit on redo', () => {
+    const command = new ExitPointCommand([{ x: 0, z: 0 }], { x: 10, z: 10 }, applyExitsSpy, toggleExitSpy);
 
     command.redo();
 
-    expect(applyExitSpy).toHaveBeenCalledWith(10, 10);
+    expect(applyExitsSpy).toHaveBeenCalledWith([{ x: 0, z: 0 }]);
+    expect(toggleExitSpy).toHaveBeenCalledWith(10, 10);
   });
 });
 
