@@ -459,6 +459,13 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Step 3: Run full test suite — confirm all 1638+ tests green
 - [x] Step 4: Update MEMORY.md with final branch state
 
+## Deployment Checklist — Red Team Pass 3
+- [x] Step 1: Wire waveCountMultiplier into WaveService.startWave() + 3 tests
+- [x] Step 2: Fix undefined --z-index-hud → --z-index-overlay
+- [x] Step 3: Mobile editor bottom-sheet + landscape height cap + test fixes
+- [x] Step 4: Run full test suite — confirm 1643 tests green
+- [ ] Step 5: Push to remote
+
 ---
 
 ## Red Team Pass 3 — Mobile Responsive + Full Branch Audit (2026-03-07)
