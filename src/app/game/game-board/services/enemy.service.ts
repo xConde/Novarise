@@ -7,7 +7,7 @@ import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '..
 import { MinHeap } from '../utils/min-heap';
 import { GameModifier, ModifierEffects, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
-import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY } from '../constants/effects.constants';
+import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG } from '../constants/effects.constants';
 
 export interface DamageResult {
   killed: boolean;
@@ -195,9 +195,10 @@ export class EnemyService {
         enemy.distanceTraveled += moveDistance;
       }
 
-      // Update mesh position
+      // Update mesh position and face movement direction
       if (enemy.mesh) {
         enemy.mesh.position.set(enemy.position.x, enemy.position.y, enemy.position.z);
+        enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
       }
     });
 
@@ -370,6 +371,19 @@ export class EnemyService {
       mat.emissive.setHex(stats.color);
       mat.emissiveIntensity = baseIntensity;
       this.tintChildMeshes(enemy.mesh, stats.color, baseIntensity);
+    });
+  }
+
+  /**
+   * Spin boss crowns for visual flair. Called once per frame.
+   */
+  updateEnemyAnimations(deltaTime: number): void {
+    this.enemies.forEach(enemy => {
+      if (!enemy.mesh || enemy.health <= 0) return;
+      const crown = enemy.mesh.userData['bossCrown'] as THREE.Mesh | undefined;
+      if (crown) {
+        crown.rotation.z += ENEMY_ANIM_CONFIG.bossCrownSpinSpeed * deltaTime;
+      }
     });
   }
 

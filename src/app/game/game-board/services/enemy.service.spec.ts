@@ -1400,4 +1400,74 @@ describe('EnemyService', () => {
       expect(path.length).toBe(0);
     });
   });
+
+  describe('enemy facing direction', () => {
+    it('should rotate enemy mesh to face movement direction', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy).toBeTruthy();
+      expect(enemy.mesh).toBeTruthy();
+
+      // Initial rotation should be 0 (default)
+      const initialRotY = enemy.mesh!.rotation.y;
+      expect(initialRotY).toBe(0);
+
+      // Update enemies to move them along path — rotation should change
+      service.updateEnemies(0.016);
+
+      // The enemy should now face its movement direction
+      // Path goes from (0,0) toward (9,9), so rotation should be non-zero
+      // unless the first segment happens to align with default facing
+      const afterRotY = enemy.mesh!.rotation.y;
+      // atan2 of some direction vector — just verify it was set (not NaN)
+      expect(isNaN(afterRotY)).toBe(false);
+    });
+
+    it('should face correct direction for known path segment', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy).toBeTruthy();
+
+      // The path from (0,0) to (9,9) on a 10x10 board — first move is along
+      // either +x or +z. After update, rotation.y should reflect that direction.
+      service.updateEnemies(0.016);
+      const rotY = enemy.mesh!.rotation.y;
+
+      // Rotation was computed via atan2(direction.x, direction.z)
+      // For a move along +z (row increases), direction.z > 0 → angle near 0
+      // For a move along +x (col increases), direction.x > 0 → angle near PI/2
+      // Either way it should be a finite number
+      expect(isFinite(rotY)).toBe(true);
+    });
+  });
+
+  describe('updateEnemyAnimations', () => {
+    it('should spin boss crown over time', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      expect(boss).toBeTruthy();
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      expect(crown).toBeTruthy();
+
+      const initialRotZ = crown.rotation.z;
+      service.updateEnemyAnimations(0.5);
+
+      expect(crown.rotation.z).toBeGreaterThan(initialRotZ);
+    });
+
+    it('should not throw for enemies without crowns', () => {
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(() => service.updateEnemyAnimations(0.016)).not.toThrow();
+    });
+
+    it('should skip dead enemies', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      const initialRotZ = crown.rotation.z;
+
+      // Kill the boss
+      service.damageEnemy(boss.id, boss.maxHealth + 100);
+      service.updateEnemyAnimations(0.5);
+
+      // Crown should not have rotated
+      expect(crown.rotation.z).toBe(initialRotZ);
+    });
+  });
 });

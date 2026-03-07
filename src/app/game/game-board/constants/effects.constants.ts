@@ -82,6 +82,10 @@ export const TOWER_ANIM_CONFIG = {
   tipGlowMax: 1.2,
 } as const;
 
+export const ENEMY_ANIM_CONFIG = {
+  bossCrownSpinSpeed: 2.0,  // radians per second
+} as const;
+
 export const TILE_PULSE_CONFIG = {
   /** Emissive intensity oscillation for spawner/exit tiles */
   speed: 1.5,
