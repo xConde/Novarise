@@ -132,6 +132,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   // Title display
   public title = 'Novarise';
 
+  // Init error state
+  public initError: string | null = null;
+
   // Map templates
   public templates: MapTemplate[] = [];
 
@@ -163,43 +166,50 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
-    this.initializeScene();
-    this.initializeCamera();
-    this.initializeLights();
-    this.addSkybox();
-    this.initializeParticles();
-    this.initializeRenderer();
-    this.initializePostProcessing();
-    this.initializeControls();
+    try {
+      this.initializeScene();
+      this.initializeCamera();
+      this.initializeLights();
+      this.addSkybox();
+      this.initializeParticles();
+      this.initializeRenderer();
+      this.initializePostProcessing();
+      this.initializeControls();
 
-    // Initialize terrain grid
-    this.terrainGrid = new TerrainGrid(this.scene, 25);
+      // Initialize terrain grid
+      this.terrainGrid = new TerrainGrid(this.scene, 25);
 
-    // Add helpers for spatial reference
-    this.addHelpers();
+      // Add helpers for spatial reference
+      this.addHelpers();
 
-    // Create brush indicator for crisp visual feedback
-    this.createBrushIndicator();
+      // Create brush indicator for crisp visual feedback
+      this.createBrushIndicator();
 
-    // Initialize brush preview system
-    this.updateBrushPreview();
+      // Initialize brush preview system
+      this.updateBrushPreview();
 
-    // Create spawn/exit markers for tower defense
-    this.createSpawnExitMarkers();
+      // Create spawn/exit markers for tower defense
+      this.createSpawnExitMarkers();
 
-    // Initialize camera rotation to match initial camera view
-    this.initializeCameraRotation();
+      // Initialize camera rotation to match initial camera view
+      this.initializeCameraRotation();
 
-    // Load map templates for the editor UI
-    this.templates = this.mapTemplateService.getTemplates();
+      // Load map templates for the editor UI
+      this.templates = this.mapTemplateService.getTemplates();
 
-    // Try to migrate old format and load current map
-    this.mapStorage.migrateOldFormat();
-    this.tryLoadCurrentMap();
+      // Try to migrate old format and load current map
+      this.mapStorage.migrateOldFormat();
+      this.tryLoadCurrentMap();
 
-    this.setupInteraction();
-    this.setupKeyboardControls();
-    this.animate();
+      this.setupInteraction();
+      this.setupKeyboardControls();
+      this.animate();
+    } catch (error) {
+      this.initError = error instanceof Error
+        ? error.message
+        : 'Failed to initialize editor renderer';
+      console.error('Editor initialization failed:', error);
+    }
   }
 
   private initializeScene(): void {
@@ -228,6 +238,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private initializeRenderer(): void {
+    const testCanvas = document.createElement('canvas');
+    const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
+    if (!gl) {
+      throw new Error('WebGL is not supported by your browser');
+    }
+
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, EDITOR_RENDERER_CONFIG.maxPixelRatio)); // Cap at 2 for performance
 
@@ -1718,6 +1734,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private animate = (): void => {
+    if (!this.renderer || this.initError) return;
     this.animationFrameId = requestAnimationFrame(this.animate);
 
     // Update camera movement
@@ -1782,15 +1799,18 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (window.visualViewport) {
       window.visualViewport.removeEventListener('resize', this.resizeHandler);
     }
-    const canvas = this.renderer.domElement;
-    canvas.removeEventListener('mousemove', this.mousemoveHandler);
-    canvas.removeEventListener('mousedown', this.mouseDownHandler);
-    canvas.removeEventListener('mouseup', this.mouseUpHandler);
-    canvas.removeEventListener('mouseleave', this.mouseUpHandler);
-    canvas.removeEventListener('touchstart', this.touchStartHandler);
-    canvas.removeEventListener('touchmove', this.touchMoveHandler);
-    canvas.removeEventListener('touchend', this.touchEndHandler);
-    canvas.removeEventListener('touchcancel', this.touchEndHandler);
+
+    if (this.renderer) {
+      const canvas = this.renderer.domElement;
+      canvas.removeEventListener('mousemove', this.mousemoveHandler);
+      canvas.removeEventListener('mousedown', this.mouseDownHandler);
+      canvas.removeEventListener('mouseup', this.mouseUpHandler);
+      canvas.removeEventListener('mouseleave', this.mouseUpHandler);
+      canvas.removeEventListener('touchstart', this.touchStartHandler);
+      canvas.removeEventListener('touchmove', this.touchMoveHandler);
+      canvas.removeEventListener('touchend', this.touchEndHandler);
+      canvas.removeEventListener('touchcancel', this.touchEndHandler);
+    }
 
     // Snapshot terrain state for the game to consume on /play navigation
     // and auto-save to localStorage to prevent data loss
@@ -1808,51 +1828,53 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.editHistory.clear();
 
     // Clean up brush preview meshes
-    this.brushPreviewMeshes.forEach(mesh => {
-      this.scene.remove(mesh);
-      mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
-    });
-    this.brushPreviewMeshes = [];
+    if (this.scene) {
+      this.brushPreviewMeshes.forEach(mesh => {
+        this.scene.remove(mesh);
+        mesh.geometry.dispose();
+        disposeMaterial(mesh.material);
+      });
+      this.brushPreviewMeshes = [];
 
-    // Clean up rectangle preview meshes
-    this.clearRectanglePreview();
+      // Clean up rectangle preview meshes
+      this.clearRectanglePreview();
 
-    // Clean up brush indicator
-    if (this.brushIndicator) {
-      this.scene.remove(this.brushIndicator);
-      this.brushIndicator.geometry.dispose();
-      disposeMaterial(this.brushIndicator.material);
-    }
+      // Clean up brush indicator
+      if (this.brushIndicator) {
+        this.scene.remove(this.brushIndicator);
+        this.brushIndicator.geometry.dispose();
+        disposeMaterial(this.brushIndicator.material);
+      }
 
-    // Clean up spawn/exit markers
-    for (const marker of this.spawnMarkers) {
-      this.scene.remove(marker);
-      marker.geometry.dispose();
-      disposeMaterial(marker.material);
-    }
-    this.spawnMarkers = [];
-    for (const marker of this.exitMarkers) {
-      this.scene.remove(marker);
-      marker.geometry.dispose();
-      disposeMaterial(marker.material);
-    }
-    this.exitMarkers = [];
+      // Clean up spawn/exit markers
+      for (const marker of this.spawnMarkers) {
+        this.scene.remove(marker);
+        marker.geometry.dispose();
+        disposeMaterial(marker.material);
+      }
+      this.spawnMarkers = [];
+      for (const marker of this.exitMarkers) {
+        this.scene.remove(marker);
+        marker.geometry.dispose();
+        disposeMaterial(marker.material);
+      }
+      this.exitMarkers = [];
 
-    // Clean up particles
-    if (this.particles) {
-      this.scene.remove(this.particles);
-      this.particles.geometry.dispose();
-      disposeMaterial(this.particles.material);
-      this.particles = null;
-    }
+      // Clean up particles
+      if (this.particles) {
+        this.scene.remove(this.particles);
+        this.particles.geometry.dispose();
+        disposeMaterial(this.particles.material);
+        this.particles = null;
+      }
 
-    // Clean up skybox
-    if (this.skybox) {
-      this.scene.remove(this.skybox);
-      this.skybox.geometry.dispose();
-      disposeMaterial(this.skybox.material);
-      this.skybox = undefined;
+      // Clean up skybox
+      if (this.skybox) {
+        this.scene.remove(this.skybox);
+        this.skybox.geometry.dispose();
+        disposeMaterial(this.skybox.material);
+        this.skybox = undefined;
+      }
     }
 
     if (this.terrainGrid) {
@@ -1876,6 +1898,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.composer.renderTarget2.dispose();
     }
 
-    this.renderer.dispose();
+    if (this.renderer) {
+      this.renderer.dispose();
+    }
   }
 }
