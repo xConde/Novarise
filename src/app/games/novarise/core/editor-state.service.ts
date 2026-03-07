@@ -14,9 +14,7 @@ export interface EditorState {
   currentMapName: string;
 }
 
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable()
 export class EditorStateService {
   public readonly brushSizes = [1, 3, 5, 7];
 
