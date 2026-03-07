@@ -31,7 +31,7 @@ import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, V
 import { GameModifier, GAME_MODIFIER_CONFIGS, GameModifierConfig, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
 import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants/rendering.constants';
-import { AMBIENT_LIGHT, KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from './constants/lighting.constants';
+import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from './constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
 import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
@@ -69,7 +69,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private controls!: OrbitControls;
   private particles: THREE.Points | null = null;
   private skybox?: THREE.Mesh;
-  private ambientLight?: THREE.AmbientLight;
   private hemisphereLight?: THREE.HemisphereLight;
   private keyLight?: THREE.DirectionalLight;
   private fillLight?: THREE.DirectionalLight;
@@ -710,10 +709,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     // Clean up lights
-    if (this.ambientLight) {
-      this.scene.remove(this.ambientLight);
-      this.ambientLight = undefined;
-    }
     if (this.hemisphereLight) {
       this.scene.remove(this.hemisphereLight);
       this.hemisphereLight = undefined;
@@ -844,8 +839,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     );
     this.scene.add(this.hemisphereLight);
 
-    this.ambientLight = new THREE.AmbientLight(AMBIENT_LIGHT.color, AMBIENT_LIGHT.intensity);
-    this.scene.add(this.ambientLight);
+    // Ambient light removed — hemisphere light provides better ambient fill with sky/ground gradient
 
     const keyLight = new THREE.DirectionalLight(KEY_LIGHT.color, KEY_LIGHT.intensity);
     keyLight.position.set(...KEY_LIGHT.position!);

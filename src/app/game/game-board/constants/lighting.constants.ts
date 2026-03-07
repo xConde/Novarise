@@ -16,7 +16,7 @@ export interface HemisphereLightConfig {
 export const HEMISPHERE_LIGHT: HemisphereLightConfig = {
   skyColor: 0x6060a0,
   groundColor: 0x302848,
-  intensity: 0.6
+  intensity: 0.7
 };
 
 /** Kept for editor or fallback use; game scene relies on hemisphere light for ambient fill */
