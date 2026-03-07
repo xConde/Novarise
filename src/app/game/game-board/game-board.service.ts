@@ -331,21 +331,39 @@ export class GameBoardService {
    * BFS from (startRow, startCol) to any tile in exitSet.
    * Traversability: tile.isTraversable OR tile.type === EXIT.
    * Matches EnemyService.findPath neighbor logic.
+   *
+   * Phase 1: Walk through the connected spawner group to find ALL traversable
+   * neighbors of the entire group — not just the single start tile. This fixes
+   * corner spawners whose individual neighbors are all OOB or other spawner tiles.
+   *
+   * Phase 2: Standard BFS from the seeded traversable neighbors.
    */
   private bfsCanReachExit(startRow: number, startCol: number, exitSet: Set<string>): boolean {
     const visited = new Set<string>();
     const queue: [number, number][] = [];
+    const directions: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 
-    // Spawner tiles are non-traversable; seed BFS from their traversable neighbors
-    const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-    for (const [dr, dc] of directions) {
-      const nr = startRow + dr;
-      const nc = startCol + dc;
-      if (nr < 0 || nr >= this.gameBoardHeight || nc < 0 || nc >= this.gameBoardWidth) continue;
-      const neighbor = this.gameBoard[nr][nc];
-      if (neighbor.isTraversable || neighbor.type === BlockType.EXIT) {
+    // Phase 1: Walk through connected spawner tiles to find ALL traversable neighbors
+    // of the spawner group (not just the single start tile).
+    const spawnerVisited = new Set<string>();
+    const spawnerQueue: [number, number][] = [[startRow, startCol]];
+    spawnerVisited.add(`${startRow},${startCol}`);
+
+    while (spawnerQueue.length > 0) {
+      const [sr, sc] = spawnerQueue.shift()!;
+      for (const [dr, dc] of directions) {
+        const nr = sr + dr;
+        const nc = sc + dc;
+        if (nr < 0 || nr >= this.gameBoardHeight || nc < 0 || nc >= this.gameBoardWidth) continue;
         const key = `${nr},${nc}`;
-        if (!visited.has(key)) {
+        const neighbor = this.gameBoard[nr][nc];
+
+        if (neighbor.type === BlockType.SPAWNER && !spawnerVisited.has(key)) {
+          // Connected spawner tile — expand the group
+          spawnerVisited.add(key);
+          spawnerQueue.push([nr, nc]);
+        } else if ((neighbor.isTraversable || neighbor.type === BlockType.EXIT) && !visited.has(key)) {
+          // Traversable neighbor of the spawner group — seed BFS
           visited.add(key);
           if (exitSet.has(key)) return true;
           queue.push([nr, nc]);
@@ -353,9 +371,9 @@ export class GameBoardService {
       }
     }
 
+    // Phase 2: Standard BFS from all seeded traversable neighbors
     while (queue.length > 0) {
       const [r, c] = queue.shift()!;
-
       for (const [dr, dc] of directions) {
         const nr = r + dr;
         const nc = c + dc;
