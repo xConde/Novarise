@@ -300,6 +300,7 @@ export class TowerCombatService {
 
     this.enemyService.getEnemies().forEach(enemy => {
       if (enemy.health <= 0) return;
+      if (enemy.isFlying) return; // Flying enemies are immune to ground slow auras
 
       const dx = enemy.position.x - towerWorldX;
       const dz = enemy.position.z - towerWorldZ;
