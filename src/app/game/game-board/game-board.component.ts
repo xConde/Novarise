@@ -936,19 +936,25 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           vec3 darkBlue = vec3(0.06, 0.04, 0.12);
           vec3 color = mix(deepPurple, darkBlue, vUv.y * 0.5);
 
+          // Stars with twinkle
           vec2 starPos = vUv * 150.0;
           float star = random(floor(starPos));
           if (star > 0.992) {
-            float brightness = random(floor(starPos) + 1.0) * 0.5;
+            float baseBright = random(floor(starPos) + 1.0) * 0.5;
+            float twinkle = 0.6 + 0.4 * sin(time * (1.0 + random(floor(starPos) + 2.0) * 3.0));
+            float brightness = baseBright * twinkle;
             color += vec3(brightness * 0.4, brightness * 0.3, brightness * 0.5);
           }
 
-          float vein1 = random(floor(vUv * 40.0 + vec2(0.0, vUv.x * 10.0)));
+          // Drifting nebula veins
+          float drift = time * 0.02;
+          float vein1 = random(floor(vUv * 40.0 + vec2(drift, vUv.x * 10.0 + drift * 0.5)));
           if (vein1 > 0.97) {
             color += vec3(0.25, 0.15, 0.3) * vein1;
           }
 
-          float bio = random(floor(vUv * 25.0)) * 0.12;
+          // Slow-shifting bioluminescence
+          float bio = random(floor(vUv * 25.0 + vec2(drift * 0.3))) * 0.12;
           color += vec3(bio * 0.3, bio * 0.5, bio * 0.7);
 
           gl_FragColor = vec4(color, 1.0);
@@ -1557,6 +1563,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
       positionAttribute.needsUpdate = true;
       this.particles.rotation.y += PARTICLE_CONFIG.rotationSpeed;
+    }
+
+    // Update skybox time uniform for star twinkle and nebula drift
+    if (this.skybox) {
+      (this.skybox.material as THREE.ShaderMaterial).uniforms['time'].value = time * 0.001;
     }
 
     // Gameplay tick — fixed timestep accumulator
