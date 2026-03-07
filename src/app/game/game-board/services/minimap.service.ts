@@ -18,11 +18,12 @@ export interface MinimapTerrainData {
 export class MinimapService {
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
-  private visible = true;
+  private visible = false;
   private lastUpdateTime = 0;
 
   /**
    * Creates the minimap canvas and appends it to the given container.
+   * Starts hidden — call setVisible(true) when gameplay begins.
    */
   init(container: HTMLElement): void {
     this.canvas = document.createElement('canvas');
@@ -35,9 +36,18 @@ export class MinimapService {
     this.canvas.style.borderRadius = '4px';
     this.canvas.style.zIndex = '100';
     this.canvas.style.pointerEvents = 'none';
+    this.canvas.style.display = 'none';
+    this.canvas.classList.add('minimap-canvas');
 
     this.ctx = this.canvas.getContext('2d');
     container.appendChild(this.canvas);
+  }
+
+  setVisible(show: boolean): void {
+    this.visible = show;
+    if (this.canvas) {
+      this.canvas.style.display = show ? 'block' : 'none';
+    }
   }
 
   /**

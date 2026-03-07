@@ -500,6 +500,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (state.phase === GamePhase.COMBAT) return;
     if (state.phase === GamePhase.VICTORY || state.phase === GamePhase.DEFEAT) return;
 
+    // Show minimap when first wave starts
+    if (state.wave === 0) {
+      this.minimapService.setVisible(true);
+    }
+
     this.gameStateService.startWave();
     this.waveService.startWave(this.gameStateService.getState().wave, this.scene);
     this.audioService.playWaveStart();
@@ -545,6 +550,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.renderGameBoard();
     this.addGridLines();
+    this.minimapService.init(this.canvasContainer.nativeElement);
     this.lastPreviewKey = '';
     this.lastTime = 0;
     this.elapsedTimeAccumulator = 0;

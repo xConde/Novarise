@@ -211,3 +211,8 @@ p {
   white-space: nowrap;
   border-width: 0;
 }
+
+/* Hide minimap on small screens — tower bar needs the space */
+@media screen and (max-width: 480px) {
+  .minimap-canvas { display: none !important; }
+}

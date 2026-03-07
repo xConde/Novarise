@@ -54,11 +54,13 @@ describe('MinimapService', () => {
 
     it('should render without errors when initialized', () => {
       service.init(container);
+      service.setVisible(true);
       expect(() => service.update(0, terrain, [])).not.toThrow();
     });
 
     it('should throttle updates based on updateIntervalMs', () => {
       service.init(container);
+      service.setVisible(true);
       // First call renders
       service.update(0, terrain, []);
       // Immediate second call should be throttled (no error, just skipped)
@@ -69,6 +71,7 @@ describe('MinimapService', () => {
 
     it('should render entities without errors', () => {
       service.init(container);
+      service.setVisible(true);
       const entities: MinimapEntityData[] = [
         { x: 5, z: 12, type: 'tower' },
         { x: 10, z: 12, type: 'enemy' },
@@ -79,30 +82,32 @@ describe('MinimapService', () => {
 
     it('should skip rendering when not visible', () => {
       service.init(container);
-      service.toggleVisibility(); // now hidden
-      // Should not throw, just skip
+      // Starts hidden — should not throw, just skip
       expect(() => service.update(0, terrain, [])).not.toThrow();
     });
   });
 
   describe('toggleVisibility', () => {
     it('should toggle visible state', () => {
-      expect(service.isVisible()).toBe(true);
-      service.toggleVisibility();
       expect(service.isVisible()).toBe(false);
       service.toggleVisibility();
       expect(service.isVisible()).toBe(true);
+      service.toggleVisibility();
+      expect(service.isVisible()).toBe(false);
     });
 
     it('should hide/show the canvas element', () => {
       service.init(container);
       const canvas = container.querySelector('canvas') as HTMLCanvasElement;
 
-      service.toggleVisibility();
+      // Starts hidden
       expect(canvas.style.display).toBe('none');
 
       service.toggleVisibility();
       expect(canvas.style.display).toBe('block');
+
+      service.toggleVisibility();
+      expect(canvas.style.display).toBe('none');
     });
   });
 

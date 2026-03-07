@@ -289,6 +289,12 @@
     z-index: var(--z-index-overlay);
     text-align: center;
 
+    @media screen and (max-width: 768px) {
+      top: auto;
+      bottom: 30%;
+      transform: translateX(-50%);
+    }
+
     .wave-btn {
       display: flex;
       flex-direction: column;
@@ -769,6 +775,8 @@
       min-width: 90vw;
       top: calc(var(--spacing-md) + 3.5rem);
       padding: var(--spacing-sm) var(--spacing-md);
+      max-height: 40vh;
+      overflow-y: auto;
     }
 
     .difficulty-label {
