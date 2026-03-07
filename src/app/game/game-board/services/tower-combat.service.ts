@@ -67,7 +67,12 @@ export class TowerCombatService {
     this.projectilePool = new ObjectPool<THREE.Mesh>(
       () => this.createPooledProjectileMesh(),
       (mesh) => { mesh.visible = false; },
-      PROJECTILE_POOL_CONFIG
+      PROJECTILE_POOL_CONFIG,
+      (mesh) => {
+        if (mesh.parent) mesh.parent.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      }
     );
   }
 

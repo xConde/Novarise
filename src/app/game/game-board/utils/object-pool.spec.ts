@@ -91,6 +91,39 @@ describe('ObjectPool', () => {
     expect(pool.availableCount).toBe(2);
   });
 
+  it('should call disposeFn when releasing to a full pool', () => {
+    const factory = createFactory();
+    const disposed: TestObj[] = [];
+    const pool = new ObjectPool<TestObj>(
+      factory, resetObj, { initialSize: 0, maxSize: 1 },
+      (obj) => disposed.push(obj)
+    );
+
+    const a = pool.acquire();
+    const b = pool.acquire();
+
+    pool.release(a); // fills pool (maxSize=1)
+    pool.release(b); // pool full — should call disposeFn
+
+    expect(pool.availableCount).toBe(1);
+    expect(disposed.length).toBe(1);
+    expect(disposed[0]).toBe(b);
+  });
+
+  it('should use constructor disposeFn in drain when no explicit disposer given', () => {
+    const factory = createFactory();
+    const disposed: TestObj[] = [];
+    const pool = new ObjectPool<TestObj>(
+      factory, resetObj, { initialSize: 2, maxSize: 5 },
+      (obj) => disposed.push(obj)
+    );
+
+    pool.drain();
+
+    expect(disposed.length).toBe(2);
+    expect(pool.availableCount).toBe(0);
+  });
+
   it('should drain pool and call disposer on each object', () => {
     const factory = createFactory();
     const pool = new ObjectPool<TestObj>(factory, resetObj, TEST_CONFIG);
