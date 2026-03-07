@@ -651,3 +651,11 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 **Location:** `tower-combat.service.ts:251,274`
 **Risk:** Geometry dispose and reassignment are separated by the creation block. With trailLength=5 this is safe, but colocating dispose with reassignment is more robust.
 **Fix:** Move dispose into the else branch immediately before reassignment.
+
+## Deployment Checklist — feat/visual-overhaul
+- [x] Fix Finding 1: Reuse persistent Map in getAllActiveEffects()
+- [x] Fix Finding 2: Extract magic numbers (TOWER_ANIM_CONFIG, BOSS_CROWN_CONFIG, PREVIEW_GHOST_CONFIG)
+- [x] Fix Finding 3: Colocate trail geometry dispose with reassignment
+- [x] Step 4: Final convention check (console.log, TODO, catch(e), hardcoded numbers)
+- [x] Step 5: Full test suite green (1696/1696, hard gate)
+- [x] Step 6: Push branch + create PR
