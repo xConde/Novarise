@@ -1,6 +1,14 @@
 <div class="board-container">
   <div class="canvas-container" #canvasContainer></div>
 
+  <!-- Loading overlay -->
+  <div class="loading-overlay" *ngIf="isLoading && !initError">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <p class="loading-text">Initializing...</p>
+    </div>
+  </div>
+
   <!-- Init error fallback -->
   <div class="init-error-overlay" *ngIf="initError">
     <div class="init-error-content">

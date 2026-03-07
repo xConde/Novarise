@@ -145,6 +145,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   showHelpOverlay = false;
   pathBlocked = false;
   initError: string | null = null;
+  isLoading = true;
   private pathBlockedTimerId: ReturnType<typeof setTimeout> | null = null;
   private rangeRingMeshes: THREE.Mesh[] = [];
 
@@ -338,10 +339,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.setupKeyboardControls();
       this.minimapService.init(this.canvasContainer.nativeElement);
       this.animate();
+      this.isLoading = false;
     } catch (error) {
       this.initError = error instanceof Error
         ? error.message
         : 'Failed to initialize game renderer';
+      this.isLoading = false;
       console.error('Game initialization failed:', error);
     }
   }

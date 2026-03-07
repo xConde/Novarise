@@ -78,6 +78,10 @@ describe('GameBoardComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('isLoading should default to true before initialization', () => {
+    expect(component.isLoading).toBeTrue();
+  });
+
   describe('goToEditor', () => {
     it('should navigate to /edit', () => {
       const router = TestBed.inject(Router);

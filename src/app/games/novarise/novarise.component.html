@@ -15,6 +15,14 @@
     </div>
   </div>
 
+  <!-- Loading overlay -->
+  <div class="loading-overlay" *ngIf="isLoading && !initError">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <p class="loading-text">Initializing...</p>
+    </div>
+  </div>
+
   <div class="novarise-content">
     <div #canvasContainer class="canvas-container"></div>
 

@@ -71,6 +71,18 @@ describe('NovariseComponent', () => {
     t.scene = { remove: () => {} };
   }
 
+  describe('Loading State', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('isLoading should default to true before initialization', () => {
+      expect(component.isLoading).toBeTrue();
+    });
+  });
+
   describe('Joystick State Initialization', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);

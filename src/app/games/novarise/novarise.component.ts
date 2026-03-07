@@ -134,6 +134,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   // Init error state
   public initError: string | null = null;
+  public isLoading = true;
 
   // Map templates
   public templates: MapTemplate[] = [];
@@ -204,10 +205,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.setupInteraction();
       this.setupKeyboardControls();
       this.animate();
+      this.isLoading = false;
     } catch (error) {
       this.initError = error instanceof Error
         ? error.message
         : 'Failed to initialize editor renderer';
+      this.isLoading = false;
       console.error('Editor initialization failed:', error);
     }
   }
