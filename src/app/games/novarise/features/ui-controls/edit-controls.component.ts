@@ -89,6 +89,14 @@ export class EditControlsComponent implements OnInit, OnDestroy {
     this.templateSelect.emit(id);
   }
 
+  public onTemplateSelect(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    if (select.value) {
+      this.templateSelect.emit(select.value);
+      select.value = '';
+    }
+  }
+
   public getTerrainColor(type: TerrainType): string {
     return `#${TERRAIN_CONFIGS[type].color.toString(16).padStart(6, '0')}`;
   }
