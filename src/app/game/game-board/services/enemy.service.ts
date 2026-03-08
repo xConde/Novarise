@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_MESH_SEGMENTS, GridNode, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED } from '../models/enemy.model';
+import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_MESH_SEGMENTS, GridNode, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, LeakedEnemyInfo } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { BlockType } from '../models/game-board-tile';
 import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
@@ -144,18 +144,18 @@ export class EnemyService {
   /**
    * Update all enemies - move along paths
    */
-  updateEnemies(deltaTime: number): string[] {
+  updateEnemies(deltaTime: number): LeakedEnemyInfo[] {
     if (deltaTime <= 0) return [];
 
-    const reachedExit: string[] = [];
+    const reachedExit: LeakedEnemyInfo[] = [];
 
     this.enemies.forEach(enemy => {
       // Skip dead enemies awaiting removal — prevents double-penalty if ordering changes
       if (enemy.health <= 0) return;
 
       if (enemy.pathIndex >= enemy.path.length - 1) {
-        // Enemy reached exit
-        reachedExit.push(enemy.id);
+        // Enemy reached exit — snapshot leakDamage before removal
+        reachedExit.push({ id: enemy.id, leakDamage: enemy.leakDamage });
         return;
       }
 

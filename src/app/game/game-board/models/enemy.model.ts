@@ -20,6 +20,12 @@ export interface GridNode {
   parent?: GridNode;
 }
 
+/** Snapshot returned by updateEnemies() for enemies that reached the exit. */
+export interface LeakedEnemyInfo {
+  id: string;
+  leakDamage: number;
+}
+
 export interface Enemy {
   id: string;
   type: EnemyType;

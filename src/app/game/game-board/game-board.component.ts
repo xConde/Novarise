@@ -1665,13 +1665,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           const reachedExit = this.enemyService.updateEnemies(PHYSICS_CONFIG.fixedTimestep);
 
           // Enemies reaching the exit cost lives scaled by enemy type
-          for (const enemyId of reachedExit) {
-            const leakedEnemy = this.enemyService.getEnemies().get(enemyId);
-            const leakCost = leakedEnemy?.leakDamage ?? 1;
-            this.gameStateService.loseLife(leakCost);
+          for (const leaked of reachedExit) {
+            this.gameStateService.loseLife(leaked.leakDamage);
             this.gameStatsService.recordEnemyLeaked();
             frameExitCount++;
-            this.enemyService.removeEnemy(enemyId, this.scene);
+            this.enemyService.removeEnemy(leaked.id, this.scene);
           }
 
           // Check wave completion: no spawning and no enemies alive

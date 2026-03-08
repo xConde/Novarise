@@ -206,7 +206,7 @@ describe('Flying Enemy', () => {
       enemy.pathIndex = enemy.path.length - 1;
 
       const reachedExit = enemyService.updateEnemies(0.1);
-      expect(reachedExit).toContain(enemy.id);
+      expect(reachedExit.find(e => e.id === enemy.id)).toBeDefined();
     });
   });
 

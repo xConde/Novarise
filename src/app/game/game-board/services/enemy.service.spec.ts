@@ -353,7 +353,7 @@ describe('EnemyService', () => {
       expect(hasMoved).toBe(true);
     });
 
-    it('should return enemy IDs that reached exit', () => {
+    it('should return LeakedEnemyInfo for enemies that reached exit', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
 
       // Force enemy to last node
@@ -361,7 +361,9 @@ describe('EnemyService', () => {
 
       const reachedExit = service.updateEnemies(0.1);
 
-      expect(reachedExit).toContain(enemy!.id);
+      expect(reachedExit.length).toBe(1);
+      expect(reachedExit[0].id).toBe(enemy!.id);
+      expect(reachedExit[0].leakDamage).toBe(ENEMY_STATS[EnemyType.BASIC].leakDamage);
     });
 
     it('should handle multiple enemies simultaneously', () => {
@@ -904,7 +906,7 @@ describe('EnemyService', () => {
 
       const reachedExit = service.updateEnemies(0.1);
 
-      expect(reachedExit).not.toContain(enemy.id);
+      expect(reachedExit.find(e => e.id === enemy.id)).toBeUndefined();
     });
   });
 
