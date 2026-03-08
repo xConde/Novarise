@@ -811,4 +811,4 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Fix minimap mobile overlap (shrink + reposition)
 - [x] Red team hardening (single-source breakpoint, named constant for disabled mouse)
 - [x] Full test suite green (1898/1898)
-- [ ] Push to remote
+- [x] Push to remote
