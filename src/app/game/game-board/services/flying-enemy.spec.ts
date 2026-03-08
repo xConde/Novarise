@@ -441,14 +441,14 @@ describe('Flying Enemy', () => {
 
     it('should use DoubleSide rendering', () => {
       const enemy = enemyService.spawnEnemy(EnemyType.FLYING, mockScene)!;
-      const material = enemy.mesh!.material as THREE.MeshLambertMaterial;
+      const material = enemy.mesh!.material as THREE.MeshStandardMaterial;
 
       expect(material.side).toBe(THREE.DoubleSide);
     });
 
     it('should use correct color from ENEMY_STATS', () => {
       const enemy = enemyService.spawnEnemy(EnemyType.FLYING, mockScene)!;
-      const material = enemy.mesh!.material as THREE.MeshLambertMaterial;
+      const material = enemy.mesh!.material as THREE.MeshStandardMaterial;
 
       expect(material.color.getHex()).toBe(ENEMY_STATS[EnemyType.FLYING].color);
     });
@@ -483,7 +483,7 @@ describe('Flying Enemy', () => {
 
     it('non-flying enemies should use FrontSide rendering', () => {
       const enemy = enemyService.spawnEnemy(EnemyType.BASIC, mockScene)!;
-      const material = enemy.mesh!.material as THREE.MeshLambertMaterial;
+      const material = enemy.mesh!.material as THREE.MeshStandardMaterial;
 
       expect(material.side).toBe(THREE.FrontSide);
     });

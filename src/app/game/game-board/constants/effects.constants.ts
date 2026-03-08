@@ -1,3 +1,18 @@
+import { StatusEffectType } from './status-effect.constants';
+
+export const STATUS_EFFECT_VISUALS: Record<StatusEffectType, { emissiveColor: number; emissiveIntensity: number }> = {
+  [StatusEffectType.SLOW]: { emissiveColor: 0x4488ff, emissiveIntensity: 0.7 },
+  [StatusEffectType.BURN]: { emissiveColor: 0xff6622, emissiveIntensity: 0.9 },
+  [StatusEffectType.POISON]: { emissiveColor: 0x44ff22, emissiveIntensity: 0.7 },
+};
+
+/** Priority order for resolving which visual takes precedence when multiple effects active */
+export const STATUS_EFFECT_PRIORITY: StatusEffectType[] = [
+  StatusEffectType.BURN,
+  StatusEffectType.POISON,
+  StatusEffectType.SLOW,
+];
+
 export const SCREEN_SHAKE_CONFIG = {
   bossHitIntensity: 0.15,
   bossHitDuration: 0.2,
@@ -36,4 +51,61 @@ export const TOWER_UPGRADE_VISUAL_CONFIG = {
     opacity: 0.4,
     segments: 32,
   },
+} as const;
+
+export const TOWER_ANIM_CONFIG = {
+  /** Basic crystal float: vertical bobbing */
+  crystalBobSpeed: 2.0,
+  crystalBobAmplitude: 0.05,
+  crystalBaseY: 1.35,
+
+  /** Slow crystal rotation speed (radians/sec) */
+  slowCrystalRotSpeed: 1.5,
+  slowCrystalBaseY: 0.82,
+  slowCrystalBobAmplitude: 0.03,
+
+  /** Chain orb pulse: scale oscillation */
+  orbPulseSpeed: 3.0,
+  orbPulseMin: 0.9,
+  orbPulseMax: 1.15,
+
+  /** Chain spark vertical bob speed (radians/sec) */
+  sparkBobSpeed: 2.5,
+  sparkPhaseScale: 10,
+  sparkBobAmplitude: 0.03,
+
+  /** Splash spore bob speed and amplitude */
+  sporeBobSpeed: 1.8,
+  sporeBobAmplitude: 0.04,
+  sporePhaseScale: 5,
+
+  /** Basic crystal rotation speed (radians/sec) */
+  basicCrystalRotSpeed: 0.5,
+
+  /** Sniper tip glow pulse */
+  tipGlowSpeed: 2.0,
+  tipGlowMin: 0.6,
+  tipGlowMax: 1.2,
+} as const;
+
+export const ENEMY_ANIM_CONFIG = {
+  bossCrownSpinSpeed: 2.0,  // radians per second
+} as const;
+
+export const BOSS_CROWN_CONFIG = {
+  radiusMultiplier: 0.8,
+  tubeMultiplier: 0.12,
+  radialSegments: 8,
+  tubularSegments: 16,
+  emissiveIntensity: 0.8,
+  roughness: 0.3,
+  metalness: 0.5,
+  yOffsetMultiplier: 0.6,
+} as const;
+
+export const TILE_PULSE_CONFIG = {
+  /** Emissive intensity oscillation for spawner/exit tiles */
+  speed: 1.5,
+  min: 0.3,
+  max: 0.7,
 } as const;

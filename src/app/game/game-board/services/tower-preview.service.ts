@@ -2,18 +2,14 @@ import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { TowerType, TOWER_CONFIGS, getEffectiveStats } from '../models/tower.model';
 import { PREVIEW_CONFIG } from '../constants/preview.constants';
-
-/** Ghost tower box geometry half-height (centered at y=0.5 for a 1-unit tall box). */
-const GHOST_BOX_SIZE = 0.6;
-
-/** Y-center of the ghost tower mesh (sits on the tile surface). */
-const GHOST_MESH_Y = 0.5;
+import { PREVIEW_GHOST_CONFIG, PREVIEW_GHOST_DEFAULT } from '../constants/ui.constants';
 
 /** Tracks which tower type the current preview meshes were built for. */
 type PreviewState = {
   towerType: TowerType;
   ghostMesh: THREE.Mesh;
   ringMesh: THREE.Mesh;
+  yCenter: number;
 } | null;
 
 @Injectable()
@@ -48,7 +44,7 @@ export class TowerPreviewService {
       : PREVIEW_CONFIG.invalidColor;
     (ghostMesh.material as THREE.MeshBasicMaterial).color.setHex(ghostColor);
 
-    ghostMesh.position.set(worldX, GHOST_MESH_Y, worldZ);
+    ghostMesh.position.set(worldX, this.previewState!.yCenter, worldZ);
     ringMesh.position.set(worldX, PREVIEW_CONFIG.groundOffset, worldZ);
   }
 
@@ -73,8 +69,8 @@ export class TowerPreviewService {
     const color = TOWER_CONFIGS[towerType].color;
     const range = getEffectiveStats(towerType, 1).range;
 
-    // Ghost tower — simple box
-    const geometry = new THREE.BoxGeometry(GHOST_BOX_SIZE, 1, GHOST_BOX_SIZE);
+    // Ghost tower — type-specific silhouette
+    const { geometry, yCenter } = this.createGhostGeometry(towerType);
     const material = new THREE.MeshBasicMaterial({
       color,
       transparent: true,
@@ -101,7 +97,23 @@ export class TowerPreviewService {
     ringMesh.rotateX(-Math.PI / 2);
     scene.add(ringMesh);
 
-    return { towerType, ghostMesh, ringMesh };
+    return { towerType, ghostMesh, ringMesh, yCenter };
+  }
+
+  private createGhostGeometry(towerType: TowerType): { geometry: THREE.BufferGeometry; yCenter: number } {
+    const config = PREVIEW_GHOST_CONFIG[towerType] ?? PREVIEW_GHOST_DEFAULT;
+    const geometry = this.buildGeometry(config.type, config.args);
+    return { geometry, yCenter: config.yCenter };
+  }
+
+  private buildGeometry(type: string, args: readonly number[]): THREE.BufferGeometry {
+    switch (type) {
+      case 'cone':     return new THREE.ConeGeometry(...(args as [number, number, number]));
+      case 'sphere':   return new THREE.SphereGeometry(...(args as [number, number, number, number, number, number, number]));
+      case 'cylinder': return new THREE.CylinderGeometry(...(args as [number, number, number, number]));
+      case 'box':      return new THREE.BoxGeometry(...(args as [number, number, number]));
+      default:         return new THREE.BoxGeometry(...(PREVIEW_GHOST_DEFAULT.args as [number, number, number]));
+    }
   }
 
   private removeMeshesFromScene(scene: THREE.Scene): void {

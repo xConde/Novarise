@@ -6,7 +6,7 @@ import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
-import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y } from '../constants/combat.constants';
+import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y, IMPACT_FLASH_CONFIG } from '../constants/combat.constants';
 import { PROJECTILE_POOL_CONFIG } from '../constants/physics.constants';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { StatusEffectService } from './status-effect.service';
@@ -16,6 +16,8 @@ import { ObjectPool } from '../utils/object-pool';
 interface Projectile {
   id: string;
   mesh: THREE.Mesh;
+  trail: THREE.Line | null;
+  trailPositions: THREE.Vector3[];
   towerKey: string;
   targetId: string;
   speed: number;
@@ -24,10 +26,19 @@ interface Projectile {
   towerType: TowerType;
 }
 
+/** Max trail vertices — matches PROJECTILE_CONFIG.trailLength */
+const TRAIL_MAX_VERTICES = PROJECTILE_CONFIG.trailLength;
+
 /** A chain arc line that persists for a short visual duration before removal. */
 interface ChainArc {
   line: THREE.Line;
   expiresAt: number; // gameTime when this arc should be removed
+}
+
+/** A brief impact flash sphere that fades and disappears. */
+interface ImpactFlash {
+  mesh: THREE.Mesh;
+  expiresAt: number;
 }
 
 /** A mortar blast zone that persists and deals DoT. */
@@ -53,11 +64,13 @@ export class TowerCombatService {
   private projectiles: Projectile[] = [];
   private chainArcs: ChainArc[] = [];
   private mortarZones: MortarZone[] = [];
+  private impactFlashes: ImpactFlash[] = [];
   private projectileCounter = 0;
   private gameTime = 0;
   private spatialGrid = new SpatialGrid();
   private towerDamageMultiplier = 1;
   private projectilePool: ObjectPool<THREE.Mesh>;
+  private sharedImpactFlashGeometry: THREE.SphereGeometry | null = null;
 
   setTowerDamageMultiplier(mult: number): void {
     this.towerDamageMultiplier = mult;
@@ -79,6 +92,26 @@ export class TowerCombatService {
         (mesh.material as THREE.Material).dispose();
       }
     );
+  }
+
+  private getImpactFlashGeometry(): THREE.SphereGeometry {
+    if (!this.sharedImpactFlashGeometry) {
+      this.sharedImpactFlashGeometry = new THREE.SphereGeometry(
+        IMPACT_FLASH_CONFIG.radius,
+        IMPACT_FLASH_CONFIG.segments,
+        IMPACT_FLASH_CONFIG.segments
+      );
+    }
+    return this.sharedImpactFlashGeometry;
+  }
+
+  /** Pre-allocate a trail BufferGeometry with fixed-size buffer for in-place updates. */
+  private createTrailGeometry(): THREE.BufferGeometry {
+    const geom = new THREE.BufferGeometry();
+    const positions = new Float32Array(TRAIL_MAX_VERTICES * 3);
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geom.setDrawRange(0, 0);
+    return geom;
   }
 
   private createPooledProjectileMesh(): THREE.Mesh {
@@ -216,7 +249,9 @@ export class TowerCombatService {
       const moveDistance = proj.speed * deltaTime;
 
       if (moveDistance >= dist) {
-        // Hit — apply damage before disposing mesh (applyDamage reads proj.mesh.position)
+        // Hit — spawn impact flash at hit position
+        this.spawnImpactFlash(proj.mesh.position.x, proj.mesh.position.z, scene);
+        // Apply damage before disposing mesh (applyDamage reads proj.mesh.position)
         const kills = this.applyDamage(proj, scene);
         killedEnemies.push(...kills);
         hitCount++;
@@ -227,6 +262,37 @@ export class TowerCombatService {
         const nz = dz / dist;
         proj.mesh.position.x += nx * moveDistance;
         proj.mesh.position.z += nz * moveDistance;
+
+        // Update trail
+        proj.trailPositions.push(proj.mesh.position.clone());
+        if (proj.trailPositions.length > PROJECTILE_CONFIG.trailLength) {
+          proj.trailPositions.shift();
+        }
+
+        if (proj.trailPositions.length >= 2) {
+          if (!proj.trail) {
+            const projColor = (proj.mesh.material as THREE.MeshBasicMaterial).color;
+            const trailMat = new THREE.LineBasicMaterial({
+              color: projColor,
+              transparent: true,
+              opacity: PROJECTILE_CONFIG.trailOpacity,
+            });
+            proj.trail = new THREE.Line(this.createTrailGeometry(), trailMat);
+            scene.add(proj.trail);
+          }
+
+          // Update positions in-place — no per-frame geometry allocation
+          const posAttr = proj.trail.geometry.getAttribute('position') as THREE.BufferAttribute;
+          const arr = posAttr.array as Float32Array;
+          for (let i = 0; i < proj.trailPositions.length; i++) {
+            arr[i * 3] = proj.trailPositions[i].x;
+            arr[i * 3 + 1] = proj.trailPositions[i].y;
+            arr[i * 3 + 2] = proj.trailPositions[i].z;
+          }
+          posAttr.needsUpdate = true;
+          proj.trail.geometry.setDrawRange(0, proj.trailPositions.length);
+        }
+
         survivingProjectiles.push(proj);
       }
     }
@@ -244,6 +310,22 @@ export class TowerCombatService {
       }
     }
     this.chainArcs = survivingArcs;
+
+    // Expire impact flashes (geometry is shared — only dispose material)
+    const survivingFlashes: ImpactFlash[] = [];
+    for (const flash of this.impactFlashes) {
+      if (this.gameTime >= flash.expiresAt) {
+        scene.remove(flash.mesh);
+        (flash.mesh.material as THREE.Material).dispose();
+      } else {
+        // Fade out over lifetime
+        const remaining = flash.expiresAt - this.gameTime;
+        const pct = remaining / IMPACT_FLASH_CONFIG.lifetime;
+        (flash.mesh.material as THREE.MeshBasicMaterial).opacity = IMPACT_FLASH_CONFIG.opacity * pct;
+        survivingFlashes.push(flash);
+      }
+    }
+    this.impactFlashes = survivingFlashes;
 
     // Update mortar zones: deal DoT and expire old zones
     const survivingZones: MortarZone[] = [];
@@ -404,18 +486,34 @@ export class TowerCombatService {
       const toX = currentTarget.position.x;
       const toZ = currentTarget.position.z;
 
-      // Create visual arc line (tower → first target, then target → next target)
+      // Create zigzag lightning arc (tower → target, or target → next target)
       {
+        const segs = CHAIN_LIGHTNING_CONFIG.zigzagSegments;
+        const jitter = CHAIN_LIGHTNING_CONFIG.zigzagJitter;
+        const arcY = GROUND_EFFECT_Y + CHAIN_LIGHTNING_CONFIG.arcHeightOffset;
+        const vertices = new Float32Array((segs + 1) * 3);
+
+        // Direction vector and perpendicular
+        const dirX = toX - fromX;
+        const dirZ = toZ - fromZ;
+        const len = Math.sqrt(dirX * dirX + dirZ * dirZ) || 1;
+        const perpX = -dirZ / len;
+        const perpZ = dirX / len;
+
+        for (let i = 0; i <= segs; i++) {
+          const t = i / segs;
+          const offset = (i === 0 || i === segs) ? 0 : (Math.random() - 0.5) * 2 * jitter;
+          vertices[i * 3]     = fromX + dirX * t + perpX * offset;
+          vertices[i * 3 + 1] = arcY;
+          vertices[i * 3 + 2] = fromZ + dirZ * t + perpZ * offset;
+        }
+
         const arcGeom = new THREE.BufferGeometry();
-        const vertices = new Float32Array([
-          fromX, GROUND_EFFECT_Y + CHAIN_LIGHTNING_CONFIG.arcHeightOffset, fromZ,
-          toX,   GROUND_EFFECT_Y + CHAIN_LIGHTNING_CONFIG.arcHeightOffset, toZ
-        ]);
         arcGeom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
         const arcMat = new THREE.LineBasicMaterial({
           color: stats.color,
           transparent: true,
-          opacity: 0.85
+          opacity: CHAIN_LIGHTNING_CONFIG.arcOpacity
         });
         const arc = new THREE.Line(arcGeom, arcMat);
         scene.add(arc);
@@ -497,6 +595,8 @@ export class TowerCombatService {
     this.projectiles.push({
       id: `proj-${this.projectileCounter++}`,
       mesh,
+      trail: null,
+      trailPositions: [],
       towerKey: tower.id,
       targetId: target.id,
       speed: stats.projectileSpeed,
@@ -527,6 +627,8 @@ export class TowerCombatService {
     this.projectiles.push({
       id: `proj-${this.projectileCounter++}`,
       mesh,
+      trail: null,
+      trailPositions: [],
       towerKey: tower.id,
       targetId: target.id,
       speed: stats.projectileSpeed,
@@ -651,7 +753,29 @@ export class TowerCombatService {
     return kills;
   }
 
+  private spawnImpactFlash(x: number, z: number, scene: THREE.Scene): void {
+    const geometry = this.getImpactFlashGeometry();
+    const material = new THREE.MeshBasicMaterial({
+      color: IMPACT_FLASH_CONFIG.color,
+      transparent: true,
+      opacity: IMPACT_FLASH_CONFIG.opacity
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, IMPACT_FLASH_CONFIG.spawnHeight, z);
+    scene.add(mesh);
+    this.impactFlashes.push({ mesh, expiresAt: this.gameTime + IMPACT_FLASH_CONFIG.lifetime });
+  }
+
   private removeProjectileMesh(proj: Projectile, scene: THREE.Scene): void {
+    // Clean up trail
+    if (proj.trail) {
+      scene.remove(proj.trail);
+      proj.trail.geometry.dispose();
+      (proj.trail.material as THREE.Material).dispose();
+      proj.trail = null;
+    }
+    proj.trailPositions = [];
+
     if (proj.towerType === TowerType.MORTAR) {
       // Mortar projectiles are not pooled — dispose normally
       scene.remove(proj.mesh);
@@ -698,6 +822,17 @@ export class TowerCombatService {
       (arc.line.material as THREE.Material).dispose();
     }
     this.chainArcs = [];
+
+    for (const flash of this.impactFlashes) {
+      scene.remove(flash.mesh);
+      (flash.mesh.material as THREE.Material).dispose();
+    }
+    this.impactFlashes = [];
+
+    if (this.sharedImpactFlashGeometry) {
+      this.sharedImpactFlashGeometry.dispose();
+      this.sharedImpactFlashGeometry = null;
+    }
 
     for (const zone of this.mortarZones) {
       scene.remove(zone.mesh);

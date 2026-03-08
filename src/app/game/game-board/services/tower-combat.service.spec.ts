@@ -6,6 +6,7 @@ import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_SPECIALIZATIONS, M
 import { Enemy, EnemyType } from '../models/enemy.model';
 import { AudioService } from './audio.service';
 import { StatusEffectService } from './status-effect.service';
+import { CHAIN_LIGHTNING_CONFIG, IMPACT_FLASH_CONFIG } from '../constants/combat.constants';
 import * as THREE from 'three';
 
 describe('TowerCombatService', () => {
@@ -459,6 +460,108 @@ describe('TowerCombatService', () => {
       service.update(1.1, mockScene);
       service.update(0.5, mockScene);
       expect(newEnemy.health).toBeLessThan(1000);
+    });
+
+    it('should initialize projectile with null trail and empty trailPositions', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy at distance so projectile stays in flight
+      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', enemy);
+
+      service.update(0.016, mockScene);
+
+      const projectiles = (service as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
+      expect(projectiles.length).toBeGreaterThan(0);
+      // After first update, trail is still null (needs >=2 positions), trailPositions has 1 entry
+      expect(projectiles[0].trail).toBeNull();
+    });
+
+    it('should create trail after projectile has moved at least 2 frames', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy within BASIC range (3) but far enough for multiple frames of travel
+      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      // Frame 1: fire + first move — 1 trail position, no trail line yet
+      service.update(0.016, mockScene);
+      // Frame 2: second move — 2 trail positions, trail created
+      service.update(0.016, mockScene);
+
+      const projectiles = (service as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
+      expect(projectiles.length).toBeGreaterThan(0);
+      expect(projectiles[0].trail).not.toBeNull();
+      expect(projectiles[0].trailPositions.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should clean up trail when projectile is removed', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy within BASIC range (3) but far enough for multiple frames of travel
+      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      // Build up a trail
+      service.update(0.016, mockScene);
+      service.update(0.016, mockScene);
+
+      const projectiles = (service as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
+      expect(projectiles.length).toBeGreaterThan(0);
+      const trail = projectiles[0].trail;
+      expect(trail).not.toBeNull();
+
+      // Remove enemy — projectile should be cleaned up including trail
+      enemyMap.delete('e1');
+      service.update(0.016, mockScene);
+
+      // Trail should have been removed from scene
+      expect(trail).toBeTruthy();
+      expect(mockScene.children).not.toContain(trail!);
+    });
+
+    it('should reuse trail geometry reference and grow drawRange.count as trail builds', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy far enough to keep projectile in flight for several frames
+      const enemy = createEnemy('e1', TOWER_WORLD_X + 2.5, TOWER_WORLD_Z, 100000);
+      enemyMap.set('e1', enemy);
+
+      // Frame 1: fire projectile
+      service.update(0.016, mockScene);
+      // Frame 2: trail is created (2 positions)
+      service.update(0.016, mockScene);
+
+      const projectiles = (service as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
+      expect(projectiles.length).toBeGreaterThan(0);
+      const trail = projectiles[0].trail!;
+      expect(trail).not.toBeNull();
+
+      const geometryRef = trail.geometry;
+      const countAfter2 = trail.geometry.drawRange.count;
+      expect(countAfter2).toBeGreaterThanOrEqual(2);
+
+      // Record the position attribute version before next update
+      const posAttrBefore = trail.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const versionBefore = posAttrBefore.version;
+
+      // Frame 3: trail grows
+      service.update(0.016, mockScene);
+
+      const projectilesAfter = (service as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
+      expect(projectilesAfter.length).toBeGreaterThan(0);
+      const trailAfter = projectilesAfter[0].trail!;
+
+      // Geometry reference must be the same object (in-place update, not replaced)
+      expect(trailAfter.geometry).toBe(geometryRef);
+
+      // drawRange.count must have grown
+      const countAfter3 = trailAfter.geometry.drawRange.count;
+      expect(countAfter3).toBeGreaterThan(countAfter2);
+
+      // Position attribute version should have incremented (needsUpdate = true bumps version)
+      const posAttrAfter = trailAfter.geometry.getAttribute('position') as THREE.BufferAttribute;
+      expect(posAttrAfter.version).toBeGreaterThan(versionBefore);
     });
   });
 
@@ -1155,6 +1258,155 @@ describe('TowerCombatService', () => {
 
       // Projectile should have hit regardless of tower being removed
       expect(enemy.health).toBeLessThan(1000);
+    });
+  });
+
+  // --- Chain Lightning Zigzag ---
+
+  describe('chain lightning zigzag', () => {
+    it('should create arc with zigzagSegments + 1 vertices', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(1.0, mockScene); // past CHAIN fireRate
+
+      const chainArcs = (service as any)['chainArcs'] as { line: THREE.Line; expiresAt: number }[];
+      expect(chainArcs.length).toBeGreaterThan(0);
+
+      const expectedVertexCount = CHAIN_LIGHTNING_CONFIG.zigzagSegments + 1;
+      const posAttr = chainArcs[0].line.geometry.getAttribute('position');
+      expect(posAttr.count).toBe(expectedVertexCount);
+    });
+
+    it('should have endpoints that connect start and end positions without jitter', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      const targetX = TOWER_WORLD_X + 1;
+      const targetZ = TOWER_WORLD_Z + 1;
+      const e1 = createEnemy('e1', targetX, targetZ, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(1.0, mockScene);
+
+      const chainArcs = (service as any)['chainArcs'] as { line: THREE.Line; expiresAt: number }[];
+      expect(chainArcs.length).toBeGreaterThan(0);
+
+      const posAttr = chainArcs[0].line.geometry.getAttribute('position');
+      const segs = CHAIN_LIGHTNING_CONFIG.zigzagSegments;
+
+      // First vertex should be at the tower world position (arc starts from tower)
+      const firstX = posAttr.getX(0);
+      const firstZ = posAttr.getZ(0);
+      expect(firstX).toBeCloseTo(TOWER_WORLD_X, 2);
+      expect(firstZ).toBeCloseTo(TOWER_WORLD_Z, 2);
+
+      // Last vertex should be at the enemy position (arc ends at target)
+      const lastX = posAttr.getX(segs);
+      const lastZ = posAttr.getZ(segs);
+      expect(lastX).toBeCloseTo(targetX, 2);
+      expect(lastZ).toBeCloseTo(targetZ, 2);
+    });
+  });
+
+  // --- Impact Flash ---
+
+  describe('impact flash', () => {
+    it('should spawn an impact flash when a projectile hits an enemy', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy at tower position — projectile hits instantly (dist=0)
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(2.0, mockScene);
+
+      const impactFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      expect(impactFlashes.length).toBeGreaterThan(0);
+    });
+
+    it('should create flash with SphereGeometry', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(2.0, mockScene);
+
+      const impactFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      expect(impactFlashes.length).toBeGreaterThan(0);
+      expect(impactFlashes[0].mesh.geometry).toBeInstanceOf(THREE.SphereGeometry);
+    });
+
+    it('should clean up flash after its lifetime expires', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(2.0, mockScene); // fire + hit → flash spawned
+
+      const impactFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      expect(impactFlashes.length).toBeGreaterThan(0);
+
+      // Move enemy far away so no new flashes are spawned
+      e1.position.x = TOWER_WORLD_X + 20;
+
+      // Advance time past flash lifetime (IMPACT_FLASH_CONFIG.lifetime = 0.08s)
+      service.update(IMPACT_FLASH_CONFIG.lifetime + 0.01, mockScene);
+
+      const remainingFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      expect(remainingFlashes.length).toBe(0);
+    });
+
+    it('should share the same geometry reference across multiple impact flashes', () => {
+      // Register two towers so two projectiles can fire simultaneously
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      service.registerTower(TOWER_ROW + 1, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Two enemies — each at its tower's position for instant hit
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      // Second tower is at row+1 → world Z offset by 1 tile
+      const e2 = createEnemy('e2', TOWER_WORLD_X, TOWER_WORLD_Z + 1, 1000);
+      enemyMap.set('e2', e2);
+
+      service.update(2.0, mockScene);
+
+      const impactFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      expect(impactFlashes.length).toBeGreaterThanOrEqual(2);
+
+      // Both flash meshes should share the same geometry instance (shared pool)
+      expect(impactFlashes[0].mesh.geometry).toBe(impactFlashes[1].mesh.geometry);
+    });
+
+    it('should re-create flash geometry after cleanup disposes it', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // First flash — instant hit
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+      service.update(2.0, mockScene);
+
+      const flashesBefore = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      expect(flashesBefore.length).toBeGreaterThan(0);
+      const geometryBeforeCleanup = flashesBefore[0].mesh.geometry;
+
+      // Cleanup disposes the shared geometry and sets it to null
+      service.cleanup(mockScene);
+
+      // Re-register tower and create a new flash
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const e2 = createEnemy('e2', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e2', e2);
+      service.update(2.0, mockScene);
+
+      const flashesAfter = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      expect(flashesAfter.length).toBeGreaterThan(0);
+      const geometryAfterCleanup = flashesAfter[0].mesh.geometry;
+
+      // New geometry must be a different reference (old one was disposed)
+      expect(geometryAfterCleanup).not.toBe(geometryBeforeCleanup);
+      expect(geometryAfterCleanup).toBeInstanceOf(THREE.SphereGeometry);
     });
   });
 });

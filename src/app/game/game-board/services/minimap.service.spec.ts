@@ -7,7 +7,8 @@ describe('MinimapService', () => {
   let container: HTMLElement;
 
   const terrain: MinimapTerrainData = {
-    gridSize: 25,
+    gridWidth: 25,
+    gridHeight: 20,
     isPath: (row: number, col: number) => row === 12,
     spawnPoints: [{ x: 0, z: 12 }],
     exitPoints: [{ x: 24, z: 12 }],

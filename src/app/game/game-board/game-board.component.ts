@@ -31,11 +31,11 @@ import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, V
 import { GameModifier, GAME_MODIFIER_CONFIGS, GameModifierConfig, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
 import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants/rendering.constants';
-import { AMBIENT_LIGHT, DIRECTIONAL_LIGHT, UNDER_LIGHT, POINT_LIGHTS } from './constants/lighting.constants';
+import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from './constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
 import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
-import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
+import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
 import { MOBILE_CONFIG } from './constants/mobile.constants';
@@ -70,10 +70,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private controls!: OrbitControls;
   private particles: THREE.Points | null = null;
   private skybox?: THREE.Mesh;
-  private ambientLight?: THREE.AmbientLight;
-  private directionalLight?: THREE.DirectionalLight;
+  private hemisphereLight?: THREE.HemisphereLight;
+  private keyLight?: THREE.DirectionalLight;
+  private fillLight?: THREE.DirectionalLight;
+  private rimLight?: THREE.DirectionalLight;
   private underLight?: THREE.PointLight;
-  private pointLights: THREE.PointLight[] = [];
+  private accentLights: THREE.PointLight[] = [];
   private bloomPass?: UnrealBloomPass;
   private vignettePass?: ShaderPass;
   private renderPass?: RenderPass;
@@ -248,7 +250,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private minimapService: MinimapService,
     private settingsService: SettingsService,
     private towerPreviewService: TowerPreviewService,
-    private pathVisualizationService: PathVisualizationService
+    private pathVisualizationService: PathVisualizationService,
+    private statusEffectService: StatusEffectService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -434,9 +437,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       const scale = TOWER_VISUAL_CONFIG.scaleBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
       towerMesh.scale.set(scale, scale, scale);
 
-      // Boost emissive intensity on upgrade
+      // Boost emissive intensity on upgrade (skip animated children — their emissive is driven per-frame)
+      const animatedNames = new Set(['tip', 'orb']);
       towerMesh.traverse(child => {
-        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
+        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial && !animatedNames.has(child.name)) {
           child.material.emissiveIntensity = TOWER_VISUAL_CONFIG.emissiveBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.emissiveIncrement;
         }
       });
@@ -659,6 +663,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.renderGameBoard();
     this.addGridLines();
+    this.initializeLights();
+    this.addSkybox();
+    this.initializeParticles();
     this.minimapService.init(this.canvasContainer.nativeElement);
     this.lastPreviewKey = '';
     this.lastTime = 0;
@@ -755,23 +762,31 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     // Clean up lights
-    if (this.ambientLight) {
-      this.scene.remove(this.ambientLight);
-      this.ambientLight = undefined;
+    if (this.hemisphereLight) {
+      this.scene.remove(this.hemisphereLight);
+      this.hemisphereLight = undefined;
     }
-    if (this.directionalLight) {
-      this.directionalLight.shadow.map?.dispose();
-      this.scene.remove(this.directionalLight);
-      this.directionalLight = undefined;
+    if (this.keyLight) {
+      this.keyLight.shadow.map?.dispose();
+      this.scene.remove(this.keyLight);
+      this.keyLight = undefined;
+    }
+    if (this.fillLight) {
+      this.scene.remove(this.fillLight);
+      this.fillLight = undefined;
+    }
+    if (this.rimLight) {
+      this.scene.remove(this.rimLight);
+      this.rimLight = undefined;
     }
     if (this.underLight) {
       this.scene.remove(this.underLight);
       this.underLight = undefined;
     }
-    for (const light of this.pointLights) {
+    for (const light of this.accentLights) {
       this.scene.remove(light);
     }
-    this.pointLights = [];
+    this.accentLights = [];
   }
 
   // --- Scene setup ---
@@ -880,35 +895,49 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private initializeLights(): void {
-    this.ambientLight = new THREE.AmbientLight(AMBIENT_LIGHT.color, AMBIENT_LIGHT.intensity);
-    this.scene.add(this.ambientLight);
+    this.hemisphereLight = new THREE.HemisphereLight(
+      HEMISPHERE_LIGHT.skyColor,
+      HEMISPHERE_LIGHT.groundColor,
+      HEMISPHERE_LIGHT.intensity
+    );
+    this.scene.add(this.hemisphereLight);
 
-    const directionalLight = new THREE.DirectionalLight(DIRECTIONAL_LIGHT.color, DIRECTIONAL_LIGHT.intensity);
-    directionalLight.position.set(...DIRECTIONAL_LIGHT.position!);
-    directionalLight.castShadow = DIRECTIONAL_LIGHT.castShadow!;
-    directionalLight.shadow.camera.left = -DIRECTIONAL_LIGHT.shadow.bounds;
-    directionalLight.shadow.camera.right = DIRECTIONAL_LIGHT.shadow.bounds;
-    directionalLight.shadow.camera.top = DIRECTIONAL_LIGHT.shadow.bounds;
-    directionalLight.shadow.camera.bottom = -DIRECTIONAL_LIGHT.shadow.bounds;
-    directionalLight.shadow.mapSize.width = DIRECTIONAL_LIGHT.shadow.mapSize;
-    directionalLight.shadow.mapSize.height = DIRECTIONAL_LIGHT.shadow.mapSize;
+    // Ambient light removed — hemisphere light provides better ambient fill with sky/ground gradient
+
+    const keyLight = new THREE.DirectionalLight(KEY_LIGHT.color, KEY_LIGHT.intensity);
+    keyLight.position.set(...KEY_LIGHT.position!);
+    keyLight.castShadow = KEY_LIGHT.castShadow;
+    keyLight.shadow.camera.left = -KEY_LIGHT.shadow.bounds;
+    keyLight.shadow.camera.right = KEY_LIGHT.shadow.bounds;
+    keyLight.shadow.camera.top = KEY_LIGHT.shadow.bounds;
+    keyLight.shadow.camera.bottom = -KEY_LIGHT.shadow.bounds;
+    keyLight.shadow.mapSize.width = KEY_LIGHT.shadow.mapSize;
+    keyLight.shadow.mapSize.height = KEY_LIGHT.shadow.mapSize;
     if (window.innerWidth <= MOBILE_CONFIG.breakpoint) {
-      directionalLight.shadow.mapSize.width = Math.min(directionalLight.shadow.mapSize.width, MOBILE_CONFIG.maxShadowMapSize);
-      directionalLight.shadow.mapSize.height = Math.min(directionalLight.shadow.mapSize.height, MOBILE_CONFIG.maxShadowMapSize);
+      keyLight.shadow.mapSize.width = Math.min(keyLight.shadow.mapSize.width, MOBILE_CONFIG.maxShadowMapSize);
+      keyLight.shadow.mapSize.height = Math.min(keyLight.shadow.mapSize.height, MOBILE_CONFIG.maxShadowMapSize);
     }
-    directionalLight.shadow.bias = DIRECTIONAL_LIGHT.shadow.bias;
-    this.directionalLight = directionalLight;
-    this.scene.add(this.directionalLight);
+    keyLight.shadow.bias = KEY_LIGHT.shadow.bias;
+    this.keyLight = keyLight;
+    this.scene.add(this.keyLight);
+
+    this.fillLight = new THREE.DirectionalLight(FILL_LIGHT.color, FILL_LIGHT.intensity);
+    this.fillLight.position.set(...FILL_LIGHT.position!);
+    this.scene.add(this.fillLight);
+
+    this.rimLight = new THREE.DirectionalLight(RIM_LIGHT.color, RIM_LIGHT.intensity);
+    this.rimLight.position.set(...RIM_LIGHT.position!);
+    this.scene.add(this.rimLight);
 
     this.underLight = new THREE.PointLight(UNDER_LIGHT.color, UNDER_LIGHT.intensity, UNDER_LIGHT.range);
     this.underLight.position.set(...UNDER_LIGHT.position!);
     this.scene.add(this.underLight);
 
-    for (const cfg of POINT_LIGHTS) {
+    for (const cfg of ACCENT_LIGHTS) {
       const light = new THREE.PointLight(cfg.color, cfg.intensity, cfg.range);
       light.position.set(...cfg.position!);
       this.scene.add(light);
-      this.pointLights.push(light);
+      this.accentLights.push(light);
     }
   }
 
@@ -973,19 +1002,25 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           vec3 darkBlue = vec3(0.06, 0.04, 0.12);
           vec3 color = mix(deepPurple, darkBlue, vUv.y * 0.5);
 
+          // Stars with twinkle
           vec2 starPos = vUv * 150.0;
           float star = random(floor(starPos));
           if (star > 0.992) {
-            float brightness = random(floor(starPos) + 1.0) * 0.5;
+            float baseBright = random(floor(starPos) + 1.0) * 0.5;
+            float twinkle = 0.6 + 0.4 * sin(time * (1.0 + random(floor(starPos) + 2.0) * 3.0));
+            float brightness = baseBright * twinkle;
             color += vec3(brightness * 0.4, brightness * 0.3, brightness * 0.5);
           }
 
-          float vein1 = random(floor(vUv * 40.0 + vec2(0.0, vUv.x * 10.0)));
+          // Drifting nebula veins
+          float drift = time * 0.02;
+          float vein1 = random(floor(vUv * 40.0 + vec2(drift, vUv.x * 10.0 + drift * 0.5)));
           if (vein1 > 0.97) {
             color += vec3(0.25, 0.15, 0.3) * vein1;
           }
 
-          float bio = random(floor(vUv * 25.0)) * 0.12;
+          // Slow-shifting bioluminescence
+          float bio = random(floor(vUv * 25.0 + vec2(drift * 0.3))) * 0.12;
           color += vec3(bio * 0.3, bio * 0.5, bio * 0.7);
 
           gl_FragColor = vec4(color, 1.0);
@@ -1555,6 +1590,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.particles.rotation.y += PARTICLE_CONFIG.rotationSpeed;
     }
 
+    // Update skybox time uniform for star twinkle and nebula drift
+    if (this.skybox) {
+      (this.skybox.material as THREE.ShaderMaterial).uniforms['time'].value = time * 0.001;
+    }
+
     // Gameplay tick — fixed timestep accumulator
     if (deltaTime > 0) {
       const state = this.gameStateService.getState();
@@ -1674,13 +1714,19 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
         }
 
-        // Update health bars once per frame (visual only, not per physics step)
-        this.enemyService.updateHealthBars();
+        // Update health bars and status effect visuals once per frame
+        this.enemyService.updateHealthBars(this.camera.quaternion);
+        this.enemyService.updateStatusVisuals(this.statusEffectService.getAllActiveEffects());
+        this.enemyService.updateEnemyAnimations(deltaTime);
 
         // Update minimap
         this.updateMinimap(time);
       }
     }
+
+    // Animate tower idle effects and tile pulses
+    this.updateTowerAnimations(time);
+    this.updateTilePulse(time);
 
     // Update visual effects (run every frame regardless of pause)
     if (deltaTime > 0) {
@@ -1701,13 +1747,22 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private updateMinimap(timeMs: number): void {
     const boardWidth = this.gameBoardService.getBoardWidth();
+    const boardHeight = this.gameBoardService.getBoardHeight();
+
+    // Build spawn/exit point lists from the service
+    const spawnerTiles = this.gameBoardService.getSpawnerTiles();
+    const exitTiles = this.gameBoardService.getExitTiles();
+
     const terrain: MinimapTerrainData = {
-      gridSize: boardWidth,
+      gridWidth: boardWidth,
+      gridHeight: boardHeight,
       isPath: (row: number, col: number) => {
         const board = this.gameBoardService.getGameBoard();
         const tile = board?.[row]?.[col];
         return tile !== undefined && tile.type !== BlockType.WALL;
       },
+      spawnPoints: spawnerTiles.map(([row, col]) => ({ x: col, z: row })),
+      exitPoints: exitTiles.map(([row, col]) => ({ x: col, z: row })),
     };
     const entities: MinimapEntityData[] = [];
     this.towerCombatService.getPlacedTowers().forEach((tower) => {
@@ -1717,6 +1772,76 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       entities.push({ x: enemy.gridPosition.col, z: enemy.gridPosition.row, type: 'enemy' });
     });
     this.minimapService.update(timeMs, terrain, entities);
+  }
+
+  private updateTowerAnimations(time: number): void {
+    const t = time * 0.001; // Convert ms to seconds
+    for (const group of this.towerMeshes.values()) {
+      const towerType = group.userData['towerType'] as TowerType | undefined;
+      if (!towerType) continue;
+
+      group.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+
+        switch (child.name) {
+          case 'crystal':
+            if (towerType === TowerType.BASIC) {
+              child.position.y = TOWER_ANIM_CONFIG.crystalBaseY
+                + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.crystalBobAmplitude;
+              child.rotation.y = t * TOWER_ANIM_CONFIG.basicCrystalRotSpeed;
+            } else if (towerType === TowerType.SLOW) {
+              child.position.y = TOWER_ANIM_CONFIG.slowCrystalBaseY
+                + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.slowCrystalBobAmplitude;
+              child.rotation.y = t * TOWER_ANIM_CONFIG.slowCrystalRotSpeed;
+            }
+            break;
+
+          case 'orb': {
+            const pulseScale = TOWER_ANIM_CONFIG.orbPulseMin
+              + (Math.sin(t * TOWER_ANIM_CONFIG.orbPulseSpeed) * 0.5 + 0.5)
+              * (TOWER_ANIM_CONFIG.orbPulseMax - TOWER_ANIM_CONFIG.orbPulseMin);
+            child.scale.setScalar(pulseScale);
+            break;
+          }
+
+          case 'spark': {
+            if (child.userData['baseY'] === undefined) child.userData['baseY'] = child.position.y;
+            child.position.y = child.userData['baseY']
+              + Math.sin(t * TOWER_ANIM_CONFIG.sparkBobSpeed + child.position.x * TOWER_ANIM_CONFIG.sparkPhaseScale) * TOWER_ANIM_CONFIG.sparkBobAmplitude;
+            break;
+          }
+
+          case 'spore': {
+            if (child.userData['baseY'] === undefined) child.userData['baseY'] = child.position.y;
+            child.position.y = child.userData['baseY']
+              + Math.sin(t * TOWER_ANIM_CONFIG.sporeBobSpeed + child.position.x * TOWER_ANIM_CONFIG.sporePhaseScale) * TOWER_ANIM_CONFIG.sporeBobAmplitude;
+            break;
+          }
+
+          case 'tip': {
+            const mat = child.material as THREE.MeshStandardMaterial;
+            mat.emissiveIntensity = TOWER_ANIM_CONFIG.tipGlowMin
+              + (Math.sin(t * TOWER_ANIM_CONFIG.tipGlowSpeed) * 0.5 + 0.5)
+              * (TOWER_ANIM_CONFIG.tipGlowMax - TOWER_ANIM_CONFIG.tipGlowMin);
+            break;
+          }
+        }
+      });
+    }
+  }
+
+  private updateTilePulse(time: number): void {
+    const t = time * 0.001;
+    const intensity = TILE_PULSE_CONFIG.min
+      + (Math.sin(t * TILE_PULSE_CONFIG.speed) * 0.5 + 0.5)
+      * (TILE_PULSE_CONFIG.max - TILE_PULSE_CONFIG.min);
+
+    for (const mesh of this.tileMeshes.values()) {
+      const tileType = mesh.userData?.['tile']?.type;
+      if (tileType === BlockType.SPAWNER || tileType === BlockType.EXIT) {
+        (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = intensity;
+      }
+    }
   }
 
   // --- Cleanup ---

@@ -632,3 +632,69 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Fix Finding 2: Wave preview max-height overflow protection
 - [x] Fix Finding 3: Card actions z-index for touch devices
 - [x] Run full test suite (1656/1656), commit, push
+
+---
+
+## Red Team Critique — feat/visual-overhaul (2026-03-07)
+
+### Finding 1: Per-frame allocation in getAllActiveEffects() (MEDIUM)
+**Location:** `status-effect.service.ts:155`, called from `game-board.component.ts:1727`
+**Risk:** Creates new `Map` + `Array.from()` per enemy every frame during combat. With 50+ enemies (swarm spawns, endless), this creates hundreds of short-lived objects/sec, pressuring GC during the render loop.
+**Fix:** Reuse a pre-allocated Map, clear-and-repopulate in-place.
+
+### Finding 2: Magic numbers in animations/crown/preview (MEDIUM)
+**Location:** `game-board.component.ts:1790,1809,1816`, `enemy.service.ts:529-539`, `tower-preview.service.ts:106-129`
+**Risk:** Raw numeric literals for crystal rotation speed, spark phase offset, boss crown geometry, and ghost preview dimensions bypass the constants layer.
+**Fix:** Add missing fields to TOWER_ANIM_CONFIG, create BOSS_CROWN_CONFIG, create PREVIEW_GHOST_CONFIG.
+
+### Finding 3: Trail geometry disposal ordering (LOW — FIXED)
+**Location:** `tower-combat.service.ts:251,274`
+**Risk:** Dispose colocated with reassignment in red team pass 8.
+
+## Red Team Critique — feat/visual-overhaul Pass 2 (2026-03-07)
+
+### Finding 1: Trail creates new BufferGeometry per frame per projectile (MEDIUM — FIXED)
+**Location:** `tower-combat.service.ts:248-271`
+**Risk:** 360+ geometry create/dispose cycles/sec with 6 towers firing. GC + GPU churn.
+**Fix:** Pre-allocate fixed-size buffer, update in-place with needsUpdate + setDrawRange.
+
+### Finding 2: Impact flash creates new SphereGeometry per hit (MEDIUM — FIXED)
+**Location:** `tower-combat.service.ts:735-750`
+**Risk:** Identical geometry allocated per hit. Should share like ParticleService.
+**Fix:** Shared geometry field, dispose in cleanup().
+
+### Finding 3: getAllActiveEffects Array.from per enemy (LOW — ACCEPTED)
+**Location:** `status-effect.service.ts:161`
+**Risk:** 30 small array allocs/frame during waves. Low real-world impact.
+**Status:** Accepted. Consumer could iterate effects directly in future refactor.
+
+## Deployment Checklist — feat/visual-overhaul
+- [x] Fix Finding 1: Reuse persistent Map in getAllActiveEffects()
+- [x] Fix Finding 2: Extract magic numbers (TOWER_ANIM_CONFIG, BOSS_CROWN_CONFIG, PREVIEW_GHOST_CONFIG)
+- [x] Fix Finding 3: Colocate trail geometry dispose with reassignment
+- [x] Step 4: Final convention check (console.log, TODO, catch(e), hardcoded numbers)
+- [x] Step 5: Full test suite green (1696/1696, hard gate)
+- [x] Step 6: Push branch + create PR
+
+## Red Team Critique — feat/visual-overhaul Pass 3 (2026-03-07)
+
+### Finding 1: Health bar billboarding broken by enemy facing rotation (CRITICAL — FIXED)
+**Location:** `enemy.service.ts:332-336`
+**Risk:** `quaternion.copy(cameraQuat)` sets LOCAL quaternion on a child of a rotated parent. World quaternion becomes `parentRot * cameraQuat` — health bars tilt/rotate with enemy facing direction.
+**Fix:** Invert parent world quaternion: `getWorldQuaternion().invert().premultiply(cameraQuat)`.
+
+### Finding 2: Dead export AMBIENT_LIGHT (LOW — FIXED)
+**Location:** `lighting.constants.ts:23`
+**Fix:** Removed — no consumers after ambient light was removed from game scene.
+
+### Finding 3: Test gaps — trail reuse, flash sharing, facing angle, billboard rotation (HIGH — FIXED)
+**Fix:** Added 4 new tests in tower-combat.service.spec.ts (trail setDrawRange reuse, shared flash geometry identity, flash re-creation after cleanup) and strengthened 2 tests in enemy.service.spec.ts (correct facing angle, billboard with rotated parent). 1697→1701 tests.
+
+## Deployment Checklist — feat/visual-overhaul (Closer Pass 2)
+- [x] Fix red team pass 2 Finding 1: Pre-allocate trail BufferGeometry, update in-place
+- [x] Fix red team pass 2 Finding 2: Share impact flash SphereGeometry across all flashes
+- [x] Remove redundant ambient light (hemisphere provides ambient fill)
+- [x] Fix tower placement BFS for corner spawners (flood-fill spawner group)
+- [x] Fix minimap dimensions for rectangular boards (gridWidth/gridHeight)
+- [x] Full test suite green (1697/1697)
+- [x] Push to PR
