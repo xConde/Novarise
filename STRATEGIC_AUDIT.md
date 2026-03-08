@@ -805,3 +805,10 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 ### Verified NOT bugs:
 - `updateMatrixWorld()` in editor touchstart/touchmove: defensive but harmless since editor disables orbit/pan on OrbitControls. No runtime cost concern (single matrix multiply per event).
 - `updateMatrixWorld()` frequency in mousemove handler: negligible cost vs. the renderer's own per-frame matrix updates.
+
+## Deployment Checklist — 2026-03-08 (Raycasting/Minimap)
+- [x] Fix raycasting after zoom (updateMatrixWorld + disable left-click orbit)
+- [x] Fix minimap mobile overlap (shrink + reposition)
+- [x] Red team hardening (single-source breakpoint, named constant for disabled mouse)
+- [x] Full test suite green (1898/1898)
+- [ ] Push to remote
