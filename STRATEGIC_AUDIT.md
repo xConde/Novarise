@@ -698,3 +698,35 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Fix minimap dimensions for rectangular boards (gridWidth/gridHeight)
 - [x] Full test suite green (1697/1697)
 - [x] Push to PR
+
+---
+
+## Red Team Critique — feat/hardening-iv (2026-03-07)
+
+### Finding 1: Silent Enemy Skip on Spawn Retry Limit (HIGH — FIXED)
+**Location:** `wave.service.ts:154`
+**Risk:** When enemy spawn fails 300 consecutive times, the enemy is silently discarded. If a map becomes unplayable mid-wave, enemies vanish from the queue without any signal to the player or logs for debugging.
+**Fix:** Added `console.warn` when skipping an enemy after max retries.
+
+### Finding 2: Misplaced JSDoc Comment (LOW — FIXED)
+**Location:** `game-board.component.ts:194-195`
+**Risk:** `recordGameEndIfNeeded()` JSDoc was orphaned above `rebuildTowerChildrenCache()`. Misleading for maintainers.
+**Fix:** Moved JSDoc to the correct method.
+
+### Finding 3: Misleading Template Comment (LOW — FIXED)
+**Location:** `game-board.component.html:53`
+**Risk:** Comment said "shown during SETUP and INTERMISSION" but template only shows during INTERMISSION. Intentional design (wave preview makes no sense before game starts) but comment contradicts behavior.
+**Fix:** Updated comment to match actual behavior.
+
+### Verified NOT bugs:
+- ReadonlySet<string> for unlockedSet: correct TS pattern (prevents external mutation, internal reassignment is fine)
+- BFS on mousemove: preview cache key gates the check — BFS only runs on tile change, not every move
+- Mobile shadow cap + 3-point lighting: correctly applied to keyLight after merge resolution
+- Raycasting cache invalidation: tileMeshArray rebuilt in renderGameBoard, towerChildrenArray rebuilt after place/sell
+
+## Deployment Checklist — feat/hardening-iv
+- [x] Fix Finding 1: Add console.warn on spawn retry skip
+- [x] Fix Finding 2: Move JSDoc to correct method
+- [x] Fix Finding 3: Fix misleading template comment
+- [x] Run full test suite — 1893/1893 green
+- [x] Commit, push, update PR

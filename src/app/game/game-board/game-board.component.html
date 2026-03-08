@@ -50,7 +50,7 @@
     (startGame)="startWave()">
   </app-game-setup>
 
-  <!-- Wave preview panel — shown during SETUP and INTERMISSION -->
+  <!-- Wave preview panel — shown during INTERMISSION only -->
   <div class="wave-preview"
        *ngIf="gameState.phase === GamePhase.INTERMISSION && wavePreview.length > 0"
        aria-label="Upcoming wave preview">

@@ -152,6 +152,7 @@ export class WaveService {
           // Spawn failed (no valid path) — retry next tick, but skip after max retries
           queue.consecutiveFailures++;
           if (queue.consecutiveFailures >= SPAWN_MAX_RETRIES) {
+            console.warn(`Skipping ${queue.type} spawn after ${SPAWN_MAX_RETRIES} consecutive failures`);
             queue.remaining--;
             queue.consecutiveFailures = 0;
           }

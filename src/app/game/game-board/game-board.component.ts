@@ -191,7 +191,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       .filter((a): a is Achievement => a != null);
   }
 
-  /** Records game-end stats for player profile. Safe to call multiple times — fires once per game. */
   /** Rebuilds the flat array of tower child meshes used for raycasting. Call after any tower add/remove. */
   private rebuildTowerChildrenCache(): void {
     this.towerChildrenArray = [];
@@ -200,6 +199,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }));
   }
 
+  /** Records game-end stats for player profile. Safe to call multiple times — fires once per game. */
   private recordGameEndIfNeeded(): void {
     const phase = this.gameStateService.getState().phase;
     if ((phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) && !this.gameEndRecorded) {
