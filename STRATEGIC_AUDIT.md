@@ -778,3 +778,9 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - `startWave()` double-call: guarded by phase check in GameStateService
 - restartGame() state reset: covers all fields including new ones from this branch
 - `totalInvested` tracking: uses actual modifier-adjusted cost, not base config cost
+
+## Deployment Checklist — feat/hardening-iv (Final)
+- [x] Verify full test suite green (1898/1898)
+- [x] Verify no TypeScript compilation errors
+- [ ] Verify no uncommitted changes remain
+- [ ] Push branch and update PR
