@@ -21,42 +21,26 @@ export interface MinimapTerrainData {
   exitPoint?: { x: number; z: number };
 }
 
+/** CSS class applied to the minimap canvas for responsive positioning via stylesheet. */
+const MINIMAP_CSS_CLASS = 'minimap-canvas';
+
 @Injectable()
 export class MinimapService {
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private visible = false;
   private lastUpdateTime = 0;
-  /** Actual canvas pixel size — varies by viewport width. */
-  private currentSize: number = MINIMAP_CONFIG.canvasSize;
 
   /**
    * Creates the minimap canvas and appends it to the given container.
+   * Positioning and responsive sizing are handled by CSS (.minimap-canvas class
+   * in styles.css) so that media queries reliably control mobile layout.
    */
   init(container: HTMLElement): void {
-    // matchMedia uses the same CSS viewport that media queries target,
-    // so it works reliably in DevTools device simulation and on real devices.
-    const isMobile = window.matchMedia(`(max-width: ${MINIMAP_CONFIG.mobileBreakpoint}px)`).matches;
-    this.currentSize = isMobile ? MINIMAP_CONFIG.mobileCanvasSize : MINIMAP_CONFIG.canvasSize;
-
     this.canvas = document.createElement('canvas');
-    this.canvas.width = this.currentSize;
-    this.canvas.height = this.currentSize;
-    this.canvas.style.position = 'absolute';
-
-    if (isMobile) {
-      // Top-left on mobile — avoids overlapping the bottom tower selection bar
-      this.canvas.style.top = `${MINIMAP_CONFIG.mobilePaddingTop}px`;
-      this.canvas.style.left = `${MINIMAP_CONFIG.mobilePaddingLeft}px`;
-    } else {
-      this.canvas.style.bottom = `${MINIMAP_CONFIG.padding}px`;
-      this.canvas.style.left = `${MINIMAP_CONFIG.padding}px`;
-    }
-
-    this.canvas.style.border = `${MINIMAP_CONFIG.borderWidth}px solid ${MINIMAP_CONFIG.borderColor}`;
-    this.canvas.style.borderRadius = '4px';
-    this.canvas.style.zIndex = '100';
-    this.canvas.style.pointerEvents = 'none';
+    this.canvas.width = MINIMAP_CONFIG.canvasSize;
+    this.canvas.height = MINIMAP_CONFIG.canvasSize;
+    this.canvas.className = MINIMAP_CSS_CLASS;
     if (!this.visible) {
       this.canvas.style.display = 'none';
     }
@@ -85,7 +69,7 @@ export class MinimapService {
     }
     this.lastUpdateTime = timeMs;
 
-    const size = this.currentSize;
+    const size = MINIMAP_CONFIG.canvasSize;
     const cellW = size / gridWidth;
     const cellH = size / gridHeight;
 

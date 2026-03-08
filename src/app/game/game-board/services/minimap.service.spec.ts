@@ -39,12 +39,10 @@ describe('MinimapService', () => {
       expect(canvas!.height).toBe(MINIMAP_CONFIG.canvasSize);
     });
 
-    it('should position canvas absolutely in bottom-left', () => {
+    it('should apply the minimap-canvas CSS class for responsive positioning', () => {
       service.init(container);
       const canvas = container.querySelector('canvas') as HTMLCanvasElement;
-      expect(canvas.style.position).toBe('absolute');
-      expect(canvas.style.bottom).toBe(`${MINIMAP_CONFIG.padding}px`);
-      expect(canvas.style.left).toBe(`${MINIMAP_CONFIG.padding}px`);
+      expect(canvas.classList.contains('minimap-canvas')).toBe(true);
     });
   });
 
