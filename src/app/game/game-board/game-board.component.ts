@@ -32,7 +32,7 @@ import { GameModifier, GAME_MODIFIER_CONFIGS, GameModifierConfig, calculateModif
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
 import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG, sinNormalized } from './constants/rendering.constants';
 import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from './constants/lighting.constants';
-import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
+import { CAMERA_CONFIG, CONTROLS_CONFIG, MOUSE_ACTION_DISABLED } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
 import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from './constants/effects.constants';
@@ -1085,6 +1085,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.controls.minPolarAngle = CONTROLS_CONFIG.minPolarAngle;
     this.controls.maxPolarAngle = CONTROLS_CONFIG.maxPolarAngle;
     this.controls.target.set(0, 0, 0);
+    // Left-click reserved for game interaction (tower placement/selection).
+    // Orbit moved to right-click; WASD handles panning.
+    this.controls.mouseButtons.LEFT = MOUSE_ACTION_DISABLED as THREE.MOUSE;
+    this.controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
     this.controls.update();
   }
 
@@ -1098,6 +1102,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
+      // Ensure camera world matrix is fresh — OrbitControls.update() modifies
+      // position/quaternion without updating matrixWorld, which stales the
+      // raycaster when a click gesture triggers a synchronous orbit update.
+      this.camera.updateMatrixWorld();
       this.raycaster.setFromCamera(this.mouse, this.camera);
       const intersects = this.raycaster.intersectObjects(this.tileMeshArray);
 
@@ -1248,6 +1256,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
     this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
+    this.camera.updateMatrixWorld();
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
     // Check for tower mesh clicks/taps first

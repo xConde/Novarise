@@ -14,3 +14,9 @@ export const CONTROLS_CONFIG = {
   minDistanceFactor: 0.5,
   maxDistanceFactor: 3
 };
+
+/**
+ * Sentinel value for disabling an OrbitControls mouse button action.
+ * OrbitControls' switch statement falls to `default: state = NONE` for unknown values.
+ */
+export const MOUSE_ACTION_DISABLED = -1;

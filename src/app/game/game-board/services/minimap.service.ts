@@ -27,17 +27,30 @@ export class MinimapService {
   private ctx: CanvasRenderingContext2D | null = null;
   private visible = false;
   private lastUpdateTime = 0;
+  /** Actual canvas pixel size — varies by viewport width. */
+  private currentSize: number = MINIMAP_CONFIG.canvasSize;
 
   /**
    * Creates the minimap canvas and appends it to the given container.
    */
   init(container: HTMLElement): void {
+    const isMobile = window.innerWidth <= MINIMAP_CONFIG.mobileBreakpoint;
+    this.currentSize = isMobile ? MINIMAP_CONFIG.mobileCanvasSize : MINIMAP_CONFIG.canvasSize;
+
     this.canvas = document.createElement('canvas');
-    this.canvas.width = MINIMAP_CONFIG.canvasSize;
-    this.canvas.height = MINIMAP_CONFIG.canvasSize;
+    this.canvas.width = this.currentSize;
+    this.canvas.height = this.currentSize;
     this.canvas.style.position = 'absolute';
-    this.canvas.style.bottom = `${MINIMAP_CONFIG.padding}px`;
-    this.canvas.style.left = `${MINIMAP_CONFIG.padding}px`;
+
+    if (isMobile) {
+      // Top-left on mobile — avoids overlapping the bottom tower selection bar
+      this.canvas.style.top = `${MINIMAP_CONFIG.mobilePaddingTop}px`;
+      this.canvas.style.left = `${MINIMAP_CONFIG.mobilePaddingLeft}px`;
+    } else {
+      this.canvas.style.bottom = `${MINIMAP_CONFIG.padding}px`;
+      this.canvas.style.left = `${MINIMAP_CONFIG.padding}px`;
+    }
+
     this.canvas.style.border = `${MINIMAP_CONFIG.borderWidth}px solid ${MINIMAP_CONFIG.borderColor}`;
     this.canvas.style.borderRadius = '4px';
     this.canvas.style.zIndex = '100';
@@ -70,7 +83,7 @@ export class MinimapService {
     }
     this.lastUpdateTime = timeMs;
 
-    const size = MINIMAP_CONFIG.canvasSize;
+    const size = this.currentSize;
     const cellW = size / gridWidth;
     const cellH = size / gridHeight;
 

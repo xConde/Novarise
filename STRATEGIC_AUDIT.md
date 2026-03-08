@@ -784,3 +784,24 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Verify no TypeScript compilation errors
 - [x] Verify no uncommitted changes remain
 - [x] Push branch and update PR #21
+
+## Red Team Critique — 2026-03-08 (Raycasting/Minimap fixes)
+
+### Finding 1: Duplicated mobile breakpoint (LOW)
+**Location:** `minimap.constants.ts:4`
+**Risk:** `mobileBreakpoint: 480` duplicates `MOBILE_CONFIG.phoneBreakpoint` from `mobile.constants.ts`. If the phone breakpoint is ever changed, the minimap won't follow — two sources of truth for the same threshold.
+**Fix:** Import and reference `MOBILE_CONFIG.phoneBreakpoint` instead of hardcoding `480`.
+
+### Finding 2: OrbitControls mouseButtons.LEFT = -1 type cast (LOW)
+**Location:** `game-board.component.ts:1088`
+**Risk:** `-1 as THREE.MOUSE` lies to the type system. The runtime behavior is correct (OrbitControls' switch falls to `default: state = NONE`), but a future Three.js update could change how unknown values are handled. The cast is fragile.
+**Fix:** Use a named constant (`MOUSE_DISABLED = -1 as THREE.MOUSE`) in camera.constants.ts so the intent is documented and the cast is centralized.
+
+### Finding 3: Minimap size/position not responsive to orientation change (LOW)
+**Location:** `minimap.service.ts:36`
+**Risk:** `isMobile` is evaluated once at `init()` time. Device rotation (portrait→landscape) won't trigger recalculation. The minimap stays small and top-left even when landscape has room for the full desktop layout.
+**Fix:** Not critical — restartGame() re-inits the minimap which picks up the new orientation. True fix would require a resize listener in the service, which is overengineering for this scope.
+
+### Verified NOT bugs:
+- `updateMatrixWorld()` in editor touchstart/touchmove: defensive but harmless since editor disables orbit/pan on OrbitControls. No runtime cost concern (single matrix multiply per event).
+- `updateMatrixWorld()` frequency in mousemove handler: negligible cost vs. the renderer's own per-frame matrix updates.

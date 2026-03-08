@@ -534,6 +534,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
+      this.camera.updateMatrixWorld();
       this.raycaster.setFromCamera(this.mouse, this.camera);
       const tileMeshes = this.terrainGrid.getTileMeshes();
       const intersects = this.raycaster.intersectObjects(tileMeshes);
@@ -612,6 +613,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
 
+      this.camera.updateMatrixWorld();
       this.raycaster.setFromCamera(this.mouse, this.camera);
       const tileMeshes = this.terrainGrid.getTileMeshes();
       const intersects = this.raycaster.intersectObjects(tileMeshes);
@@ -629,6 +631,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
 
+      this.camera.updateMatrixWorld();
       this.raycaster.setFromCamera(this.mouse, this.camera);
       const tileMeshes = this.terrainGrid.getTileMeshes();
       const intersects = this.raycaster.intersectObjects(tileMeshes);
