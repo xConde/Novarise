@@ -146,6 +146,7 @@ export class MinimapService {
     }
     this.canvas = null;
     this.ctx = null;
+    this.visible = false;
     this.lastUpdateTime = 0;
   }
 }

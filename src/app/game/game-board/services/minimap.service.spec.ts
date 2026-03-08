@@ -167,5 +167,37 @@ describe('MinimapService', () => {
       service.cleanup();
       expect(() => service.cleanup()).not.toThrow();
     });
+
+    it('should reset visible flag so isVisible() returns false', () => {
+      service.init(container);
+      service.show();
+      expect(service.isVisible()).toBe(true);
+      service.cleanup();
+      expect(service.isVisible()).toBe(false);
+    });
+
+    it('should start canvas hidden after cleanup + init', () => {
+      service.init(container);
+      service.show();
+      service.cleanup();
+      service.init(container);
+      const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+      expect(canvas.style.display).toBe('none');
+    });
+
+    it('should start canvas hidden after full restart cycle: init → show → cleanup → init', () => {
+      service.init(container);
+      service.show();
+      const firstCanvas = container.querySelector('canvas') as HTMLCanvasElement;
+      expect(firstCanvas.style.display).toBe('');
+
+      service.cleanup();
+      expect(container.querySelector('canvas')).toBeNull();
+
+      service.init(container);
+      const newCanvas = container.querySelector('canvas') as HTMLCanvasElement;
+      expect(newCanvas.style.display).toBe('none');
+      expect(service.isVisible()).toBe(false);
+    });
   });
 });

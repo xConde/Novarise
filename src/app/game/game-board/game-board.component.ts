@@ -34,7 +34,7 @@ import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG, sinNormalized } fr
 import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from './constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG, MOUSE_ACTION_DISABLED } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
-import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
+import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE, ENEMY_VISUAL_CONFIG, GAME_TIMING_CONFIG } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
@@ -438,9 +438,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       towerMesh.scale.set(scale, scale, scale);
 
       // Boost emissive intensity on upgrade (skip animated children — their emissive is driven per-frame)
-      const animatedNames = new Set(['tip', 'orb']);
       towerMesh.traverse(child => {
-        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial && !animatedNames.has(child.name)) {
+        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial && !TOWER_VISUAL_CONFIG.animatedMeshNames.has(child.name)) {
           child.material.emissiveIntensity = TOWER_VISUAL_CONFIG.emissiveBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.emissiveIncrement;
         }
       });
@@ -1312,8 +1311,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.handleInteraction(clientX, clientY);
   }
 
-  private static readonly PATH_BLOCKED_DISMISS_MS = 2000;
-
   private showPathBlockedWarning(): void {
     this.pathBlocked = true;
     if (this.pathBlockedTimerId !== null) {
@@ -1322,7 +1319,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.pathBlockedTimerId = setTimeout(() => {
       this.pathBlocked = false;
       this.pathBlockedTimerId = null;
-    }, GameBoardComponent.PATH_BLOCKED_DISMISS_MS);
+    }, GAME_TIMING_CONFIG.pathBlockedDismissMs);
   }
 
   private tryPlaceTower(row: number, col: number): void {
@@ -1614,9 +1611,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.physicsAccumulator += deltaTime * state.gameSpeed;
         let stepCount = 0;
 
-        // Elapsed time tracking — accumulate real (unscaled) time, flush every ~1 second
+        // Elapsed time tracking — accumulate real (unscaled) time, flush periodically
         this.elapsedTimeAccumulator += deltaTime;
-        if (this.elapsedTimeAccumulator >= 1) {
+        if (this.elapsedTimeAccumulator >= GAME_TIMING_CONFIG.elapsedTimeFlushInterval) {
           this.gameStateService.addElapsedTime(this.elapsedTimeAccumulator);
           this.elapsedTimeAccumulator = 0;
         }
@@ -1653,10 +1650,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               frameKills.push({
                 damage: killInfo.damage,
                 position: { ...enemy.position },
-                color: ENEMY_STATS[enemy.type]?.color ?? 0xff0000,
+                color: ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackDeathColor,
                 value: enemy.value,
               });
 
+              this.statusEffectService.removeAllEffects(killInfo.id);
               this.enemyService.removeEnemy(killInfo.id, this.scene);
             }
           }
@@ -1669,6 +1667,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             this.gameStateService.loseLife(leaked.leakDamage);
             this.gameStatsService.recordEnemyLeaked();
             frameExitCount++;
+            this.statusEffectService.removeAllEffects(leaked.id);
             this.enemyService.removeEnemy(leaked.id, this.scene);
           }
 
