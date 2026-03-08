@@ -149,6 +149,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   pathBlocked = false;
   initError: string | null = null;
   isLoading = true;
+  contextLost = false;
   private pathBlockedTimerId: ReturnType<typeof setTimeout> | null = null;
   private rangeRingMeshes: THREE.Mesh[] = [];
 
@@ -169,10 +170,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private touchStartHandler: (event: TouchEvent) => void = () => {};
   private touchMoveHandler: (event: TouchEvent) => void = () => {};
   private touchEndHandler: (event: TouchEvent) => void = () => {};
+  private contextLostHandler: (event: Event) => void = () => {};
+  private contextRestoredHandler: (event: Event) => void = () => {};
   private touchStartX = 0;
   private touchStartY = 0;
   private touchStartTime = 0;
   private touchIsDragging = false;
+  private touchWasMultiTouch = false;
   private pinchStartDistance = 0;
 
   // Audio state exposed to template
@@ -843,6 +847,21 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     };
     window.addEventListener('resize', this.resizeHandler);
+
+    this.contextLostHandler = (event: Event) => {
+      event.preventDefault();
+      cancelAnimationFrame(this.animationFrameId);
+      this.contextLost = true;
+    };
+
+    this.contextRestoredHandler = () => {
+      this.contextLost = false;
+      this.lastTime = 0;
+      this.animate();
+    };
+
+    this.renderer.domElement.addEventListener('webglcontextlost', this.contextLostHandler);
+    this.renderer.domElement.addEventListener('webglcontextrestored', this.contextRestoredHandler);
   }
 
   private initializePostProcessing(): void {
@@ -1169,17 +1188,27 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.touchStartY = touch.clientY;
         this.touchStartTime = performance.now();
         this.touchIsDragging = false;
-      } else if (event.touches.length === 2) {
-        // Two-finger: record initial pinch distance for zoom
-        const dx = event.touches[0].clientX - event.touches[1].clientX;
-        const dy = event.touches[0].clientY - event.touches[1].clientY;
-        this.pinchStartDistance = Math.sqrt(dx * dx + dy * dy);
+        this.touchWasMultiTouch = false;
+      } else if (event.touches.length >= 2) {
+        // Multi-finger: flag to prevent tap on final finger lift
+        this.touchWasMultiTouch = true;
+        if (event.touches.length === 2) {
+          // Two-finger: record initial pinch distance for zoom
+          const dx = event.touches[0].clientX - event.touches[1].clientX;
+          const dy = event.touches[0].clientY - event.touches[1].clientY;
+          this.pinchStartDistance = Math.sqrt(dx * dx + dy * dy);
+        }
       }
     };
 
     this.touchMoveHandler = (event: TouchEvent) => {
       event.preventDefault();
       if (!this.camera || !this.controls) return;
+
+      // Safety: if multiple fingers appear in move, flag multi-touch
+      if (event.touches.length >= 2) {
+        this.touchWasMultiTouch = true;
+      }
 
       if (event.touches.length === 1) {
         const touch = event.touches[0];
@@ -1231,7 +1260,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.touchEndHandler = (event: TouchEvent) => {
       event.preventDefault();
 
-      if (event.changedTouches.length === 1 && !this.touchIsDragging) {
+      if (event.changedTouches.length === 1 && !this.touchIsDragging && !this.touchWasMultiTouch) {
         const elapsed = performance.now() - this.touchStartTime;
         if (elapsed < TOUCH_CONFIG.tapThresholdMs) {
           // Short tap with no drag — treat as a click at the original touch position
@@ -1240,6 +1269,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
 
       this.touchIsDragging = false;
+      this.touchWasMultiTouch = false;
       this.pinchStartDistance = 0;
     };
 
@@ -1250,6 +1280,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Shared raycasting logic for both mouse click and touch tap interactions. */
   private handleInteraction(clientX: number, clientY: number): void {
+    const phase = this.gameStateService.getState().phase;
+    if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
+
     const canvas = this.renderer.domElement;
     const rect = canvas.getBoundingClientRect();
     this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
@@ -1567,7 +1600,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // --- Game loop ---
 
   private animate = (time: number = 0): void => {
-    if (!this.renderer || this.initError) return;
+    if (!this.renderer || this.initError || this.contextLost) return;
     this.animationFrameId = requestAnimationFrame(this.animate);
 
     const rawDelta = this.lastTime === 0 ? 0 : (time - this.lastTime) / 1000;
@@ -1879,6 +1912,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       canvas.removeEventListener('touchstart', this.touchStartHandler);
       canvas.removeEventListener('touchmove', this.touchMoveHandler);
       canvas.removeEventListener('touchend', this.touchEndHandler);
+      canvas.removeEventListener('webglcontextlost', this.contextLostHandler);
+      canvas.removeEventListener('webglcontextrestored', this.contextRestoredHandler);
     }
 
     if (this.controls) {

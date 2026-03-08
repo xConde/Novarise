@@ -258,6 +258,134 @@ describe('GameBoardComponent', () => {
       fireKey('3');
       expect(component.selectedTowerType).toBe(TowerType.SNIPER);
     });
+
+    it('pressing Space calls startWave', () => {
+      spyOn(component, 'startWave');
+      fireKey(' ');
+      expect(component.startWave).toHaveBeenCalled();
+    });
+
+    it('pressing r toggles range indicators', () => {
+      spyOn(component, 'toggleAllRanges');
+      fireKey('r');
+      expect(component.toggleAllRanges).toHaveBeenCalled();
+    });
+
+    it('pressing R (uppercase) also toggles range indicators', () => {
+      spyOn(component, 'toggleAllRanges');
+      fireKey('R');
+      expect(component.toggleAllRanges).toHaveBeenCalled();
+    });
+
+    it('pressing h toggles help overlay', () => {
+      expect(component.showHelpOverlay).toBeFalse();
+      fireKey('h');
+      expect(component.showHelpOverlay).toBeTrue();
+    });
+
+    it('pressing H (uppercase) also toggles help overlay', () => {
+      expect(component.showHelpOverlay).toBeFalse();
+      fireKey('H');
+      expect(component.showHelpOverlay).toBeTrue();
+    });
+
+    it('pressing h twice toggles help overlay off', () => {
+      fireKey('h');
+      expect(component.showHelpOverlay).toBeTrue();
+      fireKey('h');
+      expect(component.showHelpOverlay).toBeFalse();
+    });
+
+    it('pressing m toggles minimap visibility', () => {
+      const minimap = fixture.debugElement.injector.get(MinimapService);
+      spyOn(minimap, 'toggleVisibility');
+      fireKey('m');
+      expect(minimap.toggleVisibility).toHaveBeenCalled();
+    });
+
+    it('pressing M (uppercase) also toggles minimap visibility', () => {
+      const minimap = fixture.debugElement.injector.get(MinimapService);
+      spyOn(minimap, 'toggleVisibility');
+      fireKey('M');
+      expect(minimap.toggleVisibility).toHaveBeenCalled();
+    });
+
+    it('pressing v calls togglePathOverlay', () => {
+      spyOn(component, 'togglePathOverlay');
+      fireKey('v');
+      expect(component.togglePathOverlay).toHaveBeenCalled();
+    });
+
+    it('pressing V (uppercase) also calls togglePathOverlay', () => {
+      spyOn(component, 'togglePathOverlay');
+      fireKey('V');
+      expect(component.togglePathOverlay).toHaveBeenCalled();
+    });
+
+    it('Space is ignored in VICTORY phase', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.VICTORY);
+      spyOn(component, 'startWave');
+      fireKey(' ');
+      expect(component.startWave).not.toHaveBeenCalled();
+    });
+
+    it('Space is ignored in DEFEAT phase', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.DEFEAT);
+      spyOn(component, 'startWave');
+      fireKey(' ');
+      expect(component.startWave).not.toHaveBeenCalled();
+    });
+
+    it('P is ignored in VICTORY phase', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.VICTORY);
+      spyOn(component, 'togglePause');
+      fireKey('p');
+      expect(component.togglePause).not.toHaveBeenCalled();
+    });
+
+    it('R is ignored in DEFEAT phase', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.DEFEAT);
+      spyOn(component, 'toggleAllRanges');
+      fireKey('r');
+      expect(component.toggleAllRanges).not.toHaveBeenCalled();
+    });
+
+    it('H is ignored in VICTORY phase', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.VICTORY);
+      component.showHelpOverlay = false;
+      fireKey('h');
+      expect(component.showHelpOverlay).toBeFalse();
+    });
+
+    it('M is ignored in DEFEAT phase', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      const minimap = fixture.debugElement.injector.get(MinimapService);
+      spyOn(minimap, 'toggleVisibility');
+      gameStateService.setPhase(GamePhase.DEFEAT);
+      fireKey('m');
+      expect(minimap.toggleVisibility).not.toHaveBeenCalled();
+    });
+
+    it('Escape is ignored in VICTORY phase', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.VICTORY);
+      component.selectedTowerType = TowerType.SNIPER;
+      fireKey('Escape');
+      expect(component.selectedTowerType).toBe(TowerType.SNIPER);
+    });
+
+    it('V is ignored in DEFEAT phase', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.DEFEAT);
+      spyOn(component, 'togglePathOverlay');
+      fireKey('v');
+      expect(component.togglePathOverlay).not.toHaveBeenCalled();
+    });
   });
 
   describe('scoreBreakdown', () => {
@@ -422,9 +550,10 @@ describe('GameBoardComponent', () => {
       expect(removedEvents).toContain('touchend');
     });
 
-    it('touchStartHandler records start position and resets drag flag', () => {
+    it('touchStartHandler records start position and resets drag and multi-touch flags', () => {
       (component as any).setupTouchInteraction();
       (component as any).touchIsDragging = true;
+      (component as any).touchWasMultiTouch = true;
 
       const touch = { clientX: 150, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, touches: [touch] } as unknown as TouchEvent;
@@ -434,9 +563,10 @@ describe('GameBoardComponent', () => {
       expect((component as any).touchStartX).toBe(150);
       expect((component as any).touchStartY).toBe(200);
       expect((component as any).touchIsDragging).toBeFalse();
+      expect((component as any).touchWasMultiTouch).toBeFalse();
     });
 
-    it('touchStartHandler records pinch start distance for two-finger touch', () => {
+    it('touchStartHandler records pinch start distance and sets multi-touch flag for two-finger touch', () => {
       (component as any).setupTouchInteraction();
 
       const t0 = { clientX: 0, clientY: 0 } as Touch;
@@ -447,6 +577,7 @@ describe('GameBoardComponent', () => {
 
       // distance = sqrt(30^2 + 40^2) = sqrt(900+1600) = 50
       expect((component as any).pinchStartDistance).toBe(50);
+      expect((component as any).touchWasMultiTouch).toBeTrue();
     });
 
     it('touchMoveHandler sets touchIsDragging to true when movement exceeds threshold', () => {
@@ -481,6 +612,26 @@ describe('GameBoardComponent', () => {
       (component as any).touchMoveHandler(event);
 
       expect((component as any).touchIsDragging).toBeFalse();
+    });
+
+    it('touchMoveHandler sets multi-touch flag when two fingers detected during move', () => {
+      (component as any).setupTouchInteraction();
+      (component as any).touchWasMultiTouch = false;
+      (component as any).pinchStartDistance = 50;
+      (component as any).camera = { position: new THREE.Vector3(0, 10, 0) };
+      (component as any).controls = { target: new THREE.Vector3(0, 0, 0), dispose: () => {} };
+
+      const t0 = { clientX: 0, clientY: 0 } as Touch;
+      const t1 = { clientX: 30, clientY: 40 } as Touch;
+      const event = { preventDefault: () => {}, touches: [t0, t1] } as unknown as TouchEvent;
+
+      (component as any).touchMoveHandler(event);
+
+      expect((component as any).touchWasMultiTouch).toBeTrue();
+
+      // Prevent cleanup crash — reset partial mocks
+      (component as any).camera = null;
+      (component as any).controls = null;
     });
 
     it('touchEndHandler calls handleTapAsClick for a short tap with no drag', () => {
@@ -530,9 +681,10 @@ describe('GameBoardComponent', () => {
       expect((component as any).handleTapAsClick).not.toHaveBeenCalled();
     });
 
-    it('touchEndHandler resets touchIsDragging and pinchStartDistance', () => {
+    it('touchEndHandler resets touchIsDragging, touchWasMultiTouch, and pinchStartDistance', () => {
       (component as any).setupTouchInteraction();
       (component as any).touchIsDragging = true;
+      (component as any).touchWasMultiTouch = true;
       (component as any).pinchStartDistance = 50;
 
       // Long press — no tap
@@ -544,7 +696,90 @@ describe('GameBoardComponent', () => {
       (component as any).touchEndHandler(event);
 
       expect((component as any).touchIsDragging).toBeFalse();
+      expect((component as any).touchWasMultiTouch).toBeFalse();
       expect((component as any).pinchStartDistance).toBe(0);
+    });
+
+    it('touchEndHandler does not call handleTapAsClick after multi-touch gesture', () => {
+      (component as any).setupTouchInteraction();
+      (component as any).touchStartX = 100;
+      (component as any).touchStartY = 200;
+      (component as any).touchStartTime = performance.now() - 50; // within tap threshold
+      (component as any).touchIsDragging = false;
+      (component as any).touchWasMultiTouch = true; // pinch occurred
+
+      spyOn(component as any, 'handleTapAsClick');
+
+      const touch = { clientX: 100, clientY: 200 } as Touch;
+      const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
+
+      (component as any).touchEndHandler(event);
+
+      expect((component as any).handleTapAsClick).not.toHaveBeenCalled();
+    });
+
+    it('touchStartHandler sets multi-touch flag for 3+ finger touch', () => {
+      (component as any).setupTouchInteraction();
+
+      const t0 = { clientX: 0, clientY: 0 } as Touch;
+      const t1 = { clientX: 30, clientY: 40 } as Touch;
+      const t2 = { clientX: 60, clientY: 80 } as Touch;
+      const event = { preventDefault: () => {}, touches: [t0, t1, t2] } as unknown as TouchEvent;
+
+      (component as any).touchStartHandler(event);
+
+      expect((component as any).touchWasMultiTouch).toBeTrue();
+    });
+
+    it('single touch after multi-touch clears multi-touch flag and allows tap', () => {
+      (component as any).setupTouchInteraction();
+
+      // First: multi-touch gesture
+      const t0 = { clientX: 0, clientY: 0 } as Touch;
+      const t1 = { clientX: 30, clientY: 40 } as Touch;
+      const pinchEvent = { preventDefault: () => {}, touches: [t0, t1] } as unknown as TouchEvent;
+      (component as any).touchStartHandler(pinchEvent);
+      expect((component as any).touchWasMultiTouch).toBeTrue();
+
+      // Then: new single-touch gesture starts — should clear multi-touch flag
+      const singleTouch = { clientX: 100, clientY: 200 } as Touch;
+      const singleEvent = { preventDefault: () => {}, touches: [singleTouch] } as unknown as TouchEvent;
+      (component as any).touchStartHandler(singleEvent);
+
+      expect((component as any).touchWasMultiTouch).toBeFalse();
+    });
+
+    it('handleInteraction early-returns during VICTORY phase without raycasting', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.VICTORY);
+
+      // Set up minimal renderer stub with a mock raycaster to verify no raycasting occurs
+      const mockRaycaster = jasmine.createSpyObj('Raycaster', ['setFromCamera', 'intersectObjects']);
+      (component as any).raycaster = mockRaycaster;
+      (component as any).renderer = {
+        domElement: document.createElement('canvas'),
+        dispose: () => {}
+      };
+
+      (component as any).handleInteraction(100, 200);
+
+      expect(mockRaycaster.setFromCamera).not.toHaveBeenCalled();
+    });
+
+    it('handleInteraction early-returns during DEFEAT phase without raycasting', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.DEFEAT);
+
+      const mockRaycaster = jasmine.createSpyObj('Raycaster', ['setFromCamera', 'intersectObjects']);
+      (component as any).raycaster = mockRaycaster;
+      (component as any).renderer = {
+        domElement: document.createElement('canvas'),
+        dispose: () => {}
+      };
+
+      (component as any).handleInteraction(50, 75);
+
+      expect(mockRaycaster.setFromCamera).not.toHaveBeenCalled();
     });
   });
 
@@ -712,6 +947,48 @@ describe('GameBoardComponent', () => {
       window.removeEventListener('keydown', (component as any).keyboardHandler);
 
       expect(component.showPathOverlay).toBeTrue();
+    });
+  });
+
+  describe('WebGL context loss handling', () => {
+    let canvas: HTMLCanvasElement;
+
+    beforeEach(() => {
+      canvas = document.createElement('canvas');
+      const renderer = { domElement: canvas, dispose: () => {}, setSize: () => {}, setPixelRatio: () => {} } as unknown as THREE.WebGLRenderer;
+      (component as unknown as Record<string, unknown>)['renderer'] = renderer;
+      // Wire up the context loss/restore handlers on the canvas
+      const lostHandler = (event: Event) => { event.preventDefault(); component.contextLost = true; };
+      const restoredHandler = () => { component.contextLost = false; };
+      (component as unknown as Record<string, unknown>)['contextLostHandler'] = lostHandler;
+      (component as unknown as Record<string, unknown>)['contextRestoredHandler'] = restoredHandler;
+      canvas.addEventListener('webglcontextlost', lostHandler);
+      canvas.addEventListener('webglcontextrestored', restoredHandler);
+    });
+
+    afterEach(() => {
+      canvas.removeEventListener('webglcontextlost',
+        (component as unknown as Record<string, (e: Event) => void>)['contextLostHandler']);
+      canvas.removeEventListener('webglcontextrestored',
+        (component as unknown as Record<string, () => void>)['contextRestoredHandler']);
+    });
+
+    it('should set contextLost to true when webglcontextlost fires', () => {
+      expect(component.contextLost).toBeFalse();
+
+      const lostEvent = new Event('webglcontextlost', { cancelable: true });
+      canvas.dispatchEvent(lostEvent);
+
+      expect(component.contextLost).toBeTrue();
+      expect(lostEvent.defaultPrevented).toBeTrue();
+    });
+
+    it('should set contextLost back to false when webglcontextrestored fires', () => {
+      component.contextLost = true;
+
+      canvas.dispatchEvent(new Event('webglcontextrestored'));
+
+      expect(component.contextLost).toBeFalse();
     });
   });
 });
