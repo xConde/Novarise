@@ -855,6 +855,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     };
 
     this.contextRestoredHandler = () => {
+      if (!this.renderer?.getContext()) return;
       this.contextLost = false;
       this.lastTime = 0;
       this.animate();
@@ -1369,9 +1370,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
 
-    const towerStats = TOWER_CONFIGS[this.selectedTowerType];
-    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-    const effectiveCost = Math.round(towerStats.cost * costMult);
+    const effectiveCost = this.getEffectiveTowerCost(this.selectedTowerType);
 
     // Check if player can afford tower
     if (!this.gameStateService.canAfford(effectiveCost)) return;
@@ -1600,7 +1599,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // --- Game loop ---
 
   private animate = (time: number = 0): void => {
-    if (!this.renderer || this.initError || this.contextLost) return;
+    if (!this.renderer || this.initError || this.contextLost || !this.renderer.getContext()) return;
     this.animationFrameId = requestAnimationFrame(this.animate);
 
     const rawDelta = this.lastTime === 0 ? 0 : (time - this.lastTime) / 1000;

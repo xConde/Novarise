@@ -950,6 +950,28 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  describe('recordGameEndIfNeeded idempotence', () => {
+    it('should only call recordGameEnd once even when invoked twice', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.VICTORY);
+
+      // Reset call count from any prior setup
+      playerProfileSpy.recordGameEnd.calls.reset();
+
+      (component as unknown as Record<string, () => void>)['recordGameEndIfNeeded']();
+      (component as unknown as Record<string, () => void>)['recordGameEndIfNeeded']();
+
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('contextLost flag', () => {
+    it('should be truthy when set to true', () => {
+      component.contextLost = true;
+      expect(component.contextLost).toBeTruthy();
+    });
+  });
+
   describe('WebGL context loss handling', () => {
     let canvas: HTMLCanvasElement;
 
