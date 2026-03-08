@@ -315,46 +315,46 @@
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.95);
-  z-index: 1000;
-  color: #fff;
+  z-index: var(--z-index-modal);
+  color: var(--text-color);
   font-family: 'Orbitron', sans-serif;
 }
 
 .init-error-content {
   text-align: center;
   max-width: 28rem;
-  padding: 2rem;
+  padding: var(--spacing-xl);
 
   h2 {
-    color: #ff4444;
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
+    color: var(--game-defeat);
+    font-size: var(--font-size-title);
+    margin-bottom: var(--spacing-md);
   }
 
   p {
-    color: #ccc;
-    margin-bottom: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: var(--spacing-sm);
     font-family: sans-serif;
     line-height: 1.4;
   }
 
   .init-error-hint {
-    font-size: 0.85rem;
-    color: #888;
+    font-size: var(--font-size-small);
+    color: var(--text-dim);
   }
 }
 
 .init-error-btn {
-  margin-top: 1.5rem;
-  padding: 0.75rem 2rem;
-  background: var(--theme-purple, #6a4a8a);
-  color: #fff;
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-sm) var(--spacing-xl);
+  background: var(--theme-purple);
+  color: var(--text-color);
   border: none;
-  border-radius: 0.5rem;
+  border-radius: var(--border-radius-lg);
   font-family: 'Orbitron', sans-serif;
-  font-size: 0.9rem;
+  font-size: var(--font-size-small);
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: opacity var(--transition-fast);
 
   &:hover {
     opacity: 0.85;

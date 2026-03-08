@@ -211,11 +211,11 @@ export class PlayerProfileService {
   private save(): void {
     try {
       localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(this.profile));
-    } catch (e) {
-      if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22)) {
+    } catch (error) {
+      if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.code === 22)) {
         console.warn('localStorage quota exceeded — player profile was not saved.');
       } else {
-        console.warn('Failed to save player profile — localStorage may be unavailable:', e);
+        console.warn('Failed to save player profile — localStorage may be unavailable:', error);
       }
     }
   }
