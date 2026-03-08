@@ -815,6 +815,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!gl) {
       throw new Error('WebGL is not supported by your browser');
     }
+    // Release the test WebGL context to free the browser context slot
+    (gl as WebGLRenderingContext).getExtension('WEBGL_lose_context')?.loseContext();
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,

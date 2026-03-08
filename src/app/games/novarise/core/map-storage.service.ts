@@ -9,6 +9,9 @@ const MAX_EXIT_POINTS = 4;
 
 const VALID_TERRAIN_VALUES = new Set<string>(Object.values(TerrainType));
 
+/** Maximum file size for map imports (10 MB). */
+const MAX_IMPORT_FILE_SIZE = 10 * 1024 * 1024;
+
 export interface MapMetadata {
   id: string;
   name: string;
@@ -39,9 +42,9 @@ export class MapStorageService {
    * @param name Map name
    * @param data Grid state data
    * @param id Optional ID (generates new if not provided)
-   * @returns The saved map ID
+   * @returns The saved map ID, or null if the save failed (e.g. quota exceeded)
    */
-  public saveMap(name: string, data: TerrainGridState, id?: string): string {
+  public saveMap(name: string, data: TerrainGridState, id?: string): string | null {
     const mapId = id || this.generateMapId();
     const now = Date.now();
 
@@ -68,6 +71,7 @@ export class MapStorageService {
       } else {
         console.error('Failed to save map — localStorage may be unavailable:', e);
       }
+      return null;
     }
 
     // Update metadata index
@@ -205,8 +209,11 @@ export class MapStorageService {
     try {
       const data = JSON.parse(oldData);
       // Save as "Imported Map" in new format
-      this.saveMap('Imported Map', data);
-      // Remove old key
+      const mapId = this.saveMap('Imported Map', data);
+      if (!mapId) {
+        return false;
+      }
+      // Remove old key only after successful save
       localStorage.removeItem(oldKey);
       return true;
     } catch (e) {
@@ -276,9 +283,7 @@ export class MapStorageService {
       const mapName = name || savedMap.metadata?.name || 'Imported Map';
       const mapId = this.saveMap(mapName, savedMap.data);
 
-      // Verify the map actually persisted (guards against silent quota failure)
-      if (!localStorage.getItem(this.STORAGE_PREFIX + mapId)) {
-        console.warn('Import appeared to succeed but map was not persisted — storage may be full.');
+      if (!mapId) {
         return null;
       }
 
@@ -454,6 +459,12 @@ export class MapStorageService {
       input.onchange = async (event) => {
         const file = (event.target as HTMLInputElement).files?.[0];
         if (!file) {
+          resolve(null);
+          return;
+        }
+
+        if (file.size > MAX_IMPORT_FILE_SIZE) {
+          console.error(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum is ${MAX_IMPORT_FILE_SIZE / 1024 / 1024} MB.`);
           resolve(null);
           return;
         }

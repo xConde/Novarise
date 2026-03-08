@@ -200,7 +200,7 @@ export class PlayerProfileService {
         ...DEFAULT_PROFILE,
         ...parsed,
         achievements: Array.isArray(parsed.achievements)
-          ? [...parsed.achievements]
+          ? parsed.achievements.slice(0, ACHIEVEMENTS.length)
           : [],
       };
     } catch {

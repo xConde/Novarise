@@ -62,7 +62,7 @@ describe('MapStorageService', () => {
   describe('saveMap', () => {
     it('should save a new map with generated ID', () => {
       const mapData = testMapData();
-      const mapId = service.saveMap('Test Map', mapData);
+      const mapId = service.saveMap('Test Map', mapData)!;
 
       expect(mapId).toBeTruthy();
       expect(mapId).toMatch(/^map_\d+_[a-z0-9]+$/);
@@ -70,7 +70,7 @@ describe('MapStorageService', () => {
 
     it('should save map data to localStorage', () => {
       const mapData = testMapData();
-      const mapId = service.saveMap('Test Map', mapData);
+      const mapId = service.saveMap('Test Map', mapData)!;
 
       const savedJson = localStorageMock['novarise_map_' + mapId];
       expect(savedJson).toBeTruthy();
@@ -83,7 +83,7 @@ describe('MapStorageService', () => {
     it('should update metadata with correct timestamps', () => {
       const mapData = testMapData();
       const beforeSave = Date.now();
-      const mapId = service.saveMap('Test Map', mapData);
+      const mapId = service.saveMap('Test Map', mapData)!;
       const afterSave = Date.now();
 
       const savedJson = localStorageMock['novarise_map_' + mapId];
@@ -97,7 +97,7 @@ describe('MapStorageService', () => {
 
     it('should update existing map when ID is provided', () => {
       const mapData = testMapData();
-      const mapId = service.saveMap('Original Name', mapData);
+      const mapId = service.saveMap('Original Name', mapData)!;
 
       const originalJson = localStorageMock['novarise_map_' + mapId];
       const originalMap: SavedMap = JSON.parse(originalJson);
@@ -105,7 +105,7 @@ describe('MapStorageService', () => {
 
       // Wait a bit to ensure different timestamp
       const updatedData = testMapData({ gridSize: 8 });
-      service.saveMap('Updated Name', updatedData, mapId);
+      service.saveMap('Updated Name', updatedData, mapId!);
 
       const updatedJson = localStorageMock['novarise_map_' + mapId];
       const updatedMap: SavedMap = JSON.parse(updatedJson);
@@ -117,7 +117,7 @@ describe('MapStorageService', () => {
 
     it('should set saved map as current map', () => {
       const mapData = testMapData();
-      const mapId = service.saveMap('Test Map', mapData);
+      const mapId = service.saveMap('Test Map', mapData)!;
 
       expect(localStorageMock['novarise_current_map']).toBe(mapId);
     });
@@ -138,7 +138,7 @@ describe('MapStorageService', () => {
   describe('loadMap', () => {
     it('should return map data when map exists', () => {
       const mapData = testMapData();
-      const mapId = service.saveMap('Test Map', mapData);
+      const mapId = service.saveMap('Test Map', mapData)!;
 
       const loadedData = service.loadMap(mapId);
 
@@ -155,7 +155,7 @@ describe('MapStorageService', () => {
 
     it('should set loaded map as current map', () => {
       const mapData = testMapData();
-      const mapId = service.saveMap('Test Map', mapData);
+      const mapId = service.saveMap('Test Map', mapData)!;
 
       // Clear current map
       localStorageMock['novarise_current_map'] = 'other_map';
@@ -192,11 +192,11 @@ describe('MapStorageService', () => {
     });
 
     it('should return maps sorted by updated date (most recent first)', () => {
-      const mapId1 = service.saveMap('Map 1', testMapData());
+      const mapId1 = service.saveMap('Map 1', testMapData())!;
       service.saveMap('Map 2', testMapData());
 
       // Update first map to make it most recent
-      service.saveMap('Map 1 Updated', testMapData(), mapId1);
+      service.saveMap('Map 1 Updated', testMapData(), mapId1!);
 
       const maps = service.getAllMaps();
 
@@ -214,7 +214,7 @@ describe('MapStorageService', () => {
 
   describe('getMapMetadata', () => {
     it('should return metadata for existing map', () => {
-      const mapId = service.saveMap('Test Map', testMapData());
+      const mapId = service.saveMap('Test Map', testMapData())!;
 
       const metadata = service.getMapMetadata(mapId);
 
@@ -232,7 +232,7 @@ describe('MapStorageService', () => {
 
   describe('deleteMap', () => {
     it('should delete existing map and return true', () => {
-      const mapId = service.saveMap('Test Map', testMapData());
+      const mapId = service.saveMap('Test Map', testMapData())!;
 
       const result = service.deleteMap(mapId);
 
@@ -247,7 +247,7 @@ describe('MapStorageService', () => {
     });
 
     it('should remove map from metadata index', () => {
-      const mapId = service.saveMap('Test Map', testMapData());
+      const mapId = service.saveMap('Test Map', testMapData())!;
 
       service.deleteMap(mapId);
 
@@ -256,7 +256,7 @@ describe('MapStorageService', () => {
     });
 
     it('should clear current map if deleted map was current', () => {
-      const mapId = service.saveMap('Test Map', testMapData());
+      const mapId = service.saveMap('Test Map', testMapData())!;
       expect(localStorageMock['novarise_current_map']).toBe(mapId);
 
       service.deleteMap(mapId);
@@ -267,7 +267,7 @@ describe('MapStorageService', () => {
 
   describe('getCurrentMapId', () => {
     it('should return current map ID when set', () => {
-      const mapId = service.saveMap('Test Map', testMapData());
+      const mapId = service.saveMap('Test Map', testMapData())!;
 
       expect(service.getCurrentMapId()).toBe(mapId);
     });
@@ -326,7 +326,7 @@ describe('MapStorageService', () => {
   describe('exportMapToJson', () => {
     it('should return JSON string for existing map', () => {
       const mapData = testMapData();
-      const mapId = service.saveMap('Test Map', mapData);
+      const mapId = service.saveMap('Test Map', mapData)!;
 
       const json = service.exportMapToJson(mapId);
 
@@ -407,9 +407,9 @@ describe('MapStorageService', () => {
     it('should generate unique IDs for different maps', () => {
       const mapData = testMapData();
 
-      const id1 = service.saveMap('Map 1', mapData);
-      const id2 = service.saveMap('Map 2', mapData);
-      const id3 = service.saveMap('Map 3', mapData);
+      const id1 = service.saveMap('Map 1', mapData)!;
+      const id2 = service.saveMap('Map 2', mapData)!;
+      const id3 = service.saveMap('Map 3', mapData)!;
 
       expect(id1).not.toBe(id2);
       expect(id2).not.toBe(id3);
@@ -418,7 +418,7 @@ describe('MapStorageService', () => {
 
     it('should generate IDs with expected format', () => {
       const mapData = testMapData();
-      const mapId = service.saveMap('Test Map', mapData);
+      const mapId = service.saveMap('Test Map', mapData)!;
 
       // Format: map_{timestamp}_{random}
       expect(mapId).toMatch(/^map_\d{13,}_[a-z0-9]{8,9}$/);
@@ -549,7 +549,7 @@ describe('MapStorageService', () => {
 
     it('should create download link with correct filename', () => {
       const mapData = testMapData();
-      const mapId = service.saveMap('My Test Map', mapData);
+      const mapId = service.saveMap('My Test Map', mapData)!;
 
       const result = service.downloadMapAsFile(mapId);
 
@@ -560,7 +560,7 @@ describe('MapStorageService', () => {
 
     it('should sanitize filename by removing invalid characters', () => {
       const mapData = testMapData();
-      const mapId = service.saveMap('Test<>:"/\\|?*Map', mapData);
+      const mapId = service.saveMap('Test<>:"/\\|?*Map', mapData)!;
 
       service.downloadMapAsFile(mapId);
 
@@ -569,7 +569,7 @@ describe('MapStorageService', () => {
 
     it('should sanitize filename by replacing spaces with underscores', () => {
       const mapData = testMapData();
-      const mapId = service.saveMap('My  Map   Name', mapData);
+      const mapId = service.saveMap('My  Map   Name', mapData)!;
 
       service.downloadMapAsFile(mapId);
 
@@ -579,7 +579,7 @@ describe('MapStorageService', () => {
     it('should truncate long filenames', () => {
       const mapData = testMapData();
       const longName = 'A'.repeat(100);
-      const mapId = service.saveMap(longName, mapData);
+      const mapId = service.saveMap(longName, mapData)!;
 
       service.downloadMapAsFile(mapId);
 
@@ -589,7 +589,7 @@ describe('MapStorageService', () => {
 
     it('should use default filename when map name is empty', () => {
       const mapData = testMapData();
-      const mapId = service.saveMap('', mapData);
+      const mapId = service.saveMap('', mapData)!;
 
       service.downloadMapAsFile(mapId);
 
@@ -598,7 +598,7 @@ describe('MapStorageService', () => {
 
     it('should create blob URL and trigger download', () => {
       const mapData = testMapData();
-      const mapId = service.saveMap('Test', mapData);
+      const mapId = service.saveMap('Test', mapData)!;
 
       service.downloadMapAsFile(mapId);
 
@@ -609,7 +609,7 @@ describe('MapStorageService', () => {
 
     it('should clean up blob URL after download', () => {
       const mapData = testMapData();
-      const mapId = service.saveMap('Test', mapData);
+      const mapId = service.saveMap('Test', mapData)!;
 
       service.downloadMapAsFile(mapId);
 
@@ -618,7 +618,7 @@ describe('MapStorageService', () => {
 
     it('should append and remove link from document body', () => {
       const mapData = testMapData();
-      const mapId = service.saveMap('Test', mapData);
+      const mapId = service.saveMap('Test', mapData)!;
 
       service.downloadMapAsFile(mapId);
 
@@ -758,6 +758,37 @@ describe('MapStorageService', () => {
 
       const result = await promise;
       expect(result).toBeNull();
+    });
+  });
+
+  describe('promptFileImport file size limit', () => {
+    let mockInput: HTMLInputElement;
+
+    beforeEach(() => {
+      mockInput = document.createElement('input');
+      spyOn(document, 'createElement').and.callFake((tag: string) => {
+        if (tag === 'input') return mockInput;
+        return document.createElement.call(document, tag);
+      });
+      spyOn(mockInput, 'click');
+    });
+
+    it('should reject files larger than 10 MB', async () => {
+      // Create a mock file with size > 10MB (just mock the size property)
+      const mockFile = new File(['x'], 'huge.json', { type: 'application/json' });
+      Object.defineProperty(mockFile, 'size', { value: 11 * 1024 * 1024 });
+      spyOn(console, 'error');
+
+      const promise = service.promptFileImport();
+
+      Object.defineProperty(mockInput, 'files', { value: [mockFile] });
+      if (mockInput.onchange) {
+        await (mockInput.onchange as Function)({ target: mockInput });
+      }
+
+      const result = await promise;
+      expect(result).toBeNull();
+      expect(console.error).toHaveBeenCalledWith(jasmine.stringContaining('File too large'));
     });
   });
 
@@ -1113,38 +1144,40 @@ describe('MapStorageService', () => {
   });
 
   describe('quota error handling', () => {
-    it('should still return a mapId when localStorage.setItem throws QuotaExceededError', () => {
+    it('should return null when localStorage.setItem throws QuotaExceededError', () => {
       const quotaError = new DOMException('quota exceeded', 'QuotaExceededError');
-      (localStorage.setItem as jasmine.Spy).and.callFake((key: string) => {
+      (localStorage.setItem as jasmine.Spy).and.callFake(() => {
         throw quotaError;
       });
       spyOn(console, 'warn');
 
       const mapId = service.saveMap('Test Map', testMapData());
 
-      expect(mapId).toBeTruthy();
+      expect(mapId).toBeNull();
       expect(console.warn).toHaveBeenCalledWith(
         jasmine.stringContaining('quota exceeded')
       );
     });
 
-    it('should log generic error for non-quota setItem failures', () => {
+    it('should return null for non-quota setItem failures', () => {
       const genericError = new Error('SecurityError');
       (localStorage.setItem as jasmine.Spy).and.callFake(() => {
         throw genericError;
       });
       spyOn(console, 'error');
 
-      service.saveMap('Test Map', testMapData());
+      const mapId = service.saveMap('Test Map', testMapData());
 
+      expect(mapId).toBeNull();
       expect(console.error).toHaveBeenCalled();
     });
 
-    it('importMapFromJson should return null when save does not persist', () => {
-      // Allow setItem to be called but do not actually store anything
+    it('importMapFromJson should return null when save fails due to quota', () => {
+      const quotaError = new DOMException('quota exceeded', 'QuotaExceededError');
       (localStorage.setItem as jasmine.Spy).and.callFake(() => {
-        // no-op: simulates silent failure
+        throw quotaError;
       });
+      spyOn(console, 'warn');
 
       const savedMap: SavedMap = {
         metadata: {
@@ -1161,6 +1194,23 @@ describe('MapStorageService', () => {
       const mapId = service.importMapFromJson(JSON.stringify(savedMap));
 
       expect(mapId).toBeNull();
+    });
+
+    it('migrateOldFormat should return false when save fails', () => {
+      // Plant old-format data
+      localStorageMock['novarise_terrain'] = JSON.stringify(testMapData());
+
+      const quotaError = new DOMException('quota exceeded', 'QuotaExceededError');
+      (localStorage.setItem as jasmine.Spy).and.callFake(() => {
+        throw quotaError;
+      });
+      spyOn(console, 'warn');
+
+      const result = service.migrateOldFormat();
+
+      expect(result).toBe(false);
+      // Old data should NOT be removed since save failed
+      expect(localStorageMock['novarise_terrain']).toBeDefined();
     });
   });
 });

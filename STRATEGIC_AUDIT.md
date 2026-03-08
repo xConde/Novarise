@@ -730,3 +730,51 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Fix Finding 3: Fix misleading template comment
 - [x] Run full test suite — 1893/1893 green
 - [x] Commit, push, update PR
+
+---
+
+## Red Team Critique — feat/hardening-iv Pass 2 (2026-03-08)
+
+### Finding 1: saveMap() silently returns success on quota failure (MEDIUM)
+**Location:** `map-storage.service.ts:62-71`
+**Risk:** When localStorage quota is exceeded, `saveMap()` catches the error, logs a warning, but still returns a mapId and updates the metadata index. The caller (editor auto-save, manual save) sees a valid mapId and believes the save succeeded. The metadata entry points to a non-existent map — next load fails silently. The `importMap()` path was patched with verify-after-write (line 280), but direct saves were not.
+**Fix:** Return `null` on save failure so callers can detect and handle the error (e.g., show a toast).
+
+### Finding 2: testCanvas WebGL context not released (LOW)
+**Location:** `game-board.component.ts:813-814`, `novarise.component.ts:245-246`
+**Risk:** Both `initializeRenderer()` methods create a temporary canvas + WebGL context for feature detection but never release the context. The canvas is a local variable (eligible for GC) but the WebGL context may persist until GC runs, consuming one of the browser's limited WebGL context slots (typically 8-16).
+**Fix:** Call `WEBGL_lose_context` extension after the check to explicitly release the context.
+
+### Finding 3: Visual-overhaul magic numbers extracted (LOW — FIXED in prior commit)
+**Location:** `game-board.component.ts:1595,1778,1801,1824,1834,1836`
+**Risk:** Three `time * 0.001` patterns and three `* 0.5 + 0.5` patterns were bare numeric operations without named constants. Already fixed in commit 83c69c4 via `SKYBOX_CONFIG.timeScale` and `sinNormalized()`.
+
+### Verified NOT bugs:
+- Trail disposal: `removeProjectileMesh()` properly disposes trail geometry + material; `cleanup()` calls it for all active projectiles
+- Impact flash disposal: shared geometry disposed in `cleanup()`, per-flash materials disposed on expiry
+- Chain arc zigzag `Math.random()`: non-deterministic but purely visual — does not affect game state or fixed timestep determinism
+- Particle service: all new numeric literals (`emissiveIntensity`, `roughness`, `metalness`, `sizeVariation`, `scaleEnd`) sourced from `DEATH_BURST_CONFIG`
+- Child components: all 6 are pure presentational (inputs + EventEmitters), no subscriptions to leak
+- `updateStatusVisuals()` `return` in forEach: correctly exits callback for current enemy, does not skip reset for other enemies
+
+---
+
+## Red Team Critique — feat/hardening-iv Pass 3 (2026-03-08)
+
+### Finding 1: File import has no size limit (MEDIUM — FIXED)
+**Location:** `map-storage.service.ts:promptFileImport()`
+**Risk:** `file.text()` loads entire file into memory with no size check. A user accidentally selecting a multi-GB file crashes the browser tab.
+**Fix:** Added `MAX_IMPORT_FILE_SIZE` (10 MB) check before `file.text()`.
+
+### Finding 2: Achievements array unbounded on localStorage load (LOW — FIXED)
+**Location:** `player-profile.service.ts:load()`
+**Risk:** Parsed `achievements` array from localStorage is spread without length validation. Crafted data could contain thousands of entries.
+**Fix:** `parsed.achievements.slice(0, ACHIEVEMENTS.length)` caps to defined achievement count.
+
+### Verified NOT bugs (Pass 3):
+- Material casts (`as THREE.MeshStandardMaterial`) in animation loops: materials structurally guaranteed by creation code in GameBoardService — no code path creates mesh without MeshStandardMaterial
+- `getEditorMapState()!` in restartGame: guarded by `hasEditorMap()` check on line before
+- Spatial grid rebuild: correctly called after tower place/remove
+- `startWave()` double-call: guarded by phase check in GameStateService
+- restartGame() state reset: covers all fields including new ones from this branch
+- `totalInvested` tracking: uses actual modifier-adjusted cost, not base config cost

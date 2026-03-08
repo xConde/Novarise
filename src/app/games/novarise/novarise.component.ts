@@ -247,6 +247,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (!gl) {
       throw new Error('WebGL is not supported by your browser');
     }
+    // Release the test WebGL context to free the browser context slot
+    (gl as WebGLRenderingContext).getExtension('WEBGL_lose_context')?.loseContext();
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     const mobileMaxRatio = window.innerWidth <= MOBILE_CONFIG.breakpoint ? MOBILE_CONFIG.maxPixelRatio : EDITOR_RENDERER_CONFIG.maxPixelRatio;
@@ -1170,6 +1172,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Save (will update if ID exists, create new if not)
     const savedId = this.mapStorage.saveMap(mapName, state, currentId || undefined);
+    if (!savedId) {
+      alert('Failed to save map — storage may be full. Try deleting unused maps.');
+      return;
+    }
     this.currentMapName = mapName;
 
     alert(`Map "${mapName}" saved successfully!`);

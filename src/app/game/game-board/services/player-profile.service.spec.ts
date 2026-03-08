@@ -345,6 +345,16 @@ describe('PlayerProfileService', () => {
       expect(fresh.getProfile().achievements).toEqual([]);
     });
 
+    it('caps achievements array to ACHIEVEMENTS.length on load', () => {
+      const oversized = Array.from({ length: 100 }, (_, i) => `achievement_${i}`);
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ achievements: oversized })
+      );
+      const fresh = new PlayerProfileService();
+      expect(fresh.getProfile().achievements.length).toBe(ACHIEVEMENTS.length);
+    });
+
     it('merges partial saved data with defaults', () => {
       localStorage.setItem(
         STORAGE_KEY,

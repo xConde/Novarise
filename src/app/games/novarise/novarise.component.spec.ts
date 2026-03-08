@@ -363,6 +363,47 @@ describe('NovariseComponent', () => {
     });
   });
 
+  describe('Save Map', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should alert failure when saveMap returns null', () => {
+      // Mock terrainGrid.exportState()
+      (component as any).terrainGrid = {
+        exportState: () => ({ gridSize: 10, tiles: [], heightMap: [], spawnPoints: [{ x: 0, z: 0 }], exitPoints: [{ x: 9, z: 9 }], version: '2.0.0' }),
+        dispose: () => {}
+      };
+      (component as any).currentMapName = 'Test Map';
+      mockMapStorageService.saveMap.and.returnValue(null);
+      mockMapStorageService.getCurrentMapId.and.returnValue('old_id');
+      spyOn(window, 'prompt').and.returnValue('Test Map');
+      spyOn(window, 'alert');
+
+      (component as any).saveGridState();
+
+      expect(window.alert).toHaveBeenCalledWith(jasmine.stringContaining('Failed to save'));
+    });
+
+    it('should alert success when saveMap returns an ID', () => {
+      (component as any).terrainGrid = {
+        exportState: () => ({ gridSize: 10, tiles: [], heightMap: [], spawnPoints: [{ x: 0, z: 0 }], exitPoints: [{ x: 9, z: 9 }], version: '2.0.0' }),
+        dispose: () => {}
+      };
+      (component as any).currentMapName = 'Test Map';
+      mockMapStorageService.saveMap.and.returnValue('map_123');
+      mockMapStorageService.getCurrentMapId.and.returnValue(null);
+      spyOn(window, 'prompt').and.returnValue('My Map');
+      spyOn(window, 'alert');
+
+      (component as any).saveGridState();
+
+      expect(window.alert).toHaveBeenCalledWith(jasmine.stringContaining('saved successfully'));
+    });
+  });
+
   describe('Map Templates', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);
