@@ -24,19 +24,18 @@
   }
 
   @media screen and (max-width: 480px) {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    top: 11rem;
     left: 0;
-    right: 0;
+    bottom: auto;
+    right: auto;
     transform: none;
-    width: 100%;
-    border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
-    padding: var(--spacing-sm);
-    gap: var(--spacing-xs);
+    width: auto;
+    border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
+    padding: var(--spacing-xs);
+    gap: 0.25rem;
     border-left: none;
-    border-right: none;
-    border-bottom: none;
   }
 
   .tower-btn {
@@ -60,7 +59,7 @@
 
     @media screen and (max-width: 480px) {
       min-width: unset;
-      width: 100%;
+      width: 3rem;
       padding: var(--spacing-xs);
       gap: 0.125rem;
     }
@@ -174,7 +173,7 @@
       }
 
       @media screen and (max-width: 480px) {
-        font-size: 0.625rem;
+        display: none;
       }
     }
 
@@ -193,10 +192,18 @@
       color: rgba(255, 255, 255, 0.25);
       font-family: "Orbitron", sans-serif;
       letter-spacing: 0.0313rem;
+
+      @media screen and (max-width: 480px) {
+        display: none;
+      }
     }
 
-    // --- Hover tooltip ---
+    // --- Hover tooltip (hidden on mobile — touch can't hover) ---
     .tower-tooltip {
+      @media screen and (max-width: 480px) {
+        display: none;
+      }
+
       position: absolute;
       bottom: calc(100% + 0.625rem);
       left: 50%;

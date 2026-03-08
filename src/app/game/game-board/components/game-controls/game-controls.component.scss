@@ -86,7 +86,7 @@
   @media screen and (max-width: 480px) {
     flex-direction: column;
     align-items: stretch;
-    bottom: calc(var(--spacing-sm) + 11rem); // above tower grid (~10rem tall)
+    bottom: var(--spacing-sm);
     right: var(--spacing-sm);
     gap: var(--spacing-xs);
     padding: var(--spacing-xs);
