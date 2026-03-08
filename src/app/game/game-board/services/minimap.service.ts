@@ -34,7 +34,10 @@ export class MinimapService {
    * Creates the minimap canvas and appends it to the given container.
    */
   init(container: HTMLElement): void {
-    const isMobile = window.innerWidth <= MINIMAP_CONFIG.mobileBreakpoint;
+    // Use container width — window.innerWidth doesn't reflect CSS responsive
+    // simulation (DevTools device mode) since the outer window stays full-size.
+    const containerWidth = container.clientWidth || window.innerWidth;
+    const isMobile = containerWidth <= MINIMAP_CONFIG.mobileBreakpoint;
     this.currentSize = isMobile ? MINIMAP_CONFIG.mobileCanvasSize : MINIMAP_CONFIG.canvasSize;
 
     this.canvas = document.createElement('canvas');
