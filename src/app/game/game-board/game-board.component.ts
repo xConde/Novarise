@@ -30,7 +30,7 @@ import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, GameModifierConfig, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
-import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants/rendering.constants';
+import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG, sinNormalized } from './constants/rendering.constants';
 import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from './constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
@@ -1003,25 +1003,25 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           vec3 color = mix(deepPurple, darkBlue, vUv.y * 0.5);
 
           // Stars with twinkle
-          vec2 starPos = vUv * 150.0;
+          vec2 starPos = vUv * 150.0; // grid density — higher = more/smaller star cells
           float star = random(floor(starPos));
-          if (star > 0.992) {
-            float baseBright = random(floor(starPos) + 1.0) * 0.5;
-            float twinkle = 0.6 + 0.4 * sin(time * (1.0 + random(floor(starPos) + 2.0) * 3.0));
+          if (star > 0.992) { // sparsity threshold — only top 0.8% of cells are stars
+            float baseBright = random(floor(starPos) + 1.0) * 0.5; // peak brightness cap
+            float twinkle = 0.6 + 0.4 * sin(time * (1.0 + random(floor(starPos) + 2.0) * 3.0)); // min 0.6, ±0.4 oscillation at varying speeds
             float brightness = baseBright * twinkle;
-            color += vec3(brightness * 0.4, brightness * 0.3, brightness * 0.5);
+            color += vec3(brightness * 0.4, brightness * 0.3, brightness * 0.5); // cool purple-blue star tint
           }
 
           // Drifting nebula veins
-          float drift = time * 0.02;
-          float vein1 = random(floor(vUv * 40.0 + vec2(drift, vUv.x * 10.0 + drift * 0.5)));
-          if (vein1 > 0.97) {
-            color += vec3(0.25, 0.15, 0.3) * vein1;
+          float drift = time * 0.02; // slow drift speed
+          float vein1 = random(floor(vUv * 40.0 + vec2(drift, vUv.x * 10.0 + drift * 0.5))); // 40 = vein grid scale
+          if (vein1 > 0.97) { // top 3% of cells glow as veins
+            color += vec3(0.25, 0.15, 0.3) * vein1; // purple nebula tint
           }
 
           // Slow-shifting bioluminescence
-          float bio = random(floor(vUv * 25.0 + vec2(drift * 0.3))) * 0.12;
-          color += vec3(bio * 0.3, bio * 0.5, bio * 0.7);
+          float bio = random(floor(vUv * 25.0 + vec2(drift * 0.3))) * 0.12; // 25 = bio grid scale, 0.12 = max intensity
+          color += vec3(bio * 0.3, bio * 0.5, bio * 0.7); // blue-green bio tint
 
           gl_FragColor = vec4(color, 1.0);
         }
@@ -1592,7 +1592,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Update skybox time uniform for star twinkle and nebula drift
     if (this.skybox) {
-      (this.skybox.material as THREE.ShaderMaterial).uniforms['time'].value = time * 0.001;
+      (this.skybox.material as THREE.ShaderMaterial).uniforms['time'].value = time * SKYBOX_CONFIG.timeScale;
     }
 
     // Gameplay tick — fixed timestep accumulator
@@ -1775,7 +1775,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private updateTowerAnimations(time: number): void {
-    const t = time * 0.001; // Convert ms to seconds
+    const t = time * SKYBOX_CONFIG.timeScale;
     for (const group of this.towerMeshes.values()) {
       const towerType = group.userData['towerType'] as TowerType | undefined;
       if (!towerType) continue;
@@ -1798,7 +1798,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
           case 'orb': {
             const pulseScale = TOWER_ANIM_CONFIG.orbPulseMin
-              + (Math.sin(t * TOWER_ANIM_CONFIG.orbPulseSpeed) * 0.5 + 0.5)
+              + sinNormalized(Math.sin(t * TOWER_ANIM_CONFIG.orbPulseSpeed))
               * (TOWER_ANIM_CONFIG.orbPulseMax - TOWER_ANIM_CONFIG.orbPulseMin);
             child.scale.setScalar(pulseScale);
             break;
@@ -1821,7 +1821,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           case 'tip': {
             const mat = child.material as THREE.MeshStandardMaterial;
             mat.emissiveIntensity = TOWER_ANIM_CONFIG.tipGlowMin
-              + (Math.sin(t * TOWER_ANIM_CONFIG.tipGlowSpeed) * 0.5 + 0.5)
+              + sinNormalized(Math.sin(t * TOWER_ANIM_CONFIG.tipGlowSpeed))
               * (TOWER_ANIM_CONFIG.tipGlowMax - TOWER_ANIM_CONFIG.tipGlowMin);
             break;
           }
@@ -1831,9 +1831,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private updateTilePulse(time: number): void {
-    const t = time * 0.001;
+    const t = time * SKYBOX_CONFIG.timeScale;
     const intensity = TILE_PULSE_CONFIG.min
-      + (Math.sin(t * TILE_PULSE_CONFIG.speed) * 0.5 + 0.5)
+      + sinNormalized(Math.sin(t * TILE_PULSE_CONFIG.speed))
       * (TILE_PULSE_CONFIG.max - TILE_PULSE_CONFIG.min);
 
     for (const mesh of this.tileMeshes.values()) {

@@ -20,5 +20,12 @@ export const POST_PROCESSING_CONFIG = {
 export const SKYBOX_CONFIG = {
   radius: 500,
   widthSegments: 32,
-  heightSegments: 32
+  heightSegments: 32,
+  /** Multiplier to convert performance.now() ms → shader seconds */
+  timeScale: 0.001,
 };
+
+/** Converts a sin() result from [-1,1] to [0,1] for use in lerp/pulse calculations. */
+export function sinNormalized(value: number): number {
+  return value * 0.5 + 0.5;
+}
