@@ -1839,11 +1839,15 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (this.terrainGrid) {
       const state = this.terrainGrid.exportState();
       this.mapBridge.setEditorMapState(state);
-      this.mapStorage.saveMap(
-        this.currentMapName,
-        state,
-        this.mapStorage.getCurrentMapId() || undefined
-      );
+      try {
+        this.mapStorage.saveMap(
+          this.currentMapName,
+          state,
+          this.mapStorage.getCurrentMapId() || undefined
+        );
+      } catch (error) {
+        console.warn('Auto-save failed on destroy:', error);
+      }
     }
 
     // Clear undo/redo history to prevent stale closures referencing disposed TerrainGrid

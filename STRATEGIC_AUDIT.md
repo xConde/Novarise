@@ -812,3 +812,38 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Red team hardening (single-source breakpoint, named constant for disabled mouse)
 - [x] Full test suite green (1898/1898)
 - [x] Push to remote
+
+## Red Team Critique — 2026-03-08 (Hardening IV Final Gate)
+
+### Finding 1: Dead MINIMAP_CONFIG mobile constants (MEDIUM)
+**Location:** `constants/minimap.constants.ts:5-9`
+**Risk:** `mobileCanvasSize`, `mobileBreakpoint`, `mobilePaddingTop`, `mobilePaddingLeft` are defined but never consumed. CSS media queries in `styles.css` now handle mobile sizing. Dead config implies mobile minimap is JS-driven when it isn't — misleads future devs.
+**Fix:** Remove dead constants. CSS is the single source of truth for mobile minimap layout.
+
+### Finding 2: Dead MINI_SWARM_MESH_SEGMENTS import (LOW)
+**Location:** `services/enemy.service.ts:3`
+**Risk:** Imported from `enemy.model.ts` but never referenced in the service body. Suggests incomplete refactoring — mini-swarm meshes use hardcoded `OctahedronGeometry(size, 0)` detail level.
+**Fix:** Remove from import statement. Keep the constant in the model for future use.
+
+### Finding 3: Minimap display value inconsistency (LOW)
+**Location:** `services/minimap.service.ts:127,138`
+**Risk:** `show()` sets `display = ''` (CSS default), `toggleVisibility()` sets `display = 'block'`. Inconsistent — if CSS class has `display: none` by default, `''` would revert to `none` while `'block'` would override correctly.
+**Fix:** Normalize both to use `''` (let CSS class control default display).
+
+### Finding 4: Editor ngOnDestroy auto-save silent failure (MEDIUM)
+**Location:** `novarise.component.ts:1842-1846`
+**Risk:** `saveMap()` return value unchecked. If localStorage quota is exceeded during navigation-triggered auto-save, user silently loses unsaved editor changes with no notification.
+**Fix:** Wrap in try-catch, log warning on failure.
+
+### Verified NOT bugs:
+- StatusEffectService cleanup on restart: Already wired via `towerCombatService.cleanup()` → `statusEffectService.cleanup()` chain.
+- WebGL context restore: Three.js handles most GPU state restoration internally. Full scene rebuild would be overengineering.
+- Breakpoint inconsistency (768 vs 480): Intentional three-tier model (phone/tablet/desktop).
+
+## Deployment Checklist — 2026-03-08 (Hardening IV Final)
+- [x] Remove dead MINIMAP_CONFIG mobile constants (CSS handles sizing)
+- [x] Remove dead MINI_SWARM_MESH_SEGMENTS import from enemy.service
+- [x] Normalize minimap display values (show/toggle consistency)
+- [x] Add try-catch to editor ngOnDestroy auto-save
+- [x] Full test suite green (2028/2028)
+- [ ] Push to remote

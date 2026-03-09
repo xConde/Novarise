@@ -135,7 +135,7 @@ export class MinimapService {
   toggleVisibility(): void {
     this.visible = !this.visible;
     if (this.canvas) {
-      this.canvas.style.display = this.visible ? 'block' : 'none';
+      this.canvas.style.display = this.visible ? '' : 'none';
     }
   }
 

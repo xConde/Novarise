@@ -149,7 +149,7 @@ describe('MinimapService', () => {
 
       // Starts hidden (visible=false), toggle makes it visible
       service.toggleVisibility();
-      expect(canvas.style.display).toBe('block');
+      expect(canvas.style.display).toBe('');
 
       // Toggle again hides it
       service.toggleVisibility();

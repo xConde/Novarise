@@ -1,12 +1,6 @@
-import { MOBILE_CONFIG } from './mobile.constants';
-
 export const MINIMAP_CONFIG = {
   canvasSize: 150,
-  mobileCanvasSize: 80,
-  mobileBreakpoint: MOBILE_CONFIG.phoneBreakpoint,
   padding: 12,
-  mobilePaddingTop: 8,
-  mobilePaddingLeft: 8,
   backgroundColor: 'rgba(0, 0, 0, 0.6)',
   borderColor: 'rgba(138, 92, 246, 0.5)',
   borderWidth: 2,
