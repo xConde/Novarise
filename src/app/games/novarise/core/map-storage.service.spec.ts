@@ -172,6 +172,18 @@ describe('MapStorageService', () => {
 
       expect(loadedData).toBeNull();
     });
+
+    it('should return null when parsed map has no data field', () => {
+      localStorageMock['novarise_map_empty'] = JSON.stringify({ metadata: { name: 'Bad' } });
+      spyOn(console, 'warn');
+
+      const loadedData = service.loadMap('empty');
+
+      expect(loadedData).toBeNull();
+      expect(console.warn).toHaveBeenCalledWith(
+        jasmine.stringContaining('has no data field')
+      );
+    });
   });
 
   describe('getAllMaps', () => {
@@ -209,6 +221,18 @@ describe('MapStorageService', () => {
       const maps = service.getAllMaps();
 
       expect(maps).toEqual([]);
+    });
+
+    it('should return empty array when metadata JSON is not an array', () => {
+      localStorageMock['novarise_maps_metadata'] = JSON.stringify({ not: 'an array' });
+      spyOn(console, 'warn');
+
+      const maps = service.getAllMaps();
+
+      expect(maps).toEqual([]);
+      expect(console.warn).toHaveBeenCalledWith(
+        jasmine.stringContaining('not an array')
+      );
     });
   });
 

@@ -1020,4 +1020,191 @@ describe('GameStateService', () => {
       });
     });
   });
+
+  // --- Edge Cases ---
+
+  describe('edge cases', () => {
+
+    describe('setPhase idempotency', () => {
+      it('should handle setting the same phase without error', () => {
+        expect(service.getState().phase).toBe(GamePhase.SETUP);
+        service.setPhase(GamePhase.SETUP);
+        expect(service.getState().phase).toBe(GamePhase.SETUP);
+      });
+
+      it('should still emit when setting the same phase', (done) => {
+        let emitCount = 0;
+        service.getState$().subscribe(() => {
+          emitCount++;
+          if (emitCount === 2) {
+            done();
+          }
+        });
+        service.setPhase(GamePhase.SETUP);
+      });
+    });
+
+    describe('startWave during DEFEAT', () => {
+      it('should be a no-op when called during DEFEAT phase', () => {
+        service.startWave(); // → COMBAT
+        service.loseLife(INITIAL_GAME_STATE.lives); // → DEFEAT
+        expect(service.getState().phase).toBe(GamePhase.DEFEAT);
+        const waveBefore = service.getState().wave;
+
+        service.startWave();
+        expect(service.getState().wave).toBe(waveBefore);
+        expect(service.getState().phase).toBe(GamePhase.DEFEAT);
+      });
+    });
+
+    describe('loseLife with zero amount', () => {
+      it('should not change lives when amount is 0', () => {
+        const livesBefore = service.getState().lives;
+        service.loseLife(0);
+        expect(service.getState().lives).toBe(livesBefore);
+      });
+    });
+
+    describe('reset restores all fields exhaustively', () => {
+      it('should restore every field to initial values after heavy mutation', () => {
+        // Mutate every field
+        service.setDifficulty(DifficultyLevel.HARD);
+        service.setEndlessMode(true);
+        service.setSpeed(3);
+        service.setModifiers(new Set([GameModifier.ARMORED_ENEMIES, GameModifier.FAST_ENEMIES]));
+        service.startWave();
+        service.addElapsedTime(42);
+        service.addGold(999);
+        service.addScore(5000);
+        service.loseLife(3);
+        service.togglePause();
+
+        service.reset();
+
+        const state = service.getState();
+        expect(state.phase).toBe(GamePhase.SETUP);
+        expect(state.wave).toBe(0);
+        expect(state.maxWaves).toBe(INITIAL_GAME_STATE.maxWaves);
+        expect(state.lives).toBe(INITIAL_GAME_STATE.lives);
+        expect(state.gold).toBe(INITIAL_GAME_STATE.gold);
+        expect(state.score).toBe(0);
+        expect(state.difficulty).toBe(DifficultyLevel.NORMAL);
+        expect(state.isEndless).toBeFalse();
+        expect(state.highestWave).toBe(0);
+        expect(state.isPaused).toBeFalse();
+        expect(state.gameSpeed).toBe(1);
+        expect(state.elapsedTime).toBe(0);
+        expect(state.activeModifiers.size).toBe(0);
+      });
+
+      it('should clear modifier effects after reset', () => {
+        service.setModifiers(new Set([GameModifier.ARMORED_ENEMIES]));
+        expect(service.getModifierEffects().enemyHealthMultiplier).toBe(2.0);
+
+        service.reset();
+        expect(Object.keys(service.getModifierEffects()).length).toBe(0);
+        expect(service.getModifierScoreMultiplier()).toBe(1.0);
+      });
+    });
+
+    describe('endless mode highestWave tracking', () => {
+      it('should track highestWave incrementally across waves', () => {
+        service.setEndlessMode(true);
+        service.startWave();
+        service.completeWave(10);
+        expect(service.getState().highestWave).toBe(1);
+
+        service.startWave();
+        service.completeWave(10);
+        expect(service.getState().highestWave).toBe(2);
+
+        service.startWave();
+        service.completeWave(10);
+        expect(service.getState().highestWave).toBe(3);
+      });
+    });
+
+    describe('multiple startWave calls in rapid succession', () => {
+      it('should only advance wave once when called twice without completing', () => {
+        service.startWave(); // wave 1, COMBAT
+        service.startWave(); // no-op (already COMBAT)
+        service.startWave(); // no-op (already COMBAT)
+        expect(service.getState().wave).toBe(1);
+        expect(service.getState().phase).toBe(GamePhase.COMBAT);
+      });
+
+      it('should correctly advance after complete-start-start sequence', () => {
+        service.startWave(); // wave 1, COMBAT
+        service.completeWave(0); // INTERMISSION
+        service.startWave(); // wave 2, COMBAT
+        service.startWave(); // no-op
+        expect(service.getState().wave).toBe(2);
+        expect(service.getState().phase).toBe(GamePhase.COMBAT);
+      });
+    });
+
+    describe('completeWave reward accumulation', () => {
+      it('should accumulate gold and score across multiple wave completions', () => {
+        const initialGold = service.getState().gold;
+        service.startWave();
+        service.completeWave(100);
+        service.startWave();
+        service.completeWave(200);
+        service.startWave();
+        service.completeWave(300);
+
+        expect(service.getState().gold).toBe(initialGold + 100 + 200 + 300);
+        expect(service.getState().score).toBe(100 + 200 + 300);
+      });
+    });
+
+    describe('observable emits defensive copies of activeModifiers', () => {
+      it('should not allow mutation of emitted activeModifiers to affect service state', (done) => {
+        service.setModifiers(new Set([GameModifier.ARMORED_ENEMIES]));
+        let emitCount = 0;
+        service.getState$().subscribe(state => {
+          emitCount++;
+          if (emitCount === 1) {
+            // Try to mutate the emitted set
+            state.activeModifiers.add(GameModifier.FAST_ENEMIES);
+            // Service internal state should be unaffected
+            expect(service.getState().activeModifiers.has(GameModifier.FAST_ENEMIES)).toBeFalse();
+            expect(service.getState().activeModifiers.size).toBe(1);
+            done();
+          }
+        });
+      });
+    });
+
+    describe('setModifiers during SETUP but wave > 0', () => {
+      it('should be a no-op when phase is SETUP but wave is not 0', () => {
+        // Force phase back to SETUP after advancing a wave
+        service.startWave();
+        service.completeWave(0);
+        service.setPhase(GamePhase.SETUP);
+        expect(service.getState().phase).toBe(GamePhase.SETUP);
+        expect(service.getState().wave).toBe(1);
+
+        const mods = new Set([GameModifier.ARMORED_ENEMIES]);
+        service.setModifiers(mods);
+        expect(service.getState().activeModifiers.size).toBe(0);
+      });
+    });
+
+    describe('setDifficulty during SETUP but wave > 0', () => {
+      it('should be a no-op when phase is SETUP but wave is not 0', () => {
+        service.startWave();
+        service.completeWave(0);
+        service.setPhase(GamePhase.SETUP);
+        expect(service.getState().wave).toBe(1);
+
+        const livesBefore = service.getState().lives;
+        const goldBefore = service.getState().gold;
+        service.setDifficulty(DifficultyLevel.EASY);
+        expect(service.getState().lives).toBe(livesBefore);
+        expect(service.getState().gold).toBe(goldBefore);
+        expect(service.getState().difficulty).toBe(DifficultyLevel.NORMAL);
+      });
+    });
+  });
 });

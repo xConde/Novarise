@@ -99,6 +99,10 @@ export class MapStorageService {
 
     try {
       const savedMap: SavedMap = JSON.parse(json);
+      if (!savedMap.data) {
+        console.warn(`Map "${id}" has no data field — treating as missing`);
+        return null;
+      }
       this.setCurrentMapId(id);
       return savedMap.data;
     } catch (e) {
@@ -116,7 +120,12 @@ export class MapStorageService {
     if (!json) return [];
 
     try {
-      return JSON.parse(json);
+      const parsed: unknown = JSON.parse(json);
+      if (!Array.isArray(parsed)) {
+        console.warn('Maps metadata is not an array — resetting to empty');
+        return [];
+      }
+      return parsed as MapMetadata[];
     } catch (e) {
       console.error('Failed to parse maps metadata:', e);
       return [];
