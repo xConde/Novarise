@@ -846,4 +846,4 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Normalize minimap display values (show/toggle consistency)
 - [x] Add try-catch to editor ngOnDestroy auto-save
 - [x] Full test suite green (2028/2028)
-- [ ] Push to remote
+- [x] Push to remote
