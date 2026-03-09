@@ -44,8 +44,10 @@ export const TOWER_VISUAL_CONFIG = {
   scaleBase: 1.4,
   scaleIncrement: 0.15,
   emissiveBase: 0.7,
-  emissiveIncrement: 0.25
-};
+  emissiveIncrement: 0.25,
+  /** Mesh names whose emissive is driven per-frame by animations — skip during upgrade boost */
+  animatedMeshNames: new Set(['tip', 'orb']),
+} as const;
 
 export const RANGE_PREVIEW_CONFIG = {
   opacity: 0.35,
@@ -77,4 +79,13 @@ export const ENEMY_VISUAL_CONFIG = {
   miniSwarmEmissive: 0.4,
   roughness: 0.6,
   metalness: 0.2,
+  /** Fallback death particle color when enemy type has no color defined */
+  fallbackDeathColor: 0xff0000,
 };
+
+export const GAME_TIMING_CONFIG = {
+  /** How long the "path blocked" warning banner stays visible (ms) */
+  pathBlockedDismissMs: 2000,
+  /** Interval at which accumulated elapsed combat time is flushed to state (seconds) */
+  elapsedTimeFlushInterval: 1,
+} as const;

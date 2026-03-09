@@ -1,10 +1,4 @@
-@mixin glass-panel($bg: rgba(0, 0, 0, 0.75)) {
-  background: $bg;
-  border-radius: var(--border-radius-md);
-  backdrop-filter: blur(0.625rem);
-  z-index: var(--z-index-overlay);
-  font-family: "Orbitron", sans-serif;
-}
+@use './styles/game-mixins' as *;
 
 .board-container {
   display: flex;
@@ -35,6 +29,12 @@
     align-items: center;
     gap: var(--spacing-sm);
     z-index: var(--z-index-overlay);
+
+    @media screen and (max-width: 480px) {
+      top: var(--spacing-xs);
+      right: var(--spacing-xs);
+      gap: var(--spacing-xs);
+    }
   }
 
   .help-btn {
@@ -57,6 +57,10 @@
       border-color: var(--theme-purple-a80);
       color: var(--theme-purple-lighter);
     }
+
+    @media screen and (max-width: 480px) {
+      display: none;
+    }
   }
 
   // --- FPS counter ---
@@ -65,6 +69,10 @@
     font-family: "Orbitron", sans-serif;
     font-size: 0.7rem;
     opacity: 0.6;
+
+    @media screen and (max-width: 480px) {
+      display: none;
+    }
   }
 
   .audio-toggle-btn {
@@ -88,113 +96,6 @@
     }
   }
 
-  // --- Game HUD ---
-  .game-hud {
-    @include glass-panel;
-    position: absolute;
-    top: var(--spacing-md);
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: var(--spacing-lg);
-    padding: var(--spacing-sm) var(--spacing-lg);
-    border: var(--border-width-thin) solid var(--border-color);
-    user-select: none;
-
-    @media screen and (max-width: 768px) {
-      gap: var(--spacing-md);
-      padding: var(--spacing-xs) var(--spacing-md);
-      font-size: var(--font-size-small);
-    }
-
-    .hud-stat {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.125rem;
-
-      &.secondary {
-        opacity: 0.7;
-
-        .hud-value {
-          font-size: var(--font-size-small);
-        }
-      }
-
-      .hud-label {
-        font-size: 0.625rem;
-        text-transform: uppercase;
-        letter-spacing: 0.0625rem;
-        color: rgba(255, 255, 255, 0.5);
-      }
-
-      .hud-value {
-        font-size: var(--font-size-base);
-        font-weight: 700;
-        color: var(--text-color);
-
-        &.lives {
-          color: var(--game-health);
-
-          &.critical {
-            animation: pulse-critical 0.5s ease-in-out infinite alternate;
-          }
-        }
-
-        &.gold {
-          color: var(--game-gold);
-        }
-      }
-    }
-
-  }
-
-  .hud-wave-status {
-    --hud-height: 3.5rem;
-
-    position: absolute;
-    top: calc(var(--spacing-md) + var(--hud-height));
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 0.25rem var(--spacing-md);
-    background: rgba(0, 0, 0, 0.4);
-    border-radius: var(--border-radius-md);
-    color: rgba(255, 136, 136, 0.8);
-    font-family: "Orbitron", sans-serif;
-    font-size: 0.7rem;
-    white-space: nowrap;
-    z-index: var(--z-index-overlay);
-
-    .wave-enemy-count {
-      font-weight: 700;
-      color: var(--game-wave-text);
-    }
-  }
-
-  .path-blocked-warning {
-    position: absolute;
-    top: calc(var(--spacing-md) + 5rem);
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 0.4rem var(--spacing-lg);
-    background: rgba(180, 40, 40, 0.85);
-    border: 1px solid rgba(255, 80, 80, 0.6);
-    border-radius: var(--border-radius-md);
-    color: #fff;
-    font-family: "Orbitron", sans-serif;
-    font-size: 0.75rem;
-    font-weight: 600;
-    white-space: nowrap;
-    z-index: var(--z-index-overlay);
-    animation: path-blocked-fade-in 0.15s ease-out;
-    pointer-events: none;
-  }
-
-  @keyframes path-blocked-fade-in {
-    from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
-    to { opacity: 1; transform: translateX(-50%) translateY(0); }
-  }
-
   // --- Wave preview panel ---
   .wave-preview {
     @include glass-panel(rgba(0, 0, 0, 0.82));
@@ -210,6 +111,7 @@
     pointer-events: none;
 
     max-height: min(40vh, 300px);
+    overflow-x: hidden;
     overflow-y: auto;
 
     @media screen and (max-width: 768px) {
@@ -271,258 +173,36 @@
     }
   }
 
-  // --- Wave control ---
-  .wave-control {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: var(--z-index-overlay);
-    text-align: center;
-
-    .wave-btn {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: var(--spacing-xs);
-      @include glass-panel(rgba(0, 0, 0, 0.85));
-      padding: var(--spacing-md) var(--spacing-xl);
-      border: var(--border-width-medium) solid rgba(255, 255, 255, 0.3);
-      border-radius: var(--border-radius-lg);
-      color: var(--text-color);
-      font-size: var(--font-size-title);
-      cursor: pointer;
-      transition: all var(--transition-medium) ease;
-
-      &:hover {
-        background: rgba(255, 255, 255, 0.1);
-        border-color: rgba(255, 255, 255, 0.6);
-        transform: scale(1.05);
-      }
-
-      &:active {
-        transform: scale(0.98);
-      }
-
-      .wave-hint {
-        font-size: 0.5625rem;
-        color: rgba(255, 255, 255, 0.3);
-      }
-    }
-
-  }
-
-  // --- Victory / Defeat overlay ---
-  .game-overlay {
+  // --- Loading overlay ---
+  .loading-overlay {
     position: absolute;
     inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.95);
     z-index: var(--z-index-modal);
-    animation: fade-in 0.5s ease;
+  }
 
-    .overlay-content {
-      text-align: center;
-      padding: var(--spacing-2xl);
-      border-radius: var(--border-radius-lg);
-      backdrop-filter: blur(1rem);
-      animation: scale-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  .loading-content {
+    text-align: center;
+  }
 
-      &.victory {
-        background: rgba(0, 100, 0, 0.3);
-        border: var(--border-width-medium) solid rgba(0, 255, 0, 0.4);
-        box-shadow: 0 0 2.5rem rgba(0, 255, 0, 0.15);
+  .loading-spinner {
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: var(--theme-purple-light);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto var(--spacing-md);
+  }
 
-        h2 { color: var(--game-victory); }
-      }
-
-      &.defeat {
-        background: rgba(100, 0, 0, 0.3);
-        border: var(--border-width-medium) solid rgba(255, 0, 0, 0.4);
-        box-shadow: 0 0 2.5rem rgba(255, 0, 0, 0.15);
-
-        h2 { color: var(--game-defeat); }
-      }
-
-      h2 {
-        font-family: "Orbitron", sans-serif;
-        font-size: var(--font-size-hero);
-        margin-bottom: var(--spacing-md);
-        text-transform: uppercase;
-        letter-spacing: 0.25rem;
-      }
-
-      .final-score {
-        font-family: "Orbitron", sans-serif;
-        font-size: var(--font-size-large);
-        color: var(--game-gold);
-        margin-bottom: var(--spacing-lg);
-      }
-
-      // --- Star rating ---
-      .star-display {
-        display: flex;
-        justify-content: center;
-        gap: var(--spacing-sm);
-        margin-bottom: var(--spacing-lg);
-
-        .overlay-star {
-          font-size: 2.5rem;
-          line-height: 1;
-          transition: transform 0.2s ease;
-
-          &.filled {
-            color: var(--game-star-filled);
-            text-shadow: 0 0 0.75rem rgba(255, 215, 0, 0.6);
-          }
-
-          &.empty {
-            color: var(--game-star-empty);
-          }
-        }
-      }
-
-      // --- Score breakdown ---
-      .score-breakdown {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-xs);
-        margin-bottom: var(--spacing-lg);
-        min-width: 18rem;
-        text-align: left;
-
-        @media screen and (max-width: 768px) {
-          min-width: 14rem;
-        }
-
-        .score-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: var(--spacing-xs) 0;
-          border-bottom: var(--border-width-thin) solid rgba(255, 255, 255, 0.08);
-          font-family: "Orbitron", sans-serif;
-          font-size: var(--font-size-small);
-
-          &.final {
-            border-bottom: none;
-            border-top: var(--border-width-medium) solid rgba(255, 255, 255, 0.2);
-            margin-top: var(--spacing-xs);
-            padding-top: var(--spacing-sm);
-          }
-
-          .score-label {
-            color: rgba(255, 255, 255, 0.55);
-            text-transform: uppercase;
-            letter-spacing: 0.0313rem;
-          }
-
-          .score-value {
-            color: var(--text-color);
-            font-weight: 600;
-
-            &.multiplier {
-              color: var(--score-multiplier);
-            }
-
-            &.final-value {
-              color: var(--game-gold);
-              font-size: var(--font-size-large);
-              font-weight: 700;
-            }
-          }
-        }
-      }
-
-      // --- Achievements unlocked ---
-      .achievements-unlocked {
-        margin-bottom: var(--spacing-lg);
-
-        .achievements-title {
-          font-family: "Orbitron", sans-serif;
-          font-size: var(--font-size-small);
-          color: var(--game-gold);
-          text-transform: uppercase;
-          letter-spacing: 0.0625rem;
-          margin-bottom: var(--spacing-sm);
-        }
-
-        .achievement-list {
-          display: flex;
-          flex-direction: column;
-          gap: var(--spacing-xs);
-        }
-
-        .achievement-badge {
-          display: flex;
-          align-items: center;
-          gap: var(--spacing-sm);
-          padding: var(--spacing-xs) var(--spacing-sm);
-          background: rgba(255, 215, 0, 0.08);
-          border: var(--border-width-thin) solid rgba(255, 215, 0, 0.25);
-          border-radius: var(--border-radius-sm);
-          animation: scale-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-
-          .achievement-icon {
-            font-size: 1.25rem;
-          }
-
-          .achievement-info {
-            display: flex;
-            flex-direction: column;
-            text-align: left;
-          }
-
-          .achievement-name {
-            font-family: "Orbitron", sans-serif;
-            font-size: var(--font-size-small);
-            color: var(--game-gold);
-            font-weight: 600;
-          }
-
-          .achievement-desc {
-            font-size: var(--font-size-tiny);
-            color: rgba(255, 255, 255, 0.5);
-          }
-        }
-      }
-
-      .overlay-actions {
-        display: flex;
-        gap: var(--spacing-md);
-        justify-content: center;
-      }
-
-      .restart-btn, .edit-map-btn {
-        padding: var(--spacing-sm) var(--spacing-xl);
-        background: var(--theme-purple-a20);
-        border: var(--border-width-medium) solid var(--theme-purple-a50);
-        border-radius: var(--border-radius-md);
-        color: var(--text-color);
-        font-family: "Orbitron", sans-serif;
-        font-size: var(--font-size-base);
-        cursor: pointer;
-        transition: all var(--transition-medium) ease;
-
-        &:hover {
-          background: var(--theme-purple-a30);
-          border-color: var(--theme-purple-a80);
-        }
-      }
-
-      .edit-map-btn {
-        border-color: var(--theme-purple-a50);
-        color: var(--theme-purple-mid);
-
-        &:hover {
-          background: var(--theme-purple-a20);
-          border-color: var(--theme-purple-a80);
-          color: var(--theme-purple-lighter);
-        }
-      }
-    }
+  .loading-text {
+    font-family: 'Orbitron', sans-serif;
+    font-size: var(--font-size-small);
+    color: var(--theme-purple-mid);
+    letter-spacing: 0.1rem;
   }
 
   // --- Pause overlay ---
@@ -558,964 +238,9 @@
     }
   }
 
-  // --- Tower info panel ---
-  .tower-info-panel {
-    --tower-bar-height: 5.5rem;
-
-    @include glass-panel(rgba(0, 0, 0, 0.85));
-    position: absolute;
-    bottom: calc(var(--spacing-lg) + var(--tower-bar-height));
-    left: 50%;
-    transform: translateX(-50%);
-    min-width: 14rem;
-    padding: var(--spacing-md);
-    border: var(--border-width-thin) solid var(--theme-purple-a50);
-    backdrop-filter: blur(0.75rem);
-    animation: scale-in 0.2s ease-out;
-
-    @media screen and (max-width: 768px) {
-      --tower-bar-height: 4.5rem;
-      min-width: 12rem;
-      bottom: calc(var(--spacing-md) + var(--tower-bar-height));
-    }
-
-    .tower-info-header {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-sm);
-      margin-bottom: var(--spacing-sm);
-      padding-bottom: var(--spacing-xs);
-      border-bottom: var(--border-width-thin) solid var(--border-color);
-
-      .tower-info-name {
-        font-size: var(--font-size-base);
-        font-weight: 700;
-        color: var(--text-color);
-        text-transform: uppercase;
-        letter-spacing: 0.0625rem;
-      }
-
-      .tower-info-level {
-        display: flex;
-        gap: 0.125rem;
-
-        .level-star {
-          font-size: 0.75rem;
-          color: var(--game-star-filled);
-
-          &.empty {
-            color: var(--game-star-empty);
-          }
-        }
-      }
-
-      .tower-info-close {
-        margin-left: auto;
-        background: none;
-        border: none;
-        color: rgba(255, 255, 255, 0.5);
-        font-size: var(--font-size-large);
-        cursor: pointer;
-        padding: 0 var(--spacing-xs);
-        line-height: 1;
-
-        &:hover {
-          color: var(--text-color);
-        }
-      }
-    }
-
-    .tower-info-stats {
-      display: flex;
-      flex-direction: column;
-      gap: var(--spacing-xs);
-      margin-bottom: var(--spacing-sm);
-
-      .stat-row {
-        display: flex;
-        justify-content: space-between;
-        font-size: var(--font-size-small);
-
-        .stat-label {
-          color: rgba(255, 255, 255, 0.5);
-          text-transform: uppercase;
-          letter-spacing: 0.0313rem;
-        }
-
-        .stat-value {
-          color: var(--text-color);
-          font-weight: 600;
-        }
-      }
-    }
-
-    .tower-info-targeting {
-      margin-bottom: var(--spacing-xs);
-
-      .targeting-btn {
-        width: 100%;
-        padding: var(--spacing-xs) var(--spacing-sm);
-        border: var(--border-width-thin) solid rgba(100, 180, 255, 0.3);
-        border-radius: var(--border-radius-sm);
-        background: rgba(30, 80, 140, 0.3);
-        color: #88ccff;
-        font-family: "Orbitron", sans-serif;
-        font-size: 0.6875rem;
-        cursor: pointer;
-        transition: all var(--transition-medium) ease;
-        text-align: center;
-
-        &:hover {
-          background: rgba(40, 100, 180, 0.45);
-          border-color: rgba(100, 180, 255, 0.6);
-        }
-      }
-    }
-
-    .tower-info-actions {
-      display: flex;
-      gap: var(--spacing-sm);
-
-      .upgrade-btn, .sell-btn {
-        flex: 1;
-        padding: var(--spacing-xs) var(--spacing-sm);
-        border: var(--border-width-thin) solid var(--border-color);
-        border-radius: var(--border-radius-sm);
-        font-family: "Orbitron", sans-serif;
-        font-size: 0.6875rem;
-        cursor: pointer;
-        transition: all var(--transition-medium) ease;
-      }
-
-      .upgrade-btn {
-        background: rgba(0, 100, 0, 0.3);
-        border-color: rgba(0, 255, 0, 0.3);
-        color: #88ff88;
-
-        &:hover {
-          background: rgba(0, 150, 0, 0.4);
-          border-color: rgba(0, 255, 0, 0.6);
-        }
-
-        &.unaffordable {
-          opacity: 0.4;
-          cursor: not-allowed;
-          color: var(--game-health);
-        }
-      }
-
-      .sell-btn {
-        background: rgba(100, 50, 0, 0.3);
-        border-color: rgba(255, 200, 0, 0.3);
-        color: var(--game-gold);
-
-        &:hover {
-          background: rgba(150, 75, 0, 0.4);
-          border-color: rgba(255, 200, 0, 0.6);
-        }
-
-        &.confirm {
-          background: rgba(200, 50, 0, 0.5);
-          border-color: rgba(255, 100, 0, 0.8);
-          color: var(--game-health);
-          animation: pulse-warn 0.5s ease-in-out infinite alternate;
-        }
-      }
-
-      @keyframes pulse-warn {
-        from { opacity: 0.8; }
-        to { opacity: 1; }
-      }
-
-      .max-level-badge {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.6875rem;
-        color: var(--game-gold);
-        text-transform: uppercase;
-        letter-spacing: 0.0625rem;
-      }
-    }
-
-    .spec-choice-panel {
-      display: flex;
-      flex-direction: column;
-      gap: var(--spacing-xs);
-
-      .spec-choice-header {
-        font-size: var(--font-size-small);
-        color: var(--game-gold);
-        text-transform: uppercase;
-        letter-spacing: 0.0625rem;
-        text-align: center;
-        margin-bottom: var(--spacing-xs);
-      }
-
-      .spec-btn {
-        display: flex;
-        flex-direction: column;
-        gap: var(--border-width-medium);
-        padding: var(--spacing-sm);
-        border: var(--border-width-thin) solid var(--panel-blue-border);
-        border-radius: var(--border-radius-sm);
-        background: var(--panel-blue-bg);
-        font-family: "Orbitron", sans-serif;
-        cursor: pointer;
-        transition: all var(--transition-medium) ease;
-        text-align: left;
-        min-height: 2.75rem;
-
-        &:hover {
-          background: var(--panel-blue-hover);
-          border-color: var(--panel-blue-border-hover);
-        }
-
-        &.unaffordable {
-          opacity: 0.4;
-          cursor: not-allowed;
-        }
-
-        .spec-label {
-          font-size: var(--font-size-xs);
-          font-weight: 700;
-          color: var(--panel-blue-accent);
-          text-transform: uppercase;
-          letter-spacing: 0.0313rem;
-        }
-
-        .spec-desc {
-          font-size: var(--font-size-2xs);
-          color: var(--text-muted);
-        }
-
-        .spec-stats {
-          font-size: var(--font-size-3xs);
-          color: var(--text-faint);
-          font-family: monospace;
-        }
-      }
-
-      .spec-cancel-btn {
-        padding: var(--spacing-xs);
-        border: var(--border-width-thin) solid var(--border-color);
-        border-radius: var(--border-radius-sm);
-        background: var(--panel-neutral-bg);
-        color: var(--text-dim);
-        font-family: "Orbitron", sans-serif;
-        font-size: var(--font-size-2xs);
-        cursor: pointer;
-        transition: all var(--transition-medium) ease;
-        min-height: 2.75rem;
-
-        &:hover {
-          background: var(--panel-neutral-hover);
-          color: var(--text-color);
-        }
-      }
-    }
-  }
-
-  // --- Setup Panel (right side on desktop, bottom sheet on mobile) ---
-  .setup-panel {
-    @include glass-panel(rgba(0, 0, 0, 0.85));
-    position: absolute;
-    top: var(--spacing-md);
-    right: var(--spacing-md);
-    width: min(18rem, 35vw);
-    max-height: calc(100vh - var(--spacing-xl));
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-md);
-    border: var(--border-width-thin) solid var(--theme-purple-a50);
-    animation: scale-in 0.2s ease-out;
-  }
-
-  .setup-section-label {
-    font-size: var(--font-size-2xs);
-    text-transform: uppercase;
-    letter-spacing: 0.1rem;
-    color: var(--text-dim);
-    font-weight: 600;
-  }
-
-  .setup-difficulty-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--spacing-xs);
-  }
-
-  .setup-diff-btn {
-    padding: var(--spacing-xs) var(--spacing-sm);
-    background: transparent;
-    border: var(--border-width-thin) solid var(--border-color);
-    border-radius: var(--border-radius-sm);
-    color: var(--text-color);
-    font-family: "Orbitron", sans-serif;
-    font-size: var(--font-size-xs);
-    font-weight: 700;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: all var(--transition-fast) ease;
-    min-height: 2.75rem;
-
-    &:hover {
-      background: var(--theme-purple-a20);
-      border-color: var(--theme-purple-a80);
-    }
-
-    &.selected {
-      background: var(--theme-purple-a30);
-      border-color: var(--theme-purple);
-      color: var(--theme-purple-lighter);
-      box-shadow: 0 0 var(--spacing-xs) var(--theme-purple-a50);
-    }
-  }
-
-  .setup-endless {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    cursor: pointer;
-    font-size: var(--font-size-small);
-    color: var(--text-color);
-    font-family: "Orbitron", sans-serif;
-    padding: var(--spacing-xs) 0;
-    border-top: var(--border-width-thin) solid var(--border-color);
-
-    input[type="checkbox"] {
-      accent-color: var(--theme-purple);
-      width: 1rem;
-      height: 1rem;
-      cursor: pointer;
-    }
-  }
-
-  .setup-modifier-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--spacing-xs);
-  }
-
-  .setup-mod-btn {
-    padding: var(--spacing-xs);
-    background: transparent;
-    border: var(--border-width-thin) solid var(--border-color);
-    border-radius: var(--border-radius-sm);
-    color: var(--text-color);
-    font-family: "Orbitron", sans-serif;
-    font-size: var(--font-size-3xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: all var(--transition-fast) ease;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-height: 2.75rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    &:hover {
-      background: var(--theme-purple-a20);
-      border-color: var(--theme-purple-a80);
-    }
-
-    &.active {
-      background: var(--theme-purple-a30);
-      border-color: var(--theme-purple);
-      color: var(--theme-purple-lighter);
-    }
-  }
-
-  .setup-score {
-    font-family: "Orbitron", sans-serif;
-    font-size: var(--font-size-small);
-    font-weight: 700;
-    color: var(--theme-purple-lighter);
-    text-align: center;
-  }
-
-  .setup-start-btn {
-    width: 100%;
-    padding: var(--spacing-sm) var(--spacing-md);
-    border: var(--border-width-medium) solid var(--action-success-border);
-    border-radius: var(--border-radius-md);
-    background: var(--action-success-bg);
-    color: var(--action-success);
-    font-family: "Orbitron", sans-serif;
-    font-size: var(--font-size-small);
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    cursor: pointer;
-    transition: all var(--transition-fast) ease;
-
-    &:hover {
-      background: rgba(0, 180, 80, 0.35);
-      box-shadow: 0 0 var(--spacing-sm) rgba(0, 255, 100, 0.25);
-    }
-  }
-
-  // --- Pause / Speed controls ---
-  .game-controls {
-    @include glass-panel(rgba(0, 0, 0, 0.75));
-    position: absolute;
-    bottom: var(--spacing-lg);
-    right: var(--spacing-lg);
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-xs) var(--spacing-sm);
-    border: var(--border-width-thin) solid var(--border-color);
-
-    @media screen and (max-width: 768px) {
-      bottom: var(--spacing-md);
-      right: var(--spacing-md);
-      gap: var(--spacing-xs);
-      padding: var(--spacing-xs);
-    }
-
-    .speed-controls {
-      display: flex;
-      gap: 0.25rem;
-    }
-
-    .control-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: var(--spacing-xs) var(--spacing-sm);
-      background: transparent;
-      border: var(--border-width-thin) solid var(--border-color);
-      border-radius: var(--border-radius-sm);
-      color: rgba(255, 255, 255, 0.6);
-      font-family: "Orbitron", sans-serif;
-      font-size: var(--font-size-small);
-      cursor: pointer;
-      transition: all var(--transition-medium) ease;
-      min-width: 2.75rem;
-      min-height: 2.75rem;
-      line-height: 1;
-
-      @media screen and (max-width: 768px) {
-        min-width: 1.875rem;
-        font-size: 0.625rem;
-        padding: var(--spacing-xs) 0.25rem;
-      }
-
-      &:hover {
-        background: var(--theme-purple-a20);
-        border-color: var(--theme-purple-a80);
-        color: var(--theme-purple-lighter);
-      }
-
-      &:active {
-        transform: scale(0.95);
-      }
-
-      &.active {
-        background: var(--theme-purple-a30);
-        border-color: var(--theme-purple);
-        color: var(--theme-purple-lighter);
-        box-shadow: 0 0 var(--spacing-xs) var(--theme-purple-a50);
-      }
-    }
-
-    .pause-btn {
-      min-width: 2.5rem;
-      line-height: 0;
-
-      &.active {
-        background: rgba(255, 200, 0, 0.15);
-        border-color: rgba(255, 200, 0, 0.5);
-        color: var(--game-gold);
-        box-shadow: 0 0 var(--spacing-xs) rgba(255, 200, 0, 0.3);
-      }
-    }
-
-    .path-btn.active {
-      background: rgba(0, 255, 136, 0.15);
-      border-color: rgba(0, 255, 136, 0.5);
-      color: #88ffbb;
-      box-shadow: 0 0 var(--spacing-xs) rgba(0, 255, 136, 0.3);
-    }
-
-    .wave-hint {
-      font-size: 0.5625rem;
-      color: rgba(255, 255, 255, 0.3);
-    }
-  }
-
-  // --- Tower selection ---
-  .tower-selection {
-    @include glass-panel(rgba(0, 0, 0, 0.8));
-    position: absolute;
-    bottom: var(--spacing-lg);
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: var(--spacing-md);
-    padding: var(--spacing-sm);
-    border: var(--border-width-thin) solid var(--border-color);
-
-    @media screen and (max-width: 768px) {
-      bottom: var(--spacing-md);
-      gap: var(--spacing-sm);
-      padding: var(--spacing-xs);
-      width: 90%;
-      justify-content: center;
-    }
-
-    .tower-btn {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: var(--spacing-xs);
-      padding: var(--spacing-sm);
-      background: transparent;
-      border: var(--border-width-medium) solid var(--border-color);
-      border-radius: var(--border-radius-sm);
-      cursor: pointer;
-      transition: all var(--transition-medium) cubic-bezier(0.4, 0, 0.2, 1);
-      min-width: 5rem;
-
-      @media screen and (max-width: 768px) {
-        min-width: 4rem;
-        padding: var(--spacing-xs);
-      }
-
-      &:hover {
-        background: rgba(255, 255, 255, 0.1);
-        border-color: var(--border-color-strong);
-        transform: translateY(-0.125rem);
-      }
-
-      &:active {
-        transform: translateY(0.0625rem);
-      }
-
-      &.selected {
-        background: rgba(255, 255, 255, 0.15);
-        border-color: var(--text-color);
-        box-shadow: 0 0 var(--spacing-sm) rgba(255, 255, 255, 0.3);
-      }
-
-      &.unaffordable {
-        opacity: 0.4;
-
-        .tower-cost { color: var(--game-health); }
-      }
-
-      .tower-icon {
-        width: 2.5rem;
-        height: 2.5rem;
-        border-radius: var(--border-radius-sm);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-
-        @media screen and (max-width: 768px) {
-          width: 2rem;
-          height: 2rem;
-        }
-
-        &.basic::before {
-          content: '';
-          width: 1.25rem;
-          height: 1.25rem;
-          background: var(--tower-color-basic);
-          border-radius: 50%;
-          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-basic);
-        }
-
-        &.sniper::before {
-          content: '';
-          width: 0;
-          height: 0;
-          border-left: 0.75rem solid transparent;
-          border-right: 0.75rem solid transparent;
-          border-bottom: 1.5rem solid var(--tower-color-sniper);
-          // CSS border triangles don't support box-shadow — use filter instead
-          filter: drop-shadow(0 0 4px var(--tower-glow-sniper));
-        }
-
-        &.splash::before {
-          content: '';
-          width: 1.25rem;
-          height: 1.25rem;
-          background: var(--tower-color-splash);
-          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-splash);
-        }
-
-        &.slow::before {
-          content: '';
-          width: 0.9rem;
-          height: 0.9rem;
-          background: var(--tower-color-slow);
-          transform: rotate(45deg);
-          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-slow);
-        }
-
-        &.chain::before {
-          content: '';
-          width: 0.25rem;
-          height: 1.5rem;
-          background: var(--tower-color-chain);
-          border-radius: 0.125rem;
-          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-chain);
-        }
-
-        &.mortar::before {
-          content: '';
-          width: 1.4rem;
-          height: 0.75rem;
-          background: var(--tower-color-mortar);
-          border-radius: 0.1rem;
-          box-shadow: 0 0 var(--spacing-xs) var(--tower-glow-mortar);
-        }
-      }
-
-      .tower-name {
-        font-size: var(--font-size-small);
-        color: var(--text-color);
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.0313rem;
-
-        @media screen and (max-width: 768px) {
-          font-size: 0.75rem;
-        }
-      }
-
-      .tower-cost {
-        font-size: 0.6875rem;
-        color: var(--game-gold);
-        font-family: "Orbitron", sans-serif;
-      }
-
-      .tower-hotkey {
-        font-size: 0.5rem;
-        color: rgba(255, 255, 255, 0.25);
-        font-family: "Orbitron", sans-serif;
-        letter-spacing: 0.0313rem;
-      }
-
-      // --- Hover tooltip ---
-      .tower-tooltip {
-        position: absolute;
-        bottom: calc(100% + 0.625rem);
-        left: 50%;
-        transform: translateX(-50%);
-        min-width: 9rem;
-        padding: var(--spacing-sm) var(--spacing-md);
-        background: var(--nav-bg, rgba(10, 5, 20, 0.96));
-        border: var(--border-width-thin) solid var(--theme-purple-a50);
-        border-radius: var(--border-radius-md);
-        backdrop-filter: blur(0.75rem);
-        pointer-events: none;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.15s ease, visibility 0.15s ease;
-        z-index: calc(var(--z-index-overlay) + 10);
-        white-space: nowrap;
-        word-wrap: break-word;
-        box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.6), 0 0 0.5rem var(--theme-purple-a30, rgba(128, 0, 255, 0.2));
-
-        @media screen and (max-width: 480px) {
-          max-width: min(200px, 50vw);
-          white-space: normal;
-        }
-
-        .tooltip-stat {
-          display: flex;
-          justify-content: space-between;
-          gap: var(--spacing-md);
-          font-family: "Orbitron", sans-serif;
-          font-size: clamp(0.5rem, 1.5vw, 0.625rem);
-          margin-bottom: 0.1875rem;
-
-          .tooltip-label {
-            color: rgba(255, 255, 255, 0.45);
-            letter-spacing: 0.0625rem;
-          }
-
-          .tooltip-val {
-            color: var(--text-color);
-            font-weight: 600;
-          }
-        }
-
-        .tooltip-desc {
-          margin-top: var(--spacing-xs);
-          padding-top: var(--spacing-xs);
-          border-top: var(--border-width-thin) solid rgba(255, 255, 255, 0.1);
-          font-family: "Orbitron", sans-serif;
-          font-size: 0.5rem;
-          color: var(--theme-purple-mid, rgba(160, 100, 255, 0.8));
-          text-align: center;
-          line-height: 1.4;
-          white-space: normal;
-        }
-
-        // Downward-pointing caret
-        .tooltip-arrow {
-          position: absolute;
-          bottom: -0.3125rem;
-          left: 50%;
-          transform: translateX(-50%) rotate(45deg);
-          width: 0.375rem;
-          height: 0.375rem;
-          background: var(--nav-bg, rgba(10, 5, 20, 0.96));
-          border-right: var(--border-width-thin) solid var(--theme-purple-a50);
-          border-bottom: var(--border-width-thin) solid var(--theme-purple-a50);
-        }
-      }
-
-      &:hover .tower-tooltip {
-        opacity: 1;
-        visibility: visible;
-      }
-    }
-  }
-}
-
-// --- Responsive breakpoints ---
-// Tablet (max-width: 768px) enhancements not covered by nested queries above
-@media screen and (max-width: 768px) {
-  .board-container {
-    // Game controls: stack vertically on tablet
-    .game-controls {
-      flex-direction: column;
-      align-items: stretch;
-
-      .speed-controls {
-        justify-content: center;
-      }
-    }
-
-    // Wave control button: ensure minimum 44px tap target
-    .wave-control .wave-btn {
-      min-height: 2.75rem; // 44px
-    }
-
-    // Setup panel: bottom sheet on mobile
-    .setup-panel {
-      position: fixed;
-      top: auto;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      width: 100%;
-      max-height: 55vh;
-      border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
-      padding: var(--spacing-sm) var(--spacing-md);
-    }
-
-    .setup-difficulty-grid {
-      grid-template-columns: repeat(4, 1fr);
-    }
-
-    .setup-modifier-grid {
-      grid-template-columns: repeat(3, 1fr);
-    }
-
-    // Victory/defeat overlay: tighten padding
-    .game-overlay .overlay-content {
-      padding: var(--spacing-xl);
-      width: 90vw;
-
-      h2 {
-        font-size: var(--font-size-title);
-        letter-spacing: var(--spacing-xs);
-      }
-
-      .final-score {
-        font-size: var(--font-size-base);
-        margin-bottom: var(--spacing-md);
-      }
-    }
-
-    // HUD: shrink label + value sizes
-    .game-hud .hud-stat {
-      .hud-label {
-        font-size: 0.5625rem;
-      }
-
-      .hud-value {
-        font-size: var(--font-size-small);
-      }
-    }
-  }
-}
-
-// Mobile (max-width: 480px) overrides
-@media screen and (max-width: 480px) {
-  .board-container {
-    // Tower selection: switch to 3-column grid
-    .tower-selection {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      bottom: 0;
-      left: 0;
-      right: 0;
-      transform: none;
-      width: 100%;
-      border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
-      padding: var(--spacing-sm);
-      gap: var(--spacing-xs);
-      border-left: none;
-      border-right: none;
-      border-bottom: none;
-
-      .tower-btn {
-        min-width: unset;
-        width: 100%;
-        padding: var(--spacing-xs);
-        gap: 0.125rem;
-
-        .tower-icon {
-          width: 1.75rem;
-          height: 1.75rem;
-        }
-
-        .tower-name {
-          font-size: 0.625rem;
-        }
-
-        .tower-cost {
-          font-size: 0.5625rem;
-        }
-      }
-    }
-
-    // Tower info panel: full-width at bottom above tower selection
-    .tower-info-panel {
-      left: 0;
-      right: 0;
-      bottom: calc(var(--spacing-lg) + 8rem); // 8rem = 2-row tower grid height (mobile grid layout)
-      transform: none;
-      min-width: unset;
-      width: 100%;
-      border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
-      border-left: none;
-      border-right: none;
-      border-bottom: none;
-    }
-
-    // Game HUD: further reduce on mobile
-    .game-hud {
-      gap: var(--spacing-sm);
-      padding: var(--spacing-xs) var(--spacing-sm);
-      font-size: 0.625rem;
-
-      .hud-stat {
-        .hud-label {
-          font-size: 0.5rem;
-          letter-spacing: 0;
-        }
-
-        .hud-value {
-          font-size: 0.6875rem;
-        }
-      }
-    }
-
-    // Wave control button: larger tap target (min 44px touch target)
-    .wave-control .wave-btn {
-      min-height: 2.75rem; // 44px
-      padding: var(--spacing-sm) var(--spacing-lg);
-      font-size: var(--font-size-base);
-    }
-
-    // Game controls: stack vertically, right side
-    .game-controls {
-      flex-direction: column;
-      align-items: stretch;
-      bottom: calc(var(--spacing-sm) + 8.5rem); // above tower grid
-      right: var(--spacing-sm);
-      gap: var(--spacing-xs);
-      padding: var(--spacing-xs);
-      max-width: 100vw;
-      overflow-x: hidden;
-
-      .control-btn {
-        min-width: 2.75rem; // 44px tap target
-        min-height: 2.75rem;
-        padding: var(--spacing-xs) var(--spacing-sm);
-        font-size: 0.625rem;
-        justify-content: center;
-      }
-
-      .pause-btn {
-        min-width: 2.75rem;
-        min-height: 2.75rem;
-        line-height: 0;
-      }
-
-      .speed-controls {
-        flex-direction: column;
-        gap: var(--spacing-xs);
-      }
-    }
-
-    // Setup panel: constrain height on short screens
-    .setup-panel {
-      max-height: 45vh;
-    }
-
-    // Victory/defeat overlay: full-screen with adjusted padding
-    .game-overlay {
-      align-items: flex-end;
-
-      .overlay-content {
-        width: 100%;
-        max-height: 85vh;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        padding: var(--spacing-xl) var(--spacing-md);
-        border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
-        border-left: none;
-        border-right: none;
-        border-bottom: none;
-
-        h2 {
-          font-size: var(--font-size-large);
-          letter-spacing: var(--spacing-xs);
-          margin-bottom: var(--spacing-sm);
-        }
-
-        .final-score {
-          font-size: var(--font-size-base);
-          margin-bottom: var(--spacing-md);
-        }
-
-        .overlay-actions {
-          flex-direction: column;
-          gap: var(--spacing-sm);
-
-          .restart-btn, .edit-map-btn {
-            width: 100%;
-            padding: var(--spacing-sm) var(--spacing-md);
-            min-height: 2.75rem; // 44px tap target
-          }
-        }
-      }
-    }
-  }
 }
 
 // --- Animations ---
-@keyframes pulse-critical {
-  from { opacity: 1; }
-  to { opacity: 0.5; }
-}
-
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -1529,6 +254,18 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner {
+    animation: none;
+    border-top-color: var(--theme-purple-light);
+    opacity: 0.6;
   }
 }
 
@@ -1583,5 +320,74 @@
       color: rgba(255, 255, 255, 0.4);
       text-align: center;
     }
+  }
+}
+
+%fullscreen-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.95);
+  z-index: var(--z-index-modal);
+  color: var(--text-color);
+  font-family: 'Orbitron', sans-serif;
+}
+
+%overlay-content {
+  text-align: center;
+  max-width: 28rem;
+  padding: var(--spacing-xl);
+
+  h2 {
+    color: var(--game-defeat);
+    font-size: var(--font-size-title);
+    margin-bottom: var(--spacing-md);
+  }
+
+  p {
+    color: var(--text-muted);
+    margin-bottom: var(--spacing-sm);
+    font-family: sans-serif;
+    line-height: 1.4;
+  }
+}
+
+.init-error-overlay {
+  @extend %fullscreen-overlay;
+}
+
+.init-error-content {
+  @extend %overlay-content;
+
+  .init-error-hint {
+    font-size: var(--font-size-small);
+    color: var(--text-dim);
+  }
+}
+
+.context-lost-overlay {
+  @extend %fullscreen-overlay;
+}
+
+.context-lost-content {
+  @extend %overlay-content;
+}
+
+.init-error-btn {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-sm) var(--spacing-xl);
+  background: var(--theme-purple);
+  color: var(--text-color);
+  border: none;
+  border-radius: var(--border-radius-lg);
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--font-size-small);
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+
+  &:hover {
+    opacity: 0.85;
   }
 }

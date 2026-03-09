@@ -14,6 +14,7 @@ import { CameraControlService, MovementInput, RotationInput, JoystickInput } fro
 import { EditorStateService, EditMode, BrushTool } from './core/editor-state.service';
 import { MapBridgeService } from '../../game/game-board/services/map-bridge.service';
 import { disposeMaterial } from '../../game/game-board/utils/three-utils';
+import { MOBILE_CONFIG } from '../../game/game-board/constants/mobile.constants';
 import { JoystickEvent } from './features/mobile-controls';
 import {
   EDITOR_SCENE_CONFIG,
@@ -132,6 +133,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   // Title display
   public title = 'Novarise';
 
+  // Init error state
+  public initError: string | null = null;
+  public isLoading = true;
+
   // Map templates
   public templates: MapTemplate[] = [];
 
@@ -163,43 +168,52 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
-    this.initializeScene();
-    this.initializeCamera();
-    this.initializeLights();
-    this.addSkybox();
-    this.initializeParticles();
-    this.initializeRenderer();
-    this.initializePostProcessing();
-    this.initializeControls();
+    try {
+      this.initializeScene();
+      this.initializeCamera();
+      this.initializeLights();
+      this.addSkybox();
+      this.initializeParticles();
+      this.initializeRenderer();
+      this.initializePostProcessing();
+      this.initializeControls();
 
-    // Initialize terrain grid
-    this.terrainGrid = new TerrainGrid(this.scene, 25);
+      // Initialize terrain grid
+      this.terrainGrid = new TerrainGrid(this.scene, 25);
 
-    // Add helpers for spatial reference
-    this.addHelpers();
+      // Add helpers for spatial reference
+      this.addHelpers();
 
-    // Create brush indicator for crisp visual feedback
-    this.createBrushIndicator();
+      // Create brush indicator for crisp visual feedback
+      this.createBrushIndicator();
 
-    // Initialize brush preview system
-    this.updateBrushPreview();
+      // Initialize brush preview system
+      this.updateBrushPreview();
 
-    // Create spawn/exit markers for tower defense
-    this.createSpawnExitMarkers();
+      // Create spawn/exit markers for tower defense
+      this.createSpawnExitMarkers();
 
-    // Initialize camera rotation to match initial camera view
-    this.initializeCameraRotation();
+      // Initialize camera rotation to match initial camera view
+      this.initializeCameraRotation();
 
-    // Load map templates for the editor UI
-    this.templates = this.mapTemplateService.getTemplates();
+      // Load map templates for the editor UI
+      this.templates = this.mapTemplateService.getTemplates();
 
-    // Try to migrate old format and load current map
-    this.mapStorage.migrateOldFormat();
-    this.tryLoadCurrentMap();
+      // Try to migrate old format and load current map
+      this.mapStorage.migrateOldFormat();
+      this.tryLoadCurrentMap();
 
-    this.setupInteraction();
-    this.setupKeyboardControls();
-    this.animate();
+      this.setupInteraction();
+      this.setupKeyboardControls();
+      this.animate();
+      this.isLoading = false;
+    } catch (error) {
+      this.initError = error instanceof Error
+        ? error.message
+        : 'Failed to initialize editor renderer';
+      this.isLoading = false;
+      console.error('Editor initialization failed:', error);
+    }
   }
 
   private initializeScene(): void {
@@ -228,8 +242,17 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private initializeRenderer(): void {
+    const testCanvas = document.createElement('canvas');
+    const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
+    if (!gl) {
+      throw new Error('WebGL is not supported by your browser');
+    }
+    // Release the test WebGL context to free the browser context slot
+    (gl as WebGLRenderingContext).getExtension('WEBGL_lose_context')?.loseContext();
+
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, EDITOR_RENDERER_CONFIG.maxPixelRatio)); // Cap at 2 for performance
+    const mobileMaxRatio = window.innerWidth <= MOBILE_CONFIG.breakpoint ? MOBILE_CONFIG.maxPixelRatio : EDITOR_RENDERER_CONFIG.maxPixelRatio;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobileMaxRatio));
 
     // Initial size using proper viewport calculation
     const { width, height } = this.getViewportSize();
@@ -284,15 +307,17 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(renderPass);
 
-    // Reduced bloom for better visibility
+    // Skip bloom on phones — too expensive for low-end GPUs
     const { width, height } = this.getViewportSize();
-    this.bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(width, height),
-      EDITOR_POST_PROCESSING.bloom.strength,   // Reduced strength
-      EDITOR_POST_PROCESSING.bloom.radius,     // Reduced radius
-      EDITOR_POST_PROCESSING.bloom.threshold   // Higher threshold - only brightest elements
-    );
-    this.composer.addPass(this.bloomPass);
+    if (window.innerWidth > MOBILE_CONFIG.phoneBreakpoint) {
+      this.bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(width, height),
+        EDITOR_POST_PROCESSING.bloom.strength,
+        EDITOR_POST_PROCESSING.bloom.radius,
+        EDITOR_POST_PROCESSING.bloom.threshold
+      );
+      this.composer.addPass(this.bloomPass);
+    }
 
     // Lighter vignette for better edge visibility
     const vignetteShader = {
@@ -348,6 +373,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     directionalLight1.shadow.camera.bottom = -dl1Cfg.shadowCameraExtent!;
     directionalLight1.shadow.mapSize.width = dl1Cfg.shadowMapSize!;
     directionalLight1.shadow.mapSize.height = dl1Cfg.shadowMapSize!;
+    if (window.innerWidth <= MOBILE_CONFIG.breakpoint) {
+      directionalLight1.shadow.mapSize.width = Math.min(directionalLight1.shadow.mapSize.width, MOBILE_CONFIG.maxShadowMapSize);
+      directionalLight1.shadow.mapSize.height = Math.min(directionalLight1.shadow.mapSize.height, MOBILE_CONFIG.maxShadowMapSize);
+    }
     this.scene.add(directionalLight1);
 
     // Second directional light from opposite angle
@@ -437,7 +466,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private initializeParticles(): void {
-    const particleCount = EDITOR_PARTICLES.count;
+    const particleCount = window.innerWidth <= MOBILE_CONFIG.breakpoint
+      ? Math.floor(EDITOR_PARTICLES.count / MOBILE_CONFIG.particleDivisor)
+      : EDITOR_PARTICLES.count;
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
 
@@ -503,6 +534,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
+      this.camera.updateMatrixWorld();
       this.raycaster.setFromCamera(this.mouse, this.camera);
       const tileMeshes = this.terrainGrid.getTileMeshes();
       const intersects = this.raycaster.intersectObjects(tileMeshes);
@@ -581,6 +613,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
 
+      this.camera.updateMatrixWorld();
       this.raycaster.setFromCamera(this.mouse, this.camera);
       const tileMeshes = this.terrainGrid.getTileMeshes();
       const intersects = this.raycaster.intersectObjects(tileMeshes);
@@ -598,6 +631,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
 
+      this.camera.updateMatrixWorld();
       this.raycaster.setFromCamera(this.mouse, this.camera);
       const tileMeshes = this.terrainGrid.getTileMeshes();
       const intersects = this.raycaster.intersectObjects(tileMeshes);
@@ -1141,6 +1175,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Save (will update if ID exists, create new if not)
     const savedId = this.mapStorage.saveMap(mapName, state, currentId || undefined);
+    if (!savedId) {
+      alert('Failed to save map — storage may be full. Try deleting unused maps.');
+      return;
+    }
     this.currentMapName = mapName;
 
     alert(`Map "${mapName}" saved successfully!`);
@@ -1718,6 +1756,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private animate = (): void => {
+    if (!this.renderer || this.initError) return;
     this.animationFrameId = requestAnimationFrame(this.animate);
 
     // Update camera movement
@@ -1782,77 +1821,86 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (window.visualViewport) {
       window.visualViewport.removeEventListener('resize', this.resizeHandler);
     }
-    const canvas = this.renderer.domElement;
-    canvas.removeEventListener('mousemove', this.mousemoveHandler);
-    canvas.removeEventListener('mousedown', this.mouseDownHandler);
-    canvas.removeEventListener('mouseup', this.mouseUpHandler);
-    canvas.removeEventListener('mouseleave', this.mouseUpHandler);
-    canvas.removeEventListener('touchstart', this.touchStartHandler);
-    canvas.removeEventListener('touchmove', this.touchMoveHandler);
-    canvas.removeEventListener('touchend', this.touchEndHandler);
-    canvas.removeEventListener('touchcancel', this.touchEndHandler);
+
+    if (this.renderer) {
+      const canvas = this.renderer.domElement;
+      canvas.removeEventListener('mousemove', this.mousemoveHandler);
+      canvas.removeEventListener('mousedown', this.mouseDownHandler);
+      canvas.removeEventListener('mouseup', this.mouseUpHandler);
+      canvas.removeEventListener('mouseleave', this.mouseUpHandler);
+      canvas.removeEventListener('touchstart', this.touchStartHandler);
+      canvas.removeEventListener('touchmove', this.touchMoveHandler);
+      canvas.removeEventListener('touchend', this.touchEndHandler);
+      canvas.removeEventListener('touchcancel', this.touchEndHandler);
+    }
 
     // Snapshot terrain state for the game to consume on /play navigation
     // and auto-save to localStorage to prevent data loss
     if (this.terrainGrid) {
       const state = this.terrainGrid.exportState();
       this.mapBridge.setEditorMapState(state);
-      this.mapStorage.saveMap(
-        this.currentMapName,
-        state,
-        this.mapStorage.getCurrentMapId() || undefined
-      );
+      try {
+        this.mapStorage.saveMap(
+          this.currentMapName,
+          state,
+          this.mapStorage.getCurrentMapId() || undefined
+        );
+      } catch (error) {
+        console.warn('Auto-save failed on destroy:', error);
+      }
     }
 
     // Clear undo/redo history to prevent stale closures referencing disposed TerrainGrid
     this.editHistory.clear();
 
     // Clean up brush preview meshes
-    this.brushPreviewMeshes.forEach(mesh => {
-      this.scene.remove(mesh);
-      mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
-    });
-    this.brushPreviewMeshes = [];
+    if (this.scene) {
+      this.brushPreviewMeshes.forEach(mesh => {
+        this.scene.remove(mesh);
+        mesh.geometry.dispose();
+        disposeMaterial(mesh.material);
+      });
+      this.brushPreviewMeshes = [];
 
-    // Clean up rectangle preview meshes
-    this.clearRectanglePreview();
+      // Clean up rectangle preview meshes
+      this.clearRectanglePreview();
 
-    // Clean up brush indicator
-    if (this.brushIndicator) {
-      this.scene.remove(this.brushIndicator);
-      this.brushIndicator.geometry.dispose();
-      disposeMaterial(this.brushIndicator.material);
-    }
+      // Clean up brush indicator
+      if (this.brushIndicator) {
+        this.scene.remove(this.brushIndicator);
+        this.brushIndicator.geometry.dispose();
+        disposeMaterial(this.brushIndicator.material);
+      }
 
-    // Clean up spawn/exit markers
-    for (const marker of this.spawnMarkers) {
-      this.scene.remove(marker);
-      marker.geometry.dispose();
-      disposeMaterial(marker.material);
-    }
-    this.spawnMarkers = [];
-    for (const marker of this.exitMarkers) {
-      this.scene.remove(marker);
-      marker.geometry.dispose();
-      disposeMaterial(marker.material);
-    }
-    this.exitMarkers = [];
+      // Clean up spawn/exit markers
+      for (const marker of this.spawnMarkers) {
+        this.scene.remove(marker);
+        marker.geometry.dispose();
+        disposeMaterial(marker.material);
+      }
+      this.spawnMarkers = [];
+      for (const marker of this.exitMarkers) {
+        this.scene.remove(marker);
+        marker.geometry.dispose();
+        disposeMaterial(marker.material);
+      }
+      this.exitMarkers = [];
 
-    // Clean up particles
-    if (this.particles) {
-      this.scene.remove(this.particles);
-      this.particles.geometry.dispose();
-      disposeMaterial(this.particles.material);
-      this.particles = null;
-    }
+      // Clean up particles
+      if (this.particles) {
+        this.scene.remove(this.particles);
+        this.particles.geometry.dispose();
+        disposeMaterial(this.particles.material);
+        this.particles = null;
+      }
 
-    // Clean up skybox
-    if (this.skybox) {
-      this.scene.remove(this.skybox);
-      this.skybox.geometry.dispose();
-      disposeMaterial(this.skybox.material);
-      this.skybox = undefined;
+      // Clean up skybox
+      if (this.skybox) {
+        this.scene.remove(this.skybox);
+        this.skybox.geometry.dispose();
+        disposeMaterial(this.skybox.material);
+        this.skybox = undefined;
+      }
     }
 
     if (this.terrainGrid) {
@@ -1876,6 +1924,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.composer.renderTarget2.dispose();
     }
 
-    this.renderer.dispose();
+    if (this.renderer) {
+      this.renderer.dispose();
+    }
   }
 }

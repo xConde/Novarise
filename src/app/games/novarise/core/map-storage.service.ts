@@ -1,5 +1,16 @@
 import { Injectable } from '@angular/core';
-import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
+import { TerrainGridState, TerrainGridStateLegacy } from '../features/terrain-editor/terrain-grid-state.interface';
+import { TerrainType } from '../models/terrain-types.enum';
+
+const MIN_GRID_SIZE = 5;
+const MAX_GRID_SIZE = 30;
+const MAX_SPAWN_POINTS = 4;
+const MAX_EXIT_POINTS = 4;
+
+const VALID_TERRAIN_VALUES = new Set<string>(Object.values(TerrainType));
+
+/** Maximum file size for map imports (10 MB). */
+const MAX_IMPORT_FILE_SIZE = 10 * 1024 * 1024;
 
 export interface MapMetadata {
   id: string;
@@ -31,9 +42,9 @@ export class MapStorageService {
    * @param name Map name
    * @param data Grid state data
    * @param id Optional ID (generates new if not provided)
-   * @returns The saved map ID
+   * @returns The saved map ID, or null if the save failed (e.g. quota exceeded)
    */
-  public saveMap(name: string, data: TerrainGridState, id?: string): string {
+  public saveMap(name: string, data: TerrainGridState, id?: string): string | null {
     const mapId = id || this.generateMapId();
     const now = Date.now();
 
@@ -55,7 +66,12 @@ export class MapStorageService {
     try {
       localStorage.setItem(this.STORAGE_PREFIX + mapId, JSON.stringify(savedMap));
     } catch (e) {
-      console.error('Failed to save map — localStorage may be full or unavailable:', e);
+      if (this.isQuotaError(e)) {
+        console.warn('localStorage quota exceeded — cannot save map. Free space by deleting unused maps.');
+      } else {
+        console.error('Failed to save map — localStorage may be unavailable:', e);
+      }
+      return null;
     }
 
     // Update metadata index
@@ -83,6 +99,10 @@ export class MapStorageService {
 
     try {
       const savedMap: SavedMap = JSON.parse(json);
+      if (!savedMap.data) {
+        console.warn(`Map "${id}" has no data field — treating as missing`);
+        return null;
+      }
       this.setCurrentMapId(id);
       return savedMap.data;
     } catch (e) {
@@ -100,7 +120,12 @@ export class MapStorageService {
     if (!json) return [];
 
     try {
-      return JSON.parse(json);
+      const parsed: unknown = JSON.parse(json);
+      if (!Array.isArray(parsed)) {
+        console.warn('Maps metadata is not an array — resetting to empty');
+        return [];
+      }
+      return parsed as MapMetadata[];
     } catch (e) {
       console.error('Failed to parse maps metadata:', e);
       return [];
@@ -139,7 +164,11 @@ export class MapStorageService {
     try {
       localStorage.setItem(this.METADATA_KEY, JSON.stringify(filtered));
     } catch (e) {
-      console.error('Failed to update metadata index:', e);
+      if (this.isQuotaError(e)) {
+        console.warn('localStorage quota exceeded while updating metadata index after deletion.');
+      } else {
+        console.error('Failed to update metadata index:', e);
+      }
     }
 
     // Clear current map if it was this one
@@ -189,8 +218,11 @@ export class MapStorageService {
     try {
       const data = JSON.parse(oldData);
       // Save as "Imported Map" in new format
-      this.saveMap('Imported Map', data);
-      // Remove old key
+      const mapId = this.saveMap('Imported Map', data);
+      if (!mapId) {
+        return false;
+      }
+      // Remove old key only after successful save
       localStorage.removeItem(oldKey);
       return true;
     } catch (e) {
@@ -258,7 +290,13 @@ export class MapStorageService {
       }
 
       const mapName = name || savedMap.metadata?.name || 'Imported Map';
-      return this.saveMap(mapName, savedMap.data);
+      const mapId = this.saveMap(mapName, savedMap.data);
+
+      if (!mapId) {
+        return null;
+      }
+
+      return mapId;
     } catch (e) {
       console.error('Failed to import map:', e);
       return null;
@@ -266,7 +304,9 @@ export class MapStorageService {
   }
 
   /**
-   * Validate JSON string is a valid Novarise map
+   * Validate JSON string is a valid Novarise map.
+   * Performs structural validation: grid bounds, tile dimensions, terrain types,
+   * spawn/exit point coordinates and counts.
    * @param json JSON string to validate
    * @returns Validation result with map name if valid
    */
@@ -283,8 +323,79 @@ export class MapStorageService {
         return { valid: false, error: 'Invalid or missing grid size' };
       }
 
+      const gridSize = savedMap.data.gridSize;
+
+      if (gridSize < MIN_GRID_SIZE || gridSize > MAX_GRID_SIZE) {
+        return { valid: false, error: `Grid size must be between ${MIN_GRID_SIZE} and ${MAX_GRID_SIZE}, got ${gridSize}` };
+      }
+
       if (!savedMap.data.tiles || !Array.isArray(savedMap.data.tiles)) {
         return { valid: false, error: 'Invalid or missing tiles data' };
+      }
+
+      // Validate tile array dimensions
+      if (savedMap.data.tiles.length !== gridSize) {
+        return { valid: false, error: `Tiles array length (${savedMap.data.tiles.length}) does not match gridSize (${gridSize})` };
+      }
+
+      for (let x = 0; x < gridSize; x++) {
+        const column = savedMap.data.tiles[x];
+        if (!Array.isArray(column)) {
+          return { valid: false, error: `Tiles column ${x} is not an array` };
+        }
+        if (column.length !== gridSize) {
+          return { valid: false, error: `Tiles column ${x} has length ${column.length}, expected ${gridSize}` };
+        }
+        for (let z = 0; z < gridSize; z++) {
+          if (!VALID_TERRAIN_VALUES.has(column[z])) {
+            return { valid: false, error: `Invalid terrain type "${column[z]}" at tile [${x}][${z}]` };
+          }
+        }
+      }
+
+      // Validate spawn/exit points (v2 format: arrays)
+      const legacy = savedMap.data as unknown as TerrainGridStateLegacy;
+      const hasV2Spawn = Array.isArray(savedMap.data.spawnPoints);
+      const hasV2Exit = Array.isArray(savedMap.data.exitPoints);
+      const hasV1Spawn = !hasV2Spawn && legacy.spawnPoint != null;
+      const hasV1Exit = !hasV2Exit && legacy.exitPoint != null;
+
+      // Validate spawn points
+      if (hasV2Spawn) {
+        if (savedMap.data.spawnPoints.length > MAX_SPAWN_POINTS) {
+          return { valid: false, error: `Too many spawn points (${savedMap.data.spawnPoints.length}), maximum is ${MAX_SPAWN_POINTS}` };
+        }
+        for (const sp of savedMap.data.spawnPoints) {
+          if (typeof sp.x !== 'number' || typeof sp.z !== 'number' ||
+              sp.x < 0 || sp.x >= gridSize || sp.z < 0 || sp.z >= gridSize) {
+            return { valid: false, error: `Spawn point (${sp.x}, ${sp.z}) is out of bounds [0, ${gridSize})` };
+          }
+        }
+      } else if (hasV1Spawn) {
+        const sp = legacy.spawnPoint!;
+        if (typeof sp.x !== 'number' || typeof sp.z !== 'number' ||
+            sp.x < 0 || sp.x >= gridSize || sp.z < 0 || sp.z >= gridSize) {
+          return { valid: false, error: `Spawn point (${sp.x}, ${sp.z}) is out of bounds [0, ${gridSize})` };
+        }
+      }
+
+      // Validate exit points
+      if (hasV2Exit) {
+        if (savedMap.data.exitPoints.length > MAX_EXIT_POINTS) {
+          return { valid: false, error: `Too many exit points (${savedMap.data.exitPoints.length}), maximum is ${MAX_EXIT_POINTS}` };
+        }
+        for (const ep of savedMap.data.exitPoints) {
+          if (typeof ep.x !== 'number' || typeof ep.z !== 'number' ||
+              ep.x < 0 || ep.x >= gridSize || ep.z < 0 || ep.z >= gridSize) {
+            return { valid: false, error: `Exit point (${ep.x}, ${ep.z}) is out of bounds [0, ${gridSize})` };
+          }
+        }
+      } else if (hasV1Exit) {
+        const ep = legacy.exitPoint!;
+        if (typeof ep.x !== 'number' || typeof ep.z !== 'number' ||
+            ep.x < 0 || ep.x >= gridSize || ep.z < 0 || ep.z >= gridSize) {
+          return { valid: false, error: `Exit point (${ep.x}, ${ep.z}) is out of bounds [0, ${gridSize})` };
+        }
       }
 
       return {
@@ -294,6 +405,54 @@ export class MapStorageService {
     } catch (e) {
       return { valid: false, error: 'Invalid JSON format' };
     }
+  }
+
+  /**
+   * Validate that a map is ready for gameplay (not just structurally valid).
+   * Checks for spawn/exit presence, coordinate validity, and tile dimensions.
+   * @param state TerrainGridState to validate
+   * @returns Playability result with error message if not playable
+   */
+  public validateMapPlayability(state: TerrainGridState): { playable: boolean; error?: string } {
+    if (!state) {
+      return { playable: false, error: 'Map data is missing' };
+    }
+
+    if (typeof state.gridSize !== 'number' || state.gridSize < MIN_GRID_SIZE || state.gridSize > MAX_GRID_SIZE) {
+      return { playable: false, error: `Invalid grid size: ${state.gridSize}` };
+    }
+
+    if (!Array.isArray(state.tiles) || state.tiles.length !== state.gridSize) {
+      return { playable: false, error: 'Tiles array is missing or incorrectly dimensioned' };
+    }
+
+    // Resolve spawn/exit with legacy fallback
+    const legacy = state as unknown as TerrainGridStateLegacy;
+    const spawnPoints = (Array.isArray(state.spawnPoints) && state.spawnPoints.length > 0)
+      ? state.spawnPoints
+      : (legacy.spawnPoint ? [legacy.spawnPoint] : []);
+    const exitPoints = (Array.isArray(state.exitPoints) && state.exitPoints.length > 0)
+      ? state.exitPoints
+      : (legacy.exitPoint ? [legacy.exitPoint] : []);
+
+    if (spawnPoints.length === 0) {
+      return { playable: false, error: 'Map has no spawn points' };
+    }
+
+    if (exitPoints.length === 0) {
+      return { playable: false, error: 'Map has no exit points' };
+    }
+
+    // Check spawn != exit (all combinations)
+    for (const sp of spawnPoints) {
+      for (const ep of exitPoints) {
+        if (sp.x === ep.x && sp.z === ep.z) {
+          return { playable: false, error: `Spawn and exit overlap at (${sp.x}, ${sp.z})` };
+        }
+      }
+    }
+
+    return { playable: true };
   }
 
   /**
@@ -309,6 +468,12 @@ export class MapStorageService {
       input.onchange = async (event) => {
         const file = (event.target as HTMLInputElement).files?.[0];
         if (!file) {
+          resolve(null);
+          return;
+        }
+
+        if (file.size > MAX_IMPORT_FILE_SIZE) {
+          console.error(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum is ${MAX_IMPORT_FILE_SIZE / 1024 / 1024} MB.`);
           resolve(null);
           return;
         }
@@ -371,7 +536,11 @@ export class MapStorageService {
     try {
       localStorage.setItem(this.CURRENT_MAP_KEY, id);
     } catch (e) {
-      console.error('Failed to set current map ID:', e);
+      if (this.isQuotaError(e)) {
+        console.warn('localStorage quota exceeded while setting current map ID.');
+      } else {
+        console.error('Failed to set current map ID:', e);
+      }
     }
   }
 
@@ -393,7 +562,22 @@ export class MapStorageService {
     try {
       localStorage.setItem(this.METADATA_KEY, JSON.stringify(maps));
     } catch (e) {
-      console.error('Failed to update metadata index:', e);
+      if (this.isQuotaError(e)) {
+        console.warn('localStorage quota exceeded while updating metadata index.');
+      } else {
+        console.error('Failed to update metadata index:', e);
+      }
     }
+  }
+
+  /**
+   * Detect whether an error is a localStorage QuotaExceededError.
+   * Checks both the standard name property and the legacy code property.
+   */
+  private isQuotaError(e: unknown): boolean {
+    if (e instanceof DOMException) {
+      return e.name === 'QuotaExceededError' || e.code === 22;
+    }
+    return false;
   }
 }

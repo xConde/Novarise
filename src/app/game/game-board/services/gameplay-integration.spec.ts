@@ -14,6 +14,8 @@ import { GamePhase, DifficultyLevel, DIFFICULTY_PRESETS, INITIAL_GAME_STATE } fr
 import { TOWER_CONFIGS, TowerType } from '../models/tower.model';
 import { WAVE_DEFINITIONS } from '../models/wave.model';
 import { GameBoardTile } from '../models/game-board-tile';
+import { EnemyType } from '../models/enemy.model';
+import { StatusEffectType } from '../constants/status-effect.constants';
 import { calculateScoreBreakdown, DIFFICULTY_SCORE_MULTIPLIER } from '../models/score.model';
 
 /**
@@ -51,6 +53,7 @@ describe('Gameplay Integration', () => {
   let towerCombatService: TowerCombatService;
   let gameStatsService: GameStatsService;
   let gameBoardService: GameBoardService;
+  let statusEffectService: StatusEffectService;
   let audioService: AudioService;
   let scene: THREE.Scene;
 
@@ -74,6 +77,7 @@ describe('Gameplay Integration', () => {
     towerCombatService = TestBed.inject(TowerCombatService);
     gameStatsService = TestBed.inject(GameStatsService);
     gameBoardService = TestBed.inject(GameBoardService);
+    statusEffectService = TestBed.inject(StatusEffectService);
     audioService = TestBed.inject(AudioService);
 
     scene = new THREE.Scene();
@@ -507,6 +511,57 @@ describe('Gameplay Integration', () => {
       expect(stats.killsByTowerType[TowerType.BASIC]).toBe(0);
       expect(stats.totalDamageDealt).toBe(0);
       expect(stats.towersBuilt).toBe(0);
+    });
+  });
+
+  // ─── 8. Status effect cleanup on enemy removal ───
+
+  describe('status effect cleanup on enemy removal', () => {
+    it('should clear status effects when removeAllEffects is called before removeEnemy', () => {
+      const enemy = enemyService.spawnEnemy(EnemyType.BASIC, scene);
+      expect(enemy).not.toBeNull();
+
+      // Apply effects
+      statusEffectService.apply(enemy!.id, StatusEffectType.SLOW, 0);
+      statusEffectService.apply(enemy!.id, StatusEffectType.BURN, 0);
+      expect(statusEffectService.getEffects(enemy!.id).length).toBe(2);
+
+      // Explicit cleanup before removal (matches game-board.component pattern)
+      statusEffectService.removeAllEffects(enemy!.id);
+      enemyService.removeEnemy(enemy!.id, scene);
+
+      // Effects should be gone immediately — no stale entries
+      expect(statusEffectService.hasEffect(enemy!.id, StatusEffectType.SLOW)).toBe(false);
+      expect(statusEffectService.hasEffect(enemy!.id, StatusEffectType.BURN)).toBe(false);
+      expect(statusEffectService.getAllActiveEffects().size).toBe(0);
+    });
+
+    it('should restore original speed when effects are cleaned up before enemy removal', () => {
+      const enemy = enemyService.spawnEnemy(EnemyType.BASIC, scene);
+      expect(enemy).not.toBeNull();
+      const originalSpeed = enemy!.speed;
+
+      statusEffectService.apply(enemy!.id, StatusEffectType.SLOW, 0);
+      expect(enemy!.speed).toBeLessThan(originalSpeed);
+
+      // removeAllEffects restores speed before the enemy is deleted from the map
+      statusEffectService.removeAllEffects(enemy!.id);
+      expect(enemy!.speed).toBe(originalSpeed);
+    });
+
+    it('should not leave stale entries for leaked enemies', () => {
+      const enemy = enemyService.spawnEnemy(EnemyType.BASIC, scene);
+      expect(enemy).not.toBeNull();
+
+      statusEffectService.apply(enemy!.id, StatusEffectType.POISON, 0);
+
+      // Simulate leak: explicit cleanup then remove (matches component flow)
+      statusEffectService.removeAllEffects(enemy!.id);
+      enemyService.removeEnemy(enemy!.id, scene);
+
+      // Verify getAllActiveEffects returns empty — no stale entry
+      const activeEffects = statusEffectService.getAllActiveEffects();
+      expect(activeEffects.has(enemy!.id)).toBe(false);
     });
   });
 });

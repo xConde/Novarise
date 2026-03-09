@@ -102,13 +102,23 @@ export const ACHIEVEMENTS: Achievement[] = [
 @Injectable({ providedIn: 'root' })
 export class PlayerProfileService {
   private profile: PlayerProfile;
+  private unlockedSet: ReadonlySet<string> = new Set<string>();
 
   constructor() {
     this.profile = this.load();
+    this.rebuildUnlockedSet();
   }
 
   getProfile(): PlayerProfile {
     return { ...this.profile, achievements: [...this.profile.achievements] };
+  }
+
+  /**
+   * O(1) check whether an achievement is unlocked.
+   * Uses a pre-computed Set that is rebuilt whenever achievements change.
+   */
+  isUnlocked(achievementId: string): boolean {
+    return this.unlockedSet.has(achievementId);
   }
 
   /**
@@ -154,6 +164,7 @@ export class PlayerProfileService {
       }
     }
 
+    this.rebuildUnlockedSet();
     this.save();
     return newlyUnlocked;
   }
@@ -163,19 +174,16 @@ export class PlayerProfileService {
   }
 
   getUnlockedAchievements(): Achievement[] {
-    return ACHIEVEMENTS.filter((a) =>
-      this.profile.achievements.includes(a.id)
-    );
+    return ACHIEVEMENTS.filter((a) => this.unlockedSet.has(a.id));
   }
 
   getLockedAchievements(): Achievement[] {
-    return ACHIEVEMENTS.filter(
-      (a) => !this.profile.achievements.includes(a.id)
-    );
+    return ACHIEVEMENTS.filter((a) => !this.unlockedSet.has(a.id));
   }
 
   reset(): void {
     this.profile = { ...DEFAULT_PROFILE, achievements: [] };
+    this.rebuildUnlockedSet();
     try {
       localStorage.removeItem(PROFILE_STORAGE_KEY);
     } catch {
@@ -192,7 +200,7 @@ export class PlayerProfileService {
         ...DEFAULT_PROFILE,
         ...parsed,
         achievements: Array.isArray(parsed.achievements)
-          ? [...parsed.achievements]
+          ? parsed.achievements.slice(0, ACHIEVEMENTS.length)
           : [],
       };
     } catch {
@@ -203,8 +211,16 @@ export class PlayerProfileService {
   private save(): void {
     try {
       localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(this.profile));
-    } catch {
-      // localStorage full or unavailable — silently fail
+    } catch (error) {
+      if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.code === 22)) {
+        console.warn('localStorage quota exceeded — player profile was not saved.');
+      } else {
+        console.warn('Failed to save player profile — localStorage may be unavailable:', error);
+      }
     }
+  }
+
+  private rebuildUnlockedSet(): void {
+    this.unlockedSet = new Set(this.profile.achievements);
   }
 }

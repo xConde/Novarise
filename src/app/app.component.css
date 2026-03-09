@@ -40,6 +40,13 @@
   border-bottom-color: var(--theme-purple-light);
 }
 
+#main-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 @media (max-width: 768px) {
   .app-nav a {
     padding: 6px 14px;

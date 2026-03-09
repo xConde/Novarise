@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#0a0514"/>
+  <polygon points="256,80 320,200 440,200 340,280 370,400 256,330 142,400 172,280 72,200 192,200" fill="#6a4a8a" stroke="#9060c0" stroke-width="6"/>
+  <text x="256" y="470" font-family="sans-serif" font-size="48" fill="#fff" text-anchor="middle" font-weight="bold">NOVARISE</text>
+</svg>

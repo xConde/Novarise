@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
-import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model';
+import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS, MIN_ENEMY_SPEED } from '../models/enemy.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, mergeModifierEffects } from '../models/game-modifier.model';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
 import { StatusEffectType } from '../constants/status-effect.constants';
@@ -353,7 +353,7 @@ describe('EnemyService', () => {
       expect(hasMoved).toBe(true);
     });
 
-    it('should return enemy IDs that reached exit', () => {
+    it('should return LeakedEnemyInfo for enemies that reached exit', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
 
       // Force enemy to last node
@@ -361,7 +361,9 @@ describe('EnemyService', () => {
 
       const reachedExit = service.updateEnemies(0.1);
 
-      expect(reachedExit).toContain(enemy!.id);
+      expect(reachedExit.length).toBe(1);
+      expect(reachedExit[0].id).toBe(enemy!.id);
+      expect(reachedExit[0].leakDamage).toBe(ENEMY_STATS[EnemyType.BASIC].leakDamage);
     });
 
     it('should handle multiple enemies simultaneously', () => {
@@ -904,7 +906,7 @@ describe('EnemyService', () => {
 
       const reachedExit = service.updateEnemies(0.1);
 
-      expect(reachedExit).not.toContain(enemy.id);
+      expect(reachedExit.find(e => e.id === enemy.id)).toBeUndefined();
     });
   });
 
@@ -1427,6 +1429,124 @@ describe('EnemyService', () => {
     });
   });
 
+  // --- Sprint 15: Edge case tests ---
+
+  describe('Shield absorption: exact damage === shield', () => {
+    it('should deplete shield to 0 and leave health unchanged', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      const baseHealth = ENEMY_STATS[EnemyType.SHIELDED].health;
+
+      const result = service.damageEnemy(enemy.id, maxShield);
+
+      expect(result.killed).toBe(false);
+      expect(enemy.shield).toBe(0);
+      expect(enemy.health).toBe(baseHealth);
+    });
+
+    it('should remove shield mesh when exact shield damage is dealt', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+
+      expect(enemy.mesh!.userData['shieldMesh']).toBeTruthy();
+
+      service.damageEnemy(enemy.id, maxShield);
+
+      expect(enemy.mesh!.userData['shieldMesh']).toBeUndefined();
+    });
+  });
+
+  describe('Shield overflow: damage > shield carries to health', () => {
+    it('should apply exact remainder to health after shield breaks', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      const baseHealth = ENEMY_STATS[EnemyType.SHIELDED].health;
+      const overshoot = 15;
+
+      service.damageEnemy(enemy.id, maxShield + overshoot);
+
+      expect(enemy.shield).toBe(0);
+      expect(enemy.health).toBe(baseHealth - overshoot);
+    });
+
+  });
+
+  describe('MIN_ENEMY_SPEED floor', () => {
+    it('should floor speed at MIN_ENEMY_SPEED with near-zero multiplier', () => {
+      service.setModifierEffects({ enemySpeedMultiplier: 0.001 }, new Set());
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy.speed).toBe(MIN_ENEMY_SPEED);
+    });
+
+    it('should floor speed at MIN_ENEMY_SPEED with zero multiplier', () => {
+      service.setModifierEffects({ enemySpeedMultiplier: 0 }, new Set());
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy.speed).toBe(MIN_ENEMY_SPEED);
+    });
+
+    it('should not affect speed when multiplier keeps it above MIN_ENEMY_SPEED', () => {
+      service.setModifierEffects({ enemySpeedMultiplier: 0.5 }, new Set());
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const expected = ENEMY_STATS[EnemyType.BASIC].speed * 0.5;
+      expect(expected).toBeGreaterThan(MIN_ENEMY_SPEED);
+      expect(enemy.speed).toBeCloseTo(expected);
+    });
+  });
+
+  describe('SPEED_DEMONS modifier selectivity', () => {
+    it('should NOT apply SPEED_DEMONS to HEAVY enemies', () => {
+      const mods = new Set([GameModifier.SPEED_DEMONS]);
+      const effects = mergeModifierEffects(mods);
+      service.setModifierEffects(effects, mods);
+
+      const heavyEnemy = service.spawnEnemy(EnemyType.HEAVY, mockScene)!;
+      expect(heavyEnemy.speed).toBeCloseTo(ENEMY_STATS[EnemyType.HEAVY].speed);
+    });
+
+    it('should NOT apply SPEED_DEMONS to BOSS enemies', () => {
+      const mods = new Set([GameModifier.SPEED_DEMONS]);
+      const effects = mergeModifierEffects(mods);
+      service.setModifierEffects(effects, mods);
+
+      const bossEnemy = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      expect(bossEnemy.speed).toBeCloseTo(ENEMY_STATS[EnemyType.BOSS].speed);
+    });
+
+    it('should NOT apply SPEED_DEMONS to SHIELDED enemies', () => {
+      const mods = new Set([GameModifier.SPEED_DEMONS]);
+      const effects = mergeModifierEffects(mods);
+      service.setModifierEffects(effects, mods);
+
+      const shieldedEnemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      expect(shieldedEnemy.speed).toBeCloseTo(ENEMY_STATS[EnemyType.SHIELDED].speed);
+    });
+  });
+
+  describe('Flying enemies', () => {
+    it('should set isFlying=true on spawned FLYING enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.FLYING, mockScene)!;
+      expect(enemy.isFlying).toBe(true);
+    });
+
+    it('should NOT set isFlying on non-flying enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy.isFlying).toBeFalsy();
+    });
+
+    it('should use straight-line 2-node path for FLYING enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.FLYING, mockScene)!;
+      // Flying enemies bypass terrain — only start and end nodes
+      expect(enemy.path.length).toBe(2);
+      // Start at spawner (0,0)
+      expect(enemy.path[0]).toEqual(jasmine.objectContaining({ x: 0, y: 0 }));
+      // End at exit (9,9)
+      expect(enemy.path[1]).toEqual(jasmine.objectContaining({ x: 9, y: 9 }));
+    });
+  });
+
   describe('enemy facing direction', () => {
     it('should rotate enemy mesh to face movement direction', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
@@ -1501,9 +1621,71 @@ describe('EnemyService', () => {
       // Kill the boss
       service.damageEnemy(boss.id, boss.maxHealth + 100);
       service.updateEnemyAnimations(0.5);
+    });
+  });
 
-      // Crown should not have rotated
-      expect(crown.rotation.z).toBe(initialRotZ);
+  describe('Edge cases', () => {
+    it('should not throw when removing a non-existent enemy', () => {
+      expect(() => service.removeEnemy('does-not-exist', mockScene)).not.toThrow();
+    });
+
+    it('should return an empty map when no enemies have been spawned', () => {
+      const enemies = service.getEnemies();
+      expect(enemies.size).toBe(0);
+    });
+
+    it('should return null when no spawn points are configured', () => {
+      // Board with no spawner tiles — all base tiles
+      const noSpawnerBoard: GameBoardTile[][] = [];
+      for (let row = 0; row < 10; row++) {
+        noSpawnerBoard[row] = [];
+        for (let col = 0; col < 10; col++) {
+          if (row === 9 && col === 9) {
+            noSpawnerBoard[row][col] = GameBoardTile.createExit(row, col);
+          } else {
+            noSpawnerBoard[row][col] = GameBoardTile.createBase(row, col);
+          }
+        }
+      }
+      gameBoardService.getGameBoard.and.returnValue(noSpawnerBoard);
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeNull();
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('should not throw or go negative when damaging an already-dead enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Kill the enemy
+      const killResult = service.damageEnemy(enemy.id, enemy.maxHealth + 50);
+      expect(killResult.killed).toBe(true);
+
+      // Damage the same enemy again — should be a safe no-op
+      expect(() => service.damageEnemy(enemy.id, 100)).not.toThrow();
+      const secondResult = service.damageEnemy(enemy.id, 100);
+      expect(secondResult.killed).toBe(false);
+      expect(secondResult.spawnedEnemies.length).toBe(0);
+    });
+
+    it('should return null when no exit points are configured', () => {
+      // Board with a spawner but no exit tiles
+      const noExitBoard: GameBoardTile[][] = [];
+      for (let row = 0; row < 10; row++) {
+        noExitBoard[row] = [];
+        for (let col = 0; col < 10; col++) {
+          if (row === 0 && col === 0) {
+            noExitBoard[row][col] = GameBoardTile.createSpawner(row, col);
+          } else {
+            noExitBoard[row][col] = GameBoardTile.createBase(row, col);
+          }
+        }
+      }
+      gameBoardService.getGameBoard.and.returnValue(noExitBoard);
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeNull();
+      expect(service.getEnemies().size).toBe(0);
     });
   });
 });

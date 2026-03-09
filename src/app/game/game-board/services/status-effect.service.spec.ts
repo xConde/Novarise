@@ -265,6 +265,26 @@ describe('StatusEffectService', () => {
     it('should be safe to call for unknown enemy', () => {
       expect(() => service.removeAllEffects('nonexistent')).not.toThrow();
     });
+
+    it('should eagerly clear effects without waiting for next update() cycle', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+
+      service.apply('e1', StatusEffectType.SLOW, 0);
+      service.apply('e1', StatusEffectType.BURN, 0);
+
+      // Explicit cleanup — simulates what game-board.component does before removeEnemy()
+      service.removeAllEffects('e1');
+
+      // Remove enemy from map (simulates EnemyService.removeEnemy)
+      enemyMap.delete('e1');
+
+      // Effects should already be gone — no stale entry waiting for update() to detect
+      expect(service.hasEffect('e1', StatusEffectType.SLOW)).toBe(false);
+      expect(service.hasEffect('e1', StatusEffectType.BURN)).toBe(false);
+      expect(service.getEffects('e1')).toEqual([]);
+      expect(service.getAllActiveEffects().size).toBe(0);
+    });
   });
 
   // --- cleanup ---

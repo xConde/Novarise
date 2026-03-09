@@ -2,6 +2,9 @@ import { Injectable } from '@angular/core';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
 import { TerrainGridState, TerrainGridStateLegacy } from '../../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 
+const MIN_GRID_SIZE = 5;
+const MAX_GRID_SIZE = 30;
+
 /** @deprecated Use TerrainGridState directly. Kept as alias for backward compatibility. */
 export type EditorMapState = TerrainGridState;
 
@@ -69,7 +72,25 @@ export class MapBridgeService {
    * Handles both v2 (spawnPoints/exitPoints arrays) and v1 (single point) formats.
    */
   convertToGameBoard(state: EditorMapState): ConvertedBoard {
-    const gridSize = state.gridSize;
+    if (!state) {
+      throw new Error('Cannot convert null/undefined map state to game board');
+    }
+
+    let gridSize = state.gridSize;
+
+    if (typeof gridSize !== 'number' || !Number.isFinite(gridSize)) {
+      throw new Error(`Invalid gridSize: ${gridSize}`);
+    }
+
+    if (gridSize < MIN_GRID_SIZE || gridSize > MAX_GRID_SIZE) {
+      console.warn(`gridSize ${gridSize} out of bounds [${MIN_GRID_SIZE}, ${MAX_GRID_SIZE}], clamping`);
+      gridSize = Math.max(MIN_GRID_SIZE, Math.min(MAX_GRID_SIZE, gridSize));
+    }
+
+    if (!Array.isArray(state.tiles)) {
+      throw new Error('Map tiles data is missing or invalid');
+    }
+
     const board: GameBoardTile[][] = [];
 
     // Build base board: game[row][col] maps to editor tiles[col][row]

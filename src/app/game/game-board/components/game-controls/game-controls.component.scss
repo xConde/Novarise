@@ -1,0 +1,178 @@
+@use '../../styles/game-mixins' as *;
+
+:host {
+  display: contents;
+}
+
+// --- Wave control ---
+.wave-control {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: var(--z-index-overlay);
+  text-align: center;
+
+  .wave-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-xs);
+    @include glass-panel(rgba(0, 0, 0, 0.85));
+    padding: var(--spacing-md) var(--spacing-xl);
+    border: var(--border-width-medium) solid rgba(255, 255, 255, 0.3);
+    border-radius: var(--border-radius-lg);
+    color: var(--text-color);
+    font-size: var(--font-size-title);
+    cursor: pointer;
+    transition: all var(--transition-medium) ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.6);
+      transform: scale(1.05);
+    }
+
+    &:active {
+      transform: scale(0.98);
+    }
+
+    .wave-hint {
+      font-size: 0.5625rem;
+      color: rgba(255, 255, 255, 0.3);
+    }
+  }
+
+  @media screen and (max-width: 768px) {
+    .wave-btn {
+      min-height: 2.75rem; // 44px
+    }
+  }
+
+  @media screen and (max-width: 480px) {
+    .wave-btn {
+      min-height: 2.75rem; // 44px
+      padding: var(--spacing-sm) var(--spacing-lg);
+      font-size: var(--font-size-base);
+    }
+  }
+}
+
+// --- Pause / Speed controls ---
+.game-controls {
+  @include glass-panel(rgba(0, 0, 0, 0.75));
+  position: absolute;
+  bottom: var(--spacing-lg);
+  right: var(--spacing-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: var(--border-width-thin) solid var(--border-color);
+
+  @media screen and (max-width: 768px) {
+    bottom: var(--spacing-md);
+    right: var(--spacing-md);
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs);
+    flex-direction: column;
+    align-items: stretch;
+
+    .speed-controls {
+      justify-content: center;
+    }
+  }
+
+  @media screen and (max-width: 480px) {
+    flex-direction: column;
+    align-items: stretch;
+    bottom: var(--spacing-sm);
+    right: var(--spacing-sm);
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs);
+  }
+
+  .speed-controls {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .control-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: transparent;
+    border: var(--border-width-thin) solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    color: rgba(255, 255, 255, 0.6);
+    font-family: "Orbitron", sans-serif;
+    font-size: var(--font-size-small);
+    cursor: pointer;
+    transition: all var(--transition-medium) ease;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    line-height: 1;
+
+    @media screen and (max-width: 768px) {
+      min-width: 1.875rem;
+      font-size: 0.625rem;
+      padding: var(--spacing-xs) 0.25rem;
+    }
+
+    @media screen and (max-width: 480px) {
+      min-width: 2.75rem; // 44px tap target
+      min-height: 2.75rem;
+      padding: var(--spacing-xs) var(--spacing-sm);
+      font-size: 0.625rem;
+      justify-content: center;
+    }
+
+    &:hover {
+      background: var(--theme-purple-a20);
+      border-color: var(--theme-purple-a80);
+      color: var(--theme-purple-lighter);
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
+
+    &.active {
+      background: var(--theme-purple-a30);
+      border-color: var(--theme-purple);
+      color: var(--theme-purple-lighter);
+      box-shadow: 0 0 var(--spacing-xs) var(--theme-purple-a50);
+    }
+  }
+
+  .pause-btn {
+    min-width: 2.5rem;
+    line-height: 0;
+
+    &.active {
+      background: rgba(255, 200, 0, 0.15);
+      border-color: rgba(255, 200, 0, 0.5);
+      color: var(--game-gold);
+      box-shadow: 0 0 var(--spacing-xs) rgba(255, 200, 0, 0.3);
+    }
+
+    @media screen and (max-width: 480px) {
+      min-width: 2.75rem;
+      min-height: 2.75rem;
+      line-height: 0;
+    }
+  }
+
+  .path-btn.active {
+    background: rgba(0, 255, 136, 0.15);
+    border-color: rgba(0, 255, 136, 0.5);
+    color: #88ffbb;
+    box-shadow: 0 0 var(--spacing-xs) rgba(0, 255, 136, 0.3);
+  }
+
+  .wave-hint {
+    font-size: 0.5625rem;
+    color: rgba(255, 255, 255, 0.3);
+  }
+}

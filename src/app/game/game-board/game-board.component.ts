@@ -30,14 +30,15 @@ import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, GameModifierConfig, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
-import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants/rendering.constants';
+import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG, sinNormalized } from './constants/rendering.constants';
 import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from './constants/lighting.constants';
-import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
+import { CAMERA_CONFIG, CONTROLS_CONFIG, MOUSE_ACTION_DISABLED } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
-import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
+import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE, ENEMY_VISUAL_CONFIG, GAME_TIMING_CONFIG } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
+import { MOBILE_CONFIG } from './constants/mobile.constants';
 import { ENEMY_STATS } from './models/enemy.model';
 import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
@@ -84,6 +85,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
   private tileMeshes: Map<string, THREE.Mesh> = new Map();
+  private tileMeshArray: THREE.Mesh[] = [];
+  private towerChildrenArray: THREE.Object3D[] = [];
   private hoveredTile: THREE.Mesh | null = null;
   private selectedTile: { row: number, col: number } | null = null;
 
@@ -121,6 +124,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   allModifiers = Object.values(GameModifier);
   activeModifiers = new Set<GameModifier>();
   modifierScoreMultiplier = 1.0;
+  effectiveTowerCosts = new Map<TowerType, number>();
   towerTypes: { type: TowerType; hotkey: string }[] = Object.entries(TOWER_HOTKEYS).map(
     ([key, type]) => ({ type, hotkey: key })
   );
@@ -143,6 +147,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   targetingModeLabels = TARGETING_MODE_LABELS;
   showHelpOverlay = false;
   pathBlocked = false;
+  initError: string | null = null;
+  isLoading = true;
+  contextLost = false;
   private pathBlockedTimerId: ReturnType<typeof setTimeout> | null = null;
   private rangeRingMeshes: THREE.Mesh[] = [];
 
@@ -163,10 +170,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private touchStartHandler: (event: TouchEvent) => void = () => {};
   private touchMoveHandler: (event: TouchEvent) => void = () => {};
   private touchEndHandler: (event: TouchEvent) => void = () => {};
+  private contextLostHandler: (event: Event) => void = () => {};
+  private contextRestoredHandler: (event: Event) => void = () => {};
   private touchStartX = 0;
   private touchStartY = 0;
   private touchStartTime = 0;
   private touchIsDragging = false;
+  private touchWasMultiTouch = false;
   private pinchStartDistance = 0;
 
   // Audio state exposed to template
@@ -183,6 +193,35 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.achievementDetails = this.newlyUnlockedAchievements
       .map(id => ACHIEVEMENTS.find(a => a.id === id))
       .filter((a): a is Achievement => a != null);
+  }
+
+  /** Rebuilds the flat array of tower child meshes used for raycasting. Call after any tower add/remove. */
+  private rebuildTowerChildrenCache(): void {
+    this.towerChildrenArray = [];
+    this.towerMeshes.forEach(g => g.traverse(child => {
+      if (child instanceof THREE.Mesh) this.towerChildrenArray.push(child);
+    }));
+  }
+
+  /** Records game-end stats for player profile. Safe to call multiple times — fires once per game. */
+  private recordGameEndIfNeeded(): void {
+    const phase = this.gameStateService.getState().phase;
+    if ((phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) && !this.gameEndRecorded) {
+      this.gameEndRecorded = true;
+      const endState = this.gameStateService.getState();
+      const stats = this.gameStatsService.getStats();
+      const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
+      const gameEndStats: GameEndStats = {
+        isVictory: phase === GamePhase.VICTORY,
+        score: endState.score,
+        enemiesKilled: totalKills,
+        goldEarned: stats.totalGoldEarned,
+        wavesCompleted: endState.wave,
+        livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
+      };
+      this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
+      this.updateAchievementDetails();
+    }
   }
 
   // FPS exposed to template
@@ -294,24 +333,31 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Seed initial wave preview for the first wave
     const initialState = this.gameStateService.getState();
     this.wavePreview = getWavePreview(initialState.wave + 1, initialState.isEndless);
+
+    this.updateEffectiveCosts();
   }
 
   ngAfterViewInit(): void {
-    this.initializeRenderer();
-    this.initializePostProcessing();
-    this.initializeControls();
-    this.setupMouseInteraction();
-    this.setupTouchInteraction();
-    this.setupKeyboardControls();
-    this.minimapService.init(this.canvasContainer.nativeElement);
-    this.animate();
+    try {
+      this.initializeRenderer();
+      this.initializePostProcessing();
+      this.initializeControls();
+      this.setupMouseInteraction();
+      this.setupTouchInteraction();
+      this.setupKeyboardControls();
+      this.minimapService.init(this.canvasContainer.nativeElement);
+      this.animate();
+      this.isLoading = false;
+    } catch (error) {
+      this.initError = error instanceof Error
+        ? error.message
+        : 'Failed to initialize game renderer';
+      this.isLoading = false;
+      console.error('Game initialization failed:', error);
+    }
   }
 
   // --- Public methods for template ---
-
-  levelStars(count: number): number[] {
-    return Array(Math.max(0, count)).fill(0);
-  }
 
   toggleAudio(): void {
     this.audioService.toggleMute();
@@ -336,11 +382,18 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.activeModifiers
     );
     this.towerCombatService.setTowerDamageMultiplier(this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1);
+    this.updateEffectiveCosts();
+  }
+
+  private updateEffectiveCosts(): void {
+    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+    for (const type of Object.values(TowerType)) {
+      this.effectiveTowerCosts.set(type, Math.round(TOWER_CONFIGS[type].cost * costMult));
+    }
   }
 
   getEffectiveTowerCost(type: TowerType): number {
-    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-    return Math.round(TOWER_CONFIGS[type].cost * costMult);
+    return this.effectiveTowerCosts.get(type) ?? TOWER_CONFIGS[type].cost;
   }
 
   selectTowerType(type: TowerType): void {
@@ -389,9 +442,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       towerMesh.scale.set(scale, scale, scale);
 
       // Boost emissive intensity on upgrade (skip animated children — their emissive is driven per-frame)
-      const animatedNames = new Set(['tip', 'orb']);
       towerMesh.traverse(child => {
-        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial && !animatedNames.has(child.name)) {
+        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial && !TOWER_VISUAL_CONFIG.animatedMeshNames.has(child.name)) {
           child.material.emissiveIntensity = TOWER_VISUAL_CONFIG.emissiveBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.emissiveIncrement;
         }
       });
@@ -400,6 +452,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Refresh info panel
     this.refreshTowerInfoPanel();
     this.showRangePreview(this.selectedTowerInfo);
+
+    // Refresh all-range overlay if active so rings reflect upgraded stats
+    if (this.showAllRanges) {
+      this.refreshAllRanges();
+    }
   }
 
   selectSpecialization(spec: TowerSpecialization): void {
@@ -438,6 +495,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       });
       this.towerMeshes.delete(this.selectedTowerInfo.id);
+      this.rebuildTowerChildrenCache();
     }
 
     // Restore tile to BASE
@@ -454,11 +512,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   cycleTargeting(): void {
     if (!this.selectedTowerInfo) return;
     this.towerCombatService.cycleTargetingMode(this.selectedTowerInfo.id);
-  }
-
-  specLabel(tower: PlacedTower): string {
-    if (!tower.specialization) return '';
-    return TOWER_SPECIALIZATIONS[tower.type][tower.specialization].label;
   }
 
   deselectTower(): void {
@@ -621,6 +674,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.lastTime = 0;
     this.elapsedTimeAccumulator = 0;
     this.physicsAccumulator = 0;
+    this.updateEffectiveCosts();
   }
 
 
@@ -671,6 +725,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       });
     });
     this.towerMeshes.clear();
+    this.towerChildrenArray = [];
 
     // Clean up tile meshes
     this.tileMeshes.forEach(mesh => {
@@ -679,6 +734,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       disposeMaterial(mesh.material);
     });
     this.tileMeshes.clear();
+    this.tileMeshArray = [];
 
     // Clean up grid lines
     if (this.gridLines) {
@@ -757,11 +813,21 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private initializeRenderer(): void {
+    const testCanvas = document.createElement('canvas');
+    const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
+    if (!gl) {
+      throw new Error('WebGL is not supported by your browser');
+    }
+    // Release the test WebGL context to free the browser context slot
+    (gl as WebGLRenderingContext).getExtension('WEBGL_lose_context')?.loseContext();
+
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: false
     });
-    this.renderer.setPixelRatio(window.devicePixelRatio);
+    const isMobile = window.innerWidth <= MOBILE_CONFIG.breakpoint;
+    const maxPixelRatio = isMobile ? MOBILE_CONFIG.maxPixelRatio : window.devicePixelRatio;
+    this.renderer.setPixelRatio(Math.min(maxPixelRatio, window.devicePixelRatio));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -781,6 +847,22 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     };
     window.addEventListener('resize', this.resizeHandler);
+
+    this.contextLostHandler = (event: Event) => {
+      event.preventDefault();
+      cancelAnimationFrame(this.animationFrameId);
+      this.contextLost = true;
+    };
+
+    this.contextRestoredHandler = () => {
+      if (!this.renderer?.getContext()) return;
+      this.contextLost = false;
+      this.lastTime = 0;
+      this.animate();
+    };
+
+    this.renderer.domElement.addEventListener('webglcontextlost', this.contextLostHandler);
+    this.renderer.domElement.addEventListener('webglcontextrestored', this.contextRestoredHandler);
   }
 
   private initializePostProcessing(): void {
@@ -789,13 +871,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(this.renderPass);
 
-    this.bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      POST_PROCESSING_CONFIG.bloom.strength,
-      POST_PROCESSING_CONFIG.bloom.radius,
-      POST_PROCESSING_CONFIG.bloom.threshold
-    );
-    this.composer.addPass(this.bloomPass);
+    if (window.innerWidth > MOBILE_CONFIG.phoneBreakpoint) {
+      this.bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        POST_PROCESSING_CONFIG.bloom.strength,
+        POST_PROCESSING_CONFIG.bloom.radius,
+        POST_PROCESSING_CONFIG.bloom.threshold
+      );
+      this.composer.addPass(this.bloomPass);
+    }
 
     const vignetteShader = {
       uniforms: {
@@ -818,9 +902,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
         void main() {
           vec4 texel = texture2D(tDiffuse, vUv);
-          vec2 uv = (vUv - vec2(0.5)) * vec2(offset);
-          float vignette = clamp(1.0 - dot(uv, uv), 0.0, 1.0);
-          vignette = pow(vignette, darkness);
+          vec2 uv = (vUv - vec2(0.5)) * vec2(offset); // 0.5 = UV center; re-centers coords to [-0.5, 0.5]
+          float vignette = clamp(1.0 - dot(uv, uv), 0.0, 1.0); // radial falloff from center
+          vignette = pow(vignette, darkness); // darkness exponent controls falloff curve steepness
           texel.rgb *= vignette;
           gl_FragColor = texel;
         }
@@ -850,6 +934,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     keyLight.shadow.camera.bottom = -KEY_LIGHT.shadow.bounds;
     keyLight.shadow.mapSize.width = KEY_LIGHT.shadow.mapSize;
     keyLight.shadow.mapSize.height = KEY_LIGHT.shadow.mapSize;
+    if (window.innerWidth <= MOBILE_CONFIG.breakpoint) {
+      keyLight.shadow.mapSize.width = Math.min(keyLight.shadow.mapSize.width, MOBILE_CONFIG.maxShadowMapSize);
+      keyLight.shadow.mapSize.height = Math.min(keyLight.shadow.mapSize.height, MOBILE_CONFIG.maxShadowMapSize);
+    }
     keyLight.shadow.bias = KEY_LIGHT.shadow.bias;
     this.keyLight = keyLight;
     this.scene.add(this.keyLight);
@@ -885,6 +973,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.scene.add(mesh);
       });
     });
+
+    this.tileMeshArray = Array.from(this.tileMeshes.values());
   }
 
   private addGridLines(): void {
@@ -924,34 +1014,43 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         varying vec3 vPosition;
         uniform float time;
 
+        // Standard hash function (Hugo Elias / Book of Shaders).
+        // 12.9898, 78.233, 43758.5453123 are co-prime magic seeds that produce
+        // a uniform pseudo-random distribution — do not change individually.
         float random(vec2 st) {
           return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
         }
 
         void main() {
-          vec3 deepPurple = vec3(0.04, 0.02, 0.08);
-          vec3 darkBlue = vec3(0.06, 0.04, 0.12);
-          vec3 color = mix(deepPurple, darkBlue, vUv.y * 0.5);
+          // Background gradient: deep purple at horizon → dark blue at zenith
+          vec3 deepPurple = vec3(0.04, 0.02, 0.08); // RGB ≈ #0A0514
+          vec3 darkBlue = vec3(0.06, 0.04, 0.12);   // RGB ≈ #0F0A1F
+          vec3 color = mix(deepPurple, darkBlue, vUv.y * 0.5); // 0.5 = blend reaches halfway up the sphere
 
-          // Stars with twinkle
-          vec2 starPos = vUv * 150.0;
+          // --- Stars with twinkle ---
+          vec2 starPos = vUv * 150.0; // 150 = grid density — higher = more/smaller star cells
           float star = random(floor(starPos));
-          if (star > 0.992) {
-            float baseBright = random(floor(starPos) + 1.0) * 0.5;
+          if (star > 0.992) { // 0.992 = sparsity threshold — only top 0.8% of cells become stars
+            float baseBright = random(floor(starPos) + 1.0) * 0.5; // 0.5 = peak brightness cap (prevents blowout)
+            // Twinkle: oscillates [0.6, 1.0]. 1.0–3.0 = per-star random speed range.
             float twinkle = 0.6 + 0.4 * sin(time * (1.0 + random(floor(starPos) + 2.0) * 3.0));
             float brightness = baseBright * twinkle;
+            // (0.4, 0.3, 0.5) = cool purple-blue tint — red < green < blue
             color += vec3(brightness * 0.4, brightness * 0.3, brightness * 0.5);
           }
 
-          // Drifting nebula veins
-          float drift = time * 0.02;
+          // --- Drifting nebula veins ---
+          float drift = time * 0.02; // 0.02 = slow drift speed (full cycle ≈ 314s)
+          // 40.0 = vein cell grid scale; 10.0 = horizontal warp factor; 0.5 = vertical drift damping
           float vein1 = random(floor(vUv * 40.0 + vec2(drift, vUv.x * 10.0 + drift * 0.5)));
-          if (vein1 > 0.97) {
-            color += vec3(0.25, 0.15, 0.3) * vein1;
+          if (vein1 > 0.97) { // 0.97 = top 3% of cells glow as nebula veins
+            color += vec3(0.25, 0.15, 0.3) * vein1; // purple nebula tint (R=0.25, G=0.15, B=0.3)
           }
 
-          // Slow-shifting bioluminescence
+          // --- Slow-shifting bioluminescence ---
+          // 25.0 = bio cell grid scale; 0.3 = drift speed relative to nebula; 0.12 = max intensity cap
           float bio = random(floor(vUv * 25.0 + vec2(drift * 0.3))) * 0.12;
+          // (0.3, 0.5, 0.7) = blue-green bio tint — weighted toward blue channel
           color += vec3(bio * 0.3, bio * 0.5, bio * 0.7);
 
           gl_FragColor = vec4(color, 1.0);
@@ -966,7 +1065,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private initializeParticles(): void {
-    const particleCount = PARTICLE_CONFIG.count;
+    const particleCount = window.innerWidth <= MOBILE_CONFIG.breakpoint
+      ? Math.floor(PARTICLE_CONFIG.count / MOBILE_CONFIG.particleDivisor)
+      : PARTICLE_CONFIG.count;
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
 
@@ -1012,6 +1113,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.controls.minPolarAngle = CONTROLS_CONFIG.minPolarAngle;
     this.controls.maxPolarAngle = CONTROLS_CONFIG.maxPolarAngle;
     this.controls.target.set(0, 0, 0);
+    // Left-click reserved for game interaction (tower placement/selection).
+    // Orbit moved to right-click; WASD handles panning.
+    this.controls.mouseButtons.LEFT = MOUSE_ACTION_DISABLED as THREE.MOUSE;
+    this.controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
     this.controls.update();
   }
 
@@ -1025,8 +1130,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
+      // Ensure camera world matrix is fresh — OrbitControls.update() modifies
+      // position/quaternion without updating matrixWorld, which stales the
+      // raycaster when a click gesture triggers a synchronous orbit update.
+      this.camera.updateMatrixWorld();
       this.raycaster.setFromCamera(this.mouse, this.camera);
-      const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
+      const intersects = this.raycaster.intersectObjects(this.tileMeshArray);
 
       if (this.hoveredTile && this.hoveredTile !== this.getSelectedTileMesh()) {
         const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
@@ -1069,61 +1178,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     };
 
     this.clickHandler = (event: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-      this.raycaster.setFromCamera(this.mouse, this.camera);
-
-      // Check for tower mesh clicks first
-      const towerGroups = Array.from(this.towerMeshes.values());
-      const towerChildren: THREE.Object3D[] = [];
-      towerGroups.forEach(g => g.traverse(child => { if (child instanceof THREE.Mesh) towerChildren.push(child); }));
-      const towerHits = this.raycaster.intersectObjects(towerChildren);
-
-      if (towerHits.length > 0) {
-        // Walk up to find the tower group and its key
-        let hitObj: THREE.Object3D | null = towerHits[0].object;
-        let foundKey: string | null = null;
-        while (hitObj) {
-          for (const [key, group] of this.towerMeshes) {
-            if (group === hitObj) { foundKey = key; break; }
-          }
-          if (foundKey) break;
-          hitObj = hitObj.parent;
-        }
-        if (foundKey) {
-          this.selectPlacedTower(foundKey);
-          return;
-        }
-      }
-
-      // Check tile clicks
-      const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
-
-      const prevSelected = this.getSelectedTileMesh();
-      if (prevSelected) {
-        const material = prevSelected.material as THREE.MeshStandardMaterial;
-        const tileType = prevSelected.userData['tile'].type;
-        material.emissiveIntensity = tileType === BlockType.BASE ? TILE_EMISSIVE.base : tileType === BlockType.WALL ? TILE_EMISSIVE.wall : TILE_EMISSIVE.special;
-      }
-
-      if (intersects.length > 0) {
-        const mesh = intersects[0].object as THREE.Mesh;
-        const row = mesh.userData['row'];
-        const col = mesh.userData['col'];
-
-        this.selectedTile = { row, col };
-
-        const material = mesh.material as THREE.MeshStandardMaterial;
-        material.emissiveIntensity = TILE_EMISSIVE.selected;
-
-        this.deselectTower();
-        this.tryPlaceTower(row, col);
-      } else {
-        this.selectedTile = null;
-        this.deselectTower();
-      }
+      this.handleInteraction(event.clientX, event.clientY);
     };
 
     canvas.addEventListener('mousemove', this.mousemoveHandler);
@@ -1143,17 +1198,27 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.touchStartY = touch.clientY;
         this.touchStartTime = performance.now();
         this.touchIsDragging = false;
-      } else if (event.touches.length === 2) {
-        // Two-finger: record initial pinch distance for zoom
-        const dx = event.touches[0].clientX - event.touches[1].clientX;
-        const dy = event.touches[0].clientY - event.touches[1].clientY;
-        this.pinchStartDistance = Math.sqrt(dx * dx + dy * dy);
+        this.touchWasMultiTouch = false;
+      } else if (event.touches.length >= 2) {
+        // Multi-finger: flag to prevent tap on final finger lift
+        this.touchWasMultiTouch = true;
+        if (event.touches.length === 2) {
+          // Two-finger: record initial pinch distance for zoom
+          const dx = event.touches[0].clientX - event.touches[1].clientX;
+          const dy = event.touches[0].clientY - event.touches[1].clientY;
+          this.pinchStartDistance = Math.sqrt(dx * dx + dy * dy);
+        }
       }
     };
 
     this.touchMoveHandler = (event: TouchEvent) => {
       event.preventDefault();
       if (!this.camera || !this.controls) return;
+
+      // Safety: if multiple fingers appear in move, flag multi-touch
+      if (event.touches.length >= 2) {
+        this.touchWasMultiTouch = true;
+      }
 
       if (event.touches.length === 1) {
         const touch = event.touches[0];
@@ -1205,7 +1270,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.touchEndHandler = (event: TouchEvent) => {
       event.preventDefault();
 
-      if (event.changedTouches.length === 1 && !this.touchIsDragging) {
+      if (event.changedTouches.length === 1 && !this.touchIsDragging && !this.touchWasMultiTouch) {
         const elapsed = performance.now() - this.touchStartTime;
         if (elapsed < TOUCH_CONFIG.tapThresholdMs) {
           // Short tap with no drag — treat as a click at the original touch position
@@ -1214,6 +1279,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
 
       this.touchIsDragging = false;
+      this.touchWasMultiTouch = false;
       this.pinchStartDistance = 0;
     };
 
@@ -1222,22 +1288,24 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     canvas.addEventListener('touchend', this.touchEndHandler, { passive: false });
   }
 
-  /** Converts a canvas-relative touch position to NDC and runs the same raycasting as a mouse click. */
-  private handleTapAsClick(clientX: number, clientY: number): void {
+  /** Shared raycasting logic for both mouse click and touch tap interactions. */
+  private handleInteraction(clientX: number, clientY: number): void {
+    const phase = this.gameStateService.getState().phase;
+    if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
+
     const canvas = this.renderer.domElement;
     const rect = canvas.getBoundingClientRect();
     this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
     this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
+    this.camera.updateMatrixWorld();
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
-    // Check for tower mesh taps first
-    const towerGroups = Array.from(this.towerMeshes.values());
-    const towerChildren: THREE.Object3D[] = [];
-    towerGroups.forEach(g => g.traverse(child => { if (child instanceof THREE.Mesh) towerChildren.push(child); }));
-    const towerHits = this.raycaster.intersectObjects(towerChildren);
+    // Check for tower mesh clicks/taps first
+    const towerHits = this.raycaster.intersectObjects(this.towerChildrenArray);
 
     if (towerHits.length > 0) {
+      // Walk up to find the tower group and its key
       let hitObj: THREE.Object3D | null = towerHits[0].object;
       let foundKey: string | null = null;
       while (hitObj) {
@@ -1253,8 +1321,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
 
-    // Check tile taps
-    const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
+    // Check tile clicks/taps
+    const intersects = this.raycaster.intersectObjects(this.tileMeshArray);
 
     const prevSelected = this.getSelectedTileMesh();
     if (prevSelected) {
@@ -1281,7 +1349,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  private static readonly PATH_BLOCKED_DISMISS_MS = 2000;
+  /** Converts a canvas-relative touch position to NDC and runs the same raycasting as a mouse click. */
+  private handleTapAsClick(clientX: number, clientY: number): void {
+    this.handleInteraction(clientX, clientY);
+  }
 
   private showPathBlockedWarning(): void {
     this.pathBlocked = true;
@@ -1291,7 +1362,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.pathBlockedTimerId = setTimeout(() => {
       this.pathBlocked = false;
       this.pathBlockedTimerId = null;
-    }, GameBoardComponent.PATH_BLOCKED_DISMISS_MS);
+    }, GAME_TIMING_CONFIG.pathBlockedDismissMs);
   }
 
   private tryPlaceTower(row: number, col: number): void {
@@ -1308,9 +1379,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
 
-    const towerStats = TOWER_CONFIGS[this.selectedTowerType];
-    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-    const effectiveCost = Math.round(towerStats.cost * costMult);
+    const effectiveCost = this.getEffectiveTowerCost(this.selectedTowerType);
 
     // Check if player can afford tower
     if (!this.gameStateService.canAfford(effectiveCost)) return;
@@ -1337,6 +1406,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // Clear enemy path cache since board layout changed
       this.enemyService.clearPathCache();
       this.refreshPathOverlay();
+
+      // Rebuild tower children cache for raycasting
+      this.rebuildTowerChildrenCache();
     }
   }
 
@@ -1389,7 +1461,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   toggleAllRanges(): void {
     this.showAllRanges = !this.showAllRanges;
+    this.refreshAllRanges();
+  }
 
+  /** Removes existing range rings and recreates them if showAllRanges is active. */
+  private refreshAllRanges(): void {
     // Remove existing range rings
     for (const mesh of this.rangeRingMeshes) {
       this.scene.remove(mesh);
@@ -1532,6 +1608,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // --- Game loop ---
 
   private animate = (time: number = 0): void => {
+    if (!this.renderer || this.initError || this.contextLost || !this.renderer.getContext()) return;
     this.animationFrameId = requestAnimationFrame(this.animate);
 
     const rawDelta = this.lastTime === 0 ? 0 : (time - this.lastTime) / 1000;
@@ -1564,7 +1641,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Update skybox time uniform for star twinkle and nebula drift
     if (this.skybox) {
-      (this.skybox.material as THREE.ShaderMaterial).uniforms['time'].value = time * 0.001;
+      (this.skybox.material as THREE.ShaderMaterial).uniforms['time'].value = time * SKYBOX_CONFIG.timeScale;
     }
 
     // Gameplay tick — fixed timestep accumulator
@@ -1575,9 +1652,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.physicsAccumulator += deltaTime * state.gameSpeed;
         let stepCount = 0;
 
-        // Elapsed time tracking — accumulate real (unscaled) time, flush every ~1 second
+        // Elapsed time tracking — accumulate real (unscaled) time, flush periodically
         this.elapsedTimeAccumulator += deltaTime;
-        if (this.elapsedTimeAccumulator >= 1) {
+        if (this.elapsedTimeAccumulator >= GAME_TIMING_CONFIG.elapsedTimeFlushInterval) {
           this.gameStateService.addElapsedTime(this.elapsedTimeAccumulator);
           this.elapsedTimeAccumulator = 0;
         }
@@ -1614,10 +1691,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               frameKills.push({
                 damage: killInfo.damage,
                 position: { ...enemy.position },
-                color: ENEMY_STATS[enemy.type]?.color ?? 0xff0000,
+                color: ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackDeathColor,
                 value: enemy.value,
               });
 
+              this.statusEffectService.removeAllEffects(killInfo.id);
               this.enemyService.removeEnemy(killInfo.id, this.scene);
             }
           }
@@ -1626,13 +1704,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           const reachedExit = this.enemyService.updateEnemies(PHYSICS_CONFIG.fixedTimestep);
 
           // Enemies reaching the exit cost lives scaled by enemy type
-          for (const enemyId of reachedExit) {
-            const leakedEnemy = this.enemyService.getEnemies().get(enemyId);
-            const leakCost = leakedEnemy?.leakDamage ?? 1;
-            this.gameStateService.loseLife(leakCost);
+          for (const leaked of reachedExit) {
+            this.gameStateService.loseLife(leaked.leakDamage);
             this.gameStatsService.recordEnemyLeaked();
             frameExitCount++;
-            this.enemyService.removeEnemy(enemyId, this.scene);
+            this.statusEffectService.removeAllEffects(leaked.id);
+            this.enemyService.removeEnemy(leaked.id, this.scene);
           }
 
           // Check wave completion: no spawning and no enemies alive
@@ -1658,41 +1735,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             }
 
             // Record game end stats for profile (VICTORY or DEFEAT, fires once per game)
-            if ((postWavePhase === GamePhase.VICTORY || postWavePhase === GamePhase.DEFEAT) && !this.gameEndRecorded) {
-              this.gameEndRecorded = true;
-              const endState = this.gameStateService.getState();
-              const stats = this.gameStatsService.getStats();
-              const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
-              const gameEndStats: GameEndStats = {
-                isVictory: postWavePhase === GamePhase.VICTORY,
-                score: endState.score,
-                enemiesKilled: totalKills,
-                goldEarned: stats.totalGoldEarned,
-                wavesCompleted: endState.wave,
-                livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
-              };
-              this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
-              this.updateAchievementDetails();
-            }
+            this.recordGameEndIfNeeded();
           }
 
           // DEFEAT mid-frame (from loseLife) — record game end if not yet done
-          if (currentPhase === GamePhase.DEFEAT && !this.gameEndRecorded) {
-            this.gameEndRecorded = true;
-            const endState = this.gameStateService.getState();
-            const stats = this.gameStatsService.getStats();
-            const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
-            const gameEndStats: GameEndStats = {
-              isVictory: false,
-              score: endState.score,
-              enemiesKilled: totalKills,
-              goldEarned: stats.totalGoldEarned,
-              wavesCompleted: endState.wave,
-              livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
-            };
-            this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
-            this.updateAchievementDetails();
-          }
+          this.recordGameEndIfNeeded();
 
           this.physicsAccumulator -= PHYSICS_CONFIG.fixedTimestep;
           stepCount++;
@@ -1777,7 +1824,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private updateTowerAnimations(time: number): void {
-    const t = time * 0.001; // Convert ms to seconds
+    const t = time * SKYBOX_CONFIG.timeScale;
     for (const group of this.towerMeshes.values()) {
       const towerType = group.userData['towerType'] as TowerType | undefined;
       if (!towerType) continue;
@@ -1800,7 +1847,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
           case 'orb': {
             const pulseScale = TOWER_ANIM_CONFIG.orbPulseMin
-              + (Math.sin(t * TOWER_ANIM_CONFIG.orbPulseSpeed) * 0.5 + 0.5)
+              + sinNormalized(Math.sin(t * TOWER_ANIM_CONFIG.orbPulseSpeed))
               * (TOWER_ANIM_CONFIG.orbPulseMax - TOWER_ANIM_CONFIG.orbPulseMin);
             child.scale.setScalar(pulseScale);
             break;
@@ -1823,7 +1870,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           case 'tip': {
             const mat = child.material as THREE.MeshStandardMaterial;
             mat.emissiveIntensity = TOWER_ANIM_CONFIG.tipGlowMin
-              + (Math.sin(t * TOWER_ANIM_CONFIG.tipGlowSpeed) * 0.5 + 0.5)
+              + sinNormalized(Math.sin(t * TOWER_ANIM_CONFIG.tipGlowSpeed))
               * (TOWER_ANIM_CONFIG.tipGlowMax - TOWER_ANIM_CONFIG.tipGlowMin);
             break;
           }
@@ -1833,9 +1880,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private updateTilePulse(time: number): void {
-    const t = time * 0.001;
+    const t = time * SKYBOX_CONFIG.timeScale;
     const intensity = TILE_PULSE_CONFIG.min
-      + (Math.sin(t * TILE_PULSE_CONFIG.speed) * 0.5 + 0.5)
+      + sinNormalized(Math.sin(t * TILE_PULSE_CONFIG.speed))
       * (TILE_PULSE_CONFIG.max - TILE_PULSE_CONFIG.min);
 
     for (const mesh of this.tileMeshes.values()) {
@@ -1873,6 +1920,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       canvas.removeEventListener('touchstart', this.touchStartHandler);
       canvas.removeEventListener('touchmove', this.touchMoveHandler);
       canvas.removeEventListener('touchend', this.touchEndHandler);
+      canvas.removeEventListener('webglcontextlost', this.contextLostHandler);
+      canvas.removeEventListener('webglcontextrestored', this.contextRestoredHandler);
     }
 
     if (this.controls) {
@@ -1881,12 +1930,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (this.scene) {
       this.cleanupGameObjects();
+      this.particleService.cleanup(this.scene);
+      this.goldPopupService.cleanup(this.scene);
     }
 
     this.audioService.cleanup();
-    this.particleService.cleanup(this.scene);
-    this.goldPopupService.cleanup(this.scene);
-    this.screenShakeService.cleanup(this.camera);
+    if (this.camera) {
+      this.screenShakeService.cleanup(this.camera);
+    }
     this.fpsCounterService.reset();
 
     if (this.vignettePass) {

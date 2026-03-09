@@ -1131,6 +1131,136 @@ describe('TowerCombatService', () => {
     });
   });
 
+  // --- Sprint 15: Targeting strategy edge cases ---
+
+  describe('targeting strategies: edge cases', () => {
+    it('nearest targeting picks closest enemy even when farther enemy has more health', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      // Default mode is 'nearest'
+
+      // Close enemy with low health
+      const close = createEnemy('close', TOWER_WORLD_X + 0.3, TOWER_WORLD_Z, 30);
+      close.distanceTraveled = 1;
+      // Far enemy (within range=3) with high health
+      const far = createEnemy('far', TOWER_WORLD_X + 2.5, TOWER_WORLD_Z, 500);
+      far.distanceTraveled = 8;
+      enemyMap.set('close', close);
+      enemyMap.set('far', far);
+
+      service.update(2.0, mockScene);
+
+      expect(close.health).toBeLessThan(30);
+      expect(far.health).toBe(500);
+    });
+
+    it('first targeting picks enemy furthest along path regardless of distance to tower', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.setTargetingMode(key, 'first');
+
+      // Closer to tower but early in path
+      const early = createEnemy('early', TOWER_WORLD_X + 0.2, TOWER_WORLD_Z, 1000);
+      early.distanceTraveled = 1;
+      // Farther from tower but further along path
+      const late = createEnemy('late', TOWER_WORLD_X + 2.5, TOWER_WORLD_Z, 1000);
+      late.distanceTraveled = 15;
+      enemyMap.set('early', early);
+      enemyMap.set('late', late);
+
+      service.update(2.0, mockScene);
+
+      // 'first' targets highest distanceTraveled — 'late' gets hit
+      expect(late.health).toBeLessThan(1000);
+      expect(early.health).toBe(1000);
+    });
+
+    it('strongest targeting picks enemy with highest current health', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.setTargetingMode(key, 'strongest');
+
+      const weak = createEnemy('weak', TOWER_WORLD_X + 0.2, TOWER_WORLD_Z, 20);
+      const medium = createEnemy('medium', TOWER_WORLD_X + 1.0, TOWER_WORLD_Z, 150);
+      const strong = createEnemy('strong', TOWER_WORLD_X + 2.0, TOWER_WORLD_Z, 400);
+      enemyMap.set('weak', weak);
+      enemyMap.set('medium', medium);
+      enemyMap.set('strong', strong);
+
+      service.update(2.0, mockScene);
+
+      // 'strongest' picks the 400hp enemy
+      expect(strong.health).toBeLessThan(400);
+      expect(weak.health).toBe(20);
+      expect(medium.health).toBe(150);
+    });
+
+  });
+
+  describe('chain lightning: no duplicate hits', () => {
+    it('should not chain back to the primary target when two enemies are in range', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      const chainRange = TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
+      const baseDamage = TOWER_CONFIGS[TowerType.CHAIN].damage;
+
+      // Two enemies within chain range of each other
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + chainRange * 0.5, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      service.update(1.0, mockScene);
+
+      // e1 hit once (primary), e2 hit once (first bounce)
+      // e1 should NOT be hit again by chaining back from e2
+      expect(1000 - e1.health).toBe(baseDamage);
+      expect(1000 - e2.health).toBe(Math.round(baseDamage * 0.7));
+    });
+  });
+
+  describe('selling tower during combat', () => {
+    it('should not crash when tower is unregistered between fire and projectile update', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+      // Enemy at distance so projectile is in flight
+      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', enemy);
+
+      // Fire — projectile launched
+      service.update(0.016, mockScene);
+
+      // Sell the tower while projectile is in flight
+      service.unregisterTower(key);
+      expect(service.getTower(key)).toBeUndefined();
+
+      // Update should not throw — projectile still tracks target
+      expect(() => {
+        service.update(1.0, mockScene);
+      }).not.toThrow();
+    });
+
+    it('should still damage enemy when tower is sold after projectile is fired', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+
+      const enemy = createEnemy('e1', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', enemy);
+
+      // Fire
+      service.update(0.016, mockScene);
+
+      // Sell tower
+      service.unregisterTower(key);
+
+      // Advance enough for projectile to reach target (dist=1, speed=8 for BASIC -> ~0.13s)
+      service.update(0.5, mockScene);
+
+      // Projectile should have hit regardless of tower being removed
+      expect(enemy.health).toBeLessThan(1000);
+    });
+  });
+
   // --- Chain Lightning Zigzag ---
 
   describe('chain lightning zigzag', () => {

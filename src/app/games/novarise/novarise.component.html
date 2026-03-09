@@ -5,6 +5,24 @@
     </div>
   </div>
 
+  <!-- Init error fallback -->
+  <div class="init-error-overlay" *ngIf="initError">
+    <div class="init-error-content">
+      <h2>Unable to Start Editor</h2>
+      <p>{{ initError }}</p>
+      <p class="init-error-hint">Try using a modern browser with WebGL support, or check your graphics drivers.</p>
+      <button class="init-error-btn" routerLink="/maps">Back to Maps</button>
+    </div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div class="loading-overlay" *ngIf="isLoading && !initError">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <p class="loading-text">Initializing...</p>
+    </div>
+  </div>
+
   <div class="novarise-content">
     <div #canvasContainer class="canvas-container"></div>
 

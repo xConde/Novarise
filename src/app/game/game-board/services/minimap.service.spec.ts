@@ -39,12 +39,17 @@ describe('MinimapService', () => {
       expect(canvas!.height).toBe(MINIMAP_CONFIG.canvasSize);
     });
 
-    it('should position canvas absolutely in bottom-left', () => {
+    it('should clean up existing canvas when init is called twice', () => {
+      service.init(container);
+      service.init(container);
+      const canvases = container.querySelectorAll('canvas');
+      expect(canvases.length).toBe(1);
+    });
+
+    it('should apply the minimap-canvas CSS class for responsive positioning', () => {
       service.init(container);
       const canvas = container.querySelector('canvas') as HTMLCanvasElement;
-      expect(canvas.style.position).toBe('absolute');
-      expect(canvas.style.bottom).toBe(`${MINIMAP_CONFIG.padding}px`);
-      expect(canvas.style.left).toBe(`${MINIMAP_CONFIG.padding}px`);
+      expect(canvas.classList.contains('minimap-canvas')).toBe(true);
     });
   });
 
@@ -144,7 +149,7 @@ describe('MinimapService', () => {
 
       // Starts hidden (visible=false), toggle makes it visible
       service.toggleVisibility();
-      expect(canvas.style.display).toBe('block');
+      expect(canvas.style.display).toBe('');
 
       // Toggle again hides it
       service.toggleVisibility();
@@ -168,6 +173,38 @@ describe('MinimapService', () => {
       service.init(container);
       service.cleanup();
       expect(() => service.cleanup()).not.toThrow();
+    });
+
+    it('should reset visible flag so isVisible() returns false', () => {
+      service.init(container);
+      service.show();
+      expect(service.isVisible()).toBe(true);
+      service.cleanup();
+      expect(service.isVisible()).toBe(false);
+    });
+
+    it('should start canvas hidden after cleanup + init', () => {
+      service.init(container);
+      service.show();
+      service.cleanup();
+      service.init(container);
+      const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+      expect(canvas.style.display).toBe('none');
+    });
+
+    it('should start canvas hidden after full restart cycle: init → show → cleanup → init', () => {
+      service.init(container);
+      service.show();
+      const firstCanvas = container.querySelector('canvas') as HTMLCanvasElement;
+      expect(firstCanvas.style.display).toBe('');
+
+      service.cleanup();
+      expect(container.querySelector('canvas')).toBeNull();
+
+      service.init(container);
+      const newCanvas = container.querySelector('canvas') as HTMLCanvasElement;
+      expect(newCanvas.style.display).toBe('none');
+      expect(service.isVisible()).toBe(false);
     });
   });
 });

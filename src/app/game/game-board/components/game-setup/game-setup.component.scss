@@ -1,0 +1,189 @@
+@use '../../styles/game-mixins' as *;
+
+:host {
+  display: block;
+}
+
+.setup-panel {
+  @include glass-panel(rgba(0, 0, 0, 0.85));
+  position: absolute;
+  top: var(--spacing-md);
+  right: var(--spacing-md);
+  width: min(18rem, 35vw);
+  max-height: calc(100vh - var(--spacing-xl));
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
+  animation: scale-in 0.2s ease-out;
+}
+
+.setup-section-label {
+  font-size: var(--font-size-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1rem;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.setup-difficulty-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-xs);
+}
+
+.setup-diff-btn {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: transparent;
+  border: var(--border-width-thin) solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  color: var(--text-color);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--transition-fast) ease;
+  min-height: 2.75rem;
+
+  &:hover {
+    background: var(--theme-purple-a20);
+    border-color: var(--theme-purple-a80);
+  }
+
+  &.selected {
+    background: var(--theme-purple-a30);
+    border-color: var(--theme-purple);
+    color: var(--theme-purple-lighter);
+    box-shadow: 0 0 var(--spacing-xs) var(--theme-purple-a50);
+  }
+}
+
+.setup-endless {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  cursor: pointer;
+  font-size: var(--font-size-small);
+  color: var(--text-color);
+  font-family: "Orbitron", sans-serif;
+  padding: var(--spacing-xs) 0;
+  border-top: var(--border-width-thin) solid var(--border-color);
+
+  input[type="checkbox"] {
+    accent-color: var(--theme-purple);
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+  }
+}
+
+.setup-modifier-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-xs);
+}
+
+.setup-mod-btn {
+  padding: var(--spacing-xs);
+  background: transparent;
+  border: var(--border-width-thin) solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  color: var(--text-color);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-3xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--transition-fast) ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: var(--theme-purple-a20);
+    border-color: var(--theme-purple-a80);
+  }
+
+  &.active {
+    background: var(--theme-purple-a30);
+    border-color: var(--theme-purple);
+    color: var(--theme-purple-lighter);
+  }
+}
+
+.setup-score {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  color: var(--theme-purple-lighter);
+  text-align: center;
+}
+
+.setup-start-btn {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: var(--border-width-medium) solid var(--action-success-border);
+  border-radius: var(--border-radius-md);
+  background: var(--action-success-bg);
+  color: var(--action-success);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all var(--transition-fast) ease;
+
+  &:hover {
+    background: rgba(0, 180, 80, 0.35);
+    box-shadow: 0 0 var(--spacing-sm) rgba(0, 255, 100, 0.25);
+  }
+}
+
+// --- Responsive breakpoints ---
+
+@media screen and (max-width: 768px) {
+  .setup-panel {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-height: 55vh;
+    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  .setup-difficulty-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .setup-modifier-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .setup-panel {
+    max-height: 45vh;
+  }
+}
+
+// --- Animations ---
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

@@ -21,6 +21,9 @@ export interface MinimapTerrainData {
   exitPoint?: { x: number; z: number };
 }
 
+/** CSS class applied to the minimap canvas for responsive positioning via stylesheet. */
+const MINIMAP_CSS_CLASS = 'minimap-canvas';
+
 @Injectable()
 export class MinimapService {
   private canvas: HTMLCanvasElement | null = null;
@@ -30,18 +33,17 @@ export class MinimapService {
 
   /**
    * Creates the minimap canvas and appends it to the given container.
+   * Positioning and responsive sizing are handled by CSS (.minimap-canvas class
+   * in styles.css) so that media queries reliably control mobile layout.
    */
   init(container: HTMLElement): void {
+    if (this.canvas) {
+      this.cleanup();
+    }
     this.canvas = document.createElement('canvas');
     this.canvas.width = MINIMAP_CONFIG.canvasSize;
     this.canvas.height = MINIMAP_CONFIG.canvasSize;
-    this.canvas.style.position = 'absolute';
-    this.canvas.style.bottom = `${MINIMAP_CONFIG.padding}px`;
-    this.canvas.style.left = `${MINIMAP_CONFIG.padding}px`;
-    this.canvas.style.border = `${MINIMAP_CONFIG.borderWidth}px solid ${MINIMAP_CONFIG.borderColor}`;
-    this.canvas.style.borderRadius = '4px';
-    this.canvas.style.zIndex = '100';
-    this.canvas.style.pointerEvents = 'none';
+    this.canvas.className = MINIMAP_CSS_CLASS;
     if (!this.visible) {
       this.canvas.style.display = 'none';
     }
@@ -133,7 +135,7 @@ export class MinimapService {
   toggleVisibility(): void {
     this.visible = !this.visible;
     if (this.canvas) {
-      this.canvas.style.display = this.visible ? 'block' : 'none';
+      this.canvas.style.display = this.visible ? '' : 'none';
     }
   }
 
@@ -147,6 +149,7 @@ export class MinimapService {
     }
     this.canvas = null;
     this.ctx = null;
+    this.visible = false;
     this.lastUpdateTime = 0;
   }
 }

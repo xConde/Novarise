@@ -4,6 +4,8 @@ import { RouterTestingModule } from '@angular/router/testing';
 import { NovariseComponent } from './novarise.component';
 import { MapStorageService } from './core/map-storage.service';
 import { CameraControlService, JoystickInput, MovementInput, RotationInput } from './core/camera-control.service';
+import { EditHistoryService } from './core/edit-history.service';
+import { EditorStateService } from './core/editor-state.service';
 import { PathValidationService } from './core/path-validation.service';
 import { MapTemplateService } from './core/map-template.service';
 import { JoystickEvent } from './features/mobile-controls';
@@ -51,7 +53,10 @@ describe('NovariseComponent', () => {
       imports: [RouterTestingModule],
       providers: [
         { provide: MapStorageService, useValue: mockMapStorageService },
-        PathValidationService
+        PathValidationService,
+        EditHistoryService,
+        CameraControlService,
+        EditorStateService
       ],
       schemas: [NO_ERRORS_SCHEMA] // Ignore unknown elements like app-virtual-joystick
     }).compileComponents();
@@ -65,6 +70,18 @@ describe('NovariseComponent', () => {
     t.renderer = { domElement: document.createElement('canvas'), dispose: () => {} };
     t.scene = { remove: () => {} };
   }
+
+  describe('Loading State', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('isLoading should default to true before initialization', () => {
+      expect(component.isLoading).toBeTrue();
+    });
+  });
 
   describe('Joystick State Initialization', () => {
     beforeEach(() => {
@@ -343,6 +360,47 @@ describe('NovariseComponent', () => {
       const newPos = cameraControlService.getPosition();
       expect(newPos.x !== initialPos.x || newPos.z !== initialPos.z).toBe(true);
       expect(cameraControlService.getRotation().yaw).not.toBe(initialRot.yaw);
+    });
+  });
+
+  describe('Save Map', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should alert failure when saveMap returns null', () => {
+      // Mock terrainGrid.exportState()
+      (component as any).terrainGrid = {
+        exportState: () => ({ gridSize: 10, tiles: [], heightMap: [], spawnPoints: [{ x: 0, z: 0 }], exitPoints: [{ x: 9, z: 9 }], version: '2.0.0' }),
+        dispose: () => {}
+      };
+      (component as any).currentMapName = 'Test Map';
+      mockMapStorageService.saveMap.and.returnValue(null);
+      mockMapStorageService.getCurrentMapId.and.returnValue('old_id');
+      spyOn(window, 'prompt').and.returnValue('Test Map');
+      spyOn(window, 'alert');
+
+      (component as any).saveGridState();
+
+      expect(window.alert).toHaveBeenCalledWith(jasmine.stringContaining('Failed to save'));
+    });
+
+    it('should alert success when saveMap returns an ID', () => {
+      (component as any).terrainGrid = {
+        exportState: () => ({ gridSize: 10, tiles: [], heightMap: [], spawnPoints: [{ x: 0, z: 0 }], exitPoints: [{ x: 9, z: 9 }], version: '2.0.0' }),
+        dispose: () => {}
+      };
+      (component as any).currentMapName = 'Test Map';
+      mockMapStorageService.saveMap.and.returnValue('map_123');
+      mockMapStorageService.getCurrentMapId.and.returnValue(null);
+      spyOn(window, 'prompt').and.returnValue('My Map');
+      spyOn(window, 'alert');
+
+      (component as any).saveGridState();
+
+      expect(window.alert).toHaveBeenCalledWith(jasmine.stringContaining('saved successfully'));
     });
   });
 

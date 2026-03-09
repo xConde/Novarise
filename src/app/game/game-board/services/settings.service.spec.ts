@@ -92,4 +92,33 @@ describe('SettingsService', () => {
     const fresh = service.get();
     expect(fresh.audioMuted).toBe(false); // original unaffected
   });
+
+  describe('save failure logging', () => {
+    it('should log warning on QuotaExceededError', () => {
+      spyOn(localStorage, 'setItem').and.callFake(() => {
+        throw new DOMException('quota exceeded', 'QuotaExceededError');
+      });
+      spyOn(console, 'warn');
+
+      service.update({ audioMuted: true });
+
+      expect(console.warn).toHaveBeenCalledWith(
+        jasmine.stringContaining('quota exceeded')
+      );
+    });
+
+    it('should log warning on generic storage failure', () => {
+      spyOn(localStorage, 'setItem').and.callFake(() => {
+        throw new Error('SecurityError');
+      });
+      spyOn(console, 'warn');
+
+      service.update({ audioMuted: true });
+
+      expect(console.warn).toHaveBeenCalledWith(
+        jasmine.stringContaining('Failed to save settings'),
+        jasmine.anything()
+      );
+    });
+  });
 });

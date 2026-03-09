@@ -51,8 +51,12 @@ export class SettingsService {
   private save(): void {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.settings));
-    } catch {
-      // localStorage full or unavailable — silently fail
+    } catch (error) {
+      if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.code === 22)) {
+        console.warn('localStorage quota exceeded — settings were not saved. Free space by deleting unused maps.');
+      } else {
+        console.warn('Failed to save settings — localStorage may be unavailable:', error);
+      }
     }
   }
 }

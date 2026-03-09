@@ -1,0 +1,7 @@
+@mixin glass-panel($bg: rgba(0, 0, 0, 0.75)) {
+  background: $bg;
+  border-radius: var(--border-radius-md);
+  backdrop-filter: blur(0.625rem);
+  z-index: var(--z-index-overlay);
+  font-family: "Orbitron", sans-serif;
+}

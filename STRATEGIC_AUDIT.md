@@ -698,3 +698,152 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Fix minimap dimensions for rectangular boards (gridWidth/gridHeight)
 - [x] Full test suite green (1697/1697)
 - [x] Push to PR
+
+---
+
+## Red Team Critique — feat/hardening-iv (2026-03-07)
+
+### Finding 1: Silent Enemy Skip on Spawn Retry Limit (HIGH — FIXED)
+**Location:** `wave.service.ts:154`
+**Risk:** When enemy spawn fails 300 consecutive times, the enemy is silently discarded. If a map becomes unplayable mid-wave, enemies vanish from the queue without any signal to the player or logs for debugging.
+**Fix:** Added `console.warn` when skipping an enemy after max retries.
+
+### Finding 2: Misplaced JSDoc Comment (LOW — FIXED)
+**Location:** `game-board.component.ts:194-195`
+**Risk:** `recordGameEndIfNeeded()` JSDoc was orphaned above `rebuildTowerChildrenCache()`. Misleading for maintainers.
+**Fix:** Moved JSDoc to the correct method.
+
+### Finding 3: Misleading Template Comment (LOW — FIXED)
+**Location:** `game-board.component.html:53`
+**Risk:** Comment said "shown during SETUP and INTERMISSION" but template only shows during INTERMISSION. Intentional design (wave preview makes no sense before game starts) but comment contradicts behavior.
+**Fix:** Updated comment to match actual behavior.
+
+### Verified NOT bugs:
+- ReadonlySet<string> for unlockedSet: correct TS pattern (prevents external mutation, internal reassignment is fine)
+- BFS on mousemove: preview cache key gates the check — BFS only runs on tile change, not every move
+- Mobile shadow cap + 3-point lighting: correctly applied to keyLight after merge resolution
+- Raycasting cache invalidation: tileMeshArray rebuilt in renderGameBoard, towerChildrenArray rebuilt after place/sell
+
+## Deployment Checklist — feat/hardening-iv
+- [x] Fix Finding 1: Add console.warn on spawn retry skip
+- [x] Fix Finding 2: Move JSDoc to correct method
+- [x] Fix Finding 3: Fix misleading template comment
+- [x] Run full test suite — 1893/1893 green
+- [x] Commit, push, update PR
+
+---
+
+## Red Team Critique — feat/hardening-iv Pass 2 (2026-03-08)
+
+### Finding 1: saveMap() silently returns success on quota failure (MEDIUM)
+**Location:** `map-storage.service.ts:62-71`
+**Risk:** When localStorage quota is exceeded, `saveMap()` catches the error, logs a warning, but still returns a mapId and updates the metadata index. The caller (editor auto-save, manual save) sees a valid mapId and believes the save succeeded. The metadata entry points to a non-existent map — next load fails silently. The `importMap()` path was patched with verify-after-write (line 280), but direct saves were not.
+**Fix:** Return `null` on save failure so callers can detect and handle the error (e.g., show a toast).
+
+### Finding 2: testCanvas WebGL context not released (LOW)
+**Location:** `game-board.component.ts:813-814`, `novarise.component.ts:245-246`
+**Risk:** Both `initializeRenderer()` methods create a temporary canvas + WebGL context for feature detection but never release the context. The canvas is a local variable (eligible for GC) but the WebGL context may persist until GC runs, consuming one of the browser's limited WebGL context slots (typically 8-16).
+**Fix:** Call `WEBGL_lose_context` extension after the check to explicitly release the context.
+
+### Finding 3: Visual-overhaul magic numbers extracted (LOW — FIXED in prior commit)
+**Location:** `game-board.component.ts:1595,1778,1801,1824,1834,1836`
+**Risk:** Three `time * 0.001` patterns and three `* 0.5 + 0.5` patterns were bare numeric operations without named constants. Already fixed in commit 83c69c4 via `SKYBOX_CONFIG.timeScale` and `sinNormalized()`.
+
+### Verified NOT bugs:
+- Trail disposal: `removeProjectileMesh()` properly disposes trail geometry + material; `cleanup()` calls it for all active projectiles
+- Impact flash disposal: shared geometry disposed in `cleanup()`, per-flash materials disposed on expiry
+- Chain arc zigzag `Math.random()`: non-deterministic but purely visual — does not affect game state or fixed timestep determinism
+- Particle service: all new numeric literals (`emissiveIntensity`, `roughness`, `metalness`, `sizeVariation`, `scaleEnd`) sourced from `DEATH_BURST_CONFIG`
+- Child components: all 6 are pure presentational (inputs + EventEmitters), no subscriptions to leak
+- `updateStatusVisuals()` `return` in forEach: correctly exits callback for current enemy, does not skip reset for other enemies
+
+---
+
+## Red Team Critique — feat/hardening-iv Pass 3 (2026-03-08)
+
+### Finding 1: File import has no size limit (MEDIUM — FIXED)
+**Location:** `map-storage.service.ts:promptFileImport()`
+**Risk:** `file.text()` loads entire file into memory with no size check. A user accidentally selecting a multi-GB file crashes the browser tab.
+**Fix:** Added `MAX_IMPORT_FILE_SIZE` (10 MB) check before `file.text()`.
+
+### Finding 2: Achievements array unbounded on localStorage load (LOW — FIXED)
+**Location:** `player-profile.service.ts:load()`
+**Risk:** Parsed `achievements` array from localStorage is spread without length validation. Crafted data could contain thousands of entries.
+**Fix:** `parsed.achievements.slice(0, ACHIEVEMENTS.length)` caps to defined achievement count.
+
+### Verified NOT bugs (Pass 3):
+- Material casts (`as THREE.MeshStandardMaterial`) in animation loops: materials structurally guaranteed by creation code in GameBoardService — no code path creates mesh without MeshStandardMaterial
+- `getEditorMapState()!` in restartGame: guarded by `hasEditorMap()` check on line before
+- Spatial grid rebuild: correctly called after tower place/remove
+- `startWave()` double-call: guarded by phase check in GameStateService
+- restartGame() state reset: covers all fields including new ones from this branch
+- `totalInvested` tracking: uses actual modifier-adjusted cost, not base config cost
+
+## Deployment Checklist — feat/hardening-iv (Final)
+- [x] Verify full test suite green (1898/1898)
+- [x] Verify no TypeScript compilation errors
+- [x] Verify no uncommitted changes remain
+- [x] Push branch and update PR #21
+
+## Red Team Critique — 2026-03-08 (Raycasting/Minimap fixes)
+
+### Finding 1: Duplicated mobile breakpoint (LOW)
+**Location:** `minimap.constants.ts:4`
+**Risk:** `mobileBreakpoint: 480` duplicates `MOBILE_CONFIG.phoneBreakpoint` from `mobile.constants.ts`. If the phone breakpoint is ever changed, the minimap won't follow — two sources of truth for the same threshold.
+**Fix:** Import and reference `MOBILE_CONFIG.phoneBreakpoint` instead of hardcoding `480`.
+
+### Finding 2: OrbitControls mouseButtons.LEFT = -1 type cast (LOW)
+**Location:** `game-board.component.ts:1088`
+**Risk:** `-1 as THREE.MOUSE` lies to the type system. The runtime behavior is correct (OrbitControls' switch falls to `default: state = NONE`), but a future Three.js update could change how unknown values are handled. The cast is fragile.
+**Fix:** Use a named constant (`MOUSE_DISABLED = -1 as THREE.MOUSE`) in camera.constants.ts so the intent is documented and the cast is centralized.
+
+### Finding 3: Minimap size/position not responsive to orientation change (LOW)
+**Location:** `minimap.service.ts:36`
+**Risk:** `isMobile` is evaluated once at `init()` time. Device rotation (portrait→landscape) won't trigger recalculation. The minimap stays small and top-left even when landscape has room for the full desktop layout.
+**Fix:** Not critical — restartGame() re-inits the minimap which picks up the new orientation. True fix would require a resize listener in the service, which is overengineering for this scope.
+
+### Verified NOT bugs:
+- `updateMatrixWorld()` in editor touchstart/touchmove: defensive but harmless since editor disables orbit/pan on OrbitControls. No runtime cost concern (single matrix multiply per event).
+- `updateMatrixWorld()` frequency in mousemove handler: negligible cost vs. the renderer's own per-frame matrix updates.
+
+## Deployment Checklist — 2026-03-08 (Raycasting/Minimap)
+- [x] Fix raycasting after zoom (updateMatrixWorld + disable left-click orbit)
+- [x] Fix minimap mobile overlap (shrink + reposition)
+- [x] Red team hardening (single-source breakpoint, named constant for disabled mouse)
+- [x] Full test suite green (1898/1898)
+- [x] Push to remote
+
+## Red Team Critique — 2026-03-08 (Hardening IV Final Gate)
+
+### Finding 1: Dead MINIMAP_CONFIG mobile constants (MEDIUM)
+**Location:** `constants/minimap.constants.ts:5-9`
+**Risk:** `mobileCanvasSize`, `mobileBreakpoint`, `mobilePaddingTop`, `mobilePaddingLeft` are defined but never consumed. CSS media queries in `styles.css` now handle mobile sizing. Dead config implies mobile minimap is JS-driven when it isn't — misleads future devs.
+**Fix:** Remove dead constants. CSS is the single source of truth for mobile minimap layout.
+
+### Finding 2: Dead MINI_SWARM_MESH_SEGMENTS import (LOW)
+**Location:** `services/enemy.service.ts:3`
+**Risk:** Imported from `enemy.model.ts` but never referenced in the service body. Suggests incomplete refactoring — mini-swarm meshes use hardcoded `OctahedronGeometry(size, 0)` detail level.
+**Fix:** Remove from import statement. Keep the constant in the model for future use.
+
+### Finding 3: Minimap display value inconsistency (LOW)
+**Location:** `services/minimap.service.ts:127,138`
+**Risk:** `show()` sets `display = ''` (CSS default), `toggleVisibility()` sets `display = 'block'`. Inconsistent — if CSS class has `display: none` by default, `''` would revert to `none` while `'block'` would override correctly.
+**Fix:** Normalize both to use `''` (let CSS class control default display).
+
+### Finding 4: Editor ngOnDestroy auto-save silent failure (MEDIUM)
+**Location:** `novarise.component.ts:1842-1846`
+**Risk:** `saveMap()` return value unchecked. If localStorage quota is exceeded during navigation-triggered auto-save, user silently loses unsaved editor changes with no notification.
+**Fix:** Wrap in try-catch, log warning on failure.
+
+### Verified NOT bugs:
+- StatusEffectService cleanup on restart: Already wired via `towerCombatService.cleanup()` → `statusEffectService.cleanup()` chain.
+- WebGL context restore: Three.js handles most GPU state restoration internally. Full scene rebuild would be overengineering.
+- Breakpoint inconsistency (768 vs 480): Intentional three-tier model (phone/tablet/desktop).
+
+## Deployment Checklist — 2026-03-08 (Hardening IV Final)
+- [x] Remove dead MINIMAP_CONFIG mobile constants (CSS handles sizing)
+- [x] Remove dead MINI_SWARM_MESH_SEGMENTS import from enemy.service
+- [x] Normalize minimap display values (show/toggle consistency)
+- [x] Add try-catch to editor ngOnDestroy auto-save
+- [x] Full test suite green (2028/2028)
+- [x] Push to remote
