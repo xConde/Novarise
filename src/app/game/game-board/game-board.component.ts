@@ -902,9 +902,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
         void main() {
           vec4 texel = texture2D(tDiffuse, vUv);
-          vec2 uv = (vUv - vec2(0.5)) * vec2(offset);
-          float vignette = clamp(1.0 - dot(uv, uv), 0.0, 1.0);
-          vignette = pow(vignette, darkness);
+          vec2 uv = (vUv - vec2(0.5)) * vec2(offset); // 0.5 = UV center; re-centers coords to [-0.5, 0.5]
+          float vignette = clamp(1.0 - dot(uv, uv), 0.0, 1.0); // radial falloff from center
+          vignette = pow(vignette, darkness); // darkness exponent controls falloff curve steepness
           texel.rgb *= vignette;
           gl_FragColor = texel;
         }
@@ -1014,35 +1014,44 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         varying vec3 vPosition;
         uniform float time;
 
+        // Standard hash function (Hugo Elias / Book of Shaders).
+        // 12.9898, 78.233, 43758.5453123 are co-prime magic seeds that produce
+        // a uniform pseudo-random distribution — do not change individually.
         float random(vec2 st) {
           return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
         }
 
         void main() {
-          vec3 deepPurple = vec3(0.04, 0.02, 0.08);
-          vec3 darkBlue = vec3(0.06, 0.04, 0.12);
-          vec3 color = mix(deepPurple, darkBlue, vUv.y * 0.5);
+          // Background gradient: deep purple at horizon → dark blue at zenith
+          vec3 deepPurple = vec3(0.04, 0.02, 0.08); // RGB ≈ #0A0514
+          vec3 darkBlue = vec3(0.06, 0.04, 0.12);   // RGB ≈ #0F0A1F
+          vec3 color = mix(deepPurple, darkBlue, vUv.y * 0.5); // 0.5 = blend reaches halfway up the sphere
 
-          // Stars with twinkle
-          vec2 starPos = vUv * 150.0; // grid density — higher = more/smaller star cells
+          // --- Stars with twinkle ---
+          vec2 starPos = vUv * 150.0; // 150 = grid density — higher = more/smaller star cells
           float star = random(floor(starPos));
-          if (star > 0.992) { // sparsity threshold — only top 0.8% of cells are stars
-            float baseBright = random(floor(starPos) + 1.0) * 0.5; // peak brightness cap
-            float twinkle = 0.6 + 0.4 * sin(time * (1.0 + random(floor(starPos) + 2.0) * 3.0)); // min 0.6, ±0.4 oscillation at varying speeds
+          if (star > 0.992) { // 0.992 = sparsity threshold — only top 0.8% of cells become stars
+            float baseBright = random(floor(starPos) + 1.0) * 0.5; // 0.5 = peak brightness cap (prevents blowout)
+            // Twinkle: oscillates [0.6, 1.0]. 1.0–3.0 = per-star random speed range.
+            float twinkle = 0.6 + 0.4 * sin(time * (1.0 + random(floor(starPos) + 2.0) * 3.0));
             float brightness = baseBright * twinkle;
-            color += vec3(brightness * 0.4, brightness * 0.3, brightness * 0.5); // cool purple-blue star tint
+            // (0.4, 0.3, 0.5) = cool purple-blue tint — red < green < blue
+            color += vec3(brightness * 0.4, brightness * 0.3, brightness * 0.5);
           }
 
-          // Drifting nebula veins
-          float drift = time * 0.02; // slow drift speed
-          float vein1 = random(floor(vUv * 40.0 + vec2(drift, vUv.x * 10.0 + drift * 0.5))); // 40 = vein grid scale
-          if (vein1 > 0.97) { // top 3% of cells glow as veins
-            color += vec3(0.25, 0.15, 0.3) * vein1; // purple nebula tint
+          // --- Drifting nebula veins ---
+          float drift = time * 0.02; // 0.02 = slow drift speed (full cycle ≈ 314s)
+          // 40.0 = vein cell grid scale; 10.0 = horizontal warp factor; 0.5 = vertical drift damping
+          float vein1 = random(floor(vUv * 40.0 + vec2(drift, vUv.x * 10.0 + drift * 0.5)));
+          if (vein1 > 0.97) { // 0.97 = top 3% of cells glow as nebula veins
+            color += vec3(0.25, 0.15, 0.3) * vein1; // purple nebula tint (R=0.25, G=0.15, B=0.3)
           }
 
-          // Slow-shifting bioluminescence
-          float bio = random(floor(vUv * 25.0 + vec2(drift * 0.3))) * 0.12; // 25 = bio grid scale, 0.12 = max intensity
-          color += vec3(bio * 0.3, bio * 0.5, bio * 0.7); // blue-green bio tint
+          // --- Slow-shifting bioluminescence ---
+          // 25.0 = bio cell grid scale; 0.3 = drift speed relative to nebula; 0.12 = max intensity cap
+          float bio = random(floor(vUv * 25.0 + vec2(drift * 0.3))) * 0.12;
+          // (0.3, 0.5, 0.7) = blue-green bio tint — weighted toward blue channel
+          color += vec3(bio * 0.3, bio * 0.5, bio * 0.7);
 
           gl_FragColor = vec4(color, 1.0);
         }

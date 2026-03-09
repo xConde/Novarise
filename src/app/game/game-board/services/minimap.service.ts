@@ -37,6 +37,9 @@ export class MinimapService {
    * in styles.css) so that media queries reliably control mobile layout.
    */
   init(container: HTMLElement): void {
+    if (this.canvas) {
+      this.cleanup();
+    }
     this.canvas = document.createElement('canvas');
     this.canvas.width = MINIMAP_CONFIG.canvasSize;
     this.canvas.height = MINIMAP_CONFIG.canvasSize;

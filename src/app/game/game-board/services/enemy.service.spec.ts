@@ -1623,4 +1623,69 @@ describe('EnemyService', () => {
       service.updateEnemyAnimations(0.5);
     });
   });
+
+  describe('Edge cases', () => {
+    it('should not throw when removing a non-existent enemy', () => {
+      expect(() => service.removeEnemy('does-not-exist', mockScene)).not.toThrow();
+    });
+
+    it('should return an empty map when no enemies have been spawned', () => {
+      const enemies = service.getEnemies();
+      expect(enemies.size).toBe(0);
+    });
+
+    it('should return null when no spawn points are configured', () => {
+      // Board with no spawner tiles — all base tiles
+      const noSpawnerBoard: GameBoardTile[][] = [];
+      for (let row = 0; row < 10; row++) {
+        noSpawnerBoard[row] = [];
+        for (let col = 0; col < 10; col++) {
+          if (row === 9 && col === 9) {
+            noSpawnerBoard[row][col] = GameBoardTile.createExit(row, col);
+          } else {
+            noSpawnerBoard[row][col] = GameBoardTile.createBase(row, col);
+          }
+        }
+      }
+      gameBoardService.getGameBoard.and.returnValue(noSpawnerBoard);
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeNull();
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('should not throw or go negative when damaging an already-dead enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      // Kill the enemy
+      const killResult = service.damageEnemy(enemy.id, enemy.maxHealth + 50);
+      expect(killResult.killed).toBe(true);
+
+      // Damage the same enemy again — should be a safe no-op
+      expect(() => service.damageEnemy(enemy.id, 100)).not.toThrow();
+      const secondResult = service.damageEnemy(enemy.id, 100);
+      expect(secondResult.killed).toBe(false);
+      expect(secondResult.spawnedEnemies.length).toBe(0);
+    });
+
+    it('should return null when no exit points are configured', () => {
+      // Board with a spawner but no exit tiles
+      const noExitBoard: GameBoardTile[][] = [];
+      for (let row = 0; row < 10; row++) {
+        noExitBoard[row] = [];
+        for (let col = 0; col < 10; col++) {
+          if (row === 0 && col === 0) {
+            noExitBoard[row][col] = GameBoardTile.createSpawner(row, col);
+          } else {
+            noExitBoard[row][col] = GameBoardTile.createBase(row, col);
+          }
+        }
+      }
+      gameBoardService.getGameBoard.and.returnValue(noExitBoard);
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeNull();
+      expect(service.getEnemies().size).toBe(0);
+    });
+  });
 });

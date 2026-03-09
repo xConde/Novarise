@@ -323,7 +323,7 @@
   }
 }
 
-.init-error-overlay {
+%fullscreen-overlay {
   position: fixed;
   inset: 0;
   display: flex;
@@ -335,7 +335,7 @@
   font-family: 'Orbitron', sans-serif;
 }
 
-.init-error-content {
+%overlay-content {
   text-align: center;
   max-width: 28rem;
   padding: var(--spacing-xl);
@@ -352,11 +352,27 @@
     font-family: sans-serif;
     line-height: 1.4;
   }
+}
+
+.init-error-overlay {
+  @extend %fullscreen-overlay;
+}
+
+.init-error-content {
+  @extend %overlay-content;
 
   .init-error-hint {
     font-size: var(--font-size-small);
     color: var(--text-dim);
   }
+}
+
+.context-lost-overlay {
+  @extend %fullscreen-overlay;
+}
+
+.context-lost-content {
+  @extend %overlay-content;
 }
 
 .init-error-btn {

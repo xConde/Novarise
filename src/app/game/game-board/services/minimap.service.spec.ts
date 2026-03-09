@@ -39,6 +39,13 @@ describe('MinimapService', () => {
       expect(canvas!.height).toBe(MINIMAP_CONFIG.canvasSize);
     });
 
+    it('should clean up existing canvas when init is called twice', () => {
+      service.init(container);
+      service.init(container);
+      const canvases = container.querySelectorAll('canvas');
+      expect(canvases.length).toBe(1);
+    });
+
     it('should apply the minimap-canvas CSS class for responsive positioning', () => {
       service.init(container);
       const canvas = container.querySelector('canvas') as HTMLCanvasElement;
