@@ -92,7 +92,7 @@
 
   <!-- Wave preview panel — shown during SETUP and INTERMISSION -->
   <div class="wave-preview"
-       *ngIf="gameState.phase === GamePhase.INTERMISSION && wavePreview.length > 0"
+       *ngIf="(gameState.phase === GamePhase.INTERMISSION || (gameState.phase === GamePhase.SETUP && gameState.wave === 0)) && wavePreview.length > 0"
        aria-label="Upcoming wave preview">
     <div class="wave-income" *ngIf="lastWaveReward > 0 || lastInterestEarned > 0" aria-live="polite">
       <span class="income-item reward" *ngIf="lastWaveReward > 0">+{{ lastWaveReward }}g reward</span>
