@@ -2322,7 +2322,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.audioService.cleanup();
     this.particleService.cleanup(this.scene);
     this.goldPopupService.cleanup(this.scene);
-    this.priceLabelService.cleanup(this.scene);
+    // priceLabelService already cleaned by cleanupGameObjects → clearTileHighlights
     this.screenShakeService.cleanup(this.camera);
     this.fpsCounterService.reset();
 

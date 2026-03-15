@@ -103,7 +103,7 @@ export const HEATMAP_GRADIENT: ReadonlyArray<readonly [number, number, number, n
   [0.20, 0x88 / 255, 0xcc / 255, 0x22 / 255, 0.35],  // Yellow-green
   [0.40, 0xcc / 255, 0xaa / 255, 0x00 / 255, 0.40],  // Gold
   [0.65, 0xdd / 255, 0x66 / 255, 0x00 / 255, 0.45],  // Orange
-  [0.85, 0xdd / 255, 0x22 / 255, 0x00 / 255, 0.55],  // Red
+  [1.00, 0xdd / 255, 0x22 / 255, 0x00 / 255, 0.55],  // Red — extends to max strategic value
 ] as const;
 
 export const SHIELD_VISUAL_CONFIG = {

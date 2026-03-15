@@ -70,7 +70,7 @@ const PREMIUM_THRESHOLD = 0.1;
  * Tiles outside this radius cannot meaningfully extend the path and receive bfsDelta=0,
  * keeping their impactScore purely tightness-driven.
  */
-const PATH_PROXIMITY_RADIUS = 3;
+const PATH_PROXIMITY_RADIUS = 2;
 
 // ---------------------------------------------------------------------------
 // Exported types
