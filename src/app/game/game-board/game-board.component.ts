@@ -34,7 +34,7 @@ import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG, ANIMATION_CONFIG }
 import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from './constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
-import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG, TILE_EMISSIVE, HEATMAP_COLORS, ENEMY_VISUAL_CONFIG, UI_CONFIG } from './constants/ui.constants';
+import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG, TILE_EMISSIVE, HEATMAP_COLORS, HEATMAP_GRADIENT, ENEMY_VISUAL_CONFIG, UI_CONFIG } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG, DRAG_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
@@ -598,11 +598,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           mesh.userData['origEmissive'] = TILE_EMISSIVE.defaultColor;
           mesh.userData['origEmissiveIntensity'] = TILE_EMISSIVE.base;
 
-          // Apply heatmap color based on strategic tier
-          const heatmapEntry = HEATMAP_COLORS[priceInfo.tier];
-          material.emissive.setHex(heatmapEntry.color);
-          material.emissiveIntensity = heatmapEntry.intensity;
-          // Store tier for hover restore
+          // Apply smoothly interpolated heatmap color based on strategic value
+          const { color, intensity } = this.interpolateHeatmap(priceInfo.strategicMultiplier);
+          material.emissive.setRGB(color.r, color.g, color.b);
+          material.emissiveIntensity = intensity;
+          // Store tier for hover restore (uses tier-based fallback)
           mesh.userData['heatmapTier'] = priceInfo.tier;
           this.highlightedTiles.add(key);
         }
@@ -643,6 +643,35 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       delete mesh.userData['heatmapTier'];
     }
     this.highlightedTiles.clear();
+  }
+
+  /** Interpolate heatmap color from gradient stops based on strategic value (0-1). */
+  private interpolateHeatmap(value: number): { color: { r: number; g: number; b: number }; intensity: number } {
+    const stops = HEATMAP_GRADIENT;
+    const clamped = Math.max(0, Math.min(1, value));
+
+    // Find the two surrounding stops
+    let lower = stops[0];
+    let upper = stops[stops.length - 1];
+    for (let i = 0; i < stops.length - 1; i++) {
+      if (clamped >= stops[i][0] && clamped <= stops[i + 1][0]) {
+        lower = stops[i];
+        upper = stops[i + 1];
+        break;
+      }
+    }
+
+    // Lerp between the two stops
+    const range = upper[0] - lower[0];
+    const t = range > 0 ? (clamped - lower[0]) / range : 0;
+    return {
+      color: {
+        r: lower[1] + (upper[1] - lower[1]) * t,
+        g: lower[2] + (upper[2] - lower[2]) * t,
+        b: lower[3] + (upper[3] - lower[3]) * t,
+      },
+      intensity: lower[4] + (upper[4] - lower[4]) * t,
+    };
   }
 
   upgradeTower(spec?: TowerSpecialization): void {

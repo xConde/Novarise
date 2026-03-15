@@ -93,6 +93,19 @@ export const HEATMAP_COLORS = {
   critical: { color: 0xdd2200, intensity: 0.55 },  // Red — critical chokepoint
 } as const;
 
+/**
+ * Gradient stops for smooth heatmap color interpolation.
+ * Each stop is [strategicValue, R, G, B, intensity].
+ * Colors are interpolated linearly between stops.
+ */
+export const HEATMAP_GRADIENT: ReadonlyArray<readonly [number, number, number, number, number]> = [
+  [0.00, 0x22 / 255, 0xcc / 255, 0x66 / 255, 0.30],  // Green
+  [0.20, 0x88 / 255, 0xcc / 255, 0x22 / 255, 0.35],  // Yellow-green
+  [0.40, 0xcc / 255, 0xaa / 255, 0x00 / 255, 0.40],  // Gold
+  [0.65, 0xdd / 255, 0x66 / 255, 0x00 / 255, 0.45],  // Orange
+  [0.85, 0xdd / 255, 0x22 / 255, 0x00 / 255, 0.55],  // Red
+] as const;
+
 export const SHIELD_VISUAL_CONFIG = {
   color: 0x4488ff,       // Bright blue shield glow
   opacity: 0.35,
