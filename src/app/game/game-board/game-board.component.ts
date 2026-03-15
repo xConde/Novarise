@@ -30,11 +30,11 @@ import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, GameModifierConfig, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
-import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants/rendering.constants';
+import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG, ANIMATION_CONFIG } from './constants/rendering.constants';
 import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from './constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
-import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
+import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE, ENEMY_VISUAL_CONFIG, UI_CONFIG } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
@@ -1315,8 +1315,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  private static readonly PATH_BLOCKED_DISMISS_MS = 2000;
-
   private showPathBlockedWarning(): void {
     this.pathBlocked = true;
     if (this.pathBlockedTimerId !== null) {
@@ -1325,7 +1323,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.pathBlockedTimerId = setTimeout(() => {
       this.pathBlocked = false;
       this.pathBlockedTimerId = null;
-    }, GameBoardComponent.PATH_BLOCKED_DISMISS_MS);
+    }, UI_CONFIG.pathBlockedDismissMs);
   }
 
   private tryPlaceTower(row: number, col: number): void {
@@ -1616,7 +1614,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Update skybox time uniform for star twinkle and nebula drift
     if (this.skybox) {
-      (this.skybox.material as THREE.ShaderMaterial).uniforms['time'].value = time * 0.001;
+      (this.skybox.material as THREE.ShaderMaterial).uniforms['time'].value = time * ANIMATION_CONFIG.msToSeconds;
     }
 
     // Gameplay tick — fixed timestep accumulator
@@ -1629,7 +1627,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
         // Elapsed time tracking — accumulate real (unscaled) time, flush every ~1 second
         this.elapsedTimeAccumulator += deltaTime;
-        if (this.elapsedTimeAccumulator >= 1) {
+        if (this.elapsedTimeAccumulator >= PHYSICS_CONFIG.elapsedTimeFlushIntervalS) {
           this.gameStateService.addElapsedTime(this.elapsedTimeAccumulator);
           this.elapsedTimeAccumulator = 0;
         }
@@ -1666,7 +1664,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               frameKills.push({
                 damage: killInfo.damage,
                 position: { ...enemy.position },
-                color: ENEMY_STATS[enemy.type]?.color ?? 0xff0000,
+                color: ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackColor,
                 value: enemy.value,
               });
 
@@ -1848,7 +1846,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private updateTowerAnimations(time: number): void {
-    const t = time * 0.001; // Convert ms to seconds
+    const t = time * ANIMATION_CONFIG.msToSeconds;
     for (const group of this.towerMeshes.values()) {
       const towerType = group.userData['towerType'] as TowerType | undefined;
       if (!towerType) continue;
@@ -1904,7 +1902,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private updateTilePulse(time: number): void {
-    const t = time * 0.001;
+    const t = time * ANIMATION_CONFIG.msToSeconds;
     const intensity = TILE_PULSE_CONFIG.min
       + (Math.sin(t * TILE_PULSE_CONFIG.speed) * 0.5 + 0.5)
       * (TILE_PULSE_CONFIG.max - TILE_PULSE_CONFIG.min);

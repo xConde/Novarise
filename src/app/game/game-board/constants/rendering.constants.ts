@@ -22,3 +22,8 @@ export const SKYBOX_CONFIG = {
   widthSegments: 32,
   heightSegments: 32
 };
+
+export const ANIMATION_CONFIG = {
+  /** Converts requestAnimationFrame timestamps (milliseconds) to seconds. */
+  msToSeconds: 0.001,
+} as const;

@@ -77,4 +77,11 @@ export const ENEMY_VISUAL_CONFIG = {
   miniSwarmEmissive: 0.4,
   roughness: 0.6,
   metalness: 0.2,
+  /** Fallback color used when an enemy type has no configured color. */
+  fallbackColor: 0xff0000,
 };
+
+export const UI_CONFIG = {
+  /** Duration in ms before the "path blocked" warning banner auto-dismisses. */
+  pathBlockedDismissMs: 2000,
+} as const;

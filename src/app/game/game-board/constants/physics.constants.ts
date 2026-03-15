@@ -7,10 +7,16 @@ export interface PhysicsConfig {
   readonly maxDeltaTime: number;
 }
 
-export const PHYSICS_CONFIG: PhysicsConfig = {
+export interface PhysicsConfigFull extends PhysicsConfig {
+  /** How often (in real seconds) to flush accumulated elapsed time to the game state. */
+  readonly elapsedTimeFlushIntervalS: number;
+}
+
+export const PHYSICS_CONFIG: PhysicsConfigFull = {
   fixedTimestep: 1 / 60,
   maxStepsPerFrame: 5,
   maxDeltaTime: 0.1,
+  elapsedTimeFlushIntervalS: 1,
 } as const;
 
 export interface PoolConfig {
