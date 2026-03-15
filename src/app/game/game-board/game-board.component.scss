@@ -1677,23 +1677,27 @@
 }
 
 // --- Interaction mode indicator ---
+// Positioned inside .board-container (same as .tower-selection) so coordinate systems match.
 .mode-indicator {
-  position: fixed;
-  bottom: calc(var(--tower-bar-height, 5rem) + var(--spacing-sm));
+  position: absolute;
+  // Tower bar: bottom: var(--spacing-lg) + ~5.5rem content height.
+  // This sits directly above the tower bar with a small gap.
+  bottom: calc(var(--spacing-lg) + 6rem);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
+  padding: 0.25rem var(--spacing-sm);
   border-radius: var(--border-radius-md);
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.75);
   pointer-events: none;
   z-index: var(--z-index-overlay);
   font-family: "Orbitron", sans-serif;
   font-size: var(--font-size-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  white-space: nowrap;
 
   .mode-label {
     font-weight: 600;
@@ -1712,8 +1716,12 @@
   }
 
   @media screen and (max-width: 768px) {
-    bottom: calc(var(--tower-bar-height, 4.5rem) + var(--spacing-xs));
+    bottom: calc(var(--spacing-md) + 5rem);
     font-size: var(--font-size-2xs);
-    padding: 0.125rem var(--spacing-xs);
+  }
+
+  @media screen and (max-width: 480px) {
+    bottom: calc(var(--spacing-md) + 8.5rem);
+    font-size: var(--font-size-2xs);
   }
 }

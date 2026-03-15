@@ -6,13 +6,16 @@ import * as THREE from 'three';
 // ---------------------------------------------------------------------------
 
 const LABEL_CONFIG = {
-  canvasWidth: 64,
-  canvasHeight: 32,
-  fontSize: 20,
+  canvasWidth: 128,
+  canvasHeight: 48,
+  fontSize: 28,
   fontFamily: 'Arial',
   fontWeight: 'bold',
-  spriteScale: 0.5,
-  yOffset: 0.6,
+  /** World-unit width/height of the sprite billboard. */
+  spriteWidth: 0.7,
+  spriteHeight: 0.25,
+  /** Y position above the tile surface. */
+  yOffset: 0.45,
 } as const;
 
 const TIER_TEXT_COLORS: Record<string, string> = {
@@ -133,7 +136,7 @@ export class PriceLabelService {
 
       // Dark stroke for readability against the board surface.
       ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 3;
       ctx.strokeText(label, canvas.width / 2, canvas.height / 2);
 
       ctx.fillStyle = textColor;
@@ -148,7 +151,7 @@ export class PriceLabelService {
     });
 
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(LABEL_CONFIG.spriteScale, LABEL_CONFIG.spriteScale / 2, 1);
+    sprite.scale.set(LABEL_CONFIG.spriteWidth, LABEL_CONFIG.spriteHeight, 1);
 
     return sprite;
   }
