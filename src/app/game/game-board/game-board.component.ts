@@ -44,6 +44,7 @@ import { PathVisualizationService } from './services/path-visualization.service'
 import { StatusEffectService } from './services/status-effect.service';
 import { StatusEffectType } from './constants/status-effect.constants';
 import { TilePricingService, TilePriceInfo, StrategicTier } from './services/tile-pricing.service';
+import { PriceLabelService } from './services/price-label.service';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -58,7 +59,7 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService]
+  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -248,7 +249,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private towerPreviewService: TowerPreviewService,
     private pathVisualizationService: PathVisualizationService,
     private statusEffectService: StatusEffectService,
-    private tilePricingService: TilePricingService
+    private tilePricingService: TilePricingService,
+    private priceLabelService: PriceLabelService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -606,10 +608,28 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       }
     }
+
+    // Show floating % labels above highlighted tiles
+    if (this.highlightedTiles.size > 0) {
+      const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+      const priceMap = this.tilePricingService.getTilePriceMap(this.selectedTowerType!, costMult);
+      this.priceLabelService.showLabels(
+        priceMap,
+        this.gameBoardService.getBoardWidth(),
+        this.gameBoardService.getBoardHeight(),
+        this.gameBoardService.getTileSize(),
+        this.scene
+      );
+    }
   }
 
   /** Remove placement highlights from all tiles, restoring their original emissive. */
   private clearTileHighlights(): void {
+    // Remove floating price labels
+    if (this.scene) {
+      this.priceLabelService.hideLabels(this.scene);
+    }
+
     for (const key of this.highlightedTiles) {
       const mesh = this.tileMeshes.get(key);
       if (!mesh) continue;
@@ -2273,6 +2293,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.audioService.cleanup();
     this.particleService.cleanup(this.scene);
     this.goldPopupService.cleanup(this.scene);
+    this.priceLabelService.cleanup(this.scene);
     this.screenShakeService.cleanup(this.camera);
     this.fpsCounterService.reset();
 
