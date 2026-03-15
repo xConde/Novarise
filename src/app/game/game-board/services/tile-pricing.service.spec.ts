@@ -463,4 +463,69 @@ describe('TilePricingService', () => {
       expect(updatedPrice).toBeGreaterThanOrEqual(basePrice);
     });
   });
+
+  describe('Multi-spawner boards', () => {
+    it('should compute path tiles from multiple spawners', () => {
+      const board = createTestBoard(6);
+      // Add a second spawner at (0,5) — top-right corner
+      board[0][5] = GameBoardTile.createSpawner(0, 5);
+
+      boardSpy.getGameBoard.and.returnValue(board);
+      boardSpy.getBoardWidth.and.returnValue(6);
+      boardSpy.getBoardHeight.and.returnValue(6);
+      boardSpy.getSpawnerTiles.and.returnValue([[0, 0], [0, 5]]);
+      boardSpy.getExitTiles.and.returnValue([[5, 5]]);
+      service.invalidateCache();
+
+      // Tile (0,3) is between the two spawners — should have path adjacency from both paths
+      const value = service.getStrategicValue(0, 3);
+      expect(value).toBeGreaterThan(0);
+    });
+
+    it('should price tiles near both spawners with proximity premium', () => {
+      const board = createTestBoard(6);
+      board[5][0] = GameBoardTile.createSpawner(5, 0);
+
+      boardSpy.getGameBoard.and.returnValue(board);
+      boardSpy.getBoardWidth.and.returnValue(6);
+      boardSpy.getBoardHeight.and.returnValue(6);
+      boardSpy.getSpawnerTiles.and.returnValue([[0, 0], [5, 0]]);
+      boardSpy.getExitTiles.and.returnValue([[5, 5]]);
+      service.invalidateCache();
+
+      // Tile (1,0) is adjacent to first spawner — should have proximity premium
+      const nearSpawn = service.getStrategicValue(1, 0);
+      // Tile (3,3) is far from both spawners and exit
+      const farTile = service.getStrategicValue(3, 3);
+      expect(nearSpawn).toBeGreaterThan(farTile);
+    });
+  });
+
+  describe('Non-purchasable tiles', () => {
+    it('should return 0 for non-purchasable BASE tiles', () => {
+      const board = createTestBoard(5);
+      // Mark tile (2,2) as non-purchasable
+      board[2][2] = new GameBoardTile(2, 2, BlockType.BASE, true, false, 0, null);
+
+      boardSpy.getGameBoard.and.returnValue(board);
+      boardSpy.getBoardWidth.and.returnValue(5);
+      boardSpy.getBoardHeight.and.returnValue(5);
+      service.invalidateCache();
+
+      expect(service.getStrategicValue(2, 2)).toBe(0);
+    });
+
+    it('should return 0 for occupied BASE tiles', () => {
+      const board = createTestBoard(5);
+      // Mark tile (2,2) as occupied (has a tower but still BASE type — defensive guard)
+      board[2][2] = new GameBoardTile(2, 2, BlockType.BASE, true, true, 0, TowerType.BASIC);
+
+      boardSpy.getGameBoard.and.returnValue(board);
+      boardSpy.getBoardWidth.and.returnValue(5);
+      boardSpy.getBoardHeight.and.returnValue(5);
+      service.invalidateCache();
+
+      expect(service.getStrategicValue(2, 2)).toBe(0);
+    });
+  });
 });

@@ -78,7 +78,7 @@ export const TILE_EMISSIVE = {
   validPlacement: 0.35,
   /** Emissive color override for valid placement tiles (soft cyan glow). */
   validPlacementColor: 0x00ccaa,
-};
+} as const;
 
 export const SHIELD_VISUAL_CONFIG = {
   color: 0x4488ff,       // Bright blue shield glow

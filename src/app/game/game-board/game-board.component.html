@@ -265,17 +265,17 @@
       <div class="stat-row">
         <span class="stat-label">Damage</span>
         <span class="stat-value">{{ selectedTowerStats.damage }}</span>
-        <span class="stat-preview" *ngIf="upgradePreview">{{ upgradePreview.damage }}</span>
+        <span class="stat-preview" *ngIf="upgradePreview" [attr.aria-label]="'After upgrade: ' + upgradePreview.damage">{{ upgradePreview.damage }}</span>
       </div>
       <div class="stat-row">
         <span class="stat-label">Range</span>
         <span class="stat-value">{{ selectedTowerStats.range }}</span>
-        <span class="stat-preview" *ngIf="upgradePreview">{{ upgradePreview.range }}</span>
+        <span class="stat-preview" *ngIf="upgradePreview" [attr.aria-label]="'After upgrade: ' + upgradePreview.range">{{ upgradePreview.range }}</span>
       </div>
       <div class="stat-row">
         <span class="stat-label">Fire Rate</span>
         <span class="stat-value">{{ selectedTowerStats.fireRate }}s</span>
-        <span class="stat-preview" *ngIf="upgradePreview">{{ upgradePreview.fireRate }}s</span>
+        <span class="stat-preview" *ngIf="upgradePreview" [attr.aria-label]="'After upgrade: ' + upgradePreview.fireRate + 's'">{{ upgradePreview.fireRate }}s</span>
       </div>
       <div class="stat-row">
         <span class="stat-label">Kills</span>
@@ -358,7 +358,10 @@
   </div>
 
   <!-- Interaction mode indicator -->
-  <div class="mode-indicator" *ngIf="gameState.wave > 0 && gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
+  <div class="mode-indicator"
+       *ngIf="gameState.wave > 0 && gameState.phase === GamePhase.COMBAT"
+       aria-live="polite"
+       [attr.aria-label]="isPlaceMode ? 'Placing ' + (selectedTowerType | titlecase) + ' tower' : 'Inspect mode'">
     <span class="mode-label" [class.place-mode]="isPlaceMode" [class.inspect-mode]="!isPlaceMode">
       {{ isPlaceMode ? (selectedTowerType | titlecase) : 'Inspect' }}
     </span>

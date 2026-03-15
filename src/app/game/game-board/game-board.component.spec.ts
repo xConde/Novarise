@@ -959,7 +959,7 @@ describe('GameBoardComponent', () => {
       (component as any).dragStartY = 200;
       (component as any).dragThresholdMet = false;
 
-      // Move only 2px — below 8px threshold
+      // Move only ~1.4px — well below DRAG_CONFIG.minDragDistance threshold
       (component as any).onDragMove(101, 201);
 
       expect(component.isDragging).toBeFalse();
