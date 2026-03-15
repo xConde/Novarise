@@ -36,7 +36,7 @@ import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
 import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE, ENEMY_VISUAL_CONFIG, UI_CONFIG } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from './constants/effects.constants';
-import { TOUCH_CONFIG } from './constants/touch.constants';
+import { TOUCH_CONFIG, DRAG_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
 import { ENEMY_STATS } from './models/enemy.model';
 import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
@@ -181,6 +181,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private touchStartTime = 0;
   private touchIsDragging = false;
   private pinchStartDistance = 0;
+
+  // Drag-and-drop tower placement
+  isDragging = false;
+  private dragTowerType: TowerType | null = null;
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private dragThresholdMet = false;
+  private globalMouseMoveHandler: (event: MouseEvent) => void = () => {};
+  private globalMouseUpHandler: (event: MouseEvent) => void = () => {};
 
   // Audio state exposed to template
   get audioMuted(): boolean { return this.audioService.isMuted; }
@@ -392,6 +401,107 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Whether a tower type is selected for placement (PLACE mode). */
   get isPlaceMode(): boolean {
     return this.selectedTowerType !== null;
+  }
+
+  // --- Drag-and-drop tower placement ---
+
+  /** Called on mousedown/touchstart on a tower bar button. */
+  onTowerDragStart(event: MouseEvent | TouchEvent, type: TowerType): void {
+    // Only left mouse button for mouse events
+    if (event instanceof MouseEvent && event.button !== 0) return;
+
+    const clientX = event instanceof MouseEvent ? event.clientX : event.touches[0].clientX;
+    const clientY = event instanceof MouseEvent ? event.clientY : event.touches[0].clientY;
+
+    this.dragTowerType = type;
+    this.dragStartX = clientX;
+    this.dragStartY = clientY;
+    this.dragThresholdMet = false;
+    this.isDragging = false;
+
+    // Listen on window for move/up so we catch events outside the button
+    this.globalMouseMoveHandler = (e: MouseEvent) => this.onDragMove(e.clientX, e.clientY);
+    this.globalMouseUpHandler = (e: MouseEvent) => this.onDragEnd(e.clientX, e.clientY);
+    window.addEventListener('mousemove', this.globalMouseMoveHandler);
+    window.addEventListener('mouseup', this.globalMouseUpHandler);
+  }
+
+  /** Track mouse during potential drag. */
+  private onDragMove(clientX: number, clientY: number): void {
+    if (!this.dragTowerType) return;
+
+    if (!this.dragThresholdMet) {
+      const dx = clientX - this.dragStartX;
+      const dy = clientY - this.dragStartY;
+      if (Math.sqrt(dx * dx + dy * dy) < DRAG_CONFIG.minDragDistance) return;
+      this.dragThresholdMet = true;
+      this.isDragging = true;
+
+      // Enter PLACE mode with this tower type and show highlights
+      this.selectedTowerType = this.dragTowerType;
+      this.deselectTower();
+      this.updateTileHighlights();
+    }
+
+    // Update ghost preview position by raycasting to tiles
+    if (!this.renderer) return;
+    const canvas = this.renderer.domElement;
+    const rect = canvas.getBoundingClientRect();
+    this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+    const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
+
+    if (intersects.length > 0) {
+      const mesh = intersects[0].object as THREE.Mesh;
+      const row = mesh.userData['row'];
+      const col = mesh.userData['col'];
+      const tileCost = this.getTileTowerCost(this.dragTowerType!, row, col).cost;
+      const canPlace = this.gameBoardService.canPlaceTower(row, col)
+        && this.gameStateService.canAfford(tileCost);
+      this.towerPreviewService.showPreview(this.dragTowerType!, row, col, canPlace, this.scene);
+    } else {
+      this.towerPreviewService.hidePreview(this.scene);
+    }
+  }
+
+  /** End drag — place tower if over a valid tile. */
+  private onDragEnd(clientX: number, clientY: number): void {
+    // Remove global listeners
+    window.removeEventListener('mousemove', this.globalMouseMoveHandler);
+    window.removeEventListener('mouseup', this.globalMouseUpHandler);
+
+    if (!this.dragTowerType || !this.dragThresholdMet) {
+      // Threshold not met — this was a click, not a drag. selectTowerType handles it.
+      this.dragTowerType = null;
+      this.isDragging = false;
+      return;
+    }
+
+    // Raycast to find the tile under the cursor
+    if (this.renderer) {
+      const canvas = this.renderer.domElement;
+      const rect = canvas.getBoundingClientRect();
+      this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+      const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
+
+      if (intersects.length > 0) {
+        const mesh = intersects[0].object as THREE.Mesh;
+        const row = mesh.userData['row'];
+        const col = mesh.userData['col'];
+        this.tryPlaceTower(row, col);
+      }
+    }
+
+    // Clean up drag state
+    this.towerPreviewService.hidePreview(this.scene);
+    this.isDragging = false;
+    this.dragTowerType = null;
+    this.dragThresholdMet = false;
   }
 
   /**
@@ -687,6 +797,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.hoveredTile = null;
     this.selectedTile = null;
     this.selectedTowerType = TowerType.BASIC;
+    this.isDragging = false;
+    this.dragTowerType = null;
+    this.dragThresholdMet = false;
 
     this.cleanupGameObjects();
 
@@ -2061,6 +2174,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     window.removeEventListener('keydown', this.keydownPanHandler);
     window.removeEventListener('keyup', this.keyupPanHandler);
     window.removeEventListener('resize', this.resizeHandler);
+    window.removeEventListener('mousemove', this.globalMouseMoveHandler);
+    window.removeEventListener('mouseup', this.globalMouseUpHandler);
 
     // Remove canvas event listeners (stored as named references)
     if (this.renderer) {

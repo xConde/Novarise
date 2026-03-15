@@ -907,4 +907,62 @@ describe('GameBoardComponent', () => {
       expect((component as any).highlightedTiles.size).toBe(0);
     });
   });
+
+  describe('Drag-and-Drop Tower Placement', () => {
+    it('onTowerDragStart should set dragTowerType', () => {
+      const mouseEvent = new MouseEvent('mousedown', { button: 0, clientX: 100, clientY: 200 });
+      component.onTowerDragStart(mouseEvent, TowerType.SNIPER);
+      expect((component as any).dragTowerType).toBe(TowerType.SNIPER);
+      expect(component.isDragging).toBeFalse();
+      // Clean up global listeners
+      window.removeEventListener('mousemove', (component as any).globalMouseMoveHandler);
+      window.removeEventListener('mouseup', (component as any).globalMouseUpHandler);
+    });
+
+    it('onTowerDragStart should ignore right-click', () => {
+      const mouseEvent = new MouseEvent('mousedown', { button: 2, clientX: 100, clientY: 200 });
+      component.onTowerDragStart(mouseEvent, TowerType.SNIPER);
+      expect((component as any).dragTowerType).toBeNull();
+    });
+
+    it('isDragging should be false by default', () => {
+      expect(component.isDragging).toBeFalse();
+    });
+
+    it('restartGame should reset drag state', () => {
+      (component as any).isDragging = true;
+      (component as any).dragTowerType = TowerType.BASIC;
+      (component as any).dragThresholdMet = true;
+      // Stub methods that restartGame calls to avoid Three.js crashes
+      spyOn(component as any, 'cleanupGameObjects');
+      spyOn(component as any, 'renderGameBoard');
+      spyOn(component as any, 'addGridLines');
+      spyOn(component as any, 'initializeLights');
+      spyOn(component as any, 'addSkybox');
+      spyOn(component as any, 'initializeParticles');
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'reset');
+      const minimapService = fixture.debugElement.injector.get(MinimapService);
+      spyOn(minimapService, 'init');
+
+      component.restartGame();
+
+      expect(component.isDragging).toBeFalse();
+      expect((component as any).dragTowerType).toBeNull();
+      expect((component as any).dragThresholdMet).toBeFalse();
+    });
+
+    it('onDragMove should not enter drag mode below threshold', () => {
+      (component as any).dragTowerType = TowerType.BASIC;
+      (component as any).dragStartX = 100;
+      (component as any).dragStartY = 200;
+      (component as any).dragThresholdMet = false;
+
+      // Move only 2px — below 8px threshold
+      (component as any).onDragMove(101, 201);
+
+      expect(component.isDragging).toBeFalse();
+      expect((component as any).dragThresholdMet).toBeFalse();
+    });
+  });
 });

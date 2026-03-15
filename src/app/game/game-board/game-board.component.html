@@ -1,4 +1,4 @@
-<div class="board-container">
+<div class="board-container" [class.dragging]="isDragging">
   <div class="canvas-container" #canvasContainer></div>
 
   <!-- Top-right controls -->
@@ -336,6 +336,8 @@
       [class.selected]="selectedTowerType === tower.type"
       [class.unaffordable]="!gameState || gameState.gold < getEffectiveTowerCost(tower.type)"
       (click)="selectTowerType(tower.type)"
+      (mousedown)="onTowerDragStart($event, tower.type)"
+      (touchstart)="onTowerDragStart($event, tower.type)"
       [attr.aria-label]="'Select ' + (tower.type | titlecase) + ' Tower'"
       [attr.aria-pressed]="selectedTowerType === tower.type">
       <div class="tower-tooltip" role="tooltip">

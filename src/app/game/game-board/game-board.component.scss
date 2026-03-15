@@ -1658,6 +1658,11 @@
   }
 }
 
+// --- Drag cursor override ---
+:host-context(.board-container.dragging) .canvas-container {
+  cursor: grabbing !important;
+}
+
 // --- Interaction mode indicator ---
 .mode-indicator {
   position: fixed;
