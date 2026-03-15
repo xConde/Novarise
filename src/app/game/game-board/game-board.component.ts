@@ -137,6 +137,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Wave preview — shown during SETUP and INTERMISSION
   wavePreview: WavePreviewEntry[] = [];
+  // Wave income feedback — shown during INTERMISSION
+  lastWaveReward = 0;
+  lastInterestEarned = 0;
   showAllRanges = false;
   showPathOverlay = false;
   sellConfirmPending = false;
@@ -560,6 +563,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (state.phase === GamePhase.COMBAT) return;
     if (state.phase === GamePhase.VICTORY || state.phase === GamePhase.DEFEAT) return;
 
+    this.lastWaveReward = 0;
+    this.lastInterestEarned = 0;
     this.minimapService.show();
 
     // Ensure enemy service has current modifier effects before first wave
@@ -594,6 +599,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.newlyUnlockedAchievements = [];
     this.achievementDetails = [];
     this.gameEndRecorded = false;
+    this.lastWaveReward = 0;
+    this.lastInterestEarned = 0;
     this.activeModifiers = new Set<GameModifier>();
     this.modifierScoreMultiplier = 1.0;
     this.wavePreview = [];
@@ -1696,7 +1703,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               this.audioService.playVictory();
             } else if (postWavePhase === GamePhase.INTERMISSION) {
               this.audioService.playWaveClear();
-              this.gameStateService.awardInterest();
+              this.lastWaveReward = reward;
+              this.lastInterestEarned = this.gameStateService.awardInterest();
             }
 
             // Record game end stats for profile (VICTORY or DEFEAT, fires once per game)

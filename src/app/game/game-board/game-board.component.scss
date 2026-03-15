@@ -217,6 +217,27 @@
       transform: translate(-50%, calc(-50% - 5rem));
     }
 
+    .wave-income {
+      display: flex;
+      justify-content: center;
+      gap: var(--spacing-sm);
+      margin-bottom: var(--spacing-xs);
+      font-size: var(--font-size-small);
+      font-family: 'Orbitron', sans-serif;
+
+      .income-item {
+        font-weight: 600;
+      }
+
+      .reward {
+        color: var(--action-warning);
+      }
+
+      .interest {
+        color: var(--action-success);
+      }
+    }
+
     .wave-preview-header {
       font-size: 0.625rem;
       text-transform: uppercase;
