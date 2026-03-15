@@ -934,10 +934,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.addSkybox();
     this.initializeParticles();
     this.minimapService.init(this.canvasContainer.nativeElement);
+    this.tilePricingService.invalidateCache();
     this.lastPreviewKey = '';
     this.lastTime = 0;
     this.elapsedTimeAccumulator = 0;
     this.physicsAccumulator = 0;
+    this.updateTileHighlights();
   }
 
 

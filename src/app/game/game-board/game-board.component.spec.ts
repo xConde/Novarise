@@ -821,7 +821,7 @@ describe('GameBoardComponent', () => {
     it('cancelPlacement should set selectedTowerType to null', () => {
       component.selectedTowerType = TowerType.SNIPER;
 
-      (component as any).cancelPlacement();
+      component.cancelPlacement();
 
       expect(component.selectedTowerType).toBeNull();
     });
@@ -914,9 +914,10 @@ describe('GameBoardComponent', () => {
       component.onTowerDragStart(mouseEvent, TowerType.SNIPER);
       expect((component as any).dragTowerType).toBe(TowerType.SNIPER);
       expect(component.isDragging).toBeFalse();
-      // Clean up global listeners
-      window.removeEventListener('mousemove', (component as any).globalMouseMoveHandler);
-      window.removeEventListener('mouseup', (component as any).globalMouseUpHandler);
+      // Clean up global listeners (field names match component)
+      window.removeEventListener('mousemove', (component as any).globalDragMoveHandler);
+      window.removeEventListener('mouseup', (component as any).globalDragEndHandler);
+      window.removeEventListener('blur', (component as any).blurDragHandler);
     });
 
     it('onTowerDragStart should ignore right-click', () => {
