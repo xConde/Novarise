@@ -234,12 +234,11 @@ export class TilePricingService {
       }
     }
 
-    if (totalNeighbors === 0) return 0;
-
-    // Fewer free neighbors = more of a chokepoint = higher value
-    // 1 free neighbor out of 4 → very strategic (0.75)
-    // 4 free neighbors out of 4 → not strategic (0)
-    return 1 - (freeNeighbors / totalNeighbors);
+    // Normalize against 4 (max possible neighbors) to avoid inflating
+    // corner/edge tiles which have fewer than 4 neighbors.
+    // Corner tile (2 neighbors, 2 blocked): 2/4 free = 0.5, not 1.0.
+    const maxNeighbors = 4;
+    return 1 - (freeNeighbors / maxNeighbors);
   }
 
   /** Distance-based premium for tiles near spawners or exits. */

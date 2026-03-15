@@ -1671,7 +1671,7 @@
 }
 
 // --- Drag cursor override ---
-:host-context(.board-container.dragging) .canvas-container {
+.board-container.dragging .canvas-container {
   cursor: grabbing !important;
 }
 
