@@ -74,6 +74,7 @@ export class TowerCombatService {
   private projectilePool: ObjectPool<THREE.Mesh>;
   private sharedImpactFlashGeometry: THREE.SphereGeometry | null = null;
 
+  /** Applies a flat multiplier to all tower damage output. Set by the JUGGERNAUT modifier. */
   setTowerDamageMultiplier(mult: number): void {
     this.towerDamageMultiplier = mult;
   }
@@ -132,6 +133,7 @@ export class TowerCombatService {
     return mesh;
   }
 
+  /** Registers a newly placed tower so it participates in targeting and firing. `actualCost` tracks the real gold paid (may differ from base cost due to modifiers). */
   registerTower(row: number, col: number, type: TowerType, mesh: THREE.Group, actualCost: number = TOWER_CONFIGS[type].cost): void {
     const key = `${row}-${col}`;
     this.placedTowers.set(key, {
@@ -148,6 +150,7 @@ export class TowerCombatService {
     });
   }
 
+  /** Upgrades a tower from L1→L2. Returns false if at max level, already L2 (L2→L3 requires specialization), or not found. `actualCost` defaults to the configured upgrade cost. */
   upgradeTower(key: string, actualCost?: number): boolean {
     const tower = this.placedTowers.get(key);
     if (!tower || tower.level >= MAX_TOWER_LEVEL) return false;
@@ -160,6 +163,7 @@ export class TowerCombatService {
     return true;
   }
 
+  /** Upgrades a tower from L2→L3 with ALPHA or BETA specialization. Returns false if the tower is not exactly L2 or not found. */
   upgradeTowerWithSpec(key: string, spec: TowerSpecialization, actualCost?: number): boolean {
     const tower = this.placedTowers.get(key);
     if (!tower || tower.level !== MAX_TOWER_LEVEL - 1) return false;
@@ -171,6 +175,7 @@ export class TowerCombatService {
     return true;
   }
 
+  /** Removes a tower from combat tracking. Returns the removed PlacedTower (caller uses it to calculate sell refund), or undefined if not found. */
   unregisterTower(key: string): PlacedTower | undefined {
     const tower = this.placedTowers.get(key);
     if (!tower) return undefined;
@@ -178,6 +183,12 @@ export class TowerCombatService {
     return tower;
   }
 
+  /**
+   * Main per-physics-step combat tick. Rebuilds the spatial grid, runs DoT status effects, fires
+   * towers (including chain/slow aura/mortar), moves projectiles, and expires visual effects.
+   * @param deltaTime Elapsed time in seconds since last physics step.
+   * @returns `killed` — enemies that died this step; `fired` — tower types that fired; `hitCount` — projectile impacts.
+   */
   update(deltaTime: number, scene: THREE.Scene): { killed: KillInfo[]; fired: TowerType[]; hitCount: number } {
     this.gameTime += deltaTime;
     const killedEnemies: KillInfo[] = [];
@@ -380,6 +391,7 @@ export class TowerCombatService {
     };
   }
 
+  /** Sets a tower's targeting mode directly. Returns false if the tower doesn't exist. */
   setTargetingMode(towerId: string, mode: TargetingMode): boolean {
     const tower = this.placedTowers.get(towerId);
     if (!tower) return false;
@@ -387,6 +399,7 @@ export class TowerCombatService {
     return true;
   }
 
+  /** Advances the tower's targeting mode to the next in the cycle (nearest→first→strongest→nearest). Returns the new mode, or null if the tower doesn't exist. */
   cycleTargetingMode(towerId: string): TargetingMode | null {
     const tower = this.placedTowers.get(towerId);
     if (!tower) return null;
@@ -814,6 +827,7 @@ export class TowerCombatService {
     return this.placedTowers;
   }
 
+  /** Disposes all Three.js objects (projectiles, arcs, flashes, zones, tower meshes), drains the projectile pool, resets status effects, and zeros out game time. Call from both `restartGame()` and `ngOnDestroy()`. */
   cleanup(scene: THREE.Scene): void {
     for (const proj of this.projectiles) {
       this.removeProjectileMesh(proj, scene);
