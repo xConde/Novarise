@@ -8,6 +8,7 @@ import { MinHeap } from '../utils/min-heap';
 import { GameModifier, ModifierEffects, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG, BOSS_CROWN_CONFIG } from '../constants/effects.constants';
+import { gridToWorld } from '../utils/coordinate-utils';
 
 export interface DamageResult {
   killed: boolean;
@@ -69,7 +70,7 @@ export class EnemyService {
 
     // Create enemy
     const stats = ENEMY_STATS[type];
-    const worldPos = this.gridToWorld(row, col);
+    const worldPos = this.gridToWorldPos(row, col);
 
     // FLYING enemies hover above ground
     const yPos = isFlying ? FLYING_ENEMY_HEIGHT : stats.size;
@@ -164,8 +165,8 @@ export class EnemyService {
       const nextNode = enemy.path[enemy.pathIndex + 1];
 
       // Convert grid positions to world positions
-      const currentWorld = this.gridToWorld(currentNode.y, currentNode.x);
-      const nextWorld = this.gridToWorld(nextNode.y, nextNode.x);
+      const currentWorld = this.gridToWorldPos(currentNode.y, currentNode.x);
+      const nextWorld = this.gridToWorldPos(nextNode.y, nextNode.x);
 
       // Calculate direction and distance
       const direction = new THREE.Vector3(
@@ -825,18 +826,14 @@ export class EnemyService {
     return exits;
   }
 
-  /**
-   * Convert grid coordinates to world coordinates
-   */
-  private gridToWorld(row: number, col: number): { x: number, z: number } {
-    const boardWidth = this.gameBoardService.getBoardWidth();
-    const boardHeight = this.gameBoardService.getBoardHeight();
-    const tileSize = this.gameBoardService.getTileSize();
-
-    const x = (col - boardWidth / 2) * tileSize;
-    const z = (row - boardHeight / 2) * tileSize;
-
-    return { x, z };
+  /** Delegate to shared coordinate utility with current board dimensions. */
+  private gridToWorldPos(row: number, col: number): { x: number; z: number } {
+    return gridToWorld(
+      row, col,
+      this.gameBoardService.getBoardWidth(),
+      this.gameBoardService.getBoardHeight(),
+      this.gameBoardService.getTileSize()
+    );
   }
 
   /**
@@ -870,7 +867,7 @@ export class EnemyService {
     );
     if (path.length === 0) return [];
 
-    return path.map(node => this.gridToWorld(node.y, node.x));
+    return path.map(node => this.gridToWorldPos(node.y, node.x));
   }
 
   /**

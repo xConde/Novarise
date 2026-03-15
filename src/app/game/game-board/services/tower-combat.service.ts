@@ -12,6 +12,7 @@ import { StatusEffectType } from '../constants/status-effect.constants';
 import { StatusEffectService } from './status-effect.service';
 import { SpatialGrid } from '../utils/spatial-grid';
 import { ObjectPool } from '../utils/object-pool';
+import { gridToWorld } from '../utils/coordinate-utils';
 
 interface Projectile {
   id: string;
@@ -381,14 +382,14 @@ export class TowerCombatService {
     return { killed: killedEnemies, fired: firedTowerTypes, hitCount };
   }
 
+  /** Delegate to shared coordinate utility with current board dimensions. */
   private getTowerWorldPos(tower: PlacedTower): { x: number; z: number } {
-    const boardWidth = this.gameBoardService.getBoardWidth();
-    const boardHeight = this.gameBoardService.getBoardHeight();
-    const tileSize = this.gameBoardService.getTileSize();
-    return {
-      x: (tower.col - boardWidth / 2) * tileSize,
-      z: (tower.row - boardHeight / 2) * tileSize
-    };
+    return gridToWorld(
+      tower.row, tower.col,
+      this.gameBoardService.getBoardWidth(),
+      this.gameBoardService.getBoardHeight(),
+      this.gameBoardService.getTileSize()
+    );
   }
 
   /** Sets a tower's targeting mode directly. Returns false if the tower doesn't exist. */
