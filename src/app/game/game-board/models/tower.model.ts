@@ -203,9 +203,10 @@ export const TOWER_SPECIALIZATIONS: Record<TowerType, Record<TowerSpecialization
   [TowerType.CHAIN]: {
     [TowerSpecialization.ALPHA]: {
       label: 'Tesla',
-      description: 'More bounces, longer chain range',
+      description: 'More bounces, longer chain range, burns targets',
       damage: 2.0, range: 1.2, fireRate: 0.8,
       chainCountBonus: 2,
+      statusEffect: StatusEffectType.BURN,
     },
     [TowerSpecialization.BETA]: {
       label: 'Arc',

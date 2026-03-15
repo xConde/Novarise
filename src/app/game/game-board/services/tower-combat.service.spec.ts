@@ -1407,6 +1407,68 @@ describe('TowerCombatService', () => {
       );
       expect(nonSlowCalls.length).toBe(0);
     });
+
+    it('Chain Tesla L3 should apply BURN to surviving chained enemies', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.upgradeTower(key);
+      service.upgradeTowerWithSpec(key, TowerSpecialization.ALPHA);
+
+      const chainRange = TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
+      // Both enemies survive (high health) — primary and one chain bounce
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + chainRange * 0.5, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
+
+      service.update(1.0, mockScene); // past CHAIN TESLA fireRate (0.8 * 0.8 = 0.64s)
+
+      const burnCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.BURN);
+      expect(burnCalls.length).toBeGreaterThanOrEqual(2);
+      const burnTargetIds = burnCalls.map(c => c.args[0] as string);
+      expect(burnTargetIds).toContain('e1');
+      expect(burnTargetIds).toContain('e2');
+    });
+
+    it('Chain Tesla L3 should NOT apply BURN to enemies killed by the chain', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.upgradeTower(key);
+      service.upgradeTowerWithSpec(key, TowerSpecialization.ALPHA);
+
+      // Enemy health == Chain Tesla L3 damage (30) so it dies on hit
+      const teslaDamage = getEffectiveStats(TowerType.CHAIN, 3, TowerSpecialization.ALPHA).damage;
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, teslaDamage);
+      enemyMap.set('e1', e1);
+
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
+
+      service.update(1.0, mockScene);
+
+      const burnCalls = applySpy.calls.all().filter(
+        c => c.args[0] === 'e1' && c.args[1] === StatusEffectType.BURN
+      );
+      expect(burnCalls.length).toBe(0);
+    });
+
+    it('Chain Arc L3 (BETA) should NOT apply BURN — only Tesla does', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.upgradeTower(key);
+      service.upgradeTowerWithSpec(key, TowerSpecialization.BETA); // Arc spec, no statusEffect
+
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
+
+      service.update(1.0, mockScene);
+
+      const burnCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.BURN);
+      expect(burnCalls.length).toBe(0);
+    });
   });
 });
 

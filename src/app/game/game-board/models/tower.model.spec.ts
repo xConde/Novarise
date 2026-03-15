@@ -115,5 +115,20 @@ describe('Tower Model', () => {
       expect(TOWER_CONFIGS[TowerType.SNIPER].statusEffect).toBeUndefined();
       expect(TOWER_CONFIGS[TowerType.CHAIN].statusEffect).toBeUndefined();
     });
+
+    it('Chain Tesla spec has statusEffect BURN', () => {
+      expect(TOWER_SPECIALIZATIONS[TowerType.CHAIN][TowerSpecialization.ALPHA].statusEffect)
+        .toBe(StatusEffectType.BURN);
+    });
+
+    it('getEffectiveStats for Chain Tesla includes BURN statusEffect', () => {
+      const stats = getEffectiveStats(TowerType.CHAIN, 3, TowerSpecialization.ALPHA);
+      expect(stats.statusEffect).toBe(StatusEffectType.BURN);
+    });
+
+    it('Chain Tesla description mentions burns', () => {
+      const spec = TOWER_SPECIALIZATIONS[TowerType.CHAIN][TowerSpecialization.ALPHA];
+      expect(spec.description.toLowerCase()).toContain('burn');
+    });
   });
 });

@@ -528,6 +528,8 @@ export class TowerCombatService {
       const chainResult = this.enemyService.damageEnemy(currentTarget.id, currentDamage);
       if (chainResult.killed) {
         kills.push({ id: currentTarget.id, damage: currentDamage });
+      } else if (stats.statusEffect) {
+        this.statusEffectService.apply(currentTarget.id, stats.statusEffect, this.gameTime);
       }
       // Mini-swarm meshes from chain kills need to be tracked — caller adds to scene
       // via killedEnemyIds which triggers removeEnemy; spawnedEnemies returned separately
