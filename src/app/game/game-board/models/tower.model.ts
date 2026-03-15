@@ -90,10 +90,10 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
     color: 0xd47a3a
   },
   [TowerType.SNIPER]: {
-    damage: 100,
+    damage: 80,
     range: 6,
     fireRate: 2.5,
-    cost: 100,
+    cost: 125,
     projectileSpeed: 15,
     splashRadius: 0,
     color: 0x7a5ac4
@@ -122,7 +122,7 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
     damage: 15,
     range: 3,
     fireRate: 0.8,
-    cost: 150,
+    cost: 120,
     projectileSpeed: 12,
     splashRadius: 0,
     color: 0xffdd00,
@@ -133,13 +133,13 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
     damage: 8,
     range: 4,
     fireRate: 3.0,   // Slow-firing artillery
-    cost: 175,
+    cost: 140,
     projectileSpeed: 4,
     splashRadius: 0,
     color: 0xff6622,
     blastRadius: 1.5,
     dotDuration: 3,
-    dotDamage: 3
+    dotDamage: 5
   }
 };
 

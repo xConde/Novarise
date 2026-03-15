@@ -44,7 +44,7 @@ export const DIFFICULTY_PRESETS: Record<DifficultyLevel, DifficultyPreset> = {
   },
   [DifficultyLevel.NIGHTMARE]: {
     lives: 7,
-    gold: 50,
+    gold: 75,
     label: 'Nightmare',
     description: 'Razor-thin margins, every decision matters'
   }

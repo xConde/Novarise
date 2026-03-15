@@ -108,21 +108,21 @@ export const WAVE_DEFINITIONS: WaveDefinition[] = [
   // Wave 9: Mixed shielded, swarm, and flying gauntlet
   {
     entries: [
-      { type: EnemyType.SHIELDED, count: 4, spawnInterval: 1.5 },
-      { type: EnemyType.SWARM, count: 6, spawnInterval: 0.8 },
-      { type: EnemyType.HEAVY, count: 3, spawnInterval: 1.2 },
-      { type: EnemyType.FAST, count: 6, spawnInterval: 0.5 },
-      { type: EnemyType.FLYING, count: 4, spawnInterval: 1.0 }
+      { type: EnemyType.SHIELDED, count: 3, spawnInterval: 1.5 },
+      { type: EnemyType.SWARM, count: 5, spawnInterval: 0.8 },
+      { type: EnemyType.HEAVY, count: 2, spawnInterval: 1.2 },
+      { type: EnemyType.FAST, count: 4, spawnInterval: 0.5 },
+      { type: EnemyType.FLYING, count: 3, spawnInterval: 1.0 }
     ],
     reward: 150
   },
-  // Wave 10: Boss wave with shielded escort
+  // Wave 10: Boss wave with escort
   {
     entries: [
       { type: EnemyType.BOSS, count: 1, spawnInterval: 0 },
-      { type: EnemyType.SHIELDED, count: 4, spawnInterval: 1.5 },
-      { type: EnemyType.SWARM, count: 4, spawnInterval: 1.0 },
-      { type: EnemyType.HEAVY, count: 2, spawnInterval: 2.0 }
+      { type: EnemyType.SHIELDED, count: 2, spawnInterval: 1.5 },
+      { type: EnemyType.SWARM, count: 3, spawnInterval: 1.0 },
+      { type: EnemyType.HEAVY, count: 1, spawnInterval: 2.0 }
     ],
     reward: 250
   }
