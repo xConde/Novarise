@@ -1,14 +1,15 @@
 import { TestBed } from '@angular/core/testing';
 import { TowerCombatService, KillInfo } from './tower-combat.service';
-import { EnemyService, DamageResult } from './enemy.service';
+import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_SPECIALIZATIONS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
-import { Enemy, EnemyType } from '../models/enemy.model';
+import { Enemy } from '../models/enemy.model';
 import { AudioService } from './audio.service';
 import { StatusEffectService } from './status-effect.service';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { CHAIN_LIGHTNING_CONFIG, IMPACT_FLASH_CONFIG } from '../constants/combat.constants';
 import * as THREE from 'three';
+import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy } from '../testing';
 
 describe('TowerCombatService', () => {
   let service: TowerCombatService;
@@ -26,42 +27,14 @@ describe('TowerCombatService', () => {
   const TOWER_WORLD_Z = 0;
 
   // Helper: create a mock enemy at a world position
-  function createEnemy(id: string, x: number, z: number, health = 100): Enemy {
-    return {
-      id,
-      type: EnemyType.BASIC,
-      position: { x, y: 0.3, z },
-      gridPosition: { row: 0, col: 0 },
-      health,
-      maxHealth: health,
-      speed: 2,
-      value: 10,
-      leakDamage: 1,
-      path: [],
-      pathIndex: 0,
-      distanceTraveled: 0
-    };
-  }
+  const createEnemy = (id: string, x: number, z: number, health = 100): Enemy =>
+    createTestEnemy(id, x, z, health);
 
   beforeEach(() => {
     enemyMap = new Map();
 
-    enemyServiceSpy = jasmine.createSpyObj('EnemyService', ['getEnemies', 'damageEnemy']);
-    enemyServiceSpy.getEnemies.and.returnValue(enemyMap);
-    enemyServiceSpy.damageEnemy.and.callFake((id: string, damage: number): DamageResult => {
-      const noOp: DamageResult = { killed: false, spawnedEnemies: [] };
-      const enemy = enemyMap.get(id);
-      if (!enemy || enemy.health <= 0) return noOp;
-      enemy.health -= damage;
-      return { killed: enemy.health <= 0, spawnedEnemies: [] };
-    });
-
-    gameBoardServiceSpy = jasmine.createSpyObj('GameBoardService', [
-      'getBoardWidth', 'getBoardHeight', 'getTileSize'
-    ]);
-    gameBoardServiceSpy.getBoardWidth.and.returnValue(25);
-    gameBoardServiceSpy.getBoardHeight.and.returnValue(20);
-    gameBoardServiceSpy.getTileSize.and.returnValue(1);
+    enemyServiceSpy = createEnemyServiceSpy(enemyMap);
+    gameBoardServiceSpy = createGameBoardServiceSpy(25, 20, 1);
 
     audioServiceSpy = jasmine.createSpyObj('AudioService', ['playSfx']);
 

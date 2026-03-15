@@ -1,25 +1,11 @@
 import { SpatialGrid, SPATIAL_GRID_CONFIG } from './spatial-grid';
-import { Enemy, EnemyType } from '../models/enemy.model';
+import { createTestEnemy } from '../testing';
 
 describe('SpatialGrid', () => {
   let grid: SpatialGrid;
 
-  function createEnemy(id: string, x: number, z: number, health = 100): Enemy {
-    return {
-      id,
-      type: EnemyType.BASIC,
-      position: { x, y: 0.3, z },
-      gridPosition: { row: 0, col: 0 },
-      health,
-      maxHealth: health,
-      speed: 2,
-      value: 10,
-      leakDamage: 1,
-      path: [],
-      pathIndex: 0,
-      distanceTraveled: 0
-    };
-  }
+  const createEnemy = (id: string, x: number, z: number, health = 100) =>
+    createTestEnemy(id, x, z, health);
 
   beforeEach(() => {
     grid = new SpatialGrid();

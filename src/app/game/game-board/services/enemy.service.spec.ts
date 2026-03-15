@@ -4,46 +4,18 @@ import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, mergeModifierEffects } from '../models/game-modifier.model';
-import { BlockType, GameBoardTile } from '../models/game-board-tile';
+import { GameBoardTile } from '../models/game-board-tile';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
+import { createTestBoard, createGameBoardServiceSpy } from '../testing';
 
 describe('EnemyService', () => {
   let service: EnemyService;
   let gameBoardService: jasmine.SpyObj<GameBoardService>;
   let mockScene: THREE.Scene;
 
-  // Mock board: 10x10 grid with spawner at (0,0), exit at (9,9)
-  const createMockBoard = (blockedCells: { row: number, col: number }[] = []): GameBoardTile[][] => {
-    const board: GameBoardTile[][] = [];
-    for (let row = 0; row < 10; row++) {
-      board[row] = [];
-      for (let col = 0; col < 10; col++) {
-        // Check if this cell is blocked
-        const isBlocked = blockedCells.some(b => b.row === row && b.col === col);
-
-        if (row === 0 && col === 0) {
-          board[row][col] = GameBoardTile.createSpawner(row, col);
-        } else if (row === 9 && col === 9) {
-          board[row][col] = GameBoardTile.createExit(row, col);
-        } else if (isBlocked) {
-          // Create a non-traversable tile (like a tower)
-          board[row][col] = new GameBoardTile(row, col, BlockType.BASE, false, false, null, null);
-        } else {
-          board[row][col] = GameBoardTile.createBase(row, col);
-        }
-      }
-    }
-    return board;
-  };
-
   beforeEach(() => {
-    const gameBoardServiceSpy = jasmine.createSpyObj('GameBoardService', [
-      'getGameBoard',
-      'getBoardWidth',
-      'getBoardHeight',
-      'getTileSize'
-    ]);
+    const gameBoardServiceSpy = createGameBoardServiceSpy(10, 10, 1, () => createTestBoard());
 
     TestBed.configureTestingModule({
       providers: [
@@ -55,12 +27,6 @@ describe('EnemyService', () => {
     service = TestBed.inject(EnemyService);
     gameBoardService = TestBed.inject(GameBoardService) as jasmine.SpyObj<GameBoardService>;
     mockScene = new THREE.Scene();
-
-    // Default mock returns
-    gameBoardService.getBoardWidth.and.returnValue(10);
-    gameBoardService.getBoardHeight.and.returnValue(10);
-    gameBoardService.getTileSize.and.returnValue(1);
-    gameBoardService.getGameBoard.and.returnValue(createMockBoard());
   });
 
   afterEach(() => {
@@ -198,7 +164,7 @@ describe('EnemyService', () => {
         { row: 0, col: 1 },
         { row: 1, col: 0 }
       ];
-      gameBoardService.getGameBoard.and.returnValue(createMockBoard(blockedCells));
+      gameBoardService.getGameBoard.and.returnValue(createTestBoard(10, blockedCells));
 
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
       expect(enemy).toBeNull();
@@ -240,7 +206,7 @@ describe('EnemyService', () => {
       for (let col = 1; col <= 9; col++) {
         blockedCells.push({ row: 6, col });
       }
-      gameBoardService.getGameBoard.and.returnValue(createMockBoard(blockedCells));
+      gameBoardService.getGameBoard.and.returnValue(createTestBoard(10, blockedCells));
 
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
 
@@ -305,7 +271,7 @@ describe('EnemyService', () => {
       // Clear cache and add obstacle
       service.clearPathCache();
       const blockedCells = [{ row: 1, col: 1 }];
-      gameBoardService.getGameBoard.and.returnValue(createMockBoard(blockedCells));
+      gameBoardService.getGameBoard.and.returnValue(createTestBoard(10, blockedCells));
 
       const enemy2 = service.spawnEnemy(EnemyType.BASIC, mockScene);
       const pathLength2 = enemy2!.path.length;
