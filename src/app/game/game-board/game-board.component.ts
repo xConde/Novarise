@@ -435,11 +435,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const te = e as TouchEvent;
         if (te.touches.length === 1) {
           this.onDragMove(te.touches[0].clientX, te.touches[0].clientY);
+        } else if (te.touches.length > 1) {
+          // Multi-finger during drag = abort (user switched to pinch/zoom)
+          this.cancelDrag();
         }
       };
       this.globalDragEndHandler = (e: Event) => {
         const te = e as TouchEvent;
-        if (te.changedTouches.length === 1) {
+        // Always handle touchend — multi-finger release must cancel the drag,
+        // not silently orphan listeners (changedTouches.length > 1 on multi-lift)
+        if (te.changedTouches.length >= 1) {
           this.onDragEnd(te.changedTouches[0].clientX, te.changedTouches[0].clientY);
         }
       };
@@ -581,9 +586,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const tileCost = this.getTileTowerCost(this.selectedTowerType!, row, col).cost;
         if (this.gameStateService.canAfford(tileCost)) {
           const material = mesh.material as THREE.MeshStandardMaterial;
-          // Store original emissive color for restoration
-          mesh.userData['origEmissive'] = material.emissive.getHex();
-          mesh.userData['origEmissiveIntensity'] = material.emissiveIntensity;
+          // Snapshot from tile-type defaults, not live material — avoids capturing
+          // transient hover intensity if mousemove fired just before this call
+          mesh.userData['origEmissive'] = TILE_EMISSIVE.defaultColor;
+          mesh.userData['origEmissiveIntensity'] = TILE_EMISSIVE.base;
           material.emissive.setHex(TILE_EMISSIVE.validPlacementColor);
           material.emissiveIntensity = TILE_EMISSIVE.validPlacement;
           this.highlightedTiles.add(key);
@@ -622,7 +628,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // L2->L3: needs specialization choice
       if (!spec) {
         const specs = TOWER_SPECIALIZATIONS[this.selectedTowerInfo.type];
-        const currentStats = getEffectiveStats(this.selectedTowerInfo.type, this.selectedTowerInfo.level);
         const alphaStats = getEffectiveStats(this.selectedTowerInfo.type, MAX_TOWER_LEVEL, TowerSpecialization.ALPHA);
         const betaStats = getEffectiveStats(this.selectedTowerInfo.type, MAX_TOWER_LEVEL, TowerSpecialization.BETA);
         this.specOptions = [
