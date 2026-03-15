@@ -278,6 +278,10 @@
         <span class="stat-label">Kills</span>
         <span class="stat-value">{{ selectedTowerInfo.kills }}</span>
       </div>
+      <div class="stat-row" *ngIf="selectedTowerStats.statusEffect">
+        <span class="stat-label">Effect</span>
+        <span class="stat-value status-effect" [attr.data-effect]="selectedTowerStats.statusEffect">{{ selectedTowerStats.statusEffect }}</span>
+      </div>
     </div>
     <div class="tower-info-targeting" *ngIf="selectedTowerInfo && selectedTowerInfo.type !== TowerType.SLOW">
       <button

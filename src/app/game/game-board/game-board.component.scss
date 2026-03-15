@@ -709,6 +709,14 @@
         .stat-value {
           color: var(--text-color);
           font-weight: 600;
+
+          &.status-effect {
+            text-transform: capitalize;
+
+            &[data-effect='BURN'] { color: var(--effect-burn); }
+            &[data-effect='POISON'] { color: var(--effect-poison); }
+            &[data-effect='SLOW'] { color: var(--effect-slow); }
+          }
         }
       }
     }

@@ -42,6 +42,7 @@ import { ENEMY_STATS } from './models/enemy.model';
 import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
 import { StatusEffectService } from './services/status-effect.service';
+import { StatusEffectType } from './constants/status-effect.constants';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -96,7 +97,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Tower info panel state (exposed to template)
   selectedTowerInfo: PlacedTower | null = null;
-  selectedTowerStats: { damage: number; range: number; fireRate: number } | null = null;
+  selectedTowerStats: { damage: number; range: number; fireRate: number; statusEffect?: StatusEffectType } | null = null;
   selectedTowerUpgradeCost: number = 0;
   selectedTowerSellValue: number = 0;
   MAX_TOWER_LEVEL = MAX_TOWER_LEVEL;
@@ -499,7 +500,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!this.selectedTowerInfo) return;
     const tower = this.selectedTowerInfo;
     const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
-    this.selectedTowerStats = { damage: stats.damage, range: stats.range, fireRate: stats.fireRate };
+    this.selectedTowerStats = { damage: stats.damage, range: stats.range, fireRate: stats.fireRate, statusEffect: stats.statusEffect };
     const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
     this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level, costMult);
     this.selectedTowerSellValue = getSellValue(tower.totalInvested);

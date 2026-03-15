@@ -45,6 +45,11 @@
   --action-danger-bg: rgba(180, 20, 20, 0.2);
   --action-danger-border: rgba(220, 50, 50, 0.4);
 
+  /* Status effect colors (match Three.js STATUS_EFFECT_VISUALS) */
+  --effect-burn: #ff6622;
+  --effect-poison: #44ff22;
+  --effect-slow: #4488ff;
+
   /* Game-specific colors */
   --game-primary: #444444;
   --game-secondary: #666666;
