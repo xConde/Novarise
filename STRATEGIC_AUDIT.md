@@ -764,4 +764,4 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Step 2: Tile-specific cost shown in mode indicator on hover (hoveredTileCost + gold display)
 - [x] Step 3: Full test suite green (1839/1839 hard gate)
 - [x] Step 4: Production build passes — CSS trimmed to 39.83kb (below 40kb error budget)
-- [ ] Step 5: Push to remote + update PR
+- [x] Step 5: Push to remote + update PR (#23)
