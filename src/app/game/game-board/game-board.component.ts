@@ -1432,65 +1432,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     };
 
     this.clickHandler = (event: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-      this.raycaster.setFromCamera(this.mouse, this.camera);
-
-      // Check for tower mesh clicks first (works in both PLACE and INSPECT modes)
-      const towerGroups = Array.from(this.towerMeshes.values());
-      const towerChildren: THREE.Object3D[] = [];
-      towerGroups.forEach(g => g.traverse(child => { if (child instanceof THREE.Mesh) towerChildren.push(child); }));
-      const towerHits = this.raycaster.intersectObjects(towerChildren);
-
-      if (towerHits.length > 0) {
-        // Walk up to find the tower group and its key
-        let hitObj: THREE.Object3D | null = towerHits[0].object;
-        let foundKey: string | null = null;
-        while (hitObj) {
-          for (const [key, group] of this.towerMeshes) {
-            if (group === hitObj) { foundKey = key; break; }
-          }
-          if (foundKey) break;
-          hitObj = hitObj.parent;
-        }
-        if (foundKey) {
-          this.selectPlacedTower(foundKey);
-          return;
-        }
-      }
-
-      // Check tile clicks — only place towers in PLACE mode
-      const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
-
-      const prevSelected = this.getSelectedTileMesh();
-      if (prevSelected) {
-        const material = prevSelected.material as THREE.MeshStandardMaterial;
-        const tileType = prevSelected.userData['tile'].type;
-        material.emissiveIntensity = tileType === BlockType.BASE ? TILE_EMISSIVE.base : tileType === BlockType.WALL ? TILE_EMISSIVE.wall : TILE_EMISSIVE.special;
-      }
-
-      if (intersects.length > 0) {
-        const mesh = intersects[0].object as THREE.Mesh;
-        const row = mesh.userData['row'];
-        const col = mesh.userData['col'];
-
-        this.selectedTile = { row, col };
-
-        const material = mesh.material as THREE.MeshStandardMaterial;
-        material.emissiveIntensity = TILE_EMISSIVE.selected;
-
-        this.deselectTower();
-
-        // Only attempt placement in PLACE mode (tower type selected)
-        if (this.isPlaceMode) {
-          this.tryPlaceTower(row, col);
-        }
-      } else {
-        this.selectedTile = null;
-        this.deselectTower();
-      }
+      this.handleInteraction(event.clientX, event.clientY);
     };
 
     this.contextmenuHandler = (event: MouseEvent) => {
@@ -1599,8 +1541,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     canvas.addEventListener('touchend', this.touchEndHandler, { passive: false });
   }
 
-  /** Converts a canvas-relative touch position to NDC and runs the same raycasting as a mouse click. */
+  /** Converts a canvas-relative touch position to NDC and runs the same interaction as a mouse click. */
   private handleTapAsClick(clientX: number, clientY: number): void {
+    this.handleInteraction(clientX, clientY);
+  }
+
+  /** Unified click/tap handler — raycasts to towers then tiles at (clientX, clientY). */
+  private handleInteraction(clientX: number, clientY: number): void {
     const canvas = this.renderer.domElement;
     const rect = canvas.getBoundingClientRect();
     this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
@@ -1608,7 +1555,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
-    // Check for tower mesh taps first
+    // Check for tower mesh hits first (works in both PLACE and INSPECT modes)
     const towerGroups = Array.from(this.towerMeshes.values());
     const towerChildren: THREE.Object3D[] = [];
     towerGroups.forEach(g => g.traverse(child => { if (child instanceof THREE.Mesh) towerChildren.push(child); }));
@@ -1630,7 +1577,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
 
-    // Check tile taps
+    // Check tile hits — only place towers in PLACE mode
     const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
 
     const prevSelected = this.getSelectedTileMesh();
@@ -1652,7 +1599,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       this.deselectTower();
 
-      // Only attempt placement in PLACE mode (tower type selected)
       if (this.isPlaceMode) {
         this.tryPlaceTower(row, col);
       }
