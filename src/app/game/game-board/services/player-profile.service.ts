@@ -177,7 +177,8 @@ export class PlayerProfileService {
   }
 
   getMapScore(mapId: string): MapScoreRecord | null {
-    return this.profile.mapScores[mapId] ?? null;
+    const record = this.profile.mapScores[mapId];
+    return record ? { ...record } : null;
   }
 
   getAllMapScores(): Record<string, MapScoreRecord> {

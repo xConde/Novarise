@@ -717,3 +717,19 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 **Location:** `game-board.component.ts` — `handleKeyboard()` phase guard
 **Risk:** The VICTORY/DEFEAT early return skips `preventDefault()` for Backspace, allowing default browser back-navigation. Player viewing score breakdown accidentally presses Backspace → loses the overlay. Mitigated: most modern browsers removed Backspace-as-back.
 **Fix:** Move Backspace/Delete `preventDefault()` before the phase guard, or handle it in a separate early block.
+
+## Red Team Critique — feat/product-fundamentals Pass 2 (2026-03-15)
+
+### Finding 1: DEFEAT block still has isVictory guard — previous fix incomplete (CRITICAL)
+**Location:** `game-board.component.ts` ~line 1756 (DEFEAT mid-frame block)
+**Risk:** The earlier red team fix (commit a792cb1) only patched the VICTORY code path. The DEFEAT code path at ~line 1756 still reads `this.scoreBreakdown?.isVictory` which is always false for defeats. Endless mode scores remain silently unrecorded. The `replace_all` edit failed because the two blocks have different indentation (14 vs 12 spaces), so only the first matched.
+**Fix:** Manually patch the DEFEAT block to use `this.scoreBreakdown` (drop `?.isVictory`).
+
+### Finding 2: getMapScore returns mutable internal reference (MEDIUM)
+**Location:** `player-profile.service.ts` — `getMapScore()` method
+**Risk:** Returns the actual internal `MapScoreRecord` object, not a copy. A caller mutating `record.bestScore = 0` would corrupt the persistent profile. `getAllMapScores()` correctly spreads copies, but `getMapScore()` doesn't — inconsistent with the `getProfile()` immutability pattern.
+**Fix:** Return `{ ...this.profile.mapScores[mapId] }` instead of the raw reference.
+
+### Finding 3: createTestEnemy factory completeness (FALSE POSITIVE)
+**Location:** `testing/test-enemy.factory.ts`
+**Risk:** Initially flagged as missing `baseSpeed`, but `baseSpeed` is NOT part of the Enemy interface. The StatusEffectService tracks original speed via `ActiveEffect.originalSpeed` internally. No fix needed.
