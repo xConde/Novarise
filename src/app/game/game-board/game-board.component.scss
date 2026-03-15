@@ -1686,8 +1686,7 @@
   gap: var(--spacing-xs);
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--border-radius-md);
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.7);
   pointer-events: none;
   z-index: var(--z-index-overlay);
   font-family: "Orbitron", sans-serif;
@@ -1697,25 +1696,15 @@
 
   .mode-label {
     font-weight: 600;
-
-    &.place-mode {
-      color: var(--theme-cyan, #00ffff);
-    }
-
-    &.inspect-mode {
-      color: rgba(255, 255, 255, 0.5);
-    }
+    &.place-mode { color: var(--theme-cyan, #0ff); }
+    &.inspect-mode { color: rgba(255, 255, 255, 0.5); }
   }
 
-  .mode-cost {
-    color: var(--game-gold, #ffd700);
-    font-weight: 700;
-  }
+  .mode-cost { color: var(--game-gold, #ffd700); font-weight: 700; }
 
   .mode-hint {
     font-size: var(--font-size-2xs);
     color: rgba(255, 255, 255, 0.35);
-    font-family: sans-serif;
     text-transform: none;
     letter-spacing: normal;
   }
@@ -1723,10 +1712,6 @@
   @media screen and (max-width: 768px) {
     bottom: calc(var(--tower-bar-height, 4.5rem) + var(--spacing-xs));
     font-size: var(--font-size-2xs);
-  }
-
-  @media screen and (max-width: 480px) {
-    bottom: calc(var(--tower-bar-height, 4.5rem) + var(--spacing-xs));
     padding: 0.125rem var(--spacing-xs);
   }
 }
