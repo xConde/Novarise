@@ -214,13 +214,11 @@ export class TilePricingService {
   ): number {
     const directions: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
     let freeNeighbors = 0;
-    let totalNeighbors = 0;
 
     for (const [dr, dc] of directions) {
       const nr = row + dr;
       const nc = col + dc;
       if (nr < 0 || nr >= height || nc < 0 || nc >= width) continue;
-      totalNeighbors++;
       const tile = board[nr][nc];
       // A neighbor is "blocked" (not free) if it is a wall, a tower, or an
       // occupied BASE tile (BASE with towerType set, which should not happen

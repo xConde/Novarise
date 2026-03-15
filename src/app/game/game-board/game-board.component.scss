@@ -1671,6 +1671,7 @@
 }
 
 // --- Drag cursor override ---
+// !important required: Three.js sets cursor via inline styles on the canvas element
 .board-container.dragging .canvas-container {
   cursor: grabbing !important;
 }
@@ -1696,7 +1697,7 @@
 
   .mode-label {
     font-weight: 600;
-    &.place-mode { color: var(--theme-cyan, #0ff); }
+    &.place-mode { color: var(--theme-cyan, #00ffff); }
     &.inspect-mode { color: rgba(255, 255, 255, 0.5); }
   }
 

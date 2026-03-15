@@ -95,7 +95,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private rangePreviewMesh: THREE.Mesh | null = null;
   private selectionRingMesh: THREE.Mesh | null = null;
   selectedTowerType: TowerType | null = TowerType.BASIC;
-  private lastPreviewKey = ''; // "row-col-towerType" — skip BFS when unchanged
+  private lastPreviewKey = ''; // "row-col-towerType-gold" — skip preview rebuild when unchanged
   /** Set of "row-col" keys for tiles currently highlighted as valid placements. */
   private highlightedTiles: Set<string> = new Set();
   /** Tile-specific cost shown in mode indicator during PLACE mode hover. 0 = not hovering a valid tile. */
