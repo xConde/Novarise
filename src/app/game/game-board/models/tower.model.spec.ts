@@ -1,4 +1,5 @@
-import { TowerType, TowerSpecialization, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS } from './tower.model';
+import { TowerType, TowerSpecialization, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, TOWER_CONFIGS, getEffectiveStats } from './tower.model';
+import { StatusEffectType } from '../constants/status-effect.constants';
 
 describe('Tower Model', () => {
   describe('TOWER_DESCRIPTIONS', () => {
@@ -76,6 +77,43 @@ describe('Tower Model', () => {
         const beta = TOWER_SPECIALIZATIONS[type][TowerSpecialization.BETA];
         expect(alpha.label).not.toBe(beta.label);
       });
+    });
+  });
+
+  describe('statusEffect configs', () => {
+    it('Mortar base config should have statusEffect BURN', () => {
+      expect(TOWER_CONFIGS[TowerType.MORTAR].statusEffect).toBe(StatusEffectType.BURN);
+    });
+
+    it('Splash Bombardier spec should have statusEffect POISON', () => {
+      expect(TOWER_SPECIALIZATIONS[TowerType.SPLASH][TowerSpecialization.ALPHA].statusEffect)
+        .toBe(StatusEffectType.POISON);
+    });
+
+    it('getEffectiveStats for Splash Bombardier includes POISON statusEffect', () => {
+      const stats = getEffectiveStats(TowerType.SPLASH, 3, TowerSpecialization.ALPHA);
+      expect(stats.statusEffect).toBe(StatusEffectType.POISON);
+    });
+
+    it('getEffectiveStats for Mortar (no spec) preserves BURN statusEffect', () => {
+      const stats = getEffectiveStats(TowerType.MORTAR, 1);
+      expect(stats.statusEffect).toBe(StatusEffectType.BURN);
+    });
+
+    it('getEffectiveStats for Basic (no statusEffect) returns undefined statusEffect', () => {
+      const stats = getEffectiveStats(TowerType.BASIC, 1);
+      expect(stats.statusEffect).toBeUndefined();
+    });
+
+    it('Splash Bombardier description mentions poison', () => {
+      const spec = TOWER_SPECIALIZATIONS[TowerType.SPLASH][TowerSpecialization.ALPHA];
+      expect(spec.description.toLowerCase()).toContain('poison');
+    });
+
+    it('towers without statusEffect have undefined statusEffect in base config', () => {
+      expect(TOWER_CONFIGS[TowerType.BASIC].statusEffect).toBeUndefined();
+      expect(TOWER_CONFIGS[TowerType.SNIPER].statusEffect).toBeUndefined();
+      expect(TOWER_CONFIGS[TowerType.CHAIN].statusEffect).toBeUndefined();
     });
   });
 });

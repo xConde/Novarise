@@ -24,6 +24,7 @@ interface Projectile {
   damage: number;
   splashRadius: number;
   towerType: TowerType;
+  statusEffect?: StatusEffectType;
 }
 
 /** Max trail vertices — matches PROJECTILE_CONFIG.trailLength */
@@ -50,6 +51,7 @@ interface MortarZone {
   dotDamage: number;
   expiresAt: number;       // gameTime when zone expires
   lastTickTime: number;    // gameTime of last DoT tick
+  statusEffect?: StatusEffectType;
 }
 
 /** Info about a tower kill — includes the damage of the final hit. */
@@ -350,6 +352,8 @@ export class TowerCombatService {
             const result = this.enemyService.damageEnemy(enemy.id, zone.dotDamage);
             if (result.killed) {
               killedEnemies.push({ id: enemy.id, damage: zone.dotDamage });
+            } else if (zone.statusEffect) {
+              this.statusEffectService.apply(enemy.id, zone.statusEffect, this.gameTime);
             }
             // Mini-swarm meshes from DoT kills are added to scene here
             result.spawnedEnemies.forEach(mini => {
@@ -602,7 +606,8 @@ export class TowerCombatService {
       speed: stats.projectileSpeed,
       damage: stats.damage,
       splashRadius: stats.splashRadius,
-      towerType: tower.type
+      towerType: tower.type,
+      statusEffect: stats.statusEffect,
     });
   }
 
@@ -634,7 +639,8 @@ export class TowerCombatService {
       speed: stats.projectileSpeed,
       damage: stats.damage,
       splashRadius: 0,
-      towerType: TowerType.MORTAR
+      towerType: TowerType.MORTAR,
+      statusEffect: stats.statusEffect,
     });
   }
 
@@ -674,6 +680,8 @@ export class TowerCombatService {
         const result = this.enemyService.damageEnemy(enemy.id, dotDamage);
         if (result.killed) {
           initialKills.push({ id: enemy.id, damage: dotDamage });
+        } else if (stats.statusEffect) {
+          this.statusEffectService.apply(enemy.id, stats.statusEffect, this.gameTime);
         }
         result.spawnedEnemies.forEach(mini => {
           if (mini.mesh) scene.add(mini.mesh);
@@ -688,7 +696,8 @@ export class TowerCombatService {
       blastRadius,
       dotDamage,
       expiresAt: this.gameTime + dotDuration,
-      lastTickTime: this.gameTime
+      lastTickTime: this.gameTime,
+      statusEffect: stats.statusEffect,
     });
 
     return initialKills;
@@ -725,6 +734,8 @@ export class TowerCombatService {
           const result = this.enemyService.damageEnemy(enemy.id, proj.damage);
           if (result.killed) {
             kills.push({ id: enemy.id, damage: proj.damage });
+          } else if (proj.statusEffect) {
+            this.statusEffectService.apply(enemy.id, proj.statusEffect, this.gameTime);
           }
           result.spawnedEnemies.forEach(mini => {
             if (mini.mesh) scene.add(mini.mesh);
@@ -736,6 +747,8 @@ export class TowerCombatService {
       const result = this.enemyService.damageEnemy(proj.targetId, proj.damage);
       if (result.killed) {
         kills.push({ id: proj.targetId, damage: proj.damage });
+      } else if (proj.statusEffect) {
+        this.statusEffectService.apply(proj.targetId, proj.statusEffect, this.gameTime);
       }
       result.spawnedEnemies.forEach(mini => {
         if (mini.mesh) scene.add(mini.mesh);

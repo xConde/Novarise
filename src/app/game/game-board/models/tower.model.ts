@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { StatusEffectType } from '../constants/status-effect.constants';
 
 export type TargetingMode = 'nearest' | 'first' | 'strongest';
 export const TARGETING_MODES: TargetingMode[] = ['nearest', 'first', 'strongest'];
@@ -51,6 +52,8 @@ export interface TowerStats {
   blastRadius?: number;   // Area-of-effect radius for mortar zones
   dotDuration?: number;   // How long the mortar zone persists (seconds)
   dotDamage?: number;     // Damage per second dealt by mortar zone
+  // Status effects
+  statusEffect?: StatusEffectType; // Applied to enemies on hit
 }
 
 export interface SpecializationStats {
@@ -63,6 +66,7 @@ export interface SpecializationStats {
   chainCountBonus?: number;
   slowFactorOverride?: number;
   dotDamageMultiplier?: number;
+  statusEffect?: StatusEffectType; // Overrides/adds status effect at L3 spec
 }
 
 export interface PlacedTower {
@@ -139,7 +143,8 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
     color: 0xff6622,
     blastRadius: 1.5,
     dotDuration: 3,
-    dotDamage: 5
+    dotDamage: 5,
+    statusEffect: StatusEffectType.BURN
   }
 };
 
@@ -171,9 +176,10 @@ export const TOWER_SPECIALIZATIONS: Record<TowerType, Record<TowerSpecialization
   [TowerType.SPLASH]: {
     [TowerSpecialization.ALPHA]: {
       label: 'Bombardier',
-      description: 'Larger blast radius, more damage',
+      description: 'Larger blast, more damage, poisons targets',
       damage: 2.8, range: 1.2, fireRate: 0.8,
       splashRadiusBonus: 0.5,
+      statusEffect: StatusEffectType.POISON,
     },
     [TowerSpecialization.BETA]: {
       label: 'Suppressor',
@@ -276,6 +282,9 @@ export function getEffectiveStats(type: TowerType, level: number, specialization
     }
     if (spec.dotDamageMultiplier && result.dotDamage) {
       result.dotDamage = Math.round(result.dotDamage * spec.dotDamageMultiplier);
+    }
+    if (spec.statusEffect) {
+      result.statusEffect = spec.statusEffect;
     }
     return result;
   }
