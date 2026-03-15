@@ -795,7 +795,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     };
     this.contextRestoredHandler = () => {
       this.contextLost = false;
-      this.animate();
+      if (!this.animationFrameId) {
+        this.animate();
+      }
     };
     canvas.addEventListener('webglcontextlost', this.contextLostHandler as EventListener);
     canvas.addEventListener('webglcontextrestored', this.contextRestoredHandler as EventListener);
@@ -1725,7 +1727,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
               this.updateAchievementDetails();
               const mapId = this.mapBridge.getMapId();
-              if (mapId && this.scoreBreakdown?.isVictory) {
+              if (mapId && this.scoreBreakdown) {
                 this.playerProfileService.recordMapScore(
                   mapId,
                   this.scoreBreakdown.finalScore,

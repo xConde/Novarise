@@ -698,3 +698,20 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Fix minimap dimensions for rectangular boards (gridWidth/gridHeight)
 - [x] Full test suite green (1697/1697)
 - [x] Push to PR
+
+## Red Team Critique — feat/product-fundamentals (2026-03-15)
+
+### Finding 1: Endless mode scores never recorded (CRITICAL)
+**Location:** `game-board.component.ts` — both game-end recording blocks (~lines 1724 and 1752)
+**Risk:** The `this.scoreBreakdown?.isVictory` guard means only victories trigger `recordMapScore()`. Endless mode always ends in DEFEAT, so endless players — the most engaged audience — have zero per-map score tracking. Their wave-50 grinds are silently thrown away. Additionally, a hard-fought Normal defeat at 5000 points is lost while an Easy victory at 1500 is recorded.
+**Fix:** Remove `isVictory` guard from `recordMapScore`. The method already gates on `score > existing.bestScore`. Stars will be 0 for defeats (preserving `bestStars` via `Math.max`), so the best-stars field is safe.
+
+### Finding 2: WebGL context restored double-loop race (MEDIUM)
+**Location:** `game-board.component.ts` line ~209, `novarise.component.ts` line ~1612
+**Risk:** If a pre-queued RAF callback fires between context loss (which cancels RAF and zeros the id) and context restored (which calls `animate()`), two parallel animation loops start. Double physics updates cause time acceleration, double rendering halves FPS, and accumulated state drifts.
+**Fix:** Guard `animate()` call with `if (!this.animationFrameId)` in the restored handler. Same fix needed in editor component.
+
+### Finding 3: Backspace during game-over navigates browser back (LOW)
+**Location:** `game-board.component.ts` — `handleKeyboard()` phase guard
+**Risk:** The VICTORY/DEFEAT early return skips `preventDefault()` for Backspace, allowing default browser back-navigation. Player viewing score breakdown accidentally presses Backspace → loses the overlay. Mitigated: most modern browsers removed Backspace-as-back.
+**Fix:** Move Backspace/Delete `preventDefault()` before the phase guard, or handle it in a separate early block.

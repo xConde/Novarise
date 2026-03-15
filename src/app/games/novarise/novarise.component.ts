@@ -257,7 +257,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     };
     this.contextRestoredHandler = () => {
       this.contextLost = false;
-      this.animate();
+      if (!this.animationFrameId) {
+        this.animate();
+      }
     };
     canvas.addEventListener('webglcontextlost', this.contextLostHandler as EventListener);
     canvas.addEventListener('webglcontextrestored', this.contextRestoredHandler as EventListener);
