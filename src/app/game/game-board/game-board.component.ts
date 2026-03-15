@@ -43,6 +43,7 @@ import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
 import { StatusEffectService } from './services/status-effect.service';
 import { StatusEffectType } from './constants/status-effect.constants';
+import { TilePricingService, TilePriceInfo } from './services/tile-pricing.service';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -57,7 +58,7 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService]
+  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -228,7 +229,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private settingsService: SettingsService,
     private towerPreviewService: TowerPreviewService,
     private pathVisualizationService: PathVisualizationService,
-    private statusEffectService: StatusEffectService
+    private statusEffectService: StatusEffectService,
+    private tilePricingService: TilePricingService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -350,10 +352,20 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.towerCombatService.setTowerDamageMultiplier(this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1);
   }
 
+  /** Base tower cost (shown in tower bar — no tile-specific pricing). */
   getEffectiveTowerCost(type: TowerType | null): number {
     if (!type) return 0;
     const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
     return Math.round(TOWER_CONFIGS[type].cost * costMult);
+  }
+
+  /**
+   * Tile-specific tower cost including strategic pricing.
+   * Returns the actual cost to place the selected tower on this tile.
+   */
+  getTileTowerCost(type: TowerType, row: number, col: number): TilePriceInfo {
+    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+    return this.tilePricingService.getTilePrice(type, row, col, costMult);
   }
 
   selectTowerType(type: TowerType): void {
@@ -533,6 +545,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Clear path cache and BFS preview cache since board changed
     this.enemyService.clearPathCache();
+    this.tilePricingService.invalidateCache();
     this.lastPreviewKey = '';
     this.refreshPathOverlay();
 
@@ -1175,8 +1188,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           const previewKey = `${row}-${col}-${this.selectedTowerType}-${this.gameState.gold}`;
           if (previewKey !== this.lastPreviewKey) {
             this.lastPreviewKey = previewKey;
+            const tileCost = this.getTileTowerCost(this.selectedTowerType!, row, col).cost;
             const canPlace = this.gameBoardService.canPlaceTower(row, col)
-              && this.gameStateService.canAfford(this.getEffectiveTowerCost(this.selectedTowerType!));
+              && this.gameStateService.canAfford(tileCost);
             this.towerPreviewService.showPreview(this.selectedTowerType!, row, col, canPlace, this.scene);
           }
         } else {
@@ -1447,9 +1461,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
 
-    const towerStats = TOWER_CONFIGS[this.selectedTowerType];
-    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-    const effectiveCost = Math.round(towerStats.cost * costMult);
+    // Use tile-specific strategic pricing
+    const priceInfo = this.getTileTowerCost(this.selectedTowerType, row, col);
+    const effectiveCost = priceInfo.cost;
 
     // Check if player can afford tower
     if (!this.gameStateService.canAfford(effectiveCost)) return;
@@ -1475,6 +1489,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Clear enemy path cache since board layout changed
       this.enemyService.clearPathCache();
+      this.tilePricingService.invalidateCache();
       this.refreshPathOverlay();
 
       // Recompute valid tile highlights — board changed
