@@ -965,4 +965,62 @@ describe('GameBoardComponent', () => {
       expect((component as any).dragThresholdMet).toBeFalse();
     });
   });
+
+  describe('Enhanced Tower Info Panel', () => {
+    it('upgradePreview should be null by default', () => {
+      expect(component.upgradePreview).toBeNull();
+    });
+
+    it('refreshTowerInfoPanel should compute upgrade preview for L1 tower', () => {
+      const fakeTower: PlacedTower = {
+        id: '5-5', type: TowerType.BASIC, level: 1, row: 5, col: 5,
+        lastFireTime: 0, kills: 3, totalInvested: 50, mesh: null,
+        targetingMode: 'nearest'
+      };
+      (component as any).selectedTowerInfo = fakeTower;
+      // Stub showRangePreview to avoid Three.js canvas crash
+      spyOn(component as any, 'showRangePreview');
+      (component as any).refreshTowerInfoPanel();
+
+      expect(component.upgradePreview).toBeTruthy();
+      expect(component.upgradePreview!.damage).toBeGreaterThan(component.selectedTowerStats!.damage);
+    });
+
+    it('refreshTowerInfoPanel should not compute preview for L2 tower (needs spec choice)', () => {
+      const fakeTower: PlacedTower = {
+        id: '5-5', type: TowerType.BASIC, level: 2, row: 5, col: 5,
+        lastFireTime: 0, kills: 0, totalInvested: 100, mesh: null,
+        targetingMode: 'nearest'
+      };
+      (component as any).selectedTowerInfo = fakeTower;
+      spyOn(component as any, 'showRangePreview');
+      (component as any).refreshTowerInfoPanel();
+
+      // L2→L3 requires specialization choice, no generic preview
+      expect(component.upgradePreview).toBeNull();
+    });
+
+    it('refreshTowerInfoPanel should not compute preview for max level tower', () => {
+      const fakeTower: PlacedTower = {
+        id: '5-5', type: TowerType.BASIC, level: 3, row: 5, col: 5,
+        lastFireTime: 0, kills: 0, totalInvested: 150, mesh: null,
+        targetingMode: 'nearest', specialization: 'alpha' as any
+      };
+      (component as any).selectedTowerInfo = fakeTower;
+      spyOn(component as any, 'showRangePreview');
+      (component as any).refreshTowerInfoPanel();
+
+      expect(component.upgradePreview).toBeNull();
+    });
+
+    it('deselectTower should clear upgradePreview', () => {
+      component.upgradePreview = { damage: 50, range: 4, fireRate: 0.8 };
+      component.deselectTower();
+      expect(component.upgradePreview).toBeNull();
+    });
+
+    it('selectionRingMesh should be null initially', () => {
+      expect((component as any).selectionRingMesh).toBeNull();
+    });
+  });
 });

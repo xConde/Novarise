@@ -265,14 +265,17 @@
       <div class="stat-row">
         <span class="stat-label">Damage</span>
         <span class="stat-value">{{ selectedTowerStats.damage }}</span>
+        <span class="stat-preview" *ngIf="upgradePreview">{{ upgradePreview.damage }}</span>
       </div>
       <div class="stat-row">
         <span class="stat-label">Range</span>
         <span class="stat-value">{{ selectedTowerStats.range }}</span>
+        <span class="stat-preview" *ngIf="upgradePreview">{{ upgradePreview.range }}</span>
       </div>
       <div class="stat-row">
         <span class="stat-label">Fire Rate</span>
         <span class="stat-value">{{ selectedTowerStats.fireRate }}s</span>
+        <span class="stat-preview" *ngIf="upgradePreview">{{ upgradePreview.fireRate }}s</span>
       </div>
       <div class="stat-row">
         <span class="stat-label">Kills</span>
@@ -319,10 +322,14 @@
         [class.unaffordable]="!gameState || gameState.gold < selectedTowerUpgradeCost"
         [disabled]="!gameState || gameState.gold < selectedTowerUpgradeCost"
         (click)="selectSpecialization(opt.spec)"
-        [attr.aria-label]="'Specialize: ' + opt.label">
+        [attr.aria-label]="'Specialize: ' + opt.label + ' — ' + opt.description">
         <span class="spec-label">{{ opt.label }}</span>
         <span class="spec-desc">{{ opt.description }}</span>
-        <span class="spec-stats">DMG x{{ opt.damage }} | RNG x{{ opt.range }} | SPD x{{ opt.fireRate }}</span>
+        <span class="spec-stats">
+          DMG {{ opt.damage > 1 ? '+' : '' }}{{ ((opt.damage - 1) * 100) | number:'1.0-0' }}%
+          | RNG {{ opt.range > 1 ? '+' : '' }}{{ ((opt.range - 1) * 100) | number:'1.0-0' }}%
+          | SPD {{ opt.fireRate < 1 ? '+' : '' }}{{ ((1 - opt.fireRate) * 100) | number:'1.0-0' }}%
+        </span>
       </button>
       <button class="spec-cancel-btn" (click)="showSpecializationChoice = false" aria-label="Cancel specialization">Cancel</button>
     </div>

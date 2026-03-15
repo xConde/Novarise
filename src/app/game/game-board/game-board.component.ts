@@ -93,6 +93,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private towerMeshes: Map<string, THREE.Group> = new Map();
   private gridLines: THREE.Group | null = null;
   private rangePreviewMesh: THREE.Mesh | null = null;
+  private selectionRingMesh: THREE.Mesh | null = null;
   selectedTowerType: TowerType | null = TowerType.BASIC;
   private lastPreviewKey = ''; // "row-col-towerType" — skip BFS when unchanged
   /** Set of "row-col" keys for tiles currently highlighted as valid placements. */
@@ -103,6 +104,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   selectedTowerStats: { damage: number; range: number; fireRate: number; statusEffect?: StatusEffectType } | null = null;
   selectedTowerUpgradeCost: number = 0;
   selectedTowerSellValue: number = 0;
+  /** Preview of stats after upgrading (null if at max level or below L2→L3 which needs spec). */
+  upgradePreview: { damage: number; range: number; fireRate: number } | null = null;
   MAX_TOWER_LEVEL = MAX_TOWER_LEVEL;
   TowerSpecialization = TowerSpecialization;
 
@@ -680,6 +683,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   deselectTower(): void {
     this.selectedTowerInfo = null;
     this.selectedTowerStats = null;
+    this.upgradePreview = null;
     this.sellConfirmPending = false;
     this.showSpecializationChoice = false;
     this.specOptions = [];
@@ -712,6 +716,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
     this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level, costMult);
     this.selectedTowerSellValue = getSellValue(tower.totalInvested);
+
+    // Compute upgrade preview (L1→L2 only; L2→L3 requires spec choice so preview is per-spec)
+    if (tower.level < MAX_TOWER_LEVEL && tower.level < MAX_TOWER_LEVEL - 1) {
+      const nextStats = getEffectiveStats(tower.type, tower.level + 1);
+      this.upgradePreview = { damage: nextStats.damage, range: nextStats.range, fireRate: nextStats.fireRate };
+    } else {
+      this.upgradePreview = null;
+    }
   }
 
   private createRangeRing(radius: number, color: number, opacity: number, x: number, z: number): THREE.Mesh {
@@ -742,8 +754,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const x = (tower.col - boardWidth / 2) * tileSize;
     const z = (tower.row - boardHeight / 2) * tileSize;
 
+    // Range ring
     this.rangePreviewMesh = this.createRangeRing(stats.range, stats.color, RANGE_PREVIEW_CONFIG.opacity, x, z);
     this.scene.add(this.rangePreviewMesh);
+
+    // Selection ring — tight ring around the tower base to indicate it's selected
+    const selectionRadius = 0.55;
+    const selectionGeometry = new THREE.RingGeometry(selectionRadius - 0.04, selectionRadius, 32);
+    const selectionMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.6,
+      side: THREE.DoubleSide,
+    });
+    this.selectionRingMesh = new THREE.Mesh(selectionGeometry, selectionMaterial);
+    this.selectionRingMesh.rotation.x = -Math.PI / 2;
+    this.selectionRingMesh.position.set(x, RANGE_PREVIEW_CONFIG.yPosition + 0.01, z);
+    this.scene.add(this.selectionRingMesh);
   }
 
   private removeRangePreview(): void {
@@ -752,6 +779,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.rangePreviewMesh.geometry.dispose();
       disposeMaterial(this.rangePreviewMesh.material);
       this.rangePreviewMesh = null;
+    }
+    if (this.selectionRingMesh) {
+      this.scene.remove(this.selectionRingMesh);
+      this.selectionRingMesh.geometry.dispose();
+      disposeMaterial(this.selectionRingMesh.material);
+      this.selectionRingMesh = null;
     }
   }
 

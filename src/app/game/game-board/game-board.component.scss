@@ -718,6 +718,18 @@
             &[data-effect='SLOW'] { color: var(--effect-slow); }
           }
         }
+
+        .stat-preview {
+          color: var(--theme-cyan, #00ffff);
+          font-weight: 600;
+          font-size: var(--font-size-2xs);
+          opacity: 0.8;
+
+          &::before {
+            content: '\2192\00a0'; // → arrow
+            color: rgba(255, 255, 255, 0.3);
+          }
+        }
       }
     }
 
