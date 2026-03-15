@@ -256,7 +256,7 @@ export const TOWER_DESCRIPTIONS: Record<TowerType, string> = {
   [TowerType.SPLASH]: 'Area damage in a radius',
   [TowerType.SLOW]:   'Slows enemies, no damage',
   [TowerType.CHAIN]:  'Lightning bounces between enemies',
-  [TowerType.MORTAR]: 'Creates damage zones on the ground',
+  [TowerType.MORTAR]: 'Damage zones that burn enemies',
 };
 
 /** Resolve effective stats for a tower at a given level (clamped to 1..MAX_TOWER_LEVEL).

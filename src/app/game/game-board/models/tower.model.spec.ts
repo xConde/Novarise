@@ -33,7 +33,7 @@ describe('Tower Model', () => {
     });
 
     it('should have the correct description for MORTAR', () => {
-      expect(TOWER_DESCRIPTIONS[TowerType.MORTAR]).toBe('Creates damage zones on the ground');
+      expect(TOWER_DESCRIPTIONS[TowerType.MORTAR]).toBe('Damage zones that burn enemies');
     });
 
     it('should have exactly 6 entries matching the 6 TowerType values', () => {
