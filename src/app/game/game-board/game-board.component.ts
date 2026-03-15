@@ -458,6 +458,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   cycleTargeting(): void {
     if (!this.selectedTowerInfo) return;
+    // Slow towers don't support targeting mode cycling (utility-only, no projectiles)
+    if (this.selectedTowerInfo.type === TowerType.SLOW) return;
     this.towerCombatService.cycleTargetingMode(this.selectedTowerInfo.id);
   }
 

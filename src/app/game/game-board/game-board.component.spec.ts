@@ -13,7 +13,8 @@ import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase } from './models/game-state.model';
-import { TowerType } from './models/tower.model';
+import { TowerType, PlacedTower } from './models/tower.model';
+import { TowerCombatService } from './services/tower-combat.service';
 import { ScoreBreakdown, calculateScoreBreakdown } from './models/score.model';
 import { ACHIEVEMENTS, Achievement } from './services/player-profile.service';
 import { WaveService } from './services/wave.service';
@@ -307,6 +308,18 @@ describe('GameBoardComponent', () => {
       spyOn(component, 'sellTower');
       fireKey('Delete');
       expect(component.sellTower).not.toHaveBeenCalled();
+    });
+
+    it('cycleTargeting skips SLOW towers', () => {
+      component.selectedTowerInfo = {
+        id: 'tower-slow', type: TowerType.SLOW, level: 1,
+        row: 0, col: 0, lastFireTime: 0, kills: 0, totalInvested: 75,
+        targetingMode: 'nearest', mesh: null,
+      } as PlacedTower;
+      const towerCombat = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(towerCombat, 'cycleTargetingMode');
+      component.cycleTargeting();
+      expect(towerCombat.cycleTargetingMode).not.toHaveBeenCalled();
     });
   });
 
