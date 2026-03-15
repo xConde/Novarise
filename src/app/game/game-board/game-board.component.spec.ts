@@ -874,4 +874,37 @@ describe('GameBoardComponent', () => {
       expect(cost).toBe(0);
     });
   });
+
+  describe('Tile Highlighting', () => {
+    it('updateTileHighlights should not throw when tileMeshes is empty', () => {
+      component.selectedTowerType = TowerType.BASIC;
+      expect(() => component.updateTileHighlights()).not.toThrow();
+    });
+
+    it('updateTileHighlights should do nothing in INSPECT mode', () => {
+      component.selectedTowerType = null;
+      component.updateTileHighlights();
+      expect((component as any).highlightedTiles.size).toBe(0);
+    });
+
+    it('clearTileHighlights should clear the highlighted set', () => {
+      (component as any).highlightedTiles.add('0-0');
+      (component as any).highlightedTiles.add('1-1');
+      (component as any).clearTileHighlights();
+      expect((component as any).highlightedTiles.size).toBe(0);
+    });
+
+    it('selectTowerType should call updateTileHighlights', () => {
+      spyOn(component, 'updateTileHighlights');
+      component.selectedTowerType = null; // start in INSPECT mode
+      component.selectTowerType(TowerType.SNIPER);
+      expect(component.updateTileHighlights).toHaveBeenCalled();
+    });
+
+    it('cancelPlacement should clear highlights', () => {
+      (component as any).highlightedTiles.add('2-3');
+      component.cancelPlacement();
+      expect((component as any).highlightedTiles.size).toBe(0);
+    });
+  });
 });

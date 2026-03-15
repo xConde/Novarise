@@ -62,6 +62,10 @@ export const TILE_EMISSIVE = {
   special: 0.4,
   hover: 0.5,
   selected: 0.8,
+  /** Highlight intensity for tiles valid for tower placement (PLACE mode). */
+  validPlacement: 0.35,
+  /** Emissive color override for valid placement tiles (soft cyan glow). */
+  validPlacementColor: 0x00ccaa,
 };
 
 export const SHIELD_VISUAL_CONFIG = {

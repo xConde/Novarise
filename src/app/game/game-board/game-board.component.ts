@@ -94,6 +94,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private rangePreviewMesh: THREE.Mesh | null = null;
   selectedTowerType: TowerType | null = TowerType.BASIC;
   private lastPreviewKey = ''; // "row-col-towerType" — skip BFS when unchanged
+  /** Set of "row-col" keys for tiles currently highlighted as valid placements. */
+  private highlightedTiles: Set<string> = new Set();
 
   // Tower info panel state (exposed to template)
   selectedTowerInfo: PlacedTower | null = null;
@@ -362,12 +364,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.selectedTowerType = type;
     this.deselectTower();
+    this.updateTileHighlights();
   }
 
-  /** Exit PLACE mode — clears tower type selection, hides ghost preview. */
+  /** Exit PLACE mode — clears tower type selection, hides ghost preview, removes tile highlights. */
   cancelPlacement(): void {
     this.selectedTowerType = null;
     this.lastPreviewKey = '';
+    this.clearTileHighlights();
     if (this.scene) {
       this.towerPreviewService.hidePreview(this.scene);
     }
@@ -376,6 +380,60 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Whether a tower type is selected for placement (PLACE mode). */
   get isPlaceMode(): boolean {
     return this.selectedTowerType !== null;
+  }
+
+  /**
+   * Highlight all tiles where the currently selected tower type can be placed.
+   * Called when entering PLACE mode or when the board changes during PLACE mode.
+   */
+  updateTileHighlights(): void {
+    this.clearTileHighlights();
+
+    if (!this.isPlaceMode) return;
+
+    const board = this.gameBoardService.getGameBoard();
+    const cost = this.getEffectiveTowerCost(this.selectedTowerType);
+    const canAfford = this.gameStateService.canAfford(cost);
+
+    for (let row = 0; row < board.length; row++) {
+      for (let col = 0; col < board[row].length; col++) {
+        const tile = board[row][col];
+        if (tile.type !== BlockType.BASE || !tile.isPurchasable || tile.towerType !== null) continue;
+
+        const key = `${row}-${col}`;
+        const mesh = this.tileMeshes.get(key);
+        if (!mesh) continue;
+
+        // Skip hovered tile and selected tile — they have their own highlight
+        if (mesh === this.hoveredTile || (this.selectedTile?.row === row && this.selectedTile?.col === col)) continue;
+
+        if (canAfford) {
+          const material = mesh.material as THREE.MeshStandardMaterial;
+          // Store original emissive color for restoration
+          mesh.userData['origEmissive'] = material.emissive.getHex();
+          mesh.userData['origEmissiveIntensity'] = material.emissiveIntensity;
+          material.emissive.setHex(TILE_EMISSIVE.validPlacementColor);
+          material.emissiveIntensity = TILE_EMISSIVE.validPlacement;
+          this.highlightedTiles.add(key);
+        }
+      }
+    }
+  }
+
+  /** Remove placement highlights from all tiles, restoring their original emissive. */
+  private clearTileHighlights(): void {
+    for (const key of this.highlightedTiles) {
+      const mesh = this.tileMeshes.get(key);
+      if (!mesh) continue;
+      const material = mesh.material as THREE.MeshStandardMaterial;
+      const origColor = mesh.userData['origEmissive'] ?? 0x2a2548;
+      const origIntensity = mesh.userData['origEmissiveIntensity'] ?? TILE_EMISSIVE.base;
+      material.emissive.setHex(origColor);
+      material.emissiveIntensity = origIntensity;
+      delete mesh.userData['origEmissive'];
+      delete mesh.userData['origEmissiveIntensity'];
+    }
+    this.highlightedTiles.clear();
   }
 
   upgradeTower(spec?: TowerSpecialization): void {
@@ -479,6 +537,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.refreshPathOverlay();
 
     this.deselectTower();
+
+    // Recompute valid tile highlights — board changed (tile freed)
+    this.updateTileHighlights();
   }
 
   cycleTargeting(): void {
@@ -687,6 +748,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.pathVisualizationService.hidePath(this.scene);
     this.pathVisualizationService.cleanup();
     this.showPathOverlay = false;
+
+    // Clean up tile highlights
+    this.clearTileHighlights();
 
     // Clean up range preview and range toggle rings
     this.removeRangePreview();
@@ -1412,6 +1476,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // Clear enemy path cache since board layout changed
       this.enemyService.clearPathCache();
       this.refreshPathOverlay();
+
+      // Recompute valid tile highlights — board changed
+      this.updateTileHighlights();
     }
   }
 
