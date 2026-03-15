@@ -758,3 +758,10 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 **Location:** `game-board.component.ts:624`
 **Risk:** `const currentStats = getEffectiveStats(this.selectedTowerInfo.type, this.selectedTowerInfo.level);` is computed but never referenced — the spec options now use `alphaStats`/`betaStats` directly. Dead variable. No runtime cost (tree-shaken in prod), but violates code quality standards and will trigger lint warnings.
 **Fix:** Remove the unused `currentStats` line.
+
+## Deployment Checklist — feat/gameplay-interaction
+- [x] Step 1: Convention check — grep for console.log, TODO/FIXME/HACK, catch(e), hardcoded numbers added on this branch
+- [x] Step 2: Tile-specific cost shown in mode indicator on hover (hoveredTileCost + gold display)
+- [ ] Step 3: Full test suite green (1839/1839 hard gate)
+- [ ] Step 4: Production build passes with no new warnings
+- [ ] Step 5: Push to remote + update PR

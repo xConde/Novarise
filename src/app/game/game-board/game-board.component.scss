@@ -1707,6 +1707,11 @@
     }
   }
 
+  .mode-cost {
+    color: var(--game-gold, #ffd700);
+    font-weight: 700;
+  }
+
   .mode-hint {
     font-size: var(--font-size-2xs);
     color: rgba(255, 255, 255, 0.35);

@@ -98,6 +98,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private lastPreviewKey = ''; // "row-col-towerType" — skip BFS when unchanged
   /** Set of "row-col" keys for tiles currently highlighted as valid placements. */
   private highlightedTiles: Set<string> = new Set();
+  /** Tile-specific cost shown in mode indicator during PLACE mode hover. 0 = not hovering a valid tile. */
+  hoveredTileCost = 0;
 
   // Tower info panel state (exposed to template)
   selectedTowerInfo: PlacedTower | null = null;
@@ -397,6 +399,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   cancelPlacement(): void {
     this.selectedTowerType = null;
     this.lastPreviewKey = '';
+    this.hoveredTileCost = 0;
     this.clearTileHighlights();
     if (this.scene) {
       this.towerPreviewService.hidePreview(this.scene);
@@ -1409,18 +1412,21 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           if (previewKey !== this.lastPreviewKey) {
             this.lastPreviewKey = previewKey;
             const tileCost = this.getTileTowerCost(this.selectedTowerType!, row, col).cost;
+            this.hoveredTileCost = tileCost;
             const canPlace = this.gameBoardService.canPlaceTower(row, col)
               && this.gameStateService.canAfford(tileCost);
             this.towerPreviewService.showPreview(this.selectedTowerType!, row, col, canPlace, this.scene);
           }
         } else {
           this.lastPreviewKey = '';
+          this.hoveredTileCost = 0;
           this.towerPreviewService.hidePreview(this.scene);
         }
       } else {
         this.hoveredTile = null;
         canvas.style.cursor = 'default';
         this.lastPreviewKey = '';
+        this.hoveredTileCost = 0;
         this.towerPreviewService.hidePreview(this.scene);
       }
     };

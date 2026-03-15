@@ -365,6 +365,7 @@
     <span class="mode-label" [class.place-mode]="isPlaceMode" [class.inspect-mode]="!isPlaceMode">
       {{ isPlaceMode ? (selectedTowerType | titlecase) : 'Inspect' }}
     </span>
+    <span class="mode-cost" *ngIf="isPlaceMode && hoveredTileCost > 0">{{ hoveredTileCost }}g</span>
     <span class="mode-hint" *ngIf="isPlaceMode">Right-click to cancel</span>
   </div>
 
