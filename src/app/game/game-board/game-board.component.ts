@@ -34,7 +34,7 @@ import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG, ANIMATION_CONFIG }
 import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from './constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
-import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG, TILE_EMISSIVE, ENEMY_VISUAL_CONFIG, UI_CONFIG } from './constants/ui.constants';
+import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG, TILE_EMISSIVE, HEATMAP_COLORS, ENEMY_VISUAL_CONFIG, UI_CONFIG } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG, DRAG_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
@@ -43,7 +43,7 @@ import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
 import { StatusEffectService } from './services/status-effect.service';
 import { StatusEffectType } from './constants/status-effect.constants';
-import { TilePricingService, TilePriceInfo } from './services/tile-pricing.service';
+import { TilePricingService, TilePriceInfo, StrategicTier } from './services/tile-pricing.service';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -100,6 +100,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private highlightedTiles: Set<string> = new Set();
   /** Tile-specific cost shown in mode indicator during PLACE mode hover. 0 = not hovering a valid tile. */
   hoveredTileCost = 0;
+  /** % increase over base cost for the hovered tile. */
+  hoveredTilePercent = 0;
 
   // Tower info panel state (exposed to template)
   selectedTowerInfo: PlacedTower | null = null;
@@ -400,6 +402,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedTowerType = null;
     this.lastPreviewKey = '';
     this.hoveredTileCost = 0;
+    this.hoveredTilePercent = 0;
     this.clearTileHighlights();
     if (this.scene) {
       this.towerPreviewService.hidePreview(this.scene);
@@ -585,16 +588,20 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         // Skip selected tile — it has its own highlight
         if (this.selectedTile?.row === row && this.selectedTile?.col === col) continue;
 
-        // Use tile-specific strategic cost (not base cost) to check affordability
-        const tileCost = this.getTileTowerCost(this.selectedTowerType!, row, col).cost;
-        if (this.gameStateService.canAfford(tileCost)) {
+        // Use tile-specific strategic pricing for affordability and heatmap color
+        const priceInfo = this.getTileTowerCost(this.selectedTowerType!, row, col);
+        if (this.gameStateService.canAfford(priceInfo.cost)) {
           const material = mesh.material as THREE.MeshStandardMaterial;
-          // Snapshot from tile-type defaults, not live material — avoids capturing
-          // transient hover intensity if mousemove fired just before this call
+          // Snapshot from tile-type defaults, not live material
           mesh.userData['origEmissive'] = TILE_EMISSIVE.defaultColor;
           mesh.userData['origEmissiveIntensity'] = TILE_EMISSIVE.base;
-          material.emissive.setHex(TILE_EMISSIVE.validPlacementColor);
-          material.emissiveIntensity = TILE_EMISSIVE.validPlacement;
+
+          // Apply heatmap color based on strategic tier
+          const heatmapEntry = HEATMAP_COLORS[priceInfo.tier];
+          material.emissive.setHex(heatmapEntry.color);
+          material.emissiveIntensity = heatmapEntry.intensity;
+          // Store tier for hover restore
+          mesh.userData['heatmapTier'] = priceInfo.tier;
           this.highlightedTiles.add(key);
         }
       }
@@ -613,6 +620,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       material.emissiveIntensity = origIntensity;
       delete mesh.userData['origEmissive'];
       delete mesh.userData['origEmissiveIntensity'];
+      delete mesh.userData['heatmapTier'];
     }
     this.highlightedTiles.clear();
   }
@@ -1384,9 +1392,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
         const tileKey = `${this.hoveredTile.userData['row']}-${this.hoveredTile.userData['col']}`;
         if (this.highlightedTiles.has(tileKey)) {
-          // Restore to highlight state (not default)
-          material.emissive.setHex(TILE_EMISSIVE.validPlacementColor);
-          material.emissiveIntensity = TILE_EMISSIVE.validPlacement;
+          // Restore to heatmap color for this tile's tier (not a flat color)
+          const tier: StrategicTier = this.hoveredTile.userData['heatmapTier'] ?? 'base';
+          const heatmap = HEATMAP_COLORS[tier];
+          material.emissive.setHex(heatmap.color);
+          material.emissiveIntensity = heatmap.intensity;
         } else {
           const tileType = this.hoveredTile.userData['tile'].type;
           material.emissiveIntensity = tileType === BlockType.BASE ? TILE_EMISSIVE.base : tileType === BlockType.WALL ? TILE_EMISSIVE.wall : TILE_EMISSIVE.special;
@@ -1411,8 +1421,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           const previewKey = `${row}-${col}-${this.selectedTowerType}-${this.gameState.gold}`;
           if (previewKey !== this.lastPreviewKey) {
             this.lastPreviewKey = previewKey;
-            const tileCost = this.getTileTowerCost(this.selectedTowerType!, row, col).cost;
-            this.hoveredTileCost = tileCost;
+            const tilePrice = this.getTileTowerCost(this.selectedTowerType!, row, col);
+            this.hoveredTileCost = tilePrice.cost;
+            this.hoveredTilePercent = tilePrice.percentIncrease;
+            const tileCost = tilePrice.cost;
             const canPlace = this.gameBoardService.canPlaceTower(row, col)
               && this.gameStateService.canAfford(tileCost);
             this.towerPreviewService.showPreview(this.selectedTowerType!, row, col, canPlace, this.scene);
@@ -1420,6 +1432,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         } else {
           this.lastPreviewKey = '';
           this.hoveredTileCost = 0;
+    this.hoveredTilePercent = 0;
           this.towerPreviewService.hidePreview(this.scene);
         }
       } else {
@@ -1427,6 +1440,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         canvas.style.cursor = 'default';
         this.lastPreviewKey = '';
         this.hoveredTileCost = 0;
+    this.hoveredTilePercent = 0;
         this.towerPreviewService.hidePreview(this.scene);
       }
     };
