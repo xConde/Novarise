@@ -15,7 +15,7 @@ A tower defense game built with Angular 15 and Three.js. Design custom maps in a
 
 - **Framework:** Angular 15
 - **3D Engine:** Three.js (post-processing: bloom, vignette)
-- **Tests:** Karma + Jasmine (1656 specs)
+- **Tests:** Karma + Jasmine (1771 specs)
 - **Deploy:** Cloudflare Pages
 
 ## Development
@@ -34,8 +34,11 @@ ng build          # Production build → dist/
 - 10 waves + endless mode, 4 difficulty levels
 - 8 pre-game modifiers with score multipliers
 - Tower targeting modes (nearest/first/strongest)
-- Status effects (slow, burn, poison)
-- Interest system, score breakdown, star rating
+- Status effects: SLOW (Slow tower), BURN (Mortar, Chain Tesla L3), POISON (Splash Bombardier L3)
+- Per-map best scores with star ratings on map select
+- Interest system with visible wave income feedback
+- Score breakdown, star rating, keyboard tower management (U/T/Del)
+- WebGL context loss detection and auto-recovery
 - Deterministic fixed-timestep physics (60Hz)
 
 ## Editor Features

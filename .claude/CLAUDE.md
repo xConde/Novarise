@@ -6,7 +6,7 @@ Angular 15 + Three.js tower defense game with a map editor.
 - **`/edit`** — Map editor (EditorModule, lazy-loaded)
 - **`/maps`** — Map select (MapSelectModule, lazy-loaded)
 - **`/play`** — Tower defense game (GameModule, lazy-loaded, guarded)
-- **Tests:** `npm test` (Karma, 1656 tests, headless Chrome)
+- **Tests:** `npm test` (Karma, 1771 tests, headless Chrome)
 - **Deploy:** Cloudflare Pages
 
 ## Code Conventions
@@ -60,6 +60,11 @@ Every Three.js object you create must be disposed in `ngOnDestroy()`.
 - Component tests that need a canvas: skip `detectChanges()` in basic specs
 - `fakeAsync()` wraps `it()` blocks, NEVER `describe()` blocks
 - Async subscription tests: unsubscribe in `afterEach()`
+- **Shared test helpers** in `game/game-board/testing/`:
+  - `test-enemy.factory.ts` — `createTestEnemy()` for consistent Enemy objects
+  - `test-board.factory.ts` — `createTestBoard()` for mock GameBoardTile grids
+  - `test-spies.factory.ts` — pre-built spy factories for GameBoardService, EnemyService
+  - Use these instead of defining local helpers in each spec file
 
 ### State Management
 - BehaviorSubject pattern for all reactive state (GameStateService, EditorStateService)
@@ -89,16 +94,18 @@ When adding new towers, enemies, or waves, follow the established config-driven 
 ## Key Files
 | File | Purpose |
 |------|---------|
-| `game-board.component.ts` | Game renderer, loop, UI (~1,800 LOC) |
-| `novarise.component.ts` | Editor renderer, interactions (~1,880 LOC) |
-| `tower.model.ts` | Tower configs, upgrade math |
+| `game-board.component.ts` | Game renderer, loop, UI (~1,990 LOC) |
+| `novarise.component.ts` | Editor renderer, interactions (~1,920 LOC) |
+| `tower.model.ts` | Tower configs, upgrade math, statusEffect wiring |
 | `enemy.model.ts` | Enemy configs, pathfinding types |
-| `wave.model.ts` | Wave definitions |
-| `game-state.model.ts` | Game phase enum, initial state |
-| `map-bridge.service.ts` | Editor→Game map conversion (root injectable) |
+| `wave.model.ts` | Wave definitions (10 waves + endless config) |
+| `game-state.model.ts` | Game phase enum, difficulty presets, initial state |
+| `score.model.ts` | Star ratings, score breakdown, MapScoreRecord |
+| `map-bridge.service.ts` | Editor→Game map conversion + mapId tracking (root injectable) |
 | `game-modifier.model.ts` | Modifier configs, merge logic, score multipliers |
 | `status-effect.service.ts` | SLOW/BURN/POISON effects, immunity, speed restoration |
-| `tower-combat.service.ts` | Targeting, projectiles, chain, mortar, spatial grid |
+| `tower-combat.service.ts` | Targeting, projectiles, chain, mortar, spatial grid, status effect application |
+| `player-profile.service.ts` | Player stats, achievements, per-map best scores |
 | `STRATEGIC_AUDIT.md` | Master sprint roadmap + red team findings |
 
 ## Sprint Workflow

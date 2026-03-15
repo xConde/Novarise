@@ -1,12 +1,14 @@
-# Strategic Audit — 2026-03-03
+# Strategic Audit — 2026-03-03 (header state as of initial audit; see red team sections for current state)
 
-## Current State
+## Current State (as of 2026-03-15)
 
-**Stack:** Angular 15 + Three.js | 1332/1332 tests passing | Karma + headless Chrome
-**Two systems:** Map Editor (`/edit`) + Tower Defense Game (`/play`), lazy-loaded
-**Core loop:** 3 tower types, 5 enemy types, 10 waves, economy, upgrade/sell, A* pathfinding, victory/defeat
-**Visuals:** Bloom, vignette, skybox, particles, custom tower meshes, health bars
-**Editor:** 4 terrain types, brush/fill/rectangle tools, undo/redo, save/load/export, mobile joystick
+**Stack:** Angular 15 + Three.js | 1771/1771 tests passing | Karma + headless Chrome
+**Four routes:** Landing (`/`), Map Editor (`/edit`), Map Select (`/maps`), Game (`/play`, guarded)
+**Core loop:** 6 tower types (Basic, Sniper, Splash, Slow, Chain, Mortar), 8 enemy types, 10 waves + endless, 4 difficulties, 8 modifiers
+**Combat:** A* pathfinding, spatial grid, object pool, status effects (SLOW/BURN/POISON), L3 specialization branching
+**Visuals:** Bloom, vignette, skybox, particles, custom tower meshes, health bars, status effect tinting
+**Editor:** 4 terrain types, brush/fill/rectangle tools, undo/redo, save/load/export, mobile joystick, path validation
+**Progression:** Per-map best scores + star ratings, player profile, 8 achievements, wave income feedback
 
 ---
 
