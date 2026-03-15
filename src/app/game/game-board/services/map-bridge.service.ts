@@ -29,13 +29,24 @@ export interface ConvertedBoard {
 })
 export class MapBridgeService {
   private editorMapState: EditorMapState | null = null;
+  private currentMapId: string | null = null;
 
   /**
    * Store editor map state for cross-route transfer.
    * Called by NovariseComponent.ngOnDestroy() before terrain is disposed.
+   * Optionally accepts a mapId to track which saved map is being played.
    */
-  setEditorMapState(state: EditorMapState): void {
+  setEditorMapState(state: EditorMapState, mapId?: string): void {
     this.editorMapState = state;
+    this.currentMapId = mapId ?? null;
+  }
+
+  /**
+   * Returns the ID of the map currently loaded from storage, or null if
+   * this is a quick-play or unsaved map.
+   */
+  getMapId(): string | null {
+    return this.currentMapId;
   }
 
   /**
@@ -57,6 +68,7 @@ export class MapBridgeService {
    */
   clearEditorMap(): void {
     this.editorMapState = null;
+    this.currentMapId = null;
   }
 
   /**

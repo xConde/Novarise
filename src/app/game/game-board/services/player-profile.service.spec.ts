@@ -4,6 +4,8 @@ import {
   GameEndStats,
   ACHIEVEMENTS,
 } from './player-profile.service';
+import { MapScoreRecord } from '../models/score.model';
+import { DifficultyLevel } from '../models/game-state.model';
 
 const STORAGE_KEY = 'novarise-profile';
 
@@ -313,6 +315,7 @@ describe('PlayerProfileService', () => {
         highestWaveReached: 8,
         highestScore: 2500,
         achievements: ['first_victory'],
+        mapScores: {},
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
       const fresh = new PlayerProfileService();
@@ -354,6 +357,162 @@ describe('PlayerProfileService', () => {
       const p = fresh.getProfile();
       expect(p.totalGamesPlayed).toBe(3);
       expect(p.totalVictories).toBe(0); // default filled in
+    });
+  });
+
+  // ── recordMapScore ─────────────────────────────────────────────────────────
+
+  describe('recordMapScore', () => {
+    it('saves a new score for a map that has no existing record', () => {
+      service.recordMapScore('map_1', 1500, 3, DifficultyLevel.NORMAL);
+      const record = service.getMapScore('map_1');
+      expect(record).not.toBeNull();
+      expect(record!.mapId).toBe('map_1');
+      expect(record!.bestScore).toBe(1500);
+      expect(record!.bestStars).toBe(3);
+      expect(record!.difficulty).toBe(DifficultyLevel.NORMAL);
+    });
+
+    it('updates the record when new score is higher', () => {
+      service.recordMapScore('map_1', 1000, 2, DifficultyLevel.NORMAL);
+      service.recordMapScore('map_1', 2000, 3, DifficultyLevel.HARD);
+      const record = service.getMapScore('map_1');
+      expect(record!.bestScore).toBe(2000);
+      expect(record!.bestStars).toBe(3);
+      expect(record!.difficulty).toBe(DifficultyLevel.HARD);
+    });
+
+    it('does NOT update the record when new score is lower', () => {
+      service.recordMapScore('map_1', 2000, 3, DifficultyLevel.HARD);
+      service.recordMapScore('map_1', 500, 1, DifficultyLevel.EASY);
+      const record = service.getMapScore('map_1');
+      expect(record!.bestScore).toBe(2000);
+    });
+
+    it('keeps best stars even when new score is lower', () => {
+      service.recordMapScore('map_1', 3000, 3, DifficultyLevel.HARD);
+      service.recordMapScore('map_1', 1000, 1, DifficultyLevel.EASY);
+      // New score is lower so no update — stars remain at 3
+      expect(service.getMapScore('map_1')!.bestStars).toBe(3);
+    });
+
+    it('takes the max of stars when a higher score has fewer stars', () => {
+      // This edge case: if score increases but stars decrease, bestStars should
+      // keep the higher value. Set up by lowering stars artificially.
+      service.recordMapScore('map_1', 1000, 3, DifficultyLevel.NORMAL);
+      // Override internal state manually via a second call with higher score
+      service.recordMapScore('map_1', 5000, 1, DifficultyLevel.NIGHTMARE);
+      const record = service.getMapScore('map_1');
+      // Higher score wins, but bestStars is max(1, 3) = 3
+      expect(record!.bestScore).toBe(5000);
+      expect(record!.bestStars).toBe(3);
+    });
+
+    it('persists to localStorage', () => {
+      service.recordMapScore('map_1', 1500, 2, DifficultyLevel.NORMAL);
+      const raw = localStorage.getItem(STORAGE_KEY);
+      expect(raw).toBeTruthy();
+      const parsed = JSON.parse(raw!);
+      expect(parsed.mapScores?.['map_1']?.bestScore).toBe(1500);
+    });
+
+    it('tracks multiple maps independently', () => {
+      service.recordMapScore('map_1', 1000, 2, DifficultyLevel.NORMAL);
+      service.recordMapScore('map_2', 2000, 3, DifficultyLevel.HARD);
+      expect(service.getMapScore('map_1')!.bestScore).toBe(1000);
+      expect(service.getMapScore('map_2')!.bestScore).toBe(2000);
+    });
+  });
+
+  // ── getMapScore ────────────────────────────────────────────────────────────
+
+  describe('getMapScore', () => {
+    it('returns null for unknown map', () => {
+      expect(service.getMapScore('nonexistent_map')).toBeNull();
+    });
+
+    it('returns the record after recording a score', () => {
+      service.recordMapScore('map_abc', 999, 1, DifficultyLevel.EASY);
+      const record = service.getMapScore('map_abc');
+      expect(record).not.toBeNull();
+      expect(record!.bestScore).toBe(999);
+    });
+  });
+
+  // ── getAllMapScores ─────────────────────────────────────────────────────────
+
+  describe('getAllMapScores', () => {
+    it('returns empty object when no scores recorded', () => {
+      expect(service.getAllMapScores()).toEqual({});
+    });
+
+    it('returns all recorded map scores', () => {
+      service.recordMapScore('map_1', 1000, 2, DifficultyLevel.NORMAL);
+      service.recordMapScore('map_2', 2000, 3, DifficultyLevel.HARD);
+      const all = service.getAllMapScores();
+      expect(Object.keys(all).length).toBe(2);
+      expect(all['map_1'].bestScore).toBe(1000);
+      expect(all['map_2'].bestScore).toBe(2000);
+    });
+
+    it('returns a copy — mutations do not affect internal state', () => {
+      service.recordMapScore('map_1', 1000, 2, DifficultyLevel.NORMAL);
+      const all = service.getAllMapScores();
+      all['map_1'].bestScore = 9999;
+      expect(service.getMapScore('map_1')!.bestScore).toBe(1000);
+    });
+  });
+
+  // ── reset clears mapScores ─────────────────────────────────────────────────
+
+  describe('reset clears mapScores', () => {
+    it('reset removes all map scores', () => {
+      service.recordMapScore('map_1', 1000, 2, DifficultyLevel.NORMAL);
+      service.reset();
+      expect(service.getMapScore('map_1')).toBeNull();
+      expect(service.getAllMapScores()).toEqual({});
+    });
+  });
+
+  // ── load handles mapScores ──────────────────────────────────────────────────
+
+  describe('localStorage mapScores persistence', () => {
+    it('loads persisted mapScores on construction', () => {
+      const mapScore: MapScoreRecord = {
+        mapId: 'map_1',
+        bestScore: 1500,
+        bestStars: 2,
+        difficulty: DifficultyLevel.NORMAL,
+        completedAt: 1700000000000,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        totalGamesPlayed: 1,
+        achievements: [],
+        mapScores: { map_1: mapScore },
+      }));
+      const fresh = new PlayerProfileService();
+      const record = fresh.getMapScore('map_1');
+      expect(record).not.toBeNull();
+      expect(record!.bestScore).toBe(1500);
+      expect(record!.bestStars).toBe(2);
+    });
+
+    it('handles missing mapScores field in saved data gracefully', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ totalGamesPlayed: 3, achievements: [] }));
+      const fresh = new PlayerProfileService();
+      expect(fresh.getAllMapScores()).toEqual({});
+    });
+
+    it('handles null mapScores in saved data gracefully', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ achievements: [], mapScores: null }));
+      const fresh = new PlayerProfileService();
+      expect(fresh.getAllMapScores()).toEqual({});
+    });
+
+    it('handles array mapScores (corrupt data) gracefully', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ achievements: [], mapScores: ['bad'] }));
+      const fresh = new PlayerProfileService();
+      expect(fresh.getAllMapScores()).toEqual({});
     });
   });
 

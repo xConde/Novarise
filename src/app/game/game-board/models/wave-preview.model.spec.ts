@@ -71,10 +71,10 @@ describe('getWavePreview', () => {
   });
 
   it('returns correct entries for the last static wave (wave 10 — boss wave)', () => {
-    // Wave 10: BOSS×1, SHIELDED×4, SWARM×4, HEAVY×2
+    // Wave 10: BOSS×1, SHIELDED×2, SWARM×3, HEAVY×1
     const preview = getWavePreview(WAVE_DEFINITIONS.length, false);
     expect(preview.find(e => e.type === EnemyType.BOSS)?.count).toBe(1);
-    expect(preview.find(e => e.type === EnemyType.SHIELDED)?.count).toBe(4);
+    expect(preview.find(e => e.type === EnemyType.SHIELDED)?.count).toBe(2);
   });
 
   it('aggregates duplicate types in a single entry', () => {

@@ -120,6 +120,19 @@ export const MAX_SPAWN_POINTS = 4;
 /** Maximum number of exit points allowed per map. */
 export const MAX_EXIT_POINTS = 4;
 
+// ── Render order (draw priority for overlapping transparent meshes) ────────────
+export const EDITOR_RENDER_ORDER = {
+  /** Brush indicator ring — always renders on top of everything else. */
+  brushIndicator: 1000,
+  /** Spawn/exit marker cones — one below brush indicator. */
+  spawnMarker: 999,
+  exitMarker: 999,
+  /** Multi-brush secondary preview rings — same priority as markers. */
+  brushPreview: 999,
+  /** Rectangle selection preview rings — one below markers/brush. */
+  rectanglePreview: 998,
+} as const;
+
 // ── Height limits (terrain-grid.class.ts) ────────────────────────────────────
 export const EDITOR_HEIGHT = {
   min: 0,

@@ -40,9 +40,15 @@
   --action-success: #50ff88;
   --action-success-bg: rgba(0, 180, 80, 0.25);
   --action-success-border: rgba(0, 220, 100, 0.5);
+  --action-warning: #ffcc33;
   --action-danger: #ff6666;
   --action-danger-bg: rgba(180, 20, 20, 0.2);
   --action-danger-border: rgba(220, 50, 50, 0.4);
+
+  /* Status effect colors (match Three.js STATUS_EFFECT_VISUALS) */
+  --effect-burn: #ff6622;
+  --effect-poison: #44ff22;
+  --effect-slow: #4488ff;
 
   /* Game-specific colors */
   --game-primary: #444444;

@@ -31,3 +31,25 @@ export const EDITOR_CAMERA_LOOK_AT_DISTANCE = 10;
 
 /** Y offset subtracted from the look-at target to tilt view slightly downward. */
 export const EDITOR_CAMERA_LOOK_AT_Y_OFFSET = -5;
+
+// ── PerspectiveCamera constructor params ──────────────────────────────────────
+export const EDITOR_PERSPECTIVE_CAMERA_CONFIG = {
+  /** Vertical field of view in degrees. */
+  fov: 45,
+  /** Near clipping plane distance. */
+  near: 0.1,
+  /** Far clipping plane distance. */
+  far: 1000,
+  /** World-space distance from target used to set initial camera position. */
+  distance: 35,
+} as const;
+
+// ── OrbitControls zoom settings ───────────────────────────────────────────────
+export const EDITOR_ORBIT_CONTROLS_CONFIG = {
+  /** Mouse-wheel zoom speed multiplier. */
+  zoomSpeed: 1.0,
+  /** Minimum dolly distance (matches CameraConfig.minDistance). */
+  minDistance: 10,
+  /** Maximum dolly distance (matches CameraConfig.maxDistance). */
+  maxDistance: 80,
+} as const;

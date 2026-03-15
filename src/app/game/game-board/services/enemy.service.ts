@@ -8,10 +8,17 @@ import { MinHeap } from '../utils/min-heap';
 import { GameModifier, ModifierEffects, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG, BOSS_CROWN_CONFIG } from '../constants/effects.constants';
+import { gridToWorld } from '../utils/coordinate-utils';
 
+/**
+ * Result returned by {@link EnemyService.damageEnemy}.
+ * `killed` is true when the hit reduces health to 0 or below.
+ * `spawnedEnemies` is non-empty only when a SWARM parent dies; the caller
+ * must add each entry's mesh to the Three.js scene.
+ */
 export interface DamageResult {
   killed: boolean;
-  spawnedEnemies: Enemy[]; // Mini-swarm enemies added to the scene on parent death
+  spawnedEnemies: Enemy[];
 }
 
 @Injectable()
@@ -33,7 +40,11 @@ export class EnemyService {
   }
 
   /**
-   * Spawn a new enemy at a random spawner tile
+   * Spawn a new enemy of the given type at a randomly chosen spawner tile.
+   * Applies active modifier effects (health/speed multipliers) to the enemy's
+   * base stats, creates a Three.js mesh, and adds it to `scene`.
+   * FLYING enemies use a straight-line path that bypasses terrain.
+   * Returns `null` if no spawner/exit tiles exist or no valid path is found.
    */
   spawnEnemy(type: EnemyType, scene: THREE.Scene): Enemy | null {
     const spawnerTiles = this.getSpawnerTiles();
@@ -69,7 +80,7 @@ export class EnemyService {
 
     // Create enemy
     const stats = ENEMY_STATS[type];
-    const worldPos = this.gridToWorld(row, col);
+    const worldPos = this.gridToWorldPos(row, col);
 
     // FLYING enemies hover above ground
     const yPos = isFlying ? FLYING_ENEMY_HEIGHT : stats.size;
@@ -142,7 +153,10 @@ export class EnemyService {
   }
 
   /**
-   * Update all enemies - move along paths
+   * Advance all living enemies along their paths by `deltaTime` seconds.
+   * Enemies that reach the final path node are not moved further.
+   * @returns IDs of enemies that reached the exit this tick (callers should
+   *   apply leak damage and remove them via {@link removeEnemy}).
    */
   updateEnemies(deltaTime: number): string[] {
     if (deltaTime <= 0) return [];
@@ -164,8 +178,8 @@ export class EnemyService {
       const nextNode = enemy.path[enemy.pathIndex + 1];
 
       // Convert grid positions to world positions
-      const currentWorld = this.gridToWorld(currentNode.y, currentNode.x);
-      const nextWorld = this.gridToWorld(nextNode.y, nextNode.x);
+      const currentWorld = this.gridToWorldPos(currentNode.y, currentNode.x);
+      const nextWorld = this.gridToWorldPos(nextNode.y, nextNode.x);
 
       // Calculate direction and distance
       const direction = new THREE.Vector3(
@@ -208,7 +222,9 @@ export class EnemyService {
   }
 
   /**
-   * Remove an enemy and its mesh from the scene
+   * Remove an enemy by ID: disposes all child geometries/materials (health bar,
+   * shield, crown), removes the mesh from `scene`, and deletes the entry from
+   * the internal enemies map. No-op if the ID is not found.
    */
   removeEnemy(enemyId: string, scene: THREE.Scene): void {
     const enemy = this.enemies.get(enemyId);
@@ -307,7 +323,10 @@ export class EnemyService {
   }
 
   /**
-   * Update all enemy health bars to reflect current health
+   * Sync every enemy's health-bar fill and color to its current health ratio.
+   * @param cameraQuaternion When provided, billboards health-bar planes to face
+   *   the camera, compensating for the parent enemy mesh's own rotation.
+   *   Omit during unit tests or when billboarding is not needed.
    */
   updateHealthBars(cameraQuaternion?: THREE.Quaternion): void {
     this.enemies.forEach(enemy => {
@@ -825,18 +844,14 @@ export class EnemyService {
     return exits;
   }
 
-  /**
-   * Convert grid coordinates to world coordinates
-   */
-  private gridToWorld(row: number, col: number): { x: number, z: number } {
-    const boardWidth = this.gameBoardService.getBoardWidth();
-    const boardHeight = this.gameBoardService.getBoardHeight();
-    const tileSize = this.gameBoardService.getTileSize();
-
-    const x = (col - boardWidth / 2) * tileSize;
-    const z = (row - boardHeight / 2) * tileSize;
-
-    return { x, z };
+  /** Delegate to shared coordinate utility with current board dimensions. */
+  private gridToWorldPos(row: number, col: number): { x: number; z: number } {
+    return gridToWorld(
+      row, col,
+      this.gameBoardService.getBoardWidth(),
+      this.gameBoardService.getBoardHeight(),
+      this.gameBoardService.getTileSize()
+    );
   }
 
   /**
@@ -870,7 +885,7 @@ export class EnemyService {
     );
     if (path.length === 0) return [];
 
-    return path.map(node => this.gridToWorld(node.y, node.x));
+    return path.map(node => this.gridToWorldPos(node.y, node.x));
   }
 
   /**

@@ -1,12 +1,14 @@
-# Strategic Audit — 2026-03-03
+# Strategic Audit — 2026-03-03 (header state as of initial audit; see red team sections for current state)
 
-## Current State
+## Current State (as of 2026-03-15)
 
-**Stack:** Angular 15 + Three.js | 1332/1332 tests passing | Karma + headless Chrome
-**Two systems:** Map Editor (`/edit`) + Tower Defense Game (`/play`), lazy-loaded
-**Core loop:** 3 tower types, 5 enemy types, 10 waves, economy, upgrade/sell, A* pathfinding, victory/defeat
-**Visuals:** Bloom, vignette, skybox, particles, custom tower meshes, health bars
-**Editor:** 4 terrain types, brush/fill/rectangle tools, undo/redo, save/load/export, mobile joystick
+**Stack:** Angular 15 + Three.js | 1771/1771 tests passing | Karma + headless Chrome
+**Four routes:** Landing (`/`), Map Editor (`/edit`), Map Select (`/maps`), Game (`/play`, guarded)
+**Core loop:** 6 tower types (Basic, Sniper, Splash, Slow, Chain, Mortar), 8 enemy types, 10 waves + endless, 4 difficulties, 8 modifiers
+**Combat:** A* pathfinding, spatial grid, object pool, status effects (SLOW/BURN/POISON), L3 specialization branching
+**Visuals:** Bloom, vignette, skybox, particles, custom tower meshes, health bars, status effect tinting
+**Editor:** 4 terrain types, brush/fill/rectangle tools, undo/redo, save/load/export, mobile joystick, path validation
+**Progression:** Per-map best scores + star ratings, player profile, 8 achievements, wave income feedback
 
 ---
 
@@ -698,3 +700,42 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Fix minimap dimensions for rectangular boards (gridWidth/gridHeight)
 - [x] Full test suite green (1697/1697)
 - [x] Push to PR
+
+## Red Team Critique — feat/product-fundamentals (2026-03-15)
+
+### Finding 1: Endless mode scores never recorded (CRITICAL)
+**Location:** `game-board.component.ts` — both game-end recording blocks (~lines 1724 and 1752)
+**Risk:** The `this.scoreBreakdown?.isVictory` guard means only victories trigger `recordMapScore()`. Endless mode always ends in DEFEAT, so endless players — the most engaged audience — have zero per-map score tracking. Their wave-50 grinds are silently thrown away. Additionally, a hard-fought Normal defeat at 5000 points is lost while an Easy victory at 1500 is recorded.
+**Fix:** Remove `isVictory` guard from `recordMapScore`. The method already gates on `score > existing.bestScore`. Stars will be 0 for defeats (preserving `bestStars` via `Math.max`), so the best-stars field is safe.
+
+### Finding 2: WebGL context restored double-loop race (MEDIUM)
+**Location:** `game-board.component.ts` line ~209, `novarise.component.ts` line ~1612
+**Risk:** If a pre-queued RAF callback fires between context loss (which cancels RAF and zeros the id) and context restored (which calls `animate()`), two parallel animation loops start. Double physics updates cause time acceleration, double rendering halves FPS, and accumulated state drifts.
+**Fix:** Guard `animate()` call with `if (!this.animationFrameId)` in the restored handler. Same fix needed in editor component.
+
+### Finding 3: Backspace during game-over navigates browser back (LOW)
+**Location:** `game-board.component.ts` — `handleKeyboard()` phase guard
+**Risk:** The VICTORY/DEFEAT early return skips `preventDefault()` for Backspace, allowing default browser back-navigation. Player viewing score breakdown accidentally presses Backspace → loses the overlay. Mitigated: most modern browsers removed Backspace-as-back.
+**Fix:** Move Backspace/Delete `preventDefault()` before the phase guard, or handle it in a separate early block.
+
+## Red Team Critique — feat/product-fundamentals Pass 2 (2026-03-15)
+
+### Finding 1: DEFEAT block still has isVictory guard — previous fix incomplete (CRITICAL)
+**Location:** `game-board.component.ts` ~line 1756 (DEFEAT mid-frame block)
+**Risk:** The earlier red team fix (commit a792cb1) only patched the VICTORY code path. The DEFEAT code path at ~line 1756 still reads `this.scoreBreakdown?.isVictory` which is always false for defeats. Endless mode scores remain silently unrecorded. The `replace_all` edit failed because the two blocks have different indentation (14 vs 12 spaces), so only the first matched.
+**Fix:** Manually patch the DEFEAT block to use `this.scoreBreakdown` (drop `?.isVictory`).
+
+### Finding 2: getMapScore returns mutable internal reference (MEDIUM)
+**Location:** `player-profile.service.ts` — `getMapScore()` method
+**Risk:** Returns the actual internal `MapScoreRecord` object, not a copy. A caller mutating `record.bestScore = 0` would corrupt the persistent profile. `getAllMapScores()` correctly spreads copies, but `getMapScore()` doesn't — inconsistent with the `getProfile()` immutability pattern.
+**Fix:** Return `{ ...this.profile.mapScores[mapId] }` instead of the raw reference.
+
+### Finding 3: createTestEnemy factory completeness (FALSE POSITIVE)
+**Location:** `testing/test-enemy.factory.ts`
+**Risk:** Initially flagged as missing `baseSpeed`, but `baseSpeed` is NOT part of the Enemy interface. The StatusEffectService tracks original speed via `ActiveEffect.originalSpeed` internally. No fix needed.
+
+## Deployment Checklist — feat/product-fundamentals
+- [x] Code cleanup: remove console.log, TODO/FIXME/HACK added on this branch
+- [x] Convention check: catch(e) → catch(error), no hardcoded numbers in diff
+- [x] Full test suite green (1780/1780)
+- [x] Verify both isVictory guards are removed (grep confirmation — only GameEndStats construction remains)

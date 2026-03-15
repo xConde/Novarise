@@ -92,8 +92,12 @@
 
   <!-- Wave preview panel — shown during SETUP and INTERMISSION -->
   <div class="wave-preview"
-       *ngIf="gameState.phase === GamePhase.INTERMISSION && wavePreview.length > 0"
+       *ngIf="(gameState.phase === GamePhase.INTERMISSION || (gameState.phase === GamePhase.SETUP && gameState.wave === 0)) && wavePreview.length > 0"
        aria-label="Upcoming wave preview">
+    <div class="wave-income" *ngIf="lastWaveReward > 0 || lastInterestEarned > 0" aria-live="polite">
+      <span class="income-item reward" *ngIf="lastWaveReward > 0">+{{ lastWaveReward }}g reward</span>
+      <span class="income-item interest" *ngIf="lastInterestEarned > 0">+{{ lastInterestEarned }}g interest</span>
+    </div>
     <div class="wave-preview-header">
       Wave {{ gameState.wave + 1 }}
     </div>
@@ -230,6 +234,15 @@
     </div>
   </div>
 
+  <!-- WebGL Context Lost Overlay -->
+  <div class="context-lost-overlay" *ngIf="contextLost" role="alert" aria-live="assertive">
+    <div class="context-lost-content">
+      <h2 class="context-lost-title">Display Lost</h2>
+      <p class="context-lost-message">The graphics context was interrupted.</p>
+      <p class="context-lost-hint">Waiting for recovery...</p>
+    </div>
+  </div>
+
   <!-- Pause overlay -->
   <div class="pause-overlay" *ngIf="isPaused && gameState.phase === GamePhase.COMBAT" (click)="togglePause()">
     <div class="pause-content">
@@ -264,6 +277,10 @@
       <div class="stat-row">
         <span class="stat-label">Kills</span>
         <span class="stat-value">{{ selectedTowerInfo.kills }}</span>
+      </div>
+      <div class="stat-row" *ngIf="selectedTowerStats.statusEffect">
+        <span class="stat-label">Effect</span>
+        <span class="stat-value status-effect" [attr.data-effect]="selectedTowerStats.statusEffect">{{ selectedTowerStats.statusEffect }}</span>
       </div>
     </div>
     <div class="tower-info-targeting" *ngIf="selectedTowerInfo && selectedTowerInfo.type !== TowerType.SLOW">
@@ -345,6 +362,9 @@
         <span class="key">R</span><span>Toggle all range rings</span>
         <span class="key">V</span><span>Toggle enemy path</span>
         <span class="key">M</span><span>Toggle minimap</span>
+        <span class="key">U</span><span>Upgrade selected tower</span>
+        <span class="key">T</span><span>Cycle targeting mode</span>
+        <span class="key">Del</span><span>Sell selected tower</span>
         <span class="key">Escape</span><span>Deselect tower</span>
         <span class="key">WASD</span><span>Pan camera</span>
         <span class="key">H</span><span>Toggle this help</span>

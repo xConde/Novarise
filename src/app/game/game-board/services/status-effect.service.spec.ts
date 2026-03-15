@@ -1,47 +1,28 @@
 import { TestBed } from '@angular/core/testing';
 import { StatusEffectService } from './status-effect.service';
-import { EnemyService, DamageResult } from './enemy.service';
+import { EnemyService } from './enemy.service';
 import { StatusEffectType, STATUS_EFFECT_CONFIGS } from '../constants/status-effect.constants';
 import { Enemy, EnemyType } from '../models/enemy.model';
+import { createTestEnemy, createEnemyServiceSpy } from '../testing';
 
 describe('StatusEffectService', () => {
   let service: StatusEffectService;
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
   let enemyMap: Map<string, Enemy>;
 
+  /** Adapter matching the local (id, health, speed, isFlying) call signature. */
   function createEnemy(id: string, health = 100, speed = 2, isFlying = false): Enemy {
-    const enemy: Enemy = {
-      id,
+    return createTestEnemy(id, 0, 0, health, {
       type: isFlying ? EnemyType.FLYING : EnemyType.BASIC,
-      position: { x: 0, y: 0.3, z: 0 },
-      gridPosition: { row: 0, col: 0 },
-      health,
-      maxHealth: health,
       speed,
-      value: 10,
-      leakDamage: 1,
-      path: [],
-      pathIndex: 0,
-      distanceTraveled: 0,
-    };
-    if (isFlying) {
-      enemy.isFlying = true;
-    }
-    return enemy;
+      isFlying,
+    });
   }
 
   beforeEach(() => {
     enemyMap = new Map();
 
-    enemyServiceSpy = jasmine.createSpyObj('EnemyService', ['getEnemies', 'damageEnemy']);
-    enemyServiceSpy.getEnemies.and.returnValue(enemyMap);
-    enemyServiceSpy.damageEnemy.and.callFake((id: string, damage: number): DamageResult => {
-      const noOp: DamageResult = { killed: false, spawnedEnemies: [] };
-      const enemy = enemyMap.get(id);
-      if (!enemy || enemy.health <= 0) return noOp;
-      enemy.health -= damage;
-      return { killed: enemy.health <= 0, spawnedEnemies: [] };
-    });
+    enemyServiceSpy = createEnemyServiceSpy(enemyMap);
 
     TestBed.configureTestingModule({
       providers: [

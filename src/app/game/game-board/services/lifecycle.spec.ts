@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
-import { EnemyService, DamageResult } from './enemy.service';
+import { EnemyService } from './enemy.service';
 import { TowerCombatService } from './tower-combat.service';
 import { StatusEffectService } from './status-effect.service';
 import { AudioService } from './audio.service';
@@ -12,30 +12,8 @@ import { GameBoardService } from '../game-board.service';
 import { EnemyType, ENEMY_STATS, Enemy } from '../models/enemy.model';
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
 import { GamePhase, INITIAL_GAME_STATE } from '../models/game-state.model';
-import { BlockType, GameBoardTile } from '../models/game-board-tile';
 import { WAVE_DEFINITIONS } from '../models/wave.model';
-
-// ---------------------------------------------------------------------------
-// Shared helpers
-// ---------------------------------------------------------------------------
-
-/** 10x10 board with spawner at (0,0) and exit at (9,9). All other tiles are traversable. */
-const createMockBoard = (): GameBoardTile[][] => {
-  const board: GameBoardTile[][] = [];
-  for (let row = 0; row < 10; row++) {
-    board[row] = [];
-    for (let col = 0; col < 10; col++) {
-      if (row === 0 && col === 0) {
-        board[row][col] = GameBoardTile.createSpawner(row, col);
-      } else if (row === 9 && col === 9) {
-        board[row][col] = GameBoardTile.createExit(row, col);
-      } else {
-        board[row][col] = GameBoardTile.createBase(row, col);
-      }
-    }
-  }
-  return board;
-};
+import { createTestEnemy, createTestBoard, createGameBoardServiceSpy, createEnemyServiceSpy } from '../testing';
 
 // ============================================================================
 // 1. EnemyService lifecycle
@@ -47,13 +25,7 @@ describe('EnemyService lifecycle', () => {
   let scene: THREE.Scene;
 
   beforeEach(() => {
-    const spy = jasmine.createSpyObj('GameBoardService', [
-      'getGameBoard', 'getBoardWidth', 'getBoardHeight', 'getTileSize'
-    ]);
-    spy.getBoardWidth.and.returnValue(10);
-    spy.getBoardHeight.and.returnValue(10);
-    spy.getTileSize.and.returnValue(1);
-    spy.getGameBoard.and.returnValue(createMockBoard());
+    const spy = createGameBoardServiceSpy(10, 10, 1, () => createTestBoard());
 
     TestBed.configureTestingModule({
       providers: [
@@ -128,41 +100,14 @@ describe('TowerCombatService lifecycle', () => {
   let scene: THREE.Scene;
   let enemyMap: Map<string, Enemy>;
 
-  function createEnemy(id: string, x: number, z: number, health = 100): Enemy {
-    return {
-      id,
-      type: EnemyType.BASIC,
-      position: { x, y: 0.3, z },
-      gridPosition: { row: 0, col: 0 },
-      health,
-      maxHealth: health,
-      speed: 2,
-      value: 10,
-      leakDamage: 1,
-      path: [],
-      pathIndex: 0,
-      distanceTraveled: 0
-    };
-  }
+  const createEnemy = (id: string, x: number, z: number, health = 100): Enemy =>
+    createTestEnemy(id, x, z, health);
 
   beforeEach(() => {
     enemyMap = new Map();
 
-    enemyServiceSpy = jasmine.createSpyObj('EnemyService', ['getEnemies', 'damageEnemy']);
-    enemyServiceSpy.getEnemies.and.returnValue(enemyMap);
-    enemyServiceSpy.damageEnemy.and.callFake((id: string, damage: number): DamageResult => {
-      const enemy = enemyMap.get(id);
-      if (!enemy || enemy.health <= 0) return { killed: false, spawnedEnemies: [] };
-      enemy.health -= damage;
-      return { killed: enemy.health <= 0, spawnedEnemies: [] };
-    });
-
-    gameBoardServiceSpy = jasmine.createSpyObj('GameBoardService', [
-      'getBoardWidth', 'getBoardHeight', 'getTileSize'
-    ]);
-    gameBoardServiceSpy.getBoardWidth.and.returnValue(25);
-    gameBoardServiceSpy.getBoardHeight.and.returnValue(20);
-    gameBoardServiceSpy.getTileSize.and.returnValue(1);
+    enemyServiceSpy = createEnemyServiceSpy(enemyMap);
+    gameBoardServiceSpy = createGameBoardServiceSpy(25, 20, 1);
 
     audioServiceSpy = jasmine.createSpyObj('AudioService', ['playSfx']);
 

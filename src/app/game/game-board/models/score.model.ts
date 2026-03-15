@@ -1,5 +1,13 @@
 import { DifficultyLevel } from './game-state.model';
 
+export interface MapScoreRecord {
+  mapId: string;
+  bestScore: number;
+  bestStars: number;
+  difficulty: DifficultyLevel;
+  completedAt: number; // timestamp (ms since epoch)
+}
+
 /** Thresholds for star ratings. Lives remaining as percentage of starting lives. */
 export const STAR_THRESHOLDS = {
   /** 1 star: just survived (any lives remaining). */

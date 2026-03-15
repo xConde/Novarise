@@ -33,6 +33,7 @@ export class WaveService {
 
   constructor(private enemyService: EnemyService) {}
 
+  /** Enables or disables endless mode. Must be set before `startWave()` is called for waves beyond WAVE_DEFINITIONS length. */
   setEndlessMode(enabled: boolean): void {
     this.endlessMode = enabled;
   }
@@ -97,6 +98,12 @@ export class WaveService {
     return { entries, reward };
   }
 
+  /**
+   * Loads and activates a wave's spawn queues. For waves beyond WAVE_DEFINITIONS, requires
+   * endless mode to be enabled or the call is a no-op.
+   * @param waveNumber 1-based wave index.
+   * @param waveCountMultiplier Scales enemy counts per queue (e.g., DOUBLE_SPAWN modifier = 2). Clamped to minimum 1.
+   */
   startWave(waveNumber: number, scene: THREE.Scene, waveCountMultiplier: number = 1): void {
     const index = waveNumber - 1;
 
@@ -126,6 +133,11 @@ export class WaveService {
     this.active = true;
   }
 
+  /**
+   * Per-physics-step spawn tick. Advances timers on each queue and spawns enemies when
+   * their interval elapses. Sets `active = false` once all queues are exhausted.
+   * @param deltaTime Elapsed time in seconds since last physics step.
+   */
   update(deltaTime: number, scene: THREE.Scene): void {
     if (!this.active) return;
 
@@ -152,6 +164,7 @@ export class WaveService {
     }
   }
 
+  /** Returns true while enemies are still queued to spawn in the current wave. */
   isSpawning(): boolean {
     return this.active;
   }
@@ -161,6 +174,7 @@ export class WaveService {
     return this.spawnQueues.reduce((sum, q) => sum + Math.max(0, q.remaining), 0);
   }
 
+  /** Returns the total enemy count for a given wave (pre-`waveCountMultiplier`). Used for UI progress display. */
   getTotalEnemiesInWave(waveNumber: number): number {
     const index = waveNumber - 1;
     if (index < 0) return 0;
@@ -174,6 +188,7 @@ export class WaveService {
     return 0;
   }
 
+  /** Returns the gold reward for completing a given wave. Generates endless wave data on the fly for waves beyond WAVE_DEFINITIONS. */
   getWaveReward(waveNumber: number): number {
     const index = waveNumber - 1;
     if (index < 0) return 0;
@@ -186,10 +201,12 @@ export class WaveService {
     return 0;
   }
 
+  /** Returns the number of scripted waves (does not include endless-generated waves). */
   getMaxWaves(): number {
     return this.waveDefinitions.length;
   }
 
+  /** Clears all spawn queues and resets wave state. Call from `restartGame()` before a new game begins. */
   reset(): void {
     this.spawnQueues = [];
     this.active = false;

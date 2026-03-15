@@ -3,6 +3,8 @@ import { Router } from '@angular/router';
 import { MapStorageService, MapMetadata } from '../../games/novarise/core/map-storage.service';
 import { MapBridgeService } from '../game-board/services/map-bridge.service';
 import { QUICK_PLAY_PARAM } from '../guards/game.guard';
+import { PlayerProfileService } from '../game-board/services/player-profile.service';
+import { MapScoreRecord } from '../game-board/models/score.model';
 
 const DELETE_CONFIRM_TIMEOUT_MS = 3000;
 
@@ -13,17 +15,20 @@ const DELETE_CONFIRM_TIMEOUT_MS = 3000;
 })
 export class MapSelectComponent implements OnInit, OnDestroy {
   maps: MapMetadata[] = [];
+  mapScores: Record<string, MapScoreRecord> = {};
   deleteConfirmId: string | null = null;
   private deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private mapStorage: MapStorageService,
     private mapBridge: MapBridgeService,
-    private router: Router
+    private router: Router,
+    private playerProfile: PlayerProfileService
   ) {}
 
   ngOnInit(): void {
     this.maps = this.mapStorage.getAllMaps();
+    this.mapScores = this.playerProfile.getAllMapScores();
   }
 
   ngOnDestroy(): void {
@@ -33,11 +38,19 @@ export class MapSelectComponent implements OnInit, OnDestroy {
   selectMap(map: MapMetadata): void {
     const mapData = this.mapStorage.loadMap(map.id);
     if (mapData) {
-      this.mapBridge.setEditorMapState(mapData);
+      this.mapBridge.setEditorMapState(mapData, map.id);
       this.router.navigate(['/play']);
     } else {
       this.maps = this.maps.filter(m => m.id !== map.id);
     }
+  }
+
+  getMapStars(mapId: string): number {
+    return this.mapScores[mapId]?.bestStars ?? 0;
+  }
+
+  getMapBestScore(mapId: string): number | null {
+    return this.mapScores[mapId]?.bestScore ?? null;
   }
 
   quickPlay(): void {

@@ -17,11 +17,13 @@ export class GameStateService {
     return this.state;
   }
 
+  /** Force-sets the game phase and emits. Prefer `startWave()` / `completeWave()` for normal phase transitions — use this only for external overrides (e.g., editor quick-play teardown). */
   setPhase(phase: GamePhase): void {
     this.state.phase = phase;
     this.emit();
   }
 
+  /** Increments wave counter and transitions to COMBAT phase. Guards against double-calls (COMBAT phase) and terminal states (VICTORY/DEFEAT). No-op if no waves remain and endless mode is off. */
   startWave(): void {
     if (this.state.phase === GamePhase.VICTORY || this.state.phase === GamePhase.DEFEAT) return;
     if (this.state.phase === GamePhase.COMBAT) return;
@@ -33,6 +35,7 @@ export class GameStateService {
     this.emit();
   }
 
+  /** Awards wave gold/score, transitions to INTERMISSION (or VICTORY on final wave). No-op if not in COMBAT phase. Endless mode never triggers VICTORY; updates `highestWave` instead. */
   completeWave(reward: number): void {
     if (this.state.phase !== GamePhase.COMBAT) return;
     this.state.gold += reward;
@@ -52,11 +55,13 @@ export class GameStateService {
     this.emit();
   }
 
+  /** Toggles endless mode, which prevents VICTORY from triggering after the final scripted wave. */
   setEndlessMode(enabled: boolean): void {
     this.state.isEndless = enabled;
     this.emit();
   }
 
+  /** Deducts lives by `amount` (default 1). Triggers DEFEAT when lives reach 0. No-op during VICTORY or DEFEAT. */
   loseLife(amount: number = 1): void {
     if (this.state.phase === GamePhase.VICTORY || this.state.phase === GamePhase.DEFEAT) return;
     this.state.lives = Math.max(0, this.state.lives - amount);
@@ -66,6 +71,7 @@ export class GameStateService {
     this.emit();
   }
 
+  /** Adds gold and score by the same amount. Use for kill rewards and interest payouts. */
   addGold(amount: number): void {
     this.state.gold += amount;
     this.state.score += amount;
@@ -92,6 +98,7 @@ export class GameStateService {
     return interest;
   }
 
+  /** Deducts gold using the confirm-before-spend pattern. Returns true and emits only if the player can afford it; returns false without mutating state otherwise. */
   spendGold(amount: number): boolean {
     if (amount <= 0 || this.state.gold < amount) {
       return false;
@@ -105,17 +112,20 @@ export class GameStateService {
     return this.state.gold >= amount;
   }
 
+  /** Adds to score without awarding gold. Use for score-only bonuses (e.g., modifier multiplier adjustments). */
   addScore(points: number): void {
     this.state.score += points;
     this.emit();
   }
 
+  /** Toggles pause state. No-op outside of COMBAT phase. */
   togglePause(): void {
     if (this.state.phase !== GamePhase.COMBAT) return;
     this.state.isPaused = !this.state.isPaused;
     this.emit();
   }
 
+  /** Sets game speed multiplier. No-op for values not in VALID_GAME_SPEEDS. */
   setSpeed(speed: GameSpeed): void {
     if (!VALID_GAME_SPEEDS.includes(speed)) return;
     this.state.gameSpeed = speed;
@@ -146,6 +156,7 @@ export class GameStateService {
     return calculateModifierScoreMultiplier(this.state.activeModifiers);
   }
 
+  /** Sets difficulty and re-initializes lives and gold from the preset. Only applies during SETUP before wave 1. Respects any active `startingGoldMultiplier` modifier. */
   setDifficulty(difficulty: DifficultyLevel): void {
     if (this.state.phase !== GamePhase.SETUP || this.state.wave !== 0) return;
     const preset = DIFFICULTY_PRESETS[difficulty];
@@ -156,12 +167,14 @@ export class GameStateService {
     this.emit();
   }
 
+  /** Accumulates time-in-combat for the score breakdown. Only ticks during COMBAT phase. */
   addElapsedTime(seconds: number): void {
     if (this.state.phase !== GamePhase.COMBAT) return;
     this.state.elapsedTime += seconds;
     this.emit();
   }
 
+  /** Resets all game state to initial values and clears modifiers. Call from `restartGame()` before a new game begins. */
   reset(): void {
     this.state = { ...INITIAL_GAME_STATE, activeModifiers: new Set<GameModifier>() };
     this.modifierEffects = {};

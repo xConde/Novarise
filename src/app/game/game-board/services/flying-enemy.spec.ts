@@ -7,47 +7,15 @@ import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
 import { EnemyType, ENEMY_STATS, FLYING_ENEMY_HEIGHT, Enemy } from '../models/enemy.model';
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
-import { BlockType, GameBoardTile } from '../models/game-board-tile';
+import { createTestBoard, createGameBoardServiceSpy, createEnemyServiceSpy } from '../testing';
 
 describe('Flying Enemy', () => {
   let enemyService: EnemyService;
   let gameBoardService: jasmine.SpyObj<GameBoardService>;
   let mockScene: THREE.Scene;
 
-  /**
-   * Mock board: 10x10 grid with spawner at (0,0), exit at (9,9).
-   * Optionally places WALL tiles at the given cells.
-   */
-  const createMockBoard = (
-    wallCells: { row: number; col: number }[] = []
-  ): GameBoardTile[][] => {
-    const board: GameBoardTile[][] = [];
-    for (let row = 0; row < 10; row++) {
-      board[row] = [];
-      for (let col = 0; col < 10; col++) {
-        const isWall = wallCells.some(w => w.row === row && w.col === col);
-
-        if (row === 0 && col === 0) {
-          board[row][col] = GameBoardTile.createSpawner(row, col);
-        } else if (row === 9 && col === 9) {
-          board[row][col] = GameBoardTile.createExit(row, col);
-        } else if (isWall) {
-          board[row][col] = GameBoardTile.createWall(row, col);
-        } else {
-          board[row][col] = GameBoardTile.createBase(row, col);
-        }
-      }
-    }
-    return board;
-  };
-
   beforeEach(() => {
-    const spy = jasmine.createSpyObj('GameBoardService', [
-      'getGameBoard',
-      'getBoardWidth',
-      'getBoardHeight',
-      'getTileSize'
-    ]);
+    const spy = createGameBoardServiceSpy(10, 10, 1, () => createTestBoard());
 
     TestBed.configureTestingModule({
       providers: [
@@ -59,11 +27,6 @@ describe('Flying Enemy', () => {
     enemyService = TestBed.inject(EnemyService);
     gameBoardService = TestBed.inject(GameBoardService) as jasmine.SpyObj<GameBoardService>;
     mockScene = new THREE.Scene();
-
-    gameBoardService.getBoardWidth.and.returnValue(10);
-    gameBoardService.getBoardHeight.and.returnValue(10);
-    gameBoardService.getTileSize.and.returnValue(1);
-    gameBoardService.getGameBoard.and.returnValue(createMockBoard());
   });
 
   afterEach(() => {
@@ -111,7 +74,7 @@ describe('Flying Enemy', () => {
       for (let col = 0; col <= 9; col++) {
         wallCells.push({ row: 4, col });
       }
-      gameBoardService.getGameBoard.and.returnValue(createMockBoard(wallCells));
+      gameBoardService.getGameBoard.and.returnValue(createTestBoard(10, wallCells));
 
       const enemy = enemyService.spawnEnemy(EnemyType.FLYING, mockScene)!;
       expect(enemy).toBeTruthy();
@@ -130,7 +93,7 @@ describe('Flying Enemy', () => {
         { row: 0, col: 1 },
         { row: 1, col: 0 }
       ];
-      gameBoardService.getGameBoard.and.returnValue(createMockBoard(wallCells));
+      gameBoardService.getGameBoard.and.returnValue(createTestBoard(10, wallCells));
 
       // Ground enemy should fail
       const ground = enemyService.spawnEnemy(EnemyType.BASIC, mockScene);
@@ -186,7 +149,7 @@ describe('Flying Enemy', () => {
           wallCells.push({ row, col });
         }
       }
-      gameBoardService.getGameBoard.and.returnValue(createMockBoard(wallCells));
+      gameBoardService.getGameBoard.and.returnValue(createTestBoard(10, wallCells));
 
       const enemy = enemyService.spawnEnemy(EnemyType.FLYING, mockScene)!;
       expect(enemy).toBeTruthy();
@@ -263,21 +226,8 @@ describe('Flying Enemy', () => {
       beforeEach(() => {
         enemyMap = new Map();
 
-        const enemySpy = jasmine.createSpyObj('EnemyService', ['getEnemies', 'damageEnemy']);
-        enemySpy.getEnemies.and.returnValue(enemyMap);
-        enemySpy.damageEnemy.and.callFake((id: string, damage: number): DamageResult => {
-          const enemy = enemyMap.get(id);
-          if (!enemy || enemy.health <= 0) return { killed: false, spawnedEnemies: [] };
-          enemy.health -= damage;
-          return { killed: enemy.health <= 0, spawnedEnemies: [] };
-        });
-
-        gameBoardServiceForCombat = jasmine.createSpyObj('GameBoardService', [
-          'getBoardWidth', 'getBoardHeight', 'getTileSize'
-        ]);
-        gameBoardServiceForCombat.getBoardWidth.and.returnValue(10);
-        gameBoardServiceForCombat.getBoardHeight.and.returnValue(10);
-        gameBoardServiceForCombat.getTileSize.and.returnValue(1);
+        const enemySpy = createEnemyServiceSpy(enemyMap);
+        gameBoardServiceForCombat = createGameBoardServiceSpy(10, 10, 1);
 
         audioServiceSpy = jasmine.createSpyObj('AudioService', ['playSfx']);
 

@@ -18,6 +18,7 @@ describe('ProfileComponent', () => {
     highestWaveReached: 12,
     highestScore: 3500,
     achievements: ['first_victory', 'veteran'],
+    mapScores: {},
   };
 
   beforeEach(async () => {

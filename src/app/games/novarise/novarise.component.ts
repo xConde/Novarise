@@ -36,7 +36,12 @@ import {
   EDITOR_PATH_INVALID_FLASH_MS,
   EDITOR_PATH_INVALID_FLASH_COLOR,
   EDITOR_HEIGHT,
+  EDITOR_RENDER_ORDER,
 } from './constants/editor-ui.constants';
+import {
+  EDITOR_PERSPECTIVE_CAMERA_CONFIG,
+  EDITOR_ORBIT_CONTROLS_CONFIG,
+} from './constants/editor-camera.constants';
 import { PathValidationService, PathValidationResult } from './core/path-validation.service';
 import { MapTemplateService } from './core/map-template.service';
 import { MapTemplate } from './core/map-template.model';
@@ -58,10 +63,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   public get brushSize(): number { return this.editorState.getBrushSize(); }
   public get brushSizes(): number[] { return this.editorState.brushSizes; }
   public get activeTool(): BrushTool { return this.editorState.getActiveTool(); }
-
-  // Camera configuration
-  private readonly cameraDistance = 35;
-  private readonly cameraFov = 45;
 
   // Scene objects
   private scene!: THREE.Scene;
@@ -114,6 +115,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private touchEndHandler!: (event: TouchEvent) => void;
   private resizeHandler: () => void = () => {};
   private animationFrameId = 0;
+
+  // WebGL context loss recovery
+  contextLost = false;
+  private contextLostHandler: ((event: Event) => void) | null = null;
+  private contextRestoredHandler: (() => void) | null = null;
 
   // Current map tracking - delegated to EditorStateService
   private get currentMapName(): string { return this.editorState.getCurrentMapName(); }
@@ -213,12 +219,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private initializeCamera(): void {
     const aspectRatio = window.innerWidth / window.innerHeight;
     this.camera = new THREE.PerspectiveCamera(
-      this.cameraFov,
+      EDITOR_PERSPECTIVE_CAMERA_CONFIG.fov,
       aspectRatio,
-      0.1,
-      1000
+      EDITOR_PERSPECTIVE_CAMERA_CONFIG.near,
+      EDITOR_PERSPECTIVE_CAMERA_CONFIG.far
     );
-    this.camera.position.set(0, this.cameraDistance, this.cameraDistance * 0.5);
+    const dist = EDITOR_PERSPECTIVE_CAMERA_CONFIG.distance;
+    this.camera.position.set(0, dist, dist * 0.5);
     this.camera.lookAt(0, 0, 0);
   }
 
@@ -239,6 +246,25 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = EDITOR_RENDERER_CONFIG.toneMappingExposure; // Increased from 1.2 for brightness
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    // WebGL context loss handling — must be registered before appending canvas
+    const canvas = this.renderer.domElement;
+    this.contextLostHandler = (event: Event) => {
+      event.preventDefault();
+      this.contextLost = true;
+      if (this.animationFrameId) {
+        cancelAnimationFrame(this.animationFrameId);
+        this.animationFrameId = 0;
+      }
+    };
+    this.contextRestoredHandler = () => {
+      this.contextLost = false;
+      if (!this.animationFrameId) {
+        this.animate();
+      }
+    };
+    canvas.addEventListener('webglcontextlost', this.contextLostHandler as EventListener);
+    canvas.addEventListener('webglcontextrestored', this.contextRestoredHandler as EventListener);
 
     this.canvasContainer.nativeElement.appendChild(this.renderer.domElement);
 
@@ -484,9 +510,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Enable zoom with mouse wheel
     this.controls.enableZoom = true;
-    this.controls.zoomSpeed = 1.0;
-    this.controls.minDistance = 10;
-    this.controls.maxDistance = 80;
+    this.controls.zoomSpeed = EDITOR_ORBIT_CONTROLS_CONFIG.zoomSpeed;
+    this.controls.minDistance = EDITOR_ORBIT_CONTROLS_CONFIG.minDistance;
+    this.controls.maxDistance = EDITOR_ORBIT_CONTROLS_CONFIG.maxDistance;
 
     // Disable damping - we handle our own smoothing for keyboard
     this.controls.enableDamping = false;
@@ -1017,7 +1043,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.brushIndicator = new THREE.Mesh(geometry, material);
     this.brushIndicator.rotation.x = -Math.PI / 2;
     this.brushIndicator.visible = false;
-    this.brushIndicator.renderOrder = 1000; // Always render on top
+    this.brushIndicator.renderOrder = EDITOR_RENDER_ORDER.brushIndicator;
     this.scene.add(this.brushIndicator);
   }
 
@@ -1040,7 +1066,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       opacity: EDITOR_SPAWN_MARKER.opacity
     });
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.renderOrder = 999;
+    mesh.renderOrder = EDITOR_RENDER_ORDER.spawnMarker;
     return mesh;
   }
 
@@ -1057,7 +1083,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       opacity: EDITOR_EXIT_MARKER.opacity
     });
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.renderOrder = 999;
+    mesh.renderOrder = EDITOR_RENDER_ORDER.exitMarker;
     return mesh;
   }
 
@@ -1132,6 +1158,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private saveGridState(): void {
+    // Warn if map has no valid path (but allow saving anyway — might be in-progress)
+    if (!this.isPathValid && this.hasSpawnAndExit) {
+      const proceed = confirm('This map has no valid path from spawn to exit. Save anyway?');
+      if (!proceed) return;
+    }
+
     // Get current map name or prompt for new one
     const mapName = prompt('Enter map name:', this.currentMapName);
     if (!mapName) return; // User cancelled
@@ -1267,7 +1299,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           const mesh = new THREE.Mesh(geometry, material);
           mesh.rotation.x = -Math.PI / 2;
           mesh.visible = false;
-          mesh.renderOrder = 999;
+          mesh.renderOrder = EDITOR_RENDER_ORDER.brushPreview;
           mesh.userData = { offsetX: dx, offsetZ: dz };
           this.scene.add(mesh);
           this.brushPreviewMeshes.push(mesh);
@@ -1549,7 +1581,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           mesh.rotation.x = -Math.PI / 2;
           mesh.position.copy(tile.mesh.position);
           mesh.position.y = tile.mesh.position.y + EDITOR_RECTANGLE_PREVIEW.yOffset;
-          mesh.renderOrder = 998;
+          mesh.renderOrder = EDITOR_RENDER_ORDER.rectanglePreview;
           this.scene.add(mesh);
           this.rectanglePreviewMeshes.push(mesh);
         }
@@ -1874,6 +1906,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (this.composer) {
       this.composer.renderTarget1.dispose();
       this.composer.renderTarget2.dispose();
+    }
+
+    if (this.contextLostHandler && this.renderer?.domElement) {
+      this.renderer.domElement.removeEventListener('webglcontextlost', this.contextLostHandler as EventListener);
+      this.renderer.domElement.removeEventListener('webglcontextrestored', this.contextRestoredHandler as EventListener);
     }
 
     this.renderer.dispose();

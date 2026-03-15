@@ -13,7 +13,8 @@ import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase } from './models/game-state.model';
-import { TowerType } from './models/tower.model';
+import { TowerType, PlacedTower } from './models/tower.model';
+import { TowerCombatService } from './services/tower-combat.service';
 import { ScoreBreakdown, calculateScoreBreakdown } from './models/score.model';
 import { ACHIEVEMENTS, Achievement } from './services/player-profile.service';
 import { WaveService } from './services/wave.service';
@@ -247,6 +248,78 @@ describe('GameBoardComponent', () => {
       component.selectedTowerType = TowerType.SNIPER;
       fireKey('3');
       expect(component.selectedTowerType).toBe(TowerType.SNIPER);
+    });
+
+    it('pressing u calls upgradeTower', () => {
+      spyOn(component, 'upgradeTower');
+      fireKey('u');
+      expect(component.upgradeTower).toHaveBeenCalled();
+    });
+
+    it('pressing U (uppercase) calls upgradeTower', () => {
+      spyOn(component, 'upgradeTower');
+      fireKey('U');
+      expect(component.upgradeTower).toHaveBeenCalled();
+    });
+
+    it('pressing t calls cycleTargeting', () => {
+      spyOn(component, 'cycleTargeting');
+      fireKey('t');
+      expect(component.cycleTargeting).toHaveBeenCalled();
+    });
+
+    it('pressing T (uppercase) calls cycleTargeting', () => {
+      spyOn(component, 'cycleTargeting');
+      fireKey('T');
+      expect(component.cycleTargeting).toHaveBeenCalled();
+    });
+
+    it('pressing Delete calls sellTower', () => {
+      spyOn(component, 'sellTower');
+      fireKey('Delete');
+      expect(component.sellTower).toHaveBeenCalled();
+    });
+
+    it('pressing Backspace calls sellTower', () => {
+      spyOn(component, 'sellTower');
+      fireKey('Backspace');
+      expect(component.sellTower).toHaveBeenCalled();
+    });
+
+    it('u key does not call upgradeTower in VICTORY phase', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.VICTORY);
+      spyOn(component, 'upgradeTower');
+      fireKey('u');
+      expect(component.upgradeTower).not.toHaveBeenCalled();
+    });
+
+    it('t key does not call cycleTargeting in DEFEAT phase', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.DEFEAT);
+      spyOn(component, 'cycleTargeting');
+      fireKey('t');
+      expect(component.cycleTargeting).not.toHaveBeenCalled();
+    });
+
+    it('Delete key does not call sellTower in VICTORY phase', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.VICTORY);
+      spyOn(component, 'sellTower');
+      fireKey('Delete');
+      expect(component.sellTower).not.toHaveBeenCalled();
+    });
+
+    it('cycleTargeting skips SLOW towers', () => {
+      component.selectedTowerInfo = {
+        id: 'tower-slow', type: TowerType.SLOW, level: 1,
+        row: 0, col: 0, lastFireTime: 0, kills: 0, totalInvested: 75,
+        targetingMode: 'nearest', mesh: null,
+      } as PlacedTower;
+      const towerCombat = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(towerCombat, 'cycleTargetingMode');
+      component.cycleTargeting();
+      expect(towerCombat.cycleTargetingMode).not.toHaveBeenCalled();
     });
   });
 
@@ -702,6 +775,23 @@ describe('GameBoardComponent', () => {
       window.removeEventListener('keydown', (component as any).keyboardHandler);
 
       expect(component.showPathOverlay).toBeTrue();
+    });
+  });
+
+  describe('WebGL context loss', () => {
+    it('contextLost should start as false', () => {
+      expect(component.contextLost).toBeFalse();
+    });
+
+    it('setting contextLost to true should be reflected on the component', () => {
+      (component as any).contextLost = true;
+      expect(component.contextLost).toBeTrue();
+    });
+
+    it('setting contextLost back to false should be reflected on the component', () => {
+      (component as any).contextLost = true;
+      (component as any).contextLost = false;
+      expect(component.contextLost).toBeFalse();
     });
   });
 });

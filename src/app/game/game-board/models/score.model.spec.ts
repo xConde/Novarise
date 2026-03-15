@@ -3,6 +3,7 @@ import {
   calculateScoreBreakdown,
   STAR_THRESHOLDS,
   DIFFICULTY_SCORE_MULTIPLIER,
+  MapScoreRecord,
 } from './score.model';
 import { DifficultyLevel } from './game-state.model';
 
@@ -97,6 +98,36 @@ describe('Score Model', () => {
     it('should include wavesCompleted in breakdown', () => {
       const result = calculateScoreBreakdown(100, 5, 10, DifficultyLevel.EASY, 7, false);
       expect(result.wavesCompleted).toBe(7);
+    });
+  });
+
+  describe('MapScoreRecord interface', () => {
+    it('should allow constructing a valid record with all required fields', () => {
+      const record: MapScoreRecord = {
+        mapId: 'test-map-1',
+        bestScore: 5000,
+        bestStars: 3,
+        difficulty: DifficultyLevel.NORMAL,
+        completedAt: 1700000000000,
+      };
+      expect(record.mapId).toBe('test-map-1');
+      expect(record.bestScore).toBe(5000);
+      expect(record.bestStars).toBe(3);
+      expect(record.difficulty).toBe(DifficultyLevel.NORMAL);
+      expect(record.completedAt).toBe(1700000000000);
+    });
+
+    it('should allow all difficulty levels in a MapScoreRecord', () => {
+      for (const level of Object.values(DifficultyLevel)) {
+        const record: MapScoreRecord = {
+          mapId: 'map',
+          bestScore: 100,
+          bestStars: 1,
+          difficulty: level,
+          completedAt: Date.now(),
+        };
+        expect(record.difficulty).toBe(level);
+      }
     });
   });
 });

@@ -30,11 +30,11 @@ import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, GameModifierConfig, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
-import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from './constants/rendering.constants';
+import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG, ANIMATION_CONFIG } from './constants/rendering.constants';
 import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from './constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
-import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE } from './constants/ui.constants';
+import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, TILE_EMISSIVE, ENEMY_VISUAL_CONFIG, UI_CONFIG } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
@@ -42,6 +42,7 @@ import { ENEMY_STATS } from './models/enemy.model';
 import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
 import { StatusEffectService } from './services/status-effect.service';
+import { StatusEffectType } from './constants/status-effect.constants';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -96,7 +97,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Tower info panel state (exposed to template)
   selectedTowerInfo: PlacedTower | null = null;
-  selectedTowerStats: { damage: number; range: number; fireRate: number } | null = null;
+  selectedTowerStats: { damage: number; range: number; fireRate: number; statusEffect?: StatusEffectType } | null = null;
   selectedTowerUpgradeCost: number = 0;
   selectedTowerSellValue: number = 0;
   MAX_TOWER_LEVEL = MAX_TOWER_LEVEL;
@@ -137,6 +138,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Wave preview — shown during SETUP and INTERMISSION
   wavePreview: WavePreviewEntry[] = [];
+  // Wave income feedback — shown during INTERMISSION
+  lastWaveReward = 0;
+  lastInterestEarned = 0;
   showAllRanges = false;
   showPathOverlay = false;
   sellConfirmPending = false;
@@ -158,6 +162,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private animationFrameId = 0;
   private resizeHandler: () => void = () => {};
   private stateSubscription: Subscription | null = null;
+
+  // WebGL context loss recovery
+  contextLost = false;
+  private contextLostHandler: ((event: Event) => void) | null = null;
+  private contextRestoredHandler: (() => void) | null = null;
 
   // Touch interaction
   private touchStartHandler: (event: TouchEvent) => void = () => {};
@@ -453,6 +462,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   cycleTargeting(): void {
     if (!this.selectedTowerInfo) return;
+    // Slow towers don't support targeting mode cycling (utility-only, no projectiles)
+    if (this.selectedTowerInfo.type === TowerType.SLOW) return;
     this.towerCombatService.cycleTargetingMode(this.selectedTowerInfo.id);
   }
 
@@ -489,7 +500,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!this.selectedTowerInfo) return;
     const tower = this.selectedTowerInfo;
     const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
-    this.selectedTowerStats = { damage: stats.damage, range: stats.range, fireRate: stats.fireRate };
+    this.selectedTowerStats = { damage: stats.damage, range: stats.range, fireRate: stats.fireRate, statusEffect: stats.statusEffect };
     const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
     this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level, costMult);
     this.selectedTowerSellValue = getSellValue(tower.totalInvested);
@@ -553,6 +564,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (state.phase === GamePhase.COMBAT) return;
     if (state.phase === GamePhase.VICTORY || state.phase === GamePhase.DEFEAT) return;
 
+    this.lastWaveReward = 0;
+    this.lastInterestEarned = 0;
     this.minimapService.show();
 
     // Ensure enemy service has current modifier effects before first wave
@@ -587,6 +600,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.newlyUnlockedAchievements = [];
     this.achievementDetails = [];
     this.gameEndRecorded = false;
+    this.lastWaveReward = 0;
+    this.lastInterestEarned = 0;
     this.activeModifiers = new Set<GameModifier>();
     this.modifierScoreMultiplier = 1.0;
     this.wavePreview = [];
@@ -767,6 +782,25 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = SCENE_CONFIG.toneMappingExposure;
+
+    // WebGL context loss handling — must be registered before appending canvas
+    const canvas = this.renderer.domElement;
+    this.contextLostHandler = (event: Event) => {
+      event.preventDefault();
+      this.contextLost = true;
+      if (this.animationFrameId) {
+        cancelAnimationFrame(this.animationFrameId);
+        this.animationFrameId = 0;
+      }
+    };
+    this.contextRestoredHandler = () => {
+      this.contextLost = false;
+      if (!this.animationFrameId) {
+        this.animate();
+      }
+    };
+    canvas.addEventListener('webglcontextlost', this.contextLostHandler as EventListener);
+    canvas.addEventListener('webglcontextrestored', this.contextRestoredHandler as EventListener);
 
     this.canvasContainer.nativeElement.appendChild(this.renderer.domElement);
 
@@ -1281,8 +1315,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  private static readonly PATH_BLOCKED_DISMISS_MS = 2000;
-
   private showPathBlockedWarning(): void {
     this.pathBlocked = true;
     if (this.pathBlockedTimerId !== null) {
@@ -1291,7 +1323,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.pathBlockedTimerId = setTimeout(() => {
       this.pathBlocked = false;
       this.pathBlockedTimerId = null;
-    }, GameBoardComponent.PATH_BLOCKED_DISMISS_MS);
+    }, UI_CONFIG.pathBlockedDismissMs);
   }
 
   private tryPlaceTower(row: number, col: number): void {
@@ -1493,6 +1525,24 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         event.preventDefault();
         this.togglePathOverlay();
         break;
+      case 'u':
+      case 'U':
+        // U key upgrades the selected tower
+        event.preventDefault();
+        this.upgradeTower();
+        break;
+      case 't':
+      case 'T':
+        // T key cycles targeting mode on selected tower
+        event.preventDefault();
+        this.cycleTargeting();
+        break;
+      case 'Delete':
+      case 'Backspace':
+        // Delete/Backspace sells the selected tower
+        event.preventDefault();
+        this.sellTower();
+        break;
     }
   }
 
@@ -1564,7 +1614,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Update skybox time uniform for star twinkle and nebula drift
     if (this.skybox) {
-      (this.skybox.material as THREE.ShaderMaterial).uniforms['time'].value = time * 0.001;
+      (this.skybox.material as THREE.ShaderMaterial).uniforms['time'].value = time * ANIMATION_CONFIG.msToSeconds;
     }
 
     // Gameplay tick — fixed timestep accumulator
@@ -1577,7 +1627,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
         // Elapsed time tracking — accumulate real (unscaled) time, flush every ~1 second
         this.elapsedTimeAccumulator += deltaTime;
-        if (this.elapsedTimeAccumulator >= 1) {
+        if (this.elapsedTimeAccumulator >= PHYSICS_CONFIG.elapsedTimeFlushIntervalS) {
           this.gameStateService.addElapsedTime(this.elapsedTimeAccumulator);
           this.elapsedTimeAccumulator = 0;
         }
@@ -1614,7 +1664,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               frameKills.push({
                 damage: killInfo.damage,
                 position: { ...enemy.position },
-                color: ENEMY_STATS[enemy.type]?.color ?? 0xff0000,
+                color: ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackColor,
                 value: enemy.value,
               });
 
@@ -1654,7 +1704,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               this.audioService.playVictory();
             } else if (postWavePhase === GamePhase.INTERMISSION) {
               this.audioService.playWaveClear();
-              this.gameStateService.awardInterest();
+              this.lastWaveReward = reward;
+              this.lastInterestEarned = this.gameStateService.awardInterest();
             }
 
             // Record game end stats for profile (VICTORY or DEFEAT, fires once per game)
@@ -1673,6 +1724,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               };
               this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
               this.updateAchievementDetails();
+              const mapId = this.mapBridge.getMapId();
+              if (mapId && this.scoreBreakdown) {
+                this.playerProfileService.recordMapScore(
+                  mapId,
+                  this.scoreBreakdown.finalScore,
+                  this.scoreBreakdown.stars,
+                  this.scoreBreakdown.difficulty
+                );
+              }
             }
           }
 
@@ -1692,6 +1752,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             };
             this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
             this.updateAchievementDetails();
+            const mapId = this.mapBridge.getMapId();
+            if (mapId && this.scoreBreakdown) {
+              this.playerProfileService.recordMapScore(
+                mapId,
+                this.scoreBreakdown.finalScore,
+                this.scoreBreakdown.stars,
+                this.scoreBreakdown.difficulty
+              );
+            }
           }
 
           this.physicsAccumulator -= PHYSICS_CONFIG.fixedTimestep;
@@ -1777,7 +1846,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private updateTowerAnimations(time: number): void {
-    const t = time * 0.001; // Convert ms to seconds
+    const t = time * ANIMATION_CONFIG.msToSeconds;
     for (const group of this.towerMeshes.values()) {
       const towerType = group.userData['towerType'] as TowerType | undefined;
       if (!towerType) continue;
@@ -1833,7 +1902,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private updateTilePulse(time: number): void {
-    const t = time * 0.001;
+    const t = time * ANIMATION_CONFIG.msToSeconds;
     const intensity = TILE_PULSE_CONFIG.min
       + (Math.sin(t * TILE_PULSE_CONFIG.speed) * 0.5 + 0.5)
       * (TILE_PULSE_CONFIG.max - TILE_PULSE_CONFIG.min);
@@ -1905,6 +1974,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.composer.renderTarget1.dispose();
       this.composer.renderTarget2.dispose();
       this.composer.dispose();
+    }
+
+    if (this.contextLostHandler && this.renderer?.domElement) {
+      this.renderer.domElement.removeEventListener('webglcontextlost', this.contextLostHandler as EventListener);
+      this.renderer.domElement.removeEventListener('webglcontextrestored', this.contextRestoredHandler as EventListener);
     }
 
     if (this.renderer) {

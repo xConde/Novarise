@@ -1,19 +1,22 @@
 import { TestBed } from '@angular/core/testing';
 import { TowerCombatService, KillInfo } from './tower-combat.service';
-import { EnemyService, DamageResult } from './enemy.service';
+import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_SPECIALIZATIONS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
-import { Enemy, EnemyType } from '../models/enemy.model';
+import { Enemy } from '../models/enemy.model';
 import { AudioService } from './audio.service';
 import { StatusEffectService } from './status-effect.service';
+import { StatusEffectType } from '../constants/status-effect.constants';
 import { CHAIN_LIGHTNING_CONFIG, IMPACT_FLASH_CONFIG } from '../constants/combat.constants';
 import * as THREE from 'three';
+import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy } from '../testing';
 
 describe('TowerCombatService', () => {
   let service: TowerCombatService;
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
   let gameBoardServiceSpy: jasmine.SpyObj<GameBoardService>;
   let audioServiceSpy: jasmine.SpyObj<AudioService>;
+  let statusEffectService: StatusEffectService;
   let mockScene: THREE.Scene;
   let enemyMap: Map<string, Enemy>;
 
@@ -24,42 +27,14 @@ describe('TowerCombatService', () => {
   const TOWER_WORLD_Z = 0;
 
   // Helper: create a mock enemy at a world position
-  function createEnemy(id: string, x: number, z: number, health = 100): Enemy {
-    return {
-      id,
-      type: EnemyType.BASIC,
-      position: { x, y: 0.3, z },
-      gridPosition: { row: 0, col: 0 },
-      health,
-      maxHealth: health,
-      speed: 2,
-      value: 10,
-      leakDamage: 1,
-      path: [],
-      pathIndex: 0,
-      distanceTraveled: 0
-    };
-  }
+  const createEnemy = (id: string, x: number, z: number, health = 100): Enemy =>
+    createTestEnemy(id, x, z, health);
 
   beforeEach(() => {
     enemyMap = new Map();
 
-    enemyServiceSpy = jasmine.createSpyObj('EnemyService', ['getEnemies', 'damageEnemy']);
-    enemyServiceSpy.getEnemies.and.returnValue(enemyMap);
-    enemyServiceSpy.damageEnemy.and.callFake((id: string, damage: number): DamageResult => {
-      const noOp: DamageResult = { killed: false, spawnedEnemies: [] };
-      const enemy = enemyMap.get(id);
-      if (!enemy || enemy.health <= 0) return noOp;
-      enemy.health -= damage;
-      return { killed: enemy.health <= 0, spawnedEnemies: [] };
-    });
-
-    gameBoardServiceSpy = jasmine.createSpyObj('GameBoardService', [
-      'getBoardWidth', 'getBoardHeight', 'getTileSize'
-    ]);
-    gameBoardServiceSpy.getBoardWidth.and.returnValue(25);
-    gameBoardServiceSpy.getBoardHeight.and.returnValue(20);
-    gameBoardServiceSpy.getTileSize.and.returnValue(1);
+    enemyServiceSpy = createEnemyServiceSpy(enemyMap);
+    gameBoardServiceSpy = createGameBoardServiceSpy(25, 20, 1);
 
     audioServiceSpy = jasmine.createSpyObj('AudioService', ['playSfx']);
 
@@ -73,6 +48,7 @@ describe('TowerCombatService', () => {
       ]
     });
     service = TestBed.inject(TowerCombatService);
+    statusEffectService = TestBed.inject(StatusEffectService);
     mockScene = new THREE.Scene();
   });
 
@@ -1277,6 +1253,194 @@ describe('TowerCombatService', () => {
       // New geometry must be a different reference (old one was disposed)
       expect(geometryAfterCleanup).not.toBe(geometryBeforeCleanup);
       expect(geometryAfterCleanup).toBeInstanceOf(THREE.SphereGeometry);
+    });
+  });
+
+  // --- Status Effect Wiring ---
+
+  describe('status effect wiring', () => {
+    it('Mortar blast should apply BURN to surviving enemies in blast radius', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      // Enemy at tower position — mortar hits instantly, has high health so it survives
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
+
+      service.update(3.1, mockScene); // past MORTAR fireRate of 3.0s — fires and hits
+
+      const burnCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.BURN);
+      expect(burnCalls.length).toBeGreaterThan(0);
+      expect(burnCalls[0].args[0]).toBe('e1');
+    });
+
+    it('Mortar blast should NOT apply BURN to enemies killed by the blast', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      // Enemy with exactly dotDamage health — killed by initial blast
+      const dotDamage = TOWER_CONFIGS[TowerType.MORTAR].dotDamage!;
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, dotDamage);
+      enemyMap.set('e1', e1);
+
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
+
+      service.update(3.1, mockScene);
+
+      // Enemy was killed — apply should not be called for it with BURN
+      const burnCalls = applySpy.calls.all().filter(
+        c => c.args[0] === 'e1' && c.args[1] === StatusEffectType.BURN
+      );
+      expect(burnCalls.length).toBe(0);
+    });
+
+    it('Mortar zone DoT ticks should apply BURN to surviving enemies in zone', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      // Fire and create zone
+      service.update(3.1, mockScene);
+
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
+
+      // Advance 1.1s to trigger DoT tick inside zone
+      service.update(1.1, mockScene);
+
+      const burnCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.BURN);
+      expect(burnCalls.length).toBeGreaterThan(0);
+    });
+
+    it('Splash Bombardier L3 should apply POISON to surviving enemies in splash radius', () => {
+      // Set up L3 Bombardier (SPLASH ALPHA)
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SPLASH, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.upgradeTower(key);
+      service.upgradeTowerWithSpec(key, TowerSpecialization.ALPHA);
+
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
+
+      service.update(2.0, mockScene); // past SPLASH fireRate
+
+      const poisonCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.POISON);
+      expect(poisonCalls.length).toBeGreaterThan(0);
+      expect(poisonCalls[0].args[0]).toBe('e1');
+    });
+
+    it('Splash Bombardier L3 should NOT apply POISON to enemies killed by splash', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SPLASH, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.upgradeTower(key);
+      service.upgradeTowerWithSpec(key, TowerSpecialization.ALPHA);
+
+      const splashDamage = Math.round(TOWER_CONFIGS[TowerType.SPLASH].damage * 2.8); // L3 Bombardier damage
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, splashDamage);
+      enemyMap.set('e1', e1);
+
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
+
+      service.update(2.0, mockScene);
+
+      // Enemy killed — should not receive POISON
+      const poisonCalls = applySpy.calls.all().filter(
+        c => c.args[0] === 'e1' && c.args[1] === StatusEffectType.POISON
+      );
+      expect(poisonCalls.length).toBe(0);
+    });
+
+    it('Basic tower should NOT apply any status effect on hit', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
+
+      service.update(2.0, mockScene);
+
+      // SLOW apply (from slow tower) is expected to not be called at all, but neither should any other effect
+      // Only SLOW towers call apply — Basic should not call it
+      const nonSlowCalls = applySpy.calls.all().filter(
+        c => c.args[1] !== StatusEffectType.SLOW
+      );
+      expect(nonSlowCalls.length).toBe(0);
+    });
+
+    it('Sniper tower should NOT apply any status effect on hit', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SNIPER, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
+
+      service.update(3.0, mockScene); // past SNIPER fireRate of 2.5s
+
+      const nonSlowCalls = applySpy.calls.all().filter(
+        c => c.args[1] !== StatusEffectType.SLOW
+      );
+      expect(nonSlowCalls.length).toBe(0);
+    });
+
+    it('Chain Tesla L3 should apply BURN to surviving chained enemies', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.upgradeTower(key);
+      service.upgradeTowerWithSpec(key, TowerSpecialization.ALPHA);
+
+      const chainRange = TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
+      // Both enemies survive (high health) — primary and one chain bounce
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + chainRange * 0.5, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
+
+      service.update(1.0, mockScene); // past CHAIN TESLA fireRate (0.8 * 0.8 = 0.64s)
+
+      const burnCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.BURN);
+      expect(burnCalls.length).toBeGreaterThanOrEqual(2);
+      const burnTargetIds = burnCalls.map(c => c.args[0] as string);
+      expect(burnTargetIds).toContain('e1');
+      expect(burnTargetIds).toContain('e2');
+    });
+
+    it('Chain Tesla L3 should NOT apply BURN to enemies killed by the chain', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.upgradeTower(key);
+      service.upgradeTowerWithSpec(key, TowerSpecialization.ALPHA);
+
+      // Enemy health == Chain Tesla L3 damage (30) so it dies on hit
+      const teslaDamage = getEffectiveStats(TowerType.CHAIN, 3, TowerSpecialization.ALPHA).damage;
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, teslaDamage);
+      enemyMap.set('e1', e1);
+
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
+
+      service.update(1.0, mockScene);
+
+      const burnCalls = applySpy.calls.all().filter(
+        c => c.args[0] === 'e1' && c.args[1] === StatusEffectType.BURN
+      );
+      expect(burnCalls.length).toBe(0);
+    });
+
+    it('Chain Arc L3 (BETA) should NOT apply BURN — only Tesla does', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.upgradeTower(key);
+      service.upgradeTowerWithSpec(key, TowerSpecialization.BETA); // Arc spec, no statusEffect
+
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
+
+      service.update(1.0, mockScene);
+
+      const burnCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.BURN);
+      expect(burnCalls.length).toBe(0);
     });
   });
 });

@@ -12,6 +12,7 @@ import { StatusEffectType } from '../constants/status-effect.constants';
 import { StatusEffectService } from './status-effect.service';
 import { SpatialGrid } from '../utils/spatial-grid';
 import { ObjectPool } from '../utils/object-pool';
+import { gridToWorld } from '../utils/coordinate-utils';
 
 interface Projectile {
   id: string;
@@ -24,6 +25,7 @@ interface Projectile {
   damage: number;
   splashRadius: number;
   towerType: TowerType;
+  statusEffect?: StatusEffectType;
 }
 
 /** Max trail vertices — matches PROJECTILE_CONFIG.trailLength */
@@ -50,6 +52,7 @@ interface MortarZone {
   dotDamage: number;
   expiresAt: number;       // gameTime when zone expires
   lastTickTime: number;    // gameTime of last DoT tick
+  statusEffect?: StatusEffectType;
 }
 
 /** Info about a tower kill — includes the damage of the final hit. */
@@ -72,6 +75,7 @@ export class TowerCombatService {
   private projectilePool: ObjectPool<THREE.Mesh>;
   private sharedImpactFlashGeometry: THREE.SphereGeometry | null = null;
 
+  /** Applies a flat multiplier to all tower damage output. Set by the JUGGERNAUT modifier. */
   setTowerDamageMultiplier(mult: number): void {
     this.towerDamageMultiplier = mult;
   }
@@ -130,6 +134,7 @@ export class TowerCombatService {
     return mesh;
   }
 
+  /** Registers a newly placed tower so it participates in targeting and firing. `actualCost` tracks the real gold paid (may differ from base cost due to modifiers). */
   registerTower(row: number, col: number, type: TowerType, mesh: THREE.Group, actualCost: number = TOWER_CONFIGS[type].cost): void {
     const key = `${row}-${col}`;
     this.placedTowers.set(key, {
@@ -146,6 +151,7 @@ export class TowerCombatService {
     });
   }
 
+  /** Upgrades a tower from L1→L2. Returns false if at max level, already L2 (L2→L3 requires specialization), or not found. `actualCost` defaults to the configured upgrade cost. */
   upgradeTower(key: string, actualCost?: number): boolean {
     const tower = this.placedTowers.get(key);
     if (!tower || tower.level >= MAX_TOWER_LEVEL) return false;
@@ -158,6 +164,7 @@ export class TowerCombatService {
     return true;
   }
 
+  /** Upgrades a tower from L2→L3 with ALPHA or BETA specialization. Returns false if the tower is not exactly L2 or not found. */
   upgradeTowerWithSpec(key: string, spec: TowerSpecialization, actualCost?: number): boolean {
     const tower = this.placedTowers.get(key);
     if (!tower || tower.level !== MAX_TOWER_LEVEL - 1) return false;
@@ -169,6 +176,7 @@ export class TowerCombatService {
     return true;
   }
 
+  /** Removes a tower from combat tracking. Returns the removed PlacedTower (caller uses it to calculate sell refund), or undefined if not found. */
   unregisterTower(key: string): PlacedTower | undefined {
     const tower = this.placedTowers.get(key);
     if (!tower) return undefined;
@@ -176,6 +184,12 @@ export class TowerCombatService {
     return tower;
   }
 
+  /**
+   * Main per-physics-step combat tick. Rebuilds the spatial grid, runs DoT status effects, fires
+   * towers (including chain/slow aura/mortar), moves projectiles, and expires visual effects.
+   * @param deltaTime Elapsed time in seconds since last physics step.
+   * @returns `killed` — enemies that died this step; `fired` — tower types that fired; `hitCount` — projectile impacts.
+   */
   update(deltaTime: number, scene: THREE.Scene): { killed: KillInfo[]; fired: TowerType[]; hitCount: number } {
     this.gameTime += deltaTime;
     const killedEnemies: KillInfo[] = [];
@@ -350,6 +364,8 @@ export class TowerCombatService {
             const result = this.enemyService.damageEnemy(enemy.id, zone.dotDamage);
             if (result.killed) {
               killedEnemies.push({ id: enemy.id, damage: zone.dotDamage });
+            } else if (zone.statusEffect) {
+              this.statusEffectService.apply(enemy.id, zone.statusEffect, this.gameTime);
             }
             // Mini-swarm meshes from DoT kills are added to scene here
             result.spawnedEnemies.forEach(mini => {
@@ -366,16 +382,17 @@ export class TowerCombatService {
     return { killed: killedEnemies, fired: firedTowerTypes, hitCount };
   }
 
+  /** Delegate to shared coordinate utility with current board dimensions. */
   private getTowerWorldPos(tower: PlacedTower): { x: number; z: number } {
-    const boardWidth = this.gameBoardService.getBoardWidth();
-    const boardHeight = this.gameBoardService.getBoardHeight();
-    const tileSize = this.gameBoardService.getTileSize();
-    return {
-      x: (tower.col - boardWidth / 2) * tileSize,
-      z: (tower.row - boardHeight / 2) * tileSize
-    };
+    return gridToWorld(
+      tower.row, tower.col,
+      this.gameBoardService.getBoardWidth(),
+      this.gameBoardService.getBoardHeight(),
+      this.gameBoardService.getTileSize()
+    );
   }
 
+  /** Sets a tower's targeting mode directly. Returns false if the tower doesn't exist. */
   setTargetingMode(towerId: string, mode: TargetingMode): boolean {
     const tower = this.placedTowers.get(towerId);
     if (!tower) return false;
@@ -383,6 +400,7 @@ export class TowerCombatService {
     return true;
   }
 
+  /** Advances the tower's targeting mode to the next in the cycle (nearest→first→strongest→nearest). Returns the new mode, or null if the tower doesn't exist. */
   cycleTargetingMode(towerId: string): TargetingMode | null {
     const tower = this.placedTowers.get(towerId);
     if (!tower) return null;
@@ -524,6 +542,8 @@ export class TowerCombatService {
       const chainResult = this.enemyService.damageEnemy(currentTarget.id, currentDamage);
       if (chainResult.killed) {
         kills.push({ id: currentTarget.id, damage: currentDamage });
+      } else if (stats.statusEffect) {
+        this.statusEffectService.apply(currentTarget.id, stats.statusEffect, this.gameTime);
       }
       // Mini-swarm meshes from chain kills need to be tracked — caller adds to scene
       // via killedEnemyIds which triggers removeEnemy; spawnedEnemies returned separately
@@ -602,7 +622,8 @@ export class TowerCombatService {
       speed: stats.projectileSpeed,
       damage: stats.damage,
       splashRadius: stats.splashRadius,
-      towerType: tower.type
+      towerType: tower.type,
+      statusEffect: stats.statusEffect,
     });
   }
 
@@ -634,7 +655,8 @@ export class TowerCombatService {
       speed: stats.projectileSpeed,
       damage: stats.damage,
       splashRadius: 0,
-      towerType: TowerType.MORTAR
+      towerType: TowerType.MORTAR,
+      statusEffect: stats.statusEffect,
     });
   }
 
@@ -674,6 +696,8 @@ export class TowerCombatService {
         const result = this.enemyService.damageEnemy(enemy.id, dotDamage);
         if (result.killed) {
           initialKills.push({ id: enemy.id, damage: dotDamage });
+        } else if (stats.statusEffect) {
+          this.statusEffectService.apply(enemy.id, stats.statusEffect, this.gameTime);
         }
         result.spawnedEnemies.forEach(mini => {
           if (mini.mesh) scene.add(mini.mesh);
@@ -688,7 +712,8 @@ export class TowerCombatService {
       blastRadius,
       dotDamage,
       expiresAt: this.gameTime + dotDuration,
-      lastTickTime: this.gameTime
+      lastTickTime: this.gameTime,
+      statusEffect: stats.statusEffect,
     });
 
     return initialKills;
@@ -725,6 +750,8 @@ export class TowerCombatService {
           const result = this.enemyService.damageEnemy(enemy.id, proj.damage);
           if (result.killed) {
             kills.push({ id: enemy.id, damage: proj.damage });
+          } else if (proj.statusEffect) {
+            this.statusEffectService.apply(enemy.id, proj.statusEffect, this.gameTime);
           }
           result.spawnedEnemies.forEach(mini => {
             if (mini.mesh) scene.add(mini.mesh);
@@ -736,6 +763,8 @@ export class TowerCombatService {
       const result = this.enemyService.damageEnemy(proj.targetId, proj.damage);
       if (result.killed) {
         kills.push({ id: proj.targetId, damage: proj.damage });
+      } else if (proj.statusEffect) {
+        this.statusEffectService.apply(proj.targetId, proj.statusEffect, this.gameTime);
       }
       result.spawnedEnemies.forEach(mini => {
         if (mini.mesh) scene.add(mini.mesh);
@@ -799,6 +828,7 @@ export class TowerCombatService {
     return this.placedTowers;
   }
 
+  /** Disposes all Three.js objects (projectiles, arcs, flashes, zones, tower meshes), drains the projectile pool, resets status effects, and zeros out game time. Call from both `restartGame()` and `ngOnDestroy()`. */
   cleanup(scene: THREE.Scene): void {
     for (const proj of this.projectiles) {
       this.removeProjectileMesh(proj, scene);

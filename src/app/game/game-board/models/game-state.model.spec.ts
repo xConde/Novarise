@@ -84,8 +84,8 @@ describe('game-state.model', () => {
         expect(DIFFICULTY_PRESETS[DifficultyLevel.NIGHTMARE].lives).toBe(7);
       });
 
-      it('should have 50 gold', () => {
-        expect(DIFFICULTY_PRESETS[DifficultyLevel.NIGHTMARE].gold).toBe(50);
+      it('should have 75 gold', () => {
+        expect(DIFFICULTY_PRESETS[DifficultyLevel.NIGHTMARE].gold).toBe(75);
       });
     });
 

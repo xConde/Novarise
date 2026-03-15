@@ -44,6 +44,36 @@ describe('MapBridgeService', () => {
     expect(service.getEditorMapState()).toBe(state2);
   });
 
+  // --- mapId tracking ---
+
+  it('getMapId should return null when no map has been set', () => {
+    expect(service.getMapId()).toBeNull();
+  });
+
+  it('getMapId should return null after clearEditorMap', () => {
+    service.setEditorMapState(createMinimalState(3), 'map_abc');
+    service.clearEditorMap();
+    expect(service.getMapId()).toBeNull();
+  });
+
+  it('setEditorMapState with mapId stores the id', () => {
+    service.setEditorMapState(createMinimalState(3), 'map_xyz');
+    expect(service.getMapId()).toBe('map_xyz');
+  });
+
+  it('setEditorMapState without mapId sets id to null', () => {
+    service.setEditorMapState(createMinimalState(3), 'old_id');
+    service.setEditorMapState(createMinimalState(5));
+    expect(service.getMapId()).toBeNull();
+  });
+
+  it('clearEditorMap clears both state and mapId', () => {
+    service.setEditorMapState(createMinimalState(4), 'my_map');
+    service.clearEditorMap();
+    expect(service.hasEditorMap()).toBeFalse();
+    expect(service.getMapId()).toBeNull();
+  });
+
   // --- Board Conversion: Dimensions ---
 
   it('should produce a square board matching the editor gridSize', () => {
