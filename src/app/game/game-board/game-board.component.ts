@@ -1515,6 +1515,24 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         event.preventDefault();
         this.togglePathOverlay();
         break;
+      case 'u':
+      case 'U':
+        // U key upgrades the selected tower
+        event.preventDefault();
+        this.upgradeTower();
+        break;
+      case 't':
+      case 'T':
+        // T key cycles targeting mode on selected tower
+        event.preventDefault();
+        this.cycleTargeting();
+        break;
+      case 'Delete':
+      case 'Backspace':
+        // Delete/Backspace sells the selected tower
+        event.preventDefault();
+        this.sellTower();
+        break;
     }
   }
 

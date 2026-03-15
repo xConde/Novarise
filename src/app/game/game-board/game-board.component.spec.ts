@@ -248,6 +248,66 @@ describe('GameBoardComponent', () => {
       fireKey('3');
       expect(component.selectedTowerType).toBe(TowerType.SNIPER);
     });
+
+    it('pressing u calls upgradeTower', () => {
+      spyOn(component, 'upgradeTower');
+      fireKey('u');
+      expect(component.upgradeTower).toHaveBeenCalled();
+    });
+
+    it('pressing U (uppercase) calls upgradeTower', () => {
+      spyOn(component, 'upgradeTower');
+      fireKey('U');
+      expect(component.upgradeTower).toHaveBeenCalled();
+    });
+
+    it('pressing t calls cycleTargeting', () => {
+      spyOn(component, 'cycleTargeting');
+      fireKey('t');
+      expect(component.cycleTargeting).toHaveBeenCalled();
+    });
+
+    it('pressing T (uppercase) calls cycleTargeting', () => {
+      spyOn(component, 'cycleTargeting');
+      fireKey('T');
+      expect(component.cycleTargeting).toHaveBeenCalled();
+    });
+
+    it('pressing Delete calls sellTower', () => {
+      spyOn(component, 'sellTower');
+      fireKey('Delete');
+      expect(component.sellTower).toHaveBeenCalled();
+    });
+
+    it('pressing Backspace calls sellTower', () => {
+      spyOn(component, 'sellTower');
+      fireKey('Backspace');
+      expect(component.sellTower).toHaveBeenCalled();
+    });
+
+    it('u key does not call upgradeTower in VICTORY phase', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.VICTORY);
+      spyOn(component, 'upgradeTower');
+      fireKey('u');
+      expect(component.upgradeTower).not.toHaveBeenCalled();
+    });
+
+    it('t key does not call cycleTargeting in DEFEAT phase', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.DEFEAT);
+      spyOn(component, 'cycleTargeting');
+      fireKey('t');
+      expect(component.cycleTargeting).not.toHaveBeenCalled();
+    });
+
+    it('Delete key does not call sellTower in VICTORY phase', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.VICTORY);
+      spyOn(component, 'sellTower');
+      fireKey('Delete');
+      expect(component.sellTower).not.toHaveBeenCalled();
+    });
   });
 
   describe('scoreBreakdown', () => {

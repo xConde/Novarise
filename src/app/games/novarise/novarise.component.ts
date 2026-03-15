@@ -1154,6 +1154,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private saveGridState(): void {
+    // Warn if map has no valid path (but allow saving anyway — might be in-progress)
+    if (!this.isPathValid && this.hasSpawnAndExit) {
+      const proceed = confirm('This map has no valid path from spawn to exit. Save anyway?');
+      if (!proceed) return;
+    }
+
     // Get current map name or prompt for new one
     const mapName = prompt('Enter map name:', this.currentMapName);
     if (!mapName) return; // User cancelled

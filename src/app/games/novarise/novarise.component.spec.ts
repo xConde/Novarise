@@ -389,4 +389,76 @@ describe('NovariseComponent', () => {
       expect(component.contextLost).toBeFalse();
     });
   });
+
+  describe('saveGridState path guard', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      mockThreeJsFields(component);
+    });
+
+    it('should not call mapStorage.saveMap when path is invalid, spawn+exit exist, and user cancels confirm', () => {
+      // Arrange: path invalid, but spawn and exit are present
+      (component as any).pathValidationResult = { valid: false };
+      spyOnProperty(component, 'hasSpawnAndExit').and.returnValue(true);
+      spyOn(window, 'confirm').and.returnValue(false);
+
+      // Act: trigger saveGridState via its keyboard shortcut ('g' key)
+      (component as any).saveGridState();
+
+      // Assert: saveMap never called
+      expect(mockMapStorageService.saveMap).not.toHaveBeenCalled();
+    });
+
+    it('should call mapStorage.saveMap when path is invalid, spawn+exit exist, and user confirms', () => {
+      // Arrange: path invalid, but spawn and exit are present
+      (component as any).pathValidationResult = { valid: false };
+      spyOnProperty(component, 'hasSpawnAndExit').and.returnValue(true);
+      spyOn(window, 'confirm').and.returnValue(true);
+      spyOn(window, 'prompt').and.returnValue('My Map');
+      spyOn(window, 'alert');
+
+      // Stub terrainGrid so exportState() works (dispose required by ngOnDestroy)
+      const fakeState = { tiles: [], spawnerPoints: [], exitPoints: [] };
+      (component as any).terrainGrid = {
+        exportState: () => fakeState,
+        getSpawnPoints: () => [{}],
+        getExitPoints: () => [{}],
+        dispose: () => {}
+      };
+      mockMapStorageService.saveMap.and.returnValue('map-id-1');
+      mockMapStorageService.getCurrentMapId.and.returnValue(null);
+
+      // Act
+      (component as any).saveGridState();
+
+      // Assert: saveMap was called with the entered name and exported state
+      expect(mockMapStorageService.saveMap).toHaveBeenCalledWith('My Map', jasmine.any(Object), undefined);
+    });
+
+    it('should call mapStorage.saveMap without confirm when path is valid', () => {
+      // Arrange: path is valid — no guard dialog
+      (component as any).pathValidationResult = { valid: true };
+      spyOn(window, 'confirm');
+      spyOn(window, 'prompt').and.returnValue('Valid Map');
+      spyOn(window, 'alert');
+
+      const fakeState = { tiles: [], spawnerPoints: [], exitPoints: [] };
+      (component as any).terrainGrid = {
+        exportState: () => fakeState,
+        getSpawnPoints: () => [{}],
+        getExitPoints: () => [{}],
+        dispose: () => {}
+      };
+      mockMapStorageService.saveMap.and.returnValue('map-id-2');
+      mockMapStorageService.getCurrentMapId.and.returnValue(null);
+
+      // Act
+      (component as any).saveGridState();
+
+      // Assert: confirm never shown, saveMap called
+      expect(window.confirm).not.toHaveBeenCalled();
+      expect(mockMapStorageService.saveMap).toHaveBeenCalledWith('Valid Map', jasmine.any(Object), undefined);
+    });
+  });
 });
