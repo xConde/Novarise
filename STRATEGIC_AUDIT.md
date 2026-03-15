@@ -733,3 +733,9 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 ### Finding 3: createTestEnemy factory completeness (FALSE POSITIVE)
 **Location:** `testing/test-enemy.factory.ts`
 **Risk:** Initially flagged as missing `baseSpeed`, but `baseSpeed` is NOT part of the Enemy interface. The StatusEffectService tracks original speed via `ActiveEffect.originalSpeed` internally. No fix needed.
+
+## Deployment Checklist — feat/product-fundamentals
+- [x] Code cleanup: remove console.log, TODO/FIXME/HACK added on this branch
+- [x] Convention check: catch(e) → catch(error), no hardcoded numbers in diff
+- [x] Full test suite green (1780/1780)
+- [x] Verify both isVictory guards are removed (grep confirmation — only GameEndStats construction remains)
