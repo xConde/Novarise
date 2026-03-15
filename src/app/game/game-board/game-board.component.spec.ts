@@ -179,7 +179,8 @@ describe('GameBoardComponent', () => {
       window.removeEventListener('keydown', (component as any).keyboardHandler);
     });
 
-    it('pressing 1 selects BASIC tower', () => {
+    it('pressing 1 selects BASIC tower when a different type is selected', () => {
+      component.selectedTowerType = TowerType.SNIPER;
       fireKey('1');
       expect(component.selectedTowerType).toBe(TowerType.BASIC);
     });
@@ -209,11 +210,16 @@ describe('GameBoardComponent', () => {
       expect(component.selectedTowerType).toBe(TowerType.MORTAR);
     });
 
-    it('pressing Escape deselects the tower type back to BASIC and closes info panel', () => {
+    it('pressing Escape in PLACE mode cancels placement', () => {
       component.selectedTowerType = TowerType.SNIPER;
-      (component as any).selectedTowerInfo = { id: 'fake', type: TowerType.SNIPER, level: 1, row: 0, col: 0, lastFireTime: 0, kills: 0, totalInvested: 50, mesh: null };
       fireKey('Escape');
-      expect(component.selectedTowerType).toBe(TowerType.BASIC);
+      expect(component.selectedTowerType).toBeNull();
+    });
+
+    it('pressing Escape in INSPECT mode deselects placed tower info', () => {
+      component.selectedTowerType = null;
+      (component as any).selectedTowerInfo = { id: 'fake', type: TowerType.SNIPER, level: 1, row: 0, col: 0, lastFireTime: 0, kills: 0, totalInvested: 50, mesh: null, targetingMode: 'nearest' };
+      fireKey('Escape');
       expect(component.selectedTowerInfo).toBeNull();
     });
 
@@ -792,6 +798,80 @@ describe('GameBoardComponent', () => {
       (component as any).contextLost = true;
       (component as any).contextLost = false;
       expect(component.contextLost).toBeFalse();
+    });
+  });
+
+  describe('Interaction Mode System', () => {
+    it('should start with BASIC tower selected (PLACE mode by default)', () => {
+      expect(component.selectedTowerType).toBe(TowerType.BASIC);
+      expect(component.isPlaceMode).toBeTrue();
+    });
+
+    it('should toggle to INSPECT mode when clicking same tower type', () => {
+      // Start in PLACE mode with BASIC selected
+      component.selectedTowerType = TowerType.BASIC;
+
+      // Clicking the same type calls cancelPlacement — sets to null (INSPECT mode)
+      component.selectTowerType(TowerType.BASIC);
+
+      expect(component.selectedTowerType).toBeNull();
+      expect(component.isPlaceMode).toBeFalse();
+    });
+
+    it('cancelPlacement should set selectedTowerType to null', () => {
+      component.selectedTowerType = TowerType.SNIPER;
+
+      (component as any).cancelPlacement();
+
+      expect(component.selectedTowerType).toBeNull();
+    });
+
+    it('isPlaceMode should return false when selectedTowerType is null', () => {
+      component.selectedTowerType = null;
+
+      expect(component.isPlaceMode).toBeFalse();
+    });
+
+    it('isPlaceMode should return true when selectedTowerType is set', () => {
+      component.selectedTowerType = TowerType.MORTAR;
+
+      expect(component.isPlaceMode).toBeTrue();
+    });
+
+    it('selectPlacedTower should cancel placement mode', () => {
+      const towerCombatService = fixture.debugElement.injector.get(TowerCombatService);
+      const fakeTower: PlacedTower = {
+        id: 'r0-c1',
+        type: TowerType.BASIC,
+        level: 1,
+        row: 0,
+        col: 1,
+        lastFireTime: 0,
+        kills: 0,
+        totalInvested: 50,
+        targetingMode: 'nearest',
+        mesh: null,
+      };
+      spyOn(towerCombatService, 'getTower').and.returnValue(fakeTower);
+      // Stub Three.js-dependent methods to avoid canvas crash in headless tests
+      spyOn(component as any, 'showRangePreview');
+      spyOn(component as any, 'refreshTowerInfoPanel');
+
+      // Enter PLACE mode
+      component.selectedTowerType = TowerType.SNIPER;
+      expect(component.isPlaceMode).toBeTrue();
+
+      // Selecting a placed tower should exit PLACE mode
+      (component as any).selectPlacedTower('r0-c1');
+
+      expect(component.selectedTowerType).toBeNull();
+      expect(component.isPlaceMode).toBeFalse();
+    });
+
+    it('getEffectiveTowerCost should return 0 for null type', () => {
+      const cost = component.getEffectiveTowerCost(null);
+
+      expect(cost).toBe(0);
     });
   });
 });

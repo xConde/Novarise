@@ -92,7 +92,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private towerMeshes: Map<string, THREE.Group> = new Map();
   private gridLines: THREE.Group | null = null;
   private rangePreviewMesh: THREE.Mesh | null = null;
-  selectedTowerType: TowerType = TowerType.BASIC;
+  selectedTowerType: TowerType | null = TowerType.BASIC;
   private lastPreviewKey = ''; // "row-col-towerType" — skip BFS when unchanged
 
   // Tower info panel state (exposed to template)
@@ -159,6 +159,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private keyboardHandler: (event: KeyboardEvent) => void;
   private mousemoveHandler: (event: MouseEvent) => void = () => {};
   private clickHandler: (event: MouseEvent) => void = () => {};
+  private contextmenuHandler: (event: MouseEvent) => void = () => {};
   private animationFrameId = 0;
   private resizeHandler: () => void = () => {};
   private stateSubscription: Subscription | null = null;
@@ -347,14 +348,34 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.towerCombatService.setTowerDamageMultiplier(this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1);
   }
 
-  getEffectiveTowerCost(type: TowerType): number {
+  getEffectiveTowerCost(type: TowerType | null): number {
+    if (!type) return 0;
     const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
     return Math.round(TOWER_CONFIGS[type].cost * costMult);
   }
 
   selectTowerType(type: TowerType): void {
+    // Toggle: clicking the same type deselects (enters INSPECT mode)
+    if (this.selectedTowerType === type) {
+      this.cancelPlacement();
+      return;
+    }
     this.selectedTowerType = type;
     this.deselectTower();
+  }
+
+  /** Exit PLACE mode — clears tower type selection, hides ghost preview. */
+  cancelPlacement(): void {
+    this.selectedTowerType = null;
+    this.lastPreviewKey = '';
+    if (this.scene) {
+      this.towerPreviewService.hidePreview(this.scene);
+    }
+  }
+
+  /** Whether a tower type is selected for placement (PLACE mode). */
+  get isPlaceMode(): boolean {
+    return this.selectedTowerType !== null;
   }
 
   upgradeTower(spec?: TowerSpecialization): void {
@@ -491,6 +512,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const tower = this.towerCombatService.getTower(key);
     if (!tower) return;
 
+    // Exit PLACE mode when selecting a placed tower (enter INSPECT mode)
+    this.cancelPlacement();
+
     this.selectedTowerInfo = tower;
     this.refreshTowerInfoPanel();
     this.showRangePreview(tower);
@@ -588,6 +612,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Reset interaction state — old references point to disposed meshes
     this.hoveredTile = null;
     this.selectedTile = null;
+    this.selectedTowerType = TowerType.BASIC;
 
     this.cleanupGameObjects();
 
@@ -1077,18 +1102,18 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           canvas.style.cursor = 'pointer';
         }
 
-        // Tower placement preview — show ghost tower + range ring on hovered tile
+        // Tower placement preview — only show ghost tower in PLACE mode
         const row = mesh.userData['row'];
         const col = mesh.userData['col'];
         const phase = this.gameStateService.getState().phase;
         const isTerminal = phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT;
-        if (!isTerminal && !this.selectedTowerInfo) {
+        if (!isTerminal && !this.selectedTowerInfo && this.isPlaceMode) {
           const previewKey = `${row}-${col}-${this.selectedTowerType}-${this.gameState.gold}`;
           if (previewKey !== this.lastPreviewKey) {
             this.lastPreviewKey = previewKey;
             const canPlace = this.gameBoardService.canPlaceTower(row, col)
-              && this.gameStateService.canAfford(this.getEffectiveTowerCost(this.selectedTowerType));
-            this.towerPreviewService.showPreview(this.selectedTowerType, row, col, canPlace, this.scene);
+              && this.gameStateService.canAfford(this.getEffectiveTowerCost(this.selectedTowerType!));
+            this.towerPreviewService.showPreview(this.selectedTowerType!, row, col, canPlace, this.scene);
           }
         } else {
           this.lastPreviewKey = '';
@@ -1109,7 +1134,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       this.raycaster.setFromCamera(this.mouse, this.camera);
 
-      // Check for tower mesh clicks first
+      // Check for tower mesh clicks first (works in both PLACE and INSPECT modes)
       const towerGroups = Array.from(this.towerMeshes.values());
       const towerChildren: THREE.Object3D[] = [];
       towerGroups.forEach(g => g.traverse(child => { if (child instanceof THREE.Mesh) towerChildren.push(child); }));
@@ -1132,7 +1157,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       }
 
-      // Check tile clicks
+      // Check tile clicks — only place towers in PLACE mode
       const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
 
       const prevSelected = this.getSelectedTileMesh();
@@ -1153,15 +1178,27 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         material.emissiveIntensity = TILE_EMISSIVE.selected;
 
         this.deselectTower();
-        this.tryPlaceTower(row, col);
+
+        // Only attempt placement in PLACE mode (tower type selected)
+        if (this.isPlaceMode) {
+          this.tryPlaceTower(row, col);
+        }
       } else {
         this.selectedTile = null;
         this.deselectTower();
       }
     };
 
+    this.contextmenuHandler = (event: MouseEvent) => {
+      event.preventDefault();
+      if (this.isPlaceMode) {
+        this.cancelPlacement();
+      }
+    };
+
     canvas.addEventListener('mousemove', this.mousemoveHandler);
     canvas.addEventListener('click', this.clickHandler);
+    canvas.addEventListener('contextmenu', this.contextmenuHandler);
   }
 
   private setupTouchInteraction(): void {
@@ -1308,7 +1345,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       material.emissiveIntensity = TILE_EMISSIVE.selected;
 
       this.deselectTower();
-      this.tryPlaceTower(row, col);
+
+      // Only attempt placement in PLACE mode (tower type selected)
+      if (this.isPlaceMode) {
+        this.tryPlaceTower(row, col);
+      }
     } else {
       this.selectedTile = null;
       this.deselectTower();
@@ -1327,6 +1368,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private tryPlaceTower(row: number, col: number): void {
+    if (!this.selectedTowerType) return;
+
     const phase = this.gameStateService.getState().phase;
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
 
@@ -1496,10 +1539,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.togglePause();
         break;
       case 'Escape':
-        // Escape deselects tower type and closes tower info panel
+        // Escape: if in PLACE mode, cancel placement; otherwise deselect placed tower
         event.preventDefault();
-        this.selectedTowerType = TowerType.BASIC;
-        this.deselectTower();
+        if (this.isPlaceMode) {
+          this.cancelPlacement();
+        } else {
+          this.deselectTower();
+        }
         break;
       case 'r':
       case 'R':
@@ -1939,6 +1985,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       const canvas = this.renderer.domElement;
       canvas.removeEventListener('mousemove', this.mousemoveHandler);
       canvas.removeEventListener('click', this.clickHandler);
+      canvas.removeEventListener('contextmenu', this.contextmenuHandler);
       canvas.removeEventListener('touchstart', this.touchStartHandler);
       canvas.removeEventListener('touchmove', this.touchMoveHandler);
       canvas.removeEventListener('touchend', this.touchEndHandler);

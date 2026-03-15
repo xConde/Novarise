@@ -336,7 +336,8 @@
       [class.selected]="selectedTowerType === tower.type"
       [class.unaffordable]="!gameState || gameState.gold < getEffectiveTowerCost(tower.type)"
       (click)="selectTowerType(tower.type)"
-      [attr.aria-label]="'Select ' + (tower.type | titlecase) + ' Tower'">
+      [attr.aria-label]="'Select ' + (tower.type | titlecase) + ' Tower'"
+      [attr.aria-pressed]="selectedTowerType === tower.type">
       <div class="tower-tooltip" role="tooltip">
         <div class="tooltip-stat"><span class="tooltip-label">Damage</span><span class="tooltip-val">{{ towerConfigs[tower.type].damage }}</span></div>
         <div class="tooltip-stat"><span class="tooltip-label">Range</span><span class="tooltip-val">{{ towerConfigs[tower.type].range }}</span></div>
@@ -349,6 +350,14 @@
       <span class="tower-cost">{{ getEffectiveTowerCost(tower.type) }}g</span>
       <span class="tower-hotkey">{{ tower.hotkey }}</span>
     </button>
+  </div>
+
+  <!-- Interaction mode indicator -->
+  <div class="mode-indicator" *ngIf="gameState.wave > 0 && gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
+    <span class="mode-label" [class.place-mode]="isPlaceMode" [class.inspect-mode]="!isPlaceMode">
+      {{ isPlaceMode ? (selectedTowerType | titlecase) : 'Inspect' }}
+    </span>
+    <span class="mode-hint" *ngIf="isPlaceMode">Right-click to cancel</span>
   </div>
 
   <!-- Help overlay -->
