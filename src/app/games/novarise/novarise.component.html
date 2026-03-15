@@ -8,6 +8,15 @@
   <div class="novarise-content">
     <div #canvasContainer class="canvas-container"></div>
 
+    <!-- WebGL Context Lost Overlay -->
+    <div class="context-lost-overlay" *ngIf="contextLost" role="alert" aria-live="assertive">
+      <div class="context-lost-content">
+        <h2 class="context-lost-title">Display Lost</h2>
+        <p class="context-lost-message">The graphics context was interrupted.</p>
+        <p class="context-lost-hint">Waiting for recovery...</p>
+      </div>
+    </div>
+
     <!-- Mobile dual-stick controls (shown on touch devices) -->
     <app-virtual-joystick
       type="movement"

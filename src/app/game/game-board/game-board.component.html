@@ -230,6 +230,15 @@
     </div>
   </div>
 
+  <!-- WebGL Context Lost Overlay -->
+  <div class="context-lost-overlay" *ngIf="contextLost" role="alert" aria-live="assertive">
+    <div class="context-lost-content">
+      <h2 class="context-lost-title">Display Lost</h2>
+      <p class="context-lost-message">The graphics context was interrupted.</p>
+      <p class="context-lost-hint">Waiting for recovery...</p>
+    </div>
+  </div>
+
   <!-- Pause overlay -->
   <div class="pause-overlay" *ngIf="isPaused && gameState.phase === GamePhase.COMBAT" (click)="togglePause()">
     <div class="pause-content">

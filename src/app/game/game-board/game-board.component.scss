@@ -558,6 +558,49 @@
     }
   }
 
+  // --- WebGL context lost overlay ---
+  .context-lost-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: var(--z-index-modal);
+
+    .context-lost-content {
+      text-align: center;
+    }
+
+    .context-lost-title {
+      font-family: "Orbitron", sans-serif;
+      font-size: var(--font-size-hero);
+      color: var(--text-color);
+      text-transform: uppercase;
+      letter-spacing: 0.25rem;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .context-lost-message {
+      font-family: "Orbitron", sans-serif;
+      font-size: var(--font-size-small);
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .context-lost-hint {
+      font-family: "Orbitron", sans-serif;
+      font-size: var(--font-size-small);
+      color: var(--theme-purple-mid);
+      animation: pulse-text 1.5s ease-in-out infinite;
+    }
+  }
+
+  @keyframes pulse-text {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+
   // --- Tower info panel ---
   .tower-info-panel {
     --tower-bar-height: 5.5rem;

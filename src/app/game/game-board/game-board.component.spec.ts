@@ -704,4 +704,21 @@ describe('GameBoardComponent', () => {
       expect(component.showPathOverlay).toBeTrue();
     });
   });
+
+  describe('WebGL context loss', () => {
+    it('contextLost should start as false', () => {
+      expect(component.contextLost).toBeFalse();
+    });
+
+    it('setting contextLost to true should be reflected on the component', () => {
+      (component as any).contextLost = true;
+      expect(component.contextLost).toBeTrue();
+    });
+
+    it('setting contextLost back to false should be reflected on the component', () => {
+      (component as any).contextLost = true;
+      (component as any).contextLost = false;
+      expect(component.contextLost).toBeFalse();
+    });
+  });
 });

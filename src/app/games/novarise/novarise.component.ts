@@ -115,6 +115,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private resizeHandler: () => void = () => {};
   private animationFrameId = 0;
 
+  // WebGL context loss recovery
+  contextLost = false;
+  private contextLostHandler: ((event: Event) => void) | null = null;
+  private contextRestoredHandler: (() => void) | null = null;
+
   // Current map tracking - delegated to EditorStateService
   private get currentMapName(): string { return this.editorState.getCurrentMapName(); }
   private set currentMapName(name: string) { this.editorState.setCurrentMapName(name); }
@@ -239,6 +244,23 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = EDITOR_RENDERER_CONFIG.toneMappingExposure; // Increased from 1.2 for brightness
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    // WebGL context loss handling — must be registered before appending canvas
+    const canvas = this.renderer.domElement;
+    this.contextLostHandler = (event: Event) => {
+      event.preventDefault();
+      this.contextLost = true;
+      if (this.animationFrameId) {
+        cancelAnimationFrame(this.animationFrameId);
+        this.animationFrameId = 0;
+      }
+    };
+    this.contextRestoredHandler = () => {
+      this.contextLost = false;
+      this.animate();
+    };
+    canvas.addEventListener('webglcontextlost', this.contextLostHandler as EventListener);
+    canvas.addEventListener('webglcontextrestored', this.contextRestoredHandler as EventListener);
 
     this.canvasContainer.nativeElement.appendChild(this.renderer.domElement);
 
@@ -1874,6 +1896,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     if (this.composer) {
       this.composer.renderTarget1.dispose();
       this.composer.renderTarget2.dispose();
+    }
+
+    if (this.contextLostHandler && this.renderer?.domElement) {
+      this.renderer.domElement.removeEventListener('webglcontextlost', this.contextLostHandler as EventListener);
+      this.renderer.domElement.removeEventListener('webglcontextrestored', this.contextRestoredHandler as EventListener);
     }
 
     this.renderer.dispose();

@@ -159,6 +159,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private resizeHandler: () => void = () => {};
   private stateSubscription: Subscription | null = null;
 
+  // WebGL context loss recovery
+  contextLost = false;
+  private contextLostHandler: ((event: Event) => void) | null = null;
+  private contextRestoredHandler: (() => void) | null = null;
+
   // Touch interaction
   private touchStartHandler: (event: TouchEvent) => void = () => {};
   private touchMoveHandler: (event: TouchEvent) => void = () => {};
@@ -767,6 +772,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = SCENE_CONFIG.toneMappingExposure;
+
+    // WebGL context loss handling — must be registered before appending canvas
+    const canvas = this.renderer.domElement;
+    this.contextLostHandler = (event: Event) => {
+      event.preventDefault();
+      this.contextLost = true;
+      if (this.animationFrameId) {
+        cancelAnimationFrame(this.animationFrameId);
+        this.animationFrameId = 0;
+      }
+    };
+    this.contextRestoredHandler = () => {
+      this.contextLost = false;
+      this.animate();
+    };
+    canvas.addEventListener('webglcontextlost', this.contextLostHandler as EventListener);
+    canvas.addEventListener('webglcontextrestored', this.contextRestoredHandler as EventListener);
 
     this.canvasContainer.nativeElement.appendChild(this.renderer.domElement);
 
@@ -1923,6 +1945,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.composer.renderTarget1.dispose();
       this.composer.renderTarget2.dispose();
       this.composer.dispose();
+    }
+
+    if (this.contextLostHandler && this.renderer?.domElement) {
+      this.renderer.domElement.removeEventListener('webglcontextlost', this.contextLostHandler as EventListener);
+      this.renderer.domElement.removeEventListener('webglcontextrestored', this.contextRestoredHandler as EventListener);
     }
 
     if (this.renderer) {
