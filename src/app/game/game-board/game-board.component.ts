@@ -1673,6 +1673,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               };
               this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
               this.updateAchievementDetails();
+              const mapId = this.mapBridge.getMapId();
+              if (mapId && this.scoreBreakdown?.isVictory) {
+                this.playerProfileService.recordMapScore(
+                  mapId,
+                  this.scoreBreakdown.finalScore,
+                  this.scoreBreakdown.stars,
+                  this.scoreBreakdown.difficulty
+                );
+              }
             }
           }
 
@@ -1692,6 +1701,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             };
             this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
             this.updateAchievementDetails();
+            const mapId = this.mapBridge.getMapId();
+            if (mapId && this.scoreBreakdown?.isVictory) {
+              this.playerProfileService.recordMapScore(
+                mapId,
+                this.scoreBreakdown.finalScore,
+                this.scoreBreakdown.stars,
+                this.scoreBreakdown.difficulty
+              );
+            }
           }
 
           this.physicsAccumulator -= PHYSICS_CONFIG.fixedTimestep;

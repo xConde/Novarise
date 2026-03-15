@@ -1,4 +1,6 @@
 import { Injectable } from '@angular/core';
+import { MapScoreRecord } from '../models/score.model';
+import { DifficultyLevel } from '../models/game-state.model';
 
 const PROFILE_STORAGE_KEY = 'novarise-profile';
 
@@ -19,6 +21,7 @@ export interface PlayerProfile {
   highestWaveReached: number;
   highestScore: number;
   achievements: string[]; // IDs of unlocked achievements
+  mapScores: Record<string, MapScoreRecord>; // keyed by mapId
 }
 
 export interface Achievement {
@@ -46,6 +49,7 @@ const DEFAULT_PROFILE: PlayerProfile = {
   highestWaveReached: 0,
   highestScore: 0,
   achievements: [],
+  mapScores: {},
 };
 
 export const ACHIEVEMENTS: Achievement[] = [
@@ -158,6 +162,32 @@ export class PlayerProfileService {
     return newlyUnlocked;
   }
 
+  recordMapScore(mapId: string, score: number, stars: number, difficulty: DifficultyLevel): void {
+    const existing = this.profile.mapScores[mapId];
+    if (!existing || score > existing.bestScore) {
+      this.profile.mapScores[mapId] = {
+        mapId,
+        bestScore: score,
+        bestStars: Math.max(stars, existing?.bestStars ?? 0),
+        difficulty,
+        completedAt: Date.now(),
+      };
+      this.save();
+    }
+  }
+
+  getMapScore(mapId: string): MapScoreRecord | null {
+    return this.profile.mapScores[mapId] ?? null;
+  }
+
+  getAllMapScores(): Record<string, MapScoreRecord> {
+    const copy: Record<string, MapScoreRecord> = {};
+    for (const [key, record] of Object.entries(this.profile.mapScores)) {
+      copy[key] = { ...record };
+    }
+    return copy;
+  }
+
   getAchievements(): Achievement[] {
     return [...ACHIEVEMENTS];
   }
@@ -175,7 +205,7 @@ export class PlayerProfileService {
   }
 
   reset(): void {
-    this.profile = { ...DEFAULT_PROFILE, achievements: [] };
+    this.profile = { ...DEFAULT_PROFILE, achievements: [], mapScores: {} };
     try {
       localStorage.removeItem(PROFILE_STORAGE_KEY);
     } catch {
@@ -186,7 +216,7 @@ export class PlayerProfileService {
   private load(): PlayerProfile {
     try {
       const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
-      if (!raw) return { ...DEFAULT_PROFILE, achievements: [] };
+      if (!raw) return { ...DEFAULT_PROFILE, achievements: [], mapScores: {} };
       const parsed = JSON.parse(raw) as Partial<PlayerProfile>;
       return {
         ...DEFAULT_PROFILE,
@@ -194,9 +224,12 @@ export class PlayerProfileService {
         achievements: Array.isArray(parsed.achievements)
           ? [...parsed.achievements]
           : [],
+        mapScores: (parsed.mapScores && typeof parsed.mapScores === 'object' && !Array.isArray(parsed.mapScores))
+          ? { ...parsed.mapScores as Record<string, MapScoreRecord> }
+          : {},
       };
     } catch {
-      return { ...DEFAULT_PROFILE, achievements: [] };
+      return { ...DEFAULT_PROFILE, achievements: [], mapScores: {} };
     }
   }
 

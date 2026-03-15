@@ -4,6 +4,9 @@ import { Router } from '@angular/router';
 import { MapSelectComponent } from './map-select.component';
 import { MapStorageService, MapMetadata } from '../../games/novarise/core/map-storage.service';
 import { MapBridgeService } from '../game-board/services/map-bridge.service';
+import { PlayerProfileService } from '../game-board/services/player-profile.service';
+import { MapScoreRecord } from '../game-board/models/score.model';
+import { DifficultyLevel } from '../game-board/models/game-state.model';
 import { TerrainGridState } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 
@@ -21,29 +24,41 @@ const MOCK_TERRAIN_STATE: TerrainGridState = {
   version: '2.0.0'
 };
 
+const MOCK_SCORE_RECORD: MapScoreRecord = {
+  mapId: 'map_1',
+  bestScore: 3000,
+  bestStars: 2,
+  difficulty: DifficultyLevel.NORMAL,
+  completedAt: 1700000000000,
+};
+
 describe('MapSelectComponent', () => {
   let component: MapSelectComponent;
   let fixture: ComponentFixture<MapSelectComponent>;
   let mapStorageSpy: jasmine.SpyObj<MapStorageService>;
   let mapBridgeSpy: jasmine.SpyObj<MapBridgeService>;
   let routerSpy: jasmine.SpyObj<Router>;
+  let playerProfileSpy: jasmine.SpyObj<PlayerProfileService>;
 
   beforeEach(async () => {
     mapStorageSpy = jasmine.createSpyObj('MapStorageService', ['getAllMaps', 'loadMap', 'deleteMap']);
     mapBridgeSpy = jasmine.createSpyObj('MapBridgeService', ['setEditorMapState', 'clearEditorMap']);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
+    playerProfileSpy = jasmine.createSpyObj('PlayerProfileService', ['getAllMapScores']);
 
     mapStorageSpy.getAllMaps.and.returnValue(MOCK_MAPS);
     mapStorageSpy.loadMap.and.returnValue(MOCK_TERRAIN_STATE);
     mapStorageSpy.deleteMap.and.returnValue(true);
     routerSpy.navigate.and.returnValue(Promise.resolve(true));
+    playerProfileSpy.getAllMapScores.and.returnValue({});
 
     await TestBed.configureTestingModule({
       declarations: [MapSelectComponent],
       providers: [
         { provide: MapStorageService, useValue: mapStorageSpy },
         { provide: MapBridgeService, useValue: mapBridgeSpy },
-        { provide: Router, useValue: routerSpy }
+        { provide: Router, useValue: routerSpy },
+        { provide: PlayerProfileService, useValue: playerProfileSpy }
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();
@@ -96,7 +111,7 @@ describe('MapSelectComponent', () => {
     fixture.detectChanges();
     component.selectMap(MOCK_MAPS[0]);
     expect(mapStorageSpy.loadMap).toHaveBeenCalledOnceWith('map_1');
-    expect(mapBridgeSpy.setEditorMapState).toHaveBeenCalledOnceWith(MOCK_TERRAIN_STATE);
+    expect(mapBridgeSpy.setEditorMapState).toHaveBeenCalledOnceWith(MOCK_TERRAIN_STATE, 'map_1');
     expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/play']);
   });
 
@@ -229,6 +244,52 @@ describe('MapSelectComponent', () => {
       expect(metaElements.length).toBe(2);
       expect(metaElements[0].textContent).toContain('25');
       expect(metaElements[1].textContent).toContain('30');
+    });
+  });
+
+  describe('getMapStars / getMapBestScore helpers', () => {
+    it('getMapStars returns 0 for a map with no score record', () => {
+      fixture.detectChanges();
+      expect(component.getMapStars('no_such_map')).toBe(0);
+    });
+
+    it('getMapStars returns bestStars from the score record', () => {
+      playerProfileSpy.getAllMapScores.and.returnValue({ map_1: MOCK_SCORE_RECORD });
+      fixture.detectChanges();
+      expect(component.getMapStars('map_1')).toBe(2);
+    });
+
+    it('getMapBestScore returns null for a map with no score record', () => {
+      fixture.detectChanges();
+      expect(component.getMapBestScore('no_such_map')).toBeNull();
+    });
+
+    it('getMapBestScore returns bestScore from the score record', () => {
+      playerProfileSpy.getAllMapScores.and.returnValue({ map_1: MOCK_SCORE_RECORD });
+      fixture.detectChanges();
+      expect(component.getMapBestScore('map_1')).toBe(3000);
+    });
+  });
+
+  describe('map score display', () => {
+    it('should not show .map-score for a map with no score record', () => {
+      playerProfileSpy.getAllMapScores.and.returnValue({});
+      fixture.detectChanges();
+      const scoreEls = fixture.nativeElement.querySelectorAll('.map-score');
+      expect(scoreEls.length).toBe(0);
+    });
+
+    it('should show .map-score for a map with a score record', () => {
+      playerProfileSpy.getAllMapScores.and.returnValue({ map_1: MOCK_SCORE_RECORD });
+      fixture.detectChanges();
+      const scoreEls = fixture.nativeElement.querySelectorAll('.map-score');
+      expect(scoreEls.length).toBe(1);
+    });
+
+    it('selectMap passes mapId to bridge', () => {
+      fixture.detectChanges();
+      component.selectMap(MOCK_MAPS[1]);
+      expect(mapBridgeSpy.setEditorMapState).toHaveBeenCalledWith(MOCK_TERRAIN_STATE, 'map_2');
     });
   });
 });
