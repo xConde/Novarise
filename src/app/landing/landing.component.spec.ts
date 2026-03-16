@@ -40,21 +40,22 @@ describe('LandingComponent', () => {
     expect(subtitle.textContent).toContain('Tower Defense');
   });
 
-  it('should render four navigation buttons', () => {
+  it('should render five navigation buttons', () => {
     const buttons = fixture.nativeElement.querySelectorAll('.landing-btn');
-    expect(buttons.length).toBe(4);
+    expect(buttons.length).toBe(5);
   });
 
-  it('should have Quick Play as the primary CTA', () => {
+  it('should have Campaign as the primary CTA', () => {
     const buttons = fixture.nativeElement.querySelectorAll('.landing-btn');
-    expect(buttons[0].textContent).toContain('Quick Play');
+    expect(buttons[0].textContent).toContain('Campaign');
     expect(buttons[0].classList).toContain('landing-btn--primary');
   });
 
-  it('should have Select Map and Create Map buttons', () => {
+  it('should have Quick Play, Select Map, and Create Map buttons', () => {
     const buttons = fixture.nativeElement.querySelectorAll('.landing-btn');
-    expect(buttons[1].textContent).toContain('Select Map');
-    expect(buttons[2].textContent).toContain('Create Map');
+    expect(buttons[1].textContent).toContain('Quick Play');
+    expect(buttons[2].textContent).toContain('Select Map');
+    expect(buttons[3].textContent).toContain('Create Map');
   });
 
   it('should navigate to /edit when Create Map is clicked', () => {
@@ -76,5 +77,10 @@ describe('LandingComponent', () => {
   it('should navigate to /profile when Profile is clicked', () => {
     component.goToProfile();
     expect(router.navigate).toHaveBeenCalledWith(['/profile']);
+  });
+
+  it('should navigate to /campaign when Campaign is clicked', () => {
+    component.goToCampaign();
+    expect(router.navigate).toHaveBeenCalledWith(['/campaign']);
   });
 });

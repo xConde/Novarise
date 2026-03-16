@@ -1,0 +1,61 @@
+<div class="campaign-container">
+  <div class="campaign-content">
+    <h1 class="campaign-title">CAMPAIGN</h1>
+    <p class="campaign-subtitle">Tower Defense</p>
+
+    <div class="campaign-stats" aria-label="Campaign progress">
+      <span class="campaign-stat">
+        <span class="campaign-stat__value">{{ completedCount }}</span>
+        <span class="campaign-stat__label">Completed</span>
+      </span>
+      <span class="campaign-stat">
+        <span class="campaign-stat__value campaign-stat__value--gold">{{ totalStars }}</span>
+        <span class="campaign-stat__label">Stars</span>
+      </span>
+    </div>
+
+    <div class="level-grid" role="list" aria-label="Campaign levels">
+      <button
+        *ngFor="let level of levels"
+        class="level-card"
+        [class.level-card--unlocked]="isUnlocked(level.id)"
+        [class.level-card--locked]="!isUnlocked(level.id)"
+        [class.level-card--completed]="isCompleted(level.id)"
+        [disabled]="!isUnlocked(level.id)"
+        [attr.aria-label]="'Level ' + level.number + ': ' + level.name + (isUnlocked(level.id) ? '' : ' (locked)')"
+        (click)="playLevel(level)"
+        role="listitem"
+      >
+        <div class="level-card__header">
+          <span class="level-card__number">{{ level.number }}</span>
+          <span class="level-card__lock" *ngIf="!isUnlocked(level.id)" aria-hidden="true">&#128274;</span>
+          <div class="level-card__stars" aria-hidden="true" *ngIf="isCompleted(level.id)">
+            <span
+              *ngFor="let filled of getStarArray(level.id)"
+              class="level-card__star"
+              [class.level-card__star--filled]="filled"
+            >&#9733;</span>
+          </div>
+        </div>
+
+        <div class="level-card__body">
+          <span class="level-card__name">{{ level.name }}</span>
+          <span class="level-card__tier">{{ level.tier | uppercase }}</span>
+          <p class="level-card__description" *ngIf="isUnlocked(level.id)">{{ level.description }}</p>
+        </div>
+
+        <div class="level-card__meta" *ngIf="isUnlocked(level.id)">
+          <span class="level-card__meta-item">{{ level.waveCount }} waves</span>
+          <span class="level-card__meta-item">{{ level.gridSize }}x{{ level.gridSize }}</span>
+        </div>
+
+        <div class="level-card__score" *ngIf="isCompleted(level.id)">
+          <span class="level-card__score-label">Best</span>
+          <span class="level-card__score-value">{{ getLevelProgress(level.id)?.bestScore }}</span>
+        </div>
+      </button>
+    </div>
+
+    <button class="back-btn" (click)="goHome()">Home</button>
+  </div>
+</div>

@@ -30,4 +30,8 @@ export class LandingComponent {
   goToProfile(): void {
     this.router.navigate(['/profile']);
   }
+
+  goToCampaign(): void {
+    this.router.navigate(['/campaign']);
+  }
 }
