@@ -4,6 +4,7 @@
   <!-- Top-right controls -->
   <div class="top-right-controls">
     <div class="fps-counter">{{ fps }} FPS</div>
+    <button class="encyclopedia-btn" (click)="toggleEncyclopedia()" [class.active]="showEncyclopedia" aria-label="Toggle enemy encyclopedia" [attr.aria-pressed]="showEncyclopedia">E</button>
     <button class="help-btn" (click)="showHelpOverlay = !showHelpOverlay" aria-label="Show keyboard shortcuts">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
     </button>
@@ -118,9 +119,12 @@
         *ngFor="let entry of wavePreview"
         class="wave-preview-entry"
         [attr.data-type]="entry.type.toLowerCase()">
-        <span class="enemy-dot" [attr.data-type]="entry.type.toLowerCase()"></span>
+        <span
+          class="enemy-dot wave-preview-dot"
+          [attr.data-type]="entry.type.toLowerCase()"></span>
         <span class="enemy-count">{{ entry.count }}x</span>
         <span class="enemy-label">{{ entry.label }}</span>
+        <span class="wave-preview-new" *ngIf="isNewEnemyType(entry.type)">NEW</span>
       </li>
     </ul>
     <button
@@ -378,6 +382,34 @@
     <span class="mode-hint">Right-click to cancel</span>
   </div>
 
+  <!-- Enemy Encyclopedia -->
+  <div class="encyclopedia-panel" *ngIf="showEncyclopedia" role="dialog" aria-label="Enemy encyclopedia">
+    <div class="encyclopedia-header">
+      <h3>Enemy Types</h3>
+      <button class="encyclopedia-close" (click)="toggleEncyclopedia()" aria-label="Close enemy encyclopedia">&times;</button>
+    </div>
+    <div class="encyclopedia-list">
+      <div class="encyclopedia-entry" *ngFor="let enemy of enemyInfoList">
+        <div
+          class="encyclopedia-entry__color"
+          [style.background-color]="'#' + enemy.color.toString(16).padStart(6, '0')"
+          aria-hidden="true"></div>
+        <div class="encyclopedia-entry__info">
+          <span class="encyclopedia-entry__name">{{ enemy.name }}</span>
+          <span class="encyclopedia-entry__desc">{{ enemy.description }}</span>
+          <div class="encyclopedia-entry__stats">
+            <span>HP: {{ enemy.health }}</span>
+            <span>Spd: {{ enemy.speed }}</span>
+            <span>Gold: {{ enemy.reward }}</span>
+            <span *ngIf="enemy.leakDamage > 1">Leak: {{ enemy.leakDamage }}</span>
+          </div>
+          <span class="encyclopedia-entry__special" *ngIf="enemy.special">{{ enemy.special }}</span>
+          <span class="encyclopedia-entry__immunity" *ngFor="let imm of enemy.immunities">Immune: {{ imm }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Help overlay -->
   <div class="help-overlay" *ngIf="showHelpOverlay" (click)="showHelpOverlay = false">
     <div class="help-content" (click)="$event.stopPropagation()">
@@ -389,6 +421,7 @@
         <span class="key">R</span><span>Toggle all range rings</span>
         <span class="key">V</span><span>Toggle enemy path</span>
         <span class="key">M</span><span>Toggle minimap</span>
+        <span class="key">E</span><span>Enemy encyclopedia</span>
         <span class="key">U</span><span>Upgrade selected tower</span>
         <span class="key">T</span><span>Cycle targeting mode</span>
         <span class="key">Del</span><span>Sell selected tower</span>

@@ -38,7 +38,8 @@ import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG, TILE_
 import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG, DRAG_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
-import { ENEMY_STATS } from './models/enemy.model';
+import { EnemyType, ENEMY_STATS } from './models/enemy.model';
+import { EnemyInfo, ENEMY_INFO } from './models/enemy-info.model';
 import { WavePreviewEntry, getWavePreview, getWavePreviewFull } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
 import { StatusEffectService } from './services/status-effect.service';
@@ -47,6 +48,10 @@ import { TilePricingService, TilePriceInfo } from './services/tile-pricing.servi
 import { PriceLabelService } from './services/price-label.service';
 import { TutorialService, TutorialStep, TutorialTip } from './services/tutorial.service';
 import { TerrainGridStateLegacy } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
+import { CampaignService } from '../../campaign/services/campaign.service';
+import { ChallengeEvaluatorService } from '../../campaign/services/challenge-evaluator.service';
+import { CAMPAIGN_WAVE_DEFINITIONS } from '../../campaign/waves/campaign-waves';
+import { ChallengeDefinition } from '../../campaign/models/challenge.model';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -151,6 +156,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Guard: prevents recordGameEnd from firing more than once per game
   private gameEndRecorded = false;
 
+  // Challenge tracking — reset per game
+  private challengeTotalGoldSpent = 0;
+  private challengeMaxTowersPlaced = 0;
+  private challengeTowerTypesUsed = new Set<TowerType>();
+  /** Challenge completions awarded at end of this game session. */
+  completedChallenges: ChallengeDefinition[] = [];
+
   // Wave preview — shown during SETUP and INTERMISSION
   wavePreview: WavePreviewEntry[] = [];
   /** Template description for the upcoming endless wave (null for scripted waves). */
@@ -165,6 +177,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   sellConfirmPending = false;
   targetingModeLabels = TARGETING_MODE_LABELS;
   showHelpOverlay = false;
+  showEncyclopedia = false;
+  enemyInfoList: EnemyInfo[] = Object.values(ENEMY_INFO);
+  seenEnemyTypes = new Set<EnemyType>();
   pathBlocked = false;
   private pathBlockedTimerId: ReturnType<typeof setTimeout> | null = null;
   private rangeRingMeshes: THREE.Mesh[] = [];
@@ -269,7 +284,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private statusEffectService: StatusEffectService,
     private tilePricingService: TilePricingService,
     private priceLabelService: PriceLabelService,
-    private tutorialService: TutorialService
+    private tutorialService: TutorialService,
+    private campaignService: CampaignService,
+    private challengeEvaluatorService: ChallengeEvaluatorService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -313,7 +330,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       if (isPreviewPhase && (waveChanged || phaseChanged)) {
         // Preview shows the NEXT wave that is about to start (wave + 1)
         const nextWave = state.wave + 1;
-        const previewFull = getWavePreviewFull(nextWave, state.isEndless);
+        const customDefs = this.waveService.hasCustomWaves()
+          ? this.waveService.getWaveDefinitions()
+          : undefined;
+        const previewFull = getWavePreviewFull(nextWave, state.isEndless, customDefs);
         this.wavePreview = previewFull.entries;
         this.waveTemplateDescription = previewFull.templateDescription;
       }
@@ -332,6 +352,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     } else {
       this.gameBoardService.resetBoard();
     }
+
+    // Apply per-campaign-level wave definitions if this is a campaign map
+    this.applyCampaignWaves();
 
     this.initializeScene();
     this.initializeCamera();
@@ -352,9 +375,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.audioService.toggleMute();
     }
 
-    // Seed initial wave preview for the first wave
+    // Seed initial wave preview for the first wave (after applyCampaignWaves sets custom defs)
     const initialState = this.gameStateService.getState();
-    const initialPreview = getWavePreviewFull(initialState.wave + 1, initialState.isEndless);
+    const initialCustomDefs = this.waveService.hasCustomWaves()
+      ? this.waveService.getWaveDefinitions()
+      : undefined;
+    const initialPreview = getWavePreviewFull(initialState.wave + 1, initialState.isEndless, initialCustomDefs);
     this.wavePreview = initialPreview.entries;
     this.waveTemplateDescription = initialPreview.templateDescription;
 
@@ -784,6 +810,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.gameStateService.spendGold(cost);
+    this.challengeTotalGoldSpent += cost;
     this.audioService.playTowerUpgrade();
 
     // Scale tower mesh to reflect upgrade level
@@ -1022,7 +1049,30 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const waveCountMult = modEffects.waveCountMultiplier ?? 1;
     this.towerCombatService.setTowerDamageMultiplier(modEffects.towerDamageMultiplier ?? 1);
     this.waveService.startWave(this.gameStateService.getState().wave, this.scene, waveCountMult);
+
+    // Track which enemy types have been seen so the wave preview can show "NEW" badges
+    const currentWave = this.gameStateService.getState().wave;
+    const seenCustomDefs = this.waveService.hasCustomWaves()
+      ? this.waveService.getWaveDefinitions()
+      : undefined;
+    const previewEntries = getWavePreview(
+      currentWave,
+      this.gameStateService.getState().isEndless,
+      seenCustomDefs
+    );
+    for (const entry of previewEntries) {
+      this.seenEnemyTypes.add(entry.type);
+    }
+
     this.audioService.playWaveStart();
+  }
+
+  toggleEncyclopedia(): void {
+    this.showEncyclopedia = !this.showEncyclopedia;
+  }
+
+  isNewEnemyType(type: EnemyType): boolean {
+    return !this.seenEnemyTypes.has(type);
   }
 
   restartGame(): void {
@@ -1047,6 +1097,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.newlyUnlockedAchievements = [];
     this.achievementDetails = [];
     this.gameEndRecorded = false;
+    this.challengeTotalGoldSpent = 0;
+    this.challengeMaxTowersPlaced = 0;
+    this.challengeTowerTypesUsed = new Set<TowerType>();
+    this.completedChallenges = [];
     this.lastWaveReward = 0;
     this.lastInterestEarned = 0;
     this.activeModifiers = new Set<GameModifier>();
@@ -1055,6 +1109,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.defeatSoundPlayed = false;
     this.victorySoundPlayed = false;
     this.showHelpOverlay = false;
+    this.showEncyclopedia = false;
+    this.seenEnemyTypes = new Set<EnemyType>();
     this.showPathOverlay = false;
     this.leakedThisWave = false;
     this.pathBlocked = false;
@@ -1075,6 +1131,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     } else {
       this.gameBoardService.resetBoard();
     }
+
+    // Re-apply campaign waves after waveService.reset() (which clears custom waves)
+    this.applyCampaignWaves();
+
     this.renderGameBoard();
     this.addGridLines();
     this.initializeLights();
@@ -1089,6 +1149,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.updateTileHighlights();
   }
 
+
+  /**
+   * Checks if the current map is a campaign map and, if so, loads the per-level wave
+   * definitions into WaveService and updates GameStateService.maxWaves accordingly.
+   * No-op for non-campaign maps (standard 10-wave gameplay is unchanged).
+   * Called from ngOnInit() and restartGame() (after waveService.reset()).
+   */
+  private applyCampaignWaves(): void {
+    const mapId = this.mapBridge.getMapId();
+    if (!mapId?.startsWith('campaign_')) return;
+
+    const waves = CAMPAIGN_WAVE_DEFINITIONS[mapId];
+    if (!waves) return;
+
+    this.waveService.setCustomWaves(waves);
+    this.gameStateService.setMaxWaves(waves.length);
+  }
 
   /** Shared cleanup for game objects — used by both restartGame() and ngOnDestroy(). */
   private cleanupGameObjects(): void {
@@ -1794,14 +1871,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // Deduct gold
       this.gameStateService.spendGold(effectiveCost);
 
+      // Track challenge stats — gold and tower type
+      this.challengeTotalGoldSpent += effectiveCost;
+      this.challengeTowerTypesUsed.add(this.selectedTowerType);
+
       // Create tower mesh
       const towerMesh = this.gameBoardService.createTowerMesh(row, col, this.selectedTowerType);
       const key = `${row}-${col}`;
       this.towerMeshes.set(key, towerMesh);
       this.scene.add(towerMesh);
 
-      // Register tower with combat service
+      // Register tower with combat service, then update peak tower count
       this.towerCombatService.registerTower(row, col, this.selectedTowerType, towerMesh, effectiveCost);
+      const peakCount = this.towerCombatService.getPlacedTowers().size;
+      if (peakCount > this.challengeMaxTowersPlaced) {
+        this.challengeMaxTowersPlaced = peakCount;
+      }
+
       this.audioService.playTowerPlace();
       this.gameStatsService.recordTowerBuilt();
 
@@ -1982,6 +2068,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         // H key toggles help overlay
         event.preventDefault();
         this.showHelpOverlay = !this.showHelpOverlay;
+        break;
+      case 'e':
+      case 'E':
+        // E key toggles enemy encyclopedia
+        event.preventDefault();
+        this.toggleEncyclopedia();
         break;
       case 'm':
       case 'M':
@@ -2207,6 +2299,31 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
                   this.scoreBreakdown.stars,
                   this.scoreBreakdown.difficulty
                 );
+                // Evaluate and record challenge completions on VICTORY for campaign levels
+                if (postWavePhase === GamePhase.VICTORY && this.campaignService.getLevel(mapId)) {
+                  this.campaignService.recordCompletion(
+                    mapId,
+                    this.scoreBreakdown.finalScore,
+                    this.scoreBreakdown.stars,
+                    endState.difficulty
+                  );
+                  const challengeEndState = {
+                    livesLost: gameEndStats.livesLost,
+                    elapsedTime: endState.elapsedTime,
+                    totalGoldSpent: this.challengeTotalGoldSpent,
+                    maxTowersPlaced: this.challengeMaxTowersPlaced,
+                    towerTypesUsed: new Set<string>(this.challengeTowerTypesUsed),
+                  };
+                  const newlyChallenged = this.challengeEvaluatorService.evaluateChallenges(
+                    mapId,
+                    challengeEndState
+                  );
+                  this.completedChallenges = newlyChallenged;
+                  for (const challenge of newlyChallenged) {
+                    this.campaignService.completeChallenge(challenge.id);
+                    this.gameStateService.addScore(challenge.scoreBonus);
+                  }
+                }
               }
             }
           }

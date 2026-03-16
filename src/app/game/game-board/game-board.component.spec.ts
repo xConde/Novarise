@@ -14,6 +14,7 @@ import { MinimapService } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase } from './models/game-state.model';
 import { TowerType, PlacedTower } from './models/tower.model';
+import { EnemyType } from './models/enemy.model';
 import { TowerCombatService } from './services/tower-combat.service';
 import { ScoreBreakdown, calculateScoreBreakdown } from './models/score.model';
 import { ACHIEVEMENTS, Achievement } from './services/player-profile.service';
@@ -1152,6 +1153,89 @@ describe('GameBoardComponent', () => {
 
       tutorialStep$.next(null);
       expect(component.currentTutorialStep).toBeNull();
+    });
+  });
+
+  describe('toggleEncyclopedia', () => {
+    it('showEncyclopedia should be false initially', () => {
+      expect(component.showEncyclopedia).toBeFalse();
+    });
+
+    it('toggleEncyclopedia sets showEncyclopedia to true when false', () => {
+      component.showEncyclopedia = false;
+      component.toggleEncyclopedia();
+      expect(component.showEncyclopedia).toBeTrue();
+    });
+
+    it('toggleEncyclopedia sets showEncyclopedia to false when true', () => {
+      component.showEncyclopedia = true;
+      component.toggleEncyclopedia();
+      expect(component.showEncyclopedia).toBeFalse();
+    });
+
+    it('enemyInfoList should have 8 entries', () => {
+      expect(component.enemyInfoList.length).toBe(8);
+    });
+
+    it('enemyInfoList entries each have a name and description', () => {
+      for (const info of component.enemyInfoList) {
+        expect(info.name.length).toBeGreaterThan(0);
+        expect(info.description.length).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe('E key toggles encyclopedia', () => {
+    function fireKey(key: string): void {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true });
+      window.dispatchEvent(event);
+    }
+
+    beforeEach(() => {
+      window.addEventListener('keydown', (component as any).keyboardHandler);
+    });
+
+    afterEach(() => {
+      window.removeEventListener('keydown', (component as any).keyboardHandler);
+    });
+
+    it('pressing e opens the encyclopedia', () => {
+      component.showEncyclopedia = false;
+      fireKey('e');
+      expect(component.showEncyclopedia).toBeTrue();
+    });
+
+    it('pressing e again closes the encyclopedia', () => {
+      component.showEncyclopedia = true;
+      fireKey('e');
+      expect(component.showEncyclopedia).toBeFalse();
+    });
+
+    it('pressing E (uppercase) also toggles encyclopedia', () => {
+      component.showEncyclopedia = false;
+      fireKey('E');
+      expect(component.showEncyclopedia).toBeTrue();
+    });
+  });
+
+  describe('seenEnemyTypes tracking', () => {
+    it('seenEnemyTypes is empty initially', () => {
+      expect(component.seenEnemyTypes.size).toBe(0);
+    });
+
+    it('isNewEnemyType returns true for a type not yet seen', () => {
+      component.seenEnemyTypes = new Set<EnemyType>();
+      expect(component.isNewEnemyType(EnemyType.BOSS)).toBeTrue();
+    });
+
+    it('isNewEnemyType returns false for a type that has been seen', () => {
+      component.seenEnemyTypes = new Set<EnemyType>([EnemyType.BASIC]);
+      expect(component.isNewEnemyType(EnemyType.BASIC)).toBeFalse();
+    });
+
+    it('isNewEnemyType returns true for unseen type even when some types are seen', () => {
+      component.seenEnemyTypes = new Set<EnemyType>([EnemyType.BASIC, EnemyType.FAST]);
+      expect(component.isNewEnemyType(EnemyType.BOSS)).toBeTrue();
     });
   });
 });
