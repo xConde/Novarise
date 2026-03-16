@@ -323,6 +323,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.renderGameBoard();
     this.addGridLines();
 
+    // Show initial tile highlights if a tower type is pre-selected (SETUP phase)
+    if (this.isPlaceMode) {
+      this.updateTileHighlights();
+    }
+
     // Load saved settings
     const savedSettings = this.settingsService.get();
     if (savedSettings.audioMuted) {
