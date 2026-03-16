@@ -774,6 +774,134 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  describe('pause menu', () => {
+    let gameStateService: GameStateService;
+
+    function enterCombatAndPause(): void {
+      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.togglePause();
+      component.gameState = gameStateService.getState();
+    }
+
+    beforeEach(() => {
+      gameStateService = fixture.debugElement.injector.get(GameStateService);
+    });
+
+    it('showQuitConfirm defaults to false', () => {
+      expect(component.showQuitConfirm).toBeFalse();
+    });
+
+    it('togglePause resets showQuitConfirm', () => {
+      enterCombatAndPause();
+      component.showQuitConfirm = true;
+      component.togglePause();
+      expect(component.showQuitConfirm).toBeFalse();
+    });
+
+    it('onPauseOverlayClick calls togglePause', () => {
+      enterCombatAndPause();
+      spyOn(component, 'togglePause');
+      component.onPauseOverlayClick(new MouseEvent('click'));
+      expect(component.togglePause).toHaveBeenCalled();
+    });
+
+    it('isAudioMuted reflects audioService.isMuted', () => {
+      // Default: not muted
+      expect(component.isAudioMuted).toBeFalse();
+    });
+
+    it('toggleAudioFromPause calls audioService.toggleMute', () => {
+      const audioService = fixture.debugElement.injector.get(
+        // AudioService is provided in GameBoardComponent, get via injector
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (component as any).audioService.constructor
+      );
+      spyOn((component as any).audioService, 'toggleMute');
+      component.toggleAudioFromPause();
+      expect((component as any).audioService.toggleMute).toHaveBeenCalled();
+    });
+
+    it('setGameSpeedFromPause updates game speed via GameStateService', () => {
+      spyOn(gameStateService, 'setSpeed');
+      component.setGameSpeedFromPause(2);
+      expect(gameStateService.setSpeed).toHaveBeenCalledWith(2);
+    });
+
+    it('requestQuit sets showQuitConfirm to true', () => {
+      component.requestQuit();
+      expect(component.showQuitConfirm).toBeTrue();
+    });
+
+    it('cancelQuit sets showQuitConfirm to false', () => {
+      component.showQuitConfirm = true;
+      component.cancelQuit();
+      expect(component.showQuitConfirm).toBeFalse();
+    });
+
+    it('confirmQuit navigates to / when not a campaign game', () => {
+      const router = TestBed.inject(Router);
+      spyOn(router, 'navigate');
+      // Default mapBridge has no map loaded → not a campaign game
+      component.confirmQuit();
+      expect(router.navigate).toHaveBeenCalledWith(['/']);
+    });
+
+    it('confirmQuit resets showQuitConfirm', () => {
+      const router = TestBed.inject(Router);
+      spyOn(router, 'navigate');
+      component.showQuitConfirm = true;
+      component.confirmQuit();
+      expect(component.showQuitConfirm).toBeFalse();
+    });
+
+    it('pauseMenuSpeeds contains [1, 2, 3]', () => {
+      expect(component.pauseMenuSpeeds).toEqual([1, 2, 3] as any);
+    });
+  });
+
+  describe('keyboard Escape key — pause integration', () => {
+    function fireKey(key: string): void {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true });
+      window.dispatchEvent(event);
+    }
+
+    beforeEach(() => {
+      window.addEventListener('keydown', (component as any).keyboardHandler);
+    });
+
+    afterEach(() => {
+      window.removeEventListener('keydown', (component as any).keyboardHandler);
+    });
+
+    it('ESC resumes when paused', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.togglePause();
+      component.gameState = gameStateService.getState();
+
+      spyOn(component, 'togglePause').and.callThrough();
+      fireKey('Escape');
+      expect(component.togglePause).toHaveBeenCalled();
+      expect(component.isPaused).toBeFalse();
+    });
+
+    it('ESC deselects tower when not paused and not in PLACE mode', () => {
+      // ESC works in SETUP phase too — only VICTORY/DEFEAT blocks keyboard handling
+      // Do not enter COMBAT phase here to avoid auto-pause side effects
+      component.selectedTowerType = null;
+
+      spyOn(component, 'deselectTower');
+      fireKey('Escape');
+      expect(component.deselectTower).toHaveBeenCalled();
+    });
+
+    it('ESC does not toggle pause when not paused', () => {
+      spyOn(component, 'togglePause');
+      fireKey('Escape');
+      expect(component.togglePause).not.toHaveBeenCalled();
+    });
+  });
+
   describe('path overlay', () => {
     it('showPathOverlay defaults to false', () => {
       expect(component.showPathOverlay).toBeFalse();
@@ -1825,6 +1953,135 @@ describe('GameBoardComponent', () => {
       component.dismissNotification(42);
 
       expect(notificationService.dismiss).toHaveBeenCalledWith(42);
+    });
+  });
+
+  describe('Auto-pause on visibility/focus loss', () => {
+    let gameStateService: GameStateService;
+
+    beforeEach(() => {
+      gameStateService = fixture.debugElement.injector.get(GameStateService);
+      // Manually wire auto-pause listeners (ngAfterViewInit is not called in these tests)
+      (component as any).setupAutoPause();
+    });
+
+    afterEach(() => {
+      // Clean up document/window listeners to avoid leaking between tests
+      if ((component as any).visibilityChangeHandler) {
+        document.removeEventListener('visibilitychange', (component as any).visibilityChangeHandler);
+        (component as any).visibilityChangeHandler = null;
+      }
+      if ((component as any).windowBlurPauseHandler) {
+        window.removeEventListener('blur', (component as any).windowBlurPauseHandler);
+        (component as any).windowBlurPauseHandler = null;
+      }
+    });
+
+    it('visibility change to hidden during COMBAT triggers pause', () => {
+      gameStateService.setPhase(GamePhase.COMBAT);
+      spyOnProperty(document, 'hidden').and.returnValue(true);
+      spyOn(gameStateService, 'togglePause').and.callThrough();
+
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      expect(gameStateService.togglePause).toHaveBeenCalled();
+      expect(gameStateService.getState().isPaused).toBeTrue();
+    });
+
+    it('visibility change to hidden during SETUP does NOT trigger pause', () => {
+      // Phase stays SETUP (default)
+      spyOnProperty(document, 'hidden').and.returnValue(true);
+      spyOn(gameStateService, 'togglePause').and.callThrough();
+
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      expect(gameStateService.togglePause).not.toHaveBeenCalled();
+    });
+
+    it('visibility change to hidden when already paused does NOT double-toggle', () => {
+      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.togglePause(); // already paused
+      spyOnProperty(document, 'hidden').and.returnValue(true);
+      spyOn(gameStateService, 'togglePause').and.callThrough();
+
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      expect(gameStateService.togglePause).not.toHaveBeenCalled();
+      expect(gameStateService.getState().isPaused).toBeTrue();
+    });
+
+    it('window blur during COMBAT triggers pause', () => {
+      gameStateService.setPhase(GamePhase.COMBAT);
+      spyOn(gameStateService, 'togglePause').and.callThrough();
+
+      window.dispatchEvent(new Event('blur'));
+
+      expect(gameStateService.togglePause).toHaveBeenCalled();
+      expect(gameStateService.getState().isPaused).toBeTrue();
+    });
+
+    it('autoPaused flag is set to true on auto-pause via visibilitychange', () => {
+      gameStateService.setPhase(GamePhase.COMBAT);
+      spyOnProperty(document, 'hidden').and.returnValue(true);
+
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      expect(component.autoPaused).toBeTrue();
+    });
+
+    it('autoPaused flag is set to true on auto-pause via window blur', () => {
+      gameStateService.setPhase(GamePhase.COMBAT);
+
+      window.dispatchEvent(new Event('blur'));
+
+      expect(component.autoPaused).toBeTrue();
+    });
+
+    it('autoPaused flag is reset to false on manual togglePause (resume)', () => {
+      gameStateService.setPhase(GamePhase.COMBAT);
+      (component as any).autoPaused = true;
+
+      component.togglePause();
+
+      expect(component.autoPaused).toBeFalse();
+    });
+
+    it('autoPaused flag is reset in restartGame', () => {
+      (component as any).autoPaused = true;
+      spyOn(component as any, 'cleanupGameObjects');
+      spyOn(component as any, 'renderGameBoard');
+      spyOn(component as any, 'addGridLines');
+      spyOn(component as any, 'initializeLights');
+      spyOn(component as any, 'addSkybox');
+      spyOn(component as any, 'initializeParticles');
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'reset');
+      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
+      spyOn(minimapSvc, 'init');
+
+      component.restartGame();
+
+      expect(component.autoPaused).toBeFalse();
+    });
+
+    it('event listeners are cleaned up in ngOnDestroy', () => {
+      // Handlers are already wired in beforeEach; spy on remove calls
+      spyOn(document, 'removeEventListener').and.callThrough();
+      spyOn(window, 'removeEventListener').and.callThrough();
+
+      component.ngOnDestroy();
+
+      // Verify auto-pause handlers were removed
+      expect(document.removeEventListener).toHaveBeenCalledWith(
+        'visibilitychange', jasmine.any(Function)
+      );
+      expect(window.removeEventListener).toHaveBeenCalledWith(
+        'blur', jasmine.any(Function)
+      );
+
+      // Prevent afterEach from removing already-nulled handlers
+      (component as any).visibilityChangeHandler = null;
+      (component as any).windowBlurPauseHandler = null;
     });
   });
 });

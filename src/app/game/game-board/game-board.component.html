@@ -306,10 +306,71 @@
   </div>
 
   <!-- Pause overlay -->
-  <div class="pause-overlay" *ngIf="isPaused && gameState.phase === GamePhase.COMBAT" (click)="togglePause()">
-    <div class="pause-content">
-      <h2 class="pause-title">PAUSED</h2>
-      <p class="pause-hint">Click or press P to resume</p>
+  <div class="pause-overlay" *ngIf="isPaused && gameState.phase === GamePhase.COMBAT" (click)="onPauseOverlayClick($event)">
+    <div class="pause-menu" (click)="$event.stopPropagation()">
+      <h2 class="pause-menu__title">PAUSED</h2>
+
+      <!-- Game stats summary -->
+      <div class="pause-menu__stats">
+        <div class="pause-stat">
+          <span class="pause-stat__label">Wave</span>
+          <span class="pause-stat__value" *ngIf="!gameState.isEndless">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
+          <span class="pause-stat__value" *ngIf="gameState.isEndless">{{ gameState.wave }}</span>
+        </div>
+        <div class="pause-stat">
+          <span class="pause-stat__label">Score</span>
+          <span class="pause-stat__value">{{ gameState.score }}</span>
+        </div>
+        <div class="pause-stat">
+          <span class="pause-stat__label">Lives</span>
+          <span class="pause-stat__value">{{ gameState.lives }}</span>
+        </div>
+        <div class="pause-stat">
+          <span class="pause-stat__label">Gold</span>
+          <span class="pause-stat__value">{{ gameState.gold }}</span>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div class="pause-menu__settings" *ngIf="!showQuitConfirm">
+        <div class="pause-setting">
+          <span class="pause-setting__label">Audio</span>
+          <button class="pause-setting__btn" (click)="toggleAudioFromPause()">
+            {{ isAudioMuted ? 'Unmute' : 'Mute' }}
+          </button>
+        </div>
+        <div class="pause-setting">
+          <span class="pause-setting__label">Speed</span>
+          <div class="pause-speed-btns">
+            <button *ngFor="let speed of pauseMenuSpeeds"
+                    class="pause-speed-btn"
+                    [class.pause-speed-btn--active]="gameState.gameSpeed === speed"
+                    (click)="setGameSpeedFromPause(speed)">
+              {{ speed }}x
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Normal actions -->
+      <div class="pause-menu__actions" *ngIf="!showQuitConfirm">
+        <button class="pause-action pause-action--primary" (click)="togglePause()">Resume</button>
+        <button class="pause-action pause-action--quit" (click)="requestQuit()">
+          {{ isCampaignGame ? 'Quit to Campaign' : 'Quit to Menu' }}
+        </button>
+      </div>
+
+      <!-- Quit confirmation -->
+      <div class="pause-menu__quit-confirm" *ngIf="showQuitConfirm">
+        <p class="quit-confirm__text">Quit this game? Progress will be lost.</p>
+        <div class="quit-confirm__actions">
+          <button class="pause-action pause-action--primary" (click)="cancelQuit()">Cancel</button>
+          <button class="pause-action pause-action--quit" (click)="confirmQuit()">Quit</button>
+        </div>
+      </div>
+
+      <p class="pause-menu__auto-hint" *ngIf="autoPaused">Game auto-paused — tab was inactive</p>
+      <p class="pause-menu__hint">P or ESC to resume</p>
     </div>
   </div>
 

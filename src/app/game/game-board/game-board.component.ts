@@ -229,6 +229,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private blurDragHandler: () => void = () => {};
   private dragIsTouch = false;
 
+  // Auto-pause on visibility/focus loss
+  private visibilityChangeHandler: (() => void) | null = null;
+  private windowBlurPauseHandler: (() => void) | null = null;
+  autoPaused = false;
+
   // Tutorial state
   currentTutorialStep: TutorialStep | null = null;
   private tutorialSub: Subscription | null = null;
@@ -437,6 +442,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.setupTouchInteraction();
     this.setupKeyboardControls();
     this.minimapService.init(this.canvasContainer.nativeElement);
+    this.setupAutoPause();
     this.animate();
   }
 
@@ -1226,6 +1232,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.seenEnemyTypes = new Set<EnemyType>();
     this.showPathOverlay = false;
     this.leakedThisWave = false;
+    this.autoPaused = false;
     this.pathBlocked = false;
     if (this.pathBlockedTimerId !== null) {
       clearTimeout(this.pathBlockedTimerId);
@@ -2023,8 +2030,81 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.tileMeshes.get(`${this.selectedTile.row}-${this.selectedTile.col}`) || null;
   }
 
+  // --- Pause menu ---
+
+  /** Named constant for pause menu speed buttons — avoids template literal arrays. */
+  readonly pauseMenuSpeeds: readonly GameSpeed[] = VALID_GAME_SPEEDS;
+
+  /** Whether the quit-confirmation sub-panel is visible inside the pause menu. */
+  showQuitConfirm = false;
+
+  get isAudioMuted(): boolean {
+    return this.audioService.isMuted;
+  }
+
+  onPauseOverlayClick(_event: MouseEvent): void {
+    // Clicking the dark backdrop resumes the game
+    this.togglePause();
+  }
+
+  toggleAudioFromPause(): void {
+    this.audioService.toggleMute();
+    this.settingsService.update({ audioMuted: this.audioService.isMuted });
+  }
+
+  setGameSpeedFromPause(speed: GameSpeed): void {
+    this.gameStateService.setSpeed(speed);
+    this.settingsService.update({ gameSpeed: speed });
+  }
+
+  requestQuit(): void {
+    this.showQuitConfirm = true;
+  }
+
+  cancelQuit(): void {
+    this.showQuitConfirm = false;
+  }
+
+  confirmQuit(): void {
+    this.showQuitConfirm = false;
+    if (this.isCampaignGame) {
+      this.router.navigate(['/campaign']);
+    } else {
+      this.router.navigate(['/']);
+    }
+  }
+
   togglePause(): void {
+    this.showQuitConfirm = false;
+    this.autoPaused = false;
     this.gameStateService.togglePause();
+  }
+
+  /** Register visibility/focus-loss listeners for auto-pause. Called once in ngAfterViewInit. */
+  private setupAutoPause(): void {
+    this.visibilityChangeHandler = () => this.onVisibilityChange();
+    document.addEventListener('visibilitychange', this.visibilityChangeHandler);
+
+    this.windowBlurPauseHandler = () => this.onWindowBlurPause();
+    window.addEventListener('blur', this.windowBlurPauseHandler);
+  }
+
+  private onVisibilityChange(): void {
+    if (document.hidden) {
+      this.autoPauseIfCombat();
+    }
+  }
+
+  private onWindowBlurPause(): void {
+    this.autoPauseIfCombat();
+  }
+
+  private autoPauseIfCombat(): void {
+    const state = this.gameStateService.getState();
+    if (state.phase === GamePhase.COMBAT && !state.isPaused) {
+      this.gameStateService.togglePause();
+      this.autoPaused = true;
+    }
   }
 
   setSpeed(speed: number): void {
@@ -2171,9 +2251,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.togglePause();
         break;
       case 'Escape':
-        // Escape: if in PLACE mode, cancel placement; otherwise deselect placed tower
         event.preventDefault();
-        if (this.isPlaceMode) {
+        if (this.isPaused) {
+          // ESC while paused: resume game
+          this.togglePause();
+        } else if (this.isPlaceMode) {
           this.cancelPlacement();
         } else {
           this.deselectTower();
@@ -2685,6 +2767,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     window.removeEventListener('keyup', this.keyupPanHandler);
     window.removeEventListener('resize', this.resizeHandler);
     this.removeDragListeners();
+
+    if (this.visibilityChangeHandler) {
+      document.removeEventListener('visibilitychange', this.visibilityChangeHandler);
+      this.visibilityChangeHandler = null;
+    }
+    if (this.windowBlurPauseHandler) {
+      window.removeEventListener('blur', this.windowBlurPauseHandler);
+      this.windowBlurPauseHandler = null;
+    }
 
     // Remove canvas event listeners (stored as named references)
     if (this.renderer) {
