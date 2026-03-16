@@ -516,15 +516,23 @@ describe('GameStateService', () => {
       expect(service.getState().isPaused).toBeFalse();
     });
 
-    it('should be a no-op outside of COMBAT phase (SETUP)', () => {
-      service.togglePause(); // phase is SETUP
-      expect(service.getState().isPaused).toBeFalse();
-    });
-
-    it('should be a no-op in INTERMISSION phase', () => {
+    it('should pause during INTERMISSION phase', () => {
       service.startWave();
       service.completeWave(10); // → INTERMISSION
       service.togglePause();
+      expect(service.getState().isPaused).toBeTrue();
+    });
+
+    it('should resume when called again during INTERMISSION', () => {
+      service.startWave();
+      service.completeWave(10); // → INTERMISSION
+      service.togglePause();
+      service.togglePause();
+      expect(service.getState().isPaused).toBeFalse();
+    });
+
+    it('should be a no-op outside of COMBAT and INTERMISSION phases (SETUP)', () => {
+      service.togglePause(); // phase is SETUP
       expect(service.getState().isPaused).toBeFalse();
     });
 

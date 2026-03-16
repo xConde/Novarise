@@ -2219,5 +2219,124 @@ describe('GameBoardComponent', () => {
       (component as any).visibilityChangeHandler = null;
       (component as any).windowBlurPauseHandler = null;
     });
+
+    it('visibility change to hidden during INTERMISSION triggers pause', () => {
+      gameStateService.setPhase(GamePhase.INTERMISSION);
+      spyOnProperty(document, 'hidden').and.returnValue(true);
+      spyOn(gameStateService, 'togglePause').and.callThrough();
+
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      expect(gameStateService.togglePause).toHaveBeenCalled();
+      expect(gameStateService.getState().isPaused).toBeTrue();
+    });
+
+    it('window blur during INTERMISSION triggers pause', () => {
+      gameStateService.setPhase(GamePhase.INTERMISSION);
+      spyOn(gameStateService, 'togglePause').and.callThrough();
+
+      window.dispatchEvent(new Event('blur'));
+
+      expect(gameStateService.togglePause).toHaveBeenCalled();
+      expect(gameStateService.getState().isPaused).toBeTrue();
+    });
+
+    it('already paused in INTERMISSION does NOT double-toggle on blur', () => {
+      gameStateService.setPhase(GamePhase.INTERMISSION);
+      gameStateService.togglePause(); // already paused
+      spyOn(gameStateService, 'togglePause').and.callThrough();
+
+      window.dispatchEvent(new Event('blur'));
+
+      expect(gameStateService.togglePause).not.toHaveBeenCalled();
+      expect(gameStateService.getState().isPaused).toBeTrue();
+    });
+  });
+
+  describe('INTERMISSION pause — keyboard and pause menu', () => {
+    let gameStateService: GameStateService;
+
+    function fireKey(key: string): void {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true });
+      window.dispatchEvent(event);
+    }
+
+    beforeEach(() => {
+      gameStateService = fixture.debugElement.injector.get(GameStateService);
+      // Wire keyboard handler (ngAfterViewInit skipped in unit tests)
+      (component as any).setupKeyboardControls();
+    });
+
+    afterEach(() => {
+      window.removeEventListener('keydown', (component as any).keyboardHandler);
+      window.removeEventListener('keydown', (component as any).keydownPanHandler);
+      window.removeEventListener('keyup', (component as any).keyupPanHandler);
+    });
+
+    it('P key toggles pause during INTERMISSION', () => {
+      gameStateService.setPhase(GamePhase.INTERMISSION);
+      spyOn(component, 'togglePause').and.callThrough();
+
+      fireKey('p');
+
+      expect(component.togglePause).toHaveBeenCalled();
+      expect(gameStateService.getState().isPaused).toBeTrue();
+    });
+
+    it('ESC key toggles pause during INTERMISSION when paused', () => {
+      gameStateService.setPhase(GamePhase.INTERMISSION);
+      gameStateService.togglePause(); // pause first
+      component.gameState = gameStateService.getState();
+      spyOn(component, 'togglePause').and.callThrough();
+
+      fireKey('Escape');
+
+      expect(component.togglePause).toHaveBeenCalled();
+      expect(gameStateService.getState().isPaused).toBeFalse();
+    });
+
+    it('togglePause works during INTERMISSION via GameStateService', () => {
+      gameStateService.setPhase(GamePhase.INTERMISSION);
+
+      component.togglePause();
+
+      expect(gameStateService.getState().isPaused).toBeTrue();
+    });
+
+    it('autoPaused flag set when auto-pausing during INTERMISSION', () => {
+      gameStateService.setPhase(GamePhase.INTERMISSION);
+      (component as any).setupAutoPause();
+
+      spyOnProperty(document, 'hidden').and.returnValue(true);
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      expect(component.autoPaused).toBeTrue();
+
+      // cleanup
+      document.removeEventListener('visibilitychange', (component as any).visibilityChangeHandler);
+      window.removeEventListener('blur', (component as any).windowBlurPauseHandler);
+      (component as any).visibilityChangeHandler = null;
+      (component as any).windowBlurPauseHandler = null;
+    });
+  });
+
+  describe('restartGame — showQuitConfirm reset', () => {
+    it('showQuitConfirm is reset to false on restartGame', () => {
+      spyOn(component as any, 'cleanupGameObjects');
+      spyOn(component as any, 'renderGameBoard');
+      spyOn(component as any, 'addGridLines');
+      spyOn(component as any, 'initializeLights');
+      spyOn(component as any, 'addSkybox');
+      spyOn(component as any, 'initializeParticles');
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'reset');
+      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
+      spyOn(minimapSvc, 'init');
+
+      component.showQuitConfirm = true;
+      component.restartGame();
+
+      expect(component.showQuitConfirm).toBeFalse();
+    });
   });
 });

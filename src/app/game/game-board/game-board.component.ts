@@ -1233,6 +1233,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.showPathOverlay = false;
     this.leakedThisWave = false;
     this.autoPaused = false;
+    this.showQuitConfirm = false;
     this.pathBlocked = false;
     if (this.pathBlockedTimerId !== null) {
       clearTimeout(this.pathBlockedTimerId);
@@ -2146,17 +2147,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private onVisibilityChange(): void {
     if (document.hidden) {
-      this.autoPauseIfCombat();
+      this.autoPauseIfActive();
     }
   }
 
   private onWindowBlurPause(): void {
-    this.autoPauseIfCombat();
+    this.autoPauseIfActive();
   }
 
-  private autoPauseIfCombat(): void {
+  private autoPauseIfActive(): void {
     const state = this.gameStateService.getState();
-    if (state.phase === GamePhase.COMBAT && !state.isPaused) {
+    if ((state.phase === GamePhase.COMBAT || state.phase === GamePhase.INTERMISSION) && !state.isPaused) {
       this.gameStateService.togglePause();
       this.autoPaused = true;
     }

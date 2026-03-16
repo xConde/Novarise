@@ -140,9 +140,9 @@ export class GameStateService {
     this.emit();
   }
 
-  /** Toggles pause state. No-op outside of COMBAT phase. */
+  /** Toggles pause state. No-op outside of COMBAT and INTERMISSION phases. */
   togglePause(): void {
-    if (this.state.phase !== GamePhase.COMBAT) return;
+    if (this.state.phase !== GamePhase.COMBAT && this.state.phase !== GamePhase.INTERMISSION) return;
     this.state.isPaused = !this.state.isPaused;
     this.emit();
   }
