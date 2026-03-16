@@ -19,7 +19,7 @@ import { ScreenShakeService } from './services/screen-shake.service';
 import { GoldPopupService } from './services/gold-popup.service';
 import { FpsCounterService } from './services/fps-counter.service';
 import { GameStatsService } from './services/game-stats.service';
-import { PlayerProfileService, GameEndStats, ACHIEVEMENTS, Achievement, TOWER_COLLECTOR_TYPE_COUNT } from './services/player-profile.service';
+import { PlayerProfileService, ACHIEVEMENTS, Achievement } from './services/player-profile.service';
 import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService, MinimapEntityData, MinimapTerrainData } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
@@ -48,10 +48,12 @@ import { TilePricingService, TilePriceInfo } from './services/tile-pricing.servi
 import { PriceLabelService } from './services/price-label.service';
 import { TutorialService, TutorialStep, TutorialTip } from './services/tutorial.service';
 import { GameNotificationService, GameNotification, NotificationType } from './services/game-notification.service';
+import { ChallengeTrackingService } from './services/challenge-tracking.service';
+import { GameEndService } from './services/game-end.service';
 import { TerrainGridStateLegacy } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 import { CampaignService } from '../../campaign/services/campaign.service';
 import { CampaignMapService } from '../../campaign/services/campaign-map.service';
-import { ChallengeEvaluatorService } from '../../campaign/services/challenge-evaluator.service';
+
 import { CAMPAIGN_WAVE_DEFINITIONS } from '../../campaign/waves/campaign-waves';
 import { CampaignLevel } from '../../campaign/models/campaign.model';
 import { ChallengeDefinition, getChallengesForLevel } from '../../campaign/models/challenge.model';
@@ -69,7 +71,7 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService]
+  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -156,15 +158,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   newlyUnlockedAchievements: string[] = [];
   achievementDetails: Achievement[] = [];
 
-  // Guard: prevents recordGameEnd from firing more than once per game
-  private gameEndRecorded = false;
-  /** Set to true the first time the player confirms a L3 specialization upgrade. */
-  private hasSpecializationBeenUsed = false;
-
-  // Challenge tracking — reset per game
-  private challengeTotalGoldSpent = 0;
-  private challengeMaxTowersPlaced = 0;
-  private challengeTowerTypesUsed = new Set<TowerType>();
   /** Challenge completions awarded at end of this game session. */
   completedChallenges: ChallengeDefinition[] = [];
 
@@ -259,26 +252,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       .filter((a): a is Achievement => a != null);
   }
 
-  /** Builds the GameEndStats object from current service state. Used by both VICTORY and DEFEAT paths. */
-  private buildGameEndStats(isVictory: boolean): GameEndStats {
-    const endState = this.gameStateService.getState();
-    const stats = this.gameStatsService.getStats();
-    const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
-    return {
-      isVictory,
-      score: endState.score,
-      enemiesKilled: totalKills,
-      goldEarned: stats.totalGoldEarned,
-      wavesCompleted: endState.wave,
-      livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
-      towerKills: stats.killsByTowerType,
-      modifierCount: endState.activeModifiers.size,
-      usedSpecialization: this.hasSpecializationBeenUsed,
-      placedAllTowerTypes: this.challengeTowerTypesUsed.size >= TOWER_COLLECTOR_TYPE_COUNT,
-      slowEffectsApplied: this.statusEffectService.getSlowApplicationCount(),
-    };
-  }
-
   // FPS exposed to template
   get fps(): number { return this.fpsCounterService.getFps(); }
 
@@ -321,8 +294,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private tutorialService: TutorialService,
     private campaignService: CampaignService,
     private campaignMapService: CampaignMapService,
-    private challengeEvaluatorService: ChallengeEvaluatorService,
-    private notificationService: GameNotificationService
+    private notificationService: GameNotificationService,
+    private challengeTrackingService: ChallengeTrackingService,
+    private gameEndService: GameEndService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -850,14 +824,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this.towerCombatService.upgradeTowerWithSpec(this.selectedTowerInfo.id, spec, cost)) return;
       this.showSpecializationChoice = false;
       this.specOptions = [];
-      this.hasSpecializationBeenUsed = true;
+      this.gameEndService.recordSpecialization();
     } else {
       // L1->L2: standard upgrade
       if (!this.towerCombatService.upgradeTower(this.selectedTowerInfo.id, cost)) return;
     }
 
     this.gameStateService.spendGold(cost);
-    this.challengeTotalGoldSpent += cost;
+    this.challengeTrackingService.recordTowerUpgraded(cost);
     this.audioService.playTowerUpgrade();
 
     // Scale tower mesh to reflect upgrade level
@@ -905,6 +879,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gameStateService.addGold(refund);
     this.audioService.playTowerSell();
     this.gameStatsService.recordTowerSold();
+    this.challengeTrackingService.recordTowerSold();
 
     // Remove mesh from scene
     const towerMesh = this.towerMeshes.get(this.selectedTowerInfo.id);
@@ -1212,12 +1187,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.scoreBreakdown = null;
     this.newlyUnlockedAchievements = [];
     this.achievementDetails = [];
-    this.gameEndRecorded = false;
-    this.hasSpecializationBeenUsed = false;
+    this.gameEndService.reset();
     this.notificationService.clear();
-    this.challengeTotalGoldSpent = 0;
-    this.challengeMaxTowersPlaced = 0;
-    this.challengeTowerTypesUsed = new Set<TowerType>();
+    this.challengeTrackingService.reset();
     this.completedChallenges = [];
     this.lastWaveReward = 0;
     this.lastInterestEarned = 0;
@@ -1992,22 +1964,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // Deduct gold
       this.gameStateService.spendGold(effectiveCost);
 
-      // Track challenge stats — gold and tower type
-      this.challengeTotalGoldSpent += effectiveCost;
-      this.challengeTowerTypesUsed.add(this.selectedTowerType);
-
       // Create tower mesh
       const towerMesh = this.gameBoardService.createTowerMesh(row, col, this.selectedTowerType);
       const key = `${row}-${col}`;
       this.towerMeshes.set(key, towerMesh);
       this.scene.add(towerMesh);
 
-      // Register tower with combat service, then update peak tower count
+      // Register tower with combat service, then track challenge stats
       this.towerCombatService.registerTower(row, col, this.selectedTowerType, towerMesh, effectiveCost);
-      const peakCount = this.towerCombatService.getPlacedTowers().size;
-      if (peakCount > this.challengeMaxTowersPlaced) {
-        this.challengeMaxTowersPlaced = peakCount;
-      }
+      this.challengeTrackingService.recordTowerPlaced(this.selectedTowerType, effectiveCost);
 
       this.audioService.playTowerPlace();
       this.gameStatsService.recordTowerBuilt();
@@ -2068,7 +2033,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   confirmQuit(): void {
     this.showQuitConfirm = false;
-    this.recordQuitDefeat();
+    this.gameEndService.recordEnd(false, null);
     if (this.isCampaignGame) {
       this.router.navigate(['/campaign']);
     } else {
@@ -2103,31 +2068,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       return false;
     }
 
-    this.recordQuitDefeat();
+    this.gameEndService.recordEnd(false, null);
     return true;
-  }
-
-  /**
-   * Records a mid-game quit as a defeat. Idempotent — no-ops if already recorded
-   * or if the game was never in progress (SETUP phase).
-   */
-  private recordQuitDefeat(): void {
-    const state = this.gameStateService.getState();
-    if (this.gameEndRecorded) return;
-    if (state.phase !== GamePhase.COMBAT && state.phase !== GamePhase.INTERMISSION) return;
-    this.gameEndRecorded = true;
-    const gameEndStats = this.buildGameEndStats(false);
-    this.playerProfileService.recordGameEnd(gameEndStats);
-
-    const mapId = this.mapBridge.getMapId();
-    if (mapId && this.scoreBreakdown) {
-      this.playerProfileService.recordMapScore(
-        mapId,
-        this.scoreBreakdown.finalScore,
-        0,
-        state.difficulty
-      );
-    }
   }
 
   togglePause(): void {
@@ -2545,103 +2487,20 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             }
 
             // Record game end stats for profile (VICTORY or DEFEAT, fires once per game)
-            if ((postWavePhase === GamePhase.VICTORY || postWavePhase === GamePhase.DEFEAT) && !this.gameEndRecorded) {
-              this.gameEndRecorded = true;
+            if (postWavePhase === GamePhase.VICTORY || postWavePhase === GamePhase.DEFEAT) {
               const isVictory = postWavePhase === GamePhase.VICTORY;
-              const gameEndStats = this.buildGameEndStats(isVictory);
-              this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
+              const result = this.gameEndService.recordEnd(isVictory, this.scoreBreakdown);
+              this.newlyUnlockedAchievements = result.newlyUnlockedAchievements;
+              this.completedChallenges = result.completedChallenges;
               this.updateAchievementDetails();
-              // Toast: achievement unlocks
-              for (const achId of this.newlyUnlockedAchievements) {
-                const ach = ACHIEVEMENTS.find(a => a.id === achId);
-                if (ach) {
-                  this.audioService.playAchievementSound();
-                  this.notificationService.show(
-                    NotificationType.ACHIEVEMENT,
-                    'Achievement Unlocked!',
-                    ach.name
-                  );
-                }
-              }
-              const mapId = this.mapBridge.getMapId();
-              if (mapId && this.scoreBreakdown) {
-                this.playerProfileService.recordMapScore(
-                  mapId,
-                  this.scoreBreakdown.finalScore,
-                  this.scoreBreakdown.stars,
-                  this.scoreBreakdown.difficulty
-                );
-                // Evaluate and record challenge completions on VICTORY for campaign levels
-                if (isVictory && this.campaignService.getLevel(mapId)) {
-                  const endState = this.gameStateService.getState();
-                  const challengeEndState = {
-                    livesLost: gameEndStats.livesLost,
-                    elapsedTime: endState.elapsedTime,
-                    totalGoldSpent: this.challengeTotalGoldSpent,
-                    maxTowersPlaced: this.challengeMaxTowersPlaced,
-                    towerTypesUsed: new Set<string>(this.challengeTowerTypesUsed),
-                  };
-                  const newlyChallenged = this.challengeEvaluatorService.evaluateChallenges(
-                    mapId,
-                    challengeEndState
-                  );
-                  this.completedChallenges = newlyChallenged;
-                  let challengeBonus = 0;
-                  for (const challenge of newlyChallenged) {
-                    this.campaignService.completeChallenge(challenge.id);
-                    this.playerProfileService.recordChallengeCompleted();
-                    challengeBonus += challenge.scoreBonus;
-                    // Toast: challenge completion
-                    this.audioService.playChallengeSound();
-                    this.notificationService.show(
-                      NotificationType.CHALLENGE,
-                      'Challenge Complete!',
-                      `${challenge.name} (+${challenge.scoreBonus} pts)`
-                    );
-                  }
-                  if (challengeBonus > 0) {
-                    this.gameStateService.addScore(challengeBonus);
-                  }
-                  // Record completion with the final score (including challenge bonuses)
-                  const updatedScore = this.scoreBreakdown!.finalScore + challengeBonus;
-                  this.campaignService.recordCompletion(
-                    mapId,
-                    updatedScore,
-                    this.scoreBreakdown!.stars,
-                    endState.difficulty
-                  );
-                }
-              }
             }
           }
 
           // DEFEAT mid-frame (from loseLife) — record game end if not yet done
-          if (currentPhase === GamePhase.DEFEAT && !this.gameEndRecorded) {
-            this.gameEndRecorded = true;
-            const gameEndStats = this.buildGameEndStats(false);
-            this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
+          if (currentPhase === GamePhase.DEFEAT) {
+            const result = this.gameEndService.recordEnd(false, this.scoreBreakdown);
+            this.newlyUnlockedAchievements = result.newlyUnlockedAchievements;
             this.updateAchievementDetails();
-            // Toast: achievement unlocks on defeat
-            for (const achId of this.newlyUnlockedAchievements) {
-              const ach = ACHIEVEMENTS.find(a => a.id === achId);
-              if (ach) {
-                this.audioService.playAchievementSound();
-                this.notificationService.show(
-                  NotificationType.ACHIEVEMENT,
-                  'Achievement Unlocked!',
-                  ach.name
-                );
-              }
-            }
-            const mapId = this.mapBridge.getMapId();
-            if (mapId && this.scoreBreakdown) {
-              this.playerProfileService.recordMapScore(
-                mapId,
-                this.scoreBreakdown.finalScore,
-                this.scoreBreakdown.stars,
-                this.scoreBreakdown.difficulty
-              );
-            }
           }
 
           this.physicsAccumulator -= PHYSICS_CONFIG.fixedTimestep;

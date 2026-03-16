@@ -28,6 +28,9 @@ import { CampaignMapService } from '../../campaign/services/campaign-map.service
 import { CampaignLevel, CampaignTier } from '../../campaign/models/campaign.model';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 import { GameNotificationService, NotificationType } from './services/game-notification.service';
+import { ChallengeTrackingService } from './services/challenge-tracking.service';
+import { GameEndService } from './services/game-end.service';
+import { TilePricingService } from './services/tile-pricing.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -858,12 +861,15 @@ describe('GameBoardComponent', () => {
       expect(component.pauseMenuSpeeds).toEqual([1, 2, 3] as any);
     });
 
-    it('confirmQuit does NOT record defeat during SETUP phase', () => {
+    it('confirmQuit records defeat even during SETUP (delegates to GameEndService — no phase gate)', () => {
       const router = TestBed.inject(Router);
       spyOn(router, 'navigate');
-      // Phase is SETUP by default — should be a no-op for profile recording
+      // Phase is SETUP by default — GameEndService.recordEnd always records (no phase gate)
+      // In practice, confirmQuit is only reachable from the pause menu (COMBAT/INTERMISSION).
       component.confirmQuit();
-      expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ isVictory: false })
+      );
     });
 
     it('confirmQuit records defeat when quitting during COMBAT', () => {
@@ -886,11 +892,14 @@ describe('GameBoardComponent', () => {
       );
     });
 
-    it('confirmQuit does not double-record defeat when gameEndRecorded is already true', () => {
+    it('confirmQuit does not double-record defeat when game end already recorded', () => {
       const router = TestBed.inject(Router);
       spyOn(router, 'navigate');
       gameStateService.setPhase(GamePhase.COMBAT);
-      (component as any).gameEndRecorded = true;
+      // Pre-record a game end so the service's idempotency guard fires
+      const gameEndService = fixture.debugElement.injector.get(GameEndService);
+      gameEndService.recordEnd(false, null);
+      playerProfileSpy.recordGameEnd.calls.reset();
       component.confirmQuit();
       expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
     });
@@ -984,10 +993,13 @@ describe('GameBoardComponent', () => {
       expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
     });
 
-    it('does not double-record defeat when gameEndRecorded is already true', () => {
+    it('does not double-record defeat when game end already recorded', () => {
       gameStateService.setPhase(GamePhase.COMBAT);
       spyOn(window, 'confirm').and.returnValue(true);
-      (component as any).gameEndRecorded = true;
+      // Pre-record via the service so idempotency guard fires
+      const gameEndService = fixture.debugElement.injector.get(GameEndService);
+      gameEndService.recordEnd(false, null);
+      playerProfileSpy.recordGameEnd.calls.reset();
 
       component.canLeaveGame();
 
@@ -1861,76 +1873,126 @@ describe('GameBoardComponent', () => {
     });
   });
 
-  describe('buildGameEndStats — optional fields wiring', () => {
+  describe('GameEndService — buildGameEndStats wiring (via recordEnd)', () => {
+    let gameEndService: GameEndService;
+
+    beforeEach(() => {
+      gameEndService = fixture.debugElement.injector.get(GameEndService);
+    });
+
     it('includes towerKills from GameStatsService', () => {
-      // GameStatsService is provided at component level — must get from component's injector
       const gameStatsService = fixture.debugElement.injector.get(GameStatsService);
-      // Record a kill so towerKills is non-trivially populated
       gameStatsService.recordKill(TowerType.SNIPER);
       gameStatsService.recordKill(TowerType.SNIPER);
 
-      const result = (component as any).buildGameEndStats(true);
+      gameEndService.recordEnd(true, null);
 
-      expect(result.towerKills).toEqual(jasmine.objectContaining({ sniper: 2 }));
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ towerKills: jasmine.objectContaining({ sniper: 2 }) })
+      );
     });
 
     it('includes modifierCount from active modifiers on GameState', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      // activeModifiers.size should be 0 by default (SETUP phase, no modifiers)
-      const result = (component as any).buildGameEndStats(true);
+      const expected = gameStateService.getState().activeModifiers.size;
 
-      expect(result.modifierCount).toBe(gameStateService.getState().activeModifiers.size);
+      gameEndService.recordEnd(true, null);
+
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ modifierCount: expected })
+      );
     });
 
     it('usedSpecialization is false before any spec upgrade', () => {
-      const result = (component as any).buildGameEndStats(true);
+      gameEndService.recordEnd(true, null);
 
-      expect(result.usedSpecialization).toBeFalse();
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ usedSpecialization: false })
+      );
     });
 
-    it('usedSpecialization is true after hasSpecializationBeenUsed flag is set', () => {
-      (component as any).hasSpecializationBeenUsed = true;
+    it('usedSpecialization is true after recordSpecialization() is called', () => {
+      gameEndService.recordSpecialization();
 
-      const result = (component as any).buildGameEndStats(false);
+      gameEndService.recordEnd(false, null);
 
-      expect(result.usedSpecialization).toBeTrue();
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ usedSpecialization: true })
+      );
     });
 
     it('placedAllTowerTypes is false when fewer than 6 tower types used', () => {
-      (component as any).challengeTowerTypesUsed = new Set([TowerType.BASIC, TowerType.SNIPER]);
+      const challengeTrackingService = fixture.debugElement.injector.get(ChallengeTrackingService);
+      challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+      challengeTrackingService.recordTowerPlaced(TowerType.SNIPER, 150);
 
-      const result = (component as any).buildGameEndStats(true);
+      gameEndService.recordEnd(true, null);
 
-      expect(result.placedAllTowerTypes).toBeFalse();
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ placedAllTowerTypes: false })
+      );
     });
 
     it('placedAllTowerTypes is true when all 6 tower types have been used', () => {
-      (component as any).challengeTowerTypesUsed = new Set([
-        TowerType.BASIC, TowerType.SNIPER, TowerType.SPLASH,
-        TowerType.SLOW, TowerType.CHAIN, TowerType.MORTAR,
-      ]);
+      const challengeTrackingService = fixture.debugElement.injector.get(ChallengeTrackingService);
+      challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+      challengeTrackingService.recordTowerPlaced(TowerType.SNIPER, 150);
+      challengeTrackingService.recordTowerPlaced(TowerType.SPLASH, 200);
+      challengeTrackingService.recordTowerPlaced(TowerType.SLOW, 125);
+      challengeTrackingService.recordTowerPlaced(TowerType.CHAIN, 175);
+      challengeTrackingService.recordTowerPlaced(TowerType.MORTAR, 225);
 
-      const result = (component as any).buildGameEndStats(true);
+      gameEndService.recordEnd(true, null);
 
-      expect(result.placedAllTowerTypes).toBeTrue();
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ placedAllTowerTypes: true })
+      );
     });
 
     it('slowEffectsApplied comes from StatusEffectService.getSlowApplicationCount()', () => {
-      // StatusEffectService is provided at component level — get from component's injector
       const statusEffectService = fixture.debugElement.injector.get(StatusEffectService);
       spyOn(statusEffectService, 'getSlowApplicationCount').and.returnValue(42);
 
-      const result = (component as any).buildGameEndStats(true);
+      gameEndService.recordEnd(true, null);
 
-      expect(result.slowEffectsApplied).toBe(42);
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ slowEffectsApplied: 42 })
+      );
     });
 
     it('populates isVictory correctly for victory and defeat paths', () => {
-      const victoryResult = (component as any).buildGameEndStats(true);
-      const defeatResult = (component as any).buildGameEndStats(false);
+      gameEndService.recordEnd(true, null);
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ isVictory: true })
+      );
 
-      expect(victoryResult.isVictory).toBeTrue();
-      expect(defeatResult.isVictory).toBeFalse();
+      playerProfileSpy.recordGameEnd.calls.reset();
+      gameEndService.reset();
+      gameEndService.recordEnd(false, null);
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ isVictory: false })
+      );
+    });
+
+    it('recordEnd is idempotent — second call returns empty and does not re-record', () => {
+      gameEndService.recordEnd(true, null);
+      playerProfileSpy.recordGameEnd.calls.reset();
+
+      const result = gameEndService.recordEnd(true, null);
+
+      expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
+      expect(result.newlyUnlockedAchievements).toEqual([]);
+      expect(result.completedChallenges).toEqual([]);
+    });
+
+    it('reset() allows re-recording in the next session', () => {
+      gameEndService.recordEnd(false, null);
+      playerProfileSpy.recordGameEnd.calls.reset();
+      gameEndService.reset();
+
+      gameEndService.recordEnd(false, null);
+
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1963,8 +2025,13 @@ describe('GameBoardComponent', () => {
       expect(playerProfileSpy.recordChallengeCompleted).not.toHaveBeenCalled();
     });
 
-    it('hasSpecializationBeenUsed resets to false on restartGame', () => {
-      (component as any).hasSpecializationBeenUsed = true;
+    it('GameEndService.isRecorded() resets to false after restartGame', () => {
+      // Mark specialization + record game end to set hasSpecializationBeenUsed and gameEndRecorded
+      const gameEndService = fixture.debugElement.injector.get(GameEndService);
+      gameEndService.recordSpecialization();
+      gameEndService.recordEnd(false, null);
+      expect(gameEndService.isRecorded()).toBeTrue();
+
       spyOn(component as any, 'cleanupGameObjects');
       spyOn(component as any, 'renderGameBoard');
       spyOn(component as any, 'addGridLines');
@@ -1978,7 +2045,8 @@ describe('GameBoardComponent', () => {
 
       component.restartGame();
 
-      expect((component as any).hasSpecializationBeenUsed).toBeFalse();
+      // After restart, service should be reset — next recordEnd() will re-record
+      expect(gameEndService.isRecorded()).toBeFalse();
     });
   });
 
@@ -2337,6 +2405,114 @@ describe('GameBoardComponent', () => {
       component.restartGame();
 
       expect(component.showQuitConfirm).toBeFalse();
+    });
+  });
+
+  describe('ChallengeTrackingService delegation', () => {
+    let challengeTrackingSpy: jasmine.SpyObj<ChallengeTrackingService>;
+
+    beforeEach(() => {
+      challengeTrackingSpy = jasmine.createSpyObj('ChallengeTrackingService', [
+        'recordTowerPlaced',
+        'recordTowerUpgraded',
+        'recordTowerSold',
+        'getSnapshot',
+        'getTowerTypesUsed',
+        'reset',
+      ]);
+      challengeTrackingSpy.getTowerTypesUsed.and.returnValue(new Set<TowerType>());
+      // Override the component-scoped instance with our spy
+      (component as any).challengeTrackingService = challengeTrackingSpy;
+    });
+
+    it('restartGame delegates reset to ChallengeTrackingService', () => {
+      spyOn(component as any, 'cleanupGameObjects');
+      spyOn(component as any, 'renderGameBoard');
+      spyOn(component as any, 'addGridLines');
+      spyOn(component as any, 'initializeLights');
+      spyOn(component as any, 'addSkybox');
+      spyOn(component as any, 'initializeParticles');
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'reset');
+      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
+      spyOn(minimapSvc, 'init');
+
+      component.restartGame();
+
+      expect(challengeTrackingSpy.reset).toHaveBeenCalled();
+    });
+
+    it('upgradeTower delegates recordTowerUpgraded to ChallengeTrackingService', () => {
+      // Set up a real selected tower in the INSPECT state
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.addGold(500);
+
+      const towerCombatService = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(towerCombatService, 'upgradeTower').and.returnValue(true);
+
+      // Stub pricing service so it doesn't crash on missing board state
+      const tilePricingService = fixture.debugElement.injector.get(TilePricingService);
+      spyOn(tilePricingService, 'getStrategicValue').and.returnValue(0);
+
+      const mockTower: PlacedTower = {
+        id: '0-0',
+        type: TowerType.BASIC,
+        level: 1,
+        row: 0,
+        col: 0,
+        lastFireTime: 0,
+        kills: 0,
+        totalInvested: 100,
+        mesh: null as any,
+        targetingMode: 'nearest' as any,
+      };
+      (component as any).selectedTowerInfo = mockTower;
+      component.selectedTowerType = null; // INSPECT mode
+      spyOn(component as any, 'refreshTowerInfoPanel');
+      spyOn(component as any, 'showRangePreview');
+
+      component.upgradeTower();
+
+      expect(challengeTrackingSpy.recordTowerUpgraded).toHaveBeenCalled();
+    });
+
+    it('sellTower delegates recordTowerSold to ChallengeTrackingService', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.COMBAT);
+
+      const towerCombatService = fixture.debugElement.injector.get(TowerCombatService);
+      const mockSoldTower: PlacedTower = {
+        id: '1-1',
+        type: TowerType.BASIC,
+        level: 1,
+        row: 1,
+        col: 1,
+        lastFireTime: 0,
+        kills: 0,
+        totalInvested: 100,
+        mesh: null as any,
+        targetingMode: 'nearest' as any,
+      };
+      spyOn(towerCombatService, 'unregisterTower').and.returnValue(mockSoldTower);
+
+      // Stub board-touching methods so they don't crash without renderer/board
+      const gameBoardSvc = fixture.debugElement.injector.get(GameBoardService);
+      spyOn(gameBoardSvc, 'removeTower');
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'repathAffectedEnemies');
+      const tilePricingService = fixture.debugElement.injector.get(TilePricingService);
+      spyOn(tilePricingService, 'invalidateCache');
+      spyOn(component as any, 'deselectTower');
+      spyOn(component as any, 'updateTileHighlights');
+      spyOn(component as any, 'refreshPathOverlay');
+
+      (component as any).selectedTowerInfo = mockSoldTower;
+      component.sellConfirmPending = true; // skip first click confirm
+
+      component.sellTower();
+
+      expect(challengeTrackingSpy.recordTowerSold).toHaveBeenCalled();
     });
   });
 });
