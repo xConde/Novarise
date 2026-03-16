@@ -810,3 +810,18 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Step 3: Full test suite green (1925/1925 hard gate)
 - [x] Step 4: Production build passes — CSS 39.42kb (below 40kb error budget)
 - [x] Step 5: Push to remote (f1273cf..7f4b6ba)
+
+## Red Team Critique — 2026-03-15 (Wave Panel + Tile Dimming)
+
+### Finding 1: Double board iteration in updateTileHighlights (LOW)
+**Location:** `game-board.component.ts:585-652` (`updateTileHighlights`)
+**Risk:** Two full-board passes (affordable + unaffordable) each call `getTileTowerCost()` per tile. On a 15×15 board this is 450 iterations + cache lookups. Not a performance bug — cache hits are O(1) and the board size is small — but architecturally wasteful. A single pass branching on `canAfford` would halve the work.
+**Fix:** Defer — not worth the churn. The method runs once per tower selection change, not per frame. Document as a future optimization if boards grow.
+
+### Finding 2: Wave preview panel scroll blocked during SETUP (LOW)
+**Location:** `game-board.component.scss:201` (`.wave-preview { pointer-events: none }`)
+**Risk:** If a wave preview has many enemy types, `overflow-y: auto` + `pointer-events: none` prevents scrolling the list during SETUP. In practice, waves have 1–4 enemy types at ~1.5rem each, well under the 400px `max-height`. Not reachable with current wave definitions, but could surface if wave complexity grows.
+**Fix:** Defer — add `pointer-events: auto` to `.wave-preview-list` only if scroll becomes necessary.
+
+### Finding 3: No findings requiring immediate fix
+All interaction paths verified: SETUP tower placement unblocked, wave-btn pointer-events correct, unaffordable tile hover shows cost in mode indicator, drag preview checks tile-specific affordability, initial heatmap renders on board load.
