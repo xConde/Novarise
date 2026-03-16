@@ -2,16 +2,32 @@ import { Injectable } from '@angular/core';
 import { TerrainGridState } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 import { CAMPAIGN_LEVELS } from '../models/campaign.model';
+import {
+  buildFirstLight,
+  buildTheBend,
+  buildSerpentine,
+  buildTheFork,
+} from '../maps/intro-maps';
 
 /** Schema version emitted by generated placeholder maps. */
 const PLACEHOLDER_MAP_VERSION = '2.0.0';
 
 /**
- * Generates placeholder TerrainGridState maps for campaign levels.
+ * Registry of hand-crafted campaign map builders, keyed by campaign level ID.
+ * Levels not present here fall back to placeholder generation.
+ */
+const CAMPAIGN_MAP_REGISTRY: Record<string, () => TerrainGridState> = {
+  campaign_01: buildFirstLight,
+  campaign_02: buildTheBend,
+  campaign_03: buildSerpentine,
+  campaign_04: buildTheFork,
+};
+
+/**
+ * Loads TerrainGridState maps for campaign levels.
  *
- * Sprint 3-6 will replace these with hand-crafted maps stored in a registry.
- * The generated map creates a simple straight horizontal path from spawner to exit
- * scaled to the level's gridSize, with enough spawner/exit points per the level config.
+ * Levels 1-4 (Intro tier) return hand-crafted maps from CAMPAIGN_MAP_REGISTRY.
+ * Levels 5-16 fall back to placeholder generation until their sprints land.
  */
 @Injectable({ providedIn: 'root' })
 export class CampaignMapService {
@@ -20,6 +36,12 @@ export class CampaignMapService {
    * Returns null for unknown level IDs.
    */
   loadLevel(levelId: string): TerrainGridState | null {
+    const builder = CAMPAIGN_MAP_REGISTRY[levelId];
+    if (builder) {
+      return builder();
+    }
+
+    // Fallback to placeholder for levels without hand-crafted maps yet
     const level = CAMPAIGN_LEVELS.find(l => l.id === levelId);
     if (!level) return null;
     return this.generatePlaceholder(

@@ -56,12 +56,30 @@ describe('CampaignMapService', () => {
 
   // ── terrain ───────────────────────────────────────────────────────────────
 
-  it('should fill all tiles with BEDROCK', () => {
-    const state = service.loadLevel('campaign_01')!;
+  it('should fill placeholder tiles (levels 5+) entirely with BEDROCK', () => {
+    // campaign_05 is the first level without a hand-crafted map
+    const state = service.loadLevel('campaign_05')!;
     for (let x = 0; x < state.gridSize; x++) {
       for (let z = 0; z < state.gridSize; z++) {
         expect(state.tiles[x][z]).toBe(TerrainType.BEDROCK, `tile [${x}][${z}]`);
       }
+    }
+  });
+
+  it('should return hand-crafted maps (non-all-BEDROCK) for levels 1-4', () => {
+    const handCraftedIds = ['campaign_01', 'campaign_02', 'campaign_03', 'campaign_04'];
+    for (const id of handCraftedIds) {
+      const state = service.loadLevel(id)!;
+      // Hand-crafted maps use ABYSS/CRYSTAL/MOSS — not purely BEDROCK
+      let hasNonBedrock = false;
+      for (let x = 0; x < state.gridSize; x++) {
+        for (let z = 0; z < state.gridSize; z++) {
+          if (state.tiles[x][z] !== TerrainType.BEDROCK) {
+            hasNonBedrock = true;
+          }
+        }
+      }
+      expect(hasNonBedrock).withContext(`Level ${id} should use non-BEDROCK tiles`).toBeTrue();
     }
   });
 
