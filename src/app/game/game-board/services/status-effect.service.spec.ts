@@ -409,4 +409,58 @@ describe('StatusEffectService', () => {
       }
     });
   });
+
+  // --- Slow application counter ---
+
+  describe('getSlowApplicationCount', () => {
+    it('starts at 0', () => {
+      expect(service.getSlowApplicationCount()).toBe(0);
+    });
+
+    it('increments each time a new SLOW is applied to a different enemy', () => {
+      enemyMap.set('e1', createEnemy('e1', 100, 2));
+      enemyMap.set('e2', createEnemy('e2', 100, 2));
+
+      service.apply('e1', StatusEffectType.SLOW, 0);
+      service.apply('e2', StatusEffectType.SLOW, 0);
+
+      expect(service.getSlowApplicationCount()).toBe(2);
+    });
+
+    it('does not increment when refreshing an existing SLOW (no stack)', () => {
+      enemyMap.set('e1', createEnemy('e1', 100, 2));
+
+      service.apply('e1', StatusEffectType.SLOW, 0);
+      service.apply('e1', StatusEffectType.SLOW, 0); // refresh
+
+      expect(service.getSlowApplicationCount()).toBe(1);
+    });
+
+    it('does not increment for BURN or POISON applications', () => {
+      enemyMap.set('e1', createEnemy('e1', 100, 2));
+
+      service.apply('e1', StatusEffectType.BURN, 0);
+      service.apply('e1', StatusEffectType.POISON, 0);
+
+      expect(service.getSlowApplicationCount()).toBe(0);
+    });
+
+    it('is not incremented when flying enemy is immune to SLOW', () => {
+      enemyMap.set('fly1', createEnemy('fly1', 100, 2, true));
+
+      service.apply('fly1', StatusEffectType.SLOW, 0);
+
+      expect(service.getSlowApplicationCount()).toBe(0);
+    });
+
+    it('resets to 0 after cleanup()', () => {
+      enemyMap.set('e1', createEnemy('e1', 100, 2));
+      service.apply('e1', StatusEffectType.SLOW, 0);
+      expect(service.getSlowApplicationCount()).toBe(1);
+
+      service.cleanup();
+
+      expect(service.getSlowApplicationCount()).toBe(0);
+    });
+  });
 });

@@ -16,6 +16,8 @@ export class StatusEffectService {
   private effects = new Map<string, Map<StatusEffectType, ActiveEffect>>();
   /** Reused return value for getAllActiveEffects() to avoid per-frame Map allocation */
   private activeEffectsResult = new Map<string, StatusEffectType[]>();
+  /** Total number of SLOW applications this game session (for achievement tracking). */
+  private slowApplicationCount = 0;
 
   constructor(private enemyService: EnemyService) {}
 
@@ -58,6 +60,7 @@ export class StatusEffectService {
       const slowFactor = speedMultiplierOverride ?? config.speedMultiplier ?? 1;
       active.originalSpeed = enemy.speed;
       enemy.speed = enemy.speed * slowFactor;
+      this.slowApplicationCount++;
     }
 
     enemyEffects.set(effectType, active);
@@ -183,6 +186,11 @@ export class StatusEffectService {
     this.effects.delete(enemyId);
   }
 
+  /** Returns the total number of new SLOW applications this session (refreshes do not count). */
+  getSlowApplicationCount(): number {
+    return this.slowApplicationCount;
+  }
+
   /**
    * Clear all tracked effects (call on game restart/cleanup).
    * Restores speeds for all slowed enemies still alive.
@@ -199,5 +207,6 @@ export class StatusEffectService {
     }
     this.effects.clear();
     this.activeEffectsResult.clear();
+    this.slowApplicationCount = 0;
   }
 }

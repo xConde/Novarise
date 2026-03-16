@@ -1107,6 +1107,78 @@ describe('EnemyService', () => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // Wave-level multipliers (endless mode scaling)
+  // ---------------------------------------------------------------------------
+
+  describe('wave multipliers (endless mode scaling)', () => {
+    it('waveHealthMultiplier=2 doubles enemy health after modifier scaling', () => {
+      const baseHealth = ENEMY_STATS[EnemyType.BASIC].health;
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene, 2, 1)!;
+      expect(enemy.health).toBe(Math.round(baseHealth * 2));
+      expect(enemy.maxHealth).toBe(enemy.health);
+    });
+
+    it('waveSpeedMultiplier=1.5 increases enemy speed by 1.5×', () => {
+      const baseSpeed = ENEMY_STATS[EnemyType.BASIC].speed;
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1.5)!;
+      expect(enemy.speed).toBeCloseTo(baseSpeed * 1.5);
+    });
+
+    it('waveHealthMultiplier and waveSpeedMultiplier both apply in same spawn', () => {
+      const baseHealth = ENEMY_STATS[EnemyType.HEAVY].health;
+      const baseSpeed  = ENEMY_STATS[EnemyType.HEAVY].speed;
+      const enemy = service.spawnEnemy(EnemyType.HEAVY, mockScene, 3, 1.8)!;
+      expect(enemy.health).toBe(Math.round(baseHealth * 3));
+      expect(enemy.speed).toBeCloseTo(baseSpeed * 1.8);
+    });
+
+    it('wave multipliers stack multiplicatively on top of modifier health scaling', () => {
+      // ARMORED_ENEMIES: 2× health. waveHealthMultiplier=3 → expected 6×
+      const mods = new Set([GameModifier.ARMORED_ENEMIES]);
+      const effects = mergeModifierEffects(mods);
+      service.setModifierEffects(effects, mods);
+
+      const baseHealth = ENEMY_STATS[EnemyType.BASIC].health;
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene, 3, 1)!;
+      expect(enemy.health).toBe(Math.round(baseHealth * 2 * 3));
+    });
+
+    it('wave multipliers stack multiplicatively on top of modifier speed scaling', () => {
+      // FAST_ENEMIES: 1.5× speed. waveSpeedMultiplier=2 → expected 3×
+      const mods = new Set([GameModifier.FAST_ENEMIES]);
+      const effects = mergeModifierEffects(mods);
+      service.setModifierEffects(effects, mods);
+
+      const baseSpeed = ENEMY_STATS[EnemyType.BASIC].speed;
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 2)!;
+      expect(enemy.speed).toBeCloseTo(baseSpeed * 1.5 * 2);
+    });
+
+    it('speed floor MIN_ENEMY_SPEED is enforced even after extreme waveSpeedMultiplier with low base', () => {
+      // Drive speed toward zero via modifier then apply wave multiplier near zero
+      service.setModifierEffects({ enemySpeedMultiplier: 0.001 }, new Set());
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 0.001)!;
+      expect(enemy.speed).toBeGreaterThanOrEqual(0.1);
+    });
+
+    it('waveHealthMultiplier=1 and waveSpeedMultiplier=1 are no-ops (non-endless)', () => {
+      const baseHealth = ENEMY_STATS[EnemyType.BASIC].health;
+      const baseSpeed  = ENEMY_STATS[EnemyType.BASIC].speed;
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1)!;
+      expect(enemy.health).toBe(baseHealth);
+      expect(enemy.speed).toBeCloseTo(baseSpeed);
+    });
+
+    it('default parameters (no wave mult args) behave like 1×/1× for scripted waves', () => {
+      const baseHealth = ENEMY_STATS[EnemyType.FAST].health;
+      const baseSpeed  = ENEMY_STATS[EnemyType.FAST].speed;
+      const enemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      expect(enemy.health).toBe(baseHealth);
+      expect(enemy.speed).toBeCloseTo(baseSpeed);
+    });
+  });
+
   describe('enemy mesh geometry', () => {
     let meshesToDispose: THREE.Mesh[];
 

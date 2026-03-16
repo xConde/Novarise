@@ -45,8 +45,17 @@ export class EnemyService {
    * base stats, creates a Three.js mesh, and adds it to `scene`.
    * FLYING enemies use a straight-line path that bypasses terrain.
    * Returns `null` if no spawner/exit tiles exist or no valid path is found.
+   *
+   * @param waveHealthMultiplier Additional health scaling from endless-wave progression (1.0 = no change).
+   * @param waveSpeedMultiplier  Additional speed scaling from endless-wave progression (1.0 = no change).
+   *   Applied multiplicatively on top of modifier-scaled stats; speed floor is enforced after.
    */
-  spawnEnemy(type: EnemyType, scene: THREE.Scene): Enemy | null {
+  spawnEnemy(
+    type: EnemyType,
+    scene: THREE.Scene,
+    waveHealthMultiplier: number = 1,
+    waveSpeedMultiplier: number = 1,
+  ): Enemy | null {
     const spawnerTiles = this.getSpawnerTiles();
     if (spawnerTiles.length === 0) {
       console.warn('No spawner tiles available');
@@ -130,6 +139,15 @@ export class EnemyService {
     } else if (this.modifierEffects.enemySpeedMultiplier !== undefined) {
       // No SPEED_DEMONS — apply speed multiplier to all types
       enemy.speed *= this.modifierEffects.enemySpeedMultiplier;
+    }
+
+    // Apply endless-wave scaling on top of modifier scaling (multiplicative stacking)
+    if (waveHealthMultiplier !== 1) {
+      enemy.health = Math.round(enemy.health * waveHealthMultiplier);
+      enemy.maxHealth = enemy.health;
+    }
+    if (waveSpeedMultiplier !== 1) {
+      enemy.speed *= waveSpeedMultiplier;
     }
 
     // Floor speed to prevent zero/negative from extreme modifier stacking

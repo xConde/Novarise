@@ -126,7 +126,7 @@ describe('WaveService', () => {
       service.startWave(1, mockScene);
       service.update(0.016, mockScene); // ~1 frame
 
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1);
     });
 
     it('should respect spawn interval between enemies', () => {
@@ -471,6 +471,57 @@ describe('WaveService', () => {
     });
   });
 
+  // --- Endless wave multipliers wired to spawnEnemy ---
+
+  describe('endless wave multipliers passed to spawnEnemy', () => {
+    it('passes healthMultiplier > 1 to spawnEnemy during an endless wave', () => {
+      service.setEndlessMode(true);
+      const beyondMax = WAVE_DEFINITIONS.length + 10; // endless wave 10 has notable scaling
+      service.startWave(beyondMax, mockScene);
+
+      service.update(0.016, mockScene); // trigger first spawn
+
+      const callArgs = enemyServiceSpy.spawnEnemy.calls.mostRecent().args as [EnemyType, THREE.Scene, number, number];
+      const waveHealthMult = callArgs[2];
+      expect(waveHealthMult).toBeGreaterThan(1);
+    });
+
+    it('passes speedMultiplier > 1 to spawnEnemy during an endless wave', () => {
+      service.setEndlessMode(true);
+      const beyondMax = WAVE_DEFINITIONS.length + 10;
+      service.startWave(beyondMax, mockScene);
+
+      service.update(0.016, mockScene);
+
+      const callArgs = enemyServiceSpy.spawnEnemy.calls.mostRecent().args as [EnemyType, THREE.Scene, number, number];
+      const waveSpeedMult = callArgs[3];
+      expect(waveSpeedMult).toBeGreaterThan(1);
+    });
+
+    it('passes multipliers = 1 to spawnEnemy during a scripted wave', () => {
+      service.startWave(1, mockScene);
+      service.update(0.016, mockScene);
+
+      const callArgs = enemyServiceSpy.spawnEnemy.calls.mostRecent().args as [EnemyType, THREE.Scene, number, number];
+      expect(callArgs[2]).toBe(1);
+      expect(callArgs[3]).toBe(1);
+    });
+
+    it('later endless waves pass higher healthMultiplier than earlier endless waves', () => {
+      service.setEndlessMode(true);
+
+      service.startWave(WAVE_DEFINITIONS.length + 1, mockScene);
+      service.update(0.016, mockScene);
+      const earlyMult = (enemyServiceSpy.spawnEnemy.calls.mostRecent().args as [EnemyType, THREE.Scene, number, number])[2];
+
+      service.startWave(WAVE_DEFINITIONS.length + 20, mockScene);
+      service.update(0.016, mockScene);
+      const laterMult = (enemyServiceSpy.spawnEnemy.calls.mostRecent().args as [EnemyType, THREE.Scene, number, number])[2];
+
+      expect(laterMult).toBeGreaterThan(earlyMult);
+    });
+  });
+
   // --- setCustomWaves / clearCustomWaves ---
 
   describe('setCustomWaves', () => {
@@ -513,7 +564,7 @@ describe('WaveService', () => {
       service.setCustomWaves(CUSTOM_WAVES);
       service.startWave(2, mockScene);
       service.update(0.016, mockScene);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1);
     });
 
     it('startWave() rejects waves beyond custom count when endless mode is off', () => {

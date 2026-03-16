@@ -157,6 +157,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Guard: prevents recordGameEnd from firing more than once per game
   private gameEndRecorded = false;
+  /** Set to true the first time the player confirms a L3 specialization upgrade. */
+  private hasSpecializationBeenUsed = false;
 
   // Challenge tracking — reset per game
   private challengeTotalGoldSpent = 0;
@@ -245,6 +247,26 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.achievementDetails = this.newlyUnlockedAchievements
       .map(id => ACHIEVEMENTS.find(a => a.id === id))
       .filter((a): a is Achievement => a != null);
+  }
+
+  /** Builds the GameEndStats object from current service state. Used by both VICTORY and DEFEAT paths. */
+  private buildGameEndStats(isVictory: boolean): GameEndStats {
+    const endState = this.gameStateService.getState();
+    const stats = this.gameStatsService.getStats();
+    const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
+    return {
+      isVictory,
+      score: endState.score,
+      enemiesKilled: totalKills,
+      goldEarned: stats.totalGoldEarned,
+      wavesCompleted: endState.wave,
+      livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
+      towerKills: stats.killsByTowerType,
+      modifierCount: endState.activeModifiers.size,
+      usedSpecialization: this.hasSpecializationBeenUsed,
+      placedAllTowerTypes: this.challengeTowerTypesUsed.size >= 6,
+      slowEffectsApplied: this.statusEffectService.getSlowApplicationCount(),
+    };
   }
 
   // FPS exposed to template
@@ -807,6 +829,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this.towerCombatService.upgradeTowerWithSpec(this.selectedTowerInfo.id, spec, cost)) return;
       this.showSpecializationChoice = false;
       this.specOptions = [];
+      this.hasSpecializationBeenUsed = true;
     } else {
       // L1->L2: standard upgrade
       if (!this.towerCombatService.upgradeTower(this.selectedTowerInfo.id, cost)) return;
@@ -1134,6 +1157,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.newlyUnlockedAchievements = [];
     this.achievementDetails = [];
     this.gameEndRecorded = false;
+    this.hasSpecializationBeenUsed = false;
     this.challengeTotalGoldSpent = 0;
     this.challengeMaxTowersPlaced = 0;
     this.challengeTowerTypesUsed = new Set<TowerType>();
@@ -1143,6 +1167,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.activeModifiers = new Set<GameModifier>();
     this.modifierScoreMultiplier = 1.0;
     this.wavePreview = [];
+    this.waveTemplateDescription = null;
     this.defeatSoundPlayed = false;
     this.victorySoundPlayed = false;
     this.showHelpOverlay = false;
@@ -1977,8 +2002,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   getTutorialStepNumber(): number {
     const displaySteps = Object.values(TutorialStep).filter(s => s !== TutorialStep.COMPLETE);
+    if (this.currentTutorialStep === TutorialStep.COMPLETE) {
+      return displaySteps.length;
+    }
     const idx = displaySteps.indexOf(this.currentTutorialStep as TutorialStep);
     return Math.max(1, idx + 1);
+  }
+
+  getTutorialTotalSteps(): number {
+    return Object.values(TutorialStep).filter(s => s !== TutorialStep.COMPLETE).length;
   }
 
   advanceTutorial(): void {
@@ -2315,17 +2347,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             // Record game end stats for profile (VICTORY or DEFEAT, fires once per game)
             if ((postWavePhase === GamePhase.VICTORY || postWavePhase === GamePhase.DEFEAT) && !this.gameEndRecorded) {
               this.gameEndRecorded = true;
-              const endState = this.gameStateService.getState();
-              const stats = this.gameStatsService.getStats();
-              const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
-              const gameEndStats: GameEndStats = {
-                isVictory: postWavePhase === GamePhase.VICTORY,
-                score: endState.score,
-                enemiesKilled: totalKills,
-                goldEarned: stats.totalGoldEarned,
-                wavesCompleted: endState.wave,
-                livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
-              };
+              const isVictory = postWavePhase === GamePhase.VICTORY;
+              const gameEndStats = this.buildGameEndStats(isVictory);
               this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
               this.updateAchievementDetails();
               const mapId = this.mapBridge.getMapId();
@@ -2337,7 +2360,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
                   this.scoreBreakdown.difficulty
                 );
                 // Evaluate and record challenge completions on VICTORY for campaign levels
-                if (postWavePhase === GamePhase.VICTORY && this.campaignService.getLevel(mapId)) {
+                if (isVictory && this.campaignService.getLevel(mapId)) {
+                  const endState = this.gameStateService.getState();
                   this.campaignService.recordCompletion(
                     mapId,
                     this.scoreBreakdown.finalScore,
@@ -2358,6 +2382,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
                   this.completedChallenges = newlyChallenged;
                   for (const challenge of newlyChallenged) {
                     this.campaignService.completeChallenge(challenge.id);
+                    this.playerProfileService.recordChallengeCompleted();
                     this.gameStateService.addScore(challenge.scoreBonus);
                   }
                 }
@@ -2368,17 +2393,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           // DEFEAT mid-frame (from loseLife) — record game end if not yet done
           if (currentPhase === GamePhase.DEFEAT && !this.gameEndRecorded) {
             this.gameEndRecorded = true;
-            const endState = this.gameStateService.getState();
-            const stats = this.gameStatsService.getStats();
-            const totalKills = Object.values(stats.killsByTowerType).reduce((a, b) => a + b, 0);
-            const gameEndStats: GameEndStats = {
-              isVictory: false,
-              score: endState.score,
-              enemiesKilled: totalKills,
-              goldEarned: stats.totalGoldEarned,
-              wavesCompleted: endState.wave,
-              livesLost: DIFFICULTY_PRESETS[endState.difficulty].lives - endState.lives,
-            };
+            const gameEndStats = this.buildGameEndStats(false);
             this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
             this.updateAchievementDetails();
             const mapId = this.mapBridge.getMapId();

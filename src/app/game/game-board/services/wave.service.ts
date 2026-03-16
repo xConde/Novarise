@@ -146,7 +146,9 @@ export class WaveService {
       queue.timeSinceLastSpawn += deltaTime;
 
       if (queue.timeSinceLastSpawn >= queue.spawnInterval) {
-        const spawned = this.enemyService.spawnEnemy(queue.type, scene);
+        const waveHealthMult = this.currentEndlessResult?.healthMultiplier ?? 1;
+        const waveSpeedMult  = this.currentEndlessResult?.speedMultiplier  ?? 1;
+        const spawned = this.enemyService.spawnEnemy(queue.type, scene, waveHealthMult, waveSpeedMult);
         if (spawned) {
           queue.remaining--;
           queue.timeSinceLastSpawn = 0;

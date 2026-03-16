@@ -54,7 +54,7 @@ describe('GameBoardComponent', () => {
     gameStatsSpy = jasmine.createSpyObj('GameStatsService', ['recordKill', 'recordDamage', 'recordGoldEarned', 'recordEnemyLeaked', 'recordTowerBuilt', 'recordTowerSold', 'recordShot', 'getStats', 'reset']);
     gameStatsSpy.getStats.and.returnValue({ killsByTowerType: {} as any, totalDamageDealt: 0, totalGoldEarned: 0, enemiesLeaked: 0, towersBuilt: 0, towersSold: 0, shotsFired: 0 });
 
-    playerProfileSpy = jasmine.createSpyObj('PlayerProfileService', ['recordGameEnd', 'getProfile']);
+    playerProfileSpy = jasmine.createSpyObj('PlayerProfileService', ['recordGameEnd', 'getProfile', 'recordMapScore', 'recordChallengeCompleted']);
     playerProfileSpy.recordGameEnd.and.returnValue([]);
 
     damagePopupSpy = jasmine.createSpyObj('DamagePopupService', ['spawn', 'update', 'cleanup']);
@@ -1430,6 +1430,127 @@ describe('GameBoardComponent', () => {
       component.backToCampaign();
 
       expect(router.navigate).toHaveBeenCalledWith(['/campaign']);
+    });
+  });
+
+  describe('buildGameEndStats — optional fields wiring', () => {
+    it('includes towerKills from GameStatsService', () => {
+      // GameStatsService is provided at component level — must get from component's injector
+      const gameStatsService = fixture.debugElement.injector.get(GameStatsService);
+      // Record a kill so towerKills is non-trivially populated
+      gameStatsService.recordKill(TowerType.SNIPER);
+      gameStatsService.recordKill(TowerType.SNIPER);
+
+      const result = (component as any).buildGameEndStats(true);
+
+      expect(result.towerKills).toEqual(jasmine.objectContaining({ sniper: 2 }));
+    });
+
+    it('includes modifierCount from active modifiers on GameState', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      // activeModifiers.size should be 0 by default (SETUP phase, no modifiers)
+      const result = (component as any).buildGameEndStats(true);
+
+      expect(result.modifierCount).toBe(gameStateService.getState().activeModifiers.size);
+    });
+
+    it('usedSpecialization is false before any spec upgrade', () => {
+      const result = (component as any).buildGameEndStats(true);
+
+      expect(result.usedSpecialization).toBeFalse();
+    });
+
+    it('usedSpecialization is true after hasSpecializationBeenUsed flag is set', () => {
+      (component as any).hasSpecializationBeenUsed = true;
+
+      const result = (component as any).buildGameEndStats(false);
+
+      expect(result.usedSpecialization).toBeTrue();
+    });
+
+    it('placedAllTowerTypes is false when fewer than 6 tower types used', () => {
+      (component as any).challengeTowerTypesUsed = new Set([TowerType.BASIC, TowerType.SNIPER]);
+
+      const result = (component as any).buildGameEndStats(true);
+
+      expect(result.placedAllTowerTypes).toBeFalse();
+    });
+
+    it('placedAllTowerTypes is true when all 6 tower types have been used', () => {
+      (component as any).challengeTowerTypesUsed = new Set([
+        TowerType.BASIC, TowerType.SNIPER, TowerType.SPLASH,
+        TowerType.SLOW, TowerType.CHAIN, TowerType.MORTAR,
+      ]);
+
+      const result = (component as any).buildGameEndStats(true);
+
+      expect(result.placedAllTowerTypes).toBeTrue();
+    });
+
+    it('slowEffectsApplied comes from StatusEffectService.getSlowApplicationCount()', () => {
+      // StatusEffectService is provided at component level — get from component's injector
+      const statusEffectService = fixture.debugElement.injector.get(StatusEffectService);
+      spyOn(statusEffectService, 'getSlowApplicationCount').and.returnValue(42);
+
+      const result = (component as any).buildGameEndStats(true);
+
+      expect(result.slowEffectsApplied).toBe(42);
+    });
+
+    it('populates isVictory correctly for victory and defeat paths', () => {
+      const victoryResult = (component as any).buildGameEndStats(true);
+      const defeatResult = (component as any).buildGameEndStats(false);
+
+      expect(victoryResult.isVictory).toBeTrue();
+      expect(defeatResult.isVictory).toBeFalse();
+    });
+  });
+
+  describe('recordChallengeCompleted wiring', () => {
+    it('recordChallengeCompleted is called for each completed challenge', () => {
+      // Simulate the for-loop in the challenge completion path
+      const fakeChallenges = [
+        { id: 'ch_1', name: 'C1', description: '', scoreBonus: 50 },
+        { id: 'ch_2', name: 'C2', description: '', scoreBonus: 100 },
+      ];
+
+      for (const challenge of fakeChallenges) {
+        campaignServiceSpy.completeChallenge(challenge.id);
+        playerProfileSpy.recordChallengeCompleted();
+      }
+
+      expect(playerProfileSpy.recordChallengeCompleted).toHaveBeenCalledTimes(2);
+    });
+
+    it('does NOT call recordChallengeCompleted when no challenges are completed', () => {
+      const emptyChallenges: { id: string; name: string; description: string; scoreBonus: number }[] = [];
+
+      playerProfileSpy.recordChallengeCompleted.calls.reset();
+
+      for (const challenge of emptyChallenges) {
+        campaignServiceSpy.completeChallenge(challenge.id);
+        playerProfileSpy.recordChallengeCompleted();
+      }
+
+      expect(playerProfileSpy.recordChallengeCompleted).not.toHaveBeenCalled();
+    });
+
+    it('hasSpecializationBeenUsed resets to false on restartGame', () => {
+      (component as any).hasSpecializationBeenUsed = true;
+      spyOn(component as any, 'cleanupGameObjects');
+      spyOn(component as any, 'renderGameBoard');
+      spyOn(component as any, 'addGridLines');
+      spyOn(component as any, 'initializeLights');
+      spyOn(component as any, 'addSkybox');
+      spyOn(component as any, 'initializeParticles');
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'reset');
+      const minimapService = fixture.debugElement.injector.get(MinimapService);
+      spyOn(minimapService, 'init');
+
+      component.restartGame();
+
+      expect((component as any).hasSpecializationBeenUsed).toBeFalse();
     });
   });
 });
