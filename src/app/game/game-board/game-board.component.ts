@@ -47,6 +47,7 @@ import { StatusEffectType } from './constants/status-effect.constants';
 import { TilePricingService, TilePriceInfo } from './services/tile-pricing.service';
 import { PriceLabelService } from './services/price-label.service';
 import { TutorialService, TutorialStep, TutorialTip } from './services/tutorial.service';
+import { GameNotificationService, GameNotification, NotificationType } from './services/game-notification.service';
 import { TerrainGridStateLegacy } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 import { CampaignService } from '../../campaign/services/campaign.service';
 import { CampaignMapService } from '../../campaign/services/campaign-map.service';
@@ -68,7 +69,7 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService]
+  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -233,6 +234,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private tutorialSub: Subscription | null = null;
   TutorialStep = TutorialStep;
 
+  // Toast notifications
+  notifications: GameNotification[] = [];
+  private notificationSub: Subscription | null = null;
+
   // Audio state exposed to template
   get audioMuted(): boolean { return this.audioService.isMuted; }
 
@@ -311,7 +316,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private tutorialService: TutorialService,
     private campaignService: CampaignService,
     private campaignMapService: CampaignMapService,
-    private challengeEvaluatorService: ChallengeEvaluatorService
+    private challengeEvaluatorService: ChallengeEvaluatorService,
+    private notificationService: GameNotificationService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -416,6 +422,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.tutorialSub = this.tutorialService.getCurrentStep().subscribe(step => {
       this.currentTutorialStep = step;
     });
+
+    // Subscribe to toast notifications
+    this.notificationSub = this.notificationService.getNotifications().subscribe(notifs => {
+      this.notifications = notifs;
+    });
   }
 
   ngAfterViewInit(): void {
@@ -438,6 +449,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   toggleAudio(): void {
     this.audioService.toggleMute();
     this.settingsService.update({ audioMuted: this.audioService.isMuted });
+  }
+
+  dismissNotification(id: number): void {
+    this.notificationService.dismiss(id);
   }
 
   selectDifficulty(difficulty: DifficultyLevel): void {
@@ -1058,6 +1073,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return !!mapId && mapId.startsWith('campaign_');
   }
 
+  /** Returns the CampaignLevel for the current map, or null if not a campaign game. */
+  get currentCampaignLevel(): CampaignLevel | null {
+    const mapId = this.mapBridge.getMapId();
+    if (!mapId) return null;
+    return this.campaignService.getLevel(mapId) ?? null;
+  }
+
   /** Returns the next campaign level after the current one, or null if none exists. */
   get nextCampaignLevel(): CampaignLevel | null {
     const mapId = this.mapBridge.getMapId();
@@ -1121,6 +1143,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       seenCustomDefs
     );
     for (const entry of previewEntries) {
+      // Notify about new enemy types before marking them seen
+      if (!this.seenEnemyTypes.has(entry.type)) {
+        const info = ENEMY_INFO[entry.type];
+        if (info) {
+          this.notificationService.show(
+            NotificationType.INFO,
+            `New Enemy: ${info.name}`,
+            info.special ?? info.description
+          );
+        }
+      }
       this.seenEnemyTypes.add(entry.type);
     }
 
@@ -1158,6 +1191,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.achievementDetails = [];
     this.gameEndRecorded = false;
     this.hasSpecializationBeenUsed = false;
+    this.notificationService.clear();
     this.challengeTotalGoldSpent = 0;
     this.challengeMaxTowersPlaced = 0;
     this.challengeTowerTypesUsed = new Set<TowerType>();
@@ -2332,7 +2366,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             const reward = this.waveService.getWaveReward(state.wave);
             // Award streak bonus before completeWave transitions out of COMBAT
             if (!this.leakedThisWave) {
-              this.gameStateService.addStreakBonus();
+              const bonus = this.gameStateService.addStreakBonus();
+              if (bonus > 0) {
+                const streak = this.gameStateService.getStreak();
+                this.audioService.playStreakSound();
+                this.notificationService.show(
+                  NotificationType.STREAK,
+                  'Perfect Wave!',
+                  `+${bonus}g streak bonus (${streak} waves)`
+                );
+              }
             }
             this.gameStateService.completeWave(reward);
             // Check if completeWave triggered VICTORY
@@ -2353,6 +2396,18 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               const gameEndStats = this.buildGameEndStats(isVictory);
               this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
               this.updateAchievementDetails();
+              // Toast: achievement unlocks
+              for (const achId of this.newlyUnlockedAchievements) {
+                const ach = ACHIEVEMENTS.find(a => a.id === achId);
+                if (ach) {
+                  this.audioService.playAchievementSound();
+                  this.notificationService.show(
+                    NotificationType.ACHIEVEMENT,
+                    'Achievement Unlocked!',
+                    ach.name
+                  );
+                }
+              }
               const mapId = this.mapBridge.getMapId();
               if (mapId && this.scoreBreakdown) {
                 this.playerProfileService.recordMapScore(
@@ -2386,6 +2441,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
                     this.campaignService.completeChallenge(challenge.id);
                     this.playerProfileService.recordChallengeCompleted();
                     this.gameStateService.addScore(challenge.scoreBonus);
+                    // Toast: challenge completion
+                    this.audioService.playChallengeSound();
+                    this.notificationService.show(
+                      NotificationType.CHALLENGE,
+                      'Challenge Complete!',
+                      `${challenge.name} (+${challenge.scoreBonus} pts)`
+                    );
                   }
                 }
               }
@@ -2398,6 +2460,18 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             const gameEndStats = this.buildGameEndStats(false);
             this.newlyUnlockedAchievements = this.playerProfileService.recordGameEnd(gameEndStats);
             this.updateAchievementDetails();
+            // Toast: achievement unlocks on defeat
+            for (const achId of this.newlyUnlockedAchievements) {
+              const ach = ACHIEVEMENTS.find(a => a.id === achId);
+              if (ach) {
+                this.audioService.playAchievementSound();
+                this.notificationService.show(
+                  NotificationType.ACHIEVEMENT,
+                  'Achievement Unlocked!',
+                  ach.name
+                );
+              }
+            }
             const mapId = this.mapBridge.getMapId();
             if (mapId && this.scoreBreakdown) {
               this.playerProfileService.recordMapScore(
@@ -2577,6 +2651,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (this.tutorialSub) {
       this.tutorialSub.unsubscribe();
+    }
+
+    if (this.notificationSub) {
+      this.notificationSub.unsubscribe();
     }
 
     window.removeEventListener('keydown', this.keyboardHandler);

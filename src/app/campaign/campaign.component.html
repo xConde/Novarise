@@ -47,6 +47,7 @@
           <span class="level-card__name">{{ view.level.name }}</span>
           <span class="level-card__tier">{{ view.level.tier | uppercase }}</span>
           <p class="level-card__description" *ngIf="view.unlocked">{{ view.level.description }}</p>
+          <p class="level-card__unlock-req" *ngIf="!view.unlocked">{{ getUnlockText(view.level) }}</p>
         </div>
 
         <div class="level-card__meta" *ngIf="view.unlocked">

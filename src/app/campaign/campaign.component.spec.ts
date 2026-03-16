@@ -41,6 +41,7 @@ describe('CampaignComponent', () => {
       'getCompletedCount',
       'getChallengesForLevel',
       'isChallengeCompleted',
+      'getLevel',
     ]);
     campaignService.getAllLevels.and.returnValue(CAMPAIGN_LEVELS);
     campaignService.getTotalStars.and.returnValue(0);
@@ -51,6 +52,7 @@ describe('CampaignComponent', () => {
     campaignService.getLevelProgress.and.returnValue(null);
     campaignService.getChallengesForLevel.and.returnValue([]);
     campaignService.isChallengeCompleted.and.returnValue(false);
+    campaignService.getLevel.and.callFake((id: string) => CAMPAIGN_LEVELS.find(l => l.id === id));
 
     campaignMapService.loadLevel.and.returnValue(MOCK_MAP_STATE);
 
@@ -181,6 +183,58 @@ describe('CampaignComponent', () => {
   it('isChallengeCompleted should return false when service returns false', () => {
     campaignService.isChallengeCompleted.and.returnValue(false);
     expect(component.isChallengeCompleted('c01_untouchable')).toBeFalse();
+  });
+
+  // ── Unlock requirement text ───────────────────────────────────────────────
+
+  describe('getUnlockText', () => {
+    it('returns empty string for a level with no unlock requirement', () => {
+      const level = CAMPAIGN_LEVELS[0]; // campaign_01 has type: 'none'
+      expect(component.getUnlockText(level)).toBe('');
+    });
+
+    it('returns complete-level text with level name for level_complete type', () => {
+      const level = CAMPAIGN_LEVELS[1]; // campaign_02 requires campaign_01 complete
+      // campaignService.getLevel is already wired in beforeEach to return matching level
+      const text = component.getUnlockText(level);
+      expect(text).toContain('First Light');
+      expect(text).toContain('Complete');
+    });
+
+    it('falls back to generic text when required level is not found', () => {
+      campaignService.getLevel.and.returnValue(undefined);
+      const level = CAMPAIGN_LEVELS[1];
+      const text = component.getUnlockText(level);
+      expect(text).toContain('Complete previous level');
+    });
+
+    it('returns stars text with required count and current total for stars_total type', () => {
+      campaignService.getTotalStars.and.returnValue(5);
+      const level = CAMPAIGN_LEVELS[8]; // campaign_09 requires 12 stars
+      const text = component.getUnlockText(level);
+      expect(text).toContain('12');
+      expect(text).toContain('5');
+      expect(text).toContain('stars');
+    });
+
+    it('renders unlock requirement text in the DOM for locked cards', () => {
+      fixture.detectChanges();
+      const cards = fixture.nativeElement.querySelectorAll('.level-card');
+      // campaign_02 is locked — should show unlock requirement
+      const secondCard = cards[1] as HTMLElement;
+      const unlockReq = secondCard.querySelector('.level-card__unlock-req');
+      expect(unlockReq).not.toBeNull();
+      expect(unlockReq!.textContent).toContain('First Light');
+    });
+
+    it('does not render unlock requirement text on unlocked cards', () => {
+      fixture.detectChanges();
+      const cards = fixture.nativeElement.querySelectorAll('.level-card');
+      // campaign_01 is unlocked
+      const firstCard = cards[0] as HTMLElement;
+      const unlockReq = firstCard.querySelector('.level-card__unlock-req');
+      expect(unlockReq).toBeNull();
+    });
   });
 
   // ── Campaign completion ────────────────────────────────────────────────────

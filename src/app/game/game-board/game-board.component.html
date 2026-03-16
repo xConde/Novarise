@@ -37,6 +37,7 @@
       <span class="hud-label">Time</span>
       <span class="hud-value">{{ formattedTime }}</span>
     </div>
+    <span class="hud-level-name" *ngIf="isCampaignGame && currentCampaignLevel" aria-label="Level name">{{ currentCampaignLevel.name }}</span>
   </div>
 
   <!-- Wave status indicator -->
@@ -57,6 +58,12 @@
 
   <!-- Setup panel — right side on desktop, bottom sheet on mobile -->
   <div class="setup-panel" *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0">
+    <div class="campaign-level-info" *ngIf="isCampaignGame && currentCampaignLevel">
+      <span class="campaign-level-info__number">Level {{ currentCampaignLevel.number }}</span>
+      <span class="campaign-level-info__name">{{ currentCampaignLevel.name }}</span>
+      <span class="campaign-level-info__tier">{{ currentCampaignLevel.tier | uppercase }}</span>
+      <span class="campaign-level-info__waves">{{ currentCampaignLevel.waveCount }} waves</span>
+    </div>
     <span class="setup-section-label">Difficulty</span>
     <div class="setup-difficulty-grid">
       <button
@@ -183,6 +190,12 @@
       <h2 *ngIf="gameState.phase === GamePhase.VICTORY">Victory</h2>
       <h2 *ngIf="gameState.phase === GamePhase.DEFEAT">Defeat</h2>
 
+      <!-- Campaign level identity -->
+      <div class="victory-level" *ngIf="isCampaignGame && currentCampaignLevel">
+        <span class="victory-level__label">Level {{ currentCampaignLevel.number }}</span>
+        <span class="victory-level__name">{{ currentCampaignLevel.name }}</span>
+      </div>
+
       <!-- Star rating -->
       <div class="star-display" *ngIf="gameState.phase === GamePhase.VICTORY">
         <span
@@ -244,7 +257,7 @@
           *ngIf="gameState.phase === GamePhase.VICTORY && isCampaignGame && isNextLevelUnlocked"
           class="results-btn results-btn--primary"
           (click)="playNextLevel()">
-          Next Level
+          Next: {{ nextCampaignLevel?.name }}
         </button>
         <button class="results-btn" (click)="restartGame()">Play Again</button>
         <button
@@ -457,6 +470,23 @@
           {{ currentTutorialStep === TutorialStep.COMPLETE ? 'Done' : 'Next' }}
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div class="toast-stack" *ngIf="notifications.length > 0" aria-live="polite">
+    <div
+      *ngFor="let notification of notifications"
+      class="toast"
+      [class.toast--achievement]="notification.type === 'achievement'"
+      [class.toast--challenge]="notification.type === 'challenge'"
+      [class.toast--streak]="notification.type === 'streak'"
+      [class.toast--info]="notification.type === 'info'"
+      (click)="dismissNotification(notification.id)"
+      role="alert"
+    >
+      <span class="toast__title">{{ notification.title }}</span>
+      <span class="toast__message">{{ notification.message }}</span>
     </div>
   </div>
 </div>

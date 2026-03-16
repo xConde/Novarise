@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { CampaignLevel, CampaignLevelProgress } from './models/campaign.model';
+import { CampaignLevel, CampaignLevelProgress, UnlockRequirement } from './models/campaign.model';
 import { CampaignService } from './services/campaign.service';
 import { CampaignMapService } from './services/campaign-map.service';
 import { MapBridgeService } from '../game/game-board/services/map-bridge.service';
@@ -96,5 +96,25 @@ export class CampaignComponent implements OnInit {
 
   goHome(): void {
     this.router.navigate(['/']);
+  }
+
+  /**
+   * Returns a human-readable unlock requirement string for a locked level card.
+   * Returns empty string for the 'none' type (always unlocked).
+   */
+  getUnlockText(level: CampaignLevel): string {
+    const req: UnlockRequirement = level.unlockRequirement;
+    switch (req.type) {
+      case 'level_complete': {
+        const reqLevel = req.levelId ? this.campaignService.getLevel(req.levelId) : undefined;
+        return reqLevel ? `Complete "${reqLevel.name}" first` : 'Complete previous level';
+      }
+      case 'stars_total': {
+        const current = this.campaignService.getTotalStars();
+        return `Earn ${req.starsRequired} stars (${current} earned)`;
+      }
+      default:
+        return '';
+    }
   }
 }

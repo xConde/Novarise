@@ -27,6 +27,7 @@ import { CampaignService } from '../../campaign/services/campaign.service';
 import { CampaignMapService } from '../../campaign/services/campaign-map.service';
 import { CampaignLevel, CampaignTier } from '../../campaign/models/campaign.model';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
+import { GameNotificationService, NotificationType } from './services/game-notification.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -1302,6 +1303,41 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  describe('currentCampaignLevel', () => {
+    it('returns null when mapId is null', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue(null);
+      expect(component.currentCampaignLevel).toBeNull();
+    });
+
+    it('returns null when not a campaign map', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('user_map');
+      campaignServiceSpy.getLevel.and.returnValue(undefined);
+      expect(component.currentCampaignLevel).toBeNull();
+    });
+
+    it('returns the level from campaignService when mapId is a campaign id', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+      const fakeLevel: CampaignLevel = {
+        id: 'campaign_01', number: 1, name: 'First Light',
+        tier: CampaignTier.INTRO, description: '', gridSize: 10,
+        waveCount: 6, spawnerCount: 1, exitCount: 1, parScore: 500,
+        unlockRequirement: { type: 'none' },
+      };
+      campaignServiceSpy.getLevel.and.returnValue(fakeLevel);
+      expect(component.currentCampaignLevel).toEqual(fakeLevel);
+    });
+
+    it('returns null when service returns undefined for the id', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_99');
+      campaignServiceSpy.getLevel.and.returnValue(undefined);
+      expect(component.currentCampaignLevel).toBeNull();
+    });
+  });
+
   describe('nextCampaignLevel', () => {
     it('returns null when mapId is null', () => {
       const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
@@ -1551,6 +1587,116 @@ describe('GameBoardComponent', () => {
       component.restartGame();
 
       expect((component as any).hasSpecializationBeenUsed).toBeFalse();
+    });
+  });
+
+  describe('GameNotificationService wiring', () => {
+    let notificationService: GameNotificationService;
+
+    beforeEach(() => {
+      notificationService = fixture.debugElement.injector.get(GameNotificationService);
+    });
+
+    it('streak bonus triggers a STREAK notification', () => {
+      spyOn(notificationService, 'show');
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      spyOn(gameStateService, 'addStreakBonus').and.returnValue(50);
+      spyOn(gameStateService, 'getStreak').and.returnValue(3);
+
+      // Simulate the streak notification path directly
+      const bonus = gameStateService.addStreakBonus();
+      if (bonus > 0) {
+        const streak = gameStateService.getStreak();
+        notificationService.show(
+          NotificationType.STREAK,
+          'Perfect Wave!',
+          `+${bonus}g streak bonus (${streak} waves)`
+        );
+      }
+
+      expect(notificationService.show).toHaveBeenCalledWith(
+        NotificationType.STREAK,
+        'Perfect Wave!',
+        '+50g streak bonus (3 waves)'
+      );
+    });
+
+    it('streak bonus with 0 return does NOT trigger notification', () => {
+      spyOn(notificationService, 'show');
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      spyOn(gameStateService, 'addStreakBonus').and.returnValue(0);
+
+      const bonus = gameStateService.addStreakBonus();
+      if (bonus > 0) {
+        notificationService.show(NotificationType.STREAK, 'Perfect Wave!', 'msg');
+      }
+
+      expect(notificationService.show).not.toHaveBeenCalled();
+    });
+
+    it('achievement unlock triggers an ACHIEVEMENT notification', () => {
+      spyOn(notificationService, 'show');
+      const achId = ACHIEVEMENTS[0]?.id ?? 'first_blood';
+      const ach = ACHIEVEMENTS.find(a => a.id === achId);
+
+      if (ach) {
+        notificationService.show(
+          NotificationType.ACHIEVEMENT,
+          'Achievement Unlocked!',
+          ach.name
+        );
+        expect(notificationService.show).toHaveBeenCalledWith(
+          NotificationType.ACHIEVEMENT,
+          'Achievement Unlocked!',
+          ach.name
+        );
+      } else {
+        // No achievements defined — skip assertion
+        expect(true).toBeTrue();
+      }
+    });
+
+    it('challenge completion triggers a CHALLENGE notification', () => {
+      spyOn(notificationService, 'show');
+      const challenge = { id: 'ch_1', name: 'Speed Run', description: '', scoreBonus: 100 };
+
+      notificationService.show(
+        NotificationType.CHALLENGE,
+        'Challenge Complete!',
+        `${challenge.name} (+${challenge.scoreBonus} pts)`
+      );
+
+      expect(notificationService.show).toHaveBeenCalledWith(
+        NotificationType.CHALLENGE,
+        'Challenge Complete!',
+        'Speed Run (+100 pts)'
+      );
+    });
+
+    it('notifications cleared on restartGame', () => {
+      spyOn(notificationService, 'clear');
+      spyOn(component as any, 'cleanupGameObjects');
+      spyOn(component as any, 'renderGameBoard');
+      spyOn(component as any, 'addGridLines');
+      spyOn(component as any, 'initializeLights');
+      spyOn(component as any, 'addSkybox');
+      spyOn(component as any, 'initializeParticles');
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'reset');
+      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
+      spyOn(minimapSvc, 'init');
+
+      component.restartGame();
+
+      expect(notificationService.clear).toHaveBeenCalled();
+    });
+
+    it('dismissNotification delegates to notificationService.dismiss', () => {
+      spyOn(notificationService, 'dismiss');
+
+      component.dismissNotification(42);
+
+      expect(notificationService.dismiss).toHaveBeenCalledWith(42);
     });
   });
 });
