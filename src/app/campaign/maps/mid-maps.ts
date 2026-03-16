@@ -1,91 +1,6 @@
 import { TerrainGridState } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
-
-/** Schema version for all hand-crafted campaign maps. */
-const MAP_VERSION = '2.0.0';
-
-// ---------------------------------------------------------------------------
-// Grid builder helpers (module-private)
-// ---------------------------------------------------------------------------
-
-/**
- * Allocates a gridSize×gridSize grid filled with the given terrain type,
- * plus an all-zero heightMap. spawnPoints and exitPoints are left empty
- * for the caller to populate.
- */
-function createEmptyGrid(size: number, fill: TerrainType): TerrainGridState {
-  const tiles: TerrainType[][] = [];
-  const heightMap: number[][] = [];
-  for (let x = 0; x < size; x++) {
-    tiles[x] = [];
-    heightMap[x] = [];
-    for (let z = 0; z < size; z++) {
-      tiles[x][z] = fill;
-      heightMap[x][z] = 0;
-    }
-  }
-  return {
-    gridSize: size,
-    tiles,
-    heightMap,
-    spawnPoints: [],
-    exitPoints: [],
-    version: MAP_VERSION,
-  };
-}
-
-/**
- * Paints tiles[x][z] for x in [x0, x1] at fixed row z with the given type.
- * Inclusive on both ends.
- */
-function paintRow(
-  tiles: TerrainType[][],
-  z: number,
-  x0: number,
-  x1: number,
-  type: TerrainType,
-): void {
-  for (let x = x0; x <= x1; x++) {
-    tiles[x][z] = type;
-  }
-}
-
-/**
- * Paints tiles[x][z] for z in [z0, z1] at fixed column x with the given type.
- * Inclusive on both ends; z0 may be greater than z1 (range is normalised).
- */
-function paintColumn(
-  tiles: TerrainType[][],
-  x: number,
-  z0: number,
-  z1: number,
-  type: TerrainType,
-): void {
-  const lo = Math.min(z0, z1);
-  const hi = Math.max(z0, z1);
-  for (let z = lo; z <= hi; z++) {
-    tiles[x][z] = type;
-  }
-}
-
-/**
- * Paints a filled rectangle of tiles with the given type.
- * Columns x in [x0, x1], rows z in [z0, z1] — all inclusive.
- */
-function paintRect(
-  tiles: TerrainType[][],
-  x0: number,
-  z0: number,
-  x1: number,
-  z1: number,
-  type: TerrainType,
-): void {
-  for (let x = x0; x <= x1; x++) {
-    for (let z = z0; z <= z1; z++) {
-      tiles[x][z] = type;
-    }
-  }
-}
+import { createEmptyGrid, paintColumn, paintRect } from './map-helpers';
 
 // ---------------------------------------------------------------------------
 // Map 9 — "Crossfire"  (15×15, 2 spawners, 2 exits)
@@ -213,19 +128,26 @@ export function buildCrossfire(): TerrainGridState {
  *     Top leg:    z=1-2, x=0-13   — left to right along top
  *     Right leg:  x=12-13, z=2-12 — down the right side
  *     Bottom leg: z=12-13, x=2-13 — right to left along bottom
- *     Left leg:   x=1-2, z=3-12   — up the left side
- *
- *   Inner ring (clockwise, 3 tiles inward):
- *     Top leg:    z=4-5, x=3-10   — left to right
- *     Right leg:  x=10-11, z=5-10 — down
- *     Bottom leg: z=10-11, x=4-10 — right to left
- *     Left drop:  x=3-4, z=5-10   — (already open from left leg connector)
+ *     Left leg:   x=1-2, z=3-13   — up the left side
  *
  *   Connector (outer → inner):
- *     At x=2-3, z=3-5 (joins outer left leg to inner top left)
+ *     At x=2-4, z=3-5 (joins outer left leg to inner top left)
  *
- *   Center exit area: x=6-8, z=6-8 — inner zone, exit at (7,7)
- *   Inner connector to center: x=5-6, z=7-8 or from inner bottom
+ *   Inner ring (clockwise, 3 tiles inward from outer):
+ *     Top leg:    z=4-5, x=4-10   — left to right
+ *     Right leg:  x=10-11, z=5-10 — down
+ *     Bottom leg: z=10-11, x=4-11 — right to left
+ *
+ *   Center corridor (inner bottom → exit):
+ *     x=6-8, z=7-11 — vertical channel from inner bottom up to exit zone
+ *     Exit zone: x=6-9, z=7-8    — widens around exit at (7,7)
+ *
+ *   Intended path order (clockwise, no shortcuts):
+ *     outer top → outer right → outer bottom → outer left → connector →
+ *     inner top → inner right → inner bottom → center corridor → exit
+ *
+ *   Crystal walls close off any shortcut between inner top leg (z=4-5)
+ *   and the center corridor (z=7+) — the gap at z=6 remains Crystal.
  *
  *   Moss at each ring corner turn
  *
@@ -268,16 +190,16 @@ export function buildTheSpiral(): TerrainGridState {
   // Bottom leg: z=10-11, x=4-11 (right to left)
   paintRect(tiles, 4, 10, 11, 11, TerrainType.BEDROCK);
 
-  // Left leg (inner): x=4-5, z=5-10 (down to join inner bottom)
-  paintRect(tiles, 4, 5, 5, 10, TerrainType.BEDROCK);
+  // NOTE: No inner left leg — omitting x=4-5, z=5-10 forces enemies clockwise
+  // through inner right leg before reaching inner bottom and center.
 
   // --- Connector: inner ring → center exit ---
-  // From inner bottom leg at x=6-8, z=10-11 down into center
-  // Center corridor: x=6-8, z=7-11
+  // Center corridor: x=6-8, z=7-11 (rises from inner bottom leg to exit zone)
+  // Starts at z=7 so Crystal at z=6 blocks any shortcut from inner top leg (z=5).
   paintRect(tiles, 6, 7, 8, 11, TerrainType.BEDROCK);
 
-  // Center exit zone: x=6-9, z=6-8
-  paintRect(tiles, 6, 6, 9, 8, TerrainType.BEDROCK);
+  // Center exit zone: x=6-9, z=7-8
+  paintRect(tiles, 6, 7, 9, 8, TerrainType.BEDROCK);
 
   // --- Moss accents at turn points ---
   tiles[13][2] = TerrainType.MOSS;   // outer top-right turn

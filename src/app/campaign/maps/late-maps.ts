@@ -1,91 +1,6 @@
 import { TerrainGridState } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
-
-/** Schema version for all hand-crafted campaign maps. */
-const MAP_VERSION = '2.0.0';
-
-// ---------------------------------------------------------------------------
-// Grid builder helpers (module-private)
-// ---------------------------------------------------------------------------
-
-/**
- * Allocates a gridSize×gridSize grid filled with the given terrain type,
- * plus an all-zero heightMap. spawnPoints and exitPoints are left empty
- * for the caller to populate.
- */
-function createEmptyGrid(size: number, fill: TerrainType): TerrainGridState {
-  const tiles: TerrainType[][] = [];
-  const heightMap: number[][] = [];
-  for (let x = 0; x < size; x++) {
-    tiles[x] = [];
-    heightMap[x] = [];
-    for (let z = 0; z < size; z++) {
-      tiles[x][z] = fill;
-      heightMap[x][z] = 0;
-    }
-  }
-  return {
-    gridSize: size,
-    tiles,
-    heightMap,
-    spawnPoints: [],
-    exitPoints: [],
-    version: MAP_VERSION,
-  };
-}
-
-/**
- * Paints tiles[x][z] for x in [x0, x1] at fixed row z with the given type.
- * Inclusive on both ends.
- */
-function paintRow(
-  tiles: TerrainType[][],
-  z: number,
-  x0: number,
-  x1: number,
-  type: TerrainType,
-): void {
-  for (let x = x0; x <= x1; x++) {
-    tiles[x][z] = type;
-  }
-}
-
-/**
- * Paints tiles[x][z] for z in [z0, z1] at fixed column x with the given type.
- * Inclusive on both ends; z0 may be greater than z1 (range is normalised).
- */
-function paintColumn(
-  tiles: TerrainType[][],
-  x: number,
-  z0: number,
-  z1: number,
-  type: TerrainType,
-): void {
-  const lo = Math.min(z0, z1);
-  const hi = Math.max(z0, z1);
-  for (let z = lo; z <= hi; z++) {
-    tiles[x][z] = type;
-  }
-}
-
-/**
- * Paints a filled rectangle of tiles with the given type.
- * Columns x in [x0, x1], rows z in [z0, z1] — all inclusive.
- */
-function paintRect(
-  tiles: TerrainType[][],
-  x0: number,
-  z0: number,
-  x1: number,
-  z1: number,
-  type: TerrainType,
-): void {
-  for (let x = x0; x <= x1; x++) {
-    for (let z = z0; z <= z1; z++) {
-      tiles[x][z] = type;
-    }
-  }
-}
+import { createEmptyGrid, paintRow, paintColumn, paintRect } from './map-helpers';
 
 // ---------------------------------------------------------------------------
 // Map 13 — "Fortress"  (18×18, 4 spawners, 1 exit)
@@ -192,7 +107,7 @@ export function buildFortress(): TerrainGridState {
  *   Leg 5 (mid-lower, left→right):   z=13-14, x=2-15
  *   Turn 5 (right side, down):       x=15-16, z=14-16
  *   Leg 6 (bottom, right→left):      z=16-17, x=1-16
- *   Exit connector (left side, up):  x=1-2,  z=15-17  (exit at (1,16))
+ *   Exit connector (right side):      x=17,   z=16-17  (exit at (17,16))
  *
  *   Wider moss pockets (3×3) at selected turn points to allow tower placement.
  *   Spawner: (0,1)   Exit: (17,16)
@@ -299,11 +214,15 @@ export function buildTheGauntlet(): TerrainGridState {
  *     Connects all four horizontal corridors vertically
  *     Both exits (9,10) and (10,10) are within this spine
  *
- *   Crystal walls between corridors create channeling and build zones:
- *     Upper crystal band: x=1-8,  z=5-9   (between upper-left and spine)
- *     Upper-right band:   x=11-18, z=5-9
- *     Lower crystal band: x=1-8,  z=11-14 (between spine and lower-left)
- *     Lower-right band:   x=11-18, z=11-14
+ *   Crystal channeling walls (non-buildable, force enemies through corridors):
+ *     Upper-left crystal wall:  x=1-8,   z=5-9   (between upper-left corridor and spine)
+ *     Upper-right crystal wall: x=11-18, z=5-9
+ *     Lower-left crystal wall:  x=1-8,   z=11-14 (between spine and lower-left corridor)
+ *     Lower-right crystal wall: x=11-18, z=11-14
+ *
+ *   Actual tower build areas (Bedrock strips flanking the spine):
+ *     Left flank:  x=7-8,  z=5-14
+ *     Right flank: x=11-12, z=5-14
  *
  *   Moss merge-point accents where corridors hit the spine
  *
@@ -337,17 +256,17 @@ export function buildStorm(): TerrainGridState {
   // This connects all four corridors and contains both exits
   paintRect(tiles, 9, 3, 10, 16, TerrainType.BEDROCK);
 
-  // Crystal channeling walls — force enemies through corridors, create build zones
-  // Upper-left build zone: x=1-8, z=5-9
+  // Crystal channeling walls — force enemies through corridors (Crystal is non-buildable)
+  // Upper-left crystal wall zone: x=1-8, z=5-9
   paintRect(tiles, 1, 5, 8, 9, TerrainType.CRYSTAL);
 
-  // Upper-right build zone: x=11-18, z=5-9
+  // Upper-right crystal wall zone: x=11-18, z=5-9
   paintRect(tiles, 11, 5, 18, 9, TerrainType.CRYSTAL);
 
-  // Lower-left build zone: x=1-8, z=11-14
+  // Lower-left crystal wall zone: x=1-8, z=11-14
   paintRect(tiles, 1, 11, 8, 14, TerrainType.CRYSTAL);
 
-  // Lower-right build zone: x=11-18, z=11-14
+  // Lower-right crystal wall zone: x=11-18, z=11-14
   paintRect(tiles, 11, 11, 18, 14, TerrainType.CRYSTAL);
 
   // Bedrock build strips flanking the spine (tower placement near exits)
