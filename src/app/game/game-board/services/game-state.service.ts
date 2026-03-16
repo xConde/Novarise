@@ -196,6 +196,17 @@ export class GameStateService {
     this.emit();
   }
 
+  /**
+   * Overrides the maximum wave count for the current session (e.g., a campaign level with fewer or more waves than the default 10).
+   * Only applies during SETUP phase before wave 1 to prevent mid-game confusion.
+   * Also updates WaveService via the consumer — call `waveService.setCustomWaves()` first so maxWaves stays in sync.
+   */
+  setMaxWaves(count: number): void {
+    if (this.state.phase !== GamePhase.SETUP || this.state.wave !== 0) return;
+    this.state.maxWaves = count;
+    this.emit();
+  }
+
   /** Resets all game state to initial values and clears modifiers. Call from `restartGame()` before a new game begins. */
   reset(): void {
     this.state = { ...INITIAL_GAME_STATE, activeModifiers: new Set<GameModifier>() };

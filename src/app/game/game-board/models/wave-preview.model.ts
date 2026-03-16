@@ -1,5 +1,5 @@
 import { EnemyType } from './enemy.model';
-import { WAVE_DEFINITIONS } from './wave.model';
+import { WaveDefinition, WAVE_DEFINITIONS } from './wave.model';
 import { generateEndlessWave, ENDLESS_WAVE_TEMPLATES } from './endless-wave.model';
 
 export interface WavePreviewEntry {
@@ -30,30 +30,45 @@ const ENEMY_TYPE_LABELS: Record<EnemyType, string> = {
 /**
  * Returns a list of WavePreviewEntry objects for the given wave index (1-based).
  *
- * For non-endless waves (waveIndex <= WAVE_DEFINITIONS.length):
- *   reads directly from WAVE_DEFINITIONS[waveIndex - 1] and aggregates by type.
+ * For non-endless waves (waveIndex <= activeDefinitions.length):
+ *   reads directly from activeDefinitions[waveIndex - 1] and aggregates by type.
  *
- * For endless waves (isEndless === true && waveIndex > WAVE_DEFINITIONS.length):
+ * For endless waves (isEndless === true && waveIndex > activeDefinitions.length):
  *   uses generateEndlessWave() to produce the same composition that WaveService will spawn.
  *
  * Returns an empty array when waveIndex is out of range and isEndless is false.
+ *
+ * @param customDefinitions Optional custom wave definitions (e.g. for a campaign level).
+ *   When provided, these are used instead of the global WAVE_DEFINITIONS.
  */
-export function getWavePreview(waveIndex: number, isEndless: boolean): WavePreviewEntry[] {
-  return getWavePreviewFull(waveIndex, isEndless).entries;
+export function getWavePreview(
+  waveIndex: number,
+  isEndless: boolean,
+  customDefinitions?: WaveDefinition[]
+): WavePreviewEntry[] {
+  return getWavePreviewFull(waveIndex, isEndless, customDefinitions).entries;
 }
 
 /**
  * Returns the full WavePreview (entries + templateDescription) for the given wave index (1-based).
  * Prefer this over getWavePreview() when the HUD needs to display the template name.
+ *
+ * @param customDefinitions Optional custom wave definitions (e.g. for a campaign level).
+ *   When provided, these are used instead of the global WAVE_DEFINITIONS.
  */
-export function getWavePreviewFull(waveIndex: number, isEndless: boolean): WavePreview {
+export function getWavePreviewFull(
+  waveIndex: number,
+  isEndless: boolean,
+  customDefinitions?: WaveDefinition[]
+): WavePreview {
   if (waveIndex <= 0) return { entries: [], templateDescription: null };
 
+  const activeDefinitions = customDefinitions ?? WAVE_DEFINITIONS;
   const definitionIndex = waveIndex - 1;
 
-  if (definitionIndex < WAVE_DEFINITIONS.length) {
+  if (definitionIndex < activeDefinitions.length) {
     // Static wave definition — aggregate entries by type
-    const wave = WAVE_DEFINITIONS[definitionIndex];
+    const wave = activeDefinitions[definitionIndex];
     const counts = new Map<EnemyType, number>();
 
     for (const entry of wave.entries) {
@@ -72,7 +87,7 @@ export function getWavePreviewFull(waveIndex: number, isEndless: boolean): WaveP
   if (!isEndless) return { entries: [], templateDescription: null };
 
   // Endless wave — use the composition model directly (same logic as WaveService)
-  const endlessWaveNumber = waveIndex - WAVE_DEFINITIONS.length;
+  const endlessWaveNumber = waveIndex - activeDefinitions.length;
   const result = generateEndlessWave(endlessWaveNumber);
 
   // Aggregate entries by type for display

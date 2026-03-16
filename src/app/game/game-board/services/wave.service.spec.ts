@@ -470,4 +470,103 @@ describe('WaveService', () => {
       expect(result!.healthMultiplier).toBeGreaterThan(1);
     });
   });
+
+  // --- setCustomWaves / clearCustomWaves ---
+
+  describe('setCustomWaves', () => {
+    const CUSTOM_WAVES = [
+      {
+        entries: [
+          { type: EnemyType.BASIC, count: 3, spawnInterval: 1.0 }
+        ],
+        reward: 15
+      },
+      {
+        entries: [
+          { type: EnemyType.FAST, count: 4, spawnInterval: 0.8 }
+        ],
+        reward: 20
+      }
+    ];
+
+    it('hasCustomWaves() returns false by default', () => {
+      expect(service.hasCustomWaves()).toBeFalse();
+    });
+
+    it('hasCustomWaves() returns true after setCustomWaves()', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      expect(service.hasCustomWaves()).toBeTrue();
+    });
+
+    it('getMaxWaves() returns custom wave count after setCustomWaves()', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      expect(service.getMaxWaves()).toBe(CUSTOM_WAVES.length);
+    });
+
+    it('startWave() uses custom definitions — only 3 enemies in wave 1', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.startWave(1, mockScene);
+      expect(service.getRemainingToSpawn()).toBe(3);
+    });
+
+    it('startWave() spawns FAST enemies in custom wave 2', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.startWave(2, mockScene);
+      service.update(0.016, mockScene);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene);
+    });
+
+    it('startWave() rejects waves beyond custom count when endless mode is off', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.startWave(CUSTOM_WAVES.length + 1, mockScene);
+      expect(service.isSpawning()).toBeFalse();
+    });
+
+    it('getWaveDefinitions() returns the custom set', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      expect(service.getWaveDefinitions()).toBe(CUSTOM_WAVES);
+    });
+  });
+
+  describe('clearCustomWaves', () => {
+    const CUSTOM_WAVES = [
+      {
+        entries: [{ type: EnemyType.BASIC, count: 2, spawnInterval: 1.0 }],
+        reward: 10
+      }
+    ];
+
+    it('clearCustomWaves() reverts getMaxWaves() to default WAVE_DEFINITIONS length', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.clearCustomWaves();
+      expect(service.getMaxWaves()).toBe(WAVE_DEFINITIONS.length);
+    });
+
+    it('hasCustomWaves() returns false after clearCustomWaves()', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.clearCustomWaves();
+      expect(service.hasCustomWaves()).toBeFalse();
+    });
+
+    it('after clearCustomWaves(), startWave() uses default WAVE_DEFINITIONS (wave 1 has 5 BASIC)', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.clearCustomWaves();
+      service.startWave(1, mockScene);
+      expect(service.getRemainingToSpawn()).toBe(5);
+    });
+
+    it('reset() clears custom waves and reverts to defaults', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.reset();
+      expect(service.hasCustomWaves()).toBeFalse();
+      expect(service.getMaxWaves()).toBe(WAVE_DEFINITIONS.length);
+    });
+
+    it('after reset(), startWave() using default definitions still works', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.reset();
+      service.startWave(1, mockScene);
+      expect(service.isSpawning()).toBeTrue();
+    });
+  });
 });

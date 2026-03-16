@@ -16,6 +16,8 @@ interface SpawnQueue {
 @Injectable()
 export class WaveService {
   private waveDefinitions: WaveDefinition[] = WAVE_DEFINITIONS;
+  /** Custom wave definitions set for a specific campaign level. Null means use WAVE_DEFINITIONS. */
+  private customWaves: WaveDefinition[] | null = null;
   private spawnQueues: SpawnQueue[] = [];
   private active = false;
   private currentWaveIndex = -1;
@@ -23,6 +25,35 @@ export class WaveService {
   private currentEndlessResult: EndlessWaveResult | null = null;
 
   constructor(private enemyService: EnemyService) {}
+
+  /**
+   * Overrides wave definitions with a custom set for the current session (e.g., campaign level).
+   * Must be called before `startWave()` for the custom waves to take effect.
+   * Does NOT affect the global WAVE_DEFINITIONS constant.
+   */
+  setCustomWaves(waves: WaveDefinition[]): void {
+    this.customWaves = waves;
+    this.waveDefinitions = waves;
+  }
+
+  /**
+   * Reverts wave definitions to the default WAVE_DEFINITIONS set.
+   * Call from `restartGame()` when returning to non-campaign play.
+   */
+  clearCustomWaves(): void {
+    this.customWaves = null;
+    this.waveDefinitions = WAVE_DEFINITIONS;
+  }
+
+  /** Returns true if custom wave definitions are currently active. */
+  hasCustomWaves(): boolean {
+    return this.customWaves !== null;
+  }
+
+  /** Returns the active wave definitions (custom if set, otherwise default). */
+  getWaveDefinitions(): WaveDefinition[] {
+    return this.waveDefinitions;
+  }
 
   /** Enables or disables endless mode. Must be set before `startWave()` is called for waves beyond WAVE_DEFINITIONS length. */
   setEndlessMode(enabled: boolean): void {
@@ -173,12 +204,13 @@ export class WaveService {
     return this.waveDefinitions.length;
   }
 
-  /** Clears all spawn queues and resets wave state. Call from `restartGame()` before a new game begins. */
+  /** Clears all spawn queues and resets wave state. Call from `restartGame()` before a new game begins. Clears custom waves — re-apply via `setCustomWaves()` if restarting a campaign level. */
   reset(): void {
     this.spawnQueues = [];
     this.active = false;
     this.currentWaveIndex = -1;
     this.endlessMode = false;
     this.currentEndlessResult = null;
+    this.clearCustomWaves();
   }
 }
