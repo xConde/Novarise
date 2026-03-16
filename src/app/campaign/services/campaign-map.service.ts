@@ -8,6 +8,12 @@ import {
   buildSerpentine,
   buildTheFork,
 } from '../maps/intro-maps';
+import {
+  buildTwinGates,
+  buildOpenGround,
+  buildTheNarrows,
+  buildCrystalMaze,
+} from '../maps/early-maps';
 
 /** Schema version emitted by generated placeholder maps. */
 const PLACEHOLDER_MAP_VERSION = '2.0.0';
@@ -21,13 +27,17 @@ const CAMPAIGN_MAP_REGISTRY: Record<string, () => TerrainGridState> = {
   campaign_02: buildTheBend,
   campaign_03: buildSerpentine,
   campaign_04: buildTheFork,
+  campaign_05: buildTwinGates,
+  campaign_06: buildOpenGround,
+  campaign_07: buildTheNarrows,
+  campaign_08: buildCrystalMaze,
 };
 
 /**
  * Loads TerrainGridState maps for campaign levels.
  *
- * Levels 1-4 (Intro tier) return hand-crafted maps from CAMPAIGN_MAP_REGISTRY.
- * Levels 5-16 fall back to placeholder generation until their sprints land.
+ * Levels 1-8 (Intro + Early tiers) return hand-crafted maps from CAMPAIGN_MAP_REGISTRY.
+ * Levels 9-16 fall back to placeholder generation until their sprints land.
  */
 @Injectable({ providedIn: 'root' })
 export class CampaignMapService {
