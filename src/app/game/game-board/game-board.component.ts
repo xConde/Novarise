@@ -39,7 +39,7 @@ import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from './con
 import { TOUCH_CONFIG, DRAG_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
 import { ENEMY_STATS } from './models/enemy.model';
-import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
+import { WavePreviewEntry, getWavePreview, getWavePreviewFull } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
 import { StatusEffectService } from './services/status-effect.service';
 import { StatusEffectType } from './constants/status-effect.constants';
@@ -152,9 +152,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Wave preview — shown during SETUP and INTERMISSION
   wavePreview: WavePreviewEntry[] = [];
+  /** Template description for the upcoming endless wave (null for scripted waves). */
+  waveTemplateDescription: string | null = null;
   // Wave income feedback — shown during INTERMISSION
   lastWaveReward = 0;
   lastInterestEarned = 0;
+  /** Tracks whether any enemy leaked during the current wave (for streak bonus). */
+  private leakedThisWave = false;
   showAllRanges = false;
   showPathOverlay = false;
   sellConfirmPending = false;
@@ -225,6 +229,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Game stats exposed to score screen
   get gameStats() { return this.gameStatsService.getStats(); }
+
+  /** Returns the template name of the currently active endless wave, or null. Exposed to template for HUD display. */
+  get currentEndlessTemplate(): string | null {
+    return this.waveService.getCurrentEndlessTemplate();
+  }
 
   // Camera pan state (tracks which keys are currently held)
   private panKeys = new Set<string>();
@@ -297,7 +306,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       if (isPreviewPhase && (waveChanged || phaseChanged)) {
         // Preview shows the NEXT wave that is about to start (wave + 1)
         const nextWave = state.wave + 1;
-        this.wavePreview = getWavePreview(nextWave, state.isEndless);
+        const previewFull = getWavePreviewFull(nextWave, state.isEndless);
+        this.wavePreview = previewFull.entries;
+        this.waveTemplateDescription = previewFull.templateDescription;
       }
     });
 
@@ -336,7 +347,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Seed initial wave preview for the first wave
     const initialState = this.gameStateService.getState();
-    this.wavePreview = getWavePreview(initialState.wave + 1, initialState.isEndless);
+    const initialPreview = getWavePreviewFull(initialState.wave + 1, initialState.isEndless);
+    this.wavePreview = initialPreview.entries;
+    this.waveTemplateDescription = initialPreview.templateDescription;
   }
 
   ngAfterViewInit(): void {
@@ -978,6 +991,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.lastWaveReward = 0;
     this.lastInterestEarned = 0;
+    this.leakedThisWave = false;
     this.minimapService.show();
 
     // Ensure enemy service has current modifier effects before first wave
@@ -1027,6 +1041,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.victorySoundPlayed = false;
     this.showHelpOverlay = false;
     this.showPathOverlay = false;
+    this.leakedThisWave = false;
     this.pathBlocked = false;
     if (this.pathBlockedTimerId !== null) {
       clearTimeout(this.pathBlockedTimerId);
@@ -2100,6 +2115,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             const leakedEnemy = this.enemyService.getEnemies().get(enemyId);
             const leakCost = leakedEnemy?.leakDamage ?? 1;
             this.gameStateService.loseLife(leakCost);
+            this.leakedThisWave = true;
             this.gameStatsService.recordEnemyLeaked();
             frameExitCount++;
             this.enemyService.removeEnemy(enemyId, this.scene);
@@ -2116,6 +2132,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               !this.waveService.isSpawning() &&
               this.enemyService.getEnemies().size === 0) {
             const reward = this.waveService.getWaveReward(state.wave);
+            // Award streak bonus before completeWave transitions out of COMBAT
+            if (!this.leakedThisWave) {
+              this.gameStateService.addStreakBonus();
+            }
             this.gameStateService.completeWave(reward);
             // Check if completeWave triggered VICTORY
             const postWavePhase = this.gameStateService.getState().phase;

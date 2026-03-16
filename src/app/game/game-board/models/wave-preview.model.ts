@@ -1,10 +1,18 @@
 import { EnemyType } from './enemy.model';
-import { WAVE_DEFINITIONS, ENDLESS_CONFIG, ENDLESS_BASE_COUNT } from './wave.model';
+import { WAVE_DEFINITIONS } from './wave.model';
+import { generateEndlessWave, ENDLESS_WAVE_TEMPLATES } from './endless-wave.model';
 
 export interface WavePreviewEntry {
   type: EnemyType;
   count: number;
   label: string;
+}
+
+/** Optional description for the upcoming wave — set for endless waves only. */
+export interface WavePreview {
+  entries: WavePreviewEntry[];
+  /** Short description of the wave type (e.g. "Rush — Fast enemies flood the field"). Null for scripted waves. */
+  templateDescription: string | null;
 }
 
 // Display labels for each enemy type — kept here so the preview model is self-contained
@@ -19,19 +27,6 @@ const ENEMY_TYPE_LABELS: Record<EnemyType, string> = {
   [EnemyType.FLYING]: 'Flying'
 };
 
-// Enemy types that cycle in endless waves — matches WaveService.ENDLESS_ENEMY_CYCLE
-const ENDLESS_ENEMY_CYCLE: EnemyType[] = [
-  EnemyType.BASIC,
-  EnemyType.FAST,
-  EnemyType.HEAVY,
-  EnemyType.SWIFT,
-  EnemyType.SHIELDED,
-  EnemyType.SWARM,
-  EnemyType.FLYING
-];
-
-
-
 /**
  * Returns a list of WavePreviewEntry objects for the given wave index (1-based).
  *
@@ -39,13 +34,20 @@ const ENDLESS_ENEMY_CYCLE: EnemyType[] = [
  *   reads directly from WAVE_DEFINITIONS[waveIndex - 1] and aggregates by type.
  *
  * For endless waves (isEndless === true && waveIndex > WAVE_DEFINITIONS.length):
- *   replicates the WaveService.generateEndlessWave composition logic to determine
- *   which types and how many will appear, without executing the actual spawn.
+ *   uses generateEndlessWave() to produce the same composition that WaveService will spawn.
  *
  * Returns an empty array when waveIndex is out of range and isEndless is false.
  */
 export function getWavePreview(waveIndex: number, isEndless: boolean): WavePreviewEntry[] {
-  if (waveIndex <= 0) return [];
+  return getWavePreviewFull(waveIndex, isEndless).entries;
+}
+
+/**
+ * Returns the full WavePreview (entries + templateDescription) for the given wave index (1-based).
+ * Prefer this over getWavePreview() when the HUD needs to display the template name.
+ */
+export function getWavePreviewFull(waveIndex: number, isEndless: boolean): WavePreview {
+  if (waveIndex <= 0) return { entries: [], templateDescription: null };
 
   const definitionIndex = waveIndex - 1;
 
@@ -58,38 +60,34 @@ export function getWavePreview(waveIndex: number, isEndless: boolean): WavePrevi
       counts.set(entry.type, (counts.get(entry.type) ?? 0) + entry.count);
     }
 
-    return Array.from(counts.entries()).map(([type, count]) => ({
+    const entries = Array.from(counts.entries()).map(([type, count]) => ({
       type,
       count,
       label: ENEMY_TYPE_LABELS[type]
     }));
+
+    return { entries, templateDescription: null };
   }
 
-  if (!isEndless) return [];
+  if (!isEndless) return { entries: [], templateDescription: null };
 
-  // Endless wave — replicate the composition logic from WaveService.generateEndlessWave
-  const countMult =
-    ENDLESS_CONFIG.baseCountMultiplier +
-    ENDLESS_CONFIG.countScalePerWave * (waveIndex - 1);
+  // Endless wave — use the composition model directly (same logic as WaveService)
+  const endlessWaveNumber = waveIndex - WAVE_DEFINITIONS.length;
+  const result = generateEndlessWave(endlessWaveNumber);
 
-  const isBossWave = waveIndex % ENDLESS_CONFIG.bossInterval === 0;
-
-  const cycleIndex = (waveIndex - 1) % ENDLESS_ENEMY_CYCLE.length;
-  const primaryType = ENDLESS_ENEMY_CYCLE[cycleIndex];
-  const secondaryType = ENDLESS_ENEMY_CYCLE[(cycleIndex + 1) % ENDLESS_ENEMY_CYCLE.length];
-
-  const baseCount = Math.round(ENDLESS_BASE_COUNT * countMult);
-  const primaryCount = Math.ceil(baseCount * 0.6);
-  const secondaryCount = Math.floor(baseCount * 0.4);
-
-  const entries: WavePreviewEntry[] = [
-    { type: primaryType, count: primaryCount, label: ENEMY_TYPE_LABELS[primaryType] },
-    { type: secondaryType, count: secondaryCount, label: ENEMY_TYPE_LABELS[secondaryType] }
-  ];
-
-  if (isBossWave) {
-    entries.unshift({ type: EnemyType.BOSS, count: 1, label: ENEMY_TYPE_LABELS[EnemyType.BOSS] });
+  // Aggregate entries by type for display
+  const counts = new Map<EnemyType, number>();
+  for (const entry of result.entries) {
+    counts.set(entry.type, (counts.get(entry.type) ?? 0) + entry.count);
   }
 
-  return entries;
+  const entries = Array.from(counts.entries()).map(([type, count]) => ({
+    type,
+    count,
+    label: ENEMY_TYPE_LABELS[type]
+  }));
+
+  const templateConfig = ENDLESS_WAVE_TEMPLATES[result.template];
+
+  return { entries, templateDescription: templateConfig.description };
 }

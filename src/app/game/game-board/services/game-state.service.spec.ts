@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { GameStateService } from './game-state.service';
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, INITIAL_GAME_STATE, INTEREST_CONFIG } from '../models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE } from '../models/game-state.model';
 import { GameModifier } from '../models/game-modifier.model';
 
 describe('GameStateService', () => {
@@ -1018,6 +1018,106 @@ describe('GameStateService', () => {
         service.reset();
         expect(service.getModifierScoreMultiplier()).toBe(1.0);
       });
+    });
+  });
+
+  // --- Score Streaks ---
+
+  describe('score streaks', () => {
+    beforeEach(() => {
+      service.startWave(); // → COMBAT phase required for addStreakBonus
+    });
+
+    it('should start with consecutiveWavesWithoutLeak = 0', () => {
+      expect(service.getState().consecutiveWavesWithoutLeak).toBe(0);
+    });
+
+    it('getStreak() returns 0 initially', () => {
+      expect(service.getStreak()).toBe(0);
+    });
+
+    it('addStreakBonus() increments the streak counter', () => {
+      service.addStreakBonus();
+      expect(service.getState().consecutiveWavesWithoutLeak).toBe(1);
+    });
+
+    it('addStreakBonus() awards gold equal to STREAK_BONUS_PER_WAVE * new streak count', () => {
+      const goldBefore = service.getState().gold;
+      service.addStreakBonus(); // streak becomes 1
+      const expectedBonus = STREAK_BONUS_PER_WAVE * 1;
+      expect(service.getState().gold).toBe(goldBefore + expectedBonus);
+    });
+
+    it('addStreakBonus() awards score equal to STREAK_BONUS_PER_WAVE * new streak count', () => {
+      const scoreBefore = service.getState().score;
+      service.addStreakBonus(); // streak becomes 1
+      const expectedBonus = STREAK_BONUS_PER_WAVE * 1;
+      expect(service.getState().score).toBe(scoreBefore + expectedBonus);
+    });
+
+    it('streak bonus compounds on consecutive calls', () => {
+      const goldBefore = service.getState().gold;
+      service.addStreakBonus(); // streak = 1, bonus = 25
+      service.completeWave(0); // → INTERMISSION
+      service.startWave();     // → COMBAT (wave 2)
+      service.addStreakBonus(); // streak = 2, bonus = 50
+      // total bonus = 25 + 50 = 75
+      const totalBonus = STREAK_BONUS_PER_WAVE * 1 + STREAK_BONUS_PER_WAVE * 2;
+      expect(service.getState().gold).toBe(goldBefore + totalBonus);
+    });
+
+    it('addStreakBonus() returns the bonus amount awarded', () => {
+      const bonus = service.addStreakBonus(); // streak = 1
+      expect(bonus).toBe(STREAK_BONUS_PER_WAVE * 1);
+    });
+
+    it('addStreakBonus() returns 0 and is a no-op outside COMBAT phase', () => {
+      service.completeWave(0); // → INTERMISSION
+      const goldBefore = service.getState().gold;
+      const bonus = service.addStreakBonus();
+      expect(bonus).toBe(0);
+      expect(service.getState().gold).toBe(goldBefore);
+      expect(service.getState().consecutiveWavesWithoutLeak).toBe(0);
+    });
+
+    it('loseLife() resets the streak to 0', () => {
+      service.addStreakBonus(); // streak = 1
+      expect(service.getStreak()).toBe(1);
+      service.loseLife();
+      expect(service.getState().consecutiveWavesWithoutLeak).toBe(0);
+      expect(service.getStreak()).toBe(0);
+    });
+
+    it('streak resets to 0 after loseLife even when streak is large', () => {
+      service.addStreakBonus();
+      service.completeWave(0);
+      service.startWave();
+      service.addStreakBonus();
+      service.completeWave(0);
+      service.startWave();
+      service.addStreakBonus(); // streak = 3
+      expect(service.getStreak()).toBe(3);
+
+      service.loseLife();
+      expect(service.getStreak()).toBe(0);
+    });
+
+    it('reset() clears the streak counter', () => {
+      service.addStreakBonus();
+      service.reset();
+      expect(service.getState().consecutiveWavesWithoutLeak).toBe(0);
+    });
+
+    it('emits state after addStreakBonus()', (done) => {
+      let emitCount = 0;
+      service.getState$().subscribe(state => {
+        emitCount++;
+        if (emitCount === 2) {
+          expect(state.consecutiveWavesWithoutLeak).toBe(1);
+          done();
+        }
+      });
+      service.addStreakBonus();
     });
   });
 });

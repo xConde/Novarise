@@ -67,6 +67,8 @@ export interface GameState {
   gameSpeed: GameSpeed;
   elapsedTime: number; // total seconds spent in COMBAT phase
   activeModifiers: Set<GameModifier>;
+  /** Number of consecutive waves completed without any enemy leaks. Resets to 0 on any leak. */
+  consecutiveWavesWithoutLeak: number;
 }
 
 /** Economy settings for the interest system */
@@ -76,6 +78,9 @@ export const INTEREST_CONFIG = {
   /** Maximum interest payout per wave */
   maxPayout: 50,
 } as const;
+
+/** Gold bonus per consecutive leak-free wave (e.g., 3rd streak = 3 * 25 = 75g). */
+export const STREAK_BONUS_PER_WAVE = 25;
 
 export const INITIAL_GAME_STATE: GameState = {
   phase: GamePhase.SETUP,
@@ -90,5 +95,6 @@ export const INITIAL_GAME_STATE: GameState = {
   isPaused: false,
   gameSpeed: 1,
   elapsedTime: 0,
-  activeModifiers: new Set<GameModifier>()
+  activeModifiers: new Set<GameModifier>(),
+  consecutiveWavesWithoutLeak: 0,
 };

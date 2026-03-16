@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, VALID_GAME_SPEEDS } from '../models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_GAME_SPEEDS } from '../models/game-state.model';
 import { GameModifier, ModifierEffects, mergeModifierEffects, calculateModifierScoreMultiplier } from '../models/game-modifier.model';
 
 @Injectable()
@@ -61,14 +61,36 @@ export class GameStateService {
     this.emit();
   }
 
-  /** Deducts lives by `amount` (default 1). Triggers DEFEAT when lives reach 0. No-op during VICTORY or DEFEAT. */
+  /** Deducts lives by `amount` (default 1). Triggers DEFEAT when lives reach 0. Resets the leak streak. No-op during VICTORY or DEFEAT. */
   loseLife(amount: number = 1): void {
     if (this.state.phase === GamePhase.VICTORY || this.state.phase === GamePhase.DEFEAT) return;
     this.state.lives = Math.max(0, this.state.lives - amount);
+    this.state.consecutiveWavesWithoutLeak = 0;
     if (this.state.lives <= 0) {
       this.state.phase = GamePhase.DEFEAT;
     }
     this.emit();
+  }
+
+  /**
+   * Increments the no-leak streak counter and awards a streak bonus.
+   * Call this when a wave completes with zero leaks.
+   * Bonus gold = STREAK_BONUS_PER_WAVE * consecutiveWavesWithoutLeak (after increment).
+   * Returns the gold bonus awarded (0 if not in COMBAT phase).
+   */
+  addStreakBonus(): number {
+    if (this.state.phase !== GamePhase.COMBAT) return 0;
+    this.state.consecutiveWavesWithoutLeak++;
+    const bonus = STREAK_BONUS_PER_WAVE * this.state.consecutiveWavesWithoutLeak;
+    this.state.gold += bonus;
+    this.state.score += bonus;
+    this.emit();
+    return bonus;
+  }
+
+  /** Returns the current no-leak streak count. */
+  getStreak(): number {
+    return this.state.consecutiveWavesWithoutLeak;
   }
 
   /** Adds gold and score by the same amount. Use for kill rewards and interest payouts. */

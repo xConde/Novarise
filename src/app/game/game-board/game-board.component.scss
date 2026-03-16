@@ -171,6 +171,15 @@
       font-weight: 700;
       color: var(--game-wave-text);
     }
+
+    .wave-template-badge {
+      margin-left: 0.5rem;
+      font-size: 0.6rem;
+      color: var(--theme-purple);
+      text-transform: capitalize;
+      font-weight: 600;
+      letter-spacing: 0.04rem;
+    }
   }
 
   .path-blocked-warning {
@@ -247,6 +256,18 @@
       color: rgba(255, 255, 255, 0.5);
       margin-bottom: var(--spacing-xs);
       text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.2rem;
+
+      .wave-template-description {
+        font-size: 0.6rem;
+        color: var(--theme-purple);
+        text-transform: none;
+        letter-spacing: 0.04rem;
+        font-weight: 600;
+      }
     }
 
 

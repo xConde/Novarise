@@ -41,6 +41,12 @@
   <!-- Wave status indicator -->
   <div class="hud-wave-status" *ngIf="gameState.phase === GamePhase.COMBAT">
     <span class="wave-enemy-count">{{ enemiesAlive + enemiesToSpawn }}</span> enemies remaining
+    <span
+      *ngIf="gameState.isEndless && currentEndlessTemplate"
+      class="wave-template-badge"
+      aria-label="Current wave type">
+      {{ currentEndlessTemplate }}
+    </span>
   </div>
 
   <!-- Path blocked warning -->
@@ -100,6 +106,12 @@
     </div>
     <div class="wave-preview-header">
       Wave {{ gameState.wave + 1 }}
+      <span
+        *ngIf="waveTemplateDescription"
+        class="wave-template-description"
+        aria-label="Wave type">
+        {{ waveTemplateDescription }}
+      </span>
     </div>
     <ul class="wave-preview-list" *ngIf="wavePreview.length > 0">
       <li
