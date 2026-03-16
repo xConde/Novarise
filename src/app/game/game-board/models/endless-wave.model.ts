@@ -84,6 +84,24 @@ export const ENDLESS_MILESTONE_REWARD_PER_BOSS = 100;
 // Template definitions
 // ---------------------------------------------------------------------------
 
+// Per-template bonus rewards (gold awarded on wave clear, in addition to base reward)
+const RUSH_BONUS_REWARD     = 30;
+const SIEGE_BONUS_REWARD    = 50;
+const SWARM_BONUS_REWARD    = 35;
+const AIR_RAID_BONUS_REWARD = 40;
+const MIXED_BONUS_REWARD    = 25;
+const BOSS_BONUS_REWARD     = 0;  // boss uses milestone-based reward instead
+const BLITZ_BONUS_REWARD    = 45;
+
+// Spawn rate multipliers (< 1.0 = faster spawning, > 1.0 = slower)
+const RUSH_SPAWN_RATE     = 0.6;
+const SIEGE_SPAWN_RATE    = 1.5;
+const SWARM_SPAWN_RATE    = 0.7;
+const AIR_RAID_SPAWN_RATE = 0.8;
+const MIXED_SPAWN_RATE    = 1.0;
+const BOSS_SPAWN_RATE     = 1.2;
+const BLITZ_SPAWN_RATE    = 0.5;
+
 /** Non-boss templates cycled in order for variety. BOSS is selected by the milestone rule. */
 export const NON_BOSS_TEMPLATES: EndlessWaveTemplate[] = [
   EndlessWaveTemplate.RUSH,
@@ -98,81 +116,81 @@ export const ENDLESS_WAVE_TEMPLATES: Record<EndlessWaveTemplate, EndlessWaveTemp
   [EndlessWaveTemplate.RUSH]: {
     template: EndlessWaveTemplate.RUSH,
     entries: [
-      { type: EnemyType.FAST,  weight: 4 },
-      { type: EnemyType.SWIFT, weight: 3 },
-      { type: EnemyType.BASIC, weight: 1 },
+      { type: EnemyType.FAST,  weight: 4 },  // 50.0% of spawns
+      { type: EnemyType.SWIFT, weight: 3 },  // 37.5% of spawns
+      { type: EnemyType.BASIC, weight: 1 },  // 12.5% of spawns
     ],
-    spawnIntervalMultiplier: 0.6,
-    bonusReward: 30,
+    spawnIntervalMultiplier: RUSH_SPAWN_RATE,
+    bonusReward: RUSH_BONUS_REWARD,
     description: 'Rush — Fast enemies flood the field',
   },
   [EndlessWaveTemplate.SIEGE]: {
     template: EndlessWaveTemplate.SIEGE,
     entries: [
-      { type: EnemyType.HEAVY,    weight: 3 },
-      { type: EnemyType.SHIELDED, weight: 2 },
-      { type: EnemyType.BASIC,    weight: 1 },
+      { type: EnemyType.HEAVY,    weight: 3 },  // 50.0% of spawns
+      { type: EnemyType.SHIELDED, weight: 2 },  // 33.3% of spawns
+      { type: EnemyType.BASIC,    weight: 1 },  // 16.7% of spawns
     ],
-    spawnIntervalMultiplier: 1.5,
-    bonusReward: 50,
+    spawnIntervalMultiplier: SIEGE_SPAWN_RATE,
+    bonusReward: SIEGE_BONUS_REWARD,
     description: 'Siege — Armored enemies march forward',
   },
   [EndlessWaveTemplate.SWARM]: {
     template: EndlessWaveTemplate.SWARM,
     entries: [
-      { type: EnemyType.SWARM, weight: 5 },
-      { type: EnemyType.FAST,  weight: 2 },
-      { type: EnemyType.BASIC, weight: 1 },
+      { type: EnemyType.SWARM, weight: 5 },  // 62.5% of spawns
+      { type: EnemyType.FAST,  weight: 2 },  // 25.0% of spawns
+      { type: EnemyType.BASIC, weight: 1 },  // 12.5% of spawns
     ],
-    spawnIntervalMultiplier: 0.7,
-    bonusReward: 35,
+    spawnIntervalMultiplier: SWARM_SPAWN_RATE,
+    bonusReward: SWARM_BONUS_REWARD,
     description: 'Swarm — Clusters that split on death',
   },
   [EndlessWaveTemplate.AIR_RAID]: {
     template: EndlessWaveTemplate.AIR_RAID,
     entries: [
-      { type: EnemyType.FLYING, weight: 5 },
-      { type: EnemyType.SWIFT,  weight: 2 },
-      { type: EnemyType.FAST,   weight: 1 },
+      { type: EnemyType.FLYING, weight: 5 },  // 62.5% of spawns
+      { type: EnemyType.SWIFT,  weight: 2 },  // 25.0% of spawns
+      { type: EnemyType.FAST,   weight: 1 },  // 12.5% of spawns
     ],
-    spawnIntervalMultiplier: 0.8,
-    bonusReward: 40,
+    spawnIntervalMultiplier: AIR_RAID_SPAWN_RATE,
+    bonusReward: AIR_RAID_BONUS_REWARD,
     description: 'Air Raid — Flying units immune to slow',
   },
   [EndlessWaveTemplate.MIXED]: {
     template: EndlessWaveTemplate.MIXED,
     entries: [
-      { type: EnemyType.BASIC,    weight: 2 },
-      { type: EnemyType.FAST,     weight: 2 },
-      { type: EnemyType.HEAVY,    weight: 1 },
-      { type: EnemyType.SHIELDED, weight: 1 },
-      { type: EnemyType.FLYING,   weight: 1 },
+      { type: EnemyType.BASIC,    weight: 2 },  // 28.6% of spawns
+      { type: EnemyType.FAST,     weight: 2 },  // 28.6% of spawns
+      { type: EnemyType.HEAVY,    weight: 1 },  // 14.3% of spawns
+      { type: EnemyType.SHIELDED, weight: 1 },  // 14.3% of spawns
+      { type: EnemyType.FLYING,   weight: 1 },  // 14.3% of spawns
     ],
-    spawnIntervalMultiplier: 1.0,
-    bonusReward: 25,
+    spawnIntervalMultiplier: MIXED_SPAWN_RATE,
+    bonusReward: MIXED_BONUS_REWARD,
     description: 'Mixed — Balanced assault from all fronts',
   },
   [EndlessWaveTemplate.BOSS]: {
     template: EndlessWaveTemplate.BOSS,
     entries: [
-      { type: EnemyType.BOSS,     weight: 1 },
-      { type: EnemyType.SHIELDED, weight: 2 },
-      { type: EnemyType.HEAVY,    weight: 2 },
+      { type: EnemyType.BOSS,     weight: 1 },  // 20.0% of spawns
+      { type: EnemyType.SHIELDED, weight: 2 },  // 40.0% of spawns
+      { type: EnemyType.HEAVY,    weight: 2 },  // 40.0% of spawns
     ],
-    spawnIntervalMultiplier: 1.2,
-    bonusReward: 0, // bonus is milestone-based instead
+    spawnIntervalMultiplier: BOSS_SPAWN_RATE,
+    bonusReward: BOSS_BONUS_REWARD, // bonus is milestone-based instead
     description: 'Boss — Elite enemy with armored escorts',
   },
   [EndlessWaveTemplate.BLITZ]: {
     template: EndlessWaveTemplate.BLITZ,
     entries: [
-      { type: EnemyType.BASIC,  weight: 3 },
-      { type: EnemyType.FAST,   weight: 3 },
-      { type: EnemyType.SWIFT,  weight: 2 },
-      { type: EnemyType.FLYING, weight: 1 },
+      { type: EnemyType.BASIC,  weight: 3 },  // 33.3% of spawns
+      { type: EnemyType.FAST,   weight: 3 },  // 33.3% of spawns
+      { type: EnemyType.SWIFT,  weight: 2 },  // 22.2% of spawns
+      { type: EnemyType.FLYING, weight: 1 },  // 11.1% of spawns
     ],
-    spawnIntervalMultiplier: 0.5,
-    bonusReward: 45,
+    spawnIntervalMultiplier: BLITZ_SPAWN_RATE,
+    bonusReward: BLITZ_BONUS_REWARD,
     description: 'Blitz — Maximum speed, all types at once',
   },
 };
