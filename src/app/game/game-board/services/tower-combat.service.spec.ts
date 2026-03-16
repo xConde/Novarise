@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { TowerCombatService, KillInfo } from './tower-combat.service';
+import { CombatVFXService } from './combat-vfx.service';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_SPECIALIZATIONS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
@@ -13,6 +14,7 @@ import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy } fro
 
 describe('TowerCombatService', () => {
   let service: TowerCombatService;
+  let combatVFXService: CombatVFXService;
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
   let gameBoardServiceSpy: jasmine.SpyObj<GameBoardService>;
   let audioServiceSpy: jasmine.SpyObj<AudioService>;
@@ -41,6 +43,7 @@ describe('TowerCombatService', () => {
     TestBed.configureTestingModule({
       providers: [
         TowerCombatService,
+        CombatVFXService,
         StatusEffectService,
         { provide: EnemyService, useValue: enemyServiceSpy },
         { provide: GameBoardService, useValue: gameBoardServiceSpy },
@@ -48,6 +51,7 @@ describe('TowerCombatService', () => {
       ]
     });
     service = TestBed.inject(TowerCombatService);
+    combatVFXService = TestBed.inject(CombatVFXService);
     statusEffectService = TestBed.inject(StatusEffectService);
     mockScene = new THREE.Scene();
   });
@@ -1117,7 +1121,7 @@ describe('TowerCombatService', () => {
 
       service.update(1.0, mockScene); // past CHAIN fireRate
 
-      const chainArcs = (service as any)['chainArcs'] as { line: THREE.Line; expiresAt: number }[];
+      const chainArcs = combatVFXService.getChainArcs();
       expect(chainArcs.length).toBeGreaterThan(0);
 
       const expectedVertexCount = CHAIN_LIGHTNING_CONFIG.zigzagSegments + 1;
@@ -1135,7 +1139,7 @@ describe('TowerCombatService', () => {
 
       service.update(1.0, mockScene);
 
-      const chainArcs = (service as any)['chainArcs'] as { line: THREE.Line; expiresAt: number }[];
+      const chainArcs = combatVFXService.getChainArcs();
       expect(chainArcs.length).toBeGreaterThan(0);
 
       const posAttr = chainArcs[0].line.geometry.getAttribute('position');
@@ -1167,8 +1171,7 @@ describe('TowerCombatService', () => {
 
       service.update(2.0, mockScene);
 
-      const impactFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
-      expect(impactFlashes.length).toBeGreaterThan(0);
+      expect(combatVFXService.getImpactFlashCount()).toBeGreaterThan(0);
     });
 
     it('should create flash with SphereGeometry', () => {
@@ -1178,7 +1181,7 @@ describe('TowerCombatService', () => {
 
       service.update(2.0, mockScene);
 
-      const impactFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      const impactFlashes = combatVFXService.getImpactFlashes();
       expect(impactFlashes.length).toBeGreaterThan(0);
       expect(impactFlashes[0].mesh.geometry).toBeInstanceOf(THREE.SphereGeometry);
     });
@@ -1190,8 +1193,7 @@ describe('TowerCombatService', () => {
 
       service.update(2.0, mockScene); // fire + hit → flash spawned
 
-      const impactFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
-      expect(impactFlashes.length).toBeGreaterThan(0);
+      expect(combatVFXService.getImpactFlashCount()).toBeGreaterThan(0);
 
       // Move enemy far away so no new flashes are spawned
       e1.position.x = TOWER_WORLD_X + 20;
@@ -1199,8 +1201,7 @@ describe('TowerCombatService', () => {
       // Advance time past flash lifetime (IMPACT_FLASH_CONFIG.lifetime = 0.08s)
       service.update(IMPACT_FLASH_CONFIG.lifetime + 0.01, mockScene);
 
-      const remainingFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
-      expect(remainingFlashes.length).toBe(0);
+      expect(combatVFXService.getImpactFlashCount()).toBe(0);
     });
 
     it('should share the same geometry reference across multiple impact flashes', () => {
@@ -1218,7 +1219,7 @@ describe('TowerCombatService', () => {
 
       service.update(2.0, mockScene);
 
-      const impactFlashes = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      const impactFlashes = combatVFXService.getImpactFlashes();
       expect(impactFlashes.length).toBeGreaterThanOrEqual(2);
 
       // Both flash meshes should share the same geometry instance (shared pool)
@@ -1233,7 +1234,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e1', e1);
       service.update(2.0, mockScene);
 
-      const flashesBefore = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      const flashesBefore = combatVFXService.getImpactFlashes();
       expect(flashesBefore.length).toBeGreaterThan(0);
       const geometryBeforeCleanup = flashesBefore[0].mesh.geometry;
 
@@ -1246,7 +1247,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e2', e2);
       service.update(2.0, mockScene);
 
-      const flashesAfter = (service as any)['impactFlashes'] as { mesh: THREE.Mesh; expiresAt: number }[];
+      const flashesAfter = combatVFXService.getImpactFlashes();
       expect(flashesAfter.length).toBeGreaterThan(0);
       const geometryAfterCleanup = flashesAfter[0].mesh.geometry;
 

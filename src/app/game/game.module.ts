@@ -4,6 +4,7 @@ import { RouterModule } from '@angular/router';
 import { GameComponent } from './game.component';
 import { GameBoardComponent } from './game-board/game-board.component';
 import { GameBoardService } from './game-board/game-board.service';
+import { CombatVFXService } from './game-board/services/combat-vfx.service';
 @NgModule({
   declarations: [
     GameComponent,
@@ -13,6 +14,6 @@ import { GameBoardService } from './game-board/game-board.service';
     CommonModule,
     RouterModule.forChild([{ path: '', component: GameComponent }])
   ],
-  providers: [GameBoardService]
+  providers: [GameBoardService, CombatVFXService]
 })
 export class GameModule {}

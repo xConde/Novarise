@@ -2,13 +2,11 @@ import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_MESH_SEGMENTS, GridNode, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
-import { BlockType } from '../models/game-board-tile';
 import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
-import { MinHeap } from '../utils/min-heap';
 import { GameModifier, ModifierEffects, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG, BOSS_CROWN_CONFIG } from '../constants/effects.constants';
-import { gridToWorld } from '../utils/coordinate-utils';
+import { PathfindingService } from './pathfinding.service';
 
 /**
  * Result returned by {@link EnemyService.damageEnemy}.
@@ -25,13 +23,15 @@ export interface DamageResult {
 export class EnemyService {
   private enemies: Map<string, Enemy> = new Map();
   private enemyCounter = 0;
-  private pathCache: Map<string, GridNode[]> = new Map();
   private modifierEffects: ModifierEffects = {};
   private activeModifiers: Set<GameModifier> = new Set();
   /** Scratch quaternion reused each frame to avoid per-enemy allocation in billboarding. */
   private billboardScratchQuat = new THREE.Quaternion();
 
-  constructor(private gameBoardService: GameBoardService) {}
+  constructor(
+    private gameBoardService: GameBoardService,
+    private pathfindingService: PathfindingService
+  ) {}
 
   /** Set active modifier effects and the raw modifier set. Called by the component when modifiers change. */
   setModifierEffects(effects: ModifierEffects, modifiers: Set<GameModifier>): void {
@@ -56,7 +56,7 @@ export class EnemyService {
     waveHealthMultiplier: number = 1,
     waveSpeedMultiplier: number = 1,
   ): Enemy | null {
-    const spawnerTiles = this.getSpawnerTiles();
+    const spawnerTiles = this.pathfindingService.getSpawnerTiles();
     if (spawnerTiles.length === 0) {
       console.warn('No spawner tiles available');
       return null;
@@ -67,7 +67,7 @@ export class EnemyService {
     const { row, col } = spawnerTile;
 
     // Find path to exit
-    const exitTiles = this.getExitTiles();
+    const exitTiles = this.pathfindingService.getExitTiles();
     if (exitTiles.length === 0) {
       console.warn('No exit tiles available');
       return null;
@@ -79,8 +79,8 @@ export class EnemyService {
     // FLYING enemies bypass terrain — use a 2-node straight-line path
     const isFlying = type === EnemyType.FLYING;
     const path = isFlying
-      ? this.buildStraightPath({ x: col, y: row }, { x: exitTile.col, y: exitTile.row })
-      : this.findPath({ x: col, y: row }, { x: exitTile.col, y: exitTile.row });
+      ? this.pathfindingService.buildStraightPath({ x: col, y: row }, { x: exitTile.col, y: exitTile.row })
+      : this.pathfindingService.findPath({ x: col, y: row }, { x: exitTile.col, y: exitTile.row });
 
     if (path.length === 0) {
       console.warn('No valid path found from spawner to exit');
@@ -89,7 +89,7 @@ export class EnemyService {
 
     // Create enemy
     const stats = ENEMY_STATS[type];
-    const worldPos = this.gridToWorldPos(row, col);
+    const worldPos = this.pathfindingService.gridToWorldPos(row, col);
 
     // FLYING enemies hover above ground
     const yPos = isFlying ? FLYING_ENEMY_HEIGHT : stats.size;
@@ -196,8 +196,8 @@ export class EnemyService {
       const nextNode = enemy.path[enemy.pathIndex + 1];
 
       // Convert grid positions to world positions
-      const currentWorld = this.gridToWorldPos(currentNode.y, currentNode.x);
-      const nextWorld = this.gridToWorldPos(nextNode.y, nextNode.x);
+      const currentWorld = this.pathfindingService.gridToWorldPos(currentNode.y, currentNode.x);
+      const nextWorld = this.pathfindingService.gridToWorldPos(nextNode.y, nextNode.x);
 
       // Calculate direction and distance
       const direction = new THREE.Vector3(
@@ -704,225 +704,21 @@ export class EnemyService {
   }
 
   /**
-   * A* pathfinding algorithm
-   */
-  private findPath(start: { x: number, y: number }, end: { x: number, y: number }): GridNode[] {
-    const cacheKey = `${start.x},${start.y}-${end.x},${end.y}`;
-    if (this.pathCache.has(cacheKey)) {
-      // Return a shallow copy to prevent cache corruption
-      return [...this.pathCache.get(cacheKey)!];
-    }
-
-    const openHeap = new MinHeap();
-    const openMap = new Map<string, GridNode>(); // key -> best node for O(1) lookup
-    const closedSet = new Set<string>();
-    const boardWidth = this.gameBoardService.getBoardWidth();
-    const boardHeight = this.gameBoardService.getBoardHeight();
-
-    // Create start node
-    const startNode: GridNode = {
-      x: start.x,
-      y: start.y,
-      g: 0,
-      h: this.heuristic(start, end),
-      f: 0
-    };
-    startNode.f = startNode.g + startNode.h;
-
-    const startKey = `${start.x},${start.y}`;
-    openHeap.insert(startNode);
-    openMap.set(startKey, startNode);
-
-    while (openHeap.size > 0) {
-      const current = openHeap.extractMin()!;
-      const currentKey = `${current.x},${current.y}`;
-
-      // Skip stale heap entries (superseded by a better path via re-insertion)
-      if (!openMap.has(currentKey) || openMap.get(currentKey) !== current) {
-        continue;
-      }
-      openMap.delete(currentKey);
-
-      // Check if we reached the goal
-      if (current.x === end.x && current.y === end.y) {
-        const path = this.reconstructPath(current);
-        this.pathCache.set(cacheKey, path);
-        return path;
-      }
-
-      closedSet.add(currentKey);
-
-      // Check all neighbors (4-directional)
-      const neighbors = [
-        { x: current.x, y: current.y - 1 }, // Up
-        { x: current.x, y: current.y + 1 }, // Down
-        { x: current.x - 1, y: current.y }, // Left
-        { x: current.x + 1, y: current.y }  // Right
-      ];
-
-      for (const neighbor of neighbors) {
-        // Check bounds
-        if (neighbor.x < 0 || neighbor.x >= boardWidth ||
-            neighbor.y < 0 || neighbor.y >= boardHeight) {
-          continue;
-        }
-
-        const neighborKey = `${neighbor.x},${neighbor.y}`;
-
-        // Check if already evaluated
-        if (closedSet.has(neighborKey)) {
-          continue;
-        }
-
-        // Check if traversable
-        const tile = this.gameBoardService.getGameBoard()[neighbor.y][neighbor.x];
-        if (!tile.isTraversable && tile.type !== BlockType.EXIT) {
-          continue;
-        }
-
-        // Calculate costs
-        const gScore = current.g + 1;
-        const existingNode = openMap.get(neighborKey);
-
-        // Skip if existing path to this neighbor is already better
-        if (existingNode && gScore >= existingNode.g) {
-          continue;
-        }
-
-        const hScore = this.heuristic(neighbor, end);
-        const newNode: GridNode = {
-          x: neighbor.x,
-          y: neighbor.y,
-          g: gScore,
-          h: hScore,
-          f: gScore + hScore,
-          parent: current
-        };
-
-        // Insert new entry; stale entries for this key are skipped on extraction
-        openMap.set(neighborKey, newNode);
-        openHeap.insert(newNode);
-      }
-    }
-
-    // No path found
-    return [];
-  }
-
-  /**
-   * Manhattan distance heuristic
-   */
-  private heuristic(a: { x: number, y: number }, b: { x: number, y: number }): number {
-    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-  }
-
-  /**
-   * Reconstruct path from end node
-   */
-  private reconstructPath(endNode: GridNode): GridNode[] {
-    const path: GridNode[] = [];
-    let current: GridNode | undefined = endNode;
-
-    while (current) {
-      path.unshift(current);
-      current = current.parent;
-    }
-
-    return path;
-  }
-
-  /**
-   * Get all spawner tiles
-   */
-  private getSpawnerTiles(): { row: number, col: number }[] {
-    const spawners: { row: number, col: number }[] = [];
-    const board = this.gameBoardService.getGameBoard();
-
-    for (let row = 0; row < board.length; row++) {
-      for (let col = 0; col < board[row].length; col++) {
-        if (board[row][col].type === BlockType.SPAWNER) {
-          spawners.push({ row, col });
-        }
-      }
-    }
-
-    return spawners;
-  }
-
-  /**
-   * Get all exit tiles
-   */
-  private getExitTiles(): { row: number, col: number }[] {
-    const exits: { row: number, col: number }[] = [];
-    const board = this.gameBoardService.getGameBoard();
-
-    for (let row = 0; row < board.length; row++) {
-      for (let col = 0; col < board[row].length; col++) {
-        if (board[row][col].type === BlockType.EXIT) {
-          exits.push({ row, col });
-        }
-      }
-    }
-
-    return exits;
-  }
-
-  /** Delegate to shared coordinate utility with current board dimensions. */
-  private gridToWorldPos(row: number, col: number): { x: number; z: number } {
-    return gridToWorld(
-      row, col,
-      this.gameBoardService.getBoardWidth(),
-      this.gameBoardService.getBoardHeight(),
-      this.gameBoardService.getTileSize()
-    );
-  }
-
-  /**
-   * Build a direct 2-node path from start to end, ignoring terrain.
-   * Used for FLYING enemies that bypass ground obstacles.
-   */
-  private buildStraightPath(
-    start: { x: number; y: number },
-    end: { x: number; y: number }
-  ): GridNode[] {
-    return [
-      { x: start.x, y: start.y, g: 0, h: 0, f: 0 },
-      { x: end.x,   y: end.y,   g: 0, h: 0, f: 0 }
-    ];
-  }
-
-  /**
    * Returns the A* path from the first spawner to the first exit as world coordinates.
-   * Used by path overlay visualization. Returns an empty array if no path exists.
+   * Delegates to PathfindingService. Used by path overlay visualization.
    */
   getPathToExit(): { x: number; z: number }[] {
-    const spawnerTiles = this.getSpawnerTiles();
-    const exitTiles = this.getExitTiles();
-    if (spawnerTiles.length === 0 || exitTiles.length === 0) return [];
-
-    const spawner = spawnerTiles[0];
-    const exit = exitTiles[0];
-    const path = this.findPath(
-      { x: spawner.col, y: spawner.row },
-      { x: exit.col, y: exit.row }
-    );
-    if (path.length === 0) return [];
-
-    return path.map(node => this.gridToWorldPos(node.y, node.x));
+    return this.pathfindingService.getPathToExit();
   }
 
   /**
-   * Clear the path cache (call when board changes)
+   * Clear the path cache (call when board changes).
+   * Delegates to PathfindingService.
    */
   clearPathCache(): void {
-    this.pathCache.clear();
+    this.pathfindingService.invalidateCache();
   }
 
-  /**
-   * Force all living enemies to recalculate their paths from their current grid position.
-   * Call after any board mutation (tower placed/sold) so enemies don't walk through new obstacles.
-   * Flying enemies are skipped (they ignore terrain).
-   */
   /**
    * Flag enemies for deferred repath on their next waypoint arrival.
    * Only flags enemies whose remaining path passes through the changed tile.
@@ -961,12 +757,12 @@ export class EnemyService {
   private executeRepath(enemy: Enemy): void {
     enemy.needsRepath = false;
 
-    const exitTiles = this.getExitTiles();
+    const exitTiles = this.pathfindingService.getExitTiles();
     if (exitTiles.length === 0) return;
     const exitTile = exitTiles[0];
 
     // Repath from the node the enemy just arrived at (gridPosition is now current)
-    const newPath = this.findPath(
+    const newPath = this.pathfindingService.findPath(
       { x: enemy.gridPosition.col, y: enemy.gridPosition.row },
       { x: exitTile.col, y: exitTile.row }
     );

@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { EnemyService } from './enemy.service';
+import { PathfindingService } from './pathfinding.service';
 import { GameBoardService } from '../game-board.service';
 import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, mergeModifierEffects } from '../models/game-modifier.model';
@@ -19,6 +20,7 @@ describe('EnemyService', () => {
 
     TestBed.configureTestingModule({
       providers: [
+        PathfindingService,
         EnemyService,
         { provide: GameBoardService, useValue: gameBoardServiceSpy }
       ]

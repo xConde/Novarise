@@ -6,13 +6,14 @@ import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
-import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y, IMPACT_FLASH_CONFIG } from '../constants/combat.constants';
+import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG } from '../constants/combat.constants';
 import { PROJECTILE_POOL_CONFIG } from '../constants/physics.constants';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { StatusEffectService } from './status-effect.service';
 import { SpatialGrid } from '../utils/spatial-grid';
 import { ObjectPool } from '../utils/object-pool';
 import { gridToWorld } from '../utils/coordinate-utils';
+import { CombatVFXService } from './combat-vfx.service';
 
 interface Projectile {
   id: string;
@@ -31,21 +32,8 @@ interface Projectile {
 /** Max trail vertices — matches PROJECTILE_CONFIG.trailLength */
 const TRAIL_MAX_VERTICES = PROJECTILE_CONFIG.trailLength;
 
-/** A chain arc line that persists for a short visual duration before removal. */
-interface ChainArc {
-  line: THREE.Line;
-  expiresAt: number; // gameTime when this arc should be removed
-}
-
-/** A brief impact flash sphere that fades and disappears. */
-interface ImpactFlash {
-  mesh: THREE.Mesh;
-  expiresAt: number;
-}
-
-/** A mortar blast zone that persists and deals DoT. */
+/** A mortar blast zone that persists and deals DoT. Mesh ownership is in CombatVFXService. */
 interface MortarZone {
-  mesh: THREE.Mesh;
   centerX: number;
   centerZ: number;
   blastRadius: number;
@@ -65,15 +53,12 @@ export interface KillInfo {
 export class TowerCombatService {
   private placedTowers: Map<string, PlacedTower> = new Map();
   private projectiles: Projectile[] = [];
-  private chainArcs: ChainArc[] = [];
   private mortarZones: MortarZone[] = [];
-  private impactFlashes: ImpactFlash[] = [];
   private projectileCounter = 0;
   private gameTime = 0;
   private spatialGrid = new SpatialGrid();
   private towerDamageMultiplier = 1;
   private projectilePool: ObjectPool<THREE.Mesh>;
-  private sharedImpactFlashGeometry: THREE.SphereGeometry | null = null;
 
   /** Applies a flat multiplier to all tower damage output. Set by the JUGGERNAUT modifier. */
   setTowerDamageMultiplier(mult: number): void {
@@ -84,7 +69,8 @@ export class TowerCombatService {
     private enemyService: EnemyService,
     private gameBoardService: GameBoardService,
     private audioService: AudioService,
-    private statusEffectService: StatusEffectService
+    private statusEffectService: StatusEffectService,
+    private combatVFXService: CombatVFXService
   ) {
     this.projectilePool = new ObjectPool<THREE.Mesh>(
       () => this.createPooledProjectileMesh(),
@@ -96,17 +82,6 @@ export class TowerCombatService {
         (mesh.material as THREE.Material).dispose();
       }
     );
-  }
-
-  private getImpactFlashGeometry(): THREE.SphereGeometry {
-    if (!this.sharedImpactFlashGeometry) {
-      this.sharedImpactFlashGeometry = new THREE.SphereGeometry(
-        IMPACT_FLASH_CONFIG.radius,
-        IMPACT_FLASH_CONFIG.segments,
-        IMPACT_FLASH_CONFIG.segments
-      );
-    }
-    return this.sharedImpactFlashGeometry;
   }
 
   /** Pre-allocate a trail BufferGeometry with fixed-size buffer for in-place updates. */
@@ -264,7 +239,7 @@ export class TowerCombatService {
 
       if (moveDistance >= dist) {
         // Hit — spawn impact flash at hit position
-        this.spawnImpactFlash(proj.mesh.position.x, proj.mesh.position.z, scene);
+        this.combatVFXService.createImpactFlash(proj.mesh.position.x, proj.mesh.position.z, scene, this.gameTime);
         // Apply damage before disposing mesh (applyDamage reads proj.mesh.position)
         const kills = this.applyDamage(proj, scene);
         killedEnemies.push(...kills);
@@ -312,42 +287,14 @@ export class TowerCombatService {
     }
     this.projectiles = survivingProjectiles;
 
-    // Expire chain arc visuals
-    const survivingArcs: ChainArc[] = [];
-    for (const arc of this.chainArcs) {
-      if (this.gameTime >= arc.expiresAt) {
-        scene.remove(arc.line);
-        arc.line.geometry.dispose();
-        (arc.line.material as THREE.Material).dispose();
-      } else {
-        survivingArcs.push(arc);
-      }
-    }
-    this.chainArcs = survivingArcs;
+    // Delegate visual expiry to CombatVFXService (arcs, flashes, zone meshes)
+    this.combatVFXService.updateVisuals(this.gameTime, scene);
 
-    // Expire impact flashes (geometry is shared — only dispose material)
-    const survivingFlashes: ImpactFlash[] = [];
-    for (const flash of this.impactFlashes) {
-      if (this.gameTime >= flash.expiresAt) {
-        scene.remove(flash.mesh);
-        (flash.mesh.material as THREE.Material).dispose();
-      } else {
-        // Fade out over lifetime
-        const remaining = flash.expiresAt - this.gameTime;
-        const pct = remaining / IMPACT_FLASH_CONFIG.lifetime;
-        (flash.mesh.material as THREE.MeshBasicMaterial).opacity = IMPACT_FLASH_CONFIG.opacity * pct;
-        survivingFlashes.push(flash);
-      }
-    }
-    this.impactFlashes = survivingFlashes;
-
-    // Update mortar zones: deal DoT and expire old zones
+    // Update mortar zones: deal DoT and expire data records (mesh expiry handled by VFX)
     const survivingZones: MortarZone[] = [];
     for (const zone of this.mortarZones) {
       if (this.gameTime >= zone.expiresAt) {
-        scene.remove(zone.mesh);
-        zone.mesh.geometry.dispose();
-        (zone.mesh.material as THREE.Material).dispose();
+        // Mesh already removed by combatVFXService.updateVisuals above
         continue;
       }
 
@@ -497,46 +444,12 @@ export class TowerCombatService {
     for (let bounce = 0; bounce <= chainCount; bounce++) {
       hitIds.add(currentTarget.id);
 
-      // Draw arc from previousPosition → currentTarget
-      const fromX = previousX;
-      const fromZ = previousZ;
-
-      const toX = currentTarget.position.x;
-      const toZ = currentTarget.position.z;
-
-      // Create zigzag lightning arc (tower → target, or target → next target)
-      {
-        const segs = CHAIN_LIGHTNING_CONFIG.zigzagSegments;
-        const jitter = CHAIN_LIGHTNING_CONFIG.zigzagJitter;
-        const arcY = GROUND_EFFECT_Y + CHAIN_LIGHTNING_CONFIG.arcHeightOffset;
-        const vertices = new Float32Array((segs + 1) * 3);
-
-        // Direction vector and perpendicular
-        const dirX = toX - fromX;
-        const dirZ = toZ - fromZ;
-        const len = Math.sqrt(dirX * dirX + dirZ * dirZ) || 1;
-        const perpX = -dirZ / len;
-        const perpZ = dirX / len;
-
-        for (let i = 0; i <= segs; i++) {
-          const t = i / segs;
-          const offset = (i === 0 || i === segs) ? 0 : (Math.random() - 0.5) * 2 * jitter;
-          vertices[i * 3]     = fromX + dirX * t + perpX * offset;
-          vertices[i * 3 + 1] = arcY;
-          vertices[i * 3 + 2] = fromZ + dirZ * t + perpZ * offset;
-        }
-
-        const arcGeom = new THREE.BufferGeometry();
-        arcGeom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-        const arcMat = new THREE.LineBasicMaterial({
-          color: stats.color,
-          transparent: true,
-          opacity: CHAIN_LIGHTNING_CONFIG.arcOpacity
-        });
-        const arc = new THREE.Line(arcGeom, arcMat);
-        scene.add(arc);
-        this.chainArcs.push({ line: arc, expiresAt: this.gameTime + CHAIN_LIGHTNING_CONFIG.arcLifetime });
-      }
+      // Delegate arc creation to CombatVFXService
+      this.combatVFXService.createChainArc(
+        previousX, previousZ,
+        currentTarget.position.x, currentTarget.position.z,
+        stats.color, scene, this.gameTime
+      );
 
       // Deal damage
       const chainResult = this.enemyService.damageEnemy(currentTarget.id, currentDamage);
@@ -670,17 +583,8 @@ export class TowerCombatService {
     const dotDuration = stats.dotDuration ?? 3;
     const dotDamage = stats.dotDamage ?? 3;
 
-    const geometry = new THREE.CircleGeometry(blastRadius, MORTAR_VISUAL_CONFIG.zoneSegments);
-    const material = new THREE.MeshBasicMaterial({
-      color: MORTAR_VISUAL_CONFIG.zoneColor,
-      transparent: true,
-      opacity: MORTAR_VISUAL_CONFIG.zoneOpacity,
-      side: THREE.DoubleSide
-    });
-    const zoneMesh = new THREE.Mesh(geometry, material);
-    zoneMesh.rotation.x = -Math.PI / 2;
-    zoneMesh.position.set(impactX, GROUND_EFFECT_Y, impactZ);
-    scene.add(zoneMesh);
+    // Delegate mesh creation to CombatVFXService
+    this.combatVFXService.createMortarZoneMesh(impactX, impactZ, blastRadius, dotDuration, scene, this.gameTime);
 
     this.audioService.playSfx('mortarExplosion');
 
@@ -706,7 +610,6 @@ export class TowerCombatService {
     }
 
     this.mortarZones.push({
-      mesh: zoneMesh,
       centerX: impactX,
       centerZ: impactZ,
       blastRadius,
@@ -782,19 +685,6 @@ export class TowerCombatService {
     return kills;
   }
 
-  private spawnImpactFlash(x: number, z: number, scene: THREE.Scene): void {
-    const geometry = this.getImpactFlashGeometry();
-    const material = new THREE.MeshBasicMaterial({
-      color: IMPACT_FLASH_CONFIG.color,
-      transparent: true,
-      opacity: IMPACT_FLASH_CONFIG.opacity
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, IMPACT_FLASH_CONFIG.spawnHeight, z);
-    scene.add(mesh);
-    this.impactFlashes.push({ mesh, expiresAt: this.gameTime + IMPACT_FLASH_CONFIG.lifetime });
-  }
-
   private removeProjectileMesh(proj: Projectile, scene: THREE.Scene): void {
     // Clean up trail
     if (proj.trail) {
@@ -828,7 +718,7 @@ export class TowerCombatService {
     return this.placedTowers;
   }
 
-  /** Disposes all Three.js objects (projectiles, arcs, flashes, zones, tower meshes), drains the projectile pool, resets status effects, and zeros out game time. Call from both `restartGame()` and `ngOnDestroy()`. */
+  /** Disposes all Three.js objects (projectiles, tower meshes), drains the projectile pool, resets status effects, delegates VFX cleanup, and zeros out game time. Call from both `restartGame()` and `ngOnDestroy()`. */
   cleanup(scene: THREE.Scene): void {
     for (const proj of this.projectiles) {
       this.removeProjectileMesh(proj, scene);
@@ -846,29 +736,8 @@ export class TowerCombatService {
       }
     });
 
-    for (const arc of this.chainArcs) {
-      scene.remove(arc.line);
-      arc.line.geometry.dispose();
-      (arc.line.material as THREE.Material).dispose();
-    }
-    this.chainArcs = [];
-
-    for (const flash of this.impactFlashes) {
-      scene.remove(flash.mesh);
-      (flash.mesh.material as THREE.Material).dispose();
-    }
-    this.impactFlashes = [];
-
-    if (this.sharedImpactFlashGeometry) {
-      this.sharedImpactFlashGeometry.dispose();
-      this.sharedImpactFlashGeometry = null;
-    }
-
-    for (const zone of this.mortarZones) {
-      scene.remove(zone.mesh);
-      zone.mesh.geometry.dispose();
-      (zone.mesh.material as THREE.Material).dispose();
-    }
+    // Delegate all VFX cleanup to CombatVFXService
+    this.combatVFXService.cleanup(scene);
     this.mortarZones = [];
 
     // Restore all status effects (slow speed, etc.)

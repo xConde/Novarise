@@ -32,6 +32,8 @@ import { ChallengeTrackingService } from './services/challenge-tracking.service'
 import { GameEndService } from './services/game-end.service';
 import { TilePricingService } from './services/tile-pricing.service';
 import { GameSessionService } from './services/game-session.service';
+import { PathfindingService } from './services/pathfinding.service';
+import { CombatVFXService } from './services/combat-vfx.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -45,6 +47,7 @@ const MOCK_MAP_STATE_SPEC = {
 describe('GameBoardComponent', () => {
   let component: GameBoardComponent;
   let fixture: ComponentFixture<GameBoardComponent>;
+  let combatVFXService: CombatVFXService;
   let gameStatsSpy: jasmine.SpyObj<GameStatsService>;
   let playerProfileSpy: jasmine.SpyObj<PlayerProfileService>;
   let damagePopupSpy: jasmine.SpyObj<DamagePopupService>;
@@ -119,8 +122,10 @@ describe('GameBoardComponent', () => {
         GameBoardService,
         MapBridgeService,
         GameStateService,
+        PathfindingService,
         EnemyService,
         StatusEffectService,
+        CombatVFXService,
         { provide: GameStatsService, useValue: gameStatsSpy },
         { provide: PlayerProfileService, useValue: playerProfileSpy },
         { provide: DamagePopupService, useValue: damagePopupSpy },
@@ -138,6 +143,7 @@ describe('GameBoardComponent', () => {
   beforeEach(() => {
     fixture = TestBed.createComponent(GameBoardComponent);
     component = fixture.componentInstance;
+    combatVFXService = TestBed.inject(CombatVFXService);
     // Don't call detectChanges here - it triggers ngOnInit which needs a canvas
   });
 
