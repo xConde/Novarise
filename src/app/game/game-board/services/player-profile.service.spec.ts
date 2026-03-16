@@ -451,6 +451,21 @@ describe('PlayerProfileService', () => {
       service.recordGameEnd(makeStats({ isVictory: true }));
       expect(service.getProfile().achievements).not.toContain('three_star_all');
     });
+
+    it('does not unlock three_star_all with non-campaign 3-star maps', () => {
+      // Complete all 16 campaign maps at 1 star
+      for (let i = 1; i <= 16; i++) {
+        const id = `campaign_${String(i).padStart(2, '0')}`;
+        recordMapWithStars(service, id, 1);
+      }
+      // Add 16 non-campaign maps with 3 stars
+      for (let i = 0; i < 16; i++) {
+        recordMapWithStars(service, `custom_map_${i}`, 3);
+      }
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      // Should NOT unlock — non-campaign 3-stars don't count
+      expect(service.getProfile().achievements).not.toContain('three_star_all');
+    });
   });
 
   // ── Combat achievements (new) ──────────────────────────────────────────────
@@ -548,16 +563,16 @@ describe('PlayerProfileService', () => {
       expect(service.getProfile().achievements).toContain('challenger_5');
     });
 
-    it('unlocks challenger_all at 16 completed challenges', () => {
-      for (let i = 0; i < 16; i++) {
+    it('unlocks challenger_all at 41 completed challenges (all challenges)', () => {
+      for (let i = 0; i < 41; i++) {
         service.recordChallengeCompleted();
       }
       service.recordGameEnd(makeStats({ isVictory: true }));
       expect(service.getProfile().achievements).toContain('challenger_all');
     });
 
-    it('does not unlock challenger_all at fewer than 16 challenges', () => {
-      for (let i = 0; i < 15; i++) {
+    it('does not unlock challenger_all at fewer than 41 challenges', () => {
+      for (let i = 0; i < 40; i++) {
         service.recordChallengeCompleted();
       }
       service.recordGameEnd(makeStats({ isVictory: true }));
@@ -917,6 +932,25 @@ describe('PlayerProfileService', () => {
       service.recordMapScore('map_2', 2000, 3, DifficultyLevel.HARD);
       expect(service.getMapScore('map_1')!.bestScore).toBe(1000);
       expect(service.getMapScore('map_2')!.bestScore).toBe(2000);
+    });
+
+    it('promotes bestStars independently of bestScore (star regression fix)', () => {
+      // First play: high score, 1 star
+      service.recordMapScore('map_1', 5000, 1, DifficultyLevel.NORMAL);
+      // Second play: lower score, but 3 stars (played more carefully)
+      service.recordMapScore('map_1', 2000, 3, DifficultyLevel.HARD);
+      const record = service.getMapScore('map_1');
+      // bestScore should stay at 5000 (first play was higher)
+      expect(record!.bestScore).toBe(5000);
+      // bestStars should promote to 3 (second play earned more stars)
+      expect(record!.bestStars).toBe(3);
+    });
+
+    it('does not save when neither score nor stars improved', () => {
+      service.recordMapScore('map_1', 5000, 3, DifficultyLevel.HARD);
+      const saveSpy = spyOn(localStorage, 'setItem');
+      service.recordMapScore('map_1', 2000, 1, DifficultyLevel.EASY);
+      expect(saveSpy).not.toHaveBeenCalled();
     });
   });
 

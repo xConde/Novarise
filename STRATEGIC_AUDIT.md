@@ -852,3 +852,22 @@ All interaction paths verified: SETUP tower placement unblocked, wave-btn pointe
 - **Sprint 14:** Campaign integration polish — next-level flow, completion state, progress display on landing page
 - **Sprint 15:** Documentation + final verification — ARCHITECTURE.md and STRATEGIC_AUDIT.md updated, full test suite verified
 - **Test count:** 1835 → 2600+ tests
+
+---
+
+## Red Team Critique — 2026-03-16
+
+### Finding 1: `recordMapScore` silently drops best stars on score regression (HIGH)
+**Location:** `player-profile.service.ts:413-425`
+**Risk:** A player 3-stars a map on replay with a slightly lower score. The entire update is skipped because the gate is `score > existing.bestScore`. The `Math.max(stars, existing.bestStars)` on line 419 only fires when the score gate passes. The 3-star result is permanently lost. This directly breaks the star-gated campaign unlock system (levels 9, 13, 15 require 12/24/30 total stars). A player could earn 3 stars repeatedly and never have them counted.
+**Fix:** Split the update into two independent checks: update `bestScore` when score improves, update `bestStars` when stars improve. Both can fire independently. Save once if either changed.
+
+### Finding 2: `challenger_all` achievement threshold is 16 but there are 41 challenges (MEDIUM)
+**Location:** `player-profile.service.ts:304-310`
+**Risk:** `condition: (p) => p.completedChallengeCount >= ALL_CAMPAIGN_MAP_COUNT` uses `ALL_CAMPAIGN_MAP_COUNT = 16`. But `CAMPAIGN_CHALLENGES` defines 41 total challenges across 16 maps. The "Challenge Master: Complete all challenges" achievement fires at 39% completion. Additionally, `completedChallengeCount` increments on every `recordChallengeCompleted()` call with no deduplication — completing the same challenge twice counts double.
+**Fix:** Replace threshold with actual challenge count from `CAMPAIGN_CHALLENGES`. Add dedup guard using a `Set<string>` of completed challenge IDs instead of a raw counter.
+
+### Finding 3: `countThreeStarMaps` counts non-campaign maps toward "Flawless" achievement (MEDIUM)
+**Location:** `player-profile.service.ts:114-116, 231-233`
+**Risk:** `countThreeStarMaps` iterates all `mapScores`, not just campaign maps. A player who 1-stars all 16 campaign levels and 3-stars 16 custom/freeplay maps satisfies the "Flawless" achievement without 3-starring any campaign map. The adjacent `totalCampaignStars` function already correctly filters by `mapId.startsWith('campaign_')`.
+**Fix:** Add a `countThreeStarCampaignMaps` function that filters by campaign prefix, use it in the `three_star_all` condition.

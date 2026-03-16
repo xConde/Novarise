@@ -28,7 +28,7 @@ const CAMPAIGN_CHAMPION_MAP_IDS: string[] = Array.from(
 const SNIPER_ELITE_KILLS_THRESHOLD = 500;
 const CHAIN_MASTER_KILLS_THRESHOLD = 300;
 const SLOW_STEADY_APPLICATIONS_THRESHOLD = 1_000;
-const TOWER_COLLECTOR_TYPE_COUNT = 6;
+export const TOWER_COLLECTOR_TYPE_COUNT = 6;
 
 // Achievement condition thresholds — endless
 const ENDLESS_ENDURANCE_WAVE = 30;
@@ -37,6 +37,7 @@ const ENDLESS_IMMORTAL_WAVE = 100;
 
 // Achievement condition thresholds — challenge
 const CHALLENGER_COMPLETIONS_THRESHOLD = 5;
+const TOTAL_CAMPAIGN_CHALLENGES = 41;
 const MODIFIER_VICTORY_THRESHOLD = 3;
 
 export type AchievementCategory = 'campaign' | 'combat' | 'endless' | 'challenge';
@@ -111,8 +112,9 @@ function allMapsCompleted(profile: PlayerProfile, mapIds: readonly string[]): bo
   return mapIds.every((id) => mapCompleted(profile, id));
 }
 
-function countThreeStarMaps(profile: PlayerProfile): number {
-  return Object.values(profile.mapScores).filter((r) => r.bestStars >= 3).length;
+function countThreeStarCampaignMaps(profile: PlayerProfile): number {
+  return Object.values(profile.mapScores)
+    .filter((r) => r.mapId.startsWith('campaign_') && r.bestStars >= 3).length;
 }
 
 function totalCampaignStars(profile: PlayerProfile): number {
@@ -221,7 +223,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: 'Perfectionist+',
     description: 'Earn 3 stars on 5 different maps',
     category: 'campaign',
-    condition: (p) => countThreeStarMaps(p) >= THREE_STAR_MAPS_THRESHOLD,
+    condition: (p) => countThreeStarCampaignMaps(p) >= THREE_STAR_MAPS_THRESHOLD,
   },
   {
     id: 'three_star_all',
@@ -229,7 +231,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: 'Earn 3 stars on all 16 campaign maps',
     category: 'campaign',
     condition: (p) => allMapsCompleted(p, CAMPAIGN_CHAMPION_MAP_IDS) &&
-      countThreeStarMaps(p) >= ALL_CAMPAIGN_MAP_COUNT,
+      countThreeStarCampaignMaps(p) >= ALL_CAMPAIGN_MAP_COUNT,
   },
 
   // ── Combat achievements (new) ──────────────────────────────────────────────
@@ -305,8 +307,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: 'Challenge Master',
     description: 'Complete all challenges',
     category: 'challenge',
-    // 16 campaign levels × challenges — condition driven by completedChallengeCount
-    condition: (p) => p.completedChallengeCount >= ALL_CAMPAIGN_MAP_COUNT,
+    // All 41 challenges across 16 campaign levels
+    condition: (p) => p.completedChallengeCount >= TOTAL_CAMPAIGN_CHALLENGES,
   },
   {
     id: 'modifier_victory',
@@ -412,14 +414,33 @@ export class PlayerProfileService {
 
   recordMapScore(mapId: string, score: number, stars: number, difficulty: DifficultyLevel): void {
     const existing = this.profile.mapScores[mapId];
-    if (!existing || score > existing.bestScore) {
+    if (!existing) {
       this.profile.mapScores[mapId] = {
         mapId,
         bestScore: score,
-        bestStars: Math.max(stars, existing?.bestStars ?? 0),
+        bestStars: stars,
         difficulty,
         completedAt: Date.now(),
       };
+      this.save();
+      return;
+    }
+
+    let changed = false;
+
+    if (score > existing.bestScore) {
+      existing.bestScore = score;
+      existing.difficulty = difficulty;
+      existing.completedAt = Date.now();
+      changed = true;
+    }
+
+    if (stars > existing.bestStars) {
+      existing.bestStars = stars;
+      changed = true;
+    }
+
+    if (changed) {
       this.save();
     }
   }

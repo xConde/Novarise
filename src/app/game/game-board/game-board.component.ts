@@ -19,7 +19,7 @@ import { ScreenShakeService } from './services/screen-shake.service';
 import { GoldPopupService } from './services/gold-popup.service';
 import { FpsCounterService } from './services/fps-counter.service';
 import { GameStatsService } from './services/game-stats.service';
-import { PlayerProfileService, GameEndStats, ACHIEVEMENTS, Achievement } from './services/player-profile.service';
+import { PlayerProfileService, GameEndStats, ACHIEVEMENTS, Achievement, TOWER_COLLECTOR_TYPE_COUNT } from './services/player-profile.service';
 import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService, MinimapEntityData, MinimapTerrainData } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
@@ -264,7 +264,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       towerKills: stats.killsByTowerType,
       modifierCount: endState.activeModifiers.size,
       usedSpecialization: this.hasSpecializationBeenUsed,
-      placedAllTowerTypes: this.challengeTowerTypesUsed.size >= 6,
+      placedAllTowerTypes: this.challengeTowerTypesUsed.size >= TOWER_COLLECTOR_TYPE_COUNT,
       slowEffectsApplied: this.statusEffectService.getSlowApplicationCount(),
     };
   }
@@ -2000,17 +2000,19 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.currentTutorialStep ? this.tutorialService.getTip(this.currentTutorialStep) : null;
   }
 
+  /** Pre-computed tutorial display steps (excludes COMPLETE) — avoids per-CD allocation. */
+  private readonly tutorialDisplaySteps = Object.values(TutorialStep).filter(s => s !== TutorialStep.COMPLETE);
+
   getTutorialStepNumber(): number {
-    const displaySteps = Object.values(TutorialStep).filter(s => s !== TutorialStep.COMPLETE);
     if (this.currentTutorialStep === TutorialStep.COMPLETE) {
-      return displaySteps.length;
+      return this.tutorialDisplaySteps.length;
     }
-    const idx = displaySteps.indexOf(this.currentTutorialStep as TutorialStep);
+    const idx = this.tutorialDisplaySteps.indexOf(this.currentTutorialStep as TutorialStep);
     return Math.max(1, idx + 1);
   }
 
   getTutorialTotalSteps(): number {
-    return Object.values(TutorialStep).filter(s => s !== TutorialStep.COMPLETE).length;
+    return this.tutorialDisplaySteps.length;
   }
 
   advanceTutorial(): void {
