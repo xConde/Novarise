@@ -919,6 +919,10 @@ export class EnemyService {
 
       if (newPath.length > 0) {
         enemy.path = newPath;
+        // Start from node 0 (enemy's current grid cell). The movement system
+        // in updateEnemies() uses world-position distance to advance, so
+        // setting pathIndex=0 is correct — the enemy is AT node 0 and will
+        // immediately begin moving toward node 1.
         enemy.pathIndex = 0;
       }
       // If no path found, enemy keeps old path — it will walk until stuck

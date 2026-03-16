@@ -7,7 +7,7 @@
 }
 
 .board-container {
-  --tower-bar-height: 7.5rem; // shared anchor: mode-indicator + tower-info-panel
+  --tower-bar-height: 9rem; // shared anchor: icon(40px) + text(48px) + padding(20px+20px) + bar-padding(20px) ≈ 148px
 
   display: flex;
   flex-direction: column;
@@ -1440,7 +1440,7 @@
 // Mobile (max-width: 480px) overrides
 @media screen and (max-width: 480px) {
   .board-container {
-    --tower-bar-height: 9rem; // 2-row tower grid at 480px
+    --tower-bar-height: 10rem; // 2-row tower grid: 2×61px + padding + gap ≈ 147px
 
     // Tower selection: switch to 3-column grid
     .tower-selection {

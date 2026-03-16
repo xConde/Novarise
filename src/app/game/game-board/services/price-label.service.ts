@@ -12,8 +12,8 @@ const LABEL_CONFIG = {
   fontFamily: 'Arial',
   fontWeight: 'bold',
   /** World-unit width/height of the sprite billboard. */
-  spriteWidth: 0.9,
-  spriteHeight: 0.4,
+  spriteWidth: 0.75,
+  spriteHeight: 0.35,
   /** Y position above the tile surface. */
   yOffset: 0.5,
   /**
