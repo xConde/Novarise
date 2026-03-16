@@ -54,9 +54,9 @@ import { TerrainGridStateLegacy } from '../../games/novarise/features/terrain-ed
 import { CampaignService } from '../../campaign/services/campaign.service';
 import { CampaignMapService } from '../../campaign/services/campaign-map.service';
 
-import { CAMPAIGN_WAVE_DEFINITIONS } from '../../campaign/waves/campaign-waves';
 import { CampaignLevel } from '../../campaign/models/campaign.model';
 import { ChallengeDefinition, getChallengesForLevel } from '../../campaign/models/challenge.model';
+import { GameSessionService } from './services/game-session.service';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -71,7 +71,7 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService]
+  providers: [EnemyService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -296,7 +296,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private campaignMapService: CampaignMapService,
     private notificationService: GameNotificationService,
     private challengeTrackingService: ChallengeTrackingService,
-    private gameEndService: GameEndService
+    private gameEndService: GameEndService,
+    private gameSessionService: GameSessionService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -350,21 +351,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     // Import editor map if it has spawn and exit points; otherwise use default board
-    if (this.mapBridge.hasEditorMap()) {
-      const state = this.mapBridge.getEditorMapState()!;
-      const legacy = state as unknown as TerrainGridStateLegacy;
-      if ((state.spawnPoints?.length > 0 || legacy.spawnPoint) && (state.exitPoints?.length > 0 || legacy.exitPoint)) {
-        const { board, width, height } = this.mapBridge.convertToGameBoard(state);
-        this.gameBoardService.importBoard(board, width, height);
-      } else {
-        this.gameBoardService.resetBoard();
-      }
-    } else {
-      this.gameBoardService.resetBoard();
-    }
+    this.importBoard();
 
     // Apply per-campaign-level wave definitions if this is a campaign map
-    this.applyCampaignWaves();
+    this.gameSessionService.applyCampaignWaves();
 
     this.initializeScene();
     this.initializeCamera();
@@ -1179,17 +1169,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.cleanupGameObjects();
 
-    // Reset services — enemyService.reset() clears counter + path cache
-    this.enemyService.reset(this.scene);
-    this.waveService.reset();
-    this.gameStateService.reset();
-    this.gameStatsService.reset();
+    // Reset all services (enemies, combat, status effects, audio, pricing, minimap, etc.)
+    this.gameSessionService.resetAllServices(this.scene);
+
+    // Reset component-only UI state
     this.scoreBreakdown = null;
     this.newlyUnlockedAchievements = [];
     this.achievementDetails = [];
-    this.gameEndService.reset();
-    this.notificationService.clear();
-    this.challengeTrackingService.reset();
     this.completedChallenges = [];
     this.lastWaveReward = 0;
     this.lastInterestEarned = 0;
@@ -1212,21 +1198,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.pathBlockedTimerId = null;
     }
 
-    if (this.mapBridge.hasEditorMap()) {
-      const state = this.mapBridge.getEditorMapState()!;
-      const legacy = state as unknown as TerrainGridStateLegacy;
-      if ((state.spawnPoints?.length > 0 || legacy.spawnPoint) && (state.exitPoints?.length > 0 || legacy.exitPoint)) {
-        const { board, width, height } = this.mapBridge.convertToGameBoard(state);
-        this.gameBoardService.importBoard(board, width, height);
-      } else {
-        this.gameBoardService.resetBoard();
-      }
-    } else {
-      this.gameBoardService.resetBoard();
-    }
+    this.importBoard();
 
     // Re-apply campaign waves after waveService.reset() (which clears custom waves)
-    this.applyCampaignWaves();
+    this.gameSessionService.applyCampaignWaves();
 
     this.renderGameBoard();
     this.addGridLines();
@@ -1244,20 +1219,22 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
 
   /**
-   * Checks if the current map is a campaign map and, if so, loads the per-level wave
-   * definitions into WaveService and updates GameStateService.maxWaves accordingly.
-   * No-op for non-campaign maps (standard 10-wave gameplay is unchanged).
-   * Called from ngOnInit() and restartGame() (after waveService.reset()).
+   * Import the editor map into the game board service, or reset to default if no valid map.
+   * Shared between ngOnInit() and restartGame().
    */
-  private applyCampaignWaves(): void {
-    const mapId = this.mapBridge.getMapId();
-    if (!mapId?.startsWith('campaign_')) return;
-
-    const waves = CAMPAIGN_WAVE_DEFINITIONS[mapId];
-    if (!waves) return;
-
-    this.waveService.setCustomWaves(waves);
-    this.gameStateService.setMaxWaves(waves.length);
+  private importBoard(): void {
+    if (this.mapBridge.hasEditorMap()) {
+      const state = this.mapBridge.getEditorMapState()!;
+      const legacy = state as unknown as TerrainGridStateLegacy;
+      if ((state.spawnPoints?.length > 0 || legacy.spawnPoint) && (state.exitPoints?.length > 0 || legacy.exitPoint)) {
+        const { board, width, height } = this.mapBridge.convertToGameBoard(state);
+        this.gameBoardService.importBoard(board, width, height);
+      } else {
+        this.gameBoardService.resetBoard();
+      }
+    } else {
+      this.gameBoardService.resetBoard();
+    }
   }
 
   /** Shared cleanup for game objects — used by both restartGame() and ngOnDestroy(). */
@@ -2004,23 +1981,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Whether the quit-confirmation sub-panel is visible inside the pause menu. */
   showQuitConfirm = false;
 
-  get isAudioMuted(): boolean {
-    return this.audioService.isMuted;
-  }
-
   onPauseOverlayClick(_event: MouseEvent): void {
     // Clicking the dark backdrop resumes the game
     this.togglePause();
-  }
-
-  toggleAudioFromPause(): void {
-    this.audioService.toggleMute();
-    this.settingsService.update({ audioMuted: this.audioService.isMuted });
-  }
-
-  setGameSpeedFromPause(speed: GameSpeed): void {
-    this.gameStateService.setSpeed(speed);
-    this.settingsService.update({ gameSpeed: speed });
   }
 
   requestQuit(): void {

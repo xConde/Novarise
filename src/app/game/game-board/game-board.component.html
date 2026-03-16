@@ -335,8 +335,8 @@
       <div class="pause-menu__settings" *ngIf="!showQuitConfirm">
         <div class="pause-setting">
           <span class="pause-setting__label">Audio</span>
-          <button class="pause-setting__btn" (click)="toggleAudioFromPause()">
-            {{ isAudioMuted ? 'Unmute' : 'Mute' }}
+          <button class="pause-setting__btn" (click)="toggleAudio()">
+            {{ audioMuted ? 'Unmute' : 'Mute' }}
           </button>
         </div>
         <div class="pause-setting">
@@ -345,7 +345,7 @@
             <button *ngFor="let speed of pauseMenuSpeeds"
                     class="pause-speed-btn"
                     [class.pause-speed-btn--active]="gameState.gameSpeed === speed"
-                    (click)="setGameSpeedFromPause(speed)">
+                    (click)="setSpeed(speed)">
               {{ speed }}x
             </button>
           </div>
