@@ -90,9 +90,9 @@
     </button>
   </div>
 
-  <!-- Wave preview panel — shown during SETUP and INTERMISSION -->
+  <!-- Wave preview + control panel — shown during SETUP and INTERMISSION -->
   <div class="wave-preview"
-       *ngIf="(gameState.phase === GamePhase.INTERMISSION || (gameState.phase === GamePhase.SETUP && gameState.wave === 0)) && wavePreview.length > 0"
+       *ngIf="gameState.phase === GamePhase.INTERMISSION || (gameState.phase === GamePhase.SETUP && gameState.wave === 0 && wavePreview.length > 0)"
        aria-label="Upcoming wave preview">
     <div class="wave-income" *ngIf="lastWaveReward > 0 || lastInterestEarned > 0" aria-live="polite">
       <span class="income-item reward" *ngIf="lastWaveReward > 0">+{{ lastWaveReward }}g reward</span>
@@ -101,7 +101,7 @@
     <div class="wave-preview-header">
       Wave {{ gameState.wave + 1 }}
     </div>
-    <ul class="wave-preview-list">
+    <ul class="wave-preview-list" *ngIf="wavePreview.length > 0">
       <li
         *ngFor="let entry of wavePreview"
         class="wave-preview-entry"
@@ -111,13 +111,9 @@
         <span class="enemy-label">{{ entry.label }}</span>
       </li>
     </ul>
-  </div>
-
-  <!-- Wave control -->
-  <div class="wave-control" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT && gameState.wave > 0">
     <button
       class="wave-btn"
-      *ngIf="gameState.phase !== GamePhase.COMBAT"
+      *ngIf="gameState.phase === GamePhase.INTERMISSION"
       (click)="startWave()"
       aria-label="Start next wave">
       <span>Next Wave</span>

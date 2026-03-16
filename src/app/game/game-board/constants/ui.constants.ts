@@ -78,6 +78,8 @@ export const TILE_EMISSIVE = {
   validPlacement: 0.35,
   /** Emissive color override for valid placement tiles (soft cyan glow). */
   validPlacementColor: 0x00ccaa,
+  /** Dimming factor for unaffordable-but-valid tiles in PLACE mode (0-1, lower = dimmer). */
+  unaffordableDimming: 0.35,
 } as const;
 
 /**

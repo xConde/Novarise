@@ -197,26 +197,27 @@
     to { opacity: 1; transform: translateX(-50%) translateY(0); }
   }
 
-  // --- Wave preview panel ---
+  // --- Wave preview + control panel ---
   .wave-preview {
     @include glass-panel(rgba(0, 0, 0, 0.82));
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, calc(-50% - 6rem));
-    min-width: 10rem;
-    padding: var(--spacing-sm) var(--spacing-md);
+    transform: translate(-50%, -50%);
+    min-width: 12rem;
+    padding: var(--spacing-md) var(--spacing-lg);
     border: var(--border-width-thin) solid var(--theme-purple-a50);
+    border-radius: var(--border-radius-lg);
     animation: scale-in 0.2s ease-out;
     z-index: var(--z-index-overlay);
     pointer-events: none;
+    text-align: center;
 
-    max-height: min(40vh, 300px);
+    max-height: min(50vh, 400px);
     overflow-y: auto;
 
     @media (max-width:768px) {
-      min-width: 8rem;
-      transform: translate(-50%, calc(-50% - 5rem));
+      min-width: 10rem;
     }
 
     .wave-income {
@@ -292,35 +293,28 @@
       text-transform: uppercase;
       letter-spacing: 0.03125rem;
     }
-  }
-
-  // --- Wave control ---
-  .wave-control {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: var(--z-index-overlay);
-    text-align: center;
 
     .wave-btn {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: var(--spacing-xs);
-      @include glass-panel(rgba(0, 0, 0, 0.85));
-      padding: var(--spacing-md) var(--spacing-xl);
-      border: var(--border-width-medium) solid rgba(255, 255, 255, 0.3);
-      border-radius: var(--border-radius-lg);
+      gap: 0.125rem;
+      width: 100%;
+      margin-top: var(--spacing-sm);
+      padding: var(--spacing-sm) var(--spacing-md);
+      background: rgba(255, 255, 255, 0.06);
+      border: var(--border-width-thin) solid rgba(255, 255, 255, 0.2);
+      border-radius: var(--border-radius-md);
       color: var(--text-color);
       font-size: var(--font-size-title);
       cursor: pointer;
+      pointer-events: auto;
       transition: all var(--transition-medium) ease;
 
       &:hover {
-        background: rgba(255, 255, 255, 0.1);
-        border-color: rgba(255, 255, 255, 0.6);
-        transform: scale(1.05);
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.5);
+        transform: scale(1.03);
       }
 
       &:active {
@@ -328,11 +322,22 @@
       }
 
       .wave-hint {
-        font-size: 0.5625rem;
+        font-size: 0.5rem;
         color: rgba(255, 255, 255, 0.3);
+        text-transform: uppercase;
+        letter-spacing: 0.05rem;
+      }
+
+      @media (max-width:768px) {
+        min-height: 2.75rem;
+      }
+
+      @media (max-width:480px) {
+        min-height: 2.75rem;
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: var(--font-size-base);
       }
     }
-
   }
 
   // --- Victory / Defeat overlay ---
@@ -1375,10 +1380,6 @@
       }
     }
 
-    // Wave control button: ensure minimum 44px tap target
-    .wave-control .wave-btn {
-      min-height: 2.75rem; // 44px
-    }
 
     // Setup panel: bottom sheet on mobile
     .setup-panel {
@@ -1504,12 +1505,6 @@
       }
     }
 
-    // Wave control button: larger tap target (min 44px touch target)
-    .wave-control .wave-btn {
-      min-height: 2.75rem; // 44px
-      padding: var(--spacing-sm) var(--spacing-lg);
-      font-size: var(--font-size-base);
-    }
 
     // Game controls: stack vertically, right side
     .game-controls {

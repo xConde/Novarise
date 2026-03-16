@@ -616,6 +616,36 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
 
+    // Second pass: dim heatmap for unaffordable-but-valid tiles
+    for (let row = 0; row < board.length; row++) {
+      for (let col = 0; col < board[row].length; col++) {
+        const tile = board[row][col];
+        if (tile.type !== BlockType.BASE || !tile.isPurchasable || tile.towerType !== null) continue;
+
+        const key = `${row}-${col}`;
+        if (this.highlightedTiles.has(key)) continue; // already highlighted as affordable
+        const mesh = this.tileMeshes.get(key);
+        if (!mesh) continue;
+        if (this.selectedTile?.row === row && this.selectedTile?.col === col) continue;
+
+        const priceInfo = this.getTileTowerCost(this.selectedTowerType!, row, col);
+        const material = mesh.material as THREE.MeshStandardMaterial;
+        mesh.userData['origEmissive'] = TILE_EMISSIVE.defaultColor;
+        mesh.userData['origEmissiveIntensity'] = TILE_EMISSIVE.base;
+
+        // Apply dimmed heatmap — same color but at reduced intensity
+        const { color, intensity } = this.interpolateHeatmap(priceInfo.strategicMultiplier);
+        const dim = TILE_EMISSIVE.unaffordableDimming;
+        material.emissive.setRGB(color.r * dim, color.g * dim, color.b * dim);
+        material.emissiveIntensity = intensity * dim;
+        mesh.userData['heatmapR'] = color.r * dim;
+        mesh.userData['heatmapG'] = color.g * dim;
+        mesh.userData['heatmapB'] = color.b * dim;
+        mesh.userData['heatmapIntensity'] = intensity * dim;
+        this.highlightedTiles.add(key);
+      }
+    }
+
     // Show floating % labels above highlighted tiles
     if (this.highlightedTiles.size > 0) {
       const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
