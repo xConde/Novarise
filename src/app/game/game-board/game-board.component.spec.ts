@@ -981,6 +981,9 @@ describe('GameBoardComponent', () => {
       (component as any).selectedTowerInfo = fakeTower;
       // Stub showRangePreview to avoid Three.js canvas crash
       spyOn(component as any, 'showRangePreview');
+      // Stub tilePricingService to avoid board-not-initialized crash
+      const tilePricingService = (component as any).tilePricingService;
+      spyOn(tilePricingService, 'getStrategicValue').and.returnValue(0);
       (component as any).refreshTowerInfoPanel();
 
       expect(component.upgradePreview).toBeTruthy();
@@ -995,6 +998,9 @@ describe('GameBoardComponent', () => {
       };
       (component as any).selectedTowerInfo = fakeTower;
       spyOn(component as any, 'showRangePreview');
+      // Stub tilePricingService to avoid board-not-initialized crash
+      const tilePricingService = (component as any).tilePricingService;
+      spyOn(tilePricingService, 'getStrategicValue').and.returnValue(0);
       (component as any).refreshTowerInfoPanel();
 
       // L2→L3 requires specialization choice, no generic preview
@@ -1009,6 +1015,9 @@ describe('GameBoardComponent', () => {
       };
       (component as any).selectedTowerInfo = fakeTower;
       spyOn(component as any, 'showRangePreview');
+      // Stub tilePricingService to avoid board-not-initialized crash
+      const tilePricingService = (component as any).tilePricingService;
+      spyOn(tilePricingService, 'getStrategicValue').and.returnValue(0);
       (component as any).refreshTowerInfoPanel();
 
       expect(component.upgradePreview).toBeNull();

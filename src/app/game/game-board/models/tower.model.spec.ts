@@ -1,4 +1,4 @@
-import { TowerType, TowerSpecialization, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, TOWER_CONFIGS, getEffectiveStats } from './tower.model';
+import { TowerType, TowerSpecialization, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, TOWER_CONFIGS, getEffectiveStats, getUpgradeCost, UPGRADE_COST_CONFIG, MAX_TOWER_LEVEL } from './tower.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
 
 describe('Tower Model', () => {
@@ -129,6 +129,68 @@ describe('Tower Model', () => {
     it('Chain Tesla description mentions burns', () => {
       const spec = TOWER_SPECIALIZATIONS[TowerType.CHAIN][TowerSpecialization.ALPHA];
       expect(spec.description.toLowerCase()).toContain('burn');
+    });
+  });
+
+  describe('getUpgradeCost', () => {
+    it('returns base upgrade cost when tileStrategic is 0', () => {
+      const cost = getUpgradeCost(TowerType.BASIC, 1);
+      const expected = Math.round(TOWER_CONFIGS[TowerType.BASIC].cost * (UPGRADE_COST_CONFIG.baseMultiplier + 1 * UPGRADE_COST_CONFIG.levelScale));
+      expect(cost).toBe(expected);
+    });
+
+    it('returns Infinity when at max level', () => {
+      expect(getUpgradeCost(TowerType.BASIC, MAX_TOWER_LEVEL)).toBe(Infinity);
+    });
+
+    it('returns Infinity when level is 0', () => {
+      expect(getUpgradeCost(TowerType.BASIC, 0)).toBe(Infinity);
+    });
+
+    it('scales cost by tileStrategic value', () => {
+      const scaledCost = getUpgradeCost(TowerType.BASIC, 1, 1, 0.5);
+      const expected = Math.round(TOWER_CONFIGS[TowerType.BASIC].cost * (UPGRADE_COST_CONFIG.baseMultiplier + 1 * UPGRADE_COST_CONFIG.levelScale) * 1 * 1.5);
+      expect(scaledCost).toBe(expected);
+    });
+
+    it('tileStrategic=1 doubles the upgrade cost', () => {
+      const maxCost = getUpgradeCost(TowerType.BASIC, 1, 1, 1.0);
+      const expected = Math.round(TOWER_CONFIGS[TowerType.BASIC].cost * (UPGRADE_COST_CONFIG.baseMultiplier + 1 * UPGRADE_COST_CONFIG.levelScale) * 1 * 2.0);
+      expect(maxCost).toBe(expected);
+    });
+
+    it('tileStrategic default parameter is backward compatible', () => {
+      const withDefault = getUpgradeCost(TowerType.SNIPER, 2);
+      const withExplicit = getUpgradeCost(TowerType.SNIPER, 2, 1, 0);
+      expect(withDefault).toBe(withExplicit);
+    });
+
+    it('costMultiplier and tileStrategic combine multiplicatively', () => {
+      const cost = getUpgradeCost(TowerType.BASIC, 1, 2.0, 0.5);
+      const expected = Math.round(TOWER_CONFIGS[TowerType.BASIC].cost * (UPGRADE_COST_CONFIG.baseMultiplier + 1 * UPGRADE_COST_CONFIG.levelScale) * 2.0 * 1.5);
+      expect(cost).toBe(expected);
+    });
+
+    it('L2 upgrade costs more than L1 upgrade', () => {
+      const l1Cost = getUpgradeCost(TowerType.BASIC, 1);
+      const l2Cost = getUpgradeCost(TowerType.BASIC, 2);
+      expect(l2Cost).toBeGreaterThan(l1Cost);
+    });
+
+    it('all tower types return finite costs for valid levels', () => {
+      const types = Object.values(TowerType) as TowerType[];
+      types.forEach(type => {
+        for (let level = 1; level < MAX_TOWER_LEVEL; level++) {
+          expect(getUpgradeCost(type, level)).toBeLessThan(Infinity);
+          expect(getUpgradeCost(type, level)).toBeGreaterThan(0);
+        }
+      });
+    });
+
+    it('negative tileStrategic reduces cost below base', () => {
+      const baseCost = getUpgradeCost(TowerType.BASIC, 1, 1, 0);
+      const reducedCost = getUpgradeCost(TowerType.BASIC, 1, 1, -0.2);
+      expect(reducedCost).toBeLessThan(baseCost);
     });
   });
 });

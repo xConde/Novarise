@@ -782,3 +782,24 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Step 3: Full test suite green (1839/1839 hard gate)
 - [x] Step 4: Production build passes — CSS trimmed to 39.83kb (below 40kb error budget)
 - [x] Step 5: Push to remote + update PR (#23)
+
+## Red Team Critique — 2026-03-15 (Pricing System v2)
+
+### Finding 1: Heatmap gradient extrapolation for strategic values > 0.75 (CRITICAL)
+**Location:** `game-board.component.ts:661` (`interpolateHeatmap`)
+**Risk:** Sprint 5 retuned `HEATMAP_GRADIENT` stops to end at 0.75, but `interpolateHeatmap()` clamps its input to `Math.min(1, value)`. The first-pass strategic computation (`computeStrategicValues`) caps values at `Math.min(1, ...)`, not 0.75. A choke tile that disconnects the path (bfsDelta=1.0) near a spawner can reach strategic value ~0.93 without any nearby towers. When this value enters `interpolateHeatmap()`:
+- The bracket-finding loop fails (no adjacent stops span > 0.75)
+- Falls back to `lower=stops[0]` (0.00), `upper=stops[4]` (0.75)
+- Computes `t = (0.93 - 0.00) / 0.75 = 1.24` — extrapolation
+- RGB channels exceed 1.0, producing incorrect bright/white tiles
+**Fix:** Clamp interpolation input to the last gradient stop value: `Math.min(stops[stops.length - 1][0], value)` instead of `Math.min(1, value)`. Values > 0.75 render as the hottest color (red) rather than extrapolating.
+
+### Finding 2: Dead "Inspect" code path in mode indicator (LOW)
+**Location:** `game-board.component.html:364-366`
+**Risk:** Sprint 8 changed the mode indicator `*ngIf` to require `isPlaceMode`, but the inner content still has a ternary: `isPlaceMode ? tower : 'Inspect'`. Since the element is only rendered when `isPlaceMode` is true, the "Inspect" branch and `.inspect-mode` class can never activate. Dead code that wastes template evaluation and confuses readers.
+**Fix:** Replace the ternary with the tower name directly. Remove `.inspect-mode` class binding and related CSS. Simplify the `aria-label` binding.
+
+### Finding 3: `applyClusterBonuses` iterates and mutates same Map (LOW)
+**Location:** `tile-pricing.service.ts:280-308` (`applyClusterBonuses`)
+**Risk:** The method iterates `this.strategicCache` while calling `.set()` on existing keys. Per ES2015 Map spec, modifying an existing key during `for...of` is safe (no new entries added, iteration visits each key once in insertion order). However, the pattern is fragile — a future change that adds new cache entries during the loop would cause non-deterministic behavior. Not a bug today, but a maintenance hazard.
+**Fix:** Defer — document the iteration safety invariant inline. If the method grows, refactor to collect updates in a separate array and apply after iteration.

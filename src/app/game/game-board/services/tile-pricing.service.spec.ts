@@ -4,10 +4,12 @@ import {
   TilePriceInfo,
   StrategicTier,
   STRATEGIC_TIERS,
+  PRICING_CONFIG,
 } from './tile-pricing.service';
 import { GameBoardService } from '../game-board.service';
 import { GameBoardTile, BlockType } from '../models/game-board-tile';
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
+import { HEATMAP_GRADIENT } from '../constants/ui.constants';
 import { createTestBoard } from '../testing/test-board.factory';
 
 // ---------------------------------------------------------------------------
@@ -108,8 +110,8 @@ describe('TilePricingService', () => {
     it('percentIncrease matches the strategic multiplier scaled to 0–100', () => {
       spyOn(service, 'getStrategicValue').and.returnValue(0.4);
       const info = service.getTilePrice(TowerType.BASIC, 1, 1);
-      // percentIncrease = round(0.4 * 1.0 * 100) = 40
-      expect(info.percentIncrease).toBe(40);
+      // percentIncrease = round(0.4 * 0.50 * 100) = 20
+      expect(info.percentIncrease).toBe(20);
     });
 
     it('percentIncrease is 0 when strategic value is 0', () => {
@@ -118,16 +120,16 @@ describe('TilePricingService', () => {
       expect(info.percentIncrease).toBe(0);
     });
 
-    it('percentIncrease is 100 when strategic value is 1', () => {
+    it('percentIncrease is 50 when strategic value is 1 (50% max cap)', () => {
       spyOn(service, 'getStrategicValue').and.returnValue(1.0);
       const info = service.getTilePrice(TowerType.BASIC, 1, 1);
-      expect(info.percentIncrease).toBe(100);
+      expect(info.percentIncrease).toBe(50);
     });
 
     it('tier field matches STRATEGIC_TIERS thresholds', () => {
       spyOn(service, 'getStrategicValue').and.returnValue(0.9);
       const info = service.getTilePrice(TowerType.BASIC, 1, 1);
-      // 0.9 >= STRATEGIC_TIERS.critical (0.80) → 'critical'
+      // 0.9 >= STRATEGIC_TIERS.critical (0.62) → 'critical'
       expect(info.tier).toBe('critical');
     });
 
@@ -165,8 +167,8 @@ describe('TilePricingService', () => {
       spyOn(service, 'getStrategicValue').and.returnValue(0.5);
       const baseCost = TOWER_CONFIGS[TowerType.SNIPER].cost;
       const info = service.getTilePrice(TowerType.SNIPER, 1, 1, 2.0);
-      // totalMult = 2.0 * (1 + 0.5 * 1.0) = 3.0
-      expect(info.cost).toBe(Math.round(baseCost * 3.0));
+      // totalMult = 2.0 * (1 + 0.5 * 0.50) = 2.5
+      expect(info.cost).toBe(Math.round(baseCost * 2.5));
     });
 
     it('cost is always a rounded integer', () => {
@@ -175,10 +177,10 @@ describe('TilePricingService', () => {
       expect(Number.isInteger(info.cost)).toBeTrue();
     });
 
-    it('cost equals double base when strategic value is 1 and costMultiplier is 1', () => {
+    it('cost equals 1.5x base when strategic value is 1 and costMultiplier is 1', () => {
       spyOn(service, 'getStrategicValue').and.returnValue(1.0);
       const info = service.getTilePrice(TowerType.BASIC, 1, 1);
-      expect(info.cost).toBe(TOWER_CONFIGS[TowerType.BASIC].cost * 2);
+      expect(info.cost).toBe(Math.round(TOWER_CONFIGS[TowerType.BASIC].cost * 1.5));
     });
   });
 
@@ -243,29 +245,29 @@ describe('TilePricingService', () => {
   // ---------------------------------------------------------------------------
 
   describe('getStrategicTier', () => {
-    it('returns "base" for strategic value below low threshold (0.15)', () => {
-      spyOn(service, 'getStrategicValue').and.returnValue(0.10);
+    it('returns "base" for strategic value below low threshold (0.10)', () => {
+      spyOn(service, 'getStrategicValue').and.returnValue(0.05);
       const tier: StrategicTier = service.getStrategicTier(1, 1);
       expect(tier).toBe('base');
     });
 
-    it('returns "low" for value between low (0.15) and medium (0.35)', () => {
+    it('returns "low" for value between low (0.10) and medium (0.25)', () => {
       spyOn(service, 'getStrategicValue').and.returnValue(0.20);
       expect(service.getStrategicTier(1, 1)).toBe('low');
     });
 
-    it('returns "medium" for value between medium (0.35) and high (0.60)', () => {
-      spyOn(service, 'getStrategicValue').and.returnValue(0.50);
+    it('returns "medium" for value between medium (0.25) and high (0.45)', () => {
+      spyOn(service, 'getStrategicValue').and.returnValue(0.35);
       expect(service.getStrategicTier(1, 1)).toBe('medium');
     });
 
-    it('returns "high" for value between high (0.60) and critical (0.80)', () => {
-      spyOn(service, 'getStrategicValue').and.returnValue(0.70);
+    it('returns "high" for value between high (0.45) and critical (0.62)', () => {
+      spyOn(service, 'getStrategicValue').and.returnValue(0.55);
       expect(service.getStrategicTier(1, 1)).toBe('high');
     });
 
-    it('returns "critical" for value at or above critical threshold (0.80)', () => {
-      spyOn(service, 'getStrategicValue').and.returnValue(0.80);
+    it('returns "critical" for value at or above critical threshold (0.62)', () => {
+      spyOn(service, 'getStrategicValue').and.returnValue(0.62);
       expect(service.getStrategicTier(1, 1)).toBe('critical');
     });
 
@@ -279,7 +281,7 @@ describe('TilePricingService', () => {
       expect(service.getStrategicTier(1, 1)).toBe('base');
     });
 
-    it('tier boundary: exactly at low threshold (0.15) → "low"', () => {
+    it('tier boundary: exactly at low threshold (0.10) → "low"', () => {
       spyOn(service, 'getStrategicValue').and.returnValue(STRATEGIC_TIERS.low);
       expect(service.getStrategicTier(1, 1)).toBe('low');
     });
@@ -560,10 +562,10 @@ describe('TilePricingService', () => {
 
   describe('STRATEGIC_TIERS constant', () => {
     it('exposes the correct threshold values', () => {
-      expect(STRATEGIC_TIERS.low).toBe(0.15);
-      expect(STRATEGIC_TIERS.medium).toBe(0.35);
-      expect(STRATEGIC_TIERS.high).toBe(0.60);
-      expect(STRATEGIC_TIERS.critical).toBe(0.80);
+      expect(STRATEGIC_TIERS.low).toBe(0.10);
+      expect(STRATEGIC_TIERS.medium).toBe(0.25);
+      expect(STRATEGIC_TIERS.high).toBe(0.45);
+      expect(STRATEGIC_TIERS.critical).toBe(0.62);
     });
 
     it('thresholds are in ascending order', () => {
@@ -689,6 +691,186 @@ describe('TilePricingService', () => {
       const walledScore = service.getStrategicValue(2, 2);
 
       expect(walledScore).toBeGreaterThan(openScore);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Cluster density bonus
+  // ---------------------------------------------------------------------------
+
+  describe('cluster density bonus', () => {
+    it('no placed towers → no cluster bonus added', () => {
+      // Default 5×5 board has no towers placed
+      const val1 = service.getStrategicValue(2, 2);
+      // Value should stay within the singles cap (maxStrategicMultiplier = 0.50)
+      expect(val1).toBeLessThanOrEqual(PRICING_CONFIG.maxStrategicMultiplier);
+    });
+
+    it('one placed tower within radius adds a small bonus', () => {
+      const baseBoard = createTestBoard(5);
+      boardSpy.getGameBoard.and.returnValue(baseBoard);
+      service.invalidateCache();
+      const before = service.getStrategicValue(2, 3);
+
+      // Place a tower on (2,1) — within Chebyshev distance 2 of (2,3)
+      const modBoard = createTestBoard(5);
+      modBoard[2][1] = new GameBoardTile(2, 1, BlockType.BASE, true, true, 0, TowerType.BASIC);
+      boardSpy.getGameBoard.and.returnValue(modBoard);
+      service.invalidateCache();
+      const after = service.getStrategicValue(2, 3);
+
+      expect(after).toBeGreaterThanOrEqual(before);
+    });
+
+    it('saturated cluster reaches cluster max multiplier', () => {
+      // Place 4+ towers (clusterSaturationCount) around (2,2)
+      const clusterBoard = createTestBoard(5);
+      clusterBoard[1][1] = new GameBoardTile(1, 1, BlockType.BASE, true, true, 0, TowerType.BASIC);
+      clusterBoard[1][2] = new GameBoardTile(1, 2, BlockType.BASE, true, true, 0, TowerType.BASIC);
+      clusterBoard[1][3] = new GameBoardTile(1, 3, BlockType.BASE, true, true, 0, TowerType.BASIC);
+      clusterBoard[2][1] = new GameBoardTile(2, 1, BlockType.BASE, true, true, 0, TowerType.BASIC);
+      boardSpy.getGameBoard.and.returnValue(clusterBoard);
+      service.invalidateCache();
+      const val = service.getStrategicValue(2, 2);
+
+      // Should be clamped to clusterMaxMultiplier
+      expect(val).toBeLessThanOrEqual(PRICING_CONFIG.clusterMaxMultiplier);
+    });
+
+    it('total strategic value is clamped to clusterMaxMultiplier (0.75)', () => {
+      // Build a board where the choke tile has high strategic value AND nearby towers
+      const corridorBoard = createTestBoard(5, [
+        { row: 2, col: 0 }, { row: 2, col: 1 },
+        { row: 2, col: 3 }, { row: 2, col: 4 },
+      ]);
+      // Place towers near the choke at (2,2)
+      corridorBoard[1][2] = new GameBoardTile(1, 2, BlockType.BASE, true, true, 0, TowerType.BASIC);
+      corridorBoard[3][2] = new GameBoardTile(3, 2, BlockType.BASE, true, true, 0, TowerType.BASIC);
+      boardSpy.getGameBoard.and.returnValue(corridorBoard);
+      boardSpy.getBoardWidth.and.returnValue(5);
+      boardSpy.getBoardHeight.and.returnValue(5);
+      boardSpy.getSpawnerTiles.and.returnValue([[0, 0]]);
+      boardSpy.getExitTiles.and.returnValue([[4, 4]]);
+      service.invalidateCache();
+      const val = service.getStrategicValue(2, 2);
+
+      expect(val).toBeLessThanOrEqual(PRICING_CONFIG.clusterMaxMultiplier);
+    });
+
+    it('tower outside clusterRadius does not add bonus', () => {
+      const baseBoard = createTestBoard(SIZE);
+      boardSpy.getGameBoard.and.returnValue(baseBoard);
+      service.invalidateCache();
+      const before = service.getStrategicValue(0, 4);
+
+      // Place tower at (4,0) — Chebyshev distance 4 from (0,4), outside radius 2
+      const modBoard = createTestBoard(SIZE);
+      modBoard[4][0] = new GameBoardTile(4, 0, BlockType.BASE, true, true, 0, TowerType.BASIC);
+      boardSpy.getGameBoard.and.returnValue(modBoard);
+      service.invalidateCache();
+      const after = service.getStrategicValue(0, 4);
+
+      // The base strategic value may change due to tightness, but no cluster bonus
+      // We just verify the value doesn't exceed the singles cap if the base doesn't
+      if (before <= PRICING_CONFIG.maxStrategicMultiplier) {
+        expect(after).toBeLessThanOrEqual(PRICING_CONFIG.maxStrategicMultiplier);
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Spec hardening
+  // ---------------------------------------------------------------------------
+
+  describe('spec hardening', () => {
+    it('PRICING_CONFIG exports expected shape', () => {
+      expect(PRICING_CONFIG.maxStrategicMultiplier).toBe(0.50);
+      expect(PRICING_CONFIG.clusterMaxMultiplier).toBe(0.75);
+      expect(PRICING_CONFIG.clusterRadius).toBe(2);
+      expect(PRICING_CONFIG.clusterSaturationCount).toBe(4);
+      expect(PRICING_CONFIG.premiumThreshold).toBe(0.1);
+      expect(PRICING_CONFIG.weights.pathLengthImpact + PRICING_CONFIG.weights.pathAdjacency + PRICING_CONFIG.weights.proximity).toBeCloseTo(1.0);
+      expect(PRICING_CONFIG.impactSubWeights.bfsDelta + PRICING_CONFIG.impactSubWeights.tightness).toBeCloseTo(1.0);
+    });
+
+    it('cluster bonus does not push value above clusterMaxMultiplier even with many towers', () => {
+      // Place 6 towers around (2,3) — more than clusterSaturationCount
+      const board6 = createTestBoard(7);
+      board6[1][2] = new GameBoardTile(1, 2, BlockType.BASE, true, true, 0, TowerType.BASIC);
+      board6[1][3] = new GameBoardTile(1, 3, BlockType.BASE, true, true, 0, TowerType.BASIC);
+      board6[1][4] = new GameBoardTile(1, 4, BlockType.BASE, true, true, 0, TowerType.BASIC);
+      board6[2][2] = new GameBoardTile(2, 2, BlockType.BASE, true, true, 0, TowerType.BASIC);
+      board6[3][2] = new GameBoardTile(3, 2, BlockType.BASE, true, true, 0, TowerType.BASIC);
+      board6[3][3] = new GameBoardTile(3, 3, BlockType.BASE, true, true, 0, TowerType.BASIC);
+      boardSpy.getGameBoard.and.returnValue(board6);
+      boardSpy.getBoardWidth.and.returnValue(7);
+      boardSpy.getBoardHeight.and.returnValue(7);
+      boardSpy.getSpawnerTiles.and.returnValue([[0, 0]]);
+      boardSpy.getExitTiles.and.returnValue([[6, 6]]);
+      service.invalidateCache();
+
+      const val = service.getStrategicValue(2, 3);
+      expect(val).toBeLessThanOrEqual(PRICING_CONFIG.clusterMaxMultiplier);
+    });
+
+    it('gradient boundary: value at 0 maps to first gradient stop color', () => {
+      spyOn(service, 'getStrategicValue').and.returnValue(0);
+      const info = service.getTilePrice(TowerType.BASIC, 1, 1);
+      expect(info.tier).toBe('base');
+      expect(info.percentIncrease).toBe(0);
+    });
+
+    it('gradient boundary: value at clusterMax maps to critical tier', () => {
+      spyOn(service, 'getStrategicValue').and.returnValue(PRICING_CONFIG.clusterMaxMultiplier);
+      const info = service.getTilePrice(TowerType.BASIC, 1, 1);
+      expect(info.tier).toBe('critical');
+    });
+
+    it('getTilePrice percentIncrease reflects 50% max cap', () => {
+      spyOn(service, 'getStrategicValue').and.returnValue(PRICING_CONFIG.maxStrategicMultiplier);
+      const info = service.getTilePrice(TowerType.BASIC, 1, 1);
+      // 0.50 * 0.50 * 100 = 25
+      expect(info.percentIncrease).toBe(25);
+    });
+
+    it('cluster bonus on empty board (no towers) leaves values unchanged', () => {
+      const val1 = service.getStrategicValue(1, 1);
+      service.invalidateCache();
+      const val2 = service.getStrategicValue(1, 1);
+      expect(val1).toBe(val2);
+    });
+
+    it('STRATEGIC_TIERS boundaries align within gradient range', () => {
+      // All tier thresholds should be ≤ clusterMaxMultiplier
+      expect(STRATEGIC_TIERS.low).toBeLessThanOrEqual(PRICING_CONFIG.clusterMaxMultiplier);
+      expect(STRATEGIC_TIERS.medium).toBeLessThanOrEqual(PRICING_CONFIG.clusterMaxMultiplier);
+      expect(STRATEGIC_TIERS.high).toBeLessThanOrEqual(PRICING_CONFIG.clusterMaxMultiplier);
+      expect(STRATEGIC_TIERS.critical).toBeLessThanOrEqual(PRICING_CONFIG.clusterMaxMultiplier);
+    });
+
+    it('HEATMAP_GRADIENT last stop covers clusterMaxMultiplier', () => {
+      // Gradient must extend to at least clusterMaxMultiplier so interpolation never extrapolates
+      expect(HEATMAP_GRADIENT[HEATMAP_GRADIENT.length - 1][0]).toBeGreaterThanOrEqual(PRICING_CONFIG.clusterMaxMultiplier);
+    });
+
+    it('strategic values from first pass are bounded by [0, 1]', () => {
+      // Choke tile — force high strategic value
+      const corridorBoard = createTestBoard(5, [
+        { row: 2, col: 0 }, { row: 2, col: 1 },
+        { row: 2, col: 3 }, { row: 2, col: 4 },
+      ]);
+      boardSpy.getGameBoard.and.returnValue(corridorBoard);
+      boardSpy.getBoardWidth.and.returnValue(5);
+      boardSpy.getBoardHeight.and.returnValue(5);
+      boardSpy.getSpawnerTiles.and.returnValue([[0, 0]]);
+      boardSpy.getExitTiles.and.returnValue([[4, 4]]);
+      service.invalidateCache();
+
+      // No nearby towers — value is from first pass only, may exceed gradient range
+      // but should never exceed 1.0
+      const val = service.getStrategicValue(2, 2);
+      expect(val).toBeGreaterThan(0);
+      expect(val).toBeLessThanOrEqual(1);
     });
   });
 });

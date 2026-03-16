@@ -301,7 +301,7 @@
         [class.unaffordable]="!gameState || gameState.gold < selectedTowerUpgradeCost"
         (click)="upgradeTower()"
         aria-label="Upgrade tower">
-        Upgrade ({{ selectedTowerUpgradeCost }}g)
+        Upgrade ({{ selectedTowerUpgradeCost }}g)<span class="upgrade-tile-percent" *ngIf="selectedTowerUpgradePercent > 0"> +{{ selectedTowerUpgradePercent }}%</span>
       </button>
       <span class="max-level-badge" *ngIf="selectedTowerInfo.level >= MAX_TOWER_LEVEL">
         {{ selectedTowerInfo.specialization ? (selectedTowerInfo.type | titlecase) + ' — ' + specLabel(selectedTowerInfo) : 'MAX' }}
@@ -332,7 +332,7 @@
   </div>
 
   <!-- Tower selection -->
-  <div class="tower-selection" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT && gameState.wave > 0">
+  <div class="tower-selection" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
     <button
       *ngFor="let tower of towerTypes"
       class="tower-btn"
@@ -359,15 +359,15 @@
 
   <!-- Interaction mode indicator -->
   <div class="mode-indicator"
-       *ngIf="gameState.wave > 0 && gameState.phase === GamePhase.COMBAT"
+       *ngIf="isPlaceMode && gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT"
        aria-live="polite"
-       [attr.aria-label]="isPlaceMode ? 'Placing ' + (selectedTowerType | titlecase) + ' tower' : 'Inspect mode'">
-    <span class="mode-label" [class.place-mode]="isPlaceMode" [class.inspect-mode]="!isPlaceMode">
-      {{ isPlaceMode ? (selectedTowerType | titlecase) : 'Inspect' }}
+       [attr.aria-label]="'Placing ' + (selectedTowerType | titlecase) + ' tower'">
+    <span class="mode-label place-mode">
+      {{ selectedTowerType | titlecase }}
     </span>
-    <span class="mode-cost" *ngIf="isPlaceMode && hoveredTileCost > 0">{{ hoveredTileCost }}g</span>
-    <span class="mode-percent" *ngIf="isPlaceMode && hoveredTilePercent > 0">+{{ hoveredTilePercent }}%</span>
-    <span class="mode-hint" *ngIf="isPlaceMode">Right-click to cancel</span>
+    <span class="mode-cost" *ngIf="hoveredTileCost > 0">{{ hoveredTileCost }}g</span>
+    <span class="mode-percent" *ngIf="hoveredTilePercent > 0">+{{ hoveredTilePercent }}%</span>
+    <span class="mode-hint">Right-click to cancel</span>
   </div>
 
   <!-- Help overlay -->

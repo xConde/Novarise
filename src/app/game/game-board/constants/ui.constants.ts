@@ -100,10 +100,10 @@ export const HEATMAP_COLORS = {
  */
 export const HEATMAP_GRADIENT: ReadonlyArray<readonly [number, number, number, number, number]> = [
   [0.00, 0x22 / 255, 0xcc / 255, 0x66 / 255, 0.30],  // Green
-  [0.20, 0x88 / 255, 0xcc / 255, 0x22 / 255, 0.35],  // Yellow-green
-  [0.40, 0xcc / 255, 0xaa / 255, 0x00 / 255, 0.40],  // Gold
-  [0.65, 0xdd / 255, 0x66 / 255, 0x00 / 255, 0.45],  // Orange
-  [1.00, 0xdd / 255, 0x22 / 255, 0x00 / 255, 0.55],  // Red — extends to max strategic value
+  [0.15, 0x88 / 255, 0xcc / 255, 0x22 / 255, 0.35],  // Yellow-green
+  [0.35, 0xcc / 255, 0xaa / 255, 0x00 / 255, 0.40],  // Gold
+  [0.55, 0xdd / 255, 0x66 / 255, 0x00 / 255, 0.45],  // Orange
+  [0.75, 0xdd / 255, 0x22 / 255, 0x00 / 255, 0.55],  // Red — cluster-capped max
 ] as const;
 
 export const SHIELD_VISUAL_CONFIG = {

@@ -7,70 +7,58 @@ import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Maximum strategic multiplier applied on top of base cost (1.0 = up to 2× cost). */
-const MAX_STRATEGIC_MULTIPLIER = 1.0;
-
 /**
- * Weight factors for each pricing component.
- * Must sum to 1.0.
+ * Consolidated pricing configuration.
+ *
+ * - maxStrategicMultiplier: singles cap — maximum strategic multiplier applied on top
+ *   of base cost (0.50 = up to 1.5× cost for an isolated tile).
+ * - clusterMaxMultiplier: upper cap when a tile is in a dense tower cluster
+ *   (cluster bonus can push the value above the singles cap, up to this limit).
+ * - clusterRadius: Chebyshev distance within which placed towers count as "nearby"
+ *   for the cluster density pass.
+ * - clusterSaturationCount: number of nearby towers needed to reach full cluster bonus.
+ * - premiumThreshold: strategic value above which isPremium is set to true.
+ * - pathProximityRadius: Chebyshev radius around path tiles eligible for BFS delta computation.
+ * - pathImpactSaturation: detour length (tiles) at which BFS delta score saturates to 1.0.
+ * - proximityFalloffDistance: Manhattan distance from spawner/exit at which proximity score drops to 0.
+ * - pathAdjacencySaturation: minimum adjacent-path-tile count to reach full adjacency score.
+ * - maxCardinalDirections: denominator for tightness (always 4 — normalises edge/corner tiles).
+ * - weights: top-level factor weights (must sum to 1.0).
+ * - impactSubWeights: sub-weights within pathLengthImpact (must sum to 1.0).
  */
-const PRICING_WEIGHTS = {
-  /**
-   * How much longer the enemy path becomes if this tile is blocked,
-   * blended with local corridor tightness for structural bottleneck detection.
-   */
-  pathLengthImpact: 0.50,
-  /** How many cardinal neighbors are on the current shortest path. */
-  pathAdjacency: 0.25,
-  /** Manhattan-distance premium for tiles near spawners or exits. */
-  proximity: 0.25,
+export const PRICING_CONFIG = {
+  maxStrategicMultiplier: 0.50,
+  clusterMaxMultiplier: 0.75,
+  clusterRadius: 2,
+  clusterSaturationCount: 4,
+  premiumThreshold: 0.1,
+  pathProximityRadius: 2,
+  pathImpactSaturation: 10,
+  proximityFalloffDistance: 6,
+  pathAdjacencySaturation: 2,
+  maxCardinalDirections: 4,
+  weights: {
+    /**
+     * How much longer the enemy path becomes if this tile is blocked,
+     * blended with local corridor tightness for structural bottleneck detection.
+     */
+    pathLengthImpact: 0.50,
+    /** How many cardinal neighbors are on the current shortest path. */
+    pathAdjacency: 0.25,
+    /** Manhattan-distance premium for tiles near spawners or exits. */
+    proximity: 0.25,
+  },
+  impactSubWeights: {
+    /** Measured path-length delta when this tile is blocked. */
+    bfsDelta: 0.80,
+    /**
+     * Local corridor tightness: fraction of cardinal directions that are blocked
+     * (walls, placed towers, or out-of-bounds).  A tile with 3 of 4 neighbours
+     * blocked is structurally constrained regardless of the current route.
+     */
+    tightness: 0.20,
+  },
 } as const;
-
-/**
- * Sub-weights within the pathLengthImpact factor.
- * BFS delta gets the majority weight; local tightness provides a structural
- * floor so corridor tiles score higher even when the active path routes elsewhere.
- * Must sum to 1.0.
- */
-const IMPACT_SUB_WEIGHTS = {
-  /** Measured path-length delta when this tile is blocked. */
-  bfsDelta: 0.80,
-  /**
-   * Local corridor tightness: fraction of cardinal directions that are blocked
-   * (walls, placed towers, or out-of-bounds).  A tile with 3 of 4 neighbours
-   * blocked is structurally constrained regardless of the current route.
-   */
-  tightness: 0.20,
-} as const;
-
-/**
- * Path-length delta threshold at which a tile reaches maximum BFS impact score (1.0).
- * A detour of PATH_IMPACT_SATURATION tiles or more maps to a full score of 1.0.
- */
-const PATH_IMPACT_SATURATION = 10;
-
-/** How many tiles from a spawner/exit before the proximity premium drops to zero. */
-const PROXIMITY_FALLOFF_DISTANCE = 6;
-
-/**
- * Minimum adjacency count to reach full path-adjacency score.
- * A tile touching PATH_ADJACENCY_SATURATION+ path tiles gets the maximum adjacency premium.
- */
-const PATH_ADJACENCY_SATURATION = 2;
-
-/** Maximum number of cardinal directions (used as denominator for tightness). */
-const MAX_CARDINAL_DIRECTIONS = 4;
-
-/** Threshold above which a tile is considered to have a meaningful strategic premium. */
-const PREMIUM_THRESHOLD = 0.1;
-
-/**
- * Chebyshev-distance search radius around current path tiles within which a tile
- * is eligible for full BFS impact computation.
- * Tiles outside this radius cannot meaningfully extend the path and receive bfsDelta=0,
- * keeping their impactScore purely tightness-driven.
- */
-const PATH_PROXIMITY_RADIUS = 2;
 
 // ---------------------------------------------------------------------------
 // Exported types
@@ -87,11 +75,11 @@ export type StrategicTier = 'base' | 'low' | 'medium' | 'high' | 'critical';
  * A multiplier below `low` maps to 'base' (no premium).
  */
 export const STRATEGIC_TIERS = {
-  low: 0.15,      // 0–15%  → base
-  medium: 0.35,   // 15–35% → low
-  high: 0.60,     // 35–60% → medium
-  critical: 0.80, // 60–80% → high
-                  // 80–100%→ critical
+  low: 0.10,      // 0–10%  → base
+  medium: 0.25,   // 10–25% → low
+  high: 0.45,     // 25–45% → medium
+  critical: 0.62, // 45–62% → high
+                  // 62–75% → critical
 } as const;
 
 export interface TilePriceInfo {
@@ -142,15 +130,15 @@ export class TilePricingService {
   getTilePrice(type: TowerType, row: number, col: number, costMultiplier: number = 1): TilePriceInfo {
     const baseCost = TOWER_CONFIGS[type].cost;
     const strategic = this.getStrategicValue(row, col);
-    const totalMultiplier = costMultiplier * (1 + strategic * MAX_STRATEGIC_MULTIPLIER);
+    const totalMultiplier = costMultiplier * (1 + strategic * PRICING_CONFIG.maxStrategicMultiplier);
     const cost = Math.round(baseCost * totalMultiplier);
-    const percentIncrease = Math.round(strategic * MAX_STRATEGIC_MULTIPLIER * 100);
+    const percentIncrease = Math.round(strategic * PRICING_CONFIG.maxStrategicMultiplier * 100);
     return {
       cost,
       strategicMultiplier: strategic,
       percentIncrease,
       tier: this.multiplierToTier(strategic),
-      isPremium: strategic > PREMIUM_THRESHOLD,
+      isPremium: strategic > PRICING_CONFIG.premiumThreshold,
     };
   }
 
@@ -212,7 +200,7 @@ export class TilePricingService {
    * 2. Path adjacency (25%): how many cardinal neighbours are on the shortest path.
    * 3. Proximity to spawner/exit (25%): Manhattan distance falloff.
    *
-   * Optimisation: only tiles within PATH_PROXIMITY_RADIUS of the current path
+   * Optimisation: only tiles within PRICING_CONFIG.pathProximityRadius of the current path
    * get a full BFS delta run. Tiles further away receive bfsDelta=0 and only
    * accumulate tightness within the impact bucket.
    */
@@ -231,7 +219,7 @@ export class TilePricingService {
     // Path tiles are used for adjacency scoring and the near-path proximity filter.
     const pathTiles = this.computePathTiles(board, width, height, spawnerTiles, exitTiles);
 
-    // Set of tile keys within PATH_PROXIMITY_RADIUS of any path tile.
+    // Set of tile keys within PRICING_CONFIG.pathProximityRadius of any path tile.
     // Only these are eligible for the BFS delta sub-computation.
     const nearPathSet = this.buildNearPathSet(pathTiles, width, height);
 
@@ -258,15 +246,70 @@ export class TilePricingService {
         const proximityScore = this.computeProximityScore(row, col, spawnerTiles, exitTiles);
 
         const weighted =
-          impactScore    * PRICING_WEIGHTS.pathLengthImpact +
-          adjacencyScore * PRICING_WEIGHTS.pathAdjacency +
-          proximityScore * PRICING_WEIGHTS.proximity;
+          impactScore    * PRICING_CONFIG.weights.pathLengthImpact +
+          adjacencyScore * PRICING_CONFIG.weights.pathAdjacency +
+          proximityScore * PRICING_CONFIG.weights.proximity;
 
         this.strategicCache.set(key, Math.min(1, Math.max(0, weighted)));
       }
     }
 
+    // Second pass: add cluster density bonus
+    this.applyClusterBonuses(board, width, height);
+
     this.cacheValid = true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cluster density bonus (second pass)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Second pass: add cluster density bonus to strategic values.
+   * Tiles near placed towers get an additive bonus that increases placement cost,
+   * discouraging excessive clustering.
+   *
+   * Uses Chebyshev distance (king moves) to count towers within clusterRadius.
+   * Additive bonus = (towersNearby / clusterSaturationCount) * (clusterMax - singleMax).
+   * Total strategic value is clamped to clusterMaxMultiplier.
+   */
+  private applyClusterBonuses(board: GameBoardTile[][], width: number, height: number): void {
+    const { clusterRadius, clusterSaturationCount, clusterMaxMultiplier, maxStrategicMultiplier } = PRICING_CONFIG;
+    const bonusRange = clusterMaxMultiplier - maxStrategicMultiplier;
+
+    // Collect all placed tower positions for efficient lookup
+    const towerPositions: Array<[number, number]> = [];
+    for (let row = 0; row < height; row++) {
+      for (let col = 0; col < width; col++) {
+        const tile = board[row][col];
+        if (tile.towerType !== null) {
+          towerPositions.push([row, col]);
+        }
+      }
+    }
+
+    if (towerPositions.length === 0) return;
+
+    // For each cached tile, count nearby towers and add bonus
+    for (const [key, currentValue] of this.strategicCache) {
+      const dashIdx = key.indexOf('-');
+      const row = parseInt(key.slice(0, dashIdx), 10);
+      const col = parseInt(key.slice(dashIdx + 1), 10);
+
+      let towersNearby = 0;
+      for (const [tr, tc] of towerPositions) {
+        const dist = Math.max(Math.abs(row - tr), Math.abs(col - tc)); // Chebyshev distance
+        if (dist <= clusterRadius) {
+          towersNearby++;
+        }
+      }
+
+      if (towersNearby > 0) {
+        const normalizedDensity = Math.min(1, towersNearby / clusterSaturationCount);
+        const bonus = normalizedDensity * bonusRange;
+        this.strategicCache.set(key, Math.min(clusterMaxMultiplier, currentValue + bonus));
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -304,14 +347,14 @@ export class TilePricingService {
         bfsDelta = 1.0; // Disconnects all paths — maximum impact.
       } else if (baselineLength !== Infinity) {
         const delta = newLength - baselineLength;
-        bfsDelta = Math.min(1, Math.max(0, delta / PATH_IMPACT_SATURATION));
+        bfsDelta = Math.min(1, Math.max(0, delta / PRICING_CONFIG.pathImpactSaturation));
       }
     }
 
     // Local tightness — fraction of blocked cardinal directions.
     const tightness = this.computeLocalTightness(row, col, board, width, height);
 
-    return IMPACT_SUB_WEIGHTS.bfsDelta * bfsDelta + IMPACT_SUB_WEIGHTS.tightness * tightness;
+    return PRICING_CONFIG.impactSubWeights.bfsDelta * bfsDelta + PRICING_CONFIG.impactSubWeights.tightness * tightness;
   }
 
   /**
@@ -385,7 +428,7 @@ export class TilePricingService {
    * that are impassable (out-of-bounds, wall, or placed tower).
    *
    * Returns 0.0 when all 4 neighbours are free, 1.0 when all 4 are blocked.
-   * Uses MAX_CARDINAL_DIRECTIONS as denominator so edge/corner tiles are not
+   * Uses PRICING_CONFIG.maxCardinalDirections as denominator so edge/corner tiles are not
    * artificially inflated.
    */
   private computeLocalTightness(
@@ -402,10 +445,10 @@ export class TilePricingService {
       if (nr < 0 || nr >= height || nc < 0 || nc >= width) continue;
       if (this.isTileTraversable(board[nr][nc])) freeCount++;
     }
-    // freeCount / MAX_CARDINAL_DIRECTIONS normalises across edge/corner tiles:
+    // freeCount / PRICING_CONFIG.maxCardinalDirections normalises across edge/corner tiles:
     // an open corner (2 in-bounds free, 2 out-of-bounds) gives tightness=0.5,
     // not 1.0, preventing false premiums on otherwise unremarkable corners.
-    return 1 - (freeCount / MAX_CARDINAL_DIRECTIONS);
+    return 1 - (freeCount / PRICING_CONFIG.maxCardinalDirections);
   }
 
   // ---------------------------------------------------------------------------
@@ -418,7 +461,7 @@ export class TilePricingService {
     for (const [dr, dc] of DIRECTIONS) {
       if (pathTiles.has(`${row + dr}-${col + dc}`)) count++;
     }
-    return Math.min(1, count / PATH_ADJACENCY_SATURATION);
+    return Math.min(1, count / PRICING_CONFIG.pathAdjacencySaturation);
   }
 
   // ---------------------------------------------------------------------------
@@ -441,8 +484,8 @@ export class TilePricingService {
       minDist = Math.min(minDist, Math.abs(row - er) + Math.abs(col - ec));
     }
 
-    if (minDist >= PROXIMITY_FALLOFF_DISTANCE) return 0;
-    return 1 - (minDist / PROXIMITY_FALLOFF_DISTANCE);
+    if (minDist >= PRICING_CONFIG.proximityFalloffDistance) return 0;
+    return 1 - (minDist / PRICING_CONFIG.proximityFalloffDistance);
   }
 
   // ---------------------------------------------------------------------------
@@ -507,7 +550,7 @@ export class TilePricingService {
   }
 
   /**
-   * Build the set of tile keys within PATH_PROXIMITY_RADIUS (Chebyshev distance)
+   * Build the set of tile keys within PRICING_CONFIG.pathProximityRadius (Chebyshev distance)
    * of any path tile.  Only tiles in this set receive full BFS delta computation.
    */
   private buildNearPathSet(
@@ -520,8 +563,8 @@ export class TilePricingService {
       const dashIdx = key.indexOf('-');
       const pr = parseInt(key.slice(0, dashIdx), 10);
       const pc = parseInt(key.slice(dashIdx + 1), 10);
-      for (let dr = -PATH_PROXIMITY_RADIUS; dr <= PATH_PROXIMITY_RADIUS; dr++) {
-        for (let dc = -PATH_PROXIMITY_RADIUS; dc <= PATH_PROXIMITY_RADIUS; dc++) {
+      for (let dr = -PRICING_CONFIG.pathProximityRadius; dr <= PRICING_CONFIG.pathProximityRadius; dr++) {
+        for (let dc = -PRICING_CONFIG.pathProximityRadius; dc <= PRICING_CONFIG.pathProximityRadius; dc++) {
           const nr = pr + dr;
           const nc = pc + dc;
           if (nr >= 0 && nr < height && nc >= 0 && nc < width) {

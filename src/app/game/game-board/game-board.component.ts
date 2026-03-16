@@ -34,7 +34,7 @@ import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG, ANIMATION_CONFIG }
 import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from './constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from './constants/particle.constants';
-import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG, TILE_EMISSIVE, HEATMAP_COLORS, HEATMAP_GRADIENT, ENEMY_VISUAL_CONFIG, UI_CONFIG } from './constants/ui.constants';
+import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG, TILE_EMISSIVE, HEATMAP_GRADIENT, ENEMY_VISUAL_CONFIG, UI_CONFIG } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG, DRAG_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
@@ -43,7 +43,7 @@ import { WavePreviewEntry, getWavePreview } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
 import { StatusEffectService } from './services/status-effect.service';
 import { StatusEffectType } from './constants/status-effect.constants';
-import { TilePricingService, TilePriceInfo, StrategicTier } from './services/tile-pricing.service';
+import { TilePricingService, TilePriceInfo } from './services/tile-pricing.service';
 import { PriceLabelService } from './services/price-label.service';
 import { TerrainGridStateLegacy } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 
@@ -109,6 +109,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   selectedTowerInfo: PlacedTower | null = null;
   selectedTowerStats: { damage: number; range: number; fireRate: number; statusEffect?: StatusEffectType } | null = null;
   selectedTowerUpgradeCost: number = 0;
+  /** Strategic tile premium % applied to the upgrade cost (0 = no premium). */
+  selectedTowerUpgradePercent: number = 0;
   selectedTowerSellValue: number = 0;
   /** Preview of stats after upgrading (null if at max level or below L2→L3 which needs spec). */
   upgradePreview: { damage: number; range: number; fireRate: number } | null = null;
@@ -604,8 +606,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           const { color, intensity } = this.interpolateHeatmap(priceInfo.strategicMultiplier);
           material.emissive.setRGB(color.r, color.g, color.b);
           material.emissiveIntensity = intensity;
-          // Store tier for hover restore (uses tier-based fallback)
-          mesh.userData['heatmapTier'] = priceInfo.tier;
+          // Store exact interpolated values for smooth hover restore
+          mesh.userData['heatmapR'] = color.r;
+          mesh.userData['heatmapG'] = color.g;
+          mesh.userData['heatmapB'] = color.b;
+          mesh.userData['heatmapIntensity'] = intensity;
           this.highlightedTiles.add(key);
         }
       }
@@ -642,15 +647,19 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       material.emissiveIntensity = origIntensity;
       delete mesh.userData['origEmissive'];
       delete mesh.userData['origEmissiveIntensity'];
-      delete mesh.userData['heatmapTier'];
+      delete mesh.userData['heatmapR'];
+      delete mesh.userData['heatmapG'];
+      delete mesh.userData['heatmapB'];
+      delete mesh.userData['heatmapIntensity'];
     }
     this.highlightedTiles.clear();
   }
 
-  /** Interpolate heatmap color from gradient stops based on strategic value (0-1). */
+  /** Interpolate heatmap color from gradient stops based on strategic value. Clamped to gradient range. */
   private interpolateHeatmap(value: number): { color: { r: number; g: number; b: number }; intensity: number } {
     const stops = HEATMAP_GRADIENT;
-    const clamped = Math.max(0, Math.min(1, value));
+    // Clamp to gradient range — values beyond the last stop render as the hottest color
+    const clamped = Math.max(0, Math.min(stops[stops.length - 1][0], value));
 
     // Find the two surrounding stops
     let lower = stops[0];
@@ -683,7 +692,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.selectedTowerInfo.level >= MAX_TOWER_LEVEL) return;
 
     const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-    const cost = getUpgradeCost(this.selectedTowerInfo.type, this.selectedTowerInfo.level, costMult);
+    const tileStrategic = this.tilePricingService.getStrategicValue(this.selectedTowerInfo.row, this.selectedTowerInfo.col);
+    const cost = getUpgradeCost(this.selectedTowerInfo.type, this.selectedTowerInfo.level, costMult, tileStrategic);
     if (!this.gameStateService.canAfford(cost)) return;
 
     if (this.selectedTowerInfo.level === MAX_TOWER_LEVEL - 1) {
@@ -804,6 +814,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedTowerInfo = null;
     this.selectedTowerStats = null;
     this.upgradePreview = null;
+    this.selectedTowerUpgradePercent = 0;
     this.sellConfirmPending = false;
     this.showSpecializationChoice = false;
     this.specOptions = [];
@@ -834,7 +845,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
     this.selectedTowerStats = { damage: stats.damage, range: stats.range, fireRate: stats.fireRate, statusEffect: stats.statusEffect };
     const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-    this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level, costMult);
+    const tileStrategic = this.tilePricingService.getStrategicValue(tower.row, tower.col);
+    this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level, costMult, tileStrategic);
+    this.selectedTowerUpgradePercent = Math.round(tileStrategic * 100);
     this.selectedTowerSellValue = getSellValue(tower.totalInvested);
 
     // Compute upgrade preview (L1→L2 only; L2→L3 requires spec choice so preview is per-spec)
@@ -1051,6 +1064,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedTowerInfo = null;
     this.selectedTowerStats = null;
     this.upgradePreview = null;
+    this.selectedTowerUpgradePercent = 0;
     this.showSpecializationChoice = false;
     this.specOptions = [];
 
@@ -1445,11 +1459,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
         const tileKey = `${this.hoveredTile.userData['row']}-${this.hoveredTile.userData['col']}`;
         if (this.highlightedTiles.has(tileKey)) {
-          // Restore to heatmap color for this tile's tier (not a flat color)
-          const tier: StrategicTier = this.hoveredTile.userData['heatmapTier'] ?? 'base';
-          const heatmap = HEATMAP_COLORS[tier];
-          material.emissive.setHex(heatmap.color);
-          material.emissiveIntensity = heatmap.intensity;
+          // Restore exact interpolated heatmap color (smooth, no tier quantization)
+          const r = this.hoveredTile.userData['heatmapR'] ?? 0;
+          const g = this.hoveredTile.userData['heatmapG'] ?? 0;
+          const b = this.hoveredTile.userData['heatmapB'] ?? 0;
+          const hmIntensity = this.hoveredTile.userData['heatmapIntensity'] ?? TILE_EMISSIVE.base;
+          material.emissive.setRGB(r, g, b);
+          material.emissiveIntensity = hmIntensity;
         } else {
           const tileType = this.hoveredTile.userData['tile'].type;
           material.emissiveIntensity = tileType === BlockType.BASE ? TILE_EMISSIVE.base : tileType === BlockType.WALL ? TILE_EMISSIVE.wall : TILE_EMISSIVE.special;
