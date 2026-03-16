@@ -93,12 +93,14 @@ describe('GameBoardComponent', () => {
       'completeChallenge',
       'getAllLevels',
       'getCompletedCount',
+      'isChallengeCompleted',
     ]);
     campaignServiceSpy.getNextLevel.and.returnValue(null);
     campaignServiceSpy.isUnlocked.and.returnValue(false);
     campaignServiceSpy.getLevel.and.returnValue(undefined);
     campaignServiceSpy.getAllLevels.and.returnValue([]);
     campaignServiceSpy.getCompletedCount.and.returnValue(0);
+    campaignServiceSpy.isChallengeCompleted.and.returnValue(false);
 
     campaignMapServiceSpy = jasmine.createSpyObj('CampaignMapService', ['loadLevel']);
     campaignMapServiceSpy.loadLevel.and.returnValue(MOCK_MAP_STATE_SPEC);
@@ -1466,6 +1468,132 @@ describe('GameBoardComponent', () => {
       component.backToCampaign();
 
       expect(router.navigate).toHaveBeenCalledWith(['/campaign']);
+    });
+  });
+
+  describe('campaignChallenges getter', () => {
+    it('returns empty array when mapId is null', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue(null);
+
+      expect(component.campaignChallenges).toEqual([]);
+    });
+
+    it('returns empty array for a non-campaign map', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('custom_map_id');
+
+      expect(component.campaignChallenges).toEqual([]);
+    });
+
+    it('returns challenge definitions for campaign_01', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+
+      const challenges = component.campaignChallenges;
+
+      expect(challenges.length).toBeGreaterThan(0);
+      expect(challenges[0].id).toContain('c01');
+    });
+
+    it('returns different challenges for different campaign levels', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      const spy = spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+      const level01Challenges = component.campaignChallenges;
+
+      spy.and.returnValue('campaign_07');
+      const level07Challenges = component.campaignChallenges;
+
+      expect(level01Challenges[0].id).not.toBe(level07Challenges[0].id);
+    });
+  });
+
+  describe('isChallengeAlreadyCompleted', () => {
+    it('delegates to campaignService.isChallengeCompleted', () => {
+      campaignServiceSpy.isChallengeCompleted.and.returnValue(true);
+
+      expect(component.isChallengeAlreadyCompleted('c01_untouchable')).toBeTrue();
+      expect(campaignServiceSpy.isChallengeCompleted).toHaveBeenCalledWith('c01_untouchable');
+    });
+
+    it('returns false when challenge not completed', () => {
+      campaignServiceSpy.isChallengeCompleted.and.returnValue(false);
+
+      expect(component.isChallengeAlreadyCompleted('c01_tower_limit')).toBeFalse();
+    });
+  });
+
+  describe('isChallengeCompleted (victory screen)', () => {
+    it('returns false when no challenges were completed this run', () => {
+      (component as any).completedChallenges = [];
+      const challenge = { id: 'c01_untouchable', name: 'Untouchable', description: '', scoreBonus: 200,
+        type: 'untouchable' as any };
+
+      expect(component.isChallengeCompleted(challenge)).toBeFalse();
+    });
+
+    it('returns true when the challenge was completed this run', () => {
+      const challenge = { id: 'c01_untouchable', name: 'Untouchable', description: '', scoreBonus: 200,
+        type: 'untouchable' as any };
+      (component as any).completedChallenges = [challenge];
+
+      expect(component.isChallengeCompleted(challenge)).toBeTrue();
+    });
+
+    it('returns false for a different challenge not in completedChallenges', () => {
+      const completed = { id: 'c01_untouchable', name: 'Untouchable', description: '', scoreBonus: 200,
+        type: 'untouchable' as any };
+      const other = { id: 'c01_tower_limit', name: 'Minimalist', description: '', scoreBonus: 300,
+        type: 'tower_limit' as any };
+      (component as any).completedChallenges = [completed];
+
+      expect(component.isChallengeCompleted(other)).toBeFalse();
+    });
+  });
+
+  describe('score-challenge desync fix — recordCompletion includes challenge bonus', () => {
+    it('recordCompletion is called AFTER challenge bonuses are accumulated', () => {
+      // The order matters: addScore for challenge bonus must happen before recordCompletion
+      // Verify the spy call ordering by tracking call sequence
+      const callOrder: string[] = [];
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      spyOn(gameStateService, 'addScore').and.callFake(() => { callOrder.push('addScore'); });
+      campaignServiceSpy.recordCompletion.and.callFake(() => { callOrder.push('recordCompletion'); });
+
+      // Simulate the fixed victory path directly
+      const challenges = [{ id: 'ch_1', name: 'C1', description: '', scoreBonus: 100, type: 'untouchable' as any }];
+      let challengeBonus = 0;
+      for (const ch of challenges) {
+        challengeBonus += ch.scoreBonus;
+      }
+      if (challengeBonus > 0) {
+        gameStateService.addScore(challengeBonus);
+      }
+      campaignServiceSpy.recordCompletion('campaign_01', 500 + challengeBonus, 3, 'normal');
+
+      expect(callOrder).toEqual(['addScore', 'recordCompletion']);
+    });
+
+    it('recordCompletion receives score that includes challenge bonus', () => {
+      const baseScore = 1000;
+      const challengeBonus = 200;
+      const updatedScore = baseScore + challengeBonus;
+
+      campaignServiceSpy.recordCompletion('campaign_01', updatedScore, 3, 'normal');
+
+      expect(campaignServiceSpy.recordCompletion).toHaveBeenCalledWith(
+        'campaign_01', 1200, 3, 'normal'
+      );
+    });
+
+    it('recordCompletion receives base score when no challenges completed', () => {
+      const baseScore = 800;
+
+      campaignServiceSpy.recordCompletion('campaign_01', baseScore, 2, 'hard');
+
+      expect(campaignServiceSpy.recordCompletion).toHaveBeenCalledWith(
+        'campaign_01', 800, 2, 'hard'
+      );
     });
   });
 

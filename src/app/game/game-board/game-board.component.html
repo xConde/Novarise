@@ -64,6 +64,18 @@
       <span class="campaign-level-info__tier">{{ currentCampaignLevel.tier | uppercase }}</span>
       <span class="campaign-level-info__waves">{{ currentCampaignLevel.waveCount }} waves</span>
     </div>
+    <div class="campaign-challenges-preview" *ngIf="isCampaignGame && campaignChallenges.length > 0">
+      <h4 class="campaign-challenges-preview__title">Challenges</h4>
+      <div class="campaign-challenges-preview__list">
+        <div *ngFor="let challenge of campaignChallenges"
+             class="challenge-preview-item"
+             [class.challenge-preview-item--completed]="isChallengeAlreadyCompleted(challenge.id)">
+          <span class="challenge-preview-item__name">{{ challenge.name }}</span>
+          <span class="challenge-preview-item__desc">{{ challenge.description }}</span>
+          <span class="challenge-preview-item__bonus">+{{ challenge.scoreBonus }}</span>
+        </div>
+      </div>
+    </div>
     <span class="setup-section-label">Difficulty</span>
     <div class="setup-difficulty-grid">
       <button
@@ -237,6 +249,19 @@
       </div>
 
       <p class="final-score" *ngIf="!scoreBreakdown">Score: {{ gameState.score }}</p>
+
+      <!-- Challenge results -->
+      <div class="challenges-result" *ngIf="isCampaignGame && campaignChallenges.length > 0">
+        <h4 class="challenges-result__title">Challenges</h4>
+        <div *ngFor="let challenge of campaignChallenges"
+             class="challenge-result-item"
+             [class.challenge-result-item--passed]="isChallengeCompleted(challenge)"
+             [class.challenge-result-item--failed]="!isChallengeCompleted(challenge)">
+          <span class="challenge-result-item__status">{{ isChallengeCompleted(challenge) ? '✓' : '✗' }}</span>
+          <span class="challenge-result-item__name">{{ challenge.name }}</span>
+          <span class="challenge-result-item__bonus" *ngIf="isChallengeCompleted(challenge)">+{{ challenge.scoreBonus }}</span>
+        </div>
+      </div>
 
       <!-- Newly unlocked achievements -->
       <div class="achievements-unlocked" *ngIf="newlyUnlockedAchievements.length > 0">

@@ -54,7 +54,7 @@ import { CampaignMapService } from '../../campaign/services/campaign-map.service
 import { ChallengeEvaluatorService } from '../../campaign/services/challenge-evaluator.service';
 import { CAMPAIGN_WAVE_DEFINITIONS } from '../../campaign/waves/campaign-waves';
 import { CampaignLevel } from '../../campaign/models/campaign.model';
-import { ChallengeDefinition } from '../../campaign/models/challenge.model';
+import { ChallengeDefinition, getChallengesForLevel } from '../../campaign/models/challenge.model';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -1091,6 +1091,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   get isNextLevelUnlocked(): boolean {
     const next = this.nextCampaignLevel;
     return !!next && this.campaignService.isUnlocked(next.id);
+  }
+
+  /** Returns all challenge definitions for the current campaign level. Empty for non-campaign maps. */
+  get campaignChallenges(): ChallengeDefinition[] {
+    const mapId = this.mapBridge.getMapId();
+    if (!mapId) return [];
+    return getChallengesForLevel(mapId);
+  }
+
+  /** True when the given challenge was already completed in a previous run. */
+  isChallengeAlreadyCompleted(challengeId: string): boolean {
+    return this.campaignService.isChallengeCompleted(challengeId);
+  }
+
+  /** True when the challenge was completed in the current run (victory screen). */
+  isChallengeCompleted(challenge: ChallengeDefinition): boolean {
+    return this.completedChallenges.some(c => c.id === challenge.id);
   }
 
   /** Loads the next campaign level and restarts the game. No-op if no next level. */
@@ -2419,12 +2436,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
                 // Evaluate and record challenge completions on VICTORY for campaign levels
                 if (isVictory && this.campaignService.getLevel(mapId)) {
                   const endState = this.gameStateService.getState();
-                  this.campaignService.recordCompletion(
-                    mapId,
-                    this.scoreBreakdown.finalScore,
-                    this.scoreBreakdown.stars,
-                    endState.difficulty
-                  );
                   const challengeEndState = {
                     livesLost: gameEndStats.livesLost,
                     elapsedTime: endState.elapsedTime,
@@ -2437,10 +2448,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
                     challengeEndState
                   );
                   this.completedChallenges = newlyChallenged;
+                  let challengeBonus = 0;
                   for (const challenge of newlyChallenged) {
                     this.campaignService.completeChallenge(challenge.id);
                     this.playerProfileService.recordChallengeCompleted();
-                    this.gameStateService.addScore(challenge.scoreBonus);
+                    challengeBonus += challenge.scoreBonus;
                     // Toast: challenge completion
                     this.audioService.playChallengeSound();
                     this.notificationService.show(
@@ -2449,6 +2461,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
                       `${challenge.name} (+${challenge.scoreBonus} pts)`
                     );
                   }
+                  if (challengeBonus > 0) {
+                    this.gameStateService.addScore(challengeBonus);
+                  }
+                  // Record completion with the final score (including challenge bonuses)
+                  const updatedScore = this.scoreBreakdown!.finalScore + challengeBonus;
+                  this.campaignService.recordCompletion(
+                    mapId,
+                    updatedScore,
+                    this.scoreBreakdown!.stars,
+                    endState.difficulty
+                  );
                 }
               }
             }
