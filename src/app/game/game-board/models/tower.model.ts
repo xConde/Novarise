@@ -238,10 +238,10 @@ export const UPGRADE_MULTIPLIERS: { damage: number; range: number; fireRate: num
 
 /** Get the upgrade cost from current level to next level.
  *  Level 1→2: 75% of base cost; Level 2→3: 100% of base cost. */
-export function getUpgradeCost(type: TowerType, currentLevel: number, costMultiplier: number = 1): number {
+export function getUpgradeCost(type: TowerType, currentLevel: number, costMultiplier: number = 1, tileStrategic: number = 0): number {
   if (currentLevel < 1 || currentLevel >= MAX_TOWER_LEVEL) return Infinity;
   const baseCost = TOWER_CONFIGS[type].cost;
-  return Math.round(baseCost * (UPGRADE_COST_CONFIG.baseMultiplier + currentLevel * UPGRADE_COST_CONFIG.levelScale) * costMultiplier);
+  return Math.round(baseCost * (UPGRADE_COST_CONFIG.baseMultiplier + currentLevel * UPGRADE_COST_CONFIG.levelScale) * costMultiplier * (1 + tileStrategic));
 }
 
 /** Get the sell refund (50% of total gold invested). */

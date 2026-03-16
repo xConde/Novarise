@@ -739,3 +739,95 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Convention check: catch(e) → catch(error), no hardcoded numbers in diff
 - [x] Full test suite green (1780/1780)
 - [x] Verify both isVictory guards are removed (grep confirmation — only GameEndStats construction remains)
+
+---
+
+## Red Team Critique — feat/gameplay-interaction (2026-03-15)
+
+### Finding 1: Touch drag multi-finger silently drops placement (HIGH)
+**Location:** `game-board.component.ts:436,442` (touch drag handlers)
+**Risk:** The `touchmove` handler guards `te.touches.length === 1` — if a second finger touches during drag, the handler stops calling `onDragMove`. The `touchend` handler guards `te.changedTouches.length === 1` — if both fingers lift simultaneously, `changedTouches.length === 2` and `onDragEnd` never fires. The drag listeners remain on `window` permanently, `isDragging` stays true, and subsequent touch interactions are corrupted. The `blurDragHandler` only fires on window blur, not on multi-finger release.
+**Fix:** Remove the `changedTouches.length === 1` guard in `globalDragEndHandler`. On any `touchend`, cancel the drag. Multi-finger during a tower drag is always an abort, never a valid placement.
+
+### Finding 2: `updateTileHighlights` emissive snapshot races with hover (MEDIUM)
+**Location:** `game-board.component.ts:583-585` (origEmissive snapshot)
+**Risk:** `updateTileHighlights` snapshots `material.emissive.getHex()` as `origEmissive` before overwriting with the highlight color. If the tile is currently being hovered (intensity set to `TILE_EMISSIVE.hover`), the snapshot captures the hover intensity, not the base. When `clearTileHighlights` later restores, it sets the tile to hover intensity permanently even when the mouse has left. The `hoveredTile` skip guard at line 578 mitigates this for the *currently* hovered tile, but a tile that *was* hovered milliseconds before `updateTileHighlights` runs (and whose mouseleave event hasn't reset it yet) could still be captured with the wrong emissive.
+**Fix:** Always snapshot from the tile type defaults (`TILE_EMISSIVE.base/wall/special`) instead of reading the live material state, since the defaults are deterministic.
+
+### Finding 3: `currentStats` computed but unused in spec options (LOW)
+**Location:** `game-board.component.ts:624`
+**Risk:** `const currentStats = getEffectiveStats(this.selectedTowerInfo.type, this.selectedTowerInfo.level);` is computed but never referenced — the spec options now use `alphaStats`/`betaStats` directly. Dead variable. No runtime cost (tree-shaken in prod), but violates code quality standards and will trigger lint warnings.
+**Fix:** Remove the unused `currentStats` line.
+
+## Red Team Critique — feat/gameplay-interaction Pass 2 (2026-03-16)
+
+### Finding 1: `repathAffectedEnemies` clears entire path cache even for single-tile repath (HIGH)
+**Location:** `enemy.service.ts:912`
+**Risk:** `this.clearPathCache()` wipes ALL cached paths on every tower place/sell. Enemies spawning later must recompute A* from scratch even if the board change was irrelevant to their spawn→exit route. On large boards with frequent tower activity, this creates unnecessary A* overhead. More importantly, the cache clear means the `findPath` calls inside the loop will each cache their result — but enemies at different grid positions will each trigger a fresh A* that could have been served from a still-valid cache entry.
+**Fix:** Don't clear the global cache. Instead, only invalidate cache entries that include the blocked tile in their path. Or simpler: don't clear cache at all — `findPath` already handles blocked tiles via the board state; the cache key includes start/end positions, not board state, so stale entries would produce wrong results. The real fix is to always clear the cache (current behavior is correct but wasteful).
+
+### Finding 2: Sell repath misses enemies that would benefit from the freed tile (MEDIUM)
+**Location:** `game-board.component.ts:779`
+**Risk:** When a tower is sold, `repathAffectedEnemies(row, col)` only repaths enemies whose path crossed the sold tower's position. But enemies routing AROUND the tower (via longer detour) would benefit from a shorter path through the now-free tile. These enemies continue on their longer detour unnecessarily. In a sell-and-replace scenario, enemies take suboptimal paths after the sell.
+**Fix:** On tower sell, repath ALL ground enemies (not just affected ones) since any enemy could potentially take a shorter path. Use `repathAffectedEnemies(-1, -1)` for sell operations.
+
+### Finding 3: `interpolateHeatmap` direction vector computed from grid nodes, not enemy world position (LOW — verified safe)
+**Location:** `enemy.service.ts:185-189`
+**Risk:** After repath with `pathIndex=0`, the direction vector points from path[0]→path[1]. If the enemy is physically between old nodes A and B, this direction may not match the enemy's current heading. However, `distanceToNext` uses the enemy's actual world position (line 194-197), so the snap-or-move logic works correctly regardless of the direction vector's semantic accuracy. The enemy may briefly face the "wrong" way for one tick before snapping. Verified safe — not a gameplay bug.
+**Fix:** None needed. Document the behavior inline.
+
+## Deployment Checklist — feat/gameplay-interaction
+- [x] Step 1: Convention check — grep for console.log, TODO/FIXME/HACK, catch(e), hardcoded numbers added on this branch
+- [x] Step 2: Tile-specific cost shown in mode indicator on hover (hoveredTileCost + gold display)
+- [x] Step 3: Full test suite green (1839/1839 hard gate)
+- [x] Step 4: Production build passes — CSS trimmed to 39.83kb (below 40kb error budget)
+- [x] Step 5: Push to remote + update PR (#23)
+
+## Red Team Critique — 2026-03-15 (Pricing System v2)
+
+### Finding 1: Heatmap gradient extrapolation for strategic values > 0.75 (CRITICAL)
+**Location:** `game-board.component.ts:661` (`interpolateHeatmap`)
+**Risk:** Sprint 5 retuned `HEATMAP_GRADIENT` stops to end at 0.75, but `interpolateHeatmap()` clamps its input to `Math.min(1, value)`. The first-pass strategic computation (`computeStrategicValues`) caps values at `Math.min(1, ...)`, not 0.75. A choke tile that disconnects the path (bfsDelta=1.0) near a spawner can reach strategic value ~0.93 without any nearby towers. When this value enters `interpolateHeatmap()`:
+- The bracket-finding loop fails (no adjacent stops span > 0.75)
+- Falls back to `lower=stops[0]` (0.00), `upper=stops[4]` (0.75)
+- Computes `t = (0.93 - 0.00) / 0.75 = 1.24` — extrapolation
+- RGB channels exceed 1.0, producing incorrect bright/white tiles
+**Fix:** Clamp interpolation input to the last gradient stop value: `Math.min(stops[stops.length - 1][0], value)` instead of `Math.min(1, value)`. Values > 0.75 render as the hottest color (red) rather than extrapolating.
+
+### Finding 2: Dead "Inspect" code path in mode indicator (LOW)
+**Location:** `game-board.component.html:364-366`
+**Risk:** Sprint 8 changed the mode indicator `*ngIf` to require `isPlaceMode`, but the inner content still has a ternary: `isPlaceMode ? tower : 'Inspect'`. Since the element is only rendered when `isPlaceMode` is true, the "Inspect" branch and `.inspect-mode` class can never activate. Dead code that wastes template evaluation and confuses readers.
+**Fix:** Replace the ternary with the tower name directly. Remove `.inspect-mode` class binding and related CSS. Simplify the `aria-label` binding.
+
+### Finding 3: `applyClusterBonuses` iterates and mutates same Map (LOW)
+**Location:** `tile-pricing.service.ts:280-308` (`applyClusterBonuses`)
+**Risk:** The method iterates `this.strategicCache` while calling `.set()` on existing keys. Per ES2015 Map spec, modifying an existing key during `for...of` is safe (no new entries added, iteration visits each key once in insertion order). However, the pattern is fragile — a future change that adds new cache entries during the loop would cause non-deterministic behavior. Not a bug today, but a maintenance hazard.
+**Fix:** Defer — document the iteration safety invariant inline. If the method grows, refactor to collect updates in a separate array and apply after iteration.
+
+## Deployment Checklist — Pricing System v2
+- [x] Step 1: Remove dead code — `HEATMAP_COLORS` unused export (ui.constants.ts), `.inspect-mode` dead CSS (game-board.component.scss)
+- [x] Step 2: Convention check — grep for console.log, TODO/FIXME/HACK, hardcoded numbers added on this branch
+- [x] Step 3: Full test suite green (1925/1925 hard gate)
+- [x] Step 4: Production build passes — CSS 39.42kb (below 40kb error budget)
+- [x] Step 5: Push to remote (f1273cf..7f4b6ba)
+
+## Red Team Critique — 2026-03-15 (Wave Panel + Tile Dimming)
+
+### Finding 1: Double board iteration in updateTileHighlights (LOW)
+**Location:** `game-board.component.ts:585-652` (`updateTileHighlights`)
+**Risk:** Two full-board passes (affordable + unaffordable) each call `getTileTowerCost()` per tile. On a 15×15 board this is 450 iterations + cache lookups. Not a performance bug — cache hits are O(1) and the board size is small — but architecturally wasteful. A single pass branching on `canAfford` would halve the work.
+**Fix:** Defer — not worth the churn. The method runs once per tower selection change, not per frame. Document as a future optimization if boards grow.
+
+### Finding 2: Wave preview panel scroll blocked during SETUP (LOW)
+**Location:** `game-board.component.scss:201` (`.wave-preview { pointer-events: none }`)
+**Risk:** If a wave preview has many enemy types, `overflow-y: auto` + `pointer-events: none` prevents scrolling the list during SETUP. In practice, waves have 1–4 enemy types at ~1.5rem each, well under the 400px `max-height`. Not reachable with current wave definitions, but could surface if wave complexity grows.
+**Fix:** Defer — add `pointer-events: auto` to `.wave-preview-list` only if scroll becomes necessary.
+
+### Finding 3: No findings requiring immediate fix
+All interaction paths verified: SETUP tower placement unblocked, wave-btn pointer-events correct, unaffordable tile hover shows cost in mode indicator, drag preview checks tile-specific affordability, initial heatmap renders on board load.
+
+## Deployment Checklist — Wave Panel + Tile Dimming
+- [x] Step 1: Convention check — console.log/warn (3 intentional repath warnings), no TODO/FIXME, no magic numbers
+- [x] Step 2: Full test suite green (1925/1925)
+- [x] Step 3: Production build passes — CSS 39.31kb (below 40kb error budget)
+- [x] Step 4: Push to remote (00a8a94..f669dd1)

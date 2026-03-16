@@ -7,6 +7,8 @@
 }
 
 .board-container {
+  --tower-bar-height: 9rem; // shared anchor: icon(40px) + text(48px) + padding(20px+20px) + bar-padding(20px) ≈ 148px
+
   display: flex;
   flex-direction: column;
   border: var(--border-width-thin) solid var(--game-primary);
@@ -14,7 +16,7 @@
   width: 100%;
   position: relative;
 
-  @media screen and (max-width: 1023px) {
+  @media (max-width:1023px) {
     border: 0;
     border-top: var(--border-width-thin) solid var(--game-primary);
   }
@@ -101,7 +103,7 @@
     border: var(--border-width-thin) solid var(--border-color);
     user-select: none;
 
-    @media screen and (max-width: 768px) {
+    @media (max-width:768px) {
       gap: var(--spacing-md);
       padding: var(--spacing-xs) var(--spacing-md);
       font-size: var(--font-size-small);
@@ -195,26 +197,27 @@
     to { opacity: 1; transform: translateX(-50%) translateY(0); }
   }
 
-  // --- Wave preview panel ---
+  // --- Wave preview + control panel ---
   .wave-preview {
     @include glass-panel(rgba(0, 0, 0, 0.82));
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, calc(-50% - 6rem));
-    min-width: 10rem;
-    padding: var(--spacing-sm) var(--spacing-md);
+    transform: translate(-50%, -50%);
+    min-width: 12rem;
+    padding: var(--spacing-md) var(--spacing-lg);
     border: var(--border-width-thin) solid var(--theme-purple-a50);
+    border-radius: var(--border-radius-lg);
     animation: scale-in 0.2s ease-out;
     z-index: var(--z-index-overlay);
     pointer-events: none;
+    text-align: center;
 
-    max-height: min(40vh, 300px);
+    max-height: min(50vh, 400px);
     overflow-y: auto;
 
-    @media screen and (max-width: 768px) {
-      min-width: 8rem;
-      transform: translate(-50%, calc(-50% - 5rem));
+    @media (max-width:768px) {
+      min-width: 10rem;
     }
 
     .wave-income {
@@ -223,7 +226,6 @@
       gap: var(--spacing-sm);
       margin-bottom: var(--spacing-xs);
       font-size: var(--font-size-small);
-      font-family: 'Orbitron', sans-serif;
 
       .income-item {
         font-weight: 600;
@@ -246,6 +248,7 @@
       margin-bottom: var(--spacing-xs);
       text-align: center;
     }
+
 
     .wave-preview-list {
       list-style: none;
@@ -290,35 +293,28 @@
       text-transform: uppercase;
       letter-spacing: 0.03125rem;
     }
-  }
-
-  // --- Wave control ---
-  .wave-control {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: var(--z-index-overlay);
-    text-align: center;
 
     .wave-btn {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: var(--spacing-xs);
-      @include glass-panel(rgba(0, 0, 0, 0.85));
-      padding: var(--spacing-md) var(--spacing-xl);
-      border: var(--border-width-medium) solid rgba(255, 255, 255, 0.3);
-      border-radius: var(--border-radius-lg);
+      gap: 0.125rem;
+      width: 100%;
+      margin-top: var(--spacing-sm);
+      padding: var(--spacing-sm) var(--spacing-md);
+      background: rgba(255, 255, 255, 0.06);
+      border: var(--border-width-thin) solid rgba(255, 255, 255, 0.2);
+      border-radius: var(--border-radius-md);
       color: var(--text-color);
       font-size: var(--font-size-title);
       cursor: pointer;
+      pointer-events: auto;
       transition: all var(--transition-medium) ease;
 
       &:hover {
-        background: rgba(255, 255, 255, 0.1);
-        border-color: rgba(255, 255, 255, 0.6);
-        transform: scale(1.05);
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.5);
+        transform: scale(1.03);
       }
 
       &:active {
@@ -326,11 +322,21 @@
       }
 
       .wave-hint {
-        font-size: 0.5625rem;
+        font-size: 0.5rem;
         color: rgba(255, 255, 255, 0.3);
+        text-transform: uppercase;
+        letter-spacing: 0.05rem;
+      }
+
+      @media (max-width:768px) {
+        min-height: 2.75rem;
+      }
+
+      @media (max-width:480px) {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: var(--font-size-base);
       }
     }
-
   }
 
   // --- Victory / Defeat overlay ---
@@ -414,7 +420,7 @@
         min-width: 18rem;
         text-align: left;
 
-        @media screen and (max-width: 768px) {
+        @media (max-width:768px) {
           min-width: 14rem;
         }
 
@@ -534,7 +540,6 @@
       }
 
       .edit-map-btn {
-        border-color: var(--theme-purple-a50);
         color: var(--theme-purple-mid);
 
         &:hover {
@@ -624,8 +629,6 @@
 
   // --- Tower info panel ---
   .tower-info-panel {
-    --tower-bar-height: 5.5rem;
-
     @include glass-panel(rgba(0, 0, 0, 0.85));
     position: absolute;
     bottom: calc(var(--spacing-lg) + var(--tower-bar-height));
@@ -637,8 +640,7 @@
     backdrop-filter: blur(0.75rem);
     animation: scale-in 0.2s ease-out;
 
-    @media screen and (max-width: 768px) {
-      --tower-bar-height: 4.5rem;
+    @media (max-width:768px) {
       min-width: 12rem;
       bottom: calc(var(--spacing-md) + var(--tower-bar-height));
     }
@@ -718,6 +720,18 @@
             &[data-effect='SLOW'] { color: var(--effect-slow); }
           }
         }
+
+        .stat-preview {
+          color: var(--theme-cyan, #00ffff);
+          font-weight: 600;
+          font-size: var(--font-size-2xs);
+          opacity: 0.8;
+
+          &::before {
+            content: '\2192\00a0'; // → arrow
+            color: rgba(255, 255, 255, 0.3);
+          }
+        }
       }
     }
 
@@ -731,7 +745,6 @@
         border-radius: var(--border-radius-sm);
         background: rgba(30, 80, 140, 0.3);
         color: #88ccff;
-        font-family: "Orbitron", sans-serif;
         font-size: 0.6875rem;
         cursor: pointer;
         transition: all var(--transition-medium) ease;
@@ -753,7 +766,6 @@
         padding: var(--spacing-xs) var(--spacing-sm);
         border: var(--border-width-thin) solid var(--border-color);
         border-radius: var(--border-radius-sm);
-        font-family: "Orbitron", sans-serif;
         font-size: 0.6875rem;
         cursor: pointer;
         transition: all var(--transition-medium) ease;
@@ -773,6 +785,13 @@
           opacity: 0.4;
           cursor: not-allowed;
           color: var(--game-health);
+        }
+
+        .upgrade-tile-percent {
+          color: var(--theme-orange, #dd6600);
+          font-size: var(--font-size-2xs, 0.65rem);
+          margin-left: 0.25rem;
+          opacity: 0.9;
         }
       }
 
@@ -833,7 +852,6 @@
         border: var(--border-width-thin) solid var(--panel-blue-border);
         border-radius: var(--border-radius-sm);
         background: var(--panel-blue-bg);
-        font-family: "Orbitron", sans-serif;
         cursor: pointer;
         transition: all var(--transition-medium) ease;
         text-align: left;
@@ -875,7 +893,6 @@
         border-radius: var(--border-radius-sm);
         background: var(--panel-neutral-bg);
         color: var(--text-dim);
-        font-family: "Orbitron", sans-serif;
         font-size: var(--font-size-2xs);
         cursor: pointer;
         transition: all var(--transition-medium) ease;
@@ -926,7 +943,6 @@
     border: var(--border-width-thin) solid var(--border-color);
     border-radius: var(--border-radius-sm);
     color: var(--text-color);
-    font-family: "Orbitron", sans-serif;
     font-size: var(--font-size-xs);
     font-weight: 700;
     text-transform: uppercase;
@@ -954,7 +970,6 @@
     cursor: pointer;
     font-size: var(--font-size-small);
     color: var(--text-color);
-    font-family: "Orbitron", sans-serif;
     padding: var(--spacing-xs) 0;
     border-top: var(--border-width-thin) solid var(--border-color);
 
@@ -978,7 +993,6 @@
     border: var(--border-width-thin) solid var(--border-color);
     border-radius: var(--border-radius-sm);
     color: var(--text-color);
-    font-family: "Orbitron", sans-serif;
     font-size: var(--font-size-3xs);
     font-weight: 600;
     text-transform: uppercase;
@@ -1005,7 +1019,6 @@
   }
 
   .setup-score {
-    font-family: "Orbitron", sans-serif;
     font-size: var(--font-size-small);
     font-weight: 700;
     color: var(--theme-purple-lighter);
@@ -1019,7 +1032,6 @@
     border-radius: var(--border-radius-md);
     background: var(--action-success-bg);
     color: var(--action-success);
-    font-family: "Orbitron", sans-serif;
     font-size: var(--font-size-small);
     font-weight: 700;
     letter-spacing: 0.05em;
@@ -1044,7 +1056,7 @@
     padding: var(--spacing-xs) var(--spacing-sm);
     border: var(--border-width-thin) solid var(--border-color);
 
-    @media screen and (max-width: 768px) {
+    @media (max-width:768px) {
       bottom: var(--spacing-md);
       right: var(--spacing-md);
       gap: var(--spacing-xs);
@@ -1065,7 +1077,6 @@
       border: var(--border-width-thin) solid var(--border-color);
       border-radius: var(--border-radius-sm);
       color: rgba(255, 255, 255, 0.6);
-      font-family: "Orbitron", sans-serif;
       font-size: var(--font-size-small);
       cursor: pointer;
       transition: all var(--transition-medium) ease;
@@ -1073,7 +1084,7 @@
       min-height: 2.75rem;
       line-height: 1;
 
-      @media screen and (max-width: 768px) {
+      @media (max-width:768px) {
         min-width: 1.875rem;
         font-size: 0.625rem;
         padding: var(--spacing-xs) 0.25rem;
@@ -1134,7 +1145,7 @@
     padding: var(--spacing-sm);
     border: var(--border-width-thin) solid var(--border-color);
 
-    @media screen and (max-width: 768px) {
+    @media (max-width:768px) {
       bottom: var(--spacing-md);
       gap: var(--spacing-sm);
       padding: var(--spacing-xs);
@@ -1156,7 +1167,7 @@
       transition: all var(--transition-medium) cubic-bezier(0.4, 0, 0.2, 1);
       min-width: 5rem;
 
-      @media screen and (max-width: 768px) {
+      @media (max-width:768px) {
         min-width: 4rem;
         padding: var(--spacing-xs);
       }
@@ -1192,7 +1203,7 @@
         justify-content: center;
         position: relative;
 
-        @media screen and (max-width: 768px) {
+        @media (max-width:768px) {
           width: 2rem;
           height: 2rem;
         }
@@ -1260,7 +1271,7 @@
         text-transform: uppercase;
         letter-spacing: 0.0313rem;
 
-        @media screen and (max-width: 768px) {
+        @media (max-width:768px) {
           font-size: 0.75rem;
         }
       }
@@ -1268,13 +1279,11 @@
       .tower-cost {
         font-size: 0.6875rem;
         color: var(--game-gold);
-        font-family: "Orbitron", sans-serif;
       }
 
       .tower-hotkey {
         font-size: 0.5rem;
         color: rgba(255, 255, 255, 0.25);
-        font-family: "Orbitron", sans-serif;
         letter-spacing: 0.0313rem;
       }
 
@@ -1299,7 +1308,7 @@
         word-wrap: break-word;
         box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.6), 0 0 0.5rem var(--theme-purple-a30, rgba(128, 0, 255, 0.2));
 
-        @media screen and (max-width: 480px) {
+        @media (max-width:480px) {
           max-width: min(200px, 50vw);
           white-space: normal;
         }
@@ -1308,7 +1317,6 @@
           display: flex;
           justify-content: space-between;
           gap: var(--spacing-md);
-          font-family: "Orbitron", sans-serif;
           font-size: clamp(0.5rem, 1.5vw, 0.625rem);
           margin-bottom: 0.1875rem;
 
@@ -1327,7 +1335,6 @@
           margin-top: var(--spacing-xs);
           padding-top: var(--spacing-xs);
           border-top: var(--border-width-thin) solid rgba(255, 255, 255, 0.1);
-          font-family: "Orbitron", sans-serif;
           font-size: 0.5rem;
           color: var(--theme-purple-mid, rgba(160, 100, 255, 0.8));
           text-align: center;
@@ -1359,7 +1366,7 @@
 
 // --- Responsive breakpoints ---
 // Tablet (max-width: 768px) enhancements not covered by nested queries above
-@media screen and (max-width: 768px) {
+@media (max-width:768px) {
   .board-container {
     // Game controls: stack vertically on tablet
     .game-controls {
@@ -1371,30 +1378,43 @@
       }
     }
 
-    // Wave control button: ensure minimum 44px tap target
-    .wave-control .wave-btn {
-      min-height: 2.75rem; // 44px
-    }
 
-    // Setup panel: bottom sheet on mobile
+    // Setup panel: compact right-side overlay on mobile
     .setup-panel {
-      position: fixed;
+      position: absolute;
       top: auto;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      width: 100%;
-      max-height: 55vh;
-      border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
-      padding: var(--spacing-sm) var(--spacing-md);
+      bottom: calc(var(--spacing-md) + var(--tower-bar-height));
+      left: auto;
+      right: var(--spacing-sm);
+      width: min(16rem, 55vw);
+      max-height: calc(100vh - var(--tower-bar-height) - 4rem);
+      overflow-y: auto;
+      padding: var(--spacing-sm);
+      gap: var(--spacing-xs);
     }
 
     .setup-difficulty-grid {
       grid-template-columns: repeat(4, 1fr);
     }
 
+    .setup-diff-btn, .setup-mod-btn {
+      padding: 0.25rem;
+      font-size: var(--font-size-3xs);
+      min-height: 2.75rem;
+    }
+
+    .setup-endless {
+      font-size: var(--font-size-2xs);
+      padding: 0.25rem 0;
+    }
+
     .setup-modifier-grid {
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .setup-start-btn {
+      padding: var(--spacing-xs);
+      font-size: var(--font-size-2xs);
     }
 
     // Victory/defeat overlay: tighten padding
@@ -1427,8 +1447,10 @@
 }
 
 // Mobile (max-width: 480px) overrides
-@media screen and (max-width: 480px) {
+@media (max-width:480px) {
   .board-container {
+    --tower-bar-height: 10rem; // 2-row tower grid: 2×61px + padding + gap ≈ 147px
+
     // Tower selection: switch to 3-column grid
     .tower-selection {
       display: grid;
@@ -1470,7 +1492,7 @@
     .tower-info-panel {
       left: 0;
       right: 0;
-      bottom: calc(var(--spacing-lg) + 8rem); // 8rem = 2-row tower grid height (mobile grid layout)
+      bottom: calc(var(--spacing-lg) + var(--tower-bar-height));
       transform: none;
       min-width: unset;
       width: 100%;
@@ -1498,18 +1520,12 @@
       }
     }
 
-    // Wave control button: larger tap target (min 44px touch target)
-    .wave-control .wave-btn {
-      min-height: 2.75rem; // 44px
-      padding: var(--spacing-sm) var(--spacing-lg);
-      font-size: var(--font-size-base);
-    }
 
     // Game controls: stack vertically, right side
     .game-controls {
       flex-direction: column;
       align-items: stretch;
-      bottom: calc(var(--spacing-sm) + 8.5rem); // above tower grid
+      bottom: calc(var(--spacing-sm) + var(--tower-bar-height));
       right: var(--spacing-sm);
       gap: var(--spacing-xs);
       padding: var(--spacing-xs);
@@ -1525,8 +1541,6 @@
       }
 
       .pause-btn {
-        min-width: 2.75rem;
-        min-height: 2.75rem;
         line-height: 0;
       }
 
@@ -1536,9 +1550,17 @@
       }
     }
 
-    // Setup panel: constrain height on short screens
+    // Setup panel: tighter on small phones
     .setup-panel {
-      max-height: 45vh;
+      width: min(14rem, 60vw);
+      max-height: calc(100vh - var(--tower-bar-height) - 4rem);
+      padding: var(--spacing-xs);
+    }
+
+    .setup-diff-btn, .setup-mod-btn, .setup-start-btn {
+      min-height: 2.75rem;
+      font-size: 0.5rem;
+      padding: 0.125rem;
     }
 
     // Victory/defeat overlay: full-screen with adjusted padding
@@ -1549,7 +1571,6 @@
         width: 100%;
         max-height: 85vh;
         overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
         padding: var(--spacing-xl) var(--spacing-md);
         border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
         border-left: none;
@@ -1655,5 +1676,52 @@
       color: rgba(255, 255, 255, 0.4);
       text-align: center;
     }
+  }
+}
+
+// --- Drag cursor override ---
+// !important required: Three.js sets cursor via inline styles on the canvas element
+.board-container.dragging .canvas-container {
+  cursor: grabbing !important;
+}
+
+// --- Interaction mode indicator ---
+.mode-indicator {
+  position: absolute;
+  bottom: calc(var(--spacing-lg) + var(--tower-bar-height) + 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 0.25rem var(--spacing-sm);
+  border-radius: var(--border-radius-md);
+  background: rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+  z-index: var(--z-index-overlay);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+
+  .mode-label {
+    font-weight: 600;
+    &.place-mode { color: var(--theme-cyan, #00ffff); }
+  }
+
+  .mode-cost { color: var(--game-gold, #ffd700); font-weight: 700; }
+  .mode-percent { color: #dd6600; font-weight: 600; font-size: var(--font-size-2xs); }
+
+  .mode-hint {
+    font-size: var(--font-size-2xs);
+    color: rgba(255, 255, 255, 0.35);
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  @media (max-width:768px) {
+    bottom: calc(var(--spacing-md) + var(--tower-bar-height) + 0.5rem);
+    font-size: var(--font-size-2xs);
   }
 }

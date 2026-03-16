@@ -204,6 +204,11 @@ export class EnemyService {
         enemy.gridPosition.col = nextNode.x;
         enemy.pathIndex++;
         enemy.distanceTraveled += distanceToNext;
+
+        // Execute deferred repath now that we're snapped to a grid node
+        if (enemy.needsRepath) {
+          this.executeRepath(enemy);
+        }
       } else {
         // Move towards next node
         enemy.position.x += direction.x * moveDistance;
@@ -893,6 +898,68 @@ export class EnemyService {
    */
   clearPathCache(): void {
     this.pathCache.clear();
+  }
+
+  /**
+   * Force all living enemies to recalculate their paths from their current grid position.
+   * Call after any board mutation (tower placed/sold) so enemies don't walk through new obstacles.
+   * Flying enemies are skipped (they ignore terrain).
+   */
+  /**
+   * Flag enemies for deferred repath on their next waypoint arrival.
+   * Only flags enemies whose remaining path passes through the changed tile.
+   * The actual repath happens in updateEnemies() when the enemy reaches its
+   * next waypoint — this avoids direction-vector bugs from repathing mid-stride.
+   *
+   * @param changedRow Row of the placed/sold tower (or -1 to flag ALL ground enemies)
+   * @param changedCol Column of the placed/sold tower (or -1 to flag ALL ground enemies)
+   */
+  repathAffectedEnemies(changedRow: number, changedCol: number): void {
+    this.clearPathCache();
+
+    const forceAll = changedRow < 0 || changedCol < 0;
+
+    for (const enemy of this.enemies.values()) {
+      if (enemy.isFlying) continue;
+
+      if (forceAll || this.pathCrossesTile(enemy, changedRow, changedCol)) {
+        enemy.needsRepath = true;
+      }
+    }
+  }
+
+  /** Check if an enemy's remaining path (from current index forward) crosses a specific tile. */
+  private pathCrossesTile(enemy: Enemy, row: number, col: number): boolean {
+    for (let i = enemy.pathIndex; i < enemy.path.length; i++) {
+      const node = enemy.path[i];
+      if (node.y === row && node.x === col) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Execute deferred repath for an enemy that reached a waypoint. */
+  private executeRepath(enemy: Enemy): void {
+    enemy.needsRepath = false;
+
+    const exitTiles = this.getExitTiles();
+    if (exitTiles.length === 0) return;
+    const exitTile = exitTiles[0];
+
+    // Repath from the node the enemy just arrived at (gridPosition is now current)
+    const newPath = this.findPath(
+      { x: enemy.gridPosition.col, y: enemy.gridPosition.row },
+      { x: exitTile.col, y: exitTile.row }
+    );
+
+    if (newPath.length > 0) {
+      enemy.path = newPath;
+      enemy.pathIndex = 0;
+    }
+    // If findPath returns empty (no route — should be unreachable via wouldBlockPath guard),
+    // the enemy keeps its old path. This is a defensive no-op, not a silent failure,
+    // because wouldBlockPath prevents placements that fully block spawner→exit routes.
   }
 
   /**

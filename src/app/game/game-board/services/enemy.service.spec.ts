@@ -1472,4 +1472,255 @@ describe('EnemyService', () => {
       expect(crown.rotation.z).toBe(initialRotZ);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // repathAffectedEnemies — deferred repathing system
+  // ---------------------------------------------------------------------------
+  // GridNode convention: x=col, y=row. Board: 10x10, spawner (0,0), exit (9,9).
+  // World coords: x = col-5, z = row-5  (tileSize=1, centered on origin).
+  // ---------------------------------------------------------------------------
+
+  describe('repathAffectedEnemies', () => {
+
+    /** Build a minimal GridNode for use in path arrays. */
+    function node(col: number, row: number): import('../models/enemy.model').GridNode {
+      return { x: col, y: row, g: 0, h: 0, f: 0 };
+    }
+
+    it('should flag ground enemies whose remaining path crosses the changed tile', () => {
+      // Path goes through (row=2, col=3) — change that tile
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(3, 0), node(3, 2), node(9, 9)];
+      enemy.pathIndex = 0;
+
+      service.repathAffectedEnemies(2, 3); // row=2, col=3
+
+      expect(enemy.needsRepath).toBe(true);
+    });
+
+    it('should NOT flag enemies whose remaining path does not cross the changed tile', () => {
+      // Path goes right along row 0 — does not pass through (row=5, col=5)
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(3, 0), node(9, 9)];
+      enemy.pathIndex = 0;
+
+      service.repathAffectedEnemies(5, 5);
+
+      expect(enemy.needsRepath).toBeFalsy();
+    });
+
+    it('should skip flying enemies even when their path crosses the changed tile', () => {
+      const enemy = service.spawnEnemy(EnemyType.FLYING, mockScene)!;
+      // Manually override path to include the changed tile
+      enemy.path = [node(0, 0), node(3, 2), node(9, 9)];
+      enemy.pathIndex = 0;
+
+      service.repathAffectedEnemies(2, 3); // row=2, col=3
+
+      expect(enemy.needsRepath).toBeFalsy();
+    });
+
+    it('should flag ALL ground enemies when called with (-1, -1)', () => {
+      // Spawn three different ground enemies with paths that do NOT cross any
+      // specific tile — force-all mode (-1,-1) must flag them regardless.
+      const e1 = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const e2 = service.spawnEnemy(EnemyType.HEAVY, mockScene)!;
+      const e3 = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+
+      // Give each a path that stays far from (0,0) so no tile match would fire
+      e1.path = [node(4, 4), node(5, 4), node(9, 9)]; e1.pathIndex = 0;
+      e2.path = [node(4, 4), node(5, 4), node(9, 9)]; e2.pathIndex = 0;
+      e3.path = [node(4, 4), node(5, 4), node(9, 9)]; e3.pathIndex = 0;
+
+      service.repathAffectedEnemies(-1, -1);
+
+      expect(e1.needsRepath).toBe(true);
+      expect(e2.needsRepath).toBe(true);
+      expect(e3.needsRepath).toBe(true);
+    });
+
+    it('should clear the path cache', () => {
+      spyOn(service, 'clearPathCache').and.callThrough();
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      enemy.path = [node(0, 0), node(1, 0), node(9, 9)];
+      enemy.pathIndex = 0;
+
+      service.repathAffectedEnemies(1, 0);
+
+      expect(service.clearPathCache).toHaveBeenCalled();
+    });
+
+    it('should not immediately change enemy path or pathIndex', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const originalPath = [node(0, 0), node(1, 0), node(2, 0), node(3, 0), node(9, 9)];
+      enemy.path = [...originalPath];
+      enemy.pathIndex = 1;
+
+      service.repathAffectedEnemies(3, 0); // row=3, col=0 — NOT on this path
+
+      // Flagging a different enemy should not touch path or pathIndex
+      // Use force-all to definitely flag this enemy
+      service.repathAffectedEnemies(-1, -1);
+
+      // Path and pathIndex must be unchanged — repath is deferred to next waypoint
+      expect(enemy.path.length).toBe(originalPath.length);
+      expect(enemy.pathIndex).toBe(1);
+      for (let i = 0; i < originalPath.length; i++) {
+        expect(enemy.path[i].x).toBe(originalPath[i].x);
+        expect(enemy.path[i].y).toBe(originalPath[i].y);
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // pathCrossesTile — tested indirectly via repathAffectedEnemies
+  // (private method; behaviour is observable through the needsRepath flag)
+  // ---------------------------------------------------------------------------
+
+  describe('pathCrossesTile (via repathAffectedEnemies)', () => {
+
+    function node(col: number, row: number): import('../models/enemy.model').GridNode {
+      return { x: col, y: row, g: 0, h: 0, f: 0 };
+    }
+
+    it('should return true (flag enemy) when tile appears after current pathIndex', () => {
+      // Tile at index 5 — enemy is at pathIndex=2, so tile is ahead
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      enemy.path = [
+        node(0, 0), node(1, 0), node(2, 0), // indices 0-2 — already passed
+        node(3, 0), node(4, 0), node(5, 0),  // indices 3-5 — upcoming; tile at idx 5
+        node(9, 9)
+      ];
+      enemy.pathIndex = 2;
+
+      service.repathAffectedEnemies(0, 5); // row=0, col=5 — node at index 5
+
+      expect(enemy.needsRepath).toBe(true);
+    });
+
+    it('should return false (no flag) when tile is strictly before current pathIndex', () => {
+      // Tile is at index 1 — enemy is already at pathIndex=3, so tile is behind
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      enemy.path = [
+        node(0, 0), node(1, 0), // indices 0-1 — behind
+        node(2, 0), node(3, 0), node(9, 9)
+      ];
+      enemy.pathIndex = 3;
+
+      service.repathAffectedEnemies(0, 1); // row=0, col=1 — node at index 1
+
+      expect(enemy.needsRepath).toBeFalsy();
+    });
+
+    it('should return false (no flag) when tile is not in the path at all', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(9, 9)];
+      enemy.pathIndex = 0;
+
+      service.repathAffectedEnemies(7, 7); // row=7, col=7 — not in path
+
+      expect(enemy.needsRepath).toBeFalsy();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Deferred repath execution in updateEnemies
+  // ---------------------------------------------------------------------------
+  // Strategy: place enemy at the world position of pathIndex node so that
+  // a deltaTime of 0.6s causes moveDistance (2.0 * 0.6 = 1.2) >= distanceToNext (1.0),
+  // triggering a snap and executeRepath.
+  // Board: 10x10 with spawner (0,0), exit (9,9), all other tiles traversable.
+  // gridToWorld(row=r, col=c) => {x: c-5, z: r-5}
+  // ---------------------------------------------------------------------------
+
+  describe('deferred repath execution in updateEnemies', () => {
+
+    function node(col: number, row: number): import('../models/enemy.model').GridNode {
+      return { x: col, y: row, g: 0, h: 0, f: 0 };
+    }
+
+    /**
+     * Return the world {x, z} for a grid (row, col) on a 10x10 board with tileSize=1.
+     * Mirrors gridToWorld: x = col - 5, z = row - 5.
+     */
+    function worldOf(row: number, col: number): { x: number; z: number } {
+      return { x: col - 5, z: row - 5 };
+    }
+
+    it('should execute repath when enemy reaches a waypoint with needsRepath=true', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // Set a straight 4-node path along row=0: col 0→1→2→3
+      enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(3, 0)];
+      enemy.pathIndex = 0;
+      // Position enemy exactly at world coords of node 0 (row=0, col=0)
+      const w0 = worldOf(0, 0);
+      enemy.position.x = w0.x;
+      enemy.position.z = w0.z;
+      enemy.needsRepath = true;
+
+      const pathBefore = enemy.path.slice();
+
+      // deltaTime=0.6 → moveDistance=2.0*0.6=1.2 >= 1.0 → snaps to node 1 → executeRepath fires
+      service.updateEnemies(0.6);
+
+      // Path must now be the A* result from current grid position, not the original stub
+      expect(enemy.path).not.toEqual(pathBefore);
+      // A* path from (row=0, col=1) to exit (9,9) must end at (9,9)
+      const last = enemy.path[enemy.path.length - 1];
+      expect(last.x).toBe(9);
+      expect(last.y).toBe(9);
+    });
+
+    it('should NOT repath an enemy that has needsRepath=false', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(3, 0)];
+      enemy.pathIndex = 0;
+      const w0 = worldOf(0, 0);
+      enemy.position.x = w0.x;
+      enemy.position.z = w0.z;
+      enemy.needsRepath = false;
+
+      const pathBefore = enemy.path.slice();
+
+      service.updateEnemies(0.6);
+
+      // Path must be unchanged — no repath was requested
+      expect(enemy.path.length).toBe(pathBefore.length);
+      for (let i = 0; i < pathBefore.length; i++) {
+        expect(enemy.path[i].x).toBe(pathBefore[i].x);
+        expect(enemy.path[i].y).toBe(pathBefore[i].y);
+      }
+    });
+
+    it('should repath from the snapped grid position, not the original start', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // Path: row=0, col 0→1→2 then onwards
+      enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(3, 0), node(9, 9)];
+      enemy.pathIndex = 0;
+      const w0 = worldOf(0, 0);
+      enemy.position.x = w0.x;
+      enemy.position.z = w0.z;
+      enemy.needsRepath = true;
+
+      service.updateEnemies(0.6); // snaps to col=1, row=0 → executeRepath fires
+
+      // After repath, path[0] must be the arrived-at node (col=1, row=0)
+      expect(enemy.path[0].x).toBe(1);
+      expect(enemy.path[0].y).toBe(0);
+    });
+
+    it('should clear needsRepath flag after executing repath', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(9, 9)];
+      enemy.pathIndex = 0;
+      const w0 = worldOf(0, 0);
+      enemy.position.x = w0.x;
+      enemy.position.z = w0.z;
+      enemy.needsRepath = true;
+
+      service.updateEnemies(0.6); // triggers executeRepath
+
+      expect(enemy.needsRepath).toBe(false);
+    });
+  });
 });

@@ -38,6 +38,7 @@ export interface Enemy {
   maxShield?: number; // Starting shield HP (SHIELDED type only)
   isMiniSwarm?: boolean; // True for mini-enemies spawned by SWARM death — prevents recursive spawning
   isFlying?: boolean; // True for FLYING type — ignores terrain, immune to slow
+  needsRepath?: boolean; // Flagged when board changes — repath on next waypoint arrival
 }
 
 export interface EnemyStats {
