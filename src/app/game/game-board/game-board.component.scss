@@ -333,7 +333,6 @@
       }
 
       @media (max-width:480px) {
-        min-height: 2.75rem;
         padding: var(--spacing-xs) var(--spacing-sm);
         font-size: var(--font-size-base);
       }
@@ -541,7 +540,6 @@
       }
 
       .edit-map-btn {
-        border-color: var(--theme-purple-a50);
         color: var(--theme-purple-mid);
 
         &:hover {
@@ -1381,25 +1379,42 @@
     }
 
 
-    // Setup panel: bottom sheet on mobile
+    // Setup panel: compact right-side overlay on mobile
     .setup-panel {
-      position: fixed;
+      position: absolute;
       top: auto;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      width: 100%;
-      max-height: 55vh;
-      border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
-      padding: var(--spacing-sm) var(--spacing-md);
+      bottom: calc(var(--spacing-md) + var(--tower-bar-height));
+      left: auto;
+      right: var(--spacing-sm);
+      width: min(16rem, 55vw);
+      max-height: calc(100vh - var(--tower-bar-height) - 4rem);
+      overflow-y: auto;
+      padding: var(--spacing-sm);
+      gap: var(--spacing-xs);
     }
 
     .setup-difficulty-grid {
       grid-template-columns: repeat(4, 1fr);
     }
 
+    .setup-diff-btn, .setup-mod-btn {
+      padding: 0.25rem;
+      font-size: var(--font-size-3xs);
+      min-height: 2.75rem;
+    }
+
+    .setup-endless {
+      font-size: var(--font-size-2xs);
+      padding: 0.25rem 0;
+    }
+
     .setup-modifier-grid {
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .setup-start-btn {
+      padding: var(--spacing-xs);
+      font-size: var(--font-size-2xs);
     }
 
     // Victory/defeat overlay: tighten padding
@@ -1526,8 +1541,6 @@
       }
 
       .pause-btn {
-        min-width: 2.75rem;
-        min-height: 2.75rem;
         line-height: 0;
       }
 
@@ -1537,9 +1550,17 @@
       }
     }
 
-    // Setup panel: constrain height on short screens
+    // Setup panel: tighter on small phones
     .setup-panel {
-      max-height: 45vh;
+      width: min(14rem, 60vw);
+      max-height: calc(100vh - var(--tower-bar-height) - 4rem);
+      padding: var(--spacing-xs);
+    }
+
+    .setup-diff-btn, .setup-mod-btn, .setup-start-btn {
+      min-height: 2.75rem;
+      font-size: 0.5rem;
+      padding: 0.125rem;
     }
 
     // Victory/defeat overlay: full-screen with adjusted padding
