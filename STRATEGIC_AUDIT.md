@@ -825,3 +825,9 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 
 ### Finding 3: No findings requiring immediate fix
 All interaction paths verified: SETUP tower placement unblocked, wave-btn pointer-events correct, unaffordable tile hover shows cost in mode indicator, drag preview checks tile-specific affordability, initial heatmap renders on board load.
+
+## Deployment Checklist — Wave Panel + Tile Dimming
+- [x] Step 1: Convention check — console.log/warn (3 intentional repath warnings), no TODO/FIXME, no magic numbers
+- [x] Step 2: Full test suite green (1925/1925)
+- [x] Step 3: Production build passes — CSS 39.31kb (below 40kb error budget)
+- [ ] Step 4: Push to remote
