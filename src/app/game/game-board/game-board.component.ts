@@ -775,8 +775,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Restore tile to BASE
     this.gameBoardService.removeTower(this.selectedTowerInfo.row, this.selectedTowerInfo.col);
 
-    // Clear path cache and BFS preview cache since board changed
-    this.enemyService.clearPathCache();
+    // Repath all enemies and invalidate caches since board changed
+    this.enemyService.repathAllEnemies();
     this.tilePricingService.invalidateCache();
     this.lastPreviewKey = '';
     this.refreshPathOverlay();
@@ -1727,8 +1727,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.lastPreviewKey = '';
       this.towerPreviewService.hidePreview(this.scene);
 
-      // Clear enemy path cache since board layout changed
-      this.enemyService.clearPathCache();
+      // Repath all enemies since board layout changed — prevents walking through new tower
+      this.enemyService.repathAllEnemies();
       this.tilePricingService.invalidateCache();
       this.refreshPathOverlay();
 

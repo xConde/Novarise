@@ -7,20 +7,22 @@ import * as THREE from 'three';
 
 const LABEL_CONFIG = {
   canvasWidth: 128,
-  canvasHeight: 48,
-  fontSize: 28,
+  canvasHeight: 64,
+  fontSize: 32,
   fontFamily: 'Arial',
   fontWeight: 'bold',
   /** World-unit width/height of the sprite billboard. */
-  spriteWidth: 0.7,
-  spriteHeight: 0.25,
+  spriteWidth: 0.9,
+  spriteHeight: 0.4,
   /** Y position above the tile surface. */
-  yOffset: 0.45,
+  yOffset: 0.5,
   /**
    * Minimum percentIncrease required to show a label.
    * Low-value labels (+3%, +4%) add visual noise on large boards.
    */
   minPercentIncrease: 8,
+  /** Stroke width for the dark outline behind text. */
+  strokeWidth: 4,
 } as const;
 
 const TIER_TEXT_COLORS: Record<string, string> = {
@@ -141,7 +143,7 @@ export class PriceLabelService {
 
       // Dark stroke for readability against the board surface.
       ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = LABEL_CONFIG.strokeWidth;
       ctx.strokeText(label, canvas.width / 2, canvas.height / 2);
 
       ctx.fillStyle = textColor;
