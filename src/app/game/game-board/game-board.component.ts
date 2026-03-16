@@ -45,6 +45,7 @@ import { StatusEffectService } from './services/status-effect.service';
 import { StatusEffectType } from './constants/status-effect.constants';
 import { TilePricingService, TilePriceInfo, StrategicTier } from './services/tile-pricing.service';
 import { PriceLabelService } from './services/price-label.service';
+import { TerrainGridStateLegacy } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -301,7 +302,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Import editor map if it has spawn and exit points; otherwise use default board
     if (this.mapBridge.hasEditorMap()) {
       const state = this.mapBridge.getEditorMapState()!;
-      if ((state.spawnPoints?.length > 0 || (state as any).spawnPoint) && (state.exitPoints?.length > 0 || (state as any).exitPoint)) {
+      const legacy = state as unknown as TerrainGridStateLegacy;
+      if ((state.spawnPoints?.length > 0 || legacy.spawnPoint) && (state.exitPoints?.length > 0 || legacy.exitPoint)) {
         const { board, width, height } = this.mapBridge.convertToGameBoard(state);
         this.gameBoardService.importBoard(board, width, height);
       } else {
@@ -984,7 +986,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (this.mapBridge.hasEditorMap()) {
       const state = this.mapBridge.getEditorMapState()!;
-      if ((state.spawnPoints?.length > 0 || (state as any).spawnPoint) && (state.exitPoints?.length > 0 || (state as any).exitPoint)) {
+      const legacy = state as unknown as TerrainGridStateLegacy;
+      if ((state.spawnPoints?.length > 0 || legacy.spawnPoint) && (state.exitPoints?.length > 0 || legacy.exitPoint)) {
         const { board, width, height } = this.mapBridge.convertToGameBoard(state);
         this.gameBoardService.importBoard(board, width, height);
       } else {

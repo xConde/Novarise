@@ -7,6 +7,8 @@
 }
 
 .board-container {
+  --tower-bar-height: 5.5rem; // shared anchor: mode-indicator + tower-info-panel
+
   display: flex;
   flex-direction: column;
   border: var(--border-width-thin) solid var(--game-primary);
@@ -624,8 +626,6 @@
 
   // --- Tower info panel ---
   .tower-info-panel {
-    --tower-bar-height: 5.5rem;
-
     @include glass-panel(rgba(0, 0, 0, 0.85));
     position: absolute;
     bottom: calc(var(--spacing-lg) + var(--tower-bar-height));
@@ -638,7 +638,6 @@
     animation: scale-in 0.2s ease-out;
 
     @media screen and (max-width: 768px) {
-      --tower-bar-height: 4.5rem;
       min-width: 12rem;
       bottom: calc(var(--spacing-md) + var(--tower-bar-height));
     }
@@ -1441,6 +1440,8 @@
 // Mobile (max-width: 480px) overrides
 @media screen and (max-width: 480px) {
   .board-container {
+    --tower-bar-height: 9rem; // 2-row tower grid at 480px
+
     // Tower selection: switch to 3-column grid
     .tower-selection {
       display: grid;
@@ -1482,7 +1483,7 @@
     .tower-info-panel {
       left: 0;
       right: 0;
-      bottom: calc(var(--spacing-lg) + 8rem); // 8rem = 2-row tower grid height (mobile grid layout)
+      bottom: calc(var(--spacing-lg) + var(--tower-bar-height));
       transform: none;
       min-width: unset;
       width: 100%;
@@ -1521,7 +1522,7 @@
     .game-controls {
       flex-direction: column;
       align-items: stretch;
-      bottom: calc(var(--spacing-sm) + 8.5rem); // above tower grid
+      bottom: calc(var(--spacing-sm) + var(--tower-bar-height));
       right: var(--spacing-sm);
       gap: var(--spacing-xs);
       padding: var(--spacing-xs);
@@ -1561,7 +1562,6 @@
         width: 100%;
         max-height: 85vh;
         overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
         padding: var(--spacing-xl) var(--spacing-md);
         border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
         border-left: none;
@@ -1677,12 +1677,9 @@
 }
 
 // --- Interaction mode indicator ---
-// Positioned inside .board-container (same as .tower-selection) so coordinate systems match.
 .mode-indicator {
   position: absolute;
-  // Tower bar: bottom: var(--spacing-lg) + ~5.5rem content height.
-  // This sits directly above the tower bar with a small gap.
-  bottom: calc(var(--spacing-lg) + 6rem);
+  bottom: calc(var(--spacing-lg) + var(--tower-bar-height));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -1716,12 +1713,7 @@
   }
 
   @media screen and (max-width: 768px) {
-    bottom: calc(var(--spacing-md) + 5rem);
-    font-size: var(--font-size-2xs);
-  }
-
-  @media screen and (max-width: 480px) {
-    bottom: calc(var(--spacing-md) + 8.5rem);
+    bottom: calc(var(--spacing-md) + var(--tower-bar-height));
     font-size: var(--font-size-2xs);
   }
 }
