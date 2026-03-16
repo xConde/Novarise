@@ -857,6 +857,142 @@ describe('GameBoardComponent', () => {
     it('pauseMenuSpeeds contains [1, 2, 3]', () => {
       expect(component.pauseMenuSpeeds).toEqual([1, 2, 3] as any);
     });
+
+    it('confirmQuit does NOT record defeat during SETUP phase', () => {
+      const router = TestBed.inject(Router);
+      spyOn(router, 'navigate');
+      // Phase is SETUP by default — should be a no-op for profile recording
+      component.confirmQuit();
+      expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
+    });
+
+    it('confirmQuit records defeat when quitting during COMBAT', () => {
+      const router = TestBed.inject(Router);
+      spyOn(router, 'navigate');
+      gameStateService.setPhase(GamePhase.COMBAT);
+      component.confirmQuit();
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ isVictory: false })
+      );
+    });
+
+    it('confirmQuit records defeat when quitting during INTERMISSION', () => {
+      const router = TestBed.inject(Router);
+      spyOn(router, 'navigate');
+      gameStateService.setPhase(GamePhase.INTERMISSION);
+      component.confirmQuit();
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ isVictory: false })
+      );
+    });
+
+    it('confirmQuit does not double-record defeat when gameEndRecorded is already true', () => {
+      const router = TestBed.inject(Router);
+      spyOn(router, 'navigate');
+      gameStateService.setPhase(GamePhase.COMBAT);
+      (component as any).gameEndRecorded = true;
+      component.confirmQuit();
+      expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('canLeaveGame', () => {
+    let gameStateService: GameStateService;
+
+    beforeEach(() => {
+      gameStateService = fixture.debugElement.injector.get(GameStateService);
+    });
+
+    it('returns true during SETUP (no confirmation needed)', () => {
+      // Phase defaults to SETUP
+      expect(component.canLeaveGame()).toBeTrue();
+    });
+
+    it('returns true during VICTORY (no confirmation needed)', () => {
+      gameStateService.setPhase(GamePhase.VICTORY);
+      expect(component.canLeaveGame()).toBeTrue();
+    });
+
+    it('returns true during DEFEAT (no confirmation needed)', () => {
+      gameStateService.setPhase(GamePhase.DEFEAT);
+      expect(component.canLeaveGame()).toBeTrue();
+    });
+
+    it('auto-pauses during COMBAT before showing confirm', () => {
+      gameStateService.setPhase(GamePhase.COMBAT);
+      spyOn(window, 'confirm').and.returnValue(false);
+      spyOn(gameStateService, 'togglePause').and.callThrough();
+
+      component.canLeaveGame();
+
+      expect(gameStateService.togglePause).toHaveBeenCalled();
+    });
+
+    it('does not double-pause when already paused in COMBAT', () => {
+      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.togglePause(); // already paused
+      spyOn(window, 'confirm').and.returnValue(false);
+      spyOn(gameStateService, 'togglePause').and.callThrough();
+
+      component.canLeaveGame();
+
+      expect(gameStateService.togglePause).not.toHaveBeenCalled();
+    });
+
+    it('returns false when player cancels the confirm dialog', () => {
+      gameStateService.setPhase(GamePhase.COMBAT);
+      spyOn(window, 'confirm').and.returnValue(false);
+
+      expect(component.canLeaveGame()).toBeFalse();
+    });
+
+    it('returns true when player confirms leaving', () => {
+      gameStateService.setPhase(GamePhase.COMBAT);
+      spyOn(window, 'confirm').and.returnValue(true);
+
+      expect(component.canLeaveGame()).toBeTrue();
+    });
+
+    it('records defeat on confirmed leave during COMBAT', () => {
+      gameStateService.setPhase(GamePhase.COMBAT);
+      spyOn(window, 'confirm').and.returnValue(true);
+
+      component.canLeaveGame();
+
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ isVictory: false })
+      );
+    });
+
+    it('records defeat on confirmed leave during INTERMISSION', () => {
+      gameStateService.setPhase(GamePhase.INTERMISSION);
+      spyOn(window, 'confirm').and.returnValue(true);
+
+      component.canLeaveGame();
+
+      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ isVictory: false })
+      );
+    });
+
+    it('does not record defeat when player cancels', () => {
+      gameStateService.setPhase(GamePhase.COMBAT);
+      spyOn(window, 'confirm').and.returnValue(false);
+
+      component.canLeaveGame();
+
+      expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
+    });
+
+    it('does not double-record defeat when gameEndRecorded is already true', () => {
+      gameStateService.setPhase(GamePhase.COMBAT);
+      spyOn(window, 'confirm').and.returnValue(true);
+      (component as any).gameEndRecorded = true;
+
+      component.canLeaveGame();
+
+      expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
+    });
   });
 
   describe('keyboard Escape key — pause integration', () => {

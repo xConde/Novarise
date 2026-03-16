@@ -2067,10 +2067,65 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   confirmQuit(): void {
     this.showQuitConfirm = false;
+    this.recordQuitDefeat();
     if (this.isCampaignGame) {
       this.router.navigate(['/campaign']);
     } else {
       this.router.navigate(['/']);
+    }
+  }
+
+  /**
+   * Called by the CanDeactivate guard when the player tries to navigate away mid-game.
+   * Auto-pauses if in COMBAT, asks for confirmation, then records a defeat if confirmed.
+   * Returns true to allow navigation, false to stay.
+   */
+  canLeaveGame(): boolean {
+    const state = this.gameStateService.getState();
+
+    // Allow free navigation when game is not actively in progress
+    if (
+      state.phase === GamePhase.SETUP ||
+      state.phase === GamePhase.VICTORY ||
+      state.phase === GamePhase.DEFEAT
+    ) {
+      return true;
+    }
+
+    // Game is in COMBAT or INTERMISSION — auto-pause first so the loop stops
+    if (!state.isPaused) {
+      this.gameStateService.togglePause();
+    }
+
+    const shouldLeave = confirm('Leave game? Progress will be lost.');
+    if (!shouldLeave) {
+      return false;
+    }
+
+    this.recordQuitDefeat();
+    return true;
+  }
+
+  /**
+   * Records a mid-game quit as a defeat. Idempotent — no-ops if already recorded
+   * or if the game was never in progress (SETUP phase).
+   */
+  private recordQuitDefeat(): void {
+    const state = this.gameStateService.getState();
+    if (this.gameEndRecorded) return;
+    if (state.phase !== GamePhase.COMBAT && state.phase !== GamePhase.INTERMISSION) return;
+    this.gameEndRecorded = true;
+    const gameEndStats = this.buildGameEndStats(false);
+    this.playerProfileService.recordGameEnd(gameEndStats);
+
+    const mapId = this.mapBridge.getMapId();
+    if (mapId && this.scoreBreakdown) {
+      this.playerProfileService.recordMapScore(
+        mapId,
+        this.scoreBreakdown.finalScore,
+        0,
+        state.difficulty
+      );
     }
   }
 
