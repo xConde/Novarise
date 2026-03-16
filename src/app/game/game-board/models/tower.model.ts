@@ -30,6 +30,7 @@ export const MAX_TOWER_LEVEL = 3;
 export const UPGRADE_COST_CONFIG = {
   baseMultiplier: 0.5,
   levelScale: 0.25,
+  tileStrategicScale: 0.50,
 } as const;
 
 export const SELL_REFUND_RATE = 0.5;
@@ -241,7 +242,7 @@ export const UPGRADE_MULTIPLIERS: { damage: number; range: number; fireRate: num
 export function getUpgradeCost(type: TowerType, currentLevel: number, costMultiplier: number = 1, tileStrategic: number = 0): number {
   if (currentLevel < 1 || currentLevel >= MAX_TOWER_LEVEL) return Infinity;
   const baseCost = TOWER_CONFIGS[type].cost;
-  return Math.round(baseCost * (UPGRADE_COST_CONFIG.baseMultiplier + currentLevel * UPGRADE_COST_CONFIG.levelScale) * costMultiplier * (1 + tileStrategic));
+  return Math.round(baseCost * (UPGRADE_COST_CONFIG.baseMultiplier + currentLevel * UPGRADE_COST_CONFIG.levelScale) * costMultiplier * (1 + tileStrategic * UPGRADE_COST_CONFIG.tileStrategicScale));
 }
 
 /** Get the sell refund (50% of total gold invested). */

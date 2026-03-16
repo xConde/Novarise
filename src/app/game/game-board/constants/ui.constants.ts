@@ -74,10 +74,6 @@ export const TILE_EMISSIVE = {
   selected: 0.8,
   /** Default emissive color for BASE/WALL tiles (used as fallback in highlight restoration). */
   defaultColor: 0x2a2548,
-  /** Highlight intensity for tiles valid for tower placement (PLACE mode). */
-  validPlacement: 0.35,
-  /** Emissive color override for valid placement tiles (soft cyan glow). */
-  validPlacementColor: 0x00ccaa,
   /** Dimming factor for unaffordable-but-valid tiles in PLACE mode (0-1, lower = dimmer). */
   unaffordableDimming: 0.35,
 } as const;

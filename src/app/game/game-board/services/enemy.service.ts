@@ -64,8 +64,8 @@ export class EnemyService {
       return null;
     }
 
-    // Use first exit tile as target (they're grouped in center)
-    const exitTile = exitTiles[0];
+    // Pick a random exit tile (multi-exit support)
+    const exitTile = exitTiles[Math.floor(Math.random() * exitTiles.length)];
 
     // FLYING enemies bypass terrain — use a 2-node straight-line path
     const isFlying = type === EnemyType.FLYING;
@@ -945,7 +945,19 @@ export class EnemyService {
 
     const exitTiles = this.getExitTiles();
     if (exitTiles.length === 0) return;
-    const exitTile = exitTiles[0];
+
+    // Pick the nearest exit to the enemy's current position (preserves multi-exit targeting)
+    let exitTile = exitTiles[0];
+    if (exitTiles.length > 1) {
+      let minDist = Infinity;
+      for (const et of exitTiles) {
+        const dist = Math.abs(enemy.gridPosition.row - et.row) + Math.abs(enemy.gridPosition.col - et.col);
+        if (dist < minDist) {
+          minDist = dist;
+          exitTile = et;
+        }
+      }
+    }
 
     // Repath from the node the enemy just arrived at (gridPosition is now current)
     const newPath = this.findPath(

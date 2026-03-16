@@ -25,7 +25,7 @@ import { MinimapService, MinimapEntityData, MinimapTerrainData } from './service
 import { SettingsService } from './services/settings.service';
 import { TowerPreviewService } from './services/tower-preview.service';
 import { disposeMaterial } from './utils/three-utils';
-import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TARGETING_MODE_LABELS, TargetingMode, SpecializationStats } from './models/tower.model';
+import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TARGETING_MODE_LABELS, TargetingMode, SpecializationStats, UPGRADE_COST_CONFIG } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, GameModifierConfig, calculateModifierScoreMultiplier } from './models/game-modifier.model';
@@ -451,6 +451,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.globalDragMoveHandler = (e: Event) => {
         const te = e as TouchEvent;
         if (te.touches.length === 1) {
+          if (this.dragThresholdMet) {
+            te.preventDefault(); // Block page scroll during active drag
+          }
           this.onDragMove(te.touches[0].clientX, te.touches[0].clientY);
         } else if (te.touches.length > 1) {
           // Multi-finger during drag = abort (user switched to pinch/zoom)
@@ -882,7 +885,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
     const tileStrategic = this.tilePricingService.getStrategicValue(tower.row, tower.col);
     this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level, costMult, tileStrategic);
-    this.selectedTowerUpgradePercent = Math.round(tileStrategic * 100);
+    this.selectedTowerUpgradePercent = Math.round(tileStrategic * UPGRADE_COST_CONFIG.tileStrategicScale * 100);
     this.selectedTowerSellValue = getSellValue(tower.totalInvested);
 
     // Compute upgrade preview (L1→L2 only; L2→L3 requires spec choice so preview is per-spec)
@@ -1701,8 +1704,18 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const prevSelected = this.getSelectedTileMesh();
     if (prevSelected) {
       const material = prevSelected.material as THREE.MeshStandardMaterial;
-      const tileType = prevSelected.userData['tile'].type;
-      material.emissiveIntensity = tileType === BlockType.BASE ? TILE_EMISSIVE.base : tileType === BlockType.WALL ? TILE_EMISSIVE.wall : TILE_EMISSIVE.special;
+      const prevKey = `${prevSelected.userData['row']}-${prevSelected.userData['col']}`;
+      if (this.highlightedTiles.has(prevKey)) {
+        const r = prevSelected.userData['heatmapR'] ?? 0;
+        const g = prevSelected.userData['heatmapG'] ?? 0;
+        const b = prevSelected.userData['heatmapB'] ?? 0;
+        const hmIntensity = prevSelected.userData['heatmapIntensity'] ?? TILE_EMISSIVE.base;
+        material.emissive.setRGB(r, g, b);
+        material.emissiveIntensity = hmIntensity;
+      } else {
+        const tileType = prevSelected.userData['tile'].type;
+        material.emissiveIntensity = tileType === BlockType.BASE ? TILE_EMISSIVE.base : tileType === BlockType.WALL ? TILE_EMISSIVE.wall : TILE_EMISSIVE.special;
+      }
     }
 
     if (intersects.length > 0) {

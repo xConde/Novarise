@@ -149,13 +149,13 @@ describe('Tower Model', () => {
 
     it('scales cost by tileStrategic value', () => {
       const scaledCost = getUpgradeCost(TowerType.BASIC, 1, 1, 0.5);
-      const expected = Math.round(TOWER_CONFIGS[TowerType.BASIC].cost * (UPGRADE_COST_CONFIG.baseMultiplier + 1 * UPGRADE_COST_CONFIG.levelScale) * 1 * 1.5);
+      const expected = Math.round(TOWER_CONFIGS[TowerType.BASIC].cost * (UPGRADE_COST_CONFIG.baseMultiplier + 1 * UPGRADE_COST_CONFIG.levelScale) * 1 * (1 + 0.5 * UPGRADE_COST_CONFIG.tileStrategicScale));
       expect(scaledCost).toBe(expected);
     });
 
-    it('tileStrategic=1 doubles the upgrade cost', () => {
+    it('tileStrategic=1 increases upgrade cost by 50%', () => {
       const maxCost = getUpgradeCost(TowerType.BASIC, 1, 1, 1.0);
-      const expected = Math.round(TOWER_CONFIGS[TowerType.BASIC].cost * (UPGRADE_COST_CONFIG.baseMultiplier + 1 * UPGRADE_COST_CONFIG.levelScale) * 1 * 2.0);
+      const expected = Math.round(TOWER_CONFIGS[TowerType.BASIC].cost * (UPGRADE_COST_CONFIG.baseMultiplier + 1 * UPGRADE_COST_CONFIG.levelScale) * 1 * (1 + 1.0 * UPGRADE_COST_CONFIG.tileStrategicScale));
       expect(maxCost).toBe(expected);
     });
 
@@ -167,7 +167,7 @@ describe('Tower Model', () => {
 
     it('costMultiplier and tileStrategic combine multiplicatively', () => {
       const cost = getUpgradeCost(TowerType.BASIC, 1, 2.0, 0.5);
-      const expected = Math.round(TOWER_CONFIGS[TowerType.BASIC].cost * (UPGRADE_COST_CONFIG.baseMultiplier + 1 * UPGRADE_COST_CONFIG.levelScale) * 2.0 * 1.5);
+      const expected = Math.round(TOWER_CONFIGS[TowerType.BASIC].cost * (UPGRADE_COST_CONFIG.baseMultiplier + 1 * UPGRADE_COST_CONFIG.levelScale) * 2.0 * (1 + 0.5 * UPGRADE_COST_CONFIG.tileStrategicScale));
       expect(cost).toBe(expected);
     });
 
