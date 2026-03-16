@@ -739,3 +739,29 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 - [x] Convention check: catch(e) → catch(error), no hardcoded numbers in diff
 - [x] Full test suite green (1780/1780)
 - [x] Verify both isVictory guards are removed (grep confirmation — only GameEndStats construction remains)
+
+---
+
+## Red Team Critique — feat/gameplay-interaction (2026-03-15)
+
+### Finding 1: Touch drag multi-finger silently drops placement (HIGH)
+**Location:** `game-board.component.ts:436,442` (touch drag handlers)
+**Risk:** The `touchmove` handler guards `te.touches.length === 1` — if a second finger touches during drag, the handler stops calling `onDragMove`. The `touchend` handler guards `te.changedTouches.length === 1` — if both fingers lift simultaneously, `changedTouches.length === 2` and `onDragEnd` never fires. The drag listeners remain on `window` permanently, `isDragging` stays true, and subsequent touch interactions are corrupted. The `blurDragHandler` only fires on window blur, not on multi-finger release.
+**Fix:** Remove the `changedTouches.length === 1` guard in `globalDragEndHandler`. On any `touchend`, cancel the drag. Multi-finger during a tower drag is always an abort, never a valid placement.
+
+### Finding 2: `updateTileHighlights` emissive snapshot races with hover (MEDIUM)
+**Location:** `game-board.component.ts:583-585` (origEmissive snapshot)
+**Risk:** `updateTileHighlights` snapshots `material.emissive.getHex()` as `origEmissive` before overwriting with the highlight color. If the tile is currently being hovered (intensity set to `TILE_EMISSIVE.hover`), the snapshot captures the hover intensity, not the base. When `clearTileHighlights` later restores, it sets the tile to hover intensity permanently even when the mouse has left. The `hoveredTile` skip guard at line 578 mitigates this for the *currently* hovered tile, but a tile that *was* hovered milliseconds before `updateTileHighlights` runs (and whose mouseleave event hasn't reset it yet) could still be captured with the wrong emissive.
+**Fix:** Always snapshot from the tile type defaults (`TILE_EMISSIVE.base/wall/special`) instead of reading the live material state, since the defaults are deterministic.
+
+### Finding 3: `currentStats` computed but unused in spec options (LOW)
+**Location:** `game-board.component.ts:624`
+**Risk:** `const currentStats = getEffectiveStats(this.selectedTowerInfo.type, this.selectedTowerInfo.level);` is computed but never referenced — the spec options now use `alphaStats`/`betaStats` directly. Dead variable. No runtime cost (tree-shaken in prod), but violates code quality standards and will trigger lint warnings.
+**Fix:** Remove the unused `currentStats` line.
+
+## Deployment Checklist — feat/gameplay-interaction
+- [x] Step 1: Convention check — grep for console.log, TODO/FIXME/HACK, catch(e), hardcoded numbers added on this branch
+- [x] Step 2: Tile-specific cost shown in mode indicator on hover (hoveredTileCost + gold display)
+- [x] Step 3: Full test suite green (1839/1839 hard gate)
+- [x] Step 4: Production build passes — CSS trimmed to 39.83kb (below 40kb error budget)
+- [x] Step 5: Push to remote + update PR (#23)

@@ -179,7 +179,8 @@ describe('GameBoardComponent', () => {
       window.removeEventListener('keydown', (component as any).keyboardHandler);
     });
 
-    it('pressing 1 selects BASIC tower', () => {
+    it('pressing 1 selects BASIC tower when a different type is selected', () => {
+      component.selectedTowerType = TowerType.SNIPER;
       fireKey('1');
       expect(component.selectedTowerType).toBe(TowerType.BASIC);
     });
@@ -209,11 +210,16 @@ describe('GameBoardComponent', () => {
       expect(component.selectedTowerType).toBe(TowerType.MORTAR);
     });
 
-    it('pressing Escape deselects the tower type back to BASIC and closes info panel', () => {
+    it('pressing Escape in PLACE mode cancels placement', () => {
       component.selectedTowerType = TowerType.SNIPER;
-      (component as any).selectedTowerInfo = { id: 'fake', type: TowerType.SNIPER, level: 1, row: 0, col: 0, lastFireTime: 0, kills: 0, totalInvested: 50, mesh: null };
       fireKey('Escape');
-      expect(component.selectedTowerType).toBe(TowerType.BASIC);
+      expect(component.selectedTowerType).toBeNull();
+    });
+
+    it('pressing Escape in INSPECT mode deselects placed tower info', () => {
+      component.selectedTowerType = null;
+      (component as any).selectedTowerInfo = { id: 'fake', type: TowerType.SNIPER, level: 1, row: 0, col: 0, lastFireTime: 0, kills: 0, totalInvested: 50, mesh: null, targetingMode: 'nearest' };
+      fireKey('Escape');
       expect(component.selectedTowerInfo).toBeNull();
     });
 
@@ -792,6 +798,230 @@ describe('GameBoardComponent', () => {
       (component as any).contextLost = true;
       (component as any).contextLost = false;
       expect(component.contextLost).toBeFalse();
+    });
+  });
+
+  describe('Interaction Mode System', () => {
+    it('should start with BASIC tower selected (PLACE mode by default)', () => {
+      expect(component.selectedTowerType).toBe(TowerType.BASIC);
+      expect(component.isPlaceMode).toBeTrue();
+    });
+
+    it('should toggle to INSPECT mode when clicking same tower type', () => {
+      // Start in PLACE mode with BASIC selected
+      component.selectedTowerType = TowerType.BASIC;
+
+      // Clicking the same type calls cancelPlacement — sets to null (INSPECT mode)
+      component.selectTowerType(TowerType.BASIC);
+
+      expect(component.selectedTowerType).toBeNull();
+      expect(component.isPlaceMode).toBeFalse();
+    });
+
+    it('cancelPlacement should set selectedTowerType to null', () => {
+      component.selectedTowerType = TowerType.SNIPER;
+
+      component.cancelPlacement();
+
+      expect(component.selectedTowerType).toBeNull();
+    });
+
+    it('isPlaceMode should return false when selectedTowerType is null', () => {
+      component.selectedTowerType = null;
+
+      expect(component.isPlaceMode).toBeFalse();
+    });
+
+    it('isPlaceMode should return true when selectedTowerType is set', () => {
+      component.selectedTowerType = TowerType.MORTAR;
+
+      expect(component.isPlaceMode).toBeTrue();
+    });
+
+    it('selectPlacedTower should cancel placement mode', () => {
+      const towerCombatService = fixture.debugElement.injector.get(TowerCombatService);
+      const fakeTower: PlacedTower = {
+        id: 'r0-c1',
+        type: TowerType.BASIC,
+        level: 1,
+        row: 0,
+        col: 1,
+        lastFireTime: 0,
+        kills: 0,
+        totalInvested: 50,
+        targetingMode: 'nearest',
+        mesh: null,
+      };
+      spyOn(towerCombatService, 'getTower').and.returnValue(fakeTower);
+      // Stub Three.js-dependent methods to avoid canvas crash in headless tests
+      spyOn(component as any, 'showRangePreview');
+      spyOn(component as any, 'refreshTowerInfoPanel');
+
+      // Enter PLACE mode
+      component.selectedTowerType = TowerType.SNIPER;
+      expect(component.isPlaceMode).toBeTrue();
+
+      // Selecting a placed tower should exit PLACE mode
+      (component as any).selectPlacedTower('r0-c1');
+
+      expect(component.selectedTowerType).toBeNull();
+      expect(component.isPlaceMode).toBeFalse();
+    });
+
+    it('getEffectiveTowerCost should return 0 for null type', () => {
+      const cost = component.getEffectiveTowerCost(null);
+
+      expect(cost).toBe(0);
+    });
+  });
+
+  describe('Tile Highlighting', () => {
+    it('updateTileHighlights should not throw when tileMeshes is empty', () => {
+      component.selectedTowerType = TowerType.BASIC;
+      expect(() => component.updateTileHighlights()).not.toThrow();
+    });
+
+    it('updateTileHighlights should do nothing in INSPECT mode', () => {
+      component.selectedTowerType = null;
+      component.updateTileHighlights();
+      expect((component as any).highlightedTiles.size).toBe(0);
+    });
+
+    it('clearTileHighlights should clear the highlighted set', () => {
+      (component as any).highlightedTiles.add('0-0');
+      (component as any).highlightedTiles.add('1-1');
+      (component as any).clearTileHighlights();
+      expect((component as any).highlightedTiles.size).toBe(0);
+    });
+
+    it('selectTowerType should call updateTileHighlights', () => {
+      spyOn(component, 'updateTileHighlights');
+      component.selectedTowerType = null; // start in INSPECT mode
+      component.selectTowerType(TowerType.SNIPER);
+      expect(component.updateTileHighlights).toHaveBeenCalled();
+    });
+
+    it('cancelPlacement should clear highlights', () => {
+      (component as any).highlightedTiles.add('2-3');
+      component.cancelPlacement();
+      expect((component as any).highlightedTiles.size).toBe(0);
+    });
+  });
+
+  describe('Drag-and-Drop Tower Placement', () => {
+    it('onTowerDragStart should set dragTowerType', () => {
+      const mouseEvent = new MouseEvent('mousedown', { button: 0, clientX: 100, clientY: 200 });
+      component.onTowerDragStart(mouseEvent, TowerType.SNIPER);
+      expect((component as any).dragTowerType).toBe(TowerType.SNIPER);
+      expect(component.isDragging).toBeFalse();
+      // Clean up global listeners (field names match component)
+      window.removeEventListener('mousemove', (component as any).globalDragMoveHandler);
+      window.removeEventListener('mouseup', (component as any).globalDragEndHandler);
+      window.removeEventListener('blur', (component as any).blurDragHandler);
+    });
+
+    it('onTowerDragStart should ignore right-click', () => {
+      const mouseEvent = new MouseEvent('mousedown', { button: 2, clientX: 100, clientY: 200 });
+      component.onTowerDragStart(mouseEvent, TowerType.SNIPER);
+      expect((component as any).dragTowerType).toBeNull();
+    });
+
+    it('isDragging should be false by default', () => {
+      expect(component.isDragging).toBeFalse();
+    });
+
+    it('restartGame should reset drag state', () => {
+      (component as any).isDragging = true;
+      (component as any).dragTowerType = TowerType.BASIC;
+      (component as any).dragThresholdMet = true;
+      // Stub methods that restartGame calls to avoid Three.js crashes
+      spyOn(component as any, 'cleanupGameObjects');
+      spyOn(component as any, 'renderGameBoard');
+      spyOn(component as any, 'addGridLines');
+      spyOn(component as any, 'initializeLights');
+      spyOn(component as any, 'addSkybox');
+      spyOn(component as any, 'initializeParticles');
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      spyOn(enemyService, 'reset');
+      const minimapService = fixture.debugElement.injector.get(MinimapService);
+      spyOn(minimapService, 'init');
+
+      component.restartGame();
+
+      expect(component.isDragging).toBeFalse();
+      expect((component as any).dragTowerType).toBeNull();
+      expect((component as any).dragThresholdMet).toBeFalse();
+    });
+
+    it('onDragMove should not enter drag mode below threshold', () => {
+      (component as any).dragTowerType = TowerType.BASIC;
+      (component as any).dragStartX = 100;
+      (component as any).dragStartY = 200;
+      (component as any).dragThresholdMet = false;
+
+      // Move only ~1.4px — well below DRAG_CONFIG.minDragDistance threshold
+      (component as any).onDragMove(101, 201);
+
+      expect(component.isDragging).toBeFalse();
+      expect((component as any).dragThresholdMet).toBeFalse();
+    });
+  });
+
+  describe('Enhanced Tower Info Panel', () => {
+    it('upgradePreview should be null by default', () => {
+      expect(component.upgradePreview).toBeNull();
+    });
+
+    it('refreshTowerInfoPanel should compute upgrade preview for L1 tower', () => {
+      const fakeTower: PlacedTower = {
+        id: '5-5', type: TowerType.BASIC, level: 1, row: 5, col: 5,
+        lastFireTime: 0, kills: 3, totalInvested: 50, mesh: null,
+        targetingMode: 'nearest'
+      };
+      (component as any).selectedTowerInfo = fakeTower;
+      // Stub showRangePreview to avoid Three.js canvas crash
+      spyOn(component as any, 'showRangePreview');
+      (component as any).refreshTowerInfoPanel();
+
+      expect(component.upgradePreview).toBeTruthy();
+      expect(component.upgradePreview!.damage).toBeGreaterThan(component.selectedTowerStats!.damage);
+    });
+
+    it('refreshTowerInfoPanel should not compute preview for L2 tower (needs spec choice)', () => {
+      const fakeTower: PlacedTower = {
+        id: '5-5', type: TowerType.BASIC, level: 2, row: 5, col: 5,
+        lastFireTime: 0, kills: 0, totalInvested: 100, mesh: null,
+        targetingMode: 'nearest'
+      };
+      (component as any).selectedTowerInfo = fakeTower;
+      spyOn(component as any, 'showRangePreview');
+      (component as any).refreshTowerInfoPanel();
+
+      // L2→L3 requires specialization choice, no generic preview
+      expect(component.upgradePreview).toBeNull();
+    });
+
+    it('refreshTowerInfoPanel should not compute preview for max level tower', () => {
+      const fakeTower: PlacedTower = {
+        id: '5-5', type: TowerType.BASIC, level: 3, row: 5, col: 5,
+        lastFireTime: 0, kills: 0, totalInvested: 150, mesh: null,
+        targetingMode: 'nearest', specialization: 'alpha' as any
+      };
+      (component as any).selectedTowerInfo = fakeTower;
+      spyOn(component as any, 'showRangePreview');
+      (component as any).refreshTowerInfoPanel();
+
+      expect(component.upgradePreview).toBeNull();
+    });
+
+    it('deselectTower should clear upgradePreview', () => {
+      component.upgradePreview = { damage: 50, range: 4, fireRate: 0.8 };
+      component.deselectTower();
+      expect(component.upgradePreview).toBeNull();
+    });
+
+    it('selectionRingMesh should be null initially', () => {
+      expect((component as any).selectionRingMesh).toBeNull();
     });
   });
 });

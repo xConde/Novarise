@@ -56,13 +56,55 @@ export const RANGE_PREVIEW_CONFIG = {
   allRangesOpacityScale: 0.5,
 };
 
+/** Selection ring shown around the currently selected placed tower. */
+export const SELECTION_RING_CONFIG = {
+  radius: 0.55,
+  thickness: 0.04,
+  segments: 32,
+  color: 0xffffff,
+  opacity: 0.6,
+  yOffset: 0.01,
+} as const;
+
 export const TILE_EMISSIVE = {
   base: 0.15,
   wall: 0.1,
   special: 0.4,
   hover: 0.5,
   selected: 0.8,
-};
+  /** Default emissive color for BASE/WALL tiles (used as fallback in highlight restoration). */
+  defaultColor: 0x2a2548,
+  /** Highlight intensity for tiles valid for tower placement (PLACE mode). */
+  validPlacement: 0.35,
+  /** Emissive color override for valid placement tiles (soft cyan glow). */
+  validPlacementColor: 0x00ccaa,
+} as const;
+
+/**
+ * Heatmap color tiers for strategic tile pricing visualization.
+ * Colors progress from cool (cheap) to hot (expensive).
+ * Each tier maps to a StrategicTier from TilePricingService.
+ */
+export const HEATMAP_COLORS = {
+  base:     { color: 0x22cc66, intensity: 0.30 },  // Green — no premium
+  low:      { color: 0x88cc22, intensity: 0.35 },  // Yellow-green — mild premium
+  medium:   { color: 0xccaa00, intensity: 0.40 },  // Gold — moderate premium
+  high:     { color: 0xdd6600, intensity: 0.45 },  // Orange — high premium
+  critical: { color: 0xdd2200, intensity: 0.55 },  // Red — critical chokepoint
+} as const;
+
+/**
+ * Gradient stops for smooth heatmap color interpolation.
+ * Each stop is [strategicValue, R, G, B, intensity].
+ * Colors are interpolated linearly between stops.
+ */
+export const HEATMAP_GRADIENT: ReadonlyArray<readonly [number, number, number, number, number]> = [
+  [0.00, 0x22 / 255, 0xcc / 255, 0x66 / 255, 0.30],  // Green
+  [0.20, 0x88 / 255, 0xcc / 255, 0x22 / 255, 0.35],  // Yellow-green
+  [0.40, 0xcc / 255, 0xaa / 255, 0x00 / 255, 0.40],  // Gold
+  [0.65, 0xdd / 255, 0x66 / 255, 0x00 / 255, 0.45],  // Orange
+  [1.00, 0xdd / 255, 0x22 / 255, 0x00 / 255, 0.55],  // Red — extends to max strategic value
+] as const;
 
 export const SHIELD_VISUAL_CONFIG = {
   color: 0x4488ff,       // Bright blue shield glow

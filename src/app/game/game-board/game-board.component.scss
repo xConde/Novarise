@@ -7,6 +7,8 @@
 }
 
 .board-container {
+  --tower-bar-height: 9rem; // shared anchor: icon(40px) + text(48px) + padding(20px+20px) + bar-padding(20px) ≈ 148px
+
   display: flex;
   flex-direction: column;
   border: var(--border-width-thin) solid var(--game-primary);
@@ -624,8 +626,6 @@
 
   // --- Tower info panel ---
   .tower-info-panel {
-    --tower-bar-height: 5.5rem;
-
     @include glass-panel(rgba(0, 0, 0, 0.85));
     position: absolute;
     bottom: calc(var(--spacing-lg) + var(--tower-bar-height));
@@ -638,7 +638,6 @@
     animation: scale-in 0.2s ease-out;
 
     @media screen and (max-width: 768px) {
-      --tower-bar-height: 4.5rem;
       min-width: 12rem;
       bottom: calc(var(--spacing-md) + var(--tower-bar-height));
     }
@@ -716,6 +715,18 @@
             &[data-effect='BURN'] { color: var(--effect-burn); }
             &[data-effect='POISON'] { color: var(--effect-poison); }
             &[data-effect='SLOW'] { color: var(--effect-slow); }
+          }
+        }
+
+        .stat-preview {
+          color: var(--theme-cyan, #00ffff);
+          font-weight: 600;
+          font-size: var(--font-size-2xs);
+          opacity: 0.8;
+
+          &::before {
+            content: '\2192\00a0'; // → arrow
+            color: rgba(255, 255, 255, 0.3);
           }
         }
       }
@@ -1429,6 +1440,8 @@
 // Mobile (max-width: 480px) overrides
 @media screen and (max-width: 480px) {
   .board-container {
+    --tower-bar-height: 10rem; // 2-row tower grid: 2×61px + padding + gap ≈ 147px
+
     // Tower selection: switch to 3-column grid
     .tower-selection {
       display: grid;
@@ -1470,7 +1483,7 @@
     .tower-info-panel {
       left: 0;
       right: 0;
-      bottom: calc(var(--spacing-lg) + 8rem); // 8rem = 2-row tower grid height (mobile grid layout)
+      bottom: calc(var(--spacing-lg) + var(--tower-bar-height));
       transform: none;
       min-width: unset;
       width: 100%;
@@ -1509,7 +1522,7 @@
     .game-controls {
       flex-direction: column;
       align-items: stretch;
-      bottom: calc(var(--spacing-sm) + 8.5rem); // above tower grid
+      bottom: calc(var(--spacing-sm) + var(--tower-bar-height));
       right: var(--spacing-sm);
       gap: var(--spacing-xs);
       padding: var(--spacing-xs);
@@ -1549,7 +1562,6 @@
         width: 100%;
         max-height: 85vh;
         overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
         padding: var(--spacing-xl) var(--spacing-md);
         border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
         border-left: none;
@@ -1655,5 +1667,53 @@
       color: rgba(255, 255, 255, 0.4);
       text-align: center;
     }
+  }
+}
+
+// --- Drag cursor override ---
+// !important required: Three.js sets cursor via inline styles on the canvas element
+.board-container.dragging .canvas-container {
+  cursor: grabbing !important;
+}
+
+// --- Interaction mode indicator ---
+.mode-indicator {
+  position: absolute;
+  bottom: calc(var(--spacing-lg) + var(--tower-bar-height) + 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 0.25rem var(--spacing-sm);
+  border-radius: var(--border-radius-md);
+  background: rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+  z-index: var(--z-index-overlay);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+
+  .mode-label {
+    font-weight: 600;
+    &.place-mode { color: var(--theme-cyan, #00ffff); }
+    &.inspect-mode { color: rgba(255, 255, 255, 0.5); }
+  }
+
+  .mode-cost { color: var(--game-gold, #ffd700); font-weight: 700; }
+  .mode-percent { color: #dd6600; font-weight: 600; font-size: var(--font-size-2xs); }
+
+  .mode-hint {
+    font-size: var(--font-size-2xs);
+    color: rgba(255, 255, 255, 0.35);
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  @media screen and (max-width: 768px) {
+    bottom: calc(var(--spacing-md) + var(--tower-bar-height) + 0.5rem);
+    font-size: var(--font-size-2xs);
   }
 }

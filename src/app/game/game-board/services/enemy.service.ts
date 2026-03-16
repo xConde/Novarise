@@ -896,6 +896,40 @@ export class EnemyService {
   }
 
   /**
+   * Force all living enemies to recalculate their paths from their current grid position.
+   * Call after any board mutation (tower placed/sold) so enemies don't walk through new obstacles.
+   * Flying enemies are skipped (they ignore terrain).
+   */
+  repathAllEnemies(): void {
+    this.clearPathCache();
+
+    const exitTiles = this.getExitTiles();
+    if (exitTiles.length === 0) return;
+    const exitTile = exitTiles[0];
+
+    for (const enemy of this.enemies.values()) {
+      // Flying enemies use straight-line paths — terrain changes don't affect them
+      if (enemy.isFlying) continue;
+
+      const currentGridPos = enemy.gridPosition;
+      const newPath = this.findPath(
+        { x: currentGridPos.col, y: currentGridPos.row },
+        { x: exitTile.col, y: exitTile.row }
+      );
+
+      if (newPath.length > 0) {
+        enemy.path = newPath;
+        // Start from node 0 (enemy's current grid cell). The movement system
+        // in updateEnemies() uses world-position distance to advance, so
+        // setting pathIndex=0 is correct — the enemy is AT node 0 and will
+        // immediately begin moving toward node 1.
+        enemy.pathIndex = 0;
+      }
+      // If no path found, enemy keeps old path — it will walk until stuck
+    }
+  }
+
+  /**
    * Full reset: remove all enemies from the scene, reset the ID counter,
    * and clear the path cache. Call on game restart to prevent stale state.
    */
