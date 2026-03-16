@@ -830,4 +830,4 @@ All interaction paths verified: SETUP tower placement unblocked, wave-btn pointe
 - [x] Step 1: Convention check — console.log/warn (3 intentional repath warnings), no TODO/FIXME, no magic numbers
 - [x] Step 2: Full test suite green (1925/1925)
 - [x] Step 3: Production build passes — CSS 39.31kb (below 40kb error budget)
-- [ ] Step 4: Push to remote
+- [x] Step 4: Push to remote (00a8a94..f669dd1)
