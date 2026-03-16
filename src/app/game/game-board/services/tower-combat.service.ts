@@ -4,7 +4,6 @@ import { Enemy } from '../models/enemy.model';
 import { PlacedTower, TowerType, TowerStats, TowerSpecialization, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
-import { AudioService } from './audio.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
 import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG } from '../constants/combat.constants';
 import { PROJECTILE_POOL_CONFIG } from '../constants/physics.constants';
@@ -49,6 +48,13 @@ export interface KillInfo {
   damage: number;
 }
 
+/** Deferred audio event accumulated during physics steps, drained once per frame by the component. */
+export interface CombatAudioEvent {
+  type: 'tower_fire' | 'enemy_hit' | 'enemy_death' | 'sfx';
+  towerType?: TowerType;
+  sfxKey?: string;
+}
+
 @Injectable()
 export class TowerCombatService {
   private placedTowers: Map<string, PlacedTower> = new Map();
@@ -59,16 +65,26 @@ export class TowerCombatService {
   private spatialGrid = new SpatialGrid();
   private towerDamageMultiplier = 1;
   private projectilePool: ObjectPool<THREE.Mesh>;
+  private pendingAudioEvents: CombatAudioEvent[] = [];
 
   /** Applies a flat multiplier to all tower damage output. Set by the JUGGERNAUT modifier. */
   setTowerDamageMultiplier(mult: number): void {
     this.towerDamageMultiplier = mult;
   }
 
+  /**
+   * Drains and returns all audio events accumulated since the last call.
+   * Call once per animation frame (not per physics step) so audio throttling stays meaningful.
+   */
+  drainAudioEvents(): CombatAudioEvent[] {
+    const events = [...this.pendingAudioEvents];
+    this.pendingAudioEvents = [];
+    return events;
+  }
+
   constructor(
     private enemyService: EnemyService,
     private gameBoardService: GameBoardService,
-    private audioService: AudioService,
     private statusEffectService: StatusEffectService,
     private combatVFXService: CombatVFXService
   ) {
@@ -430,7 +446,7 @@ export class TowerCombatService {
     const kills: KillInfo[] = [];
     const hitIds = new Set<string>();
 
-    this.audioService.playSfx('chainZap');
+    this.pendingAudioEvents.push({ type: 'sfx', sfxKey: 'chainZap' });
 
     let currentTarget: Enemy = primaryTarget;
     let currentDamage = stats.damage;
@@ -586,7 +602,7 @@ export class TowerCombatService {
     // Delegate mesh creation to CombatVFXService
     this.combatVFXService.createMortarZoneMesh(impactX, impactZ, blastRadius, dotDuration, scene, this.gameTime);
 
-    this.audioService.playSfx('mortarExplosion');
+    this.pendingAudioEvents.push({ type: 'sfx', sfxKey: 'mortarExplosion' });
 
     // Initial blast — deal immediate damage on impact and track kills
     const initialKills: KillInfo[] = [];

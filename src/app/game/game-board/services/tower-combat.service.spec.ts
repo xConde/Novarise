@@ -1,11 +1,10 @@
 import { TestBed } from '@angular/core/testing';
-import { TowerCombatService, KillInfo } from './tower-combat.service';
+import { TowerCombatService, KillInfo, CombatAudioEvent } from './tower-combat.service';
 import { CombatVFXService } from './combat-vfx.service';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_SPECIALIZATIONS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { Enemy } from '../models/enemy.model';
-import { AudioService } from './audio.service';
 import { StatusEffectService } from './status-effect.service';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { CHAIN_LIGHTNING_CONFIG, IMPACT_FLASH_CONFIG } from '../constants/combat.constants';
@@ -17,7 +16,6 @@ describe('TowerCombatService', () => {
   let combatVFXService: CombatVFXService;
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
   let gameBoardServiceSpy: jasmine.SpyObj<GameBoardService>;
-  let audioServiceSpy: jasmine.SpyObj<AudioService>;
   let statusEffectService: StatusEffectService;
   let mockScene: THREE.Scene;
   let enemyMap: Map<string, Enemy>;
@@ -38,16 +36,13 @@ describe('TowerCombatService', () => {
     enemyServiceSpy = createEnemyServiceSpy(enemyMap);
     gameBoardServiceSpy = createGameBoardServiceSpy(25, 20, 1);
 
-    audioServiceSpy = jasmine.createSpyObj('AudioService', ['playSfx']);
-
     TestBed.configureTestingModule({
       providers: [
         TowerCombatService,
         CombatVFXService,
         StatusEffectService,
         { provide: EnemyService, useValue: enemyServiceSpy },
-        { provide: GameBoardService, useValue: gameBoardServiceSpy },
-        { provide: AudioService, useValue: audioServiceSpy }
+        { provide: GameBoardService, useValue: gameBoardServiceSpy }
       ]
     });
     service = TestBed.inject(TowerCombatService);
@@ -1442,6 +1437,45 @@ describe('TowerCombatService', () => {
 
       const burnCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.BURN);
       expect(burnCalls.length).toBe(0);
+    });
+  });
+
+  // --- drainAudioEvents ---
+
+  describe('drainAudioEvents', () => {
+    it('should return an empty array when no events have been accumulated', () => {
+      const events = service.drainAudioEvents();
+      expect(events).toEqual([]);
+    });
+
+    it('should accumulate a chainZap sfx event when CHAIN tower fires', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(1.0, mockScene); // past CHAIN fireRate
+      const events = service.drainAudioEvents();
+      const sfxEvents = events.filter((e: CombatAudioEvent) => e.type === 'sfx' && e.sfxKey === 'chainZap');
+      expect(sfxEvents.length).toBeGreaterThan(0);
+    });
+
+    it('should clear events after draining', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.update(1.0, mockScene);
+      service.drainAudioEvents(); // first drain
+
+      // Second drain should be empty
+      const empty = service.drainAudioEvents();
+      expect(empty).toEqual([]);
+    });
+
+    it('should not accumulate audio events when no towers fire', () => {
+      service.update(0.016, mockScene); // no towers registered
+      const events = service.drainAudioEvents();
+      expect(events).toEqual([]);
     });
   });
 });

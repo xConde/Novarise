@@ -1,20 +1,24 @@
 import { TestBed } from '@angular/core/testing';
 import { AudioService } from './audio.service';
+import { SettingsService } from './settings.service';
 import { TowerType } from '../models/tower.model';
 import { AUDIO_CONFIG, SFX_CONFIGS, isSfxSequenceConfig, SfxConfig } from '../constants/audio.constants';
 
 describe('AudioService', () => {
   let service: AudioService;
+  let settingsService: SettingsService;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [AudioService]
+      providers: [AudioService, SettingsService]
     });
     service = TestBed.inject(AudioService);
+    settingsService = TestBed.inject(SettingsService);
   });
 
   afterEach(() => {
     service.cleanup();
+    settingsService.reset(); // prevent muted state from bleeding across tests via localStorage
   });
 
   // --- Instantiation ---
@@ -28,6 +32,13 @@ describe('AudioService', () => {
   });
 
   it('should start unmuted', () => {
+    expect(service.isMuted).toBeFalse();
+  });
+
+  it('isMuted should read from SettingsService', () => {
+    settingsService.update({ audioMuted: true });
+    expect(service.isMuted).toBeTrue();
+    settingsService.update({ audioMuted: false });
     expect(service.isMuted).toBeFalse();
   });
 
@@ -79,6 +90,18 @@ describe('AudioService', () => {
     expect(service.isMuted).toBeFalse();
     service.toggleMute();
     expect(service.isMuted).toBeTrue();
+  });
+
+  it('toggleMute() should persist muted state to SettingsService', () => {
+    service.toggleMute();
+    expect(settingsService.get().audioMuted).toBeTrue();
+    service.toggleMute();
+    expect(settingsService.get().audioMuted).toBeFalse();
+  });
+
+  it('should have no internal _muted field — isMuted delegates to SettingsService', () => {
+    // Verify there is no private _muted state by checking the service has no such property
+    expect((service as unknown as Record<string, unknown>)['_muted']).toBeUndefined();
   });
 
   // --- cleanup ---

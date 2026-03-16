@@ -12,7 +12,7 @@ import { EnemyService } from './services/enemy.service';
 import { MapBridgeService } from './services/map-bridge.service';
 import { GameStateService } from './services/game-state.service';
 import { WaveService } from './services/wave.service';
-import { TowerCombatService, KillInfo } from './services/tower-combat.service';
+import { TowerCombatService, KillInfo, CombatAudioEvent } from './services/tower-combat.service';
 import { AudioService } from './services/audio.service';
 import { ParticleService } from './services/particle.service';
 import { ScreenShakeService } from './services/screen-shake.service';
@@ -369,12 +369,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.updateTileHighlights();
     }
 
-    // Load saved settings
-    const savedSettings = this.settingsService.get();
-    if (savedSettings.audioMuted) {
-      this.audioService.toggleMute();
-    }
-
     // Seed initial wave preview for the first wave (after applyCampaignWaves sets custom defs)
     const initialState = this.gameStateService.getState();
     const initialCustomDefs = this.waveService.hasCustomWaves()
@@ -418,7 +412,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   toggleAudio(): void {
     this.audioService.toggleMute();
-    this.settingsService.update({ audioMuted: this.audioService.isMuted });
   }
 
   dismissNotification(id: number): void {
@@ -2483,6 +2476,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           this.particleService.spawnDeathBurst(kill.position, kill.color);
           this.goldPopupService.spawn(kill.value, kill.position, this.scene);
           this.damagePopupService.spawn(kill.damage, kill.position, this.scene);
+        }
+
+        // Drain deferred audio events from TowerCombatService (chain lightning, mortar, etc.)
+        const combatAudioEvents: CombatAudioEvent[] = this.towerCombatService.drainAudioEvents();
+        for (const event of combatAudioEvents) {
+          switch (event.type) {
+            case 'sfx': this.audioService.playSfx(event.sfxKey!); break;
+            case 'tower_fire': this.audioService.playTowerFire(event.towerType!); break;
+            case 'enemy_hit': this.audioService.playEnemyHit(); break;
+            case 'enemy_death': this.audioService.playEnemyDeath(); break;
+          }
         }
         if (frameExitCount > 0) {
           this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
