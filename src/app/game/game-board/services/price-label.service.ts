@@ -16,6 +16,11 @@ const LABEL_CONFIG = {
   spriteHeight: 0.25,
   /** Y position above the tile surface. */
   yOffset: 0.45,
+  /**
+   * Minimum percentIncrease required to show a label.
+   * Low-value labels (+3%, +4%) add visual noise on large boards.
+   */
+  minPercentIncrease: 8,
 } as const;
 
 const TIER_TEXT_COLORS: Record<string, string> = {
@@ -69,7 +74,7 @@ export class PriceLabelService {
     this.hideLabels(scene);
 
     for (const [key, info] of priceMap) {
-      if (info.percentIncrease <= 0) {
+      if (info.percentIncrease < LABEL_CONFIG.minPercentIncrease) {
         continue;
       }
 
@@ -147,7 +152,8 @@ export class PriceLabelService {
     const material = new THREE.SpriteMaterial({
       map: texture,
       transparent: true,
-      depthTest: false,
+      depthTest: true,
+      depthWrite: false,
     });
 
     const sprite = new THREE.Sprite(material);

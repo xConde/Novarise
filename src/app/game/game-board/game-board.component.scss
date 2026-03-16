@@ -1679,7 +1679,7 @@
 // --- Interaction mode indicator ---
 .mode-indicator {
   position: absolute;
-  bottom: calc(var(--spacing-lg) + var(--tower-bar-height));
+  bottom: calc(var(--spacing-lg) + var(--tower-bar-height) + 0.5rem);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -1713,7 +1713,7 @@
   }
 
   @media screen and (max-width: 768px) {
-    bottom: calc(var(--spacing-md) + var(--tower-bar-height));
+    bottom: calc(var(--spacing-md) + var(--tower-bar-height) + 0.5rem);
     font-size: var(--font-size-2xs);
   }
 }
