@@ -236,3 +236,98 @@ p {
   white-space: nowrap;
   border-width: 0;
 }
+
+/* Tutorial overlay — global because game-board.component.scss is at budget limit */
+.tutorial-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.tutorial-card {
+  background: var(--panel-blue-bg, #1a1a2e);
+  border: 1px solid var(--theme-purple, #6a5a9a);
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 0 20px rgba(106, 90, 154, 0.3);
+  position: relative;
+}
+
+.tutorial-card--top {
+  align-self: flex-start;
+  margin-top: 4rem;
+}
+
+.tutorial-card--bottom {
+  align-self: flex-end;
+  margin-bottom: 4rem;
+}
+
+.tutorial-card__step-indicator {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.75rem;
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--font-size-3xs, 0.6rem);
+  color: var(--theme-purple-mid, #8a7ac0);
+}
+
+.tutorial-card__title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1rem;
+  color: var(--theme-purple-lighter, #c8b8ff);
+  margin: 0 0 0.75rem;
+}
+
+.tutorial-card__message {
+  font-size: 0.85rem;
+  color: var(--text-color, #e0e0e0);
+  line-height: 1.5;
+  margin: 0 0 1rem;
+}
+
+.tutorial-card__actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.tutorial-card__btn {
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  border: 1px solid var(--theme-purple, #6a5a9a);
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--font-size-2xs, 0.75rem);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  min-height: 2.75rem;
+}
+
+.tutorial-card__btn--skip {
+  background: transparent;
+  color: var(--theme-purple-mid, #8a7ac0);
+}
+
+.tutorial-card__btn--skip:hover {
+  background: rgba(106, 90, 154, 0.2);
+}
+
+.tutorial-card__btn--next {
+  background: var(--theme-purple, #6a5a9a);
+  color: #fff;
+}
+
+.tutorial-card__btn--next:hover {
+  background: var(--theme-purple-light, #7a6aaa);
+}

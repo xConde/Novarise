@@ -45,6 +45,7 @@ import { StatusEffectService } from './services/status-effect.service';
 import { StatusEffectType } from './constants/status-effect.constants';
 import { TilePricingService, TilePriceInfo } from './services/tile-pricing.service';
 import { PriceLabelService } from './services/price-label.service';
+import { TutorialService, TutorialStep, TutorialTip } from './services/tutorial.service';
 import { TerrainGridStateLegacy } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
@@ -208,6 +209,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private blurDragHandler: () => void = () => {};
   private dragIsTouch = false;
 
+  // Tutorial state
+  currentTutorialStep: TutorialStep | null = null;
+  private tutorialSub: Subscription | null = null;
+  TutorialStep = TutorialStep;
+
   // Audio state exposed to template
   get audioMuted(): boolean { return this.audioService.isMuted; }
 
@@ -262,7 +268,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private pathVisualizationService: PathVisualizationService,
     private statusEffectService: StatusEffectService,
     private tilePricingService: TilePricingService,
-    private priceLabelService: PriceLabelService
+    private priceLabelService: PriceLabelService,
+    private tutorialService: TutorialService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -350,6 +357,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const initialPreview = getWavePreviewFull(initialState.wave + 1, initialState.isEndless);
     this.wavePreview = initialPreview.entries;
     this.waveTemplateDescription = initialPreview.templateDescription;
+
+    // Start tutorial for first-time players
+    if (!this.tutorialService.isTutorialComplete()) {
+      this.tutorialService.startTutorial();
+    }
+    this.tutorialSub = this.tutorialService.getCurrentStep().subscribe(step => {
+      this.currentTutorialStep = step;
+    });
   }
 
   ngAfterViewInit(): void {
@@ -1831,6 +1846,26 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.waveService.setEndlessMode(newValue);
   }
 
+  // --- Tutorial ---
+
+  getTutorialTip(): TutorialTip | null {
+    return this.currentTutorialStep ? this.tutorialService.getTip(this.currentTutorialStep) : null;
+  }
+
+  getTutorialStepNumber(): number {
+    const displaySteps = Object.values(TutorialStep).filter(s => s !== TutorialStep.COMPLETE);
+    const idx = displaySteps.indexOf(this.currentTutorialStep as TutorialStep);
+    return Math.max(1, idx + 1);
+  }
+
+  advanceTutorial(): void {
+    this.tutorialService.advanceStep();
+  }
+
+  skipTutorial(): void {
+    this.tutorialService.skipTutorial();
+  }
+
   get gameSpeed(): number {
     return this.gameState.gameSpeed;
   }
@@ -2367,6 +2402,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (this.stateSubscription) {
       this.stateSubscription.unsubscribe();
+    }
+
+    if (this.tutorialSub) {
+      this.tutorialSub.unsubscribe();
     }
 
     window.removeEventListener('keydown', this.keyboardHandler);

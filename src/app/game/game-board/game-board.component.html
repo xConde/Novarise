@@ -399,4 +399,19 @@
       <p class="help-dismiss">Click anywhere or press H to close</p>
     </div>
   </div>
+
+  <!-- Tutorial overlay -->
+  <div class="tutorial-overlay" *ngIf="currentTutorialStep" (click)="$event.stopPropagation()">
+    <div class="tutorial-card" [ngClass]="'tutorial-card--' + getTutorialTip()?.position">
+      <span class="tutorial-card__step-indicator">{{ getTutorialStepNumber() }}/5</span>
+      <h3 class="tutorial-card__title">{{ getTutorialTip()?.title }}</h3>
+      <p class="tutorial-card__message">{{ getTutorialTip()?.message }}</p>
+      <div class="tutorial-card__actions">
+        <button class="tutorial-card__btn tutorial-card__btn--skip" (click)="skipTutorial()" aria-label="Skip tutorial">Skip</button>
+        <button class="tutorial-card__btn tutorial-card__btn--next" (click)="advanceTutorial()" aria-label="Next tutorial step">
+          {{ currentTutorialStep === TutorialStep.COMPLETE ? 'Done' : 'Next' }}
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
