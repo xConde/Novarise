@@ -204,6 +204,11 @@ export class EnemyService {
         enemy.gridPosition.col = nextNode.x;
         enemy.pathIndex++;
         enemy.distanceTraveled += distanceToNext;
+
+        // Execute deferred repath now that we're snapped to a grid node
+        if (enemy.needsRepath) {
+          this.executeRepath(enemy);
+        }
       } else {
         // Move towards next node
         enemy.position.x += direction.x * moveDistance;
@@ -901,38 +906,24 @@ export class EnemyService {
    * Flying enemies are skipped (they ignore terrain).
    */
   /**
-   * Repath only enemies whose current path passes through a specific blocked tile.
-   * Enemies not affected by the board change keep their existing paths.
-   * Call after tower placement or sell.
+   * Flag enemies for deferred repath on their next waypoint arrival.
+   * Only flags enemies whose remaining path passes through the changed tile.
+   * The actual repath happens in updateEnemies() when the enemy reaches its
+   * next waypoint — this avoids direction-vector bugs from repathing mid-stride.
    *
-   * @param blockedRow Row of the newly placed/removed tower (or -1 to repath ALL)
-   * @param blockedCol Column of the newly placed/removed tower (or -1 to repath ALL)
+   * @param changedRow Row of the placed/sold tower (or -1 to flag ALL ground enemies)
+   * @param changedCol Column of the placed/sold tower (or -1 to flag ALL ground enemies)
    */
-  repathAffectedEnemies(blockedRow: number, blockedCol: number): void {
+  repathAffectedEnemies(changedRow: number, changedCol: number): void {
     this.clearPathCache();
 
-    const exitTiles = this.getExitTiles();
-    if (exitTiles.length === 0) return;
-    const exitTile = exitTiles[0];
-    const forceAll = blockedRow < 0 || blockedCol < 0;
+    const forceAll = changedRow < 0 || changedCol < 0;
 
     for (const enemy of this.enemies.values()) {
       if (enemy.isFlying) continue;
 
-      // Only repath if the enemy's remaining path crosses the blocked tile
-      if (!forceAll && !this.pathCrossesTile(enemy, blockedRow, blockedCol)) {
-        continue;
-      }
-
-      const currentGridPos = enemy.gridPosition;
-      const newPath = this.findPath(
-        { x: currentGridPos.col, y: currentGridPos.row },
-        { x: exitTile.col, y: exitTile.row }
-      );
-
-      if (newPath.length > 0) {
-        enemy.path = newPath;
-        enemy.pathIndex = 0;
+      if (forceAll || this.pathCrossesTile(enemy, changedRow, changedCol)) {
+        enemy.needsRepath = true;
       }
     }
   }
@@ -946,6 +937,26 @@ export class EnemyService {
       }
     }
     return false;
+  }
+
+  /** Execute deferred repath for an enemy that reached a waypoint. */
+  private executeRepath(enemy: Enemy): void {
+    enemy.needsRepath = false;
+
+    const exitTiles = this.getExitTiles();
+    if (exitTiles.length === 0) return;
+    const exitTile = exitTiles[0];
+
+    // Repath from the node the enemy just arrived at (gridPosition is now current)
+    const newPath = this.findPath(
+      { x: enemy.gridPosition.col, y: enemy.gridPosition.row },
+      { x: exitTile.col, y: exitTile.row }
+    );
+
+    if (newPath.length > 0) {
+      enemy.path = newPath;
+      enemy.pathIndex = 0;
+    }
   }
 
   /**

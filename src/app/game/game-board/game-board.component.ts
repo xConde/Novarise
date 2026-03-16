@@ -775,8 +775,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Restore tile to BASE
     this.gameBoardService.removeTower(this.selectedTowerInfo.row, this.selectedTowerInfo.col);
 
-    // Repath enemies whose path crossed the sold tower's tile — they may now take a shorter route
-    this.enemyService.repathAffectedEnemies(this.selectedTowerInfo.row, this.selectedTowerInfo.col);
+    // On sell, repath ALL ground enemies — any enemy could benefit from a shorter path
+    // through the now-freed tile, not just enemies whose old path crossed it.
+    this.enemyService.repathAffectedEnemies(-1, -1);
     this.tilePricingService.invalidateCache();
     this.lastPreviewKey = '';
     this.refreshPathOverlay();

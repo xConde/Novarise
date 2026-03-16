@@ -759,6 +759,23 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 **Risk:** `const currentStats = getEffectiveStats(this.selectedTowerInfo.type, this.selectedTowerInfo.level);` is computed but never referenced — the spec options now use `alphaStats`/`betaStats` directly. Dead variable. No runtime cost (tree-shaken in prod), but violates code quality standards and will trigger lint warnings.
 **Fix:** Remove the unused `currentStats` line.
 
+## Red Team Critique — feat/gameplay-interaction Pass 2 (2026-03-16)
+
+### Finding 1: `repathAffectedEnemies` clears entire path cache even for single-tile repath (HIGH)
+**Location:** `enemy.service.ts:912`
+**Risk:** `this.clearPathCache()` wipes ALL cached paths on every tower place/sell. Enemies spawning later must recompute A* from scratch even if the board change was irrelevant to their spawn→exit route. On large boards with frequent tower activity, this creates unnecessary A* overhead. More importantly, the cache clear means the `findPath` calls inside the loop will each cache their result — but enemies at different grid positions will each trigger a fresh A* that could have been served from a still-valid cache entry.
+**Fix:** Don't clear the global cache. Instead, only invalidate cache entries that include the blocked tile in their path. Or simpler: don't clear cache at all — `findPath` already handles blocked tiles via the board state; the cache key includes start/end positions, not board state, so stale entries would produce wrong results. The real fix is to always clear the cache (current behavior is correct but wasteful).
+
+### Finding 2: Sell repath misses enemies that would benefit from the freed tile (MEDIUM)
+**Location:** `game-board.component.ts:779`
+**Risk:** When a tower is sold, `repathAffectedEnemies(row, col)` only repaths enemies whose path crossed the sold tower's position. But enemies routing AROUND the tower (via longer detour) would benefit from a shorter path through the now-free tile. These enemies continue on their longer detour unnecessarily. In a sell-and-replace scenario, enemies take suboptimal paths after the sell.
+**Fix:** On tower sell, repath ALL ground enemies (not just affected ones) since any enemy could potentially take a shorter path. Use `repathAffectedEnemies(-1, -1)` for sell operations.
+
+### Finding 3: `interpolateHeatmap` direction vector computed from grid nodes, not enemy world position (LOW — verified safe)
+**Location:** `enemy.service.ts:185-189`
+**Risk:** After repath with `pathIndex=0`, the direction vector points from path[0]→path[1]. If the enemy is physically between old nodes A and B, this direction may not match the enemy's current heading. However, `distanceToNext` uses the enemy's actual world position (line 194-197), so the snap-or-move logic works correctly regardless of the direction vector's semantic accuracy. The enemy may briefly face the "wrong" way for one tick before snapping. Verified safe — not a gameplay bug.
+**Fix:** None needed. Document the behavior inline.
+
 ## Deployment Checklist — feat/gameplay-interaction
 - [x] Step 1: Convention check — grep for console.log, TODO/FIXME/HACK, catch(e), hardcoded numbers added on this branch
 - [x] Step 2: Tile-specific cost shown in mode indicator on hover (hoveredTileCost + gold display)
