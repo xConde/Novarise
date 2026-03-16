@@ -957,6 +957,9 @@ export class EnemyService {
       enemy.path = newPath;
       enemy.pathIndex = 0;
     }
+    // If findPath returns empty (no route — should be unreachable via wouldBlockPath guard),
+    // the enemy keeps its old path. This is a defensive no-op, not a silent failure,
+    // because wouldBlockPath prevents placements that fully block spawner→exit routes.
   }
 
   /**
