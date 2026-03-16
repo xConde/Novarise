@@ -3,6 +3,7 @@ import {
   PlayerProfile,
   GameEndStats,
   ACHIEVEMENTS,
+  AchievementCategory,
 } from './player-profile.service';
 import { MapScoreRecord } from '../models/score.model';
 import { DifficultyLevel } from '../models/game-state.model';
@@ -17,6 +18,22 @@ function makeStats(overrides: Partial<GameEndStats> = {}): GameEndStats {
     goldEarned: 200,
     wavesCompleted: 5,
     livesLost: 0,
+    ...overrides,
+  };
+}
+
+function makeOldProfile(overrides: Partial<PlayerProfile> = {}): object {
+  // Simulates a pre-expansion profile without the new fields
+  return {
+    totalGamesPlayed: 5,
+    totalVictories: 3,
+    totalDefeats: 2,
+    totalEnemiesKilled: 100,
+    totalGoldEarned: 2000,
+    highestWaveReached: 10,
+    highestScore: 1500,
+    achievements: ['first_victory'],
+    mapScores: {},
     ...overrides,
   };
 }
@@ -46,6 +63,30 @@ describe('PlayerProfileService', () => {
       expect(p.highestWaveReached).toBe(0);
       expect(p.highestScore).toBe(0);
       expect(p.achievements).toEqual([]);
+    });
+
+    it('should have empty towerKills by default', () => {
+      expect(service.getProfile().towerKills).toEqual({});
+    });
+
+    it('should have zero slowEffectsApplied by default', () => {
+      expect(service.getProfile().slowEffectsApplied).toBe(0);
+    });
+
+    it('should have hasUsedSpecialization false by default', () => {
+      expect(service.getProfile().hasUsedSpecialization).toBe(false);
+    });
+
+    it('should have hasPlacedAllTowerTypes false by default', () => {
+      expect(service.getProfile().hasPlacedAllTowerTypes).toBe(false);
+    });
+
+    it('should have maxModifiersUsedInVictory 0 by default', () => {
+      expect(service.getProfile().maxModifiersUsedInVictory).toBe(0);
+    });
+
+    it('should have completedChallengeCount 0 by default', () => {
+      expect(service.getProfile().completedChallengeCount).toBe(0);
     });
   });
 
@@ -114,6 +155,63 @@ describe('PlayerProfileService', () => {
       const parsed = JSON.parse(raw!) as PlayerProfile;
       expect(parsed.highestScore).toBe(999);
       expect(parsed.totalEnemiesKilled).toBe(7);
+    });
+  });
+
+  // ── recordGameEnd — new tracking fields ───────────────────────────────────
+
+  describe('recordGameEnd — new tracking fields', () => {
+    it('accumulates towerKills across games', () => {
+      service.recordGameEnd(makeStats({ towerKills: { sniper: 50, chain: 30 } }));
+      service.recordGameEnd(makeStats({ towerKills: { sniper: 100, basic: 20 } }));
+      const p = service.getProfile();
+      expect(p.towerKills['sniper']).toBe(150);
+      expect(p.towerKills['chain']).toBe(30);
+      expect(p.towerKills['basic']).toBe(20);
+    });
+
+    it('accumulates slowEffectsApplied across games', () => {
+      service.recordGameEnd(makeStats({ slowEffectsApplied: 200 }));
+      service.recordGameEnd(makeStats({ slowEffectsApplied: 400 }));
+      expect(service.getProfile().slowEffectsApplied).toBe(600);
+    });
+
+    it('ignores undefined slowEffectsApplied', () => {
+      service.recordGameEnd(makeStats());
+      expect(service.getProfile().slowEffectsApplied).toBe(0);
+    });
+
+    it('sets hasUsedSpecialization to true when usedSpecialization is true', () => {
+      service.recordGameEnd(makeStats({ usedSpecialization: true }));
+      expect(service.getProfile().hasUsedSpecialization).toBe(true);
+    });
+
+    it('does not reset hasUsedSpecialization once true', () => {
+      service.recordGameEnd(makeStats({ usedSpecialization: true }));
+      service.recordGameEnd(makeStats({ usedSpecialization: false }));
+      expect(service.getProfile().hasUsedSpecialization).toBe(true);
+    });
+
+    it('sets hasPlacedAllTowerTypes to true when placedAllTowerTypes is true', () => {
+      service.recordGameEnd(makeStats({ placedAllTowerTypes: true }));
+      expect(service.getProfile().hasPlacedAllTowerTypes).toBe(true);
+    });
+
+    it('tracks maxModifiersUsedInVictory on a win', () => {
+      service.recordGameEnd(makeStats({ isVictory: true, modifierCount: 4 }));
+      expect(service.getProfile().maxModifiersUsedInVictory).toBe(4);
+    });
+
+    it('takes max of maxModifiersUsedInVictory across games', () => {
+      service.recordGameEnd(makeStats({ isVictory: true, modifierCount: 2 }));
+      service.recordGameEnd(makeStats({ isVictory: true, modifierCount: 5 }));
+      service.recordGameEnd(makeStats({ isVictory: true, modifierCount: 3 }));
+      expect(service.getProfile().maxModifiersUsedInVictory).toBe(5);
+    });
+
+    it('does not update maxModifiersUsedInVictory on a loss', () => {
+      service.recordGameEnd(makeStats({ isVictory: false, modifierCount: 10 }));
+      expect(service.getProfile().maxModifiersUsedInVictory).toBe(0);
     });
   });
 
@@ -235,6 +333,298 @@ describe('PlayerProfileService', () => {
     });
   });
 
+  // ── Campaign achievements ──────────────────────────────────────────────────
+
+  describe('campaign achievements', () => {
+    function recordMapWithStars(svc: PlayerProfileService, mapId: string, stars: number): void {
+      svc.recordMapScore(mapId, 1000, stars, DifficultyLevel.NORMAL);
+    }
+
+    it('unlocks act_1_complete when maps 1-4 are completed', () => {
+      ['campaign_01', 'campaign_02', 'campaign_03', 'campaign_04'].forEach(
+        (id) => recordMapWithStars(service, id, 2)
+      );
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).toContain('act_1_complete');
+    });
+
+    it('does not unlock act_1_complete when only 3 maps completed', () => {
+      ['campaign_01', 'campaign_02', 'campaign_03'].forEach(
+        (id) => recordMapWithStars(service, id, 2)
+      );
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).not.toContain('act_1_complete');
+    });
+
+    it('does not count a map with 0 stars as complete', () => {
+      ['campaign_01', 'campaign_02', 'campaign_03'].forEach(
+        (id) => recordMapWithStars(service, id, 2)
+      );
+      recordMapWithStars(service, 'campaign_04', 0);
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).not.toContain('act_1_complete');
+    });
+
+    it('unlocks act_2_complete when maps 5-8 are completed', () => {
+      ['campaign_05', 'campaign_06', 'campaign_07', 'campaign_08'].forEach(
+        (id) => recordMapWithStars(service, id, 1)
+      );
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).toContain('act_2_complete');
+    });
+
+    it('unlocks act_3_complete when maps 9-12 are completed', () => {
+      ['campaign_09', 'campaign_10', 'campaign_11', 'campaign_12'].forEach(
+        (id) => recordMapWithStars(service, id, 1)
+      );
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).toContain('act_3_complete');
+    });
+
+    it('unlocks star_collector with 10+ total campaign stars', () => {
+      // 4 maps × 3 stars each = 12 stars
+      ['campaign_01', 'campaign_02', 'campaign_03', 'campaign_04'].forEach(
+        (id) => recordMapWithStars(service, id, 3)
+      );
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).toContain('star_collector');
+    });
+
+    it('does not unlock star_collector with fewer than 10 stars', () => {
+      // 3 maps × 3 stars = 9 stars
+      ['campaign_01', 'campaign_02', 'campaign_03'].forEach(
+        (id) => recordMapWithStars(service, id, 3)
+      );
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).not.toContain('star_collector');
+    });
+
+    it('unlocks three_star_5 when 5 maps have 3 stars', () => {
+      ['campaign_01', 'campaign_02', 'campaign_03', 'campaign_04', 'campaign_05'].forEach(
+        (id) => recordMapWithStars(service, id, 3)
+      );
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).toContain('three_star_5');
+    });
+
+    it('does not unlock three_star_5 with only 4 maps at 3 stars', () => {
+      ['campaign_01', 'campaign_02', 'campaign_03', 'campaign_04'].forEach(
+        (id) => recordMapWithStars(service, id, 3)
+      );
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).not.toContain('three_star_5');
+    });
+
+    it('unlocks campaign_champion when all 16 maps completed', () => {
+      for (let i = 1; i <= 16; i++) {
+        const id = `campaign_${String(i).padStart(2, '0')}`;
+        recordMapWithStars(service, id, 2);
+      }
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).toContain('campaign_champion');
+    });
+
+    it('does not unlock campaign_champion with 15 maps', () => {
+      for (let i = 1; i <= 15; i++) {
+        const id = `campaign_${String(i).padStart(2, '0')}`;
+        recordMapWithStars(service, id, 2);
+      }
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).not.toContain('campaign_champion');
+    });
+
+    it('unlocks three_star_all when all 16 maps have 3 stars', () => {
+      for (let i = 1; i <= 16; i++) {
+        const id = `campaign_${String(i).padStart(2, '0')}`;
+        recordMapWithStars(service, id, 3);
+      }
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).toContain('three_star_all');
+    });
+
+    it('does not unlock three_star_all when any map has fewer than 3 stars', () => {
+      for (let i = 1; i <= 15; i++) {
+        const id = `campaign_${String(i).padStart(2, '0')}`;
+        recordMapWithStars(service, id, 3);
+      }
+      recordMapWithStars(service, 'campaign_16', 2);
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).not.toContain('three_star_all');
+    });
+  });
+
+  // ── Combat achievements (new) ──────────────────────────────────────────────
+
+  describe('combat achievements — new', () => {
+    it('unlocks sniper_elite at 500 sniper kills', () => {
+      service.recordGameEnd(makeStats({ towerKills: { sniper: 499 } }));
+      expect(service.getProfile().achievements).not.toContain('sniper_elite');
+      service.recordGameEnd(makeStats({ towerKills: { sniper: 1 } }));
+      expect(service.getProfile().achievements).toContain('sniper_elite');
+    });
+
+    it('accumulates sniper kills across games for sniper_elite', () => {
+      service.recordGameEnd(makeStats({ towerKills: { sniper: 300 } }));
+      service.recordGameEnd(makeStats({ towerKills: { sniper: 200 } }));
+      expect(service.getProfile().achievements).toContain('sniper_elite');
+    });
+
+    it('unlocks chain_master at 300 chain kills', () => {
+      service.recordGameEnd(makeStats({ towerKills: { chain: 299 } }));
+      expect(service.getProfile().achievements).not.toContain('chain_master');
+      service.recordGameEnd(makeStats({ towerKills: { chain: 1 } }));
+      expect(service.getProfile().achievements).toContain('chain_master');
+    });
+
+    it('unlocks slow_and_steady at 1000 slow applications', () => {
+      service.recordGameEnd(makeStats({ slowEffectsApplied: 999 }));
+      expect(service.getProfile().achievements).not.toContain('slow_and_steady');
+      service.recordGameEnd(makeStats({ slowEffectsApplied: 1 }));
+      expect(service.getProfile().achievements).toContain('slow_and_steady');
+    });
+
+    it('unlocks specialist when usedSpecialization is true', () => {
+      service.recordGameEnd(makeStats({ usedSpecialization: true }));
+      expect(service.getProfile().achievements).toContain('specialist');
+    });
+
+    it('does not unlock specialist when usedSpecialization is false', () => {
+      service.recordGameEnd(makeStats({ usedSpecialization: false }));
+      expect(service.getProfile().achievements).not.toContain('specialist');
+    });
+
+    it('unlocks tower_collector when placedAllTowerTypes is true', () => {
+      service.recordGameEnd(makeStats({ placedAllTowerTypes: true }));
+      expect(service.getProfile().achievements).toContain('tower_collector');
+    });
+
+    it('does not unlock tower_collector when placedAllTowerTypes is false', () => {
+      service.recordGameEnd(makeStats({ placedAllTowerTypes: false }));
+      expect(service.getProfile().achievements).not.toContain('tower_collector');
+    });
+  });
+
+  // ── Endless achievements ───────────────────────────────────────────────────
+
+  describe('endless achievements', () => {
+    it('unlocks endless_30 at wave 30', () => {
+      service.recordGameEnd(makeStats({ wavesCompleted: 29 }));
+      expect(service.getProfile().achievements).not.toContain('endless_30');
+      service.recordGameEnd(makeStats({ wavesCompleted: 30 }));
+      expect(service.getProfile().achievements).toContain('endless_30');
+    });
+
+    it('unlocks endless_50 at wave 50', () => {
+      service.recordGameEnd(makeStats({ wavesCompleted: 49 }));
+      expect(service.getProfile().achievements).not.toContain('endless_50');
+      service.recordGameEnd(makeStats({ wavesCompleted: 50 }));
+      expect(service.getProfile().achievements).toContain('endless_50');
+    });
+
+    it('unlocks endless_100 at wave 100', () => {
+      service.recordGameEnd(makeStats({ wavesCompleted: 100 }));
+      expect(service.getProfile().achievements).toContain('endless_100');
+    });
+
+    it('unlocks survivor AND endless_30 together at wave 30', () => {
+      service.recordGameEnd(makeStats({ wavesCompleted: 30 }));
+      expect(service.getProfile().achievements).toContain('survivor');
+      expect(service.getProfile().achievements).toContain('endless_30');
+    });
+  });
+
+  // ── Challenge achievements ─────────────────────────────────────────────────
+
+  describe('challenge achievements', () => {
+    it('unlocks challenger_5 at 5 completed challenges', () => {
+      for (let i = 0; i < 4; i++) {
+        service.recordChallengeCompleted();
+      }
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).not.toContain('challenger_5');
+
+      service.recordChallengeCompleted();
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).toContain('challenger_5');
+    });
+
+    it('unlocks challenger_all at 16 completed challenges', () => {
+      for (let i = 0; i < 16; i++) {
+        service.recordChallengeCompleted();
+      }
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).toContain('challenger_all');
+    });
+
+    it('does not unlock challenger_all at fewer than 16 challenges', () => {
+      for (let i = 0; i < 15; i++) {
+        service.recordChallengeCompleted();
+      }
+      service.recordGameEnd(makeStats({ isVictory: true }));
+      expect(service.getProfile().achievements).not.toContain('challenger_all');
+    });
+
+    it('unlocks modifier_victory when winning with 3+ modifiers', () => {
+      service.recordGameEnd(makeStats({ isVictory: true, modifierCount: 3 }));
+      expect(service.getProfile().achievements).toContain('modifier_victory');
+    });
+
+    it('does not unlock modifier_victory with fewer than 3 modifiers', () => {
+      service.recordGameEnd(makeStats({ isVictory: true, modifierCount: 2 }));
+      expect(service.getProfile().achievements).not.toContain('modifier_victory');
+    });
+
+    it('does not unlock modifier_victory on a loss', () => {
+      service.recordGameEnd(makeStats({ isVictory: false, modifierCount: 5 }));
+      expect(service.getProfile().achievements).not.toContain('modifier_victory');
+    });
+  });
+
+  // ── Achievement metadata ───────────────────────────────────────────────────
+
+  describe('achievement metadata', () => {
+    it('all achievements have unique IDs', () => {
+      const ids = ACHIEVEMENTS.map((a) => a.id);
+      const unique = new Set(ids);
+      expect(unique.size).toBe(ids.length);
+    });
+
+    it('all achievements have a valid category', () => {
+      const validCategories: AchievementCategory[] = ['campaign', 'combat', 'endless', 'challenge'];
+      for (const achievement of ACHIEVEMENTS) {
+        expect(validCategories).toContain(achievement.category as AchievementCategory);
+      }
+    });
+
+    it('has at least 25 achievements', () => {
+      expect(ACHIEVEMENTS.length).toBeGreaterThanOrEqual(25);
+    });
+
+    it('existing 8 achievement IDs are preserved for backward compatibility', () => {
+      const ids = ACHIEVEMENTS.map((a) => a.id);
+      const legacyIds = [
+        'first_victory', 'veteran', 'perfectionist', 'gold_hoarder',
+        'exterminator', 'survivor', 'high_scorer', 'dedicated',
+      ];
+      for (const legacyId of legacyIds) {
+        expect(ids).toContain(legacyId);
+      }
+    });
+
+    it('getAchievementsByCategory returns only achievements in that category', () => {
+      const campaignAchievements = service.getAchievementsByCategory('campaign');
+      expect(campaignAchievements.every((a) => a.category === 'campaign')).toBe(true);
+      expect(campaignAchievements.length).toBeGreaterThan(0);
+    });
+
+    it('all four categories have at least one achievement', () => {
+      const categories: AchievementCategory[] = ['campaign', 'combat', 'endless', 'challenge'];
+      for (const cat of categories) {
+        expect(service.getAchievementsByCategory(cat).length).toBeGreaterThan(0);
+      }
+    });
+  });
+
   // ── getAchievements / getUnlocked / getLocked ──────────────────────────────
 
   describe('achievement query methods', () => {
@@ -288,6 +678,24 @@ describe('PlayerProfileService', () => {
       expect(p.achievements).toEqual([]);
     });
 
+    it('clears new tracking fields on reset', () => {
+      service.recordGameEnd(makeStats({
+        towerKills: { sniper: 100 },
+        slowEffectsApplied: 50,
+        usedSpecialization: true,
+        placedAllTowerTypes: true,
+        modifierCount: 3,
+        isVictory: true,
+      }));
+      service.reset();
+      const p = service.getProfile();
+      expect(p.towerKills).toEqual({});
+      expect(p.slowEffectsApplied).toBe(0);
+      expect(p.hasUsedSpecialization).toBe(false);
+      expect(p.hasPlacedAllTowerTypes).toBe(false);
+      expect(p.maxModifiersUsedInVictory).toBe(0);
+    });
+
     it('removes data from localStorage', () => {
       service.recordGameEnd(makeStats());
       service.reset();
@@ -316,6 +724,12 @@ describe('PlayerProfileService', () => {
         highestScore: 2500,
         achievements: ['first_victory'],
         mapScores: {},
+        towerKills: { sniper: 50 },
+        slowEffectsApplied: 20,
+        hasUsedSpecialization: true,
+        hasPlacedAllTowerTypes: false,
+        maxModifiersUsedInVictory: 2,
+        completedChallengeCount: 3,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
       const fresh = new PlayerProfileService();
@@ -323,6 +737,11 @@ describe('PlayerProfileService', () => {
       expect(p.totalGamesPlayed).toBe(7);
       expect(p.totalVictories).toBe(3);
       expect(p.achievements).toContain('first_victory');
+      expect(p.towerKills['sniper']).toBe(50);
+      expect(p.slowEffectsApplied).toBe(20);
+      expect(p.hasUsedSpecialization).toBe(true);
+      expect(p.maxModifiersUsedInVictory).toBe(2);
+      expect(p.completedChallengeCount).toBe(3);
     });
 
     it('handles corrupt localStorage JSON gracefully', () => {
@@ -357,6 +776,83 @@ describe('PlayerProfileService', () => {
       const p = fresh.getProfile();
       expect(p.totalGamesPlayed).toBe(3);
       expect(p.totalVictories).toBe(0); // default filled in
+    });
+  });
+
+  // ── Backward compatibility: old profiles without new fields ────────────────
+
+  describe('backward compatibility — old profile migration', () => {
+    it('loads old profile without towerKills field and defaults to {}', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(makeOldProfile()));
+      const fresh = new PlayerProfileService();
+      expect(fresh.getProfile().towerKills).toEqual({});
+    });
+
+    it('loads old profile without slowEffectsApplied and defaults to 0', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(makeOldProfile()));
+      const fresh = new PlayerProfileService();
+      expect(fresh.getProfile().slowEffectsApplied).toBe(0);
+    });
+
+    it('loads old profile without hasUsedSpecialization and defaults to false', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(makeOldProfile()));
+      const fresh = new PlayerProfileService();
+      expect(fresh.getProfile().hasUsedSpecialization).toBe(false);
+    });
+
+    it('loads old profile without hasPlacedAllTowerTypes and defaults to false', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(makeOldProfile()));
+      const fresh = new PlayerProfileService();
+      expect(fresh.getProfile().hasPlacedAllTowerTypes).toBe(false);
+    });
+
+    it('loads old profile without maxModifiersUsedInVictory and defaults to 0', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(makeOldProfile()));
+      const fresh = new PlayerProfileService();
+      expect(fresh.getProfile().maxModifiersUsedInVictory).toBe(0);
+    });
+
+    it('loads old profile without completedChallengeCount and defaults to 0', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(makeOldProfile()));
+      const fresh = new PlayerProfileService();
+      expect(fresh.getProfile().completedChallengeCount).toBe(0);
+    });
+
+    it('preserves existing stats from old profile during migration', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(makeOldProfile({
+        totalVictories: 7,
+        achievements: ['first_victory', 'veteran'],
+      })));
+      const fresh = new PlayerProfileService();
+      expect(fresh.getProfile().totalVictories).toBe(7);
+      expect(fresh.getProfile().achievements).toContain('veteran');
+    });
+
+    it('handles old profile with array towerKills (corrupt) by defaulting to {}', () => {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(makeOldProfile({ towerKills: ['bad'] as unknown as Record<string, number> }))
+      );
+      const fresh = new PlayerProfileService();
+      expect(fresh.getProfile().towerKills).toEqual({});
+    });
+  });
+
+  // ── recordChallengeCompleted ───────────────────────────────────────────────
+
+  describe('recordChallengeCompleted', () => {
+    it('increments completedChallengeCount', () => {
+      service.recordChallengeCompleted();
+      service.recordChallengeCompleted();
+      expect(service.getProfile().completedChallengeCount).toBe(2);
+    });
+
+    it('persists completedChallengeCount to localStorage', () => {
+      service.recordChallengeCompleted();
+      const raw = localStorage.getItem(STORAGE_KEY);
+      expect(raw).toBeTruthy();
+      const parsed = JSON.parse(raw!) as PlayerProfile;
+      expect(parsed.completedChallengeCount).toBe(1);
     });
   });
 
@@ -529,6 +1025,13 @@ describe('PlayerProfileService', () => {
       const p = service.getProfile();
       p.achievements.push('fake_achievement');
       expect(service.getProfile().achievements).not.toContain('fake_achievement');
+    });
+
+    it('returns a copied towerKills object — mutations do not affect internal state', () => {
+      service.recordGameEnd(makeStats({ towerKills: { sniper: 10 } }));
+      const p = service.getProfile();
+      p.towerKills['sniper'] = 9999;
+      expect(service.getProfile().towerKills['sniper']).toBe(10);
     });
   });
 });

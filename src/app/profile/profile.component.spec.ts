@@ -1,7 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { ProfileComponent } from './profile.component';
-import { PlayerProfileService, PlayerProfile, ACHIEVEMENTS } from '../game/game-board/services/player-profile.service';
+import {
+  PlayerProfileService,
+  PlayerProfile,
+  ACHIEVEMENTS,
+  AchievementCategory,
+} from '../game/game-board/services/player-profile.service';
 
 describe('ProfileComponent', () => {
   let component: ProfileComponent;
@@ -19,6 +24,12 @@ describe('ProfileComponent', () => {
     highestScore: 3500,
     achievements: ['first_victory', 'veteran'],
     mapScores: {},
+    towerKills: {},
+    slowEffectsApplied: 0,
+    hasUsedSpecialization: false,
+    hasPlacedAllTowerTypes: false,
+    maxModifiersUsedInVictory: 0,
+    completedChallengeCount: 0,
   };
 
   beforeEach(async () => {
@@ -96,17 +107,16 @@ describe('ProfileComponent', () => {
     expect(countEl.textContent).toContain(`2 / ${ACHIEVEMENTS.length} Unlocked`);
   });
 
-  it('should render all achievement cards', () => {
+  it('should render all achievement cards across all categories', () => {
     const cards = fixture.nativeElement.querySelectorAll('.achievement-card');
     expect(cards.length).toBe(ACHIEVEMENTS.length);
   });
 
   it('should apply unlocked class to unlocked achievements', () => {
-    const cards = fixture.nativeElement.querySelectorAll('.achievement-card');
     const unlockedCards = fixture.nativeElement.querySelectorAll('.achievement-card.unlocked');
     const lockedCards = fixture.nativeElement.querySelectorAll('.achievement-card.locked');
     expect(unlockedCards.length).toBe(2);
-    expect(lockedCards.length).toBe(cards.length - 2);
+    expect(lockedCards.length).toBe(ACHIEVEMENTS.length - 2);
   });
 
   it('should navigate home on goHome()', () => {
@@ -147,5 +157,92 @@ describe('ProfileComponent', () => {
     expect(unlockedCards.length).toBeGreaterThan(0);
     const hints = unlockedCards[0].querySelectorAll('.achievement-hint');
     expect(hints.length).toBe(0);
+  });
+
+  // ── Category grouping ──────────────────────────────────────────────────────
+
+  describe('category groups', () => {
+    it('should build 4 category groups', () => {
+      expect(component.categoryGroups.length).toBe(4);
+    });
+
+    it('should include all four categories', () => {
+      const categories = component.categoryGroups.map((g) => g.category) as AchievementCategory[];
+      expect(categories).toContain('campaign');
+      expect(categories).toContain('combat');
+      expect(categories).toContain('endless');
+      expect(categories).toContain('challenge');
+    });
+
+    it('should have correct labels for each category', () => {
+      const labelMap: Record<string, string> = {};
+      for (const g of component.categoryGroups) {
+        labelMap[g.category] = g.label;
+      }
+      expect(labelMap['campaign']).toBe('Campaign');
+      expect(labelMap['combat']).toBe('Combat');
+      expect(labelMap['endless']).toBe('Endless');
+      expect(labelMap['challenge']).toBe('Challenge');
+    });
+
+    it('should sum achievements per group to equal total achievement count', () => {
+      const total = component.categoryGroups.reduce(
+        (sum, g) => sum + g.achievements.length,
+        0
+      );
+      expect(total).toBe(ACHIEVEMENTS.length);
+    });
+
+    it('should show correct unlockedCount per category', () => {
+      // first_victory = combat, veteran = combat
+      const combatGroup = component.categoryGroups.find((g) => g.category === 'combat')!;
+      expect(combatGroup.unlockedCount).toBe(2);
+
+      const campaignGroup = component.categoryGroups.find((g) => g.category === 'campaign')!;
+      expect(campaignGroup.unlockedCount).toBe(0);
+
+      const endlessGroup = component.categoryGroups.find((g) => g.category === 'endless')!;
+      expect(endlessGroup.unlockedCount).toBe(0);
+
+      const challengeGroup = component.categoryGroups.find((g) => g.category === 'challenge')!;
+      expect(challengeGroup.unlockedCount).toBe(0);
+    });
+
+    it('should render a category header for each group', () => {
+      const headers = fixture.nativeElement.querySelectorAll('.category-header');
+      expect(headers.length).toBe(4);
+    });
+
+    it('should render category name elements', () => {
+      const names = fixture.nativeElement.querySelectorAll('.category-name');
+      const texts = Array.from(names).map((el: any) => el.textContent.trim());
+      expect(texts).toContain('Campaign');
+      expect(texts).toContain('Combat');
+      expect(texts).toContain('Endless');
+      expect(texts).toContain('Challenge');
+    });
+
+    it('should render category count elements', () => {
+      const counts = fixture.nativeElement.querySelectorAll('.category-count');
+      expect(counts.length).toBe(4);
+    });
+
+    it('each group should only contain achievements of its category', () => {
+      for (const group of component.categoryGroups) {
+        expect(
+          group.achievements.every((a) => a.category === group.category)
+        ).toBe(true);
+      }
+    });
+
+    it('no achievement should appear in more than one group', () => {
+      const seen = new Set<string>();
+      for (const group of component.categoryGroups) {
+        for (const a of group.achievements) {
+          expect(seen.has(a.id)).toBe(false);
+          seen.add(a.id);
+        }
+      }
+    });
   });
 });
