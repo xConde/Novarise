@@ -1500,6 +1500,16 @@
         font-size: var(--font-size-base);
         margin-bottom: var(--spacing-md);
       }
+
+      // Wrap buttons when 4 are present (Next Level, Play Again, Campaign, Edit Map)
+      .overlay-actions {
+        flex-wrap: wrap;
+        justify-content: center;
+
+        .results-btn {
+          min-height: 2.75rem;
+        }
+      }
     }
 
     // HUD: shrink label + value sizes
@@ -1589,6 +1599,13 @@
       }
     }
 
+
+    // Wave status: allow wrap so badge doesn't overflow on narrow screens
+    .hud-wave-status {
+      white-space: normal;
+      text-align: center;
+      max-width: 80vw;
+    }
 
     // Game controls: stack vertically, right side
     .game-controls {

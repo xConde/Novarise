@@ -378,4 +378,21 @@ $campaign-grid-cols-sm: 1fr;
   .campaign-content {
     gap: var(--spacing-md);
   }
+
+  // Full-width back button on small screens
+  .back-btn {
+    width: 100%;
+    min-width: unset;
+    min-height: 2.75rem;
+  }
+
+  // Campaign complete banner: tighter padding
+  .campaign-complete {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  .campaign-complete__title {
+    font-size: var(--font-size-base);
+    letter-spacing: 0.1em;
+  }
 }

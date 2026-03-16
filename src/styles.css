@@ -466,6 +466,52 @@ p {
   background: rgba(106, 90, 154, 0.25);
 }
 
+/* ===== Encyclopedia panel — mobile bottom sheet ===== */
+@media (max-width: 768px) {
+  .encyclopedia-panel {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    top: auto;
+    transform: none;
+    width: 100%;
+    max-height: 55vh;
+    border-radius: 12px 12px 0 0;
+    z-index: 200;
+  }
+}
+
+@media (max-width: 480px) {
+  .encyclopedia-panel {
+    max-height: 45vh;
+  }
+}
+
+/* ===== Tutorial overlay — mobile positioning and touch targets ===== */
+@media (max-width: 768px) {
+  .tutorial-card {
+    max-width: 90vw;
+    margin-bottom: 6rem; /* clear tower bar */
+  }
+
+  .tutorial-card__btn {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .tutorial-card__actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .tutorial-card__btn {
+    width: 100%;
+  }
+}
+
 /* Wave preview NEW badge */
 .wave-preview-new {
   font-family: 'Orbitron', sans-serif;

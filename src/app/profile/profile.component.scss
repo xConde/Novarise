@@ -136,6 +136,45 @@
   font-weight: 400;
 }
 
+// Achievement categories
+.achievement-categories {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+  width: 100%;
+}
+
+.achievement-category {
+  width: 100%;
+}
+
+.category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-xs);
+  border-bottom: var(--border-width-thin) solid var(--theme-purple-a30);
+  flex-wrap: wrap;
+}
+
+.category-name {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  color: var(--theme-purple-lighter);
+  letter-spacing: 0.1em;
+  margin: 0;
+}
+
+.category-count {
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.65rem;
+  color: var(--theme-purple-mid);
+  white-space: nowrap;
+}
+
 .achievements-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -245,5 +284,22 @@
 
   .profile-title {
     font-size: var(--font-size-large);
+  }
+
+  // Category header wraps neatly on narrow screens
+  .category-header {
+    flex-direction: row;
+    gap: var(--spacing-xs);
+  }
+
+  .category-count {
+    font-size: 0.6rem;
+  }
+
+  // Full-width back button on small screens
+  .back-btn {
+    width: 100%;
+    min-width: unset;
+    min-height: 2.75rem;
   }
 }
