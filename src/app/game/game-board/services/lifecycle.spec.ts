@@ -33,6 +33,7 @@ describe('EnemyService lifecycle', () => {
       providers: [
         PathfindingService,
         EnemyService,
+        GameStateService,
         { provide: GameBoardService, useValue: spy }
       ]
     });
@@ -120,6 +121,7 @@ describe('TowerCombatService lifecycle', () => {
         TowerCombatService,
         CombatVFXService,
         StatusEffectService,
+        GameStateService,
         { provide: EnemyService, useValue: enemyServiceSpy },
         { provide: GameBoardService, useValue: gameBoardServiceSpy },
         { provide: AudioService, useValue: audioServiceSpy }

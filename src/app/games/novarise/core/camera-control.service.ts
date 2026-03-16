@@ -54,9 +54,7 @@ export interface JoystickInput {
   y: number;
 }
 
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable()
 export class CameraControlService {
   private readonly defaultConfig: CameraConfig = { ...EDITOR_CAMERA_CONFIG };
 

@@ -264,4 +264,54 @@ describe('TutorialService', () => {
       done();
     });
   });
+
+  // --- resetCurrentStep (S12) ---
+
+  describe('resetCurrentStep', () => {
+    it('sets current step to null without clearing completion state', (done) => {
+      // Advance through all steps to complete the tutorial
+      service.startTutorial();
+      service.skipTutorial(); // marks complete
+      expect(service.isTutorialComplete()).toBeTrue();
+
+      // Now simulate a new game session: step should reset to null
+      service.resetCurrentStep();
+
+      service.getCurrentStep().subscribe(step => {
+        expect(step).toBeNull();
+        done();
+      });
+    });
+
+    it('completion state is preserved after resetCurrentStep', () => {
+      service.startTutorial();
+      service.skipTutorial();
+      expect(service.isTutorialComplete()).toBeTrue();
+
+      service.resetCurrentStep();
+
+      expect(service.isTutorialComplete()).toBeTrue();
+    });
+
+    it('resets an in-progress step to null', (done) => {
+      service.startTutorial(); // step = WELCOME
+
+      service.resetCurrentStep();
+
+      service.getCurrentStep().subscribe(step => {
+        expect(step).toBeNull();
+        done();
+      });
+    });
+
+    it('is a no-op when already null', (done) => {
+      // currentStep starts null — calling resetCurrentStep should leave it null
+      service.resetCurrentStep();
+
+      service.getCurrentStep().subscribe(step => {
+        expect(step).toBeNull();
+        done();
+      });
+    });
+  });
 });

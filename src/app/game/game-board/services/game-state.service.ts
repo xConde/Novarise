@@ -93,8 +93,14 @@ export class GameStateService {
     return this.state.consecutiveWavesWithoutLeak;
   }
 
-  /** Adds gold and score by the same amount. Use for kill rewards and interest payouts. */
+  /** Adds gold only. Use for sell refunds (should not count toward score). */
   addGold(amount: number): void {
+    this.state.gold += amount;
+    this.emit();
+  }
+
+  /** Adds to both gold and score. Use for kill rewards, wave rewards, and interest payouts. */
+  addGoldAndScore(amount: number): void {
     this.state.gold += amount;
     this.state.score += amount;
     this.emit();

@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { EnemyService, DamageResult } from './enemy.service';
 import { PathfindingService } from './pathfinding.service';
+import { GameStateService } from './game-state.service';
 import { TowerCombatService } from './tower-combat.service';
 import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
@@ -23,6 +24,7 @@ describe('Flying Enemy', () => {
       providers: [
         PathfindingService,
         EnemyService,
+        GameStateService,
         { provide: GameBoardService, useValue: spy }
       ]
     });
@@ -241,6 +243,7 @@ describe('Flying Enemy', () => {
             TowerCombatService,
             CombatVFXService,
             StatusEffectService,
+            GameStateService,
             { provide: EnemyService, useValue: enemySpy },
             { provide: GameBoardService, useValue: gameBoardServiceForCombat },
             { provide: AudioService, useValue: audioServiceSpy }

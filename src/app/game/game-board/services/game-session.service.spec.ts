@@ -11,6 +11,7 @@ import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameEndService } from './game-end.service';
 import { MapBridgeService } from './map-bridge.service';
 import { StatusEffectService } from './status-effect.service';
+import { TutorialService } from './tutorial.service';
 import { CAMPAIGN_WAVE_DEFINITIONS } from '../../../campaign/waves/campaign-waves';
 
 describe('GameSessionService', () => {
@@ -24,6 +25,7 @@ describe('GameSessionService', () => {
   let gameEndSpy: jasmine.SpyObj<GameEndService>;
   let mapBridgeSpy: jasmine.SpyObj<MapBridgeService>;
   let statusEffectSpy: jasmine.SpyObj<StatusEffectService>;
+  let tutorialSpy: jasmine.SpyObj<TutorialService>;
 
   beforeEach(() => {
     gameStateSpy = jasmine.createSpyObj('GameStateService', ['reset', 'setMaxWaves', 'getState$', 'getState']);
@@ -66,6 +68,10 @@ describe('GameSessionService', () => {
     ]);
     statusEffectSpy.getAllActiveEffects.and.returnValue(new Map());
 
+    tutorialSpy = jasmine.createSpyObj('TutorialService', ['resetCurrentStep', 'isTutorialComplete', 'getCurrentStep']);
+    tutorialSpy.isTutorialComplete.and.returnValue(false);
+    tutorialSpy.getCurrentStep.and.returnValue({ subscribe: () => ({ unsubscribe: () => {} }) } as any);
+
     TestBed.configureTestingModule({
       providers: [
         GameSessionService,
@@ -78,6 +84,7 @@ describe('GameSessionService', () => {
         { provide: GameEndService, useValue: gameEndSpy },
         { provide: MapBridgeService, useValue: mapBridgeSpy },
         { provide: StatusEffectService, useValue: statusEffectSpy },
+        { provide: TutorialService, useValue: tutorialSpy },
       ],
     });
 
@@ -101,6 +108,7 @@ describe('GameSessionService', () => {
       expect(gameEndSpy.reset).toHaveBeenCalled();
       expect(notificationSpy.clear).toHaveBeenCalled();
       expect(challengeSpy.reset).toHaveBeenCalled();
+      expect(tutorialSpy.resetCurrentStep).toHaveBeenCalled();
 
       scene.clear();
     });

@@ -431,11 +431,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.modifierScoreMultiplier = calculateModifierScoreMultiplier(this.activeModifiers);
     this.gameStateService.setModifiers(this.activeModifiers);
-    this.enemyService.setModifierEffects(
-      this.gameStateService.getModifierEffects(),
-      this.activeModifiers
-    );
-    this.towerCombatService.setTowerDamageMultiplier(this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1);
   }
 
   /** Base tower cost (shown in tower bar — no tile-specific pricing). */
@@ -1099,18 +1094,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.leakedThisWave = false;
     this.minimapService.show();
 
-    // Ensure enemy service has current modifier effects before first wave
-    if (state.wave === 0 && this.activeModifiers.size > 0) {
-      this.enemyService.setModifierEffects(
-        this.gameStateService.getModifierEffects(),
-        this.activeModifiers
-      );
-    }
-
     this.gameStateService.startWave();
     const modEffects = this.gameStateService.getModifierEffects();
     const waveCountMult = modEffects.waveCountMultiplier ?? 1;
-    this.towerCombatService.setTowerDamageMultiplier(modEffects.towerDamageMultiplier ?? 1);
     this.waveService.startWave(this.gameStateService.getState().wave, this.scene, waveCountMult);
 
     // Track which enemy types have been seen so the wave preview can show "NEW" badges
@@ -2377,7 +2363,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           for (const killInfo of killedByTowers) {
             const enemy = this.enemyService.getEnemies().get(killInfo.id);
             if (enemy) {
-              this.gameStateService.addGold(enemy.value);
+              this.gameStateService.addGoldAndScore(enemy.value);
               this.gameStatsService.recordGoldEarned(enemy.value);
 
               // Snapshot visual data for deferred rendering (enemy removed below)

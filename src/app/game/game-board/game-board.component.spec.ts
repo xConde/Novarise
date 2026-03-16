@@ -80,6 +80,7 @@ describe('GameBoardComponent', () => {
       'advanceStep',
       'skipTutorial',
       'resetTutorial',
+      'resetCurrentStep',
       'getTip',
       'getCurrentStep',
     ]);

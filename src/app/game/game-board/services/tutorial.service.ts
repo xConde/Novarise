@@ -130,6 +130,15 @@ export class TutorialService {
     this.save();
   }
 
+  /**
+   * Reset the active tutorial step without clearing completion state.
+   * Call this at the start of each game session so the active overlay
+   * doesn't carry over from a previous session.
+   */
+  resetCurrentStep(): void {
+    this.currentStep$.next(null);
+  }
+
   /** Reset tutorial progress (can be used from settings). */
   resetTutorial(): void {
     this.seenSteps.clear();

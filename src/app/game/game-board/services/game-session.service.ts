@@ -9,6 +9,7 @@ import { GameNotificationService } from './game-notification.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameEndService } from './game-end.service';
 import { MapBridgeService } from './map-bridge.service';
+import { TutorialService } from './tutorial.service';
 import { CAMPAIGN_WAVE_DEFINITIONS } from '../../../campaign/waves/campaign-waves';
 
 /**
@@ -26,6 +27,7 @@ export class GameSessionService {
     private challengeTrackingService: ChallengeTrackingService,
     private gameEndService: GameEndService,
     private mapBridge: MapBridgeService,
+    private tutorialService: TutorialService,
   ) {}
 
   /**
@@ -41,6 +43,7 @@ export class GameSessionService {
     this.gameEndService.reset();
     this.gameNotificationService.clear();
     this.challengeTrackingService.reset();
+    this.tutorialService.resetCurrentStep();
   }
 
   /**

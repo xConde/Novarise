@@ -5,6 +5,9 @@ import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { NovariseComponent } from './novarise.component';
 import { MapStorageService } from './core/map-storage.service';
 import { PathValidationService } from './core/path-validation.service';
+import { CameraControlService } from './core/camera-control.service';
+import { EditorStateService } from './core/editor-state.service';
+import { EditHistoryService } from './core/edit-history.service';
 import { TerrainGridState } from './features/terrain-editor/terrain-grid-state.interface';
 import { TerrainType } from './models/terrain-types.enum';
 
@@ -95,7 +98,10 @@ describe('NovariseComponent Navigation', () => {
       imports: [RouterTestingModule],
       providers: [
         { provide: MapStorageService, useValue: mockMapStorageService },
-        PathValidationService
+        PathValidationService,
+        CameraControlService,
+        EditorStateService,
+        EditHistoryService,
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();

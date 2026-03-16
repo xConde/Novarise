@@ -269,12 +269,34 @@ describe('GameStateService', () => {
   // --- Gold Management ---
 
   describe('gold management', () => {
-    it('addGold should increase gold and score', () => {
+    it('addGold should increase gold only (sell refund path)', () => {
       const goldBefore = service.getState().gold;
       const scoreBefore = service.getState().score;
       service.addGold(30);
       expect(service.getState().gold).toBe(goldBefore + 30);
-      expect(service.getState().score).toBe(scoreBefore + 30);
+      expect(service.getState().score).toBe(scoreBefore); // score unchanged
+    });
+
+    it('addGoldAndScore should increase both gold and score (kill reward path)', () => {
+      const goldBefore = service.getState().gold;
+      const scoreBefore = service.getState().score;
+      service.addGoldAndScore(50);
+      expect(service.getState().gold).toBe(goldBefore + 50);
+      expect(service.getState().score).toBe(scoreBefore + 50);
+    });
+
+    it('sell refund via addGold does not inflate score', () => {
+      const scoreBefore = service.getState().score;
+      service.addGold(100); // sell refund
+      expect(service.getState().score).toBe(scoreBefore);
+    });
+
+    it('kill reward via addGoldAndScore increases both gold and score', () => {
+      const goldBefore = service.getState().gold;
+      const scoreBefore = service.getState().score;
+      service.addGoldAndScore(25);
+      expect(service.getState().gold).toBe(goldBefore + 25);
+      expect(service.getState().score).toBe(scoreBefore + 25);
     });
 
     it('spendGold should deduct gold when affordable', () => {

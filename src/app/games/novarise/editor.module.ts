@@ -5,6 +5,9 @@ import { NovariseComponent } from './novarise.component';
 import { EditControlsComponent } from './features/ui-controls/edit-controls.component';
 import { MobileControlsModule } from './features/mobile-controls';
 import { PathValidationService } from './core/path-validation.service';
+import { EditorStateService } from './core/editor-state.service';
+import { EditHistoryService } from './core/edit-history.service';
+import { CameraControlService } from './core/camera-control.service';
 
 @NgModule({
   declarations: [
@@ -17,7 +20,10 @@ import { PathValidationService } from './core/path-validation.service';
     RouterModule.forChild([{ path: '', component: NovariseComponent }])
   ],
   providers: [
-    PathValidationService
+    PathValidationService,
+    EditorStateService,
+    EditHistoryService,
+    CameraControlService
   ]
 })
 export class EditorModule {}

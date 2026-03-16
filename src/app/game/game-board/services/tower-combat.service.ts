@@ -13,6 +13,7 @@ import { SpatialGrid } from '../utils/spatial-grid';
 import { ObjectPool } from '../utils/object-pool';
 import { gridToWorld } from '../utils/coordinate-utils';
 import { CombatVFXService } from './combat-vfx.service';
+import { GameStateService } from './game-state.service';
 
 interface Projectile {
   id: string;
@@ -63,14 +64,8 @@ export class TowerCombatService {
   private projectileCounter = 0;
   private gameTime = 0;
   private spatialGrid = new SpatialGrid();
-  private towerDamageMultiplier = 1;
   private projectilePool: ObjectPool<THREE.Mesh>;
   private pendingAudioEvents: CombatAudioEvent[] = [];
-
-  /** Applies a flat multiplier to all tower damage output. Set by the JUGGERNAUT modifier. */
-  setTowerDamageMultiplier(mult: number): void {
-    this.towerDamageMultiplier = mult;
-  }
 
   /**
    * Drains and returns all audio events accumulated since the last call.
@@ -86,7 +81,8 @@ export class TowerCombatService {
     private enemyService: EnemyService,
     private gameBoardService: GameBoardService,
     private statusEffectService: StatusEffectService,
-    private combatVFXService: CombatVFXService
+    private combatVFXService: CombatVFXService,
+    private gameStateService: GameStateService,
   ) {
     this.projectilePool = new ObjectPool<THREE.Mesh>(
       () => this.createPooledProjectileMesh(),
@@ -199,10 +195,11 @@ export class TowerCombatService {
     killedEnemies.push(...dotKills);
 
     // Tower targeting and firing — resolve stats per-tower using level
+    const towerDamageMultiplier = this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1;
     this.placedTowers.forEach(tower => {
       const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
-      const stats = this.towerDamageMultiplier !== 1
-        ? { ...baseStats, damage: Math.round(baseStats.damage * this.towerDamageMultiplier) }
+      const stats = towerDamageMultiplier !== 1
+        ? { ...baseStats, damage: Math.round(baseStats.damage * towerDamageMultiplier) }
         : baseStats;
       const timeSinceLastFire = this.gameTime - tower.lastFireTime;
 
@@ -646,8 +643,9 @@ export class TowerCombatService {
       const tower = this.placedTowers.get(proj.towerKey);
       const stats = tower ? getEffectiveStats(tower.type, tower.level, tower.specialization) : null;
       if (stats) {
-        const modifiedStats = this.towerDamageMultiplier !== 1 && stats.dotDamage
-          ? { ...stats, dotDamage: Math.round(stats.dotDamage * this.towerDamageMultiplier) }
+        const dotMult = this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1;
+        const modifiedStats = dotMult !== 1 && stats.dotDamage
+          ? { ...stats, dotDamage: Math.round(stats.dotDamage * dotMult) }
           : stats;
         const initialKills = this.createMortarZone(proj.mesh.position.x, proj.mesh.position.z, modifiedStats, scene);
         kills.push(...initialKills);
@@ -778,6 +776,5 @@ export class TowerCombatService {
     this.placedTowers.clear();
     this.projectileCounter = 0;
     this.gameTime = 0;
-    this.towerDamageMultiplier = 1;
   }
 }

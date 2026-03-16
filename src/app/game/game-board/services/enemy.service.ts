@@ -7,6 +7,7 @@ import { GameModifier, ModifierEffects, GAME_MODIFIER_CONFIGS } from '../models/
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG, BOSS_CROWN_CONFIG } from '../constants/effects.constants';
 import { PathfindingService } from './pathfinding.service';
+import { GameStateService } from './game-state.service';
 
 /**
  * Result returned by {@link EnemyService.damageEnemy}.
@@ -23,21 +24,14 @@ export interface DamageResult {
 export class EnemyService {
   private enemies: Map<string, Enemy> = new Map();
   private enemyCounter = 0;
-  private modifierEffects: ModifierEffects = {};
-  private activeModifiers: Set<GameModifier> = new Set();
   /** Scratch quaternion reused each frame to avoid per-enemy allocation in billboarding. */
   private billboardScratchQuat = new THREE.Quaternion();
 
   constructor(
     private gameBoardService: GameBoardService,
-    private pathfindingService: PathfindingService
+    private pathfindingService: PathfindingService,
+    private gameStateService: GameStateService,
   ) {}
-
-  /** Set active modifier effects and the raw modifier set. Called by the component when modifiers change. */
-  setModifierEffects(effects: ModifierEffects, modifiers: Set<GameModifier>): void {
-    this.modifierEffects = effects;
-    this.activeModifiers = modifiers;
-  }
 
   /**
    * Spawn a new enemy of the given type at a randomly chosen spawner tile.
@@ -109,25 +103,27 @@ export class EnemyService {
       distanceTraveled: 0
     };
 
-    // Apply modifier effects to spawned enemy stats
-    if (this.modifierEffects.enemyHealthMultiplier !== undefined) {
-      enemy.health = Math.round(enemy.health * this.modifierEffects.enemyHealthMultiplier);
+    // Apply modifier effects to spawned enemy stats — read from GameStateService on demand.
+    const modifierEffects = this.gameStateService.getModifierEffects();
+    const activeModifiers = this.gameStateService.getState().activeModifiers;
+    if (modifierEffects.enemyHealthMultiplier !== undefined) {
+      enemy.health = Math.round(enemy.health * modifierEffects.enemyHealthMultiplier);
       enemy.maxHealth = enemy.health;
     }
     // Speed modifiers: SPEED_DEMONS only applies to FAST/SWIFT types.
     // If both FAST_ENEMIES and SPEED_DEMONS are active, compute the combined
     // multiplier manually to apply SPEED_DEMONS selectively.
-    if (this.activeModifiers.has(GameModifier.SPEED_DEMONS)) {
+    if (activeModifiers.has(GameModifier.SPEED_DEMONS)) {
       const isFastOrSwift = type === EnemyType.FAST || type === EnemyType.SWIFT;
       if (isFastOrSwift) {
         // Apply the full merged speed multiplier (includes both modifiers)
-        if (this.modifierEffects.enemySpeedMultiplier !== undefined) {
-          enemy.speed *= this.modifierEffects.enemySpeedMultiplier;
+        if (modifierEffects.enemySpeedMultiplier !== undefined) {
+          enemy.speed *= modifierEffects.enemySpeedMultiplier;
         }
       } else {
         // Only apply FAST_ENEMIES portion (exclude SPEED_DEMONS' 2.0x)
         const speedDemonsMultiplier = GAME_MODIFIER_CONFIGS[GameModifier.SPEED_DEMONS].effects.enemySpeedMultiplier ?? 1;
-        const totalMultiplier = this.modifierEffects.enemySpeedMultiplier ?? 1;
+        const totalMultiplier = modifierEffects.enemySpeedMultiplier ?? 1;
         // Guard against divide-by-zero (speedDemonsMultiplier should never be 0, but be safe)
         const nonDemonMultiplier = speedDemonsMultiplier !== 0
           ? totalMultiplier / speedDemonsMultiplier
@@ -136,9 +132,9 @@ export class EnemyService {
           enemy.speed *= nonDemonMultiplier;
         }
       }
-    } else if (this.modifierEffects.enemySpeedMultiplier !== undefined) {
+    } else if (modifierEffects.enemySpeedMultiplier !== undefined) {
       // No SPEED_DEMONS — apply speed multiplier to all types
-      enemy.speed *= this.modifierEffects.enemySpeedMultiplier;
+      enemy.speed *= modifierEffects.enemySpeedMultiplier;
     }
 
     // Apply endless-wave scaling on top of modifier scaling (multiplicative stacking)
@@ -784,8 +780,6 @@ export class EnemyService {
     this.cleanup(scene);
     this.enemyCounter = 0;
     this.clearPathCache();
-    this.modifierEffects = {};
-    this.activeModifiers = new Set();
   }
 
   /**

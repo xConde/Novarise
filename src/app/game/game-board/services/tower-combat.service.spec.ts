@@ -3,6 +3,7 @@ import { TowerCombatService, KillInfo, CombatAudioEvent } from './tower-combat.s
 import { CombatVFXService } from './combat-vfx.service';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
+import { GameStateService } from './game-state.service';
 import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_SPECIALIZATIONS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { Enemy } from '../models/enemy.model';
 import { StatusEffectService } from './status-effect.service';
@@ -41,6 +42,7 @@ describe('TowerCombatService', () => {
         TowerCombatService,
         CombatVFXService,
         StatusEffectService,
+        GameStateService,
         { provide: EnemyService, useValue: enemyServiceSpy },
         { provide: GameBoardService, useValue: gameBoardServiceSpy }
       ]
