@@ -900,16 +900,29 @@ export class EnemyService {
    * Call after any board mutation (tower placed/sold) so enemies don't walk through new obstacles.
    * Flying enemies are skipped (they ignore terrain).
    */
-  repathAllEnemies(): void {
+  /**
+   * Repath only enemies whose current path passes through a specific blocked tile.
+   * Enemies not affected by the board change keep their existing paths.
+   * Call after tower placement or sell.
+   *
+   * @param blockedRow Row of the newly placed/removed tower (or -1 to repath ALL)
+   * @param blockedCol Column of the newly placed/removed tower (or -1 to repath ALL)
+   */
+  repathAffectedEnemies(blockedRow: number, blockedCol: number): void {
     this.clearPathCache();
 
     const exitTiles = this.getExitTiles();
     if (exitTiles.length === 0) return;
     const exitTile = exitTiles[0];
+    const forceAll = blockedRow < 0 || blockedCol < 0;
 
     for (const enemy of this.enemies.values()) {
-      // Flying enemies use straight-line paths — terrain changes don't affect them
       if (enemy.isFlying) continue;
+
+      // Only repath if the enemy's remaining path crosses the blocked tile
+      if (!forceAll && !this.pathCrossesTile(enemy, blockedRow, blockedCol)) {
+        continue;
+      }
 
       const currentGridPos = enemy.gridPosition;
       const newPath = this.findPath(
@@ -919,14 +932,20 @@ export class EnemyService {
 
       if (newPath.length > 0) {
         enemy.path = newPath;
-        // Start from node 0 (enemy's current grid cell). The movement system
-        // in updateEnemies() uses world-position distance to advance, so
-        // setting pathIndex=0 is correct — the enemy is AT node 0 and will
-        // immediately begin moving toward node 1.
         enemy.pathIndex = 0;
       }
-      // If no path found, enemy keeps old path — it will walk until stuck
     }
+  }
+
+  /** Check if an enemy's remaining path (from current index forward) crosses a specific tile. */
+  private pathCrossesTile(enemy: Enemy, row: number, col: number): boolean {
+    for (let i = enemy.pathIndex; i < enemy.path.length; i++) {
+      const node = enemy.path[i];
+      if (node.y === row && node.x === col) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
