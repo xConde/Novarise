@@ -806,7 +806,7 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 
 ## Deployment Checklist — Pricing System v2
 - [x] Step 1: Remove dead code — `HEATMAP_COLORS` unused export (ui.constants.ts), `.inspect-mode` dead CSS (game-board.component.scss)
-- [ ] Step 2: Convention check — grep for console.log, TODO/FIXME/HACK, hardcoded numbers added on this branch
-- [ ] Step 3: Full test suite green (1925+ tests hard gate)
-- [ ] Step 4: Production build passes — CSS < 40kb error budget
+- [x] Step 2: Convention check — grep for console.log, TODO/FIXME/HACK, hardcoded numbers added on this branch
+- [x] Step 3: Full test suite green (1925/1925 hard gate)
+- [x] Step 4: Production build passes — CSS 39.42kb (below 40kb error budget)
 - [ ] Step 5: Push to remote + update PR
