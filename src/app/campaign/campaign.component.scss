@@ -255,6 +255,28 @@ $campaign-grid-cols-sm: 1fr;
   color: var(--game-gold);
 }
 
+// Challenge badges
+.level-card__challenges {
+  display: flex;
+  gap: 4px;
+  padding-top: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+
+.challenge-badge {
+  font-size: 0.65rem;
+  transition: color var(--transition-fast) ease;
+
+  &--complete {
+    color: var(--game-gold);
+  }
+
+  &--incomplete {
+    color: var(--theme-purple-a30);
+    opacity: 0.5;
+  }
+}
+
 // Back button (matches profile.component.scss pattern)
 .back-btn {
   padding: 0.9rem var(--spacing-lg);

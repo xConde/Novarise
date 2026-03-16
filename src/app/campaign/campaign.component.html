@@ -53,6 +53,16 @@
           <span class="level-card__score-label">Best</span>
           <span class="level-card__score-value">{{ getLevelProgress(level.id)?.bestScore }}</span>
         </div>
+
+        <div class="level-card__challenges" *ngIf="isUnlocked(level.id)" aria-label="Challenge badges">
+          <span
+            *ngFor="let challenge of getChallenges(level.id)"
+            class="challenge-badge"
+            [class.challenge-badge--complete]="isChallengeCompleted(challenge.id)"
+            [class.challenge-badge--incomplete]="!isChallengeCompleted(challenge.id)"
+            [title]="challenge.name + ': ' + challenge.description"
+          >&#9670;</span>
+        </div>
       </button>
     </div>
 

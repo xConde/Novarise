@@ -39,6 +39,8 @@ describe('CampaignComponent', () => {
       'getLevelProgress',
       'getTotalStars',
       'getCompletedCount',
+      'getChallengesForLevel',
+      'isChallengeCompleted',
     ]);
     campaignService.getAllLevels.and.returnValue(CAMPAIGN_LEVELS);
     campaignService.getTotalStars.and.returnValue(0);
@@ -47,6 +49,8 @@ describe('CampaignComponent', () => {
     campaignService.isUnlocked.and.callFake((id: string) => id === 'campaign_01');
     campaignService.isCompleted.and.returnValue(false);
     campaignService.getLevelProgress.and.returnValue(null);
+    campaignService.getChallengesForLevel.and.returnValue([]);
+    campaignService.isChallengeCompleted.and.returnValue(false);
 
     campaignMapService.loadLevel.and.returnValue(MOCK_MAP_STATE);
 
@@ -150,5 +154,32 @@ describe('CampaignComponent', () => {
     campaignService.getLevelProgress.and.returnValue(null);
     const stars = component.getStarArray('campaign_01');
     expect(stars).toEqual([false, false, false]);
+  });
+
+  // ── Challenge badge delegation ─────────────────────────────────────────────
+
+  it('getChallenges should delegate to campaignService.getChallengesForLevel', () => {
+    component.getChallenges('campaign_01');
+    expect(campaignService.getChallengesForLevel).toHaveBeenCalledWith('campaign_01');
+  });
+
+  it('getChallenges should return empty array when service returns empty', () => {
+    campaignService.getChallengesForLevel.and.returnValue([]);
+    expect(component.getChallenges('campaign_01')).toEqual([]);
+  });
+
+  it('isChallengeCompleted should delegate to campaignService.isChallengeCompleted', () => {
+    component.isChallengeCompleted('c01_untouchable');
+    expect(campaignService.isChallengeCompleted).toHaveBeenCalledWith('c01_untouchable');
+  });
+
+  it('isChallengeCompleted should return true when service returns true', () => {
+    campaignService.isChallengeCompleted.and.returnValue(true);
+    expect(component.isChallengeCompleted('c01_untouchable')).toBeTrue();
+  });
+
+  it('isChallengeCompleted should return false when service returns false', () => {
+    campaignService.isChallengeCompleted.and.returnValue(false);
+    expect(component.isChallengeCompleted('c01_untouchable')).toBeFalse();
   });
 });

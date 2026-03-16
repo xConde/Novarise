@@ -4,6 +4,7 @@ import { CampaignLevel, CampaignLevelProgress } from './models/campaign.model';
 import { CampaignService } from './services/campaign.service';
 import { CampaignMapService } from './services/campaign-map.service';
 import { MapBridgeService } from '../game/game-board/services/map-bridge.service';
+import { ChallengeDefinition } from './models/challenge.model';
 
 @Component({
   selector: 'app-campaign',
@@ -45,6 +46,14 @@ export class CampaignComponent implements OnInit {
     const progress = this.getLevelProgress(levelId);
     const earned = progress?.bestStars ?? 0;
     return [earned >= 1, earned >= 2, earned >= 3];
+  }
+
+  getChallenges(levelId: string): ChallengeDefinition[] {
+    return this.campaignService.getChallengesForLevel(levelId);
+  }
+
+  isChallengeCompleted(challengeId: string): boolean {
+    return this.campaignService.isChallengeCompleted(challengeId);
   }
 
   playLevel(level: CampaignLevel): void {

@@ -185,6 +185,50 @@ describe('CampaignService', () => {
     expect(service.getNextLevel('campaign_99')).toBeNull();
   });
 
+  // ── Challenge tracking ────────────────────────────────────────────────────
+
+  it('should return false for an uncompleted challenge', () => {
+    expect(service.isChallengeCompleted('c01_untouchable')).toBeFalse();
+  });
+
+  it('should return true after completing a challenge', () => {
+    service.completeChallenge('c01_untouchable');
+    expect(service.isChallengeCompleted('c01_untouchable')).toBeTrue();
+  });
+
+  it('should persist challenge completion to localStorage', () => {
+    service.completeChallenge('c01_untouchable');
+    const raw = localStorage.getItem(STORAGE_KEY);
+    expect(raw).not.toBeNull();
+    const parsed = JSON.parse(raw!);
+    expect(parsed.completedChallenges['c01_untouchable']).toBeTrue();
+  });
+
+  it('should not double-record a challenge', () => {
+    service.completeChallenge('c01_untouchable');
+    service.completeChallenge('c01_untouchable');
+    expect(service.getCompletedChallengeCount()).toBe(1);
+  });
+
+  it('should increment getCompletedChallengeCount per unique challenge', () => {
+    service.completeChallenge('c01_untouchable');
+    service.completeChallenge('c01_tower_limit');
+    expect(service.getCompletedChallengeCount()).toBe(2);
+  });
+
+  it('should return 0 completed challenge count initially', () => {
+    expect(service.getCompletedChallengeCount()).toBe(0);
+  });
+
+  it('getChallengesForLevel should return challenges for a campaign level', () => {
+    const challenges = service.getChallengesForLevel('campaign_01');
+    expect(challenges.length).toBeGreaterThan(0);
+  });
+
+  it('getChallengesForLevel should return empty array for unknown level', () => {
+    expect(service.getChallengesForLevel('custom_99')).toEqual([]);
+  });
+
   // ── resetProgress ─────────────────────────────────────────────────────────
 
   it('should clear all progress on reset', () => {
@@ -193,6 +237,13 @@ describe('CampaignService', () => {
     expect(service.getCompletedCount()).toBe(0);
     expect(service.getTotalStars()).toBe(0);
     expect(service.isCompleted('campaign_01')).toBeFalse();
+  });
+
+  it('should clear completed challenges on reset', () => {
+    service.completeChallenge('c01_untouchable');
+    service.resetProgress();
+    expect(service.isChallengeCompleted('c01_untouchable')).toBeFalse();
+    expect(service.getCompletedChallengeCount()).toBe(0);
   });
 
   it('should remove the localStorage key on reset', () => {

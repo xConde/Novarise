@@ -35,6 +35,7 @@ export interface CampaignLevelProgress {
 
 export interface CampaignProgress {
   completedLevels: Record<string, CampaignLevelProgress>;
+  completedChallenges: Record<string, boolean>;
 }
 
 /** Total number of campaign levels. */

@@ -5,11 +5,13 @@ import {
   CampaignProgress,
   CAMPAIGN_LEVELS,
 } from '../models/campaign.model';
+import { ChallengeDefinition, getChallengesForLevel } from '../models/challenge.model';
 
 const CAMPAIGN_STORAGE_KEY = 'novarise-campaign';
 
 const DEFAULT_PROGRESS: CampaignProgress = {
   completedLevels: {},
+  completedChallenges: {},
 };
 
 @Injectable({ providedIn: 'root' })
@@ -82,8 +84,29 @@ export class CampaignService {
     return next ?? null;
   }
 
+  // ── Challenge tracking ──────────────────────────────────────────────────────
+
+  getChallengesForLevel(levelId: string): ChallengeDefinition[] {
+    return getChallengesForLevel(levelId);
+  }
+
+  isChallengeCompleted(challengeId: string): boolean {
+    return !!this.progress.completedChallenges[challengeId];
+  }
+
+  completeChallenge(challengeId: string): void {
+    if (!this.progress.completedChallenges[challengeId]) {
+      this.progress.completedChallenges[challengeId] = true;
+      this.save();
+    }
+  }
+
+  getCompletedChallengeCount(): number {
+    return Object.keys(this.progress.completedChallenges).length;
+  }
+
   resetProgress(): void {
-    this.progress = { completedLevels: {} };
+    this.progress = { completedLevels: {}, completedChallenges: {} };
     try {
       localStorage.removeItem(CAMPAIGN_STORAGE_KEY);
     } catch {
@@ -94,7 +117,7 @@ export class CampaignService {
   private load(): CampaignProgress {
     try {
       const raw = localStorage.getItem(CAMPAIGN_STORAGE_KEY);
-      if (!raw) return { ...DEFAULT_PROGRESS, completedLevels: {} };
+      if (!raw) return { ...DEFAULT_PROGRESS, completedLevels: {}, completedChallenges: {} };
       const parsed = JSON.parse(raw) as Partial<CampaignProgress>;
       return {
         completedLevels:
@@ -103,9 +126,15 @@ export class CampaignService {
           !Array.isArray(parsed.completedLevels)
             ? { ...parsed.completedLevels as Record<string, CampaignLevelProgress> }
             : {},
+        completedChallenges:
+          parsed.completedChallenges &&
+          typeof parsed.completedChallenges === 'object' &&
+          !Array.isArray(parsed.completedChallenges)
+            ? { ...parsed.completedChallenges as Record<string, boolean> }
+            : {},
       };
     } catch {
-      return { ...DEFAULT_PROGRESS, completedLevels: {} };
+      return { ...DEFAULT_PROGRESS, completedLevels: {}, completedChallenges: {} };
     }
   }
 
