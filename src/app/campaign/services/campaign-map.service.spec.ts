@@ -56,20 +56,12 @@ describe('CampaignMapService', () => {
 
   // ── terrain ───────────────────────────────────────────────────────────────
 
-  it('should fill placeholder tiles (levels 9+) entirely with BEDROCK', () => {
-    // campaign_09 is the first level without a hand-crafted map
-    const state = service.loadLevel('campaign_09')!;
-    for (let x = 0; x < state.gridSize; x++) {
-      for (let z = 0; z < state.gridSize; z++) {
-        expect(state.tiles[x][z]).toBe(TerrainType.BEDROCK, `tile [${x}][${z}]`);
-      }
-    }
-  });
-
-  it('should return hand-crafted maps (non-all-BEDROCK) for levels 1-8', () => {
+  it('should return hand-crafted maps (non-all-BEDROCK) for all 16 levels', () => {
     const handCraftedIds = [
       'campaign_01', 'campaign_02', 'campaign_03', 'campaign_04',
       'campaign_05', 'campaign_06', 'campaign_07', 'campaign_08',
+      'campaign_09', 'campaign_10', 'campaign_11', 'campaign_12',
+      'campaign_13', 'campaign_14', 'campaign_15', 'campaign_16',
     ];
     for (const id of handCraftedIds) {
       const state = service.loadLevel(id)!;

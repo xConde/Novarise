@@ -14,6 +14,18 @@ import {
   buildTheNarrows,
   buildCrystalMaze,
 } from '../maps/early-maps';
+import {
+  buildCrossfire,
+  buildTheSpiral,
+  buildSiege,
+  buildLabyrinth,
+} from '../maps/mid-maps';
+import {
+  buildFortress,
+  buildTheGauntlet,
+  buildStorm,
+  buildNovarise,
+} from '../maps/late-maps';
 
 /** Schema version emitted by generated placeholder maps. */
 const PLACEHOLDER_MAP_VERSION = '2.0.0';
@@ -31,6 +43,14 @@ const CAMPAIGN_MAP_REGISTRY: Record<string, () => TerrainGridState> = {
   campaign_06: buildOpenGround,
   campaign_07: buildTheNarrows,
   campaign_08: buildCrystalMaze,
+  campaign_09: buildCrossfire,
+  campaign_10: buildTheSpiral,
+  campaign_11: buildSiege,
+  campaign_12: buildLabyrinth,
+  campaign_13: buildFortress,
+  campaign_14: buildTheGauntlet,
+  campaign_15: buildStorm,
+  campaign_16: buildNovarise,
 };
 
 /**
@@ -43,6 +63,7 @@ const CAMPAIGN_MAP_REGISTRY: Record<string, () => TerrainGridState> = {
 export class CampaignMapService {
   /**
    * Load the TerrainGridState for a campaign level.
+   * All 16 levels return hand-crafted maps from CAMPAIGN_MAP_REGISTRY.
    * Returns null for unknown level IDs.
    */
   loadLevel(levelId: string): TerrainGridState | null {
