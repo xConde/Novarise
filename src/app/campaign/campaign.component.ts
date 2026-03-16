@@ -56,6 +56,10 @@ export class CampaignComponent implements OnInit {
     return this.campaignService.isChallengeCompleted(challengeId);
   }
 
+  get isCampaignComplete(): boolean {
+    return this.completedCount === this.levels.length;
+  }
+
   playLevel(level: CampaignLevel): void {
     if (!this.isUnlocked(level.id)) return;
     const mapState = this.campaignMapService.loadLevel(level.id);

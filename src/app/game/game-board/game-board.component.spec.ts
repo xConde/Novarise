@@ -23,6 +23,19 @@ import { StatusEffectService } from './services/status-effect.service';
 import { EnemyService } from './services/enemy.service';
 import { TutorialService, TutorialStep } from './services/tutorial.service';
 import { BehaviorSubject } from 'rxjs';
+import { CampaignService } from '../../campaign/services/campaign.service';
+import { CampaignMapService } from '../../campaign/services/campaign-map.service';
+import { CampaignLevel, CampaignTier } from '../../campaign/models/campaign.model';
+import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
+
+const MOCK_MAP_STATE_SPEC = {
+  gridSize: 10,
+  tiles: Array.from({ length: 10 }, () => new Array<TerrainType>(10).fill(TerrainType.BEDROCK)),
+  heightMap: Array.from({ length: 10 }, () => new Array<number>(10).fill(0)),
+  spawnPoints: [{ x: 0, z: 4 }],
+  exitPoints: [{ x: 9, z: 4 }],
+  version: '2.0.0',
+};
 
 describe('GameBoardComponent', () => {
   let component: GameBoardComponent;
@@ -34,6 +47,8 @@ describe('GameBoardComponent', () => {
   let settingsSpy: jasmine.SpyObj<SettingsService>;
   let tutorialSpy: jasmine.SpyObj<TutorialService>;
   let tutorialStep$: BehaviorSubject<TutorialStep | null>;
+  let campaignServiceSpy: jasmine.SpyObj<CampaignService>;
+  let campaignMapServiceSpy: jasmine.SpyObj<CampaignMapService>;
 
   beforeEach(async () => {
     gameStatsSpy = jasmine.createSpyObj('GameStatsService', ['recordKill', 'recordDamage', 'recordGoldEarned', 'recordEnemyLeaked', 'recordTowerBuilt', 'recordTowerSold', 'recordShot', 'getStats', 'reset']);
@@ -69,6 +84,24 @@ describe('GameBoardComponent', () => {
       position: 'center' as const,
     }));
 
+    campaignServiceSpy = jasmine.createSpyObj('CampaignService', [
+      'getNextLevel',
+      'isUnlocked',
+      'getLevel',
+      'recordCompletion',
+      'completeChallenge',
+      'getAllLevels',
+      'getCompletedCount',
+    ]);
+    campaignServiceSpy.getNextLevel.and.returnValue(null);
+    campaignServiceSpy.isUnlocked.and.returnValue(false);
+    campaignServiceSpy.getLevel.and.returnValue(undefined);
+    campaignServiceSpy.getAllLevels.and.returnValue([]);
+    campaignServiceSpy.getCompletedCount.and.returnValue(0);
+
+    campaignMapServiceSpy = jasmine.createSpyObj('CampaignMapService', ['loadLevel']);
+    campaignMapServiceSpy.loadLevel.and.returnValue(MOCK_MAP_STATE_SPEC);
+
     await TestBed.configureTestingModule({
       declarations: [ GameBoardComponent ],
       imports: [ RouterTestingModule ],
@@ -84,6 +117,8 @@ describe('GameBoardComponent', () => {
         { provide: MinimapService, useValue: minimapSpy },
         { provide: SettingsService, useValue: settingsSpy },
         { provide: TutorialService, useValue: tutorialSpy },
+        { provide: CampaignService, useValue: campaignServiceSpy },
+        { provide: CampaignMapService, useValue: campaignMapServiceSpy },
       ]
     })
     .compileComponents();
@@ -1236,6 +1271,165 @@ describe('GameBoardComponent', () => {
     it('isNewEnemyType returns true for unseen type even when some types are seen', () => {
       component.seenEnemyTypes = new Set<EnemyType>([EnemyType.BASIC, EnemyType.FAST]);
       expect(component.isNewEnemyType(EnemyType.BOSS)).toBeTrue();
+    });
+  });
+
+  // ── Campaign integration ─────────────────────────────────────────────────────
+
+  describe('isCampaignGame', () => {
+    it('returns false when mapId is null', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue(null);
+      expect(component.isCampaignGame).toBeFalse();
+    });
+
+    it('returns false for a user/quickplay map', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('user_custom_map');
+      expect(component.isCampaignGame).toBeFalse();
+    });
+
+    it('returns true for campaign_01', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+      expect(component.isCampaignGame).toBeTrue();
+    });
+
+    it('returns true for any campaign_ prefixed id', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_16');
+      expect(component.isCampaignGame).toBeTrue();
+    });
+  });
+
+  describe('nextCampaignLevel', () => {
+    it('returns null when mapId is null', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue(null);
+      expect(component.nextCampaignLevel).toBeNull();
+    });
+
+    it('returns null when service has no next level', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_16');
+      campaignServiceSpy.getNextLevel.and.returnValue(null);
+      expect(component.nextCampaignLevel).toBeNull();
+    });
+
+    it('returns next level from service when available', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+      const fakeNext: CampaignLevel = {
+        id: 'campaign_02', number: 2, name: 'The Bend',
+        tier: CampaignTier.INTRO, description: '', gridSize: 10,
+        waveCount: 8, spawnerCount: 1, exitCount: 1, parScore: 1000,
+        unlockRequirement: { type: 'level_complete', levelId: 'campaign_01' },
+      };
+      campaignServiceSpy.getNextLevel.and.returnValue(fakeNext);
+      expect(component.nextCampaignLevel).toEqual(fakeNext);
+    });
+  });
+
+  describe('isNextLevelUnlocked', () => {
+    it('returns false when there is no next level', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_16');
+      campaignServiceSpy.getNextLevel.and.returnValue(null);
+      expect(component.isNextLevelUnlocked).toBeFalse();
+    });
+
+    it('returns false when next level exists but is locked', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+      const fakeNext: CampaignLevel = {
+        id: 'campaign_02', number: 2, name: 'The Bend',
+        tier: CampaignTier.INTRO, description: '', gridSize: 10,
+        waveCount: 8, spawnerCount: 1, exitCount: 1, parScore: 1000,
+        unlockRequirement: { type: 'level_complete', levelId: 'campaign_01' },
+      };
+      campaignServiceSpy.getNextLevel.and.returnValue(fakeNext);
+      campaignServiceSpy.isUnlocked.and.returnValue(false);
+      expect(component.isNextLevelUnlocked).toBeFalse();
+    });
+
+    it('returns true when next level exists and is unlocked', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+      const fakeNext: CampaignLevel = {
+        id: 'campaign_02', number: 2, name: 'The Bend',
+        tier: CampaignTier.INTRO, description: '', gridSize: 10,
+        waveCount: 8, spawnerCount: 1, exitCount: 1, parScore: 1000,
+        unlockRequirement: { type: 'level_complete', levelId: 'campaign_01' },
+      };
+      campaignServiceSpy.getNextLevel.and.returnValue(fakeNext);
+      campaignServiceSpy.isUnlocked.and.returnValue(true);
+      expect(component.isNextLevelUnlocked).toBeTrue();
+    });
+  });
+
+  describe('playNextLevel', () => {
+    it('does nothing when nextCampaignLevel is null', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_16');
+      campaignServiceSpy.getNextLevel.and.returnValue(null);
+      spyOn(component, 'restartGame');
+
+      component.playNextLevel();
+
+      expect(campaignMapServiceSpy.loadLevel).not.toHaveBeenCalled();
+      expect(component.restartGame).not.toHaveBeenCalled();
+    });
+
+    it('loads next level map and calls restartGame', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+      spyOn(mapBridge, 'setEditorMapState');
+      const fakeNext: CampaignLevel = {
+        id: 'campaign_02', number: 2, name: 'The Bend',
+        tier: CampaignTier.INTRO, description: '', gridSize: 10,
+        waveCount: 8, spawnerCount: 1, exitCount: 1, parScore: 1000,
+        unlockRequirement: { type: 'level_complete', levelId: 'campaign_01' },
+      };
+      campaignServiceSpy.getNextLevel.and.returnValue(fakeNext);
+      campaignMapServiceSpy.loadLevel.and.returnValue(MOCK_MAP_STATE_SPEC);
+
+      // Stub restartGame to avoid Three.js calls
+      spyOn(component, 'restartGame');
+
+      component.playNextLevel();
+
+      expect(campaignMapServiceSpy.loadLevel).toHaveBeenCalledWith('campaign_02');
+      expect(mapBridge.setEditorMapState).toHaveBeenCalledWith(MOCK_MAP_STATE_SPEC, 'campaign_02');
+      expect(component.restartGame).toHaveBeenCalled();
+    });
+
+    it('does nothing when loadLevel returns null', () => {
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+      const fakeNext: CampaignLevel = {
+        id: 'campaign_02', number: 2, name: 'The Bend',
+        tier: CampaignTier.INTRO, description: '', gridSize: 10,
+        waveCount: 8, spawnerCount: 1, exitCount: 1, parScore: 1000,
+        unlockRequirement: { type: 'level_complete', levelId: 'campaign_01' },
+      };
+      campaignServiceSpy.getNextLevel.and.returnValue(fakeNext);
+      campaignMapServiceSpy.loadLevel.and.returnValue(null);
+      spyOn(component, 'restartGame');
+
+      component.playNextLevel();
+
+      expect(component.restartGame).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('backToCampaign', () => {
+    it('navigates to /campaign', () => {
+      const router = TestBed.inject(Router);
+      spyOn(router, 'navigate');
+
+      component.backToCampaign();
+
+      expect(router.navigate).toHaveBeenCalledWith(['/campaign']);
     });
   });
 });

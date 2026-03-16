@@ -240,8 +240,20 @@
       </div>
 
       <div class="overlay-actions">
-        <button class="restart-btn" (click)="restartGame()">Play Again</button>
-        <button class="edit-map-btn" (click)="goToEditor()">Edit Map</button>
+        <button
+          *ngIf="gameState.phase === GamePhase.VICTORY && isCampaignGame && isNextLevelUnlocked"
+          class="results-btn results-btn--primary"
+          (click)="playNextLevel()">
+          Next Level
+        </button>
+        <button class="results-btn" (click)="restartGame()">Play Again</button>
+        <button
+          *ngIf="isCampaignGame"
+          class="results-btn results-btn--secondary"
+          (click)="backToCampaign()">
+          Campaign
+        </button>
+        <button class="results-btn results-btn--tertiary" (click)="goToEditor()">Edit Map</button>
       </div>
     </div>
   </div>

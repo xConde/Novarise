@@ -108,6 +108,15 @@
   }
 }
 
+.landing-btn__progress {
+  display: block;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  color: var(--theme-purple-mid);
+  margin-top: 2px;
+  opacity: 0.85;
+}
+
 .landing-version {
   position: absolute;
   bottom: var(--spacing-md);

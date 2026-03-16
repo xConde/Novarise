@@ -49,8 +49,10 @@ import { PriceLabelService } from './services/price-label.service';
 import { TutorialService, TutorialStep, TutorialTip } from './services/tutorial.service';
 import { TerrainGridStateLegacy } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 import { CampaignService } from '../../campaign/services/campaign.service';
+import { CampaignMapService } from '../../campaign/services/campaign-map.service';
 import { ChallengeEvaluatorService } from '../../campaign/services/challenge-evaluator.service';
 import { CAMPAIGN_WAVE_DEFINITIONS } from '../../campaign/waves/campaign-waves';
+import { CampaignLevel } from '../../campaign/models/campaign.model';
 import { ChallengeDefinition } from '../../campaign/models/challenge.model';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
@@ -286,6 +288,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private priceLabelService: PriceLabelService,
     private tutorialService: TutorialService,
     private campaignService: CampaignService,
+    private campaignMapService: CampaignMapService,
     private challengeEvaluatorService: ChallengeEvaluatorService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
@@ -1024,6 +1027,40 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
     this.router.navigate(['/edit']);
+  }
+
+  /** True when the current map is a campaign level (mapId starts with 'campaign_'). */
+  get isCampaignGame(): boolean {
+    const mapId = this.mapBridge.getMapId();
+    return !!mapId && mapId.startsWith('campaign_');
+  }
+
+  /** Returns the next campaign level after the current one, or null if none exists. */
+  get nextCampaignLevel(): CampaignLevel | null {
+    const mapId = this.mapBridge.getMapId();
+    if (!mapId) return null;
+    return this.campaignService.getNextLevel(mapId);
+  }
+
+  /** True when the next campaign level exists and is unlocked. */
+  get isNextLevelUnlocked(): boolean {
+    const next = this.nextCampaignLevel;
+    return !!next && this.campaignService.isUnlocked(next.id);
+  }
+
+  /** Loads the next campaign level and restarts the game. No-op if no next level. */
+  playNextLevel(): void {
+    const next = this.nextCampaignLevel;
+    if (!next) return;
+    const mapState = this.campaignMapService.loadLevel(next.id);
+    if (!mapState) return;
+    this.mapBridge.setEditorMapState(mapState, next.id);
+    this.restartGame();
+  }
+
+  /** Navigate back to the campaign level select screen. */
+  backToCampaign(): void {
+    this.router.navigate(['/campaign']);
   }
 
   startWave(): void {

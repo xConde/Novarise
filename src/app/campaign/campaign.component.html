@@ -14,6 +14,11 @@
       </span>
     </div>
 
+    <div class="campaign-complete" *ngIf="isCampaignComplete" role="status" aria-label="Campaign complete">
+      <h2 class="campaign-complete__title">CAMPAIGN COMPLETE</h2>
+      <p class="campaign-complete__subtitle">You have conquered all challenges</p>
+    </div>
+
     <div class="level-grid" role="list" aria-label="Campaign levels">
       <button
         *ngFor="let level of levels"

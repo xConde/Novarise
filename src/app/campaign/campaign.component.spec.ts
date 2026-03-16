@@ -182,4 +182,57 @@ describe('CampaignComponent', () => {
     campaignService.isChallengeCompleted.and.returnValue(false);
     expect(component.isChallengeCompleted('c01_untouchable')).toBeFalse();
   });
+
+  // ── Campaign completion ────────────────────────────────────────────────────
+
+  describe('isCampaignComplete', () => {
+    it('should be false when no levels are completed', () => {
+      expect(component.isCampaignComplete).toBeFalse();
+    });
+
+    it('should be true when completedCount equals the total number of levels', () => {
+      campaignService.getCompletedCount.and.returnValue(CAMPAIGN_LEVELS.length);
+      component.ngOnInit();
+      expect(component.isCampaignComplete).toBeTrue();
+    });
+
+    it('should be false when only some levels are completed', () => {
+      campaignService.getCompletedCount.and.returnValue(8);
+      component.ngOnInit();
+      expect(component.isCampaignComplete).toBeFalse();
+    });
+  });
+
+  describe('campaign complete banner', () => {
+    it('should not show the banner when campaign is not complete', () => {
+      fixture.detectChanges();
+      const banner = fixture.nativeElement.querySelector('.campaign-complete');
+      expect(banner).toBeNull();
+    });
+
+    it('should show the banner when all levels are completed', () => {
+      campaignService.getCompletedCount.and.returnValue(CAMPAIGN_LEVELS.length);
+      component.ngOnInit();
+      fixture.detectChanges();
+      const banner = fixture.nativeElement.querySelector('.campaign-complete');
+      expect(banner).not.toBeNull();
+    });
+
+    it('banner title should say CAMPAIGN COMPLETE', () => {
+      campaignService.getCompletedCount.and.returnValue(CAMPAIGN_LEVELS.length);
+      component.ngOnInit();
+      fixture.detectChanges();
+      const title = fixture.nativeElement.querySelector('.campaign-complete__title');
+      expect(title.textContent).toContain('CAMPAIGN COMPLETE');
+    });
+
+    it('banner subtitle should be visible', () => {
+      campaignService.getCompletedCount.and.returnValue(CAMPAIGN_LEVELS.length);
+      component.ngOnInit();
+      fixture.detectChanges();
+      const subtitle = fixture.nativeElement.querySelector('.campaign-complete__subtitle');
+      expect(subtitle).not.toBeNull();
+      expect(subtitle.textContent).toContain('conquered');
+    });
+  });
 });
