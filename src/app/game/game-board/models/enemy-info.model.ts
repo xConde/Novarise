@@ -1,5 +1,8 @@
 import { EnemyType, ENEMY_STATS } from './enemy.model';
 
+/** Display label for the Slow immunity (matches status effect name shown in UI). */
+const SLOW_IMMUNITY_LABEL = 'Slow';
+
 export interface EnemyInfo {
   type: EnemyType;
   name: string;
@@ -83,7 +86,7 @@ export const ENEMY_INFO: Record<EnemyType, EnemyInfo> = {
     speed: ENEMY_STATS[EnemyType.SHIELDED].speed,
     reward: ENEMY_STATS[EnemyType.SHIELDED].value,
     leakDamage: ENEMY_STATS[EnemyType.SHIELDED].leakDamage,
-    special: 'Shield absorbs first 60 damage',
+    special: `Shield absorbs first ${ENEMY_STATS[EnemyType.SHIELDED].maxShield} damage`,
     color: ENEMY_STATS[EnemyType.SHIELDED].color,
     immunities: [],
   },
@@ -109,6 +112,6 @@ export const ENEMY_INFO: Record<EnemyType, EnemyInfo> = {
     leakDamage: ENEMY_STATS[EnemyType.FLYING].leakDamage,
     special: 'Ignores pathing',
     color: ENEMY_STATS[EnemyType.FLYING].color,
-    immunities: ['Slow'],
+    immunities: [SLOW_IMMUNITY_LABEL],
   },
 };

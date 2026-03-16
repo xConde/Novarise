@@ -56,8 +56,8 @@ const CAMPAIGN_MAP_REGISTRY: Record<string, () => TerrainGridState> = {
 /**
  * Loads TerrainGridState maps for campaign levels.
  *
- * Levels 1-8 (Intro + Early tiers) return hand-crafted maps from CAMPAIGN_MAP_REGISTRY.
- * Levels 9-16 fall back to placeholder generation until their sprints land.
+ * All 16 levels (Intro through Endgame) return hand-crafted maps from CAMPAIGN_MAP_REGISTRY.
+ * Unknown level IDs fall back to placeholder generation.
  */
 @Injectable({ providedIn: 'root' })
 export class CampaignMapService {
@@ -121,6 +121,7 @@ export class CampaignMapService {
 
   /**
    * Distributes `count` points evenly along the z-axis at the given x column.
+   * Duplicate z-values are deduplicated by shifting subsequent duplicates forward.
    */
   private distributePoints(
     x: number,
@@ -128,10 +129,16 @@ export class CampaignMapService {
     count: number,
   ): { x: number; z: number }[] {
     const points: { x: number; z: number }[] = [];
+    const usedZ = new Set<number>();
     // Distribute evenly across grid rows, clamped to valid range
     const step = gridSize / (count + 1);
     for (let i = 1; i <= count; i++) {
-      const z = Math.min(Math.round(step * i) - 1, gridSize - 1);
+      let z = Math.min(Math.round(step * i) - 1, gridSize - 1);
+      // Shift forward to avoid duplicates, wrapping within grid bounds
+      while (usedZ.has(z) && z < gridSize - 1) {
+        z++;
+      }
+      usedZ.add(z);
       points.push({ x, z });
     }
     return points;

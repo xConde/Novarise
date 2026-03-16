@@ -1,4 +1,4 @@
-import { EnemyType } from './enemy.model';
+import { EnemyType, ENEMY_STATS } from './enemy.model';
 import { EnemyInfo, ENEMY_INFO } from './enemy-info.model';
 
 describe('ENEMY_INFO', () => {
@@ -93,6 +93,11 @@ describe('ENEMY_INFO', () => {
   it('SHIELDED should have a special ability mentioning shield', () => {
     expect(ENEMY_INFO[EnemyType.SHIELDED].special).not.toBeNull();
     expect(ENEMY_INFO[EnemyType.SHIELDED].special!.toLowerCase()).toContain('shield');
+  });
+
+  it('SHIELDED special should derive shield value from ENEMY_STATS maxShield', () => {
+    const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+    expect(ENEMY_INFO[EnemyType.SHIELDED].special).toContain(String(maxShield));
   });
 
   it('FLYING should have a special ability', () => {

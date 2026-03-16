@@ -9,6 +9,8 @@ import { ChallengeDefinition, getChallengesForLevel } from '../models/challenge.
 
 const CAMPAIGN_STORAGE_KEY = 'novarise-campaign';
 
+const MAX_STARS = 3;
+
 const DEFAULT_PROGRESS: CampaignProgress = {
   completedLevels: {},
   completedChallenges: {},
@@ -73,6 +75,7 @@ export class CampaignService {
       this.save();
     } else if (stars > existing.bestStars) {
       existing.bestStars = stars;
+      existing.difficulty = difficulty;
       this.save();
     }
   }
@@ -119,13 +122,21 @@ export class CampaignService {
       const raw = localStorage.getItem(CAMPAIGN_STORAGE_KEY);
       if (!raw) return { ...DEFAULT_PROGRESS, completedLevels: {}, completedChallenges: {} };
       const parsed = JSON.parse(raw) as Partial<CampaignProgress>;
+      const completedLevels: Record<string, CampaignLevelProgress> =
+        parsed.completedLevels &&
+        typeof parsed.completedLevels === 'object' &&
+        !Array.isArray(parsed.completedLevels)
+          ? { ...parsed.completedLevels as Record<string, CampaignLevelProgress> }
+          : {};
+
+      // Clamp crafted/corrupt values loaded from localStorage
+      for (const entry of Object.values(completedLevels)) {
+        entry.bestStars = Math.min(Math.max(0, entry.bestStars), MAX_STARS);
+        entry.bestScore = Math.max(0, entry.bestScore);
+      }
+
       return {
-        completedLevels:
-          parsed.completedLevels &&
-          typeof parsed.completedLevels === 'object' &&
-          !Array.isArray(parsed.completedLevels)
-            ? { ...parsed.completedLevels as Record<string, CampaignLevelProgress> }
-            : {},
+        completedLevels,
         completedChallenges:
           parsed.completedChallenges &&
           typeof parsed.completedChallenges === 'object' &&

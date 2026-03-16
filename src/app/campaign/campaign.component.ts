@@ -6,6 +6,16 @@ import { CampaignMapService } from './services/campaign-map.service';
 import { MapBridgeService } from '../game/game-board/services/map-bridge.service';
 import { ChallengeDefinition } from './models/challenge.model';
 
+export interface LevelViewModel {
+  level: CampaignLevel;
+  unlocked: boolean;
+  completed: boolean;
+  stars: boolean[];            // [true, true, false] = 2 stars
+  progress: CampaignLevelProgress | null;
+  challenges: ChallengeDefinition[];
+  challengeCompletion: boolean[];  // parallel to challenges array
+}
+
 @Component({
   selector: 'app-campaign',
   templateUrl: './campaign.component.html',
@@ -13,6 +23,7 @@ import { ChallengeDefinition } from './models/challenge.model';
 })
 export class CampaignComponent implements OnInit {
   levels: CampaignLevel[] = [];
+  levelViews: LevelViewModel[] = [];
   totalStars = 0;
   completedCount = 0;
 
@@ -27,8 +38,30 @@ export class CampaignComponent implements OnInit {
     this.levels = this.campaignService.getAllLevels();
     this.totalStars = this.campaignService.getTotalStars();
     this.completedCount = this.campaignService.getCompletedCount();
+    this.levelViews = this.levels.map(level => {
+      const challenges = this.campaignService.getChallengesForLevel(level.id);
+      return {
+        level,
+        unlocked: this.campaignService.isUnlocked(level.id),
+        completed: this.campaignService.isCompleted(level.id),
+        stars: this.getStarArray(level.id),
+        progress: this.campaignService.getLevelProgress(level.id),
+        challenges,
+        challengeCompletion: challenges.map(c =>
+          this.campaignService.isChallengeCompleted(c.id),
+        ),
+      };
+    });
   }
 
+  /** Returns an array of length 3 used to render filled/empty stars. */
+  getStarArray(levelId: string): boolean[] {
+    const progress = this.campaignService.getLevelProgress(levelId);
+    const earned = progress?.bestStars ?? 0;
+    return [earned >= 1, earned >= 2, earned >= 3];
+  }
+
+  // Kept for backward compatibility with existing tests
   isUnlocked(levelId: string): boolean {
     return this.campaignService.isUnlocked(levelId);
   }
@@ -39,13 +72,6 @@ export class CampaignComponent implements OnInit {
 
   getLevelProgress(levelId: string): CampaignLevelProgress | null {
     return this.campaignService.getLevelProgress(levelId);
-  }
-
-  /** Returns an array of length 3 used to render filled/empty stars. */
-  getStarArray(levelId: string): boolean[] {
-    const progress = this.getLevelProgress(levelId);
-    const earned = progress?.bestStars ?? 0;
-    return [earned >= 1, earned >= 2, earned >= 3];
   }
 
   getChallenges(levelId: string): ChallengeDefinition[] {
@@ -61,7 +87,7 @@ export class CampaignComponent implements OnInit {
   }
 
   playLevel(level: CampaignLevel): void {
-    if (!this.isUnlocked(level.id)) return;
+    if (!this.campaignService.isUnlocked(level.id)) return;
     const mapState = this.campaignMapService.loadLevel(level.id);
     if (!mapState) return;
     this.mapBridge.setEditorMapState(mapState, level.id);

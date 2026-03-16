@@ -229,6 +229,60 @@ describe('CampaignService', () => {
     expect(service.getChallengesForLevel('custom_99')).toEqual([]);
   });
 
+  it('should update difficulty when higher stars are recorded with lower score', () => {
+    service.recordCompletion('campaign_01', 800, 1, 'normal');
+    service.recordCompletion('campaign_01', 600, 3, 'hard');
+    const progress = service.getLevelProgress('campaign_01');
+    // Score stays at 800, stars updated to 3, difficulty should update to hard
+    expect(progress?.bestScore).toBe(800);
+    expect(progress?.bestStars).toBe(3);
+    expect(progress?.difficulty).toBe('hard');
+  });
+
+  // ── localStorage clamping ─────────────────────────────────────────────────
+
+  it('should clamp bestStars > 3 from localStorage to 3', () => {
+    const crafted = {
+      completedLevels: {
+        campaign_01: { bestScore: 500, bestStars: 999, difficulty: 'normal', completedAt: 1 },
+      },
+      completedChallenges: {},
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(crafted));
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({});
+    const fresh = TestBed.inject(CampaignService);
+    expect(fresh.getLevelProgress('campaign_01')?.bestStars).toBe(3);
+  });
+
+  it('should clamp bestStars < 0 from localStorage to 0', () => {
+    const crafted = {
+      completedLevels: {
+        campaign_01: { bestScore: 500, bestStars: -5, difficulty: 'normal', completedAt: 1 },
+      },
+      completedChallenges: {},
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(crafted));
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({});
+    const fresh = TestBed.inject(CampaignService);
+    expect(fresh.getLevelProgress('campaign_01')?.bestStars).toBe(0);
+  });
+
+  it('should clamp bestScore < 0 from localStorage to 0', () => {
+    const crafted = {
+      completedLevels: {
+        campaign_01: { bestScore: -1, bestStars: 2, difficulty: 'normal', completedAt: 1 },
+      },
+      completedChallenges: {},
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(crafted));
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({});
+    const fresh = TestBed.inject(CampaignService);
+    expect(fresh.getLevelProgress('campaign_01')?.bestScore).toBe(0);
+  });
+
   // ── resetProgress ─────────────────────────────────────────────────────────
 
   it('should clear all progress on reset', () => {

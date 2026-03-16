@@ -106,6 +106,7 @@ export class TutorialService {
 
   /** Start the tutorial sequence from the beginning. No-op if already complete. */
   startTutorial(): void {
+    if (this.tutorialComplete) return;
     this.currentStep$.next(TutorialStep.WELCOME);
   }
 

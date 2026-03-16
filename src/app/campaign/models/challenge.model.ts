@@ -1,5 +1,3 @@
-import { TowerType } from '../../game/game-board/models/tower.model';
-
 export enum ChallengeType {
   NO_SLOW = 'no_slow',           // Win without using Slow towers
   SPEED_RUN = 'speed_run',       // Win in under N seconds
@@ -412,6 +410,3 @@ export function challengeHasRequiredParam(challenge: ChallengeDefinition): boole
       return true;
   }
 }
-
-// Re-export TowerType so evaluator can reference it without circular imports
-export { TowerType };
