@@ -1,14 +1,14 @@
 # Strategic Audit — 2026-03-03 (header state as of initial audit; see red team sections for current state)
 
-## Current State (as of 2026-03-15)
+## Current State (as of 2026-03-16)
 
-**Stack:** Angular 15 + Three.js | 1771/1771 tests passing | Karma + headless Chrome
-**Four routes:** Landing (`/`), Map Editor (`/edit`), Map Select (`/maps`), Game (`/play`, guarded)
+**Stack:** Angular 15 + Three.js | 2600+ tests passing | Karma + headless Chrome
+**Six routes:** Landing (`/`), Campaign (`/campaign`), Map Editor (`/edit`), Map Select (`/maps`), Game (`/play`, guarded), Profile (`/profile`)
 **Core loop:** 6 tower types (Basic, Sniper, Splash, Slow, Chain, Mortar), 8 enemy types, 10 waves + endless, 4 difficulties, 8 modifiers
 **Combat:** A* pathfinding, spatial grid, object pool, status effects (SLOW/BURN/POISON), L3 specialization branching
 **Visuals:** Bloom, vignette, skybox, particles, custom tower meshes, health bars, status effect tinting
 **Editor:** 4 terrain types, brush/fill/rectangle tools, undo/redo, save/load/export, mobile joystick, path validation
-**Progression:** Per-map best scores + star ratings, player profile, 8 achievements, wave income feedback
+**Progression:** 16-level campaign, per-map challenges, 26 achievements (4 categories), tutorial, enemy encyclopedia, wave income feedback
 
 ---
 
@@ -831,3 +831,24 @@ All interaction paths verified: SETUP tower placement unblocked, wave-btn pointe
 - [x] Step 2: Full test suite green (1925/1925)
 - [x] Step 3: Production build passes — CSS 39.31kb (below 40kb error budget)
 - [x] Step 4: Push to remote (00a8a94..f669dd1)
+
+---
+
+## Sprint History — feat/product-campaign (15 sprints, merged 2026-03-16)
+
+- **Sprint 1:** Campaign data model + service — `CampaignLevel`, `CampaignProgress`, `CampaignService`, `/campaign` route, `CampaignModule`
+- **Sprint 2:** Campaign level select UI — lock/unlock states, star ratings, progress bar, next-level navigation
+- **Sprint 3:** Intro campaign maps 1–4 — First Light, The Bend, Serpentine, The Fork (10×10, single spawner)
+- **Sprint 4:** Early campaign maps 5–8 — Twin Gates, Open Ground, The Narrows, Crystal Maze (10×10–12×12, dual spawner)
+- **Sprint 5:** Mid campaign maps 9–12 — Crossfire, The Spiral, Siege, Labyrinth (12×12–15×15, 2–3 spawners)
+- **Sprint 6:** Late/endgame campaign maps 13–16 — Fortress, Gauntlet, Storm, Novarise (15×15–20×20, 2–4 spawners)
+- **Sprint 7:** Custom wave definitions per map — `campaign-waves.ts` with 6–12 waves per level, tier-appropriate enemy rosters, `CampaignMapService` bridge
+- **Sprint 8:** Enhanced endless mode — 7 wave templates, boss milestones at waves 5/10/15/20, score streaks, `endless-wave.model.ts`
+- **Sprint 9:** Tutorial system — 5-step onboarding overlay, localStorage persistence, `TutorialService` injected into `GameBoardComponent`
+- **Sprint 10:** Enemy encyclopedia + wave preview enhancement — `EnemyInfo` model, E-key panel toggle, NEW badges for first-encounter enemies in wave preview
+- **Sprint 11:** Per-map challenge modes — 32 challenges across 16 maps, 6 `ChallengeType` variants (NoDamage, SpeedRun, LimitedTowers, GoldEfficiency, PerfectWaves, NoSlow), `ChallengeEvaluatorService`
+- **Sprint 12:** Achievement expansion — 8 → 26 achievements across 4 categories (Combat, Campaign, Endless, Challenge), profile UI updated
+- **Sprint 13:** Balance verification — 69 test assertions in `balance.spec.ts` codifying game economics across all campaign maps
+- **Sprint 14:** Campaign integration polish — next-level flow, completion state, progress display on landing page
+- **Sprint 15:** Documentation + final verification — ARCHITECTURE.md and STRATEGIC_AUDIT.md updated, full test suite verified
+- **Test count:** 1835 → 2600+ tests
