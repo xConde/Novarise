@@ -81,19 +81,6 @@ export const TILE_EMISSIVE = {
 } as const;
 
 /**
- * Heatmap color tiers for strategic tile pricing visualization.
- * Colors progress from cool (cheap) to hot (expensive).
- * Each tier maps to a StrategicTier from TilePricingService.
- */
-export const HEATMAP_COLORS = {
-  base:     { color: 0x22cc66, intensity: 0.30 },  // Green — no premium
-  low:      { color: 0x88cc22, intensity: 0.35 },  // Yellow-green — mild premium
-  medium:   { color: 0xccaa00, intensity: 0.40 },  // Gold — moderate premium
-  high:     { color: 0xdd6600, intensity: 0.45 },  // Orange — high premium
-  critical: { color: 0xdd2200, intensity: 0.55 },  // Red — critical chokepoint
-} as const;
-
-/**
  * Gradient stops for smooth heatmap color interpolation.
  * Each stop is [strategicValue, R, G, B, intensity].
  * Colors are interpolated linearly between stops.

@@ -803,3 +803,10 @@ Cross-cutting sprint pulling from S3, S4, S6, and S8 to establish product fundam
 **Location:** `tile-pricing.service.ts:280-308` (`applyClusterBonuses`)
 **Risk:** The method iterates `this.strategicCache` while calling `.set()` on existing keys. Per ES2015 Map spec, modifying an existing key during `for...of` is safe (no new entries added, iteration visits each key once in insertion order). However, the pattern is fragile — a future change that adds new cache entries during the loop would cause non-deterministic behavior. Not a bug today, but a maintenance hazard.
 **Fix:** Defer — document the iteration safety invariant inline. If the method grows, refactor to collect updates in a separate array and apply after iteration.
+
+## Deployment Checklist — Pricing System v2
+- [x] Step 1: Remove dead code — `HEATMAP_COLORS` unused export (ui.constants.ts), `.inspect-mode` dead CSS (game-board.component.scss)
+- [ ] Step 2: Convention check — grep for console.log, TODO/FIXME/HACK, hardcoded numbers added on this branch
+- [ ] Step 3: Full test suite green (1925+ tests hard gate)
+- [ ] Step 4: Production build passes — CSS < 40kb error budget
+- [ ] Step 5: Push to remote + update PR

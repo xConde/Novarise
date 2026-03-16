@@ -1692,7 +1692,6 @@
   .mode-label {
     font-weight: 600;
     &.place-mode { color: var(--theme-cyan, #00ffff); }
-    &.inspect-mode { color: rgba(255, 255, 255, 0.5); }
   }
 
   .mode-cost { color: var(--game-gold, #ffd700); font-weight: 700; }
