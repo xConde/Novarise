@@ -201,6 +201,21 @@ export class AudioService {
     this.playArpeggio(cfg.notes, cfg.noteDuration, cfg.noteGap, cfg.oscillatorType, cfg.gain);
   }
 
+  /** 5-note ascending arpeggio (C5 E5 G5 B5 C6) for achievement unlocks. */
+  playAchievementSound(): void {
+    this.playSfx('achievement');
+  }
+
+  /** Quick ascending 2-note chime (E5 G5) for streak bonus. */
+  playStreakSound(): void {
+    this.playSfx('streak');
+  }
+
+  /** Rapid ascending coin cascade (C6 E6 G6) for challenge completion. */
+  playChallengeSound(): void {
+    this.playSfx('challenge');
+  }
+
   /**
    * Play a named SFX from SFX_CONFIGS. Handles both single-tone and sequence configs.
    * No-op if the key is not found.

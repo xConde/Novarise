@@ -50,6 +50,40 @@ export const SFX_CONFIGS: Record<string, SfxConfigEntry> = {
     volume: 0.1,
   } as SfxConfig,
 
+  // 5-note ascending arpeggio for achievement unlock (C5 E5 G5 B5 C6 — major 7th chord)
+  achievement: {
+    type: 'sine',
+    notes: [
+      { freq: 523, duration: 0.08 },   // C5
+      { freq: 659, duration: 0.08 },   // E5
+      { freq: 784, duration: 0.08 },   // G5
+      { freq: 988, duration: 0.08 },   // B5
+      { freq: 1047, duration: 0.16 },  // C6 — held
+    ],
+    volume: 0.3,
+  } as SfxSequenceConfig,
+
+  // Quick 2-note ascending chime for streak bonus (E5 G5)
+  streak: {
+    type: 'sine',
+    notes: [
+      { freq: 659, duration: 0.07 },   // E5
+      { freq: 784, duration: 0.12 },   // G5 — held
+    ],
+    volume: 0.28,
+  } as SfxSequenceConfig,
+
+  // Rapid descending coin cascade for challenge completion (C6 E6 G6)
+  challenge: {
+    type: 'triangle',
+    notes: [
+      { freq: 1047, duration: 0.06 },  // C6
+      { freq: 1319, duration: 0.06 },  // E6
+      { freq: 1568, duration: 0.12 },  // G6 — held
+    ],
+    volume: 0.25,
+  } as SfxSequenceConfig,
+
   // Ascending tone fanfare for wave completion (multi-note sequence)
   waveComplete: {
     type: 'sine',
