@@ -9,6 +9,15 @@ export enum GamePhase {
   DEFEAT = 'defeat'
 }
 
+/** Legal phase transitions. Key = from, value = set of allowed targets. */
+export const VALID_TRANSITIONS: Record<GamePhase, ReadonlySet<GamePhase>> = {
+  [GamePhase.SETUP]: new Set([GamePhase.COMBAT]),
+  [GamePhase.COMBAT]: new Set([GamePhase.INTERMISSION, GamePhase.VICTORY, GamePhase.DEFEAT]),
+  [GamePhase.INTERMISSION]: new Set([GamePhase.COMBAT]),
+  [GamePhase.VICTORY]: new Set([GamePhase.SETUP]),   // reset/restart
+  [GamePhase.DEFEAT]: new Set([GamePhase.SETUP]),    // reset/restart
+};
+
 export enum DifficultyLevel {
   EASY = 'easy',
   NORMAL = 'normal',

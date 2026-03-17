@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { GameStateService } from './game-state.service';
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE } from '../models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_TRANSITIONS } from '../models/game-state.model';
 import { GameModifier } from '../models/game-modifier.model';
 
 describe('GameStateService', () => {
@@ -366,9 +366,232 @@ describe('GameStateService', () => {
   // --- setPhase ---
 
   describe('setPhase', () => {
-    it('should directly set the phase', () => {
+    it('should set phase when the transition is valid (SETUP → COMBAT)', () => {
+      service.setPhase(GamePhase.COMBAT);
+      expect(service.getState().phase).toBe(GamePhase.COMBAT);
+    });
+
+    it('should be a no-op for invalid transitions and warn (SETUP → INTERMISSION)', () => {
+      const warnSpy = spyOn(console, 'warn');
+      service.setPhase(GamePhase.INTERMISSION);
+      expect(service.getState().phase).toBe(GamePhase.SETUP);
+      expect(warnSpy).toHaveBeenCalledWith(jasmine.stringContaining('Invalid phase transition'));
+    });
+
+    it('should be a no-op for invalid transitions and warn (SETUP → VICTORY)', () => {
+      const warnSpy = spyOn(console, 'warn');
       service.setPhase(GamePhase.VICTORY);
-      expect(service.getState().phase).toBe(GamePhase.VICTORY);
+      expect(service.getState().phase).toBe(GamePhase.SETUP);
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it('should be a no-op for invalid transitions and warn (SETUP → DEFEAT)', () => {
+      const warnSpy = spyOn(console, 'warn');
+      service.setPhase(GamePhase.DEFEAT);
+      expect(service.getState().phase).toBe(GamePhase.SETUP);
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it('should be a no-op when called with the current phase (SETUP → SETUP)', () => {
+      const warnSpy = spyOn(console, 'warn');
+      service.setPhase(GamePhase.SETUP);
+      expect(service.getState().phase).toBe(GamePhase.SETUP);
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it('INTERMISSION → VICTORY is invalid and is rejected', () => {
+      const warnSpy = spyOn(console, 'warn');
+      service.startWave();
+      service.completeWave(0); // → INTERMISSION
+      service.setPhase(GamePhase.VICTORY);
+      expect(service.getState().phase).toBe(GamePhase.INTERMISSION);
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it('INTERMISSION → DEFEAT is invalid and is rejected', () => {
+      const warnSpy = spyOn(console, 'warn');
+      service.startWave();
+      service.completeWave(0); // → INTERMISSION
+      service.setPhase(GamePhase.DEFEAT);
+      expect(service.getState().phase).toBe(GamePhase.INTERMISSION);
+      expect(warnSpy).toHaveBeenCalled();
+    });
+  });
+
+  // --- VALID_TRANSITIONS constant ---
+
+  describe('VALID_TRANSITIONS', () => {
+    it('SETUP allows only COMBAT', () => {
+      expect(VALID_TRANSITIONS[GamePhase.SETUP].has(GamePhase.COMBAT)).toBeTrue();
+      expect(VALID_TRANSITIONS[GamePhase.SETUP].size).toBe(1);
+    });
+
+    it('COMBAT allows INTERMISSION, VICTORY, DEFEAT', () => {
+      expect(VALID_TRANSITIONS[GamePhase.COMBAT].has(GamePhase.INTERMISSION)).toBeTrue();
+      expect(VALID_TRANSITIONS[GamePhase.COMBAT].has(GamePhase.VICTORY)).toBeTrue();
+      expect(VALID_TRANSITIONS[GamePhase.COMBAT].has(GamePhase.DEFEAT)).toBeTrue();
+      expect(VALID_TRANSITIONS[GamePhase.COMBAT].size).toBe(3);
+    });
+
+    it('INTERMISSION allows only COMBAT', () => {
+      expect(VALID_TRANSITIONS[GamePhase.INTERMISSION].has(GamePhase.COMBAT)).toBeTrue();
+      expect(VALID_TRANSITIONS[GamePhase.INTERMISSION].size).toBe(1);
+    });
+
+    it('VICTORY allows only SETUP (reset/restart)', () => {
+      expect(VALID_TRANSITIONS[GamePhase.VICTORY].has(GamePhase.SETUP)).toBeTrue();
+      expect(VALID_TRANSITIONS[GamePhase.VICTORY].size).toBe(1);
+    });
+
+    it('DEFEAT allows only SETUP (reset/restart)', () => {
+      expect(VALID_TRANSITIONS[GamePhase.DEFEAT].has(GamePhase.SETUP)).toBeTrue();
+      expect(VALID_TRANSITIONS[GamePhase.DEFEAT].size).toBe(1);
+    });
+  });
+
+  // --- getPhaseChanges() ---
+
+  describe('getPhaseChanges()', () => {
+    it('startWave() emits SETUP → COMBAT', (done) => {
+      service.getPhaseChanges().subscribe(event => {
+        expect(event.from).toBe(GamePhase.SETUP);
+        expect(event.to).toBe(GamePhase.COMBAT);
+        done();
+      });
+      service.startWave();
+    });
+
+    it('completeWave() emits COMBAT → INTERMISSION when waves remain', (done) => {
+      service.startWave(); // → COMBAT
+      service.getPhaseChanges().subscribe(event => {
+        expect(event.from).toBe(GamePhase.COMBAT);
+        expect(event.to).toBe(GamePhase.INTERMISSION);
+        done();
+      });
+      service.completeWave(0);
+    });
+
+    it('completeWave() emits COMBAT → VICTORY on final wave', (done) => {
+      const maxWaves = service.getState().maxWaves;
+      for (let i = 0; i < maxWaves - 1; i++) {
+        service.startWave();
+        service.completeWave(0);
+      }
+      service.startWave(); // final wave
+      service.getPhaseChanges().subscribe(event => {
+        expect(event.from).toBe(GamePhase.COMBAT);
+        expect(event.to).toBe(GamePhase.VICTORY);
+        done();
+      });
+      service.completeWave(0);
+    });
+
+    it('loseLife() emits COMBAT → DEFEAT when lives reach 0', (done) => {
+      service.startWave(); // → COMBAT
+      service.getPhaseChanges().subscribe(event => {
+        expect(event.from).toBe(GamePhase.COMBAT);
+        expect(event.to).toBe(GamePhase.DEFEAT);
+        done();
+      });
+      service.loseLife(INITIAL_GAME_STATE.lives);
+    });
+
+    it('startWave() after INTERMISSION emits INTERMISSION → COMBAT', (done) => {
+      service.startWave();
+      service.completeWave(0); // → INTERMISSION
+      service.getPhaseChanges().subscribe(event => {
+        expect(event.from).toBe(GamePhase.INTERMISSION);
+        expect(event.to).toBe(GamePhase.COMBAT);
+        done();
+      });
+      service.startWave();
+    });
+
+    it('reset() emits current phase → SETUP', (done) => {
+      service.startWave(); // → COMBAT
+      service.getPhaseChanges().subscribe(event => {
+        expect(event.from).toBe(GamePhase.COMBAT);
+        expect(event.to).toBe(GamePhase.SETUP);
+        done();
+      });
+      service.reset();
+    });
+
+    it('reset() from VICTORY emits VICTORY → SETUP', (done) => {
+      const maxWaves = service.getState().maxWaves;
+      for (let i = 0; i < maxWaves; i++) {
+        service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
+      }
+      service.completeWave(0); // → VICTORY
+      service.getPhaseChanges().subscribe(event => {
+        expect(event.from).toBe(GamePhase.VICTORY);
+        expect(event.to).toBe(GamePhase.SETUP);
+        done();
+      });
+      service.reset();
+    });
+
+    it('reset() from DEFEAT emits DEFEAT → SETUP', (done) => {
+      service.startWave();
+      service.loseLife(INITIAL_GAME_STATE.lives); // → DEFEAT
+      service.getPhaseChanges().subscribe(event => {
+        expect(event.from).toBe(GamePhase.DEFEAT);
+        expect(event.to).toBe(GamePhase.SETUP);
+        done();
+      });
+      service.reset();
+    });
+
+    it('setPhase() with valid transition emits { from, to }', (done) => {
+      service.getPhaseChanges().subscribe(event => {
+        expect(event.from).toBe(GamePhase.SETUP);
+        expect(event.to).toBe(GamePhase.COMBAT);
+        done();
+      });
+      service.setPhase(GamePhase.COMBAT);
+    });
+
+    it('setPhase() with invalid transition does NOT emit', () => {
+      spyOn(console, 'warn');
+      const events: Array<{ from: GamePhase; to: GamePhase }> = [];
+      const sub = service.getPhaseChanges().subscribe(e => events.push(e));
+      service.setPhase(GamePhase.VICTORY); // invalid from SETUP
+      expect(events.length).toBe(0);
+      sub.unsubscribe();
+    });
+
+    it('setPhase() with current phase (no-op) does NOT emit', () => {
+      const events: Array<{ from: GamePhase; to: GamePhase }> = [];
+      const sub = service.getPhaseChanges().subscribe(e => events.push(e));
+      service.setPhase(GamePhase.SETUP); // already in SETUP
+      expect(events.length).toBe(0);
+      sub.unsubscribe();
+    });
+
+    it('loseLife() that does NOT reach 0 does NOT emit phaseChange', () => {
+      service.startWave(); // → COMBAT (consumes one phaseChange emission)
+      const events: Array<{ from: GamePhase; to: GamePhase }> = [];
+      const sub = service.getPhaseChanges().subscribe(e => events.push(e));
+      service.loseLife(1); // lives still > 0
+      expect(events.length).toBe(0);
+      sub.unsubscribe();
+    });
+
+    it('emits multiple transitions in the correct order', () => {
+      const events: Array<{ from: GamePhase; to: GamePhase }> = [];
+      const sub = service.getPhaseChanges().subscribe(e => events.push(e));
+
+      service.startWave();        // SETUP → COMBAT
+      service.completeWave(0);    // COMBAT → INTERMISSION
+      service.startWave();        // INTERMISSION → COMBAT
+
+      expect(events.length).toBe(3);
+      expect(events[0]).toEqual({ from: GamePhase.SETUP, to: GamePhase.COMBAT });
+      expect(events[1]).toEqual({ from: GamePhase.COMBAT, to: GamePhase.INTERMISSION });
+      expect(events[2]).toEqual({ from: GamePhase.INTERMISSION, to: GamePhase.COMBAT });
+
+      sub.unsubscribe();
     });
   });
 
