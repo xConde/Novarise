@@ -29,7 +29,6 @@
         [disabled]="!view.unlocked"
         [attr.aria-label]="'Level ' + view.level.number + ': ' + view.level.name + (view.unlocked ? '' : ' (locked)')"
         (click)="playLevel(view.level)"
-        role="listitem"
       >
         <div class="level-card__header">
           <span class="level-card__number">{{ view.level.number }}</span>

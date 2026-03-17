@@ -394,10 +394,22 @@ describe('GameEndService', () => {
     it('calls recordChallengeCompleted for each completed challenge', () => {
       const challenges: ChallengeDefinition[] = [FAKE_CHALLENGE, { id: 'ch_2', type: ChallengeType.FRUGAL, name: 'C2', description: '', scoreBonus: 100 }];
       challengeEvaluatorSpy.evaluateChallenges.and.returnValue(challenges);
+      campaignSpy.isChallengeCompleted.and.returnValue(false);
 
       service.recordEnd(true, FAKE_SCORE_BREAKDOWN);
 
       expect(playerProfileSpy.recordChallengeCompleted).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not call recordChallengeCompleted for already-completed challenges', () => {
+      const ch2: ChallengeDefinition = { id: 'ch_2', type: ChallengeType.FRUGAL, name: 'C2', description: '', scoreBonus: 100 };
+      challengeEvaluatorSpy.evaluateChallenges.and.returnValue([FAKE_CHALLENGE, ch2]);
+      // FAKE_CHALLENGE already completed in a previous session, ch2 is new
+      campaignSpy.isChallengeCompleted.and.callFake((id: string) => id === FAKE_CHALLENGE.id);
+
+      service.recordEnd(true, FAKE_SCORE_BREAKDOWN);
+
+      expect(playerProfileSpy.recordChallengeCompleted).toHaveBeenCalledTimes(1);
     });
 
     it('fires challenge toast for each completed challenge', () => {

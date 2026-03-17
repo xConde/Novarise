@@ -89,7 +89,7 @@
       </button>
     </div>
 
-    <label class="setup-endless">
+    <label class="setup-endless" *ngIf="!isCampaignGame">
       <input type="checkbox" [checked]="gameState.isEndless" (change)="toggleEndless()">
       <span>Endless Mode</span>
     </label>
@@ -306,7 +306,7 @@
   </div>
 
   <!-- Pause overlay -->
-  <div class="pause-overlay" *ngIf="isPaused && (gameState.phase === GamePhase.COMBAT || gameState.phase === GamePhase.INTERMISSION)" (click)="onPauseOverlayClick($event)">
+  <div class="pause-overlay" *ngIf="isPaused && (gameState.phase === GamePhase.COMBAT || gameState.phase === GamePhase.INTERMISSION)" (click)="onPauseOverlayClick($event)" role="dialog" aria-modal="true" aria-label="Game paused">
     <div class="pause-menu" (click)="$event.stopPropagation()">
       <h2 class="pause-menu__title">PAUSED</h2>
 
@@ -545,7 +545,7 @@
   </div>
 
   <!-- Tutorial overlay -->
-  <div class="tutorial-overlay" *ngIf="currentTutorialStep" (click)="$event.stopPropagation()">
+  <div class="tutorial-overlay" *ngIf="currentTutorialStep" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Tutorial">
     <div class="tutorial-card" [ngClass]="'tutorial-card--' + getTutorialTip()?.position">
       <span class="tutorial-card__step-indicator">{{ getTutorialStepNumber() }}/5</span>
       <h3 class="tutorial-card__title">{{ getTutorialTip()?.title }}</h3>

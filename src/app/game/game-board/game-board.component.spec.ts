@@ -763,6 +763,17 @@ describe('GameBoardComponent', () => {
 
       expect(gameStateService.getState().isEndless).toBeFalse();
     });
+
+    it('should be a no-op for campaign games', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+      spyOn(gameStateService, 'setEndlessMode');
+
+      component.toggleEndless();
+
+      expect(gameStateService.setEndlessMode).not.toHaveBeenCalled();
+    });
   });
 
   describe('pause overlay state', () => {

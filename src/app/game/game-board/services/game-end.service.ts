@@ -118,8 +118,10 @@ export class GameEndService {
 
       let challengeBonus = 0;
       for (const challenge of newlyChallenged) {
+        if (!this.campaignService.isChallengeCompleted(challenge.id)) {
+          this.playerProfileService.recordChallengeCompleted();
+        }
         this.campaignService.completeChallenge(challenge.id);
-        this.playerProfileService.recordChallengeCompleted();
         challengeBonus += challenge.scoreBonus;
         this.audioService.playChallengeSound();
         this.notificationService.show(
@@ -137,7 +139,7 @@ export class GameEndService {
       this.campaignService.recordCompletion(
         mapId,
         updatedScore,
-        scoreBreakdown!.stars,
+        scoreBreakdown?.stars ?? 0,
         endState.difficulty,
       );
     }
