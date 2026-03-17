@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import * as THREE from 'three';
 import { EditorSceneService } from './editor-scene.service';
 
 describe('EditorSceneService', () => {
@@ -119,6 +120,27 @@ describe('EditorSceneService', () => {
   describe('render', () => {
     it('render() does not throw when called before init', () => {
       expect(() => service.render()).not.toThrow();
+    });
+  });
+
+  describe('shadow map disposal', () => {
+    it('dispose() clears shadow light after initLights()', () => {
+      service.initScene();
+      service.initLights();
+      // Shadow light should exist after init
+      const scene = service.getScene();
+      const lightsBeforeDispose = scene.children.filter(
+        (c: THREE.Object3D) => c instanceof THREE.DirectionalLight && (c as THREE.DirectionalLight).castShadow
+      );
+      expect(lightsBeforeDispose.length).toBe(1);
+
+      service.dispose();
+
+      // Shadow light should be removed from scene
+      const lightsAfterDispose = scene.children.filter(
+        (c: THREE.Object3D) => c instanceof THREE.DirectionalLight && (c as THREE.DirectionalLight).castShadow
+      );
+      expect(lightsAfterDispose.length).toBe(0);
     });
   });
 });

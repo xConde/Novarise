@@ -101,6 +101,9 @@ export class EditorSceneService {
   private skybox?: THREE.Mesh;
   private particles: THREE.Points | null = null;
 
+  /** Shadow-casting light — tracked for shadow map disposal. */
+  private shadowLight?: THREE.DirectionalLight;
+
   // Context loss handlers — stored for removal on dispose
   private contextLostHandler: ((event: Event) => void) | null = null;
   private contextRestoredHandler: (() => void) | null = null;
@@ -224,16 +227,16 @@ export class EditorSceneService {
 
     const [dl1Cfg, dl2Cfg, dl3Cfg, dl4Cfg] = EDITOR_LIGHTS.directional;
 
-    const directionalLight1 = new THREE.DirectionalLight(dl1Cfg.color, dl1Cfg.intensity);
-    directionalLight1.position.set(...dl1Cfg.position);
-    directionalLight1.castShadow = true;
-    directionalLight1.shadow.camera.left = -dl1Cfg.shadowCameraExtent!;
-    directionalLight1.shadow.camera.right = dl1Cfg.shadowCameraExtent!;
-    directionalLight1.shadow.camera.top = dl1Cfg.shadowCameraExtent!;
-    directionalLight1.shadow.camera.bottom = -dl1Cfg.shadowCameraExtent!;
-    directionalLight1.shadow.mapSize.width = dl1Cfg.shadowMapSize!;
-    directionalLight1.shadow.mapSize.height = dl1Cfg.shadowMapSize!;
-    this.scene.add(directionalLight1);
+    this.shadowLight = new THREE.DirectionalLight(dl1Cfg.color, dl1Cfg.intensity);
+    this.shadowLight.position.set(...dl1Cfg.position);
+    this.shadowLight.castShadow = true;
+    this.shadowLight.shadow.camera.left = -dl1Cfg.shadowCameraExtent!;
+    this.shadowLight.shadow.camera.right = dl1Cfg.shadowCameraExtent!;
+    this.shadowLight.shadow.camera.top = dl1Cfg.shadowCameraExtent!;
+    this.shadowLight.shadow.camera.bottom = -dl1Cfg.shadowCameraExtent!;
+    this.shadowLight.shadow.mapSize.width = dl1Cfg.shadowMapSize!;
+    this.shadowLight.shadow.mapSize.height = dl1Cfg.shadowMapSize!;
+    this.scene.add(this.shadowLight);
 
     const directionalLight2 = new THREE.DirectionalLight(dl2Cfg.color, dl2Cfg.intensity);
     directionalLight2.position.set(...dl2Cfg.position);
@@ -427,6 +430,13 @@ export class EditorSceneService {
         window.visualViewport.removeEventListener('resize', this.resizeHandler);
       }
       this.resizeHandler = null;
+    }
+
+    // Shadow map render target
+    if (this.shadowLight) {
+      this.shadowLight.shadow.map?.dispose();
+      this.scene.remove(this.shadowLight);
+      this.shadowLight = undefined;
     }
 
     // Controls

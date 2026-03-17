@@ -36,7 +36,7 @@ export class StorageService {
       localStorage.setItem(key, serialized);
       return true;
     } catch (e) {
-      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22)) {
         const serialized = (() => {
           try { return JSON.stringify(value); } catch { return ''; }
         })();

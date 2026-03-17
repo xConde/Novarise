@@ -949,3 +949,22 @@ Test count: 2756 → 3024 (+268 tests)
 **Location:** `campaign.component.scss:10`, `styles.css:208-212`
 **Risk:** `height: 100%` on `.campaign-container` requires the parent (`app-campaign`) to have a constrained height. The fix added `app-campaign { flex: 1; overflow: hidden; }` which works IF the app root is a flex column. If the app layout changes (e.g., a wrapping div is added), the scroll breaks silently.
 **Fix:** Add a comment documenting the flex chain dependency. Consider `height: 100vh` as a more robust fallback.
+
+---
+
+## Red Team Critique — 2026-03-17 (feat/hardening-v)
+
+### Finding 1: EditorSceneService.dispose() does not dispose shadow map render targets (HIGH)
+**Location:** `editor-scene.service.ts:387-444`
+**Risk:** `initLights()` creates 2 DirectionalLights with `castShadow = true` (lines 229, 257). Shadow maps allocate WebGL render target textures. `dispose()` does not call `light.shadow.map?.dispose()` before removing lights. Over repeated editor open/close cycles (route transitions), shadow map textures leak. The game's `SceneService.disposeLights()` (scene.service.ts:362-363) correctly disposes shadow maps — the editor service was extracted without this pattern.
+**Fix:** Add shadow map disposal for all shadow-casting lights before renderer.dispose(). Track lights as fields (like game's SceneService) or traverse scene for lights. Also null out scene/camera/renderer after disposal to prevent use-after-dispose.
+
+### Finding 2: StorageService.setJSON() QuotaExceededError detection is browser-specific (LOW)
+**Location:** `storage.service.ts:39`
+**Risk:** `e.name === 'QuotaExceededError'` works on Chrome/Firefox/modern Safari but older Safari/WebKit used `e.code === 22` without the standardized name. The function still returns `false` on any exception (correct), but the descriptive error log is lost on affected browsers. Not a data-loss risk but reduces debuggability.
+**Fix:** Add fallback check: `(e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22))`.
+
+### Finding 3: CombatFrameResult.kills returns reference to reused array (LOW — accepted)
+**Location:** `combat-loop.service.ts:214`
+**Risk:** `this.frameKills` is cleared at the start of each `tick()` (line 87) and the same array reference is returned in the result (line 214). If a consumer stores the reference and reads it after the next `tick()`, it sees corrupted data. Currently safe because the component consumes synchronously in `processCombatResult()` (same animation frame), but fragile to future refactoring.
+**Fix:** Document the contract: "Returned kills array is valid only until the next tick() call. Consume synchronously." Consider returning `[...this.frameKills]` if the allocation cost is acceptable.
