@@ -975,5 +975,5 @@ Test count: 2756 → 3024 (+268 tests)
 
 - [x] Step 1: Document CombatFrameResult.kills synchronous-consumption contract in combat-loop.service.ts
 - [x] Step 2: Add file.size guard to MapStorageService.promptFileImport() (red-team lesson #148 still open)
-- [ ] Step 3: Final full test suite + production build — zero failures, zero warnings
+- [x] Step 3: Final full test suite + production build — zero failures, zero warnings
 - [ ] Step 4: Push to remote and update branch for PR
