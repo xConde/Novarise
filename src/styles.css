@@ -252,10 +252,21 @@ p {
   z-index: 900;
 }
 
+/* Fix 4: Subtle backdrop dim — not blocking, just enough contrast for the card */
+.tutorial-spotlight::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  z-index: -1;
+}
+
 .tutorial-card {
   pointer-events: auto; /* Card itself is interactive */
   position: fixed;
-  background: rgba(20, 20, 35, 0.95);
+  /* Fix 1: Fully opaque base, progressive enhancement with backdrop-filter */
+  background: rgba(20, 20, 35, 1.0);
   border: 1px solid var(--theme-purple, #6a5a9a);
   border-radius: 12px;
   padding: 1.25rem 1.5rem;
@@ -264,6 +275,15 @@ p {
   text-align: center;
   box-shadow: 0 0 20px rgba(106, 90, 154, 0.4);
   z-index: 901;
+  /* Fix 6: Fade-in animation on appearance/step change */
+  animation: tutorial-fade-in 0.3s ease-out;
+}
+
+@supports (backdrop-filter: blur(8px)) {
+  .tutorial-card {
+    background: rgba(20, 20, 35, 0.92);
+    backdrop-filter: blur(8px);
+  }
 }
 
 /* Position by step */
@@ -285,7 +305,35 @@ p {
 .tutorial-card--upgrade_tower {
   top: 50%;
   right: 2rem;
+  /* Fix 2: Unset left so right: 2rem is unambiguous */
+  left: auto;
   transform: translateY(-50%);
+}
+
+/* Fix 5: CSS triangle arrows connecting card to its target element */
+/* select_tower card sits above the tower bar → arrow points DOWN */
+.tutorial-card--select_tower::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid var(--theme-purple, #6a5a9a);
+}
+
+/* start_wave / upgrade_tower cards are to the right → arrow points LEFT */
+.tutorial-card--start_wave::after,
+.tutorial-card--upgrade_tower::after {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-right: 8px solid var(--theme-purple, #6a5a9a);
 }
 
 /* Highlight border on target element */
@@ -300,6 +348,18 @@ p {
 @keyframes tutorial-pulse {
   0%, 100% { outline-color: rgba(200, 184, 255, 0.8); }
   50% { outline-color: rgba(200, 184, 255, 1); box-shadow: 0 0 25px rgba(200, 184, 255, 0.6) !important; }
+}
+
+/* Fix 6: Fade-in keyframe (opacity-only to avoid conflicting with positional transforms) */
+@keyframes tutorial-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Fix 7: Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-target-highlight { animation: none; }
+  .tutorial-card { animation: none; }
 }
 
 .tutorial-card__step-indicator {
@@ -546,6 +606,23 @@ p {
 
   .tutorial-card--select_tower {
     bottom: 6rem;
+  }
+
+  /* Fix 3: Right-side cards may clip on small screens — center them above content instead */
+  .tutorial-card--start_wave,
+  .tutorial-card--upgrade_tower {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    top: auto;
+    bottom: 8rem;
+    max-width: 85vw;
+  }
+
+  /* Fix 3: Left-pointing arrows no longer apply when card is centered */
+  .tutorial-card--start_wave::after,
+  .tutorial-card--upgrade_tower::after {
+    display: none;
   }
 
   .tutorial-card__actions {
