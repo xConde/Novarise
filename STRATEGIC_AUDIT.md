@@ -1,8 +1,8 @@
 # Strategic Audit — 2026-03-03 (header state as of initial audit; see red team sections for current state)
 
-## Current State (as of 2026-03-16)
+## Current State (as of 2026-03-17)
 
-**Stack:** Angular 15 + Three.js | 2600+ tests passing | Karma + headless Chrome
+**Stack:** Angular 15 + Three.js | 3221+ tests passing | Karma + headless Chrome
 **Six routes:** Landing (`/`), Campaign (`/campaign`), Map Editor (`/edit`), Map Select (`/maps`), Game (`/play`, guarded), Profile (`/profile`)
 **Core loop:** 6 tower types (Basic, Sniper, Splash, Slow, Chain, Mortar), 8 enemy types, 10 waves + endless, 4 difficulties, 8 modifiers
 **Combat:** A* pathfinding, spatial grid, object pool, status effects (SLOW/BURN/POISON), L3 specialization branching

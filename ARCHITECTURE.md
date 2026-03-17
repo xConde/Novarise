@@ -37,17 +37,17 @@ src/app/
 
 ## Module Boundaries
 
-All routes lazy-loaded. `GameGuard` is root-provided.
+All routes lazy-loaded. `gameGuard` and `gameLeaveGuard` are functional guards (CanActivateFn/CanDeactivateFn).
 
 **`CampaignModule` (`/campaign`)** provides: `CampaignService`, `CampaignMapService`, `ChallengeEvaluatorService`
 
 **`GameModule` (`/play`)** provides: `GameBoardService`
 
-**`GameBoardComponent`** provides (component-scoped): `EnemyService`, `GameStateService`, `WaveService`, `TowerCombatService`, `AudioService`, `ParticleService`, `ScreenShakeService`, `GoldPopupService`, `FpsCounterService`, `GameStatsService`, `DamagePopupService`, `MinimapService`, `TowerPreviewService`, `PathVisualizationService`, `StatusEffectService`, `TutorialService`, `GameEndService`, `ChallengeTrackingService`, `GameSessionService`, `PathfindingService`, `CombatVFXService`, `SceneService`, `TowerInteractionService`
+**`GameBoardComponent`** provides (component-scoped): `EnemyService`, `GameStateService`, `WaveService`, `TowerCombatService`, `AudioService`, `ParticleService`, `ScreenShakeService`, `GoldPopupService`, `FpsCounterService`, `GameStatsService`, `DamagePopupService`, `MinimapService`, `TowerPreviewService`, `PathVisualizationService`, `StatusEffectService`, `TutorialService`, `GameEndService`, `ChallengeTrackingService`, `GameSessionService`, `PathfindingService`, `CombatVFXService`, `SceneService`, `TowerInteractionService`, `CombatLoopService`
 
-**`EditorModule` (`/edit`)** provides: `PathValidationService`
+**`EditorModule` (`/edit`)** provides: `PathValidationService`, `EditorSceneService`
 
-**Root-scoped** (survive route transitions): `MapBridgeService`, `SettingsService`, `PlayerProfileService`, `EditorStateService`, `EditHistoryService`, `CameraControlService`, `MapStorageService`, `MapShareService`, `MapTemplateService`
+**Root-scoped** (survive route transitions): `MapBridgeService`, `SettingsService`, `PlayerProfileService`, `EditorStateService`, `EditHistoryService`, `CameraControlService`, `MapStorageService`, `MapShareService`, `MapTemplateService`, `StorageService`
 
 ## Data Flow
 
@@ -174,9 +174,11 @@ Files over 500 LOC — be careful editing these, they are dense:
 
 | File | LOC | Notes |
 |------|-----|-------|
-| `game-board/game-board.component.ts` | 2314 | Main coordinator — Three.js loop, game phases |
-| `games/novarise/novarise.component.ts` | 1916 | God component — editor renderer |
-| `services/scene.service.ts` | ~459 | Three.js infrastructure (extracted sprint 16) |
-| `services/enemy.service.ts` | 803 | Spawn + movement (A* moved to PathfindingService) |
-| `services/tower-combat.service.ts` | 783 | Targeting + projectiles (VFX moved to CombatVFXService) |
-| `game-board/game-board.service.ts` | 708 | Board gen + path-block BFS |
+| `game-board/game-board.component.ts` | ~2256 | Main coordinator — delegates to CombatLoopService |
+| `games/novarise/novarise.component.ts` | ~1558 | Editor coordinator — delegates to EditorSceneService |
+| `services/scene.service.ts` | ~459 | Game Three.js infrastructure |
+| `core/editor-scene.service.ts` | ~463 | Editor Three.js infrastructure |
+| `services/enemy.service.ts` | ~800 | Spawn + movement (A* in PathfindingService) |
+| `services/tower-combat.service.ts` | ~780 | Targeting + projectiles (VFX in CombatVFXService) |
+| `game-board/game-board.service.ts` | ~708 | Board gen + path-block BFS |
+| `services/combat-loop.service.ts` | ~250 | Physics stepping, kill/leak/wave processing |
