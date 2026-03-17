@@ -1,14 +1,15 @@
 import { TestBed } from '@angular/core/testing';
 import { MapStorageService, MapMetadata, SavedMap } from './map-storage.service';
 import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
+import { CURRENT_SCHEMA_VERSION } from './map-schema';
 
 function testMapData(overrides?: Record<string, unknown>): TerrainGridState {
   return {
-    gridSize: 25,
-    tiles: [],
-    heightMap: [],
-    spawnPoints: [],
-    exitPoints: [],
+    gridSize: 10,
+    tiles: [[]],
+    heightMap: [[]],
+    spawnPoints: [{ x: 0, z: 0 }],
+    exitPoints: [{ x: 9, z: 9 }],
     version: '2.0.0',
     ...overrides
   } as TerrainGridState;
@@ -63,7 +64,7 @@ describe('MapStorageService', () => {
 
       const savedMap: SavedMap = JSON.parse(savedJson);
       expect(savedMap.metadata.name).toBe('Test Map');
-      expect(savedMap.data.gridSize).toBe(25);
+      expect(savedMap.data.gridSize).toBe(10);
     });
 
     it('should update metadata with correct timestamps', () => {
@@ -129,7 +130,7 @@ describe('MapStorageService', () => {
       const loadedData = service.loadMap(mapId);
 
       expect(loadedData).toBeTruthy();
-      expect(loadedData!.gridSize).toBe(25);
+      expect(loadedData!.gridSize).toBe(10);
       expect(loadedData!.tiles as unknown).toEqual([[1, 2]]);
     });
 
@@ -492,7 +493,7 @@ describe('MapStorageService', () => {
     it('should use "Unnamed Map" when metadata.name is missing', () => {
       const savedMap = {
         metadata: {},  // no name
-        data: { gridSize: 25, tiles: [] }
+        data: testMapData({ tiles: [[]] })
       };
 
       const result = service.validateMapJson(JSON.stringify(savedMap));
@@ -744,6 +745,161 @@ describe('MapStorageService', () => {
 
       const result = await promise;
       expect(result).toBeNull();
+    });
+  });
+
+  describe('schema versioning', () => {
+    it('should stamp schemaVersion on saved maps', () => {
+      const mapId = service.saveMap('Test Map', testMapData());
+      const savedJson = localStorageMock['novarise_map_' + mapId];
+      const savedMap: SavedMap = JSON.parse(savedJson);
+
+      expect(savedMap.data.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    });
+
+    it('should load v1 data (singular spawnPoint/exitPoint) via migration', () => {
+      const v1Data = {
+        gridSize: 10,
+        tiles: [[]],
+        heightMap: [[]],
+        spawnPoint: { x: 0, z: 0 },
+        exitPoint: { x: 9, z: 9 },
+        version: '1.0.0'
+      };
+      const savedMap = {
+        metadata: {
+          id: 'v1_map',
+          name: 'Legacy Map',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          version: '1.0.0',
+          gridSize: 10
+        },
+        data: v1Data
+      };
+      localStorageMock['novarise_map_v1_map'] = JSON.stringify(savedMap);
+
+      const result = service.loadMap('v1_map');
+
+      expect(result).not.toBeNull();
+      expect(result!.spawnPoints).toEqual([{ x: 0, z: 0 }]);
+      expect(result!.exitPoints).toEqual([{ x: 9, z: 9 }]);
+      expect((result as unknown as Record<string, unknown>)['spawnPoint']).toBeUndefined();
+    });
+
+    it('should re-save migrated data to localStorage after migration', () => {
+      const v1Data = {
+        gridSize: 10,
+        tiles: [[]],
+        heightMap: [[]],
+        spawnPoint: { x: 0, z: 0 },
+        exitPoint: { x: 9, z: 9 },
+        version: '1.0.0'
+      };
+      const savedMap = {
+        metadata: {
+          id: 'v1_resave',
+          name: 'Legacy',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          version: '1.0.0',
+          gridSize: 10
+        },
+        data: v1Data
+      };
+      localStorageMock['novarise_map_v1_resave'] = JSON.stringify(savedMap);
+
+      service.loadMap('v1_resave');
+
+      const reSaved: SavedMap = JSON.parse(localStorageMock['novarise_map_v1_resave']);
+      expect(reSaved.data.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+      expect(reSaved.data.spawnPoints).toEqual([{ x: 0, z: 0 }]);
+    });
+
+    it('should return null when loading data from a future schema version', () => {
+      const futureSavedMap = {
+        metadata: {
+          id: 'future_map',
+          name: 'Future',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          version: '99.0.0',
+          gridSize: 10
+        },
+        data: {
+          gridSize: 10,
+          tiles: [[]],
+          heightMap: [[]],
+          spawnPoints: [],
+          exitPoints: [],
+          version: '99.0.0',
+          schemaVersion: CURRENT_SCHEMA_VERSION + 1
+        }
+      };
+      localStorageMock['novarise_map_future_map'] = JSON.stringify(futureSavedMap);
+
+      const result = service.loadMap('future_map');
+
+      expect(result).toBeNull();
+    });
+
+    it('should round-trip: save v2 data → load → data unchanged', () => {
+      const original = testMapData({ tiles: [[1, 2]] });
+      const mapId = service.saveMap('Round Trip', original);
+
+      const loaded = service.loadMap(mapId);
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.gridSize).toBe(original.gridSize);
+      expect(loaded!.tiles as unknown).toEqual([[1, 2]]);
+      expect(loaded!.spawnPoints).toEqual(original.spawnPoints);
+      expect(loaded!.exitPoints).toEqual(original.exitPoints);
+      expect(loaded!.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    });
+
+    it('should not re-save to localStorage when schemaVersion is already current', () => {
+      const mapData = testMapData();
+      const mapId = service.saveMap('No Re-save', mapData);
+
+      // Record initial call count
+      const setItemSpy = localStorage.setItem as jasmine.Spy;
+      setItemSpy.calls.reset();
+
+      service.loadMap(mapId);
+
+      // setItem should only be called for current_map, not for the map data itself
+      const dataKeyCalls = setItemSpy.calls.all().filter(
+        (call: jasmine.CallInfo<jasmine.Func>) => (call.args[0] as string).startsWith('novarise_map_map_')
+      );
+      expect(dataKeyCalls.length).toBe(0);
+    });
+
+    it('should import v1 map from JSON and migrate automatically', () => {
+      const v1Map = {
+        metadata: {
+          id: 'v1_import',
+          name: 'V1 Import',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          version: '1.0.0',
+          gridSize: 10
+        },
+        data: {
+          gridSize: 10,
+          tiles: [[]],
+          heightMap: [[]],
+          spawnPoint: { x: 0, z: 0 },
+          exitPoint: { x: 9, z: 9 },
+          version: '1.0.0'
+        }
+      };
+
+      const mapId = service.importMapFromJson(JSON.stringify(v1Map));
+
+      expect(mapId).not.toBeNull();
+      const loaded = service.loadMap(mapId!);
+      expect(loaded!.spawnPoints).toEqual([{ x: 0, z: 0 }]);
+      expect(loaded!.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     });
   });
 

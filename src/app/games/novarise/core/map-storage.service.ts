@@ -1,5 +1,10 @@
 import { Injectable } from '@angular/core';
 import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
+import {
+  CURRENT_SCHEMA_VERSION,
+  migrateMap,
+  validateMapData
+} from './map-schema';
 
 export interface MapMetadata {
   id: string;
@@ -46,9 +51,14 @@ export class MapStorageService {
       gridSize: data.gridSize
     };
 
+    const dataWithVersion: TerrainGridState = {
+      ...data,
+      schemaVersion: CURRENT_SCHEMA_VERSION
+    };
+
     const savedMap: SavedMap = {
       metadata: metadata,
-      data: data
+      data: dataWithVersion
     };
 
     // Save the map data
@@ -83,8 +93,28 @@ export class MapStorageService {
 
     try {
       const savedMap: SavedMap = JSON.parse(json);
+      const rawData = savedMap.data as unknown as Record<string, unknown>;
+      const migrated = migrateMap(rawData);
+
+      if (!migrated) {
+        console.error(`Failed to migrate map "${id}" — data may be corrupted or from a newer version`);
+        return null;
+      }
+
+      const migratedData = migrated as unknown as TerrainGridState;
+
+      // Re-save to localStorage if the schema was upgraded so future loads are fast
+      if ((rawData['schemaVersion'] as number | undefined) !== CURRENT_SCHEMA_VERSION) {
+        const upgradedMap: SavedMap = { metadata: savedMap.metadata, data: migratedData };
+        try {
+          localStorage.setItem(key, JSON.stringify(upgradedMap));
+        } catch (e) {
+          console.warn('Failed to persist migrated map data:', e);
+        }
+      }
+
       this.setCurrentMapId(id);
-      return savedMap.data;
+      return migratedData;
     } catch (e) {
       console.error('Failed to parse map data:', e);
       return null;
@@ -251,14 +281,24 @@ export class MapStorageService {
     try {
       const savedMap: SavedMap = JSON.parse(json);
 
-      // Validate the imported data structure
-      if (!savedMap.data || typeof savedMap.data.gridSize !== 'number') {
-        console.error('Invalid map data structure');
+      const rawData = savedMap.data as unknown as Record<string, unknown>;
+
+      // Migrate to current schema version first (handles v1 field renames)
+      const migrated = migrateMap(rawData);
+      if (!migrated) {
+        console.error('Failed to migrate imported map data');
+        return null;
+      }
+
+      // Validate the migrated structure
+      const validation = validateMapData(migrated);
+      if (!validation.valid) {
+        console.error('Invalid map data structure:', validation.errors.join('; '));
         return null;
       }
 
       const mapName = name || savedMap.metadata?.name || 'Imported Map';
-      return this.saveMap(mapName, savedMap.data);
+      return this.saveMap(mapName, migrated as unknown as TerrainGridState);
     } catch (e) {
       console.error('Failed to import map:', e);
       return null;
@@ -274,17 +314,26 @@ export class MapStorageService {
     try {
       const savedMap: SavedMap = JSON.parse(json);
 
-      // Check for required fields
+      // Check for required top-level field
       if (!savedMap.data) {
         return { valid: false, error: 'Missing map data' };
       }
 
-      if (typeof savedMap.data.gridSize !== 'number') {
+      const rawData = savedMap.data as unknown as Record<string, unknown>;
+
+      // Legacy checks preserved for backward compat with existing error message contract
+      if (typeof rawData['gridSize'] !== 'number') {
         return { valid: false, error: 'Invalid or missing grid size' };
       }
 
-      if (!savedMap.data.tiles || !Array.isArray(savedMap.data.tiles)) {
+      if (!rawData['tiles'] || !Array.isArray(rawData['tiles'])) {
         return { valid: false, error: 'Invalid or missing tiles data' };
+      }
+
+      // Run full validation for richer checks
+      const result = validateMapData(rawData);
+      if (!result.valid) {
+        return { valid: false, error: result.errors[0] };
       }
 
       return {

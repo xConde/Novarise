@@ -14,6 +14,8 @@ export interface TerrainGridState {
   spawnPoints: { x: number; z: number }[];
   exitPoints: { x: number; z: number }[];
   version: string;
+  /** Numeric schema version for migration. Optional for backward compatibility. */
+  schemaVersion?: number;
 }
 
 /**
