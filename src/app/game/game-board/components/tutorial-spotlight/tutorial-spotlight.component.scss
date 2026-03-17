@@ -1,0 +1,3 @@
+// Tutorial spotlight styles live in global styles.css because the
+// tutorial-target-highlight class is applied to elements outside this
+// component's shadow boundary. No encapsulated styles needed here.

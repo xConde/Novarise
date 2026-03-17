@@ -5,10 +5,12 @@ import { GameComponent } from './game.component';
 import { GameBoardComponent } from './game-board/game-board.component';
 import { GameBoardService } from './game-board/game-board.service';
 import { CombatVFXService } from './game-board/services/combat-vfx.service';
+import { TutorialSpotlightComponent } from './game-board/components/tutorial-spotlight/tutorial-spotlight.component';
 @NgModule({
   declarations: [
     GameComponent,
-    GameBoardComponent
+    GameBoardComponent,
+    TutorialSpotlightComponent,
   ],
   imports: [
     CommonModule,

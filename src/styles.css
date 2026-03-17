@@ -301,13 +301,22 @@ p {
   transform: translateX(-50%);
 }
 
-.tutorial-card--start_wave,
-.tutorial-card--upgrade_tower {
-  top: 50%;
-  right: 2rem;
-  /* Fix 2: Unset left so right: 2rem is unambiguous */
+/* start_wave: left of the setup panel, arrow points RIGHT toward panel */
+.tutorial-card--start_wave {
+  top: auto;
+  bottom: 4rem;
+  right: 22rem; /* just left of the setup panel (~18rem wide + gap) */
   left: auto;
-  transform: translateY(-50%);
+  transform: none;
+}
+
+/* upgrade_tower: above the tower bar, centered */
+.tutorial-card--upgrade_tower {
+  bottom: 8rem; /* above tower bar, similar to select_tower */
+  left: 50%;
+  right: auto;
+  top: auto;
+  transform: translateX(-50%);
 }
 
 /* Fix 5: CSS triangle arrows connecting card to its target element */
@@ -323,17 +332,28 @@ p {
   border-top: 8px solid var(--theme-purple, #6a5a9a);
 }
 
-/* start_wave / upgrade_tower cards are to the right → arrow points LEFT */
-.tutorial-card--start_wave::after,
-.tutorial-card--upgrade_tower::after {
+/* start_wave card is left of the setup panel → arrow points RIGHT */
+.tutorial-card--start_wave::after {
   content: '';
   position: absolute;
-  left: -8px;
+  right: -8px;
   top: 50%;
   transform: translateY(-50%);
   border-top: 8px solid transparent;
   border-bottom: 8px solid transparent;
-  border-right: 8px solid var(--theme-purple, #6a5a9a);
+  border-left: 8px solid var(--theme-purple, #6a5a9a);
+}
+
+/* upgrade_tower card sits above the tower bar → arrow points DOWN */
+.tutorial-card--upgrade_tower::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid var(--theme-purple, #6a5a9a);
 }
 
 /* Highlight border on target element */
@@ -585,9 +605,16 @@ p {
     bottom: 7rem;
   }
 
-  .tutorial-card--start_wave,
+  /* On mobile the setup panel collapses to a bottom sheet — center start_wave above tower bar */
+  .tutorial-card--start_wave {
+    right: auto;
+    left: 50%;
+    bottom: 8rem;
+    transform: translateX(-50%);
+    max-width: 280px;
+  }
+
   .tutorial-card--upgrade_tower {
-    right: 0.5rem;
     max-width: 280px;
   }
 
@@ -607,7 +634,7 @@ p {
     bottom: 6rem;
   }
 
-  /* Fix 3: Right-side cards may clip on small screens — center them above content instead */
+  /* On small screens both cards center above the tower bar — arrows hidden */
   .tutorial-card--start_wave,
   .tutorial-card--upgrade_tower {
     right: auto;
@@ -618,7 +645,7 @@ p {
     max-width: 85vw;
   }
 
-  /* Fix 3: Left-pointing arrows no longer apply when card is centered */
+  /* Arrows are irrelevant when cards are repositioned to center */
   .tutorial-card--start_wave::after,
   .tutorial-card--upgrade_tower::after {
     display: none;

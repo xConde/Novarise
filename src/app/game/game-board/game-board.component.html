@@ -545,21 +545,14 @@
   </div>
 
   <!-- Tutorial — non-blocking contextual card -->
-  <div class="tutorial-spotlight" *ngIf="currentTutorialStep">
-    <div class="tutorial-card"
-         [ngClass]="'tutorial-card--' + currentTutorialStep"
-         role="dialog" aria-modal="false" aria-label="Tutorial">
-      <span class="tutorial-card__step-indicator">{{ getTutorialStepNumber() }}/{{ getTutorialTotalSteps() }}</span>
-      <h3 class="tutorial-card__title">{{ getTutorialTip()?.title }}</h3>
-      <p class="tutorial-card__message">{{ getTutorialTip()?.message }}</p>
-      <div class="tutorial-card__actions">
-        <button class="tutorial-card__btn tutorial-card__btn--skip" (click)="skipTutorial()" aria-label="Skip tutorial">Skip</button>
-        <button class="tutorial-card__btn tutorial-card__btn--next" (click)="advanceTutorial()" aria-label="Next tutorial step">
-          {{ currentTutorialStep === TutorialStep.COMPLETE ? 'Done' : 'Next' }}
-        </button>
-      </div>
-    </div>
-  </div>
+  <app-tutorial-spotlight
+    [step]="currentTutorialStep"
+    [tip]="getTutorialTip()"
+    [stepNumber]="getTutorialStepNumber()"
+    [totalSteps]="getTutorialTotalSteps()"
+    (advance)="advanceTutorial()"
+    (skip)="skipTutorial()">
+  </app-tutorial-spotlight>
 
   <!-- Toast notifications -->
   <div class="toast-stack" *ngIf="notifications.length > 0" aria-live="polite">

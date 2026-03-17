@@ -368,7 +368,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.tutorialSub = this.tutorialService.getCurrentStep().subscribe(step => {
       this.currentTutorialStep = step;
-      this.applyTutorialHighlight();
     });
 
     // Subscribe to toast notifications
@@ -1217,9 +1216,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Clean up tile highlights
     this.clearTileHighlights();
 
-    // Clean up tutorial element highlights
-    this.removeTutorialHighlight();
-
     // Clean up range preview and range toggle rings
     this.removeRangePreview();
     for (const mesh of this.rangeRingMeshes) {
@@ -1765,27 +1761,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   skipTutorial(): void {
-    this.removeTutorialHighlight();
     this.tutorialService.skipTutorial();
-  }
-
-  /** Apply highlight outline to the DOM element targeted by the current tutorial step. */
-  private applyTutorialHighlight(): void {
-    this.removeTutorialHighlight();
-    const tip = this.getTutorialTip();
-    if (tip?.targetSelector) {
-      const target = document.querySelector(tip.targetSelector);
-      if (target) {
-        target.classList.add('tutorial-target-highlight');
-      }
-    }
-  }
-
-  /** Remove the tutorial highlight class from any element that has it. */
-  private removeTutorialHighlight(): void {
-    document.querySelectorAll('.tutorial-target-highlight').forEach(el =>
-      el.classList.remove('tutorial-target-highlight')
-    );
   }
 
   get gameSpeed(): number {
