@@ -35,6 +35,7 @@ import { GameSessionService } from './services/game-session.service';
 import { SceneService } from './services/scene.service';
 import { PathfindingService } from './services/pathfinding.service';
 import { CombatVFXService } from './services/combat-vfx.service';
+import { CombatLoopService } from './services/combat-loop.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -59,6 +60,7 @@ describe('GameBoardComponent', () => {
   let campaignServiceSpy: jasmine.SpyObj<CampaignService>;
   let campaignMapServiceSpy: jasmine.SpyObj<CampaignMapService>;
   let gameSessionSpy: jasmine.SpyObj<GameSessionService>;
+  let combatLoopSpy: jasmine.SpyObj<CombatLoopService>;
 
   beforeEach(async () => {
     gameStatsSpy = jasmine.createSpyObj('GameStatsService', ['recordKill', 'recordDamage', 'recordGoldEarned', 'recordEnemyLeaked', 'recordTowerBuilt', 'recordTowerSold', 'recordShot', 'getStats', 'reset']);
@@ -117,6 +119,9 @@ describe('GameBoardComponent', () => {
 
     gameSessionSpy = jasmine.createSpyObj('GameSessionService', ['resetAllServices', 'applyCampaignWaves']);
 
+    combatLoopSpy = jasmine.createSpyObj('CombatLoopService', ['tick', 'reset', 'flushElapsedTime']);
+    combatLoopSpy.flushElapsedTime.and.returnValue(0);
+
     await TestBed.configureTestingModule({
       declarations: [ GameBoardComponent ],
       imports: [ RouterTestingModule ],
@@ -137,6 +142,7 @@ describe('GameBoardComponent', () => {
         { provide: CampaignService, useValue: campaignServiceSpy },
         { provide: CampaignMapService, useValue: campaignMapServiceSpy },
         { provide: GameSessionService, useValue: gameSessionSpy },
+        { provide: CombatLoopService, useValue: combatLoopSpy },
       ]
     })
     .compileComponents();

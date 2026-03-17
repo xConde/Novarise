@@ -8,7 +8,7 @@ import { EnemyService } from './services/enemy.service';
 import { MapBridgeService } from './services/map-bridge.service';
 import { GameStateService } from './services/game-state.service';
 import { WaveService } from './services/wave.service';
-import { TowerCombatService, KillInfo, CombatAudioEvent } from './services/tower-combat.service';
+import { TowerCombatService } from './services/tower-combat.service';
 import { AudioService } from './services/audio.service';
 import { ParticleService } from './services/particle.service';
 import { ScreenShakeService } from './services/screen-shake.service';
@@ -29,11 +29,11 @@ import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
 import { ANIMATION_CONFIG } from './constants/rendering.constants';
 import { CAMERA_CONFIG } from './constants/camera.constants';
 import { PARTICLE_CONFIG } from './constants/particle.constants';
-import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG, TILE_EMISSIVE, HEATMAP_GRADIENT, ENEMY_VISUAL_CONFIG, UI_CONFIG } from './constants/ui.constants';
+import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG, TILE_EMISSIVE, HEATMAP_GRADIENT, UI_CONFIG } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG, DRAG_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
-import { EnemyType, ENEMY_STATS } from './models/enemy.model';
+import { EnemyType } from './models/enemy.model';
 import { EnemyInfo, ENEMY_INFO } from './models/enemy-info.model';
 import { WavePreviewEntry, getWavePreview, getWavePreviewFull } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
@@ -54,6 +54,8 @@ import { CampaignMapService } from '../../campaign/services/campaign-map.service
 import { CampaignLevel } from '../../campaign/models/campaign.model';
 import { ChallengeDefinition, getChallengesForLevel } from '../../campaign/models/challenge.model';
 import { GameSessionService } from './services/game-session.service';
+import { CombatLoopService } from './services/combat-loop.service';
+import { CombatFrameResult } from './models/combat-frame.model';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -68,7 +70,7 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [SceneService, EnemyService, PathfindingService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService]
+  providers: [SceneService, EnemyService, PathfindingService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -167,12 +169,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Animation
   private lastTime = 0;
-  private elapsedTimeAccumulator = 0;
-  private physicsAccumulator = 0;
-  /** Reused per-frame kill accumulator — cleared at the start of each combat frame. */
-  private frameKills: { damage: number; position: { x: number; y: number; z: number }; color: number; value: number }[] = [];
-  /** Reused per-frame fired-tower-type set — cleared at the start of each combat frame. */
-  private frameFiredTypes = new Set<TowerType>();
   /** Cached minimap terrain data — static after board setup, rebuilt on board import. */
   private cachedMinimapTerrain: MinimapTerrainData | null = null;
   /** Reusable entity list for updateMinimap() — avoids per-frame array allocation. */
@@ -282,7 +278,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private challengeTrackingService: ChallengeTrackingService,
     private gameEndService: GameEndService,
     private gameSessionService: GameSessionService,
-    private towerInteractionService: TowerInteractionService
+    private towerInteractionService: TowerInteractionService,
+    private combatLoopService: CombatLoopService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -302,10 +299,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         prevPhase !== GamePhase.DEFEAT
       ) {
         // Flush any accumulated elapsed time before scoring so the final time is accurate
-        if (this.elapsedTimeAccumulator > 0) {
-          this.gameStateService.addElapsedTime(this.elapsedTimeAccumulator);
-          this.elapsedTimeAccumulator = 0;
-        }
+        this.combatLoopService.flushElapsedTime();
         const livesTotal = DIFFICULTY_PRESETS[state.difficulty].lives;
         this.scoreBreakdown = calculateScoreBreakdown(
           state.score,
@@ -1123,6 +1117,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Reset all services (enemies, combat, status effects, audio, pricing, minimap, etc.)
     this.gameSessionService.resetAllServices(this.sceneService.getScene());
+    this.combatLoopService.reset();
 
     // Reset component-only UI state
     this.scoreBreakdown = null;
@@ -1166,8 +1161,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.cachedMinimapTerrain = null;
     this.lastPreviewKey = '';
     this.lastTime = 0;
-    this.elapsedTimeAccumulator = 0;
-    this.physicsAccumulator = 0;
     this.updateTileHighlights();
   }
 
@@ -1979,184 +1972,21 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.sceneService.getControls().update();
     }
 
-    // Animate ambient particles
-    if (this.sceneService.getParticles()) {
-      const positionAttribute = this.sceneService.getParticles()!.geometry.attributes['position'] as THREE.BufferAttribute;
-      const positions = positionAttribute.array as Float32Array;
-      for (let i = 0; i < positions.length; i += 3) {
-        positions[i + 1] += Math.sin(time * PARTICLE_CONFIG.animSpeedTime + i) * PARTICLE_CONFIG.animSpeedWave;
-      }
-      positionAttribute.needsUpdate = true;
-      this.sceneService.getParticles()!.rotation.y += PARTICLE_CONFIG.rotationSpeed;
-    }
+    // Ambient visuals (particles, skybox)
+    this.updateAmbientVisuals(time);
 
-    // Update skybox time uniform for star twinkle and nebula drift
-    if (this.sceneService.getSkybox()) {
-      (this.sceneService.getSkybox()!.material as THREE.ShaderMaterial).uniforms['time'].value = time * ANIMATION_CONFIG.msToSeconds;
-    }
-
-    // Gameplay tick — fixed timestep accumulator
+    // Combat tick
     if (deltaTime > 0) {
       const state = this.gameStateService.getState();
-
       if (state.phase === GamePhase.COMBAT && !state.isPaused) {
-        this.physicsAccumulator += deltaTime * state.gameSpeed;
-        let stepCount = 0;
-
-        // Elapsed time tracking — accumulate real (unscaled) time, flush every ~1 second
-        this.elapsedTimeAccumulator += deltaTime;
-        if (this.elapsedTimeAccumulator >= PHYSICS_CONFIG.elapsedTimeFlushIntervalS) {
-          this.gameStateService.addElapsedTime(this.elapsedTimeAccumulator);
-          this.elapsedTimeAccumulator = 0;
-        }
-
-        // Accumulate visual events across all physics steps — process once per frame
-        this.frameKills.length = 0;
-        this.frameFiredTypes.clear();
-        let frameHitCount = 0;
-        let frameExitCount = 0;
-
-        while (this.physicsAccumulator >= PHYSICS_CONFIG.fixedTimestep &&
-               stepCount < PHYSICS_CONFIG.maxStepsPerFrame) {
-
-          // Wave spawning
-          this.waveService.update(PHYSICS_CONFIG.fixedTimestep, this.sceneService.getScene());
-
-          // Tower combat — returns IDs of enemies killed, tower types that fired, and hit count
-          const { killed: killedByTowers, fired: firedTowerTypes, hitCount } = this.towerCombatService.update(PHYSICS_CONFIG.fixedTimestep, this.sceneService.getScene());
-
-          // Accumulate fired tower types and hit counts for audio (once per frame)
-          for (const towerType of firedTowerTypes) {
-            this.frameFiredTypes.add(towerType);
-          }
-          frameHitCount += hitCount;
-
-          // Collect gold from tower kills and remove dead enemies
-          for (const killInfo of killedByTowers) {
-            const enemy = this.enemyService.getEnemies().get(killInfo.id);
-            if (enemy) {
-              this.gameStateService.addGoldAndScore(enemy.value);
-              this.gameStatsService.recordGoldEarned(enemy.value);
-
-              // Snapshot visual data for deferred rendering (enemy removed below)
-              this.frameKills.push({
-                damage: killInfo.damage,
-                position: { ...enemy.position },
-                color: ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackColor,
-                value: enemy.value,
-              });
-
-              this.enemyService.removeEnemy(killInfo.id, this.sceneService.getScene());
-            }
-          }
-
-          // Move enemies along paths
-          const reachedExit = this.enemyService.updateEnemies(PHYSICS_CONFIG.fixedTimestep);
-
-          // Enemies reaching the exit cost lives scaled by enemy type
-          for (const enemyId of reachedExit) {
-            const leakedEnemy = this.enemyService.getEnemies().get(enemyId);
-            const leakCost = leakedEnemy?.leakDamage ?? 1;
-            this.gameStateService.loseLife(leakCost);
-            this.leakedThisWave = true;
-            this.gameStatsService.recordEnemyLeaked();
-            frameExitCount++;
-            this.enemyService.removeEnemy(enemyId, this.sceneService.getScene());
-          }
-
-          // Check wave completion: no spawning and no enemies alive
-          // Re-read phase — loseLife() above may have set DEFEAT mid-frame
-          const currentPhase = this.gameStateService.getState().phase;
-          if (currentPhase === GamePhase.DEFEAT && !this.defeatSoundPlayed) {
-            this.defeatSoundPlayed = true;
-            this.audioService.playDefeat();
-          }
-          if (currentPhase === GamePhase.COMBAT &&
-              !this.waveService.isSpawning() &&
-              this.enemyService.getEnemies().size === 0) {
-            const reward = this.waveService.getWaveReward(state.wave);
-            // Award streak bonus before completeWave transitions out of COMBAT
-            if (!this.leakedThisWave) {
-              const bonus = this.gameStateService.addStreakBonus();
-              if (bonus > 0) {
-                const streak = this.gameStateService.getStreak();
-                this.audioService.playStreakSound();
-                this.notificationService.show(
-                  NotificationType.STREAK,
-                  'Perfect Wave!',
-                  `+${bonus}g streak bonus (${streak} waves)`
-                );
-              }
-            }
-            this.gameStateService.completeWave(reward);
-            // Check if completeWave triggered VICTORY
-            const postWavePhase = this.gameStateService.getState().phase;
-            if (postWavePhase === GamePhase.VICTORY && !this.victorySoundPlayed) {
-              this.victorySoundPlayed = true;
-              this.audioService.playVictory();
-            } else if (postWavePhase === GamePhase.INTERMISSION) {
-              this.audioService.playWaveClear();
-              this.lastWaveReward = reward;
-              this.lastInterestEarned = this.gameStateService.awardInterest();
-            }
-
-            // Record game end stats for profile (VICTORY or DEFEAT, fires once per game)
-            if (postWavePhase === GamePhase.VICTORY || postWavePhase === GamePhase.DEFEAT) {
-              const isVictory = postWavePhase === GamePhase.VICTORY;
-              const result = this.gameEndService.recordEnd(isVictory, this.scoreBreakdown);
-              this.newlyUnlockedAchievements = result.newlyUnlockedAchievements;
-              this.completedChallenges = result.completedChallenges;
-              this.updateAchievementDetails();
-            }
-          }
-
-          // DEFEAT mid-frame (from loseLife) — record game end if not yet done
-          if (currentPhase === GamePhase.DEFEAT) {
-            const result = this.gameEndService.recordEnd(false, this.scoreBreakdown);
-            this.newlyUnlockedAchievements = result.newlyUnlockedAchievements;
-            this.updateAchievementDetails();
-          }
-
-          this.physicsAccumulator -= PHYSICS_CONFIG.fixedTimestep;
-          stepCount++;
-        }
-
-        // Process accumulated visual events once per frame (not per physics step)
-        for (const towerType of this.frameFiredTypes) {
-          this.audioService.playTowerFire(towerType);
-        }
-        if (frameHitCount > 0) {
-          this.audioService.playEnemyHit();
-        }
-        for (const kill of this.frameKills) {
-          this.audioService.playGoldEarned();
-          this.audioService.playEnemyDeath();
-          this.particleService.spawnDeathBurst(kill.position, kill.color);
-          this.goldPopupService.spawn(kill.value, kill.position, this.sceneService.getScene());
-          this.damagePopupService.spawn(kill.damage, kill.position, this.sceneService.getScene());
-        }
-
-        // Drain deferred audio events from TowerCombatService (chain lightning, mortar, etc.)
-        const combatAudioEvents: CombatAudioEvent[] = this.towerCombatService.drainAudioEvents();
-        for (const event of combatAudioEvents) {
-          switch (event.type) {
-            case 'sfx': this.audioService.playSfx(event.sfxKey!); break;
-            case 'tower_fire': this.audioService.playTowerFire(event.towerType!); break;
-            case 'enemy_hit': this.audioService.playEnemyHit(); break;
-            case 'enemy_death': this.audioService.playEnemyDeath(); break;
-          }
-        }
-        if (frameExitCount > 0) {
-          this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
-        }
-
-        // Update health bars and status effect visuals once per frame
-        this.enemyService.updateHealthBars(this.sceneService.getCamera().quaternion);
-        this.enemyService.updateStatusVisuals(this.statusEffectService.getAllActiveEffects());
-        this.enemyService.updateEnemyAnimations(deltaTime);
-
-        // Update minimap
-        this.updateMinimap(time);
+        const result = this.combatLoopService.tick(
+          deltaTime,
+          state.gameSpeed,
+          this.sceneService.getScene(),
+          this.scoreBreakdown,
+          this.leakedThisWave,
+        );
+        this.processCombatResult(result, deltaTime, time);
       }
     }
 
@@ -2175,6 +2005,99 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Render
     this.sceneService.render();
+  }
+
+  private updateAmbientVisuals(time: number): void {
+    // Animate ambient particles
+    if (this.sceneService.getParticles()) {
+      const positionAttribute = this.sceneService.getParticles()!.geometry.attributes['position'] as THREE.BufferAttribute;
+      const positions = positionAttribute.array as Float32Array;
+      for (let i = 0; i < positions.length; i += 3) {
+        positions[i + 1] += Math.sin(time * PARTICLE_CONFIG.animSpeedTime + i) * PARTICLE_CONFIG.animSpeedWave;
+      }
+      positionAttribute.needsUpdate = true;
+      this.sceneService.getParticles()!.rotation.y += PARTICLE_CONFIG.rotationSpeed;
+    }
+
+    // Update skybox time uniform for star twinkle and nebula drift
+    if (this.sceneService.getSkybox()) {
+      (this.sceneService.getSkybox()!.material as THREE.ShaderMaterial).uniforms['time'].value = time * ANIMATION_CONFIG.msToSeconds;
+    }
+  }
+
+  private processCombatResult(result: CombatFrameResult, deltaTime: number, time: number): void {
+    // Update component leak state
+    if (result.leaked) this.leakedThisWave = true;
+
+    // Defeat sound (play once per defeat)
+    if (result.defeatTriggered && !this.defeatSoundPlayed) {
+      this.defeatSoundPlayed = true;
+      this.audioService.playDefeat();
+    }
+
+    // Wave completion events
+    if (result.waveCompletion) {
+      const wc = result.waveCompletion;
+      if (wc.streakBonus > 0) {
+        this.audioService.playStreakSound();
+        this.notificationService.show(
+          NotificationType.STREAK,
+          'Perfect Wave!',
+          `+${wc.streakBonus}g streak bonus (${wc.streakCount} waves)`
+        );
+      }
+      if (wc.resultPhase === GamePhase.VICTORY && !this.victorySoundPlayed) {
+        this.victorySoundPlayed = true;
+        this.audioService.playVictory();
+      } else if (wc.resultPhase === GamePhase.INTERMISSION) {
+        this.audioService.playWaveClear();
+        this.lastWaveReward = wc.reward;
+        this.lastInterestEarned = wc.interestEarned;
+      }
+    }
+
+    // Game end (achievements, challenges)
+    if (result.gameEnd) {
+      this.newlyUnlockedAchievements = result.gameEnd.newlyUnlockedAchievements;
+      this.completedChallenges = result.gameEnd.completedChallenges;
+      this.updateAchievementDetails();
+    }
+
+    // Post-physics audio dispatch (tower fire sounds, hit sounds, kill sounds)
+    for (const towerType of result.firedTypes) {
+      this.audioService.playTowerFire(towerType);
+    }
+    if (result.hitCount > 0) {
+      this.audioService.playEnemyHit();
+    }
+    for (const kill of result.kills) {
+      this.audioService.playGoldEarned();
+      this.audioService.playEnemyDeath();
+      this.particleService.spawnDeathBurst(kill.position, kill.color);
+      this.goldPopupService.spawn(kill.value, kill.position, this.sceneService.getScene());
+      this.damagePopupService.spawn(kill.damage, kill.position, this.sceneService.getScene());
+    }
+
+    // Drain deferred combat audio events (chain lightning, mortar, etc.)
+    for (const event of result.combatAudioEvents) {
+      switch (event.type) {
+        case 'sfx': this.audioService.playSfx(event.sfxKey!); break;
+        case 'tower_fire': this.audioService.playTowerFire(event.towerType!); break;
+        case 'enemy_hit': this.audioService.playEnemyHit(); break;
+        case 'enemy_death': this.audioService.playEnemyDeath(); break;
+      }
+    }
+
+    // Screen shake on life loss
+    if (result.exitCount > 0) {
+      this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
+    }
+
+    // Per-frame visual updates (health bars, status effects, animations, minimap)
+    this.enemyService.updateHealthBars(this.sceneService.getCamera().quaternion);
+    this.enemyService.updateStatusVisuals(this.statusEffectService.getAllActiveEffects());
+    this.enemyService.updateEnemyAnimations(deltaTime);
+    this.updateMinimap(time);
   }
 
   private updateMinimap(timeMs: number): void {
