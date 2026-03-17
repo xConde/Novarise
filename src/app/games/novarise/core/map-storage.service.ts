@@ -330,6 +330,14 @@ export class MapStorageService {
           return;
         }
 
+        // Guard against oversized files — prevent OOM during JSON.parse
+        const MAX_MAP_FILE_BYTES = 512 * 1024; // 512 KB
+        if (file.size > MAX_MAP_FILE_BYTES) {
+          console.error(`Map file too large: ${file.size} bytes (max ${MAX_MAP_FILE_BYTES})`);
+          resolve(null);
+          return;
+        }
+
         try {
           const json = await file.text();
           const validation = this.validateMapJson(json);
