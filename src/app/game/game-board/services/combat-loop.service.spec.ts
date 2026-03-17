@@ -552,4 +552,128 @@ describe('CombatLoopService', () => {
       expect(gameStateSpy.addElapsedTime).not.toHaveBeenCalled();
     });
   });
+
+  // ─── integration: full wave lifecycle ───────────────────────────────────────
+
+  describe('integration: wave lifecycle', () => {
+    it('full wave clear: spawn done, no enemies left → waveCompletion emitted', () => {
+      waveSpy.isSpawning.and.returnValue(false);
+      enemySpy.getEnemies.and.returnValue(new Map());
+      gameStateSpy.addStreakBonus.and.returnValue(0);
+      gameStateSpy.getStreak.and.returnValue(0);
+      gameStateSpy.awardInterest.and.returnValue(0);
+      let callCount = 0;
+      gameStateSpy.getState.and.callFake(() => ({
+        phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
+        wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
+        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
+        highestWave: 0, activeModifiers: new Set(),
+      } as any));
+
+      const result = service.tick(FIXED_DT, 1, scene, null, false);
+
+      expect(result.waveCompletion).not.toBeNull();
+      expect(result.waveCompletion!.resultPhase).toBe(GamePhase.INTERMISSION);
+      expect(gameStateSpy.completeWave).toHaveBeenCalled();
+    });
+
+    it('enemy leaks to exit → loseLife called, result.leaked = true', () => {
+      const enemy = makeEnemy({ id: 'leaked1', leakDamage: 3 });
+      enemySpy.getEnemies.and.returnValue(new Map([['leaked1', enemy]]));
+      enemySpy.updateEnemies.and.returnValue(['leaked1']); // enemy reached exit
+
+      const result = service.tick(FIXED_DT, 1, scene, null, false);
+
+      expect(gameStateSpy.loseLife).toHaveBeenCalledWith(3);
+      expect(result.leaked).toBeTrue();
+    });
+
+    it('wave completion with no leaks awards streak bonus', () => {
+      waveSpy.isSpawning.and.returnValue(false);
+      enemySpy.getEnemies.and.returnValue(new Map());
+      enemySpy.updateEnemies.and.returnValue([]);
+      gameStateSpy.addStreakBonus.and.returnValue(50);
+      gameStateSpy.getStreak.and.returnValue(3);
+      gameStateSpy.awardInterest.and.returnValue(0);
+      let callCount = 0;
+      gameStateSpy.getState.and.callFake(() => ({
+        phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
+        wave: 3, lives: 10, gold: 100, score: 0, isPaused: false,
+        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 3,
+        highestWave: 0, activeModifiers: new Set(),
+      } as any));
+
+      const result = service.tick(FIXED_DT, 1, scene, null, false /* leakedThisWave=false */);
+
+      expect(gameStateSpy.addStreakBonus).toHaveBeenCalled();
+      expect(result.waveCompletion!.streakBonus).toBe(50);
+      expect(result.waveCompletion!.streakCount).toBe(3);
+    });
+
+    it('wave reward is correctly passed to completeWave', () => {
+      waveSpy.isSpawning.and.returnValue(false);
+      waveSpy.getWaveReward.and.returnValue(120);
+      enemySpy.getEnemies.and.returnValue(new Map());
+      gameStateSpy.addStreakBonus.and.returnValue(0);
+      gameStateSpy.getStreak.and.returnValue(0);
+      gameStateSpy.awardInterest.and.returnValue(0);
+      let callCount = 0;
+      gameStateSpy.getState.and.callFake(() => ({
+        phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
+        wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
+        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
+        highestWave: 0, activeModifiers: new Set(),
+      } as any));
+
+      service.tick(FIXED_DT, 1, scene, null, false);
+
+      expect(gameStateSpy.completeWave).toHaveBeenCalledWith(120);
+    });
+
+    it('DEFEAT mid-frame: defeatTriggered = true, recordEnd called', () => {
+      const enemy = makeEnemy({ id: 'e1', leakDamage: 99 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      enemySpy.updateEnemies.and.returnValue(['e1']);
+      let callCount = 0;
+      gameStateSpy.getState.and.callFake(() => ({
+        phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
+        wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
+        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
+        highestWave: 0, activeModifiers: new Set(),
+      } as any));
+
+      const result = service.tick(FIXED_DT, 1, scene, null, false);
+
+      expect(result.defeatTriggered).toBeTrue();
+      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false, null);
+    });
+
+    it('VICTORY: waveCompletion resultPhase is VICTORY, recordEnd called with isVictory=true', () => {
+      waveSpy.isSpawning.and.returnValue(false);
+      enemySpy.getEnemies.and.returnValue(new Map());
+      gameStateSpy.addStreakBonus.and.returnValue(0);
+      gameStateSpy.getStreak.and.returnValue(0);
+      gameStateSpy.awardInterest.and.returnValue(0);
+      gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [], completedChallenges: [] });
+      let callCount = 0;
+      gameStateSpy.getState.and.callFake(() => ({
+        phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.VICTORY,
+        wave: 10, lives: 10, gold: 100, score: 500, isPaused: false,
+        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        maxWaves: 10, elapsedTime: 60, consecutiveWavesWithoutLeak: 5,
+        highestWave: 0, activeModifiers: new Set(),
+      } as any));
+
+      const result = service.tick(FIXED_DT, 1, scene, null, false);
+
+      expect(result.waveCompletion!.resultPhase).toBe(GamePhase.VICTORY);
+      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(true, null);
+      expect(result.gameEnd).not.toBeNull();
+      expect(result.gameEnd!.isVictory).toBeTrue();
+    });
+  });
 });

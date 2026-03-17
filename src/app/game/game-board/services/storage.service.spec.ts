@@ -170,4 +170,54 @@ describe('StorageService', () => {
       expect(freshService.isAvailable()).toBeFalse();
     });
   });
+
+  // ── error paths ───────────────────────────────────────────────────────────
+
+  describe('error paths', () => {
+    it('getJSON returns defaultValue when stored value is an empty string (not valid JSON)', () => {
+      // An empty string is not valid JSON — JSON.parse('') throws SyntaxError
+      localStorage.setItem(TEST_KEY, '');
+      const result = service.getJSON<string>(TEST_KEY, 'fallback');
+      expect(result).toBe('fallback');
+    });
+
+    it('setJSON with a circular reference returns false', () => {
+      const circular: Record<string, unknown> = {};
+      circular['self'] = circular; // circular reference — JSON.stringify will throw
+      const ok = service.setJSON(TEST_KEY, circular);
+      expect(ok).toBeFalse();
+    });
+
+    it('setJSON with a circular reference does not write to localStorage', () => {
+      const setItemSpy = spyOn(localStorage, 'setItem').and.callThrough();
+      const circular: Record<string, unknown> = {};
+      circular['self'] = circular;
+      service.setJSON(TEST_KEY, circular);
+      // setItem should not have been called because stringify fails first
+      expect(setItemSpy).not.toHaveBeenCalled();
+    });
+
+    it('getUsage returns non-zero used bytes when localStorage has entries', () => {
+      // Write several keys to ensure non-zero usage
+      localStorage.setItem('__usage_test_a__', 'a'.repeat(200));
+      localStorage.setItem('__usage_test_b__', 'b'.repeat(200));
+      localStorage.setItem('__usage_test_c__', 'c'.repeat(200));
+
+      const usage = service.getUsage();
+      expect(usage.used).toBeGreaterThan(0);
+
+      // Clean up
+      localStorage.removeItem('__usage_test_a__');
+      localStorage.removeItem('__usage_test_b__');
+      localStorage.removeItem('__usage_test_c__');
+    });
+
+    it('getUsage used increases proportionally with data written', () => {
+      const before = service.getUsage().used;
+      localStorage.setItem(TEST_KEY, 'x'.repeat(1000));
+      const after = service.getUsage().used;
+      // 1000 chars × 2 bytes (UTF-16) = 2000 bytes increase for value alone
+      expect(after - before).toBeGreaterThanOrEqual(2000);
+    });
+  });
 });

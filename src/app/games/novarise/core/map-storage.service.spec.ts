@@ -953,4 +953,138 @@ describe('MapStorageService', () => {
       expect(metadata!.name).toBe('Imported Map');
     });
   });
+
+  describe('error paths', () => {
+    it('saveMap when localStorage is full logs error but still returns a mapId', () => {
+      const consoleSpy = spyOn(console, 'error');
+      // Make setItem succeed for everything EXCEPT the map data key
+      const realSetItem = localStorageMock;
+      (localStorage.setItem as jasmine.Spy).and.callFake((key: string, value: string) => {
+        if (key.startsWith('novarise_map_map_')) {
+          throw new DOMException('quota exceeded', 'QuotaExceededError');
+        }
+        realSetItem[key] = value;
+      });
+
+      const mapId = service.saveMap('Full Storage', testMapData());
+
+      expect(mapId).toBeTruthy();
+      expect(consoleSpy).toHaveBeenCalledWith(
+        jasmine.stringContaining('Failed to save map')
+      );
+    });
+
+    it('importMapFromJson with JSON missing tiles returns null', () => {
+      const invalidMap = {
+        metadata: {
+          id: 'no-tiles',
+          name: 'No Tiles',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          version: '2.0.0',
+          gridSize: 10
+        },
+        data: {
+          gridSize: 10,
+          heightMap: [[]],
+          spawnPoints: [{ x: 0, z: 0 }],
+          exitPoints: [{ x: 9, z: 9 }],
+          version: '2.0.0',
+          schemaVersion: 2
+          // tiles intentionally absent
+        }
+      };
+
+      const result = service.importMapFromJson(JSON.stringify(invalidMap));
+      expect(result).toBeNull();
+    });
+
+    it('importMapFromJson with gridSize below minimum (< 5) returns null', () => {
+      const invalidMap = {
+        metadata: {
+          id: 'tiny',
+          name: 'Tiny',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          version: '2.0.0',
+          gridSize: 3
+        },
+        data: {
+          gridSize: 3, // below minimum of 5
+          tiles: [[]],
+          heightMap: [[]],
+          spawnPoints: [{ x: 0, z: 0 }],
+          exitPoints: [{ x: 2, z: 2 }],
+          version: '2.0.0',
+          schemaVersion: 2
+        }
+      };
+
+      const result = service.importMapFromJson(JSON.stringify(invalidMap));
+      expect(result).toBeNull();
+    });
+
+    it('importMapFromJson with gridSize above maximum (> 50) returns null', () => {
+      const invalidMap = {
+        metadata: {
+          id: 'huge',
+          name: 'Huge',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          version: '2.0.0',
+          gridSize: 99
+        },
+        data: {
+          gridSize: 99, // above maximum of 50
+          tiles: [[]],
+          heightMap: [[]],
+          spawnPoints: [{ x: 0, z: 0 }],
+          exitPoints: [{ x: 98, z: 98 }],
+          version: '2.0.0',
+          schemaVersion: 2
+        }
+      };
+
+      const result = service.importMapFromJson(JSON.stringify(invalidMap));
+      expect(result).toBeNull();
+    });
+
+    it('exportMapToJson for non-existent map returns null', () => {
+      const result = service.exportMapToJson('does-not-exist-xyz');
+      expect(result).toBeNull();
+    });
+
+    it('deleteMap for non-existent map returns false', () => {
+      const result = service.deleteMap('does-not-exist-xyz');
+      expect(result).toBeFalse();
+    });
+
+    it('loadMap with map data at unsupported future schema version returns null', () => {
+      // Inject a map with schemaVersion far beyond the current version.
+      // migrateMap() rejects data from a future schema version, causing loadMap to return null.
+      const futureSchemaMap = {
+        metadata: {
+          id: 'future-schema',
+          name: 'Future Schema',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          version: '99.0.0',
+          gridSize: 10
+        },
+        data: {
+          gridSize: 10,
+          tiles: [[]],
+          heightMap: [[]],
+          spawnPoints: [{ x: 0, z: 0 }],
+          exitPoints: [{ x: 9, z: 9 }],
+          version: '99.0.0',
+          schemaVersion: CURRENT_SCHEMA_VERSION + 1 // one version beyond current
+        }
+      };
+      localStorageMock['novarise_map_future-schema'] = JSON.stringify(futureSchemaMap);
+
+      const result = service.loadMap('future-schema');
+      expect(result).toBeNull();
+    });
+  });
 });

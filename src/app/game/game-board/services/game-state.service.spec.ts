@@ -1373,4 +1373,147 @@ describe('GameStateService', () => {
       service.addStreakBonus();
     });
   });
+
+  // --- error paths and edge cases ---
+
+  describe('error paths and edge cases', () => {
+    it('addGoldAndScore with 0 does not change gold or score', () => {
+      const goldBefore = service.getState().gold;
+      const scoreBefore = service.getState().score;
+
+      service.addGoldAndScore(0);
+
+      expect(service.getState().gold).toBe(goldBefore + 0);
+      expect(service.getState().score).toBe(scoreBefore + 0);
+      // Gold unchanged — checking the formula adds 0, not changes value
+      expect(service.getState().gold).toBe(goldBefore);
+      expect(service.getState().score).toBe(scoreBefore);
+    });
+
+    it('addGoldAndScore with 0 still emits state (observable contract)', (done) => {
+      let emitCount = 0;
+      service.getState$().subscribe(() => {
+        emitCount++;
+        if (emitCount === 2) {
+          done(); // second emission means state was emitted
+        }
+      });
+      service.addGoldAndScore(0);
+    });
+
+    it('reset clears elapsedTime to 0', () => {
+      service.startWave();
+      service.addElapsedTime(120);
+      expect(service.getState().elapsedTime).toBe(120);
+
+      service.reset();
+      expect(service.getState().elapsedTime).toBe(0);
+    });
+
+    it('reset clears consecutiveWavesWithoutLeak to 0', () => {
+      service.startWave();
+      service.addStreakBonus();
+      service.addStreakBonus();
+      expect(service.getState().consecutiveWavesWithoutLeak).toBe(2);
+
+      service.reset();
+      expect(service.getState().consecutiveWavesWithoutLeak).toBe(0);
+    });
+
+    it('reset clears highestWave to 0', () => {
+      service.setEndlessMode(true);
+      service.startWave();
+      service.completeWave(0); // highestWave becomes 1
+      expect(service.getState().highestWave).toBe(1);
+
+      service.reset();
+      expect(service.getState().highestWave).toBe(0);
+    });
+
+    it('reset clears isEndless to false', () => {
+      service.setEndlessMode(true);
+      expect(service.getState().isEndless).toBeTrue();
+
+      service.reset();
+      expect(service.getState().isEndless).toBe(INITIAL_GAME_STATE.isEndless);
+    });
+
+    it('reset clears isPaused to false', () => {
+      service.startWave();
+      service.togglePause();
+      expect(service.getState().isPaused).toBeTrue();
+
+      service.reset();
+      expect(service.getState().isPaused).toBeFalse();
+    });
+
+    it('reset sets maxWaves back to INITIAL_GAME_STATE.maxWaves', () => {
+      service.setMaxWaves(5);
+      expect(service.getState().maxWaves).toBe(5);
+
+      service.reset();
+      expect(service.getState().maxWaves).toBe(INITIAL_GAME_STATE.maxWaves);
+    });
+
+    it('loseLife with amount greater than remaining lives clamps to 0 and triggers DEFEAT', () => {
+      // Start with whatever initial lives, then overkill
+      const lives = service.getState().lives;
+      service.startWave(); // → COMBAT so loseLife has an effect on phase
+
+      service.loseLife(lives + 100); // overkill
+
+      expect(service.getState().lives).toBe(0);
+      expect(service.getState().phase).toBe(GamePhase.DEFEAT);
+    });
+
+    it('setModifiers is a no-op during COMBAT phase', () => {
+      service.startWave(); // → COMBAT
+      const modsBefore = service.getState().activeModifiers;
+
+      const newMods = new Set([GameModifier.ARMORED_ENEMIES]);
+      service.setModifiers(newMods);
+
+      // Modifiers should be unchanged
+      expect(service.getState().activeModifiers.has(GameModifier.ARMORED_ENEMIES)).toBeFalse();
+    });
+
+    it('setModifiers is a no-op during INTERMISSION phase', () => {
+      service.startWave();
+      service.completeWave(50); // → INTERMISSION
+
+      service.setModifiers(new Set([GameModifier.ARMORED_ENEMIES]));
+
+      expect(service.getState().activeModifiers.has(GameModifier.ARMORED_ENEMIES)).toBeFalse();
+    });
+
+    it('startWave when already at maxWaves (not endless) is a no-op', () => {
+      const maxWaves = service.getState().maxWaves;
+
+      // Advance to final wave and complete it → VICTORY
+      for (let i = 0; i < maxWaves; i++) {
+        service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
+      }
+      service.completeWave(100); // → VICTORY
+
+      const waveBefore = service.getState().wave;
+      service.startWave(); // should be no-op
+
+      expect(service.getState().wave).toBe(waveBefore);
+      expect(service.getState().phase).toBe(GamePhase.VICTORY);
+    });
+
+    it('setDifficulty during COMBAT is a no-op', () => {
+      service.startWave(); // → COMBAT
+      const livesBefore = service.getState().lives;
+      const goldBefore = service.getState().gold;
+      const diffBefore = service.getState().difficulty;
+
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+
+      expect(service.getState().lives).toBe(livesBefore);
+      expect(service.getState().gold).toBe(goldBefore);
+      expect(service.getState().difficulty).toBe(diffBefore);
+    });
+  });
 });
