@@ -544,10 +544,12 @@
     </div>
   </div>
 
-  <!-- Tutorial overlay -->
-  <div class="tutorial-overlay" *ngIf="currentTutorialStep" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Tutorial">
-    <div class="tutorial-card" [ngClass]="'tutorial-card--' + getTutorialTip()?.position">
-      <span class="tutorial-card__step-indicator">{{ getTutorialStepNumber() }}/5</span>
+  <!-- Tutorial — non-blocking contextual card -->
+  <div class="tutorial-spotlight" *ngIf="currentTutorialStep">
+    <div class="tutorial-card"
+         [ngClass]="'tutorial-card--' + currentTutorialStep"
+         role="dialog" aria-modal="false" aria-label="Tutorial">
+      <span class="tutorial-card__step-indicator">{{ getTutorialStepNumber() }}/{{ getTutorialTotalSteps() }}</span>
       <h3 class="tutorial-card__title">{{ getTutorialTip()?.title }}</h3>
       <p class="tutorial-card__message">{{ getTutorialTip()?.message }}</p>
       <div class="tutorial-card__actions">

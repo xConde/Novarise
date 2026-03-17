@@ -1486,6 +1486,77 @@ describe('GameBoardComponent', () => {
       tutorialStep$.next(null);
       expect(component.currentTutorialStep).toBeNull();
     });
+
+    it('applyTutorialHighlight adds tutorial-target-highlight class to matched element', () => {
+      // Create a mock DOM element that matches the targetSelector
+      const mockEl = document.createElement('div');
+      mockEl.className = 'tower-selection';
+      document.body.appendChild(mockEl);
+
+      try {
+        // Override getTutorialTip to return a tip with a known targetSelector
+        spyOn(component, 'getTutorialTip').and.returnValue({
+          id: TutorialStep.SELECT_TOWER,
+          step: TutorialStep.SELECT_TOWER,
+          title: 'Select a Tower',
+          message: 'Choose a tower.',
+          targetSelector: '.tower-selection',
+          position: 'bottom' as const,
+        });
+        component.currentTutorialStep = TutorialStep.SELECT_TOWER;
+        (component as any).applyTutorialHighlight();
+        expect(mockEl.classList.contains('tutorial-target-highlight')).toBeTrue();
+      } finally {
+        document.body.removeChild(mockEl);
+      }
+    });
+
+    it('applyTutorialHighlight removes previous highlight before applying new one', () => {
+      const prevEl = document.createElement('div');
+      prevEl.className = 'tutorial-target-highlight';
+      document.body.appendChild(prevEl);
+
+      try {
+        component.currentTutorialStep = TutorialStep.WELCOME; // no targetSelector
+        (component as any).applyTutorialHighlight();
+        expect(prevEl.classList.contains('tutorial-target-highlight')).toBeFalse();
+      } finally {
+        if (prevEl.parentNode) {
+          document.body.removeChild(prevEl);
+        }
+      }
+    });
+
+    it('applyTutorialHighlight does nothing when step has no targetSelector', () => {
+      component.currentTutorialStep = TutorialStep.WELCOME;
+      // Should not throw
+      expect(() => (component as any).applyTutorialHighlight()).not.toThrow();
+    });
+
+    it('removeTutorialHighlight removes class from all highlighted elements', () => {
+      const el1 = document.createElement('div');
+      el1.classList.add('tutorial-target-highlight');
+      const el2 = document.createElement('div');
+      el2.classList.add('tutorial-target-highlight');
+      document.body.appendChild(el1);
+      document.body.appendChild(el2);
+
+      try {
+        (component as any).removeTutorialHighlight();
+        expect(el1.classList.contains('tutorial-target-highlight')).toBeFalse();
+        expect(el2.classList.contains('tutorial-target-highlight')).toBeFalse();
+      } finally {
+        if (el1.parentNode) document.body.removeChild(el1);
+        if (el2.parentNode) document.body.removeChild(el2);
+      }
+    });
+
+    it('skipTutorial calls removeTutorialHighlight before skipping', () => {
+      const spy = spyOn<any>(component, 'removeTutorialHighlight').and.callThrough();
+      component.skipTutorial();
+      expect(spy).toHaveBeenCalled();
+      expect(tutorialSpy.skipTutorial).toHaveBeenCalled();
+    });
   });
 
   describe('toggleEncyclopedia', () => {

@@ -205,6 +205,13 @@ app-novarise, app-game, app-landing, app-profile {
   display: block;
 }
 
+/* Campaign scrolls — container handles its own overflow */
+app-campaign {
+  flex: 1;
+  overflow: hidden;
+  display: block;
+}
+
 /* Typography */
 h1, h2, h3, h4, h5, h6 {
   margin: 0;
@@ -237,41 +244,62 @@ p {
   border-width: 0;
 }
 
-/* Tutorial overlay — global because game-board.component.scss is at budget limit */
-.tutorial-overlay {
+/* Tutorial — non-blocking spotlight system */
+.tutorial-spotlight {
+  pointer-events: none; /* Let clicks pass through to the game */
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: auto;
+  inset: 0;
+  z-index: 900;
 }
 
 .tutorial-card {
-  background: var(--panel-blue-bg, #1a1a2e);
+  pointer-events: auto; /* Card itself is interactive */
+  position: fixed;
+  background: rgba(20, 20, 35, 0.95);
   border: 1px solid var(--theme-purple, #6a5a9a);
   border-radius: 12px;
-  padding: 1.5rem;
-  max-width: 400px;
+  padding: 1.25rem 1.5rem;
+  max-width: 380px;
   width: 90%;
   text-align: center;
-  box-shadow: 0 0 20px rgba(106, 90, 154, 0.3);
-  position: relative;
+  box-shadow: 0 0 20px rgba(106, 90, 154, 0.4);
+  z-index: 901;
 }
 
-.tutorial-card--top {
-  align-self: flex-start;
-  margin-top: 4rem;
+/* Position by step */
+.tutorial-card--welcome,
+.tutorial-card--place_tower,
+.tutorial-card--complete {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
-.tutorial-card--bottom {
-  align-self: flex-end;
-  margin-bottom: 4rem;
+.tutorial-card--select_tower {
+  bottom: 8rem; /* Above the tower bar */
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.tutorial-card--start_wave,
+.tutorial-card--upgrade_tower {
+  top: 50%;
+  right: 2rem;
+  transform: translateY(-50%);
+}
+
+/* Highlight border on target element */
+.tutorial-target-highlight {
+  outline: 3px solid var(--theme-purple-lighter, #c8b8ff) !important;
+  outline-offset: 4px;
+  box-shadow: 0 0 15px rgba(200, 184, 255, 0.4) !important;
+  border-radius: 8px;
+  animation: tutorial-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes tutorial-pulse {
+  0%, 100% { outline-color: rgba(200, 184, 255, 0.8); }
+  50% { outline-color: rgba(200, 184, 255, 1); box-shadow: 0 0 25px rgba(200, 184, 255, 0.6) !important; }
 }
 
 .tutorial-card__step-indicator {
@@ -488,20 +516,38 @@ p {
   }
 }
 
-/* ===== Tutorial overlay — mobile positioning and touch targets ===== */
+/* ===== Tutorial — mobile positioning and touch targets ===== */
 @media (max-width: 768px) {
   .tutorial-card {
     max-width: 90vw;
-    margin-bottom: 6rem; /* clear tower bar */
+  }
+
+  .tutorial-card--select_tower {
+    bottom: 7rem;
+  }
+
+  .tutorial-card--start_wave,
+  .tutorial-card--upgrade_tower {
+    right: 0.5rem;
+    max-width: 280px;
   }
 
   .tutorial-card__btn {
     padding: 0.75rem 1.5rem;
     font-size: 0.8rem;
+    min-height: 2.75rem;
   }
 }
 
 @media (max-width: 480px) {
+  .tutorial-card {
+    max-width: 85vw;
+  }
+
+  .tutorial-card--select_tower {
+    bottom: 6rem;
+  }
+
   .tutorial-card__actions {
     flex-direction: column;
     gap: 0.5rem;

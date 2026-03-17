@@ -8,13 +8,14 @@ $campaign-grid-cols-sm: 1fr;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  min-height: 100vh;
+  height: 100%;
   background-color: var(--bg-color);
   color: var(--text-color);
   position: relative;
   overflow-y: auto;
   overflow-x: hidden;
   padding: var(--spacing-xl) var(--spacing-md);
+  padding-bottom: 4rem;
 
   &::before {
     content: '';
