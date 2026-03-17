@@ -930,3 +930,22 @@ Test count: 2756 → 3024 (+268 tests)
 - [x] Step 2: Full test suite green (3027/3027)
 - [x] Step 3: Production build passes — CSS 35.82kb (below 40kb error budget)
 - [x] Step 4: Push to remote and update PR #24
+
+---
+
+## Red Team Critique — 2026-03-16 (Tutorial Spotlight)
+
+### Finding 1: `tutorial-target-highlight` uses `!important` on outline — stomps focus-visible rings (MEDIUM)
+**Location:** `styles.css` — `.tutorial-target-highlight` rule
+**Risk:** `outline: 3px solid ... !important` overrides `:focus-visible` outlines on the highlighted element. During the SELECT_TOWER step, if a keyboard user tabs to a tower button within `.tower-selection`, their focus ring is invisible because the tutorial highlight outline takes precedence. When the highlight is removed (step advance), the focus ring returns — but during that step, keyboard users lose their primary navigation cue.
+**Fix:** Use `box-shadow` for the tutorial highlight instead of `outline`, leaving `outline` free for focus-visible. Or scope the `!important` to only apply when `:not(:focus-visible)`.
+
+### Finding 2: `applyTutorialHighlight` uses raw `document.querySelector` — Angular anti-pattern (LOW)
+**Location:** `game-board.component.ts:1748`
+**Risk:** Queries the global DOM, not the component's view. If another component on the page has a matching selector (unlikely since routes are exclusive, but possible during transitions), the wrong element gets highlighted. Also makes the component harder to test in isolation — tests must append mock elements to `document.body`.
+**Fix:** Acceptable trade-off. `@ViewChild` can't target dynamically-determined selectors. Document the limitation inline.
+
+### Finding 3: Campaign scroll fix depends on parent flex context (LOW)
+**Location:** `campaign.component.scss:10`, `styles.css:208-212`
+**Risk:** `height: 100%` on `.campaign-container` requires the parent (`app-campaign`) to have a constrained height. The fix added `app-campaign { flex: 1; overflow: hidden; }` which works IF the app root is a flex column. If the app layout changes (e.g., a wrapping div is added), the scroll breaks silently.
+**Fix:** Add a comment documenting the flex chain dependency. Consider `height: 100vh` as a more robust fallback.

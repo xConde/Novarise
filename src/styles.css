@@ -337,17 +337,16 @@ p {
 }
 
 /* Highlight border on target element */
+/* Tutorial highlight uses box-shadow instead of outline to preserve :focus-visible rings */
 .tutorial-target-highlight {
-  outline: 3px solid var(--theme-purple-lighter, #c8b8ff) !important;
-  outline-offset: 4px;
-  box-shadow: 0 0 15px rgba(200, 184, 255, 0.4) !important;
+  box-shadow: 0 0 0 3px var(--theme-purple-lighter, #c8b8ff), 0 0 15px rgba(200, 184, 255, 0.4) !important;
   border-radius: 8px;
   animation: tutorial-pulse 1.5s ease-in-out infinite;
 }
 
 @keyframes tutorial-pulse {
-  0%, 100% { outline-color: rgba(200, 184, 255, 0.8); }
-  50% { outline-color: rgba(200, 184, 255, 1); box-shadow: 0 0 25px rgba(200, 184, 255, 0.6) !important; }
+  0%, 100% { box-shadow: 0 0 0 3px rgba(200, 184, 255, 0.8), 0 0 15px rgba(200, 184, 255, 0.3) !important; }
+  50% { box-shadow: 0 0 0 3px rgba(200, 184, 255, 1), 0 0 25px rgba(200, 184, 255, 0.6) !important; }
 }
 
 /* Fix 6: Fade-in keyframe (opacity-only to avoid conflicting with positional transforms) */
