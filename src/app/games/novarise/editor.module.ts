@@ -8,6 +8,7 @@ import { PathValidationService } from './core/path-validation.service';
 import { EditorStateService } from './core/editor-state.service';
 import { EditHistoryService } from './core/edit-history.service';
 import { CameraControlService } from './core/camera-control.service';
+import { EditorSceneService } from './core/editor-scene.service';
 
 @NgModule({
   declarations: [
@@ -23,7 +24,8 @@ import { CameraControlService } from './core/camera-control.service';
     PathValidationService,
     EditorStateService,
     EditHistoryService,
-    CameraControlService
+    CameraControlService,
+    EditorSceneService
   ]
 })
 export class EditorModule {}

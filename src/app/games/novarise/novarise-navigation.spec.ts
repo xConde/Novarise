@@ -8,8 +8,10 @@ import { PathValidationService } from './core/path-validation.service';
 import { CameraControlService } from './core/camera-control.service';
 import { EditorStateService } from './core/editor-state.service';
 import { EditHistoryService } from './core/edit-history.service';
+import { EditorSceneService } from './core/editor-scene.service';
 import { TerrainGridState } from './features/terrain-editor/terrain-grid-state.interface';
 import { TerrainType } from './models/terrain-types.enum';
+import * as THREE from 'three';
 
 /**
  * Typed access to private members needed for test setup/assertion.
@@ -24,11 +26,25 @@ interface TestableNovarise {
     exportState(): TerrainGridState;
     dispose(): void;
   } | null;
-  renderer: { domElement: HTMLElement; dispose(): void };
-  scene: { remove(): void };
   keysPressed: Set<string>;
   pathValidationResult: { valid: boolean };
   handleKeyDown(event: KeyboardEvent): void;
+}
+
+function makeEditorSceneSpy(): jasmine.SpyObj<EditorSceneService> {
+  const spy = jasmine.createSpyObj<EditorSceneService>('EditorSceneService', [
+    'initScene', 'initCamera', 'initLights', 'initSkybox', 'initParticles',
+    'initRenderer', 'initPostProcessing', 'initControls',
+    'getScene', 'getCamera', 'getRenderer', 'getComposer',
+    'getControls', 'getParticles', 'getSkybox',
+    'render', 'resize', 'dispose', 'disposeParticles', 'disposeSkybox',
+  ]);
+  spy.getRenderer.and.returnValue({ domElement: document.createElement('canvas'), dispose: () => {} } as unknown as THREE.WebGLRenderer);
+  spy.getScene.and.returnValue({ add: () => {}, remove: () => {} } as unknown as THREE.Scene);
+  spy.getCamera.and.returnValue({} as unknown as THREE.PerspectiveCamera);
+  spy.getControls.and.returnValue(undefined as unknown as ReturnType<EditorSceneService['getControls']>);
+  spy.getParticles.and.returnValue(null);
+  return spy;
 }
 
 /** Build a fully-walkable NxN tile grid (all BEDROCK). */
@@ -98,6 +114,7 @@ describe('NovariseComponent Navigation', () => {
       imports: [RouterTestingModule],
       providers: [
         { provide: MapStorageService, useValue: mockMapStorageService },
+        { provide: EditorSceneService, useValue: makeEditorSceneSpy() },
         PathValidationService,
         CameraControlService,
         EditorStateService,
@@ -111,12 +128,6 @@ describe('NovariseComponent Navigation', () => {
     const fixture = TestBed.createComponent(NovariseComponent);
     component = fixture.componentInstance;
     testable = component as unknown as TestableNovarise;
-
-    // Mock Three.js objects that ngOnDestroy accesses during cleanup.
-    // These are normally created in ngAfterViewInit which never runs in headless tests.
-    testable.renderer = { domElement: document.createElement('canvas'), dispose: () => {} };
-    testable.scene = { remove: () => {} };
-
     router = TestBed.inject(Router);
     spyOn(router, 'navigate');
   });
