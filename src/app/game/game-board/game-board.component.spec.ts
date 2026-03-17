@@ -35,6 +35,7 @@ import { GameSessionService } from './services/game-session.service';
 import { SceneService } from './services/scene.service';
 import { PathfindingService } from './services/pathfinding.service';
 import { CombatVFXService } from './services/combat-vfx.service';
+import { CombatLoopService } from './services/combat-loop.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -59,6 +60,7 @@ describe('GameBoardComponent', () => {
   let campaignServiceSpy: jasmine.SpyObj<CampaignService>;
   let campaignMapServiceSpy: jasmine.SpyObj<CampaignMapService>;
   let gameSessionSpy: jasmine.SpyObj<GameSessionService>;
+  let combatLoopSpy: jasmine.SpyObj<CombatLoopService>;
 
   beforeEach(async () => {
     gameStatsSpy = jasmine.createSpyObj('GameStatsService', ['recordKill', 'recordDamage', 'recordGoldEarned', 'recordEnemyLeaked', 'recordTowerBuilt', 'recordTowerSold', 'recordShot', 'getStats', 'reset']);
@@ -117,6 +119,9 @@ describe('GameBoardComponent', () => {
 
     gameSessionSpy = jasmine.createSpyObj('GameSessionService', ['resetAllServices', 'applyCampaignWaves']);
 
+    combatLoopSpy = jasmine.createSpyObj('CombatLoopService', ['tick', 'reset', 'flushElapsedTime']);
+    combatLoopSpy.flushElapsedTime.and.returnValue(0);
+
     await TestBed.configureTestingModule({
       declarations: [ GameBoardComponent ],
       imports: [ RouterTestingModule ],
@@ -137,6 +142,7 @@ describe('GameBoardComponent', () => {
         { provide: CampaignService, useValue: campaignServiceSpy },
         { provide: CampaignMapService, useValue: campaignMapServiceSpy },
         { provide: GameSessionService, useValue: gameSessionSpy },
+        { provide: CombatLoopService, useValue: combatLoopSpy },
       ]
     })
     .compileComponents();
@@ -321,7 +327,9 @@ describe('GameBoardComponent', () => {
 
     it('hotkeys are ignored in VICTORY phase', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setPhase(GamePhase.VICTORY);
+      gameStateService.setMaxWaves(1);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // wave 1 === maxWaves 1 → VICTORY
       component.selectedTowerType = TowerType.SNIPER;
       fireKey('1');
       // Should remain SNIPER — hotkey is blocked
@@ -330,7 +338,8 @@ describe('GameBoardComponent', () => {
 
     it('hotkeys are ignored in DEFEAT phase', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setPhase(GamePhase.DEFEAT);
+      gameStateService.startWave();
+      gameStateService.loseLife(gameStateService.getState().lives); // → DEFEAT
       component.selectedTowerType = TowerType.SNIPER;
       fireKey('3');
       expect(component.selectedTowerType).toBe(TowerType.SNIPER);
@@ -374,7 +383,9 @@ describe('GameBoardComponent', () => {
 
     it('u key does not call upgradeTower in VICTORY phase', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setPhase(GamePhase.VICTORY);
+      gameStateService.setMaxWaves(1);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // → VICTORY
       spyOn(component, 'upgradeTower');
       fireKey('u');
       expect(component.upgradeTower).not.toHaveBeenCalled();
@@ -382,7 +393,8 @@ describe('GameBoardComponent', () => {
 
     it('t key does not call cycleTargeting in DEFEAT phase', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setPhase(GamePhase.DEFEAT);
+      gameStateService.startWave();
+      gameStateService.loseLife(gameStateService.getState().lives); // → DEFEAT
       spyOn(component, 'cycleTargeting');
       fireKey('t');
       expect(component.cycleTargeting).not.toHaveBeenCalled();
@@ -390,7 +402,9 @@ describe('GameBoardComponent', () => {
 
     it('Delete key does not call sellTower in VICTORY phase', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setPhase(GamePhase.VICTORY);
+      gameStateService.setMaxWaves(1);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // → VICTORY
       spyOn(component, 'sellTower');
       fireKey('Delete');
       expect(component.sellTower).not.toHaveBeenCalled();
@@ -913,7 +927,8 @@ describe('GameBoardComponent', () => {
     it('confirmQuit records defeat when quitting during INTERMISSION', () => {
       const router = TestBed.inject(Router);
       spyOn(router, 'navigate');
-      gameStateService.setPhase(GamePhase.INTERMISSION);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // → INTERMISSION
       component.confirmQuit();
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ isVictory: false })
@@ -946,12 +961,15 @@ describe('GameBoardComponent', () => {
     });
 
     it('returns true during VICTORY (no confirmation needed)', () => {
-      gameStateService.setPhase(GamePhase.VICTORY);
+      gameStateService.setMaxWaves(1);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // → VICTORY
       expect(component.canLeaveGame()).toBeTrue();
     });
 
     it('returns true during DEFEAT (no confirmation needed)', () => {
-      gameStateService.setPhase(GamePhase.DEFEAT);
+      gameStateService.startWave();
+      gameStateService.loseLife(gameStateService.getState().lives); // → DEFEAT
       expect(component.canLeaveGame()).toBeTrue();
     });
 
@@ -1002,7 +1020,8 @@ describe('GameBoardComponent', () => {
     });
 
     it('records defeat on confirmed leave during INTERMISSION', () => {
-      gameStateService.setPhase(GamePhase.INTERMISSION);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // → INTERMISSION
       spyOn(window, 'confirm').and.returnValue(true);
 
       component.canLeaveGame();
@@ -2313,7 +2332,8 @@ describe('GameBoardComponent', () => {
     });
 
     it('visibility change to hidden during INTERMISSION triggers pause', () => {
-      gameStateService.setPhase(GamePhase.INTERMISSION);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // → INTERMISSION
       spyOnProperty(document, 'hidden').and.returnValue(true);
       spyOn(gameStateService, 'togglePause').and.callThrough();
 
@@ -2324,7 +2344,8 @@ describe('GameBoardComponent', () => {
     });
 
     it('window blur during INTERMISSION triggers pause', () => {
-      gameStateService.setPhase(GamePhase.INTERMISSION);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // → INTERMISSION
       spyOn(gameStateService, 'togglePause').and.callThrough();
 
       window.dispatchEvent(new Event('blur'));
@@ -2334,7 +2355,8 @@ describe('GameBoardComponent', () => {
     });
 
     it('already paused in INTERMISSION does NOT double-toggle on blur', () => {
-      gameStateService.setPhase(GamePhase.INTERMISSION);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // → INTERMISSION
       gameStateService.togglePause(); // already paused
       spyOn(gameStateService, 'togglePause').and.callThrough();
 
@@ -2366,7 +2388,8 @@ describe('GameBoardComponent', () => {
     });
 
     it('P key toggles pause during INTERMISSION', () => {
-      gameStateService.setPhase(GamePhase.INTERMISSION);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // → INTERMISSION
       spyOn(component, 'togglePause').and.callThrough();
 
       fireKey('p');
@@ -2376,7 +2399,8 @@ describe('GameBoardComponent', () => {
     });
 
     it('ESC key toggles pause during INTERMISSION when paused', () => {
-      gameStateService.setPhase(GamePhase.INTERMISSION);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // → INTERMISSION
       gameStateService.togglePause(); // pause first
       component.gameState = gameStateService.getState();
       spyOn(component, 'togglePause').and.callThrough();
@@ -2388,7 +2412,8 @@ describe('GameBoardComponent', () => {
     });
 
     it('togglePause works during INTERMISSION via GameStateService', () => {
-      gameStateService.setPhase(GamePhase.INTERMISSION);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // → INTERMISSION
 
       component.togglePause();
 
@@ -2396,7 +2421,8 @@ describe('GameBoardComponent', () => {
     });
 
     it('autoPaused flag set when auto-pausing during INTERMISSION', () => {
-      gameStateService.setPhase(GamePhase.INTERMISSION);
+      gameStateService.startWave();
+      gameStateService.completeWave(0); // → INTERMISSION
       (component as any).setupAutoPause();
 
       spyOnProperty(document, 'hidden').and.returnValue(true);

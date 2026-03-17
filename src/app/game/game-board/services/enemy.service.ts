@@ -26,6 +26,11 @@ export class EnemyService {
   private enemyCounter = 0;
   /** Scratch quaternion reused each frame to avoid per-enemy allocation in billboarding. */
   private billboardScratchQuat = new THREE.Quaternion();
+  /** Scratch Vector3 reused each frame to avoid per-enemy allocation in movement. */
+  private scratchDirection = new THREE.Vector3();
+  /** Scratch world-position objects reused each frame to avoid per-enemy allocation. */
+  private scratchCurrentWorld = { x: 0, z: 0 };
+  private scratchNextWorld = { x: 0, z: 0 };
 
   constructor(
     private gameBoardService: GameBoardService,
@@ -191,12 +196,14 @@ export class EnemyService {
       const currentNode = enemy.path[enemy.pathIndex];
       const nextNode = enemy.path[enemy.pathIndex + 1];
 
-      // Convert grid positions to world positions
-      const currentWorld = this.pathfindingService.gridToWorldPos(currentNode.y, currentNode.x);
-      const nextWorld = this.pathfindingService.gridToWorldPos(nextNode.y, nextNode.x);
+      // Convert grid positions to world positions (reuse scratch objects — no allocation)
+      this.pathfindingService.gridToWorldPosInto(currentNode.y, currentNode.x, this.scratchCurrentWorld);
+      this.pathfindingService.gridToWorldPosInto(nextNode.y, nextNode.x, this.scratchNextWorld);
+      const currentWorld = this.scratchCurrentWorld;
+      const nextWorld = this.scratchNextWorld;
 
-      // Calculate direction and distance
-      const direction = new THREE.Vector3(
+      // Calculate direction and distance (reuse scratch Vector3 — no allocation)
+      const direction = this.scratchDirection.set(
         nextWorld.x - currentWorld.x,
         0,
         nextWorld.z - currentWorld.z

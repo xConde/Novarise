@@ -3,7 +3,7 @@ import { GameBoardService } from '../game-board.service';
 import { BlockType } from '../models/game-board-tile';
 import { GridNode } from '../models/enemy.model';
 import { MinHeap } from '../utils/min-heap';
-import { gridToWorld } from '../utils/coordinate-utils';
+import { gridToWorld, gridToWorldInto } from '../utils/coordinate-utils';
 
 @Injectable()
 export class PathfindingService {
@@ -208,6 +208,20 @@ export class PathfindingService {
       this.gameBoardService.getBoardWidth(),
       this.gameBoardService.getBoardHeight(),
       this.gameBoardService.getTileSize()
+    );
+  }
+
+  /**
+   * Like gridToWorldPos but writes into an existing object instead of allocating.
+   * Use in hot paths (e.g., per-enemy per-frame movement) to avoid GC pressure.
+   */
+  gridToWorldPosInto(row: number, col: number, out: { x: number; z: number }): void {
+    gridToWorldInto(
+      row, col,
+      this.gameBoardService.getBoardWidth(),
+      this.gameBoardService.getBoardHeight(),
+      this.gameBoardService.getTileSize(),
+      out
     );
   }
 

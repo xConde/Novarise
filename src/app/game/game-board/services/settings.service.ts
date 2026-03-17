@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { DifficultyLevel } from '../models/game-state.model';
+import { StorageService } from './storage.service';
 
 const STORAGE_KEY = 'novarise-settings';
 
@@ -19,7 +20,7 @@ const DEFAULT_SETTINGS: GameSettings = {
 export class SettingsService {
   private settings: GameSettings;
 
-  constructor() {
+  constructor(private storageService: StorageService) {
     this.settings = this.load();
   }
 
@@ -38,21 +39,11 @@ export class SettingsService {
   }
 
   private load(): GameSettings {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return { ...DEFAULT_SETTINGS };
-      const parsed = JSON.parse(raw) as Partial<GameSettings>;
-      return { ...DEFAULT_SETTINGS, ...parsed };
-    } catch {
-      return { ...DEFAULT_SETTINGS };
-    }
+    const parsed = this.storageService.getJSON<Partial<GameSettings>>(STORAGE_KEY, {});
+    return { ...DEFAULT_SETTINGS, ...parsed };
   }
 
   private save(): void {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.settings));
-    } catch {
-      // localStorage full or unavailable — silently fail
-    }
+    this.storageService.setJSON(STORAGE_KEY, this.settings);
   }
 }

@@ -9,6 +9,7 @@ import {
   ACHIEVEMENTS,
   TOWER_COLLECTOR_TYPE_COUNT,
 } from '../models/achievement.model';
+import { StorageService } from './storage.service';
 
 // Re-export everything so existing callers importing from this file continue to work.
 export {
@@ -44,7 +45,7 @@ const DEFAULT_PROFILE: PlayerProfile = {
 export class PlayerProfileService {
   private profile: PlayerProfile;
 
-  constructor() {
+  constructor(private storageService: StorageService) {
     this.profile = this.load();
   }
 
@@ -211,47 +212,35 @@ export class PlayerProfileService {
       mapScores: {},
       towerKills: {},
     };
-    try {
-      localStorage.removeItem(PROFILE_STORAGE_KEY);
-    } catch {
-      // localStorage unavailable — silently fail
-    }
+    this.storageService.remove(PROFILE_STORAGE_KEY);
   }
 
   private load(): PlayerProfile {
-    try {
-      const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
-      if (!raw) return { ...DEFAULT_PROFILE, achievements: [], mapScores: {}, towerKills: {} };
-      const parsed = JSON.parse(raw) as Partial<PlayerProfile>;
-      return {
-        ...DEFAULT_PROFILE,
-        ...parsed,
-        achievements: Array.isArray(parsed.achievements)
-          ? [...parsed.achievements].slice(0, ACHIEVEMENTS.length + 10)
-          : [],
-        mapScores: (parsed.mapScores && typeof parsed.mapScores === 'object' && !Array.isArray(parsed.mapScores))
-          ? { ...parsed.mapScores as Record<string, MapScoreRecord> }
-          : {},
-        // Migration: new fields default if absent from old profiles
-        towerKills: (parsed.towerKills && typeof parsed.towerKills === 'object' && !Array.isArray(parsed.towerKills))
-          ? { ...parsed.towerKills as Record<string, number> }
-          : {},
-        slowEffectsApplied: typeof parsed.slowEffectsApplied === 'number' ? parsed.slowEffectsApplied : 0,
-        hasUsedSpecialization: typeof parsed.hasUsedSpecialization === 'boolean' ? parsed.hasUsedSpecialization : false,
-        hasPlacedAllTowerTypes: typeof parsed.hasPlacedAllTowerTypes === 'boolean' ? parsed.hasPlacedAllTowerTypes : false,
-        maxModifiersUsedInVictory: typeof parsed.maxModifiersUsedInVictory === 'number' ? parsed.maxModifiersUsedInVictory : 0,
-        completedChallengeCount: typeof parsed.completedChallengeCount === 'number' ? parsed.completedChallengeCount : 0,
-      };
-    } catch {
-      return { ...DEFAULT_PROFILE, achievements: [], mapScores: {}, towerKills: {} };
-    }
+    const empty = { ...DEFAULT_PROFILE, achievements: [], mapScores: {}, towerKills: {} };
+    const parsed = this.storageService.getJSON<Partial<PlayerProfile>>(PROFILE_STORAGE_KEY, empty);
+    if (parsed === empty) return empty;
+    return {
+      ...DEFAULT_PROFILE,
+      ...parsed,
+      achievements: Array.isArray(parsed.achievements)
+        ? [...parsed.achievements].slice(0, ACHIEVEMENTS.length + 10)
+        : [],
+      mapScores: (parsed.mapScores && typeof parsed.mapScores === 'object' && !Array.isArray(parsed.mapScores))
+        ? { ...parsed.mapScores as Record<string, MapScoreRecord> }
+        : {},
+      // Migration: new fields default if absent from old profiles
+      towerKills: (parsed.towerKills && typeof parsed.towerKills === 'object' && !Array.isArray(parsed.towerKills))
+        ? { ...parsed.towerKills as Record<string, number> }
+        : {},
+      slowEffectsApplied: typeof parsed.slowEffectsApplied === 'number' ? parsed.slowEffectsApplied : 0,
+      hasUsedSpecialization: typeof parsed.hasUsedSpecialization === 'boolean' ? parsed.hasUsedSpecialization : false,
+      hasPlacedAllTowerTypes: typeof parsed.hasPlacedAllTowerTypes === 'boolean' ? parsed.hasPlacedAllTowerTypes : false,
+      maxModifiersUsedInVictory: typeof parsed.maxModifiersUsedInVictory === 'number' ? parsed.maxModifiersUsedInVictory : 0,
+      completedChallengeCount: typeof parsed.completedChallengeCount === 'number' ? parsed.completedChallengeCount : 0,
+    };
   }
 
   private save(): void {
-    try {
-      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(this.profile));
-    } catch {
-      // localStorage full or unavailable — silently fail
-    }
+    this.storageService.setJSON(PROFILE_STORAGE_KEY, this.profile);
   }
 }

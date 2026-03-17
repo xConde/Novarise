@@ -1,11 +1,6 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
 import { TerrainGrid } from './features/terrain-editor/terrain-grid.class';
 import { TerrainType, TERRAIN_CONFIGS } from './models/terrain-types.enum';
 import { MapStorageService } from './core/map-storage.service';
@@ -15,14 +10,6 @@ import { EditorStateService, EditMode, BrushTool } from './core/editor-state.ser
 import { MapBridgeService } from '../../game/game-board/services/map-bridge.service';
 import { disposeMaterial } from '../../game/game-board/utils/three-utils';
 import { JoystickEvent } from './features/mobile-controls';
-import {
-  EDITOR_SCENE_CONFIG,
-  EDITOR_RENDERER_CONFIG,
-  EDITOR_POST_PROCESSING,
-  EDITOR_LIGHTS,
-  EDITOR_SKYBOX,
-  EDITOR_PARTICLES,
-} from './constants/editor-scene.constants';
 import {
   EDITOR_EDIT_THROTTLE_MS,
   EDITOR_BRUSH_INDICATOR,
@@ -38,13 +25,10 @@ import {
   EDITOR_HEIGHT,
   EDITOR_RENDER_ORDER,
 } from './constants/editor-ui.constants';
-import {
-  EDITOR_PERSPECTIVE_CAMERA_CONFIG,
-  EDITOR_ORBIT_CONTROLS_CONFIG,
-} from './constants/editor-camera.constants';
 import { PathValidationService, PathValidationResult } from './core/path-validation.service';
 import { MapTemplateService } from './core/map-template.service';
 import { MapTemplate } from './core/map-template.model';
+import { EditorSceneService } from './core/editor-scene.service';
 
 // Re-export types for template compatibility
 export { EditMode, BrushTool } from './core/editor-state.service';
@@ -63,17 +47,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   public get brushSize(): number { return this.editorState.getBrushSize(); }
   public get brushSizes(): number[] { return this.editorState.brushSizes; }
   public get activeTool(): BrushTool { return this.editorState.getActiveTool(); }
-
-  // Scene objects
-  private scene!: THREE.Scene;
-  private camera!: THREE.PerspectiveCamera;
-  private renderer!: THREE.WebGLRenderer;
-  private controls!: OrbitControls;
-  private composer!: EffectComposer;
-  private bloomPass?: UnrealBloomPass;
-  private vignettePass?: ShaderPass;
-  private skybox?: THREE.Mesh;
-  private particles: THREE.Points | null = null;
 
   // Terrain
   private terrainGrid!: TerrainGrid;
@@ -113,13 +86,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private touchStartHandler!: (event: TouchEvent) => void;
   private touchMoveHandler!: (event: TouchEvent) => void;
   private touchEndHandler!: (event: TouchEvent) => void;
-  private resizeHandler: () => void = () => {};
   private animationFrameId = 0;
 
   // WebGL context loss recovery
   contextLost = false;
-  private contextLostHandler: ((event: Event) => void) | null = null;
-  private contextRestoredHandler: (() => void) | null = null;
 
   // Current map tracking - delegated to EditorStateService
   private get currentMapName(): string { return this.editorState.getCurrentMapName(); }
@@ -160,7 +130,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     private editorState: EditorStateService,
     private mapBridge: MapBridgeService,
     private pathValidation: PathValidationService,
-    private mapTemplateService: MapTemplateService
+    private mapTemplateService: MapTemplateService,
+    private editorScene: EditorSceneService
   ) {
     this.keyboardHandler = this.handleKeyDown.bind(this);
     this.keyUpHandler = this.handleKeyUp.bind(this);
@@ -169,17 +140,32 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
-    this.initializeScene();
-    this.initializeCamera();
-    this.initializeLights();
-    this.addSkybox();
-    this.initializeParticles();
-    this.initializeRenderer();
-    this.initializePostProcessing();
-    this.initializeControls();
+    this.editorScene.initScene();
+    this.editorScene.initCamera();
+    this.editorScene.initLights();
+    this.editorScene.initSkybox();
+    this.editorScene.initParticles();
+    this.editorScene.initRenderer(
+      this.canvasContainer.nativeElement,
+      () => {
+        this.contextLost = true;
+        if (this.animationFrameId) {
+          cancelAnimationFrame(this.animationFrameId);
+          this.animationFrameId = 0;
+        }
+      },
+      () => {
+        this.contextLost = false;
+        if (!this.animationFrameId) {
+          this.animate();
+        }
+      }
+    );
+    this.editorScene.initPostProcessing();
+    this.editorScene.initControls();
 
     // Initialize terrain grid
-    this.terrainGrid = new TerrainGrid(this.scene, 25);
+    this.terrainGrid = new TerrainGrid(this.editorScene.getScene(), 25);
 
     // Add helpers for spatial reference
     this.addHelpers();
@@ -208,328 +194,19 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.animate();
   }
 
-  private initializeScene(): void {
-    this.scene = new THREE.Scene();
-    // Lighter background for better visibility
-    this.scene.background = new THREE.Color(EDITOR_SCENE_CONFIG.backgroundColor);
-    // Reduce fog for better visibility
-    this.scene.fog = new THREE.FogExp2(EDITOR_SCENE_CONFIG.fogColor, EDITOR_SCENE_CONFIG.fogDensity);
-  }
-
-  private initializeCamera(): void {
-    const aspectRatio = window.innerWidth / window.innerHeight;
-    this.camera = new THREE.PerspectiveCamera(
-      EDITOR_PERSPECTIVE_CAMERA_CONFIG.fov,
-      aspectRatio,
-      EDITOR_PERSPECTIVE_CAMERA_CONFIG.near,
-      EDITOR_PERSPECTIVE_CAMERA_CONFIG.far
-    );
-    const dist = EDITOR_PERSPECTIVE_CAMERA_CONFIG.distance;
-    this.camera.position.set(0, dist, dist * 0.5);
-    this.camera.lookAt(0, 0, 0);
-  }
-
   private initializeCameraRotation(): void {
-    // Initialize camera control service from current camera state
-    this.cameraControl.initializeFromCamera(this.camera, new THREE.Vector3(0, 0, 0));
-  }
-
-  private initializeRenderer(): void {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, EDITOR_RENDERER_CONFIG.maxPixelRatio)); // Cap at 2 for performance
-
-    // Initial size using proper viewport calculation
-    const { width, height } = this.getViewportSize();
-    this.renderer.setSize(width, height);
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = EDITOR_RENDERER_CONFIG.toneMappingExposure; // Increased from 1.2 for brightness
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-    // WebGL context loss handling — must be registered before appending canvas
-    const canvas = this.renderer.domElement;
-    this.contextLostHandler = (event: Event) => {
-      event.preventDefault();
-      this.contextLost = true;
-      if (this.animationFrameId) {
-        cancelAnimationFrame(this.animationFrameId);
-        this.animationFrameId = 0;
-      }
-    };
-    this.contextRestoredHandler = () => {
-      this.contextLost = false;
-      if (!this.animationFrameId) {
-        this.animate();
-      }
-    };
-    canvas.addEventListener('webglcontextlost', this.contextLostHandler as EventListener);
-    canvas.addEventListener('webglcontextrestored', this.contextRestoredHandler as EventListener);
-
-    this.canvasContainer.nativeElement.appendChild(this.renderer.domElement);
-
-    // Handle resize with proper viewport calculations
-    this.resizeHandler = () => {
-      const { width, height } = this.getViewportSize();
-      this.renderer.setSize(width, height);
-      this.camera.aspect = width / height;
-      this.camera.updateProjectionMatrix();
-      if (this.composer) {
-        this.composer.setSize(width, height);
-      }
-    };
-
-    window.addEventListener('resize', this.resizeHandler);
-
-    // Also listen to visualViewport for mobile browser chrome changes
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', this.resizeHandler);
-    }
-  }
-
-  /**
-   * Get accurate viewport size accounting for mobile browser chrome
-   */
-  private getViewportSize(): { width: number; height: number } {
-    // Use visualViewport for accurate mobile sizing (accounts for browser chrome)
-    if (window.visualViewport) {
-      return {
-        width: window.visualViewport.width,
-        height: window.visualViewport.height
-      };
-    }
-    // Fallback to innerWidth/innerHeight
-    return {
-      width: window.innerWidth,
-      height: window.innerHeight
-    };
-  }
-
-  private initializePostProcessing(): void {
-    this.composer = new EffectComposer(this.renderer);
-    const renderPass = new RenderPass(this.scene, this.camera);
-    this.composer.addPass(renderPass);
-
-    // Reduced bloom for better visibility
-    const { width, height } = this.getViewportSize();
-    this.bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(width, height),
-      EDITOR_POST_PROCESSING.bloom.strength,   // Reduced strength
-      EDITOR_POST_PROCESSING.bloom.radius,     // Reduced radius
-      EDITOR_POST_PROCESSING.bloom.threshold   // Higher threshold - only brightest elements
-    );
-    this.composer.addPass(this.bloomPass);
-
-    // Lighter vignette for better edge visibility
-    const vignetteShader = {
-      uniforms: {
-        tDiffuse: { value: null },
-        offset: { value: EDITOR_POST_PROCESSING.vignette.offset },    // Increased offset = less vignette
-        darkness: { value: EDITOR_POST_PROCESSING.vignette.darkness } // Reduced darkness
-      },
-      vertexShader: `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform sampler2D tDiffuse;
-        uniform float offset;
-        uniform float darkness;
-        varying vec2 vUv;
-        void main() {
-          vec4 texel = texture2D(tDiffuse, vUv);
-          vec2 uv = (vUv - vec2(0.5)) * vec2(offset);
-          float vignette = clamp(1.0 - dot(uv, uv), 0.0, 1.0);
-          vignette = pow(vignette, darkness);
-          texel.rgb *= vignette;
-          gl_FragColor = texel;
-        }
-      `
-    };
-
-    this.vignettePass = new ShaderPass(vignetteShader);
-    this.composer.addPass(this.vignettePass);
-  }
-
-  private initializeLights(): void {
-    // EXTREMELY BRIGHT ambient light for maximum visibility
-    const ambientLight = new THREE.AmbientLight(
-      EDITOR_LIGHTS.ambient.color,
-      EDITOR_LIGHTS.ambient.intensity
-    );
-    this.scene.add(ambientLight);
-
-    // Multiple strong directional lights for even coverage
-    const [dl1Cfg, dl2Cfg, dl3Cfg, dl4Cfg] = EDITOR_LIGHTS.directional;
-
-    const directionalLight1 = new THREE.DirectionalLight(dl1Cfg.color, dl1Cfg.intensity);
-    directionalLight1.position.set(...dl1Cfg.position);
-    directionalLight1.castShadow = true;
-    directionalLight1.shadow.camera.left = -dl1Cfg.shadowCameraExtent!;
-    directionalLight1.shadow.camera.right = dl1Cfg.shadowCameraExtent!;
-    directionalLight1.shadow.camera.top = dl1Cfg.shadowCameraExtent!;
-    directionalLight1.shadow.camera.bottom = -dl1Cfg.shadowCameraExtent!;
-    directionalLight1.shadow.mapSize.width = dl1Cfg.shadowMapSize!;
-    directionalLight1.shadow.mapSize.height = dl1Cfg.shadowMapSize!;
-    this.scene.add(directionalLight1);
-
-    // Second directional light from opposite angle
-    const directionalLight2 = new THREE.DirectionalLight(dl2Cfg.color, dl2Cfg.intensity);
-    directionalLight2.position.set(...dl2Cfg.position);
-    this.scene.add(directionalLight2);
-
-    // Third directional light from side
-    const directionalLight3 = new THREE.DirectionalLight(dl3Cfg.color, dl3Cfg.intensity);
-    directionalLight3.position.set(...dl3Cfg.position);
-    this.scene.add(directionalLight3);
-
-    // Fourth directional light from opposite side
-    const directionalLight4 = new THREE.DirectionalLight(dl4Cfg.color, dl4Cfg.intensity);
-    directionalLight4.position.set(...dl4Cfg.position);
-    this.scene.add(directionalLight4);
-
-    // Bright light from below for complete visibility
-    const blCfg = EDITOR_LIGHTS.bottomLight;
-    const bottomLight = new THREE.DirectionalLight(blCfg.color, blCfg.intensity);
-    bottomLight.position.set(...blCfg.position);
-    bottomLight.lookAt(0, 0, 0);
-    this.scene.add(bottomLight);
-
-    // Hemisphere light for natural fill
-    const hemiLight = new THREE.HemisphereLight(
-      EDITOR_LIGHTS.hemisphere.skyColor,
-      EDITOR_LIGHTS.hemisphere.groundColor,
-      EDITOR_LIGHTS.hemisphere.intensity
-    );
-    this.scene.add(hemiLight);
-
-    // Point lights for extra brightness at key positions
-    for (const cfg of EDITOR_LIGHTS.point) {
-      const pl = new THREE.PointLight(cfg.color, cfg.intensity, cfg.distance);
-      pl.position.set(...cfg.position);
-      this.scene.add(pl);
-    }
-  }
-
-  private addSkybox(): void {
-    const starfieldGeometry = new THREE.SphereGeometry(EDITOR_SKYBOX.radius, EDITOR_SKYBOX.widthSegments, EDITOR_SKYBOX.heightSegments);
-    const starfieldMaterial = new THREE.ShaderMaterial({
-      vertexShader: `
-        varying vec2 vUv;
-        varying vec3 vPosition;
-        void main() {
-          vUv = uv;
-          vPosition = position;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        varying vec2 vUv;
-        float random(vec2 st) {
-          return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
-        }
-        void main() {
-          vec3 deepPurple = vec3(0.02, 0.01, 0.05);
-          vec3 darkBlue = vec3(0.03, 0.02, 0.08);
-          vec3 color = mix(deepPurple, darkBlue, vUv.y * 0.5);
-
-          vec2 starPos = vUv * 150.0;
-          float star = random(floor(starPos));
-          if (star > 0.992) {
-            float brightness = random(floor(starPos) + 1.0) * 0.3;
-            color += vec3(brightness * 0.4, brightness * 0.3, brightness * 0.5);
-          }
-
-          float vein1 = random(floor(vUv * 40.0 + vec2(0.0, vUv.x * 10.0)));
-          if (vein1 > 0.97) {
-            color += vec3(0.15, 0.08, 0.2) * vein1;
-          }
-
-          float bio = random(floor(vUv * 25.0)) * 0.08;
-          color += vec3(bio * 0.3, bio * 0.5, bio * 0.7);
-
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,
-      side: THREE.BackSide,
-      depthWrite: false
-    });
-
-    this.skybox = new THREE.Mesh(starfieldGeometry, starfieldMaterial);
-    this.scene.add(this.skybox);
-  }
-
-  private initializeParticles(): void {
-    const particleCount = EDITOR_PARTICLES.count;
-    const positions = new Float32Array(particleCount * 3);
-    const colors = new Float32Array(particleCount * 3);
-
-    for (let i = 0; i < particleCount; i++) {
-      positions[i * 3]     = (Math.random() - 0.5) * EDITOR_PARTICLES.positionRange;
-      positions[i * 3 + 1] = Math.random() * EDITOR_PARTICLES.positionYRange + EDITOR_PARTICLES.positionYMin;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * EDITOR_PARTICLES.positionRange;
-
-      const colorChoice = Math.random();
-      let rgb: [number, number, number];
-      if (colorChoice < EDITOR_PARTICLES.colorThresholds.blue) {
-        rgb = EDITOR_PARTICLES.colors.blue;
-      } else if (colorChoice < EDITOR_PARTICLES.colorThresholds.purple) {
-        rgb = EDITOR_PARTICLES.colors.purple;
-      } else {
-        rgb = EDITOR_PARTICLES.colors.teal;
-      }
-      colors[i * 3] = rgb[0]; colors[i * 3 + 1] = rgb[1]; colors[i * 3 + 2] = rgb[2];
-    }
-
-    const particleGeometry = new THREE.BufferGeometry();
-    particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const particleMaterial = new THREE.PointsMaterial({
-      size: EDITOR_PARTICLES.size,
-      vertexColors: true,
-      transparent: true,
-      opacity: EDITOR_PARTICLES.opacity,
-      sizeAttenuation: true,
-      blending: THREE.AdditiveBlending
-    });
-
-    this.particles = new THREE.Points(particleGeometry, particleMaterial);
-    this.scene.add(this.particles);
-  }
-
-  private initializeControls(): void {
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-
-    // Disable mouse rotation and pan - mouse is for terrain editing
-    this.controls.enableRotate = false;
-    this.controls.enablePan = false;
-
-    // Enable zoom with mouse wheel
-    this.controls.enableZoom = true;
-    this.controls.zoomSpeed = EDITOR_ORBIT_CONTROLS_CONFIG.zoomSpeed;
-    this.controls.minDistance = EDITOR_ORBIT_CONTROLS_CONFIG.minDistance;
-    this.controls.maxDistance = EDITOR_ORBIT_CONTROLS_CONFIG.maxDistance;
-
-    // Disable damping - we handle our own smoothing for keyboard
-    this.controls.enableDamping = false;
-
-    this.controls.target.set(0, 0, 0);
-    this.controls.update();
+    this.cameraControl.initializeFromCamera(this.editorScene.getCamera(), new THREE.Vector3(0, 0, 0));
   }
 
   private setupInteraction(): void {
-    const canvas = this.renderer.domElement;
+    const canvas = this.editorScene.getRenderer().domElement;
 
     this.mousemoveHandler = (event: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-      this.raycaster.setFromCamera(this.mouse, this.camera);
+      this.raycaster.setFromCamera(this.mouse, this.editorScene.getCamera());
       const tileMeshes = this.terrainGrid.getTileMeshes();
       const intersects = this.raycaster.intersectObjects(tileMeshes);
 
@@ -607,7 +284,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
 
-      this.raycaster.setFromCamera(this.mouse, this.camera);
+      this.raycaster.setFromCamera(this.mouse, this.editorScene.getCamera());
       const tileMeshes = this.terrainGrid.getTileMeshes();
       const intersects = this.raycaster.intersectObjects(tileMeshes);
 
@@ -624,7 +301,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
 
-      this.raycaster.setFromCamera(this.mouse, this.camera);
+      this.raycaster.setFromCamera(this.mouse, this.editorScene.getCamera());
       const tileMeshes = this.terrainGrid.getTileMeshes();
       const intersects = this.raycaster.intersectObjects(tileMeshes);
 
@@ -1018,7 +695,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.cameraControl.update(movementInput, rotationInput, this.movementJoystick, this.rotationJoystick);
 
     // Apply camera state to Three.js camera and controls
-    this.cameraControl.applyToCamera(this.camera, this.controls?.target);
+    this.cameraControl.applyToCamera(this.editorScene.getCamera(), this.editorScene.getControls()?.target);
   }
 
   private addHelpers(): void {
@@ -1044,7 +721,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.brushIndicator.rotation.x = -Math.PI / 2;
     this.brushIndicator.visible = false;
     this.brushIndicator.renderOrder = EDITOR_RENDER_ORDER.brushIndicator;
-    this.scene.add(this.brushIndicator);
+    this.editorScene.getScene().add(this.brushIndicator);
   }
 
   private createSpawnExitMarkers(): void {
@@ -1094,7 +771,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Remove excess markers
     while (this.spawnMarkers.length > points.length) {
       const marker = this.spawnMarkers.pop()!;
-      this.scene.remove(marker);
+      this.editorScene.getScene().remove(marker);
       marker.geometry.dispose();
       disposeMaterial(marker.material);
     }
@@ -1103,7 +780,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     while (this.spawnMarkers.length < points.length) {
       const marker = this.createSpawnMarkerMesh();
       this.spawnMarkers.push(marker);
-      this.scene.add(marker);
+      this.editorScene.getScene().add(marker);
     }
 
     // Position all markers
@@ -1124,7 +801,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Remove excess markers
     while (this.exitMarkers.length > points.length) {
       const marker = this.exitMarkers.pop()!;
-      this.scene.remove(marker);
+      this.editorScene.getScene().remove(marker);
       marker.geometry.dispose();
       disposeMaterial(marker.material);
     }
@@ -1133,7 +810,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     while (this.exitMarkers.length < points.length) {
       const marker = this.createExitMarkerMesh();
       this.exitMarkers.push(marker);
-      this.scene.add(marker);
+      this.editorScene.getScene().add(marker);
     }
 
     // Position all markers
@@ -1271,7 +948,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private updateBrushPreview(): void {
     // Clear existing preview meshes
     this.brushPreviewMeshes.forEach(mesh => {
-      this.scene.remove(mesh);
+      this.editorScene.getScene().remove(mesh);
       mesh.geometry.dispose();
       disposeMaterial(mesh.material);
     });
@@ -1301,7 +978,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           mesh.visible = false;
           mesh.renderOrder = EDITOR_RENDER_ORDER.brushPreview;
           mesh.userData = { offsetX: dx, offsetZ: dz };
-          this.scene.add(mesh);
+          this.editorScene.getScene().add(mesh);
           this.brushPreviewMeshes.push(mesh);
         }
       }
@@ -1582,7 +1259,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           mesh.position.copy(tile.mesh.position);
           mesh.position.y = tile.mesh.position.y + EDITOR_RECTANGLE_PREVIEW.yOffset;
           mesh.renderOrder = EDITOR_RENDER_ORDER.rectanglePreview;
-          this.scene.add(mesh);
+          this.editorScene.getScene().add(mesh);
           this.rectanglePreviewMeshes.push(mesh);
         }
       }
@@ -1591,7 +1268,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   private clearRectanglePreview(): void {
     this.rectanglePreviewMeshes.forEach(mesh => {
-      this.scene.remove(mesh);
+      this.editorScene.getScene().remove(mesh);
       mesh.geometry.dispose();
       disposeMaterial(mesh.material);
     });
@@ -1755,8 +1432,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Update camera movement
     this.updateCameraMovement();
 
-    if (this.controls) {
-      this.controls.update();
+    const controls = this.editorScene.getControls();
+    if (controls) {
+      controls.update();
     }
 
     // Animate brush indicator for crisp, noticeable feedback
@@ -1789,19 +1467,18 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.exitMarkers[i].rotation.y += EDITOR_ANIMATION.exitRotationSpeed;
     }
 
-    if (this.particles) {
-      const positionAttribute = this.particles.geometry.attributes['position'] as THREE.BufferAttribute;
+    const particles = this.editorScene.getParticles();
+    if (particles) {
+      const positionAttribute = particles.geometry.attributes['position'] as THREE.BufferAttribute;
       const positions = positionAttribute.array as Float32Array;
       for (let i = 0; i < positions.length; i += 3) {
         positions[i + 1] += Math.sin(Date.now() * 0.001 + i) * 0.002;
       }
       positionAttribute.needsUpdate = true;
-      this.particles.rotation.y += 0.0002;
+      particles.rotation.y += 0.0002;
     }
 
-    if (this.composer) {
-      this.composer.render();
-    }
+    this.editorScene.render();
   }
 
   ngOnDestroy(): void {
@@ -1810,19 +1487,18 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     window.removeEventListener('keydown', this.keyboardHandler);
     window.removeEventListener('keyup', this.keyUpHandler);
-    window.removeEventListener('resize', this.resizeHandler);
-    if (window.visualViewport) {
-      window.visualViewport.removeEventListener('resize', this.resizeHandler);
+
+    const canvas = this.editorScene.getRenderer()?.domElement;
+    if (canvas) {
+      canvas.removeEventListener('mousemove', this.mousemoveHandler);
+      canvas.removeEventListener('mousedown', this.mouseDownHandler);
+      canvas.removeEventListener('mouseup', this.mouseUpHandler);
+      canvas.removeEventListener('mouseleave', this.mouseUpHandler);
+      canvas.removeEventListener('touchstart', this.touchStartHandler);
+      canvas.removeEventListener('touchmove', this.touchMoveHandler);
+      canvas.removeEventListener('touchend', this.touchEndHandler);
+      canvas.removeEventListener('touchcancel', this.touchEndHandler);
     }
-    const canvas = this.renderer.domElement;
-    canvas.removeEventListener('mousemove', this.mousemoveHandler);
-    canvas.removeEventListener('mousedown', this.mouseDownHandler);
-    canvas.removeEventListener('mouseup', this.mouseUpHandler);
-    canvas.removeEventListener('mouseleave', this.mouseUpHandler);
-    canvas.removeEventListener('touchstart', this.touchStartHandler);
-    canvas.removeEventListener('touchmove', this.touchMoveHandler);
-    canvas.removeEventListener('touchend', this.touchEndHandler);
-    canvas.removeEventListener('touchcancel', this.touchEndHandler);
 
     // Snapshot terrain state for the game to consume on /play navigation
     // and auto-save to localStorage to prevent data loss
@@ -1840,8 +1516,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.editHistory.clear();
 
     // Clean up brush preview meshes
+    const scene = this.editorScene.getScene();
     this.brushPreviewMeshes.forEach(mesh => {
-      this.scene.remove(mesh);
+      scene.remove(mesh);
       mesh.geometry.dispose();
       disposeMaterial(mesh.material);
     });
@@ -1852,67 +1529,30 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Clean up brush indicator
     if (this.brushIndicator) {
-      this.scene.remove(this.brushIndicator);
+      scene.remove(this.brushIndicator);
       this.brushIndicator.geometry.dispose();
       disposeMaterial(this.brushIndicator.material);
     }
 
     // Clean up spawn/exit markers
     for (const marker of this.spawnMarkers) {
-      this.scene.remove(marker);
+      scene.remove(marker);
       marker.geometry.dispose();
       disposeMaterial(marker.material);
     }
     this.spawnMarkers = [];
     for (const marker of this.exitMarkers) {
-      this.scene.remove(marker);
+      scene.remove(marker);
       marker.geometry.dispose();
       disposeMaterial(marker.material);
     }
     this.exitMarkers = [];
 
-    // Clean up particles
-    if (this.particles) {
-      this.scene.remove(this.particles);
-      this.particles.geometry.dispose();
-      disposeMaterial(this.particles.material);
-      this.particles = null;
-    }
-
-    // Clean up skybox
-    if (this.skybox) {
-      this.scene.remove(this.skybox);
-      this.skybox.geometry.dispose();
-      disposeMaterial(this.skybox.material);
-      this.skybox = undefined;
-    }
-
     if (this.terrainGrid) {
       this.terrainGrid.dispose();
     }
 
-    // Dispose OrbitControls (removes its internal DOM event listeners)
-    if (this.controls) {
-      this.controls.dispose();
-    }
-
-    // Dispose post-processing passes (frees GPU framebuffers)
-    if (this.vignettePass) {
-      this.vignettePass.dispose();
-    }
-    if (this.bloomPass) {
-      this.bloomPass.dispose();
-    }
-    if (this.composer) {
-      this.composer.renderTarget1.dispose();
-      this.composer.renderTarget2.dispose();
-    }
-
-    if (this.contextLostHandler && this.renderer?.domElement) {
-      this.renderer.domElement.removeEventListener('webglcontextlost', this.contextLostHandler as EventListener);
-      this.renderer.domElement.removeEventListener('webglcontextrestored', this.contextRestoredHandler as EventListener);
-    }
-
-    this.renderer.dispose();
+    // Dispose scene infrastructure (renderer, composer, passes, controls, skybox, particles)
+    this.editorScene.dispose();
   }
 }

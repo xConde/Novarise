@@ -1,6 +1,9 @@
 {
   "name": "novarise",
   "version": "0.0.0",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "ng": "ng",
     "start": "bash ./nvmrc-check.sh && ng serve",

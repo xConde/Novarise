@@ -8,17 +8,38 @@ import { EditorStateService } from './core/editor-state.service';
 import { EditHistoryService } from './core/edit-history.service';
 import { PathValidationService } from './core/path-validation.service';
 import { MapTemplateService } from './core/map-template.service';
+import { EditorSceneService } from './core/editor-scene.service';
 import { JoystickEvent } from './features/mobile-controls';
 
 /**
  * Typed access to private members needed for test setup/assertion.
  */
 interface TestableNovarise {
-  renderer: { domElement: HTMLCanvasElement; dispose(): void };
-  scene: { remove(...objects: unknown[]): void };
   movementJoystick: JoystickInput;
   rotationJoystick: JoystickInput;
 }
+
+/**
+ * Minimal mock for EditorSceneService — only the methods touched during
+ * component construction and ngOnDestroy (which never runs in basic specs).
+ */
+function makeEditorSceneSpy(): jasmine.SpyObj<EditorSceneService> {
+  const spy = jasmine.createSpyObj<EditorSceneService>('EditorSceneService', [
+    'initScene', 'initCamera', 'initLights', 'initSkybox', 'initParticles',
+    'initRenderer', 'initPostProcessing', 'initControls',
+    'getScene', 'getCamera', 'getRenderer', 'getComposer',
+    'getControls', 'getParticles', 'getSkybox',
+    'render', 'resize', 'dispose', 'disposeParticles', 'disposeSkybox',
+  ]);
+  spy.getRenderer.and.returnValue({ domElement: document.createElement('canvas'), dispose: () => {} } as unknown as THREE.WebGLRenderer);
+  spy.getScene.and.returnValue({ add: () => {}, remove: () => {} } as unknown as THREE.Scene);
+  spy.getCamera.and.returnValue({} as unknown as THREE.PerspectiveCamera);
+  spy.getControls.and.returnValue(undefined as unknown as ReturnType<EditorSceneService['getControls']>);
+  spy.getParticles.and.returnValue(null);
+  return spy;
+}
+
+import * as THREE from 'three';
 
 const NO_MOVEMENT: MovementInput = {
   forward: false, backward: false, left: false, right: false, up: false, down: false, fast: false
@@ -31,6 +52,8 @@ describe('NovariseComponent', () => {
   let fixture: ComponentFixture<NovariseComponent>;
   let mockMapStorageService: jasmine.SpyObj<MapStorageService>;
   let cameraControlService: CameraControlService;
+
+  let mockEditorScene: jasmine.SpyObj<EditorSceneService>;
 
   beforeEach(async () => {
     mockMapStorageService = jasmine.createSpyObj('MapStorageService', [
@@ -48,11 +71,14 @@ describe('NovariseComponent', () => {
     mockMapStorageService.getMapMetadata.and.returnValue(null);
     mockMapStorageService.getAllMaps.and.returnValue([]);
 
+    mockEditorScene = makeEditorSceneSpy();
+
     await TestBed.configureTestingModule({
       declarations: [NovariseComponent],
       imports: [RouterTestingModule],
       providers: [
         { provide: MapStorageService, useValue: mockMapStorageService },
+        { provide: EditorSceneService, useValue: mockEditorScene },
         PathValidationService,
         CameraControlService,
         EditorStateService,
@@ -64,18 +90,11 @@ describe('NovariseComponent', () => {
     cameraControlService = TestBed.inject(CameraControlService);
   });
 
-  /** Mock Three.js fields that ngOnDestroy accesses (renderer is never initialized since ngAfterViewInit doesn't run in tests) */
-  function mockThreeJsFields(comp: NovariseComponent): void {
-    const t = comp as unknown as TestableNovarise;
-    t.renderer = { domElement: document.createElement('canvas'), dispose: () => {} };
-    t.scene = { remove: () => {} };
-  }
-
   describe('Joystick State Initialization', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);
       component = fixture.componentInstance;
-      mockThreeJsFields(component);
+
     });
 
     it('should initialize movement joystick state as inactive', () => {
@@ -103,7 +122,7 @@ describe('NovariseComponent', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);
       component = fixture.componentInstance;
-      mockThreeJsFields(component);
+
     });
 
     it('should update movement joystick state when movement event received', () => {
@@ -233,7 +252,7 @@ describe('NovariseComponent', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);
       component = fixture.componentInstance;
-      mockThreeJsFields(component);
+
       cameraControlService.reset();
     });
 
@@ -297,7 +316,7 @@ describe('NovariseComponent', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);
       component = fixture.componentInstance;
-      mockThreeJsFields(component);
+
       cameraControlService.reset();
     });
 
@@ -355,7 +374,7 @@ describe('NovariseComponent', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);
       component = fixture.componentInstance;
-      mockThreeJsFields(component);
+
     });
 
     it('should populate templates from MapTemplateService on creation', () => {
@@ -376,7 +395,7 @@ describe('NovariseComponent', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);
       component = fixture.componentInstance;
-      mockThreeJsFields(component);
+
     });
 
     it('contextLost should start as false', () => {
@@ -399,7 +418,7 @@ describe('NovariseComponent', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);
       component = fixture.componentInstance;
-      mockThreeJsFields(component);
+
     });
 
     it('should not call mapStorage.saveMap when path is invalid, spawn+exit exist, and user cancels confirm', () => {

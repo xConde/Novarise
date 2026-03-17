@@ -6,6 +6,7 @@ import {
   CAMPAIGN_LEVELS,
 } from '../models/campaign.model';
 import { ChallengeDefinition, getChallengesForLevel } from '../models/challenge.model';
+import { StorageService } from '../../game/game-board/services/storage.service';
 
 const CAMPAIGN_STORAGE_KEY = 'novarise-campaign';
 
@@ -20,7 +21,7 @@ const DEFAULT_PROGRESS: CampaignProgress = {
 export class CampaignService {
   private progress: CampaignProgress;
 
-  constructor() {
+  constructor(private storageService: StorageService) {
     this.progress = this.load();
   }
 
@@ -110,50 +111,42 @@ export class CampaignService {
 
   resetProgress(): void {
     this.progress = { completedLevels: {}, completedChallenges: {} };
-    try {
-      localStorage.removeItem(CAMPAIGN_STORAGE_KEY);
-    } catch {
-      // localStorage unavailable — silently fail
-    }
+    this.storageService.remove(CAMPAIGN_STORAGE_KEY);
   }
 
   private load(): CampaignProgress {
-    try {
-      const raw = localStorage.getItem(CAMPAIGN_STORAGE_KEY);
-      if (!raw) return { ...DEFAULT_PROGRESS, completedLevels: {}, completedChallenges: {} };
-      const parsed = JSON.parse(raw) as Partial<CampaignProgress>;
-      const completedLevels: Record<string, CampaignLevelProgress> =
-        parsed.completedLevels &&
-        typeof parsed.completedLevels === 'object' &&
-        !Array.isArray(parsed.completedLevels)
-          ? { ...parsed.completedLevels as Record<string, CampaignLevelProgress> }
-          : {};
+    const empty = { ...DEFAULT_PROGRESS, completedLevels: {}, completedChallenges: {} };
+    const parsed = this.storageService.getJSON<Partial<CampaignProgress>>(
+      CAMPAIGN_STORAGE_KEY,
+      empty
+    );
+    if (parsed === empty) return empty;
 
-      // Clamp crafted/corrupt values loaded from localStorage
-      for (const entry of Object.values(completedLevels)) {
-        entry.bestStars = Math.min(Math.max(0, entry.bestStars), MAX_STARS);
-        entry.bestScore = Math.max(0, entry.bestScore);
-      }
+    const completedLevels: Record<string, CampaignLevelProgress> =
+      parsed.completedLevels &&
+      typeof parsed.completedLevels === 'object' &&
+      !Array.isArray(parsed.completedLevels)
+        ? { ...parsed.completedLevels as Record<string, CampaignLevelProgress> }
+        : {};
 
-      return {
-        completedLevels,
-        completedChallenges:
-          parsed.completedChallenges &&
-          typeof parsed.completedChallenges === 'object' &&
-          !Array.isArray(parsed.completedChallenges)
-            ? { ...parsed.completedChallenges as Record<string, boolean> }
-            : {},
-      };
-    } catch {
-      return { ...DEFAULT_PROGRESS, completedLevels: {}, completedChallenges: {} };
+    // Clamp crafted/corrupt values loaded from localStorage
+    for (const entry of Object.values(completedLevels)) {
+      entry.bestStars = Math.min(Math.max(0, entry.bestStars), MAX_STARS);
+      entry.bestScore = Math.max(0, entry.bestScore);
     }
+
+    return {
+      completedLevels,
+      completedChallenges:
+        parsed.completedChallenges &&
+        typeof parsed.completedChallenges === 'object' &&
+        !Array.isArray(parsed.completedChallenges)
+          ? { ...parsed.completedChallenges as Record<string, boolean> }
+          : {},
+    };
   }
 
   private save(): void {
-    try {
-      localStorage.setItem(CAMPAIGN_STORAGE_KEY, JSON.stringify(this.progress));
-    } catch {
-      // localStorage full or unavailable — silently fail
-    }
+    this.storageService.setJSON(CAMPAIGN_STORAGE_KEY, this.progress);
   }
 }

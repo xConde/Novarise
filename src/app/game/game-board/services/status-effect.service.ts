@@ -16,6 +16,8 @@ export class StatusEffectService {
   private effects = new Map<string, Map<StatusEffectType, ActiveEffect>>();
   /** Reused return value for getAllActiveEffects() to avoid per-frame Map allocation */
   private activeEffectsResult = new Map<string, StatusEffectType[]>();
+  /** Per-enemy arrays reused across frames to avoid per-enemy-per-frame Array.from allocation */
+  private effectArrayCache = new Map<string, StatusEffectType[]>();
   /** Total number of SLOW applications this game session (for achievement tracking). */
   private slowApplicationCount = 0;
 
@@ -161,7 +163,17 @@ export class StatusEffectService {
     this.activeEffectsResult.clear();
     for (const [enemyId, enemyEffects] of this.effects) {
       if (enemyEffects.size > 0) {
-        this.activeEffectsResult.set(enemyId, Array.from(enemyEffects.keys()));
+        // Reuse cached array to avoid per-enemy-per-frame Array.from allocation
+        let arr = this.effectArrayCache.get(enemyId);
+        if (!arr) {
+          arr = [];
+          this.effectArrayCache.set(enemyId, arr);
+        }
+        arr.length = 0;
+        for (const key of enemyEffects.keys()) {
+          arr.push(key);
+        }
+        this.activeEffectsResult.set(enemyId, arr);
       }
     }
     return this.activeEffectsResult;
@@ -184,6 +196,7 @@ export class StatusEffectService {
     }
 
     this.effects.delete(enemyId);
+    this.effectArrayCache.delete(enemyId);
   }
 
   /** Returns the total number of new SLOW applications this session (refreshes do not count). */
@@ -207,6 +220,7 @@ export class StatusEffectService {
     }
     this.effects.clear();
     this.activeEffectsResult.clear();
+    this.effectArrayCache.clear();
     this.slowApplicationCount = 0;
   }
 }

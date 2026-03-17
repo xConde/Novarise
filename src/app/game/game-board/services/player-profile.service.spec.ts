@@ -7,6 +7,7 @@ import {
 } from './player-profile.service';
 import { MapScoreRecord } from '../models/score.model';
 import { DifficultyLevel } from '../models/game-state.model';
+import { StorageService } from './storage.service';
 
 const STORAGE_KEY = 'novarise-profile';
 
@@ -43,7 +44,7 @@ describe('PlayerProfileService', () => {
 
   beforeEach(() => {
     localStorage.removeItem(STORAGE_KEY);
-    service = new PlayerProfileService();
+    service = new PlayerProfileService(new StorageService());
   });
 
   afterEach(() => {
@@ -747,7 +748,7 @@ describe('PlayerProfileService', () => {
         completedChallengeCount: 3,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       const p = fresh.getProfile();
       expect(p.totalGamesPlayed).toBe(7);
       expect(p.totalVictories).toBe(3);
@@ -761,7 +762,7 @@ describe('PlayerProfileService', () => {
 
     it('handles corrupt localStorage JSON gracefully', () => {
       localStorage.setItem(STORAGE_KEY, 'not-valid-json{{');
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       const p = fresh.getProfile();
       expect(p.totalGamesPlayed).toBe(0);
       expect(p.achievements).toEqual([]);
@@ -769,7 +770,7 @@ describe('PlayerProfileService', () => {
 
     it('handles missing localStorage entry gracefully', () => {
       localStorage.removeItem(STORAGE_KEY);
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       expect(fresh.getProfile().totalGamesPlayed).toBe(0);
     });
 
@@ -778,7 +779,7 @@ describe('PlayerProfileService', () => {
         STORAGE_KEY,
         JSON.stringify({ totalGamesPlayed: 5, achievements: null })
       );
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       expect(fresh.getProfile().achievements).toEqual([]);
     });
 
@@ -787,7 +788,7 @@ describe('PlayerProfileService', () => {
         STORAGE_KEY,
         JSON.stringify({ totalGamesPlayed: 3 })
       );
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       const p = fresh.getProfile();
       expect(p.totalGamesPlayed).toBe(3);
       expect(p.totalVictories).toBe(0); // default filled in
@@ -799,37 +800,37 @@ describe('PlayerProfileService', () => {
   describe('backward compatibility — old profile migration', () => {
     it('loads old profile without towerKills field and defaults to {}', () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(makeOldProfile()));
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       expect(fresh.getProfile().towerKills).toEqual({});
     });
 
     it('loads old profile without slowEffectsApplied and defaults to 0', () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(makeOldProfile()));
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       expect(fresh.getProfile().slowEffectsApplied).toBe(0);
     });
 
     it('loads old profile without hasUsedSpecialization and defaults to false', () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(makeOldProfile()));
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       expect(fresh.getProfile().hasUsedSpecialization).toBe(false);
     });
 
     it('loads old profile without hasPlacedAllTowerTypes and defaults to false', () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(makeOldProfile()));
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       expect(fresh.getProfile().hasPlacedAllTowerTypes).toBe(false);
     });
 
     it('loads old profile without maxModifiersUsedInVictory and defaults to 0', () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(makeOldProfile()));
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       expect(fresh.getProfile().maxModifiersUsedInVictory).toBe(0);
     });
 
     it('loads old profile without completedChallengeCount and defaults to 0', () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(makeOldProfile()));
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       expect(fresh.getProfile().completedChallengeCount).toBe(0);
     });
 
@@ -838,7 +839,7 @@ describe('PlayerProfileService', () => {
         totalVictories: 7,
         achievements: ['first_victory', 'veteran'],
       })));
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       expect(fresh.getProfile().totalVictories).toBe(7);
       expect(fresh.getProfile().achievements).toContain('veteran');
     });
@@ -848,7 +849,7 @@ describe('PlayerProfileService', () => {
         STORAGE_KEY,
         JSON.stringify(makeOldProfile({ towerKills: ['bad'] as unknown as Record<string, number> }))
       );
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       expect(fresh.getProfile().towerKills).toEqual({});
     });
   });
@@ -1020,7 +1021,7 @@ describe('PlayerProfileService', () => {
         achievements: [],
         mapScores: { map_1: mapScore },
       }));
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       const record = fresh.getMapScore('map_1');
       expect(record).not.toBeNull();
       expect(record!.bestScore).toBe(1500);
@@ -1029,19 +1030,19 @@ describe('PlayerProfileService', () => {
 
     it('handles missing mapScores field in saved data gracefully', () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ totalGamesPlayed: 3, achievements: [] }));
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       expect(fresh.getAllMapScores()).toEqual({});
     });
 
     it('handles null mapScores in saved data gracefully', () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ achievements: [], mapScores: null }));
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       expect(fresh.getAllMapScores()).toEqual({});
     });
 
     it('handles array mapScores (corrupt data) gracefully', () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ achievements: [], mapScores: ['bad'] }));
-      const fresh = new PlayerProfileService();
+      const fresh = new PlayerProfileService(new StorageService());
       expect(fresh.getAllMapScores()).toEqual({});
     });
   });

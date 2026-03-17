@@ -1,5 +1,11 @@
 import { Injectable } from '@angular/core';
 import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
+import {
+  CURRENT_SCHEMA_VERSION,
+  migrateMap,
+  validateMapData
+} from './map-schema';
+import { StorageService } from '../../../game/game-board/services/storage.service';
 
 export interface MapMetadata {
   id: string;
@@ -24,7 +30,7 @@ export class MapStorageService {
   private readonly METADATA_KEY = 'novarise_maps_metadata';
   private readonly CURRENT_MAP_KEY = 'novarise_current_map';
 
-  constructor() {}
+  constructor(private storageService: StorageService) {}
 
   /**
    * Save a map with metadata
@@ -46,16 +52,19 @@ export class MapStorageService {
       gridSize: data.gridSize
     };
 
+    const dataWithVersion: TerrainGridState = {
+      ...data,
+      schemaVersion: CURRENT_SCHEMA_VERSION
+    };
+
     const savedMap: SavedMap = {
       metadata: metadata,
-      data: data
+      data: dataWithVersion
     };
 
     // Save the map data
-    try {
-      localStorage.setItem(this.STORAGE_PREFIX + mapId, JSON.stringify(savedMap));
-    } catch (e) {
-      console.error('Failed to save map — localStorage may be full or unavailable:', e);
+    if (!this.storageService.setJSON(this.STORAGE_PREFIX + mapId, savedMap)) {
+      console.error('Failed to save map — localStorage may be full or unavailable');
     }
 
     // Update metadata index
@@ -74,21 +83,33 @@ export class MapStorageService {
    */
   public loadMap(id: string): TerrainGridState | null {
     const key = this.STORAGE_PREFIX + id;
-    const json = localStorage.getItem(key);
+    const savedMap = this.storageService.getJSON<SavedMap | null>(key, null);
 
-    if (!json) {
+    if (!savedMap) {
       console.warn(`Map with ID "${id}" not found`);
       return null;
     }
 
-    try {
-      const savedMap: SavedMap = JSON.parse(json);
-      this.setCurrentMapId(id);
-      return savedMap.data;
-    } catch (e) {
-      console.error('Failed to parse map data:', e);
+    const rawData = savedMap.data as unknown as Record<string, unknown>;
+    const migrated = migrateMap(rawData);
+
+    if (!migrated) {
+      console.error(`Failed to migrate map "${id}" — data may be corrupted or from a newer version`);
       return null;
     }
+
+    const migratedData = migrated as unknown as TerrainGridState;
+
+    // Re-save to localStorage if the schema was upgraded so future loads are fast
+    if ((rawData['schemaVersion'] as number | undefined) !== CURRENT_SCHEMA_VERSION) {
+      const upgradedMap: SavedMap = { metadata: savedMap.metadata, data: migratedData };
+      if (!this.storageService.setJSON(key, upgradedMap)) {
+        console.warn('Failed to persist migrated map data');
+      }
+    }
+
+    this.setCurrentMapId(id);
+    return migratedData;
   }
 
   /**
@@ -96,15 +117,7 @@ export class MapStorageService {
    * @returns Array of map metadata
    */
   public getAllMaps(): MapMetadata[] {
-    const json = localStorage.getItem(this.METADATA_KEY);
-    if (!json) return [];
-
-    try {
-      return JSON.parse(json);
-    } catch (e) {
-      console.error('Failed to parse maps metadata:', e);
-      return [];
-    }
+    return this.storageService.getJSON<MapMetadata[]>(this.METADATA_KEY, []);
   }
 
   /**
@@ -124,27 +137,20 @@ export class MapStorageService {
    */
   public deleteMap(id: string): boolean {
     const key = this.STORAGE_PREFIX + id;
-    const item = localStorage.getItem(key);
-
-    if (!item) {
+    if (!this.storageService.remove(key)) {
       return false;
     }
-
-    // Remove from storage
-    localStorage.removeItem(key);
 
     // Remove from metadata index
     const maps = this.getAllMaps();
     const filtered = maps.filter(m => m.id !== id);
-    try {
-      localStorage.setItem(this.METADATA_KEY, JSON.stringify(filtered));
-    } catch (e) {
-      console.error('Failed to update metadata index:', e);
+    if (!this.storageService.setJSON(this.METADATA_KEY, filtered)) {
+      console.error('Failed to update metadata index');
     }
 
     // Clear current map if it was this one
     if (this.getCurrentMapId() === id) {
-      localStorage.removeItem(this.CURRENT_MAP_KEY);
+      this.storageService.remove(this.CURRENT_MAP_KEY);
     }
 
     return true;
@@ -155,11 +161,11 @@ export class MapStorageService {
    * @returns Current map ID or null
    */
   public getCurrentMapId(): string | null {
-    return localStorage.getItem(this.CURRENT_MAP_KEY);
+    return this.storageService.getString(this.CURRENT_MAP_KEY);
   }
 
   public clearCurrentMapId(): void {
-    localStorage.removeItem(this.CURRENT_MAP_KEY);
+    this.storageService.remove(this.CURRENT_MAP_KEY);
   }
 
   /**
@@ -180,23 +186,17 @@ export class MapStorageService {
    */
   public migrateOldFormat(): boolean {
     const oldKey = 'novarise_terrain';
-    const oldData = localStorage.getItem(oldKey);
+    const oldData = this.storageService.getJSON<TerrainGridState | null>(oldKey, null);
 
     if (!oldData) {
       return false;
     }
 
-    try {
-      const data = JSON.parse(oldData);
-      // Save as "Imported Map" in new format
-      this.saveMap('Imported Map', data);
-      // Remove old key
-      localStorage.removeItem(oldKey);
-      return true;
-    } catch (e) {
-      console.error('Failed to migrate old map:', e);
-      return false;
-    }
+    // Save as "Imported Map" in new format
+    this.saveMap('Imported Map', oldData);
+    // Remove old key
+    this.storageService.remove(oldKey);
+    return true;
   }
 
   /**
@@ -205,9 +205,7 @@ export class MapStorageService {
    * @returns JSON string or null
    */
   public exportMapToJson(id: string): string | null {
-    const key = this.STORAGE_PREFIX + id;
-    const json = localStorage.getItem(key);
-    return json;
+    return this.storageService.getString(this.STORAGE_PREFIX + id);
   }
 
   /**
@@ -251,14 +249,24 @@ export class MapStorageService {
     try {
       const savedMap: SavedMap = JSON.parse(json);
 
-      // Validate the imported data structure
-      if (!savedMap.data || typeof savedMap.data.gridSize !== 'number') {
-        console.error('Invalid map data structure');
+      const rawData = savedMap.data as unknown as Record<string, unknown>;
+
+      // Migrate to current schema version first (handles v1 field renames)
+      const migrated = migrateMap(rawData);
+      if (!migrated) {
+        console.error('Failed to migrate imported map data');
+        return null;
+      }
+
+      // Validate the migrated structure
+      const validation = validateMapData(migrated);
+      if (!validation.valid) {
+        console.error('Invalid map data structure:', validation.errors.join('; '));
         return null;
       }
 
       const mapName = name || savedMap.metadata?.name || 'Imported Map';
-      return this.saveMap(mapName, savedMap.data);
+      return this.saveMap(mapName, migrated as unknown as TerrainGridState);
     } catch (e) {
       console.error('Failed to import map:', e);
       return null;
@@ -274,17 +282,26 @@ export class MapStorageService {
     try {
       const savedMap: SavedMap = JSON.parse(json);
 
-      // Check for required fields
+      // Check for required top-level field
       if (!savedMap.data) {
         return { valid: false, error: 'Missing map data' };
       }
 
-      if (typeof savedMap.data.gridSize !== 'number') {
+      const rawData = savedMap.data as unknown as Record<string, unknown>;
+
+      // Legacy checks preserved for backward compat with existing error message contract
+      if (typeof rawData['gridSize'] !== 'number') {
         return { valid: false, error: 'Invalid or missing grid size' };
       }
 
-      if (!savedMap.data.tiles || !Array.isArray(savedMap.data.tiles)) {
+      if (!rawData['tiles'] || !Array.isArray(rawData['tiles'])) {
         return { valid: false, error: 'Invalid or missing tiles data' };
+      }
+
+      // Run full validation for richer checks
+      const result = validateMapData(rawData);
+      if (!result.valid) {
+        return { valid: false, error: result.errors[0] };
       }
 
       return {
@@ -309,6 +326,14 @@ export class MapStorageService {
       input.onchange = async (event) => {
         const file = (event.target as HTMLInputElement).files?.[0];
         if (!file) {
+          resolve(null);
+          return;
+        }
+
+        // Guard against oversized files — prevent OOM during JSON.parse
+        const MAX_MAP_FILE_BYTES = 512 * 1024; // 512 KB
+        if (file.size > MAX_MAP_FILE_BYTES) {
+          console.error(`Map file too large: ${file.size} bytes (max ${MAX_MAP_FILE_BYTES})`);
           resolve(null);
           return;
         }
@@ -355,10 +380,10 @@ export class MapStorageService {
   public clearAllMaps(): void {
     const maps = this.getAllMaps();
     maps.forEach(map => {
-      localStorage.removeItem(this.STORAGE_PREFIX + map.id);
+      this.storageService.remove(this.STORAGE_PREFIX + map.id);
     });
-    localStorage.removeItem(this.METADATA_KEY);
-    localStorage.removeItem(this.CURRENT_MAP_KEY);
+    this.storageService.remove(this.METADATA_KEY);
+    this.storageService.remove(this.CURRENT_MAP_KEY);
   }
 
   // Private helper methods
@@ -368,10 +393,8 @@ export class MapStorageService {
   }
 
   private setCurrentMapId(id: string): void {
-    try {
-      localStorage.setItem(this.CURRENT_MAP_KEY, id);
-    } catch (e) {
-      console.error('Failed to set current map ID:', e);
+    if (!this.storageService.setString(this.CURRENT_MAP_KEY, id)) {
+      console.error('Failed to set current map ID');
     }
   }
 
@@ -390,10 +413,8 @@ export class MapStorageService {
     // Sort by updated date (most recent first)
     maps.sort((a, b) => b.updatedAt - a.updatedAt);
 
-    try {
-      localStorage.setItem(this.METADATA_KEY, JSON.stringify(maps));
-    } catch (e) {
-      console.error('Failed to update metadata index:', e);
+    if (!this.storageService.setJSON(this.METADATA_KEY, maps)) {
+      console.error('Failed to update metadata index');
     }
   }
 }

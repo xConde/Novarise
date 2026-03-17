@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_GAME_SPEEDS } from '../models/game-state.model';
+import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_GAME_SPEEDS, VALID_TRANSITIONS } from '../models/game-state.model';
 import { GameModifier, ModifierEffects, mergeModifierEffects, calculateModifierScoreMultiplier } from '../models/game-modifier.model';
 
 @Injectable()
@@ -8,6 +8,7 @@ export class GameStateService {
   private state: GameState = { ...INITIAL_GAME_STATE, activeModifiers: new Set<GameModifier>() };
   private state$ = new BehaviorSubject<GameState>(this.state);
   private modifierEffects: ModifierEffects = {};
+  private phaseChange$ = new Subject<{ from: GamePhase; to: GamePhase }>();
 
   getState$(): Observable<GameState> {
     return this.state$.asObservable();
@@ -17,10 +18,35 @@ export class GameStateService {
     return this.state;
   }
 
-  /** Force-sets the game phase and emits. Prefer `startWave()` / `completeWave()` for normal phase transitions — use this only for external overrides (e.g., editor quick-play teardown). */
+  /** Emits whenever the game phase changes. Each emission carries the previous and next phase. */
+  getPhaseChanges(): Observable<{ from: GamePhase; to: GamePhase }> {
+    return this.phaseChange$.asObservable();
+  }
+
+  /** Force-sets the game phase and emits. Prefer `startWave()` / `completeWave()` for normal phase transitions — use this only for external overrides (e.g., editor quick-play teardown). No-op on invalid transitions (warns to console). */
   setPhase(phase: GamePhase): void {
+    if (!this.validateTransition(phase)) return;
+    const from = this.state.phase;
     this.state.phase = phase;
+    if (from !== phase) {
+      this.phaseChange$.next({ from, to: phase });
+    }
     this.emit();
+  }
+
+  /**
+   * Returns true if the transition from the current phase to `to` is legal (or is a no-op).
+   * Logs a warning and returns false for invalid transitions.
+   */
+  private validateTransition(to: GamePhase): boolean {
+    const from = this.state.phase;
+    if (from === to) return true; // no-op, not a transition
+    const allowed = VALID_TRANSITIONS[from];
+    if (!allowed.has(to)) {
+      console.warn(`Invalid phase transition: ${from} → ${to}`);
+      return false;
+    }
+    return true;
   }
 
   /** Increments wave counter and transitions to COMBAT phase. Guards against double-calls (COMBAT phase) and terminal states (VICTORY/DEFEAT). No-op if no waves remain and endless mode is off. */
@@ -30,14 +56,17 @@ export class GameStateService {
     const hasMoreWaves =
       this.state.wave < this.state.maxWaves || this.state.isEndless;
     if (!hasMoreWaves) return;
+    const from = this.state.phase;
     this.state.wave++;
     this.state.phase = GamePhase.COMBAT;
+    this.phaseChange$.next({ from, to: GamePhase.COMBAT });
     this.emit();
   }
 
   /** Awards wave gold/score, transitions to INTERMISSION (or VICTORY on final wave). No-op if not in COMBAT phase. Endless mode never triggers VICTORY; updates `highestWave` instead. */
   completeWave(reward: number): void {
     if (this.state.phase !== GamePhase.COMBAT) return;
+    const from = this.state.phase;
     this.addGoldAndScore(reward);
 
     if (this.state.isEndless) {
@@ -51,6 +80,7 @@ export class GameStateService {
     } else {
       this.state.phase = GamePhase.INTERMISSION;
     }
+    this.phaseChange$.next({ from, to: this.state.phase });
     this.emit();
   }
 
@@ -66,7 +96,9 @@ export class GameStateService {
     this.state.lives = Math.max(0, this.state.lives - amount);
     this.state.consecutiveWavesWithoutLeak = 0;
     if (this.state.lives <= 0) {
+      const from = this.state.phase;
       this.state.phase = GamePhase.DEFEAT;
+      this.phaseChange$.next({ from, to: GamePhase.DEFEAT });
     }
     this.emit();
   }
@@ -212,8 +244,10 @@ export class GameStateService {
 
   /** Resets all game state to initial values and clears modifiers. Call from `restartGame()` before a new game begins. */
   reset(): void {
+    const from = this.state.phase;
     this.state = { ...INITIAL_GAME_STATE, activeModifiers: new Set<GameModifier>() };
     this.modifierEffects = {};
+    this.phaseChange$.next({ from, to: GamePhase.SETUP });
     this.emit();
   }
 
