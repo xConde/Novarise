@@ -921,3 +921,12 @@ Test count: 2756 → 3024 (+268 tests)
 **Location:** `tower-interaction.service.ts:115-124`
 **Risk:** Method checks tile type/occupancy, not path-blocking BFS. The component uses it to decide whether to show the "path blocked" warning. For tiles that fail `canPlaceTower()` due to actual path blocking, the warning may not fire if the tile also fails the occupancy check first. The method name is misleading.
 **Fix:** Either rename to `isValidEmptyTile()` or replace with a call to `GameBoardService.wouldBlockPath()`.
+
+---
+
+## Deployment Checklist
+
+- [x] Step 1: Convention check — console.log/warn (0 new), no TODO/FIXME, no magic numbers in new files
+- [x] Step 2: Full test suite green (3027/3027)
+- [x] Step 3: Production build passes — CSS 35.82kb (below 40kb error budget)
+- [ ] Step 4: Push to remote and update PR #24
