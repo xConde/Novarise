@@ -16,8 +16,8 @@ export class StorageService {
       const raw = localStorage.getItem(key);
       if (raw === null) return defaultValue;
       return JSON.parse(raw) as T;
-    } catch (e) {
-      if (e instanceof SyntaxError) {
+    } catch (error) {
+      if (error instanceof SyntaxError) {
         console.error(`Storage: corrupted data for key "${key}", returning default`);
       }
       // SecurityError (private browsing) and other errors silently return default
@@ -35,8 +35,8 @@ export class StorageService {
       const bytes = serialized.length * 2; // UTF-16
       localStorage.setItem(key, serialized);
       return true;
-    } catch (e) {
-      if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22)) {
+    } catch (error) {
+      if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.code === 22)) {
         const serialized = (() => {
           try { return JSON.stringify(value); } catch { return ''; }
         })();
