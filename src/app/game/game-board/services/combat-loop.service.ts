@@ -65,6 +65,11 @@ export class CombatLoopService {
    * @param scoreBreakdown Current score breakdown (passed to GameEndService on game end).
    * @param leakedThisWave Whether any enemy has already leaked this wave (component owns this).
    * @returns           Accumulated frame events for the component to consume.
+   *
+   * **IMPORTANT:** The returned `kills` and `firedTypes` are references to
+   * internal reused collections. They are cleared at the start of the NEXT
+   * tick() call. Consume them synchronously in the same animation frame —
+   * do NOT store the reference for deferred processing.
    */
   tick(
     deltaTime: number,

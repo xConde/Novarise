@@ -968,3 +968,12 @@ Test count: 2756 → 3024 (+268 tests)
 **Location:** `combat-loop.service.ts:214`
 **Risk:** `this.frameKills` is cleared at the start of each `tick()` (line 87) and the same array reference is returned in the result (line 214). If a consumer stores the reference and reads it after the next `tick()`, it sees corrupted data. Currently safe because the component consumes synchronously in `processCombatResult()` (same animation frame), but fragile to future refactoring.
 **Fix:** Document the contract: "Returned kills array is valid only until the next tick() call. Consume synchronously." Consider returning `[...this.frameKills]` if the allocation cost is acceptable.
+
+---
+
+## Deployment Checklist — feat/hardening-v
+
+- [x] Step 1: Document CombatFrameResult.kills synchronous-consumption contract in combat-loop.service.ts
+- [ ] Step 2: Add file.size guard to MapStorageService.promptFileImport() (red-team lesson #148 still open)
+- [ ] Step 3: Final full test suite + production build — zero failures, zero warnings
+- [ ] Step 4: Push to remote and update branch for PR
