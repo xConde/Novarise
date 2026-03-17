@@ -902,3 +902,22 @@ All interaction paths verified: SETUP tower placement unblocked, wave-btn pointe
 - Keystone 19: Component 2892→2314 (-578), 8 new services, 3024 tests
 
 Test count: 2756 → 3024 (+268 tests)
+
+---
+
+## Red Team Critique — 2026-03-16 (Tech Debt Extractions)
+
+### Finding 1: `slowApplicationCount` not reset on game restart — cross-session stat inflation (MEDIUM)
+**Location:** `status-effect.service.ts:210`, `game-session.service.ts:38-47`
+**Risk:** `StatusEffectService.slowApplicationCount` survives `resetAllServices()` because StatusEffectService is not reset by GameSessionService. `cleanup()` is called inside `TowerCombatService.cleanup()` which runs via the component's `cleanupGameObjects()`, NOT through GameSessionService. On game restart, slow applications from run 1 accumulate into run 2's achievement tracking. The `slow_and_steady` achievement (1000 applications) fires early across sessions.
+**Fix:** Add `this.statusEffectService.cleanup()` to `GameSessionService.resetAllServices()`, or ensure `slowApplicationCount` is reset to 0 in the existing `cleanup()` method. Verify `cleanup()` zeroes the counter.
+
+### Finding 2: `completeWave()` and `awardInterest()` bypass `addGoldAndScore()` — inline mutation (LOW)
+**Location:** `game-state.service.ts:completeWave()`, `awardInterest()`
+**Risk:** Both methods directly mutate `state.gold += amount; state.score += amount` instead of calling `addGoldAndScore()`. If `addGoldAndScore()` ever gains side effects (audit log, modifier cap, event emission), these two paths silently bypass them. No bug today, but a future maintenance trap.
+**Fix:** Refactor both methods to call `addGoldAndScore(amount)` instead of inline mutation.
+
+### Finding 3: `TowerInteractionService.wouldBlockPath()` doesn't actually check path blocking (LOW)
+**Location:** `tower-interaction.service.ts:115-124`
+**Risk:** Method checks tile type/occupancy, not path-blocking BFS. The component uses it to decide whether to show the "path blocked" warning. For tiles that fail `canPlaceTower()` due to actual path blocking, the warning may not fire if the tile also fails the occupancy check first. The method name is misleading.
+**Fix:** Either rename to `isValidEmptyTile()` or replace with a call to `GameBoardService.wouldBlockPath()`.

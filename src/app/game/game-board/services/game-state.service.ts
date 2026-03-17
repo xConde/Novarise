@@ -38,8 +38,7 @@ export class GameStateService {
   /** Awards wave gold/score, transitions to INTERMISSION (or VICTORY on final wave). No-op if not in COMBAT phase. Endless mode never triggers VICTORY; updates `highestWave` instead. */
   completeWave(reward: number): void {
     if (this.state.phase !== GamePhase.COMBAT) return;
-    this.state.gold += reward;
-    this.state.score += reward;
+    this.addGoldAndScore(reward);
 
     if (this.state.isEndless) {
       // In endless mode, track highest wave reached and never trigger VICTORY
@@ -119,9 +118,7 @@ export class GameStateService {
       INTEREST_CONFIG.maxPayout
     );
     if (interest > 0) {
-      this.state.gold += interest;
-      this.state.score += interest;
-      this.emit();
+      this.addGoldAndScore(interest);
     }
     return interest;
   }

@@ -108,6 +108,7 @@ describe('GameSessionService', () => {
       expect(gameEndSpy.reset).toHaveBeenCalled();
       expect(notificationSpy.clear).toHaveBeenCalled();
       expect(challengeSpy.reset).toHaveBeenCalled();
+      expect(statusEffectSpy.cleanup).toHaveBeenCalled();
       expect(tutorialSpy.resetCurrentStep).toHaveBeenCalled();
 
       scene.clear();
