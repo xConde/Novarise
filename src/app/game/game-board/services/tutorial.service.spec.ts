@@ -1,4 +1,5 @@
 import { TutorialService, TutorialStep, TutorialTip } from './tutorial.service';
+import { StorageService } from './storage.service';
 
 const STORAGE_KEY = 'novarise-tutorial';
 
@@ -7,7 +8,7 @@ describe('TutorialService', () => {
 
   beforeEach(() => {
     localStorage.removeItem(STORAGE_KEY);
-    service = new TutorialService();
+    service = new TutorialService(new StorageService());
   });
 
   afterEach(() => {
@@ -223,7 +224,7 @@ describe('TutorialService', () => {
     const data = { seenSteps: [TutorialStep.COMPLETE] };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
-    const fresh = new TutorialService();
+    const fresh = new TutorialService(new StorageService());
     expect(fresh.isTutorialComplete()).toBeTrue();
   });
 
@@ -231,13 +232,13 @@ describe('TutorialService', () => {
 
   it('handles corrupted localStorage gracefully — returns empty set', () => {
     localStorage.setItem(STORAGE_KEY, 'not-valid-json{{');
-    const fresh = new TutorialService();
+    const fresh = new TutorialService(new StorageService());
     expect(fresh.isTutorialComplete()).toBeFalse();
   });
 
   it('handles localStorage with wrong shape gracefully', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ seenSteps: 'not-an-array' }));
-    const fresh = new TutorialService();
+    const fresh = new TutorialService(new StorageService());
     expect(fresh.isTutorialComplete()).toBeFalse();
   });
 

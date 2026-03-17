@@ -1,5 +1,6 @@
 import { SettingsService, GameSettings } from './settings.service';
 import { DifficultyLevel } from '../models/game-state.model';
+import { StorageService } from './storage.service';
 
 const STORAGE_KEY = 'novarise-settings';
 
@@ -8,7 +9,7 @@ describe('SettingsService', () => {
 
   beforeEach(() => {
     localStorage.removeItem(STORAGE_KEY);
-    service = new SettingsService();
+    service = new SettingsService(new StorageService());
   });
 
   afterEach(() => {
@@ -49,7 +50,7 @@ describe('SettingsService', () => {
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
 
-    const freshService = new SettingsService();
+    const freshService = new SettingsService(new StorageService());
     const settings = freshService.get();
     expect(settings.audioMuted).toBe(true);
     expect(settings.difficulty).toBe(DifficultyLevel.NIGHTMARE);
@@ -59,7 +60,7 @@ describe('SettingsService', () => {
   it('should return defaults when localStorage contains invalid JSON', () => {
     localStorage.setItem(STORAGE_KEY, 'not-json');
 
-    const freshService = new SettingsService();
+    const freshService = new SettingsService(new StorageService());
     const settings = freshService.get();
     expect(settings.audioMuted).toBe(false);
     expect(settings.difficulty).toBe(DifficultyLevel.NORMAL);
@@ -68,7 +69,7 @@ describe('SettingsService', () => {
   it('should merge partial saved data with defaults', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ audioMuted: true }));
 
-    const freshService = new SettingsService();
+    const freshService = new SettingsService(new StorageService());
     const settings = freshService.get();
     expect(settings.audioMuted).toBe(true);
     expect(settings.difficulty).toBe(DifficultyLevel.NORMAL); // default filled in

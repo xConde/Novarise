@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { StorageService } from './storage.service';
 
 export enum TutorialStep {
   WELCOME = 'welcome',
@@ -88,7 +89,7 @@ export class TutorialService {
   private tutorialComplete: boolean;
   private readonly currentStep$: BehaviorSubject<TutorialStep | null>;
 
-  constructor() {
+  constructor(private storageService: StorageService) {
     this.seenSteps = this.load();
     this.tutorialComplete = this.seenSteps.has(TutorialStep.COMPLETE);
     this.currentStep$ = new BehaviorSubject<TutorialStep | null>(null);
@@ -144,11 +145,7 @@ export class TutorialService {
     this.seenSteps.clear();
     this.tutorialComplete = false;
     this.currentStep$.next(null);
-    try {
-      localStorage.removeItem(TUTORIAL_STORAGE_KEY);
-    } catch {
-      // localStorage unavailable — silently fail
-    }
+    this.storageService.remove(TUTORIAL_STORAGE_KEY);
   }
 
   /** Get the tip configuration for a given step. */
@@ -170,23 +167,16 @@ export class TutorialService {
   }
 
   private load(): Set<string> {
-    try {
-      const raw = localStorage.getItem(TUTORIAL_STORAGE_KEY);
-      if (!raw) return new Set<string>();
-      const parsed = JSON.parse(raw) as TutorialStorageData;
-      if (!Array.isArray(parsed.seenSteps)) return new Set<string>();
-      return new Set<string>(parsed.seenSteps.filter((s): s is string => typeof s === 'string'));
-    } catch {
-      return new Set<string>();
-    }
+    const parsed = this.storageService.getJSON<TutorialStorageData | null>(
+      TUTORIAL_STORAGE_KEY,
+      null
+    );
+    if (!parsed || !Array.isArray(parsed.seenSteps)) return new Set<string>();
+    return new Set<string>(parsed.seenSteps.filter((s): s is string => typeof s === 'string'));
   }
 
   private save(): void {
-    try {
-      const data: TutorialStorageData = { seenSteps: Array.from(this.seenSteps) };
-      localStorage.setItem(TUTORIAL_STORAGE_KEY, JSON.stringify(data));
-    } catch {
-      // localStorage full or unavailable — silently fail
-    }
+    const data: TutorialStorageData = { seenSteps: Array.from(this.seenSteps) };
+    this.storageService.setJSON(TUTORIAL_STORAGE_KEY, data);
   }
 }
