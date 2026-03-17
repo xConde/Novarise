@@ -1,15 +1,22 @@
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRouteSnapshot, Router, UrlTree, convertToParamMap } from '@angular/router';
-import { GameGuard } from './game.guard';
+import { ActivatedRouteSnapshot, Router, RouterStateSnapshot, UrlTree, convertToParamMap } from '@angular/router';
+import { EnvironmentInjector } from '@angular/core';
+import { gameGuard, QUICK_PLAY_PARAM } from './game.guard';
 import { MapBridgeService } from '../game-board/services/map-bridge.service';
 
-describe('GameGuard', () => {
-  let guard: GameGuard;
+describe('gameGuard', () => {
   let mapBridge: jasmine.SpyObj<MapBridgeService>;
   let router: jasmine.SpyObj<Router>;
+  let injector: EnvironmentInjector;
 
   function createRoute(queryParams: Record<string, string> = {}): ActivatedRouteSnapshot {
     return { queryParamMap: convertToParamMap(queryParams) } as unknown as ActivatedRouteSnapshot;
+  }
+
+  function runGuard(route: ActivatedRouteSnapshot): boolean | UrlTree {
+    return injector.runInContext(() =>
+      gameGuard(route, {} as RouterStateSnapshot)
+    ) as boolean | UrlTree;
   }
 
   beforeEach(() => {
@@ -18,22 +25,17 @@ describe('GameGuard', () => {
 
     TestBed.configureTestingModule({
       providers: [
-        GameGuard,
         { provide: MapBridgeService, useValue: mapBridge },
         { provide: Router, useValue: router }
       ]
     });
 
-    guard = TestBed.inject(GameGuard);
-  });
-
-  it('should be created', () => {
-    expect(guard).toBeTruthy();
+    injector = TestBed.inject(EnvironmentInjector);
   });
 
   it('should allow access when a map is loaded', () => {
     mapBridge.hasEditorMap.and.returnValue(true);
-    expect(guard.canActivate(createRoute())).toBe(true);
+    expect(runGuard(createRoute())).toBe(true);
   });
 
   it('should redirect to /maps when no map is loaded', () => {
@@ -41,7 +43,7 @@ describe('GameGuard', () => {
     const mockUrlTree = {} as UrlTree;
     router.createUrlTree.and.returnValue(mockUrlTree);
 
-    const result = guard.canActivate(createRoute());
+    const result = runGuard(createRoute());
 
     expect(result).toBe(mockUrlTree);
     expect(router.createUrlTree).toHaveBeenCalledWith(['/maps']);
@@ -49,7 +51,7 @@ describe('GameGuard', () => {
 
   it('should allow access with quickplay query param even without a map', () => {
     mapBridge.hasEditorMap.and.returnValue(false);
-    const result = guard.canActivate(createRoute({ quickplay: 'true' }));
+    const result = runGuard(createRoute({ [QUICK_PLAY_PARAM]: 'true' }));
     expect(result).toBe(true);
   });
 
@@ -58,7 +60,7 @@ describe('GameGuard', () => {
     const mockUrlTree = {} as UrlTree;
     router.createUrlTree.and.returnValue(mockUrlTree);
 
-    const result = guard.canActivate(createRoute({ quickplay: 'false' }));
+    const result = runGuard(createRoute({ [QUICK_PLAY_PARAM]: 'false' }));
 
     expect(result).toBe(mockUrlTree);
   });
