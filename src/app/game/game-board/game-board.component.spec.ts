@@ -32,6 +32,7 @@ import { ChallengeTrackingService } from './services/challenge-tracking.service'
 import { GameEndService } from './services/game-end.service';
 import { TilePricingService } from './services/tile-pricing.service';
 import { GameSessionService } from './services/game-session.service';
+import { SceneService } from './services/scene.service';
 import { PathfindingService } from './services/pathfinding.service';
 import { CombatVFXService } from './services/combat-vfx.service';
 
@@ -517,11 +518,9 @@ describe('GameBoardComponent', () => {
       addEventSpy = spyOn(mockCanvas, 'addEventListener').and.callThrough();
       removeEventSpy = spyOn(mockCanvas, 'removeEventListener').and.callThrough();
 
-      // Inject mock canvas via renderer stub on the private renderer field
-      (component as any).renderer = {
-        domElement: mockCanvas,
-        dispose: () => {}
-      };
+      // Stub SceneService.getRenderer() to return a mock renderer with the canvas
+      const mockRenderer = { domElement: mockCanvas, dispose: () => {} };
+      spyOn((component as any).sceneService, 'getRenderer').and.returnValue(mockRenderer);
     });
 
     it('setupTouchInteraction registers touchstart, touchmove, and touchend handlers', () => {
@@ -559,7 +558,7 @@ describe('GameBoardComponent', () => {
       (component as any).setupTouchInteraction();
 
       // Simulate ngOnDestroy canvas listener removal path
-      const canvas = (component as any).renderer.domElement as HTMLElement;
+      const canvas = (component as any).sceneService.getRenderer().domElement as HTMLElement;
       canvas.removeEventListener('touchstart', (component as any).touchStartHandler);
       canvas.removeEventListener('touchmove', (component as any).touchMoveHandler);
       canvas.removeEventListener('touchend', (component as any).touchEndHandler);
@@ -601,8 +600,12 @@ describe('GameBoardComponent', () => {
       (component as any).setupTouchInteraction();
       (component as any).touchStartX = 0;
       (component as any).touchStartY = 0;
-      (component as any).camera = { position: new THREE.Vector3(0, 10, 0) };
-      (component as any).controls = { target: new THREE.Vector3(0, 0, 0), dispose: () => {} };
+
+      // Stub sceneService camera/controls since the real Three.js objects are not initialized in tests
+      const mockCamera = { position: new THREE.Vector3(0, 10, 0) } as any;
+      const mockControls = { target: new THREE.Vector3(0, 0, 0), dispose: () => {} } as any;
+      spyOn((component as any).sceneService, 'getCamera').and.returnValue(mockCamera);
+      spyOn((component as any).sceneService, 'getControls').and.returnValue(mockControls);
 
       const touch = { clientX: 20, clientY: 20 } as Touch;
       const event = { preventDefault: () => {}, touches: [touch] } as unknown as TouchEvent;
@@ -610,10 +613,6 @@ describe('GameBoardComponent', () => {
       (component as any).touchMoveHandler(event);
 
       expect((component as any).touchIsDragging).toBeTrue();
-
-      // Prevent cleanup crash — reset partial mocks
-      (component as any).camera = null;
-      (component as any).controls = null;
     });
 
     it('touchMoveHandler does not set touchIsDragging when movement is within threshold', () => {
@@ -1091,7 +1090,8 @@ describe('GameBoardComponent', () => {
     });
 
     it('togglePathOverlay calls showPath when path exists', () => {
-      (component as any).scene = new THREE.Scene();
+      const mockScene = new THREE.Scene();
+      spyOn((component as any).sceneService, 'getScene').and.returnValue(mockScene);
       const pvs = (component as any).pathVisualizationService;
       spyOn(pvs, 'showPath');
       spyOn(pvs, 'hidePath');
@@ -1100,7 +1100,7 @@ describe('GameBoardComponent', () => {
 
       component.togglePathOverlay();
 
-      expect(pvs.showPath).toHaveBeenCalledWith(fakePath, (component as any).scene);
+      expect(pvs.showPath).toHaveBeenCalledWith(fakePath, mockScene);
     });
 
     it('togglePathOverlay does not call showPath when path is empty', () => {
@@ -1285,9 +1285,9 @@ describe('GameBoardComponent', () => {
       spyOn(component as any, 'cleanupGameObjects');
       spyOn(component as any, 'renderGameBoard');
       spyOn(component as any, 'addGridLines');
-      spyOn(component as any, 'initializeLights');
-      spyOn(component as any, 'addSkybox');
-      spyOn(component as any, 'initializeParticles');
+      spyOn((component as any).sceneService, 'initLights');
+      spyOn((component as any).sceneService, 'initSkybox');
+      spyOn((component as any).sceneService, 'initParticles');
       const enemyService = fixture.debugElement.injector.get(EnemyService);
       spyOn(enemyService, 'reset');
       const minimapService = fixture.debugElement.injector.get(MinimapService);
@@ -2135,9 +2135,9 @@ describe('GameBoardComponent', () => {
       spyOn(component as any, 'cleanupGameObjects');
       spyOn(component as any, 'renderGameBoard');
       spyOn(component as any, 'addGridLines');
-      spyOn(component as any, 'initializeLights');
-      spyOn(component as any, 'addSkybox');
-      spyOn(component as any, 'initializeParticles');
+      spyOn((component as any).sceneService, 'initLights');
+      spyOn((component as any).sceneService, 'initSkybox');
+      spyOn((component as any).sceneService, 'initParticles');
       const minimapSvc = fixture.debugElement.injector.get(MinimapService);
       spyOn(minimapSvc, 'init');
 
@@ -2251,9 +2251,9 @@ describe('GameBoardComponent', () => {
       spyOn(component as any, 'cleanupGameObjects');
       spyOn(component as any, 'renderGameBoard');
       spyOn(component as any, 'addGridLines');
-      spyOn(component as any, 'initializeLights');
-      spyOn(component as any, 'addSkybox');
-      spyOn(component as any, 'initializeParticles');
+      spyOn((component as any).sceneService, 'initLights');
+      spyOn((component as any).sceneService, 'initSkybox');
+      spyOn((component as any).sceneService, 'initParticles');
       const enemyService = fixture.debugElement.injector.get(EnemyService);
       spyOn(enemyService, 'reset');
       const minimapSvc = fixture.debugElement.injector.get(MinimapService);
@@ -2389,9 +2389,9 @@ describe('GameBoardComponent', () => {
       spyOn(component as any, 'cleanupGameObjects');
       spyOn(component as any, 'renderGameBoard');
       spyOn(component as any, 'addGridLines');
-      spyOn(component as any, 'initializeLights');
-      spyOn(component as any, 'addSkybox');
-      spyOn(component as any, 'initializeParticles');
+      spyOn((component as any).sceneService, 'initLights');
+      spyOn((component as any).sceneService, 'initSkybox');
+      spyOn((component as any).sceneService, 'initParticles');
       const enemyService = fixture.debugElement.injector.get(EnemyService);
       spyOn(enemyService, 'reset');
       const minimapSvc = fixture.debugElement.injector.get(MinimapService);
@@ -2417,8 +2417,9 @@ describe('GameBoardComponent', () => {
         'reset',
       ]);
       challengeTrackingSpy.getTowerTypesUsed.and.returnValue(new Set<TowerType>());
-      // Override the component-scoped instance with our spy
+      // Override on both the component (for direct calls) and the service (for delegated calls)
       (component as any).challengeTrackingService = challengeTrackingSpy;
+      (component as any).towerInteractionService.challengeTrackingService = challengeTrackingSpy;
     });
 
     it('restartGame delegates service resets to GameSessionService.resetAllServices', () => {
@@ -2427,9 +2428,9 @@ describe('GameBoardComponent', () => {
       spyOn(component as any, 'cleanupGameObjects');
       spyOn(component as any, 'renderGameBoard');
       spyOn(component as any, 'addGridLines');
-      spyOn(component as any, 'initializeLights');
-      spyOn(component as any, 'addSkybox');
-      spyOn(component as any, 'initializeParticles');
+      spyOn((component as any).sceneService, 'initLights');
+      spyOn((component as any).sceneService, 'initSkybox');
+      spyOn((component as any).sceneService, 'initParticles');
       const minimapSvc = fixture.debugElement.injector.get(MinimapService);
       spyOn(minimapSvc, 'init');
 
@@ -2444,13 +2445,6 @@ describe('GameBoardComponent', () => {
       gameStateService.setPhase(GamePhase.COMBAT);
       gameStateService.addGold(500);
 
-      const towerCombatService = fixture.debugElement.injector.get(TowerCombatService);
-      spyOn(towerCombatService, 'upgradeTower').and.returnValue(true);
-
-      // Stub pricing service so it doesn't crash on missing board state
-      const tilePricingService = fixture.debugElement.injector.get(TilePricingService);
-      spyOn(tilePricingService, 'getStrategicValue').and.returnValue(0);
-
       const mockTower: PlacedTower = {
         id: '0-0',
         type: TowerType.BASIC,
@@ -2463,6 +2457,15 @@ describe('GameBoardComponent', () => {
         mesh: null as any,
         targetingMode: 'nearest' as any,
       };
+
+      const towerCombatService = fixture.debugElement.injector.get(TowerCombatService);
+      spyOn(towerCombatService, 'getTower').and.returnValue(mockTower);
+      spyOn(towerCombatService, 'upgradeTower').and.returnValue(true);
+
+      // Stub pricing service so it doesn't crash on missing board state
+      const tilePricingService = fixture.debugElement.injector.get(TilePricingService);
+      spyOn(tilePricingService, 'getStrategicValue').and.returnValue(0);
+
       (component as any).selectedTowerInfo = mockTower;
       component.selectedTowerType = null; // INSPECT mode
       spyOn(component as any, 'refreshTowerInfoPanel');
