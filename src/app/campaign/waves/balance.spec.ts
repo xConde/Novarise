@@ -56,6 +56,20 @@ const NIGHTMARE_MIN_BASIC_TOWERS = 1;
 const MAX_TOWER_COST_RATIO = 3;
 
 /**
+ * Maximum allowed ratio between the highest and second-highest DPS/cost
+ * efficiency among damage-dealing towers.
+ *
+ * Mortar and Splash have intentionally low raw DPS because their value is
+ * AoE/DoT/status — comparing max-to-min would always flag them. Comparing the
+ * top two efficiencies catches a scenario where one direct-damage tower is
+ * tuned to be absurdly dominant over the next best option.
+ *
+ * Current values (Basic 0.500, Sniper 0.256, Chain 0.156, Splash 0.133):
+ * ratio = 0.500 / 0.256 ≈ 1.95×.  A limit of 4× gives a comfortable buffer.
+ */
+const MAX_DPS_COST_EFFICIENCY_RATIO = 4;
+
+/**
  * Multiplier applied to gridSize to estimate the minimum number of towers
  * needed for a viable defense. Rough heuristic: one tower per 3 grid units.
  */
@@ -65,8 +79,12 @@ const INCOME_SUFFICIENCY_GRID_FACTOR = 3;
  * Total income (starting gold + wave rewards + kill values on Normal) must
  * be at least this many times the cheapest tower cost, times the tower count
  * estimate for the level's grid size.
+ *
+ * Set to 3 so that the test fails if all wave rewards were zeroed out.
+ * For level 1 (gridSize 10): required = 50 * ceil(10/3) * 3 = 600g.
+ * Normal starting gold is 200g, so wave rewards + kills must cover ≥ 400g.
  */
-const INCOME_SUFFICIENCY_MULTIPLIER = 1;
+const INCOME_SUFFICIENCY_MULTIPLIER = 3;
 
 /**
  * Minimum spawn interval (seconds) allowed in any campaign wave entry.
@@ -86,9 +104,14 @@ const ENDLESS_WAVE_100_MAX_ENEMIES = 120;
 /**
  * Minimum required HP increase from first to last wave (as a ratio).
  * Last wave total HP must be at least this many times the first wave.
- * Set to 1 (strict greater-than enforced in the test) — just requiring growth.
+ *
+ * Set to 1.5 — a meaningful improvement over the previous check (ratio=1, i.e. just
+ * "last > first"). campaign_08 (Crystal Maze) is the tightest case at ≈1.82×: its
+ * wave 10 is a targeted mini-boss wave rather than a mass-quantity wave, giving lower
+ * total HP than a pure-swarm finale would. 2.0 would fail that map; 1.5 passes it
+ * while still catching any map that barely grows difficulty wave-over-wave.
  */
-const HP_RAMP_MIN_LAST_TO_FIRST_RATIO = 1;
+const HP_RAMP_MIN_LAST_TO_FIRST_RATIO = 1.5;
 
 /**
  * Endgame tier (maps 15-16) total HP in the final wave must exceed
@@ -311,18 +334,38 @@ describe('Balance — Tower Viability', () => {
   });
 
   it('DPS/cost efficiency varies across damage-dealing towers (no single dominant tower)', () => {
-    // If all efficiencies were identical, every tower would be interchangeable.
-    // Variance > 0 confirms different towers excel in different situations.
+    // Compare top-2 DPS/cost efficiencies to catch a scenario where one direct-damage
+    // tower is tuned absurdly better than all alternatives.
+    //
+    // Mortar and Splash have intentionally low raw DPS (their value is AoE/DoT/status),
+    // so comparing max-to-min would trivially fail. Comparing top-two isolates the
+    // "direct damage" towers where dominance would actually be a balance problem.
+    //
+    // Current top-2: Basic (0.500) / Sniper (0.256) ≈ 1.95×.
+    // MAX_DPS_COST_EFFICIENCY_RATIO = 4 gives stable headroom.
     const damagingTowers = Object.values(TOWER_CONFIGS).filter(c => c.damage > 0);
-    const efficiencies = damagingTowers.map(c => (c.damage / c.fireRate) / c.cost);
+    const efficiencies = damagingTowers
+      .map(c => (c.damage / c.fireRate) / c.cost)
+      .sort((a, b) => b - a); // descending
 
-    const mean = efficiencies.reduce((a, b) => a + b, 0) / efficiencies.length;
-    const variance =
-      efficiencies.reduce((sum, e) => sum + (e - mean) ** 2, 0) / efficiencies.length;
+    expect(efficiencies.length)
+      .withContext('Need at least 2 damage-dealing tower types to compare')
+      .toBeGreaterThanOrEqual(2);
 
-    expect(Math.sqrt(variance))
+    const topEfficiency = efficiencies[0];
+    const secondEfficiency = efficiencies[1];
+
+    expect(topEfficiency)
       .withContext('DPS/cost standard deviation should be > 0 across damage-dealing towers')
-      .toBeGreaterThan(0);
+      .toBeGreaterThan(secondEfficiency);
+
+    expect(topEfficiency / secondEfficiency)
+      .withContext(
+        `Top DPS/cost efficiency (${topEfficiency.toFixed(4)}) is more than ` +
+        `${MAX_DPS_COST_EFFICIENCY_RATIO}× the second-highest (${secondEfficiency.toFixed(4)}). ` +
+        `A single tower is dominantly more efficient than all others.`
+      )
+      .toBeLessThanOrEqual(MAX_DPS_COST_EFFICIENCY_RATIO);
   });
 
   it('Slow tower has zero damage — it is a utility tower only', () => {
@@ -446,6 +489,53 @@ describe('Balance — Difficulty Curve', () => {
       expect(waveTotalHp(waves[0]))
         .withContext(`${level.id}: first and last wave HP must differ`)
         .not.toEqual(waveTotalHp(waves[waves.length - 1]));
+    }
+  });
+
+  it('mid tier maps (9-12) all have a Boss in their final wave', () => {
+    // Maps 9-12 reach a Boss finale on wave 10 — this is the mid-game climax
+    // that demands the player has built up sustained DPS through the prior waves.
+    // If Boss is removed from mid-tier finales, the difficulty curve collapses.
+    const midIds = CAMPAIGN_LEVELS.filter(l => l.tier === CampaignTier.MID).map(l => l.id);
+    for (const id of midIds) {
+      const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
+      if (!waves) { fail(`No wave definitions for ${id}`); continue; }
+      const finalWave = waves[waves.length - 1];
+      const hasBoss = finalWave.entries.some(e => e.type === EnemyType.BOSS);
+      expect(hasBoss)
+        .withContext(`${id} final wave should contain a Boss — mid tier climax`)
+        .toBeTrue();
+    }
+  });
+
+  it('late tier maps (13-14) all have a Boss in their final wave', () => {
+    // Maps 13-14 are the pre-endgame tier — their final waves must include a Boss
+    // to maintain escalating pressure and prepare players for the endgame maps.
+    const lateIds = CAMPAIGN_LEVELS.filter(l => l.tier === CampaignTier.LATE).map(l => l.id);
+    for (const id of lateIds) {
+      const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
+      if (!waves) { fail(`No wave definitions for ${id}`); continue; }
+      const finalWave = waves[waves.length - 1];
+      const hasBoss = finalWave.entries.some(e => e.type === EnemyType.BOSS);
+      expect(hasBoss)
+        .withContext(`${id} final wave should contain a Boss — late tier climax`)
+        .toBeTrue();
+    }
+  });
+
+  it('endgame tier maps (15-16) all have a Boss in their final wave', () => {
+    // Maps 15-16 are the ultimate challenge — their final waves must include at
+    // least one Boss. Endgame maps also have Boss appearances in earlier waves,
+    // but the final wave Boss is the design-mandated climax.
+    const endgameIds = CAMPAIGN_LEVELS.filter(l => l.tier === CampaignTier.ENDGAME).map(l => l.id);
+    for (const id of endgameIds) {
+      const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
+      if (!waves) { fail(`No wave definitions for ${id}`); continue; }
+      const finalWave = waves[waves.length - 1];
+      const hasBoss = finalWave.entries.some(e => e.type === EnemyType.BOSS);
+      expect(hasBoss)
+        .withContext(`${id} final wave should contain a Boss — endgame tier climax`)
+        .toBeTrue();
     }
   });
 });
