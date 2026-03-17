@@ -175,6 +175,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private frameFiredTypes = new Set<TowerType>();
   /** Cached minimap terrain data — static after board setup, rebuilt on board import. */
   private cachedMinimapTerrain: MinimapTerrainData | null = null;
+  /** Reusable entity list for updateMinimap() — avoids per-frame array allocation. */
+  private minimapEntities: MinimapEntityData[] = [];
   private defeatSoundPlayed = false;
   private victorySoundPlayed = false;
   private keyboardHandler: (event: KeyboardEvent) => void;
@@ -2182,14 +2184,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     const terrain = this.cachedMinimapTerrain!;
 
-    const entities: MinimapEntityData[] = [];
+    this.minimapEntities.length = 0;
     this.towerCombatService.getPlacedTowers().forEach((tower) => {
-      entities.push({ x: tower.col, z: tower.row, type: 'tower' });
+      this.minimapEntities.push({ x: tower.col, z: tower.row, type: 'tower' });
     });
     this.enemyService.getEnemies().forEach((enemy) => {
-      entities.push({ x: enemy.gridPosition.col, z: enemy.gridPosition.row, type: 'enemy' });
+      this.minimapEntities.push({ x: enemy.gridPosition.col, z: enemy.gridPosition.row, type: 'enemy' });
     });
-    this.minimapService.update(timeMs, terrain, entities);
+    this.minimapService.update(timeMs, terrain, this.minimapEntities);
   }
 
   private updateTowerAnimations(time: number): void {

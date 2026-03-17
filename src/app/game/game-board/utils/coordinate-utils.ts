@@ -20,6 +20,22 @@ export function gridToWorld(
   };
 }
 
+/**
+ * Like gridToWorld but writes into an existing object instead of allocating.
+ * Use in hot paths (e.g., per-enemy per-frame movement) to avoid GC pressure.
+ */
+export function gridToWorldInto(
+  row: number,
+  col: number,
+  boardWidth: number,
+  boardHeight: number,
+  tileSize: number,
+  out: { x: number; z: number }
+): void {
+  out.x = (col - boardWidth / 2) * tileSize;
+  out.z = (row - boardHeight / 2) * tileSize;
+}
+
 /** Convert world x/z back to grid row/col (rounded to nearest tile). */
 export function worldToGrid(
   worldX: number,

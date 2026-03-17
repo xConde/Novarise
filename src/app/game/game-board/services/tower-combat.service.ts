@@ -60,6 +60,14 @@ export interface CombatAudioEvent {
 export class TowerCombatService {
   private placedTowers: Map<string, PlacedTower> = new Map();
   private projectiles: Projectile[] = [];
+  /**
+   * Scratch TowerStats object reused when the tower-damage modifier is active,
+   * avoiding a per-tower-per-frame object spread allocation.
+   */
+  private scratchStats: TowerStats = {
+    damage: 0, range: 0, fireRate: 0, cost: 0,
+    projectileSpeed: 0, splashRadius: 0, color: 0,
+  };
   private mortarZones: MortarZone[] = [];
   private projectileCounter = 0;
   private gameTime = 0;
@@ -198,9 +206,28 @@ export class TowerCombatService {
     const towerDamageMultiplier = this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1;
     this.placedTowers.forEach(tower => {
       const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
-      const stats = towerDamageMultiplier !== 1
-        ? { ...baseStats, damage: Math.round(baseStats.damage * towerDamageMultiplier) }
-        : baseStats;
+      let stats: TowerStats;
+      if (towerDamageMultiplier !== 1) {
+        // Copy all fields into scratch object — avoids per-tower-per-frame spread allocation
+        this.scratchStats.damage = Math.round(baseStats.damage * towerDamageMultiplier);
+        this.scratchStats.range = baseStats.range;
+        this.scratchStats.fireRate = baseStats.fireRate;
+        this.scratchStats.cost = baseStats.cost;
+        this.scratchStats.projectileSpeed = baseStats.projectileSpeed;
+        this.scratchStats.splashRadius = baseStats.splashRadius;
+        this.scratchStats.color = baseStats.color;
+        this.scratchStats.slowFactor = baseStats.slowFactor;
+        this.scratchStats.slowDuration = baseStats.slowDuration;
+        this.scratchStats.chainCount = baseStats.chainCount;
+        this.scratchStats.chainRange = baseStats.chainRange;
+        this.scratchStats.blastRadius = baseStats.blastRadius;
+        this.scratchStats.dotDuration = baseStats.dotDuration;
+        this.scratchStats.dotDamage = baseStats.dotDamage;
+        this.scratchStats.statusEffect = baseStats.statusEffect;
+        stats = this.scratchStats;
+      } else {
+        stats = baseStats;
+      }
       const timeSinceLastFire = this.gameTime - tower.lastFireTime;
 
       if (timeSinceLastFire < stats.fireRate) return;
@@ -265,10 +292,14 @@ export class TowerCombatService {
         proj.mesh.position.x += nx * moveDistance;
         proj.mesh.position.z += nz * moveDistance;
 
-        // Update trail
-        proj.trailPositions.push(proj.mesh.position.clone());
-        if (proj.trailPositions.length > PROJECTILE_CONFIG.trailLength) {
-          proj.trailPositions.shift();
+        // Update trail — reuse Vector3 objects after the buffer is full to avoid allocation
+        if (proj.trailPositions.length < TRAIL_MAX_VERTICES) {
+          proj.trailPositions.push(proj.mesh.position.clone());
+        } else {
+          // Rotate: recycle the oldest entry rather than allocating a new Vector3
+          const recycled = proj.trailPositions.shift()!;
+          recycled.copy(proj.mesh.position);
+          proj.trailPositions.push(recycled);
         }
 
         if (proj.trailPositions.length >= 2) {
