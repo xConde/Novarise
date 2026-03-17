@@ -871,3 +871,34 @@ All interaction paths verified: SETUP tower placement unblocked, wave-btn pointe
 **Location:** `player-profile.service.ts:114-116, 231-233`
 **Risk:** `countThreeStarMaps` iterates all `mapScores`, not just campaign maps. A player who 1-stars all 16 campaign levels and 3-stars 16 custom/freeplay maps satisfies the "Flawless" achievement without 3-starring any campaign map. The adjacent `totalCampaignStars` function already correctly filters by `mapId.startsWith('campaign_')`.
 **Fix:** Add a `countThreeStarCampaignMaps` function that filters by campaign prefix, use it in the `three_star_all` condition.
+
+---
+
+## Sprint History — feat/product-campaign tech debt (16 sprints, 2026-03-16)
+
+### Phase 1: God Component Extraction (Sprints 1-4 + Keystone 5)
+- S1: GameEndService — unified 3 recording paths, -141 lines from component
+- S2: ChallengeTrackingService — moved 3 challenge tracking fields
+- S3: GameSessionService — wrapped restart + campaign wave orchestration
+- S4: Deduplicated 3 method pairs + extracted shared importBoard()
+- Keystone 5: Component 2892→2714 (-178)
+
+### Phase 2: Oversized Service Breakdown (Sprints 6-9 + Keystone 10)
+- S6: PathfindingService from EnemyService (1007→803)
+- S7: CombatVFXService from TowerCombatService (898→783)
+- S8: Achievement model from PlayerProfileService (536→257)
+- S9: AudioService decoupled from SettingsService + TowerCombatService
+- Keystone 10: All service LOCs verified
+
+### Phase 3: DI & Lifecycle Fixes (Sprints 11-14 + Keystone 15)
+- S11: Editor services scoped to EditorModule (no more root leaks)
+- S12: TutorialService resetCurrentStep() on game restart
+- S13: Modifier propagation centralized (services read from GameStateService)
+- S14: Gold/score separation (sell refund no longer inflates score)
+
+### Phase 4: Scene & Interaction Extraction (Sprints 16-17 + Keystone 19)
+- S16: SceneService — Three.js infrastructure extracted (459 LOC)
+- S17: TowerInteractionService — place/sell/upgrade business logic (252 LOC)
+- Keystone 19: Component 2892→2314 (-578), 8 new services, 3024 tests
+
+Test count: 2756 → 3024 (+268 tests)
