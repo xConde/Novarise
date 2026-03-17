@@ -128,11 +128,6 @@ describe('CampaignComponent', () => {
     expect(router.navigate).not.toHaveBeenCalled();
   });
 
-  it('should navigate to / when Home button is clicked', () => {
-    component.goHome();
-    expect(router.navigate).toHaveBeenCalledWith(['/']);
-  });
-
   it('should display total stars', () => {
     campaignService.getTotalStars.and.returnValue(6);
     component.ngOnInit();

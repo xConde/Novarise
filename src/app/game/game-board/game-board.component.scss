@@ -209,15 +209,15 @@
   // --- Wave preview + control panel ---
   .wave-preview {
     @include glass-panel(rgba(0, 0, 0, 0.82));
-    position: absolute;
-    top: 50%;
+    position: fixed;
+    top: 4rem;
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translateX(-50%);
     min-width: 12rem;
     padding: var(--spacing-md) var(--spacing-lg);
     border: var(--border-width-thin) solid var(--theme-purple-a50);
     border-radius: var(--border-radius-lg);
-    animation: scale-in 0.2s ease-out;
+    animation: wave-preview-in 0.2s ease-out;
     z-index: var(--z-index-overlay);
     pointer-events: none;
     text-align: center;
@@ -225,8 +225,15 @@
     max-height: min(50vh, 400px);
     overflow-y: auto;
 
-    @media (max-width:768px) {
+    @media (max-width: 768px) {
       min-width: 10rem;
+    }
+
+    @media (max-width: 480px) {
+      top: 3rem;
+      font-size: var(--font-size-xs);
+      padding: var(--spacing-sm) var(--spacing-md);
+      min-width: 9rem;
     }
 
     .wave-income {
@@ -1420,6 +1427,11 @@
     opacity: 1;
     transform: scale(1);
   }
+}
+
+@keyframes wave-preview-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 .help-overlay {
