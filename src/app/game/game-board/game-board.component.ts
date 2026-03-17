@@ -134,6 +134,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Score breakdown — populated when game ends (VICTORY or DEFEAT)
   scoreBreakdown: ScoreBreakdown | null = null;
+  /** Pre-computed star array — set alongside scoreBreakdown to avoid per-CD allocation. */
+  starArray: Array<'filled' | 'empty'> = [];
 
   // Achievements unlocked at game end
   newlyUnlockedAchievements: string[] = [];
@@ -167,6 +169,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private lastTime = 0;
   private elapsedTimeAccumulator = 0;
   private physicsAccumulator = 0;
+  /** Reused per-frame kill accumulator — cleared at the start of each combat frame. */
+  private frameKills: { damage: number; position: { x: number; y: number; z: number }; color: number; value: number }[] = [];
+  /** Reused per-frame fired-tower-type set — cleared at the start of each combat frame. */
+  private frameFiredTypes = new Set<TowerType>();
+  /** Cached minimap terrain data — static after board setup, rebuilt on board import. */
+  private cachedMinimapTerrain: MinimapTerrainData | null = null;
   private defeatSoundPlayed = false;
   private victorySoundPlayed = false;
   private keyboardHandler: (event: KeyboardEvent) => void;
@@ -217,12 +225,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Audio state exposed to template
   get audioMuted(): boolean { return this.audioService.isMuted; }
-
-  /** Returns a 3-element array of 'filled' | 'empty' for the star rating display. */
-  get starArray(): Array<'filled' | 'empty'> {
-    const stars = this.scoreBreakdown?.stars ?? 0;
-    return [0, 1, 2].map(i => (i < stars ? 'filled' : 'empty')) as Array<'filled' | 'empty'>;
-  }
 
   /** Resolves newly unlocked achievement IDs to their name/description for display. */
   private updateAchievementDetails(): void {
@@ -312,6 +314,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           state.phase === GamePhase.VICTORY,
           this.gameStateService.getModifierScoreMultiplier()
         );
+        this.starArray = [0, 1, 2].map(i => i < this.scoreBreakdown!.stars ? 'filled' : 'empty') as Array<'filled' | 'empty'>;
       }
 
       // Refresh wave preview when entering SETUP/INTERMISSION or when the wave number changes
@@ -1122,6 +1125,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Reset component-only UI state
     this.scoreBreakdown = null;
+    this.starArray = [];
     this.newlyUnlockedAchievements = [];
     this.achievementDetails = [];
     this.completedChallenges = [];
@@ -1158,6 +1162,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sceneService.initParticles();
     this.minimapService.init(this.canvasContainer.nativeElement);
     this.tilePricingService.invalidateCache();
+    this.cachedMinimapTerrain = null;
     this.lastPreviewKey = '';
     this.lastTime = 0;
     this.elapsedTimeAccumulator = 0;
@@ -1280,6 +1285,28 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.sceneService.getScene().add(mesh);
       });
     });
+
+    this.buildMinimapTerrainCache();
+  }
+
+  /** Builds and caches the static minimap terrain data after board setup. */
+  private buildMinimapTerrainCache(): void {
+    const boardWidth = this.gameBoardService.getBoardWidth();
+    const boardHeight = this.gameBoardService.getBoardHeight();
+    const spawnerTiles = this.gameBoardService.getSpawnerTiles();
+    const exitTiles = this.gameBoardService.getExitTiles();
+
+    this.cachedMinimapTerrain = {
+      gridWidth: boardWidth,
+      gridHeight: boardHeight,
+      isPath: (row: number, col: number) => {
+        const board = this.gameBoardService.getGameBoard();
+        const tile = board?.[row]?.[col];
+        return tile !== undefined && tile.type !== BlockType.WALL;
+      },
+      spawnPoints: spawnerTiles.map(([row, col]) => ({ x: col, z: row })),
+      exitPoints: exitTiles.map(([row, col]) => ({ x: col, z: row })),
+    };
   }
 
   private addGridLines(): void {
@@ -1600,8 +1627,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // --- Pause menu ---
 
-  /** Named constant for pause menu speed buttons — avoids template literal arrays. */
-  readonly pauseMenuSpeeds: readonly GameSpeed[] = VALID_GAME_SPEEDS;
+  /** Named constant for speed buttons (HUD and pause menu) — avoids template literal arrays. */
+  readonly validGameSpeeds: readonly GameSpeed[] = VALID_GAME_SPEEDS;
 
   /** Whether the quit-confirmation sub-panel is visible inside the pause menu. */
   showQuitConfirm = false;
@@ -2006,8 +2033,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         }
 
         // Accumulate visual events across all physics steps — process once per frame
-        const frameKills: { damage: number; position: { x: number; y: number; z: number }; color: number; value: number }[] = [];
-        const frameFiredTypes: Set<TowerType> = new Set();
+        this.frameKills.length = 0;
+        this.frameFiredTypes.clear();
         let frameHitCount = 0;
         let frameExitCount = 0;
 
@@ -2022,7 +2049,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
           // Accumulate fired tower types and hit counts for audio (once per frame)
           for (const towerType of firedTowerTypes) {
-            frameFiredTypes.add(towerType);
+            this.frameFiredTypes.add(towerType);
           }
           frameHitCount += hitCount;
 
@@ -2034,7 +2061,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
               this.gameStatsService.recordGoldEarned(enemy.value);
 
               // Snapshot visual data for deferred rendering (enemy removed below)
-              frameKills.push({
+              this.frameKills.push({
                 damage: killInfo.damage,
                 position: { ...enemy.position },
                 color: ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackColor,
@@ -2117,13 +2144,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         }
 
         // Process accumulated visual events once per frame (not per physics step)
-        for (const towerType of frameFiredTypes) {
+        for (const towerType of this.frameFiredTypes) {
           this.audioService.playTowerFire(towerType);
         }
         if (frameHitCount > 0) {
           this.audioService.playEnemyHit();
         }
-        for (const kill of frameKills) {
+        for (const kill of this.frameKills) {
           this.audioService.playGoldEarned();
           this.audioService.playEnemyDeath();
           this.particleService.spawnDeathBurst(kill.position, kill.color);
@@ -2173,24 +2200,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private updateMinimap(timeMs: number): void {
-    const boardWidth = this.gameBoardService.getBoardWidth();
-    const boardHeight = this.gameBoardService.getBoardHeight();
+    // Use cached terrain (static after board setup); fall back to building if not yet cached
+    if (!this.cachedMinimapTerrain) {
+      this.buildMinimapTerrainCache();
+    }
+    const terrain = this.cachedMinimapTerrain!;
 
-    // Build spawn/exit point lists from the service
-    const spawnerTiles = this.gameBoardService.getSpawnerTiles();
-    const exitTiles = this.gameBoardService.getExitTiles();
-
-    const terrain: MinimapTerrainData = {
-      gridWidth: boardWidth,
-      gridHeight: boardHeight,
-      isPath: (row: number, col: number) => {
-        const board = this.gameBoardService.getGameBoard();
-        const tile = board?.[row]?.[col];
-        return tile !== undefined && tile.type !== BlockType.WALL;
-      },
-      spawnPoints: spawnerTiles.map(([row, col]) => ({ x: col, z: row })),
-      exitPoints: exitTiles.map(([row, col]) => ({ x: col, z: row })),
-    };
     const entities: MinimapEntityData[] = [];
     this.towerCombatService.getPlacedTowers().forEach((tower) => {
       entities.push({ x: tower.col, z: tower.row, type: 'tower' });

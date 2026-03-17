@@ -1170,35 +1170,6 @@ p {
   justify-content: center;
 }
 
-.board-container .overlay-content .restart-btn,
-.board-container .overlay-content .edit-map-btn {
-  padding: var(--spacing-sm) var(--spacing-xl);
-  background: var(--theme-purple-a20);
-  border: var(--border-width-medium) solid var(--theme-purple-a50);
-  border-radius: var(--border-radius-md);
-  color: var(--text-color);
-  font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-base);
-  cursor: pointer;
-  transition: all var(--transition-medium) ease;
-}
-
-.board-container .overlay-content .restart-btn:hover,
-.board-container .overlay-content .edit-map-btn:hover {
-  background: var(--theme-purple-a30);
-  border-color: var(--theme-purple-a80);
-}
-
-.board-container .overlay-content .edit-map-btn {
-  color: var(--theme-purple-mid);
-}
-
-.board-container .overlay-content .edit-map-btn:hover {
-  background: var(--theme-purple-a20);
-  border-color: var(--theme-purple-a80);
-  color: var(--theme-purple-lighter);
-}
-
 /* Unified results button */
 .board-container .overlay-content .results-btn {
   padding: var(--spacing-sm) var(--spacing-xl);

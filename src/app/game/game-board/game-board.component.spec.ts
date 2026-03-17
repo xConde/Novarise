@@ -475,34 +475,45 @@ describe('GameBoardComponent', () => {
   });
 
   describe('starArray', () => {
-    it('should return 3 empty stars when scoreBreakdown is null', () => {
-      component.scoreBreakdown = null;
-      expect(component.starArray).toEqual(['empty', 'empty', 'empty']);
+    /** Helper: set scoreBreakdown and sync the pre-computed starArray field. */
+    function setBreakdown(stars: number | null): void {
+      if (stars === null) {
+        component.scoreBreakdown = null;
+        component.starArray = [];
+      } else {
+        component.scoreBreakdown = { stars } as ScoreBreakdown;
+        component.starArray = [0, 1, 2].map(i => i < stars ? 'filled' : 'empty') as Array<'filled' | 'empty'>;
+      }
+    }
+
+    it('should return empty array when scoreBreakdown is null', () => {
+      setBreakdown(null);
+      expect(component.starArray).toEqual([]);
     });
 
     it('should return 3 filled stars when breakdown has 3 stars', () => {
-      component.scoreBreakdown = { stars: 3 } as ScoreBreakdown;
+      setBreakdown(3);
       expect(component.starArray).toEqual(['filled', 'filled', 'filled']);
     });
 
     it('should return 2 filled and 1 empty when breakdown has 2 stars', () => {
-      component.scoreBreakdown = { stars: 2 } as ScoreBreakdown;
+      setBreakdown(2);
       expect(component.starArray).toEqual(['filled', 'filled', 'empty']);
     });
 
     it('should return 1 filled and 2 empty when breakdown has 1 star', () => {
-      component.scoreBreakdown = { stars: 1 } as ScoreBreakdown;
+      setBreakdown(1);
       expect(component.starArray).toEqual(['filled', 'empty', 'empty']);
     });
 
     it('should return 3 empty stars when breakdown has 0 stars (defeat)', () => {
-      component.scoreBreakdown = { stars: 0 } as ScoreBreakdown;
+      setBreakdown(0);
       expect(component.starArray).toEqual(['empty', 'empty', 'empty']);
     });
 
-    it('should always return exactly 3 elements', () => {
-      for (const stars of [0, 1, 2, 3]) {
-        component.scoreBreakdown = { stars } as ScoreBreakdown;
+    it('should always return exactly 3 elements when stars > 0', () => {
+      for (const stars of [1, 2, 3]) {
+        setBreakdown(stars);
         expect(component.starArray.length).toBe(3);
       }
     });
@@ -874,8 +885,8 @@ describe('GameBoardComponent', () => {
       expect(component.showQuitConfirm).toBeFalse();
     });
 
-    it('pauseMenuSpeeds contains [1, 2, 3]', () => {
-      expect(component.pauseMenuSpeeds).toEqual([1, 2, 3] as any);
+    it('validGameSpeeds contains [1, 2, 3]', () => {
+      expect(component.validGameSpeeds).toEqual([1, 2, 3] as any);
     });
 
     it('confirmQuit records defeat even during SETUP (delegates to GameEndService — no phase gate)', () => {

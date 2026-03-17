@@ -169,7 +169,7 @@
     </button>
     <div class="speed-controls">
       <button
-        *ngFor="let s of [1, 2, 3]"
+        *ngFor="let s of validGameSpeeds"
         class="control-btn speed-btn"
         [class.active]="gameSpeed === s"
         (click)="setSpeed(s)"
@@ -342,7 +342,7 @@
         <div class="pause-setting">
           <span class="pause-setting__label">Speed</span>
           <div class="pause-speed-btns">
-            <button *ngFor="let speed of pauseMenuSpeeds"
+            <button *ngFor="let speed of validGameSpeeds"
                     class="pause-speed-btn"
                     [class.pause-speed-btn--active]="gameState.gameSpeed === speed"
                     (click)="setSpeed(speed)">
