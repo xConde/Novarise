@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, VALID_GAME_SPEEDS } from '../models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_GAME_SPEEDS } from '../models/game-state.model';
 import { GameModifier, ModifierEffects, mergeModifierEffects, calculateModifierScoreMultiplier } from '../models/game-modifier.model';
 
 @Injectable()
@@ -38,8 +38,7 @@ export class GameStateService {
   /** Awards wave gold/score, transitions to INTERMISSION (or VICTORY on final wave). No-op if not in COMBAT phase. Endless mode never triggers VICTORY; updates `highestWave` instead. */
   completeWave(reward: number): void {
     if (this.state.phase !== GamePhase.COMBAT) return;
-    this.state.gold += reward;
-    this.state.score += reward;
+    this.addGoldAndScore(reward);
 
     if (this.state.isEndless) {
       // In endless mode, track highest wave reached and never trigger VICTORY
@@ -61,18 +60,46 @@ export class GameStateService {
     this.emit();
   }
 
-  /** Deducts lives by `amount` (default 1). Triggers DEFEAT when lives reach 0. No-op during VICTORY or DEFEAT. */
+  /** Deducts lives by `amount` (default 1). Triggers DEFEAT when lives reach 0. Resets the leak streak. No-op during VICTORY or DEFEAT. */
   loseLife(amount: number = 1): void {
     if (this.state.phase === GamePhase.VICTORY || this.state.phase === GamePhase.DEFEAT) return;
     this.state.lives = Math.max(0, this.state.lives - amount);
+    this.state.consecutiveWavesWithoutLeak = 0;
     if (this.state.lives <= 0) {
       this.state.phase = GamePhase.DEFEAT;
     }
     this.emit();
   }
 
-  /** Adds gold and score by the same amount. Use for kill rewards and interest payouts. */
+  /**
+   * Increments the no-leak streak counter and awards a streak bonus.
+   * Call this when a wave completes with zero leaks.
+   * Bonus gold = STREAK_BONUS_PER_WAVE * consecutiveWavesWithoutLeak (after increment).
+   * Returns the gold bonus awarded (0 if not in COMBAT phase).
+   */
+  addStreakBonus(): number {
+    if (this.state.phase !== GamePhase.COMBAT) return 0;
+    this.state.consecutiveWavesWithoutLeak++;
+    const bonus = STREAK_BONUS_PER_WAVE * this.state.consecutiveWavesWithoutLeak;
+    this.state.gold += bonus;
+    this.state.score += bonus;
+    this.emit();
+    return bonus;
+  }
+
+  /** Returns the current no-leak streak count. */
+  getStreak(): number {
+    return this.state.consecutiveWavesWithoutLeak;
+  }
+
+  /** Adds gold only. Use for sell refunds (should not count toward score). */
   addGold(amount: number): void {
+    this.state.gold += amount;
+    this.emit();
+  }
+
+  /** Adds to both gold and score. Use for kill rewards, wave rewards, and interest payouts. */
+  addGoldAndScore(amount: number): void {
     this.state.gold += amount;
     this.state.score += amount;
     this.emit();
@@ -91,9 +118,7 @@ export class GameStateService {
       INTEREST_CONFIG.maxPayout
     );
     if (interest > 0) {
-      this.state.gold += interest;
-      this.state.score += interest;
-      this.emit();
+      this.addGoldAndScore(interest);
     }
     return interest;
   }
@@ -118,9 +143,9 @@ export class GameStateService {
     this.emit();
   }
 
-  /** Toggles pause state. No-op outside of COMBAT phase. */
+  /** Toggles pause state. No-op outside of COMBAT and INTERMISSION phases. */
   togglePause(): void {
-    if (this.state.phase !== GamePhase.COMBAT) return;
+    if (this.state.phase !== GamePhase.COMBAT && this.state.phase !== GamePhase.INTERMISSION) return;
     this.state.isPaused = !this.state.isPaused;
     this.emit();
   }
@@ -171,6 +196,17 @@ export class GameStateService {
   addElapsedTime(seconds: number): void {
     if (this.state.phase !== GamePhase.COMBAT) return;
     this.state.elapsedTime += seconds;
+    this.emit();
+  }
+
+  /**
+   * Overrides the maximum wave count for the current session (e.g., a campaign level with fewer or more waves than the default 10).
+   * Only applies during SETUP phase before wave 1 to prevent mid-game confusion.
+   * Also updates WaveService via the consumer — call `waveService.setCustomWaves()` first so maxWaves stays in sync.
+   */
+  setMaxWaves(count: number): void {
+    if (this.state.phase !== GamePhase.SETUP || this.state.wave !== 0) return;
+    this.state.maxWaves = count;
     this.emit();
   }
 

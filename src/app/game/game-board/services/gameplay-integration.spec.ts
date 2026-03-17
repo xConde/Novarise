@@ -4,7 +4,9 @@ import * as THREE from 'three';
 import { GameStateService } from './game-state.service';
 import { WaveService } from './wave.service';
 import { EnemyService } from './enemy.service';
+import { PathfindingService } from './pathfinding.service';
 import { TowerCombatService } from './tower-combat.service';
+import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
 import { GameStatsService } from './game-stats.service';
 import { GameBoardService } from '../game-board.service';
@@ -49,6 +51,7 @@ describe('Gameplay Integration', () => {
   let waveService: WaveService;
   let enemyService: EnemyService;
   let towerCombatService: TowerCombatService;
+  let combatVFXService: CombatVFXService;
   let gameStatsService: GameStatsService;
   let gameBoardService: GameBoardService;
   let audioService: AudioService;
@@ -59,8 +62,11 @@ describe('Gameplay Integration', () => {
       providers: [
         GameStateService,
         WaveService,
+        PathfindingService,
         EnemyService,
         TowerCombatService,
+        CombatVFXService,
+
         StatusEffectService,
         GameStatsService,
         GameBoardService,
@@ -72,6 +78,7 @@ describe('Gameplay Integration', () => {
     waveService = TestBed.inject(WaveService);
     enemyService = TestBed.inject(EnemyService);
     towerCombatService = TestBed.inject(TowerCombatService);
+    combatVFXService = TestBed.inject(CombatVFXService);
     gameStatsService = TestBed.inject(GameStatsService);
     gameBoardService = TestBed.inject(GameBoardService);
     audioService = TestBed.inject(AudioService);

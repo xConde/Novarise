@@ -44,18 +44,34 @@
     </section>
 
     <section class="achievements-section">
-      <h2 class="achievements-title">Achievements <span class="achievements-count">{{ unlockedCount }} / {{ allAchievements.length }} Unlocked</span></h2>
-      <div class="achievements-grid">
+      <h2 class="achievements-title">
+        Achievements
+        <span class="achievements-count">{{ unlockedCount }} / {{ allAchievements.length }} Unlocked</span>
+      </h2>
+
+      <div class="achievement-categories">
         <div
-          *ngFor="let achievement of allAchievements"
-          class="achievement-card"
-          [class.unlocked]="isUnlocked(achievement.id)"
-          [class.locked]="!isUnlocked(achievement.id)"
+          *ngFor="let group of categoryGroups"
+          class="achievement-category"
         >
-          <span class="achievement-icon">{{ isUnlocked(achievement.id) ? '&#127942;' : '&#128274;' }}</span>
-          <span class="achievement-name">{{ achievement.name }}</span>
-          <span class="achievement-hint" *ngIf="!isUnlocked(achievement.id)">How to unlock:</span>
-          <span class="achievement-desc">{{ achievement.description }}</span>
+          <div class="category-header">
+            <h3 class="category-name">{{ group.label }}</h3>
+            <span class="category-count">{{ group.unlockedCount }} / {{ group.achievements.length }}</span>
+          </div>
+
+          <div class="achievements-grid">
+            <div
+              *ngFor="let achievement of group.achievements"
+              class="achievement-card"
+              [class.unlocked]="isUnlocked(achievement.id)"
+              [class.locked]="!isUnlocked(achievement.id)"
+            >
+              <span class="achievement-icon">{{ isUnlocked(achievement.id) ? '&#127942;' : '&#128274;' }}</span>
+              <span class="achievement-name">{{ achievement.name }}</span>
+              <span class="achievement-hint" *ngIf="!isUnlocked(achievement.id)">How to unlock:</span>
+              <span class="achievement-desc">{{ achievement.description }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>

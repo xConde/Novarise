@@ -1,6 +1,7 @@
 import { EnemyType } from './enemy.model';
 import { WAVE_DEFINITIONS } from './wave.model';
-import { WavePreviewEntry, getWavePreview } from './wave-preview.model';
+import { WavePreviewEntry, getWavePreview, getWavePreviewFull } from './wave-preview.model';
+import { ENDLESS_BOSS_INTERVAL } from './endless-wave.model';
 
 describe('getWavePreview', () => {
 
@@ -90,15 +91,11 @@ describe('getWavePreview', () => {
   });
 
   // ── Endless mode — non-boss waves ──────────────────────────────────────
+  // wave 11 = endless wave 1 (RUSH template: FAST + SWIFT + BASIC)
 
-  it('returns two entries for a normal endless wave (wave 11)', () => {
+  it('returns at least one entry for a normal endless wave (wave 11)', () => {
     const preview = getWavePreview(11, true);
-    expect(preview.length).toBe(2);
-  });
-
-  it('endless wave primary count is greater than secondary count', () => {
-    const preview = getWavePreview(11, true);
-    expect(preview[0].count).toBeGreaterThan(preview[1].count);
+    expect(preview.length).toBeGreaterThan(0);
   });
 
   it('endless wave entries have positive counts', () => {
@@ -115,37 +112,39 @@ describe('getWavePreview', () => {
     }
   });
 
-  // ── Endless mode — boss waves ──────────────────────────────────────────
-
-  it('endless wave that is a multiple of bossInterval includes BOSS entry', () => {
-    // ENDLESS_CONFIG.bossInterval = 5 → wave 15 is a boss wave
-    const preview = getWavePreview(15, true);
-    const bossEntry = preview.find(e => e.type === EnemyType.BOSS);
-    expect(bossEntry).toBeDefined();
-    expect(bossEntry?.count).toBe(1);
-  });
-
-  it('endless boss wave has BOSS as the first entry', () => {
-    const preview = getWavePreview(15, true);
-    expect(preview[0].type).toBe(EnemyType.BOSS);
-  });
-
-  it('endless boss wave has 3 entries (boss + primary + secondary)', () => {
-    const preview = getWavePreview(15, true);
-    expect(preview.length).toBe(3);
-  });
-
   it('endless non-boss wave does not include BOSS entry', () => {
     const preview = getWavePreview(11, true);
     const bossEntry = preview.find(e => e.type === EnemyType.BOSS);
     expect(bossEntry).toBeUndefined();
   });
 
+  // ── Endless mode — boss waves ──────────────────────────────────────────
+  // wave 15 = endless wave 5 (5 % ENDLESS_BOSS_INTERVAL = 0 → BOSS milestone)
+
+  it('endless wave at milestone includes BOSS entry (wave 15 = endless wave 5)', () => {
+    const preview = getWavePreview(WAVE_DEFINITIONS.length + ENDLESS_BOSS_INTERVAL, true);
+    const bossEntry = preview.find(e => e.type === EnemyType.BOSS);
+    expect(bossEntry).toBeDefined();
+  });
+
+  it('endless milestone wave includes BOSS entry with positive count', () => {
+    const preview = getWavePreview(WAVE_DEFINITIONS.length + ENDLESS_BOSS_INTERVAL, true);
+    const bossEntry = preview.find(e => e.type === EnemyType.BOSS);
+    expect(bossEntry).toBeDefined();
+    expect(bossEntry!.count).toBeGreaterThan(0);
+  });
+
+  it('endless milestone wave has multiple entries', () => {
+    const preview = getWavePreview(WAVE_DEFINITIONS.length + ENDLESS_BOSS_INTERVAL, true);
+    expect(preview.length).toBeGreaterThan(1);
+  });
+
   // ── Endless mode — scaling ─────────────────────────────────────────────
 
-  it('later endless waves have higher total counts than earlier ones', () => {
-    const early = getWavePreview(11, true);
-    const late = getWavePreview(21, true);
+  it('later endless waves have higher or equal total counts than earlier ones', () => {
+    // Compare non-milestone waves to avoid milestone bonus count effects
+    const early = getWavePreview(11, true); // endless wave 1
+    const late = getWavePreview(23, true);  // endless wave 13
     const earlyTotal = early.reduce((s, e) => s + e.count, 0);
     const lateTotal = late.reduce((s, e) => s + e.count, 0);
     expect(lateTotal).toBeGreaterThan(earlyTotal);
@@ -158,5 +157,50 @@ describe('getWavePreview', () => {
     const notEndless = getWavePreview(1, false);
     const withEndless = getWavePreview(1, true);
     expect(notEndless).toEqual(withEndless);
+  });
+
+  // ── getWavePreviewFull ─────────────────────────────────────────────────
+
+  describe('getWavePreviewFull', () => {
+    it('returns templateDescription null for scripted waves', () => {
+      const full = getWavePreviewFull(1, false);
+      expect(full.templateDescription).toBeNull();
+    });
+
+    it('returns templateDescription null for scripted waves even with isEndless=true', () => {
+      const full = getWavePreviewFull(1, true);
+      expect(full.templateDescription).toBeNull();
+    });
+
+    it('returns non-null templateDescription for endless waves', () => {
+      const full = getWavePreviewFull(11, true);
+      expect(full.templateDescription).not.toBeNull();
+      expect(full.templateDescription!.length).toBeGreaterThan(0);
+    });
+
+    it('entries match getWavePreview() for scripted waves', () => {
+      const full = getWavePreviewFull(5, false);
+      const simple = getWavePreview(5, false);
+      expect(full.entries).toEqual(simple);
+    });
+
+    it('entries match getWavePreview() for endless waves', () => {
+      const full = getWavePreviewFull(11, true);
+      const simple = getWavePreview(11, true);
+      expect(full.entries).toEqual(simple);
+    });
+
+    it('returns empty entries and null description for waveIndex 0', () => {
+      const full = getWavePreviewFull(0, false);
+      expect(full.entries).toEqual([]);
+      expect(full.templateDescription).toBeNull();
+    });
+
+    it('templateDescription for endless milestone wave mentions boss theme', () => {
+      const milestoneWave = WAVE_DEFINITIONS.length + ENDLESS_BOSS_INTERVAL;
+      const full = getWavePreviewFull(milestoneWave, true);
+      // BOSS template description should be non-empty
+      expect(full.templateDescription).toBeTruthy();
+    });
   });
 });

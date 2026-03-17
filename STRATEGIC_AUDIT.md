@@ -1,14 +1,14 @@
 # Strategic Audit — 2026-03-03 (header state as of initial audit; see red team sections for current state)
 
-## Current State (as of 2026-03-15)
+## Current State (as of 2026-03-16)
 
-**Stack:** Angular 15 + Three.js | 1771/1771 tests passing | Karma + headless Chrome
-**Four routes:** Landing (`/`), Map Editor (`/edit`), Map Select (`/maps`), Game (`/play`, guarded)
+**Stack:** Angular 15 + Three.js | 2600+ tests passing | Karma + headless Chrome
+**Six routes:** Landing (`/`), Campaign (`/campaign`), Map Editor (`/edit`), Map Select (`/maps`), Game (`/play`, guarded), Profile (`/profile`)
 **Core loop:** 6 tower types (Basic, Sniper, Splash, Slow, Chain, Mortar), 8 enemy types, 10 waves + endless, 4 difficulties, 8 modifiers
 **Combat:** A* pathfinding, spatial grid, object pool, status effects (SLOW/BURN/POISON), L3 specialization branching
 **Visuals:** Bloom, vignette, skybox, particles, custom tower meshes, health bars, status effect tinting
 **Editor:** 4 terrain types, brush/fill/rectangle tools, undo/redo, save/load/export, mobile joystick, path validation
-**Progression:** Per-map best scores + star ratings, player profile, 8 achievements, wave income feedback
+**Progression:** 16-level campaign, per-map challenges, 26 achievements (4 categories), tutorial, enemy encyclopedia, wave income feedback
 
 ---
 
@@ -831,3 +831,121 @@ All interaction paths verified: SETUP tower placement unblocked, wave-btn pointe
 - [x] Step 2: Full test suite green (1925/1925)
 - [x] Step 3: Production build passes — CSS 39.31kb (below 40kb error budget)
 - [x] Step 4: Push to remote (00a8a94..f669dd1)
+
+---
+
+## Sprint History — feat/product-campaign (15 sprints, merged 2026-03-16)
+
+- **Sprint 1:** Campaign data model + service — `CampaignLevel`, `CampaignProgress`, `CampaignService`, `/campaign` route, `CampaignModule`
+- **Sprint 2:** Campaign level select UI — lock/unlock states, star ratings, progress bar, next-level navigation
+- **Sprint 3:** Intro campaign maps 1–4 — First Light, The Bend, Serpentine, The Fork (10×10, single spawner)
+- **Sprint 4:** Early campaign maps 5–8 — Twin Gates, Open Ground, The Narrows, Crystal Maze (10×10–12×12, dual spawner)
+- **Sprint 5:** Mid campaign maps 9–12 — Crossfire, The Spiral, Siege, Labyrinth (12×12–15×15, 2–3 spawners)
+- **Sprint 6:** Late/endgame campaign maps 13–16 — Fortress, Gauntlet, Storm, Novarise (15×15–20×20, 2–4 spawners)
+- **Sprint 7:** Custom wave definitions per map — `campaign-waves.ts` with 6–12 waves per level, tier-appropriate enemy rosters, `CampaignMapService` bridge
+- **Sprint 8:** Enhanced endless mode — 7 wave templates, boss milestones at waves 5/10/15/20, score streaks, `endless-wave.model.ts`
+- **Sprint 9:** Tutorial system — 5-step onboarding overlay, localStorage persistence, `TutorialService` injected into `GameBoardComponent`
+- **Sprint 10:** Enemy encyclopedia + wave preview enhancement — `EnemyInfo` model, E-key panel toggle, NEW badges for first-encounter enemies in wave preview
+- **Sprint 11:** Per-map challenge modes — 32 challenges across 16 maps, 6 `ChallengeType` variants (NoDamage, SpeedRun, LimitedTowers, GoldEfficiency, PerfectWaves, NoSlow), `ChallengeEvaluatorService`
+- **Sprint 12:** Achievement expansion — 8 → 26 achievements across 4 categories (Combat, Campaign, Endless, Challenge), profile UI updated
+- **Sprint 13:** Balance verification — 69 test assertions in `balance.spec.ts` codifying game economics across all campaign maps
+- **Sprint 14:** Campaign integration polish — next-level flow, completion state, progress display on landing page
+- **Sprint 15:** Documentation + final verification — ARCHITECTURE.md and STRATEGIC_AUDIT.md updated, full test suite verified
+- **Test count:** 1835 → 2600+ tests
+
+---
+
+## Red Team Critique — 2026-03-16
+
+### Finding 1: `recordMapScore` silently drops best stars on score regression (HIGH)
+**Location:** `player-profile.service.ts:413-425`
+**Risk:** A player 3-stars a map on replay with a slightly lower score. The entire update is skipped because the gate is `score > existing.bestScore`. The `Math.max(stars, existing.bestStars)` on line 419 only fires when the score gate passes. The 3-star result is permanently lost. This directly breaks the star-gated campaign unlock system (levels 9, 13, 15 require 12/24/30 total stars). A player could earn 3 stars repeatedly and never have them counted.
+**Fix:** Split the update into two independent checks: update `bestScore` when score improves, update `bestStars` when stars improve. Both can fire independently. Save once if either changed.
+
+### Finding 2: `challenger_all` achievement threshold is 16 but there are 41 challenges (MEDIUM)
+**Location:** `player-profile.service.ts:304-310`
+**Risk:** `condition: (p) => p.completedChallengeCount >= ALL_CAMPAIGN_MAP_COUNT` uses `ALL_CAMPAIGN_MAP_COUNT = 16`. But `CAMPAIGN_CHALLENGES` defines 41 total challenges across 16 maps. The "Challenge Master: Complete all challenges" achievement fires at 39% completion. Additionally, `completedChallengeCount` increments on every `recordChallengeCompleted()` call with no deduplication — completing the same challenge twice counts double.
+**Fix:** Replace threshold with actual challenge count from `CAMPAIGN_CHALLENGES`. Add dedup guard using a `Set<string>` of completed challenge IDs instead of a raw counter.
+
+### Finding 3: `countThreeStarMaps` counts non-campaign maps toward "Flawless" achievement (MEDIUM)
+**Location:** `player-profile.service.ts:114-116, 231-233`
+**Risk:** `countThreeStarMaps` iterates all `mapScores`, not just campaign maps. A player who 1-stars all 16 campaign levels and 3-stars 16 custom/freeplay maps satisfies the "Flawless" achievement without 3-starring any campaign map. The adjacent `totalCampaignStars` function already correctly filters by `mapId.startsWith('campaign_')`.
+**Fix:** Add a `countThreeStarCampaignMaps` function that filters by campaign prefix, use it in the `three_star_all` condition.
+
+---
+
+## Sprint History — feat/product-campaign tech debt (16 sprints, 2026-03-16)
+
+### Phase 1: God Component Extraction (Sprints 1-4 + Keystone 5)
+- S1: GameEndService — unified 3 recording paths, -141 lines from component
+- S2: ChallengeTrackingService — moved 3 challenge tracking fields
+- S3: GameSessionService — wrapped restart + campaign wave orchestration
+- S4: Deduplicated 3 method pairs + extracted shared importBoard()
+- Keystone 5: Component 2892→2714 (-178)
+
+### Phase 2: Oversized Service Breakdown (Sprints 6-9 + Keystone 10)
+- S6: PathfindingService from EnemyService (1007→803)
+- S7: CombatVFXService from TowerCombatService (898→783)
+- S8: Achievement model from PlayerProfileService (536→257)
+- S9: AudioService decoupled from SettingsService + TowerCombatService
+- Keystone 10: All service LOCs verified
+
+### Phase 3: DI & Lifecycle Fixes (Sprints 11-14 + Keystone 15)
+- S11: Editor services scoped to EditorModule (no more root leaks)
+- S12: TutorialService resetCurrentStep() on game restart
+- S13: Modifier propagation centralized (services read from GameStateService)
+- S14: Gold/score separation (sell refund no longer inflates score)
+
+### Phase 4: Scene & Interaction Extraction (Sprints 16-17 + Keystone 19)
+- S16: SceneService — Three.js infrastructure extracted (459 LOC)
+- S17: TowerInteractionService — place/sell/upgrade business logic (252 LOC)
+- Keystone 19: Component 2892→2314 (-578), 8 new services, 3024 tests
+
+Test count: 2756 → 3024 (+268 tests)
+
+---
+
+## Red Team Critique — 2026-03-16 (Tech Debt Extractions)
+
+### Finding 1: `slowApplicationCount` not reset on game restart — cross-session stat inflation (MEDIUM)
+**Location:** `status-effect.service.ts:210`, `game-session.service.ts:38-47`
+**Risk:** `StatusEffectService.slowApplicationCount` survives `resetAllServices()` because StatusEffectService is not reset by GameSessionService. `cleanup()` is called inside `TowerCombatService.cleanup()` which runs via the component's `cleanupGameObjects()`, NOT through GameSessionService. On game restart, slow applications from run 1 accumulate into run 2's achievement tracking. The `slow_and_steady` achievement (1000 applications) fires early across sessions.
+**Fix:** Add `this.statusEffectService.cleanup()` to `GameSessionService.resetAllServices()`, or ensure `slowApplicationCount` is reset to 0 in the existing `cleanup()` method. Verify `cleanup()` zeroes the counter.
+
+### Finding 2: `completeWave()` and `awardInterest()` bypass `addGoldAndScore()` — inline mutation (LOW)
+**Location:** `game-state.service.ts:completeWave()`, `awardInterest()`
+**Risk:** Both methods directly mutate `state.gold += amount; state.score += amount` instead of calling `addGoldAndScore()`. If `addGoldAndScore()` ever gains side effects (audit log, modifier cap, event emission), these two paths silently bypass them. No bug today, but a future maintenance trap.
+**Fix:** Refactor both methods to call `addGoldAndScore(amount)` instead of inline mutation.
+
+### Finding 3: `TowerInteractionService.wouldBlockPath()` doesn't actually check path blocking (LOW)
+**Location:** `tower-interaction.service.ts:115-124`
+**Risk:** Method checks tile type/occupancy, not path-blocking BFS. The component uses it to decide whether to show the "path blocked" warning. For tiles that fail `canPlaceTower()` due to actual path blocking, the warning may not fire if the tile also fails the occupancy check first. The method name is misleading.
+**Fix:** Either rename to `isValidEmptyTile()` or replace with a call to `GameBoardService.wouldBlockPath()`.
+
+---
+
+## Deployment Checklist
+
+- [x] Step 1: Convention check — console.log/warn (0 new), no TODO/FIXME, no magic numbers in new files
+- [x] Step 2: Full test suite green (3027/3027)
+- [x] Step 3: Production build passes — CSS 35.82kb (below 40kb error budget)
+- [x] Step 4: Push to remote and update PR #24
+
+---
+
+## Red Team Critique — 2026-03-16 (Tutorial Spotlight)
+
+### Finding 1: `tutorial-target-highlight` uses `!important` on outline — stomps focus-visible rings (MEDIUM)
+**Location:** `styles.css` — `.tutorial-target-highlight` rule
+**Risk:** `outline: 3px solid ... !important` overrides `:focus-visible` outlines on the highlighted element. During the SELECT_TOWER step, if a keyboard user tabs to a tower button within `.tower-selection`, their focus ring is invisible because the tutorial highlight outline takes precedence. When the highlight is removed (step advance), the focus ring returns — but during that step, keyboard users lose their primary navigation cue.
+**Fix:** Use `box-shadow` for the tutorial highlight instead of `outline`, leaving `outline` free for focus-visible. Or scope the `!important` to only apply when `:not(:focus-visible)`.
+
+### Finding 2: `applyTutorialHighlight` uses raw `document.querySelector` — Angular anti-pattern (LOW)
+**Location:** `game-board.component.ts:1748`
+**Risk:** Queries the global DOM, not the component's view. If another component on the page has a matching selector (unlikely since routes are exclusive, but possible during transitions), the wrong element gets highlighted. Also makes the component harder to test in isolation — tests must append mock elements to `document.body`.
+**Fix:** Acceptable trade-off. `@ViewChild` can't target dynamically-determined selectors. Document the limitation inline.
+
+### Finding 3: Campaign scroll fix depends on parent flex context (LOW)
+**Location:** `campaign.component.scss:10`, `styles.css:208-212`
+**Risk:** `height: 100%` on `.campaign-container` requires the parent (`app-campaign`) to have a constrained height. The fix added `app-campaign { flex: 1; overflow: hidden; }` which works IF the app root is a flex column. If the app layout changes (e.g., a wrapping div is added), the scroll breaks silently.
+**Fix:** Add a comment documenting the flex chain dependency. Consider `height: 100vh` as a more robust fallback.

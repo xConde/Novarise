@@ -1,7 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { EnemyService, DamageResult } from './enemy.service';
+import { PathfindingService } from './pathfinding.service';
+import { GameStateService } from './game-state.service';
 import { TowerCombatService } from './tower-combat.service';
+import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
 import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
@@ -19,7 +22,9 @@ describe('Flying Enemy', () => {
 
     TestBed.configureTestingModule({
       providers: [
+        PathfindingService,
         EnemyService,
+        GameStateService,
         { provide: GameBoardService, useValue: spy }
       ]
     });
@@ -213,6 +218,7 @@ describe('Flying Enemy', () => {
     // Slow immunity test requires TowerCombatService
     describe('Slow immunity (TowerCombatService integration)', () => {
       let combatService: TowerCombatService;
+      let combatVFXService: CombatVFXService;
       let enemyServiceForCombat: EnemyService;
       let gameBoardServiceForCombat: jasmine.SpyObj<GameBoardService>;
       let audioServiceSpy: jasmine.SpyObj<AudioService>;
@@ -235,7 +241,9 @@ describe('Flying Enemy', () => {
         TestBed.configureTestingModule({
           providers: [
             TowerCombatService,
+            CombatVFXService,
             StatusEffectService,
+            GameStateService,
             { provide: EnemyService, useValue: enemySpy },
             { provide: GameBoardService, useValue: gameBoardServiceForCombat },
             { provide: AudioService, useValue: audioServiceSpy }
@@ -243,6 +251,7 @@ describe('Flying Enemy', () => {
         });
 
         combatService = TestBed.inject(TowerCombatService);
+        combatVFXService = TestBed.inject(CombatVFXService);
         enemyServiceForCombat = TestBed.inject(EnemyService) as unknown as EnemyService;
         combatScene = new THREE.Scene();
       });

@@ -4,6 +4,7 @@
   <!-- Top-right controls -->
   <div class="top-right-controls">
     <div class="fps-counter">{{ fps }} FPS</div>
+    <button class="encyclopedia-btn" (click)="toggleEncyclopedia()" [class.active]="showEncyclopedia" aria-label="Toggle enemy encyclopedia" [attr.aria-pressed]="showEncyclopedia">E</button>
     <button class="help-btn" (click)="showHelpOverlay = !showHelpOverlay" aria-label="Show keyboard shortcuts">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
     </button>
@@ -36,11 +37,18 @@
       <span class="hud-label">Time</span>
       <span class="hud-value">{{ formattedTime }}</span>
     </div>
+    <span class="hud-level-name" *ngIf="isCampaignGame && currentCampaignLevel" aria-label="Level name">{{ currentCampaignLevel.name }}</span>
   </div>
 
   <!-- Wave status indicator -->
   <div class="hud-wave-status" *ngIf="gameState.phase === GamePhase.COMBAT">
     <span class="wave-enemy-count">{{ enemiesAlive + enemiesToSpawn }}</span> enemies remaining
+    <span
+      *ngIf="gameState.isEndless && currentEndlessTemplate"
+      class="wave-template-badge"
+      aria-label="Current wave type">
+      {{ currentEndlessTemplate }}
+    </span>
   </div>
 
   <!-- Path blocked warning -->
@@ -50,6 +58,24 @@
 
   <!-- Setup panel — right side on desktop, bottom sheet on mobile -->
   <div class="setup-panel" *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0">
+    <div class="campaign-level-info" *ngIf="isCampaignGame && currentCampaignLevel">
+      <span class="campaign-level-info__number">Level {{ currentCampaignLevel.number }}</span>
+      <span class="campaign-level-info__name">{{ currentCampaignLevel.name }}</span>
+      <span class="campaign-level-info__tier">{{ currentCampaignLevel.tier | uppercase }}</span>
+      <span class="campaign-level-info__waves">{{ currentCampaignLevel.waveCount }} waves</span>
+    </div>
+    <div class="campaign-challenges-preview" *ngIf="isCampaignGame && campaignChallenges.length > 0">
+      <h4 class="campaign-challenges-preview__title">Challenges</h4>
+      <div class="campaign-challenges-preview__list">
+        <div *ngFor="let challenge of campaignChallenges"
+             class="challenge-preview-item"
+             [class.challenge-preview-item--completed]="isChallengeAlreadyCompleted(challenge.id)">
+          <span class="challenge-preview-item__name">{{ challenge.name }}</span>
+          <span class="challenge-preview-item__desc">{{ challenge.description }}</span>
+          <span class="challenge-preview-item__bonus">+{{ challenge.scoreBonus }}</span>
+        </div>
+      </div>
+    </div>
     <span class="setup-section-label">Difficulty</span>
     <div class="setup-difficulty-grid">
       <button
@@ -63,7 +89,7 @@
       </button>
     </div>
 
-    <label class="setup-endless">
+    <label class="setup-endless" *ngIf="!isCampaignGame">
       <input type="checkbox" [checked]="gameState.isEndless" (change)="toggleEndless()">
       <span>Endless Mode</span>
     </label>
@@ -100,15 +126,24 @@
     </div>
     <div class="wave-preview-header">
       Wave {{ gameState.wave + 1 }}
+      <span
+        *ngIf="waveTemplateDescription"
+        class="wave-template-description"
+        aria-label="Wave type">
+        {{ waveTemplateDescription }}
+      </span>
     </div>
     <ul class="wave-preview-list" *ngIf="wavePreview.length > 0">
       <li
         *ngFor="let entry of wavePreview"
         class="wave-preview-entry"
         [attr.data-type]="entry.type.toLowerCase()">
-        <span class="enemy-dot" [attr.data-type]="entry.type.toLowerCase()"></span>
+        <span
+          class="enemy-dot wave-preview-dot"
+          [attr.data-type]="entry.type.toLowerCase()"></span>
         <span class="enemy-count">{{ entry.count }}x</span>
         <span class="enemy-label">{{ entry.label }}</span>
+        <span class="wave-preview-new" *ngIf="isNewEnemyType(entry.type)">NEW</span>
       </li>
     </ul>
     <button
@@ -134,7 +169,7 @@
     </button>
     <div class="speed-controls">
       <button
-        *ngFor="let s of [1, 2, 3]"
+        *ngFor="let s of validGameSpeeds"
         class="control-btn speed-btn"
         [class.active]="gameSpeed === s"
         (click)="setSpeed(s)"
@@ -166,6 +201,12 @@
     <div class="overlay-content" [class.victory]="gameState.phase === GamePhase.VICTORY" [class.defeat]="gameState.phase === GamePhase.DEFEAT">
       <h2 *ngIf="gameState.phase === GamePhase.VICTORY">Victory</h2>
       <h2 *ngIf="gameState.phase === GamePhase.DEFEAT">Defeat</h2>
+
+      <!-- Campaign level identity -->
+      <div class="victory-level" *ngIf="isCampaignGame && currentCampaignLevel">
+        <span class="victory-level__label">Level {{ currentCampaignLevel.number }}</span>
+        <span class="victory-level__name">{{ currentCampaignLevel.name }}</span>
+      </div>
 
       <!-- Star rating -->
       <div class="star-display" *ngIf="gameState.phase === GamePhase.VICTORY">
@@ -209,6 +250,19 @@
 
       <p class="final-score" *ngIf="!scoreBreakdown">Score: {{ gameState.score }}</p>
 
+      <!-- Challenge results -->
+      <div class="challenges-result" *ngIf="isCampaignGame && campaignChallenges.length > 0">
+        <h4 class="challenges-result__title">Challenges</h4>
+        <div *ngFor="let challenge of campaignChallenges"
+             class="challenge-result-item"
+             [class.challenge-result-item--passed]="isChallengeCompleted(challenge)"
+             [class.challenge-result-item--failed]="!isChallengeCompleted(challenge)">
+          <span class="challenge-result-item__status">{{ isChallengeCompleted(challenge) ? '✓' : '✗' }}</span>
+          <span class="challenge-result-item__name">{{ challenge.name }}</span>
+          <span class="challenge-result-item__bonus" *ngIf="isChallengeCompleted(challenge)">+{{ challenge.scoreBonus }}</span>
+        </div>
+      </div>
+
       <!-- Newly unlocked achievements -->
       <div class="achievements-unlocked" *ngIf="newlyUnlockedAchievements.length > 0">
         <h3 class="achievements-title">Achievements Unlocked</h3>
@@ -224,8 +278,20 @@
       </div>
 
       <div class="overlay-actions">
-        <button class="restart-btn" (click)="restartGame()">Play Again</button>
-        <button class="edit-map-btn" (click)="goToEditor()">Edit Map</button>
+        <button
+          *ngIf="gameState.phase === GamePhase.VICTORY && isCampaignGame && isNextLevelUnlocked"
+          class="results-btn results-btn--primary"
+          (click)="playNextLevel()">
+          Next: {{ nextCampaignLevel?.name }}
+        </button>
+        <button class="results-btn" (click)="restartGame()">Play Again</button>
+        <button
+          *ngIf="isCampaignGame"
+          class="results-btn results-btn--secondary"
+          (click)="backToCampaign()">
+          Campaign
+        </button>
+        <button class="results-btn results-btn--tertiary" (click)="goToEditor()">Edit Map</button>
       </div>
     </div>
   </div>
@@ -240,10 +306,71 @@
   </div>
 
   <!-- Pause overlay -->
-  <div class="pause-overlay" *ngIf="isPaused && gameState.phase === GamePhase.COMBAT" (click)="togglePause()">
-    <div class="pause-content">
-      <h2 class="pause-title">PAUSED</h2>
-      <p class="pause-hint">Click or press P to resume</p>
+  <div class="pause-overlay" *ngIf="isPaused && (gameState.phase === GamePhase.COMBAT || gameState.phase === GamePhase.INTERMISSION)" (click)="onPauseOverlayClick($event)" role="dialog" aria-modal="true" aria-label="Game paused">
+    <div class="pause-menu" (click)="$event.stopPropagation()">
+      <h2 class="pause-menu__title">PAUSED</h2>
+
+      <!-- Game stats summary -->
+      <div class="pause-menu__stats">
+        <div class="pause-stat">
+          <span class="pause-stat__label">Wave</span>
+          <span class="pause-stat__value" *ngIf="!gameState.isEndless">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
+          <span class="pause-stat__value" *ngIf="gameState.isEndless">{{ gameState.wave }}</span>
+        </div>
+        <div class="pause-stat">
+          <span class="pause-stat__label">Score</span>
+          <span class="pause-stat__value">{{ gameState.score }}</span>
+        </div>
+        <div class="pause-stat">
+          <span class="pause-stat__label">Lives</span>
+          <span class="pause-stat__value">{{ gameState.lives }}</span>
+        </div>
+        <div class="pause-stat">
+          <span class="pause-stat__label">Gold</span>
+          <span class="pause-stat__value">{{ gameState.gold }}</span>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div class="pause-menu__settings" *ngIf="!showQuitConfirm">
+        <div class="pause-setting">
+          <span class="pause-setting__label">Audio</span>
+          <button class="pause-setting__btn" (click)="toggleAudio()">
+            {{ audioMuted ? 'Unmute' : 'Mute' }}
+          </button>
+        </div>
+        <div class="pause-setting">
+          <span class="pause-setting__label">Speed</span>
+          <div class="pause-speed-btns">
+            <button *ngFor="let speed of validGameSpeeds"
+                    class="pause-speed-btn"
+                    [class.pause-speed-btn--active]="gameState.gameSpeed === speed"
+                    (click)="setSpeed(speed)">
+              {{ speed }}x
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Normal actions -->
+      <div class="pause-menu__actions" *ngIf="!showQuitConfirm">
+        <button class="pause-action pause-action--primary" (click)="togglePause()">Resume</button>
+        <button class="pause-action pause-action--quit" (click)="requestQuit()">
+          {{ isCampaignGame ? 'Quit to Campaign' : 'Quit to Menu' }}
+        </button>
+      </div>
+
+      <!-- Quit confirmation -->
+      <div class="pause-menu__quit-confirm" *ngIf="showQuitConfirm">
+        <p class="quit-confirm__text">Quit this game? Progress will be lost.</p>
+        <div class="quit-confirm__actions">
+          <button class="pause-action pause-action--primary" (click)="cancelQuit()">Cancel</button>
+          <button class="pause-action pause-action--quit" (click)="confirmQuit()">Quit</button>
+        </div>
+      </div>
+
+      <p class="pause-menu__auto-hint" *ngIf="autoPaused">Game auto-paused — tab was inactive</p>
+      <p class="pause-menu__hint">P or ESC to resume</p>
     </div>
   </div>
 
@@ -366,6 +493,34 @@
     <span class="mode-hint">Right-click to cancel</span>
   </div>
 
+  <!-- Enemy Encyclopedia -->
+  <div class="encyclopedia-panel" *ngIf="showEncyclopedia" role="dialog" aria-label="Enemy encyclopedia">
+    <div class="encyclopedia-header">
+      <h3>Enemy Types</h3>
+      <button class="encyclopedia-close" (click)="toggleEncyclopedia()" aria-label="Close enemy encyclopedia">&times;</button>
+    </div>
+    <div class="encyclopedia-list">
+      <div class="encyclopedia-entry" *ngFor="let enemy of enemyInfoList">
+        <div
+          class="encyclopedia-entry__color"
+          [style.background-color]="'#' + enemy.color.toString(16).padStart(6, '0')"
+          aria-hidden="true"></div>
+        <div class="encyclopedia-entry__info">
+          <span class="encyclopedia-entry__name">{{ enemy.name }}</span>
+          <span class="encyclopedia-entry__desc">{{ enemy.description }}</span>
+          <div class="encyclopedia-entry__stats">
+            <span>HP: {{ enemy.health }}</span>
+            <span>Spd: {{ enemy.speed }}</span>
+            <span>Gold: {{ enemy.reward }}</span>
+            <span *ngIf="enemy.leakDamage > 1">Leak: {{ enemy.leakDamage }}</span>
+          </div>
+          <span class="encyclopedia-entry__special" *ngIf="enemy.special">{{ enemy.special }}</span>
+          <span class="encyclopedia-entry__immunity" *ngFor="let imm of enemy.immunities">Immune: {{ imm }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Help overlay -->
   <div class="help-overlay" *ngIf="showHelpOverlay" (click)="showHelpOverlay = false">
     <div class="help-content" (click)="$event.stopPropagation()">
@@ -374,17 +529,45 @@
         <span class="key">1-6</span><span>Select tower type</span>
         <span class="key">Space</span><span>Start next wave</span>
         <span class="key">P</span><span>Pause / Resume</span>
+        <span class="key">Escape</span><span>Pause / Resume (or deselect tower)</span>
         <span class="key">R</span><span>Toggle all range rings</span>
         <span class="key">V</span><span>Toggle enemy path</span>
         <span class="key">M</span><span>Toggle minimap</span>
+        <span class="key">E</span><span>Enemy encyclopedia</span>
         <span class="key">U</span><span>Upgrade selected tower</span>
         <span class="key">T</span><span>Cycle targeting mode</span>
         <span class="key">Del</span><span>Sell selected tower</span>
-        <span class="key">Escape</span><span>Deselect tower</span>
         <span class="key">WASD</span><span>Pan camera</span>
         <span class="key">H</span><span>Toggle this help</span>
       </div>
       <p class="help-dismiss">Click anywhere or press H to close</p>
+    </div>
+  </div>
+
+  <!-- Tutorial — non-blocking contextual card -->
+  <app-tutorial-spotlight
+    [step]="currentTutorialStep"
+    [tip]="getTutorialTip()"
+    [stepNumber]="getTutorialStepNumber()"
+    [totalSteps]="getTutorialTotalSteps()"
+    (advance)="advanceTutorial()"
+    (skip)="skipTutorial()">
+  </app-tutorial-spotlight>
+
+  <!-- Toast notifications -->
+  <div class="toast-stack" *ngIf="notifications.length > 0" aria-live="polite">
+    <div
+      *ngFor="let notification of notifications"
+      class="toast"
+      [class.toast--achievement]="notification.type === 'achievement'"
+      [class.toast--challenge]="notification.type === 'challenge'"
+      [class.toast--streak]="notification.type === 'streak'"
+      [class.toast--info]="notification.type === 'info'"
+      (click)="dismissNotification(notification.id)"
+      role="alert"
+    >
+      <span class="toast__title">{{ notification.title }}</span>
+      <span class="toast__message">{{ notification.message }}</span>
     </div>
   </div>
 </div>

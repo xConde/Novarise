@@ -1,44 +1,26 @@
 import { Injectable } from '@angular/core';
 import { MapScoreRecord } from '../models/score.model';
 import { DifficultyLevel } from '../models/game-state.model';
+import {
+  Achievement,
+  AchievementCategory,
+  PlayerProfile,
+  GameEndStats,
+  ACHIEVEMENTS,
+  TOWER_COLLECTOR_TYPE_COUNT,
+} from '../models/achievement.model';
+
+// Re-export everything so existing callers importing from this file continue to work.
+export {
+  Achievement,
+  AchievementCategory,
+  PlayerProfile,
+  GameEndStats,
+  ACHIEVEMENTS,
+  TOWER_COLLECTOR_TYPE_COUNT,
+} from '../models/achievement.model';
 
 const PROFILE_STORAGE_KEY = 'novarise-profile';
-
-// Achievement condition thresholds
-const VETERAN_GAMES_THRESHOLD = 10;
-const GOLD_HOARDER_THRESHOLD = 10_000;
-const EXTERMINATOR_KILLS_THRESHOLD = 1_000;
-const SURVIVOR_WAVE_THRESHOLD = 20;
-const HIGH_SCORER_THRESHOLD = 5_000;
-const DEDICATED_VICTORIES_THRESHOLD = 25;
-
-export interface PlayerProfile {
-  totalGamesPlayed: number;
-  totalVictories: number;
-  totalDefeats: number;
-  totalEnemiesKilled: number;
-  totalGoldEarned: number;
-  highestWaveReached: number;
-  highestScore: number;
-  achievements: string[]; // IDs of unlocked achievements
-  mapScores: Record<string, MapScoreRecord>; // keyed by mapId
-}
-
-export interface Achievement {
-  id: string;
-  name: string;
-  description: string;
-  condition: (profile: PlayerProfile) => boolean;
-}
-
-export interface GameEndStats {
-  isVictory: boolean;
-  score: number;
-  enemiesKilled: number;
-  goldEarned: number;
-  wavesCompleted: number;
-  livesLost: number;
-}
 
 const DEFAULT_PROFILE: PlayerProfile = {
   totalGamesPlayed: 0,
@@ -50,58 +32,13 @@ const DEFAULT_PROFILE: PlayerProfile = {
   highestScore: 0,
   achievements: [],
   mapScores: {},
+  towerKills: {},
+  slowEffectsApplied: 0,
+  hasUsedSpecialization: false,
+  hasPlacedAllTowerTypes: false,
+  maxModifiersUsedInVictory: 0,
+  completedChallengeCount: 0,
 };
-
-export const ACHIEVEMENTS: Achievement[] = [
-  {
-    id: 'first_victory',
-    name: 'First Victory',
-    description: 'Win your first game',
-    condition: (p) => p.totalVictories >= 1,
-  },
-  {
-    id: 'veteran',
-    name: 'Veteran',
-    description: 'Play 10 games',
-    condition: (p) => p.totalGamesPlayed >= VETERAN_GAMES_THRESHOLD,
-  },
-  {
-    id: 'perfectionist',
-    name: 'Perfectionist',
-    description: 'Win without losing any lives',
-    condition: (p) => p.achievements.includes('perfectionist'),
-  },
-  {
-    id: 'gold_hoarder',
-    name: 'Gold Hoarder',
-    description: 'Earn 10,000 total gold',
-    condition: (p) => p.totalGoldEarned >= GOLD_HOARDER_THRESHOLD,
-  },
-  {
-    id: 'exterminator',
-    name: 'Exterminator',
-    description: 'Kill 1,000 enemies',
-    condition: (p) => p.totalEnemiesKilled >= EXTERMINATOR_KILLS_THRESHOLD,
-  },
-  {
-    id: 'survivor',
-    name: 'Survivor',
-    description: 'Reach wave 20 in endless mode',
-    condition: (p) => p.highestWaveReached >= SURVIVOR_WAVE_THRESHOLD,
-  },
-  {
-    id: 'high_scorer',
-    name: 'High Scorer',
-    description: 'Score over 5,000 points',
-    condition: (p) => p.highestScore >= HIGH_SCORER_THRESHOLD,
-  },
-  {
-    id: 'dedicated',
-    name: 'Dedicated',
-    description: 'Win 25 games',
-    condition: (p) => p.totalVictories >= DEDICATED_VICTORIES_THRESHOLD,
-  },
-];
 
 @Injectable({ providedIn: 'root' })
 export class PlayerProfileService {
@@ -112,7 +49,12 @@ export class PlayerProfileService {
   }
 
   getProfile(): PlayerProfile {
-    return { ...this.profile, achievements: [...this.profile.achievements] };
+    return {
+      ...this.profile,
+      achievements: [...this.profile.achievements],
+      towerKills: { ...this.profile.towerKills },
+      mapScores: { ...this.profile.mapScores },
+    };
   }
 
   /**
@@ -139,6 +81,35 @@ export class PlayerProfileService {
       stats.score
     );
 
+    // Merge per-tower kill counts
+    if (stats.towerKills) {
+      for (const [towerType, kills] of Object.entries(stats.towerKills)) {
+        this.profile.towerKills[towerType] =
+          (this.profile.towerKills[towerType] ?? 0) + kills;
+      }
+    }
+
+    // Accumulate slow-effect applications
+    if (stats.slowEffectsApplied != null && stats.slowEffectsApplied > 0) {
+      this.profile.slowEffectsApplied += stats.slowEffectsApplied;
+    }
+
+    // One-way flags
+    if (stats.usedSpecialization) {
+      this.profile.hasUsedSpecialization = true;
+    }
+    if (stats.placedAllTowerTypes) {
+      this.profile.hasPlacedAllTowerTypes = true;
+    }
+
+    // Track max modifiers on a victory
+    if (stats.isVictory && stats.modifierCount != null) {
+      this.profile.maxModifiersUsedInVictory = Math.max(
+        this.profile.maxModifiersUsedInVictory,
+        stats.modifierCount
+      );
+    }
+
     // Perfectionist must be injected into achievements before condition is checked,
     // because its condition reads achievements (self-referential).
     if (stats.isVictory && stats.livesLost === 0) {
@@ -164,16 +135,40 @@ export class PlayerProfileService {
 
   recordMapScore(mapId: string, score: number, stars: number, difficulty: DifficultyLevel): void {
     const existing = this.profile.mapScores[mapId];
-    if (!existing || score > existing.bestScore) {
+    if (!existing) {
       this.profile.mapScores[mapId] = {
         mapId,
         bestScore: score,
-        bestStars: Math.max(stars, existing?.bestStars ?? 0),
+        bestStars: stars,
         difficulty,
         completedAt: Date.now(),
       };
       this.save();
+      return;
     }
+
+    let changed = false;
+
+    if (score > existing.bestScore) {
+      existing.bestScore = score;
+      existing.difficulty = difficulty;
+      existing.completedAt = Date.now();
+      changed = true;
+    }
+
+    if (stars > existing.bestStars) {
+      existing.bestStars = stars;
+      changed = true;
+    }
+
+    if (changed) {
+      this.save();
+    }
+  }
+
+  recordChallengeCompleted(): void {
+    this.profile.completedChallengeCount += 1;
+    this.save();
   }
 
   getMapScore(mapId: string): MapScoreRecord | null {
@@ -193,6 +188,10 @@ export class PlayerProfileService {
     return [...ACHIEVEMENTS];
   }
 
+  getAchievementsByCategory(category: AchievementCategory): Achievement[] {
+    return ACHIEVEMENTS.filter((a) => a.category === category);
+  }
+
   getUnlockedAchievements(): Achievement[] {
     return ACHIEVEMENTS.filter((a) =>
       this.profile.achievements.includes(a.id)
@@ -206,7 +205,12 @@ export class PlayerProfileService {
   }
 
   reset(): void {
-    this.profile = { ...DEFAULT_PROFILE, achievements: [], mapScores: {} };
+    this.profile = {
+      ...DEFAULT_PROFILE,
+      achievements: [],
+      mapScores: {},
+      towerKills: {},
+    };
     try {
       localStorage.removeItem(PROFILE_STORAGE_KEY);
     } catch {
@@ -217,20 +221,29 @@ export class PlayerProfileService {
   private load(): PlayerProfile {
     try {
       const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
-      if (!raw) return { ...DEFAULT_PROFILE, achievements: [], mapScores: {} };
+      if (!raw) return { ...DEFAULT_PROFILE, achievements: [], mapScores: {}, towerKills: {} };
       const parsed = JSON.parse(raw) as Partial<PlayerProfile>;
       return {
         ...DEFAULT_PROFILE,
         ...parsed,
         achievements: Array.isArray(parsed.achievements)
-          ? [...parsed.achievements]
+          ? [...parsed.achievements].slice(0, ACHIEVEMENTS.length + 10)
           : [],
         mapScores: (parsed.mapScores && typeof parsed.mapScores === 'object' && !Array.isArray(parsed.mapScores))
           ? { ...parsed.mapScores as Record<string, MapScoreRecord> }
           : {},
+        // Migration: new fields default if absent from old profiles
+        towerKills: (parsed.towerKills && typeof parsed.towerKills === 'object' && !Array.isArray(parsed.towerKills))
+          ? { ...parsed.towerKills as Record<string, number> }
+          : {},
+        slowEffectsApplied: typeof parsed.slowEffectsApplied === 'number' ? parsed.slowEffectsApplied : 0,
+        hasUsedSpecialization: typeof parsed.hasUsedSpecialization === 'boolean' ? parsed.hasUsedSpecialization : false,
+        hasPlacedAllTowerTypes: typeof parsed.hasPlacedAllTowerTypes === 'boolean' ? parsed.hasPlacedAllTowerTypes : false,
+        maxModifiersUsedInVictory: typeof parsed.maxModifiersUsedInVictory === 'number' ? parsed.maxModifiersUsedInVictory : 0,
+        completedChallengeCount: typeof parsed.completedChallengeCount === 'number' ? parsed.completedChallengeCount : 0,
       };
     } catch {
-      return { ...DEFAULT_PROFILE, achievements: [], mapScores: {} };
+      return { ...DEFAULT_PROFILE, achievements: [], mapScores: {}, towerKills: {} };
     }
   }
 

@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { EnemyService } from './enemy.service';
+import { PathfindingService } from './pathfinding.service';
 import { TowerCombatService } from './tower-combat.service';
+import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
 import { AudioService } from './audio.service';
 import { GameStateService } from './game-state.service';
@@ -29,7 +31,9 @@ describe('EnemyService lifecycle', () => {
 
     TestBed.configureTestingModule({
       providers: [
+        PathfindingService,
         EnemyService,
+        GameStateService,
         { provide: GameBoardService, useValue: spy }
       ]
     });
@@ -94,6 +98,7 @@ describe('EnemyService lifecycle', () => {
 
 describe('TowerCombatService lifecycle', () => {
   let service: TowerCombatService;
+  let combatVFXService: CombatVFXService;
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
   let gameBoardServiceSpy: jasmine.SpyObj<GameBoardService>;
   let audioServiceSpy: jasmine.SpyObj<AudioService>;
@@ -114,7 +119,9 @@ describe('TowerCombatService lifecycle', () => {
     TestBed.configureTestingModule({
       providers: [
         TowerCombatService,
+        CombatVFXService,
         StatusEffectService,
+        GameStateService,
         { provide: EnemyService, useValue: enemyServiceSpy },
         { provide: GameBoardService, useValue: gameBoardServiceSpy },
         { provide: AudioService, useValue: audioServiceSpy }
@@ -122,6 +129,7 @@ describe('TowerCombatService lifecycle', () => {
     });
 
     service = TestBed.inject(TowerCombatService);
+    combatVFXService = TestBed.inject(CombatVFXService);
     scene = new THREE.Scene();
   });
 

@@ -1,7 +1,8 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { EnemyType } from '../models/enemy.model';
-import { WaveDefinition, WaveEntry, WAVE_DEFINITIONS, ENDLESS_CONFIG, ENDLESS_BASE_COUNT, ENDLESS_BASE_SPAWN_INTERVAL, ENDLESS_BASE_REWARD, ENDLESS_REWARD_SCALE_PER_WAVE, ENDLESS_BOSS_COUNT, ENDLESS_BOSS_SPAWN_INTERVAL } from '../models/wave.model';
+import { WaveDefinition, WAVE_DEFINITIONS } from '../models/wave.model';
+import { EndlessWaveTemplate, EndlessWaveResult, generateEndlessWave } from '../models/endless-wave.model';
 import { EnemyService } from './enemy.service';
 
 interface SpawnQueue {
@@ -11,27 +12,48 @@ interface SpawnQueue {
   timeSinceLastSpawn: number;
 }
 
-// Enemy types that cycle in endless waves (excludes BOSS — added separately at intervals)
-const ENDLESS_ENEMY_CYCLE: EnemyType[] = [
-  EnemyType.BASIC,
-  EnemyType.FAST,
-  EnemyType.HEAVY,
-  EnemyType.SWIFT,
-  EnemyType.SHIELDED,
-  EnemyType.SWARM,
-  EnemyType.FLYING
-];
-
 
 @Injectable()
 export class WaveService {
   private waveDefinitions: WaveDefinition[] = WAVE_DEFINITIONS;
+  /** Custom wave definitions set for a specific campaign level. Null means use WAVE_DEFINITIONS. */
+  private customWaves: WaveDefinition[] | null = null;
   private spawnQueues: SpawnQueue[] = [];
   private active = false;
   private currentWaveIndex = -1;
   private endlessMode = false;
+  private currentEndlessResult: EndlessWaveResult | null = null;
 
   constructor(private enemyService: EnemyService) {}
+
+  /**
+   * Overrides wave definitions with a custom set for the current session (e.g., campaign level).
+   * Must be called before `startWave()` for the custom waves to take effect.
+   * Does NOT affect the global WAVE_DEFINITIONS constant.
+   */
+  setCustomWaves(waves: WaveDefinition[]): void {
+    this.customWaves = waves;
+    this.waveDefinitions = waves;
+  }
+
+  /**
+   * Reverts wave definitions to the default WAVE_DEFINITIONS set.
+   * Call from `restartGame()` when returning to non-campaign play.
+   */
+  clearCustomWaves(): void {
+    this.customWaves = null;
+    this.waveDefinitions = WAVE_DEFINITIONS;
+  }
+
+  /** Returns true if custom wave definitions are currently active. */
+  hasCustomWaves(): boolean {
+    return this.customWaves !== null;
+  }
+
+  /** Returns the active wave definitions (custom if set, otherwise default). */
+  getWaveDefinitions(): WaveDefinition[] {
+    return this.waveDefinitions;
+  }
 
   /** Enables or disables endless mode. Must be set before `startWave()` is called for waves beyond WAVE_DEFINITIONS length. */
   setEndlessMode(enabled: boolean): void {
@@ -43,59 +65,27 @@ export class WaveService {
   }
 
   /**
-   * Procedurally generates a WaveDefinition for endless waves (waveNumber > WAVE_DEFINITIONS.length).
-   * waveNumber is the absolute wave number (e.g. 11, 12, ...).
-   *
-   * Scaling rules (all from ENDLESS_CONFIG — no magic numbers here):
-   *   healthMultiplier  = baseHealthMultiplier + healthScalePerWave * (waveNumber - 1)
-   *   speedMultiplier   = baseSpeedMultiplier  + speedScalePerWave  * (waveNumber - 1)
-   *   countMultiplier   = baseCountMultiplier  + countScalePerWave  * (waveNumber - 1)
-   * Boss wave: waveNumber % bossInterval === 0
+   * Returns the template used by the currently active endless wave, or null if not in
+   * an endless wave. Used by the HUD to display the wave type.
    */
-  generateEndlessWave(waveNumber: number): WaveDefinition {
-    const healthMult =
-      ENDLESS_CONFIG.baseHealthMultiplier +
-      ENDLESS_CONFIG.healthScalePerWave * (waveNumber - 1);
-    const speedMult =
-      ENDLESS_CONFIG.baseSpeedMultiplier +
-      ENDLESS_CONFIG.speedScalePerWave * (waveNumber - 1);
-    const countMult =
-      ENDLESS_CONFIG.baseCountMultiplier +
-      ENDLESS_CONFIG.countScalePerWave * (waveNumber - 1);
+  getCurrentEndlessTemplate(): EndlessWaveTemplate | null {
+    return this.currentEndlessResult?.template ?? null;
+  }
 
-    const isBossWave = waveNumber % ENDLESS_CONFIG.bossInterval === 0;
+  /**
+   * Returns the full result of the currently active endless wave generation, or null if
+   * the current wave is a scripted wave.
+   */
+  getCurrentEndlessResult(): EndlessWaveResult | null {
+    return this.currentEndlessResult;
+  }
 
-    // Cycle through enemy types so each endless wave has a different composition
-    const cycleIndex = (waveNumber - 1) % ENDLESS_ENEMY_CYCLE.length;
-    const primaryType = ENDLESS_ENEMY_CYCLE[cycleIndex];
-    const secondaryType =
-      ENDLESS_ENEMY_CYCLE[(cycleIndex + 1) % ENDLESS_ENEMY_CYCLE.length];
-
-    const baseCount = Math.round(ENDLESS_BASE_COUNT * countMult);
-    const primaryCount = Math.ceil(baseCount * 0.6);
-    const secondaryCount = Math.floor(baseCount * 0.4);
-    const spawnInterval = Math.max(
-      0.3,
-      ENDLESS_BASE_SPAWN_INTERVAL / speedMult
-    );
-
-    const entries: WaveEntry[] = [
-      { type: primaryType, count: primaryCount, spawnInterval },
-      { type: secondaryType, count: secondaryCount, spawnInterval: spawnInterval * 1.2 }
-    ];
-
-    if (isBossWave) {
-      entries.unshift({
-        type: EnemyType.BOSS,
-        count: ENDLESS_BOSS_COUNT,
-        spawnInterval: ENDLESS_BOSS_SPAWN_INTERVAL
-      });
-    }
-
-    const reward =
-      ENDLESS_BASE_REWARD + ENDLESS_REWARD_SCALE_PER_WAVE * (waveNumber - 1);
-
-    return { entries, reward };
+  /**
+   * Converts an absolute wave number to the 1-based endless wave number.
+   * e.g. wave 11 with 10 scripted waves → endless wave 1.
+   */
+  private toEndlessWaveNumber(absoluteWaveNumber: number): number {
+    return absoluteWaveNumber - this.waveDefinitions.length;
   }
 
   /**
@@ -108,15 +98,21 @@ export class WaveService {
     const index = waveNumber - 1;
 
     let waveDef: WaveDefinition | undefined;
+    this.currentEndlessResult = null;
 
     if (index >= 0 && index < this.waveDefinitions.length) {
       // Normal wave from the static definitions
       this.currentWaveIndex = index;
       waveDef = this.waveDefinitions[this.currentWaveIndex];
     } else if (this.endlessMode && waveNumber > this.waveDefinitions.length) {
-      // Endless wave — procedurally generated
+      // Endless wave — composition-based generation
       this.currentWaveIndex = index;
-      waveDef = this.generateEndlessWave(waveNumber);
+      const endlessWaveNumber = this.toEndlessWaveNumber(waveNumber);
+      this.currentEndlessResult = generateEndlessWave(endlessWaveNumber);
+      waveDef = {
+        entries: this.currentEndlessResult.entries,
+        reward: this.currentEndlessResult.reward,
+      };
     } else {
       return;
     }
@@ -150,7 +146,9 @@ export class WaveService {
       queue.timeSinceLastSpawn += deltaTime;
 
       if (queue.timeSinceLastSpawn >= queue.spawnInterval) {
-        const spawned = this.enemyService.spawnEnemy(queue.type, scene);
+        const waveHealthMult = this.currentEndlessResult?.healthMultiplier ?? 1;
+        const waveSpeedMult  = this.currentEndlessResult?.speedMultiplier  ?? 1;
+        const spawned = this.enemyService.spawnEnemy(queue.type, scene, waveHealthMult, waveSpeedMult);
         if (spawned) {
           queue.remaining--;
           queue.timeSinceLastSpawn = 0;
@@ -182,8 +180,9 @@ export class WaveService {
       return this.waveDefinitions[index].entries.reduce((sum, e) => sum + e.count, 0);
     }
     if (this.endlessMode) {
-      const waveDef = this.generateEndlessWave(waveNumber);
-      return waveDef.entries.reduce((sum, e) => sum + e.count, 0);
+      const endlessWaveNumber = this.toEndlessWaveNumber(waveNumber);
+      const result = generateEndlessWave(endlessWaveNumber);
+      return result.entries.reduce((sum, e) => sum + e.count, 0);
     }
     return 0;
   }
@@ -196,7 +195,8 @@ export class WaveService {
       return this.waveDefinitions[index].reward;
     }
     if (this.endlessMode) {
-      return this.generateEndlessWave(waveNumber).reward;
+      const endlessWaveNumber = this.toEndlessWaveNumber(waveNumber);
+      return generateEndlessWave(endlessWaveNumber).reward;
     }
     return 0;
   }
@@ -206,11 +206,13 @@ export class WaveService {
     return this.waveDefinitions.length;
   }
 
-  /** Clears all spawn queues and resets wave state. Call from `restartGame()` before a new game begins. */
+  /** Clears all spawn queues and resets wave state. Call from `restartGame()` before a new game begins. Clears custom waves — re-apply via `setCustomWaves()` if restarting a campaign level. */
   reset(): void {
     this.spawnQueues = [];
     this.active = false;
     this.currentWaveIndex = -1;
     this.endlessMode = false;
+    this.currentEndlessResult = null;
+    this.clearCustomWaves();
   }
 }

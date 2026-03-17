@@ -1,19 +1,21 @@
 import { Injectable } from '@angular/core';
 import { TowerType } from '../models/tower.model';
 import { AUDIO_CONFIG, SFX_CONFIGS, isSfxSequenceConfig } from '../constants/audio.constants';
+import { SettingsService } from './settings.service';
 
 @Injectable()
 export class AudioService {
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
-  private _muted = false;
   private _volume = AUDIO_CONFIG.masterVolume;
   private lastEnemyHitTime = -Infinity;
   private towerFiresThisFrame = 0;
   private deathSoundsThisFrame = 0;
 
+  constructor(private settingsService: SettingsService) {}
+
   get isMuted(): boolean {
-    return this._muted;
+    return this.settingsService.get().audioMuted;
   }
 
   get volume(): number {
@@ -28,7 +30,7 @@ export class AudioService {
     try {
       this.audioContext = new AudioContext();
       this.masterGain = this.audioContext.createGain();
-      this.masterGain.gain.value = this._muted ? 0 : this._volume;
+      this.masterGain.gain.value = this.isMuted ? 0 : this._volume;
       this.masterGain.connect(this.audioContext.destination);
     } catch {
       this.audioContext = null;
@@ -201,6 +203,21 @@ export class AudioService {
     this.playArpeggio(cfg.notes, cfg.noteDuration, cfg.noteGap, cfg.oscillatorType, cfg.gain);
   }
 
+  /** 5-note ascending arpeggio (C5 E5 G5 B5 C6) for achievement unlocks. */
+  playAchievementSound(): void {
+    this.playSfx('achievement');
+  }
+
+  /** Quick ascending 2-note chime (E5 G5) for streak bonus. */
+  playStreakSound(): void {
+    this.playSfx('streak');
+  }
+
+  /** Rapid ascending coin cascade (C6 E6 G6) for challenge completion. */
+  playChallengeSound(): void {
+    this.playSfx('challenge');
+  }
+
   /**
    * Play a named SFX from SFX_CONFIGS. Handles both single-tone and sequence configs.
    * No-op if the key is not found.
@@ -236,15 +253,16 @@ export class AudioService {
 
   setVolume(volume: number): void {
     this._volume = Math.max(0, Math.min(1, volume));
-    if (this.masterGain && !this._muted) {
+    if (this.masterGain && !this.isMuted) {
       this.masterGain.gain.value = this._volume;
     }
   }
 
   toggleMute(): void {
-    this._muted = !this._muted;
+    const next = !this.isMuted;
+    this.settingsService.update({ audioMuted: next });
     if (this.masterGain) {
-      this.masterGain.gain.value = this._muted ? 0 : this._volume;
+      this.masterGain.gain.value = next ? 0 : this._volume;
     }
   }
 

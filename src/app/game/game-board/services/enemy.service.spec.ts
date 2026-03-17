@@ -1,17 +1,29 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { EnemyService } from './enemy.service';
+import { PathfindingService } from './pathfinding.service';
 import { GameBoardService } from '../game-board.service';
+import { GameStateService } from './game-state.service';
 import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model';
-import { GameModifier, GAME_MODIFIER_CONFIGS, mergeModifierEffects } from '../models/game-modifier.model';
+import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { GameBoardTile } from '../models/game-board-tile';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { createTestBoard, createGameBoardServiceSpy } from '../testing';
 
+/**
+ * Helper: configure modifier effects on the real GameStateService.
+ * GameStateService.setModifiers() is gated to SETUP phase (wave === 0),
+ * which is the initial state — so this always works in tests.
+ */
+function setModifiers(gameStateService: GameStateService, mods: Set<GameModifier>): void {
+  gameStateService.setModifiers(mods);
+}
+
 describe('EnemyService', () => {
   let service: EnemyService;
   let gameBoardService: jasmine.SpyObj<GameBoardService>;
+  let gameStateService: GameStateService;
   let mockScene: THREE.Scene;
 
   beforeEach(() => {
@@ -19,13 +31,16 @@ describe('EnemyService', () => {
 
     TestBed.configureTestingModule({
       providers: [
+        PathfindingService,
         EnemyService,
+        GameStateService,
         { provide: GameBoardService, useValue: gameBoardServiceSpy }
       ]
     });
 
     service = TestBed.inject(EnemyService);
     gameBoardService = TestBed.inject(GameBoardService) as jasmine.SpyObj<GameBoardService>;
+    gameStateService = TestBed.inject(GameStateService);
     mockScene = new THREE.Scene();
   });
 
@@ -990,9 +1005,7 @@ describe('EnemyService', () => {
 
   describe('Modifier Effects on Spawn', () => {
     it('should spawn enemy with doubled health when ARMORED_ENEMIES is active', () => {
-      const mods = new Set([GameModifier.ARMORED_ENEMIES]);
-      const effects = mergeModifierEffects(mods);
-      service.setModifierEffects(effects, mods);
+      setModifiers(gameStateService, new Set([GameModifier.ARMORED_ENEMIES]));
 
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       const baseHealth = ENEMY_STATS[EnemyType.BASIC].health;
@@ -1001,9 +1014,7 @@ describe('EnemyService', () => {
     });
 
     it('should spawn enemy with increased speed when FAST_ENEMIES is active', () => {
-      const mods = new Set([GameModifier.FAST_ENEMIES]);
-      const effects = mergeModifierEffects(mods);
-      service.setModifierEffects(effects, mods);
+      setModifiers(gameStateService, new Set([GameModifier.FAST_ENEMIES]));
 
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       const baseSpeed = ENEMY_STATS[EnemyType.BASIC].speed;
@@ -1011,9 +1022,7 @@ describe('EnemyService', () => {
     });
 
     it('should apply SPEED_DEMONS only to FAST type enemies', () => {
-      const mods = new Set([GameModifier.SPEED_DEMONS]);
-      const effects = mergeModifierEffects(mods);
-      service.setModifierEffects(effects, mods);
+      setModifiers(gameStateService, new Set([GameModifier.SPEED_DEMONS]));
 
       const fastEnemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
       const basicEnemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
@@ -1025,18 +1034,14 @@ describe('EnemyService', () => {
     });
 
     it('should apply SPEED_DEMONS to SWIFT type enemies', () => {
-      const mods = new Set([GameModifier.SPEED_DEMONS]);
-      const effects = mergeModifierEffects(mods);
-      service.setModifierEffects(effects, mods);
+      setModifiers(gameStateService, new Set([GameModifier.SPEED_DEMONS]));
 
       const swiftEnemy = service.spawnEnemy(EnemyType.SWIFT, mockScene)!;
       expect(swiftEnemy.speed).toBeCloseTo(ENEMY_STATS[EnemyType.SWIFT].speed * 2.0);
     });
 
     it('should combine FAST_ENEMIES and SPEED_DEMONS for FAST type', () => {
-      const mods = new Set([GameModifier.FAST_ENEMIES, GameModifier.SPEED_DEMONS]);
-      const effects = mergeModifierEffects(mods);
-      service.setModifierEffects(effects, mods);
+      setModifiers(gameStateService, new Set([GameModifier.FAST_ENEMIES, GameModifier.SPEED_DEMONS]));
 
       const fastEnemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
       // FAST_ENEMIES 1.5x * SPEED_DEMONS 2.0x = 3.0x for FAST type
@@ -1044,9 +1049,7 @@ describe('EnemyService', () => {
     });
 
     it('should only apply FAST_ENEMIES (not SPEED_DEMONS) to non-fast types when both active', () => {
-      const mods = new Set([GameModifier.FAST_ENEMIES, GameModifier.SPEED_DEMONS]);
-      const effects = mergeModifierEffects(mods);
-      service.setModifierEffects(effects, mods);
+      setModifiers(gameStateService, new Set([GameModifier.FAST_ENEMIES, GameModifier.SPEED_DEMONS]));
 
       const heavyEnemy = service.spawnEnemy(EnemyType.HEAVY, mockScene)!;
       // Only FAST_ENEMIES 1.5x applies to HEAVY (not SPEED_DEMONS)
@@ -1054,46 +1057,40 @@ describe('EnemyService', () => {
     });
 
     it('should spawn with normal stats when no modifiers are active', () => {
-      service.setModifierEffects({}, new Set());
-
+      // Default state — no modifiers set
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       expect(enemy.health).toBe(ENEMY_STATS[EnemyType.BASIC].health);
       expect(enemy.speed).toBeCloseTo(ENEMY_STATS[EnemyType.BASIC].speed);
     });
 
     it('should combine health and speed modifiers', () => {
-      const mods = new Set([GameModifier.ARMORED_ENEMIES, GameModifier.FAST_ENEMIES]);
-      const effects = mergeModifierEffects(mods);
-      service.setModifierEffects(effects, mods);
+      setModifiers(gameStateService, new Set([GameModifier.ARMORED_ENEMIES, GameModifier.FAST_ENEMIES]));
 
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       expect(enemy.health).toBe(ENEMY_STATS[EnemyType.BASIC].health * 2);
       expect(enemy.speed).toBeCloseTo(ENEMY_STATS[EnemyType.BASIC].speed * 1.5);
     });
 
-    it('should clear modifier effects on reset', () => {
-      const mods = new Set([GameModifier.ARMORED_ENEMIES]);
-      const effects = mergeModifierEffects(mods);
-      service.setModifierEffects(effects, mods);
+    it('should use no modifier effects after game state reset', () => {
+      setModifiers(gameStateService, new Set([GameModifier.ARMORED_ENEMIES]));
 
+      // Reset both services (mirrors what restartGame() does)
       service.reset(mockScene);
+      gameStateService.reset();
 
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       expect(enemy.health).toBe(ENEMY_STATS[EnemyType.BASIC].health);
     });
 
-    it('should floor enemy speed at MIN_ENEMY_SPEED even with extreme modifiers', () => {
-      // Simulate a near-zero speed multiplier
-      service.setModifierEffects({ enemySpeedMultiplier: 0.001 }, new Set());
-
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+    it('should floor enemy speed at MIN_ENEMY_SPEED even with extreme speed multiplier', () => {
+      // Use FAST_ENEMIES + SPEED_DEMONS for a large combined multiplier,
+      // then rely on waveSpeedMultiplier driving toward zero to test the floor.
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 0.000001)!;
       expect(enemy.speed).toBeGreaterThanOrEqual(0.1);
     });
 
     it('should apply ARMORED + FAST + SPEED_DEMONS combo correctly', () => {
-      const mods = new Set([GameModifier.ARMORED_ENEMIES, GameModifier.FAST_ENEMIES, GameModifier.SPEED_DEMONS]);
-      const effects = mergeModifierEffects(mods);
-      service.setModifierEffects(effects, mods);
+      setModifiers(gameStateService, new Set([GameModifier.ARMORED_ENEMIES, GameModifier.FAST_ENEMIES, GameModifier.SPEED_DEMONS]));
 
       const fastEnemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
       // Health: 2x, Speed: 1.5x * 2.0x = 3.0x for FAST type
@@ -1104,6 +1101,73 @@ describe('EnemyService', () => {
       // Health: 2x, Speed: only FAST_ENEMIES 1.5x (SPEED_DEMONS excluded for non-fast)
       expect(heavyEnemy.health).toBe(ENEMY_STATS[EnemyType.HEAVY].health * 2);
       expect(heavyEnemy.speed).toBeCloseTo(ENEMY_STATS[EnemyType.HEAVY].speed * 1.5);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Wave-level multipliers (endless mode scaling)
+  // ---------------------------------------------------------------------------
+
+  describe('wave multipliers (endless mode scaling)', () => {
+    it('waveHealthMultiplier=2 doubles enemy health after modifier scaling', () => {
+      const baseHealth = ENEMY_STATS[EnemyType.BASIC].health;
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene, 2, 1)!;
+      expect(enemy.health).toBe(Math.round(baseHealth * 2));
+      expect(enemy.maxHealth).toBe(enemy.health);
+    });
+
+    it('waveSpeedMultiplier=1.5 increases enemy speed by 1.5×', () => {
+      const baseSpeed = ENEMY_STATS[EnemyType.BASIC].speed;
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1.5)!;
+      expect(enemy.speed).toBeCloseTo(baseSpeed * 1.5);
+    });
+
+    it('waveHealthMultiplier and waveSpeedMultiplier both apply in same spawn', () => {
+      const baseHealth = ENEMY_STATS[EnemyType.HEAVY].health;
+      const baseSpeed  = ENEMY_STATS[EnemyType.HEAVY].speed;
+      const enemy = service.spawnEnemy(EnemyType.HEAVY, mockScene, 3, 1.8)!;
+      expect(enemy.health).toBe(Math.round(baseHealth * 3));
+      expect(enemy.speed).toBeCloseTo(baseSpeed * 1.8);
+    });
+
+    it('wave multipliers stack multiplicatively on top of modifier health scaling', () => {
+      // ARMORED_ENEMIES: 2× health. waveHealthMultiplier=3 → expected 6×
+      setModifiers(gameStateService, new Set([GameModifier.ARMORED_ENEMIES]));
+
+      const baseHealth = ENEMY_STATS[EnemyType.BASIC].health;
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene, 3, 1)!;
+      expect(enemy.health).toBe(Math.round(baseHealth * 2 * 3));
+    });
+
+    it('wave multipliers stack multiplicatively on top of modifier speed scaling', () => {
+      // FAST_ENEMIES: 1.5× speed. waveSpeedMultiplier=2 → expected 3×
+      setModifiers(gameStateService, new Set([GameModifier.FAST_ENEMIES]));
+
+      const baseSpeed = ENEMY_STATS[EnemyType.BASIC].speed;
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 2)!;
+      expect(enemy.speed).toBeCloseTo(baseSpeed * 1.5 * 2);
+    });
+
+    it('speed floor MIN_ENEMY_SPEED is enforced even after extreme waveSpeedMultiplier with low base', () => {
+      // Apply near-zero wave multipliers to push speed toward zero
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 0.000001)!;
+      expect(enemy.speed).toBeGreaterThanOrEqual(0.1);
+    });
+
+    it('waveHealthMultiplier=1 and waveSpeedMultiplier=1 are no-ops (non-endless)', () => {
+      const baseHealth = ENEMY_STATS[EnemyType.BASIC].health;
+      const baseSpeed  = ENEMY_STATS[EnemyType.BASIC].speed;
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1)!;
+      expect(enemy.health).toBe(baseHealth);
+      expect(enemy.speed).toBeCloseTo(baseSpeed);
+    });
+
+    it('default parameters (no wave mult args) behave like 1×/1× for scripted waves', () => {
+      const baseHealth = ENEMY_STATS[EnemyType.FAST].health;
+      const baseSpeed  = ENEMY_STATS[EnemyType.FAST].speed;
+      const enemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      expect(enemy.health).toBe(baseHealth);
+      expect(enemy.speed).toBeCloseTo(baseSpeed);
     });
   });
 

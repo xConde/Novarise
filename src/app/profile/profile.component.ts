@@ -1,6 +1,28 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { PlayerProfileService, PlayerProfile, Achievement, ACHIEVEMENTS } from '../game/game-board/services/player-profile.service';
+import {
+  PlayerProfileService,
+  PlayerProfile,
+  Achievement,
+  AchievementCategory,
+  ACHIEVEMENTS,
+} from '../game/game-board/services/player-profile.service';
+
+export interface AchievementCategoryGroup {
+  category: AchievementCategory;
+  label: string;
+  achievements: Achievement[];
+  unlockedCount: number;
+}
+
+const CATEGORY_LABELS: Record<AchievementCategory, string> = {
+  campaign: 'Campaign',
+  combat: 'Combat',
+  endless: 'Endless',
+  challenge: 'Challenge',
+};
+
+const CATEGORY_ORDER: AchievementCategory[] = ['campaign', 'combat', 'endless', 'challenge'];
 
 @Component({
   selector: 'app-profile',
@@ -10,6 +32,7 @@ import { PlayerProfileService, PlayerProfile, Achievement, ACHIEVEMENTS } from '
 export class ProfileComponent implements OnInit {
   profile!: PlayerProfile;
   allAchievements: Achievement[] = ACHIEVEMENTS;
+  categoryGroups: AchievementCategoryGroup[] = [];
   private unlockedSet = new Set<string>();
 
   constructor(
@@ -20,6 +43,20 @@ export class ProfileComponent implements OnInit {
   ngOnInit(): void {
     this.profile = this.profileService.getProfile();
     this.unlockedSet = new Set(this.profile.achievements);
+    this.categoryGroups = this.buildCategoryGroups();
+  }
+
+  private buildCategoryGroups(): AchievementCategoryGroup[] {
+    return CATEGORY_ORDER.map((category) => {
+      const achievements = ACHIEVEMENTS.filter((a) => a.category === category);
+      const unlockedCount = achievements.filter((a) => this.unlockedSet.has(a.id)).length;
+      return {
+        category,
+        label: CATEGORY_LABELS[category],
+        achievements,
+        unlockedCount,
+      };
+    });
   }
 
   isUnlocked(achievementId: string): boolean {

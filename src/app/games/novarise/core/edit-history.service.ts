@@ -185,9 +185,7 @@ export class CompositeCommand implements EditCommand {
 /**
  * Service to manage edit history with undo/redo functionality
  */
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable()
 export class EditHistoryService {
   private undoStack: EditCommand[] = [];
   private redoStack: EditCommand[] = [];

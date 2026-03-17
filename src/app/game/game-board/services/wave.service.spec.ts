@@ -3,7 +3,8 @@ import { WaveService } from './wave.service';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { EnemyType } from '../models/enemy.model';
-import { ENDLESS_CONFIG, WAVE_DEFINITIONS } from '../models/wave.model';
+import { WAVE_DEFINITIONS } from '../models/wave.model';
+import { generateEndlessWave, ENDLESS_BOSS_INTERVAL, ENDLESS_MIN_SPAWN_INTERVAL_S } from '../models/endless-wave.model';
 import * as THREE from 'three';
 
 describe('WaveService', () => {
@@ -125,7 +126,7 @@ describe('WaveService', () => {
       service.startWave(1, mockScene);
       service.update(0.016, mockScene); // ~1 frame
 
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1);
     });
 
     it('should respect spawn interval between enemies', () => {
@@ -299,94 +300,70 @@ describe('WaveService', () => {
     });
   });
 
-  // --- generateEndlessWave ---
+  // --- generateEndlessWave (model function) ---
+  // Note: generateEndlessWave() moved to endless-wave.model.ts (full tests in endless-wave.model.spec.ts).
+  // These tests verify integration properties visible to WaveService consumers.
 
-  describe('generateEndlessWave', () => {
-    it('should return a valid WaveDefinition with entries and reward', () => {
-      const wave = service.generateEndlessWave(11);
-      expect(wave).toBeDefined();
-      expect(Array.isArray(wave.entries)).toBeTrue();
-      expect(wave.entries.length).toBeGreaterThan(0);
-      expect(wave.reward).toBeGreaterThan(0);
+  describe('generateEndlessWave (model integration)', () => {
+    it('should return a valid result with entries and reward for endless wave 1', () => {
+      const result = generateEndlessWave(1);
+      expect(result).toBeDefined();
+      expect(Array.isArray(result.entries)).toBeTrue();
+      expect(result.entries.length).toBeGreaterThan(0);
+      expect(result.reward).toBeGreaterThan(0);
     });
 
-    it('each entry should have a valid EnemyType, positive count, and non-negative spawnInterval', () => {
-      const wave = service.generateEndlessWave(11);
+    it('each entry should have a valid EnemyType, positive count, and positive spawnInterval', () => {
+      const result = generateEndlessWave(1);
       const validTypes = Object.values(EnemyType) as string[];
-      for (const entry of wave.entries) {
+      for (const entry of result.entries) {
         expect(validTypes).toContain(entry.type);
         expect(entry.count).toBeGreaterThan(0);
-        expect(entry.spawnInterval).toBeGreaterThanOrEqual(0);
+        expect(entry.spawnInterval).toBeGreaterThan(0);
       }
     });
 
-    it('wave 20 should have more enemies than wave 11 (count scaling)', () => {
-      const wave11 = service.generateEndlessWave(11);
-      const wave20 = service.generateEndlessWave(20);
-      const count11 = wave11.entries.reduce((s, e) => s + e.count, 0);
-      const count20 = wave20.entries.reduce((s, e) => s + e.count, 0);
-      expect(count20).toBeGreaterThan(count11);
+    it('endless wave 10 should have more enemies than endless wave 1 (count scaling)', () => {
+      const w1 = generateEndlessWave(1);
+      const w10 = generateEndlessWave(10);
+      const count1 = w1.entries.reduce((s, e) => s + e.count, 0);
+      const count10 = w10.entries.reduce((s, e) => s + e.count, 0);
+      expect(count10).toBeGreaterThan(count1);
     });
 
-    it('wave 20 should have faster spawns than wave 11 (speed scaling reduces interval)', () => {
-      const wave11 = service.generateEndlessWave(11);
-      const wave20 = service.generateEndlessWave(20);
-      // Primary entry (index 0 or 1, not boss) should have shorter spawn interval
-      const nonBoss11 = wave11.entries.filter(e => e.type !== EnemyType.BOSS);
-      const nonBoss20 = wave20.entries.filter(e => e.type !== EnemyType.BOSS);
-      const avgInterval11 =
-        nonBoss11.reduce((s, e) => s + e.spawnInterval, 0) / nonBoss11.length;
-      const avgInterval20 =
-        nonBoss20.reduce((s, e) => s + e.spawnInterval, 0) / nonBoss20.length;
-      expect(avgInterval20).toBeLessThanOrEqual(avgInterval11);
+    it('endless wave 10 should have a higher reward than endless wave 1', () => {
+      const w1 = generateEndlessWave(1);
+      const w10 = generateEndlessWave(10);
+      expect(w10.reward).toBeGreaterThan(w1.reward);
     });
 
-    it('wave 20 should have a higher reward than wave 11', () => {
-      const wave11 = service.generateEndlessWave(11);
-      const wave20 = service.generateEndlessWave(20);
-      expect(wave20.reward).toBeGreaterThan(wave11.reward);
-    });
-
-    it('should include a BOSS entry on every bossInterval wave', () => {
-      const bossWaveNumber = ENDLESS_CONFIG.bossInterval; // e.g. wave 5
-      const wave = service.generateEndlessWave(bossWaveNumber);
-      const hasBoss = wave.entries.some(e => e.type === EnemyType.BOSS);
+    it('should include a BOSS entry on every bossInterval endless wave', () => {
+      const result = generateEndlessWave(ENDLESS_BOSS_INTERVAL);
+      const hasBoss = result.entries.some(e => e.type === EnemyType.BOSS);
       expect(hasBoss).toBeTrue();
     });
 
-    it('should NOT include a BOSS entry on non-boss waves', () => {
-      // Wave 11 is not a boss wave (11 % 5 !== 0)
-      const wave = service.generateEndlessWave(11);
-      const hasBoss = wave.entries.some(e => e.type === EnemyType.BOSS);
+    it('should NOT include a BOSS entry on non-milestone endless wave 1', () => {
+      const result = generateEndlessWave(1);
+      const hasBoss = result.entries.some(e => e.type === EnemyType.BOSS);
       expect(hasBoss).toBeFalse();
     });
 
-    it('should produce a boss entry with count 1', () => {
-      const bossWave = service.generateEndlessWave(ENDLESS_CONFIG.bossInterval);
-      const bossEntry = bossWave.entries.find(e => e.type === EnemyType.BOSS);
-      expect(bossEntry).toBeDefined();
-      expect(bossEntry!.count).toBe(1);
-    });
-
-    it('should cycle through different primary enemy types across waves', () => {
+    it('should cycle through different enemy types across consecutive non-milestone waves', () => {
       const types = new Set<EnemyType>();
-      // Sample several consecutive waves to verify cycling
-      for (let w = 11; w <= 16; w++) {
-        const wave = service.generateEndlessWave(w);
-        const nonBoss = wave.entries.filter(e => e.type !== EnemyType.BOSS);
-        nonBoss.forEach(e => types.add(e.type));
+      for (let w = 1; w <= 8; w++) {
+        if (w % ENDLESS_BOSS_INTERVAL !== 0) {
+          const result = generateEndlessWave(w);
+          result.entries.forEach(e => types.add(e.type));
+        }
       }
-      // Should see more than one type across 6 consecutive waves
       expect(types.size).toBeGreaterThan(1);
     });
 
-    it('spawn interval should never drop below minimum (0.3s)', () => {
-      // Wave 100 — very high, speed multiplier is large, but floor should apply
-      const wave = service.generateEndlessWave(100);
-      for (const entry of wave.entries) {
-        if (entry.type !== EnemyType.BOSS) {
-          expect(entry.spawnInterval).toBeGreaterThanOrEqual(0.3);
-        }
+    it('spawn interval should never drop below ENDLESS_MIN_SPAWN_INTERVAL_S', () => {
+      const result = generateEndlessWave(100);
+      for (const entry of result.entries) {
+        expect(entry.spawnInterval).toBeGreaterThanOrEqual(ENDLESS_MIN_SPAWN_INTERVAL_S);
       }
     });
   });
@@ -433,6 +410,214 @@ describe('WaveService', () => {
       }
 
       expect(service.isSpawning()).toBeFalse();
+    });
+  });
+
+  // --- getCurrentEndlessTemplate ---
+
+  describe('getCurrentEndlessTemplate', () => {
+    it('returns null before any wave starts', () => {
+      expect(service.getCurrentEndlessTemplate()).toBeNull();
+    });
+
+    it('returns null during a scripted wave', () => {
+      service.startWave(1, mockScene);
+      expect(service.getCurrentEndlessTemplate()).toBeNull();
+    });
+
+    it('returns a non-null template during an endless wave', () => {
+      service.setEndlessMode(true);
+      const beyondMax = WAVE_DEFINITIONS.length + 1;
+      service.startWave(beyondMax, mockScene);
+      expect(service.getCurrentEndlessTemplate()).not.toBeNull();
+    });
+
+    it('returns null after reset()', () => {
+      service.setEndlessMode(true);
+      service.startWave(WAVE_DEFINITIONS.length + 1, mockScene);
+      service.reset();
+      expect(service.getCurrentEndlessTemplate()).toBeNull();
+    });
+
+    it('returns a non-null string that matches a known template name', () => {
+      service.setEndlessMode(true);
+      service.startWave(WAVE_DEFINITIONS.length + 1, mockScene);
+      const template = service.getCurrentEndlessTemplate();
+      expect(template).not.toBeNull();
+      // Valid template strings are the EndlessWaveTemplate enum values
+      const validTemplates = ['rush', 'siege', 'swarm', 'air_raid', 'mixed', 'boss', 'blitz'];
+      expect(validTemplates).toContain(template as string);
+    });
+  });
+
+  // --- getCurrentEndlessResult ---
+
+  describe('getCurrentEndlessResult', () => {
+    it('returns null before any wave starts', () => {
+      expect(service.getCurrentEndlessResult()).toBeNull();
+    });
+
+    it('returns null during a scripted wave', () => {
+      service.startWave(1, mockScene);
+      expect(service.getCurrentEndlessResult()).toBeNull();
+    });
+
+    it('returns result with healthMultiplier > 1 during an endless wave', () => {
+      service.setEndlessMode(true);
+      service.startWave(WAVE_DEFINITIONS.length + 1, mockScene);
+      const result = service.getCurrentEndlessResult();
+      expect(result).not.toBeNull();
+      expect(result!.healthMultiplier).toBeGreaterThan(1);
+    });
+  });
+
+  // --- Endless wave multipliers wired to spawnEnemy ---
+
+  describe('endless wave multipliers passed to spawnEnemy', () => {
+    it('passes healthMultiplier > 1 to spawnEnemy during an endless wave', () => {
+      service.setEndlessMode(true);
+      const beyondMax = WAVE_DEFINITIONS.length + 10; // endless wave 10 has notable scaling
+      service.startWave(beyondMax, mockScene);
+
+      service.update(0.016, mockScene); // trigger first spawn
+
+      const callArgs = enemyServiceSpy.spawnEnemy.calls.mostRecent().args as [EnemyType, THREE.Scene, number, number];
+      const waveHealthMult = callArgs[2];
+      expect(waveHealthMult).toBeGreaterThan(1);
+    });
+
+    it('passes speedMultiplier > 1 to spawnEnemy during an endless wave', () => {
+      service.setEndlessMode(true);
+      const beyondMax = WAVE_DEFINITIONS.length + 10;
+      service.startWave(beyondMax, mockScene);
+
+      service.update(0.016, mockScene);
+
+      const callArgs = enemyServiceSpy.spawnEnemy.calls.mostRecent().args as [EnemyType, THREE.Scene, number, number];
+      const waveSpeedMult = callArgs[3];
+      expect(waveSpeedMult).toBeGreaterThan(1);
+    });
+
+    it('passes multipliers = 1 to spawnEnemy during a scripted wave', () => {
+      service.startWave(1, mockScene);
+      service.update(0.016, mockScene);
+
+      const callArgs = enemyServiceSpy.spawnEnemy.calls.mostRecent().args as [EnemyType, THREE.Scene, number, number];
+      expect(callArgs[2]).toBe(1);
+      expect(callArgs[3]).toBe(1);
+    });
+
+    it('later endless waves pass higher healthMultiplier than earlier endless waves', () => {
+      service.setEndlessMode(true);
+
+      service.startWave(WAVE_DEFINITIONS.length + 1, mockScene);
+      service.update(0.016, mockScene);
+      const earlyMult = (enemyServiceSpy.spawnEnemy.calls.mostRecent().args as [EnemyType, THREE.Scene, number, number])[2];
+
+      service.startWave(WAVE_DEFINITIONS.length + 20, mockScene);
+      service.update(0.016, mockScene);
+      const laterMult = (enemyServiceSpy.spawnEnemy.calls.mostRecent().args as [EnemyType, THREE.Scene, number, number])[2];
+
+      expect(laterMult).toBeGreaterThan(earlyMult);
+    });
+  });
+
+  // --- setCustomWaves / clearCustomWaves ---
+
+  describe('setCustomWaves', () => {
+    const CUSTOM_WAVES = [
+      {
+        entries: [
+          { type: EnemyType.BASIC, count: 3, spawnInterval: 1.0 }
+        ],
+        reward: 15
+      },
+      {
+        entries: [
+          { type: EnemyType.FAST, count: 4, spawnInterval: 0.8 }
+        ],
+        reward: 20
+      }
+    ];
+
+    it('hasCustomWaves() returns false by default', () => {
+      expect(service.hasCustomWaves()).toBeFalse();
+    });
+
+    it('hasCustomWaves() returns true after setCustomWaves()', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      expect(service.hasCustomWaves()).toBeTrue();
+    });
+
+    it('getMaxWaves() returns custom wave count after setCustomWaves()', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      expect(service.getMaxWaves()).toBe(CUSTOM_WAVES.length);
+    });
+
+    it('startWave() uses custom definitions — only 3 enemies in wave 1', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.startWave(1, mockScene);
+      expect(service.getRemainingToSpawn()).toBe(3);
+    });
+
+    it('startWave() spawns FAST enemies in custom wave 2', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.startWave(2, mockScene);
+      service.update(0.016, mockScene);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1);
+    });
+
+    it('startWave() rejects waves beyond custom count when endless mode is off', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.startWave(CUSTOM_WAVES.length + 1, mockScene);
+      expect(service.isSpawning()).toBeFalse();
+    });
+
+    it('getWaveDefinitions() returns the custom set', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      expect(service.getWaveDefinitions()).toBe(CUSTOM_WAVES);
+    });
+  });
+
+  describe('clearCustomWaves', () => {
+    const CUSTOM_WAVES = [
+      {
+        entries: [{ type: EnemyType.BASIC, count: 2, spawnInterval: 1.0 }],
+        reward: 10
+      }
+    ];
+
+    it('clearCustomWaves() reverts getMaxWaves() to default WAVE_DEFINITIONS length', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.clearCustomWaves();
+      expect(service.getMaxWaves()).toBe(WAVE_DEFINITIONS.length);
+    });
+
+    it('hasCustomWaves() returns false after clearCustomWaves()', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.clearCustomWaves();
+      expect(service.hasCustomWaves()).toBeFalse();
+    });
+
+    it('after clearCustomWaves(), startWave() uses default WAVE_DEFINITIONS (wave 1 has 5 BASIC)', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.clearCustomWaves();
+      service.startWave(1, mockScene);
+      expect(service.getRemainingToSpawn()).toBe(5);
+    });
+
+    it('reset() clears custom waves and reverts to defaults', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.reset();
+      expect(service.hasCustomWaves()).toBeFalse();
+      expect(service.getMaxWaves()).toBe(WAVE_DEFINITIONS.length);
+    });
+
+    it('after reset(), startWave() using default definitions still works', () => {
+      service.setCustomWaves(CUSTOM_WAVES);
+      service.reset();
+      service.startWave(1, mockScene);
+      expect(service.isSpawning()).toBeTrue();
     });
   });
 });

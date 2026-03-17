@@ -21,6 +21,14 @@ export interface EndlessWaveConfig {
   bossInterval: number; // boss wave every N waves (relative to endless wave number)
 }
 
+/**
+ * @deprecated Use constants from endless-wave.model.ts instead.
+ * Kept for backward compatibility — wave.model.spec.ts tests this object directly.
+ * The authoritative scaling constants are: ENDLESS_HEALTH_SCALE_PER_WAVE (0.2),
+ * ENDLESS_SPEED_SCALE_PER_WAVE (0.03), ENDLESS_COUNT_SCALE_PER_WAVE (0.8),
+ * ENDLESS_BOSS_INTERVAL (5) — all exported from endless-wave.model.ts.
+ * Note: countScalePerWave here (0.1) diverges from the real value (0.8).
+ */
 export const ENDLESS_CONFIG: EndlessWaveConfig = {
   baseHealthMultiplier: 1.0,
   healthScalePerWave: 0.15,
