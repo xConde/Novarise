@@ -343,6 +343,12 @@ $campaign-grid-cols-sm: 1fr;
 }
 
 // Responsive
+@media (max-width: 1024px) {
+  .level-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .level-grid {
     grid-template-columns: $campaign-grid-cols-md;

@@ -2364,6 +2364,12 @@ body .tutorial-target-highlight {
 }
 
 /* setup panel responsive overrides */
+@media (max-width: 1024px) {
+  .board-container .setup-panel {
+    width: min(16rem, 30vw);
+  }
+}
+
 @media (max-width: 768px) {
   .board-container .setup-panel {
     position: absolute;

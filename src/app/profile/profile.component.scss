@@ -402,6 +402,13 @@
 }
 
 // Responsive
+@media (max-width: 1024px) {
+  .stats-grid,
+  .achievements-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .stats-grid,
   .achievements-grid {

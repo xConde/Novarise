@@ -78,6 +78,13 @@
   color: var(--action-danger);
 }
 
+// --- Intermediate breakpoint (iPad landscape) ---
+@media (max-width: 1024px) {
+  .edit-controls-panel {
+    width: min(220px, 28vw);
+  }
+}
+
 // --- Mobile layout ---
 @media (max-width: 768px) {
   .reopen-button {
