@@ -595,26 +595,29 @@ describe('EnemyService', () => {
         expect(enemy.health).toBe(ENEMY_STATS[EnemyType.SHIELDED].health - overshoot);
       });
 
-      it('should remove shield mesh from userData when shield breaks', () => {
+      it('should start shield break animation when shield HP reaches 0', () => {
         const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
         const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
-
-        // Shield mesh should exist before break
-        expect(enemy.mesh!.userData['shieldMesh']).toBeTruthy();
 
         service.damageEnemy(enemy.id, maxShield);
 
         expect(enemy.shield).toBe(0);
-        expect(enemy.mesh!.userData['shieldMesh']).toBeUndefined();
+        // Break animation is deferred — dome still present but shieldBreaking=true
+        expect(enemy.shieldBreaking).toBe(true);
+        expect(enemy.shieldBreakTimer).toBeGreaterThan(0);
+        expect(enemy.mesh!.userData['shieldMesh']).toBeTruthy();
       });
 
-      it('should remove shield mesh from enemy mesh children when shield breaks', () => {
+      it('should remove shield mesh from userData and children after break animation completes', () => {
         const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
         const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
         const childrenBefore = enemy.mesh!.children.length;
 
         service.damageEnemy(enemy.id, maxShield);
+        // Advance past the full break animation duration
+        service.updateShieldBreakAnimations(1.0);
 
+        expect(enemy.mesh!.userData['shieldMesh']).toBeUndefined();
         expect(enemy.mesh!.children.length).toBe(childrenBefore - 1);
       });
 
@@ -2285,6 +2288,105 @@ describe('EnemyService', () => {
       service.updateHitFlashes(1.0);
 
       expect(enemy.hitFlashTimer).toBe(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Shield break animation — updateShieldBreakAnimations
+  // ---------------------------------------------------------------------------
+
+  describe('updateShieldBreakAnimations', () => {
+    it('should scale the shield dome up during break animation', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      service.damageEnemy(enemy.id, maxShield);
+
+      const shieldMesh = enemy.mesh!.userData['shieldMesh'] as THREE.Mesh;
+      const scaleAtStart = shieldMesh.scale.x;
+
+      // Advance partway through the animation
+      service.updateShieldBreakAnimations(0.1);
+
+      expect(shieldMesh.scale.x).toBeGreaterThan(scaleAtStart);
+    });
+
+    it('should fade the shield dome opacity toward 0 during break animation', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      service.damageEnemy(enemy.id, maxShield);
+
+      const shieldMesh = enemy.mesh!.userData['shieldMesh'] as THREE.Mesh;
+      const mat = shieldMesh.material as THREE.MeshStandardMaterial;
+      const opacityAtStart = mat.opacity;
+
+      service.updateShieldBreakAnimations(0.1);
+
+      expect(mat.opacity).toBeLessThan(opacityAtStart);
+    });
+
+    it('should remove shield mesh and clear shieldBreaking after animation completes', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      service.damageEnemy(enemy.id, maxShield);
+
+      expect(enemy.shieldBreaking).toBe(true);
+
+      service.updateShieldBreakAnimations(1.0);
+
+      expect(enemy.shieldBreaking).toBe(false);
+      expect(enemy.shieldBreakTimer).toBeUndefined();
+      expect(enemy.mesh!.userData['shieldMesh']).toBeUndefined();
+    });
+
+    it('should be a no-op when deltaTime <= 0', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      service.damageEnemy(enemy.id, maxShield);
+      const timerBefore = enemy.shieldBreakTimer!;
+
+      service.updateShieldBreakAnimations(0);
+
+      expect(enemy.shieldBreakTimer).toBe(timerBefore);
+    });
+
+    it('should not affect enemies with no active shield break animation', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      expect(() => service.updateShieldBreakAnimations(0.1)).not.toThrow();
+    });
+
+    it('should reduce the shieldBreakTimer by deltaTime', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      service.damageEnemy(enemy.id, maxShield);
+      const timerBefore = enemy.shieldBreakTimer!;
+
+      service.updateShieldBreakAnimations(0.1);
+
+      expect(enemy.shieldBreakTimer!).toBeCloseTo(timerBefore - 0.1);
+    });
+
+    it('cleanup handles SHIELDED enemies with active shield break animation', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      service.damageEnemy(enemy.id, maxShield);
+
+      // Shield break animation has started but not yet completed
+      expect(enemy.shieldBreaking).toBe(true);
+
+      expect(() => service.cleanup(mockScene)).not.toThrow();
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('reset handles SHIELDED enemies with active shield break animation', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      service.damageEnemy(enemy.id, maxShield);
+
+      expect(enemy.shieldBreaking).toBe(true);
+
+      expect(() => service.reset(mockScene)).not.toThrow();
+      expect(service.getEnemies().size).toBe(0);
     });
   });
 });

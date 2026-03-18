@@ -5,7 +5,7 @@ import { GameBoardService } from '../game-board.service';
 import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { GameModifier, ModifierEffects, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
-import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG, BOSS_CROWN_CONFIG, DEATH_ANIM_CONFIG, HIT_FLASH_CONFIG } from '../constants/effects.constants';
+import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG, BOSS_CROWN_CONFIG, DEATH_ANIM_CONFIG, HIT_FLASH_CONFIG, SHIELD_BREAK_CONFIG } from '../constants/effects.constants';
 import { PathfindingService } from './pathfinding.service';
 import { GameStateService } from './game-state.service';
 
@@ -623,27 +623,71 @@ export class EnemyService {
       emissiveIntensity: SHIELD_VISUAL_CONFIG.emissiveIntensity,
       transparent: true,
       opacity: SHIELD_VISUAL_CONFIG.opacity,
-      side: THREE.FrontSide
+      side: THREE.DoubleSide
     });
     return new THREE.Mesh(shieldGeometry, shieldMaterial);
   }
 
   /**
-   * Remove and dispose the shield visual when shield HP reaches 0.
+   * Start the shield break animation when shield HP reaches 0.
+   * The dome scales up and fades out over SHIELD_BREAK_CONFIG.duration seconds.
+   * Actual disposal happens in updateShieldBreakAnimations() when the timer expires.
    */
   private removeShieldMesh(enemy: Enemy): void {
     if (!enemy.mesh) return;
     const shieldMesh = enemy.mesh.userData['shieldMesh'] as THREE.Mesh | undefined;
     if (!shieldMesh) return;
 
-    enemy.mesh.remove(shieldMesh);
-    shieldMesh.geometry.dispose();
-    if (Array.isArray(shieldMesh.material)) {
-      shieldMesh.material.forEach(mat => mat.dispose());
-    } else {
-      shieldMesh.material.dispose();
-    }
-    delete enemy.mesh.userData['shieldMesh'];
+    enemy.shieldBreaking = true;
+    enemy.shieldBreakTimer = SHIELD_BREAK_CONFIG.duration;
+  }
+
+  /**
+   * Tick all active shield break animations by `deltaTime` seconds.
+   * Scales the dome up and fades opacity toward 0.
+   * When the timer expires, disposes and removes the dome mesh.
+   * Call once per render frame (not inside the fixed-timestep physics loop).
+   */
+  updateShieldBreakAnimations(deltaTime: number): void {
+    if (deltaTime <= 0) return;
+
+    this.enemies.forEach(enemy => {
+      if (!enemy.shieldBreaking || enemy.shieldBreakTimer === undefined) return;
+
+      enemy.shieldBreakTimer -= deltaTime;
+
+      const shieldMesh = enemy.mesh?.userData['shieldMesh'] as THREE.Mesh | undefined;
+      if (!shieldMesh) return;
+
+      if (enemy.shieldBreakTimer <= 0) {
+        // Animation complete — dispose and remove the dome
+        if (enemy.mesh) {
+          enemy.mesh.remove(shieldMesh);
+          delete enemy.mesh.userData['shieldMesh'];
+        }
+        shieldMesh.geometry.dispose();
+        if (Array.isArray(shieldMesh.material)) {
+          shieldMesh.material.forEach(mat => mat.dispose());
+        } else {
+          shieldMesh.material.dispose();
+        }
+        enemy.shieldBreaking = false;
+        enemy.shieldBreakTimer = undefined;
+        return;
+      }
+
+      // Progress 0 = animation start, 1 = animation end
+      const progress = 1 - (enemy.shieldBreakTimer / SHIELD_BREAK_CONFIG.duration);
+
+      // Scale: 1.0 → SHIELD_BREAK_CONFIG.breakScale
+      const scale = 1 + progress * (SHIELD_BREAK_CONFIG.breakScale - 1);
+      shieldMesh.scale.setScalar(scale);
+
+      // Opacity: SHIELD_VISUAL_CONFIG.opacity → 0
+      const opacity = SHIELD_VISUAL_CONFIG.opacity * (1 - progress);
+      const mat = shieldMesh.material as THREE.MeshStandardMaterial;
+      mat.opacity = opacity;
+    });
   }
 
   /**

@@ -42,6 +42,8 @@ export interface Enemy {
   dying?: boolean;     // True while the death shrink-fade animation is playing
   dyingTimer?: number; // Seconds remaining in the death animation (counts down to 0)
   hitFlashTimer?: number; // Seconds remaining in the hit-flash animation (counts down to 0)
+  shieldBreaking?: boolean;    // True while the shield break animation is playing
+  shieldBreakTimer?: number;   // Seconds remaining in the shield break animation (counts down to 0)
 }
 
 export interface EnemyStats {

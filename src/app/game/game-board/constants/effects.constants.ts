@@ -134,3 +134,10 @@ export const TILE_PULSE_CONFIG = {
   min: 0.3,
   max: 0.7,
 } as const;
+
+export const SHIELD_BREAK_CONFIG = {
+  /** Seconds for the shield dome to scale up and fade out. */
+  duration: 0.3,
+  /** Scale the dome reaches at the end of the break animation. */
+  breakScale: 2.0,
+} as const;
