@@ -10,7 +10,9 @@
   <div class="map-section" *ngIf="maps.length > 0">
     <h2 class="section-label">Your Maps</h2>
     <div class="map-grid">
-      <div class="map-card" *ngFor="let map of maps" (click)="selectMap(map)">
+      <div class="map-card" *ngFor="let map of maps"
+           [class.map-card--last-played]="map.id === lastPlayedMapId"
+           (click)="selectMap(map)">
         <div class="card-actions">
           <button
             class="card-action-btn edit-btn"

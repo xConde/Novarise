@@ -25,11 +25,13 @@ export class GameResultsOverlayComponent implements OnInit, OnDestroy {
   @Input() isNextLevelUnlocked = false;
   @Input() nextLevelName = '';
   @Input() isChallengeCompletedFn: (challenge: ChallengeDefinition) => boolean = () => false;
+  @Input() isEditorOrigin = false;
 
   @Output() restart = new EventEmitter<void>();
   @Output() backToCampaign = new EventEmitter<void>();
   @Output() editMap = new EventEmitter<void>();
   @Output() playNextLevel = new EventEmitter<void>();
+  @Output() backToEditor = new EventEmitter<void>();
 
   private readonly focusTrap = new FocusTrap();
 

@@ -17,6 +17,7 @@ export class MapSelectComponent implements OnInit, OnDestroy {
   maps: MapMetadata[] = [];
   mapScores: Record<string, MapScoreRecord> = {};
   deleteConfirmId: string | null = null;
+  lastPlayedMapId: string | null = null;
   private deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
@@ -29,6 +30,7 @@ export class MapSelectComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.maps = this.mapStorage.getAllMaps();
     this.mapScores = this.playerProfile.getAllMapScores();
+    this.lastPlayedMapId = this.mapBridge.getMapId();
   }
 
   ngOnDestroy(): void {

@@ -42,7 +42,7 @@ describe('MapSelectComponent', () => {
 
   beforeEach(async () => {
     mapStorageSpy = jasmine.createSpyObj('MapStorageService', ['getAllMaps', 'loadMap', 'deleteMap']);
-    mapBridgeSpy = jasmine.createSpyObj('MapBridgeService', ['setEditorMapState', 'clearEditorMap']);
+    mapBridgeSpy = jasmine.createSpyObj('MapBridgeService', ['setEditorMapState', 'clearEditorMap', 'getMapId']);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
     playerProfileSpy = jasmine.createSpyObj('PlayerProfileService', ['getAllMapScores']);
 
@@ -51,6 +51,7 @@ describe('MapSelectComponent', () => {
     mapStorageSpy.deleteMap.and.returnValue(true);
     routerSpy.navigate.and.returnValue(Promise.resolve(true));
     playerProfileSpy.getAllMapScores.and.returnValue({});
+    mapBridgeSpy.getMapId.and.returnValue(null);
 
     await TestBed.configureTestingModule({
       declarations: [MapSelectComponent],
@@ -290,6 +291,35 @@ describe('MapSelectComponent', () => {
       fixture.detectChanges();
       component.selectMap(MOCK_MAPS[1]);
       expect(mapBridgeSpy.setEditorMapState).toHaveBeenCalledWith(MOCK_TERRAIN_STATE, 'map_2');
+    });
+  });
+
+  describe('last-played map highlight', () => {
+    it('should set lastPlayedMapId from mapBridge on init', () => {
+      mapBridgeSpy.getMapId.and.returnValue('map_1');
+      fixture.detectChanges();
+      expect(component.lastPlayedMapId).toBe('map_1');
+    });
+
+    it('should set lastPlayedMapId to null when mapBridge has no mapId', () => {
+      mapBridgeSpy.getMapId.and.returnValue(null);
+      fixture.detectChanges();
+      expect(component.lastPlayedMapId).toBeNull();
+    });
+
+    it('should apply map-card--last-played class to the last-played map card', () => {
+      mapBridgeSpy.getMapId.and.returnValue('map_1');
+      fixture.detectChanges();
+      const cards = fixture.nativeElement.querySelectorAll('.map-card') as NodeListOf<HTMLElement>;
+      expect(cards[0].classList).toContain('map-card--last-played');
+      expect(cards[1].classList).not.toContain('map-card--last-played');
+    });
+
+    it('should not apply map-card--last-played when no last-played map', () => {
+      mapBridgeSpy.getMapId.and.returnValue(null);
+      fixture.detectChanges();
+      const highlighted = fixture.nativeElement.querySelectorAll('.map-card--last-played');
+      expect(highlighted.length).toBe(0);
     });
   });
 });

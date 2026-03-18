@@ -283,5 +283,29 @@ describe('CampaignComponent', () => {
       expect(subtitle).not.toBeNull();
       expect(subtitle.textContent).toContain('conquered');
     });
+
+    it('banner should contain a Return Home button when complete', () => {
+      campaignService.getCompletedCount.and.returnValue(CAMPAIGN_LEVELS.length);
+      component.ngOnInit();
+      fixture.detectChanges();
+      const homeBtn = fixture.nativeElement.querySelector('.campaign-complete__home-btn');
+      expect(homeBtn).not.toBeNull();
+      expect(homeBtn.textContent).toContain('Return Home');
+    });
+
+    it('Return Home button should navigate to / when clicked', () => {
+      campaignService.getCompletedCount.and.returnValue(CAMPAIGN_LEVELS.length);
+      component.ngOnInit();
+      fixture.detectChanges();
+      const homeBtn = fixture.nativeElement.querySelector('.campaign-complete__home-btn');
+      homeBtn.click();
+      expect(router.navigate).toHaveBeenCalledWith(['/']);
+    });
+
+    it('should not show Return Home button when campaign is not complete', () => {
+      fixture.detectChanges();
+      const homeBtn = fixture.nativeElement.querySelector('.campaign-complete__home-btn');
+      expect(homeBtn).toBeNull();
+    });
   });
 });

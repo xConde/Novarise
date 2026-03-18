@@ -133,6 +133,33 @@ $campaign-grid-cols-sm: 1fr;
   margin: 0;
 }
 
+.campaign-complete__home-btn {
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-xl);
+  border: var(--border-width-thin) solid var(--game-gold);
+  border-radius: var(--border-radius-md);
+  background: rgba(255, 215, 0, 0.08);
+  color: var(--game-gold);
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast) ease,
+    box-shadow var(--transition-fast) ease;
+
+  &:hover {
+    background: rgba(255, 215, 0, 0.18);
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.35);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--game-gold);
+    outline-offset: 2px;
+  }
+}
+
 // Level grid
 .level-grid {
   display: grid;

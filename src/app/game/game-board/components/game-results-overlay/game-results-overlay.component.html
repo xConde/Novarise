@@ -95,7 +95,13 @@
         (click)="backToCampaign.emit()">
         Campaign
       </button>
-      <button class="results-btn results-btn--tertiary" (click)="editMap.emit()">Edit Map</button>
+      <button
+        *ngIf="isEditorOrigin"
+        class="results-btn results-btn--tertiary"
+        (click)="backToEditor.emit()">
+        Back to Editor
+      </button>
+      <button *ngIf="!isEditorOrigin" class="results-btn results-btn--tertiary" (click)="editMap.emit()">Edit Map</button>
     </div>
   </div>
 </div>

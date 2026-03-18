@@ -979,6 +979,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return !!mapId && mapId.startsWith('campaign_');
   }
 
+  /**
+   * True when the game was launched from the editor (map state loaded but no saved mapId).
+   * The editor calls setEditorMapState(state) without a mapId, while map-select and campaign
+   * always pass one. Quickplay has no map state at all.
+   */
+  get isEditorOrigin(): boolean {
+    return this.mapBridge.hasEditorMap() && this.mapBridge.getMapId() === null;
+  }
+
   /** Returns the CampaignLevel for the current map, or null if not a campaign game. */
   get currentCampaignLevel(): CampaignLevel | null {
     const mapId = this.mapBridge.getMapId();

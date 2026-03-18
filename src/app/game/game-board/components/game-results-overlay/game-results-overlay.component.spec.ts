@@ -559,5 +559,55 @@ describe('GameResultsOverlayComponent', () => {
 
       expect(emitted).toBeTrue();
     });
+
+    it('should show Edit Map button when isEditorOrigin is false', () => {
+      component.isEditorOrigin = false;
+      fixture.detectChanges();
+
+      const buttons: NodeListOf<HTMLButtonElement> = fixture.nativeElement.querySelectorAll('.results-btn');
+      const editBtn = Array.from(buttons).find(b => b.textContent?.trim() === 'Edit Map');
+      expect(editBtn).toBeTruthy();
+    });
+
+    it('should not show Edit Map button when isEditorOrigin is true', () => {
+      component.isEditorOrigin = true;
+      fixture.detectChanges();
+
+      const buttons: NodeListOf<HTMLButtonElement> = fixture.nativeElement.querySelectorAll('.results-btn');
+      const editBtn = Array.from(buttons).find(b => b.textContent?.trim() === 'Edit Map');
+      expect(editBtn).toBeUndefined();
+    });
+
+    it('should show Back to Editor button when isEditorOrigin is true', () => {
+      component.isEditorOrigin = true;
+      fixture.detectChanges();
+
+      const buttons: NodeListOf<HTMLButtonElement> = fixture.nativeElement.querySelectorAll('.results-btn');
+      const editorBtn = Array.from(buttons).find(b => b.textContent?.trim() === 'Back to Editor');
+      expect(editorBtn).toBeTruthy();
+    });
+
+    it('should not show Back to Editor button when isEditorOrigin is false', () => {
+      component.isEditorOrigin = false;
+      fixture.detectChanges();
+
+      const buttons: NodeListOf<HTMLButtonElement> = fixture.nativeElement.querySelectorAll('.results-btn');
+      const editorBtn = Array.from(buttons).find(b => b.textContent?.trim() === 'Back to Editor');
+      expect(editorBtn).toBeUndefined();
+    });
+
+    it('should emit backToEditor when Back to Editor button is clicked', () => {
+      let emitted = false;
+      component.isEditorOrigin = true;
+      component.backToEditor.subscribe(() => (emitted = true));
+      fixture.detectChanges();
+
+      const buttons: NodeListOf<HTMLButtonElement> = fixture.nativeElement.querySelectorAll('.results-btn');
+      const editorBtn = Array.from(buttons).find(b => b.textContent?.trim() === 'Back to Editor');
+      expect(editorBtn).toBeTruthy();
+      editorBtn!.click();
+
+      expect(emitted).toBeTrue();
+    });
   });
 });

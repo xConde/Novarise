@@ -190,9 +190,11 @@
     [isNextLevelUnlocked]="isNextLevelUnlocked"
     [nextLevelName]="nextCampaignLevel?.name || ''"
     [isChallengeCompletedFn]="isChallengeCompleted.bind(this)"
+    [isEditorOrigin]="isEditorOrigin"
     (restart)="restartGame()"
     (backToCampaign)="backToCampaign()"
     (editMap)="goToEditor()"
+    (backToEditor)="goToEditor()"
     (playNextLevel)="playNextLevel()">
   </app-game-results-overlay>
 
