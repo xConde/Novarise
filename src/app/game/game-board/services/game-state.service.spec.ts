@@ -1208,6 +1208,53 @@ describe('GameStateService', () => {
         mods.add(GameModifier.FAST_ENEMIES);
         expect(service.getState().activeModifiers.size).toBe(1);
       });
+
+      // --- Modifier toggle exploit prevention ---
+
+      it('should not grant extra gold when toggling WEALTHY_START on after spending', () => {
+        // Normal = 200g. Spend 50g.
+        service.spendGold(50);
+        expect(service.getState().gold).toBe(150);
+
+        // Toggle WEALTHY_START on → 200*2=400 starting, minus 50 spent = 350
+        service.setModifiers(new Set([GameModifier.WEALTHY_START]));
+        expect(service.getState().gold).toBe(350);
+
+        // Toggle WEALTHY_START off → 200*1=200 starting, minus 50 spent = 150
+        service.setModifiers(new Set());
+        expect(service.getState().gold).toBe(150);
+      });
+
+      it('should not grant free towers by toggling WEALTHY_START on, spending, then off', () => {
+        // Toggle WEALTHY_START on → 400g
+        service.setModifiers(new Set([GameModifier.WEALTHY_START]));
+        expect(service.getState().gold).toBe(400);
+
+        // Spend 300g on towers
+        service.spendGold(300);
+        expect(service.getState().gold).toBe(100);
+
+        // Toggle WEALTHY_START off → 200 - 300 spent = 0 (floored)
+        service.setModifiers(new Set());
+        expect(service.getState().gold).toBe(0);
+        // Player has 300g of towers but only 200g budget — punished correctly
+      });
+
+      it('should handle combined difficulty + modifier toggle exploit', () => {
+        // Easy (300g) + WEALTHY_START → 600g
+        service.setDifficulty(DifficultyLevel.EASY);
+        service.setModifiers(new Set([GameModifier.WEALTHY_START]));
+        expect(service.getState().gold).toBe(600);
+
+        // Spend 400g
+        service.spendGold(400);
+        expect(service.getState().gold).toBe(200);
+
+        // Switch to Nightmare (75g) + remove WEALTHY_START → 75 - 400 = 0
+        service.setDifficulty(DifficultyLevel.NIGHTMARE);
+        service.setModifiers(new Set());
+        expect(service.getState().gold).toBe(0);
+      });
     });
 
     describe('getModifierEffects', () => {

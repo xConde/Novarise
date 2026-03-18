@@ -99,7 +99,7 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
   },
   [TowerType.SNIPER]: {
     damage: 80,
-    range: 6,
+    range: 8,
     fireRate: 2.5,
     cost: 125,
     projectileSpeed: 15,
