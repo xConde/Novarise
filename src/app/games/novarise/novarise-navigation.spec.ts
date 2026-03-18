@@ -9,6 +9,7 @@ import { CameraControlService } from './core/camera-control.service';
 import { EditorStateService } from './core/editor-state.service';
 import { EditHistoryService } from './core/edit-history.service';
 import { EditorSceneService } from './core/editor-scene.service';
+import { EditorNotificationService } from './core/editor-notification.service';
 import { TerrainGridState } from './features/terrain-editor/terrain-grid-state.interface';
 import { TerrainType } from './models/terrain-types.enum';
 import * as THREE from 'three';
@@ -119,6 +120,7 @@ describe('NovariseComponent Navigation', () => {
         CameraControlService,
         EditorStateService,
         EditHistoryService,
+        EditorNotificationService,
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();

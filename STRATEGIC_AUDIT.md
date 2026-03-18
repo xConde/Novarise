@@ -912,10 +912,11 @@ Test count: 2756 → 3024 (+268 tests)
 **Risk:** `StatusEffectService.slowApplicationCount` survives `resetAllServices()` because StatusEffectService is not reset by GameSessionService. `cleanup()` is called inside `TowerCombatService.cleanup()` which runs via the component's `cleanupGameObjects()`, NOT through GameSessionService. On game restart, slow applications from run 1 accumulate into run 2's achievement tracking. The `slow_and_steady` achievement (1000 applications) fires early across sessions.
 **Fix:** Add `this.statusEffectService.cleanup()` to `GameSessionService.resetAllServices()`, or ensure `slowApplicationCount` is reset to 0 in the existing `cleanup()` method. Verify `cleanup()` zeroes the counter.
 
-### Finding 2: `completeWave()` and `awardInterest()` bypass `addGoldAndScore()` — inline mutation (LOW)
+### Finding 2: `completeWave()` and `awardInterest()` bypass `addGoldAndScore()` — inline mutation (LOW — PARTIALLY FIXED in hardening-vi S13)
 **Location:** `game-state.service.ts:completeWave()`, `awardInterest()`
 **Risk:** Both methods directly mutate `state.gold += amount; state.score += amount` instead of calling `addGoldAndScore()`. If `addGoldAndScore()` ever gains side effects (audit log, modifier cap, event emission), these two paths silently bypass them. No bug today, but a future maintenance trap.
 **Fix:** Refactor both methods to call `addGoldAndScore(amount)` instead of inline mutation.
+**Status:** `addStreakBonus` (the real bypass in the streak path) was routed through `addGoldAndScore()` in S13. `completeWave()`/`awardInterest()` inline mutations remain.
 
 ### Finding 3: `TowerInteractionService.wouldBlockPath()` doesn't actually check path blocking (LOW)
 **Location:** `tower-interaction.service.ts:115-124`
@@ -935,7 +936,7 @@ Test count: 2756 → 3024 (+268 tests)
 
 ## Red Team Critique — 2026-03-16 (Tutorial Spotlight)
 
-### Finding 1: `tutorial-target-highlight` uses `!important` on outline — stomps focus-visible rings (MEDIUM)
+### Finding 1: `tutorial-target-highlight` uses `!important` on outline — stomps focus-visible rings (MEDIUM — FIXED in hardening-vi S18)
 **Location:** `styles.css` — `.tutorial-target-highlight` rule
 **Risk:** `outline: 3px solid ... !important` overrides `:focus-visible` outlines on the highlighted element. During the SELECT_TOWER step, if a keyboard user tabs to a tower button within `.tower-selection`, their focus ring is invisible because the tutorial highlight outline takes precedence. When the highlight is removed (step advance), the focus ring returns — but during that step, keyboard users lose their primary navigation cue.
 **Fix:** Use `box-shadow` for the tutorial highlight instead of `outline`, leaving `outline` free for focus-visible. Or scope the `!important` to only apply when `:not(:focus-visible)`.
@@ -945,10 +946,11 @@ Test count: 2756 → 3024 (+268 tests)
 **Risk:** Queries the global DOM, not the component's view. If another component on the page has a matching selector (unlikely since routes are exclusive, but possible during transitions), the wrong element gets highlighted. Also makes the component harder to test in isolation — tests must append mock elements to `document.body`.
 **Fix:** Acceptable trade-off. `@ViewChild` can't target dynamically-determined selectors. Document the limitation inline.
 
-### Finding 3: Campaign scroll fix depends on parent flex context (LOW)
+### Finding 3: Campaign scroll fix depends on parent flex context (LOW — PARTIALLY FIXED in hardening-vi S18)
 **Location:** `campaign.component.scss:10`, `styles.css:208-212`
 **Risk:** `height: 100%` on `.campaign-container` requires the parent (`app-campaign`) to have a constrained height. The fix added `app-campaign { flex: 1; overflow: hidden; }` which works IF the app root is a flex column. If the app layout changes (e.g., a wrapping div is added), the scroll breaks silently.
 **Fix:** Add a comment documenting the flex chain dependency. Consider `height: 100vh` as a more robust fallback.
+**Status:** dvh fallback added in S18, but flex-chain dependency still exists — fully robust solution deferred.
 
 ---
 
@@ -959,15 +961,15 @@ Test count: 2756 → 3024 (+268 tests)
 **Risk:** `initLights()` creates 2 DirectionalLights with `castShadow = true` (lines 229, 257). Shadow maps allocate WebGL render target textures. `dispose()` does not call `light.shadow.map?.dispose()` before removing lights. Over repeated editor open/close cycles (route transitions), shadow map textures leak. The game's `SceneService.disposeLights()` (scene.service.ts:362-363) correctly disposes shadow maps — the editor service was extracted without this pattern.
 **Fix:** Add shadow map disposal for all shadow-casting lights before renderer.dispose(). Track lights as fields (like game's SceneService) or traverse scene for lights. Also null out scene/camera/renderer after disposal to prevent use-after-dispose.
 
-### Finding 2: StorageService.setJSON() QuotaExceededError detection is browser-specific (LOW)
+### Finding 2: StorageService.setJSON() QuotaExceededError detection is browser-specific (LOW — FIXED in hardening-vi S16)
 **Location:** `storage.service.ts:39`
 **Risk:** `e.name === 'QuotaExceededError'` works on Chrome/Firefox/modern Safari but older Safari/WebKit used `e.code === 22` without the standardized name. The function still returns `false` on any exception (correct), but the descriptive error log is lost on affected browsers. Not a data-loss risk but reduces debuggability.
 **Fix:** Add fallback check: `(e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22))`.
 
-### Finding 3: CombatFrameResult.kills returns reference to reused array (LOW — accepted)
+### Finding 3: CombatFrameResult.kills returns reference to reused array (LOW — FIXED in hardening-vi S14)
 **Location:** `combat-loop.service.ts:214`
 **Risk:** `this.frameKills` is cleared at the start of each `tick()` (line 87) and the same array reference is returned in the result (line 214). If a consumer stores the reference and reads it after the next `tick()`, it sees corrupted data. Currently safe because the component consumes synchronously in `processCombatResult()` (same animation frame), but fragile to future refactoring.
-**Fix:** Document the contract: "Returned kills array is valid only until the next tick() call. Consume synchronously." Consider returning `[...this.frameKills]` if the allocation cost is acceptable.
+**Fix:** Defensive copy (`[...this.frameKills]`) returned in CombatFrameResult — allocation cost is negligible per frame.
 
 ---
 
@@ -977,3 +979,70 @@ Test count: 2756 → 3024 (+268 tests)
 - [x] Step 2: Add file.size guard to MapStorageService.promptFileImport() (red-team lesson #148 still open)
 - [x] Step 3: Final full test suite + production build — zero failures, zero warnings
 - [x] Step 4: Push to remote and update branch for PR
+
+---
+
+## Sprint History — feat/hardening-vi (main, 2026-03-17)
+
+**18 sprints — 3221 → 3496 tests (+275)**
+
+| Sprint | Focus | Key Changes |
+|--------|-------|-------------|
+| S1 | State integrity | saveMap returns null on failure, modifier divergence fix, notification timeout leak, restart resets |
+| S2 | Type safety | GlobalErrorHandler, CombatAudioEvent discriminated union, touches guard, subscription error handlers, FLYING enum case |
+| S3 | Service extraction | TileHighlightService (204 LOC from component) |
+| S4 | Service extraction | TowerAnimationService (81 LOC), SceneService.tickAmbientVisuals() |
+| S5 | **KEYSTONE 1** | Test gaps: map-helpers (39 tests), applyCampaignWaves all 16 maps (50 tests), canLeaveGame (pre-existing) |
+| S6 | Service extraction | RangeVisualizationService (135 LOC from component) |
+| S7 | Service split | TowerMeshFactory (300 LOC from GameBoardService) |
+| S8 | DESCOPED | ProjectileService extraction deferred — tightly coupled to combat |
+| S9 | State migration | leakedThisWave → CombatLoopService, seenEnemyTypes → WaveService, legacy schema → MapBridgeService |
+| S10 | **KEYSTONE 2** | 3456/3456, component 2256→1954 LOC, GameBoardService 708→432 LOC |
+| S11 | Map integrity | Validate-before-save, post-migration validation, stale bridge on delete |
+| S12 | Enum hardening | TargetingMode enum, assertNever utility, exhaustive switches |
+| S13 | Gold consolidation | addStreakBonus routed through addGoldAndScore |
+| S14 | Service hardening | PlayerProfile idempotency guard, WaveService cache, CombatFrameResult defensive copies |
+| S15 | **KEYSTONE 3** | 3473/3473, 36 services (was 31), zero circular deps |
+| S16 | Storage | Safari/Firefox QuotaExceeded detection, isAvailable() health check |
+| S17 | Test quality | MORTAR BURN DoT e2e, CHAIN damage falloff, pause behavior, SpatialGrid query |
+| S18 | Tutorial UX | TutorialSpotlightComponent extracted, box-shadow replaces outline !important, dvh scroll fallback |
+
+---
+
+### Sprints 19-28 (hardening-vi continued, 2026-03-17)
+**10 sprints — 3496 → 3609 tests (+113)**
+
+| Sprint | Focus | Key Changes |
+|--------|-------|-------------|
+| S19 | Editor UX | EditorNotificationService replaces 9 alert() calls with inline toasts |
+| S20 | Performance | Raycasting array caching — eliminates per-mousemove Array.from() allocation |
+| S21 | Test infra | 8 new spy factories in test-spies.factory.ts, component spec refactored |
+| S22 | Dead code | Empty addHelpers removed, @deprecated aliases cleaned, rectangle magic number fixed |
+| S23 | **KEYSTONE 5** | 3515/3515, zero tsc errors |
+| S24 | Template | GameHudComponent extracted (10 tests) |
+| S25 | Template | GameSetupPanelComponent extracted (14 tests) |
+| S26 | Template | GameResultsOverlayComponent extracted (30 tests) |
+| S27 | Template | TowerInfoPanelComponent extracted (9+ tests) |
+| S28 | **KEYSTONE 6** | 3609/3609, template 573→387 LOC, 5 child components |
+
+## Red Team Critique — 2026-03-17
+
+### Finding 1: validateMapData accepts structurally invalid spawn/exit points (HIGH)
+**Location:** `games/novarise/core/map-schema.ts:119-125`
+**Risk:** `spawnPoints: [{}]` or `[{x: 9999, z: -1}]` passes all validation, gets saved, and produces a board with no SPAWNER tile. A* pathfinding crashes on wave start with no valid path. Exploitable via crafted JSON import.
+**Fix:** Add type checks on spawn/exit point objects (must have numeric `x`/`z` fields) and coordinate-bounds checks (`0 <= x < gridSize`, `0 <= z < gridSize`).
+
+### Finding 2: TowerMeshFactory shared materials cause double-dispose (MEDIUM)
+**Location:** `services/tower-mesh-factory.service.ts:41-68` + `game-board.component.ts:1063-1067`
+**Risk:** All meshes within a tower type share one material instance. `cleanupGameObjects` traverses each child and calls `disposeMaterial()`, disposing the same GPU resource multiple times. Three.js tolerates this (subsequent dispose() calls are no-ops) but it's technically incorrect, produces console noise in debug builds, and is fragile if Three.js ever tightens disposal semantics.
+**Fix:** Clone material per mesh, or track disposed materials in a Set to skip duplicates during cleanup.
+
+### Finding 3: Particle Y positions accumulate unboundedly in tickAmbientVisuals (MEDIUM)
+**Location:** `services/scene.service.ts:340`
+**Risk:** `positions[i+1] += Math.sin(...)` accumulates drift. After ~14 minutes at 60fps, particles have drifted ~100 units and are invisible. Visual regression in long sessions.
+**Fix:** Store base Y positions at init time. Compute `baseY + sin(t)` instead of `+= sin(t)`.
+
+### Finding 4: bind(this) in template creates new function every CD cycle (LOW)
+**Location:** `game-board.component.html:61,164`
+**Risk:** `.bind(this)` creates a new function reference on every change detection cycle, defeating OnPush optimization and forcing child re-renders at 60Hz during combat. GC churn.
+**Fix:** Define bound functions as class field arrow functions: `isChallengeCompletedBound = (c: ChallengeDefinition) => this.isChallengeCompleted(c);`

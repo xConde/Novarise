@@ -227,8 +227,8 @@ describe('map-schema', () => {
     });
 
     it('should accept boundary gridSize values (5 and 50)', () => {
-      expect(validateMapData({ ...validData(), gridSize: 5 }).valid).toBe(true);
-      expect(validateMapData({ ...validData(), gridSize: 50 }).valid).toBe(true);
+      expect(validateMapData({ ...validData(), gridSize: 5, spawnPoints: [{ x: 0, z: 0 }], exitPoints: [{ x: 4, z: 4 }] }).valid).toBe(true);
+      expect(validateMapData({ ...validData(), gridSize: 50, spawnPoints: [{ x: 0, z: 0 }], exitPoints: [{ x: 49, z: 49 }] }).valid).toBe(true);
     });
 
     it('should reject non-array tiles', () => {
@@ -316,6 +316,78 @@ describe('map-schema', () => {
 
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(1);
+    });
+
+    // --- Spawn/exit point structure validation (red team finding #1) ---
+
+    it('should reject spawnPoints with non-object entries', () => {
+      const data = { ...validData(), spawnPoints: ['not-an-object'] };
+      const result = validateMapData(data);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('spawnPoints[0]') && e.includes('not an object'))).toBe(true);
+    });
+
+    it('should reject spawnPoints with missing x/z fields', () => {
+      const data = { ...validData(), spawnPoints: [{}] };
+      const result = validateMapData(data);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('spawnPoints[0]') && e.includes('x/z'))).toBe(true);
+    });
+
+    it('should reject spawnPoints with non-numeric x/z', () => {
+      const data = { ...validData(), spawnPoints: [{ x: 'a', z: 0 }] };
+      const result = validateMapData(data);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('x/z'))).toBe(true);
+    });
+
+    it('should reject spawnPoints with out-of-bounds coordinates', () => {
+      const data = { ...validData(), spawnPoints: [{ x: 9999, z: -1 }] };
+      const result = validateMapData(data);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('out of bounds'))).toBe(true);
+    });
+
+    it('should reject spawnPoints at gridSize boundary (exclusive upper bound)', () => {
+      const data = { ...validData(), gridSize: 10, spawnPoints: [{ x: 10, z: 0 }] };
+      const result = validateMapData(data);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('out of bounds'))).toBe(true);
+    });
+
+    it('should accept spawnPoints at max valid coordinate (gridSize - 1)', () => {
+      const data = { ...validData(), gridSize: 10, spawnPoints: [{ x: 9, z: 9 }] };
+      const result = validateMapData(data);
+      expect(result.valid).toBe(true);
+    });
+
+    it('should reject non-integer spawn coordinates', () => {
+      const data = { ...validData(), spawnPoints: [{ x: 1.5, z: 2.7 }] };
+      const result = validateMapData(data);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('integers'))).toBe(true);
+    });
+
+    it('should reject exitPoints with non-object entries', () => {
+      const data = { ...validData(), exitPoints: [null] };
+      const result = validateMapData(data);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('exitPoints[0]') && e.includes('not an object'))).toBe(true);
+    });
+
+    it('should reject exitPoints with out-of-bounds coordinates', () => {
+      const data = { ...validData(), gridSize: 10, exitPoints: [{ x: 0, z: 10 }] };
+      const result = validateMapData(data);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('out of bounds'))).toBe(true);
+    });
+
+    it('should validate all points in array and report per-index errors', () => {
+      const data = { ...validData(), spawnPoints: [{ x: 0, z: 0 }, { x: 'bad', z: 0 }, { x: 100, z: 100 }] };
+      const result = validateMapData(data);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('spawnPoints[1]'))).toBe(true);
+      expect(result.errors.some(e => e.includes('spawnPoints[2]'))).toBe(true);
     });
   });
 });

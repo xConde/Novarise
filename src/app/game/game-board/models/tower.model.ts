@@ -1,14 +1,18 @@
 import * as THREE from 'three';
 import { StatusEffectType } from '../constants/status-effect.constants';
 
-export type TargetingMode = 'nearest' | 'first' | 'strongest';
-export const TARGETING_MODES: TargetingMode[] = ['nearest', 'first', 'strongest'];
-export const DEFAULT_TARGETING_MODE: TargetingMode = 'nearest';
+export enum TargetingMode {
+  NEAREST = 'nearest',
+  FIRST = 'first',
+  STRONGEST = 'strongest',
+}
+export const TARGETING_MODES: TargetingMode[] = [TargetingMode.NEAREST, TargetingMode.FIRST, TargetingMode.STRONGEST];
+export const DEFAULT_TARGETING_MODE: TargetingMode = TargetingMode.NEAREST;
 
 export const TARGETING_MODE_LABELS: Record<TargetingMode, string> = {
-  nearest: 'Nearest',
-  first: 'First',
-  strongest: 'Strongest',
+  [TargetingMode.NEAREST]: 'Nearest',
+  [TargetingMode.FIRST]: 'First',
+  [TargetingMode.STRONGEST]: 'Strongest',
 };
 
 export enum TowerType {
@@ -95,7 +99,7 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
   },
   [TowerType.SNIPER]: {
     damage: 80,
-    range: 6,
+    range: 8,
     fireRate: 2.5,
     cost: 125,
     projectileSpeed: 15,

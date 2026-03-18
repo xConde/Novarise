@@ -563,6 +563,11 @@ export class EnemyService {
         // Octahedron — compact, gem-like
         return new THREE.OctahedronGeometry(size, 0);
 
+      case EnemyType.FLYING:
+        // Diamond geometry is built inline in createEnemyMesh for flying enemies;
+        // this branch is a safety fallback and should never be reached at runtime.
+        return new THREE.SphereGeometry(size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
+
       case EnemyType.BASIC:
       default:
         // Standard sphere

@@ -125,11 +125,11 @@ describe('CombatLoopService', () => {
   describe('reset()', () => {
     it('should zero both accumulators', () => {
       // Prime accumulators with one tick
-      service.tick(0.016, 1, scene, null, false);
+      service.tick(0.016, 1, scene, null);
       service.reset();
 
       // After reset, a tiny delta should not trigger any physics steps
-      const result = service.tick(0.001, 1, scene, null, false);
+      const result = service.tick(0.001, 1, scene, null);
       expect(combatSpy.update).not.toHaveBeenCalled(); // no step triggered
       expect(result.kills.length).toBe(0);
     });
@@ -144,24 +144,92 @@ describe('CombatLoopService', () => {
         hitCount: 1,
       });
 
-      service.tick(FIXED_DT, 1, scene, null, false);
+      service.tick(FIXED_DT, 1, scene, null);
       service.reset();
 
       // Tick with empty combat to get clean result
       combatSpy.update.and.returnValue({ killed: [], fired: [], hitCount: 0 });
       enemySpy.getEnemies.and.returnValue(new Map());
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(result.kills.length).toBe(0);
       expect(result.firedTypes.size).toBe(0);
+    });
+
+    it('should clear leakedThisWave flag so streak can be awarded after reset', () => {
+      // Cause a leak to set leakedThisWave = true
+      const leakEnemy = makeEnemy({ id: 'leak1' });
+      enemySpy.getEnemies.and.returnValue(new Map([['leak1', leakEnemy]]));
+      enemySpy.updateEnemies.and.returnValue(['leak1']);
+      service.tick(FIXED_DT, 1, scene, null);
+
+      // reset() should clear leakedThisWave
+      service.reset();
+
+      // Now set up a clean wave-clear — streak bonus should fire
+      waveSpy.isSpawning.and.returnValue(false);
+      enemySpy.getEnemies.and.returnValue(new Map());
+      enemySpy.updateEnemies.and.returnValue([]);
+      gameStateSpy.addStreakBonus.and.returnValue(50);
+      gameStateSpy.getStreak.and.returnValue(1);
+      gameStateSpy.awardInterest.and.returnValue(0);
+      let callCount = 0;
+      gameStateSpy.getState.and.callFake(() => ({
+        phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
+        wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
+        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
+        highestWave: 0, activeModifiers: new Set(),
+      } as any));
+
+      service.tick(FIXED_DT, 1, scene, null);
+
+      expect(gameStateSpy.addStreakBonus).toHaveBeenCalled();
+    });
+  });
+
+  describe('resetLeakState()', () => {
+    it('should clear leakedThisWave so a clean wave can earn streak bonus', () => {
+      // Leak an enemy to prime leakedThisWave
+      const leakEnemy = makeEnemy({ id: 'leak1' });
+      enemySpy.getEnemies.and.returnValue(new Map([['leak1', leakEnemy]]));
+      enemySpy.updateEnemies.and.returnValue(['leak1']);
+      service.tick(FIXED_DT, 1, scene, null);
+
+      // Reset just the leak state (simulating startWave)
+      service.resetLeakState();
+
+      // Set up a wave-clear — streak bonus should fire since leak state was reset
+      waveSpy.isSpawning.and.returnValue(false);
+      enemySpy.getEnemies.and.returnValue(new Map());
+      enemySpy.updateEnemies.and.returnValue([]);
+      gameStateSpy.addStreakBonus.and.returnValue(50);
+      gameStateSpy.getStreak.and.returnValue(1);
+      gameStateSpy.awardInterest.and.returnValue(0);
+      let callCount = 0;
+      gameStateSpy.getState.and.callFake(() => ({
+        phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
+        wave: 2, lives: 9, gold: 100, score: 0, isPaused: false,
+        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
+        highestWave: 0, activeModifiers: new Set(),
+      } as any));
+
+      service.tick(FIXED_DT, 1, scene, null);
+
+      expect(gameStateSpy.addStreakBonus).toHaveBeenCalled();
+    });
+
+    it('should be callable without error when no leak has occurred', () => {
+      expect(() => service.resetLeakState()).not.toThrow();
     });
   });
 
   describe('flushElapsedTime()', () => {
     it('should flush accumulated elapsed time and return the amount', () => {
       // Advance time in two ticks (each less than fixedTimestep to avoid physics)
-      service.tick(0.3, 1, scene, null, false);
-      service.tick(0.4, 1, scene, null, false);
+      service.tick(0.3, 1, scene, null);
+      service.tick(0.4, 1, scene, null);
 
       const flushed = service.flushElapsedTime();
 
@@ -177,7 +245,7 @@ describe('CombatLoopService', () => {
     });
 
     it('should reset accumulator to 0 after flush', () => {
-      service.tick(0.5, 1, scene, null, false);
+      service.tick(0.5, 1, scene, null);
       service.flushElapsedTime();
       // Call again — should return 0
       const second = service.flushElapsedTime();
@@ -187,14 +255,14 @@ describe('CombatLoopService', () => {
 
   describe('tick() — physics accumulator', () => {
     it('should not run any physics steps when deltaTime is below the fixed timestep', () => {
-      service.tick(0.001, 1, scene, null, false);
+      service.tick(0.001, 1, scene, null);
 
       expect(combatSpy.update).not.toHaveBeenCalled();
       expect(waveSpy.update).not.toHaveBeenCalled();
     });
 
     it('should run exactly one physics step when deltaTime equals fixedTimestep', () => {
-      service.tick(FIXED_DT, 1, scene, null, false);
+      service.tick(FIXED_DT, 1, scene, null);
 
       expect(combatSpy.update).toHaveBeenCalledTimes(1);
       expect(waveSpy.update).toHaveBeenCalledTimes(1);
@@ -202,23 +270,23 @@ describe('CombatLoopService', () => {
 
     it('should accumulate across multiple ticks before stepping', () => {
       // Each tick is half a step — need two to fire one step
-      service.tick(FIXED_DT / 2, 1, scene, null, false);
+      service.tick(FIXED_DT / 2, 1, scene, null);
       expect(combatSpy.update).not.toHaveBeenCalled();
 
-      service.tick(FIXED_DT / 2, 1, scene, null, false);
+      service.tick(FIXED_DT / 2, 1, scene, null);
       expect(combatSpy.update).toHaveBeenCalledTimes(1);
     });
 
     it('should cap steps at PHYSICS_CONFIG.maxStepsPerFrame', () => {
       // Pass a huge delta that would require many steps
-      service.tick(10, 1, scene, null, false);
+      service.tick(10, 1, scene, null);
 
       expect(combatSpy.update).toHaveBeenCalledTimes(PHYSICS_CONFIG.maxStepsPerFrame);
     });
 
     it('should scale accumulation by gameSpeed', () => {
       // At speed 2, half the fixedTimestep triggers a full step
-      service.tick(FIXED_DT / 2, 2, scene, null, false);
+      service.tick(FIXED_DT / 2, 2, scene, null);
 
       expect(combatSpy.update).toHaveBeenCalledTimes(1);
     });
@@ -230,7 +298,7 @@ describe('CombatLoopService', () => {
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
       combatSpy.update.and.returnValue({ killed: [{ id: 'e1', damage: 10 }], fired: [], hitCount: 0 });
 
-      service.tick(FIXED_DT, 1, scene, null, false);
+      service.tick(FIXED_DT, 1, scene, null);
 
       expect(gameStateSpy.addGoldAndScore).toHaveBeenCalledWith(25);
       expect(gameStatsSpy.recordGoldEarned).toHaveBeenCalledWith(25);
@@ -241,7 +309,7 @@ describe('CombatLoopService', () => {
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
       combatSpy.update.and.returnValue({ killed: [{ id: 'e1', damage: 7 }], fired: [], hitCount: 0 });
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(result.kills.length).toBe(1);
       expect(result.kills[0].damage).toBe(7);
@@ -254,7 +322,7 @@ describe('CombatLoopService', () => {
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
       combatSpy.update.and.returnValue({ killed: [{ id: 'e1', damage: 5 }], fired: [], hitCount: 0 });
 
-      service.tick(FIXED_DT, 1, scene, null, false);
+      service.tick(FIXED_DT, 1, scene, null);
 
       expect(enemySpy.removeEnemy).toHaveBeenCalledWith('e1', scene);
     });
@@ -273,7 +341,7 @@ describe('CombatLoopService', () => {
       });
 
       // Two steps in one tick
-      const result = service.tick(FIXED_DT * 2, 1, scene, null, false);
+      const result = service.tick(FIXED_DT * 2, 1, scene, null);
 
       expect(result.kills.length).toBe(2);
     });
@@ -285,7 +353,7 @@ describe('CombatLoopService', () => {
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
       enemySpy.updateEnemies.and.returnValue(['e1']);
 
-      service.tick(FIXED_DT, 1, scene, null, false);
+      service.tick(FIXED_DT, 1, scene, null);
 
       expect(gameStateSpy.loseLife).toHaveBeenCalledWith(2);
       expect(gameStatsSpy.recordEnemyLeaked).toHaveBeenCalled();
@@ -295,7 +363,7 @@ describe('CombatLoopService', () => {
       enemySpy.updateEnemies.and.returnValue(['e1']);
       enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy({ id: 'e1' })]]));
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(result.leaked).toBeTrue();
     });
@@ -308,7 +376,7 @@ describe('CombatLoopService', () => {
       enemySpy.getEnemies.and.returnValue(enemies);
       enemySpy.updateEnemies.and.returnValue(['e1', 'e2']);
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(result.exitCount).toBe(2);
     });
@@ -316,7 +384,7 @@ describe('CombatLoopService', () => {
     it('should set result.leaked = false when no enemies exit', () => {
       enemySpy.updateEnemies.and.returnValue([]);
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(result.leaked).toBeFalse();
     });
@@ -339,7 +407,7 @@ describe('CombatLoopService', () => {
       enemySpy.updateEnemies.and.returnValue(['e1']);
       enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy({ id: 'e1' })]]));
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(result.defeatTriggered).toBeTrue();
     });
@@ -356,7 +424,7 @@ describe('CombatLoopService', () => {
       enemySpy.updateEnemies.and.returnValue(['e1']);
       enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy({ id: 'e1' })]]));
 
-      service.tick(FIXED_DT, 1, scene, null, false);
+      service.tick(FIXED_DT, 1, scene, null);
 
       expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false, null);
     });
@@ -374,7 +442,7 @@ describe('CombatLoopService', () => {
       enemySpy.updateEnemies.and.returnValue(['e1']);
       enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy({ id: 'e1' })]]));
 
-      service.tick(FIXED_DT, 1, scene, null, false);
+      service.tick(FIXED_DT, 1, scene, null);
 
       expect(gameEndSpy.recordEnd).not.toHaveBeenCalled();
     });
@@ -401,7 +469,7 @@ describe('CombatLoopService', () => {
       waveSpy.getWaveReward.and.returnValue(75);
       setupWaveClear(GamePhase.INTERMISSION);
 
-      service.tick(FIXED_DT, 1, scene, null, false);
+      service.tick(FIXED_DT, 1, scene, null);
 
       expect(gameStateSpy.completeWave).toHaveBeenCalledWith(75);
     });
@@ -410,7 +478,7 @@ describe('CombatLoopService', () => {
       setupWaveClear(GamePhase.INTERMISSION);
       gameStateSpy.awardInterest.and.returnValue(10);
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(result.waveCompletion).not.toBeNull();
       expect(result.waveCompletion!.resultPhase).toBe(GamePhase.INTERMISSION);
@@ -420,28 +488,50 @@ describe('CombatLoopService', () => {
     it('should emit waveCompletion with VICTORY resultPhase', () => {
       setupWaveClear(GamePhase.VICTORY);
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(result.waveCompletion).not.toBeNull();
       expect(result.waveCompletion!.resultPhase).toBe(GamePhase.VICTORY);
     });
 
-    it('should award streak bonus when leakedThisWave=false and no leak this frame', () => {
+    it('should award streak bonus when no enemy has leaked this wave', () => {
       setupWaveClear(GamePhase.INTERMISSION);
       gameStateSpy.addStreakBonus.and.returnValue(100);
       gameStateSpy.getStreak.and.returnValue(2);
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(gameStateSpy.addStreakBonus).toHaveBeenCalled();
       expect(result.waveCompletion!.streakBonus).toBe(100);
       expect(result.waveCompletion!.streakCount).toBe(2);
     });
 
-    it('should NOT award streak bonus when leakedThisWave=true', () => {
-      setupWaveClear(GamePhase.INTERMISSION);
+    it('should NOT award streak bonus when an enemy leaked in a prior tick this wave', () => {
+      // Simulate a leak happening in a prior tick by priming leakedThisWave
+      // via a tick that causes an exit, then resetting wave spawning state for the clear tick
+      const enemy = makeEnemy({ id: 'e_leak' });
+      enemySpy.getEnemies.and.returnValue(new Map([['e_leak', enemy]]));
+      enemySpy.updateEnemies.and.returnValue(['e_leak']); // enemy reaches exit
+      // Leak tick — no wave clear yet (still spawning)
+      waveSpy.isSpawning.and.returnValue(true);
+      service.tick(FIXED_DT, 1, scene, null);
 
-      service.tick(FIXED_DT, 1, scene, null, true /* leakedThisWave */);
+      // Now set up wave-clear conditions
+      waveSpy.isSpawning.and.returnValue(false);
+      enemySpy.getEnemies.and.returnValue(new Map());
+      enemySpy.updateEnemies.and.returnValue([]);
+      gameStateSpy.addStreakBonus.and.returnValue(0);
+      gameStateSpy.awardInterest.and.returnValue(0);
+      let callCount = 0;
+      gameStateSpy.getState.and.callFake(() => ({
+        phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
+        wave: 1, lives: 9, gold: 100, score: 0, isPaused: false,
+        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
+        highestWave: 0, activeModifiers: new Set(),
+      } as any));
+
+      service.tick(FIXED_DT, 1, scene, null);
 
       expect(gameStateSpy.addStreakBonus).not.toHaveBeenCalled();
     });
@@ -467,7 +557,7 @@ describe('CombatLoopService', () => {
       });
       enemySpy.updateEnemies.and.returnValue(['e1']); // enemy leaks
 
-      service.tick(FIXED_DT, 1, scene, null, false);
+      service.tick(FIXED_DT, 1, scene, null);
 
       expect(gameStateSpy.addStreakBonus).not.toHaveBeenCalled();
     });
@@ -476,7 +566,7 @@ describe('CombatLoopService', () => {
       setupWaveClear(GamePhase.VICTORY);
       gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: ['ach1'], completedChallenges: [] });
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(true, null);
       expect(result.gameEnd).not.toBeNull();
@@ -487,7 +577,7 @@ describe('CombatLoopService', () => {
     it('should not emit waveCompletion when spawning is still active', () => {
       waveSpy.isSpawning.and.returnValue(true);
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(result.waveCompletion).toBeNull();
       expect(gameStateSpy.completeWave).not.toHaveBeenCalled();
@@ -497,7 +587,7 @@ describe('CombatLoopService', () => {
       waveSpy.isSpawning.and.returnValue(false);
       enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy()]]));
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(result.waveCompletion).toBeNull();
     });
@@ -507,7 +597,7 @@ describe('CombatLoopService', () => {
     it('should accumulate firedTypes from TowerCombatService', () => {
       combatSpy.update.and.returnValue({ killed: [], fired: [TowerType.BASIC, TowerType.SNIPER], hitCount: 0 });
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(result.firedTypes.has(TowerType.BASIC)).toBeTrue();
       expect(result.firedTypes.has(TowerType.SNIPER)).toBeTrue();
@@ -520,7 +610,7 @@ describe('CombatLoopService', () => {
       }));
 
       // Two steps in one tick
-      const result = service.tick(FIXED_DT * 2, 1, scene, null, false);
+      const result = service.tick(FIXED_DT * 2, 1, scene, null);
 
       expect(result.hitCount).toBe(5);
     });
@@ -531,7 +621,7 @@ describe('CombatLoopService', () => {
       const events = [{ type: 'sfx' as const, sfxKey: 'chain' }];
       combatSpy.drainAudioEvents.and.returnValue(events);
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(result.combatAudioEvents).toEqual(events);
     });
@@ -540,16 +630,75 @@ describe('CombatLoopService', () => {
   describe('tick() — elapsed time flush', () => {
     it('should flush accumulated elapsed time when threshold exceeded', () => {
       // Exceed PHYSICS_CONFIG.elapsedTimeFlushIntervalS (1 second) in one tick
-      service.tick(PHYSICS_CONFIG.elapsedTimeFlushIntervalS + 0.01, 1, scene, null, false);
+      service.tick(PHYSICS_CONFIG.elapsedTimeFlushIntervalS + 0.01, 1, scene, null);
 
       expect(gameStateSpy.addElapsedTime).toHaveBeenCalled();
     });
 
     it('should not flush if accumulated time is below threshold', () => {
-      service.tick(0.5, 1, scene, null, false);
+      service.tick(0.5, 1, scene, null);
 
       // Internal periodic flush shouldn't fire for 0.5s
       expect(gameStateSpy.addElapsedTime).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── pause handling ─────────────────────────────────────────────────────────
+  // CombatLoopService.tick() has no internal isPaused guard — the component is
+  // responsible for not calling tick() when paused. The contract here is that
+  // a tick with deltaTime=0 (the effective no-op the component uses) performs
+  // zero physics steps and does not advance the physics accumulator.
+
+  describe('tick() — pause behavior (deltaTime=0 contract)', () => {
+    it('should perform no physics steps when deltaTime is 0', () => {
+      service.tick(0, 1, scene, null);
+
+      expect(combatSpy.update).not.toHaveBeenCalled();
+      expect(waveSpy.update).not.toHaveBeenCalled();
+    });
+
+    it('should return zero kills, zero hitCount, and no waveCompletion when deltaTime is 0', () => {
+      const result = service.tick(0, 1, scene, null);
+
+      expect(result.kills.length).toBe(0);
+      expect(result.hitCount).toBe(0);
+      expect(result.waveCompletion).toBeNull();
+    });
+
+    it('should not advance physics accumulator — subsequent tiny delta still triggers no steps', () => {
+      // Simulate a series of zero-delta ticks (paused frames)
+      service.tick(0, 1, scene, null);
+      service.tick(0, 1, scene, null);
+      service.tick(0, 1, scene, null);
+
+      // Small non-zero delta still below fixedTimestep — should still be no steps
+      service.tick(0.001, 1, scene, null);
+
+      expect(combatSpy.update).not.toHaveBeenCalled();
+    });
+
+    it('should still accumulate elapsed time even at deltaTime=0', () => {
+      // Advance elapsed time to near the flush threshold via a non-physics tick
+      service.tick(PHYSICS_CONFIG.elapsedTimeFlushIntervalS - 0.001, 1, scene, null);
+      expect(gameStateSpy.addElapsedTime).not.toHaveBeenCalled();
+
+      // A zero-delta tick does not push elapsed time over the threshold
+      service.tick(0, 1, scene, null);
+      expect(gameStateSpy.addElapsedTime).not.toHaveBeenCalled();
+    });
+
+    it('should not advance accumulator across multiple zero-delta ticks followed by one FIXED_DT', () => {
+      // After several zero-delta ticks the accumulator is 0;
+      // exactly one fixedTimestep should trigger exactly one physics step
+      service.tick(0, 1, scene, null);
+      service.tick(0, 1, scene, null);
+      combatSpy.update.calls.reset();
+      waveSpy.update.calls.reset();
+
+      service.tick(FIXED_DT, 1, scene, null);
+
+      expect(combatSpy.update).toHaveBeenCalledTimes(1);
+      expect(waveSpy.update).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -571,7 +720,7 @@ describe('CombatLoopService', () => {
         highestWave: 0, activeModifiers: new Set(),
       } as any));
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(result.waveCompletion).not.toBeNull();
       expect(result.waveCompletion!.resultPhase).toBe(GamePhase.INTERMISSION);
@@ -583,7 +732,7 @@ describe('CombatLoopService', () => {
       enemySpy.getEnemies.and.returnValue(new Map([['leaked1', enemy]]));
       enemySpy.updateEnemies.and.returnValue(['leaked1']); // enemy reached exit
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(gameStateSpy.loseLife).toHaveBeenCalledWith(3);
       expect(result.leaked).toBeTrue();
@@ -605,7 +754,7 @@ describe('CombatLoopService', () => {
         highestWave: 0, activeModifiers: new Set(),
       } as any));
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false /* leakedThisWave=false */);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(gameStateSpy.addStreakBonus).toHaveBeenCalled();
       expect(result.waveCompletion!.streakBonus).toBe(50);
@@ -628,7 +777,7 @@ describe('CombatLoopService', () => {
         highestWave: 0, activeModifiers: new Set(),
       } as any));
 
-      service.tick(FIXED_DT, 1, scene, null, false);
+      service.tick(FIXED_DT, 1, scene, null);
 
       expect(gameStateSpy.completeWave).toHaveBeenCalledWith(120);
     });
@@ -646,7 +795,7 @@ describe('CombatLoopService', () => {
         highestWave: 0, activeModifiers: new Set(),
       } as any));
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(result.defeatTriggered).toBeTrue();
       expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false, null);
@@ -668,12 +817,66 @@ describe('CombatLoopService', () => {
         highestWave: 0, activeModifiers: new Set(),
       } as any));
 
-      const result = service.tick(FIXED_DT, 1, scene, null, false);
+      const result = service.tick(FIXED_DT, 1, scene, null);
 
       expect(result.waveCompletion!.resultPhase).toBe(GamePhase.VICTORY);
       expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(true, null);
       expect(result.gameEnd).not.toBeNull();
       expect(result.gameEnd!.isVictory).toBeTrue();
+    });
+  });
+
+  // ─── defensive copies: kills and firedTypes ──────────────────────────────
+
+  describe('tick() — defensive copy of kills and firedTypes', () => {
+    it('mutating the returned kills array does not affect the next tick result', () => {
+      const enemy = makeEnemy({ id: 'e1', value: 10 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      combatSpy.update.and.returnValue({ killed: [{ id: 'e1', damage: 5 }], fired: [], hitCount: 0 });
+
+      const result = service.tick(FIXED_DT, 1, scene, null);
+      // Poison the returned array after consumption
+      result.kills.push({ damage: 999, position: { x: 0, y: 0, z: 0 }, color: 0, value: 999 });
+
+      // Next tick with no kills — the internal buffer should be unaffected
+      combatSpy.update.and.returnValue({ killed: [], fired: [], hitCount: 0 });
+      enemySpy.getEnemies.and.returnValue(new Map());
+      const next = service.tick(FIXED_DT, 1, scene, null);
+
+      expect(next.kills.length).toBe(0);
+    });
+
+    it('mutating the returned firedTypes set does not affect the next tick result', () => {
+      combatSpy.update.and.returnValue({ killed: [], fired: [TowerType.BASIC], hitCount: 0 });
+
+      const result = service.tick(FIXED_DT, 1, scene, null);
+      expect(result.firedTypes.has(TowerType.BASIC)).toBeTrue();
+      // Poison the returned set
+      result.firedTypes.add(TowerType.SNIPER);
+
+      // Next tick with no fired types — internal set should be unaffected
+      combatSpy.update.and.returnValue({ killed: [], fired: [], hitCount: 0 });
+      const next = service.tick(FIXED_DT, 1, scene, null);
+
+      expect(next.firedTypes.has(TowerType.BASIC)).toBeFalse();
+      expect(next.firedTypes.has(TowerType.SNIPER)).toBeFalse();
+    });
+
+    it('returned kills array is a snapshot — contains events from current tick only', () => {
+      const enemy = makeEnemy({ id: 'e1', value: 5 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      combatSpy.update.and.returnValue({ killed: [{ id: 'e1', damage: 3 }], fired: [], hitCount: 0 });
+
+      const first = service.tick(FIXED_DT, 1, scene, null);
+
+      // Second tick with no kills
+      combatSpy.update.and.returnValue({ killed: [], fired: [], hitCount: 0 });
+      enemySpy.getEnemies.and.returnValue(new Map());
+      service.tick(FIXED_DT, 1, scene, null);
+
+      // The first result should still hold the original kill (it's a copy, not a reference)
+      expect(first.kills.length).toBe(1);
+      expect(first.kills[0].damage).toBe(3);
     });
   });
 });

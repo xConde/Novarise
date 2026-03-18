@@ -36,7 +36,12 @@ export class StorageService {
       localStorage.setItem(key, serialized);
       return true;
     } catch (error) {
-      if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.code === 22)) {
+      const isQuotaError = (error instanceof DOMException) && (
+        error.code === 22 ||  // Safari/WebKit legacy code
+        error.name === 'QuotaExceededError' ||  // Modern browsers
+        error.name === 'NS_ERROR_DOM_QUOTA_REACHED'  // Firefox
+      );
+      if (isQuotaError) {
         const serialized = (() => {
           try { return JSON.stringify(value); } catch { return ''; }
         })();

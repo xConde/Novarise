@@ -11,6 +11,7 @@ import { GameEndService } from './game-end.service';
 import { StatusEffectService } from './status-effect.service';
 import { MapBridgeService } from './map-bridge.service';
 import { TutorialService } from './tutorial.service';
+import { PlayerProfileService } from './player-profile.service';
 import { CAMPAIGN_WAVE_DEFINITIONS } from '../../../campaign/waves/campaign-waves';
 
 /**
@@ -30,6 +31,7 @@ export class GameSessionService {
     private statusEffectService: StatusEffectService,
     private mapBridge: MapBridgeService,
     private tutorialService: TutorialService,
+    private playerProfileService: PlayerProfileService,
   ) {}
 
   /**
@@ -47,6 +49,7 @@ export class GameSessionService {
     this.challengeTrackingService.reset();
     this.statusEffectService.cleanup();
     this.tutorialService.resetCurrentStep();
+    this.playerProfileService.resetSession();
   }
 
   /**

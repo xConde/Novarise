@@ -8,6 +8,8 @@ $campaign-grid-cols-sm: 1fr;
   display: flex;
   align-items: flex-start;
   justify-content: center;
+  // height: 100% constrains the container to its flex parent, creating the scroll context
+  // for overflow-y: auto. Do NOT use min-height here — it removes the cap and breaks scroll.
   height: 100%;
   background-color: var(--bg-color);
   color: var(--text-color);

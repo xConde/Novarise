@@ -121,30 +121,35 @@ describe('PlayerProfileService', () => {
 
     it('accumulates totalEnemiesKilled across games', () => {
       service.recordGameEnd(makeStats({ enemiesKilled: 30 }));
+      service.resetSession();
       service.recordGameEnd(makeStats({ enemiesKilled: 50 }));
       expect(service.getProfile().totalEnemiesKilled).toBe(80);
     });
 
     it('accumulates totalGoldEarned across games', () => {
       service.recordGameEnd(makeStats({ goldEarned: 300 }));
+      service.resetSession();
       service.recordGameEnd(makeStats({ goldEarned: 700 }));
       expect(service.getProfile().totalGoldEarned).toBe(1000);
     });
 
     it('tracks highestWaveReached as a max, not a sum', () => {
       service.recordGameEnd(makeStats({ wavesCompleted: 8 }));
+      service.resetSession();
       service.recordGameEnd(makeStats({ wavesCompleted: 5 }));
       expect(service.getProfile().highestWaveReached).toBe(8);
     });
 
     it('updates highestWaveReached when new value is greater', () => {
       service.recordGameEnd(makeStats({ wavesCompleted: 3 }));
+      service.resetSession();
       service.recordGameEnd(makeStats({ wavesCompleted: 12 }));
       expect(service.getProfile().highestWaveReached).toBe(12);
     });
 
     it('tracks highestScore as a max, not a sum', () => {
       service.recordGameEnd(makeStats({ score: 4000 }));
+      service.resetSession();
       service.recordGameEnd(makeStats({ score: 2000 }));
       expect(service.getProfile().highestScore).toBe(4000);
     });
@@ -164,6 +169,7 @@ describe('PlayerProfileService', () => {
   describe('recordGameEnd — new tracking fields', () => {
     it('accumulates towerKills across games', () => {
       service.recordGameEnd(makeStats({ towerKills: { sniper: 50, chain: 30 } }));
+      service.resetSession();
       service.recordGameEnd(makeStats({ towerKills: { sniper: 100, basic: 20 } }));
       const p = service.getProfile();
       expect(p.towerKills['sniper']).toBe(150);
@@ -173,6 +179,7 @@ describe('PlayerProfileService', () => {
 
     it('accumulates slowEffectsApplied across games', () => {
       service.recordGameEnd(makeStats({ slowEffectsApplied: 200 }));
+      service.resetSession();
       service.recordGameEnd(makeStats({ slowEffectsApplied: 400 }));
       expect(service.getProfile().slowEffectsApplied).toBe(600);
     });
@@ -189,6 +196,7 @@ describe('PlayerProfileService', () => {
 
     it('does not reset hasUsedSpecialization once true', () => {
       service.recordGameEnd(makeStats({ usedSpecialization: true }));
+      service.resetSession();
       service.recordGameEnd(makeStats({ usedSpecialization: false }));
       expect(service.getProfile().hasUsedSpecialization).toBe(true);
     });
@@ -205,7 +213,9 @@ describe('PlayerProfileService', () => {
 
     it('takes max of maxModifiersUsedInVictory across games', () => {
       service.recordGameEnd(makeStats({ isVictory: true, modifierCount: 2 }));
+      service.resetSession();
       service.recordGameEnd(makeStats({ isVictory: true, modifierCount: 5 }));
+      service.resetSession();
       service.recordGameEnd(makeStats({ isVictory: true, modifierCount: 3 }));
       expect(service.getProfile().maxModifiersUsedInVictory).toBe(5);
     });
@@ -226,6 +236,7 @@ describe('PlayerProfileService', () => {
 
     it('does not return already-unlocked achievements', () => {
       service.recordGameEnd(makeStats({ isVictory: true }));
+      service.resetSession();
       const secondUnlock = service.recordGameEnd(makeStats({ isVictory: true }));
       expect(secondUnlock).not.toContain('first_victory');
     });
@@ -255,6 +266,7 @@ describe('PlayerProfileService', () => {
     it('unlocks veteran after 10 games', () => {
       for (let i = 0; i < 9; i++) {
         service.recordGameEnd(makeStats({ isVictory: false }));
+        service.resetSession();
       }
       expect(service.getProfile().achievements).not.toContain('veteran');
       service.recordGameEnd(makeStats({ isVictory: false }));
@@ -264,6 +276,7 @@ describe('PlayerProfileService', () => {
     it('unlocks gold_hoarder when cumulative gold reaches 10,000', () => {
       service.recordGameEnd(makeStats({ goldEarned: 9_999 }));
       expect(service.getProfile().achievements).not.toContain('gold_hoarder');
+      service.resetSession();
       service.recordGameEnd(makeStats({ goldEarned: 1 }));
       expect(service.getProfile().achievements).toContain('gold_hoarder');
     });
@@ -271,6 +284,7 @@ describe('PlayerProfileService', () => {
     it('unlocks exterminator when cumulative kills reach 1,000', () => {
       service.recordGameEnd(makeStats({ enemiesKilled: 999 }));
       expect(service.getProfile().achievements).not.toContain('exterminator');
+      service.resetSession();
       service.recordGameEnd(makeStats({ enemiesKilled: 1 }));
       expect(service.getProfile().achievements).toContain('exterminator');
     });
@@ -278,6 +292,7 @@ describe('PlayerProfileService', () => {
     it('unlocks survivor when highestWaveReached reaches 20', () => {
       service.recordGameEnd(makeStats({ wavesCompleted: 19 }));
       expect(service.getProfile().achievements).not.toContain('survivor');
+      service.resetSession();
       service.recordGameEnd(makeStats({ wavesCompleted: 20 }));
       expect(service.getProfile().achievements).toContain('survivor');
     });
@@ -285,6 +300,7 @@ describe('PlayerProfileService', () => {
     it('unlocks high_scorer when highestScore reaches 5,000', () => {
       service.recordGameEnd(makeStats({ score: 4999 }));
       expect(service.getProfile().achievements).not.toContain('high_scorer');
+      service.resetSession();
       service.recordGameEnd(makeStats({ score: 5000 }));
       expect(service.getProfile().achievements).toContain('high_scorer');
     });
@@ -292,6 +308,7 @@ describe('PlayerProfileService', () => {
     it('unlocks dedicated after 25 victories', () => {
       for (let i = 0; i < 24; i++) {
         service.recordGameEnd(makeStats({ isVictory: true }));
+        service.resetSession();
       }
       expect(service.getProfile().achievements).not.toContain('dedicated');
       service.recordGameEnd(makeStats({ isVictory: true }));
@@ -327,6 +344,7 @@ describe('PlayerProfileService', () => {
 
     it('does not return perfectionist again once already unlocked', () => {
       service.recordGameEnd(makeStats({ isVictory: true, livesLost: 0 }));
+      service.resetSession();
       const second = service.recordGameEnd(
         makeStats({ isVictory: true, livesLost: 0 })
       );
@@ -475,12 +493,14 @@ describe('PlayerProfileService', () => {
     it('unlocks sniper_elite at 500 sniper kills', () => {
       service.recordGameEnd(makeStats({ towerKills: { sniper: 499 } }));
       expect(service.getProfile().achievements).not.toContain('sniper_elite');
+      service.resetSession();
       service.recordGameEnd(makeStats({ towerKills: { sniper: 1 } }));
       expect(service.getProfile().achievements).toContain('sniper_elite');
     });
 
     it('accumulates sniper kills across games for sniper_elite', () => {
       service.recordGameEnd(makeStats({ towerKills: { sniper: 300 } }));
+      service.resetSession();
       service.recordGameEnd(makeStats({ towerKills: { sniper: 200 } }));
       expect(service.getProfile().achievements).toContain('sniper_elite');
     });
@@ -488,6 +508,7 @@ describe('PlayerProfileService', () => {
     it('unlocks chain_master at 300 chain kills', () => {
       service.recordGameEnd(makeStats({ towerKills: { chain: 299 } }));
       expect(service.getProfile().achievements).not.toContain('chain_master');
+      service.resetSession();
       service.recordGameEnd(makeStats({ towerKills: { chain: 1 } }));
       expect(service.getProfile().achievements).toContain('chain_master');
     });
@@ -495,6 +516,7 @@ describe('PlayerProfileService', () => {
     it('unlocks slow_and_steady at 1000 slow applications', () => {
       service.recordGameEnd(makeStats({ slowEffectsApplied: 999 }));
       expect(service.getProfile().achievements).not.toContain('slow_and_steady');
+      service.resetSession();
       service.recordGameEnd(makeStats({ slowEffectsApplied: 1 }));
       expect(service.getProfile().achievements).toContain('slow_and_steady');
     });
@@ -526,6 +548,7 @@ describe('PlayerProfileService', () => {
     it('unlocks endless_30 at wave 30', () => {
       service.recordGameEnd(makeStats({ wavesCompleted: 29 }));
       expect(service.getProfile().achievements).not.toContain('endless_30');
+      service.resetSession();
       service.recordGameEnd(makeStats({ wavesCompleted: 30 }));
       expect(service.getProfile().achievements).toContain('endless_30');
     });
@@ -533,6 +556,7 @@ describe('PlayerProfileService', () => {
     it('unlocks endless_50 at wave 50', () => {
       service.recordGameEnd(makeStats({ wavesCompleted: 49 }));
       expect(service.getProfile().achievements).not.toContain('endless_50');
+      service.resetSession();
       service.recordGameEnd(makeStats({ wavesCompleted: 50 }));
       expect(service.getProfile().achievements).toContain('endless_50');
     });
@@ -560,6 +584,7 @@ describe('PlayerProfileService', () => {
       expect(service.getProfile().achievements).not.toContain('challenger_5');
 
       service.recordChallengeCompleted();
+      service.resetSession();
       service.recordGameEnd(makeStats({ isVictory: true }));
       expect(service.getProfile().achievements).toContain('challenger_5');
     });
@@ -1067,6 +1092,55 @@ describe('PlayerProfileService', () => {
       const p = service.getProfile();
       p.towerKills['sniper'] = 9999;
       expect(service.getProfile().towerKills['sniper']).toBe(10);
+    });
+  });
+
+  // ── recordGameEnd idempotency guard ────────────────────────────────────────
+
+  describe('recordGameEnd idempotency guard', () => {
+    it('second call within the same session is a no-op and returns []', () => {
+      const first = service.recordGameEnd(makeStats({ isVictory: true, score: 100 }));
+      const second = service.recordGameEnd(makeStats({ isVictory: true, score: 200 }));
+
+      expect(second).toEqual([]);
+      // totalGamesPlayed should only be 1, not 2
+      expect(service.getProfile().totalGamesPlayed).toBe(1);
+    });
+
+    it('stats from the second duplicate call are NOT applied', () => {
+      service.recordGameEnd(makeStats({ score: 100, enemiesKilled: 5 }));
+      service.recordGameEnd(makeStats({ score: 999, enemiesKilled: 999 }));
+
+      const p = service.getProfile();
+      expect(p.highestScore).toBe(100);
+      expect(p.totalEnemiesKilled).toBe(5);
+    });
+
+    it('resetSession() allows a subsequent recordGameEnd to be recorded', () => {
+      service.recordGameEnd(makeStats({ score: 100 }));
+      service.resetSession();
+
+      const newlyUnlocked = service.recordGameEnd(makeStats({ score: 200 }));
+
+      // The second call should have been processed — totalGamesPlayed = 2
+      expect(service.getProfile().totalGamesPlayed).toBe(2);
+      // Return value should be an array (possibly empty), not the no-op []
+      expect(Array.isArray(newlyUnlocked)).toBeTrue();
+    });
+
+    it('resetSession() clears the guard so stats accumulate correctly across sessions', () => {
+      service.recordGameEnd(makeStats({ enemiesKilled: 10 }));
+      service.resetSession();
+      service.recordGameEnd(makeStats({ enemiesKilled: 20 }));
+
+      expect(service.getProfile().totalEnemiesKilled).toBe(30);
+    });
+
+    it('resetSession() is safe to call before any recordGameEnd', () => {
+      expect(() => service.resetSession()).not.toThrow();
+      // Should still be recordable after a reset on a fresh instance
+      service.recordGameEnd(makeStats());
+      expect(service.getProfile().totalGamesPlayed).toBe(1);
     });
   });
 });

@@ -6,6 +6,7 @@ import {
   validateMapData
 } from './map-schema';
 import { StorageService } from '../../../game/game-board/services/storage.service';
+import { MapBridgeService } from '../../../game/game-board/services/map-bridge.service';
 
 export interface MapMetadata {
   id: string;
@@ -30,7 +31,10 @@ export class MapStorageService {
   private readonly METADATA_KEY = 'novarise_maps_metadata';
   private readonly CURRENT_MAP_KEY = 'novarise_current_map';
 
-  constructor(private storageService: StorageService) {}
+  constructor(
+    private storageService: StorageService,
+    private mapBridge: MapBridgeService
+  ) {}
 
   /**
    * Save a map with metadata
@@ -39,7 +43,7 @@ export class MapStorageService {
    * @param id Optional ID (generates new if not provided)
    * @returns The saved map ID
    */
-  public saveMap(name: string, data: TerrainGridState, id?: string): string {
+  public saveMap(name: string, data: TerrainGridState, id?: string): string | null {
     const mapId = id || this.generateMapId();
     const now = Date.now();
 
@@ -57,6 +61,12 @@ export class MapStorageService {
       schemaVersion: CURRENT_SCHEMA_VERSION
     };
 
+    const validation = validateMapData(dataWithVersion as unknown as Record<string, unknown>);
+    if (!validation.valid) {
+      console.error('Cannot save invalid map:', validation.errors.join('; '));
+      return null;
+    }
+
     const savedMap: SavedMap = {
       metadata: metadata,
       data: dataWithVersion
@@ -65,6 +75,7 @@ export class MapStorageService {
     // Save the map data
     if (!this.storageService.setJSON(this.STORAGE_PREFIX + mapId, savedMap)) {
       console.error('Failed to save map — localStorage may be full or unavailable');
+      return null;
     }
 
     // Update metadata index
@@ -95,6 +106,12 @@ export class MapStorageService {
 
     if (!migrated) {
       console.error(`Failed to migrate map "${id}" — data may be corrupted or from a newer version`);
+      return null;
+    }
+
+    const postMigrateValidation = validateMapData(migrated);
+    if (!postMigrateValidation.valid) {
+      console.error(`Migrated map "${id}" failed validation:`, postMigrateValidation.errors.join('; '));
       return null;
     }
 
@@ -151,6 +168,11 @@ export class MapStorageService {
     // Clear current map if it was this one
     if (this.getCurrentMapId() === id) {
       this.storageService.remove(this.CURRENT_MAP_KEY);
+    }
+
+    // Clear bridge state if the deleted map was loaded
+    if (this.mapBridge.getMapId() === id) {
+      this.mapBridge.clearEditorMap();
     }
 
     return true;

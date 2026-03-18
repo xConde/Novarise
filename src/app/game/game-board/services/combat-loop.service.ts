@@ -38,6 +38,8 @@ import { TowerType } from '../models/tower.model';
 export class CombatLoopService {
   private physicsAccumulator = 0;
   private elapsedTimeAccumulator = 0;
+  /** Whether any enemy has leaked during the current wave (for streak bonus calculation). */
+  private leakedThisWave = false;
 
   /** Reused per-frame kill accumulator — cleared at the start of each tick(). */
   private frameKills: FrameKillEvent[] = [];
@@ -63,20 +65,18 @@ export class CombatLoopService {
    * @param gameSpeed   Current speed multiplier (1/2/3).
    * @param scene       The active Three.js scene (needed by WaveService / EnemyService).
    * @param scoreBreakdown Current score breakdown (passed to GameEndService on game end).
-   * @param leakedThisWave Whether any enemy has already leaked this wave (component owns this).
    * @returns           Accumulated frame events for the component to consume.
    *
-   * **IMPORTANT:** The returned `kills` and `firedTypes` are references to
-   * internal reused collections. They are cleared at the start of the NEXT
-   * tick() call. Consume them synchronously in the same animation frame —
-   * do NOT store the reference for deferred processing.
+   * The returned `kills` array and `firedTypes` set are **defensive copies** of
+   * the internal reused collections. They are safe to hold across frames — the
+   * internal arrays are cleared at the start of the NEXT tick() but the copies
+   * are independent snapshots.
    */
   tick(
     deltaTime: number,
     gameSpeed: number,
     scene: THREE.Scene,
     scoreBreakdown: ScoreBreakdown | null,
-    leakedThisWave: boolean,
   ): CombatFrameResult {
     this.physicsAccumulator += deltaTime * gameSpeed;
     let stepCount = 0;
@@ -146,6 +146,7 @@ export class CombatLoopService {
         const leakCost = leakedEnemy?.leakDamage ?? 1;
         this.gameStateService.loseLife(leakCost);
         frameLeaked = true;
+        this.leakedThisWave = true;
         this.gameStatsService.recordEnemyLeaked();
         frameExitCount++;
         this.enemyService.removeEnemy(enemyId, scene);
@@ -178,8 +179,8 @@ export class CombatLoopService {
         let streakCount = 0;
 
         // Award streak bonus before completeWave transitions out of COMBAT
-        const effectivelyLeaked = leakedThisWave || frameLeaked;
-        if (!effectivelyLeaked) {
+        // leakedThisWave is already true if any enemy leaked this frame (set above)
+        if (!this.leakedThisWave) {
           streakBonus = this.gameStateService.addStreakBonus();
           streakCount = this.gameStateService.getStreak();
         }
@@ -216,8 +217,8 @@ export class CombatLoopService {
     const combatAudioEvents = this.towerCombatService.drainAudioEvents();
 
     return {
-      kills: this.frameKills,
-      firedTypes: this.frameFiredTypes,
+      kills: [...this.frameKills],              // defensive copy — internal array is cleared on next tick()
+      firedTypes: new Set(this.frameFiredTypes), // defensive copy — internal set is cleared on next tick()
       hitCount: frameHitCount,
       exitCount: frameExitCount,
       leaked: frameLeaked,
@@ -243,12 +244,21 @@ export class CombatLoopService {
   }
 
   /**
+   * Reset the per-wave leak flag.
+   * Call from the component's startWave() before beginning a new wave.
+   */
+  resetLeakState(): void {
+    this.leakedThisWave = false;
+  }
+
+  /**
    * Reset accumulators and internal state.
    * Call on game restart (in restartGame() alongside GameSessionService.resetAllServices()).
    */
   reset(): void {
     this.physicsAccumulator = 0;
     this.elapsedTimeAccumulator = 0;
+    this.leakedThisWave = false;
     this.frameKills.length = 0;
     this.frameFiredTypes.clear();
   }

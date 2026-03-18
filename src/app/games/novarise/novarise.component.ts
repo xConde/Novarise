@@ -1,5 +1,6 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
+import { Subscription } from 'rxjs';
 import * as THREE from 'three';
 import { TerrainGrid } from './features/terrain-editor/terrain-grid.class';
 import { TerrainType, TERRAIN_CONFIGS } from './models/terrain-types.enum';
@@ -29,6 +30,7 @@ import { PathValidationService, PathValidationResult } from './core/path-validat
 import { MapTemplateService } from './core/map-template.service';
 import { MapTemplate } from './core/map-template.model';
 import { EditorSceneService } from './core/editor-scene.service';
+import { EditorNotificationService, EditorNotification } from './core/editor-notification.service';
 
 // Re-export types for template compatibility
 export { EditMode, BrushTool } from './core/editor-state.service';
@@ -111,6 +113,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   // Map templates
   public templates: MapTemplate[] = [];
 
+  // Toast notification state (populated from EditorNotificationService)
+  public editorNotification: EditorNotification | null = null;
+  private notificationSub: Subscription | null = null;
+
   // Undo/Redo state - expose for UI binding
   public get canUndo(): boolean { return this.editHistory.canUndo; }
   public get canRedo(): boolean { return this.editHistory.canRedo; }
@@ -131,7 +137,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     private mapBridge: MapBridgeService,
     private pathValidation: PathValidationService,
     private mapTemplateService: MapTemplateService,
-    private editorScene: EditorSceneService
+    private editorScene: EditorSceneService,
+    public editorNotificationService: EditorNotificationService
   ) {
     this.keyboardHandler = this.handleKeyDown.bind(this);
     this.keyUpHandler = this.handleKeyUp.bind(this);
@@ -167,9 +174,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Initialize terrain grid
     this.terrainGrid = new TerrainGrid(this.editorScene.getScene(), 25);
 
-    // Add helpers for spatial reference
-    this.addHelpers();
-
     // Create brush indicator for crisp visual feedback
     this.createBrushIndicator();
 
@@ -184,6 +188,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Load map templates for the editor UI
     this.templates = this.mapTemplateService.getTemplates();
+
+    // Subscribe to toast notifications from EditorNotificationService
+    this.notificationSub = this.editorNotificationService.getNotification().subscribe(n => {
+      this.editorNotification = n;
+    });
 
     // Try to migrate old format and load current map
     this.mapStorage.migrateOldFormat();
@@ -698,11 +707,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.cameraControl.applyToCamera(this.editorScene.getCamera(), this.editorScene.getControls()?.target);
   }
 
-  private addHelpers(): void {
-    // Don't add THREE.js GridHelper - we have custom grid lines that match tiles perfectly
-    // The custom grid lines are added by TerrainGrid and aligned to actual tile positions
-  }
-
   private createBrushIndicator(): void {
     // Create a ring to show brush area - crisp and clear
     const geometry = new THREE.RingGeometry(
@@ -824,12 +828,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  /** @deprecated Backward-compatible alias — calls updateSpawnMarkers(). */
   private updateSpawnMarker(): void {
     this.updateSpawnMarkers();
   }
 
-  /** @deprecated Backward-compatible alias — calls updateExitMarkers(). */
   private updateExitMarker(): void {
     this.updateExitMarkers();
   }
@@ -850,16 +852,20 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Save (will update if ID exists, create new if not)
     const savedId = this.mapStorage.saveMap(mapName, state, currentId || undefined);
+    if (!savedId) {
+      this.editorNotificationService.show('Failed to save map. Storage may be full.', 'error');
+      return;
+    }
     this.currentMapName = mapName;
 
-    alert(`Map "${mapName}" saved successfully!`);
+    this.editorNotificationService.show(`Map "${mapName}" saved successfully!`, 'success');
   }
 
   private loadGridState(): void {
     const maps = this.mapStorage.getAllMaps();
 
     if (maps.length === 0) {
-      alert('No saved maps found.');
+      this.editorNotificationService.show('No saved maps found.', 'error');
       return;
     }
 
@@ -875,7 +881,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     const index = parseInt(selection) - 1;
     if (index < 0 || index >= maps.length) {
-      alert('Invalid selection.');
+      this.editorNotificationService.show('Invalid selection.', 'error');
       return;
     }
 
@@ -888,9 +894,9 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.updateExitMarker();
       this.runPathValidation();
       this.currentMapName = selectedMap.name;
-      alert(`Map "${selectedMap.name}" loaded successfully!`);
+      this.editorNotificationService.show(`Map "${selectedMap.name}" loaded successfully!`, 'success');
     } else {
-      alert('Failed to load map.');
+      this.editorNotificationService.show('Failed to load map.', 'error');
     }
   }
 
@@ -1170,7 +1176,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           if (this.editMode === 'paint') {
             this.terrainGrid.paintTile(x, z, this.selectedTerrainType);
           } else if (this.editMode === 'height') {
-            this.terrainGrid.adjustHeight(x, z, 0.2);
+            this.terrainGrid.adjustHeight(x, z, EDITOR_HEIGHT.stepSize);
             // Track new height after change
             const updatedTile = this.terrainGrid.getTileAt(x, z);
             if (updatedTile) {
@@ -1393,13 +1399,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   public exportCurrentMap(): void {
     const currentId = this.mapStorage.getCurrentMapId();
     if (!currentId) {
-      alert('No map to export. Save a map first (G key).');
+      this.editorNotificationService.show('No map to export. Save a map first (G key).', 'error');
       return;
     }
 
     const success = this.mapStorage.downloadMapAsFile(currentId);
     if (!success) {
-      alert('Failed to export map.');
+      this.editorNotificationService.show('Failed to export map.', 'error');
     }
   }
 
@@ -1421,7 +1427,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         }
         // Clear edit history when loading a new map
         this.editHistory.clear();
-        alert(`Map "${this.currentMapName}" imported successfully!`);
+        this.editorNotificationService.show(`Map "${this.currentMapName}" imported successfully!`, 'success');
       }
     }
   }
@@ -1484,6 +1490,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     // Stop the animation loop first to prevent calls to disposed resources
     cancelAnimationFrame(this.animationFrameId);
+
+    this.notificationSub?.unsubscribe();
+    this.notificationSub = null;
+    this.editorNotificationService.clear();
 
     window.removeEventListener('keydown', this.keyboardHandler);
     window.removeEventListener('keyup', this.keyUpHandler);

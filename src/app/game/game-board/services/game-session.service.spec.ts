@@ -167,5 +167,79 @@ describe('GameSessionService', () => {
       expect(waveSpy.setCustomWaves).toHaveBeenCalledWith(expectedWaves);
       expect(gameStateSpy.setMaxWaves).toHaveBeenCalledWith(expectedWaves.length);
     });
+
+    it('should be a no-op for an empty string mapId', () => {
+      mapBridgeSpy.getMapId.and.returnValue('');
+
+      service.applyCampaignWaves();
+
+      expect(waveSpy.setCustomWaves).not.toHaveBeenCalled();
+      expect(gameStateSpy.setMaxWaves).not.toHaveBeenCalled();
+    });
+
+    it('should be a no-op for a map id that starts with "campaign_" but has no definition', () => {
+      mapBridgeSpy.getMapId.and.returnValue('campaign_99');
+
+      service.applyCampaignWaves();
+
+      expect(waveSpy.setCustomWaves).not.toHaveBeenCalled();
+      expect(gameStateSpy.setMaxWaves).not.toHaveBeenCalled();
+    });
+
+    // --- All 16 campaign level IDs ---
+
+    const ALL_CAMPAIGN_IDS = [
+      'campaign_01', 'campaign_02', 'campaign_03', 'campaign_04',
+      'campaign_05', 'campaign_06', 'campaign_07', 'campaign_08',
+      'campaign_09', 'campaign_10', 'campaign_11', 'campaign_12',
+      'campaign_13', 'campaign_14', 'campaign_15', 'campaign_16',
+    ];
+
+    ALL_CAMPAIGN_IDS.forEach(mapId => {
+      it(`should load non-empty wave definitions for ${mapId}`, () => {
+        mapBridgeSpy.getMapId.and.returnValue(mapId);
+
+        service.applyCampaignWaves();
+
+        const waves = CAMPAIGN_WAVE_DEFINITIONS[mapId];
+        expect(waves).toBeTruthy();
+        expect(waves.length).toBeGreaterThan(0);
+        expect(waveSpy.setCustomWaves).toHaveBeenCalledWith(waves);
+        expect(gameStateSpy.setMaxWaves).toHaveBeenCalledWith(waves.length);
+      });
+    });
+
+    ALL_CAMPAIGN_IDS.forEach(mapId => {
+      it(`should set maxWaves to match wave array length for ${mapId}`, () => {
+        mapBridgeSpy.getMapId.and.returnValue(mapId);
+
+        service.applyCampaignWaves();
+
+        const expectedLength = CAMPAIGN_WAVE_DEFINITIONS[mapId].length;
+        expect(gameStateSpy.setMaxWaves).toHaveBeenCalledWith(expectedLength);
+      });
+    });
+
+    ALL_CAMPAIGN_IDS.forEach(mapId => {
+      it(`each wave entry for ${mapId} should have at least one enemy entry`, () => {
+        const waves = CAMPAIGN_WAVE_DEFINITIONS[mapId];
+        waves.forEach((wave, i) => {
+          expect(wave.entries.length)
+            .withContext(`${mapId} wave[${i}].entries must be non-empty`)
+            .toBeGreaterThan(0);
+        });
+      });
+    });
+
+    ALL_CAMPAIGN_IDS.forEach(mapId => {
+      it(`each wave entry for ${mapId} should have a positive reward`, () => {
+        const waves = CAMPAIGN_WAVE_DEFINITIONS[mapId];
+        waves.forEach((wave, i) => {
+          expect(wave.reward)
+            .withContext(`${mapId} wave[${i}].reward must be > 0`)
+            .toBeGreaterThan(0);
+        });
+      });
+    });
   });
 });

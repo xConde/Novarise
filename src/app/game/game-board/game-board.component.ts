@@ -26,11 +26,9 @@ import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, GameModifierConfig, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
-import { ANIMATION_CONFIG } from './constants/rendering.constants';
 import { CAMERA_CONFIG } from './constants/camera.constants';
-import { PARTICLE_CONFIG } from './constants/particle.constants';
-import { TOWER_VISUAL_CONFIG, RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG, TILE_EMISSIVE, HEATMAP_GRADIENT, UI_CONFIG } from './constants/ui.constants';
-import { SCREEN_SHAKE_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from './constants/effects.constants';
+import { TOWER_VISUAL_CONFIG, TILE_EMISSIVE, UI_CONFIG } from './constants/ui.constants';
+import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG, DRAG_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
 import { EnemyType } from './models/enemy.model';
@@ -47,7 +45,6 @@ import { ChallengeTrackingService } from './services/challenge-tracking.service'
 import { GameEndService } from './services/game-end.service';
 import { TowerInteractionService } from './services/tower-interaction.service';
 import { PathfindingService } from './services/pathfinding.service';
-import { TerrainGridStateLegacy } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 import { CampaignService } from '../../campaign/services/campaign.service';
 import { CampaignMapService } from '../../campaign/services/campaign-map.service';
 
@@ -56,6 +53,10 @@ import { ChallengeDefinition, getChallengesForLevel } from '../../campaign/model
 import { GameSessionService } from './services/game-session.service';
 import { CombatLoopService } from './services/combat-loop.service';
 import { CombatFrameResult } from './models/combat-frame.model';
+import { TileHighlightService } from './services/tile-highlight.service';
+import { TowerAnimationService } from './services/tower-animation.service';
+import { RangeVisualizationService } from './services/range-visualization.service';
+import { TowerMeshFactoryService } from './services/tower-mesh-factory.service';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -70,7 +71,7 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [SceneService, EnemyService, PathfindingService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService]
+  providers: [SceneService, EnemyService, PathfindingService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -87,13 +88,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Tower management
   private towerMeshes: Map<string, THREE.Group> = new Map();
+  /** Cached flat array of tile meshes for raycasting — rebuilt on board changes. */
+  private tileMeshArray: THREE.Mesh[] = [];
+  /** Cached flat array of tower mesh children for raycasting — rebuilt on tower changes. */
+  private towerChildrenArray: THREE.Object3D[] = [];
   private gridLines: THREE.Group | null = null;
-  private rangePreviewMesh: THREE.Mesh | null = null;
-  private selectionRingMesh: THREE.Mesh | null = null;
   selectedTowerType: TowerType | null = TowerType.BASIC;
   private lastPreviewKey = ''; // "row-col-towerType-gold" — skip preview rebuild when unchanged
-  /** Set of "row-col" keys for tiles currently highlighted as valid placements. */
-  private highlightedTiles: Set<string> = new Set();
   /** Tile-specific cost shown in mode indicator during PLACE mode hover. 0 = not hovering a valid tile. */
   hoveredTileCost = 0;
   /** % increase over base cost for the hovered tile. */
@@ -153,8 +154,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Wave income feedback — shown during INTERMISSION
   lastWaveReward = 0;
   lastInterestEarned = 0;
-  /** Tracks whether any enemy leaked during the current wave (for streak bonus). */
-  private leakedThisWave = false;
   showAllRanges = false;
   showPathOverlay = false;
   sellConfirmPending = false;
@@ -162,10 +161,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   showHelpOverlay = false;
   showEncyclopedia = false;
   enemyInfoList: EnemyInfo[] = Object.values(ENEMY_INFO);
-  seenEnemyTypes = new Set<EnemyType>();
   pathBlocked = false;
   private pathBlockedTimerId: ReturnType<typeof setTimeout> | null = null;
-  private rangeRingMeshes: THREE.Mesh[] = [];
 
   // Animation
   private lastTime = 0;
@@ -279,7 +276,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private gameEndService: GameEndService,
     private gameSessionService: GameSessionService,
     private towerInteractionService: TowerInteractionService,
-    private combatLoopService: CombatLoopService
+    private combatLoopService: CombatLoopService,
+    private tileHighlightService: TileHighlightService,
+    private towerAnimationService: TowerAnimationService,
+    private rangeVisualizationService: RangeVisualizationService,
+    private towerMeshFactory: TowerMeshFactoryService
   ) {
     this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
@@ -287,10 +288,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnInit(): void {
     // Subscribe to game state changes
-    this.stateSubscription = this.gameStateService.getState$().subscribe(state => {
+    this.stateSubscription = this.gameStateService.getState$().subscribe({
+      error: (error: unknown) => console.error('Game state subscription error:', error),
+      next: state => {
       const prevPhase = this.gameState.phase;
       const prevWave = this.gameState.wave;
       this.gameState = state;
+      // Keep component modifier copies in sync with the service — setModifiers has a phase
+      // guard that silently no-ops outside SETUP/wave 0, so we read back the authoritative state
+      // rather than trusting toggleModifier's local mutations.
+      this.activeModifiers = state.activeModifiers;
+      this.modifierScoreMultiplier = calculateModifierScoreMultiplier(state.activeModifiers);
 
       // Compute score breakdown the first time we enter a terminal phase
       if (
@@ -328,6 +336,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.wavePreview = previewFull.entries;
         this.waveTemplateDescription = previewFull.templateDescription;
       }
+      }
     });
 
     // Import editor map if it has spawn and exit points; otherwise use default board
@@ -362,13 +371,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!this.tutorialService.isTutorialComplete()) {
       this.tutorialService.startTutorial();
     }
-    this.tutorialSub = this.tutorialService.getCurrentStep().subscribe(step => {
-      this.currentTutorialStep = step;
+    this.tutorialSub = this.tutorialService.getCurrentStep().subscribe({
+      next: step => { this.currentTutorialStep = step; },
+      error: (error: unknown) => console.error('Tutorial subscription error:', error)
     });
 
     // Subscribe to toast notifications
-    this.notificationSub = this.notificationService.getNotifications().subscribe(notifs => {
-      this.notifications = notifs;
+    this.notificationSub = this.notificationService.getNotifications().subscribe({
+      next: notifs => { this.notifications = notifs; },
+      error: (error: unknown) => console.error('Notification subscription error:', error)
     });
   }
 
@@ -485,6 +496,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   onTowerDragStart(event: MouseEvent | TouchEvent, type: TowerType): void {
     // Only left mouse button for mouse events
     if (event instanceof MouseEvent && event.button !== 0) return;
+    // Guard: a TouchEvent with no touches (e.g. touchend) has nothing to read
+    if (event instanceof TouchEvent && event.touches.length === 0) return;
 
     const clientX = event instanceof MouseEvent ? event.clientX : event.touches[0].clientX;
     const clientY = event instanceof MouseEvent ? event.clientY : event.touches[0].clientY;
@@ -554,7 +567,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
     this.raycaster.setFromCamera(this.mouse, this.sceneService.getCamera());
-    const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
+    const intersects = this.raycaster.intersectObjects(this.tileMeshArray);
 
     if (intersects.length > 0) {
       const mesh = intersects[0].object as THREE.Mesh;
@@ -588,7 +601,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
       this.raycaster.setFromCamera(this.mouse, this.sceneService.getCamera());
-      const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
+      const intersects = this.raycaster.intersectObjects(this.tileMeshArray);
 
       if (intersects.length > 0) {
         const mesh = intersects[0].object as THREE.Mesh;
@@ -635,143 +648,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    * Called when entering PLACE mode or when the board changes during PLACE mode.
    */
   updateTileHighlights(): void {
-    this.clearTileHighlights();
-
-    if (!this.isPlaceMode) return;
-
-    const board = this.gameBoardService.getGameBoard();
-
-    for (let row = 0; row < board.length; row++) {
-      for (let col = 0; col < board[row].length; col++) {
-        const tile = board[row][col];
-        if (tile.type !== BlockType.BASE || !tile.isPurchasable || tile.towerType !== null) continue;
-
-        const key = `${row}-${col}`;
-        const mesh = this.tileMeshes.get(key);
-        if (!mesh) continue;
-
-        // Skip selected tile — it has its own highlight
-        if (this.selectedTile?.row === row && this.selectedTile?.col === col) continue;
-
-        // Use tile-specific strategic pricing for affordability and heatmap color
-        const priceInfo = this.getTileTowerCost(this.selectedTowerType!, row, col);
-        if (this.gameStateService.canAfford(priceInfo.cost)) {
-          const material = mesh.material as THREE.MeshStandardMaterial;
-          // Snapshot from tile-type defaults, not live material
-          mesh.userData['origEmissive'] = TILE_EMISSIVE.defaultColor;
-          mesh.userData['origEmissiveIntensity'] = TILE_EMISSIVE.base;
-
-          // Apply smoothly interpolated heatmap color based on strategic value
-          const { color, intensity } = this.interpolateHeatmap(priceInfo.strategicMultiplier);
-          material.emissive.setRGB(color.r, color.g, color.b);
-          material.emissiveIntensity = intensity;
-          // Store exact interpolated values for smooth hover restore
-          mesh.userData['heatmapR'] = color.r;
-          mesh.userData['heatmapG'] = color.g;
-          mesh.userData['heatmapB'] = color.b;
-          mesh.userData['heatmapIntensity'] = intensity;
-          this.highlightedTiles.add(key);
-        }
-      }
+    if (!this.isPlaceMode) {
+      this.tileHighlightService.clearHighlights(this.tileMeshes, this.sceneService.getScene());
+      return;
     }
-
-    // Second pass: dim heatmap for unaffordable-but-valid tiles
-    for (let row = 0; row < board.length; row++) {
-      for (let col = 0; col < board[row].length; col++) {
-        const tile = board[row][col];
-        if (tile.type !== BlockType.BASE || !tile.isPurchasable || tile.towerType !== null) continue;
-
-        const key = `${row}-${col}`;
-        if (this.highlightedTiles.has(key)) continue; // already highlighted as affordable
-        const mesh = this.tileMeshes.get(key);
-        if (!mesh) continue;
-        if (this.selectedTile?.row === row && this.selectedTile?.col === col) continue;
-
-        const priceInfo = this.getTileTowerCost(this.selectedTowerType!, row, col);
-        const material = mesh.material as THREE.MeshStandardMaterial;
-        mesh.userData['origEmissive'] = TILE_EMISSIVE.defaultColor;
-        mesh.userData['origEmissiveIntensity'] = TILE_EMISSIVE.base;
-
-        // Apply dimmed heatmap — same color but at reduced intensity
-        const { color, intensity } = this.interpolateHeatmap(priceInfo.strategicMultiplier);
-        const dim = TILE_EMISSIVE.unaffordableDimming;
-        material.emissive.setRGB(color.r * dim, color.g * dim, color.b * dim);
-        material.emissiveIntensity = intensity * dim;
-        mesh.userData['heatmapR'] = color.r * dim;
-        mesh.userData['heatmapG'] = color.g * dim;
-        mesh.userData['heatmapB'] = color.b * dim;
-        mesh.userData['heatmapIntensity'] = intensity * dim;
-        this.highlightedTiles.add(key);
-      }
-    }
-
-    // Show floating % labels above highlighted tiles
-    if (this.highlightedTiles.size > 0) {
-      const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-      const priceMap = this.tilePricingService.getTilePriceMap(this.selectedTowerType!, costMult);
-      this.priceLabelService.showLabels(
-        priceMap,
-        this.gameBoardService.getBoardWidth(),
-        this.gameBoardService.getBoardHeight(),
-        this.gameBoardService.getTileSize(),
-        this.sceneService.getScene()
-      );
-    }
+    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+    this.tileHighlightService.updateHighlights(
+      this.selectedTowerType!,
+      this.tileMeshes,
+      this.selectedTile,
+      this.sceneService.getScene(),
+      costMult
+    );
   }
 
   /** Remove placement highlights from all tiles, restoring their original emissive. */
   private clearTileHighlights(): void {
-    // Remove floating price labels
-    if (this.sceneService.getScene()) {
-      this.priceLabelService.hideLabels(this.sceneService.getScene());
-    }
-
-    for (const key of this.highlightedTiles) {
-      const mesh = this.tileMeshes.get(key);
-      if (!mesh) continue;
-      const material = mesh.material as THREE.MeshStandardMaterial;
-      const origColor = mesh.userData['origEmissive'] ?? TILE_EMISSIVE.defaultColor;
-      const origIntensity = mesh.userData['origEmissiveIntensity'] ?? TILE_EMISSIVE.base;
-      material.emissive.setHex(origColor);
-      material.emissiveIntensity = origIntensity;
-      delete mesh.userData['origEmissive'];
-      delete mesh.userData['origEmissiveIntensity'];
-      delete mesh.userData['heatmapR'];
-      delete mesh.userData['heatmapG'];
-      delete mesh.userData['heatmapB'];
-      delete mesh.userData['heatmapIntensity'];
-    }
-    this.highlightedTiles.clear();
-  }
-
-  /** Interpolate heatmap color from gradient stops based on strategic value. Clamped to gradient range. */
-  private interpolateHeatmap(value: number): { color: { r: number; g: number; b: number }; intensity: number } {
-    const stops = HEATMAP_GRADIENT;
-    // Clamp to gradient range — values beyond the last stop render as the hottest color
-    const clamped = Math.max(0, Math.min(stops[stops.length - 1][0], value));
-
-    // Find the two surrounding stops
-    let lower = stops[0];
-    let upper = stops[stops.length - 1];
-    for (let i = 0; i < stops.length - 1; i++) {
-      if (clamped >= stops[i][0] && clamped <= stops[i + 1][0]) {
-        lower = stops[i];
-        upper = stops[i + 1];
-        break;
-      }
-    }
-
-    // Lerp between the two stops
-    const range = upper[0] - lower[0];
-    const t = range > 0 ? (clamped - lower[0]) / range : 0;
-    return {
-      color: {
-        r: lower[1] + (upper[1] - lower[1]) * t,
-        g: lower[2] + (upper[2] - lower[2]) * t,
-        b: lower[3] + (upper[3] - lower[3]) * t,
-      },
-      intensity: lower[4] + (upper[4] - lower[4]) * t,
-    };
+    this.tileHighlightService.clearHighlights(this.tileMeshes, this.sceneService.getScene());
   }
 
   upgradeTower(spec?: TowerSpecialization): void {
@@ -810,7 +703,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Refresh info panel
     this.refreshTowerInfoPanel();
-    this.showRangePreview(this.selectedTowerInfo);
+    this.rangeVisualizationService.showForTower(
+      this.selectedTowerInfo,
+      this.gameBoardService.getBoardWidth(),
+      this.gameBoardService.getBoardHeight(),
+      this.gameBoardService.getTileSize(),
+      this.sceneService.getScene()
+    );
   }
 
   selectSpecialization(spec: TowerSpecialization): void {
@@ -844,6 +743,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       });
       this.towerMeshes.delete(this.selectedTowerInfo.id);
+      this.rebuildTowerChildrenArray();
     }
 
     this.lastPreviewKey = '';
@@ -875,7 +775,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sellConfirmPending = false;
     this.showSpecializationChoice = false;
     this.specOptions = [];
-    this.removeRangePreview();
+    this.rangeVisualizationService.removePreview(this.sceneService.getScene());
   }
 
   private selectPlacedTower(key: string): void {
@@ -893,7 +793,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.selectedTowerInfo = tower;
     this.refreshTowerInfoPanel();
-    this.showRangePreview(tower);
+    this.rangeVisualizationService.showForTower(
+      tower,
+      this.gameBoardService.getBoardWidth(),
+      this.gameBoardService.getBoardHeight(),
+      this.gameBoardService.getTileSize(),
+      this.sceneService.getScene()
+    );
   }
 
   private refreshTowerInfoPanel(): void {
@@ -913,71 +819,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.upgradePreview = { damage: nextStats.damage, range: nextStats.range, fireRate: nextStats.fireRate };
     } else {
       this.upgradePreview = null;
-    }
-  }
-
-  private createRangeRing(radius: number, color: number, opacity: number, x: number, z: number): THREE.Mesh {
-    const geometry = new THREE.RingGeometry(
-      radius - RANGE_PREVIEW_CONFIG.ringThickness,
-      radius,
-      RANGE_PREVIEW_CONFIG.segments
-    );
-    const material = new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity,
-      side: THREE.DoubleSide,
-    });
-    const ring = new THREE.Mesh(geometry, material);
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.set(x, RANGE_PREVIEW_CONFIG.yPosition, z);
-    return ring;
-  }
-
-  private showRangePreview(tower: PlacedTower): void {
-    this.removeRangePreview();
-
-    const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
-    const boardWidth = this.gameBoardService.getBoardWidth();
-    const boardHeight = this.gameBoardService.getBoardHeight();
-    const tileSize = this.gameBoardService.getTileSize();
-    const x = (tower.col - boardWidth / 2) * tileSize;
-    const z = (tower.row - boardHeight / 2) * tileSize;
-
-    // Range ring
-    this.rangePreviewMesh = this.createRangeRing(stats.range, stats.color, RANGE_PREVIEW_CONFIG.opacity, x, z);
-    this.sceneService.getScene().add(this.rangePreviewMesh);
-
-    // Selection ring — tight ring around the tower base to indicate it's selected
-    const selectionGeometry = new THREE.RingGeometry(
-      SELECTION_RING_CONFIG.radius - SELECTION_RING_CONFIG.thickness,
-      SELECTION_RING_CONFIG.radius,
-      SELECTION_RING_CONFIG.segments
-    );
-    const selectionMaterial = new THREE.MeshBasicMaterial({
-      color: SELECTION_RING_CONFIG.color,
-      transparent: true,
-      opacity: SELECTION_RING_CONFIG.opacity,
-      side: THREE.DoubleSide,
-    });
-    this.selectionRingMesh = new THREE.Mesh(selectionGeometry, selectionMaterial);
-    this.selectionRingMesh.rotation.x = -Math.PI / 2;
-    this.selectionRingMesh.position.set(x, RANGE_PREVIEW_CONFIG.yPosition + SELECTION_RING_CONFIG.yOffset, z);
-    this.sceneService.getScene().add(this.selectionRingMesh);
-  }
-
-  private removeRangePreview(): void {
-    if (this.rangePreviewMesh) {
-      this.sceneService.getScene().remove(this.rangePreviewMesh);
-      this.rangePreviewMesh.geometry.dispose();
-      disposeMaterial(this.rangePreviewMesh.material);
-      this.rangePreviewMesh = null;
-    }
-    if (this.selectionRingMesh) {
-      this.sceneService.getScene().remove(this.selectionRingMesh);
-      this.selectionRingMesh.geometry.dispose();
-      disposeMaterial(this.selectionRingMesh.material);
-      this.selectionRingMesh = null;
     }
   }
 
@@ -1058,7 +899,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.lastWaveReward = 0;
     this.lastInterestEarned = 0;
-    this.leakedThisWave = false;
+    this.combatLoopService.resetLeakState();
     this.minimapService.show();
 
     this.gameStateService.startWave();
@@ -1078,7 +919,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     );
     for (const entry of previewEntries) {
       // Notify about new enemy types before marking them seen
-      if (!this.seenEnemyTypes.has(entry.type)) {
+      if (this.waveService.isNewType(entry.type)) {
         const info = ENEMY_INFO[entry.type];
         if (info) {
           this.notificationService.show(
@@ -1088,7 +929,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           );
         }
       }
-      this.seenEnemyTypes.add(entry.type);
+      this.waveService.markSeen(entry.type);
     }
 
     this.audioService.playWaveStart();
@@ -1099,7 +940,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   isNewEnemyType(type: EnemyType): boolean {
-    return !this.seenEnemyTypes.has(type);
+    return this.waveService.isNewType(type);
   }
 
   restartGame(): void {
@@ -1135,11 +976,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.victorySoundPlayed = false;
     this.showHelpOverlay = false;
     this.showEncyclopedia = false;
-    this.seenEnemyTypes = new Set<EnemyType>();
     this.showPathOverlay = false;
-    this.leakedThisWave = false;
     this.autoPaused = false;
     this.showQuitConfirm = false;
+    this.sellConfirmPending = false;
+    this.contextLost = false;
     this.pathBlocked = false;
     if (this.pathBlockedTimerId !== null) {
       clearTimeout(this.pathBlockedTimerId);
@@ -1170,15 +1011,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    * Shared between ngOnInit() and restartGame().
    */
   private importBoard(): void {
-    if (this.mapBridge.hasEditorMap()) {
+    if (this.mapBridge.hasEditorMap() && this.mapBridge.hasValidSpawnAndExit()) {
       const state = this.mapBridge.getEditorMapState()!;
-      const legacy = state as unknown as TerrainGridStateLegacy;
-      if ((state.spawnPoints?.length > 0 || legacy.spawnPoint) && (state.exitPoints?.length > 0 || legacy.exitPoint)) {
-        const { board, width, height } = this.mapBridge.convertToGameBoard(state);
-        this.gameBoardService.importBoard(board, width, height);
-      } else {
-        this.gameBoardService.resetBoard();
-      }
+      const { board, width, height } = this.mapBridge.convertToGameBoard(state);
+      this.gameBoardService.importBoard(board, width, height);
     } else {
       this.gameBoardService.resetBoard();
     }
@@ -1212,13 +1048,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.clearTileHighlights();
 
     // Clean up range preview and range toggle rings
-    this.removeRangePreview();
-    for (const mesh of this.rangeRingMeshes) {
-      this.sceneService.getScene().remove(mesh);
-      mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
-    }
-    this.rangeRingMeshes = [];
+    this.rangeVisualizationService.cleanup(this.sceneService.getScene());
     this.showAllRanges = false;
     this.selectedTowerInfo = null;
     this.selectedTowerStats = null;
@@ -1238,6 +1068,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       });
     });
     this.towerMeshes.clear();
+    this.towerChildrenArray = [];
 
     // Clean up tile meshes
     this.tileMeshes.forEach(mesh => {
@@ -1246,6 +1077,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       disposeMaterial(mesh.material);
     });
     this.tileMeshes.clear();
+    this.tileMeshArray = [];
 
     // Clean up grid lines
     if (this.gridLines) {
@@ -1278,6 +1110,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     this.buildMinimapTerrainCache();
+    this.rebuildTileMeshArray();
+    this.rebuildTowerChildrenArray();
   }
 
   /** Builds and caches the static minimap terrain data after board setup. */
@@ -1316,6 +1150,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sceneService.getScene().add(this.gridLines);
   }
 
+  /** Rebuild the cached tile mesh array. Call after any board mutation. */
+  private rebuildTileMeshArray(): void {
+    this.tileMeshArray = Array.from(this.tileMeshes.values());
+  }
+
+  /** Rebuild the cached tower children array. Call after tower placement or removal. */
+  private rebuildTowerChildrenArray(): void {
+    this.towerChildrenArray = [];
+    for (const group of this.towerMeshes.values()) {
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          this.towerChildrenArray.push(child);
+        }
+      });
+    }
+  }
+
   // --- Interaction ---
 
   private setupMouseInteraction(): void {
@@ -1327,23 +1178,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
       this.raycaster.setFromCamera(this.mouse, this.sceneService.getCamera());
-      const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
+      const intersects = this.raycaster.intersectObjects(this.tileMeshArray);
 
       if (this.hoveredTile && this.hoveredTile !== this.getSelectedTileMesh()) {
-        const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
-        const tileKey = `${this.hoveredTile.userData['row']}-${this.hoveredTile.userData['col']}`;
-        if (this.highlightedTiles.has(tileKey)) {
-          // Restore exact interpolated heatmap color (smooth, no tier quantization)
-          const r = this.hoveredTile.userData['heatmapR'] ?? 0;
-          const g = this.hoveredTile.userData['heatmapG'] ?? 0;
-          const b = this.hoveredTile.userData['heatmapB'] ?? 0;
-          const hmIntensity = this.hoveredTile.userData['heatmapIntensity'] ?? TILE_EMISSIVE.base;
-          material.emissive.setRGB(r, g, b);
-          material.emissiveIntensity = hmIntensity;
-        } else {
-          const tileType = this.hoveredTile.userData['tile'].type;
-          material.emissiveIntensity = tileType === BlockType.BASE ? TILE_EMISSIVE.base : tileType === BlockType.WALL ? TILE_EMISSIVE.wall : TILE_EMISSIVE.special;
-        }
+        this.tileHighlightService.restoreAfterHover(this.hoveredTile);
       }
 
       if (intersects.length > 0) {
@@ -1513,10 +1351,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.raycaster.setFromCamera(this.mouse, this.sceneService.getCamera());
 
     // Check for tower mesh hits first (works in both PLACE and INSPECT modes)
-    const towerGroups = Array.from(this.towerMeshes.values());
-    const towerChildren: THREE.Object3D[] = [];
-    towerGroups.forEach(g => g.traverse(child => { if (child instanceof THREE.Mesh) towerChildren.push(child); }));
-    const towerHits = this.raycaster.intersectObjects(towerChildren);
+    const towerHits = this.raycaster.intersectObjects(this.towerChildrenArray);
 
     if (towerHits.length > 0) {
       let hitObj: THREE.Object3D | null = towerHits[0].object;
@@ -1535,7 +1370,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     // Check tile hits — only place towers in PLACE mode
-    const intersects = this.raycaster.intersectObjects(Array.from(this.tileMeshes.values()));
+    const intersects = this.raycaster.intersectObjects(this.tileMeshArray);
 
     const prevSelected = this.getSelectedTileMesh();
     if (prevSelected) {
@@ -1591,9 +1426,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!result.success) return;
 
     // Create tower mesh and add to scene (visual concern — stays here)
-    const towerMesh = this.gameBoardService.createTowerMesh(row, col, this.selectedTowerType);
+    const towerMesh = this.towerMeshFactory.createTowerMesh(row, col, this.selectedTowerType, this.gameBoardService.getBoardWidth(), this.gameBoardService.getBoardHeight());
     this.towerMeshes.set(result.towerKey, towerMesh);
     this.sceneService.getScene().add(towerMesh);
+    this.rebuildTowerChildrenArray();
 
     // Register tower with combat service (needs the mesh reference)
     this.towerCombatService.registerTower(row, col, this.selectedTowerType, towerMesh, result.cost);
@@ -1780,36 +1616,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   toggleAllRanges(): void {
-    this.showAllRanges = !this.showAllRanges;
-
-    // Remove existing range rings
-    for (const mesh of this.rangeRingMeshes) {
-      this.sceneService.getScene().remove(mesh);
-      mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
-    }
-    this.rangeRingMeshes = [];
-
-    if (this.showAllRanges) {
-      const boardWidth = this.gameBoardService.getBoardWidth();
-      const boardHeight = this.gameBoardService.getBoardHeight();
-      const tileSize = this.gameBoardService.getTileSize();
-
-      this.towerCombatService.getPlacedTowers().forEach(tower => {
-        const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
-        const worldX = (tower.col - boardWidth / 2) * tileSize;
-        const worldZ = (tower.row - boardHeight / 2) * tileSize;
-        const ring = this.createRangeRing(
-          stats.range,
-          RANGE_PREVIEW_CONFIG.allRangesColor,
-          RANGE_PREVIEW_CONFIG.opacity * RANGE_PREVIEW_CONFIG.allRangesOpacityScale,
-          worldX,
-          worldZ
-        );
-        this.sceneService.getScene().add(ring);
-        this.rangeRingMeshes.push(ring);
-      });
-    }
+    this.showAllRanges = this.rangeVisualizationService.toggleAllRanges(
+      this.showAllRanges,
+      this.towerCombatService.getPlacedTowers(),
+      this.gameBoardService.getBoardWidth(),
+      this.gameBoardService.getBoardHeight(),
+      this.gameBoardService.getTileSize(),
+      this.sceneService.getScene()
+    );
   }
 
   togglePathOverlay(): void {
@@ -1973,7 +1787,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     // Ambient visuals (particles, skybox)
-    this.updateAmbientVisuals(time);
+    this.sceneService.tickAmbientVisuals(time);
 
     // Combat tick
     if (deltaTime > 0) {
@@ -1984,15 +1798,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           state.gameSpeed,
           this.sceneService.getScene(),
           this.scoreBreakdown,
-          this.leakedThisWave,
         );
         this.processCombatResult(result, deltaTime, time);
       }
     }
 
     // Animate tower idle effects and tile pulses
-    this.updateTowerAnimations(time);
-    this.updateTilePulse(time);
+    this.towerAnimationService.updateTowerAnimations(this.towerMeshes, time);
+    this.towerAnimationService.updateTilePulse(this.tileMeshes, time);
 
     // Update visual effects (run every frame regardless of pause)
     if (deltaTime > 0) {
@@ -2007,28 +1820,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sceneService.render();
   }
 
-  private updateAmbientVisuals(time: number): void {
-    // Animate ambient particles
-    if (this.sceneService.getParticles()) {
-      const positionAttribute = this.sceneService.getParticles()!.geometry.attributes['position'] as THREE.BufferAttribute;
-      const positions = positionAttribute.array as Float32Array;
-      for (let i = 0; i < positions.length; i += 3) {
-        positions[i + 1] += Math.sin(time * PARTICLE_CONFIG.animSpeedTime + i) * PARTICLE_CONFIG.animSpeedWave;
-      }
-      positionAttribute.needsUpdate = true;
-      this.sceneService.getParticles()!.rotation.y += PARTICLE_CONFIG.rotationSpeed;
-    }
-
-    // Update skybox time uniform for star twinkle and nebula drift
-    if (this.sceneService.getSkybox()) {
-      (this.sceneService.getSkybox()!.material as THREE.ShaderMaterial).uniforms['time'].value = time * ANIMATION_CONFIG.msToSeconds;
-    }
-  }
-
   private processCombatResult(result: CombatFrameResult, deltaTime: number, time: number): void {
-    // Update component leak state
-    if (result.leaked) this.leakedThisWave = true;
-
     // Defeat sound (play once per defeat)
     if (result.defeatTriggered && !this.defeatSoundPlayed) {
       this.defeatSoundPlayed = true;
@@ -2081,8 +1873,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Drain deferred combat audio events (chain lightning, mortar, etc.)
     for (const event of result.combatAudioEvents) {
       switch (event.type) {
-        case 'sfx': this.audioService.playSfx(event.sfxKey!); break;
-        case 'tower_fire': this.audioService.playTowerFire(event.towerType!); break;
+        case 'sfx': this.audioService.playSfx(event.sfxKey); break;
+        case 'tower_fire': this.audioService.playTowerFire(event.towerType); break;
         case 'enemy_hit': this.audioService.playEnemyHit(); break;
         case 'enemy_death': this.audioService.playEnemyDeath(); break;
       }
@@ -2115,76 +1907,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.minimapEntities.push({ x: enemy.gridPosition.col, z: enemy.gridPosition.row, type: 'enemy' });
     });
     this.minimapService.update(timeMs, terrain, this.minimapEntities);
-  }
-
-  private updateTowerAnimations(time: number): void {
-    const t = time * ANIMATION_CONFIG.msToSeconds;
-    for (const group of this.towerMeshes.values()) {
-      const towerType = group.userData['towerType'] as TowerType | undefined;
-      if (!towerType) continue;
-
-      group.traverse((child) => {
-        if (!(child instanceof THREE.Mesh)) return;
-
-        switch (child.name) {
-          case 'crystal':
-            if (towerType === TowerType.BASIC) {
-              child.position.y = TOWER_ANIM_CONFIG.crystalBaseY
-                + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.crystalBobAmplitude;
-              child.rotation.y = t * TOWER_ANIM_CONFIG.basicCrystalRotSpeed;
-            } else if (towerType === TowerType.SLOW) {
-              child.position.y = TOWER_ANIM_CONFIG.slowCrystalBaseY
-                + Math.sin(t * TOWER_ANIM_CONFIG.crystalBobSpeed) * TOWER_ANIM_CONFIG.slowCrystalBobAmplitude;
-              child.rotation.y = t * TOWER_ANIM_CONFIG.slowCrystalRotSpeed;
-            }
-            break;
-
-          case 'orb': {
-            const pulseScale = TOWER_ANIM_CONFIG.orbPulseMin
-              + (Math.sin(t * TOWER_ANIM_CONFIG.orbPulseSpeed) * 0.5 + 0.5)
-              * (TOWER_ANIM_CONFIG.orbPulseMax - TOWER_ANIM_CONFIG.orbPulseMin);
-            child.scale.setScalar(pulseScale);
-            break;
-          }
-
-          case 'spark': {
-            if (child.userData['baseY'] === undefined) child.userData['baseY'] = child.position.y;
-            child.position.y = child.userData['baseY']
-              + Math.sin(t * TOWER_ANIM_CONFIG.sparkBobSpeed + child.position.x * TOWER_ANIM_CONFIG.sparkPhaseScale) * TOWER_ANIM_CONFIG.sparkBobAmplitude;
-            break;
-          }
-
-          case 'spore': {
-            if (child.userData['baseY'] === undefined) child.userData['baseY'] = child.position.y;
-            child.position.y = child.userData['baseY']
-              + Math.sin(t * TOWER_ANIM_CONFIG.sporeBobSpeed + child.position.x * TOWER_ANIM_CONFIG.sporePhaseScale) * TOWER_ANIM_CONFIG.sporeBobAmplitude;
-            break;
-          }
-
-          case 'tip': {
-            const mat = child.material as THREE.MeshStandardMaterial;
-            mat.emissiveIntensity = TOWER_ANIM_CONFIG.tipGlowMin
-              + (Math.sin(t * TOWER_ANIM_CONFIG.tipGlowSpeed) * 0.5 + 0.5)
-              * (TOWER_ANIM_CONFIG.tipGlowMax - TOWER_ANIM_CONFIG.tipGlowMin);
-            break;
-          }
-        }
-      });
-    }
-  }
-
-  private updateTilePulse(time: number): void {
-    const t = time * ANIMATION_CONFIG.msToSeconds;
-    const intensity = TILE_PULSE_CONFIG.min
-      + (Math.sin(t * TILE_PULSE_CONFIG.speed) * 0.5 + 0.5)
-      * (TILE_PULSE_CONFIG.max - TILE_PULSE_CONFIG.min);
-
-    for (const mesh of this.tileMeshes.values()) {
-      const tileType = mesh.userData?.['tile']?.type;
-      if (tileType === BlockType.SPAWNER || tileType === BlockType.EXIT) {
-        (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = intensity;
-      }
-    }
   }
 
   // --- Cleanup ---

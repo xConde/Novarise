@@ -316,6 +316,70 @@ describe('MapBridgeService', () => {
       }
     }
   });
+
+  // --- hasValidSpawnAndExit ---
+
+  describe('hasValidSpawnAndExit', () => {
+    it('returns false when no map is stored', () => {
+      expect(service.hasValidSpawnAndExit()).toBeFalse();
+    });
+
+    it('returns true when map has v2 spawnPoints and exitPoints', () => {
+      const state = createMinimalState(5);
+      state.spawnPoints = [{ x: 0, z: 2 }];
+      state.exitPoints = [{ x: 4, z: 2 }];
+      service.setEditorMapState(state);
+      expect(service.hasValidSpawnAndExit()).toBeTrue();
+    });
+
+    it('returns false when spawnPoints is empty and no legacy spawnPoint', () => {
+      const state = createMinimalState(5);
+      state.spawnPoints = [];
+      state.exitPoints = [{ x: 4, z: 2 }];
+      service.setEditorMapState(state);
+      expect(service.hasValidSpawnAndExit()).toBeFalse();
+    });
+
+    it('returns false when exitPoints is empty and no legacy exitPoint', () => {
+      const state = createMinimalState(5);
+      state.spawnPoints = [{ x: 0, z: 2 }];
+      state.exitPoints = [];
+      service.setEditorMapState(state);
+      expect(service.hasValidSpawnAndExit()).toBeFalse();
+    });
+
+    it('returns true for v1 format with legacy spawnPoint and exitPoint', () => {
+      const v1State = {
+        ...createMinimalState(5),
+        spawnPoint: { x: 0, z: 2 },
+        exitPoint: { x: 4, z: 2 },
+      } as any;
+      delete v1State.spawnPoints;
+      delete v1State.exitPoints;
+      service.setEditorMapState(v1State);
+      expect(service.hasValidSpawnAndExit()).toBeTrue();
+    });
+
+    it('returns false for v1 format missing exitPoint', () => {
+      const v1State = {
+        ...createMinimalState(5),
+        spawnPoint: { x: 0, z: 2 },
+      } as any;
+      delete v1State.spawnPoints;
+      delete v1State.exitPoints;
+      service.setEditorMapState(v1State);
+      expect(service.hasValidSpawnAndExit()).toBeFalse();
+    });
+
+    it('returns false after clearEditorMap', () => {
+      const state = createMinimalState(5);
+      state.spawnPoints = [{ x: 0, z: 2 }];
+      state.exitPoints = [{ x: 4, z: 2 }];
+      service.setEditorMapState(state);
+      service.clearEditorMap();
+      expect(service.hasValidSpawnAndExit()).toBeFalse();
+    });
+  });
 });
 
 /**
