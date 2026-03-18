@@ -58,6 +58,7 @@ import { TileHighlightService } from './services/tile-highlight.service';
 import { TowerAnimationService } from './services/tower-animation.service';
 import { RangeVisualizationService } from './services/range-visualization.service';
 import { TowerMeshFactoryService } from './services/tower-mesh-factory.service';
+import { FocusTrap } from '../../shared/utils/focus-trap.util';
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -76,7 +77,9 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
+  @ViewChild('pauseOverlay') pauseOverlayRef?: ElementRef<HTMLElement>;
 
+  private readonly pauseFocusTrap = new FocusTrap();
 
   // Scene — delegated to SceneService
 
@@ -1589,7 +1592,18 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   togglePause(): void {
     this.showQuitConfirm = false;
     this.autoPaused = false;
+    const willPause = !this.isPaused;
+    if (!willPause) {
+      this.pauseFocusTrap.deactivate();
+    }
     this.gameStateService.togglePause();
+    if (willPause) {
+      setTimeout(() => {
+        if (this.pauseOverlayRef) {
+          this.pauseFocusTrap.activate(this.pauseOverlayRef.nativeElement);
+        }
+      }, 0);
+    }
   }
 
   /** Register visibility/focus-loss listeners for auto-pause. Called once in ngAfterViewInit. */
@@ -1616,6 +1630,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if ((state.phase === GamePhase.COMBAT || state.phase === GamePhase.INTERMISSION) && !state.isPaused) {
       this.gameStateService.togglePause();
       this.autoPaused = true;
+      setTimeout(() => {
+        if (this.pauseOverlayRef) {
+          this.pauseFocusTrap.activate(this.pauseOverlayRef.nativeElement);
+        }
+      }, 0);
     }
   }
 
@@ -1989,6 +2008,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // --- Cleanup ---
 
   ngOnDestroy(): void {
+    this.pauseFocusTrap.deactivate();
     cancelAnimationFrame(this.animationFrameId);
 
     if (this.pathBlockedTimerId !== null) {

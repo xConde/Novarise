@@ -1,7 +1,7 @@
-<div class="game-overlay" role="alertdialog" [attr.aria-label]="isVictory ? 'Victory' : 'Defeat'">
+<div class="game-overlay" role="alertdialog" aria-modal="true" aria-labelledby="results-overlay-title">
   <div class="overlay-content" [class.victory]="isVictory" [class.defeat]="!isVictory">
-    <h2 *ngIf="isVictory">Victory</h2>
-    <h2 *ngIf="!isVictory">Defeat</h2>
+    <h2 *ngIf="isVictory" id="results-overlay-title">Victory</h2>
+    <h2 *ngIf="!isVictory" id="results-overlay-title">Defeat</h2>
 
     <!-- Campaign level identity -->
     <div class="victory-level" *ngIf="isCampaignGame && currentCampaignLevel">

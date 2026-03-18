@@ -184,9 +184,9 @@
   </div>
 
   <!-- Pause overlay -->
-  <div class="pause-overlay" *ngIf="isPaused && (gameState.phase === GamePhase.COMBAT || gameState.phase === GamePhase.INTERMISSION)" (click)="onPauseOverlayClick($event)" role="dialog" aria-modal="true" aria-label="Game paused">
+  <div class="pause-overlay" *ngIf="isPaused && (gameState.phase === GamePhase.COMBAT || gameState.phase === GamePhase.INTERMISSION)" #pauseOverlay (click)="onPauseOverlayClick($event)" role="dialog" aria-modal="true" aria-labelledby="pause-menu-title">
     <div class="pause-menu" (click)="$event.stopPropagation()">
-      <h2 class="pause-menu__title">PAUSED</h2>
+      <h2 class="pause-menu__title" id="pause-menu-title">PAUSED</h2>
 
       <!-- Game stats summary -->
       <div class="pause-menu__stats">
