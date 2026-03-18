@@ -7,6 +7,8 @@ import {
   AchievementCategory,
   ACHIEVEMENTS,
 } from '../game/game-board/services/player-profile.service';
+import { SettingsService } from '../game/game-board/services/settings.service';
+import { DifficultyLevel, GameSpeed, VALID_GAME_SPEEDS } from '../game/game-board/models/game-state.model';
 
 export interface AchievementCategoryGroup {
   category: AchievementCategory;
@@ -35,8 +37,24 @@ export class ProfileComponent implements OnInit {
   categoryGroups: AchievementCategoryGroup[] = [];
   private unlockedSet = new Set<string>();
 
+  // Settings state
+  audioMuted = false;
+  currentDifficulty: DifficultyLevel = DifficultyLevel.NORMAL;
+  currentSpeed: GameSpeed = 1;
+  showFps = false;
+  reduceMotion = false;
+
+  readonly difficulties: DifficultyLevel[] = [
+    DifficultyLevel.EASY,
+    DifficultyLevel.NORMAL,
+    DifficultyLevel.HARD,
+    DifficultyLevel.NIGHTMARE,
+  ];
+  readonly speeds: readonly GameSpeed[] = VALID_GAME_SPEEDS;
+
   constructor(
     private profileService: PlayerProfileService,
+    private settingsService: SettingsService,
     private router: Router
   ) {}
 
@@ -44,6 +62,16 @@ export class ProfileComponent implements OnInit {
     this.profile = this.profileService.getProfile();
     this.unlockedSet = new Set(this.profile.achievements);
     this.categoryGroups = this.buildCategoryGroups();
+    this.loadSettings();
+  }
+
+  private loadSettings(): void {
+    const s = this.settingsService.get();
+    this.audioMuted = s.audioMuted;
+    this.currentDifficulty = s.difficulty;
+    this.currentSpeed = s.gameSpeed as GameSpeed;
+    this.showFps = s.showFps;
+    this.reduceMotion = s.reduceMotion;
   }
 
   private buildCategoryGroups(): AchievementCategoryGroup[] {
@@ -70,6 +98,36 @@ export class ProfileComponent implements OnInit {
 
   get unlockedCount(): number {
     return this.profile.achievements.length;
+  }
+
+  toggleAudio(): void {
+    this.audioMuted = !this.audioMuted;
+    this.settingsService.update({ audioMuted: this.audioMuted });
+  }
+
+  setDifficulty(difficulty: DifficultyLevel): void {
+    this.currentDifficulty = difficulty;
+    this.settingsService.update({ difficulty });
+  }
+
+  setSpeed(speed: GameSpeed): void {
+    this.currentSpeed = speed;
+    this.settingsService.update({ gameSpeed: speed });
+  }
+
+  toggleFps(): void {
+    this.showFps = !this.showFps;
+    this.settingsService.update({ showFps: this.showFps });
+  }
+
+  toggleReduceMotion(): void {
+    this.reduceMotion = !this.reduceMotion;
+    this.settingsService.update({ reduceMotion: this.reduceMotion });
+    if (this.reduceMotion) {
+      document.body.classList.add('reduce-motion');
+    } else {
+      document.body.classList.remove('reduce-motion');
+    }
   }
 
   goHome(): void {

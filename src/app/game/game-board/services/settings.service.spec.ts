@@ -21,6 +21,8 @@ describe('SettingsService', () => {
     expect(settings.audioMuted).toBe(false);
     expect(settings.difficulty).toBe(DifficultyLevel.NORMAL);
     expect(settings.gameSpeed).toBe(1);
+    expect(settings.showFps).toBe(false);
+    expect(settings.reduceMotion).toBe(false);
   });
 
   it('should persist settings to localStorage on update', () => {
@@ -47,6 +49,8 @@ describe('SettingsService', () => {
       audioMuted: true,
       difficulty: DifficultyLevel.NIGHTMARE,
       gameSpeed: 3,
+      showFps: true,
+      reduceMotion: true,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
 
@@ -55,6 +59,8 @@ describe('SettingsService', () => {
     expect(settings.audioMuted).toBe(true);
     expect(settings.difficulty).toBe(DifficultyLevel.NIGHTMARE);
     expect(settings.gameSpeed).toBe(3);
+    expect(settings.showFps).toBe(true);
+    expect(settings.reduceMotion).toBe(true);
   });
 
   it('should return defaults when localStorage contains invalid JSON', () => {
@@ -77,13 +83,15 @@ describe('SettingsService', () => {
   });
 
   it('should reset to defaults', () => {
-    service.update({ audioMuted: true, difficulty: DifficultyLevel.NIGHTMARE, gameSpeed: 3 });
+    service.update({ audioMuted: true, difficulty: DifficultyLevel.NIGHTMARE, gameSpeed: 3, showFps: true, reduceMotion: true });
     service.reset();
 
     const settings = service.get();
     expect(settings.audioMuted).toBe(false);
     expect(settings.difficulty).toBe(DifficultyLevel.NORMAL);
     expect(settings.gameSpeed).toBe(1);
+    expect(settings.showFps).toBe(false);
+    expect(settings.reduceMotion).toBe(false);
   });
 
   it('should return a copy from get() — mutations do not affect stored state', () => {

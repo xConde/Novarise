@@ -8,12 +8,16 @@ export interface GameSettings {
   audioMuted: boolean;
   difficulty: DifficultyLevel;
   gameSpeed: number;
+  showFps: boolean;
+  reduceMotion: boolean;
 }
 
 const DEFAULT_SETTINGS: GameSettings = {
   audioMuted: false,
   difficulty: DifficultyLevel.NORMAL,
   gameSpeed: 1,
+  showFps: false,
+  reduceMotion: false,
 };
 
 @Injectable({ providedIn: 'root' })

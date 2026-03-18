@@ -7,12 +7,23 @@ import {
   ACHIEVEMENTS,
   AchievementCategory,
 } from '../game/game-board/services/player-profile.service';
+import { SettingsService, GameSettings } from '../game/game-board/services/settings.service';
+import { DifficultyLevel } from '../game/game-board/models/game-state.model';
 
 describe('ProfileComponent', () => {
   let component: ProfileComponent;
   let fixture: ComponentFixture<ProfileComponent>;
   let router: jasmine.SpyObj<Router>;
   let profileService: jasmine.SpyObj<PlayerProfileService>;
+  let settingsService: jasmine.SpyObj<SettingsService>;
+
+  const mockSettings: GameSettings = {
+    audioMuted: false,
+    difficulty: DifficultyLevel.NORMAL,
+    gameSpeed: 1,
+    showFps: false,
+    reduceMotion: false,
+  };
 
   const mockProfile: PlayerProfile = {
     totalGamesPlayed: 15,
@@ -37,11 +48,15 @@ describe('ProfileComponent', () => {
     profileService = jasmine.createSpyObj('PlayerProfileService', ['getProfile']);
     profileService.getProfile.and.returnValue({ ...mockProfile, achievements: [...mockProfile.achievements] });
 
+    settingsService = jasmine.createSpyObj('SettingsService', ['get', 'update']);
+    settingsService.get.and.returnValue({ ...mockSettings });
+
     await TestBed.configureTestingModule({
       declarations: [ProfileComponent],
       providers: [
         { provide: Router, useValue: router },
         { provide: PlayerProfileService, useValue: profileService },
+        { provide: SettingsService, useValue: settingsService },
       ]
     }).compileComponents();
 
@@ -243,6 +258,158 @@ describe('ProfileComponent', () => {
           seen.add(a.id);
         }
       }
+    });
+  });
+
+  // ── Settings section ───────────────────────────────────────────────────────
+
+  describe('settings section', () => {
+    it('should render the settings section', () => {
+      const section = fixture.nativeElement.querySelector('.settings-section');
+      expect(section).toBeTruthy();
+    });
+
+    it('should render the settings title', () => {
+      const title = fixture.nativeElement.querySelector('.settings-title');
+      expect(title).toBeTruthy();
+      expect(title.textContent).toContain('Settings');
+    });
+
+    it('should load settings from SettingsService on init', () => {
+      expect(settingsService.get).toHaveBeenCalled();
+      expect(component.audioMuted).toBe(false);
+      expect(component.currentDifficulty).toBe(DifficultyLevel.NORMAL);
+      expect(component.currentSpeed).toBe(1);
+      expect(component.showFps).toBe(false);
+      expect(component.reduceMotion).toBe(false);
+    });
+
+    it('should load muted state when settings have audioMuted=true', () => {
+      settingsService.get.and.returnValue({ ...mockSettings, audioMuted: true });
+      const newFixture = TestBed.createComponent(ProfileComponent);
+      newFixture.detectChanges();
+      expect(newFixture.componentInstance.audioMuted).toBe(true);
+    });
+
+    it('should render 4 difficulty buttons', () => {
+      const difficultyButtons = fixture.nativeElement.querySelectorAll('.setting-options button');
+      // First setting-options group is difficulty (4 buttons), second is speed (3 buttons)
+      const allOptionBtns = Array.from(
+        fixture.nativeElement.querySelectorAll('.setting-option-btn')
+      ) as HTMLButtonElement[];
+      expect(allOptionBtns.length).toBe(7); // 4 difficulties + 3 speeds
+    });
+
+    it('should toggle audio and call settingsService.update', () => {
+      component.toggleAudio();
+      expect(component.audioMuted).toBe(true);
+      expect(settingsService.update).toHaveBeenCalledWith({ audioMuted: true });
+
+      component.toggleAudio();
+      expect(component.audioMuted).toBe(false);
+      expect(settingsService.update).toHaveBeenCalledWith({ audioMuted: false });
+    });
+
+    it('should show "On" when audio is not muted', () => {
+      component.audioMuted = false;
+      fixture.detectChanges();
+      const toggleBtns = fixture.nativeElement.querySelectorAll('.setting-toggle');
+      const audioBtn = toggleBtns[0] as HTMLButtonElement;
+      expect((audioBtn.textContent ?? '').trim()).toBe('On');
+    });
+
+    it('should show "Muted" when audio is muted', () => {
+      component.audioMuted = true;
+      fixture.detectChanges();
+      const toggleBtns = fixture.nativeElement.querySelectorAll('.setting-toggle');
+      const audioBtn = toggleBtns[0] as HTMLButtonElement;
+      expect((audioBtn.textContent ?? '').trim()).toBe('Muted');
+    });
+
+    it('should set difficulty and persist', () => {
+      component.setDifficulty(DifficultyLevel.HARD);
+      expect(component.currentDifficulty).toBe(DifficultyLevel.HARD);
+      expect(settingsService.update).toHaveBeenCalledWith({ difficulty: DifficultyLevel.HARD });
+    });
+
+    it('should set speed and persist', () => {
+      component.setSpeed(2);
+      expect(component.currentSpeed).toBe(2);
+      expect(settingsService.update).toHaveBeenCalledWith({ gameSpeed: 2 });
+    });
+
+    it('should toggle FPS and persist', () => {
+      component.toggleFps();
+      expect(component.showFps).toBe(true);
+      expect(settingsService.update).toHaveBeenCalledWith({ showFps: true });
+
+      component.toggleFps();
+      expect(component.showFps).toBe(false);
+      expect(settingsService.update).toHaveBeenCalledWith({ showFps: false });
+    });
+
+    it('should show "On" when FPS counter is enabled', () => {
+      component.showFps = true;
+      fixture.detectChanges();
+      const toggleBtns = fixture.nativeElement.querySelectorAll('.setting-toggle');
+      const fpsBtn = toggleBtns[1] as HTMLButtonElement;
+      expect((fpsBtn.textContent ?? '').trim()).toBe('On');
+    });
+
+    it('should show "Off" when FPS counter is disabled', () => {
+      component.showFps = false;
+      fixture.detectChanges();
+      const toggleBtns = fixture.nativeElement.querySelectorAll('.setting-toggle');
+      const fpsBtn = toggleBtns[1] as HTMLButtonElement;
+      expect((fpsBtn.textContent ?? '').trim()).toBe('Off');
+    });
+
+    it('should toggle reduceMotion, persist, and add class to body', () => {
+      component.toggleReduceMotion();
+      expect(component.reduceMotion).toBe(true);
+      expect(settingsService.update).toHaveBeenCalledWith({ reduceMotion: true });
+      expect(document.body.classList.contains('reduce-motion')).toBe(true);
+
+      component.toggleReduceMotion();
+      expect(component.reduceMotion).toBe(false);
+      expect(settingsService.update).toHaveBeenCalledWith({ reduceMotion: false });
+      expect(document.body.classList.contains('reduce-motion')).toBe(false);
+    });
+
+    it('should mark active difficulty button with active class', () => {
+      component.currentDifficulty = DifficultyLevel.HARD;
+      fixture.detectChanges();
+      const allOptionBtns = Array.from(
+        fixture.nativeElement.querySelectorAll('.setting-option-btn')
+      ) as HTMLButtonElement[];
+      const activeButtons = allOptionBtns.filter((btn) => btn.classList.contains('active'));
+      // Only one difficulty button should be active (hard) plus the active speed button (1×)
+      const activeTexts = activeButtons.map((btn) => btn.textContent?.trim());
+      expect(activeTexts).toContain('Hard');
+    });
+
+    it('should mark active speed button with active class', () => {
+      component.currentSpeed = 2;
+      fixture.detectChanges();
+      const allOptionBtns = Array.from(
+        fixture.nativeElement.querySelectorAll('.setting-option-btn')
+      ) as HTMLButtonElement[];
+      const activeButtons = allOptionBtns.filter((btn) => btn.classList.contains('active'));
+      const activeTexts = activeButtons.map((btn) => btn.textContent?.trim());
+      expect(activeTexts).toContain('2×');
+    });
+
+    it('should expose difficulties array with all 4 levels', () => {
+      expect(component.difficulties).toEqual([
+        DifficultyLevel.EASY,
+        DifficultyLevel.NORMAL,
+        DifficultyLevel.HARD,
+        DifficultyLevel.NIGHTMARE,
+      ]);
+    });
+
+    it('should expose speeds array as [1, 2, 3]', () => {
+      expect(Array.from(component.speeds)).toEqual([1, 2, 3]);
     });
   });
 });

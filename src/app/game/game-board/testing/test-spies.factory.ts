@@ -215,6 +215,8 @@ export function createSettingsServiceSpy(): jasmine.SpyObj<SettingsService> {
     audioMuted: false,
     difficulty: DifficultyLevel.NORMAL,
     gameSpeed: 1,
+    showFps: false,
+    reduceMotion: false,
   };
   spy.get.and.returnValue(defaultSettings);
   return spy;
