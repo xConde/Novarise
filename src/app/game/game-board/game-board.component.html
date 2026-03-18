@@ -1,4 +1,4 @@
-<div class="board-container" [class.dragging]="isDragging">
+<div class="board-container" [class.dragging]="isDragging" (touchstart)="previewTowerType && clearTowerPreview()">
   <div class="canvas-container" #canvasContainer></div>
 
   <!-- Top-right controls -->
@@ -280,12 +280,14 @@
       *ngFor="let tower of towerTypes"
       class="tower-btn"
       [class.selected]="selectedTowerType === tower.type"
+      [class.previewing]="previewTowerType === tower.type"
       [class.unaffordable]="!gameState || gameState.gold < getEffectiveTowerCost(tower.type)"
-      (click)="selectTowerType(tower.type)"
+      (click)="handleTowerButtonTap($event, tower.type)"
       (mousedown)="onTowerDragStart($event, tower.type)"
       (touchstart)="onTowerDragStart($event, tower.type)"
       [attr.aria-label]="'Select ' + (tower.type | titlecase) + ' Tower'"
-      [attr.aria-pressed]="selectedTowerType === tower.type">
+      [attr.aria-pressed]="selectedTowerType === tower.type"
+      [attr.aria-expanded]="previewTowerType === tower.type || null">
       <div class="tower-tooltip" role="tooltip">
         <div class="tooltip-stat"><span class="tooltip-label">Damage</span><span class="tooltip-val">{{ towerConfigs[tower.type].damage }}</span></div>
         <div class="tooltip-stat"><span class="tooltip-label">Range</span><span class="tooltip-val">{{ towerConfigs[tower.type].range }}</span></div>

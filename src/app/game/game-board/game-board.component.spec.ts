@@ -1252,6 +1252,97 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  describe('Mobile tower preview (handleTowerButtonTap)', () => {
+    function makeTouchEvent(): TouchEvent {
+      return new TouchEvent('click', { bubbles: true });
+    }
+
+    function makeMouseEvent(): MouseEvent {
+      return new MouseEvent('click', { bubbles: true });
+    }
+
+    it('previewTowerType should be null by default', () => {
+      expect(component.previewTowerType).toBeNull();
+    });
+
+    it('first touch tap sets previewTowerType without selecting for placement', () => {
+      component.selectedTowerType = null;
+
+      component.handleTowerButtonTap(makeTouchEvent(), TowerType.SNIPER);
+
+      expect(component.previewTowerType).toBe(TowerType.SNIPER);
+      // Must NOT have entered PLACE mode yet
+      expect(component.selectedTowerType).toBeNull();
+    });
+
+    it('second touch tap on same tower selects it for placement and clears preview', () => {
+      component.previewTowerType = TowerType.SNIPER;
+      component.selectedTowerType = null;
+
+      component.handleTowerButtonTap(makeTouchEvent(), TowerType.SNIPER);
+
+      expect(component.isPlaceMode).toBeTrue();
+      expect(component.selectedTowerType as TowerType | null).toBe(TowerType.SNIPER);
+      expect(component.previewTowerType).toBeNull();
+    });
+
+    it('touch tap on different tower while preview open switches preview', () => {
+      component.previewTowerType = TowerType.BASIC;
+
+      component.handleTowerButtonTap(makeTouchEvent(), TowerType.MORTAR);
+
+      expect(component.previewTowerType).toBe(TowerType.MORTAR);
+      // Still no placement commitment
+      expect(component.selectedTowerType).toBe(TowerType.BASIC);
+    });
+
+    it('mouse click delegates directly to selectTowerType (desktop unchanged)', () => {
+      spyOn(component, 'selectTowerType');
+      component.selectedTowerType = null;
+
+      component.handleTowerButtonTap(makeMouseEvent(), TowerType.SPLASH);
+
+      expect(component.selectTowerType).toHaveBeenCalledWith(TowerType.SPLASH);
+      // Preview must not be set for mouse events
+      expect(component.previewTowerType).toBeNull();
+    });
+
+    it('mouse click does not mutate previewTowerType', () => {
+      component.previewTowerType = null;
+
+      component.handleTowerButtonTap(makeMouseEvent(), TowerType.CHAIN);
+
+      expect(component.previewTowerType).toBeNull();
+    });
+
+    it('clearTowerPreview sets previewTowerType to null', () => {
+      component.previewTowerType = TowerType.SLOW;
+
+      component.clearTowerPreview();
+
+      expect(component.previewTowerType).toBeNull();
+    });
+
+    it('clearTowerPreview does not affect selectedTowerType', () => {
+      component.previewTowerType = TowerType.SLOW;
+      component.selectedTowerType = TowerType.BASIC;
+
+      component.clearTowerPreview();
+
+      expect(component.selectedTowerType).toBe(TowerType.BASIC);
+    });
+
+    it('second touch tap on same tower also calls updateTileHighlights via selectTowerType', () => {
+      spyOn(component, 'updateTileHighlights');
+      component.previewTowerType = TowerType.SPLASH;
+      component.selectedTowerType = null;
+
+      component.handleTowerButtonTap(makeTouchEvent(), TowerType.SPLASH);
+
+      expect(component.updateTileHighlights).toHaveBeenCalled();
+    });
+  });
+
   describe('Tile Highlighting', () => {
     it('updateTileHighlights should not throw when tileMeshes is empty', () => {
       component.selectedTowerType = TowerType.BASIC;

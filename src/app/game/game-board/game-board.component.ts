@@ -157,6 +157,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   showAllRanges = false;
   showPathOverlay = false;
   sellConfirmPending = false;
+  /** Tower type currently being previewed on touch devices (first tap). Null = no preview open. */
+  previewTowerType: TowerType | null = null;
   targetingModeLabels = TARGETING_MODE_LABELS;
   showHelpOverlay = false;
   showEncyclopedia = false;
@@ -471,6 +473,37 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedTowerType = type;
     this.deselectTower();
     this.updateTileHighlights();
+  }
+
+  /**
+   * Touch-device two-tap tower selection:
+   *   - First tap: open stats preview (sets previewTowerType, does not select for placement).
+   *   - Second tap on same tower: select for placement (clear preview, enter PLACE mode).
+   *   - Tap on different tower while preview open: switch preview to new tower.
+   *
+   * On pointer (mouse) devices this delegates straight to selectTowerType so desktop
+   * behaviour is completely unchanged.
+   */
+  handleTowerButtonTap(event: MouseEvent | TouchEvent, type: TowerType): void {
+    const isTouch = event instanceof TouchEvent || (event instanceof PointerEvent && event.pointerType === 'touch');
+    if (!isTouch) {
+      this.selectTowerType(type);
+      return;
+    }
+
+    if (this.previewTowerType === type) {
+      // Second tap on same tower — commit to placement
+      this.previewTowerType = null;
+      this.selectTowerType(type);
+    } else {
+      // First tap (or switching preview to a different tower)
+      this.previewTowerType = type;
+    }
+  }
+
+  /** Dismiss the touch preview without selecting a tower. */
+  clearTowerPreview(): void {
+    this.previewTowerType = null;
   }
 
   /** Exit PLACE mode — clears tower type selection, hides ghost preview, removes tile highlights. */

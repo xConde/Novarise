@@ -2555,6 +2555,20 @@ body .tutorial-target-highlight {
   visibility: visible;
 }
 
+/* On touch devices, suppress the hover-triggered tooltip so it only shows on deliberate first-tap. */
+@media (hover: none) {
+  .board-container .tower-selection .tower-btn:hover .tower-tooltip {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* Touch first-tap preview: show tooltip when .previewing class is applied (touch devices). */
+.board-container .tower-selection .tower-btn.previewing .tower-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
 .board-container .tower-selection .tooltip-stat {
   display: flex;
   justify-content: space-between;
