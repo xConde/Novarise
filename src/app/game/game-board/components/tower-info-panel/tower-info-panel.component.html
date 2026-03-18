@@ -1,0 +1,79 @@
+<!-- Tower info panel -->
+<div class="tower-info-panel">
+  <div class="tower-info-header">
+    <span class="tower-info-name">{{ towerInfo!.type | titlecase }}</span>
+    <span class="tower-info-level">
+      <span *ngFor="let star of levelStars(towerInfo!.level)" class="level-star">&#9733;</span>
+      <span *ngFor="let star of levelStars(MAX_TOWER_LEVEL - towerInfo!.level)" class="level-star empty">&#9733;</span>
+    </span>
+    <button class="tower-info-close" (click)="close.emit()" aria-label="Close tower info">&times;</button>
+  </div>
+  <div class="tower-info-stats">
+    <div class="stat-row">
+      <span class="stat-label">Damage</span>
+      <span class="stat-value">{{ towerStats!.damage }}</span>
+      <span class="stat-preview" *ngIf="upgradePreview" [attr.aria-label]="'After upgrade: ' + upgradePreview.damage">{{ upgradePreview.damage }}</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Range</span>
+      <span class="stat-value">{{ towerStats!.range }}</span>
+      <span class="stat-preview" *ngIf="upgradePreview" [attr.aria-label]="'After upgrade: ' + upgradePreview.range">{{ upgradePreview.range }}</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Fire Rate</span>
+      <span class="stat-value">{{ towerStats!.fireRate }}s</span>
+      <span class="stat-preview" *ngIf="upgradePreview" [attr.aria-label]="'After upgrade: ' + upgradePreview.fireRate + 's'">{{ upgradePreview.fireRate }}s</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Kills</span>
+      <span class="stat-value">{{ towerInfo!.kills }}</span>
+    </div>
+    <div class="stat-row" *ngIf="towerStats!.statusEffect">
+      <span class="stat-label">Effect</span>
+      <span class="stat-value status-effect" [attr.data-effect]="towerStats!.statusEffect">{{ towerStats!.statusEffect }}</span>
+    </div>
+  </div>
+  <div class="tower-info-targeting" *ngIf="towerInfo && towerInfo.type !== TowerType.SLOW">
+    <button
+      class="targeting-btn"
+      (click)="cycleTargeting.emit()"
+      [attr.aria-label]="'Targeting: ' + targetingModeLabels[towerInfo.targetingMode] + '. Click to cycle.'">
+      Target: {{ targetingModeLabels[towerInfo.targetingMode] }}
+    </button>
+  </div>
+  <div class="tower-info-actions" *ngIf="!showSpecializationChoice">
+    <button
+      class="upgrade-btn"
+      *ngIf="towerInfo!.level < MAX_TOWER_LEVEL"
+      [class.unaffordable]="gold < upgradeCost"
+      (click)="upgrade.emit()"
+      aria-label="Upgrade tower">
+      Upgrade ({{ upgradeCost }}g)<span class="upgrade-tile-percent" *ngIf="upgradePercent > 0"> +{{ upgradePercent }}%</span>
+    </button>
+    <span class="max-level-badge" *ngIf="towerInfo!.level >= MAX_TOWER_LEVEL">
+      {{ towerInfo!.specialization ? (towerInfo!.type | titlecase) + ' — ' + specLabel(towerInfo!) : 'MAX' }}
+    </span>
+    <button
+      class="sell-btn"
+      [class.confirm]="sellConfirmPending"
+      (click)="sell.emit()"
+      aria-label="Sell tower">
+      {{ sellConfirmPending ? 'Confirm Sell?' : 'Sell (+' + sellValue + 'g)' }}
+    </button>
+  </div>
+  <div class="spec-choice-panel" *ngIf="showSpecializationChoice">
+    <div class="spec-choice-header">Choose Specialization ({{ upgradeCost }}g)</div>
+    <button
+      *ngFor="let opt of specOptions"
+      class="spec-btn"
+      [class.unaffordable]="gold < upgradeCost"
+      [disabled]="gold < upgradeCost"
+      (click)="selectSpecialization.emit(opt.spec)"
+      [attr.aria-label]="'Specialize: ' + opt.label + ' — ' + opt.description">
+      <span class="spec-label">{{ opt.label }}</span>
+      <span class="spec-desc">{{ opt.description }}</span>
+      <span class="spec-stats">DMG {{ opt.damage }} | RNG {{ opt.range }} | {{ opt.fireRate }}s</span>
+    </button>
+    <button class="spec-cancel-btn" (click)="cancelSpecialization.emit()" aria-label="Cancel specialization">Cancel</button>
+  </div>
+</div>

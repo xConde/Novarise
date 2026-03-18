@@ -12,16 +12,29 @@ src/app/
 │   └── campaign.component.ts      # Level select UI
 ├── game/                          # Tower defense game (/play, /maps)
 │   ├── game-board/
+│   │   ├── components/
+│   │   │   ├── game-hud/              # HUD display (lives, gold, wave, score, time)
+│   │   │   ├── game-results-overlay/  # Victory/defeat overlay (stars, score, challenges)
+│   │   │   ├── game-setup-panel/      # Pre-game setup (difficulty, modifiers, start)
+│   │   │   ├── tower-info-panel/      # Selected tower stats, upgrade, sell, spec
+│   │   │   └── tutorial-spotlight/    # Non-blocking tutorial cards
 │   │   ├── constants/             # 16 config files (see Constants Architecture)
 │   │   ├── models/                # tower, enemy, wave, game-state, score, modifier, wave-preview,
 │   │   │                          #   enemy-info (encyclopedia), endless-wave (template-based gen)
-│   │   ├── services/              # 22 services — includes TutorialService (see Service Scopes)
+│   │   ├── services/              # 26 services — includes TutorialService (see Service Scopes)
+│   │   │   ├── tile-highlight.service.ts     # Tile heatmap highlighting for tower placement
+│   │   │   ├── tower-animation.service.ts    # Tower idle animations and tile pulse
+│   │   │   ├── range-visualization.service.ts # Range ring and selection ring lifecycle
+│   │   │   └── tower-mesh-factory.service.ts  # Tower mesh creation (extracted from GameBoardService)
 │   │   ├── testing/               # Shared factories: test-board, test-enemy, test-spies
-│   │   └── utils/                 # coordinate-utils, min-heap, object-pool, spatial-grid, three-utils
+│   │   └── utils/                 # coordinate-utils, min-heap, object-pool, spatial-grid, three-utils, assert-never
 │   ├── guards/                    # GameGuard — requires MapBridge loaded or ?quickplay=true
-│   ├── game-board.component.ts    # Main game renderer/loop (1993 LOC)
-│   ├── game-board.service.ts      # Board generation, mesh creation, path-block validation (708 LOC)
+│   ├── game-board.component.ts    # Main game renderer/loop (~1978 LOC)
+│   ├── game-board.component.html  # Template (~387 LOC, decomposed into 5 child components)
+│   ├── game-board.service.ts      # Board generation, path-block validation (~432 LOC)
 │   └── map-select/                # Map selection screen (/maps)
+├── core/
+│   └── error-handler.service.ts   # Global ErrorHandler — catches uncaught exceptions, logs, avoids crash
 ├── games/novarise/                # Map editor (/edit)
 │   ├── constants/                 # editor-camera, editor-scene, editor-ui
 │   ├── core/                      # Editor services (see Service Scopes)
@@ -43,9 +56,9 @@ All routes lazy-loaded. `gameGuard` and `gameLeaveGuard` are functional guards (
 
 **`GameModule` (`/play`)** provides: `GameBoardService`
 
-**`GameBoardComponent`** provides (component-scoped): `EnemyService`, `GameStateService`, `WaveService`, `TowerCombatService`, `AudioService`, `ParticleService`, `ScreenShakeService`, `GoldPopupService`, `FpsCounterService`, `GameStatsService`, `DamagePopupService`, `MinimapService`, `TowerPreviewService`, `PathVisualizationService`, `StatusEffectService`, `TutorialService`, `GameEndService`, `ChallengeTrackingService`, `GameSessionService`, `PathfindingService`, `CombatVFXService`, `SceneService`, `TowerInteractionService`, `CombatLoopService`
+**`GameBoardComponent`** provides (component-scoped): `EnemyService`, `GameStateService`, `WaveService`, `TowerCombatService`, `AudioService`, `ParticleService`, `ScreenShakeService`, `GoldPopupService`, `FpsCounterService`, `GameStatsService`, `DamagePopupService`, `MinimapService`, `TowerPreviewService`, `PathVisualizationService`, `StatusEffectService`, `TutorialService`, `GameEndService`, `ChallengeTrackingService`, `GameSessionService`, `PathfindingService`, `CombatVFXService`, `SceneService`, `TowerInteractionService`, `CombatLoopService`, `TileHighlightService`, `TowerAnimationService`, `RangeVisualizationService`, `TowerMeshFactoryService`
 
-**`EditorModule` (`/edit`)** provides: `PathValidationService`, `EditorSceneService`
+**`EditorModule` (`/edit`)** provides: `PathValidationService`, `EditorSceneService`, `EditorNotificationService`
 
 **Root-scoped** (survive route transitions): `MapBridgeService`, `SettingsService`, `PlayerProfileService`, `EditorStateService`, `EditHistoryService`, `CameraControlService`, `MapStorageService`, `MapShareService`, `MapTemplateService`, `StorageService`
 
@@ -174,11 +187,15 @@ Files over 500 LOC — be careful editing these, they are dense:
 
 | File | LOC | Notes |
 |------|-----|-------|
-| `game-board/game-board.component.ts` | ~2256 | Main coordinator — delegates to CombatLoopService |
+| `game-board/game-board.component.ts` | ~1978 | Main coordinator — delegates to CombatLoopService (was ~2256) |
 | `games/novarise/novarise.component.ts` | ~1558 | Editor coordinator — delegates to EditorSceneService |
 | `services/scene.service.ts` | ~459 | Game Three.js infrastructure |
 | `core/editor-scene.service.ts` | ~463 | Editor Three.js infrastructure |
 | `services/enemy.service.ts` | ~800 | Spawn + movement (A* in PathfindingService) |
 | `services/tower-combat.service.ts` | ~780 | Targeting + projectiles (VFX in CombatVFXService) |
-| `game-board/game-board.service.ts` | ~708 | Board gen + path-block BFS |
+| `game-board/game-board.service.ts` | ~432 | Board gen + path-block BFS (was ~708; mesh creation moved to TowerMeshFactoryService) |
 | `services/combat-loop.service.ts` | ~250 | Physics stepping, kill/leak/wave processing |
+| `services/tower-mesh-factory.service.ts` | ~300 | Tower mesh creation (extracted from GameBoardService) |
+| `services/tile-highlight.service.ts` | ~204 | Tile heatmap highlighting for tower placement |
+| `services/range-visualization.service.ts` | ~135 | Range ring and selection ring lifecycle |
+| `services/tower-animation.service.ts` | ~81 | Tower idle animations and tile pulse |

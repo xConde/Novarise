@@ -9,6 +9,7 @@ import { EditHistoryService } from './core/edit-history.service';
 import { PathValidationService } from './core/path-validation.service';
 import { MapTemplateService } from './core/map-template.service';
 import { EditorSceneService } from './core/editor-scene.service';
+import { EditorNotificationService } from './core/editor-notification.service';
 import { JoystickEvent } from './features/mobile-controls';
 
 /**
@@ -83,6 +84,7 @@ describe('NovariseComponent', () => {
         CameraControlService,
         EditorStateService,
         EditHistoryService,
+        EditorNotificationService,
       ],
       schemas: [NO_ERRORS_SCHEMA] // Ignore unknown elements like app-virtual-joystick
     }).compileComponents();

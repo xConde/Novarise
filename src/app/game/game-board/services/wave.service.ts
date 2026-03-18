@@ -23,6 +23,8 @@ export class WaveService {
   private currentWaveIndex = -1;
   private endlessMode = false;
   private currentEndlessResult: EndlessWaveResult | null = null;
+  /** Tracks which enemy types have been introduced to the player (for "NEW" badge notifications). */
+  private seenEnemyTypes = new Set<EnemyType>();
 
   constructor(private enemyService: EnemyService) {}
 
@@ -180,9 +182,12 @@ export class WaveService {
       return this.waveDefinitions[index].entries.reduce((sum, e) => sum + e.count, 0);
     }
     if (this.endlessMode) {
+      // Use cached result when available for the requested wave to avoid regenerating on every UI query.
+      if (this.currentEndlessResult && this.currentWaveIndex === index) {
+        return this.currentEndlessResult.entries.reduce((sum, e) => sum + e.count, 0);
+      }
       const endlessWaveNumber = this.toEndlessWaveNumber(waveNumber);
-      const result = generateEndlessWave(endlessWaveNumber);
-      return result.entries.reduce((sum, e) => sum + e.count, 0);
+      return generateEndlessWave(endlessWaveNumber).entries.reduce((sum, e) => sum + e.count, 0);
     }
     return 0;
   }
@@ -206,6 +211,22 @@ export class WaveService {
     return this.waveDefinitions.length;
   }
 
+  /**
+   * Returns true if this enemy type has NOT yet been shown to the player.
+   * Used to determine whether to display the "NEW" badge in the wave preview.
+   */
+  isNewType(type: EnemyType): boolean {
+    return !this.seenEnemyTypes.has(type);
+  }
+
+  /**
+   * Mark an enemy type as seen (introduced to the player).
+   * Call after showing the "NEW" notification so subsequent waves don't re-alert.
+   */
+  markSeen(type: EnemyType): void {
+    this.seenEnemyTypes.add(type);
+  }
+
   /** Clears all spawn queues and resets wave state. Call from `restartGame()` before a new game begins. Clears custom waves — re-apply via `setCustomWaves()` if restarting a campaign level. */
   reset(): void {
     this.spawnQueues = [];
@@ -213,6 +234,7 @@ export class WaveService {
     this.currentWaveIndex = -1;
     this.endlessMode = false;
     this.currentEndlessResult = null;
+    this.seenEnemyTypes.clear();
     this.clearCustomWaves();
   }
 }

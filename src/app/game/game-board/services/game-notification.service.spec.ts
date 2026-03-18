@@ -99,6 +99,21 @@ describe('GameNotificationService', () => {
 
       expect(notifs.length).toBe(1);
     });
+
+    it('should cancel the pending auto-dismiss timer', fakeAsync(() => {
+      let notifs: GameNotification[] = [];
+      service.getNotifications().subscribe(n => { notifs = n; });
+
+      service.show(NotificationType.INFO, 'A', 'a', 1000);
+      const idToRemove = notifs[0].id;
+
+      service.dismiss(idToRemove);
+      expect(notifs.length).toBe(0);
+
+      // Timer must not fire again after explicit dismiss
+      tick(1000);
+      expect(notifs.length).toBe(0);
+    }));
   });
 
   describe('clear()', () => {
@@ -123,6 +138,21 @@ describe('GameNotificationService', () => {
 
       expect(notifs[0].id).toBe(0);
     });
+
+    it('should cancel all pending auto-dismiss timers', fakeAsync(() => {
+      let notifs: GameNotification[] = [];
+      service.getNotifications().subscribe(n => { notifs = n; });
+
+      service.show(NotificationType.INFO, 'A', 'a', 1000);
+      service.show(NotificationType.STREAK, 'B', 'b', 2000);
+      service.clear();
+
+      expect(notifs.length).toBe(0);
+
+      // Neither timer should fire after clear()
+      tick(2000);
+      expect(notifs.length).toBe(0);
+    }));
   });
 
   describe('auto-dismiss', () => {

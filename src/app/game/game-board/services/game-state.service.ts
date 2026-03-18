@@ -113,9 +113,7 @@ export class GameStateService {
     if (this.state.phase !== GamePhase.COMBAT) return 0;
     this.state.consecutiveWavesWithoutLeak++;
     const bonus = STREAK_BONUS_PER_WAVE * this.state.consecutiveWavesWithoutLeak;
-    this.state.gold += bonus;
-    this.state.score += bonus;
-    this.emit();
+    this.addGoldAndScore(bonus);
     return bonus;
   }
 

@@ -6,7 +6,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
 import { disposeMaterial } from '../utils/three-utils';
-import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG } from '../constants/rendering.constants';
+import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG, ANIMATION_CONFIG } from '../constants/rendering.constants';
 import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from '../constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from '../constants/camera.constants';
 import { PARTICLE_CONFIG, PARTICLE_COLORS } from '../constants/particle.constants';
@@ -330,6 +330,22 @@ export class SceneService {
   }
 
   // ----- Per-frame operations -----
+
+  /** Tick ambient particle drift and skybox time uniform. */
+  tickAmbientVisuals(time: number): void {
+    if (this.particles) {
+      const posAttr = this.particles.geometry.attributes['position'] as THREE.BufferAttribute;
+      const positions = posAttr.array as Float32Array;
+      for (let i = 0; i < positions.length; i += 3) {
+        positions[i + 1] += Math.sin(time * PARTICLE_CONFIG.animSpeedTime + i) * PARTICLE_CONFIG.animSpeedWave;
+      }
+      posAttr.needsUpdate = true;
+      this.particles.rotation.y += PARTICLE_CONFIG.rotationSpeed;
+    }
+    if (this.skybox) {
+      (this.skybox.material as THREE.ShaderMaterial).uniforms['time'].value = time * ANIMATION_CONFIG.msToSeconds;
+    }
+  }
 
   resize(width: number, height: number): void {
     if (this.camera) {

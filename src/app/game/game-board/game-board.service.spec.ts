@@ -1,5 +1,4 @@
 import { TestBed } from '@angular/core/testing';
-import * as THREE from 'three';
 import { GameBoardService } from './game-board.service';
 import { BlockType, GameBoardTile } from './models/game-board-tile';
 import { TowerType } from './models/tower.model';
@@ -472,83 +471,6 @@ describe('GameBoardService', () => {
       const result = service.placeTower(5, 5, TowerType.SNIPER);
       expect(result).toBeTrue();
       expect(service.getGameBoard()[5][5].type).toBe(BlockType.TOWER);
-    });
-  });
-
-  // --- createTowerMesh for new tower types ---
-
-  describe('createTowerMesh — new tower types', () => {
-    beforeEach(() => {
-      service.resetBoard();
-    });
-
-    it('should create a mesh group for SLOW tower', () => {
-      const group = service.createTowerMesh(5, 5, TowerType.SLOW);
-      expect(group).toBeTruthy();
-      expect(group instanceof THREE.Group).toBeTrue();
-      expect(group.children.length).toBeGreaterThan(0);
-      // Dispose after test
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          if (Array.isArray(child.material)) {
-            child.material.forEach(m => m.dispose());
-          } else {
-            (child.material as THREE.Material).dispose();
-          }
-        }
-      });
-    });
-
-    it('should create a mesh group for CHAIN tower', () => {
-      const group = service.createTowerMesh(5, 5, TowerType.CHAIN);
-      expect(group).toBeTruthy();
-      expect(group instanceof THREE.Group).toBeTrue();
-      expect(group.children.length).toBeGreaterThan(0);
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          if (Array.isArray(child.material)) {
-            child.material.forEach(m => m.dispose());
-          } else {
-            (child.material as THREE.Material).dispose();
-          }
-        }
-      });
-    });
-
-    it('should create a mesh group for MORTAR tower', () => {
-      const group = service.createTowerMesh(5, 5, TowerType.MORTAR);
-      expect(group).toBeTruthy();
-      expect(group instanceof THREE.Group).toBeTrue();
-      expect(group.children.length).toBeGreaterThan(0);
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          if (Array.isArray(child.material)) {
-            child.material.forEach(m => m.dispose());
-          } else {
-            (child.material as THREE.Material).dispose();
-          }
-        }
-      });
-    });
-
-    it('should position SLOW tower at the correct world coordinates', () => {
-      const group = service.createTowerMesh(5, 5, TowerType.SLOW);
-      // Board is 25x20; world x = (5 - 12.5) * 1 = -7.5; world z = (5 - 10) * 1 = -5
-      expect(group.position.x).toBeCloseTo(-7.5);
-      expect(group.position.z).toBeCloseTo(-5);
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          if (Array.isArray(child.material)) {
-            child.material.forEach(m => m.dispose());
-          } else {
-            (child.material as THREE.Material).dispose();
-          }
-        }
-      });
     });
   });
 

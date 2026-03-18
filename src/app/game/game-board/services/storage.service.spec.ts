@@ -169,6 +169,66 @@ describe('StorageService', () => {
       spyOn(localStorage, 'setItem').and.throwError(new Error('blocked'));
       expect(freshService.isAvailable()).toBeFalse();
     });
+
+    it('returns true when write+read+delete succeed (health check passes)', () => {
+      const freshService = new StorageService();
+      expect(freshService.isAvailable()).toBeTrue();
+    });
+
+    it('returns false when localStorage throws on setItem (storage unavailable)', () => {
+      const freshService = new StorageService();
+      const domErr = new DOMException('storage unavailable', 'SecurityError');
+      spyOn(localStorage, 'setItem').and.throwError(domErr);
+      expect(freshService.isAvailable()).toBeFalse();
+    });
+  });
+
+  // ── quota error detection ─────────────────────────────────────────────────
+
+  describe('quota error detection', () => {
+    it('returns false and logs error for Safari/WebKit quota error (code 22)', () => {
+      spyOn(console, 'error');
+      // DOMException with code 22 is the Safari/WebKit legacy QuotaExceededError
+      const safariErr = new DOMException('QuotaExceededError', 'QuotaExceededError');
+      Object.defineProperty(safariErr, 'code', { value: 22 });
+      spyOn(localStorage, 'setItem').and.throwError(safariErr);
+      const ok = service.setJSON(TEST_KEY, { data: 'value' });
+      expect(ok).toBeFalse();
+      expect(console.error).toHaveBeenCalledWith(
+        jasmine.stringContaining(`quota exceeded writing key "${TEST_KEY}"`)
+      );
+    });
+
+    it('returns false and logs error for modern QuotaExceededError name', () => {
+      spyOn(console, 'error');
+      const modernErr = new DOMException('quota exceeded', 'QuotaExceededError');
+      spyOn(localStorage, 'setItem').and.throwError(modernErr);
+      const ok = service.setJSON(TEST_KEY, { data: 'value' });
+      expect(ok).toBeFalse();
+      expect(console.error).toHaveBeenCalledWith(
+        jasmine.stringContaining(`quota exceeded writing key "${TEST_KEY}"`)
+      );
+    });
+
+    it('returns false and logs error for Firefox NS_ERROR_DOM_QUOTA_REACHED', () => {
+      spyOn(console, 'error');
+      const firefoxErr = new DOMException('quota exceeded', 'NS_ERROR_DOM_QUOTA_REACHED');
+      spyOn(localStorage, 'setItem').and.throwError(firefoxErr);
+      const ok = service.setJSON(TEST_KEY, { data: 'value' });
+      expect(ok).toBeFalse();
+      expect(console.error).toHaveBeenCalledWith(
+        jasmine.stringContaining(`quota exceeded writing key "${TEST_KEY}"`)
+      );
+    });
+
+    it('returns false but does NOT log for non-quota errors', () => {
+      spyOn(console, 'error');
+      const genericErr = new DOMException('unknown error', 'UnknownError');
+      spyOn(localStorage, 'setItem').and.throwError(genericErr);
+      const ok = service.setJSON(TEST_KEY, { data: 'value' });
+      expect(ok).toBeFalse();
+      expect(console.error).not.toHaveBeenCalled();
+    });
   });
 
   // ── error paths ───────────────────────────────────────────────────────────

@@ -47,5 +47,16 @@
       (playMapClick)="playMap()"
       (templateSelect)="loadTemplate($event)">
     </app-edit-controls>
+
+    <!-- Editor toast notifications (replaces alert() calls) -->
+    <div
+      *ngIf="editorNotification"
+      class="editor-toast"
+      [class.editor-toast--success]="editorNotification.type === 'success'"
+      [class.editor-toast--error]="editorNotification.type === 'error'"
+      role="status"
+      aria-live="polite">
+      {{ editorNotification.message }}
+    </div>
   </div>
 </div>

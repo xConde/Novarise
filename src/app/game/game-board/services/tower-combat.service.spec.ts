@@ -7,7 +7,7 @@ import { GameStateService } from './game-state.service';
 import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_SPECIALIZATIONS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { Enemy } from '../models/enemy.model';
 import { StatusEffectService } from './status-effect.service';
-import { StatusEffectType } from '../constants/status-effect.constants';
+import { StatusEffectType, STATUS_EFFECT_CONFIGS } from '../constants/status-effect.constants';
 import { CHAIN_LIGHTNING_CONFIG, IMPACT_FLASH_CONFIG } from '../constants/combat.constants';
 import * as THREE from 'three';
 import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy } from '../testing';
@@ -162,32 +162,32 @@ describe('TowerCombatService', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
       const tower = service.getTower(`${TOWER_ROW}-${TOWER_COL}`)!;
       expect(tower.targetingMode).toBe(DEFAULT_TARGETING_MODE);
-      expect(tower.targetingMode).toBe('nearest');
+      expect(tower.targetingMode).toBe(TargetingMode.NEAREST);
     });
 
     it('should set targeting mode via setTargetingMode', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
       const key = `${TOWER_ROW}-${TOWER_COL}`;
 
-      expect(service.setTargetingMode(key, 'first')).toBeTrue();
-      expect(service.getTower(key)!.targetingMode).toBe('first');
+      expect(service.setTargetingMode(key, TargetingMode.FIRST)).toBeTrue();
+      expect(service.getTower(key)!.targetingMode).toBe(TargetingMode.FIRST);
 
-      expect(service.setTargetingMode(key, 'strongest')).toBeTrue();
-      expect(service.getTower(key)!.targetingMode).toBe('strongest');
+      expect(service.setTargetingMode(key, TargetingMode.STRONGEST)).toBeTrue();
+      expect(service.getTower(key)!.targetingMode).toBe(TargetingMode.STRONGEST);
     });
 
     it('should return false for setTargetingMode on non-existent tower', () => {
-      expect(service.setTargetingMode('99-99', 'first')).toBeFalse();
+      expect(service.setTargetingMode('99-99', TargetingMode.FIRST)).toBeFalse();
     });
 
     it('should cycle targeting mode through all modes', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
       const key = `${TOWER_ROW}-${TOWER_COL}`;
 
-      // Default is 'nearest' (index 0) → cycles to 'first' (index 1)
-      expect(service.cycleTargetingMode(key)).toBe('first');
-      expect(service.cycleTargetingMode(key)).toBe('strongest');
-      expect(service.cycleTargetingMode(key)).toBe('nearest'); // wraps around
+      // Default is NEAREST (index 0) → cycles to FIRST (index 1)
+      expect(service.cycleTargetingMode(key)).toBe(TargetingMode.FIRST);
+      expect(service.cycleTargetingMode(key)).toBe(TargetingMode.STRONGEST);
+      expect(service.cycleTargetingMode(key)).toBe(TargetingMode.NEAREST); // wraps around
     });
 
     it('should return null for cycleTargetingMode on non-existent tower', () => {
@@ -217,7 +217,7 @@ describe('TowerCombatService', () => {
     it('findTarget with first returns enemy furthest along path', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
       const key = `${TOWER_ROW}-${TOWER_COL}`;
-      service.setTargetingMode(key, 'first');
+      service.setTargetingMode(key, TargetingMode.FIRST);
 
       // Close enemy but early in path
       const close = createEnemy('close', TOWER_WORLD_X + 0.5, TOWER_WORLD_Z, 1000);
@@ -239,7 +239,7 @@ describe('TowerCombatService', () => {
     it('findTarget with strongest returns enemy with highest health', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
       const key = `${TOWER_ROW}-${TOWER_COL}`;
-      service.setTargetingMode(key, 'strongest');
+      service.setTargetingMode(key, TargetingMode.STRONGEST);
 
       // Weak enemy right at tower
       const weak = createEnemy('weak', TOWER_WORLD_X, TOWER_WORLD_Z, 50);
@@ -262,12 +262,12 @@ describe('TowerCombatService', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
       const key = `${TOWER_ROW}-${TOWER_COL}`;
 
-      service.setTargetingMode(key, 'strongest');
-      expect(service.getTower(key)!.targetingMode).toBe('strongest');
+      service.setTargetingMode(key, TargetingMode.STRONGEST);
+      expect(service.getTower(key)!.targetingMode).toBe(TargetingMode.STRONGEST);
 
       const upgraded = service.upgradeTower(key);
       expect(upgraded).toBeTrue();
-      expect(service.getTower(key)!.targetingMode).toBe('strongest');
+      expect(service.getTower(key)!.targetingMode).toBe(TargetingMode.STRONGEST);
     });
   });
 
@@ -1439,6 +1439,271 @@ describe('TowerCombatService', () => {
 
       const burnCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.BURN);
       expect(burnCalls.length).toBe(0);
+    });
+  });
+
+  // --- MORTAR BURN DoT full-chain integration ---
+
+  describe('Mortar BURN DoT integration', () => {
+    it('BURN ticks from StatusEffectService should reduce enemy health after mortar blast', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      // Enemy survives the initial blast — high health
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      // Fire and impact at gameTime=3.1 — creates zone, initial tick deals dotDamage,
+      // and BURN is applied to the surviving enemy
+      service.update(3.1, mockScene);
+      const healthAfterBlast = e1.health;
+
+      // Advance exactly one BURN tick interval (0.5s) to trigger the first BURN DoT tick.
+      // BURN damagePerTick=5, tickInterval=0.5 — StatusEffectService.update() is called
+      // inside TowerCombatService.update(), so a second update drives the DoT tick.
+      const burnCfg = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN];
+
+      // Move enemy out of blast radius before next update so the mortar zone DoT
+      // (tickInterval=1.0s) does NOT fire during this tick — only BURN fires.
+      e1.position.x = TOWER_WORLD_X + 100;
+      service.update(burnCfg.tickInterval!, mockScene);
+
+      // Health must have decreased from the BURN DoT tick
+      expect(e1.health).toBeLessThan(healthAfterBlast);
+      // The exact decrease must equal BURN damagePerTick
+      expect(healthAfterBlast - e1.health).toBe(burnCfg.damagePerTick!);
+    });
+
+    it('BURN deals cumulative damage across multiple ticks after mortar blast', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+
+      service.update(3.1, mockScene); // fire + blast + BURN applied
+
+      const burnCfg = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN];
+      // Move enemy out of mortar zone so only BURN damages it from here on
+      e1.position.x = TOWER_WORLD_X + 100;
+      const healthAfterBlast = e1.health;
+
+      // Advance by 1.1x the tick interval to avoid exact floating-point tick boundary
+      // issues. This guarantees exactly one tick fires per update() call.
+      const step = burnCfg.tickInterval! * 1.1; // 0.55s — safely crosses 0.5s boundary
+
+      // First BURN tick
+      service.update(step, mockScene);
+      const healthAfterTick1 = e1.health;
+      expect(healthAfterTick1).toBeLessThan(healthAfterBlast);
+      expect(healthAfterBlast - healthAfterTick1).toBe(burnCfg.damagePerTick!);
+
+      // Second BURN tick — health decreases again by the same amount
+      service.update(step, mockScene);
+      const healthAfterTick2 = e1.health;
+      expect(healthAfterTick2).toBeLessThan(healthAfterTick1);
+      expect(healthAfterTick1 - healthAfterTick2).toBe(burnCfg.damagePerTick!);
+    });
+
+    it('BURN tick kills enemy when remaining health equals one tick damage', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const burnCfg = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN];
+
+      // Enemy health: blast damage + exactly enough to survive blast, then die on first BURN tick
+      // dotDamage (initial blast) + burnDamagePerTick = total lethal health
+      const dotDamage = TOWER_CONFIGS[TowerType.MORTAR].dotDamage!;
+      const initialHealth = dotDamage + burnCfg.damagePerTick!;
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, initialHealth);
+      enemyMap.set('e1', e1);
+
+      // Fire and blast — enemy survives with exactly burnCfg.damagePerTick health
+      service.update(3.1, mockScene);
+      expect(e1.health).toBe(burnCfg.damagePerTick!);
+
+      // Move out of mortar zone so only BURN ticks
+      e1.position.x = TOWER_WORLD_X + 100;
+
+      // Advance one BURN tick — should kill the enemy via StatusEffectService
+      const result = service.update(burnCfg.tickInterval!, mockScene);
+
+      // Kill should be reported from the DoT tick
+      const dotKills = result.killed.filter((k: KillInfo) => k.id === 'e1');
+      expect(dotKills.length).toBe(1);
+    });
+  });
+
+  // --- Chain damage-per-hop: 3-enemy falloff chain ---
+
+  describe('Chain tower damage per hop (3+ enemies)', () => {
+    it('should apply exact falloff across three chained targets', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      const chainRange = TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
+      const baseDamage = TOWER_CONFIGS[TowerType.CHAIN].damage;
+
+      // Three enemies in a line, each within chainRange of the previous
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + chainRange * 0.5, TOWER_WORLD_Z, 10000);
+      const e3 = createEnemy('e3', TOWER_WORLD_X + chainRange * 0.9, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+      enemyMap.set('e3', e3);
+
+      service.update(1.0, mockScene); // past CHAIN fireRate of 0.8s
+
+      const e1Damage = 10000 - e1.health;
+      const e2Damage = 10000 - e2.health;
+      const e3Damage = 10000 - e3.health;
+
+      // Primary target receives full base damage
+      expect(e1Damage).toBe(baseDamage);
+
+      // Second target receives baseDamage * falloff (0.7)
+      const expectedSecond = Math.round(baseDamage * CHAIN_LIGHTNING_CONFIG.damageFalloff);
+      expect(e2Damage).toBe(expectedSecond);
+
+      // Third target receives second-hop damage * falloff (0.7 * 0.7)
+      const expectedThird = Math.round(expectedSecond * CHAIN_LIGHTNING_CONFIG.damageFalloff);
+      expect(e3Damage).toBe(expectedThird);
+    });
+
+    it('primary target always receives full unmodified damage regardless of chain length', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      const chainRange = TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
+      const baseDamage = TOWER_CONFIGS[TowerType.CHAIN].damage;
+
+      // Stack four enemies — primary must still take exactly baseDamage
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + chainRange * 0.3, TOWER_WORLD_Z, 10000);
+      const e3 = createEnemy('e3', TOWER_WORLD_X + chainRange * 0.6, TOWER_WORLD_Z, 10000);
+      const e4 = createEnemy('e4', TOWER_WORLD_X + chainRange * 0.8, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+      enemyMap.set('e3', e3);
+      enemyMap.set('e4', e4);
+
+      service.update(1.0, mockScene);
+
+      expect(10000 - e1.health).toBe(baseDamage);
+    });
+
+    it('secondary targets receive strictly less damage than primary', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      const chainRange = TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + chainRange * 0.5, TOWER_WORLD_Z, 10000);
+      const e3 = createEnemy('e3', TOWER_WORLD_X + chainRange * 0.9, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+      enemyMap.set('e3', e3);
+
+      service.update(1.0, mockScene);
+
+      const e1Damage = 10000 - e1.health;
+      const e2Damage = 10000 - e2.health;
+      const e3Damage = 10000 - e3.health;
+
+      expect(e2Damage).toBeLessThan(e1Damage);
+      expect(e3Damage).toBeLessThan(e2Damage);
+    });
+
+    it('each hop damage matches CHAIN_LIGHTNING_CONFIG.damageFalloff constant exactly', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      const chainRange = TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
+      const baseDamage = TOWER_CONFIGS[TowerType.CHAIN].damage;
+      const falloff = CHAIN_LIGHTNING_CONFIG.damageFalloff;
+
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + chainRange * 0.5, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      service.update(1.0, mockScene);
+
+      const e1Damage = 10000 - e1.health;
+      const e2Damage = 10000 - e2.health;
+
+      expect(e1Damage).toBe(baseDamage);
+      expect(e2Damage).toBe(Math.round(baseDamage * falloff));
+    });
+  });
+
+  // --- SpatialGrid: rebuild timing and range query ---
+
+  describe('SpatialGrid query correctness', () => {
+    it('enemies within tower range are found and damaged after spatial grid rebuild', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Place enemy within BASIC range (3 world units)
+      const inRange = createEnemy('in', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 10000);
+      enemyMap.set('in', inRange);
+
+      service.update(2.0, mockScene); // fire rate 1.0s — fires after 1.0s
+
+      expect(inRange.health).toBeLessThan(10000);
+    });
+
+    it('enemies outside tower range are not found by spatial grid query', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // BASIC range = 3 — place enemy just outside
+      const outOfRange = createEnemy('out', TOWER_WORLD_X + 5, TOWER_WORLD_Z, 10000);
+      enemyMap.set('out', outOfRange);
+
+      service.update(2.0, mockScene);
+
+      expect(outOfRange.health).toBe(10000); // untouched
+    });
+
+    it('spatial grid rebuilds every update — newly added enemies are found immediately', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // First update with no enemies — no fire
+      service.update(1.1, mockScene);
+
+      // Add enemy for the second update — grid rebuilds and finds it
+      const lateEnemy = createEnemy('late', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('late', lateEnemy);
+
+      service.update(1.1, mockScene); // fire rate resets each update; tower fires
+
+      expect(lateEnemy.health).toBeLessThan(10000);
+    });
+
+    it('spatial grid rebuilds correctly after an enemy is removed between updates', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1);
+      enemyMap.set('e1', e1);
+
+      // First update: tower fires and kills e1 (health=1)
+      service.update(2.0, mockScene);
+      // Remove killed enemy from map (simulate EnemyService removal)
+      enemyMap.delete('e1');
+
+      // Add a new enemy and verify grid picks it up
+      const e2 = createEnemy('e2', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e2', e2);
+
+      service.update(1.1, mockScene); // past fire rate
+
+      expect(e2.health).toBeLessThan(10000);
+    });
+
+    it('Chain tower spatial grid correctly finds enemies for chain bouncing', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      const chainRange = TOWER_CONFIGS[TowerType.CHAIN].chainRange!;
+      // Two enemies: one in CHAIN tower range, one just within chainRange of the first
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + chainRange * 0.4, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      service.update(1.0, mockScene); // past CHAIN fireRate
+
+      // Both enemies should have been found by the spatial grid
+      expect(e1.health).toBeLessThan(10000);
+      expect(e2.health).toBeLessThan(10000);
     });
   });
 

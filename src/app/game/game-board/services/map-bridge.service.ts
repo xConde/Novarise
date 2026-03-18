@@ -72,6 +72,19 @@ export class MapBridgeService {
   }
 
   /**
+   * Returns true if the stored editor map has valid spawn and exit points.
+   * Handles both v2 (spawnPoints/exitPoints arrays) and v1 (single point) legacy formats.
+   */
+  hasValidSpawnAndExit(): boolean {
+    const state = this.editorMapState;
+    if (!state) return false;
+    const legacy = state as unknown as TerrainGridStateLegacy;
+    const hasSpawn = (state.spawnPoints?.length > 0) || !!legacy.spawnPoint;
+    const hasExit = (state.exitPoints?.length > 0) || !!legacy.exitPoint;
+    return hasSpawn && hasExit;
+  }
+
+  /**
    * Convert an editor map state to the game's board format.
    *
    * The editor stores tiles as tiles[x][z] (column-major) while the game

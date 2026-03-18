@@ -88,6 +88,29 @@ export interface MapValidationResult {
   warnings: string[];
 }
 
+/**
+ * Validate a single spawn/exit point: must be an object with numeric x and z
+ * within [0, gridSize). Returns an error string or null if valid.
+ */
+function validatePoint(point: unknown, fieldName: string, index: number, gridSize: number): string | null {
+  if (!point || typeof point !== 'object') {
+    return `${fieldName}[${index}] is not an object`;
+  }
+  const p = point as Record<string, unknown>;
+  if (typeof p['x'] !== 'number' || typeof p['z'] !== 'number') {
+    return `${fieldName}[${index}] missing numeric x/z fields`;
+  }
+  const x = p['x'] as number;
+  const z = p['z'] as number;
+  if (gridSize > 0 && (x < 0 || x >= gridSize || z < 0 || z >= gridSize)) {
+    return `${fieldName}[${index}] coordinates (${x},${z}) out of bounds for gridSize ${gridSize}`;
+  }
+  if (!Number.isInteger(x) || !Number.isInteger(z)) {
+    return `${fieldName}[${index}] coordinates must be integers`;
+  }
+  return null;
+}
+
 export function validateMapData(data: unknown): MapValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -116,12 +139,26 @@ export function validateMapData(data: unknown): MapValidationResult {
     errors.push('Missing or invalid heightMap array');
   }
 
+  const gridSize = typeof d['gridSize'] === 'number' ? d['gridSize'] : 0;
+
   if (!Array.isArray(d['spawnPoints']) || (d['spawnPoints'] as unknown[]).length === 0) {
     errors.push('Must have at least one spawn point');
+  } else {
+    const points = d['spawnPoints'] as unknown[];
+    for (let i = 0; i < points.length; i++) {
+      const pointError = validatePoint(points[i], 'spawnPoints', i, gridSize);
+      if (pointError) errors.push(pointError);
+    }
   }
 
   if (!Array.isArray(d['exitPoints']) || (d['exitPoints'] as unknown[]).length === 0) {
     errors.push('Must have at least one exit point');
+  } else {
+    const points = d['exitPoints'] as unknown[];
+    for (let i = 0; i < points.length; i++) {
+      const pointError = validatePoint(points[i], 'exitPoints', i, gridSize);
+      if (pointError) errors.push(pointError);
+    }
   }
 
   // Warnings (non-blocking)

@@ -14,6 +14,7 @@ import {
   TOWER_CONFIGS,
   getSellValue,
   MAX_TOWER_LEVEL,
+  TargetingMode,
 } from '../models/tower.model';
 import { GamePhase } from '../models/game-state.model';
 import { BlockType } from '../models/game-board-tile';
@@ -31,7 +32,7 @@ function makeMockTower(overrides: Partial<PlacedTower> = {}): PlacedTower {
     kills: 0,
     totalInvested: 100,
     mesh: null as any,
-    targetingMode: 'nearest' as any,
+    targetingMode: TargetingMode.NEAREST,
     ...overrides,
   };
 }

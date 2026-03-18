@@ -44,6 +44,12 @@ const DEFAULT_PROFILE: PlayerProfile = {
 @Injectable({ providedIn: 'root' })
 export class PlayerProfileService {
   private profile: PlayerProfile;
+  /**
+   * Per-session guard: prevents double-recording if `recordGameEnd()` is called
+   * more than once (e.g., component re-render, stale subscription). Reset via
+   * `resetSession()` at the start of each new game.
+   */
+  private gameEndRecordedThisSession = false;
 
   constructor(private storageService: StorageService) {
     this.profile = this.load();
@@ -61,8 +67,14 @@ export class PlayerProfileService {
   /**
    * Updates all stats based on game results, checks all achievement conditions,
    * and saves. Returns IDs of newly unlocked achievements.
+   *
+   * Idempotent within a session: subsequent calls before `resetSession()` are
+   * no-ops and return an empty array.
    */
   recordGameEnd(stats: GameEndStats): string[] {
+    if (this.gameEndRecordedThisSession) return [];
+    this.gameEndRecordedThisSession = true;
+
     const alreadyUnlocked = new Set(this.profile.achievements);
 
     this.profile.totalGamesPlayed += 1;
@@ -213,6 +225,16 @@ export class PlayerProfileService {
       towerKills: {},
     };
     this.storageService.remove(PROFILE_STORAGE_KEY);
+    this.gameEndRecordedThisSession = false;
+  }
+
+  /**
+   * Clears the per-session idempotency guard so `recordGameEnd()` will accept
+   * the next call. Call from `GameSessionService.resetAllServices()` at the
+   * start of every new game.
+   */
+  resetSession(): void {
+    this.gameEndRecordedThisSession = false;
   }
 
   private load(): PlayerProfile {

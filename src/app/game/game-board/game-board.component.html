@@ -15,30 +15,18 @@
   </div>
 
   <!-- Game HUD -->
-  <div class="game-hud" *ngIf="gameState.wave > 0">
-    <div class="hud-stat">
-      <span class="hud-label">Lives</span>
-      <span class="hud-value lives" [class.critical]="gameState.lives <= 5">{{ gameState.lives }}</span>
-    </div>
-    <div class="hud-stat">
-      <span class="hud-label">Gold</span>
-      <span class="hud-value gold">{{ gameState.gold }}</span>
-    </div>
-    <div class="hud-stat">
-      <span class="hud-label">Wave</span>
-      <span class="hud-value" *ngIf="!gameState.isEndless">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
-      <span class="hud-value" *ngIf="gameState.isEndless">{{ gameState.wave }}</span>
-    </div>
-    <div class="hud-stat secondary">
-      <span class="hud-label">Score</span>
-      <span class="hud-value">{{ gameState.score }}</span>
-    </div>
-    <div class="hud-stat secondary">
-      <span class="hud-label">Time</span>
-      <span class="hud-value">{{ formattedTime }}</span>
-    </div>
-    <span class="hud-level-name" *ngIf="isCampaignGame && currentCampaignLevel" aria-label="Level name">{{ currentCampaignLevel.name }}</span>
-  </div>
+  <app-game-hud
+    *ngIf="gameState.wave > 0"
+    [lives]="gameState.lives"
+    [gold]="gameState.gold"
+    [wave]="gameState.wave"
+    [maxWaves]="gameState.maxWaves"
+    [score]="gameState.score"
+    [formattedTime]="formattedTime"
+    [isEndless]="gameState.isEndless"
+    [isCampaignGame]="isCampaignGame"
+    [levelName]="currentCampaignLevel?.name || ''">
+  </app-game-hud>
 
   <!-- Wave status indicator -->
   <div class="hud-wave-status" *ngIf="gameState.phase === GamePhase.COMBAT">
@@ -57,64 +45,25 @@
   </div>
 
   <!-- Setup panel — right side on desktop, bottom sheet on mobile -->
-  <div class="setup-panel" *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0">
-    <div class="campaign-level-info" *ngIf="isCampaignGame && currentCampaignLevel">
-      <span class="campaign-level-info__number">Level {{ currentCampaignLevel.number }}</span>
-      <span class="campaign-level-info__name">{{ currentCampaignLevel.name }}</span>
-      <span class="campaign-level-info__tier">{{ currentCampaignLevel.tier | uppercase }}</span>
-      <span class="campaign-level-info__waves">{{ currentCampaignLevel.waveCount }} waves</span>
-    </div>
-    <div class="campaign-challenges-preview" *ngIf="isCampaignGame && campaignChallenges.length > 0">
-      <h4 class="campaign-challenges-preview__title">Challenges</h4>
-      <div class="campaign-challenges-preview__list">
-        <div *ngFor="let challenge of campaignChallenges"
-             class="challenge-preview-item"
-             [class.challenge-preview-item--completed]="isChallengeAlreadyCompleted(challenge.id)">
-          <span class="challenge-preview-item__name">{{ challenge.name }}</span>
-          <span class="challenge-preview-item__desc">{{ challenge.description }}</span>
-          <span class="challenge-preview-item__bonus">+{{ challenge.scoreBonus }}</span>
-        </div>
-      </div>
-    </div>
-    <span class="setup-section-label">Difficulty</span>
-    <div class="setup-difficulty-grid">
-      <button
-        *ngFor="let level of difficultyLevels"
-        class="setup-diff-btn"
-        [class.selected]="gameState.difficulty === level"
-        (click)="selectDifficulty(level)"
-        [attr.aria-label]="'Select ' + difficultyPresets[level].label + ' difficulty'"
-        [attr.aria-pressed]="gameState.difficulty === level">
-        {{ difficultyPresets[level].label }}
-      </button>
-    </div>
-
-    <label class="setup-endless" *ngIf="!isCampaignGame">
-      <input type="checkbox" [checked]="gameState.isEndless" (change)="toggleEndless()">
-      <span>Endless Mode</span>
-    </label>
-
-    <span class="setup-section-label">Modifiers</span>
-    <div class="setup-modifier-grid">
-      <button
-        *ngFor="let mod of allModifiers"
-        class="setup-mod-btn"
-        [class.active]="activeModifiers.has(mod)"
-        (click)="toggleModifier(mod)"
-        [title]="modifierConfigs[mod].description"
-        [attr.aria-label]="'Toggle modifier: ' + modifierConfigs[mod].label"
-        [attr.aria-pressed]="activeModifiers.has(mod)">
-        {{ modifierConfigs[mod].label }}
-      </button>
-    </div>
-    <div class="setup-score" *ngIf="activeModifiers.size > 0">
-      Score: {{ modifierScoreMultiplier.toFixed(1) }}x
-    </div>
-
-    <button class="setup-start-btn" (click)="startWave()" aria-label="Start the game">
-      Start Game
-    </button>
-  </div>
+  <app-game-setup-panel
+    *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0"
+    [difficulty]="gameState.difficulty"
+    [difficultyLevels]="difficultyLevels"
+    [difficultyPresets]="difficultyPresets"
+    [modifierConfigs]="modifierConfigs"
+    [allModifiers]="allModifiers"
+    [activeModifiers]="activeModifiers"
+    [modifierScoreMultiplier]="modifierScoreMultiplier"
+    [isCampaignGame]="isCampaignGame"
+    [currentCampaignLevel]="currentCampaignLevel"
+    [campaignChallenges]="campaignChallenges"
+    [isEndless]="gameState.isEndless"
+    [isChallengeAlreadyCompletedFn]="isChallengeAlreadyCompleted.bind(this)"
+    (selectDifficulty)="selectDifficulty($event)"
+    (toggleModifier)="toggleModifier($event)"
+    (toggleEndless)="toggleEndless()"
+    (startGame)="startWave()">
+  </app-game-setup-panel>
 
   <!-- Wave preview + control panel — shown during SETUP and INTERMISSION -->
   <div class="wave-preview"
@@ -197,104 +146,27 @@
   </div>
 
   <!-- Victory/Defeat overlay -->
-  <div class="game-overlay" *ngIf="gameState.phase === GamePhase.VICTORY || gameState.phase === GamePhase.DEFEAT" role="alertdialog" [attr.aria-label]="gameState.phase === GamePhase.VICTORY ? 'Victory' : 'Defeat'">
-    <div class="overlay-content" [class.victory]="gameState.phase === GamePhase.VICTORY" [class.defeat]="gameState.phase === GamePhase.DEFEAT">
-      <h2 *ngIf="gameState.phase === GamePhase.VICTORY">Victory</h2>
-      <h2 *ngIf="gameState.phase === GamePhase.DEFEAT">Defeat</h2>
-
-      <!-- Campaign level identity -->
-      <div class="victory-level" *ngIf="isCampaignGame && currentCampaignLevel">
-        <span class="victory-level__label">Level {{ currentCampaignLevel.number }}</span>
-        <span class="victory-level__name">{{ currentCampaignLevel.name }}</span>
-      </div>
-
-      <!-- Star rating -->
-      <div class="star-display" *ngIf="gameState.phase === GamePhase.VICTORY">
-        <span
-          *ngFor="let s of starArray; let i = index"
-          class="overlay-star"
-          [class.filled]="s === 'filled'"
-          [class.empty]="s === 'empty'"
-          [attr.aria-label]="s === 'filled' ? 'Star earned' : 'Star not earned'">
-          &#9733;
-        </span>
-      </div>
-
-      <!-- Score breakdown -->
-      <div class="score-breakdown" *ngIf="scoreBreakdown">
-        <div class="score-row">
-          <span class="score-label">Base Score</span>
-          <span class="score-value">{{ scoreBreakdown.baseScore }}</span>
-        </div>
-        <div class="score-row">
-          <span class="score-label">Difficulty</span>
-          <span class="score-value multiplier">x{{ scoreBreakdown.difficultyMultiplier }}</span>
-        </div>
-        <div class="score-row" *ngIf="scoreBreakdown.modifierMultiplier !== 1">
-          <span class="score-label">Modifiers</span>
-          <span class="score-value multiplier">x{{ scoreBreakdown.modifierMultiplier.toFixed(1) }}</span>
-        </div>
-        <div class="score-row">
-          <span class="score-label">Waves Completed</span>
-          <span class="score-value">{{ scoreBreakdown.wavesCompleted }} / {{ gameState.maxWaves }}</span>
-        </div>
-        <div class="score-row">
-          <span class="score-label">Lives Remaining</span>
-          <span class="score-value">{{ scoreBreakdown.livesRemaining }} / {{ scoreBreakdown.livesTotal }}</span>
-        </div>
-        <div class="score-row final">
-          <span class="score-label">Final Score</span>
-          <span class="score-value final-value">{{ scoreBreakdown.finalScore }}</span>
-        </div>
-      </div>
-
-      <p class="final-score" *ngIf="!scoreBreakdown">Score: {{ gameState.score }}</p>
-
-      <!-- Challenge results -->
-      <div class="challenges-result" *ngIf="isCampaignGame && campaignChallenges.length > 0">
-        <h4 class="challenges-result__title">Challenges</h4>
-        <div *ngFor="let challenge of campaignChallenges"
-             class="challenge-result-item"
-             [class.challenge-result-item--passed]="isChallengeCompleted(challenge)"
-             [class.challenge-result-item--failed]="!isChallengeCompleted(challenge)">
-          <span class="challenge-result-item__status">{{ isChallengeCompleted(challenge) ? '✓' : '✗' }}</span>
-          <span class="challenge-result-item__name">{{ challenge.name }}</span>
-          <span class="challenge-result-item__bonus" *ngIf="isChallengeCompleted(challenge)">+{{ challenge.scoreBonus }}</span>
-        </div>
-      </div>
-
-      <!-- Newly unlocked achievements -->
-      <div class="achievements-unlocked" *ngIf="newlyUnlockedAchievements.length > 0">
-        <h3 class="achievements-title">Achievements Unlocked</h3>
-        <div class="achievement-list">
-          <div class="achievement-badge" *ngFor="let ach of achievementDetails">
-            <span class="achievement-icon">&#127942;</span>
-            <div class="achievement-info">
-              <span class="achievement-name">{{ ach.name }}</span>
-              <span class="achievement-desc">{{ ach.description }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="overlay-actions">
-        <button
-          *ngIf="gameState.phase === GamePhase.VICTORY && isCampaignGame && isNextLevelUnlocked"
-          class="results-btn results-btn--primary"
-          (click)="playNextLevel()">
-          Next: {{ nextCampaignLevel?.name }}
-        </button>
-        <button class="results-btn" (click)="restartGame()">Play Again</button>
-        <button
-          *ngIf="isCampaignGame"
-          class="results-btn results-btn--secondary"
-          (click)="backToCampaign()">
-          Campaign
-        </button>
-        <button class="results-btn results-btn--tertiary" (click)="goToEditor()">Edit Map</button>
-      </div>
-    </div>
-  </div>
+  <app-game-results-overlay
+    *ngIf="gameState.phase === GamePhase.VICTORY || gameState.phase === GamePhase.DEFEAT"
+    [isVictory]="gameState.phase === GamePhase.VICTORY"
+    [scoreBreakdown]="scoreBreakdown"
+    [starArray]="starArray"
+    [gameScore]="gameState.score"
+    [maxWaves]="gameState.maxWaves"
+    [isCampaignGame]="isCampaignGame"
+    [currentCampaignLevel]="currentCampaignLevel"
+    [campaignChallenges]="campaignChallenges"
+    [completedChallenges]="completedChallenges"
+    [achievementDetails]="achievementDetails"
+    [newlyUnlockedCount]="newlyUnlockedAchievements.length"
+    [isNextLevelUnlocked]="isNextLevelUnlocked"
+    [nextLevelName]="nextCampaignLevel?.name || ''"
+    [isChallengeCompletedFn]="isChallengeCompleted.bind(this)"
+    (restart)="restartGame()"
+    (backToCampaign)="backToCampaign()"
+    (editMap)="goToEditor()"
+    (playNextLevel)="playNextLevel()">
+  </app-game-results-overlay>
 
   <!-- WebGL Context Lost Overlay -->
   <div class="context-lost-overlay" *ngIf="contextLost" role="alert" aria-live="assertive">
@@ -375,84 +247,26 @@
   </div>
 
   <!-- Tower info panel -->
-  <div class="tower-info-panel" *ngIf="selectedTowerInfo && selectedTowerStats">
-    <div class="tower-info-header">
-      <span class="tower-info-name">{{ selectedTowerInfo.type | titlecase }}</span>
-      <span class="tower-info-level">
-        <span *ngFor="let star of levelStars(selectedTowerInfo.level)" class="level-star">&#9733;</span>
-        <span *ngFor="let star of levelStars(MAX_TOWER_LEVEL - selectedTowerInfo.level)" class="level-star empty">&#9733;</span>
-      </span>
-      <button class="tower-info-close" (click)="deselectTower()" aria-label="Close tower info">&times;</button>
-    </div>
-    <div class="tower-info-stats">
-      <div class="stat-row">
-        <span class="stat-label">Damage</span>
-        <span class="stat-value">{{ selectedTowerStats.damage }}</span>
-        <span class="stat-preview" *ngIf="upgradePreview" [attr.aria-label]="'After upgrade: ' + upgradePreview.damage">{{ upgradePreview.damage }}</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">Range</span>
-        <span class="stat-value">{{ selectedTowerStats.range }}</span>
-        <span class="stat-preview" *ngIf="upgradePreview" [attr.aria-label]="'After upgrade: ' + upgradePreview.range">{{ upgradePreview.range }}</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">Fire Rate</span>
-        <span class="stat-value">{{ selectedTowerStats.fireRate }}s</span>
-        <span class="stat-preview" *ngIf="upgradePreview" [attr.aria-label]="'After upgrade: ' + upgradePreview.fireRate + 's'">{{ upgradePreview.fireRate }}s</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">Kills</span>
-        <span class="stat-value">{{ selectedTowerInfo.kills }}</span>
-      </div>
-      <div class="stat-row" *ngIf="selectedTowerStats.statusEffect">
-        <span class="stat-label">Effect</span>
-        <span class="stat-value status-effect" [attr.data-effect]="selectedTowerStats.statusEffect">{{ selectedTowerStats.statusEffect }}</span>
-      </div>
-    </div>
-    <div class="tower-info-targeting" *ngIf="selectedTowerInfo && selectedTowerInfo.type !== TowerType.SLOW">
-      <button
-        class="targeting-btn"
-        (click)="cycleTargeting()"
-        [attr.aria-label]="'Targeting: ' + targetingModeLabels[selectedTowerInfo.targetingMode] + '. Click to cycle.'">
-        Target: {{ targetingModeLabels[selectedTowerInfo.targetingMode] }}
-      </button>
-    </div>
-    <div class="tower-info-actions" *ngIf="!showSpecializationChoice">
-      <button
-        class="upgrade-btn"
-        *ngIf="selectedTowerInfo.level < MAX_TOWER_LEVEL"
-        [class.unaffordable]="!gameState || gameState.gold < selectedTowerUpgradeCost"
-        (click)="upgradeTower()"
-        aria-label="Upgrade tower">
-        Upgrade ({{ selectedTowerUpgradeCost }}g)<span class="upgrade-tile-percent" *ngIf="selectedTowerUpgradePercent > 0"> +{{ selectedTowerUpgradePercent }}%</span>
-      </button>
-      <span class="max-level-badge" *ngIf="selectedTowerInfo.level >= MAX_TOWER_LEVEL">
-        {{ selectedTowerInfo.specialization ? (selectedTowerInfo.type | titlecase) + ' — ' + specLabel(selectedTowerInfo) : 'MAX' }}
-      </span>
-      <button
-        class="sell-btn"
-        [class.confirm]="sellConfirmPending"
-        (click)="sellTower()"
-        aria-label="Sell tower">
-        {{ sellConfirmPending ? 'Confirm Sell?' : 'Sell (+' + selectedTowerSellValue + 'g)' }}
-      </button>
-    </div>
-    <div class="spec-choice-panel" *ngIf="showSpecializationChoice">
-      <div class="spec-choice-header">Choose Specialization ({{ selectedTowerUpgradeCost }}g)</div>
-      <button
-        *ngFor="let opt of specOptions"
-        class="spec-btn"
-        [class.unaffordable]="!gameState || gameState.gold < selectedTowerUpgradeCost"
-        [disabled]="!gameState || gameState.gold < selectedTowerUpgradeCost"
-        (click)="selectSpecialization(opt.spec)"
-        [attr.aria-label]="'Specialize: ' + opt.label + ' — ' + opt.description">
-        <span class="spec-label">{{ opt.label }}</span>
-        <span class="spec-desc">{{ opt.description }}</span>
-        <span class="spec-stats">DMG {{ opt.damage }} | RNG {{ opt.range }} | {{ opt.fireRate }}s</span>
-      </button>
-      <button class="spec-cancel-btn" (click)="showSpecializationChoice = false" aria-label="Cancel specialization">Cancel</button>
-    </div>
-  </div>
+  <app-tower-info-panel
+    *ngIf="selectedTowerInfo && selectedTowerStats"
+    [towerInfo]="selectedTowerInfo"
+    [towerStats]="selectedTowerStats"
+    [upgradeCost]="selectedTowerUpgradeCost"
+    [upgradePercent]="selectedTowerUpgradePercent"
+    [sellValue]="selectedTowerSellValue"
+    [upgradePreview]="upgradePreview"
+    [showSpecializationChoice]="showSpecializationChoice"
+    [specOptions]="specOptions"
+    [gold]="gameState.gold"
+    [sellConfirmPending]="sellConfirmPending"
+    [targetingModeLabels]="targetingModeLabels"
+    (close)="deselectTower()"
+    (upgrade)="upgradeTower()"
+    (sell)="sellTower()"
+    (cycleTargeting)="cycleTargeting()"
+    (selectSpecialization)="selectSpecialization($event)"
+    (cancelSpecialization)="showSpecializationChoice = false">
+  </app-tower-info-panel>
 
   <!-- Tower selection -->
   <div class="tower-selection" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">

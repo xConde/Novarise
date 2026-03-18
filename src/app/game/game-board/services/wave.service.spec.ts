@@ -298,6 +298,49 @@ describe('WaveService', () => {
       service.startWave(beyondMax, mockScene);
       expect(service.isSpawning()).toBeFalse();
     });
+
+    it('should clear seen enemy types so isNewType returns true after reset', () => {
+      service.markSeen(EnemyType.BASIC);
+      service.markSeen(EnemyType.FAST);
+      expect(service.isNewType(EnemyType.BASIC)).toBeFalse();
+
+      service.reset();
+
+      expect(service.isNewType(EnemyType.BASIC)).toBeTrue();
+      expect(service.isNewType(EnemyType.FAST)).toBeTrue();
+    });
+  });
+
+  // --- isNewType / markSeen ---
+
+  describe('isNewType / markSeen', () => {
+    it('isNewType returns true for all types initially', () => {
+      expect(service.isNewType(EnemyType.BASIC)).toBeTrue();
+      expect(service.isNewType(EnemyType.BOSS)).toBeTrue();
+    });
+
+    it('isNewType returns false after markSeen', () => {
+      service.markSeen(EnemyType.BASIC);
+      expect(service.isNewType(EnemyType.BASIC)).toBeFalse();
+    });
+
+    it('isNewType returns true for types not yet marked seen', () => {
+      service.markSeen(EnemyType.BASIC);
+      expect(service.isNewType(EnemyType.FAST)).toBeTrue();
+    });
+
+    it('marking same type twice does not cause errors', () => {
+      service.markSeen(EnemyType.BASIC);
+      service.markSeen(EnemyType.BASIC);
+      expect(service.isNewType(EnemyType.BASIC)).toBeFalse();
+    });
+
+    it('markSeen for one type does not affect other types', () => {
+      service.markSeen(EnemyType.HEAVY);
+      expect(service.isNewType(EnemyType.BASIC)).toBeTrue();
+      expect(service.isNewType(EnemyType.FAST)).toBeTrue();
+      expect(service.isNewType(EnemyType.HEAVY)).toBeFalse();
+    });
   });
 
   // --- generateEndlessWave (model function) ---
@@ -447,6 +490,42 @@ describe('WaveService', () => {
       // Valid template strings are the EndlessWaveTemplate enum values
       const validTemplates = ['rush', 'siege', 'swarm', 'air_raid', 'mixed', 'boss', 'blitz'];
       expect(validTemplates).toContain(template as string);
+    });
+  });
+
+  // --- getTotalEnemiesInWave: cache reuse ---
+
+  describe('getTotalEnemiesInWave — cache reuse for active endless wave', () => {
+    it('returns the same count when called twice for the active endless wave (cache hit)', () => {
+      service.setEndlessMode(true);
+      const beyondMax = WAVE_DEFINITIONS.length + 1;
+      service.startWave(beyondMax, mockScene);
+
+      const first = service.getTotalEnemiesInWave(beyondMax);
+      const second = service.getTotalEnemiesInWave(beyondMax);
+
+      expect(first).toBe(second);
+      expect(first).toBeGreaterThan(0);
+    });
+
+    it('result for a different endless wave index is generated fresh (cache miss)', () => {
+      service.setEndlessMode(true);
+      const wave11 = WAVE_DEFINITIONS.length + 1;
+      const wave12 = WAVE_DEFINITIONS.length + 2;
+
+      service.startWave(wave11, mockScene);
+      const countFor11 = service.getTotalEnemiesInWave(wave11);
+      // Requesting a different wave than the active one should not use the cache
+      const countFor12 = service.getTotalEnemiesInWave(wave12);
+
+      // Both should be positive; they may differ
+      expect(countFor11).toBeGreaterThan(0);
+      expect(countFor12).toBeGreaterThan(0);
+    });
+
+    it('returns 0 when endless mode is off regardless of what wave is active', () => {
+      const beyondMax = WAVE_DEFINITIONS.length + 1;
+      expect(service.getTotalEnemiesInWave(beyondMax)).toBe(0);
     });
   });
 

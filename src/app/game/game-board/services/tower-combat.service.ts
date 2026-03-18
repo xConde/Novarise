@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy } from '../models/enemy.model';
 import { PlacedTower, TowerType, TowerStats, TowerSpecialization, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
+import { assertNever } from '../utils/assert-never';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
@@ -50,11 +51,11 @@ export interface KillInfo {
 }
 
 /** Deferred audio event accumulated during physics steps, drained once per frame by the component. */
-export interface CombatAudioEvent {
-  type: 'tower_fire' | 'enemy_hit' | 'enemy_death' | 'sfx';
-  towerType?: TowerType;
-  sfxKey?: string;
-}
+export type CombatAudioEvent =
+  | { type: 'tower_fire'; towerType: TowerType }
+  | { type: 'enemy_hit' }
+  | { type: 'enemy_death' }
+  | { type: 'sfx'; sfxKey: string };
 
 @Injectable()
 export class TowerCombatService {
@@ -420,19 +421,20 @@ export class TowerCombatService {
 
       let score: number;
       switch (tower.targetingMode) {
-        case 'first':
+        case TargetingMode.FIRST:
           // Enemy furthest along path (highest distanceTraveled) is closest to exit
           score = enemy.distanceTraveled;
           break;
-        case 'strongest':
+        case TargetingMode.STRONGEST:
           // Enemy with highest current health
           score = enemy.health;
           break;
-        case 'nearest':
-        default:
+        case TargetingMode.NEAREST:
           // Closest by distance (invert so closer = higher score)
           score = -dist;
           break;
+        default:
+          assertNever(tower.targetingMode);
       }
 
       if (score > bestScore) {

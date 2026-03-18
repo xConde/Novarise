@@ -357,16 +357,18 @@ p {
 }
 
 /* Highlight border on target element */
-/* Tutorial highlight uses box-shadow instead of outline to preserve :focus-visible rings */
-.tutorial-target-highlight {
-  box-shadow: 0 0 0 3px var(--theme-purple-lighter, #c8b8ff), 0 0 15px rgba(200, 184, 255, 0.4) !important;
+/* Uses box-shadow (not outline) so :focus-visible outline rings are never overridden.
+   No !important — body prefix provides enough specificity over component styles.
+   When the element is also :focus-visible we layer both: tutorial ring + focus outline. */
+body .tutorial-target-highlight {
+  box-shadow: 0 0 0 3px var(--theme-purple-lighter, #c8b8ff), 0 0 15px rgba(200, 184, 255, 0.4);
   border-radius: 8px;
   animation: tutorial-pulse 1.5s ease-in-out infinite;
 }
 
 @keyframes tutorial-pulse {
-  0%, 100% { box-shadow: 0 0 0 3px rgba(200, 184, 255, 0.8), 0 0 15px rgba(200, 184, 255, 0.3) !important; }
-  50% { box-shadow: 0 0 0 3px rgba(200, 184, 255, 1), 0 0 25px rgba(200, 184, 255, 0.6) !important; }
+  0%, 100% { box-shadow: 0 0 0 3px rgba(200, 184, 255, 0.8), 0 0 15px rgba(200, 184, 255, 0.3); }
+  50% { box-shadow: 0 0 0 3px rgba(200, 184, 255, 1), 0 0 25px rgba(200, 184, 255, 0.6); }
 }
 
 /* Fix 6: Fade-in keyframe (opacity-only to avoid conflicting with positional transforms) */
@@ -377,7 +379,7 @@ p {
 
 /* Fix 7: Respect prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
-  .tutorial-target-highlight { animation: none; }
+  body .tutorial-target-highlight { animation: none; }
   .tutorial-card { animation: none; }
 }
 
@@ -813,7 +815,7 @@ p {
 
 .challenge-preview-item__desc {
   font-size: 0.58rem;
-  color: rgba(200, 184, 255, 0.7);
+  color: rgba(200, 184, 255, 0.85);
   grid-column: 1;
   grid-row: 2;
   line-height: 1.3;
