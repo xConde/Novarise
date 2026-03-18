@@ -67,13 +67,13 @@ export const SELECTION_RING_CONFIG = {
 } as const;
 
 export const TILE_EMISSIVE = {
-  base: 0.15,
-  wall: 0.1,
+  base: 0.35,
+  wall: 0.05,
   special: 0.4,
   hover: 0.5,
   selected: 0.8,
-  /** Default emissive color for BASE/WALL tiles (used as fallback in highlight restoration). */
-  defaultColor: 0x2a2548,
+  /** Default emissive color for BASE tiles (used as fallback in highlight restoration). */
+  defaultColor: 0x303848,
   /** Highlight intensity for tiles valid for tower placement (PLACE mode). */
   validPlacement: 0.35,
   /** Emissive color override for valid placement tiles (soft cyan glow). */

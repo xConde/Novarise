@@ -17,11 +17,11 @@ export class GameBoardService {
     [9, 11], [9, 12], [10, 11], [10, 12]
   ];
 
-  // Colors for different tile types
-  private readonly colorBase = 0x3a3a4a;
+  // Colors for different tile types — base must be visually distinct from wall
+  private readonly colorBase = 0x404858;    // Lighter blue-gray — reads as "buildable ground"
   private readonly colorSpawner = 0x00ffff;
   private readonly colorExit = 0xff00ff;
-  private readonly colorWall = 0x2a2540;
+  private readonly colorWall = 0x1a1520;    // Much darker — reads as "not usable"
   private readonly colorGrid = 0x444444;
 
   // State
@@ -96,16 +96,15 @@ export class GameBoardService {
     const geometry = new THREE.BoxGeometry(this.tileSize * 0.95, this.tileHeight, this.tileSize * 0.95);
     const color = this.getTileColor(type);
 
-    // Organic cave rock material
+    // Material — base tiles glow subtly to signal "buildable", walls are dark and inert
     const isBase = type === BlockType.BASE;
     const isWall = type === BlockType.WALL;
-    const isSubdued = isBase || isWall;
     const material = new THREE.MeshStandardMaterial({
       color: color,
-      emissive: isSubdued ? 0x2a2548 : color,
-      emissiveIntensity: isBase ? 0.25 : isWall ? 0.15 : 0.45,
-      metalness: isWall ? 0.4 : 0.1,
-      roughness: isBase ? 0.75 : isWall ? 0.9 : 0.7,
+      emissive: isWall ? 0x0a0810 : isBase ? 0x303848 : color,
+      emissiveIntensity: isBase ? 0.35 : isWall ? 0.05 : 0.45,
+      metalness: isWall ? 0.5 : 0.1,
+      roughness: isBase ? 0.7 : isWall ? 0.95 : 0.7,
       envMapIntensity: 0.3
     });
 
