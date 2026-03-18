@@ -10,7 +10,7 @@
     </div>
 
     <!-- Star rating -->
-    <div class="star-display" *ngIf="isVictory">
+    <div class="star-display" *ngIf="isVictory" [attr.aria-label]="(scoreBreakdown?.stars ?? 0) + ' out of ' + starArray.length + ' stars'">
       <span
         *ngFor="let s of starArray; let i = index"
         class="overlay-star"
@@ -61,7 +61,7 @@
            class="challenge-result-item"
            [class.challenge-result-item--passed]="isChallengeCompletedFn(challenge)"
            [class.challenge-result-item--failed]="!isChallengeCompletedFn(challenge)">
-        <span class="challenge-result-item__status">{{ isChallengeCompletedFn(challenge) ? '✓' : '✗' }}</span>
+        <span class="challenge-result-item__status" [attr.aria-label]="isChallengeCompletedFn(challenge) ? 'passed' : 'failed'" aria-hidden="false">{{ isChallengeCompletedFn(challenge) ? '✓' : '✗' }}</span>
         <span class="challenge-result-item__name">{{ challenge.name }}</span>
         <span class="challenge-result-item__bonus" *ngIf="isChallengeCompletedFn(challenge)">+{{ challenge.scoreBonus }}</span>
       </div>

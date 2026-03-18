@@ -2866,16 +2866,17 @@ body .tutorial-target-highlight {
   font-size: var(--font-size-small);
 }
 
-.board-container .help-overlay .help-grid .key {
+.board-container .help-overlay .help-grid kbd {
   background: rgba(255, 255, 255, 0.1);
   padding: 2px var(--spacing-xs);
   border-radius: var(--border-radius-sm);
   text-align: center;
   font-family: monospace;
   color: var(--text-color);
+  border: none;
 }
 
-.board-container .help-overlay .help-grid span:not(.key) { color: rgba(255, 255, 255, 0.7); }
+.board-container .help-overlay .help-grid span { color: rgba(255, 255, 255, 0.7); }
 
 .board-container .help-overlay .help-dismiss {
   margin: var(--spacing-sm) 0 0;

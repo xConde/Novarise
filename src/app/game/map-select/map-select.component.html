@@ -32,10 +32,11 @@
         <span class="map-meta">{{ map.gridSize }} &times; {{ map.gridSize }}</span>
         <span class="map-date">{{ map.updatedAt | date:'short' }}</span>
         <div class="map-score" *ngIf="getMapBestScore(map.id) !== null">
-          <span class="star-display">
+          <span class="star-display" [attr.aria-label]="getMapStars(map.id) + ' out of 3 stars'">
             <span *ngFor="let i of [0, 1, 2]"
                   class="star"
-                  [class.filled]="i < getMapStars(map.id)">&#9733;</span>
+                  [class.filled]="i < getMapStars(map.id)"
+                  aria-hidden="true">&#9733;</span>
           </span>
           <span class="best-score">{{ getMapBestScore(map.id) | number }}</span>
         </div>

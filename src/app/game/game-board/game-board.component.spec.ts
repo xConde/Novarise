@@ -3349,4 +3349,5 @@ describe('GameBoardComponent', () => {
       expect(component.challengeIndicators).toEqual([]);
     });
   });
+
 });

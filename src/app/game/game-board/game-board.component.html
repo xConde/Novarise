@@ -3,7 +3,7 @@
 
   <!-- Top-right controls -->
   <div class="top-right-controls">
-    <div class="fps-counter">{{ fps }} FPS</div>
+    <div class="fps-counter" aria-hidden="true">{{ fps }} FPS</div>
     <button class="encyclopedia-btn" (click)="toggleEncyclopedia()" [class.active]="showEncyclopedia" aria-label="Toggle enemy encyclopedia" [attr.aria-pressed]="showEncyclopedia">E</button>
     <button class="help-btn" (click)="showHelpOverlay = !showHelpOverlay" aria-label="Show keyboard shortcuts">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -410,19 +410,19 @@
     <div class="help-content" (click)="$event.stopPropagation()">
       <h3>Keyboard Shortcuts</h3>
       <div class="help-grid">
-        <span class="key">1-6</span><span>Select tower type</span>
-        <span class="key">Space</span><span>Start next wave</span>
-        <span class="key">P</span><span>Pause / Resume</span>
-        <span class="key">Escape</span><span>Pause / Resume (or deselect tower)</span>
-        <span class="key">R</span><span>Toggle all range rings</span>
-        <span class="key">V</span><span>Toggle enemy path</span>
-        <span class="key">M</span><span>Toggle minimap</span>
-        <span class="key">E</span><span>Enemy encyclopedia</span>
-        <span class="key">U</span><span>Upgrade selected tower</span>
-        <span class="key">T</span><span>Cycle targeting mode</span>
-        <span class="key">Del</span><span>Sell selected tower</span>
-        <span class="key">WASD</span><span>Pan camera</span>
-        <span class="key">H</span><span>Toggle this help</span>
+        <kbd>1-6</kbd><span>Select tower type</span>
+        <kbd>Space</kbd><span>Start next wave</span>
+        <kbd>P</kbd><span>Pause / Resume</span>
+        <kbd>Escape</kbd><span>Pause / Resume (or deselect tower)</span>
+        <kbd>R</kbd><span>Toggle all range rings</span>
+        <kbd>V</kbd><span>Toggle enemy path</span>
+        <kbd>M</kbd><span>Toggle minimap</span>
+        <kbd>E</kbd><span>Enemy encyclopedia</span>
+        <kbd>U</kbd><span>Upgrade selected tower</span>
+        <kbd>T</kbd><span>Cycle targeting mode</span>
+        <kbd>Del</kbd><span>Sell selected tower</span>
+        <kbd>WASD</kbd><span>Pan camera</span>
+        <kbd>H</kbd><span>Toggle this help</span>
       </div>
       <p class="help-dismiss">Click anywhere or press H to close</p>
     </div>

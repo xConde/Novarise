@@ -459,6 +459,50 @@ describe('GameResultsOverlayComponent', () => {
     });
   });
 
+  describe('accessibility', () => {
+    it('should have aria-label on star display container showing star count', () => {
+      component.isVictory = true;
+      component.starArray = ['filled', 'filled', 'empty'];
+      component.scoreBreakdown = makeScoreBreakdown({ stars: 2 });
+      fixture.detectChanges();
+
+      const starDisplay: HTMLElement = fixture.nativeElement.querySelector('.star-display');
+      expect(starDisplay.getAttribute('aria-label')).toBe('2 out of 3 stars');
+    });
+
+    it('should have aria-label "0 out of 3 stars" when no stars earned', () => {
+      component.isVictory = true;
+      component.starArray = ['empty', 'empty', 'empty'];
+      component.scoreBreakdown = makeScoreBreakdown({ stars: 0 });
+      fixture.detectChanges();
+
+      const starDisplay: HTMLElement = fixture.nativeElement.querySelector('.star-display');
+      expect(starDisplay.getAttribute('aria-label')).toBe('0 out of 3 stars');
+    });
+
+    it('should have aria-label "passed" on completed challenge status', () => {
+      const challenge = makeChallenge();
+      component.isCampaignGame = true;
+      component.campaignChallenges = [challenge];
+      component.isChallengeCompletedFn = () => true;
+      fixture.detectChanges();
+
+      const status: HTMLElement = fixture.nativeElement.querySelector('.challenge-result-item__status');
+      expect(status.getAttribute('aria-label')).toBe('passed');
+    });
+
+    it('should have aria-label "failed" on failed challenge status', () => {
+      const challenge = makeChallenge();
+      component.isCampaignGame = true;
+      component.campaignChallenges = [challenge];
+      component.isChallengeCompletedFn = () => false;
+      fixture.detectChanges();
+
+      const status: HTMLElement = fixture.nativeElement.querySelector('.challenge-result-item__status');
+      expect(status.getAttribute('aria-label')).toBe('failed');
+    });
+  });
+
   describe('output events', () => {
     it('should emit restart when Play Again button is clicked', () => {
       let emitted = false;

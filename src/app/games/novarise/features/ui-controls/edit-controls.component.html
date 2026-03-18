@@ -14,8 +14,8 @@
       aria-label="Play this map">
       ▶
     </button>
-    <span class="mobile-path-status path-valid" *ngIf="isPathValid">✓</span>
-    <span class="mobile-path-status path-invalid" *ngIf="!isPathValid && hasSpawnAndExit">✗</span>
+    <span class="mobile-path-status path-valid" *ngIf="isPathValid" aria-label="Path valid">✓</span>
+    <span class="mobile-path-status path-invalid" *ngIf="!isPathValid && hasSpawnAndExit" aria-label="Path invalid">✗</span>
     <span class="mobile-path-status path-hint" *ngIf="!hasSpawnAndExit">No path</span>
     <button class="mobile-close-btn" (click)="closePanel()" aria-label="Close">✕</button>
   </div>
@@ -197,8 +197,8 @@
 
   <!-- DESKTOP PATH STATUS (play/delete actions live on /maps page) -->
   <div class="path-status-section" *ngIf="!isMobile">
-    <span class="path-status path-valid" *ngIf="isPathValid">Path OK ✓</span>
-    <span class="path-status path-invalid" *ngIf="!isPathValid && hasSpawnAndExit">No valid path ✗</span>
+    <span class="path-status path-valid" *ngIf="isPathValid" aria-label="Path valid">Path OK ✓</span>
+    <span class="path-status path-invalid" *ngIf="!isPathValid && hasSpawnAndExit" aria-label="Path invalid">No valid path ✗</span>
     <span class="path-hint" *ngIf="!hasSpawnAndExit">Set spawn (P) and exit (X) first</span>
   </div>
 </div>
