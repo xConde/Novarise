@@ -49,7 +49,7 @@ import { CampaignService } from '../../campaign/services/campaign.service';
 import { CampaignMapService } from '../../campaign/services/campaign-map.service';
 
 import { CampaignLevel } from '../../campaign/models/campaign.model';
-import { ChallengeDefinition, getChallengesForLevel } from '../../campaign/models/challenge.model';
+import { ChallengeDefinition, ChallengeType, getChallengesForLevel } from '../../campaign/models/challenge.model';
 import { GameSessionService } from './services/game-session.service';
 import { CombatLoopService } from './services/combat-loop.service';
 import { CombatFrameResult } from './models/combat-frame.model';
@@ -852,6 +852,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const mapId = this.mapBridge.getMapId();
     if (!mapId) return null;
     return this.campaignService.getNextLevel(mapId);
+  }
+
+  /** Returns the SPEED_RUN timeLimit for the current campaign level, or 0 if none. */
+  get activeSpeedRunTimeLimit(): number {
+    if (!this.isCampaignGame || !this.currentCampaignLevel) return 0;
+    const challenges = getChallengesForLevel(this.currentCampaignLevel.id);
+    const speedRun = challenges.find((c: ChallengeDefinition) => c.type === ChallengeType.SPEED_RUN);
+    return speedRun?.timeLimit ?? 0;
   }
 
   /** True when the next campaign level exists and is unlocked. */

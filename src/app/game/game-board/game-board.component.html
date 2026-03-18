@@ -25,7 +25,9 @@
     [formattedTime]="formattedTime"
     [isEndless]="gameState.isEndless"
     [isCampaignGame]="isCampaignGame"
-    [levelName]="currentCampaignLevel?.name || ''">
+    [levelName]="currentCampaignLevel?.name || ''"
+    [speedRunTimeLimit]="activeSpeedRunTimeLimit"
+    [elapsedTime]="gameState.elapsedTime">
   </app-game-hud>
 
   <!-- Wave status indicator -->

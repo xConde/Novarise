@@ -16,9 +16,16 @@
     <span class="hud-label">Score</span>
     <span class="hud-value">{{ score }}</span>
   </div>
-  <div class="hud-stat secondary">
-    <span class="hud-label">Time</span>
-    <span class="hud-value">{{ formattedTime }}</span>
+  <div class="hud-stat" [class.secondary]="speedRunTimeLimit === 0" [class.speed-run-active]="speedRunTimeLimit > 0">
+    <span class="hud-label" *ngIf="speedRunTimeLimit === 0">Time</span>
+    <span class="hud-label speed-run-label" *ngIf="speedRunTimeLimit > 0">Speed Run</span>
+    <span class="hud-value" *ngIf="speedRunTimeLimit === 0">{{ formattedTime }}</span>
+    <span class="hud-value speed-run-timer"
+          *ngIf="speedRunTimeLimit > 0"
+          [class.warning]="speedRunWarning"
+          [class.critical]="speedRunCritical">
+      {{ formattedSpeedRunRemaining }}
+    </span>
   </div>
   <span class="hud-level-name" *ngIf="isCampaignGame && levelName" aria-label="Level name">{{ levelName }}</span>
 </div>

@@ -147,6 +147,31 @@
           color: var(--game-gold);
         }
       }
+
+      &.speed-run-active {
+        opacity: 1 !important; // Override .secondary opacity
+
+        .speed-run-label {
+          color: var(--game-accent-orange);
+        }
+
+        .speed-run-timer {
+          color: var(--game-accent-orange);
+          font-variant-numeric: tabular-nums;
+
+          &.warning {
+            color: var(--game-health);
+            animation: pulse-critical 0.5s ease-in-out infinite alternate;
+          }
+
+          &.critical {
+            color: var(--game-health);
+            animation: pulse-critical 0.3s ease-in-out infinite alternate;
+            font-size: var(--font-size-base);
+            font-weight: 900;
+          }
+        }
+      }
     }
 
   }
