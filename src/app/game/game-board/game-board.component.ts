@@ -33,6 +33,7 @@ import { TOUCH_CONFIG, DRAG_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
 import { EnemyType } from './models/enemy.model';
 import { EnemyInfo, ENEMY_INFO } from './models/enemy-info.model';
+import { TowerInfo, TOWER_INFO } from './models/tower-info.model';
 import { WavePreviewEntry, getWavePreview, getWavePreviewFull } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
 import { StatusEffectService } from './services/status-effect.service';
@@ -162,7 +163,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   targetingModeLabels = TARGETING_MODE_LABELS;
   showHelpOverlay = false;
   showEncyclopedia = false;
+  encyclopediaTab: 'enemies' | 'towers' = 'enemies';
   enemyInfoList: EnemyInfo[] = Object.values(ENEMY_INFO);
+  towerInfoList: TowerInfo[] = Object.values(TOWER_INFO);
   pathBlocked = false;
   private pathBlockedTimerId: ReturnType<typeof setTimeout> | null = null;
 

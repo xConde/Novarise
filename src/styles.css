@@ -548,6 +548,61 @@ body .tutorial-target-highlight {
   color: #ff6b6b;
 }
 
+/* Encyclopedia tab bar */
+.encyclopedia-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.encyclopedia-tab {
+  flex: 1;
+  background: none;
+  border: 1px solid rgba(106, 90, 154, 0.3);
+  border-radius: 4px;
+  color: var(--theme-purple-mid, #9a8aca);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.35rem 0;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  min-height: 2.75rem;
+}
+
+.encyclopedia-tab:hover {
+  color: var(--theme-purple-lighter, #c8b8f8);
+  border-color: var(--theme-purple, #6a5a9a);
+  background: rgba(106, 90, 154, 0.15);
+}
+
+.encyclopedia-tab.active {
+  color: var(--theme-purple-lighter, #c8b8f8);
+  border-color: var(--theme-purple, #6a5a9a);
+  background: rgba(106, 90, 154, 0.3);
+}
+
+/* Tower specialization sub-rows inside an encyclopedia entry */
+.encyclopedia-entry__specs {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 0.4rem;
+  margin-top: 3px;
+}
+
+.encyclopedia-entry__spec-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.58rem;
+  color: var(--game-gold, #ffd700);
+  white-space: nowrap;
+}
+
+.encyclopedia-entry__spec-desc {
+  font-size: 0.58rem;
+  color: var(--text-color, #ccc);
+  font-style: italic;
+}
+
 /* Encyclopedia toggle button in top-right controls */
 .encyclopedia-btn {
   background: rgba(0, 0, 0, 0.75);

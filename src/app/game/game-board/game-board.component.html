@@ -315,13 +315,28 @@
     <span class="mode-hint">Right-click to cancel</span>
   </div>
 
-  <!-- Enemy Encyclopedia -->
-  <div class="encyclopedia-panel" *ngIf="showEncyclopedia" role="dialog" aria-label="Enemy encyclopedia">
+  <!-- Encyclopedia -->
+  <div class="encyclopedia-panel" *ngIf="showEncyclopedia" role="dialog" aria-label="Encyclopedia">
     <div class="encyclopedia-header">
-      <h3>Enemy Types</h3>
-      <button class="encyclopedia-close" (click)="toggleEncyclopedia()" aria-label="Close enemy encyclopedia">&times;</button>
+      <h3>Encyclopedia</h3>
+      <button class="encyclopedia-close" (click)="toggleEncyclopedia()" aria-label="Close encyclopedia">&times;</button>
     </div>
-    <div class="encyclopedia-list">
+    <div class="encyclopedia-tabs" role="tablist">
+      <button
+        class="encyclopedia-tab"
+        [class.active]="encyclopediaTab === 'enemies'"
+        (click)="encyclopediaTab = 'enemies'"
+        role="tab"
+        [attr.aria-selected]="encyclopediaTab === 'enemies'">Enemies</button>
+      <button
+        class="encyclopedia-tab"
+        [class.active]="encyclopediaTab === 'towers'"
+        (click)="encyclopediaTab = 'towers'"
+        role="tab"
+        [attr.aria-selected]="encyclopediaTab === 'towers'">Towers</button>
+    </div>
+    <!-- Enemies tab -->
+    <div class="encyclopedia-list" *ngIf="encyclopediaTab === 'enemies'" role="tabpanel">
       <div class="encyclopedia-entry" *ngFor="let enemy of enemyInfoList">
         <div
           class="encyclopedia-entry__color"
@@ -338,6 +353,31 @@
           </div>
           <span class="encyclopedia-entry__special" *ngIf="enemy.special">{{ enemy.special }}</span>
           <span class="encyclopedia-entry__immunity" *ngFor="let imm of enemy.immunities">Immune: {{ imm }}</span>
+        </div>
+      </div>
+    </div>
+    <!-- Towers tab -->
+    <div class="encyclopedia-list" *ngIf="encyclopediaTab === 'towers'" role="tabpanel">
+      <div class="encyclopedia-entry" *ngFor="let tower of towerInfoList">
+        <div
+          class="encyclopedia-entry__color"
+          [style.background-color]="'#' + tower.color.toString(16).padStart(6, '0')"
+          aria-hidden="true"></div>
+        <div class="encyclopedia-entry__info">
+          <span class="encyclopedia-entry__name">{{ tower.name }}</span>
+          <span class="encyclopedia-entry__desc">{{ tower.description }}</span>
+          <div class="encyclopedia-entry__stats">
+            <span>DMG: {{ tower.damage }}</span>
+            <span>RNG: {{ tower.range }}</span>
+            <span>SPD: {{ tower.fireRate }}s</span>
+            <span>Cost: {{ tower.cost }}</span>
+          </div>
+          <div class="encyclopedia-entry__specs">
+            <span class="encyclopedia-entry__spec-label">α {{ tower.alpha.label }}</span>
+            <span class="encyclopedia-entry__spec-desc">{{ tower.alpha.description }}</span>
+            <span class="encyclopedia-entry__spec-label">β {{ tower.beta.label }}</span>
+            <span class="encyclopedia-entry__spec-desc">{{ tower.beta.description }}</span>
+          </div>
         </div>
       </div>
     </div>

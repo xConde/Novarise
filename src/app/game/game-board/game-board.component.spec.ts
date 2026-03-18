@@ -1635,6 +1635,65 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  describe('encyclopediaTab', () => {
+    it('default tab is enemies', () => {
+      expect(component.encyclopediaTab).toBe('enemies');
+    });
+
+    it('switching to towers tab sets encyclopediaTab to towers', () => {
+      component.encyclopediaTab = 'towers';
+      expect(component.encyclopediaTab).toBe('towers');
+    });
+
+    it('switching back to enemies tab sets encyclopediaTab to enemies', () => {
+      component.encyclopediaTab = 'towers';
+      component.encyclopediaTab = 'enemies';
+      expect(component.encyclopediaTab).toBe('enemies');
+    });
+  });
+
+  describe('towerInfoList', () => {
+    it('towerInfoList should have 6 entries (one per tower type)', () => {
+      expect(component.towerInfoList.length).toBe(6);
+    });
+
+    it('each tower entry has a non-empty name', () => {
+      for (const info of component.towerInfoList) {
+        expect(info.name.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('each tower entry has a non-empty description', () => {
+      for (const info of component.towerInfoList) {
+        expect(info.description.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('each tower entry has non-empty alpha and beta labels', () => {
+      for (const info of component.towerInfoList) {
+        expect(info.alpha.label.length).toBeGreaterThan(0);
+        expect(info.beta.label.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('all 6 tower types are represented', () => {
+      const types = component.towerInfoList.map(t => t.type);
+      expect(types).toContain(TowerType.BASIC);
+      expect(types).toContain(TowerType.SNIPER);
+      expect(types).toContain(TowerType.SPLASH);
+      expect(types).toContain(TowerType.SLOW);
+      expect(types).toContain(TowerType.CHAIN);
+      expect(types).toContain(TowerType.MORTAR);
+    });
+
+    it('each tower entry has positive cost and damage (except Slow which has 0 damage)', () => {
+      for (const info of component.towerInfoList) {
+        expect(info.cost).toBeGreaterThan(0);
+        expect(info.damage).toBeGreaterThanOrEqual(0);
+      }
+    });
+  });
+
   describe('E key toggles encyclopedia', () => {
     function fireKey(key: string): void {
       const event = new KeyboardEvent('keydown', { key, bubbles: true });
