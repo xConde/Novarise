@@ -153,6 +153,61 @@ describe('GameResultsOverlayComponent', () => {
       const starDisplay = fixture.nativeElement.querySelector('.star-display');
       expect(starDisplay).toBeNull();
     });
+
+    it('should assign star-1, star-2, star-3 position classes to each star', () => {
+      component.isVictory = true;
+      component.starArray = ['filled', 'filled', 'empty'];
+      fixture.detectChanges();
+
+      const stars: NodeListOf<HTMLElement> = fixture.nativeElement.querySelectorAll('.overlay-star');
+      expect(stars[0].classList.contains('star-1')).toBeTrue();
+      expect(stars[1].classList.contains('star-2')).toBeTrue();
+      expect(stars[2].classList.contains('star-3')).toBeTrue();
+    });
+
+    it('should not assign out-of-range position classes', () => {
+      component.isVictory = true;
+      component.starArray = ['filled', 'filled', 'empty'];
+      fixture.detectChanges();
+
+      const stars: NodeListOf<HTMLElement> = fixture.nativeElement.querySelectorAll('.overlay-star');
+      expect(stars[0].classList.contains('star-2')).toBeFalse();
+      expect(stars[0].classList.contains('star-3')).toBeFalse();
+      expect(stars[1].classList.contains('star-1')).toBeFalse();
+      expect(stars[1].classList.contains('star-3')).toBeFalse();
+    });
+
+    it('should apply filled class to earned stars and empty class to unearned stars', () => {
+      component.isVictory = true;
+      component.starArray = ['filled', 'filled', 'empty'];
+      fixture.detectChanges();
+
+      const stars: NodeListOf<HTMLElement> = fixture.nativeElement.querySelectorAll('.overlay-star');
+      expect(stars[0].classList.contains('filled')).toBeTrue();
+      expect(stars[0].classList.contains('empty')).toBeFalse();
+      expect(stars[2].classList.contains('empty')).toBeTrue();
+      expect(stars[2].classList.contains('filled')).toBeFalse();
+    });
+
+    it('should render all three stars with correct count', () => {
+      component.isVictory = true;
+      component.starArray = ['filled', 'filled', 'filled'];
+      fixture.detectChanges();
+
+      const stars = fixture.nativeElement.querySelectorAll('.overlay-star');
+      expect(stars.length).toBe(3);
+    });
+
+    it('should render zero filled stars for a zero-star result', () => {
+      component.isVictory = true;
+      component.starArray = ['empty', 'empty', 'empty'];
+      fixture.detectChanges();
+
+      const filled = fixture.nativeElement.querySelectorAll('.overlay-star.filled');
+      const empty = fixture.nativeElement.querySelectorAll('.overlay-star.empty');
+      expect(filled.length).toBe(0);
+      expect(empty.length).toBe(3);
+    });
   });
 
   describe('score breakdown', () => {
