@@ -158,6 +158,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Wave income feedback — shown during INTERMISSION
   lastWaveReward = 0;
   lastInterestEarned = 0;
+  // Wave transition visual feedback
+  waveClearMessage = '';
+  showWaveClear = false;
+  waveStartPulse = false;
+  private waveClearTimerId: ReturnType<typeof setTimeout> | null = null;
+  private waveStartPulseTimerId: ReturnType<typeof setTimeout> | null = null;
   showAllRanges = false;
   showPathOverlay = false;
   sellConfirmPending = false;
@@ -967,6 +973,31 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.router.navigate(['/campaign']);
   }
 
+  /** Show a centered "Wave X Clear!" banner for 2 seconds. Call when transitioning to INTERMISSION. */
+  onWaveComplete(wave: number, perfectWave: boolean): void {
+    this.waveClearMessage = perfectWave ? `Wave ${wave} Clear! Perfect!` : `Wave ${wave} Clear!`;
+    this.showWaveClear = true;
+    if (this.waveClearTimerId !== null) {
+      clearTimeout(this.waveClearTimerId);
+    }
+    this.waveClearTimerId = setTimeout(() => {
+      this.showWaveClear = false;
+      this.waveClearTimerId = null;
+    }, 2000);
+  }
+
+  /** Briefly pulse the wave counter in the HUD when a new wave begins. */
+  private triggerWaveStartPulse(): void {
+    this.waveStartPulse = true;
+    if (this.waveStartPulseTimerId !== null) {
+      clearTimeout(this.waveStartPulseTimerId);
+    }
+    this.waveStartPulseTimerId = setTimeout(() => {
+      this.waveStartPulse = false;
+      this.waveStartPulseTimerId = null;
+    }, 300);
+  }
+
   startWave(): void {
     const state = this.gameStateService.getState();
     if (state.phase === GamePhase.COMBAT) return;
@@ -1008,6 +1039,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.audioService.playWaveStart();
+    this.triggerWaveStartPulse();
   }
 
   toggleEncyclopedia(): void {
@@ -1936,6 +1968,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.audioService.playWaveClear();
         this.lastWaveReward = wc.reward;
         this.lastInterestEarned = wc.interestEarned;
+        const completedWave = this.gameStateService.getState().wave;
+        const perfectWave = wc.streakBonus > 0;
+        this.onWaveComplete(completedWave, perfectWave);
       }
     }
 
@@ -2014,6 +2049,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.pathBlockedTimerId !== null) {
       clearTimeout(this.pathBlockedTimerId);
       this.pathBlockedTimerId = null;
+    }
+
+    if (this.waveClearTimerId !== null) {
+      clearTimeout(this.waveClearTimerId);
+      this.waveClearTimerId = null;
+    }
+
+    if (this.waveStartPulseTimerId !== null) {
+      clearTimeout(this.waveStartPulseTimerId);
+      this.waveStartPulseTimerId = null;
     }
 
     if (this.stateSubscription) {

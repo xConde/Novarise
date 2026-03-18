@@ -9,8 +9,8 @@
   </div>
   <div class="hud-stat">
     <span class="hud-label">Wave</span>
-    <span class="hud-value" *ngIf="!isEndless">{{ wave }} / {{ maxWaves }}</span>
-    <span class="hud-value" *ngIf="isEndless">{{ wave }}</span>
+    <span class="hud-value" [class.wave-start-pulse]="waveStartPulse" *ngIf="!isEndless">{{ wave }} / {{ maxWaves }}</span>
+    <span class="hud-value" [class.wave-start-pulse]="waveStartPulse" *ngIf="isEndless">{{ wave }}</span>
   </div>
   <div class="hud-stat secondary">
     <span class="hud-label">Score</span>

@@ -27,8 +27,19 @@
     [isCampaignGame]="isCampaignGame"
     [levelName]="currentCampaignLevel?.name || ''"
     [speedRunTimeLimit]="activeSpeedRunTimeLimit"
-    [elapsedTime]="gameState.elapsedTime">
+    [elapsedTime]="gameState.elapsedTime"
+    [waveStartPulse]="waveStartPulse">
   </app-game-hud>
+
+  <!-- Wave clear banner -->
+  <div
+    class="wave-clear-banner"
+    *ngIf="showWaveClear"
+    [class.perfect]="waveClearMessage.includes('Perfect')"
+    aria-live="assertive"
+    aria-atomic="true">
+    {{ waveClearMessage }}
+  </div>
 
   <!-- Wave status indicator -->
   <div class="hud-wave-status" *ngIf="gameState.phase === GamePhase.COMBAT">

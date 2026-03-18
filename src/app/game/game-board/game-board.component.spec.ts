@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
 import * as THREE from 'three';
@@ -2989,5 +2989,86 @@ describe('GameBoardComponent', () => {
       mat1.dispose();
       mat2.dispose();
     });
+  });
+
+  describe('onWaveComplete — wave clear banner', () => {
+    it('sets showWaveClear to true and waveClearMessage immediately', () => {
+      component.onWaveComplete(3, false);
+
+      expect(component.showWaveClear).toBeTrue();
+      expect(component.waveClearMessage).toBe('Wave 3 Clear!');
+    });
+
+    it('includes "Perfect!" suffix when perfectWave is true', () => {
+      component.onWaveComplete(5, true);
+
+      expect(component.waveClearMessage).toBe('Wave 5 Clear! Perfect!');
+    });
+
+    it('does NOT include "Perfect!" when perfectWave is false', () => {
+      component.onWaveComplete(2, false);
+
+      expect(component.waveClearMessage).not.toContain('Perfect');
+    });
+
+    it('sets showWaveClear to false after 2 seconds', fakeAsync(() => {
+      component.onWaveComplete(1, false);
+      expect(component.showWaveClear).toBeTrue();
+
+      tick(2000);
+
+      expect(component.showWaveClear).toBeFalse();
+    }));
+
+    it('resets the timer if called again before the first expires', fakeAsync(() => {
+      component.onWaveComplete(1, false);
+      tick(1000);
+      component.onWaveComplete(2, false);
+
+      // Should still be showing because the timer was reset
+      tick(1500);
+      expect(component.showWaveClear).toBeTrue();
+
+      tick(500);
+      expect(component.showWaveClear).toBeFalse();
+    }));
+  });
+
+  describe('waveStartPulse — wave counter pulse', () => {
+    it('starts as false', () => {
+      expect(component.waveStartPulse).toBeFalse();
+    });
+
+    it('becomes true when triggerWaveStartPulse is called', fakeAsync(() => {
+      (component as any).triggerWaveStartPulse();
+
+      expect(component.waveStartPulse).toBeTrue();
+
+      tick(300);
+
+      expect(component.waveStartPulse).toBeFalse();
+    }));
+
+    it('resets to false after 300ms', fakeAsync(() => {
+      (component as any).triggerWaveStartPulse();
+      tick(299);
+      expect(component.waveStartPulse).toBeTrue();
+
+      tick(1);
+      expect(component.waveStartPulse).toBeFalse();
+    }));
+
+    it('resets timer if called again before prior pulse expires', fakeAsync(() => {
+      (component as any).triggerWaveStartPulse();
+      tick(200);
+      (component as any).triggerWaveStartPulse();
+
+      // 200ms into the reset timer — should still be true
+      tick(200);
+      expect(component.waveStartPulse).toBeTrue();
+
+      tick(100);
+      expect(component.waveStartPulse).toBeFalse();
+    }));
   });
 });

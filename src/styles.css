@@ -1848,13 +1848,52 @@ body .tutorial-target-highlight {
   to   { opacity: 1; transform: scale(1); }
 }
 
+@keyframes wave-clear-in {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+  20%  { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  80%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes wave-start-pulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+.board-container .wave-clear-banner {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: var(--font-size-hero);
+  font-family: "Orbitron", sans-serif;
+  font-weight: 700;
+  color: var(--text-color);
+  text-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+  animation: wave-clear-in 2s ease-out forwards;
+  pointer-events: none;
+  z-index: var(--z-index-overlay);
+  white-space: nowrap;
+}
+
+.board-container .wave-clear-banner.perfect {
+  color: var(--game-gold);
+}
+
+.wave-start-pulse {
+  animation: wave-start-pulse var(--transition-medium) ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .board-container .mode-indicator,
   .encyclopedia-panel,
   .board-container .wave-preview .wave-income,
   .board-container .pause-overlay,
   .board-container .tower-info-panel .spec-choice-panel,
-  .board-container .wave-preview {
+  .board-container .wave-preview,
+  .board-container .wave-clear-banner,
+  .wave-start-pulse {
     animation: none !important;
   }
 }

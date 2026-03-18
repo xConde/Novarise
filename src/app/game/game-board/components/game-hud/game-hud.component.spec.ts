@@ -276,6 +276,40 @@ describe('GameHudComponent', () => {
     });
   });
 
+  describe('waveStartPulse', () => {
+    it('should apply wave-start-pulse class to wave value when waveStartPulse is true (finite)', () => {
+      component.waveStartPulse = true;
+      component.isEndless = false;
+      component.wave = 3;
+      component.maxWaves = 10;
+      fixture.detectChanges();
+
+      const waveEl = fixture.nativeElement.querySelector('.hud-stat:nth-child(3) .hud-value');
+      expect(waveEl.classList.contains('wave-start-pulse')).toBeTrue();
+    });
+
+    it('should apply wave-start-pulse class to wave value when waveStartPulse is true (endless)', () => {
+      component.waveStartPulse = true;
+      component.isEndless = true;
+      component.wave = 5;
+      fixture.detectChanges();
+
+      const waveEl = fixture.nativeElement.querySelector('.hud-stat:nth-child(3) .hud-value');
+      expect(waveEl.classList.contains('wave-start-pulse')).toBeTrue();
+    });
+
+    it('should not apply wave-start-pulse class when waveStartPulse is false', () => {
+      component.waveStartPulse = false;
+      component.isEndless = false;
+      component.wave = 2;
+      component.maxWaves = 10;
+      fixture.detectChanges();
+
+      const waveEl = fixture.nativeElement.querySelector('.hud-stat:nth-child(3) .hud-value');
+      expect(waveEl.classList.contains('wave-start-pulse')).toBeFalse();
+    });
+  });
+
   describe('level name', () => {
     it('should show level name when isCampaignGame is true and levelName is set', () => {
       component.isCampaignGame = true;

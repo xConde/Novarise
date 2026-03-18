@@ -17,6 +17,7 @@ export class GameHudComponent {
   @Input() levelName = '';
   @Input() speedRunTimeLimit = 0;
   @Input() elapsedTime = 0;
+  @Input() waveStartPulse = false;
 
   get speedRunRemaining(): number {
     return Math.max(0, this.speedRunTimeLimit - this.elapsedTime);
