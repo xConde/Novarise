@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { GameSetupPanelComponent } from './game-setup-panel.component';
 import { DifficultyLevel, DIFFICULTY_PRESETS } from '../../models/game-state.model';
+import { DIFFICULTY_SCORE_MULTIPLIER } from '../../models/score.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../../models/game-modifier.model';
 import { CampaignLevel, CampaignTier } from '../../../../campaign/models/campaign.model';
 import { ChallengeDefinition, ChallengeType } from '../../../../campaign/models/challenge.model';
@@ -213,6 +214,68 @@ describe('GameSetupPanelComponent', () => {
 
       const scoreEl = fixture.nativeElement.querySelector('.setup-score');
       expect(scoreEl).toBeNull();
+    });
+  });
+
+  describe('getDifficultyInfo', () => {
+    it('should return formatted info for Easy difficulty', () => {
+      const info = component.getDifficultyInfo(DifficultyLevel.EASY);
+      const preset = DIFFICULTY_PRESETS[DifficultyLevel.EASY];
+      const multiplier = DIFFICULTY_SCORE_MULTIPLIER[DifficultyLevel.EASY];
+      expect(info).toBe(`${preset.lives} lives · ${preset.gold}g · ${multiplier.toFixed(1)}× score`);
+    });
+
+    it('should return formatted info for Normal difficulty', () => {
+      const info = component.getDifficultyInfo(DifficultyLevel.NORMAL);
+      const preset = DIFFICULTY_PRESETS[DifficultyLevel.NORMAL];
+      const multiplier = DIFFICULTY_SCORE_MULTIPLIER[DifficultyLevel.NORMAL];
+      expect(info).toBe(`${preset.lives} lives · ${preset.gold}g · ${multiplier.toFixed(1)}× score`);
+    });
+
+    it('should return formatted info for Hard difficulty', () => {
+      const info = component.getDifficultyInfo(DifficultyLevel.HARD);
+      expect(info).toBe('10 lives · 100g · 1.5× score');
+    });
+
+    it('should return formatted info for Nightmare difficulty', () => {
+      const info = component.getDifficultyInfo(DifficultyLevel.NIGHTMARE);
+      expect(info).toBe('7 lives · 75g · 2.0× score');
+    });
+  });
+
+  describe('difficulty info display', () => {
+    it('should render the difficulty info element', () => {
+      const el: HTMLElement = fixture.nativeElement.querySelector('.setup-difficulty-info');
+      expect(el).toBeTruthy();
+    });
+
+    it('should display info matching the selected difficulty', () => {
+      component.difficulty = DifficultyLevel.HARD;
+      fixture.detectChanges();
+
+      const el: HTMLElement = fixture.nativeElement.querySelector('.setup-difficulty-info');
+      expect(el.textContent).toContain('10 lives');
+      expect(el.textContent).toContain('100g');
+      expect(el.textContent).toContain('1.5× score');
+    });
+
+    it('should update info when difficulty changes', () => {
+      component.difficulty = DifficultyLevel.EASY;
+      fixture.detectChanges();
+      const elEasy: HTMLElement = fixture.nativeElement.querySelector('.setup-difficulty-info');
+      expect(elEasy.textContent).toContain('30 lives');
+
+      component.difficulty = DifficultyLevel.NIGHTMARE;
+      fixture.detectChanges();
+      const elNightmare: HTMLElement = fixture.nativeElement.querySelector('.setup-difficulty-info');
+      expect(elNightmare.textContent).toContain('7 lives');
+    });
+
+    it('should display Normal difficulty info by default', () => {
+      const el: HTMLElement = fixture.nativeElement.querySelector('.setup-difficulty-info');
+      expect(el.textContent).toContain('20 lives');
+      expect(el.textContent).toContain('200g');
+      expect(el.textContent).toContain('1.0× score');
     });
   });
 

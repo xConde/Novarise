@@ -2030,6 +2030,13 @@ body .tutorial-target-highlight {
   gap: var(--spacing-xs);
 }
 
+.board-container .setup-difficulty-info {
+  font-size: var(--font-size-2xs);
+  color: var(--text-dim);
+  opacity: 0.75;
+  text-align: center;
+}
+
 .board-container .setup-diff-btn {
   padding: var(--spacing-xs) var(--spacing-sm);
   background: transparent;
