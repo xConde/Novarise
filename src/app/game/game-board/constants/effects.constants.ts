@@ -161,6 +161,17 @@ export const TILE_PULSE_CONFIG = {
   max: 0.7,
 } as const;
 
+export const SPECIALIZATION_VISUAL_CONFIG = {
+  alpha: {
+    emissiveTint: 0xff6633,    // warm orange/red
+    emissiveIntensity: 0.4,
+  },
+  beta: {
+    emissiveTint: 0x3366ff,    // cool blue
+    emissiveIntensity: 0.4,
+  },
+} as const;
+
 export const SHIELD_BREAK_CONFIG = {
   /** Seconds for the shield dome to scale up and fade out. */
   duration: 0.3,

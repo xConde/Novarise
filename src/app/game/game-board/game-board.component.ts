@@ -28,7 +28,7 @@ import { GameModifier, GAME_MODIFIER_CONFIGS, GameModifierConfig, calculateModif
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
 import { CAMERA_CONFIG } from './constants/camera.constants';
 import { TOWER_VISUAL_CONFIG, TILE_EMISSIVE, UI_CONFIG } from './constants/ui.constants';
-import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
+import { SCREEN_SHAKE_CONFIG, SPECIALIZATION_VISUAL_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG, DRAG_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
 import { EnemyType } from './models/enemy.model';
@@ -735,6 +735,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           child.material.emissiveIntensity = TOWER_VISUAL_CONFIG.emissiveBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.emissiveIncrement;
         }
       });
+
+      // Apply specialization tint on L3 upgrade
+      if (result.specialization) {
+        this.applySpecializationVisual(towerMesh, result.specialization);
+      }
     }
 
     // Refresh info panel
@@ -750,6 +755,29 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   selectSpecialization(spec: TowerSpecialization): void {
     this.upgradeTower(spec);
+  }
+
+  /**
+   * Apply ALPHA (warm orange) or BETA (cool blue) emissive tint to all MeshStandardMaterial
+   * children in the tower group. Skips 'tip' and 'orb' mesh names whose emissive is
+   * driven per-frame by TowerAnimationService.
+   */
+  applySpecializationVisual(towerMesh: THREE.Group, spec: TowerSpecialization): void {
+    const config = spec === TowerSpecialization.ALPHA
+      ? SPECIALIZATION_VISUAL_CONFIG.alpha
+      : SPECIALIZATION_VISUAL_CONFIG.beta;
+    const animatedNames = new Set(['tip', 'orb']);
+    towerMesh.traverse(child => {
+      if (child instanceof THREE.Mesh && !animatedNames.has(child.name)) {
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        for (const mat of materials) {
+          if (mat instanceof THREE.MeshStandardMaterial) {
+            mat.emissive.set(config.emissiveTint);
+            mat.emissiveIntensity = config.emissiveIntensity;
+          }
+        }
+      }
+    });
   }
 
   sellTower(): void {

@@ -13,7 +13,7 @@ import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase } from './models/game-state.model';
-import { TowerType, PlacedTower, TargetingMode } from './models/tower.model';
+import { TowerType, TowerSpecialization, PlacedTower, TargetingMode } from './models/tower.model';
 import { EnemyType } from './models/enemy.model';
 import { TowerCombatService } from './services/tower-combat.service';
 import { ScoreBreakdown, calculateScoreBreakdown } from './models/score.model';
@@ -2873,6 +2873,121 @@ describe('GameBoardComponent', () => {
 
       expect((component as any).tileMeshArray.length).toBe(0);
       expect((component as any).towerChildrenArray.length).toBe(0);
+    });
+  });
+
+  describe('applySpecializationVisual', () => {
+    function makeMeshGroup(...names: string[]): THREE.Group {
+      const group = new THREE.Group();
+      for (const name of names) {
+        const geom = new THREE.BoxGeometry(1, 1, 1);
+        const mat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.name = name;
+        group.add(mesh);
+      }
+      return group;
+    }
+
+    afterEach(() => {
+      // Dispose geometries/materials created in helpers
+    });
+
+    it('should apply warm orange emissive tint for ALPHA specialization', () => {
+      const group = makeMeshGroup('base', 'top');
+      component.applySpecializationVisual(group, TowerSpecialization.ALPHA);
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
+          expect(child.material.emissive.getHex()).toBe(0xff6633);
+          expect(child.material.emissiveIntensity).toBe(0.4);
+        }
+      });
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          (child.material as THREE.MeshStandardMaterial).dispose();
+        }
+      });
+    });
+
+    it('should apply cool blue emissive tint for BETA specialization', () => {
+      const group = makeMeshGroup('base', 'top');
+      component.applySpecializationVisual(group, TowerSpecialization.BETA);
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
+          expect(child.material.emissive.getHex()).toBe(0x3366ff);
+          expect(child.material.emissiveIntensity).toBe(0.4);
+        }
+      });
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          (child.material as THREE.MeshStandardMaterial).dispose();
+        }
+      });
+    });
+
+    it('should not modify tip or orb meshes (animated by TowerAnimationService)', () => {
+      const group = makeMeshGroup('base', 'tip', 'orb');
+      const tipMesh = group.children.find(c => c.name === 'tip') as THREE.Mesh;
+      const orbMesh = group.children.find(c => c.name === 'orb') as THREE.Mesh;
+      const tipMat = tipMesh.material as THREE.MeshStandardMaterial;
+      const orbMat = orbMesh.material as THREE.MeshStandardMaterial;
+      const tipOriginalHex = tipMat.emissive.getHex();
+      const orbOriginalHex = orbMat.emissive.getHex();
+
+      component.applySpecializationVisual(group, TowerSpecialization.ALPHA);
+
+      expect(tipMat.emissive.getHex()).toBe(tipOriginalHex);
+      expect(orbMat.emissive.getHex()).toBe(orbOriginalHex);
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          (child.material as THREE.MeshStandardMaterial).dispose();
+        }
+      });
+    });
+
+    it('should apply tint to all non-animated mesh children in the group', () => {
+      const group = makeMeshGroup('base', 'mid', 'top', 'crystal');
+      const tinted: string[] = [];
+      component.applySpecializationVisual(group, TowerSpecialization.BETA);
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
+          if (child.material.emissive.getHex() === 0x3366ff) {
+            tinted.push(child.name);
+          }
+        }
+      });
+      expect(tinted).toContain('base');
+      expect(tinted).toContain('mid');
+      expect(tinted).toContain('top');
+      expect(tinted).toContain('crystal');
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          (child.material as THREE.MeshStandardMaterial).dispose();
+        }
+      });
+    });
+
+    it('should handle Material[] arrays on a mesh', () => {
+      const group = new THREE.Group();
+      const geom = new THREE.BoxGeometry(1, 1, 1);
+      const mat1 = new THREE.MeshStandardMaterial({ color: 0xffffff });
+      const mat2 = new THREE.MeshStandardMaterial({ color: 0x888888 });
+      const mesh = new THREE.Mesh(geom, [mat1, mat2]);
+      mesh.name = 'multi';
+      group.add(mesh);
+
+      component.applySpecializationVisual(group, TowerSpecialization.ALPHA);
+
+      expect(mat1.emissive.getHex()).toBe(0xff6633);
+      expect(mat2.emissive.getHex()).toBe(0xff6633);
+
+      geom.dispose();
+      mat1.dispose();
+      mat2.dispose();
     });
   });
 });
