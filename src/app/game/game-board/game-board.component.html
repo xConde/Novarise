@@ -69,12 +69,9 @@
   <div class="wave-preview"
        *ngIf="gameState.phase === GamePhase.INTERMISSION || (gameState.phase === GamePhase.SETUP && gameState.wave === 0 && wavePreview.length > 0)"
        aria-label="Upcoming wave preview">
-    <div class="wave-income" *ngIf="lastWaveReward > 0 || lastInterestEarned > 0" aria-live="polite">
-      <span class="income-item reward" *ngIf="lastWaveReward > 0">+{{ lastWaveReward }}g reward</span>
-      <span class="income-item interest" *ngIf="lastInterestEarned > 0">+{{ lastInterestEarned }}g interest</span>
-    </div>
+    <!-- Hero: wave number is the primary context -->
     <div class="wave-preview-header">
-      Wave {{ gameState.wave + 1 }}
+      <span class="wave-number">Wave {{ gameState.wave + 1 }}</span>
       <span
         *ngIf="waveTemplateDescription"
         class="wave-template-description"
@@ -82,6 +79,7 @@
         {{ waveTemplateDescription }}
       </span>
     </div>
+    <!-- Tactical: what's coming -->
     <ul class="wave-preview-list" *ngIf="wavePreview.length > 0">
       <li
         *ngFor="let entry of wavePreview"
@@ -95,6 +93,12 @@
         <span class="wave-preview-new" *ngIf="isNewEnemyType(entry.type)">NEW</span>
       </li>
     </ul>
+    <!-- Secondary: income earned (only shown between waves, not setup) -->
+    <div class="wave-income" *ngIf="lastWaveReward > 0 || lastInterestEarned > 0" aria-live="polite">
+      <span class="income-item reward" *ngIf="lastWaveReward > 0">+{{ lastWaveReward }}g</span>
+      <span class="income-item interest" *ngIf="lastInterestEarned > 0">+{{ lastInterestEarned }}g interest</span>
+    </div>
+    <!-- Action -->
     <button
       class="wave-btn"
       *ngIf="gameState.phase === GamePhase.INTERMISSION"

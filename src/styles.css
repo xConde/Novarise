@@ -1584,37 +1584,42 @@ body .tutorial-target-highlight {
   }
 }
 
+.board-container .wave-preview .wave-preview-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--spacing-sm);
+}
+
+.board-container .wave-preview .wave-preview-header .wave-number {
+  font-size: var(--font-size-large);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15rem;
+  color: var(--text-color);
+}
+
 .board-container .wave-preview .wave-income {
   display: flex;
   justify-content: center;
   gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-xs);
-  font-size: var(--font-size-small);
+  margin-top: var(--spacing-xs);
+  padding-top: var(--spacing-xs);
+  border-top: var(--border-width-thin) solid rgba(255, 255, 255, 0.08);
+  font-size: var(--font-size-xs);
 }
 
 .board-container .wave-preview .wave-income .income-item { font-weight: 600; }
 .board-container .wave-preview .wave-income .reward { color: var(--action-warning); }
 .board-container .wave-preview .wave-income .interest { color: var(--action-success); }
 
-.board-container .wave-preview .wave-preview-header {
-  font-size: 0.625rem;
-  text-transform: uppercase;
-  letter-spacing: 0.125rem;
-  color: rgba(255, 255, 255, 0.5);
-  margin-bottom: var(--spacing-xs);
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-}
-
 .board-container .wave-preview .wave-preview-header .wave-template-description {
-  font-size: 0.6rem;
+  font-size: var(--font-size-2xs);
   color: var(--theme-purple);
   text-transform: none;
   letter-spacing: 0.04rem;
   font-weight: 600;
+  margin-top: 0.125rem;
 }
 
 .board-container .wave-preview .wave-preview-list {
