@@ -19,8 +19,13 @@
   --nav-bg: #0a0515;
 
   /* Purple alpha variants */
+  --theme-purple-a10: rgba(106, 74, 138, 0.1);
+  --theme-purple-a15: rgba(106, 74, 138, 0.15);
   --theme-purple-a20: rgba(106, 74, 138, 0.2);
+  --theme-purple-a25: rgba(106, 74, 138, 0.25);
   --theme-purple-a30: rgba(106, 74, 138, 0.3);
+  --theme-purple-a35: rgba(106, 74, 138, 0.35);
+  --theme-purple-a40: rgba(106, 74, 138, 0.4);
   --theme-purple-a50: rgba(106, 74, 138, 0.5);
   --theme-purple-a60: rgba(106, 74, 138, 0.6);
   --theme-purple-a70: rgba(106, 74, 138, 0.7);
@@ -60,6 +65,12 @@
   /* Game state colors */
   --game-health: #ff4444;
   --game-gold: #ffd700;
+  --game-gold-a08: rgba(255, 215, 0, 0.08);
+  --game-gold-a15: rgba(255, 215, 0, 0.15);
+  --game-gold-a25: rgba(255, 215, 0, 0.25);
+  --game-gold-a40: rgba(255, 215, 0, 0.4);
+  --game-gold-a50: rgba(255, 215, 0, 0.5);
+  --game-gold-a60: rgba(255, 215, 0, 0.6);
   --game-victory: #00ff88;
   --game-defeat: #ff4444;
   --game-wave-text: #ff8888;
@@ -103,6 +114,8 @@
   /* Misc UI colors */
   --score-multiplier: #88aaff;
   --text-disabled: #8a8a9a;
+  --theme-cyan: #00ffff;
+  --theme-orange: #dd6600;
 
   /* Rainbow effect colors */
   --rainbow-red: #FF0000;
@@ -273,7 +286,7 @@ p {
   max-width: 380px;
   width: 90%;
   text-align: center;
-  box-shadow: 0 0 20px rgba(106, 90, 154, 0.4);
+  box-shadow: 0 0 20px var(--theme-purple-a40);
   z-index: 901;
   /* Fix 6: Fade-in animation on appearance/step change */
   animation: tutorial-fade-in 0.3s ease-out;
@@ -429,7 +442,7 @@ body .tutorial-target-highlight {
 }
 
 .tutorial-card__btn--skip:hover {
-  background: rgba(106, 90, 154, 0.2);
+  background: var(--theme-purple-a20);
 }
 
 .tutorial-card__btn--next {
@@ -495,7 +508,7 @@ body .tutorial-target-highlight {
   display: flex;
   gap: 0.5rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid rgba(106, 90, 154, 0.2);
+  border-bottom: 1px solid var(--theme-purple-a20);
 }
 
 .encyclopedia-entry:last-child {
@@ -545,7 +558,7 @@ body .tutorial-target-highlight {
 
 .encyclopedia-entry__immunity {
   font-size: 0.6rem;
-  color: #ff6b6b;
+  color: var(--action-danger);
 }
 
 /* Encyclopedia tab bar */
@@ -558,7 +571,7 @@ body .tutorial-target-highlight {
 .encyclopedia-tab {
   flex: 1;
   background: none;
-  border: 1px solid rgba(106, 90, 154, 0.3);
+  border: 1px solid var(--theme-purple-a30);
   border-radius: 4px;
   color: var(--theme-purple-mid, #9a8aca);
   font-family: 'Orbitron', sans-serif;
@@ -573,13 +586,13 @@ body .tutorial-target-highlight {
 .encyclopedia-tab:hover {
   color: var(--theme-purple-lighter, #c8b8f8);
   border-color: var(--theme-purple, #6a5a9a);
-  background: rgba(106, 90, 154, 0.15);
+  background: var(--theme-purple-a15);
 }
 
 .encyclopedia-tab.active {
   color: var(--theme-purple-lighter, #c8b8f8);
   border-color: var(--theme-purple, #6a5a9a);
-  background: rgba(106, 90, 154, 0.3);
+  background: var(--theme-purple-a30);
 }
 
 /* Tower specialization sub-rows inside an encyclopedia entry */
@@ -613,7 +626,7 @@ body .tutorial-target-highlight {
   width: 2.75rem;
   height: 2.75rem;
   padding: 0;
-  border: 1px solid rgba(106, 90, 154, 0.5);
+  border: 1px solid var(--theme-purple-a50);
   color: var(--theme-purple-mid, #9a8aca);
   font-size: 0.7rem;
   font-weight: 700;
@@ -627,7 +640,7 @@ body .tutorial-target-highlight {
 .encyclopedia-btn.active {
   color: var(--theme-purple-lighter, #c8b8f8);
   border-color: var(--theme-purple, #6a5a9a);
-  background: rgba(106, 90, 154, 0.25);
+  background: var(--theme-purple-a25);
 }
 
 /* ===== Encyclopedia panel — mobile bottom sheet ===== */
@@ -726,8 +739,8 @@ body .tutorial-target-highlight {
   gap: 0.375rem 0.625rem;
   padding: 0.5rem 0.75rem;
   margin-bottom: 0.25rem;
-  background: rgba(106, 90, 154, 0.18);
-  border: 1px solid rgba(106, 90, 154, 0.45);
+  background: var(--theme-purple-a20);
+  border: 1px solid var(--theme-purple-a50);
   border-radius: 6px;
 }
 
@@ -798,8 +811,8 @@ body .tutorial-target-highlight {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   padding: 0.2rem 0.5rem;
-  background: rgba(106, 90, 154, 0.25);
-  border: 1px solid rgba(106, 90, 154, 0.5);
+  background: var(--theme-purple-a25);
+  border: 1px solid var(--theme-purple-a50);
   border-radius: 4px;
 }
 
@@ -823,7 +836,7 @@ body .tutorial-target-highlight {
   margin-bottom: 0.5rem;
   padding: 0.5rem 0.75rem;
   background: rgba(40, 30, 70, 0.5);
-  border: 1px solid rgba(106, 90, 154, 0.35);
+  border: 1px solid var(--theme-purple-a35);
   border-radius: 6px;
 }
 
@@ -849,8 +862,8 @@ body .tutorial-target-highlight {
   grid-template-rows: auto auto;
   column-gap: 0.5rem;
   padding: 0.3rem 0.4rem;
-  background: rgba(106, 90, 154, 0.1);
-  border: 1px solid rgba(106, 90, 154, 0.25);
+  background: var(--theme-purple-a10);
+  border: 1px solid var(--theme-purple-a25);
   border-radius: 4px;
   transition: opacity 0.2s;
 }
@@ -892,7 +905,7 @@ body .tutorial-target-highlight {
   margin: 0.5rem 0 0.625rem;
   padding: 0.5rem 0.75rem;
   background: rgba(30, 20, 60, 0.6);
-  border: 1px solid rgba(106, 90, 154, 0.4);
+  border: 1px solid var(--theme-purple-a40);
   border-radius: 6px;
   text-align: left;
 }
@@ -967,8 +980,8 @@ body .tutorial-target-highlight {
   font-size: 0.5rem;
   font-weight: 700;
   color: var(--game-gold, #ffd700);
-  background: rgba(255, 215, 0, 0.15);
-  border: 1px solid rgba(255, 215, 0, 0.4);
+  background: var(--game-gold-a15);
+  border: 1px solid var(--game-gold-a40);
   border-radius: 3px;
   padding: 1px 4px;
   align-self: center;
@@ -1000,8 +1013,8 @@ body .tutorial-target-highlight {
 }
 
 .toast--achievement {
-  background: rgba(255, 215, 0, 0.15);
-  border: 1px solid rgba(255, 215, 0, 0.5);
+  background: var(--game-gold-a15);
+  border: 1px solid var(--game-gold-a50);
 }
 
 .toast--streak {
@@ -1135,7 +1148,7 @@ body .tutorial-target-highlight {
 
 .board-container .overlay-content .overlay-star.filled {
   color: var(--game-star-filled);
-  text-shadow: 0 0 0.75rem rgba(255, 215, 0, 0.6);
+  text-shadow: 0 0 0.75rem var(--game-gold-a60);
   opacity: 0;
   animation: star-reveal 0.4s ease-out forwards;
 }
@@ -1250,8 +1263,8 @@ body .tutorial-target-highlight {
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-xs) var(--spacing-sm);
-  background: rgba(255, 215, 0, 0.08);
-  border: var(--border-width-thin) solid rgba(255, 215, 0, 0.25);
+  background: var(--game-gold-a08);
+  border: var(--border-width-thin) solid var(--game-gold-a25);
   border-radius: var(--border-radius-sm);
   animation: scale-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -2775,7 +2788,7 @@ body .tutorial-target-highlight {
 .board-container .mode-indicator .mode-label { font-weight: 600; }
 .board-container .mode-indicator .mode-label.place-mode { color: var(--theme-cyan, #00ffff); }
 .board-container .mode-indicator .mode-cost { color: var(--game-gold, #ffd700); font-weight: 700; }
-.board-container .mode-indicator .mode-percent { color: #dd6600; font-weight: 600; font-size: var(--font-size-2xs); }
+.board-container .mode-indicator .mode-percent { color: var(--theme-orange); font-weight: 600; font-size: var(--font-size-2xs); }
 
 .board-container .mode-indicator .mode-hint {
   font-size: var(--font-size-2xs);

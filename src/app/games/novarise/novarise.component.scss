@@ -104,7 +104,7 @@
   padding: var(--spacing-md) var(--spacing-lg);
   backdrop-filter: blur(0.625rem);
   font-family: 'Courier New', monospace;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   color: var(--theme-purple-light);
   display: flex;
   gap: var(--spacing-xl);
@@ -156,13 +156,13 @@
   animation: toast-fade-in 0.2s ease-out;
 
   &.editor-toast--success {
-    border-color: #50ff50;
-    color: #50ff50;
+    border-color: var(--action-success);
+    color: var(--action-success);
   }
 
   &.editor-toast--error {
-    border-color: #ff5050;
-    color: #ff5050;
+    border-color: var(--action-danger);
+    color: var(--action-danger);
   }
 }
 
