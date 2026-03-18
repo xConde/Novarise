@@ -8,12 +8,9 @@ $campaign-grid-cols-sm: 1fr;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  // min-height: 100% keeps the container filling its flex parent (app-campaign flex:1).
-  // min-height: 100dvh is the independent fallback: if the parent flex chain ever loses
-  // its constrained height, the container still covers the full viewport minus the nav.
-  // overflow-y: auto on this element (not the parent) creates the scroll context.
-  min-height: 100%;
-  min-height: 100dvh; // progressive enhancement — overrides above in supporting browsers
+  // height: 100% constrains the container to its flex parent, creating the scroll context
+  // for overflow-y: auto. Do NOT use min-height here — it removes the cap and breaks scroll.
+  height: 100%;
   background-color: var(--bg-color);
   color: var(--text-color);
   position: relative;
