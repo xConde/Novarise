@@ -995,6 +995,40 @@ body .tutorial-target-highlight {
   letter-spacing: 0.05em;
 }
 
+/* Wave preview — tactical info badges (immunity, special ability, leak damage) */
+.wave-enemy-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin-top: 0.15rem;
+  /* occupy full width of the list item so badges wrap below the name row */
+  width: 100%;
+}
+
+.wave-enemy-badge {
+  font-size: var(--font-size-3xs);
+  padding: 0.05rem 0.25rem;
+  border-radius: var(--border-radius-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.wave-enemy-badge.badge-info {
+  background: var(--theme-purple-a20);
+  color: var(--text-dim);
+}
+
+.wave-enemy-badge.badge-warning {
+  background: rgba(255, 165, 0, 0.15);
+  color: var(--game-accent-orange);
+}
+
+.wave-enemy-badge.badge-danger {
+  background: rgba(255, 68, 68, 0.15);
+  color: var(--game-health);
+}
+
 /* ===== Toast notification system ===== */
 .toast-stack {
   position: fixed;
@@ -1739,6 +1773,7 @@ body .tutorial-target-highlight {
 .board-container .wave-preview .wave-preview-entry {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--spacing-xs);
   font-size: var(--font-size-small);
 }

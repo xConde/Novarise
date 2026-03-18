@@ -1749,6 +1749,88 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  // ── getEnemyBadges ───────────────────────────────────────────────────────────
+
+  describe('getEnemyBadges', () => {
+    it('returns an empty array for Basic enemies (no immunities, no specials, leak=1)', () => {
+      const badges = component.getEnemyBadges(EnemyType.BASIC);
+      expect(badges).toEqual([]);
+    });
+
+    it('returns Flies badge and Slow immune badge for Flying enemies', () => {
+      const badges = component.getEnemyBadges(EnemyType.FLYING);
+      const texts = badges.map(b => b.text);
+      expect(texts).toContain('Flies');
+      expect(texts).toContain('Slow immune');
+    });
+
+    it('Flies badge has severity info', () => {
+      const badges = component.getEnemyBadges(EnemyType.FLYING);
+      const flies = badges.find(b => b.text === 'Flies');
+      expect(flies?.severity).toBe('info');
+    });
+
+    it('Slow immune badge has severity warning', () => {
+      const badges = component.getEnemyBadges(EnemyType.FLYING);
+      const immune = badges.find(b => b.text === 'Slow immune');
+      expect(immune?.severity).toBe('warning');
+    });
+
+    it('returns Shield badge with correct HP for Shielded enemies', () => {
+      const badges = component.getEnemyBadges(EnemyType.SHIELDED);
+      const shield = badges.find(b => b.text.startsWith('Shield:'));
+      expect(shield).toBeTruthy();
+      // Value must match ENEMY_STATS — currently 60HP
+      expect(shield?.text).toBe('Shield: 60HP');
+      expect(shield?.severity).toBe('info');
+    });
+
+    it('returns Leak:2 badge for Shielded enemies', () => {
+      const badges = component.getEnemyBadges(EnemyType.SHIELDED);
+      const leak = badges.find(b => b.text.startsWith('Leak:'));
+      expect(leak?.text).toBe('Leak: 2');
+      expect(leak?.severity).toBe('danger');
+    });
+
+    it('returns Splits badge for Swarm enemies', () => {
+      const badges = component.getEnemyBadges(EnemyType.SWARM);
+      const splits = badges.find(b => b.text.startsWith('Splits'));
+      expect(splits).toBeTruthy();
+      expect(splits?.text).toBe('Splits ×3');
+      expect(splits?.severity).toBe('warning');
+    });
+
+    it('returns Leak:3 badge for Boss enemies', () => {
+      const badges = component.getEnemyBadges(EnemyType.BOSS);
+      const leak = badges.find(b => b.text.startsWith('Leak:'));
+      expect(leak?.text).toBe('Leak: 3');
+      expect(leak?.severity).toBe('danger');
+    });
+
+    it('returns Leak:2 badge for Heavy enemies', () => {
+      const badges = component.getEnemyBadges(EnemyType.HEAVY);
+      const leak = badges.find(b => b.text.startsWith('Leak:'));
+      expect(leak?.text).toBe('Leak: 2');
+      expect(leak?.severity).toBe('danger');
+    });
+
+    it('returns an empty array for Fast enemies (leak=1, no specials)', () => {
+      const badges = component.getEnemyBadges(EnemyType.FAST);
+      expect(badges).toEqual([]);
+    });
+
+    it('returns an empty array for Swift enemies (leak=1, no specials)', () => {
+      const badges = component.getEnemyBadges(EnemyType.SWIFT);
+      expect(badges).toEqual([]);
+    });
+
+    it('returns the same array reference on repeated calls (memoised)', () => {
+      const first = component.getEnemyBadges(EnemyType.BOSS);
+      const second = component.getEnemyBadges(EnemyType.BOSS);
+      expect(first).toBe(second);
+    });
+  });
+
   // ── Campaign integration ─────────────────────────────────────────────────────
 
   describe('isCampaignGame', () => {

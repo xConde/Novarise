@@ -31,7 +31,7 @@ import { TOWER_VISUAL_CONFIG, TILE_EMISSIVE, UI_CONFIG } from './constants/ui.co
 import { SCREEN_SHAKE_CONFIG, SPECIALIZATION_VISUAL_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG, DRAG_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
-import { EnemyType } from './models/enemy.model';
+import { EnemyType, ENEMY_STATS } from './models/enemy.model';
 import { EnemyInfo, ENEMY_INFO } from './models/enemy-info.model';
 import { TowerInfo, TOWER_INFO } from './models/tower-info.model';
 import { WavePreviewEntry, getWavePreview, getWavePreviewFull } from './models/wave-preview.model';
@@ -61,6 +61,12 @@ import { RangeVisualizationService } from './services/range-visualization.servic
 import { TowerMeshFactoryService } from './services/tower-mesh-factory.service';
 import { FocusTrap } from '../../shared/utils/focus-trap.util';
 
+/** A small tactical badge shown in the wave preview for each enemy type. */
+export interface EnemyBadge {
+  text: string;
+  severity: 'info' | 'warning' | 'danger';
+}
+
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
   '2': TowerType.SNIPER,
@@ -69,6 +75,49 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
   '5': TowerType.CHAIN,
   '6': TowerType.MORTAR,
 };
+
+/**
+ * Builds a map of tactical badges for every EnemyType, computed once at module load.
+ * Reads directly from ENEMY_STATS and ENEMY_INFO so values never diverge from game data.
+ */
+function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
+  const map = new Map<EnemyType, EnemyBadge[]>();
+
+  for (const type of Object.values(EnemyType)) {
+    const badges: EnemyBadge[] = [];
+    const stats = ENEMY_STATS[type];
+    const info = ENEMY_INFO[type];
+
+    // Flying enemies hover above terrain — bypass ground pathing
+    if (type === EnemyType.FLYING) {
+      badges.push({ text: 'Flies', severity: 'info' });
+    }
+
+    // Immunities sourced from ENEMY_INFO (currently only Slow for Flying)
+    for (const immunity of info.immunities) {
+      badges.push({ text: `${immunity} immune`, severity: 'warning' });
+    }
+
+    // Shield HP — SHIELDED only
+    if (stats.maxShield !== undefined) {
+      badges.push({ text: `Shield: ${stats.maxShield}HP`, severity: 'info' });
+    }
+
+    // Swarm splits on death
+    if (stats.spawnOnDeath !== undefined) {
+      badges.push({ text: `Splits ×${stats.spawnOnDeath}`, severity: 'warning' });
+    }
+
+    // High leak damage — warn the player when one leak = multiple lives lost
+    if (stats.leakDamage > 1) {
+      badges.push({ text: `Leak: ${stats.leakDamage}`, severity: 'danger' });
+    }
+
+    map.set(type, badges);
+  }
+
+  return map;
+}
 
 @Component({
   selector: 'app-game-board',
@@ -179,6 +228,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   encyclopediaTab: 'enemies' | 'towers' = 'enemies';
   enemyInfoList: EnemyInfo[] = Object.values(ENEMY_INFO);
   towerInfoList: TowerInfo[] = Object.values(TOWER_INFO);
+  /**
+   * Pre-computed badge map — one array per EnemyType, built once at field initialisation.
+   * Enemy stats and immunities are static, so there is no need to recompute per render cycle.
+   */
+  readonly enemyBadgeMap: ReadonlyMap<EnemyType, EnemyBadge[]> = buildEnemyBadgeMap();
   pathBlocked = false;
   private pathBlockedTimerId: ReturnType<typeof setTimeout> | null = null;
 
@@ -1118,6 +1172,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   isNewEnemyType(type: EnemyType): boolean {
     return this.waveService.isNewType(type);
+  }
+
+  /** Returns the pre-computed tactical badges for a given enemy type. Always returns an array (never null). */
+  getEnemyBadges(type: EnemyType): EnemyBadge[] {
+    return this.enemyBadgeMap.get(type) ?? [];
   }
 
   restartGame(): void {

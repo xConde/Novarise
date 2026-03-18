@@ -105,6 +105,16 @@
         <span class="enemy-count">{{ entry.count }}x</span>
         <span class="enemy-label">{{ entry.label }}</span>
         <span class="wave-preview-new" *ngIf="isNewEnemyType(entry.type)">NEW</span>
+        <div class="wave-enemy-badges" *ngIf="getEnemyBadges(entry.type).length > 0">
+          <span
+            *ngFor="let badge of getEnemyBadges(entry.type)"
+            class="wave-enemy-badge"
+            [class.badge-info]="badge.severity === 'info'"
+            [class.badge-warning]="badge.severity === 'warning'"
+            [class.badge-danger]="badge.severity === 'danger'">
+            {{ badge.text }}
+          </span>
+        </div>
       </li>
     </ul>
     <!-- Secondary: income earned (only shown between waves, not setup) -->
