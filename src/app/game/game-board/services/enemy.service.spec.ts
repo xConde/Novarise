@@ -2389,4 +2389,162 @@ describe('EnemyService', () => {
       expect(service.getEnemies().size).toBe(0);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // updateStatusEffectParticles
+  // ---------------------------------------------------------------------------
+
+  describe('updateStatusEffectParticles', () => {
+    it('creates BURN particles when enemy has BURN effect', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+
+      expect(enemy.statusParticles).toBeTruthy();
+      expect(enemy.statusParticles!.length).toBe(3); // maxParticlesPerEnemy
+    });
+
+    it('creates POISON particles when enemy has POISON effect', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.POISON]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+
+      expect(enemy.statusParticles!.length).toBe(3);
+      // Poison particles use green color
+      const mat = enemy.statusParticles![0].material as THREE.MeshBasicMaterial;
+      expect(mat.color.getHex()).toBe(0x44ff44);
+    });
+
+    it('creates SLOW particles when enemy has SLOW effect', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.SLOW]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+
+      expect(enemy.statusParticles!.length).toBe(3);
+      // Slow particles use ice-blue color
+      const mat = enemy.statusParticles![0].material as THREE.MeshBasicMaterial;
+      expect(mat.color.getHex()).toBe(0x88ccff);
+    });
+
+    it('removes particles when status effect ends (empty active effects)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+      expect(enemy.statusParticles!.length).toBe(3);
+
+      // Effect ended — no entry for this enemy
+      const noEffects = new Map<string, StatusEffectType[]>();
+      service.updateStatusEffectParticles(0.016, mockScene, noEffects);
+
+      expect(enemy.statusParticles!.length).toBe(0);
+    });
+
+    it('removes particles when enemy enters dying state', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      // Create particles first
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+      expect(enemy.statusParticles!.length).toBe(3);
+
+      // Mark as dying
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+
+      expect(enemy.statusParticles!.length).toBe(0);
+    });
+
+    it('removes particles on removeEnemy()', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+      const initialSceneCount = mockScene.children.length;
+      // 3 particles added to scene = enemy mesh + 3 particles
+      expect(mockScene.children.length).toBeGreaterThanOrEqual(4);
+
+      service.removeEnemy(enemy.id, mockScene);
+
+      // After removal scene should not contain the enemy mesh or particles
+      expect(mockScene.children.length).toBeLessThan(initialSceneCount);
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('cleans up all particles on cleanup()', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+      expect(enemy.statusParticles!.length).toBe(3);
+
+      service.cleanup(mockScene);
+
+      expect(mockScene.children.length).toBe(0);
+    });
+
+    it('does not create particles for dying enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+
+      // dying enemies get no particles (or existing ones removed)
+      expect(!enemy.statusParticles || enemy.statusParticles.length === 0).toBe(true);
+    });
+
+    it('respects max particle limit of 3 per enemy per effect', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.POISON]);
+
+      // Call multiple times — should not exceed max
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+
+      expect(enemy.statusParticles!.length).toBe(3);
+    });
+
+    it('does not throw for zero deltaTime', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      expect(() => service.updateStatusEffectParticles(0, mockScene, activeEffects)).not.toThrow();
+    });
+
+    it('adds particles to scene (not as child of enemy mesh)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const childCountBefore = enemy.mesh!.children.length;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+
+      // Particles should be in the scene, NOT as children of the enemy mesh
+      expect(enemy.mesh!.children.length).toBe(childCountBefore);
+      // Scene should have grown by 3 (particles)
+      const particles = enemy.statusParticles!;
+      particles.forEach(p => {
+        expect(p.parent).toBe(mockScene);
+      });
+    });
+  });
 });

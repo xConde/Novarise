@@ -1,5 +1,31 @@
 import { StatusEffectType } from './status-effect.constants';
 
+export const STATUS_EFFECT_VISUAL_CONFIG = {
+  maxParticlesPerEnemy: 3,
+  particleSize: 0.08,
+  burn: {
+    color: 0xff6600,
+    emissive: 0xff4400,
+    speed: 1.5,       // upward drift speed
+    spread: 0.15,     // horizontal random spread
+    lifetime: 0.6,    // seconds before respawn at base
+  },
+  poison: {
+    color: 0x44ff44,
+    emissive: 0x22cc22,
+    speed: 0.5,       // slow outward drift
+    spread: 0.2,
+    lifetime: 0.8,
+  },
+  slow: {
+    color: 0x88ccff,
+    emissive: 0x4488cc,
+    speed: 0.3,       // subtle downward drift
+    spread: 0.1,
+    lifetime: 1.0,
+  },
+} as const;
+
 export const STATUS_EFFECT_VISUALS: Record<StatusEffectType, { emissiveColor: number; emissiveIntensity: number }> = {
   [StatusEffectType.SLOW]: { emissiveColor: 0x4488ff, emissiveIntensity: 0.7 },
   [StatusEffectType.BURN]: { emissiveColor: 0xff6622, emissiveIntensity: 0.9 },

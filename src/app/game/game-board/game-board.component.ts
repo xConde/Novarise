@@ -1934,7 +1934,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.enemyService.updateHitFlashes(deltaTime);
     this.enemyService.updateShieldBreakAnimations(deltaTime);
     this.enemyService.updateHealthBars(this.sceneService.getCamera().quaternion);
-    this.enemyService.updateStatusVisuals(this.statusEffectService.getAllActiveEffects());
+    const activeEffects = this.statusEffectService.getAllActiveEffects();
+    this.enemyService.updateStatusVisuals(activeEffects);
+    this.enemyService.updateStatusEffectParticles(deltaTime, this.sceneService.getScene(), activeEffects);
     this.enemyService.updateEnemyAnimations(deltaTime);
     this.updateMinimap(time);
   }
