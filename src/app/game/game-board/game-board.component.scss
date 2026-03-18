@@ -158,6 +158,7 @@
     }
 
     .hud-stat {
+      position: relative;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -194,6 +195,28 @@
         &.gold {
           color: var(--game-gold);
         }
+
+        &.gold-pulse {
+          animation: hud-value-pulse var(--transition-fast, 0.3s) ease-out;
+        }
+
+        &.score-pulse {
+          animation: hud-value-pulse var(--transition-fast, 0.3s) ease-out;
+        }
+      }
+
+      .gold-change {
+        position: absolute;
+        top: -0.25rem;
+        left: 50%;
+        transform: translateX(-50%);
+        font-family: "Orbitron", sans-serif;
+        font-size: 0.625rem;
+        font-weight: 700;
+        color: var(--game-gold);
+        pointer-events: none;
+        white-space: nowrap;
+        animation: gold-change-float var(--transition-fast, 0.3s) ease-out forwards;
       }
 
       &.speed-run-active {
@@ -409,6 +432,30 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes hud-value-pulse {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@keyframes gold-change-float {
+  0% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-1rem); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container {
+    .gold-pulse,
+    .score-pulse {
+      animation: none;
+    }
+
+    .gold-change {
+      animation: none;
+    }
   }
 }
 

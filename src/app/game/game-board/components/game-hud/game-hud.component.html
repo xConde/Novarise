@@ -6,7 +6,8 @@
     </div>
     <div class="hud-stat">
       <span class="hud-label">Gold</span>
-      <span class="hud-value gold">{{ gold }}</span>
+      <span class="hud-value gold" [class.gold-pulse]="goldPulse">{{ gold }}</span>
+      <span class="gold-change" *ngIf="goldChange > 0">+{{ goldChange }}g</span>
     </div>
     <div class="hud-stat">
       <span class="hud-label">Wave</span>
@@ -15,7 +16,7 @@
     </div>
     <div class="hud-stat secondary">
       <span class="hud-label">Score</span>
-      <span class="hud-value">{{ score }}</span>
+      <span class="hud-value" [class.score-pulse]="scorePulse">{{ score }}</span>
     </div>
     <div class="hud-stat" [class.secondary]="speedRunTimeLimit === 0" [class.speed-run-active]="speedRunTimeLimit > 0">
       <span class="hud-label" *ngIf="speedRunTimeLimit === 0">Time</span>
