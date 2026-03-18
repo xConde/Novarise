@@ -29,6 +29,7 @@ import { CampaignLevel, CampaignTier } from '../../campaign/models/campaign.mode
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 import { GameNotificationService, NotificationType } from './services/game-notification.service';
 import { ChallengeTrackingService } from './services/challenge-tracking.service';
+import { ChallengeType, ChallengeDefinition } from '../../campaign/models/challenge.model';
 import { GameEndService } from './services/game-end.service';
 import { TilePricingService } from './services/tile-pricing.service';
 import { GameSessionService } from './services/game-session.service';
@@ -3070,5 +3071,200 @@ describe('GameBoardComponent', () => {
       tick(100);
       expect(component.waveStartPulse).toBeFalse();
     }));
+  });
+
+  describe('updateChallengeIndicators', () => {
+    let challengeTrackingService: ChallengeTrackingService;
+    let mapBridge: MapBridgeService;
+
+    beforeEach(() => {
+      challengeTrackingService = fixture.debugElement.injector.get(ChallengeTrackingService);
+      mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+    });
+
+    it('returns empty array when not a campaign game', () => {
+      // No campaign map loaded — mapId is null
+      component.updateChallengeIndicators();
+      expect(component.challengeIndicators).toEqual([]);
+    });
+
+    it('returns empty array when mapId is null (non-campaign game)', () => {
+      // mapBridge.getMapId() returns null by default (no map loaded)
+      spyOn(mapBridge, 'getMapId').and.returnValue(null);
+      component.updateChallengeIndicators();
+      expect(component.challengeIndicators).toEqual([]);
+    });
+
+    describe('NO_SLOW indicator', () => {
+      beforeEach(() => {
+        const mockLevel = { id: 'campaign_02', name: 'Map 2' } as CampaignLevel;
+        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
+        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_02');
+      });
+
+      it('passing=true when no Slow tower placed', () => {
+        // campaign_02 has NO_SLOW + SPEED_RUN; no slow placed
+        component.updateChallengeIndicators();
+        const noSlow = component.challengeIndicators.find(ci => ci.label === 'No Slow');
+        expect(noSlow).toBeTruthy();
+        expect(noSlow!.passing).toBeTrue();
+        expect(noSlow!.value).toBe('✓');
+      });
+
+      it('passing=false when Slow tower has been placed', () => {
+        challengeTrackingService.recordTowerPlaced(TowerType.SLOW, 100);
+        component.updateChallengeIndicators();
+        const noSlow = component.challengeIndicators.find(ci => ci.label === 'No Slow');
+        expect(noSlow).toBeTruthy();
+        expect(noSlow!.passing).toBeFalse();
+        expect(noSlow!.value).toBe('✗');
+      });
+    });
+
+    describe('UNTOUCHABLE indicator', () => {
+      beforeEach(() => {
+        const mockLevel = { id: 'campaign_01', name: 'Map 1' } as CampaignLevel;
+        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
+        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+      });
+
+      it('passing=true when no lives lost', () => {
+        // Default NORMAL difficulty: 20 lives, no lives lost
+        component.updateChallengeIndicators();
+        const noDmg = component.challengeIndicators.find(ci => ci.label === 'No Damage');
+        expect(noDmg).toBeTruthy();
+        expect(noDmg!.passing).toBeTrue();
+      });
+
+      it('passing=false when a life has been lost', () => {
+        const gameStateService = fixture.debugElement.injector.get(GameStateService);
+        // Lose a life by setting phase to COMBAT first, then deducting
+        gameStateService.setPhase(GamePhase.COMBAT);
+        gameStateService.loseLife(1);
+        component.updateChallengeIndicators();
+        const noDmg = component.challengeIndicators.find(ci => ci.label === 'No Damage');
+        expect(noDmg).toBeTruthy();
+        expect(noDmg!.passing).toBeFalse();
+      });
+    });
+
+    describe('TOWER_LIMIT indicator', () => {
+      beforeEach(() => {
+        const mockLevel = { id: 'campaign_01', name: 'Map 1' } as CampaignLevel;
+        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
+        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+      });
+
+      it('shows current/limit and passing=true when under limit', () => {
+        // campaign_01 has TOWER_LIMIT of 4
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+        component.updateChallengeIndicators();
+        const towers = component.challengeIndicators.find(ci => ci.label === 'Towers');
+        expect(towers).toBeTruthy();
+        expect(towers!.passing).toBeTrue();
+        expect(towers!.value).toBe('2/4');
+      });
+
+      it('passing=false when over limit', () => {
+        // Place 5 towers against limit of 4
+        for (let i = 0; i < 5; i++) {
+          challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+        }
+        component.updateChallengeIndicators();
+        const towers = component.challengeIndicators.find(ci => ci.label === 'Towers');
+        expect(towers).toBeTruthy();
+        expect(towers!.passing).toBeFalse();
+        expect(towers!.value).toBe('5/4');
+      });
+    });
+
+    describe('FRUGAL indicator', () => {
+      beforeEach(() => {
+        const mockLevel = { id: 'campaign_03', name: 'Map 3' } as CampaignLevel;
+        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
+        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_03');
+      });
+
+      it('shows spent/limit and passing=true when under gold limit', () => {
+        // campaign_03 has FRUGAL with goldLimit=600
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 200);
+        component.updateChallengeIndicators();
+        const spent = component.challengeIndicators.find(ci => ci.label === 'Spent');
+        expect(spent).toBeTruthy();
+        expect(spent!.passing).toBeTrue();
+        expect(spent!.value).toBe('200g/600g');
+      });
+
+      it('passing=false when over gold limit', () => {
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 700);
+        component.updateChallengeIndicators();
+        const spent = component.challengeIndicators.find(ci => ci.label === 'Spent');
+        expect(spent).toBeTruthy();
+        expect(spent!.passing).toBeFalse();
+      });
+    });
+
+    describe('SINGLE_TYPE indicator', () => {
+      beforeEach(() => {
+        const mockLevel = { id: 'campaign_07', name: 'Map 7' } as CampaignLevel;
+        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
+        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_07');
+      });
+
+      it('passing=true when only one tower type used', () => {
+        // campaign_07 has SINGLE_TYPE + SPEED_RUN
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+        component.updateChallengeIndicators();
+        const single = component.challengeIndicators.find(ci => ci.label === 'Single Type');
+        expect(single).toBeTruthy();
+        expect(single!.passing).toBeTrue();
+        expect(single!.value).toBe('✓');
+      });
+
+      it('passing=false when multiple tower types used', () => {
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+        challengeTrackingService.recordTowerPlaced(TowerType.SNIPER, 150);
+        component.updateChallengeIndicators();
+        const single = component.challengeIndicators.find(ci => ci.label === 'Single Type');
+        expect(single).toBeTruthy();
+        expect(single!.passing).toBeFalse();
+        expect(single!.value).toBe('2 types');
+      });
+
+      it('passing=true with zero towers placed', () => {
+        component.updateChallengeIndicators();
+        const single = component.challengeIndicators.find(ci => ci.label === 'Single Type');
+        expect(single).toBeTruthy();
+        expect(single!.passing).toBeTrue();
+      });
+    });
+
+    it('excludes SPEED_RUN from indicators when campaign has multiple challenge types', () => {
+      const mockLevel = { id: 'campaign_02', name: 'Map 2' } as CampaignLevel;
+      campaignServiceSpy.getLevel.and.returnValue(mockLevel);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_02');
+      component.updateChallengeIndicators();
+      const speedRunIndicator = component.challengeIndicators.find(ci => ci.label === 'Speed Run');
+      expect(speedRunIndicator).toBeUndefined();
+    });
+
+    it('challengeIndicators is reset to [] on restartGame', () => {
+      component.challengeIndicators = [{ label: 'No Slow', value: '✓', passing: true }];
+
+      spyOn(component as any, 'cleanupGameObjects');
+      spyOn(component as any, 'renderGameBoard');
+      spyOn(component as any, 'addGridLines');
+      spyOn((component as any).sceneService, 'initLights');
+      spyOn((component as any).sceneService, 'initSkybox');
+      spyOn((component as any).sceneService, 'initParticles');
+      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
+      spyOn(minimapSvc, 'init');
+
+      component.restartGame();
+
+      expect(component.challengeIndicators).toEqual([]);
+    });
   });
 });

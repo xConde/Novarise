@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
-import { GameHudComponent } from './game-hud.component';
+import { GameHudComponent, ChallengeIndicator } from './game-hud.component';
 
 describe('GameHudComponent', () => {
   let component: GameHudComponent;
@@ -337,6 +337,95 @@ describe('GameHudComponent', () => {
 
       const levelEl = fixture.nativeElement.querySelector('.hud-level-name');
       expect(levelEl).toBeNull();
+    });
+  });
+
+  describe('challenge indicators', () => {
+    it('should not render .challenge-indicators when challengeIndicators is empty', () => {
+      component.challengeIndicators = [];
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement.querySelector('.challenge-indicators');
+      expect(el).toBeNull();
+    });
+
+    it('should render .challenge-indicators when indicators are provided', () => {
+      const indicators: ChallengeIndicator[] = [
+        { label: 'No Slow', value: '✓', passing: true },
+        { label: 'Towers', value: '2/4', passing: true },
+      ];
+      component.challengeIndicators = indicators;
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement.querySelector('.challenge-indicators');
+      expect(el).toBeTruthy();
+    });
+
+    it('should render one badge per indicator', () => {
+      const indicators: ChallengeIndicator[] = [
+        { label: 'No Slow', value: '✓', passing: true },
+        { label: 'Towers', value: '3/4', passing: false },
+        { label: 'Spent', value: '400g/600g', passing: true },
+      ];
+      component.challengeIndicators = indicators;
+      fixture.detectChanges();
+
+      const badges = fixture.nativeElement.querySelectorAll('.challenge-indicator');
+      expect(badges.length).toBe(3);
+    });
+
+    it('should apply passing class when indicator.passing is true', () => {
+      component.challengeIndicators = [{ label: 'No Slow', value: '✓', passing: true }];
+      fixture.detectChanges();
+
+      const badge = fixture.nativeElement.querySelector('.challenge-indicator');
+      expect(badge.classList.contains('passing')).toBeTrue();
+      expect(badge.classList.contains('failing')).toBeFalse();
+    });
+
+    it('should apply failing class when indicator.passing is false', () => {
+      component.challengeIndicators = [{ label: 'No Slow', value: '✗', passing: false }];
+      fixture.detectChanges();
+
+      const badge = fixture.nativeElement.querySelector('.challenge-indicator');
+      expect(badge.classList.contains('failing')).toBeTrue();
+      expect(badge.classList.contains('passing')).toBeFalse();
+    });
+
+    it('should display label and value in badge text', () => {
+      component.challengeIndicators = [{ label: 'Towers', value: '2/4', passing: true }];
+      fixture.detectChanges();
+
+      const badge = fixture.nativeElement.querySelector('.challenge-indicator');
+      expect(badge.textContent.trim()).toContain('Towers');
+      expect(badge.textContent.trim()).toContain('2/4');
+    });
+
+    it('should set aria-label combining label and value on each badge', () => {
+      component.challengeIndicators = [{ label: 'Spent', value: '300g/600g', passing: true }];
+      fixture.detectChanges();
+
+      const badge = fixture.nativeElement.querySelector('.challenge-indicator');
+      expect(badge.getAttribute('aria-label')).toBe('Spent: 300g/600g');
+    });
+
+    it('should update rendered badges when input changes', () => {
+      component.challengeIndicators = [{ label: 'No Damage', value: '✓', passing: true }];
+      fixture.detectChanges();
+
+      component.challengeIndicators = [
+        { label: 'No Damage', value: '✗', passing: false },
+        { label: 'Towers', value: '5/4', passing: false },
+      ];
+      fixture.detectChanges();
+
+      const badges = fixture.nativeElement.querySelectorAll('.challenge-indicator');
+      expect(badges.length).toBe(2);
+      expect(badges[0].classList.contains('failing')).toBeTrue();
+    });
+
+    it('should default challengeIndicators to empty array', () => {
+      expect(component.challengeIndicators).toEqual([]);
     });
   });
 });

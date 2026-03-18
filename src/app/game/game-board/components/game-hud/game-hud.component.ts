@@ -1,5 +1,11 @@
 import { Component, Input, ViewEncapsulation } from '@angular/core';
 
+export interface ChallengeIndicator {
+  label: string;
+  value: string;
+  passing: boolean;
+}
+
 @Component({
   selector: 'app-game-hud',
   templateUrl: './game-hud.component.html',
@@ -18,6 +24,7 @@ export class GameHudComponent {
   @Input() speedRunTimeLimit = 0;
   @Input() elapsedTime = 0;
   @Input() waveStartPulse = false;
+  @Input() challengeIndicators: ChallengeIndicator[] = [];
 
   get speedRunRemaining(): number {
     return Math.max(0, this.speedRunTimeLimit - this.elapsedTime);

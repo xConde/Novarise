@@ -51,6 +51,7 @@ import { CampaignMapService } from '../../campaign/services/campaign-map.service
 
 import { CampaignLevel } from '../../campaign/models/campaign.model';
 import { ChallengeDefinition, ChallengeType, getChallengesForLevel } from '../../campaign/models/challenge.model';
+import { ChallengeIndicator } from './components/game-hud/game-hud.component';
 import { GameSessionService } from './services/game-session.service';
 import { CombatLoopService } from './services/combat-loop.service';
 import { CombatFrameResult } from './models/combat-frame.model';
@@ -150,6 +151,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Challenge completions awarded at end of this game session. */
   completedChallenges: ChallengeDefinition[] = [];
+
+  /** Live challenge progress badges shown in HUD during campaign games. Updated on tower events. */
+  challengeIndicators: ChallengeIndicator[] = [];
 
   // Wave preview — shown during SETUP and INTERMISSION
   wavePreview: WavePreviewEntry[] = [];
@@ -307,6 +311,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       next: state => {
       const prevPhase = this.gameState.phase;
       const prevWave = this.gameState.wave;
+      const prevLives = this.gameState.lives;
       this.gameState = state;
       // Keep component modifier copies in sync with the service — setModifiers has a phase
       // guard that silently no-ops outside SETUP/wave 0, so we read back the authoritative state
@@ -349,6 +354,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const previewFull = getWavePreviewFull(nextWave, state.isEndless, customDefs);
         this.wavePreview = previewFull.entries;
         this.waveTemplateDescription = previewFull.templateDescription;
+      }
+
+      // Update UNTOUCHABLE indicator whenever lives decrease (enemy leak)
+      if (state.lives !== prevLives && this.challengeIndicators.length > 0) {
+        this.updateChallengeIndicators();
       }
       }
     });
@@ -760,6 +770,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.gameBoardService.getTileSize(),
       this.sceneService.getScene()
     );
+    this.updateChallengeIndicators();
   }
 
   selectSpecialization(spec: TowerSpecialization): void {
@@ -826,6 +837,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Recompute valid tile highlights — board changed (tile freed)
     this.updateTileHighlights();
+    this.updateChallengeIndicators();
   }
 
   cycleTargeting(): void {
@@ -958,6 +970,64 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.completedChallenges.some(c => c.id === challenge.id);
   }
 
+  /**
+   * Recomputes challenge progress badges for the HUD.
+   * Called after any tower event (place, sell, upgrade) and on restart.
+   * SPEED_RUN challenges are excluded — they are handled by the countdown timer.
+   */
+  updateChallengeIndicators(): void {
+    if (!this.isCampaignGame || !this.currentCampaignLevel) {
+      this.challengeIndicators = [];
+      return;
+    }
+    const challenges = getChallengesForLevel(this.currentCampaignLevel.id);
+    const nonSpeedRun = challenges.filter(c => c.type !== ChallengeType.SPEED_RUN);
+    if (nonSpeedRun.length === 0) {
+      this.challengeIndicators = [];
+      return;
+    }
+    const snapshot = this.challengeTrackingService.getSnapshot();
+    const initialLives = DIFFICULTY_PRESETS[this.gameState.difficulty].lives;
+    this.challengeIndicators = nonSpeedRun.map(c => this.buildIndicator(c, snapshot, initialLives));
+  }
+
+  private buildIndicator(
+    challenge: ChallengeDefinition,
+    snapshot: { totalGoldSpent: number; maxTowersPlaced: number; towerTypesUsed: Set<string> },
+    initialLives: number,
+  ): ChallengeIndicator {
+    switch (challenge.type) {
+      case ChallengeType.UNTOUCHABLE: {
+        const passing = this.gameState.lives >= initialLives;
+        return { label: 'No Damage', value: passing ? '✓' : '✗', passing };
+      }
+      case ChallengeType.TOWER_LIMIT: {
+        const limit = challenge.towerLimit ?? 0;
+        const current = snapshot.maxTowersPlaced;
+        const passing = current <= limit;
+        return { label: 'Towers', value: `${current}/${limit}`, passing };
+      }
+      case ChallengeType.FRUGAL: {
+        const limit = challenge.goldLimit ?? 0;
+        const spent = snapshot.totalGoldSpent;
+        const passing = spent <= limit;
+        return { label: 'Spent', value: `${spent}g/${limit}g`, passing };
+      }
+      case ChallengeType.SINGLE_TYPE: {
+        const count = snapshot.towerTypesUsed.size;
+        const passing = count <= 1;
+        return { label: 'Single Type', value: count <= 1 ? '✓' : `${count} types`, passing };
+      }
+      case ChallengeType.NO_SLOW: {
+        const passing = !snapshot.towerTypesUsed.has(TowerType.SLOW);
+        return { label: 'No Slow', value: passing ? '✓' : '✗', passing };
+      }
+      // SPEED_RUN excluded by caller — should never reach here
+      default:
+        return { label: 'Challenge', value: '?', passing: true };
+    }
+  }
+
   /** Loads the next campaign level and restarts the game. No-op if no next level. */
   playNextLevel(): void {
     const next = this.nextCampaignLevel;
@@ -1073,6 +1143,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.newlyUnlockedAchievements = [];
     this.achievementDetails = [];
     this.completedChallenges = [];
+    this.challengeIndicators = [];
     this.lastWaveReward = 0;
     this.lastInterestEarned = 0;
     this.activeModifiers = new Set<GameModifier>();
@@ -1552,6 +1623,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Recompute valid tile highlights — board changed
     this.updateTileHighlights();
+    this.updateChallengeIndicators();
   }
 
   private getSelectedTileMesh(): THREE.Mesh | null {
