@@ -279,31 +279,7 @@
       }
     }
 
-    // Victory/defeat overlay: tighten padding
-    .game-overlay .overlay-content {
-      padding: var(--spacing-xl);
-      width: 90vw;
-
-      h2 {
-        font-size: var(--font-size-title);
-        letter-spacing: var(--spacing-xs);
-      }
-
-      .final-score {
-        font-size: var(--font-size-base);
-        margin-bottom: var(--spacing-md);
-      }
-
-      // Wrap buttons when 4 are present (Next Level, Play Again, Campaign, Edit Map)
-      .overlay-actions {
-        flex-wrap: wrap;
-        justify-content: center;
-
-        .results-btn {
-          min-height: 2.75rem;
-        }
-      }
-    }
+    // Victory/defeat overlay — responsive rules moved to src/styles.css (child component can't be reached by scoped CSS)
   }
 }
 
@@ -337,43 +313,7 @@
       max-width: 80vw;
     }
 
-    // Victory/defeat overlay: full-screen with adjusted padding
-    .game-overlay {
-      align-items: flex-end;
-
-      .overlay-content {
-        width: 100%;
-        max-height: 85vh;
-        overflow-y: auto;
-        padding: var(--spacing-xl) var(--spacing-md);
-        border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
-        border-left: none;
-        border-right: none;
-        border-bottom: none;
-
-        h2 {
-          font-size: var(--font-size-large);
-          letter-spacing: var(--spacing-xs);
-          margin-bottom: var(--spacing-sm);
-        }
-
-        .final-score {
-          font-size: var(--font-size-base);
-          margin-bottom: var(--spacing-md);
-        }
-
-        .overlay-actions {
-          flex-direction: column;
-          gap: var(--spacing-sm);
-
-          .restart-btn, .edit-map-btn, .results-btn {
-            width: 100%;
-            padding: var(--spacing-sm) var(--spacing-md);
-            min-height: 2.75rem; // 44px tap target
-          }
-        }
-      }
-    }
+    // Victory/defeat overlay — responsive rules moved to src/styles.css (child component can't be reached by scoped CSS)
   }
 }
 
