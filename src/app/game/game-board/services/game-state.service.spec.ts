@@ -704,6 +704,52 @@ describe('GameStateService', () => {
       expect(service.getState().lives).toBe(livesBefore);
       expect(service.getState().difficulty).toBe(DifficultyLevel.NORMAL);
     });
+
+    // --- Exploit prevention: difficulty/modifier toggling with spent gold ---
+
+    it('should preserve gold spent when switching from Normal to Easy', () => {
+      // Start with Normal (200g), spend 50g on a tower
+      expect(service.getState().gold).toBe(200);
+      service.spendGold(50);
+      expect(service.getState().gold).toBe(150);
+
+      // Switch to Easy (300g) — should get 300 - 50 spent = 250, NOT 300
+      service.setDifficulty(DifficultyLevel.EASY);
+      expect(service.getState().gold).toBe(250);
+    });
+
+    it('should preserve gold spent when switching from Easy back to Normal', () => {
+      service.setDifficulty(DifficultyLevel.EASY); // 300g
+      service.spendGold(100); // 200g remaining, 100 spent
+
+      service.setDifficulty(DifficultyLevel.NORMAL); // 200 - 100 = 100
+      expect(service.getState().gold).toBe(100);
+    });
+
+    it('should floor gold at 0 if spent exceeds new preset', () => {
+      service.setDifficulty(DifficultyLevel.EASY); // 300g
+      service.spendGold(250); // 50g remaining, 250 spent
+
+      // Switch to Nightmare (75g) — 75 - 250 = negative → floor at 0
+      service.setDifficulty(DifficultyLevel.NIGHTMARE);
+      expect(service.getState().gold).toBe(0);
+    });
+
+    it('should not grant extra gold by toggling difficulty up then down', () => {
+      // The original exploit: Normal(200) → spend 100 → Nightmare(75) → Easy(300)
+      service.spendGold(100); // 100g remaining
+      service.setDifficulty(DifficultyLevel.NIGHTMARE); // 75 - 100 = 0 (floored)
+      service.setDifficulty(DifficultyLevel.EASY); // 300 - 75 spent (from Nightmare starting 75, gold=0) = 225
+      // The key: gold should never exceed Easy preset (300) minus TOTAL spent (100)
+      expect(service.getState().gold).toBeLessThanOrEqual(200);
+    });
+
+    it('should give full preset gold when no gold has been spent', () => {
+      service.setDifficulty(DifficultyLevel.EASY);
+      expect(service.getState().gold).toBe(300);
+      service.setDifficulty(DifficultyLevel.HARD);
+      expect(service.getState().gold).toBe(100);
+    });
   });
 
   // --- reset ---

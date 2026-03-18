@@ -9,6 +9,8 @@ export class GameStateService {
   private state$ = new BehaviorSubject<GameState>(this.state);
   private modifierEffects: ModifierEffects = {};
   private phaseChange$ = new Subject<{ from: GamePhase; to: GamePhase }>();
+  /** Cumulative gold spent during SETUP (tower placement before wave 1). Prevents difficulty/modifier toggle exploits. */
+  private setupGoldSpent = 0;
 
   getState$(): Observable<GameState> {
     return this.state$.asObservable();
@@ -125,6 +127,10 @@ export class GameStateService {
   /** Adds gold only. Use for sell refunds (should not count toward score). */
   addGold(amount: number): void {
     this.state.gold += amount;
+    // Sell refunds during SETUP reduce the spent counter (tower was returned)
+    if (this.state.phase === GamePhase.SETUP) {
+      this.setupGoldSpent = Math.max(0, this.setupGoldSpent - amount);
+    }
     this.emit();
   }
 
@@ -159,6 +165,10 @@ export class GameStateService {
       return false;
     }
     this.state.gold -= amount;
+    // Track gold spent during SETUP to prevent difficulty/modifier toggle exploits
+    if (this.state.phase === GamePhase.SETUP) {
+      this.setupGoldSpent += amount;
+    }
     this.emit();
     return true;
   }
@@ -194,10 +204,10 @@ export class GameStateService {
     if (this.state.phase !== GamePhase.SETUP || this.state.wave !== 0) return;
     this.state.activeModifiers = new Set(modifiers);
     this.modifierEffects = mergeModifierEffects(this.state.activeModifiers);
-    // Re-apply starting gold with modifier
+    // Re-apply starting gold with new modifier, minus cumulative gold spent on towers
     const preset = DIFFICULTY_PRESETS[this.state.difficulty];
     const goldMultiplier = this.modifierEffects.startingGoldMultiplier ?? 1;
-    this.state.gold = Math.floor(preset.gold * goldMultiplier);
+    this.state.gold = Math.max(0, Math.floor(preset.gold * goldMultiplier) - this.setupGoldSpent);
     this.emit();
   }
 
@@ -218,7 +228,9 @@ export class GameStateService {
     this.state.difficulty = difficulty;
     this.state.lives = preset.lives;
     const goldMultiplier = this.modifierEffects.startingGoldMultiplier ?? 1;
-    this.state.gold = Math.floor(preset.gold * goldMultiplier);
+    const startingGold = Math.floor(preset.gold * goldMultiplier);
+    // Deduct cumulative gold already spent on towers to prevent toggle exploits
+    this.state.gold = Math.max(0, startingGold - this.setupGoldSpent);
     this.emit();
   }
 
@@ -245,6 +257,7 @@ export class GameStateService {
     const from = this.state.phase;
     this.state = { ...INITIAL_GAME_STATE, activeModifiers: new Set<GameModifier>() };
     this.modifierEffects = {};
+    this.setupGoldSpent = 0;
     this.phaseChange$.next({ from, to: GamePhase.SETUP });
     this.emit();
   }
