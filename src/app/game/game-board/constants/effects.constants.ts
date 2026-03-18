@@ -92,6 +92,20 @@ export const ENEMY_ANIM_CONFIG = {
   bossCrownSpinSpeed: 2.0,  // radians per second
 } as const;
 
+/** Duration and visual parameters for the enemy death shrink-fade animation. */
+export const DEATH_ANIM_CONFIG = {
+  /** Seconds for a standard enemy to shrink and fade out. */
+  duration: 0.3,
+  /** Seconds for a BOSS enemy — slightly longer for impact. */
+  durationBoss: 0.5,
+  /** Scale the mesh reaches by the end of the animation (approaches 0 visually). */
+  minScale: 0.1,
+  /** Particle burst count for a standard enemy death. */
+  burstCount: 8,
+  /** Particle burst count for a BOSS enemy death — larger visual splash. */
+  burstCountBoss: 20,
+} as const;
+
 export const BOSS_CROWN_CONFIG = {
   radiusMultiplier: 0.8,
   tubeMultiplier: 0.12,

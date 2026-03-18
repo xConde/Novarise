@@ -5,7 +5,7 @@ import { GameBoardService } from '../game-board.service';
 import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { GameModifier, ModifierEffects, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
-import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG, BOSS_CROWN_CONFIG } from '../constants/effects.constants';
+import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG, BOSS_CROWN_CONFIG, DEATH_ANIM_CONFIG } from '../constants/effects.constants';
 import { PathfindingService } from './pathfinding.service';
 import { GameStateService } from './game-state.service';
 
@@ -185,6 +185,8 @@ export class EnemyService {
     this.enemies.forEach(enemy => {
       // Skip dead enemies awaiting removal — prevents double-penalty if ordering changes
       if (enemy.health <= 0) return;
+      // Skip dying enemies — they are frozen in place while the animation plays
+      if (enemy.dying) return;
 
       if (enemy.pathIndex >= enemy.path.length - 1) {
         // Enemy reached exit
@@ -357,6 +359,8 @@ export class EnemyService {
   updateHealthBars(cameraQuaternion?: THREE.Quaternion): void {
     this.enemies.forEach(enemy => {
       if (!enemy.mesh) return;
+      // Hide health bar while dying — avoids flickering during scale-down
+      if (enemy.dying) return;
       // The health bar is stored in userData
       const healthBarBg = enemy.mesh.userData?.['healthBarBg'] as THREE.Mesh | undefined;
       const healthBarFg = enemy.mesh.userData?.['healthBarFg'] as THREE.Mesh | undefined;
@@ -395,6 +399,7 @@ export class EnemyService {
   updateStatusVisuals(activeEffects: Map<string, StatusEffectType[]>): void {
     this.enemies.forEach(enemy => {
       if (!enemy.mesh) return;
+      if (enemy.dying) return;
       const mat = enemy.mesh.material as THREE.MeshStandardMaterial;
       if (!mat.emissive) return;
 
@@ -429,6 +434,7 @@ export class EnemyService {
   updateEnemyAnimations(deltaTime: number): void {
     this.enemies.forEach(enemy => {
       if (!enemy.mesh || enemy.health <= 0) return;
+      if (enemy.dying) return;
       const crown = enemy.mesh.userData['bossCrown'] as THREE.Mesh | undefined;
       if (crown) {
         crown.rotation.z += ENEMY_ANIM_CONFIG.bossCrownSpinSpeed * deltaTime;
@@ -709,6 +715,120 @@ export class EnemyService {
     mesh.userData = { healthBarBg, healthBarFg };
 
     return mesh;
+  }
+
+  /**
+   * Mark an enemy as dying and start the shrink-fade animation.
+   * The enemy is immediately removed from the spatial-grid targeting pool (health is 0)
+   * but remains in the enemies map until the animation completes.
+   * BOSS enemies use a longer duration for added impact.
+   * SWARM mini-spawn happens in damageEnemy() before this is called — no special handling needed here.
+   */
+  startDyingAnimation(enemyId: string): void {
+    const enemy = this.enemies.get(enemyId);
+    if (!enemy || enemy.dying) return;
+
+    const duration = enemy.type === EnemyType.BOSS
+      ? DEATH_ANIM_CONFIG.durationBoss
+      : DEATH_ANIM_CONFIG.duration;
+
+    enemy.dying = true;
+    enemy.dyingTimer = duration;
+
+    // Make material transparent so we can animate opacity
+    if (enemy.mesh) {
+      this.setMeshTransparent(enemy.mesh, true);
+    }
+  }
+
+  /**
+   * Advance all active dying animations by `deltaTime` seconds.
+   * Scales the mesh down and fades opacity toward 0.
+   * When the timer expires, calls removeEnemy() to dispose the mesh.
+   *
+   * This must be called from the render loop (not inside the fixed-timestep physics loop)
+   * so the animation runs at real-time frame rate regardless of game speed.
+   */
+  updateDyingAnimations(deltaTime: number, scene: THREE.Scene): void {
+    if (deltaTime <= 0) return;
+
+    const toRemove: string[] = [];
+
+    this.enemies.forEach((enemy, id) => {
+      if (!enemy.dying || enemy.dyingTimer === undefined) return;
+
+      enemy.dyingTimer -= deltaTime;
+
+      if (enemy.dyingTimer <= 0) {
+        toRemove.push(id);
+        return;
+      }
+
+      if (!enemy.mesh) return;
+
+      const duration = enemy.type === EnemyType.BOSS
+        ? DEATH_ANIM_CONFIG.durationBoss
+        : DEATH_ANIM_CONFIG.duration;
+
+      // Progress 0 = animation start, 1 = animation end
+      const progress = 1 - (enemy.dyingTimer / duration);
+
+      // Scale: 1.0 → DEATH_ANIM_CONFIG.minScale
+      const scale = 1 - progress * (1 - DEATH_ANIM_CONFIG.minScale);
+      enemy.mesh.scale.setScalar(scale);
+
+      // Opacity: 1.0 → 0
+      const opacity = 1 - progress;
+      this.setMeshOpacity(enemy.mesh, opacity);
+    });
+
+    for (const id of toRemove) {
+      this.removeEnemy(id, scene);
+    }
+  }
+
+  /**
+   * Returns the count of enemies that are alive and NOT in the dying animation.
+   * Use this for wave-completion checks instead of enemies.size, because dying
+   * enemies are still in the map during their animation but are already "dead"
+   * from the game-logic perspective.
+   */
+  getLivingEnemyCount(): number {
+    let count = 0;
+    this.enemies.forEach(enemy => {
+      if (!enemy.dying) count++;
+    });
+    return count;
+  }
+
+  /**
+   * Enable or disable transparent rendering on a mesh and all its children
+   * that use MeshStandardMaterial (skips health bar BasicMaterial children).
+   */
+  private setMeshTransparent(mesh: THREE.Mesh, transparent: boolean): void {
+    if (mesh.material instanceof THREE.MeshStandardMaterial) {
+      mesh.material.transparent = transparent;
+      mesh.material.needsUpdate = true;
+    }
+    const crown = mesh.userData['bossCrown'] as THREE.Mesh | undefined;
+    if (crown && crown.material instanceof THREE.MeshStandardMaterial) {
+      crown.material.transparent = transparent;
+      crown.material.needsUpdate = true;
+    }
+  }
+
+  /**
+   * Set opacity on the main mesh material and its BOSS crown child.
+   * Skips health-bar children (MeshBasicMaterial) since they are already hidden.
+   */
+  private setMeshOpacity(mesh: THREE.Mesh, opacity: number): void {
+    if (mesh.material instanceof THREE.MeshStandardMaterial) {
+      mesh.material.opacity = opacity;
+    }
+    const crown = mesh.userData['bossCrown'] as THREE.Mesh | undefined;
+    if (crown && crown.material instanceof THREE.MeshStandardMaterial) {
+      crown.material.opacity = opacity;
+    }
   }
 
   /**

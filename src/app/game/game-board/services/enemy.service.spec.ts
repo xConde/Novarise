@@ -1697,6 +1697,314 @@ describe('EnemyService', () => {
   // gridToWorld(row=r, col=c) => {x: c-5, z: r-5}
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Death animation — startDyingAnimation / updateDyingAnimations / getLivingEnemyCount
+  // ---------------------------------------------------------------------------
+
+  describe('startDyingAnimation', () => {
+    it('should set dying=true on the enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+
+      service.startDyingAnimation(enemy.id);
+
+      expect(enemy.dying).toBe(true);
+    });
+
+    it('should set dyingTimer to DEATH_ANIM_CONFIG.duration for non-boss enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+
+      service.startDyingAnimation(enemy.id);
+
+      // Timer should be the standard duration (0.3s)
+      expect(enemy.dyingTimer).toBeCloseTo(0.3);
+    });
+
+    it('should set dyingTimer to DEATH_ANIM_CONFIG.durationBoss for BOSS enemies', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      service.damageEnemy(boss.id, boss.maxHealth);
+
+      service.startDyingAnimation(boss.id);
+
+      // Timer should be the boss duration (0.5s)
+      expect(boss.dyingTimer).toBeCloseTo(0.5);
+    });
+
+    it('should set mesh material transparent=true', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+
+      service.startDyingAnimation(enemy.id);
+
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      expect(mat.transparent).toBe(true);
+    });
+
+    it('should be a no-op when called on a non-existent enemy', () => {
+      expect(() => service.startDyingAnimation('ghost-id')).not.toThrow();
+    });
+
+    it('should be a no-op when called twice on the same enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+
+      service.startDyingAnimation(enemy.id);
+      const timerAfterFirst = enemy.dyingTimer!;
+
+      // Manually advance time to simulate partial animation
+      enemy.dyingTimer = timerAfterFirst - 0.1;
+      service.startDyingAnimation(enemy.id);
+
+      // Timer should not have been reset by the second call
+      expect(enemy.dyingTimer).toBeCloseTo(timerAfterFirst - 0.1);
+    });
+
+    it('should keep the enemy in the enemies map', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+
+      service.startDyingAnimation(enemy.id);
+
+      expect(service.getEnemies().has(enemy.id)).toBe(true);
+    });
+
+    it('should set BOSS crown material transparent=true', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      service.damageEnemy(boss.id, boss.maxHealth);
+
+      service.startDyingAnimation(boss.id);
+
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      const crownMat = crown.material as THREE.MeshStandardMaterial;
+      expect(crownMat.transparent).toBe(true);
+    });
+  });
+
+  describe('updateDyingAnimations', () => {
+    it('should reduce the dyingTimer by deltaTime', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+      const initial = enemy.dyingTimer!;
+
+      service.updateDyingAnimations(0.1, mockScene);
+
+      expect(enemy.dyingTimer!).toBeCloseTo(initial - 0.1);
+    });
+
+    it('should shrink mesh scale toward DEATH_ANIM_CONFIG.minScale over time', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      // Advance halfway through the animation
+      service.updateDyingAnimations(0.15, mockScene);
+
+      // Scale should be between minScale and 1
+      expect(enemy.mesh!.scale.x).toBeLessThan(1);
+      expect(enemy.mesh!.scale.x).toBeGreaterThan(0.1);
+    });
+
+    it('should reduce mesh opacity toward 0 over time', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      // Advance halfway through the animation
+      service.updateDyingAnimations(0.15, mockScene);
+
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      expect(mat.opacity).toBeLessThan(1);
+      expect(mat.opacity).toBeGreaterThan(0);
+    });
+
+    it('should remove enemy from map when timer expires', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const id = enemy.id;
+      service.damageEnemy(id, enemy.maxHealth);
+      service.startDyingAnimation(id);
+
+      // Advance past the full duration
+      service.updateDyingAnimations(1.0, mockScene);
+
+      expect(service.getEnemies().has(id)).toBe(false);
+    });
+
+    it('should remove enemy mesh from scene when timer expires', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const id = enemy.id;
+      service.damageEnemy(id, enemy.maxHealth);
+      service.startDyingAnimation(id);
+
+      expect(mockScene.children.length).toBeGreaterThan(0);
+
+      service.updateDyingAnimations(1.0, mockScene);
+
+      expect(mockScene.children).not.toContain(enemy.mesh!);
+    });
+
+    it('should not affect living (non-dying) enemies', () => {
+      const living = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      service.updateDyingAnimations(0.3, mockScene);
+
+      expect(living.mesh!.scale.x).toBe(1); // default scale unchanged
+      expect(service.getEnemies().has(living.id)).toBe(true);
+    });
+
+    it('should be a no-op when deltaTime <= 0', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+      const timer = enemy.dyingTimer!;
+
+      service.updateDyingAnimations(0, mockScene);
+
+      expect(enemy.dyingTimer).toBe(timer);
+    });
+
+    it('should keep BOSS enemy in map until durationBoss expires', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      const id = boss.id;
+      service.damageEnemy(id, boss.maxHealth);
+      service.startDyingAnimation(id);
+
+      // Standard duration (0.3s) should NOT remove boss
+      service.updateDyingAnimations(0.3, mockScene);
+      expect(service.getEnemies().has(id)).toBe(true);
+
+      // Advance past boss duration (0.5s total → another 0.3s = 0.6s total)
+      service.updateDyingAnimations(0.3, mockScene);
+      expect(service.getEnemies().has(id)).toBe(false);
+    });
+  });
+
+  describe('getLivingEnemyCount', () => {
+    it('should return 0 when no enemies are spawned', () => {
+      expect(service.getLivingEnemyCount()).toBe(0);
+    });
+
+    it('should count all living enemies', () => {
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+
+      expect(service.getLivingEnemyCount()).toBe(2);
+    });
+
+    it('should exclude dying enemies from the count', () => {
+      const e1 = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+
+      service.damageEnemy(e1.id, e1.maxHealth);
+      service.startDyingAnimation(e1.id);
+
+      // e1 is dying, e2 is alive → count should be 1
+      expect(service.getLivingEnemyCount()).toBe(1);
+    });
+
+    it('should return 0 when all enemies are dying', () => {
+      const e1 = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const e2 = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+
+      service.damageEnemy(e1.id, e1.maxHealth);
+      service.startDyingAnimation(e1.id);
+      service.damageEnemy(e2.id, e2.maxHealth);
+      service.startDyingAnimation(e2.id);
+
+      expect(service.getLivingEnemyCount()).toBe(0);
+    });
+  });
+
+  describe('dying enemies — movement and targeting exclusions', () => {
+    it('dying enemies should not move during updateEnemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+      const pos = { ...enemy.position };
+
+      service.updateEnemies(0.5);
+
+      expect(enemy.position.x).toBe(pos.x);
+      expect(enemy.position.z).toBe(pos.z);
+    });
+
+    it('dying enemies should not appear in reached-exit list', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // Place at last path node so it would normally register as leaked
+      enemy.pathIndex = enemy.path.length - 1;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      const reached = service.updateEnemies(0.1);
+
+      expect(reached).not.toContain(enemy.id);
+    });
+
+    it('should not update health bar for dying enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      // Manually corrupt health bar scale to verify it is not touched
+      const healthBarFg = enemy.mesh!.userData['healthBarFg'] as THREE.Mesh;
+      healthBarFg.scale.x = 0.99;
+
+      service.updateHealthBars();
+
+      expect(healthBarFg.scale.x).toBe(0.99); // not updated
+    });
+
+    it('should not update status visuals for dying enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusVisuals(activeEffects);
+
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      // Emissive should not have been set to BURN color
+      expect(mat.emissive.getHex()).not.toBe(0xff6622);
+    });
+
+    it('dying enemies should not animate (boss crown should not spin)', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      service.damageEnemy(boss.id, boss.maxHealth);
+      service.startDyingAnimation(boss.id);
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      const rotBefore = crown.rotation.z;
+
+      service.updateEnemyAnimations(0.5);
+
+      expect(crown.rotation.z).toBe(rotBefore);
+    });
+  });
+
+  describe('reset() cleans up dying enemies', () => {
+    it('should remove dying enemies from the map on reset', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      service.reset(mockScene);
+
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('should remove dying enemy meshes from the scene on reset', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      service.reset(mockScene);
+
+      expect(mockScene.children).not.toContain(enemy.mesh!);
+    });
+  });
+
   describe('deferred repath execution in updateEnemies', () => {
 
     function node(col: number, row: number): import('../models/enemy.model').GridNode {

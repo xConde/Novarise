@@ -39,6 +39,8 @@ export interface Enemy {
   isMiniSwarm?: boolean; // True for mini-enemies spawned by SWARM death — prevents recursive spawning
   isFlying?: boolean; // True for FLYING type — ignores terrain, immune to slow
   needsRepath?: boolean; // Flagged when board changes — repath on next waypoint arrival
+  dying?: boolean;     // True while the death shrink-fade animation is playing
+  dyingTimer?: number; // Seconds remaining in the death animation (counts down to 0)
 }
 
 export interface EnemyStats {

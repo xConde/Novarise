@@ -192,9 +192,10 @@ export class TowerCombatService {
     const firedTowerTypes: TowerType[] = [];
 
     // Rebuild spatial grid for this frame (broad-phase acceleration for range queries)
+    // Dying enemies are excluded — they are already dead from the targeting perspective.
     this.spatialGrid.clear();
     this.enemyService.getEnemies().forEach(enemy => {
-      if (enemy.health > 0) {
+      if (enemy.health > 0 && !enemy.dying) {
         this.spatialGrid.insert(enemy);
       }
     });

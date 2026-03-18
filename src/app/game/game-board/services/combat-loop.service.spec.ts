@@ -84,9 +84,13 @@ describe('CombatLoopService', () => {
       'getEnemies',
       'updateEnemies',
       'removeEnemy',
+      'startDyingAnimation',
+      'getLivingEnemyCount',
     ]);
     enemySpy.getEnemies.and.returnValue(new Map());
     enemySpy.updateEnemies.and.returnValue([]);
+    // Default: no living enemies (wave appears done unless overridden per-test)
+    enemySpy.getLivingEnemyCount.and.returnValue(0);
 
     gameStatsSpy = jasmine.createSpyObj('GameStatsService', [
       'recordGoldEarned',
@@ -317,14 +321,15 @@ describe('CombatLoopService', () => {
       expect(result.kills[0].position).toEqual({ x: 1, y: 2, z: 3 });
     });
 
-    it('should call removeEnemy for each kill', () => {
+    it('should call startDyingAnimation for each kill instead of removeEnemy', () => {
       const enemy = makeEnemy({ id: 'e1' });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
       combatSpy.update.and.returnValue({ killed: [{ id: 'e1', damage: 5 }], fired: [], hitCount: 0 });
 
       service.tick(FIXED_DT, 1, scene, null);
 
-      expect(enemySpy.removeEnemy).toHaveBeenCalledWith('e1', scene);
+      expect(enemySpy.startDyingAnimation).toHaveBeenCalledWith('e1');
+      expect(enemySpy.removeEnemy).not.toHaveBeenCalledWith('e1', scene);
     });
 
     it('should accumulate kills across physics steps in the same frame', () => {
@@ -586,6 +591,8 @@ describe('CombatLoopService', () => {
     it('should not emit waveCompletion when enemies are still alive', () => {
       waveSpy.isSpawning.and.returnValue(false);
       enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy()]]));
+      // Simulate living enemies — getLivingEnemyCount returns non-zero
+      enemySpy.getLivingEnemyCount.and.returnValue(1);
 
       const result = service.tick(FIXED_DT, 1, scene, null);
 
