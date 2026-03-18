@@ -1931,6 +1931,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Per-frame visual updates (health bars, status effects, animations, minimap)
     this.enemyService.updateDyingAnimations(deltaTime, this.sceneService.getScene());
+    this.enemyService.updateHitFlashes(deltaTime);
     this.enemyService.updateHealthBars(this.sceneService.getCamera().quaternion);
     this.enemyService.updateStatusVisuals(this.statusEffectService.getAllActiveEffects());
     this.enemyService.updateEnemyAnimations(deltaTime);

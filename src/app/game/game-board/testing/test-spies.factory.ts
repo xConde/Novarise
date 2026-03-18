@@ -63,7 +63,7 @@ export function createGameBoardServiceSpy(
 export function createEnemyServiceSpy(
   enemyMap: Map<string, Enemy>
 ): jasmine.SpyObj<EnemyService> {
-  const methods: (keyof EnemyService)[] = ['getEnemies', 'damageEnemy', 'spawnEnemy', 'removeEnemy'];
+  const methods: (keyof EnemyService)[] = ['getEnemies', 'damageEnemy', 'spawnEnemy', 'removeEnemy', 'startHitFlash'];
   const spy = jasmine.createSpyObj<EnemyService>('EnemyService', methods);
   spy.getEnemies.and.returnValue(enemyMap);
   spy.damageEnemy.and.callFake((id: string, damage: number): DamageResult => {

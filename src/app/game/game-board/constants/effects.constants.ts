@@ -117,6 +117,17 @@ export const BOSS_CROWN_CONFIG = {
   yOffsetMultiplier: 0.6,
 } as const;
 
+export const HIT_FLASH_CONFIG = {
+  /** Seconds the white flash is visible. */
+  duration: 0.12,
+  /** emissiveIntensity applied during the flash. */
+  emissiveIntensity: 2.0,
+  /** Emissive color during the flash (white). */
+  color: 0xffffff,
+  /** Minimum gap before the same enemy can be re-flashed. */
+  cooldown: 0.1,
+} as const;
+
 export const TILE_PULSE_CONFIG = {
   /** Emissive intensity oscillation for spawner/exit tiles */
   speed: 1.5,

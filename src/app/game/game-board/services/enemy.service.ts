@@ -5,7 +5,7 @@ import { GameBoardService } from '../game-board.service';
 import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { GameModifier, ModifierEffects, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
-import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG, BOSS_CROWN_CONFIG, DEATH_ANIM_CONFIG } from '../constants/effects.constants';
+import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG, BOSS_CROWN_CONFIG, DEATH_ANIM_CONFIG, HIT_FLASH_CONFIG } from '../constants/effects.constants';
 import { PathfindingService } from './pathfinding.service';
 import { GameStateService } from './game-state.service';
 
@@ -739,6 +739,76 @@ export class EnemyService {
     if (enemy.mesh) {
       this.setMeshTransparent(enemy.mesh, true);
     }
+  }
+
+  /**
+   * Trigger a brief white emissive flash on the hit enemy.
+   * No-op if the enemy is dying, already flashing, or not found.
+   * Saves the current emissive color/intensity so they can be restored
+   * when the flash expires — compatible with status-effect tinting.
+   */
+  startHitFlash(enemyId: string): void {
+    const enemy = this.enemies.get(enemyId);
+    if (!enemy || enemy.dying) return;
+    // Throttle: skip if already mid-flash
+    if (enemy.hitFlashTimer !== undefined && enemy.hitFlashTimer > 0) return;
+    if (!enemy.mesh) return;
+
+    enemy.hitFlashTimer = HIT_FLASH_CONFIG.duration;
+
+    const mat = enemy.mesh.material;
+    if (mat instanceof THREE.MeshStandardMaterial) {
+      // Snapshot current emissive so we can restore it when the flash ends
+      enemy.mesh.userData['preFlashEmissive'] = mat.emissive.getHex();
+      enemy.mesh.userData['preFlashEmissiveIntensity'] = mat.emissiveIntensity;
+      mat.emissive.setHex(HIT_FLASH_CONFIG.color);
+      mat.emissiveIntensity = HIT_FLASH_CONFIG.emissiveIntensity;
+    }
+    // Apply the same flash to the boss crown if present
+    const crown = enemy.mesh.userData['bossCrown'] as THREE.Mesh | undefined;
+    if (crown && crown.material instanceof THREE.MeshStandardMaterial) {
+      crown.userData['preFlashEmissive'] = crown.material.emissive.getHex();
+      crown.userData['preFlashEmissiveIntensity'] = crown.material.emissiveIntensity;
+      crown.material.emissive.setHex(HIT_FLASH_CONFIG.color);
+      crown.material.emissiveIntensity = HIT_FLASH_CONFIG.emissiveIntensity;
+    }
+  }
+
+  /**
+   * Tick all active hit-flash timers and restore emissive when each expires.
+   * Call once per render frame (not inside fixed-timestep physics) so the flash
+   * duration is decoupled from game speed.
+   */
+  updateHitFlashes(deltaTime: number): void {
+    if (deltaTime <= 0) return;
+
+    this.enemies.forEach(enemy => {
+      if (enemy.hitFlashTimer === undefined || enemy.hitFlashTimer <= 0) return;
+
+      enemy.hitFlashTimer -= deltaTime;
+
+      if (enemy.hitFlashTimer <= 0) {
+        enemy.hitFlashTimer = 0;
+        if (!enemy.mesh) return;
+
+        // Restore the snapshotted emissive (may be status-effect color)
+        const savedColor = enemy.mesh.userData['preFlashEmissive'] as number | undefined;
+        const savedIntensity = enemy.mesh.userData['preFlashEmissiveIntensity'] as number | undefined;
+        const mat = enemy.mesh.material;
+        if (mat instanceof THREE.MeshStandardMaterial) {
+          if (savedColor !== undefined) mat.emissive.setHex(savedColor);
+          if (savedIntensity !== undefined) mat.emissiveIntensity = savedIntensity;
+        }
+        // Restore boss crown
+        const crown = enemy.mesh.userData['bossCrown'] as THREE.Mesh | undefined;
+        if (crown && crown.material instanceof THREE.MeshStandardMaterial) {
+          const crownColor = crown.userData['preFlashEmissive'] as number | undefined;
+          const crownIntensity = crown.userData['preFlashEmissiveIntensity'] as number | undefined;
+          if (crownColor !== undefined) crown.material.emissive.setHex(crownColor);
+          if (crownIntensity !== undefined) crown.material.emissiveIntensity = crownIntensity;
+        }
+      }
+    });
   }
 
   /**

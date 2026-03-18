@@ -2095,4 +2095,196 @@ describe('EnemyService', () => {
       expect(enemy.needsRepath).toBe(false);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Hit flash — startHitFlash / updateHitFlashes
+  // ---------------------------------------------------------------------------
+
+  describe('startHitFlash', () => {
+    it('should set hitFlashTimer on a living enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      service.startHitFlash(enemy.id);
+
+      expect(enemy.hitFlashTimer).toBeGreaterThan(0);
+    });
+
+    it('should set emissiveIntensity to HIT_FLASH_CONFIG.emissiveIntensity', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      service.startHitFlash(enemy.id);
+
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      expect(mat.emissiveIntensity).toBeCloseTo(2.0);
+    });
+
+    it('should set emissive color to white (0xffffff)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      service.startHitFlash(enemy.id);
+
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(0xffffff);
+    });
+
+    it('should NOT flash a dying enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      service.startHitFlash(enemy.id);
+
+      expect(enemy.hitFlashTimer).toBeUndefined();
+    });
+
+    it('should NOT re-flash while already flashing (throttle)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.startHitFlash(enemy.id);
+      const firstTimer = enemy.hitFlashTimer!;
+      // Manually reduce the timer (as if partially elapsed) so it is still active
+      enemy.hitFlashTimer = firstTimer * 0.5;
+
+      // Second flash attempt should be a no-op
+      service.startHitFlash(enemy.id);
+
+      expect(enemy.hitFlashTimer).toBeCloseTo(firstTimer * 0.5);
+    });
+
+    it('should be a no-op for a non-existent enemy ID', () => {
+      expect(() => service.startHitFlash('ghost-id')).not.toThrow();
+    });
+
+    it('should snapshot the pre-flash emissive color into userData', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      const originalColor = mat.emissive.getHex();
+
+      service.startHitFlash(enemy.id);
+
+      expect(enemy.mesh!.userData['preFlashEmissive']).toBe(originalColor);
+    });
+
+    it('should snapshot the pre-flash emissiveIntensity into userData', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      const originalIntensity = mat.emissiveIntensity;
+
+      service.startHitFlash(enemy.id);
+
+      expect(enemy.mesh!.userData['preFlashEmissiveIntensity']).toBeCloseTo(originalIntensity);
+    });
+
+    it('should also flash boss crown mesh', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+
+      service.startHitFlash(boss.id);
+
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      const crownMat = crown.material as THREE.MeshStandardMaterial;
+      expect(crownMat.emissive.getHex()).toBe(0xffffff);
+      expect(crownMat.emissiveIntensity).toBeCloseTo(2.0);
+    });
+
+    it('works with MeshStandardMaterial', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy.mesh!.material).toBeInstanceOf(THREE.MeshStandardMaterial);
+
+      service.startHitFlash(enemy.id);
+
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(0xffffff);
+    });
+  });
+
+  describe('updateHitFlashes', () => {
+    it('should reduce hitFlashTimer by deltaTime', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.startHitFlash(enemy.id);
+      const before = enemy.hitFlashTimer!;
+
+      service.updateHitFlashes(0.05);
+
+      expect(enemy.hitFlashTimer).toBeCloseTo(before - 0.05);
+    });
+
+    it('should restore original emissive color when timer expires', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      const originalColor = mat.emissive.getHex();
+
+      service.startHitFlash(enemy.id);
+      // Advance past the full flash duration
+      service.updateHitFlashes(1.0);
+
+      expect(mat.emissive.getHex()).toBe(originalColor);
+    });
+
+    it('should restore original emissiveIntensity when timer expires', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      const originalIntensity = mat.emissiveIntensity;
+
+      service.startHitFlash(enemy.id);
+      service.updateHitFlashes(1.0);
+
+      expect(mat.emissiveIntensity).toBeCloseTo(originalIntensity);
+    });
+
+    it('should restore boss crown emissive when timer expires', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      const crownMat = crown.material as THREE.MeshStandardMaterial;
+      const originalColor = crownMat.emissive.getHex();
+      const originalIntensity = crownMat.emissiveIntensity;
+
+      service.startHitFlash(boss.id);
+      service.updateHitFlashes(1.0);
+
+      expect(crownMat.emissive.getHex()).toBe(originalColor);
+      expect(crownMat.emissiveIntensity).toBeCloseTo(originalIntensity);
+    });
+
+    it('should be a no-op when deltaTime <= 0', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.startHitFlash(enemy.id);
+      const before = enemy.hitFlashTimer!;
+
+      service.updateHitFlashes(0);
+
+      expect(enemy.hitFlashTimer).toBe(before);
+    });
+
+    it('should not affect enemies with no active flash', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      const originalIntensity = mat.emissiveIntensity;
+
+      service.updateHitFlashes(0.1);
+
+      expect(mat.emissiveIntensity).toBeCloseTo(originalIntensity);
+    });
+
+    it('restores status-effect emissive after flash expires (snapshot preserves tinted color)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      // Manually apply a status-effect tint before the flash
+      mat.emissive.setHex(0x4488ff); // SLOW color
+      mat.emissiveIntensity = 0.7;
+
+      service.startHitFlash(enemy.id);
+      service.updateHitFlashes(1.0);
+
+      expect(mat.emissive.getHex()).toBe(0x4488ff);
+      expect(mat.emissiveIntensity).toBeCloseTo(0.7);
+    });
+
+    it('should zero hitFlashTimer after expiry (not leave it negative)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.startHitFlash(enemy.id);
+
+      service.updateHitFlashes(1.0);
+
+      expect(enemy.hitFlashTimer).toBe(0);
+    });
+  });
 });
