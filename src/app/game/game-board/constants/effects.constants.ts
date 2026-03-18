@@ -1,4 +1,5 @@
 import { StatusEffectType } from './status-effect.constants';
+import { TowerType } from '../models/tower.model';
 
 export const STATUS_EFFECT_VISUAL_CONFIG = {
   maxParticlesPerEnemy: 3,
@@ -184,4 +185,19 @@ export const SHIELD_BREAK_CONFIG = {
   duration: 0.3,
   /** Scale the dome reaches at the end of the break animation. */
   breakScale: 2.0,
+} as const;
+
+/** Per-tower-type projectile appearance — color, emissive, scale, and emissive intensity.
+ *  CHAIN and SLOW are omitted: CHAIN uses zigzag arc visuals, SLOW has no projectile. */
+export const PROJECTILE_VISUAL_CONFIG: Partial<Record<TowerType, {
+  color: number;
+  emissive: number;
+  scale: number;
+  emissiveIntensity: number;
+  scaleZ?: number;
+}>> = {
+  [TowerType.BASIC]:  { color: 0xffffcc, emissive: 0xffff88, scale: 1.0, emissiveIntensity: 0.5 },
+  [TowerType.SNIPER]: { color: 0xff4444, emissive: 0xff2222, scale: 0.7, emissiveIntensity: 1.0, scaleZ: 1.5 },
+  [TowerType.SPLASH]: { color: 0x44ff44, emissive: 0x22cc22, scale: 1.3, emissiveIntensity: 0.6 },
+  [TowerType.MORTAR]: { color: 0xff8844, emissive: 0xff6622, scale: 1.5, emissiveIntensity: 0.8 },
 } as const;

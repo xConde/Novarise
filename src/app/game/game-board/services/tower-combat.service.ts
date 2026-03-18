@@ -7,6 +7,7 @@ import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
 import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG } from '../constants/combat.constants';
+import { PROJECTILE_VISUAL_CONFIG } from '../constants/effects.constants';
 import { PROJECTILE_POOL_CONFIG } from '../constants/physics.constants';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { StatusEffectService } from './status-effect.service';
@@ -97,7 +98,14 @@ export class TowerCombatService {
   ) {
     this.projectilePool = new ObjectPool<THREE.Mesh>(
       () => this.createPooledProjectileMesh(),
-      (mesh) => { mesh.visible = false; },
+      (mesh) => {
+        mesh.visible = false;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        mat.color.setHex(0xffffff);
+        mat.emissive.setHex(0x000000);
+        mat.emissiveIntensity = 0;
+        mesh.scale.set(1, 1, 1);
+      },
       PROJECTILE_POOL_CONFIG,
       (mesh) => {
         if (mesh.parent) mesh.parent.remove(mesh);
@@ -122,8 +130,10 @@ export class TowerCombatService {
       PROJECTILE_CONFIG.segments,
       PROJECTILE_CONFIG.segments
     );
-    const material = new THREE.MeshBasicMaterial({
+    const material = new THREE.MeshStandardMaterial({
       color: 0xffffff,
+      emissive: 0x000000,
+      emissiveIntensity: 0,
       transparent: true,
       opacity: PROJECTILE_CONFIG.opacity
     });
@@ -298,6 +308,12 @@ export class TowerCombatService {
         proj.mesh.position.x += nx * moveDistance;
         proj.mesh.position.z += nz * moveDistance;
 
+        // Rotate elongated projectiles (e.g. Sniper) to face travel direction
+        const visualCfg = PROJECTILE_VISUAL_CONFIG[proj.towerType];
+        if (visualCfg?.scaleZ !== undefined) {
+          proj.mesh.rotation.y = Math.atan2(nx, nz);
+        }
+
         // Update trail — reuse Vector3 objects after the buffer is full to avoid allocation
         if (proj.trailPositions.length < TRAIL_MAX_VERTICES) {
           proj.trailPositions.push(proj.mesh.position.clone());
@@ -310,7 +326,7 @@ export class TowerCombatService {
 
         if (proj.trailPositions.length >= 2) {
           if (!proj.trail) {
-            const projColor = (proj.mesh.material as THREE.MeshBasicMaterial).color;
+            const projColor = (proj.mesh.material as THREE.MeshStandardMaterial).color;
             const trailMat = new THREE.LineBasicMaterial({
               color: projColor,
               transparent: true,
@@ -575,7 +591,20 @@ export class TowerCombatService {
     }
 
     const mesh = this.projectilePool.acquire();
-    (mesh.material as THREE.MeshBasicMaterial).color.set(stats.color);
+    const visualCfg = PROJECTILE_VISUAL_CONFIG[tower.type];
+    const mat = mesh.material as THREE.MeshStandardMaterial;
+    if (visualCfg) {
+      mat.color.setHex(visualCfg.color);
+      mat.emissive.setHex(visualCfg.emissive);
+      mat.emissiveIntensity = visualCfg.emissiveIntensity;
+      const s = visualCfg.scale;
+      mesh.scale.set(s, s, visualCfg.scaleZ !== undefined ? s * visualCfg.scaleZ : s);
+    } else {
+      mat.color.setHex(stats.color);
+      mat.emissive.setHex(0x000000);
+      mat.emissiveIntensity = 0;
+      mesh.scale.set(1, 1, 1);
+    }
     mesh.position.set(towerWorldX, PROJECTILE_CONFIG.spawnHeight, towerWorldZ);
     mesh.visible = true;
     if (!mesh.parent) {

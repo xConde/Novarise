@@ -9,6 +9,7 @@ import { Enemy } from '../models/enemy.model';
 import { StatusEffectService } from './status-effect.service';
 import { StatusEffectType, STATUS_EFFECT_CONFIGS } from '../constants/status-effect.constants';
 import { CHAIN_LIGHTNING_CONFIG, IMPACT_FLASH_CONFIG } from '../constants/combat.constants';
+import { PROJECTILE_VISUAL_CONFIG } from '../constants/effects.constants';
 import * as THREE from 'three';
 import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy } from '../testing';
 import { TowerAnimationService } from './tower-animation.service';
@@ -1747,6 +1748,77 @@ describe('TowerCombatService', () => {
       expect(events).toEqual([]);
     });
   });
+
+  // --- Projectile visual config applied on fire and reset on pool release ---
+
+  describe('projectile visual config applied on fire', () => {
+    it('should apply BASIC visual config color when BASIC tower fires', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Place enemy within BASIC range (3) but not at exact tower position so projectile is in-flight
+      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', enemy);
+
+      // deltaTime=0.016 — tower fires (lastFireTime=-Infinity) but projectile won't reach enemy yet
+      service.update(0.016, mockScene);
+
+      // Find the projectile mesh added to scene
+      const projectileMesh = mockScene.children.find(
+        (c): c is THREE.Mesh => c instanceof THREE.Mesh && c.visible
+      );
+
+      expect(projectileMesh).toBeDefined();
+      const mat = projectileMesh!.material as THREE.MeshStandardMaterial;
+      // BASIC config color is 0xffffcc
+      expect(mat.color.getHex()).toBe(0xffffcc);
+      expect(mat.emissiveIntensity).toBeGreaterThan(0);
+    });
+
+    it('should apply SNIPER visual config and set scaleZ on sniper projectile', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SNIPER, new THREE.Group());
+
+      // Place enemy within SNIPER range (8), far enough so projectile is in-flight
+      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', enemy);
+
+      service.update(0.016, mockScene);
+
+      const projectileMesh = mockScene.children.find(
+        (c): c is THREE.Mesh => c instanceof THREE.Mesh && c.visible
+      );
+
+      expect(projectileMesh).toBeDefined();
+      const mat = projectileMesh!.material as THREE.MeshStandardMaterial;
+      expect(mat.color.getHex()).toBe(0xff4444);
+      // scaleZ should differ from scaleX (elongated)
+      expect(projectileMesh!.scale.z).toBeGreaterThan(projectileMesh!.scale.x);
+    });
+
+    it('should reset material and scale to defaults when projectile returns to pool', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy at tower position — projectile hits and returns to pool on first update
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', enemy);
+
+      // First update: fires and hits (enemy at dist=0)
+      service.update(2.0, mockScene);
+
+      // The pool mesh should now be reset (visible=false, neutral material)
+      const pooledMesh = mockScene.children.find(
+        (c): c is THREE.Mesh => c instanceof THREE.Mesh && !c.visible
+      );
+
+      expect(pooledMesh).toBeDefined();
+      const mat = pooledMesh!.material as THREE.MeshStandardMaterial;
+      expect(mat.color.getHex()).toBe(0xffffff);
+      expect(mat.emissive.getHex()).toBe(0x000000);
+      expect(mat.emissiveIntensity).toBe(0);
+      expect(pooledMesh!.scale.x).toBe(1);
+      expect(pooledMesh!.scale.y).toBe(1);
+      expect(pooledMesh!.scale.z).toBe(1);
+    });
+  });
 });
 
 // --- Tower Model Pure Function Tests ---
@@ -2055,4 +2127,69 @@ describe('Tower Model Functions', () => {
       expect(TOWER_CONFIGS[TowerType.SLOW].damage).toBe(0);
     });
   });
+
+  // --- Projectile Visual Config ---
+
+  describe('PROJECTILE_VISUAL_CONFIG', () => {
+    it('should define a config for BASIC', () => {
+      expect(PROJECTILE_VISUAL_CONFIG[TowerType.BASIC]).toBeDefined();
+    });
+
+    it('should define a config for SNIPER', () => {
+      expect(PROJECTILE_VISUAL_CONFIG[TowerType.SNIPER]).toBeDefined();
+    });
+
+    it('should define a config for SPLASH', () => {
+      expect(PROJECTILE_VISUAL_CONFIG[TowerType.SPLASH]).toBeDefined();
+    });
+
+    it('should define a config for MORTAR', () => {
+      expect(PROJECTILE_VISUAL_CONFIG[TowerType.MORTAR]).toBeDefined();
+    });
+
+    it('should NOT define a config for CHAIN (uses arc visuals)', () => {
+      expect(PROJECTILE_VISUAL_CONFIG[TowerType.CHAIN]).toBeUndefined();
+    });
+
+    it('should NOT define a config for SLOW (no projectile)', () => {
+      expect(PROJECTILE_VISUAL_CONFIG[TowerType.SLOW]).toBeUndefined();
+    });
+
+    it('SNIPER config should have scaleZ for elongated bullet look', () => {
+      expect(PROJECTILE_VISUAL_CONFIG[TowerType.SNIPER]?.scaleZ).toBeDefined();
+      expect(PROJECTILE_VISUAL_CONFIG[TowerType.SNIPER]!.scaleZ).toBeGreaterThan(1);
+    });
+
+    it('SNIPER config should have higher emissiveIntensity than BASIC', () => {
+      expect(PROJECTILE_VISUAL_CONFIG[TowerType.SNIPER]!.emissiveIntensity).toBeGreaterThan(
+        PROJECTILE_VISUAL_CONFIG[TowerType.BASIC]!.emissiveIntensity
+      );
+    });
+
+    it('MORTAR config should have larger scale than BASIC', () => {
+      expect(PROJECTILE_VISUAL_CONFIG[TowerType.MORTAR]!.scale).toBeGreaterThan(
+        PROJECTILE_VISUAL_CONFIG[TowerType.BASIC]!.scale
+      );
+    });
+
+    it('SNIPER config should have smaller scale than BASIC (fast, narrow bullet)', () => {
+      expect(PROJECTILE_VISUAL_CONFIG[TowerType.SNIPER]!.scale).toBeLessThan(
+        PROJECTILE_VISUAL_CONFIG[TowerType.BASIC]!.scale
+      );
+    });
+
+    it('each defined config should have required numeric fields', () => {
+      const projectileTypes = [TowerType.BASIC, TowerType.SNIPER, TowerType.SPLASH, TowerType.MORTAR];
+      for (const type of projectileTypes) {
+        const cfg = PROJECTILE_VISUAL_CONFIG[type]!;
+        expect(typeof cfg.color).toBe('number');
+        expect(typeof cfg.emissive).toBe('number');
+        expect(typeof cfg.scale).toBe('number');
+        expect(typeof cfg.emissiveIntensity).toBe('number');
+        expect(cfg.scale).toBeGreaterThan(0);
+        expect(cfg.emissiveIntensity).toBeGreaterThanOrEqual(0);
+      }
+    });
+  });
+
 });
