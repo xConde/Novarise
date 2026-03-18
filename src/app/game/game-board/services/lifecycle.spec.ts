@@ -15,7 +15,8 @@ import { EnemyType, ENEMY_STATS, Enemy } from '../models/enemy.model';
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
 import { GamePhase, INITIAL_GAME_STATE } from '../models/game-state.model';
 import { WAVE_DEFINITIONS } from '../models/wave.model';
-import { createTestEnemy, createTestBoard, createGameBoardServiceSpy, createEnemyServiceSpy } from '../testing';
+import { createTestEnemy, createTestBoard, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy } from '../testing';
+import { TowerAnimationService } from './tower-animation.service';
 
 // ============================================================================
 // 1. EnemyService lifecycle
@@ -124,7 +125,8 @@ describe('TowerCombatService lifecycle', () => {
         GameStateService,
         { provide: EnemyService, useValue: enemyServiceSpy },
         { provide: GameBoardService, useValue: gameBoardServiceSpy },
-        { provide: AudioService, useValue: audioServiceSpy }
+        { provide: AudioService, useValue: audioServiceSpy },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
       ]
     });
 

@@ -44,7 +44,9 @@ import {
   createCombatLoopServiceSpy,
   createMinimapServiceSpy,
   createSettingsServiceSpy,
+  createTowerAnimationServiceSpy,
 } from './testing';
+import { TowerAnimationService } from './services/tower-animation.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -134,6 +136,7 @@ describe('GameBoardComponent', () => {
         { provide: CampaignMapService, useValue: campaignMapServiceSpy },
         { provide: GameSessionService, useValue: gameSessionSpy },
         { provide: CombatLoopService, useValue: combatLoopSpy },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
       ]
     })
     .compileComponents();

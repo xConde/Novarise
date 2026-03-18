@@ -11,6 +11,8 @@ import { StatusEffectService } from './status-effect.service';
 import { GameStatsService } from './game-stats.service';
 import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
+import { TowerAnimationService } from './tower-animation.service';
+import { createTowerAnimationServiceSpy } from '../testing';
 
 import { GamePhase, DifficultyLevel, DIFFICULTY_PRESETS, INITIAL_GAME_STATE } from '../models/game-state.model';
 import { TOWER_CONFIGS, TowerType } from '../models/tower.model';
@@ -71,6 +73,7 @@ describe('Gameplay Integration', () => {
         GameStatsService,
         GameBoardService,
         AudioService,
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
       ]
     });
 

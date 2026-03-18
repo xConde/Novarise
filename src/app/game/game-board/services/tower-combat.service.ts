@@ -15,6 +15,7 @@ import { ObjectPool } from '../utils/object-pool';
 import { gridToWorld } from '../utils/coordinate-utils';
 import { CombatVFXService } from './combat-vfx.service';
 import { GameStateService } from './game-state.service';
+import { TowerAnimationService } from './tower-animation.service';
 
 interface Projectile {
   id: string;
@@ -92,6 +93,7 @@ export class TowerCombatService {
     private statusEffectService: StatusEffectService,
     private combatVFXService: CombatVFXService,
     private gameStateService: GameStateService,
+    private towerAnimationService: TowerAnimationService,
   ) {
     this.projectilePool = new ObjectPool<THREE.Mesh>(
       () => this.createPooledProjectileMesh(),
@@ -238,6 +240,7 @@ export class TowerCombatService {
         // Slow towers pulse an aura — no projectile, just apply slow to nearby enemies
         this.applySlowAura(tower, stats);
         tower.lastFireTime = this.gameTime;
+        this.towerAnimationService.startMuzzleFlash(tower);
         firedTowerTypes.push(tower.type);
         return;
       }
@@ -246,6 +249,7 @@ export class TowerCombatService {
       if (!target) return;
 
       tower.lastFireTime = this.gameTime;
+      this.towerAnimationService.startMuzzleFlash(tower);
 
       if (tower.type === TowerType.CHAIN) {
         const kills = this.fireChainLightning(tower, target, stats, scene);

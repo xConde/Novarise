@@ -10,7 +10,8 @@ import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
 import { EnemyType, ENEMY_STATS, FLYING_ENEMY_HEIGHT, Enemy } from '../models/enemy.model';
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
-import { createTestBoard, createGameBoardServiceSpy, createEnemyServiceSpy } from '../testing';
+import { createTestBoard, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy } from '../testing';
+import { TowerAnimationService } from './tower-animation.service';
 
 describe('Flying Enemy', () => {
   let enemyService: EnemyService;
@@ -246,7 +247,8 @@ describe('Flying Enemy', () => {
             GameStateService,
             { provide: EnemyService, useValue: enemySpy },
             { provide: GameBoardService, useValue: gameBoardServiceForCombat },
-            { provide: AudioService, useValue: audioServiceSpy }
+            { provide: AudioService, useValue: audioServiceSpy },
+            { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
           ]
         });
 

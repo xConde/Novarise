@@ -14,7 +14,8 @@ import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
 
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
-import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy } from '../testing';
+import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy } from '../testing';
+import { TowerAnimationService } from './tower-animation.service';
 import { Enemy } from '../models/enemy.model';
 
 describe('combat integration', () => {
@@ -42,6 +43,7 @@ describe('combat integration', () => {
         GameStateService,
         { provide: EnemyService, useValue: enemyServiceSpy },
         { provide: GameBoardService, useValue: gameBoardServiceSpy },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
       ],
     });
 

@@ -2069,6 +2069,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Animate tower idle effects and tile pulses
     this.towerAnimationService.updateTowerAnimations(this.towerMeshes, time);
     this.towerAnimationService.updateTilePulse(this.tileMeshes, time);
+    this.towerAnimationService.updateMuzzleFlashes(this.towerCombatService.getPlacedTowers(), deltaTime);
 
     // Update visual effects (run every frame regardless of pause)
     if (deltaTime > 0) {

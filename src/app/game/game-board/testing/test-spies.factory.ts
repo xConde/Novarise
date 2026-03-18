@@ -10,6 +10,7 @@ import { SettingsService, GameSettings } from '../services/settings.service';
 import { AudioService } from '../services/audio.service';
 import { SceneService } from '../services/scene.service';
 import { GameNotificationService, GameNotification } from '../services/game-notification.service';
+import { TowerAnimationService } from '../services/tower-animation.service';
 import { Enemy } from '../models/enemy.model';
 import { GameBoardTile } from '../models/game-board-tile';
 import { TowerType } from '../models/tower.model';
@@ -311,4 +312,19 @@ export function createGameNotificationServiceSpy(): jasmine.SpyObj<GameNotificat
   ]);
   spy.getNotifications.and.returnValue(of([] as GameNotification[]));
   return spy;
+}
+
+/**
+ * Create a pre-configured TowerAnimationService spy.
+ *
+ * All animation methods are stubbed as no-op voids:
+ *   - startMuzzleFlash / updateMuzzleFlashes / updateTowerAnimations / updateTilePulse
+ */
+export function createTowerAnimationServiceSpy(): jasmine.SpyObj<TowerAnimationService> {
+  return jasmine.createSpyObj<TowerAnimationService>('TowerAnimationService', [
+    'startMuzzleFlash',
+    'updateMuzzleFlashes',
+    'updateTowerAnimations',
+    'updateTilePulse',
+  ]);
 }

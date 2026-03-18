@@ -10,7 +10,8 @@ import { StatusEffectService } from './status-effect.service';
 import { StatusEffectType, STATUS_EFFECT_CONFIGS } from '../constants/status-effect.constants';
 import { CHAIN_LIGHTNING_CONFIG, IMPACT_FLASH_CONFIG } from '../constants/combat.constants';
 import * as THREE from 'three';
-import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy } from '../testing';
+import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy } from '../testing';
+import { TowerAnimationService } from './tower-animation.service';
 
 describe('TowerCombatService', () => {
   let service: TowerCombatService;
@@ -44,7 +45,8 @@ describe('TowerCombatService', () => {
         StatusEffectService,
         GameStateService,
         { provide: EnemyService, useValue: enemyServiceSpy },
-        { provide: GameBoardService, useValue: gameBoardServiceSpy }
+        { provide: GameBoardService, useValue: gameBoardServiceSpy },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
       ]
     });
     service = TestBed.inject(TowerCombatService);

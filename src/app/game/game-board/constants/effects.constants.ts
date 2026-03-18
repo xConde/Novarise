@@ -154,6 +154,13 @@ export const HIT_FLASH_CONFIG = {
   cooldown: 0.1,
 } as const;
 
+export const MUZZLE_FLASH_CONFIG = {
+  /** Seconds the emissive spike is visible. */
+  duration: 0.1,
+  /** Multiplier applied to current emissive intensity on fire. */
+  intensityMultiplier: 3.0,
+} as const;
+
 export const TILE_PULSE_CONFIG = {
   /** Emissive intensity oscillation for spawner/exit tiles */
   speed: 1.5,
