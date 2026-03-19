@@ -1943,7 +1943,7 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
   z-index: var(--z-index-overlay);
   font-family: "Orbitron", sans-serif;
   position: fixed;
-  top: 6.5rem;
+  top: 8rem;
   left: 50%;
   transform: translateX(-50%);
   min-width: 12rem;
@@ -2832,7 +2832,8 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
 
 @media (max-width: 480px) {
   .board-container .game-controls {
-    bottom: calc(var(--tower-bar-height) + var(--spacing-xs));
+    bottom: auto;
+    top: 3rem;
     right: var(--spacing-xs);
     flex-direction: row;
     flex-wrap: wrap;

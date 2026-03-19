@@ -52,6 +52,14 @@ export class MinimapService {
       this.canvas.style.display = 'none';
     }
 
+    // Compact minimap on narrow viewports — position above tower bar
+    if (window.innerWidth <= 480) {
+      this.canvas.width = 80;
+      this.canvas.height = 80;
+      this.canvas.style.bottom = 'calc(6.5rem + 8px)';
+      this.canvas.style.left = '4px';
+    }
+
     this.ctx = this.canvas.getContext('2d');
     container.appendChild(this.canvas);
   }
