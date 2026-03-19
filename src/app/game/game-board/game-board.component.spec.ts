@@ -3495,4 +3495,57 @@ describe('GameBoardComponent', () => {
     }));
   });
 
+  // ── Red team gate 2: no double-tick of visual animations ──────────────
+  describe('red team gate 2: animation calls not duplicated', () => {
+    beforeEach(() => {
+      const mockCamera = new THREE.PerspectiveCamera();
+      spyOn((component as any).sceneService, 'getCamera').and.returnValue(mockCamera);
+      spyOn((component as any).sceneService, 'getScene').and.returnValue(new THREE.Scene());
+      const statusEffectService = fixture.debugElement.injector.get(StatusEffectService);
+      spyOn(statusEffectService, 'getAllActiveEffects').and.returnValue(new Map());
+    });
+
+    it('processCombatResult does NOT call updateDyingAnimations (handled in animate)', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const dyingSpy = spyOn(enemyService, 'updateDyingAnimations');
+
+      // Call processCombatResult with an empty result
+      const emptyResult = {
+        kills: [],
+        firedTypes: new Set(),
+        hitCount: 0,
+        exitCount: 0,
+        leaked: false,
+        defeatTriggered: false,
+        waveCompletion: null,
+        gameEnd: null,
+        combatAudioEvents: [],
+      };
+      (component as any).processCombatResult(emptyResult, 0.016, 1000);
+
+      // updateDyingAnimations should NOT be called from processCombatResult
+      expect(dyingSpy).not.toHaveBeenCalled();
+    });
+
+    it('processCombatResult does NOT call updateHitFlashes (handled in animate)', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const flashSpy = spyOn(enemyService, 'updateHitFlashes');
+
+      const emptyResult = {
+        kills: [],
+        firedTypes: new Set(),
+        hitCount: 0,
+        exitCount: 0,
+        leaked: false,
+        defeatTriggered: false,
+        waveCompletion: null,
+        gameEnd: null,
+        combatAudioEvents: [],
+      };
+      (component as any).processCombatResult(emptyResult, 0.016, 1000);
+
+      expect(flashSpy).not.toHaveBeenCalled();
+    });
+  });
+
 });

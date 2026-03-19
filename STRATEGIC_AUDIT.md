@@ -1073,3 +1073,21 @@ Test count: 2756 → 3024 (+268 tests)
 - [x] Step 2: Wire `showFps` setting to game HUD — FPS counter is always visible; read `SettingsService.showFps` and conditionally show/hide
 - [x] Step 3: Sync ARCHITECTURE.md with new files/services added in Hardening VII
 - [x] Step 4: Final full test suite verification — 4028/4028 tests, zero failures, clean build ✓
+
+---
+
+## Red Team Critique — 2026-03-19 (Post-fix pass, 15+ hotfix commits)
+
+### Finding 1: Double-tick death/hit/shield animations during COMBAT (CRITICAL)
+**Location:** `game-board.component.ts:2178-2181` and `game-board.component.ts:2266-2268`
+**Risk:** `updateDyingAnimations()`, `updateHitFlashes()`, and `updateShieldBreakAnimations()` are called twice per frame during COMBAT: once in the phase-independent block (line 2178-2181) and again inside `processCombatResult()` (line 2266-2268). Death animations complete at 2× speed during combat, 1× during INTERMISSION — visually inconsistent and halving the designed animation duration.
+**Fix:** Remove the duplicate calls from `processCombatResult()` (lines 2266-2268). The phase-independent block at 2178-2181 already handles all phases correctly.
+
+### Finding 2: Focus trap double-activate leaks old keydown listener (LOW)
+**Location:** `focus-trap.util.ts:14-19`
+**Risk:** If `activate()` is called twice without `deactivate()`, the old `boundHandler` is overwritten but never removed from `document`. The old listener leaks. In practice, game-board only calls activate after deactivate, so this is defensive, not a runtime bug.
+**Fix:** Call `deactivate()` at the start of `activate()` if already active.
+
+### Finding 3: Camera pan boundary fires every frame via OrbitControls 'change' event (LOW)
+**Location:** `scene.service.ts:281-287`
+**Risk:** The clamping callback runs 60×/sec during any orbit interaction. Trivial computation (6 Math.max/min calls) so not a real perf issue, but unnecessary work when values haven't changed. No fix needed — flagged for awareness only.

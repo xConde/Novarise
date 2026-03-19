@@ -2262,10 +2262,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.screenShakeService.trigger(SCREEN_SHAKE_CONFIG.lifeLossIntensity, SCREEN_SHAKE_CONFIG.lifeLossDuration);
     }
 
-    // Per-frame visual updates (health bars, status effects, animations, minimap)
-    this.enemyService.updateDyingAnimations(deltaTime, this.sceneService.getScene());
-    this.enemyService.updateHitFlashes(deltaTime);
-    this.enemyService.updateShieldBreakAnimations(deltaTime);
+    // Per-frame visual updates (health bars, status effects, minimap)
+    // NOTE: dying/hit/shield animations are NOT called here — they run in the
+    // phase-independent block in animate() (line ~2178) to avoid double-ticking.
     this.enemyService.updateHealthBars(this.sceneService.getCamera().quaternion);
     const activeEffects = this.statusEffectService.getAllActiveEffects();
     this.enemyService.updateStatusVisuals(activeEffects);

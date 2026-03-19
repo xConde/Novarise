@@ -7,6 +7,11 @@ export class FocusTrap {
   private boundHandler: ((e: KeyboardEvent) => void) | null = null;
 
   activate(element: HTMLElement): void {
+    // Deactivate any existing trap to prevent listener leaks on double-activate
+    if (this.boundHandler) {
+      document.removeEventListener('keydown', this.boundHandler);
+      this.boundHandler = null;
+    }
     this.previouslyFocused = document.activeElement as HTMLElement;
     this.trapElement = element;
 
