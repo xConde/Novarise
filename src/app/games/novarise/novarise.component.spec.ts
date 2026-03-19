@@ -567,6 +567,121 @@ describe('NovariseComponent', () => {
     });
   });
 
+  describe('Autosave draft', () => {
+    const DRAFT_KEY = 'novarise-draft';
+
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+      localStorage.removeItem(DRAFT_KEY);
+    });
+
+    afterEach(() => {
+      localStorage.removeItem(DRAFT_KEY);
+    });
+
+    it('saveDraft writes grid state to localStorage under the draft key', () => {
+      const fakeState = { gridSize: 25, tiles: [], heightMap: [], spawnPoints: [], exitPoints: [] };
+      (component as any).terrainGrid = { exportState: () => fakeState, dispose: () => {} };
+
+      (component as any).saveDraft();
+
+      const stored = localStorage.getItem(DRAFT_KEY);
+      expect(stored).not.toBeNull();
+      expect(JSON.parse(stored!)).toEqual(fakeState);
+    });
+
+    it('saveDraft sets lastAutosaveTime to a Date', () => {
+      (component as any).terrainGrid = { exportState: () => ({ gridSize: 25, tiles: [], heightMap: [], spawnPoints: [], exitPoints: [] }), dispose: () => {} };
+      expect(component.lastAutosaveTime).toBeNull();
+
+      (component as any).saveDraft();
+
+      expect(component.lastAutosaveTime).toBeInstanceOf(Date);
+    });
+
+    it('loadDraft returns null when no draft is in localStorage', () => {
+      expect((component as any).loadDraft()).toBeNull();
+    });
+
+    it('loadDraft returns parsed state when draft exists', () => {
+      const fakeState = { gridSize: 25, tiles: [], heightMap: [], spawnPoints: [], exitPoints: [] };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(fakeState));
+
+      const result = (component as any).loadDraft();
+
+      expect(result).toEqual(fakeState);
+    });
+
+    it('loadDraft returns null when draft JSON is malformed', () => {
+      localStorage.setItem(DRAFT_KEY, '{not valid json');
+
+      expect((component as any).loadDraft()).toBeNull();
+    });
+
+    it('clearDraft removes the draft from localStorage', () => {
+      localStorage.setItem(DRAFT_KEY, '{}');
+      (component as any).lastAutosaveTime = new Date();
+
+      (component as any).clearDraft();
+
+      expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
+    });
+
+    it('clearDraft resets lastAutosaveTime to null', () => {
+      (component as any).lastAutosaveTime = new Date();
+
+      (component as any).clearDraft();
+
+      expect(component.lastAutosaveTime).toBeNull();
+    });
+
+    it('startAutosave sets a non-null autosaveInterval', () => {
+      expect((component as any).autosaveInterval).toBeNull();
+
+      (component as any).startAutosave();
+
+      expect((component as any).autosaveInterval).not.toBeNull();
+      clearInterval((component as any).autosaveInterval);
+    });
+
+    it('ngOnDestroy clears the autosave interval', () => {
+      (component as any).startAutosave();
+      const id = (component as any).autosaveInterval;
+      expect(id).not.toBeNull();
+
+      component.ngOnDestroy();
+
+      expect((component as any).autosaveInterval).toBeNull();
+    });
+  });
+
+  describe('formatAutosaveTime', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+    });
+
+    it('returns empty string when lastAutosaveTime is null', () => {
+      expect(component.formatAutosaveTime()).toBe('');
+    });
+
+    it('returns "just now" when saved less than 60 seconds ago', () => {
+      component.lastAutosaveTime = new Date(Date.now() - 30_000);
+      expect(component.formatAutosaveTime()).toBe('just now');
+    });
+
+    it('returns "1 min ago" when saved 90 seconds ago', () => {
+      component.lastAutosaveTime = new Date(Date.now() - 90_000);
+      expect(component.formatAutosaveTime()).toBe('1 min ago');
+    });
+
+    it('returns "5 min ago" when saved 5 minutes ago', () => {
+      component.lastAutosaveTime = new Date(Date.now() - 300_000);
+      expect(component.formatAutosaveTime()).toBe('5 min ago');
+    });
+  });
+
   describe('saveGridState path guard (modal-based)', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);

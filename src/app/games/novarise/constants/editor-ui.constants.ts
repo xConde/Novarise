@@ -133,6 +133,14 @@ export const EDITOR_RENDER_ORDER = {
   rectanglePreview: 998,
 } as const;
 
+// ── Autosave draft ────────────────────────────────────────────────────────────
+/** localStorage key for the unsaved draft. */
+export const EDITOR_AUTOSAVE_DRAFT_KEY = 'novarise-draft';
+/** Interval (ms) between automatic draft saves. */
+export const EDITOR_AUTOSAVE_INTERVAL_MS = 60_000;
+/** Threshold (ms) below which the indicator shows "just now". */
+export const EDITOR_AUTOSAVE_JUST_NOW_MS = 60_000;
+
 // ── Height limits (terrain-grid.class.ts) ────────────────────────────────────
 export const EDITOR_HEIGHT = {
   min: 0,

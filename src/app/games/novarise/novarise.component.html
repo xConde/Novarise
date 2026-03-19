@@ -48,6 +48,15 @@
       (templateSelect)="loadTemplate($event)">
     </app-edit-controls>
 
+    <!-- Autosave indicator -->
+    <span
+      *ngIf="lastAutosaveTime"
+      class="autosave-indicator"
+      aria-live="polite"
+      aria-label="Draft autosaved">
+      Draft saved {{ formatAutosaveTime() }}
+    </span>
+
     <!-- Editor toast notifications (replaces alert() calls) -->
     <div
       *ngIf="editorNotification"
