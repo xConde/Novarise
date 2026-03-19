@@ -233,7 +233,7 @@
 // Mobile (max-width: 480px) — HUD responsive rules moved to src/styles.css; only non-HUD rules remain
 @media (max-width:480px) {
   .board-container {
-    --tower-bar-height: 10rem; // 2-row tower grid: 2×61px + padding + gap ≈ 147px
+    --tower-bar-height: 6.5rem; // compact 2-row grid: reduced icon + tiny text + padding ≈ 104px
 
     // Wave status: allow wrap so badge doesn't overflow on narrow screens
     .hud-wave-status {
