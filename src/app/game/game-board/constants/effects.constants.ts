@@ -29,7 +29,7 @@ export const STATUS_EFFECT_VISUAL_CONFIG = {
 
 export const STATUS_EFFECT_VISUALS: Record<StatusEffectType, { emissiveColor: number; emissiveIntensity: number }> = {
   [StatusEffectType.SLOW]: { emissiveColor: 0x4488ff, emissiveIntensity: 0.7 },
-  [StatusEffectType.BURN]: { emissiveColor: 0xff6622, emissiveIntensity: 0.9 },
+  [StatusEffectType.BURN]: { emissiveColor: 0xff6622, emissiveIntensity: 0.7 },
   [StatusEffectType.POISON]: { emissiveColor: 0x44ff22, emissiveIntensity: 0.7 },
 };
 
@@ -197,7 +197,7 @@ export const PROJECTILE_VISUAL_CONFIG: Partial<Record<TowerType, {
   scaleZ?: number;
 }>> = {
   [TowerType.BASIC]:  { color: 0xffffcc, emissive: 0xffff88, scale: 1.0, emissiveIntensity: 0.5 },
-  [TowerType.SNIPER]: { color: 0xff4444, emissive: 0xff2222, scale: 0.7, emissiveIntensity: 1.0, scaleZ: 1.5 },
+  [TowerType.SNIPER]: { color: 0xff4444, emissive: 0xff2222, scale: 0.7, emissiveIntensity: 0.7, scaleZ: 1.5 },
   [TowerType.SPLASH]: { color: 0x44ff44, emissive: 0x22cc22, scale: 1.3, emissiveIntensity: 0.6 },
   [TowerType.MORTAR]: { color: 0xff8844, emissive: 0xff6622, scale: 1.5, emissiveIntensity: 0.8 },
 } as const;

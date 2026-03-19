@@ -1269,6 +1269,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.showWaveClear = false;
     this.waveClearMessage = '';
     this.waveStartPulse = false;
+    this.previewTowerType = null;
+    this.encyclopediaTab = 'enemies';
 
     this.importBoard();
 
