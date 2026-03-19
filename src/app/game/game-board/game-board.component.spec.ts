@@ -3454,4 +3454,45 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  // ── Red team gate: restartGame() timer cleanup ──────────────────
+  describe('red team gate: restartGame clears wave transition timers', () => {
+    beforeEach(() => {
+      spyOn(component as any, 'cleanupGameObjects');
+      spyOn(component as any, 'renderGameBoard');
+      spyOn(component as any, 'addGridLines');
+      spyOn((component as any).sceneService, 'initLights');
+      spyOn((component as any).sceneService, 'initSkybox');
+      spyOn((component as any).sceneService, 'initParticles');
+      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
+      spyOn(minimapSvc, 'init');
+    });
+
+    it('clears waveClearTimerId on restart', fakeAsync(() => {
+      component.onWaveComplete(3, true);
+      expect(component.showWaveClear).toBeTrue();
+
+      component.restartGame();
+
+      expect(component.showWaveClear).toBeFalse();
+      expect(component.waveClearMessage).toBe('');
+
+      // Timer should NOT fire after restart
+      tick(3000);
+      expect(component.showWaveClear).toBeFalse();
+    }));
+
+    it('clears waveStartPulseTimerId on restart', fakeAsync(() => {
+      (component as any).triggerWaveStartPulse();
+      expect(component.waveStartPulse).toBeTrue();
+
+      component.restartGame();
+
+      expect(component.waveStartPulse).toBeFalse();
+
+      // Timer should NOT fire after restart
+      tick(500);
+      expect(component.waveStartPulse).toBeFalse();
+    }));
+  });
+
 });

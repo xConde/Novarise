@@ -376,6 +376,23 @@ describe('ProfileComponent', () => {
       expect(document.body.classList.contains('reduce-motion')).toBe(false);
     });
 
+    it('should apply reduce-motion class on init when setting is persisted (red team gate)', () => {
+      // Clean up any existing class from prior tests
+      document.body.classList.remove('reduce-motion');
+      // Simulate persisted reduceMotion=true
+      settingsService.get.and.returnValue({
+        audioMuted: false,
+        difficulty: DifficultyLevel.NORMAL,
+        gameSpeed: 1,
+        showFps: false,
+        reduceMotion: true,
+      });
+      component.ngOnInit();
+      expect(document.body.classList.contains('reduce-motion')).toBe(true);
+      // Clean up
+      document.body.classList.remove('reduce-motion');
+    });
+
     it('should mark active difficulty button with active class', () => {
       component.currentDifficulty = DifficultyLevel.HARD;
       fixture.detectChanges();

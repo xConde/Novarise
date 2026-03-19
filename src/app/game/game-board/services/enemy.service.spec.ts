@@ -2289,6 +2289,21 @@ describe('EnemyService', () => {
 
       expect(enemy.hitFlashTimer).toBe(0);
     });
+
+    it('should cancel flash immediately if enemy is dying (red team gate)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.startHitFlash(enemy.id);
+      expect(enemy.hitFlashTimer).toBeGreaterThan(0);
+
+      // Enemy starts dying while flash is in progress
+      service.startDyingAnimation(enemy.id);
+      expect(enemy.dying).toBeTrue();
+
+      // Flash should be cancelled, not restored
+      service.updateHitFlashes(0.01);
+      expect(enemy.hitFlashTimer).toBe(0);
+      // Emissive should NOT be restored (death animation owns the visual state)
+    });
   });
 
   // ---------------------------------------------------------------------------

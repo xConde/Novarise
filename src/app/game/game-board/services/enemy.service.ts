@@ -1028,6 +1028,12 @@ export class EnemyService {
     this.enemies.forEach(enemy => {
       if (enemy.hitFlashTimer === undefined || enemy.hitFlashTimer <= 0) return;
 
+      // Cancel in-progress flash if enemy started dying — let death animation own visuals
+      if (enemy.dying) {
+        enemy.hitFlashTimer = 0;
+        return;
+      }
+
       enemy.hitFlashTimer -= deltaTime;
 
       if (enemy.hitFlashTimer <= 0) {

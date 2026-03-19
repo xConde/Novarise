@@ -1253,6 +1253,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       clearTimeout(this.pathBlockedTimerId);
       this.pathBlockedTimerId = null;
     }
+    if (this.waveClearTimerId !== null) {
+      clearTimeout(this.waveClearTimerId);
+      this.waveClearTimerId = null;
+    }
+    if (this.waveStartPulseTimerId !== null) {
+      clearTimeout(this.waveStartPulseTimerId);
+      this.waveStartPulseTimerId = null;
+    }
+    this.showWaveClear = false;
+    this.waveClearMessage = '';
+    this.waveStartPulse = false;
 
     this.importBoard();
 

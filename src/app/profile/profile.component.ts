@@ -72,6 +72,9 @@ export class ProfileComponent implements OnInit {
     this.currentSpeed = s.gameSpeed as GameSpeed;
     this.showFps = s.showFps;
     this.reduceMotion = s.reduceMotion;
+    if (this.reduceMotion) {
+      document.body.classList.add('reduce-motion');
+    }
   }
 
   private buildCategoryGroups(): AchievementCategoryGroup[] {
