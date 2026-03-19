@@ -148,7 +148,7 @@ export const HIT_FLASH_CONFIG = {
   /** Seconds the white flash is visible. */
   duration: 0.12,
   /** emissiveIntensity applied during the flash. */
-  emissiveIntensity: 2.0,
+  emissiveIntensity: 0.8,
   /** Emissive color during the flash (white). */
   color: 0xffffff,
   /** Minimum gap before the same enemy can be re-flashed. */
@@ -159,7 +159,7 @@ export const MUZZLE_FLASH_CONFIG = {
   /** Seconds the emissive spike is visible. */
   duration: 0.1,
   /** Multiplier applied to current emissive intensity on fire. */
-  intensityMultiplier: 3.0,
+  intensityMultiplier: 1.5,
 } as const;
 
 export const TILE_PULSE_CONFIG = {

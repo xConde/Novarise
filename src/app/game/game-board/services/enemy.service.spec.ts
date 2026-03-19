@@ -8,6 +8,7 @@ import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model'
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { GameBoardTile } from '../models/game-board-tile';
 import { StatusEffectType } from '../constants/status-effect.constants';
+import { HIT_FLASH_CONFIG } from '../constants/effects.constants';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { createTestBoard, createGameBoardServiceSpy } from '../testing';
 
@@ -2118,7 +2119,7 @@ describe('EnemyService', () => {
       service.startHitFlash(enemy.id);
 
       const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
-      expect(mat.emissiveIntensity).toBeCloseTo(2.0);
+      expect(mat.emissiveIntensity).toBeCloseTo(HIT_FLASH_CONFIG.emissiveIntensity);
     });
 
     it('should set emissive color to white (0xffffff)', () => {
@@ -2185,7 +2186,7 @@ describe('EnemyService', () => {
       const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
       const crownMat = crown.material as THREE.MeshStandardMaterial;
       expect(crownMat.emissive.getHex()).toBe(0xffffff);
-      expect(crownMat.emissiveIntensity).toBeCloseTo(2.0);
+      expect(crownMat.emissiveIntensity).toBeCloseTo(HIT_FLASH_CONFIG.emissiveIntensity);
     });
 
     it('works with MeshStandardMaterial', () => {

@@ -12,6 +12,6 @@ export const CONTROLS_CONFIG = {
   minPolarAngle: 0,
   maxPolarAngle: Math.PI / 2.5,
   minDistanceFactor: 0.5,
-  maxDistanceFactor: 3,
-  panBoundaryMargin: 0.6,  // fraction of board size beyond edges
+  maxDistanceFactor: 2,
+  panBoundaryMargin: 0.45,  // fraction of board size beyond edges
 };

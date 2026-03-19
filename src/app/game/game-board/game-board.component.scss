@@ -90,162 +90,7 @@
     }
   }
 
-  // --- Game HUD ---
-  .game-hud {
-    @include glass-panel;
-    position: absolute;
-    top: var(--spacing-md);
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0;
-    padding: var(--spacing-sm) var(--spacing-lg);
-    border: var(--border-width-thin) solid var(--border-color);
-    user-select: none;
-
-    @media (max-width:768px) {
-      padding: var(--spacing-xs) var(--spacing-md);
-      font-size: var(--font-size-small);
-    }
-
-    .hud-stats-row {
-      display: flex;
-      gap: var(--spacing-lg);
-      align-items: center;
-
-      @media (max-width:768px) {
-        gap: var(--spacing-md);
-      }
-    }
-
-    .challenge-indicators {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.25rem;
-      justify-content: center;
-      margin-top: 0.25rem;
-      padding-top: 0.25rem;
-      border-top: 1px solid var(--border-color-subtle);
-      width: 100%;
-    }
-
-    .challenge-indicator {
-      font-family: "Orbitron", sans-serif;
-      font-size: 0.625rem;
-      font-weight: 600;
-      letter-spacing: 0.03rem;
-      padding: 0.125rem 0.5rem;
-      border-radius: 1rem;
-      border: 1px solid currentColor;
-      white-space: nowrap;
-
-      &.passing {
-        color: var(--action-success);
-        background: rgba(0, 180, 80, 0.1);
-      }
-
-      &.failing {
-        color: var(--action-danger);
-        background: var(--action-danger-bg);
-      }
-
-      @media (max-width:480px) {
-        font-size: 0.5625rem;
-        padding: 0.0625rem 0.375rem;
-      }
-    }
-
-    .hud-stat {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.125rem;
-
-      &.secondary {
-        opacity: 0.7;
-
-        .hud-value {
-          font-size: var(--font-size-small);
-        }
-      }
-
-      .hud-label {
-        font-size: 0.625rem;
-        text-transform: uppercase;
-        letter-spacing: 0.0625rem;
-        color: rgba(255, 255, 255, 0.5);
-      }
-
-      .hud-value {
-        font-size: var(--font-size-base);
-        font-weight: 700;
-        color: var(--text-color);
-
-        &.lives {
-          color: var(--game-health);
-
-          &.critical {
-            animation: pulse-critical 0.5s ease-in-out infinite alternate;
-          }
-        }
-
-        &.gold {
-          color: var(--game-gold);
-        }
-
-        &.gold-pulse {
-          animation: hud-value-pulse var(--transition-fast, 0.3s) ease-out;
-        }
-
-        &.score-pulse {
-          animation: hud-value-pulse var(--transition-fast, 0.3s) ease-out;
-        }
-      }
-
-      .gold-change {
-        position: absolute;
-        top: -0.25rem;
-        left: 50%;
-        transform: translateX(-50%);
-        font-family: "Orbitron", sans-serif;
-        font-size: 0.625rem;
-        font-weight: 700;
-        color: var(--game-gold);
-        pointer-events: none;
-        white-space: nowrap;
-        animation: gold-change-float var(--transition-fast, 0.3s) ease-out forwards;
-      }
-
-      &.speed-run-active {
-        opacity: 1 !important; // Override .secondary opacity
-
-        .speed-run-label {
-          color: var(--game-accent-orange);
-        }
-
-        .speed-run-timer {
-          color: var(--game-accent-orange);
-          font-variant-numeric: tabular-nums;
-
-          &.warning {
-            color: var(--game-health);
-            animation: pulse-critical 0.5s ease-in-out infinite alternate;
-          }
-
-          &.critical {
-            color: var(--game-health);
-            animation: pulse-critical 0.3s ease-in-out infinite alternate;
-            font-size: var(--font-size-base);
-            font-weight: 900;
-          }
-        }
-      }
-    }
-
-  }
+  // Game HUD styles moved to src/styles.css (.board-container .game-hud) for ViewEncapsulation.None reach
 
   .hud-wave-status {
     --hud-height: 3.5rem;
@@ -383,46 +228,12 @@
 }
 
 // --- Responsive breakpoints ---
-// Tablet (max-width: 768px) — game-hud and game-overlay only; other UI moved to src/styles.css
-@media (max-width:768px) {
-  .board-container {
-    // HUD: shrink label + value sizes
-    .game-hud .hud-stat {
-      .hud-label {
-        font-size: 0.5625rem;
-      }
+// Tablet (max-width: 768px) — HUD and overlay responsive rules moved to src/styles.css
 
-      .hud-value {
-        font-size: var(--font-size-small);
-      }
-    }
-
-    // Victory/defeat overlay — responsive rules moved to src/styles.css (child component can't be reached by scoped CSS)
-  }
-}
-
-// Mobile (max-width: 480px) — game-hud, hud-wave-status, and game-overlay only; other UI in src/styles.css
+// Mobile (max-width: 480px) — HUD responsive rules moved to src/styles.css; only non-HUD rules remain
 @media (max-width:480px) {
   .board-container {
     --tower-bar-height: 10rem; // 2-row tower grid: 2×61px + padding + gap ≈ 147px
-
-    // Game HUD: further reduce on mobile
-    .game-hud {
-      gap: var(--spacing-sm);
-      padding: var(--spacing-xs) var(--spacing-sm);
-      font-size: 0.625rem;
-
-      .hud-stat {
-        .hud-label {
-          font-size: 0.5rem;
-          letter-spacing: 0;
-        }
-
-        .hud-value {
-          font-size: 0.6875rem;
-        }
-      }
-    }
 
     // Wave status: allow wrap so badge doesn't overflow on narrow screens
     .hud-wave-status {
@@ -457,37 +268,8 @@
   }
 }
 
-@keyframes hud-value-pulse {
-  0% { transform: scale(1); }
-  40% { transform: scale(1.2); }
-  100% { transform: scale(1); }
-}
-
-@keyframes gold-change-float {
-  0% { opacity: 1; transform: translateX(-50%) translateY(0); }
-  100% { opacity: 0; transform: translateX(-50%) translateY(-1rem); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .board-container {
-    .gold-pulse,
-    .score-pulse {
-      animation: none;
-    }
-
-    .gold-change {
-      animation: none;
-    }
-  }
-}
-
-:host-context(body.reduce-motion) .board-container {
-  .gold-pulse,
-  .score-pulse,
-  .gold-change {
-    animation: none;
-  }
-}
+// hud-value-pulse, gold-change-float keyframes moved to src/styles.css
+// prefers-reduced-motion and body.reduce-motion HUD animation blocks moved to src/styles.css
 
 // wave-preview-in keyframe moved to src/styles.css
 
