@@ -1567,9 +1567,9 @@ describe('GameBoardComponent', () => {
       expect(component.getTutorialStepNumber()).toBe(2);
     });
 
-    it('getTutorialStepNumber() returns at least 1 when step is not found', () => {
+    it('getTutorialStepNumber() returns 0 when currentTutorialStep is null', () => {
       component.currentTutorialStep = null;
-      expect(component.getTutorialStepNumber()).toBeGreaterThanOrEqual(1);
+      expect(component.getTutorialStepNumber()).toBe(0);
     });
 
     it('does not call startTutorial when tutorial is already complete', () => {

@@ -128,8 +128,11 @@ export function createGameStatsServiceSpy(): jasmine.SpyObj<GameStatsService> {
 export function createTutorialServiceSpy(): jasmine.SpyObj<TutorialService> {
   const spy = jasmine.createSpyObj<TutorialService>('TutorialService', [
     'isTutorialComplete',
+    'isTipsComplete',
     'getCurrentStep',
     'startTutorial',
+    'startTips',
+    'incrementGamesPlayed',
     'advanceStep',
     'skipTutorial',
     'resetCurrentStep',
@@ -137,10 +140,12 @@ export function createTutorialServiceSpy(): jasmine.SpyObj<TutorialService> {
     'getTip',
   ]);
   spy.isTutorialComplete.and.returnValue(true);
+  spy.isTipsComplete.and.returnValue(true);
   spy.getCurrentStep.and.returnValue(of(null));
   spy.getTip.and.callFake((step: TutorialStep): TutorialTip => ({
     id: step,
     step,
+    type: 'tutorial',
     title: 'Test Title',
     message: 'Test message.',
     position: 'center',

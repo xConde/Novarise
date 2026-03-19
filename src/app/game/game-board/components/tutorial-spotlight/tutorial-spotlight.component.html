@@ -1,18 +1,21 @@
 <div class="tutorial-spotlight" *ngIf="step">
   <div class="tutorial-card"
+       [class.tutorial-card--is-tip]="tip?.type === 'tip'"
        [ngClass]="'tutorial-card--' + step"
-       role="dialog" aria-modal="false" aria-label="Tutorial">
+       role="dialog" aria-modal="false"
+       [attr.aria-label]="tip?.type === 'tip' ? 'Strategy Tip' : 'Tutorial'">
+    <span class="tutorial-card__type-label">{{ tip?.type === 'tip' ? 'Strategy Tip' : 'Tutorial' }}</span>
     <span class="tutorial-card__step-indicator">{{ stepNumber }}/{{ totalSteps }}</span>
     <h3 class="tutorial-card__title">{{ tip?.title }}</h3>
     <p class="tutorial-card__message">{{ tip?.message }}</p>
     <div class="tutorial-card__actions">
       <button class="tutorial-card__btn tutorial-card__btn--skip"
               (click)="skip.emit()"
-              aria-label="Skip tutorial">Skip</button>
+              [attr.aria-label]="tip?.type === 'tip' ? 'Skip strategy tips' : 'Skip tutorial'">Skip</button>
       <button class="tutorial-card__btn tutorial-card__btn--next"
               (click)="advance.emit()"
-              aria-label="Next tutorial step">
-        {{ step === TutorialStep.COMPLETE ? 'Done' : 'Next' }}
+              aria-label="Next step">
+        {{ isLastStep ? 'Done' : 'Next' }}
       </button>
     </div>
   </div>

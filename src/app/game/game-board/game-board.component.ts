@@ -445,9 +445,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.wavePreview = initialPreview.entries;
     this.waveTemplateDescription = initialPreview.templateDescription;
 
-    // Start tutorial for first-time players
+    // Track games played, then start appropriate tutorial/tips sequence
+    this.tutorialService.incrementGamesPlayed();
     if (!this.tutorialService.isTutorialComplete()) {
       this.tutorialService.startTutorial();
+    } else {
+      this.tutorialService.startTips();
     }
     this.tutorialSub = this.tutorialService.getCurrentStep().subscribe({
       next: step => { this.currentTutorialStep = step; },
@@ -1835,18 +1838,36 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.currentTutorialStep ? this.tutorialService.getTip(this.currentTutorialStep) : null;
   }
 
-  /** Pre-computed tutorial display steps (excludes COMPLETE) — avoids per-CD allocation. */
-  private readonly tutorialDisplaySteps = Object.values(TutorialStep).filter(s => s !== TutorialStep.COMPLETE);
+  /** Controls tutorial steps shown to the user (excludes COMPLETE and tip steps). */
+  private readonly tutorialDisplaySteps: TutorialStep[] = [
+    TutorialStep.WELCOME,
+    TutorialStep.SELECT_TOWER,
+    TutorialStep.PLACE_TOWER,
+    TutorialStep.START_WAVE,
+    TutorialStep.UPGRADE_TOWER,
+    TutorialStep.COMPLETE,
+  ];
+
+  /** Strategy tip steps (separate sequence). */
+  private readonly tipsDisplaySteps: TutorialStep[] = [
+    TutorialStep.TIP_PLACEMENT,
+    TutorialStep.TIP_WAVE_PREVIEW,
+    TutorialStep.TIP_UPGRADE,
+  ];
 
   getTutorialStepNumber(): number {
-    if (this.currentTutorialStep === TutorialStep.COMPLETE) {
-      return this.tutorialDisplaySteps.length;
-    }
-    const idx = this.tutorialDisplaySteps.indexOf(this.currentTutorialStep as TutorialStep);
+    const step = this.currentTutorialStep;
+    if (!step) return 0;
+    const tipIdx = this.tipsDisplaySteps.indexOf(step);
+    if (tipIdx >= 0) return tipIdx + 1;
+    const idx = this.tutorialDisplaySteps.indexOf(step);
     return Math.max(1, idx + 1);
   }
 
   getTutorialTotalSteps(): number {
+    const step = this.currentTutorialStep;
+    if (!step) return 0;
+    if (this.tipsDisplaySteps.includes(step)) return this.tipsDisplaySteps.length;
     return this.tutorialDisplaySteps.length;
   }
 
