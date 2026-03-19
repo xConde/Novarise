@@ -2165,6 +2165,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.towerAnimationService.updateTilePulse(this.tileMeshes, time);
     this.towerAnimationService.updateMuzzleFlashes(this.towerCombatService.getPlacedTowers(), deltaTime);
 
+    // Dying/hit/shield animations must run in ALL phases (not just COMBAT)
+    // so enemies that die at the end of a wave finish their death animation
+    // during INTERMISSION instead of freezing on the board.
+    if (deltaTime > 0 && this.enemyService.getEnemies().size > 0) {
+      this.enemyService.updateDyingAnimations(deltaTime, this.sceneService.getScene());
+      this.enemyService.updateHitFlashes(deltaTime);
+      this.enemyService.updateShieldBreakAnimations(deltaTime);
+    }
+
     // Update visual effects (run every frame regardless of pause)
     if (deltaTime > 0) {
       this.particleService.addPendingToScene(this.sceneService.getScene());

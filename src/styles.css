@@ -1943,7 +1943,7 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
   z-index: var(--z-index-overlay);
   font-family: "Orbitron", sans-serif;
   position: fixed;
-  top: 4rem;
+  top: 6.5rem;
   left: 50%;
   transform: translateX(-50%);
   min-width: 12rem;
@@ -1953,7 +1953,7 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
   animation: wave-preview-in 0.2s ease-out;
   pointer-events: none;
   text-align: center;
-  max-height: min(50vh, 400px);
+  max-height: min(45vh, 350px);
   overflow-y: auto;
 }
 
@@ -1963,7 +1963,7 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
 
 @media (max-width: 480px) {
   .board-container .wave-preview {
-    top: 4.5rem;
+    top: 5.5rem;
     font-size: var(--font-size-3xs);
     padding: var(--spacing-sm) var(--spacing-md);
     min-width: 9rem;
