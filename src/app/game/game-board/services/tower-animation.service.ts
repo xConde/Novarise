@@ -72,26 +72,53 @@ export class TowerAnimationService {
   startMuzzleFlash(tower: PlacedTower): void {
     if (!tower.mesh) return;
 
-    const saved = new Map<string, number>();
+    // Only save original values on FIRST flash — if a flash is already active,
+    // reuse the existing saved values to prevent accumulation (each re-save
+    // would capture the already-spiked intensity, ratcheting up forever).
+    const isReflash = tower.muzzleFlashTimer !== undefined && tower.muzzleFlashTimer > 0;
 
-    tower.mesh.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) return;
-      // Skip 'tip' — its emissiveIntensity is owned by the tip-glow animation
-      if (child.name === 'tip') return;
+    if (!isReflash) {
+      const saved = new Map<string, number>();
 
-      const materials = Array.isArray(child.material)
-        ? child.material as THREE.MeshStandardMaterial[]
-        : [child.material as THREE.MeshStandardMaterial];
+      tower.mesh.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+        if (child.name === 'tip') return;
 
-      for (const mat of materials) {
-        if (mat.emissiveIntensity === undefined) continue;
-        saved.set(child.uuid + '_' + mat.uuid, mat.emissiveIntensity);
-        mat.emissiveIntensity = mat.emissiveIntensity * MUZZLE_FLASH_CONFIG.intensityMultiplier;
-      }
-    });
+        const materials = Array.isArray(child.material)
+          ? child.material as THREE.MeshStandardMaterial[]
+          : [child.material as THREE.MeshStandardMaterial];
+
+        for (const mat of materials) {
+          if (mat.emissiveIntensity === undefined) continue;
+          saved.set(child.uuid + '_' + mat.uuid, mat.emissiveIntensity);
+        }
+      });
+
+      tower.originalEmissiveIntensity = saved;
+    }
+
+    // Apply the spike from the SAVED originals, not from current (possibly spiked) values
+    const originals = tower.originalEmissiveIntensity;
+    if (originals) {
+      tower.mesh.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+        if (child.name === 'tip') return;
+
+        const materials = Array.isArray(child.material)
+          ? child.material as THREE.MeshStandardMaterial[]
+          : [child.material as THREE.MeshStandardMaterial];
+
+        for (const mat of materials) {
+          const key = child.uuid + '_' + mat.uuid;
+          const base = originals.get(key);
+          if (base !== undefined) {
+            mat.emissiveIntensity = base * MUZZLE_FLASH_CONFIG.intensityMultiplier;
+          }
+        }
+      });
+    }
 
     tower.muzzleFlashTimer = MUZZLE_FLASH_CONFIG.duration;
-    tower.originalEmissiveIntensity = saved;
   }
 
   /**
