@@ -321,6 +321,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private panKeys = new Set<string>();
   private keydownPanHandler: (e: KeyboardEvent) => void = () => {};
   private keyupPanHandler: (e: KeyboardEvent) => void = () => {};
+  // Cached vectors for screen-relative pan (avoid per-frame allocation)
+  private readonly _panForward = new THREE.Vector3();
+  private readonly _panRight = new THREE.Vector3();
+  private readonly _panUp = new THREE.Vector3(0, 1, 0);
 
   constructor(
     private router: Router,
@@ -2074,19 +2078,43 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private updateCameraPan(): void {
-    if (this.panKeys.size === 0 || !this.sceneService.getCamera() || !this.sceneService.getControls()) return;
+    if (this.panKeys.size === 0) return;
+    const camera = this.sceneService.getCamera();
+    const controls = this.sceneService.getControls();
+    if (!camera || !controls) return;
 
-    let dx = 0;
-    let dz = 0;
-    if (this.panKeys.has('w') || this.panKeys.has('arrowup')) dz -= CAMERA_CONFIG.panSpeed;
-    if (this.panKeys.has('s') || this.panKeys.has('arrowdown')) dz += CAMERA_CONFIG.panSpeed;
-    if (this.panKeys.has('a') || this.panKeys.has('arrowleft')) dx -= CAMERA_CONFIG.panSpeed;
-    if (this.panKeys.has('d') || this.panKeys.has('arrowright')) dx += CAMERA_CONFIG.panSpeed;
+    // Forward = camera look direction projected onto XZ plane
+    camera.getWorldDirection(this._panForward);
+    this._panForward.y = 0;
+    this._panForward.normalize();
 
-    this.sceneService.getCamera().position.x += dx;
-    this.sceneService.getCamera().position.z += dz;
-    this.sceneService.getControls().target.x += dx;
-    this.sceneService.getControls().target.z += dz;
+    // Right = forward × up (perpendicular on XZ plane)
+    this._panRight.crossVectors(this._panForward, this._panUp).normalize();
+
+    let moveX = 0;
+    let moveZ = 0;
+
+    if (this.panKeys.has('w') || this.panKeys.has('arrowup')) {
+      moveX += this._panForward.x * CAMERA_CONFIG.panSpeed;
+      moveZ += this._panForward.z * CAMERA_CONFIG.panSpeed;
+    }
+    if (this.panKeys.has('s') || this.panKeys.has('arrowdown')) {
+      moveX -= this._panForward.x * CAMERA_CONFIG.panSpeed;
+      moveZ -= this._panForward.z * CAMERA_CONFIG.panSpeed;
+    }
+    if (this.panKeys.has('a') || this.panKeys.has('arrowleft')) {
+      moveX -= this._panRight.x * CAMERA_CONFIG.panSpeed;
+      moveZ -= this._panRight.z * CAMERA_CONFIG.panSpeed;
+    }
+    if (this.panKeys.has('d') || this.panKeys.has('arrowright')) {
+      moveX += this._panRight.x * CAMERA_CONFIG.panSpeed;
+      moveZ += this._panRight.z * CAMERA_CONFIG.panSpeed;
+    }
+
+    camera.position.x += moveX;
+    camera.position.z += moveZ;
+    controls.target.x += moveX;
+    controls.target.z += moveZ;
   }
 
   // --- Game loop ---

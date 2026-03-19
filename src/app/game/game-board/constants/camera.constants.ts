@@ -4,7 +4,7 @@ export const CAMERA_CONFIG = {
   far: 1000,
   distance: 35,
   zOffsetFactor: 0.5,
-  panSpeed: 0.5,
+  panSpeed: 0.3,
 };
 
 export const CONTROLS_CONFIG = {
@@ -13,5 +13,5 @@ export const CONTROLS_CONFIG = {
   maxPolarAngle: Math.PI / 2.5,
   minDistanceFactor: 0.5,
   maxDistanceFactor: 2,
-  panBoundaryMargin: 0.45,  // fraction of board size beyond edges
+  panBoundaryMargin: 0.55,  // fraction of board size beyond edges
 };
