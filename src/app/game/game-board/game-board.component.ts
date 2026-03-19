@@ -255,6 +255,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // WebGL context loss recovery (handlers live in SceneService; component owns the flag)
   contextLost = false;
 
+  // Game initialization failure (WebGL not supported or canvas creation failed)
+  initializationFailed = false;
+
   // Touch interaction
   private touchStartHandler: (event: TouchEvent) => void = () => {};
   private touchMoveHandler: (event: TouchEvent) => void = () => {};
@@ -465,22 +468,27 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
-    this.sceneService.initRenderer(
-      this.canvasContainer.nativeElement,
-      () => {
-        this.contextLost = true;
-        if (this.animationFrameId) {
-          cancelAnimationFrame(this.animationFrameId);
-          this.animationFrameId = 0;
+    try {
+      this.sceneService.initRenderer(
+        this.canvasContainer.nativeElement,
+        () => {
+          this.contextLost = true;
+          if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = 0;
+          }
+        },
+        () => {
+          this.contextLost = false;
+          if (!this.animationFrameId) {
+            this.animate();
+          }
         }
-      },
-      () => {
-        this.contextLost = false;
-        if (!this.animationFrameId) {
-          this.animate();
-        }
-      }
-    );
+      );
+    } catch {
+      this.initializationFailed = true;
+      return;
+    }
     this.sceneService.initPostProcessing();
     this.sceneService.initControls();
 
@@ -506,6 +514,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   toggleAudio(): void {
     this.audioService.toggleMute();
+  }
+
+  /** Reload the page — used by the WebGL context-lost refresh button. */
+  reloadPage(): void {
+    window.location.reload();
+  }
+
+  /** Navigate back to map select — used by the game initialization failure overlay. */
+  goBackToMaps(): void {
+    this.router.navigate(['/maps']);
   }
 
   dismissNotification(id: number): void {

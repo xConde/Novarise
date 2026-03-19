@@ -1180,6 +1180,29 @@ describe('GameBoardComponent', () => {
       (component as any).contextLost = false;
       expect(component.contextLost).toBeFalse();
     });
+
+    it('reloadPage is defined and callable', () => {
+      // Verify the method exists; actual navigation cannot be tested in headless Chrome
+      expect(typeof component.reloadPage).toBe('function');
+    });
+  });
+
+  describe('game initialization failure', () => {
+    it('initializationFailed should start as false', () => {
+      expect(component.initializationFailed).toBeFalse();
+    });
+
+    it('goBackToMaps navigates to /maps', () => {
+      const router = TestBed.inject(Router);
+      spyOn(router, 'navigate');
+      component.goBackToMaps();
+      expect(router.navigate).toHaveBeenCalledWith(['/maps']);
+    });
+
+    it('setting initializationFailed to true is reflected on the component', () => {
+      (component as any).initializationFailed = true;
+      expect(component.initializationFailed).toBeTrue();
+    });
   });
 
   describe('Interaction Mode System', () => {

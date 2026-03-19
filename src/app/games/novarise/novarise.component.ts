@@ -941,7 +941,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       // Save (will update if ID exists, create new if not)
       const savedId = this.mapStorage.saveMap(mapName, state, currentId || undefined);
       if (!savedId) {
-        this.editorNotificationService.show('Failed to save map. Storage may be full.', 'error');
+        this.editorNotificationService.show('Storage full — delete unused maps to free space.', 'error');
         return;
       }
       this.currentMapName = mapName;
@@ -1553,7 +1553,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
    * Import a map from a file
    */
   public async importMapFromFile(): Promise<void> {
-    const mapId = await this.mapStorage.promptFileImport();
+    const { mapId, errorCode } = await this.mapStorage.promptFileImport();
     if (mapId) {
       const state = this.mapStorage.loadMap(mapId);
       if (state) {
@@ -1569,6 +1569,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.editHistory.clear();
         this.editorNotificationService.show(`Map "${this.currentMapName}" imported successfully!`, 'success');
       }
+    } else if (errorCode) {
+      const importErrorMessages: Record<string, string> = {
+        file_too_large: 'Map file is too large (max 512KB). Try a smaller map.',
+        invalid_json: 'Map file is corrupted or not a valid Novarise map.',
+        invalid_schema: 'Map file format is not recognized. It may be from a different version.',
+        general: 'Failed to import map. Please try a different file.'
+      };
+      this.editorNotificationService.show(importErrorMessages[errorCode] ?? importErrorMessages['general'], 'error');
     }
   }
 

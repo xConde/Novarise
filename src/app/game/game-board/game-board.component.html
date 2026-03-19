@@ -198,12 +198,22 @@
     (playNextLevel)="playNextLevel()">
   </app-game-results-overlay>
 
+  <!-- Game Initialization Failure Overlay -->
+  <div class="context-lost-overlay" *ngIf="initializationFailed" role="alert" aria-live="assertive">
+    <div class="context-lost-content">
+      <h2 class="context-lost-title">Game Failed to Load</h2>
+      <p class="context-lost-message">Game failed to initialize. Your browser may not support WebGL.</p>
+      <button class="context-lost-back-btn" (click)="goBackToMaps()">Go Back</button>
+    </div>
+  </div>
+
   <!-- WebGL Context Lost Overlay -->
   <div class="context-lost-overlay" *ngIf="contextLost" role="alert" aria-live="assertive">
     <div class="context-lost-content">
       <h2 class="context-lost-title">Display Lost</h2>
-      <p class="context-lost-message">The graphics context was interrupted.</p>
+      <p class="context-lost-message">The graphics engine lost its connection. This can happen when your device runs low on memory.</p>
       <p class="context-lost-hint">Waiting for recovery...</p>
+      <button class="context-lost-refresh-btn" (click)="reloadPage()">Try Refreshing</button>
     </div>
   </div>
 
