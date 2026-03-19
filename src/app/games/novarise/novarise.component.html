@@ -58,5 +58,59 @@
       aria-live="polite">
       {{ editorNotification.message }}
     </div>
+
+    <!-- Inline modal (replaces browser prompt()/confirm()) -->
+    <div
+      *ngIf="showModal"
+      class="editor-modal-overlay"
+      (click)="cancelModal()"
+      role="presentation">
+      <div
+        class="editor-modal"
+        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-modal="true"
+        [attr.aria-label]="modalTitle">
+        <h3 class="editor-modal-title">{{ modalTitle }}</h3>
+
+        <!-- Input mode: single text field -->
+        <input
+          *ngIf="modalType === 'input'"
+          [(ngModel)]="modalInputValue"
+          (keyup.enter)="confirmModal()"
+          (keyup.escape)="cancelModal()"
+          class="editor-modal-input"
+          aria-label="Map name"
+          autofocus>
+
+        <!-- Select mode: list of options -->
+        <ul *ngIf="modalType === 'select'" class="editor-modal-list" role="listbox">
+          <li
+            *ngFor="let option of modalSelectOptions; let i = index"
+            class="editor-modal-list-item"
+            role="option"
+            tabindex="0"
+            (click)="selectModalOption(i)"
+            (keyup.enter)="selectModalOption(i)">
+            {{ option }}
+          </li>
+        </ul>
+
+        <!-- Action buttons (not shown in select mode — clicking an option acts as confirm) -->
+        <div *ngIf="modalType !== 'select'" class="editor-modal-actions">
+          <button class="editor-modal-btn editor-modal-btn--cancel" (click)="cancelModal()">
+            Cancel
+          </button>
+          <button class="editor-modal-btn editor-modal-btn--confirm" (click)="confirmModal()">
+            {{ modalType === 'input' ? 'Save' : 'Confirm' }}
+          </button>
+        </div>
+        <div *ngIf="modalType === 'select'" class="editor-modal-actions">
+          <button class="editor-modal-btn editor-modal-btn--cancel" (click)="cancelModal()">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>

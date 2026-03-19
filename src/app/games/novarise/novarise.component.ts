@@ -117,6 +117,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   public editorNotification: EditorNotification | null = null;
   private notificationSub: Subscription | null = null;
 
+  // Modal dialog state (replaces browser prompt()/confirm())
+  public showModal = false;
+  public modalTitle = '';
+  public modalType: 'input' | 'confirm' | 'select' = 'confirm';
+  public modalInputValue = '';
+  public modalSelectOptions: string[] = [];
+  private modalCallback: ((result: string | boolean | number | null) => void) | null = null;
+
   // Undo/Redo state - expose for UI binding
   public get canUndo(): boolean { return this.editHistory.canUndo; }
   public get canRedo(): boolean { return this.editHistory.canRedo; }
@@ -836,29 +844,87 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.updateExitMarkers();
   }
 
+  // ── Modal dialog helpers ──────────────────────────────────────────────────
+
+  private showInputModal(title: string, defaultValue: string, callback: (value: string | null) => void): void {
+    this.modalTitle = title;
+    this.modalType = 'input';
+    this.modalInputValue = defaultValue;
+    this.modalCallback = (result) => callback(result as string | null);
+    this.showModal = true;
+  }
+
+  private showConfirmModal(title: string, callback: (confirmed: boolean) => void): void {
+    this.modalTitle = title;
+    this.modalType = 'confirm';
+    this.modalCallback = (result) => callback(result as boolean);
+    this.showModal = true;
+  }
+
+  private showSelectModal(title: string, options: string[], callback: (index: number | null) => void): void {
+    this.modalTitle = title;
+    this.modalType = 'select';
+    this.modalSelectOptions = options;
+    this.modalCallback = (result) => callback(result === null ? null : (result as unknown as number));
+    this.showModal = true;
+  }
+
+  public confirmModal(): void {
+    const cb = this.modalCallback;
+    const value = this.modalType === 'input' ? (this.modalInputValue || null) : true;
+    this.closeModal();
+    if (cb) cb(value);
+  }
+
+  public selectModalOption(index: number): void {
+    const cb = this.modalCallback;
+    this.closeModal();
+    if (cb) cb(index);
+  }
+
+  public cancelModal(): void {
+    const cb = this.modalCallback;
+    const value = this.modalType === 'input' ? null : false;
+    this.closeModal();
+    if (cb) cb(value);
+  }
+
+  public closeModal(): void {
+    this.showModal = false;
+    this.modalCallback = null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+
   private saveGridState(): void {
     // Warn if map has no valid path (but allow saving anyway — might be in-progress)
     if (!this.isPathValid && this.hasSpawnAndExit) {
-      const proceed = confirm('This map has no valid path from spawn to exit. Save anyway?');
-      if (!proceed) return;
-    }
-
-    // Get current map name or prompt for new one
-    const mapName = prompt('Enter map name:', this.currentMapName);
-    if (!mapName) return; // User cancelled
-
-    const state = this.terrainGrid.exportState();
-    const currentId = this.mapStorage.getCurrentMapId();
-
-    // Save (will update if ID exists, create new if not)
-    const savedId = this.mapStorage.saveMap(mapName, state, currentId || undefined);
-    if (!savedId) {
-      this.editorNotificationService.show('Failed to save map. Storage may be full.', 'error');
+      this.showConfirmModal('This map has no valid path from spawn to exit. Save anyway?', (proceed) => {
+        if (!proceed) return;
+        this.promptForMapNameAndSave();
+      });
       return;
     }
-    this.currentMapName = mapName;
+    this.promptForMapNameAndSave();
+  }
 
-    this.editorNotificationService.show(`Map "${mapName}" saved successfully!`, 'success');
+  private promptForMapNameAndSave(): void {
+    this.showInputModal('Enter map name', this.currentMapName, (mapName) => {
+      if (!mapName) return; // User cancelled
+
+      const state = this.terrainGrid.exportState();
+      const currentId = this.mapStorage.getCurrentMapId();
+
+      // Save (will update if ID exists, create new if not)
+      const savedId = this.mapStorage.saveMap(mapName, state, currentId || undefined);
+      if (!savedId) {
+        this.editorNotificationService.show('Failed to save map. Storage may be full.', 'error');
+        return;
+      }
+      this.currentMapName = mapName;
+
+      this.editorNotificationService.show(`Map "${mapName}" saved successfully!`, 'success');
+    });
   }
 
   private loadGridState(): void {
@@ -869,35 +935,28 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    // Build a simple list for user selection
-    let message = 'Select a map to load:\n\n';
-    maps.forEach((map, index) => {
+    const options = maps.map((map) => {
       const date = new Date(map.updatedAt).toLocaleString();
-      message += `${index + 1}. ${map.name} (${date})\n`;
+      return `${map.name} — ${date}`;
     });
 
-    const selection = prompt(message + '\nEnter number:');
-    if (!selection) return; // User cancelled
+    this.showSelectModal('Select a map to load', options, (selectedIndex) => {
+      if (selectedIndex === null) return; // User cancelled
 
-    const index = parseInt(selection) - 1;
-    if (index < 0 || index >= maps.length) {
-      this.editorNotificationService.show('Invalid selection.', 'error');
-      return;
-    }
+      const selectedMap = maps[selectedIndex];
+      const state = this.mapStorage.loadMap(selectedMap.id);
 
-    const selectedMap = maps[index];
-    const state = this.mapStorage.loadMap(selectedMap.id);
-
-    if (state) {
-      this.terrainGrid.importState(state);
-      this.updateSpawnMarker();
-      this.updateExitMarker();
-      this.runPathValidation();
-      this.currentMapName = selectedMap.name;
-      this.editorNotificationService.show(`Map "${selectedMap.name}" loaded successfully!`, 'success');
-    } else {
-      this.editorNotificationService.show('Failed to load map.', 'error');
-    }
+      if (state) {
+        this.terrainGrid.importState(state);
+        this.updateSpawnMarker();
+        this.updateExitMarker();
+        this.runPathValidation();
+        this.currentMapName = selectedMap.name;
+        this.editorNotificationService.show(`Map "${selectedMap.name}" loaded successfully!`, 'success');
+      } else {
+        this.editorNotificationService.show('Failed to load map.', 'error');
+      }
+    });
   }
 
   private tryLoadCurrentMap(): void {
@@ -919,16 +978,25 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   public loadTemplate(templateId: string): void {
-    if (this.editHistory.canUndo && !confirm('Load template? Unsaved changes will be lost.')) return;
-    const state = this.mapTemplateService.loadTemplate(templateId);
-    if (!state) return;
-    this.terrainGrid.importState(state);
-    this.updateSpawnMarker();
-    this.updateExitMarker();
-    this.runPathValidation();
-    this.editHistory.clear();
-    this.mapStorage.clearCurrentMapId();
-    this.currentMapName = '';
+    const doLoad = () => {
+      const state = this.mapTemplateService.loadTemplate(templateId);
+      if (!state) return;
+      this.terrainGrid.importState(state);
+      this.updateSpawnMarker();
+      this.updateExitMarker();
+      this.runPathValidation();
+      this.editHistory.clear();
+      this.mapStorage.clearCurrentMapId();
+      this.currentMapName = '';
+    };
+
+    if (this.editHistory.canUndo) {
+      this.showConfirmModal('Load template? Unsaved changes will be lost.', (confirmed) => {
+        if (confirmed) doLoad();
+      });
+    } else {
+      doLoad();
+    }
   }
 
   private cycleBrushSize(direction: number): void {

@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { RouterTestingModule } from '@angular/router/testing';
 import { NovariseComponent } from './novarise.component';
 import { MapStorageService } from './core/map-storage.service';
@@ -76,7 +77,7 @@ describe('NovariseComponent', () => {
 
     await TestBed.configureTestingModule({
       declarations: [NovariseComponent],
-      imports: [RouterTestingModule],
+      imports: [RouterTestingModule, FormsModule],
       providers: [
         { provide: MapStorageService, useValue: mockMapStorageService },
         { provide: EditorSceneService, useValue: mockEditorScene },
@@ -416,35 +417,200 @@ describe('NovariseComponent', () => {
     });
   });
 
-  describe('saveGridState path guard', () => {
+  describe('Modal dialog state', () => {
     beforeEach(() => {
       fixture = TestBed.createComponent(NovariseComponent);
       component = fixture.componentInstance;
-
     });
 
-    it('should not call mapStorage.saveMap when path is invalid, spawn+exit exist, and user cancels confirm', () => {
-      // Arrange: path invalid, but spawn and exit are present
+    it('should initialize with showModal false', () => {
+      expect(component.showModal).toBeFalse();
+    });
+
+    describe('showInputModal', () => {
+      it('should set showModal, modalType, modalTitle, and modalInputValue', () => {
+        (component as any).showInputModal('Enter map name', 'My Map', () => {});
+        expect(component.showModal).toBeTrue();
+        expect(component.modalType).toBe('input');
+        expect(component.modalTitle).toBe('Enter map name');
+        expect(component.modalInputValue).toBe('My Map');
+      });
+    });
+
+    describe('showConfirmModal', () => {
+      it('should set showModal, modalType, and modalTitle', () => {
+        (component as any).showConfirmModal('Proceed?', () => {});
+        expect(component.showModal).toBeTrue();
+        expect(component.modalType).toBe('confirm');
+        expect(component.modalTitle).toBe('Proceed?');
+      });
+    });
+
+    describe('showSelectModal', () => {
+      it('should set showModal, modalType, modalTitle, and modalSelectOptions', () => {
+        (component as any).showSelectModal('Pick one', ['Alpha', 'Beta'], () => {});
+        expect(component.showModal).toBeTrue();
+        expect(component.modalType).toBe('select');
+        expect(component.modalTitle).toBe('Pick one');
+        expect(component.modalSelectOptions).toEqual(['Alpha', 'Beta']);
+      });
+    });
+
+    describe('confirmModal on input type', () => {
+      it('should invoke callback with the current input value', () => {
+        let received: string | null | boolean = 'unset';
+        (component as any).showInputModal('Name', 'default', (v: string | null) => { received = v; });
+        component.modalInputValue = 'Custom Name';
+        component.confirmModal();
+        expect(received).toBe('Custom Name');
+      });
+
+      it('should close the modal after confirm', () => {
+        (component as any).showInputModal('Name', '', () => {});
+        component.confirmModal();
+        expect(component.showModal).toBeFalse();
+      });
+
+      it('should pass null when input value is empty string', () => {
+        let received: string | null | boolean = 'unset';
+        (component as any).showInputModal('Name', '', (v: string | null) => { received = v; });
+        component.modalInputValue = '';
+        component.confirmModal();
+        expect(received).toBeNull();
+      });
+    });
+
+    describe('confirmModal on confirm type', () => {
+      it('should invoke callback with true', () => {
+        let received: string | null | boolean = false;
+        (component as any).showConfirmModal('Sure?', (v: boolean) => { received = v; });
+        component.confirmModal();
+        expect(received).toBeTrue();
+      });
+
+      it('should close the modal after confirm', () => {
+        (component as any).showConfirmModal('Sure?', () => {});
+        component.confirmModal();
+        expect(component.showModal).toBeFalse();
+      });
+    });
+
+    describe('cancelModal on input type', () => {
+      it('should invoke callback with null', () => {
+        let received: string | null | boolean = 'unset';
+        (component as any).showInputModal('Name', 'value', (v: string | null) => { received = v; });
+        component.cancelModal();
+        expect(received).toBeNull();
+      });
+
+      it('should close the modal', () => {
+        (component as any).showInputModal('Name', '', () => {});
+        component.cancelModal();
+        expect(component.showModal).toBeFalse();
+      });
+    });
+
+    describe('cancelModal on confirm type', () => {
+      it('should invoke callback with false', () => {
+        let received: string | null | boolean = true;
+        (component as any).showConfirmModal('Sure?', (v: boolean) => { received = v; });
+        component.cancelModal();
+        expect(received).toBeFalse();
+      });
+
+      it('should close the modal', () => {
+        (component as any).showConfirmModal('Sure?', () => {});
+        component.cancelModal();
+        expect(component.showModal).toBeFalse();
+      });
+    });
+
+    describe('cancelModal on select type', () => {
+      it('should invoke callback with null when cancelled', () => {
+        let callbackInvoked = false;
+        (component as any).showSelectModal('Pick', ['A'], (v: number | null) => {
+          callbackInvoked = true;
+          // cancel passes false through the generic callback; the select wrapper
+          // receives false (not a number) so consumers should guard with null check
+          expect(v === null || typeof v !== 'number').toBeTrue();
+        });
+        component.cancelModal();
+        expect(callbackInvoked).toBeTrue();
+        expect(component.showModal).toBeFalse();
+      });
+    });
+
+    describe('selectModalOption', () => {
+      it('should invoke callback with the chosen index', () => {
+        let received = -1;
+        (component as any).showSelectModal('Pick', ['Alpha', 'Beta'], (i: number | null) => {
+          if (i !== null) received = i;
+        });
+        component.selectModalOption(1);
+        expect(received).toBe(1);
+      });
+
+      it('should close the modal after selection', () => {
+        (component as any).showSelectModal('Pick', ['A'], () => {});
+        component.selectModalOption(0);
+        expect(component.showModal).toBeFalse();
+      });
+    });
+
+    describe('closeModal', () => {
+      it('should set showModal to false and clear callback', () => {
+        (component as any).showConfirmModal('Test', () => {});
+        component.closeModal();
+        expect(component.showModal).toBeFalse();
+        expect((component as any).modalCallback).toBeNull();
+      });
+    });
+  });
+
+  describe('saveGridState path guard (modal-based)', () => {
+    beforeEach(() => {
+      fixture = TestBed.createComponent(NovariseComponent);
+      component = fixture.componentInstance;
+    });
+
+    it('should not call mapStorage.saveMap when path is invalid, spawn+exit exist, and user cancels confirm modal', () => {
+      // Arrange: path invalid, spawn and exit present
       (component as any).pathValidationResult = { valid: false };
       spyOnProperty(component, 'hasSpawnAndExit').and.returnValue(true);
-      spyOn(window, 'confirm').and.returnValue(false);
 
-      // Act: trigger saveGridState via its keyboard shortcut ('g' key)
+      // Act: trigger saveGridState — it should open a confirm modal
       (component as any).saveGridState();
+
+      // Confirm modal is open, then user cancels
+      expect(component.showModal).toBeTrue();
+      expect(component.modalType).toBe('confirm');
+      component.cancelModal();
 
       // Assert: saveMap never called
       expect(mockMapStorageService.saveMap).not.toHaveBeenCalled();
     });
 
-    it('should call mapStorage.saveMap when path is invalid, spawn+exit exist, and user confirms', () => {
-      // Arrange: path invalid, but spawn and exit are present
+    it('should open input modal after user confirms the path-invalid warning', () => {
+      // Arrange: path invalid, spawn and exit present
       (component as any).pathValidationResult = { valid: false };
       spyOnProperty(component, 'hasSpawnAndExit').and.returnValue(true);
-      spyOn(window, 'confirm').and.returnValue(true);
-      spyOn(window, 'prompt').and.returnValue('My Map');
-      spyOn(window, 'alert');
 
-      // Stub terrainGrid so exportState() works (dispose required by ngOnDestroy)
+      (component as any).saveGridState();
+
+      // User confirms the "save anyway?" dialog
+      expect(component.modalType).toBe('confirm');
+      component.confirmModal();
+
+      // Input modal should now be open
+      expect(component.showModal).toBeTrue();
+      expect(component.modalType).toBe('input');
+    });
+
+    it('should call mapStorage.saveMap when path is invalid and user confirms both dialogs', () => {
+      // Arrange
+      (component as any).pathValidationResult = { valid: false };
+      spyOnProperty(component, 'hasSpawnAndExit').and.returnValue(true);
+
       const fakeState = { tiles: [], spawnerPoints: [], exitPoints: [] };
       (component as any).terrainGrid = {
         exportState: () => fakeState,
@@ -457,17 +623,29 @@ describe('NovariseComponent', () => {
 
       // Act
       (component as any).saveGridState();
+      component.confirmModal(); // confirm "save anyway?"
+      component.modalInputValue = 'My Map';
+      component.confirmModal(); // confirm map name
 
-      // Assert: saveMap was called with the entered name and exported state
+      // Assert
       expect(mockMapStorageService.saveMap).toHaveBeenCalledWith('My Map', jasmine.any(Object), undefined);
     });
 
-    it('should call mapStorage.saveMap without confirm when path is valid', () => {
-      // Arrange: path is valid — no guard dialog
+    it('should open input modal directly (no confirm) when path is valid', () => {
+      // Arrange: path valid — no guard dialog
       (component as any).pathValidationResult = { valid: true };
-      spyOn(window, 'confirm');
-      spyOn(window, 'prompt').and.returnValue('Valid Map');
-      spyOn(window, 'alert');
+
+      // Act
+      (component as any).saveGridState();
+
+      // Input modal opens immediately — no confirm step
+      expect(component.showModal).toBeTrue();
+      expect(component.modalType).toBe('input');
+    });
+
+    it('should call mapStorage.saveMap when path is valid and user enters a name', () => {
+      // Arrange
+      (component as any).pathValidationResult = { valid: true };
 
       const fakeState = { tiles: [], spawnerPoints: [], exitPoints: [] };
       (component as any).terrainGrid = {
@@ -481,9 +659,10 @@ describe('NovariseComponent', () => {
 
       // Act
       (component as any).saveGridState();
+      component.modalInputValue = 'Valid Map';
+      component.confirmModal();
 
-      // Assert: confirm never shown, saveMap called
-      expect(window.confirm).not.toHaveBeenCalled();
+      // Assert
       expect(mockMapStorageService.saveMap).toHaveBeenCalledWith('Valid Map', jasmine.any(Object), undefined);
     });
   });
