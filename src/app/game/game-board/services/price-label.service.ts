@@ -6,23 +6,23 @@ import * as THREE from 'three';
 // ---------------------------------------------------------------------------
 
 const LABEL_CONFIG = {
-  canvasWidth: 128,
-  canvasHeight: 64,
-  fontSize: 32,
+  canvasWidth: 192,
+  canvasHeight: 96,
+  fontSize: 40,
   fontFamily: 'Arial',
   fontWeight: 'bold',
   /** World-unit width/height of the sprite billboard. */
-  spriteWidth: 0.75,
-  spriteHeight: 0.35,
+  spriteWidth: 1.0,
+  spriteHeight: 0.5,
   /** Y position above the tile surface. */
-  yOffset: 0.5,
+  yOffset: 0.6,
   /**
    * Minimum percentIncrease required to show a label.
    * Low-value labels (+3%, +4%) add visual noise on large boards.
    */
   minPercentIncrease: 8,
   /** Stroke width for the dark outline behind text. */
-  strokeWidth: 4,
+  strokeWidth: 5,
 } as const;
 
 const TIER_TEXT_COLORS: Record<string, string> = {

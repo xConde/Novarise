@@ -2254,6 +2254,39 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
   animation: scale-in 0.2s ease-out;
 }
 
+/* Dark scrollbar for panels */
+.board-container .setup-panel,
+.encyclopedia-panel,
+.editor-modal-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--theme-purple-a30, rgba(106, 90, 154, 0.3)) transparent;
+}
+
+.board-container .setup-panel::-webkit-scrollbar,
+.encyclopedia-panel::-webkit-scrollbar,
+.editor-modal-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.board-container .setup-panel::-webkit-scrollbar-track,
+.encyclopedia-panel::-webkit-scrollbar-track,
+.editor-modal-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.board-container .setup-panel::-webkit-scrollbar-thumb,
+.encyclopedia-panel::-webkit-scrollbar-thumb,
+.editor-modal-list::-webkit-scrollbar-thumb {
+  background: var(--theme-purple-a30, rgba(106, 90, 154, 0.3));
+  border-radius: 3px;
+}
+
+.board-container .setup-panel::-webkit-scrollbar-thumb:hover,
+.encyclopedia-panel::-webkit-scrollbar-thumb:hover,
+.editor-modal-list::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-purple-a50, rgba(106, 90, 154, 0.5));
+}
+
 .board-container .setup-section-label {
   font-size: var(--font-size-2xs);
   text-transform: uppercase;
