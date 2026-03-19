@@ -1933,6 +1933,25 @@ body .tutorial-target-highlight {
   }
 }
 
+/* Manual reduce-motion override via .reduce-motion class on body */
+body.reduce-motion .tutorial-target-highlight,
+body.reduce-motion .tutorial-card,
+body.reduce-motion .toast,
+body.reduce-motion .board-container .overlay-content .overlay-star.filled,
+body.reduce-motion .board-container .mode-indicator,
+body.reduce-motion .encyclopedia-panel,
+body.reduce-motion .board-container .wave-preview .wave-income,
+body.reduce-motion .board-container .pause-overlay,
+body.reduce-motion .board-container .tower-info-panel .spec-choice-panel,
+body.reduce-motion .board-container .wave-preview,
+body.reduce-motion .board-container .wave-clear-banner,
+body.reduce-motion .wave-start-pulse {
+  animation: none !important;
+}
+body.reduce-motion .board-container .overlay-content .overlay-star.filled {
+  opacity: 1;
+}
+
 /* ============================================================
    game-board: tower info panel
    ============================================================ */

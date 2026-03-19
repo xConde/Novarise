@@ -1065,3 +1065,11 @@ Test count: 2756 → 3024 (+268 tests)
 **Location:** `profile.component.ts:68-75`
 **Risk:** `loadSettings()` reads `reduceMotion` from `SettingsService` but never applies the `reduce-motion` class to `document.body`. Only `toggleReduceMotion()` (line 123) applies it. After page refresh or navigation back to `/profile`, the toggle shows "On" but animations still play — the accessibility override is silently broken. A user who explicitly opted out of motion will see animations until they toggle off and on again.
 **Fix:** Add `if (this.reduceMotion) { document.body.classList.add('reduce-motion'); }` at the end of `loadSettings()`.
+
+---
+
+## Deployment Checklist
+- [x] Step 1: Wire `.reduce-motion` CSS rules — the body class is set but no selectors consume it; duplicate each `@media (prefers-reduced-motion: reduce)` block as `.reduce-motion` selectors
+- [ ] Step 2: Wire `showFps` setting to game HUD — FPS counter is always visible; read `SettingsService.showFps` and conditionally show/hide
+- [ ] Step 3: Sync ARCHITECTURE.md with new files/services added in Hardening VII
+- [ ] Step 4: Final full test suite verification — 4028+ tests, zero failures, clean build

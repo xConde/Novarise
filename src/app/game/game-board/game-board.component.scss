@@ -481,6 +481,14 @@
   }
 }
 
+:host-context(body.reduce-motion) .board-container {
+  .gold-pulse,
+  .score-pulse,
+  .gold-change {
+    animation: none;
+  }
+}
+
 // wave-preview-in keyframe moved to src/styles.css
 
 // help-overlay moved to src/styles.css (.board-container .help-overlay)
