@@ -1819,6 +1819,75 @@ describe('TowerCombatService', () => {
       expect(pooledMesh!.scale.z).toBe(1);
     });
   });
+
+  // ── Boundary conditions ────────────────────────────────────────────────────
+
+  describe('boundary conditions', () => {
+    // Board is 25×20, tileSize=1. For row=0, col=0:
+    //   worldX = (0 - 25/2) * 1 = -12.5
+    //   worldZ = (0 - 20/2) * 1 = -10
+    const EDGE_WORLD_X = -12.5;
+    const EDGE_WORLD_Z = -10;
+
+    it('should register a tower at the board edge (row 0, col 0) without error', () => {
+      expect(() => service.registerTower(0, 0, TowerType.BASIC, new THREE.Group())).not.toThrow();
+      expect(service.getTower('0-0')).toBeTruthy();
+    });
+
+    it('tower at board edge targets an enemy at the same position', () => {
+      service.registerTower(0, 0, TowerType.BASIC, new THREE.Group());
+
+      // Enemy at the exact edge tower world position — distance 0, within any range
+      const enemy = createEnemy('edge-e', EDGE_WORLD_X, EDGE_WORLD_Z, 1000);
+      enemyMap.set('edge-e', enemy);
+
+      service.update(0.016, mockScene);
+
+      expect(enemy.health).toBeLessThan(1000);
+    });
+
+    it('update with no enemies returns empty killed array and does not throw', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      // enemyMap is empty
+
+      let result: ReturnType<typeof service.update> | undefined;
+      expect(() => { result = service.update(0.016, mockScene); }).not.toThrow();
+      expect(result!.killed.length).toBe(0);
+    });
+
+    it('update with no towers and no enemies does not throw', () => {
+      // No towers registered, no enemies
+      expect(() => service.update(0.016, mockScene)).not.toThrow();
+    });
+
+    it('enemy at exact BASIC range boundary (distance === range) is targeted', () => {
+      // BASIC range = 3. Tower at (TOWER_ROW, TOWER_COL) → world (-0.5, 0).
+      // Enemy placed at distance exactly = range along x-axis.
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const exactRangeX = TOWER_WORLD_X + TOWER_CONFIGS[TowerType.BASIC].range;
+      const enemy = createEnemy('boundary-e', exactRangeX, TOWER_WORLD_Z, 1000);
+      enemyMap.set('boundary-e', enemy);
+
+      // Fire + allow projectile travel time
+      service.update(0.016, mockScene);
+      service.update(1.0, mockScene);
+
+      expect(enemy.health).toBeLessThan(1000);
+    });
+
+    it('enemy just outside range (distance > range) is not targeted', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      // BASIC range = 3; place enemy 3.1 units away (just outside range)
+      const outsideRangeX = TOWER_WORLD_X + TOWER_CONFIGS[TowerType.BASIC].range + 0.1;
+      const enemy = createEnemy('outside-e', outsideRangeX, TOWER_WORLD_Z, 1000);
+      enemyMap.set('outside-e', enemy);
+
+      service.update(2.0, mockScene);
+
+      expect(enemy.health).toBe(1000);
+    });
+  });
+
 });
 
 // --- Tower Model Pure Function Tests ---

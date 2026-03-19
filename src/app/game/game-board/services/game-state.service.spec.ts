@@ -1609,4 +1609,74 @@ describe('GameStateService', () => {
       expect(service.getState().difficulty).toBe(diffBefore);
     });
   });
+
+  // --- Illegal phase transitions (state machine contract) ---
+
+  describe('illegal phase transitions', () => {
+    it('DEFEAT → COMBAT is rejected via setPhase', () => {
+      const warnSpy = spyOn(console, 'warn');
+      service.startWave();
+      service.loseLife(INITIAL_GAME_STATE.lives); // → DEFEAT
+      expect(service.getState().phase).toBe(GamePhase.DEFEAT);
+
+      service.setPhase(GamePhase.COMBAT);
+
+      expect(service.getState().phase).toBe(GamePhase.DEFEAT);
+      expect(warnSpy).toHaveBeenCalledWith(jasmine.stringContaining('Invalid phase transition'));
+    });
+
+    it('VICTORY → COMBAT is rejected via setPhase', () => {
+      const warnSpy = spyOn(console, 'warn');
+      const maxWaves = service.getState().maxWaves;
+      for (let i = 0; i < maxWaves; i++) {
+        service.startWave();
+        if (i < maxWaves - 1) service.completeWave(0);
+      }
+      service.completeWave(0); // → VICTORY
+
+      service.setPhase(GamePhase.COMBAT);
+
+      expect(service.getState().phase).toBe(GamePhase.VICTORY);
+      expect(warnSpy).toHaveBeenCalledWith(jasmine.stringContaining('Invalid phase transition'));
+    });
+
+    it('COMBAT → SETUP is rejected via setPhase', () => {
+      const warnSpy = spyOn(console, 'warn');
+      service.startWave(); // → COMBAT
+
+      service.setPhase(GamePhase.SETUP);
+
+      expect(service.getState().phase).toBe(GamePhase.COMBAT);
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it('SETUP → COMBAT → INTERMISSION → COMBAT chain (valid) succeeds', () => {
+      service.startWave();        // SETUP → COMBAT
+      service.completeWave(0);    // COMBAT → INTERMISSION
+      service.startWave();        // INTERMISSION → COMBAT
+      expect(service.getState().phase).toBe(GamePhase.COMBAT);
+      expect(service.getState().wave).toBe(2);
+    });
+
+    it('gold never goes below 0 after multiple overspend attempts', () => {
+      // spendGold rejects when insufficient, so multiple attempts don't underflow
+      service.spendGold(INITIAL_GAME_STATE.gold); // spend all gold
+      service.spendGold(1);
+      service.spendGold(100);
+      expect(service.getState().gold).toBe(0);
+    });
+
+    it('score never goes negative from addScore with zero', () => {
+      service.addScore(0);
+      expect(service.getState().score).toBe(0);
+    });
+
+    it('addGoldAndScore with zero does not change state', () => {
+      const goldBefore = service.getState().gold;
+      const scoreBefore = service.getState().score;
+      service.addGoldAndScore(0);
+      expect(service.getState().gold).toBe(goldBefore);
+      expect(service.getState().score).toBe(scoreBefore);
+    });
+  });
 });

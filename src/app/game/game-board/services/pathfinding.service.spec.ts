@@ -311,4 +311,65 @@ describe('PathfindingService', () => {
       expect(pos.z).toBe(4);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Boundary conditions
+  // ---------------------------------------------------------------------------
+
+  describe('boundary conditions', () => {
+    it('findPath returns a path with start node when start and end are the same tile', () => {
+      // On a 1×1 board the spawner and exit are the same cell (0,0).
+      // A* reaches the goal immediately — it should not throw and should return a non-empty result.
+      const singleTile: GameBoardTile[][] = [
+        [GameBoardTile.createSpawner(0, 0)]
+      ];
+      gameBoardService.getGameBoard.and.returnValue(singleTile);
+      gameBoardService.getBoardWidth.and.returnValue(1);
+      gameBoardService.getBoardHeight.and.returnValue(1);
+
+      const path = service.findPath({ x: 0, y: 0 }, { x: 0, y: 0 });
+
+      expect(path.length).toBeGreaterThanOrEqual(1);
+      expect(path[0]).toEqual(jasmine.objectContaining({ x: 0, y: 0 }));
+    });
+
+    it('findPath on a 2-tile board where spawn and exit are adjacent returns a 2-node path', () => {
+      // 1×2 board: spawner at (row=0, col=0), exit at (row=0, col=1)
+      // Grid coords: spawner {x:0, y:0}, exit {x:1, y:0}
+      const twoTileBoard: GameBoardTile[][] = [
+        [GameBoardTile.createSpawner(0, 0), GameBoardTile.createExit(0, 1)]
+      ];
+      gameBoardService.getGameBoard.and.returnValue(twoTileBoard);
+      gameBoardService.getBoardWidth.and.returnValue(2);
+      gameBoardService.getBoardHeight.and.returnValue(1);
+
+      const path = service.findPath({ x: 0, y: 0 }, { x: 1, y: 0 });
+
+      expect(path.length).toBe(2);
+      expect(path[0]).toEqual(jasmine.objectContaining({ x: 0, y: 0 }));
+      expect(path[1]).toEqual(jasmine.objectContaining({ x: 1, y: 0 }));
+    });
+
+    it('findPath on a fully-walkable board returns a valid path without throwing', () => {
+      // Use default 10×10 board (all tiles walkable — no blocked cells)
+      gameBoardService.getGameBoard.and.returnValue(createTestBoard(10));
+      gameBoardService.getBoardWidth.and.returnValue(10);
+      gameBoardService.getBoardHeight.and.returnValue(10);
+
+      let path: ReturnType<typeof service.findPath> | undefined;
+      expect(() => {
+        path = service.findPath({ x: 0, y: 0 }, { x: 9, y: 9 });
+      }).not.toThrow();
+      expect(path!.length).toBeGreaterThan(0);
+    });
+
+    it('findPath with start out of board bounds returns empty array', () => {
+      // x=-1 is out of bounds — A* skips out-of-bounds neighbors;
+      // start itself is never expanded because it fails the bounds check as a neighbor.
+      // The heap is seeded with the out-of-bounds start but it will never reach goal.
+      const path = service.findPath({ x: -1, y: -1 }, { x: 9, y: 9 });
+      // The implementation never finds a walkable neighbor from an OOB start → empty
+      expect(path.length).toBe(0);
+    });
+  });
 });

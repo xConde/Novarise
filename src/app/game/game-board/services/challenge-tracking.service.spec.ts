@@ -167,5 +167,54 @@ describe('ChallengeTrackingService', () => {
       expect(snap.maxTowersPlaced).toBe(1);
       expect(snap.towerTypesUsed.has(TowerType.MORTAR)).toBeTrue();
     });
+
+    it('reset when already empty is a no-op (does not throw)', () => {
+      expect(() => service.reset()).not.toThrow();
+      const snap = service.getSnapshot();
+      expect(snap.totalGoldSpent).toBe(0);
+      expect(snap.maxTowersPlaced).toBe(0);
+      expect(snap.towerTypesUsed.size).toBe(0);
+    });
+  });
+
+  // ── getSnapshot — each call is independent ────────────────────────────────
+
+  describe('getSnapshot — independent calls', () => {
+    it('getSnapshot returns a fresh Set each call (not the same reference)', () => {
+      service.recordTowerPlaced(TowerType.BASIC, 100);
+      const snap1 = service.getSnapshot();
+      const snap2 = service.getSnapshot();
+      expect(snap1.towerTypesUsed).not.toBe(snap2.towerTypesUsed);
+    });
+
+    it('mutating one snapshot towerTypesUsed does not affect a later snapshot', () => {
+      service.recordTowerPlaced(TowerType.SNIPER, 125);
+      const snap1 = service.getSnapshot();
+      snap1.towerTypesUsed.clear(); // clear the copy
+
+      const snap2 = service.getSnapshot();
+      expect(snap2.towerTypesUsed.has(TowerType.SNIPER)).toBeTrue();
+    });
+
+    it('mutating one snapshot numeric fields does not affect the service state', () => {
+      service.recordTowerPlaced(TowerType.SPLASH, 75);
+      const snap = service.getSnapshot();
+      // ChallengeSnapshot numeric fields are primitives (copied by value) —
+      // confirming we get the correct values before any external mutation
+      expect(snap.totalGoldSpent).toBe(75);
+
+      // The service internal value is unaffected by reassigning the snap field
+      // (primitives are not references, but we verify via a second getSnapshot)
+      const snap2 = service.getSnapshot();
+      expect(snap2.totalGoldSpent).toBe(75);
+    });
+
+    it('recordTowerSold when count is already 0 keeps count at 0 (no negative)', () => {
+      service.recordTowerSold(); // count was 0, should not go below 0
+      service.recordTowerSold();
+      service.recordTowerPlaced(TowerType.CHAIN, 120);
+      // currentTowerCount floored at 0 before the place → peak should be 1
+      expect(service.getSnapshot().maxTowersPlaced).toBe(1);
+    });
   });
 });

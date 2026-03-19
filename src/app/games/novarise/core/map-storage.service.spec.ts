@@ -1200,4 +1200,42 @@ describe('MapStorageService', () => {
       expect(result).toBeNull();
     });
   });
+
+  // ── Additional error paths ─────────────────────────────────────────────────
+
+  describe('additional error paths', () => {
+    it('saveMap with empty string name still saves and returns a map ID', () => {
+      // An empty name is sanitised downstream (downloadMapAsFile falls back to "map")
+      // but saveMap itself does not block empty names — it only blocks invalid data
+      const mapId = service.saveMap('', testMapData());
+      expect(mapId).toBeTruthy();
+      const metadata = service.getMapMetadata(mapId!);
+      expect(metadata!.name).toBe('');
+    });
+
+    it('saveMap with empty name appears in getAllMaps', () => {
+      service.saveMap('', testMapData());
+      expect(service.getAllMaps().length).toBe(1);
+    });
+
+    it('loadMap returns null for a key that was never written', () => {
+      const result = service.loadMap('key_that_does_not_exist');
+      expect(result).toBeNull();
+    });
+
+    it('importMapFromJson with empty string returns null', () => {
+      const result = service.importMapFromJson('');
+      expect(result).toBeNull();
+    });
+
+    it('importMapFromJson with whitespace-only string returns null', () => {
+      const result = service.importMapFromJson('   ');
+      expect(result).toBeNull();
+    });
+
+    it('importMapFromJson with valid JSON but no metadata or data fields returns null', () => {
+      const result = service.importMapFromJson('{}');
+      expect(result).toBeNull();
+    });
+  });
 });
