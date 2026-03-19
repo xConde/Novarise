@@ -42,6 +42,12 @@ export class MinimapService {
     this.canvas.style.borderRadius = '4px';
     this.canvas.style.zIndex = '100';
     this.canvas.style.pointerEvents = 'none';
+    // Glass-panel visual consistency
+    this.canvas.style.boxShadow = '0 0 8px rgba(138, 92, 246, 0.25), inset 0 0 0 1px rgba(255,255,255,0.06)';
+    this.canvas.style.overflow = 'hidden';
+    // Opacity-based show/hide enables fade-in transition
+    this.canvas.style.transition = `opacity ${MINIMAP_CONFIG.fadeInMs}ms ease`;
+    this.canvas.style.opacity = this.visible ? '1' : '0';
     if (!this.visible) {
       this.canvas.style.display = 'none';
     }
@@ -122,18 +128,40 @@ export class MinimapService {
 
   show(): void {
     this.visible = true;
-    if (this.canvas) this.canvas.style.display = '';
+    if (this.canvas) {
+      // Make element present first so transition plays
+      this.canvas.style.display = '';
+      // Defer to next tick so the display change is painted before opacity transitions
+      requestAnimationFrame(() => {
+        if (this.canvas) this.canvas.style.opacity = '1';
+      });
+    }
   }
 
   hide(): void {
     this.visible = false;
-    if (this.canvas) this.canvas.style.display = 'none';
+    if (this.canvas) {
+      // Instant hide — no transition needed
+      this.canvas.style.display = 'none';
+      this.canvas.style.opacity = '0';
+    }
   }
 
   toggleVisibility(): void {
-    this.visible = !this.visible;
-    if (this.canvas) {
-      this.canvas.style.display = this.visible ? 'block' : 'none';
+    if (this.visible) {
+      this.hide();
+    } else {
+      this.show();
+    }
+  }
+
+  /**
+   * Dims the minimap to indicate a non-live (paused) state.
+   * Uses `MINIMAP_CONFIG.pausedOpacity` when dimmed.
+   */
+  setDimmed(dimmed: boolean): void {
+    if (this.canvas && this.visible) {
+      this.canvas.style.opacity = dimmed ? String(MINIMAP_CONFIG.pausedOpacity) : '1';
     }
   }
 

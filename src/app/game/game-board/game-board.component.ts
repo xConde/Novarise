@@ -1772,6 +1772,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.pauseFocusTrap.deactivate();
     }
     this.gameStateService.togglePause();
+    this.minimapService.setDimmed(willPause);
     if (willPause) {
       setTimeout(() => {
         if (this.pauseOverlayRef) {
@@ -1804,6 +1805,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const state = this.gameStateService.getState();
     if ((state.phase === GamePhase.COMBAT || state.phase === GamePhase.INTERMISSION) && !state.isPaused) {
       this.gameStateService.togglePause();
+      this.minimapService.setDimmed(true);
       this.autoPaused = true;
       setTimeout(() => {
         if (this.pauseOverlayRef) {
