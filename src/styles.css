@@ -995,9 +995,18 @@ body .tutorial-target-highlight {
 /* Mobile responsive — HUD */
 @media (max-width: 480px) {
   .board-container .game-hud {
-    gap: var(--spacing-sm);
-    padding: var(--spacing-xs) var(--spacing-sm);
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-xs);
     font-size: 0.625rem;
+    max-width: calc(100vw - 1.5rem);
+  }
+
+  .board-container .game-hud .hud-stats-row {
+    gap: var(--spacing-xs);
+  }
+
+  .board-container .game-hud .hud-stat.secondary {
+    display: none;
   }
 
   .board-container .game-hud .hud-stat .hud-label {
@@ -2833,8 +2842,8 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
   }
 
   .board-container .game-controls .control-btn {
-    min-width: 2.25rem;
-    min-height: 2.25rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
     padding: var(--spacing-xs);
     font-size: 0.5625rem;
     justify-content: center;
@@ -2921,6 +2930,7 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
   .board-container .tower-selection .tower-btn {
     min-width: unset;
     width: 100%;
+    min-height: 2.75rem;
     padding: 0.25rem;
     gap: 0.0625rem;
   }
