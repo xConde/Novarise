@@ -845,6 +845,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
 
+    // Invalidate muzzle flash saved emissive — upgrade changed the baseline
+    const placedTower = this.towerCombatService.getPlacedTowers().get(this.selectedTowerInfo.id);
+    if (placedTower) {
+      placedTower.originalEmissiveIntensity = undefined;
+      placedTower.muzzleFlashTimer = undefined;
+    }
+
     // Refresh info panel
     this.refreshTowerInfoPanel();
     this.rangeVisualizationService.showForTower(
