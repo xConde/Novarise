@@ -99,7 +99,7 @@ describe('PriceLabelService', () => {
       service.showLabels(priceMap, BOARD_WIDTH, BOARD_HEIGHT, TILE_SIZE, scene);
 
       const sprite = scene.children[0] as THREE.Sprite;
-      expect(sprite.position.y).toBeCloseTo(0.6);
+      expect(sprite.position.y).toBeCloseTo(0.35);
     });
 
     it('positions sprites at the correct world X/Z for row 2, col 3 on a 5×5 board', () => {

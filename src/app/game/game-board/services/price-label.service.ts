@@ -12,10 +12,10 @@ const LABEL_CONFIG = {
   fontFamily: 'Arial',
   fontWeight: 'bold',
   /** World-unit width/height of the sprite billboard. */
-  spriteWidth: 1.0,
-  spriteHeight: 0.5,
+  spriteWidth: 0.7,
+  spriteHeight: 0.3,
   /** Y position above the tile surface. */
-  yOffset: 0.6,
+  yOffset: 0.35,
   /**
    * Minimum percentIncrease required to show a label.
    * Low-value labels (+3%, +4%) add visual noise on large boards.

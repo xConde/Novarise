@@ -1963,7 +1963,8 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
 
 @media (max-width: 480px) {
   .board-container .wave-preview {
-    top: var(--spacing-md);  /* Align with top-right controls row */
+    position: absolute;  /* Override fixed — align with absolute-positioned controls */
+    top: var(--spacing-md);  /* Same top as E/help/audio row */
     left: var(--spacing-xs);
     right: auto;
     transform: none;
