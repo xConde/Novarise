@@ -1982,12 +1982,6 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
     gap: 0;
   }
 
-  .board-container .wave-preview .wave-preview-header .wave-number {
-    font-size: 0.875rem;
-    margin: 0;
-    letter-spacing: 0.05rem;
-  }
-
   .board-container .wave-preview .wave-preview-list {
     gap: 0.1rem;
   }
@@ -2012,6 +2006,14 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
   text-transform: uppercase;
   letter-spacing: 0.15rem;
   color: var(--text-color);
+}
+
+@media (max-width: 480px) {
+  .board-container .wave-preview .wave-preview-header .wave-number {
+    font-size: 0.875rem;
+    letter-spacing: 0.05rem;
+    margin: 0;
+  }
 }
 
 .board-container .wave-preview .wave-income {
@@ -2745,7 +2747,7 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
     bottom: 0;
     left: 0;
     width: 100%;
-    max-height: 42vh;
+    max-height: 35vh;
     border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
     padding: 0.25rem 0.5rem;
     overflow-y: auto;
@@ -2943,7 +2945,7 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
 @media (max-width: 480px) {
   .board-container .game-controls {
     bottom: auto;
-    top: 3rem;
+    top: 5rem;
     right: var(--spacing-xs);
     flex-direction: row;
     flex-wrap: wrap;
