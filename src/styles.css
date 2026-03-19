@@ -332,6 +332,18 @@ p {
   transform: translateX(-50%);
 }
 
+/* Strategy tip cards — centered, below nav bar (~3rem) */
+.tutorial-card--tip_placement,
+.tutorial-card--tip_wave_preview,
+.tutorial-card--tip_upgrade,
+.tutorial-card--is-tip {
+  top: max(4rem, var(--spacing-xl, 2rem));
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  transform: translateX(-50%);
+}
+
 /* Fix 5: CSS triangle arrows connecting card to its target element */
 /* select_tower card sits above the tower bar → arrow points DOWN */
 .tutorial-card--select_tower::after {
@@ -2259,32 +2271,32 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
 .encyclopedia-panel,
 .editor-modal-list {
   scrollbar-width: thin;
-  scrollbar-color: var(--theme-purple-a30, rgba(106, 90, 154, 0.3)) transparent;
+  scrollbar-color: var(--theme-purple-a50, rgba(106, 90, 154, 0.5)) transparent;
 }
 
 .board-container .setup-panel::-webkit-scrollbar,
 .encyclopedia-panel::-webkit-scrollbar,
 .editor-modal-list::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .board-container .setup-panel::-webkit-scrollbar-track,
 .encyclopedia-panel::-webkit-scrollbar-track,
 .editor-modal-list::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .board-container .setup-panel::-webkit-scrollbar-thumb,
 .encyclopedia-panel::-webkit-scrollbar-thumb,
 .editor-modal-list::-webkit-scrollbar-thumb {
-  background: var(--theme-purple-a30, rgba(106, 90, 154, 0.3));
-  border-radius: 3px;
+  background: var(--theme-purple-a50, rgba(106, 90, 154, 0.5));
+  border-radius: 4px;
 }
 
 .board-container .setup-panel::-webkit-scrollbar-thumb:hover,
 .encyclopedia-panel::-webkit-scrollbar-thumb:hover,
 .editor-modal-list::-webkit-scrollbar-thumb:hover {
-  background: var(--theme-purple-a50, rgba(106, 90, 154, 0.5));
+  background: var(--theme-purple-a70, rgba(106, 90, 154, 0.7));
 }
 
 .board-container .setup-section-label {
