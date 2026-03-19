@@ -1317,6 +1317,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sceneService.setBoardSize(
       Math.max(this.gameBoardService.getBoardWidth(), this.gameBoardService.getBoardHeight())
     );
+    this.towerPreviewService.setBoardSize(
+      this.gameBoardService.getBoardWidth(),
+      this.gameBoardService.getBoardHeight()
+    );
   }
 
   /** Shared cleanup for game objects — used by both restartGame() and ngOnDestroy(). */

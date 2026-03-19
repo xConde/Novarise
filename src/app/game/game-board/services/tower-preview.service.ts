@@ -21,6 +21,15 @@ export class TowerPreviewService {
    * Reuses existing meshes when only the position or validity changes;
    * recreates meshes when the tower type changes.
    */
+  /** Set board dimensions so the range ring can be clipped at edges. */
+  setBoardSize(width: number, height: number): void {
+    this.boardWidth = width;
+    this.boardHeight = height;
+  }
+
+  private boardWidth = 10;
+  private boardHeight = 10;
+
   showPreview(
     towerType: TowerType,
     row: number,
@@ -87,11 +96,24 @@ export class TowerPreviewService {
       outerRadius,
       PREVIEW_CONFIG.rangeRingSegments
     );
+    // Clipping planes to prevent range ring from extending beyond board edges
+    const halfW = this.boardWidth / 2;
+    const halfH = this.boardHeight / 2;
+    const centerX = (this.boardWidth - 1) / 2;
+    const centerZ = (this.boardHeight - 1) / 2;
+    const clippingPlanes = [
+      new THREE.Plane(new THREE.Vector3(1, 0, 0), halfW + centerX),     // left
+      new THREE.Plane(new THREE.Vector3(-1, 0, 0), halfW - centerX),    // right (negated)
+      new THREE.Plane(new THREE.Vector3(0, 0, 1), halfH + centerZ),     // top
+      new THREE.Plane(new THREE.Vector3(0, 0, -1), halfH - centerZ),    // bottom (negated)
+    ];
+
     const ringMaterial = new THREE.MeshBasicMaterial({
       color: PREVIEW_CONFIG.rangeRingColor,
       transparent: true,
       opacity: PREVIEW_CONFIG.rangeRingOpacity,
       side: THREE.DoubleSide,
+      clippingPlanes,
     });
     const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
     ringMesh.rotateX(-Math.PI / 2);
