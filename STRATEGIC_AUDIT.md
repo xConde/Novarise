@@ -1072,4 +1072,4 @@ Test count: 2756 → 3024 (+268 tests)
 - [x] Step 1: Wire `.reduce-motion` CSS rules — the body class is set but no selectors consume it; duplicate each `@media (prefers-reduced-motion: reduce)` block as `.reduce-motion` selectors
 - [x] Step 2: Wire `showFps` setting to game HUD — FPS counter is always visible; read `SettingsService.showFps` and conditionally show/hide
 - [x] Step 3: Sync ARCHITECTURE.md with new files/services added in Hardening VII
-- [ ] Step 4: Final full test suite verification — 4028+ tests, zero failures, clean build
+- [x] Step 4: Final full test suite verification — 4028/4028 tests, zero failures, clean build ✓
