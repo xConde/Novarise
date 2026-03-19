@@ -1963,11 +1963,23 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
 
 @media (max-width: 480px) {
   .board-container .wave-preview {
-    top: 5.5rem;
+    top: 3.5rem;
+    left: var(--spacing-xs);
+    right: auto;
+    transform: none;
     font-size: var(--font-size-3xs);
-    padding: var(--spacing-sm) var(--spacing-md);
-    min-width: 9rem;
-    max-height: 35vh;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    min-width: auto;
+    max-height: 30vh;
+    text-align: left;
+  }
+
+  .board-container .wave-preview .wave-preview-header {
+    align-items: flex-start;
+  }
+
+  .board-container .wave-preview .wave-number {
+    font-size: 1.2rem;
   }
 }
 
@@ -2715,20 +2727,53 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
     bottom: 0;
     left: 0;
     width: 100%;
-    max-height: 55vh;
+    max-height: 45vh;
     border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--spacing-xs) var(--spacing-sm);
     overflow-y: auto;
-    /* override any right/bottom positioning from 768px block */
+    gap: var(--spacing-xs);
     transform: none;
   }
 
+  .board-container .setup-panel .setup-section-title {
+    font-size: var(--font-size-3xs);
+    margin-bottom: 0.125rem;
+  }
+
+  .board-container .setup-level-info {
+    padding: var(--spacing-xs);
+    font-size: var(--font-size-3xs);
+  }
+
+  .board-container .setup-challenges {
+    padding: var(--spacing-xs);
+    gap: 0.2rem;
+  }
+
+  .board-container .setup-diff-grid {
+    gap: 0.2rem;
+  }
+
+  .board-container .setup-mod-grid {
+    gap: 0.2rem;
+  }
+
+  .board-container .setup-difficulty-info {
+    font-size: var(--font-size-3xs);
+    margin-top: 0.1rem;
+  }
+
   .board-container .setup-diff-btn,
-  .board-container .setup-mod-btn,
-  .board-container .setup-start-btn {
+  .board-container .setup-mod-btn {
     min-height: 2.75rem;
     font-size: 0.5rem;
     padding: 0.125rem;
+  }
+
+  .board-container .setup-start-btn {
+    min-height: 2.75rem;
+    font-size: var(--font-size-xs);
+    padding: var(--spacing-xs);
   }
 }
 

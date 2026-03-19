@@ -104,7 +104,7 @@
           [attr.data-type]="entry.type.toLowerCase()"></span>
         <span class="enemy-count">{{ entry.count }}x</span>
         <span class="enemy-label">{{ entry.label }}</span>
-        <span class="wave-preview-new" *ngIf="isNewEnemyType(entry.type)">NEW</span>
+        <!-- NEW badge removed — adds visual noise without actionable value -->
         <div class="wave-enemy-badges" *ngIf="getEnemyBadges(entry.type).length > 0">
           <span
             *ngFor="let badge of getEnemyBadges(entry.type)"
