@@ -258,6 +258,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Game initialization failure (WebGL not supported or canvas creation failed)
   initializationFailed = false;
 
+  // FPS counter visibility from settings
+  showFps = false;
+
   // Touch interaction
   private touchStartHandler: (event: TouchEvent) => void = () => {};
   private touchMoveHandler: (event: TouchEvent) => void = () => {};
@@ -362,6 +365,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.showFps = this.settingsService.get().showFps;
+
     // Subscribe to game state changes
     this.stateSubscription = this.gameStateService.getState$().subscribe({
       error: (error: unknown) => console.error('Game state subscription error:', error),
