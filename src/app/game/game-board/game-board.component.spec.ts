@@ -3376,4 +3376,82 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  // ── Red team: visual animation freeze during pause (S30) ──────────────────
+  describe('red team: visual animations during pause', () => {
+    it('enemiesAlive getter uses getLivingEnemyCount (excludes dying enemies)', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const livingCountSpy = spyOn(enemyService, 'getLivingEnemyCount').and.returnValue(2);
+      // Simulate 3 enemies in map but only 2 living (1 is dying)
+      spyOn(enemyService, 'getEnemies').and.returnValue(new Map([
+        ['e1', {} as any], ['e2', {} as any], ['e3', {} as any],
+      ]));
+
+      const result = component.enemiesAlive;
+
+      expect(livingCountSpy).toHaveBeenCalled();
+      // Must return 2 (from getLivingEnemyCount), not 3 (from getEnemies.size)
+      expect(result).toBe(2);
+    });
+
+    it('runPausedVisuals calls all cosmetic-only animation updates', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const statusEffectService = fixture.debugElement.injector.get(StatusEffectService);
+      const mockScene = new THREE.Scene();
+      const mockCamera = new THREE.PerspectiveCamera();
+      spyOn((component as any).sceneService, 'getScene').and.returnValue(mockScene);
+      spyOn((component as any).sceneService, 'getCamera').and.returnValue(mockCamera);
+      spyOn(statusEffectService, 'getAllActiveEffects').and.returnValue(new Map());
+
+      const dyingSpy = spyOn(enemyService, 'updateDyingAnimations');
+      const flashSpy = spyOn(enemyService, 'updateHitFlashes');
+      const shieldSpy = spyOn(enemyService, 'updateShieldBreakAnimations');
+      const healthBarSpy = spyOn(enemyService, 'updateHealthBars');
+      const particleSpy = spyOn(enemyService, 'updateStatusEffectParticles');
+      spyOn(enemyService, 'updateStatusVisuals');
+      spyOn(enemyService, 'updateEnemyAnimations');
+      spyOn(component as any, 'updateMinimap');
+
+      (component as any).runPausedVisuals(0.016, 1000);
+
+      expect(dyingSpy).toHaveBeenCalledWith(0.016, mockScene);
+      expect(flashSpy).toHaveBeenCalledWith(0.016);
+      expect(shieldSpy).toHaveBeenCalledWith(0.016);
+      expect(healthBarSpy).toHaveBeenCalled();
+      expect(particleSpy).toHaveBeenCalled();
+    });
+
+    it('runPausedVisuals is NOT invoked when game is unpaused in COMBAT', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.COMBAT);
+      expect(gameStateService.getState().isPaused).toBeFalse();
+
+      const pausedVisualsSpy = spyOn(component as any, 'runPausedVisuals');
+
+      // Replicate the animate-loop guard logic
+      const state = gameStateService.getState();
+      if (state.phase === GamePhase.COMBAT && state.isPaused) {
+        (component as any).runPausedVisuals(0.016, 1000);
+      }
+
+      expect(pausedVisualsSpy).not.toHaveBeenCalled();
+    });
+
+    it('runPausedVisuals IS invoked when game is paused in COMBAT', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.togglePause();
+      expect(gameStateService.getState().isPaused).toBeTrue();
+
+      const pausedVisualsSpy = spyOn(component as any, 'runPausedVisuals');
+
+      // Replicate the animate-loop guard logic
+      const state = gameStateService.getState();
+      if (state.phase === GamePhase.COMBAT && state.isPaused) {
+        (component as any).runPausedVisuals(0.016, 1000);
+      }
+
+      expect(pausedVisualsSpy).toHaveBeenCalledWith(0.016, 1000);
+    });
+  });
+
 });

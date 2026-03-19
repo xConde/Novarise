@@ -1912,7 +1912,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   get enemiesAlive(): number {
-    return this.enemyService.getEnemies().size;
+    return this.enemyService.getLivingEnemyCount();
   }
 
   get enemiesToSpawn(): number {
@@ -2104,6 +2104,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           this.scoreBreakdown,
         );
         this.processCombatResult(result, deltaTime, time);
+      } else if (state.phase === GamePhase.COMBAT && state.isPaused) {
+        // Even while paused, run cosmetic-only animations so they don't freeze.
+        // Physics, spawning, and movement are NOT ticked.
+        this.runPausedVisuals(deltaTime, time);
       }
     }
 
@@ -2194,6 +2198,24 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     // Per-frame visual updates (health bars, status effects, animations, minimap)
+    this.enemyService.updateDyingAnimations(deltaTime, this.sceneService.getScene());
+    this.enemyService.updateHitFlashes(deltaTime);
+    this.enemyService.updateShieldBreakAnimations(deltaTime);
+    this.enemyService.updateHealthBars(this.sceneService.getCamera().quaternion);
+    const activeEffects = this.statusEffectService.getAllActiveEffects();
+    this.enemyService.updateStatusVisuals(activeEffects);
+    this.enemyService.updateStatusEffectParticles(deltaTime, this.sceneService.getScene(), activeEffects);
+    this.enemyService.updateEnemyAnimations(deltaTime);
+    this.updateMinimap(time);
+  }
+
+  /**
+   * Run cosmetic-only visual updates during pause.
+   * Physics, spawning, and movement are NOT ticked — only animations that
+   * were already in-progress (death, hit flash, shield break) continue to play
+   * so the scene doesn't look frozen.
+   */
+  private runPausedVisuals(deltaTime: number, time: number): void {
     this.enemyService.updateDyingAnimations(deltaTime, this.sceneService.getScene());
     this.enemyService.updateHitFlashes(deltaTime);
     this.enemyService.updateShieldBreakAnimations(deltaTime);
