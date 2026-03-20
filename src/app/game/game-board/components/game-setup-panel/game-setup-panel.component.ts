@@ -24,6 +24,8 @@ export class GameSetupPanelComponent {
   @Input() isEndless = false;
   @Input() isChallengeAlreadyCompletedFn: (id: string) => boolean = () => false;
 
+  modifiersExpanded = false;
+
   @Output() selectDifficulty = new EventEmitter<DifficultyLevel>();
   @Output() toggleModifier = new EventEmitter<GameModifier>();
   @Output() toggleEndless = new EventEmitter<void>();

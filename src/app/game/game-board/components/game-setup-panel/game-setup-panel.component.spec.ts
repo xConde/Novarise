@@ -159,6 +159,11 @@ describe('GameSetupPanelComponent', () => {
   });
 
   describe('modifier buttons', () => {
+    beforeEach(() => {
+      component.modifiersExpanded = true;
+      fixture.detectChanges();
+    });
+
     it('should render a button for each modifier', () => {
       const buttons: NodeListOf<HTMLButtonElement> = fixture.nativeElement.querySelectorAll('.setup-mod-btn');
       expect(buttons.length).toBe(Object.values(GameModifier).length);
@@ -199,6 +204,7 @@ describe('GameSetupPanelComponent', () => {
 
   describe('score multiplier display', () => {
     it('should show the score multiplier when activeModifiers is non-empty', () => {
+      component.modifiersExpanded = true;
       component.activeModifiers = new Set<GameModifier>([GameModifier.DOUBLE_SPAWN]);
       component.modifierScoreMultiplier = 1.4;
       fixture.detectChanges();
