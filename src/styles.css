@@ -1412,6 +1412,12 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
   }
 }
 
+@media (max-width: 480px) {
+  .toast-stack {
+    bottom: calc(var(--tower-bar-height, 7.75rem) + 0.5rem);
+  }
+}
+
 /* ==========================================================================
    Victory / Defeat overlay — moved from game-board.component.scss (CSS budget relief)
    Selectors prefixed with .board-container to match component template DOM.
