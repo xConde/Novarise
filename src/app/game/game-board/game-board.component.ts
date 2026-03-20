@@ -2197,6 +2197,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (result.defeatTriggered && !this.defeatSoundPlayed) {
       this.defeatSoundPlayed = true;
       this.audioService.playDefeat();
+      // Restore minimap if it was hidden during INTERMISSION on mobile
+      if (window.innerWidth <= 480) {
+        this.minimapService.show();
+      }
     }
 
     // Wave completion events
@@ -2213,6 +2217,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       if (wc.resultPhase === GamePhase.VICTORY && !this.victorySoundPlayed) {
         this.victorySoundPlayed = true;
         this.audioService.playVictory();
+        // Restore minimap if it was hidden during INTERMISSION on mobile
+        if (window.innerWidth <= 480) {
+          this.minimapService.show();
+        }
       } else if (wc.resultPhase === GamePhase.INTERMISSION) {
         this.audioService.playWaveClear();
         this.lastWaveReward = wc.reward;
