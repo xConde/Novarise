@@ -45,6 +45,14 @@ export class TowerPreviewService {
       this.removeMeshesFromScene(scene);
       this.disposeMeshes();
       this.previewState = this.createPreviewMeshes(towerType, scene);
+    } else if (this.previewState) {
+      // Same tower type but meshes may have been removed by hidePreview — re-add
+      if (!this.previewState.ghostMesh.parent) {
+        scene.add(this.previewState.ghostMesh);
+      }
+      if (!this.previewState.ringMesh.parent) {
+        scene.add(this.previewState.ringMesh);
+      }
     }
 
     const { ghostMesh, ringMesh } = this.previewState!;
