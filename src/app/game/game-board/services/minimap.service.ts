@@ -35,30 +35,35 @@ export class MinimapService {
     this.canvas = document.createElement('canvas');
     this.canvas.width = MINIMAP_CONFIG.canvasSize;
     this.canvas.height = MINIMAP_CONFIG.canvasSize;
+    const isMobile = window.innerWidth <= 480;
+
     this.canvas.style.position = 'absolute';
-    this.canvas.style.bottom = `${MINIMAP_CONFIG.padding}px`;
-    this.canvas.style.left = `${MINIMAP_CONFIG.padding}px`;
     this.canvas.style.border = `${MINIMAP_CONFIG.borderWidth}px solid ${MINIMAP_CONFIG.borderColor}`;
     this.canvas.style.borderRadius = '4px';
     this.canvas.style.zIndex = '100';
     this.canvas.style.pointerEvents = 'none';
-    // Glass-panel visual consistency
     this.canvas.style.boxShadow = '0 0 8px rgba(138, 92, 246, 0.25), inset 0 0 0 1px rgba(255,255,255,0.06)';
     this.canvas.style.overflow = 'hidden';
-    // Opacity-based show/hide enables fade-in transition
     this.canvas.style.transition = `opacity ${MINIMAP_CONFIG.fadeInMs}ms ease`;
     this.canvas.style.opacity = this.visible ? '1' : '0';
     if (!this.visible) {
       this.canvas.style.display = 'none';
     }
 
-    // Compact minimap on narrow viewports — top-left to avoid tower bar overlap
-    if (window.innerWidth <= 480) {
+    if (isMobile) {
+      // Mobile: top-left, small, clear of tower bar
       this.canvas.width = 60;
       this.canvas.height = 60;
-      this.canvas.style.removeProperty('bottom');
       this.canvas.style.top = '6rem';
       this.canvas.style.left = '4px';
+      this.canvas.style.bottom = 'auto';
+      this.canvas.style.right = 'auto';
+    } else {
+      // Desktop: bottom-left
+      this.canvas.style.bottom = `${MINIMAP_CONFIG.padding}px`;
+      this.canvas.style.left = `${MINIMAP_CONFIG.padding}px`;
+      this.canvas.style.top = 'auto';
+      this.canvas.style.right = 'auto';
     }
 
     this.ctx = this.canvas.getContext('2d');
@@ -85,7 +90,7 @@ export class MinimapService {
     }
     this.lastUpdateTime = timeMs;
 
-    const size = MINIMAP_CONFIG.canvasSize;
+    const size = this.canvas.width; // Use actual canvas size (60 on mobile, 150 on desktop)
     const cellW = size / gridWidth;
     const cellH = size / gridHeight;
 
