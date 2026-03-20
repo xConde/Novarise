@@ -2745,10 +2745,10 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
     position: fixed;
     top: auto;
     right: 0;
-    bottom: 0;
+    bottom: var(--tower-bar-height);
     left: 0;
     width: 100%;
-    max-height: 35vh;
+    max-height: calc(100vh - var(--tower-bar-height) - 4rem);
     border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
     padding: 0.25rem 0.5rem;
     overflow-y: auto;
@@ -2842,18 +2842,6 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
     min-height: 2.5rem;
     font-size: 0.65rem;
     padding: 0.25rem;
-  }
-}
-
-/* On mobile during SETUP, hide tower bar — setup panel fills the bottom instead */
-@media (max-width: 480px) {
-  .board-container .tower-selection.setup-phase {
-    display: none;
-  }
-
-  /* With tower bar hidden, setup panel can use more space */
-  .board-container .setup-panel {
-    max-height: 45vh;
   }
 }
 

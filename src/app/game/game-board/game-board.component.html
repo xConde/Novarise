@@ -309,7 +309,7 @@
   </app-tower-info-panel>
 
   <!-- Tower selection -->
-  <div class="tower-selection" [class.setup-phase]="gameState.wave === 0" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
+  <div class="tower-selection" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
     <button
       *ngFor="let tower of towerTypes"
       class="tower-btn"
