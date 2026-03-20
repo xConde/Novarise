@@ -39,12 +39,10 @@ describe('MinimapService', () => {
       expect(canvas!.height).toBe(MINIMAP_CONFIG.canvasSize);
     });
 
-    it('should position canvas absolutely in bottom-left', () => {
+    it('should add canvas with game-minimap class for CSS positioning', () => {
       service.init(container);
       const canvas = container.querySelector('canvas') as HTMLCanvasElement;
-      expect(canvas.style.position).toBe('absolute');
-      expect(canvas.style.bottom).toBe(`${MINIMAP_CONFIG.padding}px`);
-      expect(canvas.style.left).toBe(`${MINIMAP_CONFIG.padding}px`);
+      expect(canvas.className).toBe('game-minimap');
     });
   });
 
@@ -103,11 +101,10 @@ describe('MinimapService', () => {
       expect(canvas.style.display).toBe('');
     });
 
-    it('should have opacity transition configured after init', () => {
+    it('should have game-minimap class for CSS transition', () => {
       service.init(container);
       const canvas = container.querySelector('canvas') as HTMLCanvasElement;
-      expect(canvas.style.transition).toContain('opacity');
-      expect(canvas.style.transition).toContain(`${MINIMAP_CONFIG.fadeInMs}ms`);
+      expect(canvas.classList.contains('game-minimap')).toBeTrue();
     });
 
     it('should start with opacity 0 before show is called', () => {

@@ -2965,6 +2965,33 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
 }
 
 /* ============================================================
+   game-board: minimap canvas
+   ============================================================ */
+.game-minimap {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  top: auto;
+  right: auto;
+  border: 2px solid rgba(138, 92, 246, 0.5);
+  border-radius: 4px;
+  z-index: 100;
+  pointer-events: none;
+  box-shadow: 0 0 8px rgba(138, 92, 246, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  transition: opacity 300ms ease;
+}
+
+@media (max-width: 480px) {
+  .game-minimap {
+    bottom: auto !important;
+    top: 6rem !important;
+    left: 4px !important;
+    right: auto !important;
+  }
+}
+
+/* ============================================================
    game-board: pause / speed controls
    ============================================================ */
 .board-container .game-controls {
