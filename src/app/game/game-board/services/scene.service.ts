@@ -271,6 +271,7 @@ export class SceneService {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = CONTROLS_CONFIG.dampingFactor;
     this.controls.screenSpacePanning = false;
+    this.controls.enablePan = true;
     this.controls.minDistance = CAMERA_CONFIG.distance * CONTROLS_CONFIG.minDistanceFactor;
     this.controls.maxDistance = CAMERA_CONFIG.distance * CONTROLS_CONFIG.maxDistanceFactor;
     this.controls.minPolarAngle = CONTROLS_CONFIG.minPolarAngle;

@@ -2857,10 +2857,10 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
     position: fixed;
     top: auto;
     right: 0;
-    bottom: var(--tower-bar-height);
+    bottom: calc(var(--tower-bar-height) + 1.75rem);
     left: 0;
     width: 100%;
-    max-height: calc(100vh - var(--tower-bar-height) - 4rem);
+    max-height: calc(100vh - var(--tower-bar-height) - 5.5rem);
     border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
     padding: 0.25rem 0.5rem;
     overflow-y: auto;
