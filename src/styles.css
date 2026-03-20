@@ -2857,10 +2857,10 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
     position: fixed;
     top: auto;
     right: 0;
-    bottom: calc(var(--tower-bar-height) + 1.75rem);
+    bottom: calc(var(--tower-bar-height) + 0.25rem);
     left: 0;
     width: 100%;
-    max-height: calc(100vh - var(--tower-bar-height) - 5.5rem);
+    max-height: calc(100vh - var(--tower-bar-height) - 4.25rem);
     border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
     padding: 0.25rem 0.5rem;
     overflow-y: auto;
@@ -3479,8 +3479,15 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
 
 @media (max-width: 480px) {
   .board-container .mode-indicator {
-    bottom: calc(var(--tower-bar-height) + var(--spacing-sm));
+    bottom: calc(var(--tower-bar-height) + 0.2rem);
+    left: auto;
+    right: var(--spacing-xs);
+    transform: none;
     font-size: var(--font-size-3xs);
     padding: 0.15rem 0.5rem;
+  }
+
+  .board-container .mode-indicator .mode-hint {
+    display: none;  /* "Right-click to cancel" not applicable on touch */
   }
 }

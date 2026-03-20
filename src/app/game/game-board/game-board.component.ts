@@ -591,20 +591,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    * behaviour is completely unchanged.
    */
   handleTowerButtonTap(event: MouseEvent | TouchEvent, type: TowerType): void {
-    const isTouch = event instanceof TouchEvent || (event instanceof PointerEvent && event.pointerType === 'touch');
-    if (!isTouch) {
-      this.selectTowerType(type);
-      return;
-    }
-
-    if (this.previewTowerType === type) {
-      // Second tap on same tower — commit to placement
-      this.previewTowerType = null;
-      this.selectTowerType(type);
-    } else {
-      // First tap (or switching preview to a different tower)
-      this.previewTowerType = type;
-    }
+    // On both touch and mouse, select the tower directly.
+    // The tooltip preview (.previewing class) shows stats on touch via CSS,
+    // but the tower is selected immediately so the mode indicator updates.
+    this.selectTowerType(type);
   }
 
   /** Dismiss the touch preview without selecting a tower. */

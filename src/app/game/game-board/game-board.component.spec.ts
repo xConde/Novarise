@@ -1292,35 +1292,20 @@ describe('GameBoardComponent', () => {
       expect(component.previewTowerType).toBeNull();
     });
 
-    it('first touch tap sets previewTowerType without selecting for placement', () => {
-      component.selectedTowerType = null;
-
-      component.handleTowerButtonTap(makeTouchEvent(), TowerType.SNIPER);
-
-      expect(component.previewTowerType).toBe(TowerType.SNIPER);
-      // Must NOT have entered PLACE mode yet
-      expect(component.selectedTowerType).toBeNull();
-    });
-
-    it('second touch tap on same tower selects it for placement and clears preview', () => {
-      component.previewTowerType = TowerType.SNIPER;
+    it('touch tap selects tower immediately (mode indicator updates)', () => {
       component.selectedTowerType = null;
 
       component.handleTowerButtonTap(makeTouchEvent(), TowerType.SNIPER);
 
       expect(component.isPlaceMode).toBeTrue();
       expect(component.selectedTowerType as TowerType | null).toBe(TowerType.SNIPER);
-      expect(component.previewTowerType).toBeNull();
     });
 
-    it('touch tap on different tower while preview open switches preview', () => {
-      component.previewTowerType = TowerType.BASIC;
-
+    it('touch tap on different tower switches selection', () => {
+      component.handleTowerButtonTap(makeTouchEvent(), TowerType.BASIC);
       component.handleTowerButtonTap(makeTouchEvent(), TowerType.MORTAR);
 
-      expect(component.previewTowerType).toBe(TowerType.MORTAR);
-      // Still no placement commitment
-      expect(component.selectedTowerType).toBe(TowerType.BASIC);
+      expect(component.selectedTowerType as TowerType | null).toBe(TowerType.MORTAR);
     });
 
     it('mouse click delegates directly to selectTowerType (desktop unchanged)', () => {
