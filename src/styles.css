@@ -2863,11 +2863,14 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
     padding: 0.1rem 0.2rem;
   }
 
-  /* Start button — primary action, needs more presence */
+  /* Start button — sticky at bottom of panel so it's always visible */
   .board-container .setup-start-btn {
+    position: sticky;
+    bottom: 0;
     min-height: 2.5rem;
     font-size: 0.65rem;
     padding: 0.25rem;
+    z-index: 1;
   }
 }
 

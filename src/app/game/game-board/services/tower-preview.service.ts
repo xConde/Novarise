@@ -37,8 +37,9 @@ export class TowerPreviewService {
     isValid: boolean,
     scene: THREE.Scene
   ): void {
-    const worldX = col;
-    const worldZ = row;
+    // Convert grid coords to world-space (board is centered at origin)
+    const worldX = (col - this.boardWidth / 2) * 1; // tileSize = 1
+    const worldZ = (row - this.boardHeight / 2) * 1;
 
     if (this.previewState?.towerType !== towerType) {
       this.removeMeshesFromScene(scene);
@@ -96,13 +97,15 @@ export class TowerPreviewService {
       outerRadius,
       PREVIEW_CONFIG.rangeRingSegments
     );
-    // Clipping planes keep ring within board bounds (tiles at 0..width-1, 0..height-1)
-    // Three.js Plane: visible where (normal · point + constant) >= 0
+    // Clipping planes keep ring within board world-space bounds
+    // Board is centered: x ∈ [-w/2 - 0.5, w/2 - 0.5], z ∈ [-h/2 - 0.5, h/2 - 0.5]
+    const halfW = this.boardWidth / 2;
+    const halfH = this.boardHeight / 2;
     const clippingPlanes = [
-      new THREE.Plane(new THREE.Vector3(1, 0, 0), 0.5),                       // x >= -0.5
-      new THREE.Plane(new THREE.Vector3(-1, 0, 0), this.boardWidth - 0.5),    // x <= width-0.5
-      new THREE.Plane(new THREE.Vector3(0, 0, 1), 0.5),                       // z >= -0.5
-      new THREE.Plane(new THREE.Vector3(0, 0, -1), this.boardHeight - 0.5),   // z <= height-0.5
+      new THREE.Plane(new THREE.Vector3(1, 0, 0), halfW + 0.5),     // x >= -halfW - 0.5
+      new THREE.Plane(new THREE.Vector3(-1, 0, 0), halfW - 0.5),    // x <= halfW - 0.5
+      new THREE.Plane(new THREE.Vector3(0, 0, 1), halfH + 0.5),     // z >= -halfH - 0.5
+      new THREE.Plane(new THREE.Vector3(0, 0, -1), halfH - 0.5),    // z <= halfH - 0.5
     ];
 
     const ringMaterial = new THREE.MeshBasicMaterial({
