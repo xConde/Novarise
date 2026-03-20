@@ -2845,6 +2845,18 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
   }
 }
 
+/* On mobile during SETUP, hide tower bar — setup panel fills the bottom instead */
+@media (max-width: 480px) {
+  .board-container .tower-selection.setup-phase {
+    display: none;
+  }
+
+  /* With tower bar hidden, setup panel can use more space */
+  .board-container .setup-panel {
+    max-height: 45vh;
+  }
+}
+
 /* ============================================================
    game-board: pause / speed controls
    ============================================================ */

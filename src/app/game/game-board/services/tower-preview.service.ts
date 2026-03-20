@@ -96,16 +96,13 @@ export class TowerPreviewService {
       outerRadius,
       PREVIEW_CONFIG.rangeRingSegments
     );
-    // Clipping planes to prevent range ring from extending beyond board edges
-    const halfW = this.boardWidth / 2;
-    const halfH = this.boardHeight / 2;
-    const centerX = (this.boardWidth - 1) / 2;
-    const centerZ = (this.boardHeight - 1) / 2;
+    // Clipping planes keep ring within board bounds (tiles at 0..width-1, 0..height-1)
+    // Three.js Plane: visible where (normal · point + constant) >= 0
     const clippingPlanes = [
-      new THREE.Plane(new THREE.Vector3(1, 0, 0), halfW + centerX),     // left
-      new THREE.Plane(new THREE.Vector3(-1, 0, 0), halfW - centerX),    // right (negated)
-      new THREE.Plane(new THREE.Vector3(0, 0, 1), halfH + centerZ),     // top
-      new THREE.Plane(new THREE.Vector3(0, 0, -1), halfH - centerZ),    // bottom (negated)
+      new THREE.Plane(new THREE.Vector3(1, 0, 0), 0.5),                       // x >= -0.5
+      new THREE.Plane(new THREE.Vector3(-1, 0, 0), this.boardWidth - 0.5),    // x <= width-0.5
+      new THREE.Plane(new THREE.Vector3(0, 0, 1), 0.5),                       // z >= -0.5
+      new THREE.Plane(new THREE.Vector3(0, 0, -1), this.boardHeight - 0.5),   // z <= height-0.5
     ];
 
     const ringMaterial = new THREE.MeshBasicMaterial({
