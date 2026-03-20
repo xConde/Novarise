@@ -680,7 +680,59 @@ body .tutorial-target-highlight {
 
 @media (max-width: 480px) {
   .encyclopedia-panel {
-    max-height: 45vh;
+    bottom: var(--tower-bar-height, 6.5rem);
+    max-height: calc(100vh - var(--tower-bar-height, 6.5rem) - 4rem);
+    padding: 0.5rem;
+    font-size: var(--font-size-3xs);
+  }
+
+  .encyclopedia-header {
+    margin-bottom: 0.35rem;
+  }
+
+  .encyclopedia-header h3 {
+    font-size: 0.7rem;
+  }
+
+  .encyclopedia-tabs {
+    gap: 0.2rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .encyclopedia-tab {
+    font-size: 0.5rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .encyclopedia-entry {
+    padding: 0.3rem;
+    gap: 0.2rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .encyclopedia-entry__name {
+    font-size: 0.6rem;
+  }
+
+  .encyclopedia-entry__stats {
+    font-size: 0.45rem;
+    gap: 0.3rem;
+  }
+
+  .encyclopedia-entry__desc {
+    font-size: 0.4rem;
+  }
+
+  .encyclopedia-entry__specs {
+    gap: 0.15rem;
+  }
+
+  .encyclopedia-entry__spec-label {
+    font-size: 0.45rem;
+  }
+
+  .encyclopedia-entry__spec-desc {
+    font-size: 0.4rem;
   }
 }
 
