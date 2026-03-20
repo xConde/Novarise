@@ -2183,7 +2183,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Dying/hit/shield animations must run in ALL phases (not just COMBAT)
     // so enemies that die at the end of a wave finish their death animation
     // during INTERMISSION instead of freezing on the board.
-    if (deltaTime > 0 && this.enemyService.getEnemies().size > 0) {
+    // Skip when runPausedVisuals already handled it (COMBAT + paused) to avoid double-tick.
+    const pauseHandled = deltaTime > 0
+      && this.gameStateService.getState().phase === GamePhase.COMBAT
+      && this.gameStateService.getState().isPaused;
+    if (deltaTime > 0 && !pauseHandled && this.enemyService.getEnemies().size > 0) {
       this.enemyService.updateDyingAnimations(deltaTime, this.sceneService.getScene());
       this.enemyService.updateHitFlashes(deltaTime);
       this.enemyService.updateShieldBreakAnimations(deltaTime);

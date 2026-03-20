@@ -1091,3 +1091,12 @@ Test count: 2756 → 3024 (+268 tests)
 ### Finding 3: Camera pan boundary fires every frame via OrbitControls 'change' event (LOW)
 **Location:** `scene.service.ts:281-287`
 **Risk:** The clamping callback runs 60×/sec during any orbit interaction. Trivial computation (6 Math.max/min calls) so not a real perf issue, but unnecessary work when values haven't changed. No fix needed — flagged for awareness only.
+
+---
+
+## Red Team Critique — 2026-03-19 (Final gate, post-hotfixes)
+
+### Finding 1: Dying/hit/shield animations still double-tick during COMBAT+paused (HIGH)
+**Location:** `game-board.component.ts:2174` and `game-board.component.ts:2186-2189`
+**Risk:** When game is paused during COMBAT, `runPausedVisuals()` (line 2174) calls `updateDyingAnimations`, `updateHitFlashes`, `updateShieldBreakAnimations`. Then the phase-independent block (lines 2186-2189) calls them AGAIN unconditionally. Death animations run at 2× speed while paused. The previous fix removed the duplicate from `processCombatResult` but introduced a new one by adding the phase-independent block without guarding against the pause path.
+**Fix:** Guard lines 2186-2189 to skip when `runPausedVisuals` already handled the tick: add `!(state.phase === GamePhase.COMBAT && state.isPaused)` to the condition.
