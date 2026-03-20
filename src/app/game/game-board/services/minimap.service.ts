@@ -52,11 +52,12 @@ export class MinimapService {
       this.canvas.style.display = 'none';
     }
 
-    // Compact minimap on narrow viewports — position above tower bar
+    // Compact minimap on narrow viewports — top-left to avoid tower bar
     if (window.innerWidth <= 480) {
-      this.canvas.width = 80;
-      this.canvas.height = 80;
-      this.canvas.style.bottom = 'calc(6.5rem + 8px)';
+      this.canvas.width = 60;
+      this.canvas.height = 60;
+      this.canvas.style.bottom = 'auto';
+      this.canvas.style.top = '3.5rem';
       this.canvas.style.left = '4px';
     }
 

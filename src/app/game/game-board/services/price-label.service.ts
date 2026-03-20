@@ -22,15 +22,15 @@ const LABEL_CONFIG = {
    */
   minPercentIncrease: 8,
   /** Stroke width for the dark outline behind text. */
-  strokeWidth: 5,
+  strokeWidth: 6,
 } as const;
 
 const TIER_TEXT_COLORS: Record<string, string> = {
-  base: '#22cc66',
-  low: '#88cc22',
-  medium: '#ccaa00',
-  high: '#dd6600',
-  critical: '#dd2200',
+  base: '#44ee88',
+  low: '#aaee44',
+  medium: '#ffdd33',
+  high: '#ff8833',
+  critical: '#ff4444',
 };
 
 /** Fallback color for unknown tiers. */
