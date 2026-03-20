@@ -2990,8 +2990,8 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
     right: auto !important;
   }
 
-  .board-container .wave-preview .wave-hint {
-    display: none;
+  .board-container .wave-hint {
+    display: none;  /* No keyboard on mobile — hide all key hints (Space, R, V) */
   }
 }
 
