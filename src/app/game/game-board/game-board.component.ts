@@ -1501,11 +1501,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             const tileCost = tilePrice.cost;
             const canPlace = this.gameBoardService.canPlaceTower(row, col)
               && this.gameStateService.canAfford(tileCost);
-            if (canPlace) {
-              this.towerPreviewService.showPreview(this.selectedTowerType!, row, col, canPlace, this.sceneService.getScene());
-            } else {
-              this.towerPreviewService.hidePreview(this.sceneService.getScene());
-            }
+            this.towerPreviewService.showPreview(this.selectedTowerType!, row, col, canPlace, this.sceneService.getScene());
           }
         } else {
           this.lastPreviewKey = '';
