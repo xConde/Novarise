@@ -1435,6 +1435,8 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
   backdrop-filter: blur(1rem);
   animation: scale-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   max-width: min(32rem, 90vw);
+  max-height: 90vh;
+  overflow-y: auto;
   width: 100%;
 }
 
