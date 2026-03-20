@@ -2916,15 +2916,16 @@ body.reduce-motion .board-container .overlay-content .overlay-star.filled {
   }
 
   .board-container .setup-panel .challenge-preview-item__name {
-    font-size: 0.55rem;
+    font-size: 0.65rem;
   }
 
   .board-container .setup-panel .challenge-preview-item__desc {
-    font-size: 0.4rem;
+    font-size: 0.55rem;
+    color: rgba(200, 184, 255, 1);
   }
 
   .board-container .setup-panel .challenge-preview-item__bonus {
-    font-size: 0.5rem;
+    font-size: 0.6rem;
   }
 
   /* Difficulty grid: 4 across */
