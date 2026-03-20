@@ -6,9 +6,9 @@ import * as THREE from 'three';
 // ---------------------------------------------------------------------------
 
 const LABEL_CONFIG = {
-  canvasWidth: 192,
-  canvasHeight: 96,
-  fontSize: 40,
+  canvasWidth: 256,
+  canvasHeight: 128,
+  fontSize: 54,
   fontFamily: 'Arial',
   fontWeight: 'bold',
   /** World-unit width/height of the sprite billboard. */
@@ -151,6 +151,8 @@ export class PriceLabelService {
     }
 
     const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter; // No mipmaps — keeps text sharp at distance
+    texture.generateMipmaps = false;
     const material = new THREE.SpriteMaterial({
       map: texture,
       transparent: true,
