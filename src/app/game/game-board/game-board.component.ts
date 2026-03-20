@@ -2220,6 +2220,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const completedWave = this.gameStateService.getState().wave;
         const perfectWave = wc.streakBonus > 0;
         this.onWaveComplete(completedWave, perfectWave);
+        // Hide minimap during intermission on mobile — frees space for Next Wave button
+        if (window.innerWidth <= 480) {
+          this.minimapService.hide();
+        }
       }
     }
 

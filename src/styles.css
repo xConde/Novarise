@@ -2036,8 +2036,8 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
     font-size: var(--font-size-3xs);
     padding: 0.2rem 0.4rem;
     min-width: auto;
-    max-width: 45%;
-    max-height: 20vh;
+    max-width: 55%;
+    max-height: 25vh;
     text-align: left;
     border-radius: var(--border-radius-sm);
   }
@@ -2190,10 +2190,12 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
 
 @media (max-width: 480px) {
   .board-container .wave-preview .wave-btn {
-    padding: 0.35rem 0.75rem;
-    font-size: var(--font-size-2xs);
-    min-height: 2rem;
-    margin-top: 0.25rem;
+    padding: 0.5rem 1rem;
+    font-size: var(--font-size-xs);
+    min-height: 2.75rem;
+    margin-top: 0.35rem;
+    pointer-events: auto;
+    width: 100%;
   }
 }
 
