@@ -153,6 +153,61 @@ describe('GameResultsOverlayComponent', () => {
       const starDisplay = fixture.nativeElement.querySelector('.star-display');
       expect(starDisplay).toBeNull();
     });
+
+    it('should assign star-1, star-2, star-3 position classes to each star', () => {
+      component.isVictory = true;
+      component.starArray = ['filled', 'filled', 'empty'];
+      fixture.detectChanges();
+
+      const stars: NodeListOf<HTMLElement> = fixture.nativeElement.querySelectorAll('.overlay-star');
+      expect(stars[0].classList.contains('star-1')).toBeTrue();
+      expect(stars[1].classList.contains('star-2')).toBeTrue();
+      expect(stars[2].classList.contains('star-3')).toBeTrue();
+    });
+
+    it('should not assign out-of-range position classes', () => {
+      component.isVictory = true;
+      component.starArray = ['filled', 'filled', 'empty'];
+      fixture.detectChanges();
+
+      const stars: NodeListOf<HTMLElement> = fixture.nativeElement.querySelectorAll('.overlay-star');
+      expect(stars[0].classList.contains('star-2')).toBeFalse();
+      expect(stars[0].classList.contains('star-3')).toBeFalse();
+      expect(stars[1].classList.contains('star-1')).toBeFalse();
+      expect(stars[1].classList.contains('star-3')).toBeFalse();
+    });
+
+    it('should apply filled class to earned stars and empty class to unearned stars', () => {
+      component.isVictory = true;
+      component.starArray = ['filled', 'filled', 'empty'];
+      fixture.detectChanges();
+
+      const stars: NodeListOf<HTMLElement> = fixture.nativeElement.querySelectorAll('.overlay-star');
+      expect(stars[0].classList.contains('filled')).toBeTrue();
+      expect(stars[0].classList.contains('empty')).toBeFalse();
+      expect(stars[2].classList.contains('empty')).toBeTrue();
+      expect(stars[2].classList.contains('filled')).toBeFalse();
+    });
+
+    it('should render all three stars with correct count', () => {
+      component.isVictory = true;
+      component.starArray = ['filled', 'filled', 'filled'];
+      fixture.detectChanges();
+
+      const stars = fixture.nativeElement.querySelectorAll('.overlay-star');
+      expect(stars.length).toBe(3);
+    });
+
+    it('should render zero filled stars for a zero-star result', () => {
+      component.isVictory = true;
+      component.starArray = ['empty', 'empty', 'empty'];
+      fixture.detectChanges();
+
+      const filled = fixture.nativeElement.querySelectorAll('.overlay-star.filled');
+      const empty = fixture.nativeElement.querySelectorAll('.overlay-star.empty');
+      expect(filled.length).toBe(0);
+      expect(empty.length).toBe(3);
+    });
   });
 
   describe('score breakdown', () => {
@@ -404,6 +459,50 @@ describe('GameResultsOverlayComponent', () => {
     });
   });
 
+  describe('accessibility', () => {
+    it('should have aria-label on star display container showing star count', () => {
+      component.isVictory = true;
+      component.starArray = ['filled', 'filled', 'empty'];
+      component.scoreBreakdown = makeScoreBreakdown({ stars: 2 });
+      fixture.detectChanges();
+
+      const starDisplay: HTMLElement = fixture.nativeElement.querySelector('.star-display');
+      expect(starDisplay.getAttribute('aria-label')).toBe('2 out of 3 stars');
+    });
+
+    it('should have aria-label "0 out of 3 stars" when no stars earned', () => {
+      component.isVictory = true;
+      component.starArray = ['empty', 'empty', 'empty'];
+      component.scoreBreakdown = makeScoreBreakdown({ stars: 0 });
+      fixture.detectChanges();
+
+      const starDisplay: HTMLElement = fixture.nativeElement.querySelector('.star-display');
+      expect(starDisplay.getAttribute('aria-label')).toBe('0 out of 3 stars');
+    });
+
+    it('should have aria-label "passed" on completed challenge status', () => {
+      const challenge = makeChallenge();
+      component.isCampaignGame = true;
+      component.campaignChallenges = [challenge];
+      component.isChallengeCompletedFn = () => true;
+      fixture.detectChanges();
+
+      const status: HTMLElement = fixture.nativeElement.querySelector('.challenge-result-item__status');
+      expect(status.getAttribute('aria-label')).toBe('passed');
+    });
+
+    it('should have aria-label "failed" on failed challenge status', () => {
+      const challenge = makeChallenge();
+      component.isCampaignGame = true;
+      component.campaignChallenges = [challenge];
+      component.isChallengeCompletedFn = () => false;
+      fixture.detectChanges();
+
+      const status: HTMLElement = fixture.nativeElement.querySelector('.challenge-result-item__status');
+      expect(status.getAttribute('aria-label')).toBe('failed');
+    });
+  });
+
   describe('output events', () => {
     it('should emit restart when Play Again button is clicked', () => {
       let emitted = false;
@@ -457,6 +556,56 @@ describe('GameResultsOverlayComponent', () => {
       const primaryBtn: HTMLButtonElement = fixture.nativeElement.querySelector('.results-btn--primary');
       expect(primaryBtn).toBeTruthy();
       primaryBtn.click();
+
+      expect(emitted).toBeTrue();
+    });
+
+    it('should show Edit Map button when isEditorOrigin is false', () => {
+      component.isEditorOrigin = false;
+      fixture.detectChanges();
+
+      const buttons: NodeListOf<HTMLButtonElement> = fixture.nativeElement.querySelectorAll('.results-btn');
+      const editBtn = Array.from(buttons).find(b => b.textContent?.trim() === 'Edit Map');
+      expect(editBtn).toBeTruthy();
+    });
+
+    it('should not show Edit Map button when isEditorOrigin is true', () => {
+      component.isEditorOrigin = true;
+      fixture.detectChanges();
+
+      const buttons: NodeListOf<HTMLButtonElement> = fixture.nativeElement.querySelectorAll('.results-btn');
+      const editBtn = Array.from(buttons).find(b => b.textContent?.trim() === 'Edit Map');
+      expect(editBtn).toBeUndefined();
+    });
+
+    it('should show Back to Editor button when isEditorOrigin is true', () => {
+      component.isEditorOrigin = true;
+      fixture.detectChanges();
+
+      const buttons: NodeListOf<HTMLButtonElement> = fixture.nativeElement.querySelectorAll('.results-btn');
+      const editorBtn = Array.from(buttons).find(b => b.textContent?.trim() === 'Back to Editor');
+      expect(editorBtn).toBeTruthy();
+    });
+
+    it('should not show Back to Editor button when isEditorOrigin is false', () => {
+      component.isEditorOrigin = false;
+      fixture.detectChanges();
+
+      const buttons: NodeListOf<HTMLButtonElement> = fixture.nativeElement.querySelectorAll('.results-btn');
+      const editorBtn = Array.from(buttons).find(b => b.textContent?.trim() === 'Back to Editor');
+      expect(editorBtn).toBeUndefined();
+    });
+
+    it('should emit backToEditor when Back to Editor button is clicked', () => {
+      let emitted = false;
+      component.isEditorOrigin = true;
+      component.backToEditor.subscribe(() => (emitted = true));
+      fixture.detectChanges();
+
+      const buttons: NodeListOf<HTMLButtonElement> = fixture.nativeElement.querySelectorAll('.results-btn');
+      const editorBtn = Array.from(buttons).find(b => b.textContent?.trim() === 'Back to Editor');
+      expect(editorBtn).toBeTruthy();
+      editorBtn!.click();
 
       expect(emitted).toBeTrue();
     });

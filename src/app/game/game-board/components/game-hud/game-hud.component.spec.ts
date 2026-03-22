@@ -1,6 +1,7 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
-import { GameHudComponent } from './game-hud.component';
+import { SimpleChange } from '@angular/core';
+import { GameHudComponent, ChallengeIndicator } from './game-hud.component';
 
 describe('GameHudComponent', () => {
   let component: GameHudComponent;
@@ -97,6 +98,219 @@ describe('GameHudComponent', () => {
     });
   });
 
+  describe('speed run timer', () => {
+    describe('default state (no speed run)', () => {
+      it('should show "Time" label when speedRunTimeLimit is 0', () => {
+        component.speedRunTimeLimit = 0;
+        component.formattedTime = '01:23';
+        fixture.detectChanges();
+
+        const timeStatEl = fixture.nativeElement.querySelector('.hud-stat.secondary:nth-child(5)');
+        const label = timeStatEl?.querySelector('.hud-label');
+        expect(label?.textContent?.trim()).toBe('Time');
+      });
+
+      it('should show formattedTime when speedRunTimeLimit is 0', () => {
+        component.speedRunTimeLimit = 0;
+        component.formattedTime = '02:45';
+        fixture.detectChanges();
+
+        const timeStatEl = fixture.nativeElement.querySelector('.hud-stat.secondary:nth-child(5)');
+        const value = timeStatEl?.querySelector('.hud-value');
+        expect(value?.textContent?.trim()).toBe('02:45');
+      });
+
+      it('should not apply speed-run-active class when speedRunTimeLimit is 0', () => {
+        component.speedRunTimeLimit = 0;
+        fixture.detectChanges();
+
+        const speedRunEl = fixture.nativeElement.querySelector('.hud-stat.speed-run-active');
+        expect(speedRunEl).toBeNull();
+      });
+    });
+
+    describe('active speed run', () => {
+      beforeEach(() => {
+        component.speedRunTimeLimit = 120;
+        component.elapsedTime = 60;
+        fixture.detectChanges();
+      });
+
+      it('should show "Speed Run" label when speedRunTimeLimit > 0', () => {
+        const label = fixture.nativeElement.querySelector('.speed-run-label');
+        expect(label?.textContent?.trim()).toBe('Speed Run');
+      });
+
+      it('should not show the "Time" label when speed run is active', () => {
+        const labels = fixture.nativeElement.querySelectorAll('.hud-stat:nth-child(5) .hud-label');
+        const timeLabel = Array.from(labels as NodeList).find(
+          (el: Node) => (el as HTMLElement).textContent?.trim() === 'Time'
+        );
+        expect(timeLabel).toBeUndefined();
+      });
+
+      it('should apply speed-run-active class when speedRunTimeLimit > 0', () => {
+        const el = fixture.nativeElement.querySelector('.hud-stat.speed-run-active');
+        expect(el).toBeTruthy();
+      });
+
+      it('should show remaining time in MM:SS format', () => {
+        component.speedRunTimeLimit = 120;
+        component.elapsedTime = 60;
+        fixture.detectChanges();
+
+        const timerEl = fixture.nativeElement.querySelector('.speed-run-timer');
+        expect(timerEl?.textContent?.trim()).toBe('01:00');
+      });
+
+      it('should format remaining time with leading zeros', () => {
+        component.speedRunTimeLimit = 120;
+        component.elapsedTime = 115;
+        fixture.detectChanges();
+
+        const timerEl = fixture.nativeElement.querySelector('.speed-run-timer');
+        expect(timerEl?.textContent?.trim()).toBe('00:05');
+      });
+
+      it('should show 00:00 when elapsed time exceeds time limit', () => {
+        component.speedRunTimeLimit = 60;
+        component.elapsedTime = 90;
+        fixture.detectChanges();
+
+        const timerEl = fixture.nativeElement.querySelector('.speed-run-timer');
+        expect(timerEl?.textContent?.trim()).toBe('00:00');
+      });
+
+      it('should not apply warning class when more than 30s remain', () => {
+        component.speedRunTimeLimit = 120;
+        component.elapsedTime = 89; // 31s remaining
+        fixture.detectChanges();
+
+        const timerEl = fixture.nativeElement.querySelector('.speed-run-timer');
+        expect(timerEl?.classList.contains('warning')).toBeFalse();
+      });
+
+      it('should apply warning class when 30s or fewer remain', () => {
+        component.speedRunTimeLimit = 120;
+        component.elapsedTime = 90; // exactly 30s remaining
+        fixture.detectChanges();
+
+        const timerEl = fixture.nativeElement.querySelector('.speed-run-timer');
+        expect(timerEl?.classList.contains('warning')).toBeTrue();
+      });
+
+      it('should apply warning class when fewer than 30s remain', () => {
+        component.speedRunTimeLimit = 120;
+        component.elapsedTime = 100; // 20s remaining
+        fixture.detectChanges();
+
+        const timerEl = fixture.nativeElement.querySelector('.speed-run-timer');
+        expect(timerEl?.classList.contains('warning')).toBeTrue();
+      });
+
+      it('should not apply critical class when more than 10s remain', () => {
+        component.speedRunTimeLimit = 120;
+        component.elapsedTime = 109; // 11s remaining
+        fixture.detectChanges();
+
+        const timerEl = fixture.nativeElement.querySelector('.speed-run-timer');
+        expect(timerEl?.classList.contains('critical')).toBeFalse();
+      });
+
+      it('should apply critical class when 10s or fewer remain', () => {
+        component.speedRunTimeLimit = 120;
+        component.elapsedTime = 110; // exactly 10s remaining
+        fixture.detectChanges();
+
+        const timerEl = fixture.nativeElement.querySelector('.speed-run-timer');
+        expect(timerEl?.classList.contains('critical')).toBeTrue();
+      });
+
+      it('should apply critical class when fewer than 10s remain', () => {
+        component.speedRunTimeLimit = 120;
+        component.elapsedTime = 115; // 5s remaining
+        fixture.detectChanges();
+
+        const timerEl = fixture.nativeElement.querySelector('.speed-run-timer');
+        expect(timerEl?.classList.contains('critical')).toBeTrue();
+      });
+    });
+
+    describe('speedRunRemaining getter', () => {
+      it('should return time limit minus elapsed time', () => {
+        component.speedRunTimeLimit = 120;
+        component.elapsedTime = 45;
+        expect(component.speedRunRemaining).toBe(75);
+      });
+
+      it('should never return a negative value', () => {
+        component.speedRunTimeLimit = 60;
+        component.elapsedTime = 100;
+        expect(component.speedRunRemaining).toBe(0);
+      });
+
+      it('should return time limit when elapsed is 0', () => {
+        component.speedRunTimeLimit = 180;
+        component.elapsedTime = 0;
+        expect(component.speedRunRemaining).toBe(180);
+      });
+    });
+
+    describe('formattedSpeedRunRemaining getter', () => {
+      it('should format whole minutes correctly', () => {
+        component.speedRunTimeLimit = 120;
+        component.elapsedTime = 0;
+        expect(component.formattedSpeedRunRemaining).toBe('02:00');
+      });
+
+      it('should ceil fractional seconds', () => {
+        component.speedRunTimeLimit = 120;
+        component.elapsedTime = 59.7; // 60.3s remaining → ceil → 61 → 01:01
+        expect(component.formattedSpeedRunRemaining).toBe('01:01');
+      });
+
+      it('should return 00:00 when no time remains', () => {
+        component.speedRunTimeLimit = 60;
+        component.elapsedTime = 120;
+        expect(component.formattedSpeedRunRemaining).toBe('00:00');
+      });
+    });
+  });
+
+  describe('waveStartPulse', () => {
+    it('should apply wave-start-pulse class to wave value when waveStartPulse is true (finite)', () => {
+      component.waveStartPulse = true;
+      component.isEndless = false;
+      component.wave = 3;
+      component.maxWaves = 10;
+      fixture.detectChanges();
+
+      const waveEl = fixture.nativeElement.querySelector('.hud-stat:nth-child(3) .hud-value');
+      expect(waveEl.classList.contains('wave-start-pulse')).toBeTrue();
+    });
+
+    it('should apply wave-start-pulse class to wave value when waveStartPulse is true (endless)', () => {
+      component.waveStartPulse = true;
+      component.isEndless = true;
+      component.wave = 5;
+      fixture.detectChanges();
+
+      const waveEl = fixture.nativeElement.querySelector('.hud-stat:nth-child(3) .hud-value');
+      expect(waveEl.classList.contains('wave-start-pulse')).toBeTrue();
+    });
+
+    it('should not apply wave-start-pulse class when waveStartPulse is false', () => {
+      component.waveStartPulse = false;
+      component.isEndless = false;
+      component.wave = 2;
+      component.maxWaves = 10;
+      fixture.detectChanges();
+
+      const waveEl = fixture.nativeElement.querySelector('.hud-stat:nth-child(3) .hud-value');
+      expect(waveEl.classList.contains('wave-start-pulse')).toBeFalse();
+    });
+  });
+
   describe('level name', () => {
     it('should show level name when isCampaignGame is true and levelName is set', () => {
       component.isCampaignGame = true;
@@ -124,6 +338,327 @@ describe('GameHudComponent', () => {
 
       const levelEl = fixture.nativeElement.querySelector('.hud-level-name');
       expect(levelEl).toBeNull();
+    });
+  });
+
+  describe('challenge indicators', () => {
+    it('should not render .challenge-indicators when challengeIndicators is empty', () => {
+      component.challengeIndicators = [];
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement.querySelector('.challenge-indicators');
+      expect(el).toBeNull();
+    });
+
+    it('should render .challenge-indicators when indicators are provided', () => {
+      const indicators: ChallengeIndicator[] = [
+        { label: 'No Slow', value: '✓', passing: true },
+        { label: 'Towers', value: '2/4', passing: true },
+      ];
+      component.challengeIndicators = indicators;
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement.querySelector('.challenge-indicators');
+      expect(el).toBeTruthy();
+    });
+
+    it('should render one badge per indicator', () => {
+      const indicators: ChallengeIndicator[] = [
+        { label: 'No Slow', value: '✓', passing: true },
+        { label: 'Towers', value: '3/4', passing: false },
+        { label: 'Spent', value: '400g/600g', passing: true },
+      ];
+      component.challengeIndicators = indicators;
+      fixture.detectChanges();
+
+      const badges = fixture.nativeElement.querySelectorAll('.challenge-indicator');
+      expect(badges.length).toBe(3);
+    });
+
+    it('should apply passing class when indicator.passing is true', () => {
+      component.challengeIndicators = [{ label: 'No Slow', value: '✓', passing: true }];
+      fixture.detectChanges();
+
+      const badge = fixture.nativeElement.querySelector('.challenge-indicator');
+      expect(badge.classList.contains('passing')).toBeTrue();
+      expect(badge.classList.contains('failing')).toBeFalse();
+    });
+
+    it('should apply failing class when indicator.passing is false', () => {
+      component.challengeIndicators = [{ label: 'No Slow', value: '✗', passing: false }];
+      fixture.detectChanges();
+
+      const badge = fixture.nativeElement.querySelector('.challenge-indicator');
+      expect(badge.classList.contains('failing')).toBeTrue();
+      expect(badge.classList.contains('passing')).toBeFalse();
+    });
+
+    it('should display label and value in badge text', () => {
+      component.challengeIndicators = [{ label: 'Towers', value: '2/4', passing: true }];
+      fixture.detectChanges();
+
+      const badge = fixture.nativeElement.querySelector('.challenge-indicator');
+      expect(badge.textContent.trim()).toContain('Towers');
+      expect(badge.textContent.trim()).toContain('2/4');
+    });
+
+    it('should set aria-label combining label and value on each badge', () => {
+      component.challengeIndicators = [{ label: 'Spent', value: '300g/600g', passing: true }];
+      fixture.detectChanges();
+
+      const badge = fixture.nativeElement.querySelector('.challenge-indicator');
+      expect(badge.getAttribute('aria-label')).toBe('Spent: 300g/600g');
+    });
+
+    it('should update rendered badges when input changes', () => {
+      component.challengeIndicators = [{ label: 'No Damage', value: '✓', passing: true }];
+      fixture.detectChanges();
+
+      component.challengeIndicators = [
+        { label: 'No Damage', value: '✗', passing: false },
+        { label: 'Towers', value: '5/4', passing: false },
+      ];
+      fixture.detectChanges();
+
+      const badges = fixture.nativeElement.querySelectorAll('.challenge-indicator');
+      expect(badges.length).toBe(2);
+      expect(badges[0].classList.contains('failing')).toBeTrue();
+    });
+
+    it('should default challengeIndicators to empty array', () => {
+      expect(component.challengeIndicators).toEqual([]);
+    });
+  });
+
+  describe('gold and score pulse animations', () => {
+    describe('goldPulse', () => {
+      it('should not set goldPulse on firstChange', fakeAsync(() => {
+        component.ngOnChanges({
+          gold: new SimpleChange(undefined, 100, true),
+        });
+        expect(component.goldPulse).toBeFalse();
+        tick(300);
+      }));
+
+      it('should set goldPulse to true when gold increases', fakeAsync(() => {
+        component.ngOnChanges({
+          gold: new SimpleChange(0, 150, false),
+        });
+        expect(component.goldPulse).toBeTrue();
+        tick(300);
+      }));
+
+      it('should set goldPulse to true when gold decreases (tower purchase)', fakeAsync(() => {
+        // Seed previousGold to 200
+        component.ngOnChanges({
+          gold: new SimpleChange(0, 200, false),
+        });
+        tick(300);
+        component.ngOnChanges({
+          gold: new SimpleChange(200, 50, false),
+        });
+        expect(component.goldPulse).toBeTrue();
+        tick(300);
+      }));
+
+      it('should reset goldPulse to false after 300ms', fakeAsync(() => {
+        component.ngOnChanges({
+          gold: new SimpleChange(0, 150, false),
+        });
+        expect(component.goldPulse).toBeTrue();
+        tick(300);
+        expect(component.goldPulse).toBeFalse();
+      }));
+
+      it('should not set goldPulse when gold value is unchanged', fakeAsync(() => {
+        // Seed previousGold to 100 via a non-firstChange call, then let timer expire
+        component.ngOnChanges({
+          gold: new SimpleChange(0, 100, false),
+        });
+        tick(300);
+        // Now sending 100 again — delta is 0, no pulse
+        component.ngOnChanges({
+          gold: new SimpleChange(100, 100, false),
+        });
+        expect(component.goldPulse).toBeFalse();
+        tick(300);
+      }));
+
+      it('should re-trigger goldPulse if gold changes again before timer expires', fakeAsync(() => {
+        component.ngOnChanges({
+          gold: new SimpleChange(0, 150, false),
+        });
+        tick(150);
+        component.ngOnChanges({
+          gold: new SimpleChange(150, 200, false),
+        });
+        expect(component.goldPulse).toBeTrue();
+        tick(300);
+        expect(component.goldPulse).toBeFalse();
+      }));
+    });
+
+    describe('scorePulse', () => {
+      it('should not set scorePulse on firstChange', fakeAsync(() => {
+        component.ngOnChanges({
+          score: new SimpleChange(undefined, 500, true),
+        });
+        expect(component.scorePulse).toBeFalse();
+        tick(300);
+      }));
+
+      it('should set scorePulse to true when score changes', fakeAsync(() => {
+        component.ngOnChanges({
+          score: new SimpleChange(0, 750, false),
+        });
+        expect(component.scorePulse).toBeTrue();
+        tick(300);
+      }));
+
+      it('should reset scorePulse to false after 300ms', fakeAsync(() => {
+        component.ngOnChanges({
+          score: new SimpleChange(0, 750, false),
+        });
+        tick(300);
+        expect(component.scorePulse).toBeFalse();
+      }));
+
+      it('should not set scorePulse when score value is unchanged', fakeAsync(() => {
+        // Seed previousScore to 500 via a non-firstChange call, then let timer expire
+        component.ngOnChanges({
+          score: new SimpleChange(0, 500, false),
+        });
+        tick(300);
+        // Now sending 500 again — no change, no pulse
+        component.ngOnChanges({
+          score: new SimpleChange(500, 500, false),
+        });
+        expect(component.scorePulse).toBeFalse();
+        tick(300);
+      }));
+    });
+
+    describe('goldChange indicator', () => {
+      it('should set goldChange to the delta when gold increases from 0', fakeAsync(() => {
+        // previousGold starts at 0; first non-firstChange triggers delta = 150 - 0 = 150
+        component.ngOnChanges({
+          gold: new SimpleChange(0, 150, false),
+        });
+        expect(component.goldChange).toBe(150);
+        tick(300);
+      }));
+
+      it('should set goldChange to the delta for a subsequent gold increase', fakeAsync(() => {
+        // Seed previousGold via a non-firstChange call
+        component.ngOnChanges({
+          gold: new SimpleChange(0, 100, false),
+        });
+        tick(300);
+        component.ngOnChanges({
+          gold: new SimpleChange(100, 150, false),
+        });
+        expect(component.goldChange).toBe(50);
+        tick(300);
+      }));
+
+      it('should not set goldChange when gold decreases', fakeAsync(() => {
+        // Seed previousGold to 200
+        component.ngOnChanges({
+          gold: new SimpleChange(0, 200, false),
+        });
+        tick(300);
+        component.ngOnChanges({
+          gold: new SimpleChange(200, 100, false),
+        });
+        expect(component.goldChange).toBe(0);
+        tick(300);
+      }));
+
+      it('should reset goldChange to 0 after 300ms', fakeAsync(() => {
+        component.ngOnChanges({
+          gold: new SimpleChange(0, 150, false),
+        });
+        expect(component.goldChange).toBe(150);
+        tick(300);
+        expect(component.goldChange).toBe(0);
+      }));
+
+      it('should update goldChange if gold increases again before timer expires', fakeAsync(() => {
+        component.ngOnChanges({
+          gold: new SimpleChange(0, 100, false),
+        });
+        tick(150);
+        component.ngOnChanges({
+          gold: new SimpleChange(100, 180, false),
+        });
+        expect(component.goldChange).toBe(80);
+        tick(300);
+        expect(component.goldChange).toBe(0);
+      }));
+    });
+
+    describe('DOM binding', () => {
+      it('should apply gold-pulse class to gold hud-value when goldPulse is true', () => {
+        component.goldPulse = true;
+        fixture.detectChanges();
+
+        const goldEl = fixture.nativeElement.querySelector('.hud-value.gold');
+        expect(goldEl.classList.contains('gold-pulse')).toBeTrue();
+      });
+
+      it('should not apply gold-pulse class when goldPulse is false', () => {
+        component.goldPulse = false;
+        fixture.detectChanges();
+
+        const goldEl = fixture.nativeElement.querySelector('.hud-value.gold');
+        expect(goldEl.classList.contains('gold-pulse')).toBeFalse();
+      });
+
+      it('should apply score-pulse class to score hud-value when scorePulse is true', () => {
+        component.scorePulse = true;
+        fixture.detectChanges();
+
+        const scoreEl = fixture.nativeElement.querySelector('.hud-stat.secondary .hud-value');
+        expect(scoreEl.classList.contains('score-pulse')).toBeTrue();
+      });
+
+      it('should not apply score-pulse class when scorePulse is false', () => {
+        component.scorePulse = false;
+        fixture.detectChanges();
+
+        const scoreEl = fixture.nativeElement.querySelector('.hud-stat.secondary .hud-value');
+        expect(scoreEl.classList.contains('score-pulse')).toBeFalse();
+      });
+
+      it('should render gold-change span when goldChange is positive', () => {
+        component.goldChange = 50;
+        fixture.detectChanges();
+
+        const changeEl = fixture.nativeElement.querySelector('.gold-change');
+        expect(changeEl).toBeTruthy();
+        expect(changeEl.textContent.trim()).toBe('+50g');
+      });
+
+      it('should not render gold-change span when goldChange is 0', () => {
+        component.goldChange = 0;
+        fixture.detectChanges();
+
+        const changeEl = fixture.nativeElement.querySelector('.gold-change');
+        expect(changeEl).toBeNull();
+      });
+    });
+
+    describe('ngOnDestroy cleanup', () => {
+      it('should clear pending timers on destroy without throwing', fakeAsync(() => {
+        component.ngOnChanges({
+          gold: new SimpleChange(0, 150, false),
+        });
+        component.ngOnChanges({
+          score: new SimpleChange(0, 750, false),
+        });
+        expect(() => component.ngOnDestroy()).not.toThrow();
+        tick(300);
+      }));
     });
   });
 });

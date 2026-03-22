@@ -8,6 +8,7 @@ import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model'
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { GameBoardTile } from '../models/game-board-tile';
 import { StatusEffectType } from '../constants/status-effect.constants';
+import { HIT_FLASH_CONFIG } from '../constants/effects.constants';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { createTestBoard, createGameBoardServiceSpy } from '../testing';
 
@@ -595,26 +596,29 @@ describe('EnemyService', () => {
         expect(enemy.health).toBe(ENEMY_STATS[EnemyType.SHIELDED].health - overshoot);
       });
 
-      it('should remove shield mesh from userData when shield breaks', () => {
+      it('should start shield break animation when shield HP reaches 0', () => {
         const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
         const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
-
-        // Shield mesh should exist before break
-        expect(enemy.mesh!.userData['shieldMesh']).toBeTruthy();
 
         service.damageEnemy(enemy.id, maxShield);
 
         expect(enemy.shield).toBe(0);
-        expect(enemy.mesh!.userData['shieldMesh']).toBeUndefined();
+        // Break animation is deferred — dome still present but shieldBreaking=true
+        expect(enemy.shieldBreaking).toBe(true);
+        expect(enemy.shieldBreakTimer).toBeGreaterThan(0);
+        expect(enemy.mesh!.userData['shieldMesh']).toBeTruthy();
       });
 
-      it('should remove shield mesh from enemy mesh children when shield breaks', () => {
+      it('should remove shield mesh from userData and children after break animation completes', () => {
         const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
         const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
         const childrenBefore = enemy.mesh!.children.length;
 
         service.damageEnemy(enemy.id, maxShield);
+        // Advance past the full break animation duration
+        service.updateShieldBreakAnimations(1.0);
 
+        expect(enemy.mesh!.userData['shieldMesh']).toBeUndefined();
         expect(enemy.mesh!.children.length).toBe(childrenBefore - 1);
       });
 
@@ -1697,6 +1701,314 @@ describe('EnemyService', () => {
   // gridToWorld(row=r, col=c) => {x: c-5, z: r-5}
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Death animation — startDyingAnimation / updateDyingAnimations / getLivingEnemyCount
+  // ---------------------------------------------------------------------------
+
+  describe('startDyingAnimation', () => {
+    it('should set dying=true on the enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+
+      service.startDyingAnimation(enemy.id);
+
+      expect(enemy.dying).toBe(true);
+    });
+
+    it('should set dyingTimer to DEATH_ANIM_CONFIG.duration for non-boss enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+
+      service.startDyingAnimation(enemy.id);
+
+      // Timer should be the standard duration (0.3s)
+      expect(enemy.dyingTimer).toBeCloseTo(0.3);
+    });
+
+    it('should set dyingTimer to DEATH_ANIM_CONFIG.durationBoss for BOSS enemies', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      service.damageEnemy(boss.id, boss.maxHealth);
+
+      service.startDyingAnimation(boss.id);
+
+      // Timer should be the boss duration (0.5s)
+      expect(boss.dyingTimer).toBeCloseTo(0.5);
+    });
+
+    it('should set mesh material transparent=true', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+
+      service.startDyingAnimation(enemy.id);
+
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      expect(mat.transparent).toBe(true);
+    });
+
+    it('should be a no-op when called on a non-existent enemy', () => {
+      expect(() => service.startDyingAnimation('ghost-id')).not.toThrow();
+    });
+
+    it('should be a no-op when called twice on the same enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+
+      service.startDyingAnimation(enemy.id);
+      const timerAfterFirst = enemy.dyingTimer!;
+
+      // Manually advance time to simulate partial animation
+      enemy.dyingTimer = timerAfterFirst - 0.1;
+      service.startDyingAnimation(enemy.id);
+
+      // Timer should not have been reset by the second call
+      expect(enemy.dyingTimer).toBeCloseTo(timerAfterFirst - 0.1);
+    });
+
+    it('should keep the enemy in the enemies map', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+
+      service.startDyingAnimation(enemy.id);
+
+      expect(service.getEnemies().has(enemy.id)).toBe(true);
+    });
+
+    it('should set BOSS crown material transparent=true', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      service.damageEnemy(boss.id, boss.maxHealth);
+
+      service.startDyingAnimation(boss.id);
+
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      const crownMat = crown.material as THREE.MeshStandardMaterial;
+      expect(crownMat.transparent).toBe(true);
+    });
+  });
+
+  describe('updateDyingAnimations', () => {
+    it('should reduce the dyingTimer by deltaTime', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+      const initial = enemy.dyingTimer!;
+
+      service.updateDyingAnimations(0.1, mockScene);
+
+      expect(enemy.dyingTimer!).toBeCloseTo(initial - 0.1);
+    });
+
+    it('should shrink mesh scale toward DEATH_ANIM_CONFIG.minScale over time', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      // Advance halfway through the animation
+      service.updateDyingAnimations(0.15, mockScene);
+
+      // Scale should be between minScale and 1
+      expect(enemy.mesh!.scale.x).toBeLessThan(1);
+      expect(enemy.mesh!.scale.x).toBeGreaterThan(0.1);
+    });
+
+    it('should reduce mesh opacity toward 0 over time', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      // Advance halfway through the animation
+      service.updateDyingAnimations(0.15, mockScene);
+
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      expect(mat.opacity).toBeLessThan(1);
+      expect(mat.opacity).toBeGreaterThan(0);
+    });
+
+    it('should remove enemy from map when timer expires', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const id = enemy.id;
+      service.damageEnemy(id, enemy.maxHealth);
+      service.startDyingAnimation(id);
+
+      // Advance past the full duration
+      service.updateDyingAnimations(1.0, mockScene);
+
+      expect(service.getEnemies().has(id)).toBe(false);
+    });
+
+    it('should remove enemy mesh from scene when timer expires', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const id = enemy.id;
+      service.damageEnemy(id, enemy.maxHealth);
+      service.startDyingAnimation(id);
+
+      expect(mockScene.children.length).toBeGreaterThan(0);
+
+      service.updateDyingAnimations(1.0, mockScene);
+
+      expect(mockScene.children).not.toContain(enemy.mesh!);
+    });
+
+    it('should not affect living (non-dying) enemies', () => {
+      const living = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      service.updateDyingAnimations(0.3, mockScene);
+
+      expect(living.mesh!.scale.x).toBe(1); // default scale unchanged
+      expect(service.getEnemies().has(living.id)).toBe(true);
+    });
+
+    it('should be a no-op when deltaTime <= 0', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+      const timer = enemy.dyingTimer!;
+
+      service.updateDyingAnimations(0, mockScene);
+
+      expect(enemy.dyingTimer).toBe(timer);
+    });
+
+    it('should keep BOSS enemy in map until durationBoss expires', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      const id = boss.id;
+      service.damageEnemy(id, boss.maxHealth);
+      service.startDyingAnimation(id);
+
+      // Standard duration (0.3s) should NOT remove boss
+      service.updateDyingAnimations(0.3, mockScene);
+      expect(service.getEnemies().has(id)).toBe(true);
+
+      // Advance past boss duration (0.5s total → another 0.3s = 0.6s total)
+      service.updateDyingAnimations(0.3, mockScene);
+      expect(service.getEnemies().has(id)).toBe(false);
+    });
+  });
+
+  describe('getLivingEnemyCount', () => {
+    it('should return 0 when no enemies are spawned', () => {
+      expect(service.getLivingEnemyCount()).toBe(0);
+    });
+
+    it('should count all living enemies', () => {
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+
+      expect(service.getLivingEnemyCount()).toBe(2);
+    });
+
+    it('should exclude dying enemies from the count', () => {
+      const e1 = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+
+      service.damageEnemy(e1.id, e1.maxHealth);
+      service.startDyingAnimation(e1.id);
+
+      // e1 is dying, e2 is alive → count should be 1
+      expect(service.getLivingEnemyCount()).toBe(1);
+    });
+
+    it('should return 0 when all enemies are dying', () => {
+      const e1 = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const e2 = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+
+      service.damageEnemy(e1.id, e1.maxHealth);
+      service.startDyingAnimation(e1.id);
+      service.damageEnemy(e2.id, e2.maxHealth);
+      service.startDyingAnimation(e2.id);
+
+      expect(service.getLivingEnemyCount()).toBe(0);
+    });
+  });
+
+  describe('dying enemies — movement and targeting exclusions', () => {
+    it('dying enemies should not move during updateEnemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+      const pos = { ...enemy.position };
+
+      service.updateEnemies(0.5);
+
+      expect(enemy.position.x).toBe(pos.x);
+      expect(enemy.position.z).toBe(pos.z);
+    });
+
+    it('dying enemies should not appear in reached-exit list', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // Place at last path node so it would normally register as leaked
+      enemy.pathIndex = enemy.path.length - 1;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      const reached = service.updateEnemies(0.1);
+
+      expect(reached).not.toContain(enemy.id);
+    });
+
+    it('should not update health bar for dying enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      // Manually corrupt health bar scale to verify it is not touched
+      const healthBarFg = enemy.mesh!.userData['healthBarFg'] as THREE.Mesh;
+      healthBarFg.scale.x = 0.99;
+
+      service.updateHealthBars();
+
+      expect(healthBarFg.scale.x).toBe(0.99); // not updated
+    });
+
+    it('should not update status visuals for dying enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusVisuals(activeEffects);
+
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      // Emissive should not have been set to BURN color
+      expect(mat.emissive.getHex()).not.toBe(0xff6622);
+    });
+
+    it('dying enemies should not animate (boss crown should not spin)', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      service.damageEnemy(boss.id, boss.maxHealth);
+      service.startDyingAnimation(boss.id);
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      const rotBefore = crown.rotation.z;
+
+      service.updateEnemyAnimations(0.5);
+
+      expect(crown.rotation.z).toBe(rotBefore);
+    });
+  });
+
+  describe('reset() cleans up dying enemies', () => {
+    it('should remove dying enemies from the map on reset', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      service.reset(mockScene);
+
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('should remove dying enemy meshes from the scene on reset', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      service.reset(mockScene);
+
+      expect(mockScene.children).not.toContain(enemy.mesh!);
+    });
+  });
+
   describe('deferred repath execution in updateEnemies', () => {
 
     function node(col: number, row: number): import('../models/enemy.model').GridNode {
@@ -1785,6 +2097,470 @@ describe('EnemyService', () => {
       service.updateEnemies(0.6); // triggers executeRepath
 
       expect(enemy.needsRepath).toBe(false);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Hit flash — startHitFlash / updateHitFlashes
+  // ---------------------------------------------------------------------------
+
+  describe('startHitFlash', () => {
+    it('should set hitFlashTimer on a living enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      service.startHitFlash(enemy.id);
+
+      expect(enemy.hitFlashTimer).toBeGreaterThan(0);
+    });
+
+    it('should set emissiveIntensity to HIT_FLASH_CONFIG.emissiveIntensity', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      service.startHitFlash(enemy.id);
+
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      expect(mat.emissiveIntensity).toBeCloseTo(HIT_FLASH_CONFIG.emissiveIntensity);
+    });
+
+    it('should set emissive color to white (0xffffff)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      service.startHitFlash(enemy.id);
+
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(0xffffff);
+    });
+
+    it('should NOT flash a dying enemy', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      service.startHitFlash(enemy.id);
+
+      expect(enemy.hitFlashTimer).toBeUndefined();
+    });
+
+    it('should NOT re-flash while already flashing (throttle)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.startHitFlash(enemy.id);
+      const firstTimer = enemy.hitFlashTimer!;
+      // Manually reduce the timer (as if partially elapsed) so it is still active
+      enemy.hitFlashTimer = firstTimer * 0.5;
+
+      // Second flash attempt should be a no-op
+      service.startHitFlash(enemy.id);
+
+      expect(enemy.hitFlashTimer).toBeCloseTo(firstTimer * 0.5);
+    });
+
+    it('should be a no-op for a non-existent enemy ID', () => {
+      expect(() => service.startHitFlash('ghost-id')).not.toThrow();
+    });
+
+    it('should snapshot the pre-flash emissive color into userData', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      const originalColor = mat.emissive.getHex();
+
+      service.startHitFlash(enemy.id);
+
+      expect(enemy.mesh!.userData['preFlashEmissive']).toBe(originalColor);
+    });
+
+    it('should snapshot the pre-flash emissiveIntensity into userData', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      const originalIntensity = mat.emissiveIntensity;
+
+      service.startHitFlash(enemy.id);
+
+      expect(enemy.mesh!.userData['preFlashEmissiveIntensity']).toBeCloseTo(originalIntensity);
+    });
+
+    it('should also flash boss crown mesh', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+
+      service.startHitFlash(boss.id);
+
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      const crownMat = crown.material as THREE.MeshStandardMaterial;
+      expect(crownMat.emissive.getHex()).toBe(0xffffff);
+      expect(crownMat.emissiveIntensity).toBeCloseTo(HIT_FLASH_CONFIG.emissiveIntensity);
+    });
+
+    it('works with MeshStandardMaterial', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy.mesh!.material).toBeInstanceOf(THREE.MeshStandardMaterial);
+
+      service.startHitFlash(enemy.id);
+
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      expect(mat.emissive.getHex()).toBe(0xffffff);
+    });
+  });
+
+  describe('updateHitFlashes', () => {
+    it('should reduce hitFlashTimer by deltaTime', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.startHitFlash(enemy.id);
+      const before = enemy.hitFlashTimer!;
+
+      service.updateHitFlashes(0.05);
+
+      expect(enemy.hitFlashTimer).toBeCloseTo(before - 0.05);
+    });
+
+    it('should restore original emissive color when timer expires', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      const originalColor = mat.emissive.getHex();
+
+      service.startHitFlash(enemy.id);
+      // Advance past the full flash duration
+      service.updateHitFlashes(1.0);
+
+      expect(mat.emissive.getHex()).toBe(originalColor);
+    });
+
+    it('should restore original emissiveIntensity when timer expires', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      const originalIntensity = mat.emissiveIntensity;
+
+      service.startHitFlash(enemy.id);
+      service.updateHitFlashes(1.0);
+
+      expect(mat.emissiveIntensity).toBeCloseTo(originalIntensity);
+    });
+
+    it('should restore boss crown emissive when timer expires', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      const crown = boss.mesh!.userData['bossCrown'] as THREE.Mesh;
+      const crownMat = crown.material as THREE.MeshStandardMaterial;
+      const originalColor = crownMat.emissive.getHex();
+      const originalIntensity = crownMat.emissiveIntensity;
+
+      service.startHitFlash(boss.id);
+      service.updateHitFlashes(1.0);
+
+      expect(crownMat.emissive.getHex()).toBe(originalColor);
+      expect(crownMat.emissiveIntensity).toBeCloseTo(originalIntensity);
+    });
+
+    it('should be a no-op when deltaTime <= 0', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.startHitFlash(enemy.id);
+      const before = enemy.hitFlashTimer!;
+
+      service.updateHitFlashes(0);
+
+      expect(enemy.hitFlashTimer).toBe(before);
+    });
+
+    it('should not affect enemies with no active flash', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      const originalIntensity = mat.emissiveIntensity;
+
+      service.updateHitFlashes(0.1);
+
+      expect(mat.emissiveIntensity).toBeCloseTo(originalIntensity);
+    });
+
+    it('restores status-effect emissive after flash expires (snapshot preserves tinted color)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const mat = enemy.mesh!.material as THREE.MeshStandardMaterial;
+      // Manually apply a status-effect tint before the flash
+      mat.emissive.setHex(0x4488ff); // SLOW color
+      mat.emissiveIntensity = 0.7;
+
+      service.startHitFlash(enemy.id);
+      service.updateHitFlashes(1.0);
+
+      expect(mat.emissive.getHex()).toBe(0x4488ff);
+      expect(mat.emissiveIntensity).toBeCloseTo(0.7);
+    });
+
+    it('should zero hitFlashTimer after expiry (not leave it negative)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.startHitFlash(enemy.id);
+
+      service.updateHitFlashes(1.0);
+
+      expect(enemy.hitFlashTimer).toBe(0);
+    });
+
+    it('should cancel flash immediately if enemy is dying (red team gate)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.startHitFlash(enemy.id);
+      expect(enemy.hitFlashTimer).toBeGreaterThan(0);
+
+      // Enemy starts dying while flash is in progress
+      service.startDyingAnimation(enemy.id);
+      expect(enemy.dying).toBeTrue();
+
+      // Flash should be cancelled, not restored
+      service.updateHitFlashes(0.01);
+      expect(enemy.hitFlashTimer).toBe(0);
+      // Emissive should NOT be restored (death animation owns the visual state)
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Shield break animation — updateShieldBreakAnimations
+  // ---------------------------------------------------------------------------
+
+  describe('updateShieldBreakAnimations', () => {
+    it('should scale the shield dome up during break animation', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      service.damageEnemy(enemy.id, maxShield);
+
+      const shieldMesh = enemy.mesh!.userData['shieldMesh'] as THREE.Mesh;
+      const scaleAtStart = shieldMesh.scale.x;
+
+      // Advance partway through the animation
+      service.updateShieldBreakAnimations(0.1);
+
+      expect(shieldMesh.scale.x).toBeGreaterThan(scaleAtStart);
+    });
+
+    it('should fade the shield dome opacity toward 0 during break animation', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      service.damageEnemy(enemy.id, maxShield);
+
+      const shieldMesh = enemy.mesh!.userData['shieldMesh'] as THREE.Mesh;
+      const mat = shieldMesh.material as THREE.MeshStandardMaterial;
+      const opacityAtStart = mat.opacity;
+
+      service.updateShieldBreakAnimations(0.1);
+
+      expect(mat.opacity).toBeLessThan(opacityAtStart);
+    });
+
+    it('should remove shield mesh and clear shieldBreaking after animation completes', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      service.damageEnemy(enemy.id, maxShield);
+
+      expect(enemy.shieldBreaking).toBe(true);
+
+      service.updateShieldBreakAnimations(1.0);
+
+      expect(enemy.shieldBreaking).toBe(false);
+      expect(enemy.shieldBreakTimer).toBeUndefined();
+      expect(enemy.mesh!.userData['shieldMesh']).toBeUndefined();
+    });
+
+    it('should be a no-op when deltaTime <= 0', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      service.damageEnemy(enemy.id, maxShield);
+      const timerBefore = enemy.shieldBreakTimer!;
+
+      service.updateShieldBreakAnimations(0);
+
+      expect(enemy.shieldBreakTimer).toBe(timerBefore);
+    });
+
+    it('should not affect enemies with no active shield break animation', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      expect(() => service.updateShieldBreakAnimations(0.1)).not.toThrow();
+    });
+
+    it('should reduce the shieldBreakTimer by deltaTime', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      service.damageEnemy(enemy.id, maxShield);
+      const timerBefore = enemy.shieldBreakTimer!;
+
+      service.updateShieldBreakAnimations(0.1);
+
+      expect(enemy.shieldBreakTimer!).toBeCloseTo(timerBefore - 0.1);
+    });
+
+    it('cleanup handles SHIELDED enemies with active shield break animation', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      service.damageEnemy(enemy.id, maxShield);
+
+      // Shield break animation has started but not yet completed
+      expect(enemy.shieldBreaking).toBe(true);
+
+      expect(() => service.cleanup(mockScene)).not.toThrow();
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('reset handles SHIELDED enemies with active shield break animation', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      const maxShield = ENEMY_STATS[EnemyType.SHIELDED].maxShield!;
+      service.damageEnemy(enemy.id, maxShield);
+
+      expect(enemy.shieldBreaking).toBe(true);
+
+      expect(() => service.reset(mockScene)).not.toThrow();
+      expect(service.getEnemies().size).toBe(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // updateStatusEffectParticles
+  // ---------------------------------------------------------------------------
+
+  describe('updateStatusEffectParticles', () => {
+    it('creates BURN particles when enemy has BURN effect', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+
+      expect(enemy.statusParticles).toBeTruthy();
+      expect(enemy.statusParticles!.length).toBe(3); // maxParticlesPerEnemy
+    });
+
+    it('creates POISON particles when enemy has POISON effect', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.POISON]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+
+      expect(enemy.statusParticles!.length).toBe(3);
+      // Poison particles use green color
+      const mat = enemy.statusParticles![0].material as THREE.MeshBasicMaterial;
+      expect(mat.color.getHex()).toBe(0x44ff44);
+    });
+
+    it('creates SLOW particles when enemy has SLOW effect', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.SLOW]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+
+      expect(enemy.statusParticles!.length).toBe(3);
+      // Slow particles use ice-blue color
+      const mat = enemy.statusParticles![0].material as THREE.MeshBasicMaterial;
+      expect(mat.color.getHex()).toBe(0x88ccff);
+    });
+
+    it('removes particles when status effect ends (empty active effects)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+      expect(enemy.statusParticles!.length).toBe(3);
+
+      // Effect ended — no entry for this enemy
+      const noEffects = new Map<string, StatusEffectType[]>();
+      service.updateStatusEffectParticles(0.016, mockScene, noEffects);
+
+      expect(enemy.statusParticles!.length).toBe(0);
+    });
+
+    it('removes particles when enemy enters dying state', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      // Create particles first
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+      expect(enemy.statusParticles!.length).toBe(3);
+
+      // Mark as dying
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+
+      expect(enemy.statusParticles!.length).toBe(0);
+    });
+
+    it('removes particles on removeEnemy()', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+      const initialSceneCount = mockScene.children.length;
+      // 3 particles added to scene = enemy mesh + 3 particles
+      expect(mockScene.children.length).toBeGreaterThanOrEqual(4);
+
+      service.removeEnemy(enemy.id, mockScene);
+
+      // After removal scene should not contain the enemy mesh or particles
+      expect(mockScene.children.length).toBeLessThan(initialSceneCount);
+      expect(service.getEnemies().size).toBe(0);
+    });
+
+    it('cleans up all particles on cleanup()', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+      expect(enemy.statusParticles!.length).toBe(3);
+
+      service.cleanup(mockScene);
+
+      expect(mockScene.children.length).toBe(0);
+    });
+
+    it('does not create particles for dying enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+
+      // dying enemies get no particles (or existing ones removed)
+      expect(!enemy.statusParticles || enemy.statusParticles.length === 0).toBe(true);
+    });
+
+    it('respects max particle limit of 3 per enemy per effect', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.POISON]);
+
+      // Call multiple times — should not exceed max
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+
+      expect(enemy.statusParticles!.length).toBe(3);
+    });
+
+    it('does not throw for zero deltaTime', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      expect(() => service.updateStatusEffectParticles(0, mockScene, activeEffects)).not.toThrow();
+    });
+
+    it('adds particles to scene (not as child of enemy mesh)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const childCountBefore = enemy.mesh!.children.length;
+      const activeEffects = new Map<string, StatusEffectType[]>();
+      activeEffects.set(enemy.id, [StatusEffectType.BURN]);
+
+      service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
+
+      // Particles should be in the scene, NOT as children of the enemy mesh
+      expect(enemy.mesh!.children.length).toBe(childCountBefore);
+      // Scene should have grown by 3 (particles)
+      const particles = enemy.statusParticles!;
+      particles.forEach(p => {
+        expect(p.parent).toBe(mockScene);
+      });
     });
   });
 });

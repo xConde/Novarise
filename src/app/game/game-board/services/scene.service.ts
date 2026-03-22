@@ -115,6 +115,9 @@ export class SceneService {
   private skybox?: THREE.Mesh;
   private particles: THREE.Points | null = null;
 
+  // Board size — used to clamp orbit target and prevent wandering off the map
+  private boardSize = 10;
+
   // Renderer event handlers — stored for removal on dispose
   private contextLostHandler: ((event: Event) => void) | null = null;
   private contextRestoredHandler: (() => void) | null = null;
@@ -133,6 +136,8 @@ export class SceneService {
   getControls(): OrbitControls { return this.controls; }
   getParticles(): THREE.Points | null { return this.particles; }
   getSkybox(): THREE.Mesh | undefined { return this.skybox; }
+
+  setBoardSize(size: number): void { this.boardSize = size; }
 
   // ----- Initializers -----
 
@@ -172,6 +177,7 @@ export class SceneService {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.localClippingEnabled = true;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = SCENE_CONFIG.toneMappingExposure;
 
@@ -265,12 +271,22 @@ export class SceneService {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = CONTROLS_CONFIG.dampingFactor;
     this.controls.screenSpacePanning = false;
+    this.controls.enablePan = true;
     this.controls.minDistance = CAMERA_CONFIG.distance * CONTROLS_CONFIG.minDistanceFactor;
     this.controls.maxDistance = CAMERA_CONFIG.distance * CONTROLS_CONFIG.maxDistanceFactor;
     this.controls.minPolarAngle = CONTROLS_CONFIG.minPolarAngle;
     this.controls.maxPolarAngle = CONTROLS_CONFIG.maxPolarAngle;
     this.controls.target.set(0, 0, 0);
     this.controls.update();
+
+    // Clamp orbit target to prevent wandering off the map
+    this.controls.addEventListener('change', () => {
+      const target = this.controls.target;
+      const boardHalf = this.boardSize * CONTROLS_CONFIG.panBoundaryMargin;
+      target.x = Math.max(-boardHalf, Math.min(boardHalf, target.x));
+      target.z = Math.max(-boardHalf, Math.min(boardHalf, target.z));
+      target.y = Math.max(0, Math.min(5, target.y)); // Keep y reasonable
+    });
   }
 
   initParticles(): void {

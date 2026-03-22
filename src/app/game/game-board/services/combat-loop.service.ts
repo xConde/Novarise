@@ -119,10 +119,12 @@ export class CombatLoopService {
       }
       frameHitCount += hitCount;
 
-      // Collect gold from tower kills and snapshot visual data before removal
+      // Collect gold from tower kills and snapshot visual data.
+      // Start the death animation instead of immediately removing — the enemy stays in
+      // the map during the animation but is excluded from targeting (dying flag).
       for (const killInfo of killedByTowers) {
         const enemy = this.enemyService.getEnemies().get(killInfo.id);
-        if (enemy) {
+        if (enemy && !enemy.dying) {
           this.gameStateService.addGoldAndScore(enemy.value);
           this.gameStatsService.recordGoldEarned(enemy.value);
 
@@ -133,7 +135,8 @@ export class CombatLoopService {
             value: enemy.value,
           });
 
-          this.enemyService.removeEnemy(killInfo.id, scene);
+          // Start death animation — actual disposal happens in updateDyingAnimations()
+          this.enemyService.startDyingAnimation(killInfo.id);
         }
       }
 
@@ -168,11 +171,13 @@ export class CombatLoopService {
         }
       }
 
-      // Check wave completion: no spawning and no enemies alive
+      // Check wave completion: no spawning and no living enemies.
+      // Dying enemies are still in the map during their animation — use getLivingEnemyCount()
+      // which excludes them, so the wave completes as soon as all enemies are killed.
       if (
         currentPhase === GamePhase.COMBAT &&
         !this.waveService.isSpawning() &&
-        this.enemyService.getEnemies().size === 0
+        this.enemyService.getLivingEnemyCount() === 0
       ) {
         const reward = this.waveService.getWaveReward(waveAtFrameStart);
         let streakBonus = 0;

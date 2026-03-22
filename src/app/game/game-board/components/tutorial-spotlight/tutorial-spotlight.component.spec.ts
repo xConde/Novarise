@@ -8,8 +8,21 @@ function makeTip(overrides: Partial<TutorialTip> = {}): TutorialTip {
   return {
     id: TutorialStep.WELCOME,
     step: TutorialStep.WELCOME,
+    type: 'tutorial',
     title: 'Test Title',
     message: 'Test message.',
+    position: 'center',
+    ...overrides,
+  };
+}
+
+function makeTipStep(overrides: Partial<TutorialTip> = {}): TutorialTip {
+  return {
+    id: TutorialStep.TIP_PLACEMENT,
+    step: TutorialStep.TIP_PLACEMENT,
+    type: 'tip',
+    title: 'Strategy Tip Title',
+    message: 'Strategy tip message.',
     position: 'center',
     ...overrides,
   };
@@ -93,22 +106,73 @@ describe('TutorialSpotlightComponent', () => {
       expect(indicator.textContent.trim()).toBe('3/5');
     });
 
-    it('should show "Done" on Next button for COMPLETE step', () => {
+    it('should show "Done" on Next button when stepNumber equals totalSteps', () => {
       component.step = TutorialStep.COMPLETE;
       component.tip = makeTip({ step: TutorialStep.COMPLETE });
+      component.stepNumber = 6;
+      component.totalSteps = 6;
       fixture.detectChanges();
 
       const nextBtn = fixture.nativeElement.querySelector('.tutorial-card__btn--next');
       expect(nextBtn.textContent.trim()).toBe('Done');
     });
 
-    it('should show "Next" on Next button for non-COMPLETE steps', () => {
+    it('should show "Next" on Next button when stepNumber is less than totalSteps', () => {
       component.step = TutorialStep.WELCOME;
       component.tip = makeTip();
+      component.stepNumber = 1;
+      component.totalSteps = 6;
       fixture.detectChanges();
 
       const nextBtn = fixture.nativeElement.querySelector('.tutorial-card__btn--next');
       expect(nextBtn.textContent.trim()).toBe('Next');
+    });
+
+    it('should show "Done" on last tip step when stepNumber equals totalSteps', () => {
+      component.step = TutorialStep.TIP_UPGRADE;
+      component.tip = makeTipStep({ step: TutorialStep.TIP_UPGRADE });
+      component.stepNumber = 3;
+      component.totalSteps = 3;
+      fixture.detectChanges();
+
+      const nextBtn = fixture.nativeElement.querySelector('.tutorial-card__btn--next');
+      expect(nextBtn.textContent.trim()).toBe('Done');
+    });
+
+    it('should show type label "Tutorial" for tutorial steps', () => {
+      component.step = TutorialStep.WELCOME;
+      component.tip = makeTip();
+      fixture.detectChanges();
+
+      const label = fixture.nativeElement.querySelector('.tutorial-card__type-label');
+      expect(label.textContent.trim()).toBe('Tutorial');
+    });
+
+    it('should show type label "Strategy Tip" for tip steps', () => {
+      component.step = TutorialStep.TIP_PLACEMENT;
+      component.tip = makeTipStep();
+      fixture.detectChanges();
+
+      const label = fixture.nativeElement.querySelector('.tutorial-card__type-label');
+      expect(label.textContent.trim()).toBe('Strategy Tip');
+    });
+
+    it('should apply tutorial-card--is-tip class for tip steps', () => {
+      component.step = TutorialStep.TIP_PLACEMENT;
+      component.tip = makeTipStep();
+      fixture.detectChanges();
+
+      const card = fixture.nativeElement.querySelector('.tutorial-card');
+      expect(card.classList.contains('tutorial-card--is-tip')).toBeTrue();
+    });
+
+    it('should not apply tutorial-card--is-tip class for tutorial steps', () => {
+      component.step = TutorialStep.WELCOME;
+      component.tip = makeTip();
+      fixture.detectChanges();
+
+      const card = fixture.nativeElement.querySelector('.tutorial-card');
+      expect(card.classList.contains('tutorial-card--is-tip')).toBeFalse();
     });
   });
 
@@ -137,6 +201,32 @@ describe('TutorialSpotlightComponent', () => {
       skipBtn.click();
 
       expect(emitted).toBeTrue();
+    });
+  });
+
+  describe('isLastStep', () => {
+    it('returns true when stepNumber equals totalSteps', () => {
+      component.stepNumber = 6;
+      component.totalSteps = 6;
+      expect(component.isLastStep).toBeTrue();
+    });
+
+    it('returns false when stepNumber is less than totalSteps', () => {
+      component.stepNumber = 3;
+      component.totalSteps = 6;
+      expect(component.isLastStep).toBeFalse();
+    });
+
+    it('returns true for last tip step (3/3)', () => {
+      component.stepNumber = 3;
+      component.totalSteps = 3;
+      expect(component.isLastStep).toBeTrue();
+    });
+
+    it('returns false for first tip step (1/3)', () => {
+      component.stepNumber = 1;
+      component.totalSteps = 3;
+      expect(component.isLastStep).toBeFalse();
     });
   });
 

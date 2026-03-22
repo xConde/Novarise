@@ -17,4 +17,8 @@ export const MINIMAP_CONFIG = {
   viewportColor: 'rgba(255, 255, 255, 0.4)',
   viewportLineWidth: 1,
   updateIntervalMs: 100,
+  /** Fade-in duration in ms when minimap becomes visible. */
+  fadeInMs: 300,
+  /** Opacity applied to the minimap canvas while the game is paused. */
+  pausedOpacity: 0.3,
 } as const;

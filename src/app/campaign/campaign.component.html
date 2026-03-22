@@ -17,6 +17,9 @@
     <div class="campaign-complete" *ngIf="isCampaignComplete" role="status" aria-label="Campaign complete">
       <h2 class="campaign-complete__title">CAMPAIGN COMPLETE</h2>
       <p class="campaign-complete__subtitle">You have conquered all challenges</p>
+      <button class="campaign-complete__home-btn" (click)="goHome()" aria-label="Return to home screen">
+        Return Home
+      </button>
     </div>
 
     <div class="level-grid" role="list" aria-label="Campaign levels">
@@ -66,6 +69,7 @@
             [class.challenge-badge--complete]="view.challengeCompletion[i]"
             [class.challenge-badge--incomplete]="!view.challengeCompletion[i]"
             [title]="challenge.name + ': ' + challenge.description"
+            [attr.aria-label]="challenge.name + ': ' + (view.challengeCompletion[i] ? 'completed' : 'incomplete')"
           >&#9670;</span>
         </div>
       </button>

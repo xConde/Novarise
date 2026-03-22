@@ -25,6 +25,11 @@ export class TutorialSpotlightComponent implements OnChanges, OnDestroy {
 
   readonly TutorialStep = TutorialStep;
 
+  /** True when this is the final step so the button reads "Done" instead of "Next". */
+  get isLastStep(): boolean {
+    return this.stepNumber === this.totalSteps;
+  }
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['tip']) {
       this.applyHighlight();

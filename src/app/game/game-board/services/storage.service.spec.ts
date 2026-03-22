@@ -280,4 +280,39 @@ describe('StorageService', () => {
       expect(after - before).toBeGreaterThanOrEqual(2000);
     });
   });
+
+  // ── setString — long-value error paths ────────────────────────────────────
+
+  describe('setString — boundary conditions', () => {
+    it('does not throw when writing a very long string (10 000 chars)', () => {
+      const longValue = 'a'.repeat(10_000);
+      expect(() => service.setString(TEST_KEY, longValue)).not.toThrow();
+    });
+
+    it('persists a very long string and reads it back correctly', () => {
+      const longValue = 'z'.repeat(10_000);
+      service.setString(TEST_KEY, longValue);
+      expect(service.getString(TEST_KEY)).toBe(longValue);
+    });
+
+    it('returns false and does not throw when setItem throws for a long string', () => {
+      const err = new DOMException('quota exceeded', 'QuotaExceededError');
+      spyOn(localStorage, 'setItem').and.throwError(err);
+      const longValue = 'b'.repeat(10_000);
+      let result: boolean | undefined;
+      expect(() => { result = service.setString(TEST_KEY, longValue); }).not.toThrow();
+      expect(result).toBeFalse();
+    });
+  });
+
+  // ── getJSON — null stored value ────────────────────────────────────────────
+
+  describe('getJSON — missing key returns default', () => {
+    it('returns the exact defaultValue when key is absent (null from localStorage)', () => {
+      // Ensure key is not present
+      localStorage.removeItem('__definitely_absent__');
+      const result = service.getJSON<number[]>('__definitely_absent__', [1, 2, 3]);
+      expect(result).toEqual([1, 2, 3]);
+    });
+  });
 });

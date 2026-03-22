@@ -39,12 +39,10 @@ describe('MinimapService', () => {
       expect(canvas!.height).toBe(MINIMAP_CONFIG.canvasSize);
     });
 
-    it('should position canvas absolutely in bottom-left', () => {
+    it('should add canvas with game-minimap class for CSS positioning', () => {
       service.init(container);
       const canvas = container.querySelector('canvas') as HTMLCanvasElement;
-      expect(canvas.style.position).toBe('absolute');
-      expect(canvas.style.bottom).toBe(`${MINIMAP_CONFIG.padding}px`);
-      expect(canvas.style.left).toBe(`${MINIMAP_CONFIG.padding}px`);
+      expect(canvas.className).toBe('game-minimap');
     });
   });
 
@@ -103,6 +101,18 @@ describe('MinimapService', () => {
       expect(canvas.style.display).toBe('');
     });
 
+    it('should have game-minimap class for CSS transition', () => {
+      service.init(container);
+      const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+      expect(canvas.classList.contains('game-minimap')).toBeTrue();
+    });
+
+    it('should start with opacity 0 before show is called', () => {
+      service.init(container);
+      const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+      expect(canvas.style.opacity).toBe('0');
+    });
+
     it('should not throw without init', () => {
       expect(() => service.show()).not.toThrow();
     });
@@ -124,6 +134,14 @@ describe('MinimapService', () => {
       expect(canvas.style.display).toBe('none');
     });
 
+    it('should reset opacity to 0 when hidden', () => {
+      service.init(container);
+      service.show();
+      service.hide();
+      const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+      expect(canvas.style.opacity).toBe('0');
+    });
+
     it('should not throw without init', () => {
       expect(() => service.hide()).not.toThrow();
     });
@@ -138,17 +156,49 @@ describe('MinimapService', () => {
       expect(service.isVisible()).toBe(false);
     });
 
-    it('should show/hide the canvas element', () => {
+    it('should show the canvas element on first toggle (display cleared)', () => {
       service.init(container);
       const canvas = container.querySelector('canvas') as HTMLCanvasElement;
 
-      // Starts hidden (visible=false), toggle makes it visible
+      // Starts hidden (visible=false), toggle makes it visible — display is cleared
       service.toggleVisibility();
-      expect(canvas.style.display).toBe('block');
+      expect(canvas.style.display).toBe('');
 
-      // Toggle again hides it
+      // Toggle again hides it instantly
       service.toggleVisibility();
       expect(canvas.style.display).toBe('none');
+    });
+  });
+
+  describe('setDimmed', () => {
+    it('should set canvas opacity to pausedOpacity when dimmed and visible', () => {
+      service.init(container);
+      service.show();
+      service.setDimmed(true);
+      const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+      expect(canvas.style.opacity).toBe(String(MINIMAP_CONFIG.pausedOpacity));
+    });
+
+    it('should restore canvas opacity to 1 when un-dimmed and visible', () => {
+      service.init(container);
+      service.show();
+      service.setDimmed(true);
+      service.setDimmed(false);
+      const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+      expect(canvas.style.opacity).toBe('1');
+    });
+
+    it('should not affect opacity when minimap is not visible', () => {
+      service.init(container);
+      // Not shown — calling setDimmed should be a no-op
+      service.setDimmed(true);
+      const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+      // Opacity stays at '0' (hidden state), not pausedOpacity
+      expect(canvas.style.opacity).toBe('0');
+    });
+
+    it('should not throw without init', () => {
+      expect(() => service.setDimmed(true)).not.toThrow();
     });
   });
 

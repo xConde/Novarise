@@ -10,6 +10,7 @@ import { SettingsService, GameSettings } from '../services/settings.service';
 import { AudioService } from '../services/audio.service';
 import { SceneService } from '../services/scene.service';
 import { GameNotificationService, GameNotification } from '../services/game-notification.service';
+import { TowerAnimationService } from '../services/tower-animation.service';
 import { Enemy } from '../models/enemy.model';
 import { GameBoardTile } from '../models/game-board-tile';
 import { TowerType } from '../models/tower.model';
@@ -63,7 +64,7 @@ export function createGameBoardServiceSpy(
 export function createEnemyServiceSpy(
   enemyMap: Map<string, Enemy>
 ): jasmine.SpyObj<EnemyService> {
-  const methods: (keyof EnemyService)[] = ['getEnemies', 'damageEnemy', 'spawnEnemy', 'removeEnemy'];
+  const methods: (keyof EnemyService)[] = ['getEnemies', 'damageEnemy', 'spawnEnemy', 'removeEnemy', 'startHitFlash'];
   const spy = jasmine.createSpyObj<EnemyService>('EnemyService', methods);
   spy.getEnemies.and.returnValue(enemyMap);
   spy.damageEnemy.and.callFake((id: string, damage: number): DamageResult => {
@@ -127,8 +128,11 @@ export function createGameStatsServiceSpy(): jasmine.SpyObj<GameStatsService> {
 export function createTutorialServiceSpy(): jasmine.SpyObj<TutorialService> {
   const spy = jasmine.createSpyObj<TutorialService>('TutorialService', [
     'isTutorialComplete',
+    'isTipsComplete',
     'getCurrentStep',
     'startTutorial',
+    'startTips',
+    'incrementGamesPlayed',
     'advanceStep',
     'skipTutorial',
     'resetCurrentStep',
@@ -136,10 +140,12 @@ export function createTutorialServiceSpy(): jasmine.SpyObj<TutorialService> {
     'getTip',
   ]);
   spy.isTutorialComplete.and.returnValue(true);
+  spy.isTipsComplete.and.returnValue(true);
   spy.getCurrentStep.and.returnValue(of(null));
   spy.getTip.and.callFake((step: TutorialStep): TutorialTip => ({
     id: step,
     step,
+    type: 'tutorial',
     title: 'Test Title',
     message: 'Test message.',
     position: 'center',
@@ -215,6 +221,8 @@ export function createSettingsServiceSpy(): jasmine.SpyObj<SettingsService> {
     audioMuted: false,
     difficulty: DifficultyLevel.NORMAL,
     gameSpeed: 1,
+    showFps: false,
+    reduceMotion: false,
   };
   spy.get.and.returnValue(defaultSettings);
   return spy;
@@ -309,4 +317,19 @@ export function createGameNotificationServiceSpy(): jasmine.SpyObj<GameNotificat
   ]);
   spy.getNotifications.and.returnValue(of([] as GameNotification[]));
   return spy;
+}
+
+/**
+ * Create a pre-configured TowerAnimationService spy.
+ *
+ * All animation methods are stubbed as no-op voids:
+ *   - startMuzzleFlash / updateMuzzleFlashes / updateTowerAnimations / updateTilePulse
+ */
+export function createTowerAnimationServiceSpy(): jasmine.SpyObj<TowerAnimationService> {
+  return jasmine.createSpyObj<TowerAnimationService>('TowerAnimationService', [
+    'startMuzzleFlash',
+    'updateMuzzleFlashes',
+    'updateTowerAnimations',
+    'updateTilePulse',
+  ]);
 }

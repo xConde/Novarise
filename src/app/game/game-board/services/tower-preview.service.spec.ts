@@ -34,12 +34,14 @@ describe('TowerPreviewService', () => {
       expect(scene.children.length).toBe(2);
     });
 
-    it('places ghost mesh at the correct world position', () => {
+    it('places ghost mesh at the correct world position (centered)', () => {
+      service.setBoardSize(10, 10);
       service.showPreview(TowerType.BASIC, 3, 7, true, scene);
       const ghost = scene.children[0] as THREE.Mesh;
-      // worldX = col = 7, worldZ = row = 3
-      expect(ghost.position.x).toBe(7);
-      expect(ghost.position.z).toBe(3);
+      // col=7, boardWidth=10 → worldX = (7 - 5) = 2
+      // row=3, boardHeight=10 → worldZ = (3 - 5) = -2
+      expect(ghost.position.x).toBe(2);
+      expect(ghost.position.z).toBe(-2);
     });
 
     it('places range ring at ground offset y', () => {
@@ -108,20 +110,24 @@ describe('TowerPreviewService', () => {
       expect(scene.children.length).toBe(2);
     });
 
-    it('updates ghost mesh position to new tile', () => {
+    it('updates ghost mesh position to new tile (centered coords)', () => {
+      service.setBoardSize(10, 10);
       service.showPreview(TowerType.BASIC, 5, 5, true, scene);
       service.showPreview(TowerType.BASIC, 8, 3, true, scene);
       const ghost = scene.children[0] as THREE.Mesh;
-      expect(ghost.position.x).toBe(3); // col=3
-      expect(ghost.position.z).toBe(8); // row=8
+      // col=3, boardWidth=10 → worldX = (3 - 5) = -2
+      expect(ghost.position.x).toBe(-2);
+      // row=8, boardHeight=10 → worldZ = (8 - 5) = 3
+      expect(ghost.position.z).toBe(3);
     });
 
-    it('updates ring position to new tile', () => {
+    it('updates ring position to new tile (centered coords)', () => {
+      service.setBoardSize(10, 10);
       service.showPreview(TowerType.BASIC, 5, 5, true, scene);
       service.showPreview(TowerType.BASIC, 8, 3, true, scene);
       const ring = scene.children[1] as THREE.Mesh;
-      expect(ring.position.x).toBe(3);
-      expect(ring.position.z).toBe(8);
+      expect(ring.position.x).toBe(-2);
+      expect(ring.position.z).toBe(3);
     });
 
     it('validity color updates on subsequent call without tower type change', () => {

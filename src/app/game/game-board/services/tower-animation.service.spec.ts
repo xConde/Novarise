@@ -1,9 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { TowerAnimationService } from './tower-animation.service';
-import { TowerType } from '../models/tower.model';
+import { PlacedTower, TowerType, TargetingMode } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
-import { TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
+import { MUZZLE_FLASH_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
 
 // ---------------------------------------------------------------------------
@@ -351,6 +351,230 @@ describe('TowerAnimationService', () => {
 
     it('handles an empty tileMeshes map gracefully', () => {
       expect(() => service.updateTilePulse(new Map(), 1000)).not.toThrow();
+    });
+  });
+
+  // ---- startMuzzleFlash / updateMuzzleFlashes ----
+
+  describe('muzzle flash', () => {
+    /** Build a minimal PlacedTower with a group containing one named standard mesh. */
+    function makePlacedTower(
+      childName: string,
+      initialIntensity: number
+    ): { tower: PlacedTower; child: THREE.Mesh } {
+      const group = new THREE.Group();
+      const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+      const mat = new THREE.MeshStandardMaterial({ emissiveIntensity: initialIntensity });
+      const child = new THREE.Mesh(geo, mat);
+      child.name = childName;
+      group.add(child);
+
+      const tower: PlacedTower = {
+        id: '0-0',
+        type: TowerType.BASIC,
+        level: 1,
+        row: 0,
+        col: 0,
+        lastFireTime: 0,
+        kills: 0,
+        totalInvested: 50,
+        targetingMode: TargetingMode.NEAREST,
+        mesh: group,
+      };
+
+      return { tower, child };
+    }
+
+    function disposePlacedTower(tower: PlacedTower): void {
+      tower.mesh?.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+          (obj.material as THREE.MeshStandardMaterial).dispose();
+        }
+      });
+    }
+
+    describe('startMuzzleFlash', () => {
+      it('sets muzzleFlashTimer to MUZZLE_FLASH_CONFIG.duration', () => {
+        const { tower } = makePlacedTower('base', 0.5);
+
+        service.startMuzzleFlash(tower);
+
+        expect(tower.muzzleFlashTimer).toBeCloseTo(MUZZLE_FLASH_CONFIG.duration, 5);
+
+        disposePlacedTower(tower);
+      });
+
+      it('spikes emissive intensity by intensityMultiplier on non-tip meshes', () => {
+        const initial = 0.5;
+        const { tower, child } = makePlacedTower('base', initial);
+
+        service.startMuzzleFlash(tower);
+
+        const mat = child.material as THREE.MeshStandardMaterial;
+        expect(mat.emissiveIntensity).toBeCloseTo(initial * MUZZLE_FLASH_CONFIG.intensityMultiplier, 5);
+
+        disposePlacedTower(tower);
+      });
+
+      it('saves the original intensity so it can be restored', () => {
+        const initial = 0.4;
+        const { tower, child } = makePlacedTower('body', initial);
+
+        service.startMuzzleFlash(tower);
+
+        const mat = child.material as THREE.MeshStandardMaterial;
+        const key = child.uuid + '_' + mat.uuid;
+        expect(tower.originalEmissiveIntensity?.get(key)).toBeCloseTo(initial, 5);
+
+        disposePlacedTower(tower);
+      });
+
+      it('does NOT affect the tip mesh', () => {
+        const initial = 0.8;
+        const { tower, child } = makePlacedTower('tip', initial);
+
+        service.startMuzzleFlash(tower);
+
+        const mat = child.material as THREE.MeshStandardMaterial;
+        // emissiveIntensity must be unchanged
+        expect(mat.emissiveIntensity).toBeCloseTo(initial, 5);
+
+        disposePlacedTower(tower);
+      });
+
+      it('re-triggers correctly while a flash is already active (rapid fire)', () => {
+        const initial = 0.5;
+        const { tower, child } = makePlacedTower('base', initial);
+
+        service.startMuzzleFlash(tower);
+        // Partially tick the timer so we can detect a reset
+        tower.muzzleFlashTimer! -= 0.04;
+        // Manually restore intensity to simulate it mid-flight, then fire again
+        (child.material as THREE.MeshStandardMaterial).emissiveIntensity = initial;
+        service.startMuzzleFlash(tower);
+
+        expect(tower.muzzleFlashTimer).toBeCloseTo(MUZZLE_FLASH_CONFIG.duration, 5);
+
+        disposePlacedTower(tower);
+      });
+
+      it('does nothing when tower.mesh is null', () => {
+        const tower: PlacedTower = {
+          id: '0-0',
+          type: TowerType.BASIC,
+          level: 1,
+          row: 0,
+          col: 0,
+          lastFireTime: 0,
+          kills: 0,
+          totalInvested: 50,
+          targetingMode: TargetingMode.NEAREST,
+          mesh: null,
+        };
+
+        expect(() => service.startMuzzleFlash(tower)).not.toThrow();
+        expect(tower.muzzleFlashTimer).toBeUndefined();
+      });
+    });
+
+    describe('updateMuzzleFlashes', () => {
+      it('counts down muzzleFlashTimer by deltaTime', () => {
+        const { tower } = makePlacedTower('base', 0.5);
+        service.startMuzzleFlash(tower);
+
+        service.updateMuzzleFlashes(new Map([['0-0', tower]]), 0.05);
+
+        expect(tower.muzzleFlashTimer).toBeCloseTo(MUZZLE_FLASH_CONFIG.duration - 0.05, 5);
+
+        disposePlacedTower(tower);
+      });
+
+      it('restores original emissive intensity when timer expires', () => {
+        const initial = 0.4;
+        const { tower, child } = makePlacedTower('base', initial);
+        service.startMuzzleFlash(tower);
+
+        // Expire the timer in one step
+        service.updateMuzzleFlashes(new Map([['0-0', tower]]), MUZZLE_FLASH_CONFIG.duration + 0.01);
+
+        const mat = child.material as THREE.MeshStandardMaterial;
+        expect(mat.emissiveIntensity).toBeCloseTo(initial, 5);
+
+        disposePlacedTower(tower);
+      });
+
+      it('clears muzzleFlashTimer and originalEmissiveIntensity after restoration', () => {
+        const { tower } = makePlacedTower('base', 0.5);
+        service.startMuzzleFlash(tower);
+
+        service.updateMuzzleFlashes(new Map([['0-0', tower]]), MUZZLE_FLASH_CONFIG.duration + 0.01);
+
+        expect(tower.muzzleFlashTimer).toBeUndefined();
+        expect(tower.originalEmissiveIntensity).toBeUndefined();
+
+        disposePlacedTower(tower);
+      });
+
+      it('does not touch the tip mesh during update/restore', () => {
+        // Create a group with both a 'base' child and a 'tip' child
+        const group = new THREE.Group();
+        const baseGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+        const baseMat = new THREE.MeshStandardMaterial({ emissiveIntensity: 0.5 });
+        const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+        baseMesh.name = 'base';
+
+        const tipGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+        const tipMat = new THREE.MeshStandardMaterial({ emissiveIntensity: 0.9 });
+        const tipMesh = new THREE.Mesh(tipGeo, tipMat);
+        tipMesh.name = 'tip';
+
+        group.add(baseMesh);
+        group.add(tipMesh);
+
+        const tower: PlacedTower = {
+          id: '0-0',
+          type: TowerType.SNIPER,
+          level: 1,
+          row: 0,
+          col: 0,
+          lastFireTime: 0,
+          kills: 0,
+          totalInvested: 125,
+          targetingMode: TargetingMode.NEAREST,
+          mesh: group,
+        };
+
+        service.startMuzzleFlash(tower);
+        // tip must be unchanged after flash starts
+        expect(tipMat.emissiveIntensity).toBeCloseTo(0.9, 5);
+
+        service.updateMuzzleFlashes(new Map([['0-0', tower]]), MUZZLE_FLASH_CONFIG.duration + 0.01);
+        // tip must still be unchanged after flash restores
+        expect(tipMat.emissiveIntensity).toBeCloseTo(0.9, 5);
+
+        group.traverse((obj) => {
+          if (obj instanceof THREE.Mesh) {
+            obj.geometry.dispose();
+            (obj.material as THREE.MeshStandardMaterial).dispose();
+          }
+        });
+      });
+
+      it('handles an empty towers map gracefully', () => {
+        expect(() => service.updateMuzzleFlashes(new Map(), 0.016)).not.toThrow();
+      });
+
+      it('skips towers without an active flash timer', () => {
+        const { tower, child } = makePlacedTower('base', 0.5);
+        // Do NOT call startMuzzleFlash — timer is undefined
+
+        expect(() => service.updateMuzzleFlashes(new Map([['0-0', tower]]), 0.016)).not.toThrow();
+        // Intensity must remain untouched
+        expect((child.material as THREE.MeshStandardMaterial).emissiveIntensity).toBeCloseTo(0.5, 5);
+
+        disposePlacedTower(tower);
+      });
     });
   });
 });

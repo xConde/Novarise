@@ -1046,3 +1046,57 @@ Test count: 2756 → 3024 (+268 tests)
 **Location:** `game-board.component.html:61,164`
 **Risk:** `.bind(this)` creates a new function reference on every change detection cycle, defeating OnPush optimization and forcing child re-renders at 60Hz during combat. GC churn.
 **Fix:** Define bound functions as class field arrow functions: `isChallengeCompletedBound = (c: ChallengeDefinition) => this.isChallengeCompleted(c);`
+
+---
+
+## Red Team Critique — 2026-03-18 (Hardening VII, 30 sprints)
+
+### Finding 1: restartGame() does not clear wave transition timers (HIGH)
+**Location:** `game-board.component.ts:1230-1255`
+**Risk:** If a player restarts during the 2-second "Wave Clear!" banner timeout, `showWaveClear` is never reset and `waveClearTimerId` is never cleared. The stale banner from the previous game bleeds into the new game's first wave, showing "Wave 5 Clear! Perfect!" during a fresh wave 1. Same issue with `waveStartPulseTimerId` — HUD pulse can trigger on stale timer. The `pathBlockedTimerId` IS correctly cleared (line 1252), making this an inconsistency the author missed.
+**Fix:** Clear `waveClearTimerId`, `waveStartPulseTimerId` in `restartGame()`. Reset `showWaveClear`, `waveClearMessage`, `waveStartPulse` to defaults.
+
+### Finding 2: Hit flash restoration overwrites emissive during death fade (MEDIUM)
+**Location:** `enemy.service.ts:1025-1055`
+**Risk:** `updateHitFlashes()` iterates ALL enemies including dying ones. If an enemy dies while mid-flash (120ms flash, 300ms death fade overlap), the flash expiry at line 1042-1043 restores the pre-flash emissive color, fighting the death animation's opacity fade. Visually, the dying enemy briefly shifts from white flash back to its status-effect color (e.g., BURN orange) during the death shrink — a noticeable visual pop. The guard in `startHitFlash()` (line 995: `if (enemy.dying) return`) prevents NEW flashes on dying enemies, but does NOT handle flashes that were already in progress when death started.
+**Fix:** Add `if (enemy.dying) { enemy.hitFlashTimer = 0; return; }` at line 1029, immediately after the forEach entry. This cancels in-progress flashes on dying enemies without restoration, letting the death animation own the visual state cleanly.
+
+### Finding 3: Reduce-motion class not applied on page load or navigation (MEDIUM)
+**Location:** `profile.component.ts:68-75`
+**Risk:** `loadSettings()` reads `reduceMotion` from `SettingsService` but never applies the `reduce-motion` class to `document.body`. Only `toggleReduceMotion()` (line 123) applies it. After page refresh or navigation back to `/profile`, the toggle shows "On" but animations still play — the accessibility override is silently broken. A user who explicitly opted out of motion will see animations until they toggle off and on again.
+**Fix:** Add `if (this.reduceMotion) { document.body.classList.add('reduce-motion'); }` at the end of `loadSettings()`.
+
+---
+
+## Deployment Checklist
+- [x] Step 1: Wire `.reduce-motion` CSS rules — the body class is set but no selectors consume it; duplicate each `@media (prefers-reduced-motion: reduce)` block as `.reduce-motion` selectors
+- [x] Step 2: Wire `showFps` setting to game HUD — FPS counter is always visible; read `SettingsService.showFps` and conditionally show/hide
+- [x] Step 3: Sync ARCHITECTURE.md with new files/services added in Hardening VII
+- [x] Step 4: Final full test suite verification — 4028/4028 tests, zero failures, clean build ✓
+
+---
+
+## Red Team Critique — 2026-03-19 (Post-fix pass, 15+ hotfix commits)
+
+### Finding 1: Double-tick death/hit/shield animations during COMBAT (CRITICAL)
+**Location:** `game-board.component.ts:2178-2181` and `game-board.component.ts:2266-2268`
+**Risk:** `updateDyingAnimations()`, `updateHitFlashes()`, and `updateShieldBreakAnimations()` are called twice per frame during COMBAT: once in the phase-independent block (line 2178-2181) and again inside `processCombatResult()` (line 2266-2268). Death animations complete at 2× speed during combat, 1× during INTERMISSION — visually inconsistent and halving the designed animation duration.
+**Fix:** Remove the duplicate calls from `processCombatResult()` (lines 2266-2268). The phase-independent block at 2178-2181 already handles all phases correctly.
+
+### Finding 2: Focus trap double-activate leaks old keydown listener (LOW)
+**Location:** `focus-trap.util.ts:14-19`
+**Risk:** If `activate()` is called twice without `deactivate()`, the old `boundHandler` is overwritten but never removed from `document`. The old listener leaks. In practice, game-board only calls activate after deactivate, so this is defensive, not a runtime bug.
+**Fix:** Call `deactivate()` at the start of `activate()` if already active.
+
+### Finding 3: Camera pan boundary fires every frame via OrbitControls 'change' event (LOW)
+**Location:** `scene.service.ts:281-287`
+**Risk:** The clamping callback runs 60×/sec during any orbit interaction. Trivial computation (6 Math.max/min calls) so not a real perf issue, but unnecessary work when values haven't changed. No fix needed — flagged for awareness only.
+
+---
+
+## Red Team Critique — 2026-03-19 (Final gate, post-hotfixes)
+
+### Finding 1: Dying/hit/shield animations still double-tick during COMBAT+paused (HIGH)
+**Location:** `game-board.component.ts:2174` and `game-board.component.ts:2186-2189`
+**Risk:** When game is paused during COMBAT, `runPausedVisuals()` (line 2174) calls `updateDyingAnimations`, `updateHitFlashes`, `updateShieldBreakAnimations`. Then the phase-independent block (lines 2186-2189) calls them AGAIN unconditionally. Death animations run at 2× speed while paused. The previous fix removed the duplicate from `processCombatResult` but introduced a new one by adding the phase-independent block without guarding against the pause path.
+**Fix:** Guard lines 2186-2189 to skip when `runPausedVisuals` already handled the tick: add `!(state.phase === GamePhase.COMBAT && state.isPaused)` to the condition.

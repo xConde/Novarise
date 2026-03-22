@@ -699,7 +699,7 @@ describe('MapStorageService', () => {
       await promise;
     });
 
-    it('should resolve with null when user cancels', async () => {
+    it('should resolve with null mapId and null errorCode when user cancels', async () => {
       const promise = service.promptFileImport();
 
       // Trigger cancel
@@ -708,10 +708,11 @@ describe('MapStorageService', () => {
       }
 
       const result = await promise;
-      expect(result).toBeNull();
+      expect(result.mapId).toBeNull();
+      expect(result.errorCode).toBeNull();
     });
 
-    it('should resolve with null when no file selected', async () => {
+    it('should resolve with null mapId and null errorCode when no file selected', async () => {
       const promise = service.promptFileImport();
 
       // Simulate change event with no files, setting target to the mock input
@@ -723,10 +724,11 @@ describe('MapStorageService', () => {
       }
 
       const result = await promise;
-      expect(result).toBeNull();
+      expect(result.mapId).toBeNull();
+      expect(result.errorCode).toBeNull();
     });
 
-    it('should resolve with map ID when valid file is selected', async () => {
+    it('should resolve with map ID and null errorCode when valid file is selected', async () => {
       const validMap: SavedMap = {
         metadata: {
           id: 'old_id',
@@ -750,11 +752,12 @@ describe('MapStorageService', () => {
       }
 
       const result = await promise;
-      expect(result).toBeTruthy();
-      expect(result).toMatch(/^map_\d+_[a-z0-9]+$/);
+      expect(result.mapId).toBeTruthy();
+      expect(result.mapId).toMatch(/^map_\d+_[a-z0-9]+$/);
+      expect(result.errorCode).toBeNull();
     });
 
-    it('should resolve with null when file has invalid JSON', async () => {
+    it('should resolve with invalid_json errorCode when file has invalid JSON', async () => {
       const mockFile = new File(['not valid json'], 'test.json', { type: 'application/json' });
 
       const promise = service.promptFileImport();
@@ -765,10 +768,11 @@ describe('MapStorageService', () => {
       }
 
       const result = await promise;
-      expect(result).toBeNull();
+      expect(result.mapId).toBeNull();
+      expect(result.errorCode).toBe('invalid_json');
     });
 
-    it('should resolve with null when file has invalid map structure', async () => {
+    it('should resolve with invalid_schema errorCode when file has invalid map structure', async () => {
       const invalidMap = {
         metadata: { name: 'Test' },
         data: { }  // missing required fields
@@ -784,7 +788,25 @@ describe('MapStorageService', () => {
       }
 
       const result = await promise;
-      expect(result).toBeNull();
+      expect(result.mapId).toBeNull();
+      expect(result.errorCode).toBe('invalid_schema');
+    });
+
+    it('should resolve with file_too_large errorCode when file exceeds 512KB', async () => {
+      // Create a mock file with size > 512KB by overriding the size property
+      const mockFile = new File(['x'], 'big.json', { type: 'application/json' });
+      Object.defineProperty(mockFile, 'size', { value: 513 * 1024 });
+
+      const promise = service.promptFileImport();
+
+      Object.defineProperty(mockInput, 'files', { value: [mockFile] });
+      if (mockInput.onchange) {
+        await mockInput.onchange({ target: mockInput } as any);
+      }
+
+      const result = await promise;
+      expect(result.mapId).toBeNull();
+      expect(result.errorCode).toBe('file_too_large');
     });
   });
 
@@ -1175,6 +1197,44 @@ describe('MapStorageService', () => {
       localStorageMock['novarise_map_future-schema'] = JSON.stringify(futureSchemaMap);
 
       const result = service.loadMap('future-schema');
+      expect(result).toBeNull();
+    });
+  });
+
+  // ── Additional error paths ─────────────────────────────────────────────────
+
+  describe('additional error paths', () => {
+    it('saveMap with empty string name still saves and returns a map ID', () => {
+      // An empty name is sanitised downstream (downloadMapAsFile falls back to "map")
+      // but saveMap itself does not block empty names — it only blocks invalid data
+      const mapId = service.saveMap('', testMapData());
+      expect(mapId).toBeTruthy();
+      const metadata = service.getMapMetadata(mapId!);
+      expect(metadata!.name).toBe('');
+    });
+
+    it('saveMap with empty name appears in getAllMaps', () => {
+      service.saveMap('', testMapData());
+      expect(service.getAllMaps().length).toBe(1);
+    });
+
+    it('loadMap returns null for a key that was never written', () => {
+      const result = service.loadMap('key_that_does_not_exist');
+      expect(result).toBeNull();
+    });
+
+    it('importMapFromJson with empty string returns null', () => {
+      const result = service.importMapFromJson('');
+      expect(result).toBeNull();
+    });
+
+    it('importMapFromJson with whitespace-only string returns null', () => {
+      const result = service.importMapFromJson('   ');
+      expect(result).toBeNull();
+    });
+
+    it('importMapFromJson with valid JSON but no metadata or data fields returns null', () => {
+      const result = service.importMapFromJson('{}');
       expect(result).toBeNull();
     });
   });

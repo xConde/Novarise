@@ -21,6 +21,15 @@ export class TowerPreviewService {
    * Reuses existing meshes when only the position or validity changes;
    * recreates meshes when the tower type changes.
    */
+  /** Set board dimensions so the range ring can be clipped at edges. */
+  setBoardSize(width: number, height: number): void {
+    this.boardWidth = width;
+    this.boardHeight = height;
+  }
+
+  private boardWidth = 10;
+  private boardHeight = 10;
+
   showPreview(
     towerType: TowerType,
     row: number,
@@ -28,13 +37,22 @@ export class TowerPreviewService {
     isValid: boolean,
     scene: THREE.Scene
   ): void {
-    const worldX = col;
-    const worldZ = row;
+    // Convert grid coords to world-space (board is centered at origin)
+    const worldX = (col - this.boardWidth / 2) * 1; // tileSize = 1
+    const worldZ = (row - this.boardHeight / 2) * 1;
 
     if (this.previewState?.towerType !== towerType) {
       this.removeMeshesFromScene(scene);
       this.disposeMeshes();
       this.previewState = this.createPreviewMeshes(towerType, scene);
+    } else if (this.previewState) {
+      // Same tower type but meshes may have been removed by hidePreview — re-add
+      if (!this.previewState.ghostMesh.parent) {
+        scene.add(this.previewState.ghostMesh);
+      }
+      if (!this.previewState.ringMesh.parent) {
+        scene.add(this.previewState.ringMesh);
+      }
     }
 
     const { ghostMesh, ringMesh } = this.previewState!;
@@ -87,11 +105,23 @@ export class TowerPreviewService {
       outerRadius,
       PREVIEW_CONFIG.rangeRingSegments
     );
+    // Clipping planes keep ring within board world-space bounds
+    // Board is centered: x ∈ [-w/2 - 0.5, w/2 - 0.5], z ∈ [-h/2 - 0.5, h/2 - 0.5]
+    const halfW = this.boardWidth / 2;
+    const halfH = this.boardHeight / 2;
+    const clippingPlanes = [
+      new THREE.Plane(new THREE.Vector3(1, 0, 0), halfW + 0.5),     // x >= -halfW - 0.5
+      new THREE.Plane(new THREE.Vector3(-1, 0, 0), halfW - 0.5),    // x <= halfW - 0.5
+      new THREE.Plane(new THREE.Vector3(0, 0, 1), halfH + 0.5),     // z >= -halfH - 0.5
+      new THREE.Plane(new THREE.Vector3(0, 0, -1), halfH - 0.5),    // z <= halfH - 0.5
+    ];
+
     const ringMaterial = new THREE.MeshBasicMaterial({
       color: PREVIEW_CONFIG.rangeRingColor,
       transparent: true,
       opacity: PREVIEW_CONFIG.rangeRingOpacity,
       side: THREE.DoubleSide,
+      clippingPlanes,
     });
     const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
     ringMesh.rotateX(-Math.PI / 2);

@@ -1,9 +1,9 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { TowerType } from '../models/tower.model';
+import { PlacedTower, TowerType } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
 import { ANIMATION_CONFIG } from '../constants/rendering.constants';
-import { TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
+import { MUZZLE_FLASH_CONFIG, TOWER_ANIM_CONFIG, TILE_PULSE_CONFIG } from '../constants/effects.constants';
 
 @Injectable()
 export class TowerAnimationService {
@@ -61,6 +61,101 @@ export class TowerAnimationService {
           }
         }
       });
+    }
+  }
+
+  /**
+   * Spikes emissive intensity on all non-tip meshes in the tower's group when it fires.
+   * Saves the current intensity per mesh so `updateMuzzleFlashes` can restore it exactly.
+   * Calling again while a flash is already active resets the timer (re-trigger on rapid fire).
+   */
+  startMuzzleFlash(tower: PlacedTower): void {
+    if (!tower.mesh) return;
+
+    // Only save original values on FIRST flash — if a flash is already active,
+    // reuse the existing saved values to prevent accumulation (each re-save
+    // would capture the already-spiked intensity, ratcheting up forever).
+    const isReflash = tower.muzzleFlashTimer !== undefined && tower.muzzleFlashTimer > 0;
+
+    if (!isReflash) {
+      const saved = new Map<string, number>();
+
+      tower.mesh.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+        if (child.name === 'tip') return;
+
+        const materials = Array.isArray(child.material)
+          ? child.material as THREE.MeshStandardMaterial[]
+          : [child.material as THREE.MeshStandardMaterial];
+
+        for (const mat of materials) {
+          if (mat.emissiveIntensity === undefined) continue;
+          saved.set(child.uuid + '_' + mat.uuid, mat.emissiveIntensity);
+        }
+      });
+
+      tower.originalEmissiveIntensity = saved;
+    }
+
+    // Apply the spike from the SAVED originals, not from current (possibly spiked) values
+    const originals = tower.originalEmissiveIntensity;
+    if (originals) {
+      tower.mesh.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+        if (child.name === 'tip') return;
+
+        const materials = Array.isArray(child.material)
+          ? child.material as THREE.MeshStandardMaterial[]
+          : [child.material as THREE.MeshStandardMaterial];
+
+        for (const mat of materials) {
+          const key = child.uuid + '_' + mat.uuid;
+          const base = originals.get(key);
+          if (base !== undefined) {
+            mat.emissiveIntensity = base * MUZZLE_FLASH_CONFIG.intensityMultiplier;
+          }
+        }
+      });
+    }
+
+    tower.muzzleFlashTimer = MUZZLE_FLASH_CONFIG.duration;
+  }
+
+  /**
+   * Counts down active muzzle flash timers and restores original emissive intensity when done.
+   * Call once per animation frame with the real-world deltaTime (seconds).
+   */
+  updateMuzzleFlashes(towers: Map<string, PlacedTower>, deltaTime: number): void {
+    for (const tower of towers.values()) {
+      if (tower.muzzleFlashTimer === undefined || !tower.mesh) continue;
+
+      tower.muzzleFlashTimer -= deltaTime;
+
+      if (tower.muzzleFlashTimer <= 0) {
+        // Restore saved intensities
+        const saved = tower.originalEmissiveIntensity;
+        if (saved) {
+          tower.mesh.traverse((child) => {
+            if (!(child instanceof THREE.Mesh)) return;
+            if (child.name === 'tip') return;
+
+            const materials = Array.isArray(child.material)
+              ? child.material as THREE.MeshStandardMaterial[]
+              : [child.material as THREE.MeshStandardMaterial];
+
+            for (const mat of materials) {
+              const key = child.uuid + '_' + mat.uuid;
+              const original = saved.get(key);
+              if (original !== undefined) {
+                mat.emissiveIntensity = original;
+              }
+            }
+          });
+        }
+
+        tower.muzzleFlashTimer = undefined;
+        tower.originalEmissiveIntensity = undefined;
+      }
     }
   }
 

@@ -5,7 +5,7 @@ import { GameBoardService } from '../game-board.service';
 import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { GameModifier, ModifierEffects, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
-import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG, BOSS_CROWN_CONFIG } from '../constants/effects.constants';
+import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_VISUAL_CONFIG, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG, BOSS_CROWN_CONFIG, DEATH_ANIM_CONFIG, HIT_FLASH_CONFIG, SHIELD_BREAK_CONFIG } from '../constants/effects.constants';
 import { PathfindingService } from './pathfinding.service';
 import { GameStateService } from './game-state.service';
 
@@ -31,6 +31,11 @@ export class EnemyService {
   /** Scratch world-position objects reused each frame to avoid per-enemy allocation. */
   private scratchCurrentWorld = { x: 0, z: 0 };
   private scratchNextWorld = { x: 0, z: 0 };
+
+  // Shared geometry and materials for status-effect particles — one per effect type.
+  // Created lazily on first use, disposed in cleanup().
+  private statusParticleGeometry: THREE.SphereGeometry | null = null;
+  private statusParticleMaterials: Partial<Record<StatusEffectType, THREE.MeshBasicMaterial>> = {};
 
   constructor(
     private gameBoardService: GameBoardService,
@@ -185,6 +190,8 @@ export class EnemyService {
     this.enemies.forEach(enemy => {
       // Skip dead enemies awaiting removal — prevents double-penalty if ordering changes
       if (enemy.health <= 0) return;
+      // Skip dying enemies — they are frozen in place while the animation plays
+      if (enemy.dying) return;
 
       if (enemy.pathIndex >= enemy.path.length - 1) {
         // Enemy reached exit
@@ -255,6 +262,9 @@ export class EnemyService {
   removeEnemy(enemyId: string, scene: THREE.Scene): void {
     const enemy = this.enemies.get(enemyId);
     if (enemy) {
+      // Remove status-effect particles (geometry/material are shared — just scene.remove)
+      this.removeStatusParticles(enemy, scene);
+
       if (enemy.mesh) {
         // Dispose health bar and shield children before removing
         enemy.mesh.children.forEach(child => {
@@ -357,6 +367,8 @@ export class EnemyService {
   updateHealthBars(cameraQuaternion?: THREE.Quaternion): void {
     this.enemies.forEach(enemy => {
       if (!enemy.mesh) return;
+      // Hide health bar while dying — avoids flickering during scale-down
+      if (enemy.dying) return;
       // The health bar is stored in userData
       const healthBarBg = enemy.mesh.userData?.['healthBarBg'] as THREE.Mesh | undefined;
       const healthBarFg = enemy.mesh.userData?.['healthBarFg'] as THREE.Mesh | undefined;
@@ -395,6 +407,7 @@ export class EnemyService {
   updateStatusVisuals(activeEffects: Map<string, StatusEffectType[]>): void {
     this.enemies.forEach(enemy => {
       if (!enemy.mesh) return;
+      if (enemy.dying) return;
       const mat = enemy.mesh.material as THREE.MeshStandardMaterial;
       if (!mat.emissive) return;
 
@@ -429,11 +442,203 @@ export class EnemyService {
   updateEnemyAnimations(deltaTime: number): void {
     this.enemies.forEach(enemy => {
       if (!enemy.mesh || enemy.health <= 0) return;
+      if (enemy.dying) return;
       const crown = enemy.mesh.userData['bossCrown'] as THREE.Mesh | undefined;
       if (crown) {
         crown.rotation.z += ENEMY_ANIM_CONFIG.bossCrownSpinSpeed * deltaTime;
       }
     });
+  }
+
+  /**
+   * Create/animate/remove small particle meshes for active status effects.
+   * Particles are added directly to the scene (not as child of enemy mesh) so
+   * they trail slightly behind. Each enemy gets at most
+   * STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy particles per active effect.
+   *
+   * Animation per effect:
+   *   BURN  — particles drift upward from the enemy base, reset when they
+   *            reach the top of the lifetime window.
+   *   POISON — particles drift outward in the XZ plane from the enemy center.
+   *   SLOW  — particles drift downward (ice-crystal feel).
+   *
+   * Shared geometry (SphereGeometry) and one MeshBasicMaterial per effect type
+   * are reused across all enemies to keep draw calls minimal.
+   *
+   * Call once per render frame (NOT inside the fixed-timestep physics loop).
+   */
+  updateStatusEffectParticles(
+    deltaTime: number,
+    scene: THREE.Scene,
+    activeEffects: Map<string, StatusEffectType[]>,
+  ): void {
+    if (deltaTime <= 0) return;
+
+    this.enemies.forEach(enemy => {
+      // Skip dying enemies — particles removed below with the rest of cleanup
+      if (enemy.dying) {
+        this.removeStatusParticles(enemy, scene);
+        return;
+      }
+
+      const effects = activeEffects.get(enemy.id);
+
+      if (!effects || effects.length === 0) {
+        // No active effects — remove any lingering particles
+        this.removeStatusParticles(enemy, scene);
+        return;
+      }
+
+      // Determine the highest-priority effect to display (same priority order as emissive tint)
+      let activeEffect: StatusEffectType | null = null;
+      for (const priority of STATUS_EFFECT_PRIORITY) {
+        if (effects.includes(priority)) {
+          activeEffect = priority;
+          break;
+        }
+      }
+      if (!activeEffect) {
+        this.removeStatusParticles(enemy, scene);
+        return;
+      }
+
+      // Create particles on first activation for this effect
+      if (!enemy.statusParticles || enemy.statusParticles.length === 0) {
+        enemy.statusParticles = this.createStatusParticles(activeEffect, scene, enemy);
+      }
+
+      // Animate existing particles
+      const cfg = STATUS_EFFECT_VISUAL_CONFIG[activeEffect === StatusEffectType.BURN
+        ? 'burn' : activeEffect === StatusEffectType.POISON ? 'poison' : 'slow'];
+
+      enemy.statusParticles.forEach((particle, i) => {
+        // Each particle has its own timer stored in userData
+        let timer = (particle.userData['timer'] as number) ?? 0;
+        timer += deltaTime;
+
+        if (timer >= cfg.lifetime) {
+          // Respawn at enemy base with a new random offset
+          timer = 0;
+          this.resetStatusParticlePosition(particle, enemy, activeEffect!, i);
+        }
+
+        // Animate position based on effect type
+        const progress = timer / cfg.lifetime;
+        if (activeEffect === StatusEffectType.BURN) {
+          // Drift upward
+          particle.position.y = enemy.position.y + progress * cfg.speed;
+        } else if (activeEffect === StatusEffectType.POISON) {
+          // Drift outward in XZ plane
+          const angle = particle.userData['angle'] as number;
+          const dist = progress * cfg.speed;
+          particle.position.x = enemy.position.x + Math.cos(angle) * dist;
+          particle.position.z = enemy.position.z + Math.sin(angle) * dist;
+        } else {
+          // SLOW: drift downward
+          particle.position.y = enemy.position.y - progress * cfg.speed;
+        }
+
+        particle.userData['timer'] = timer;
+      });
+    });
+  }
+
+  /** Create maxParticlesPerEnemy particles for the given effect and add them to the scene. */
+  private createStatusParticles(
+    effectType: StatusEffectType,
+    scene: THREE.Scene,
+    enemy: Enemy,
+  ): THREE.Mesh[] {
+    const geometry = this.getStatusParticleGeometry();
+    const material = this.getStatusParticleMaterial(effectType);
+    const count = STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy;
+    const particles: THREE.Mesh[] = [];
+
+    for (let i = 0; i < count; i++) {
+      const mesh = new THREE.Mesh(geometry, material);
+      // Stagger initial timers so particles don't all reset at once
+      const cfg = STATUS_EFFECT_VISUAL_CONFIG[effectType === StatusEffectType.BURN
+        ? 'burn' : effectType === StatusEffectType.POISON ? 'poison' : 'slow'];
+      const initialTimer = (i / count) * cfg.lifetime;
+      mesh.userData['timer'] = initialTimer;
+      this.resetStatusParticlePosition(mesh, enemy, effectType, i);
+      scene.add(mesh);
+      particles.push(mesh);
+    }
+
+    return particles;
+  }
+
+  /** Set the initial/reset position for a status particle with a random spread offset. */
+  private resetStatusParticlePosition(
+    particle: THREE.Mesh,
+    enemy: Enemy,
+    effectType: StatusEffectType,
+    index: number,
+  ): void {
+    const cfg = STATUS_EFFECT_VISUAL_CONFIG[effectType === StatusEffectType.BURN
+      ? 'burn' : effectType === StatusEffectType.POISON ? 'poison' : 'slow'];
+
+    const offsetX = (Math.random() - 0.5) * 2 * cfg.spread;
+    const offsetZ = (Math.random() - 0.5) * 2 * cfg.spread;
+
+    if (effectType === StatusEffectType.BURN) {
+      particle.position.set(
+        enemy.position.x + offsetX,
+        enemy.position.y,
+        enemy.position.z + offsetZ,
+      );
+    } else if (effectType === StatusEffectType.POISON) {
+      // Store a fixed outward angle per particle so it orbits consistently
+      const angle = (index / STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy) * Math.PI * 2
+        + (Math.random() - 0.5) * 0.5;
+      particle.userData['angle'] = angle;
+      particle.position.set(enemy.position.x, enemy.position.y, enemy.position.z);
+    } else {
+      // SLOW: start above enemy center, drift down
+      particle.position.set(
+        enemy.position.x + offsetX,
+        enemy.position.y + cfg.speed,
+        enemy.position.z + offsetZ,
+      );
+    }
+  }
+
+  /** Dispose and remove all status particles from the scene for the given enemy. */
+  private removeStatusParticles(enemy: Enemy, scene: THREE.Scene): void {
+    if (!enemy.statusParticles || enemy.statusParticles.length === 0) return;
+    for (const particle of enemy.statusParticles) {
+      scene.remove(particle);
+      // Geometry is shared — do NOT dispose it here
+      if (Array.isArray(particle.material)) {
+        // MeshBasicMaterial is shared — do not dispose per-particle
+      }
+      // No per-particle disposal needed: geometry and material are both shared
+    }
+    enemy.statusParticles = [];
+  }
+
+  /** Lazily create the shared particle geometry (reused for all effect types). */
+  private getStatusParticleGeometry(): THREE.SphereGeometry {
+    if (!this.statusParticleGeometry) {
+      this.statusParticleGeometry = new THREE.SphereGeometry(
+        STATUS_EFFECT_VISUAL_CONFIG.particleSize, 4, 4,
+      );
+    }
+    return this.statusParticleGeometry;
+  }
+
+  /** Lazily create a shared MeshBasicMaterial for the given effect type. */
+  private getStatusParticleMaterial(effectType: StatusEffectType): THREE.MeshBasicMaterial {
+    let material = this.statusParticleMaterials[effectType];
+    if (!material) {
+      const cfgKey = effectType === StatusEffectType.BURN
+        ? 'burn' : effectType === StatusEffectType.POISON ? 'poison' : 'slow';
+      const cfg = STATUS_EFFECT_VISUAL_CONFIG[cfgKey];
+      material = new THREE.MeshBasicMaterial({ color: cfg.color });
+      this.statusParticleMaterials[effectType] = material;
+    }
+    return material;
   }
 
   /**
@@ -617,27 +822,71 @@ export class EnemyService {
       emissiveIntensity: SHIELD_VISUAL_CONFIG.emissiveIntensity,
       transparent: true,
       opacity: SHIELD_VISUAL_CONFIG.opacity,
-      side: THREE.FrontSide
+      side: THREE.DoubleSide
     });
     return new THREE.Mesh(shieldGeometry, shieldMaterial);
   }
 
   /**
-   * Remove and dispose the shield visual when shield HP reaches 0.
+   * Start the shield break animation when shield HP reaches 0.
+   * The dome scales up and fades out over SHIELD_BREAK_CONFIG.duration seconds.
+   * Actual disposal happens in updateShieldBreakAnimations() when the timer expires.
    */
   private removeShieldMesh(enemy: Enemy): void {
     if (!enemy.mesh) return;
     const shieldMesh = enemy.mesh.userData['shieldMesh'] as THREE.Mesh | undefined;
     if (!shieldMesh) return;
 
-    enemy.mesh.remove(shieldMesh);
-    shieldMesh.geometry.dispose();
-    if (Array.isArray(shieldMesh.material)) {
-      shieldMesh.material.forEach(mat => mat.dispose());
-    } else {
-      shieldMesh.material.dispose();
-    }
-    delete enemy.mesh.userData['shieldMesh'];
+    enemy.shieldBreaking = true;
+    enemy.shieldBreakTimer = SHIELD_BREAK_CONFIG.duration;
+  }
+
+  /**
+   * Tick all active shield break animations by `deltaTime` seconds.
+   * Scales the dome up and fades opacity toward 0.
+   * When the timer expires, disposes and removes the dome mesh.
+   * Call once per render frame (not inside the fixed-timestep physics loop).
+   */
+  updateShieldBreakAnimations(deltaTime: number): void {
+    if (deltaTime <= 0) return;
+
+    this.enemies.forEach(enemy => {
+      if (!enemy.shieldBreaking || enemy.shieldBreakTimer === undefined) return;
+
+      enemy.shieldBreakTimer -= deltaTime;
+
+      const shieldMesh = enemy.mesh?.userData['shieldMesh'] as THREE.Mesh | undefined;
+      if (!shieldMesh) return;
+
+      if (enemy.shieldBreakTimer <= 0) {
+        // Animation complete — dispose and remove the dome
+        if (enemy.mesh) {
+          enemy.mesh.remove(shieldMesh);
+          delete enemy.mesh.userData['shieldMesh'];
+        }
+        shieldMesh.geometry.dispose();
+        if (Array.isArray(shieldMesh.material)) {
+          shieldMesh.material.forEach(mat => mat.dispose());
+        } else {
+          shieldMesh.material.dispose();
+        }
+        enemy.shieldBreaking = false;
+        enemy.shieldBreakTimer = undefined;
+        return;
+      }
+
+      // Progress 0 = animation start, 1 = animation end
+      const progress = 1 - (enemy.shieldBreakTimer / SHIELD_BREAK_CONFIG.duration);
+
+      // Scale: 1.0 → SHIELD_BREAK_CONFIG.breakScale
+      const scale = 1 + progress * (SHIELD_BREAK_CONFIG.breakScale - 1);
+      shieldMesh.scale.setScalar(scale);
+
+      // Opacity: SHIELD_VISUAL_CONFIG.opacity → 0
+      const opacity = SHIELD_VISUAL_CONFIG.opacity * (1 - progress);
+      const mat = shieldMesh.material as THREE.MeshStandardMaterial;
+      mat.opacity = opacity;
+    });
   }
 
   /**
@@ -709,6 +958,196 @@ export class EnemyService {
     mesh.userData = { healthBarBg, healthBarFg };
 
     return mesh;
+  }
+
+  /**
+   * Mark an enemy as dying and start the shrink-fade animation.
+   * The enemy is immediately removed from the spatial-grid targeting pool (health is 0)
+   * but remains in the enemies map until the animation completes.
+   * BOSS enemies use a longer duration for added impact.
+   * SWARM mini-spawn happens in damageEnemy() before this is called — no special handling needed here.
+   */
+  startDyingAnimation(enemyId: string): void {
+    const enemy = this.enemies.get(enemyId);
+    if (!enemy || enemy.dying) return;
+
+    const duration = enemy.type === EnemyType.BOSS
+      ? DEATH_ANIM_CONFIG.durationBoss
+      : DEATH_ANIM_CONFIG.duration;
+
+    enemy.dying = true;
+    enemy.dyingTimer = duration;
+
+    // Make material transparent so we can animate opacity
+    if (enemy.mesh) {
+      this.setMeshTransparent(enemy.mesh, true);
+    }
+  }
+
+  /**
+   * Trigger a brief white emissive flash on the hit enemy.
+   * No-op if the enemy is dying, already flashing, or not found.
+   * Saves the current emissive color/intensity so they can be restored
+   * when the flash expires — compatible with status-effect tinting.
+   */
+  startHitFlash(enemyId: string): void {
+    const enemy = this.enemies.get(enemyId);
+    if (!enemy || enemy.dying) return;
+    // Throttle: skip if already mid-flash
+    if (enemy.hitFlashTimer !== undefined && enemy.hitFlashTimer > 0) return;
+    if (!enemy.mesh) return;
+
+    enemy.hitFlashTimer = HIT_FLASH_CONFIG.duration;
+
+    const mat = enemy.mesh.material;
+    if (mat instanceof THREE.MeshStandardMaterial) {
+      // Snapshot current emissive so we can restore it when the flash ends
+      enemy.mesh.userData['preFlashEmissive'] = mat.emissive.getHex();
+      enemy.mesh.userData['preFlashEmissiveIntensity'] = mat.emissiveIntensity;
+      mat.emissive.setHex(HIT_FLASH_CONFIG.color);
+      mat.emissiveIntensity = HIT_FLASH_CONFIG.emissiveIntensity;
+    }
+    // Apply the same flash to the boss crown if present
+    const crown = enemy.mesh.userData['bossCrown'] as THREE.Mesh | undefined;
+    if (crown && crown.material instanceof THREE.MeshStandardMaterial) {
+      crown.userData['preFlashEmissive'] = crown.material.emissive.getHex();
+      crown.userData['preFlashEmissiveIntensity'] = crown.material.emissiveIntensity;
+      crown.material.emissive.setHex(HIT_FLASH_CONFIG.color);
+      crown.material.emissiveIntensity = HIT_FLASH_CONFIG.emissiveIntensity;
+    }
+  }
+
+  /**
+   * Tick all active hit-flash timers and restore emissive when each expires.
+   * Call once per render frame (not inside fixed-timestep physics) so the flash
+   * duration is decoupled from game speed.
+   */
+  updateHitFlashes(deltaTime: number): void {
+    if (deltaTime <= 0) return;
+
+    this.enemies.forEach(enemy => {
+      if (enemy.hitFlashTimer === undefined || enemy.hitFlashTimer <= 0) return;
+
+      // Cancel in-progress flash if enemy started dying — let death animation own visuals
+      if (enemy.dying) {
+        enemy.hitFlashTimer = 0;
+        return;
+      }
+
+      enemy.hitFlashTimer -= deltaTime;
+
+      if (enemy.hitFlashTimer <= 0) {
+        enemy.hitFlashTimer = 0;
+        if (!enemy.mesh) return;
+
+        // Restore the snapshotted emissive (may be status-effect color)
+        const savedColor = enemy.mesh.userData['preFlashEmissive'] as number | undefined;
+        const savedIntensity = enemy.mesh.userData['preFlashEmissiveIntensity'] as number | undefined;
+        const mat = enemy.mesh.material;
+        if (mat instanceof THREE.MeshStandardMaterial) {
+          if (savedColor !== undefined) mat.emissive.setHex(savedColor);
+          if (savedIntensity !== undefined) mat.emissiveIntensity = savedIntensity;
+        }
+        // Restore boss crown
+        const crown = enemy.mesh.userData['bossCrown'] as THREE.Mesh | undefined;
+        if (crown && crown.material instanceof THREE.MeshStandardMaterial) {
+          const crownColor = crown.userData['preFlashEmissive'] as number | undefined;
+          const crownIntensity = crown.userData['preFlashEmissiveIntensity'] as number | undefined;
+          if (crownColor !== undefined) crown.material.emissive.setHex(crownColor);
+          if (crownIntensity !== undefined) crown.material.emissiveIntensity = crownIntensity;
+        }
+      }
+    });
+  }
+
+  /**
+   * Advance all active dying animations by `deltaTime` seconds.
+   * Scales the mesh down and fades opacity toward 0.
+   * When the timer expires, calls removeEnemy() to dispose the mesh.
+   *
+   * This must be called from the render loop (not inside the fixed-timestep physics loop)
+   * so the animation runs at real-time frame rate regardless of game speed.
+   */
+  updateDyingAnimations(deltaTime: number, scene: THREE.Scene): void {
+    if (deltaTime <= 0) return;
+
+    const toRemove: string[] = [];
+
+    this.enemies.forEach((enemy, id) => {
+      if (!enemy.dying || enemy.dyingTimer === undefined) return;
+
+      enemy.dyingTimer -= deltaTime;
+
+      if (enemy.dyingTimer <= 0) {
+        toRemove.push(id);
+        return;
+      }
+
+      if (!enemy.mesh) return;
+
+      const duration = enemy.type === EnemyType.BOSS
+        ? DEATH_ANIM_CONFIG.durationBoss
+        : DEATH_ANIM_CONFIG.duration;
+
+      // Progress 0 = animation start, 1 = animation end
+      const progress = 1 - (enemy.dyingTimer / duration);
+
+      // Scale: 1.0 → DEATH_ANIM_CONFIG.minScale
+      const scale = 1 - progress * (1 - DEATH_ANIM_CONFIG.minScale);
+      enemy.mesh.scale.setScalar(scale);
+
+      // Opacity: 1.0 → 0
+      const opacity = 1 - progress;
+      this.setMeshOpacity(enemy.mesh, opacity);
+    });
+
+    for (const id of toRemove) {
+      this.removeEnemy(id, scene);
+    }
+  }
+
+  /**
+   * Returns the count of enemies that are alive and NOT in the dying animation.
+   * Use this for wave-completion checks instead of enemies.size, because dying
+   * enemies are still in the map during their animation but are already "dead"
+   * from the game-logic perspective.
+   */
+  getLivingEnemyCount(): number {
+    let count = 0;
+    this.enemies.forEach(enemy => {
+      if (!enemy.dying) count++;
+    });
+    return count;
+  }
+
+  /**
+   * Enable or disable transparent rendering on a mesh and all its children
+   * that use MeshStandardMaterial (skips health bar BasicMaterial children).
+   */
+  private setMeshTransparent(mesh: THREE.Mesh, transparent: boolean): void {
+    if (mesh.material instanceof THREE.MeshStandardMaterial) {
+      mesh.material.transparent = transparent;
+      mesh.material.needsUpdate = true;
+    }
+    const crown = mesh.userData['bossCrown'] as THREE.Mesh | undefined;
+    if (crown && crown.material instanceof THREE.MeshStandardMaterial) {
+      crown.material.transparent = transparent;
+      crown.material.needsUpdate = true;
+    }
+  }
+
+  /**
+   * Set opacity on the main mesh material and its BOSS crown child.
+   * Skips health-bar children (MeshBasicMaterial) since they are already hidden.
+   */
+  private setMeshOpacity(mesh: THREE.Mesh, opacity: number): void {
+    if (mesh.material instanceof THREE.MeshStandardMaterial) {
+      mesh.material.opacity = opacity;
+    }
+    const crown = mesh.userData['bossCrown'] as THREE.Mesh | undefined;
+    if (crown && crown.material instanceof THREE.MeshStandardMaterial) {
+      crown.material.opacity = opacity;
+    }
   }
 
   /**
@@ -805,5 +1244,15 @@ export class EnemyService {
     // removeEnemy deletes entries during forEach — ensure map is cleared in case
     // any entry was skipped (e.g. enemy with no mesh)
     this.enemies.clear();
+
+    // Dispose shared status-particle geometry and materials
+    if (this.statusParticleGeometry) {
+      this.statusParticleGeometry.dispose();
+      this.statusParticleGeometry = null;
+    }
+    for (const mat of Object.values(this.statusParticleMaterials)) {
+      mat?.dispose();
+    }
+    this.statusParticleMaterials = {};
   }
 }

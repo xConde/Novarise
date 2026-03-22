@@ -1,24 +1,44 @@
 <div class="game-hud">
-  <div class="hud-stat">
-    <span class="hud-label">Lives</span>
-    <span class="hud-value lives" [class.critical]="lives <= 5">{{ lives }}</span>
+  <div class="hud-stats-row">
+    <div class="hud-stat">
+      <span class="hud-label">Lives</span>
+      <span class="hud-value lives" [class.critical]="lives <= 5">{{ lives }}</span>
+    </div>
+    <div class="hud-stat">
+      <span class="hud-label">Gold</span>
+      <span class="hud-value gold" [class.gold-pulse]="goldPulse">{{ gold }}</span>
+      <span class="gold-change" *ngIf="goldChange > 0">+{{ goldChange }}g</span>
+    </div>
+    <div class="hud-stat">
+      <span class="hud-label">Wave</span>
+      <span class="hud-value" [class.wave-start-pulse]="waveStartPulse" *ngIf="!isEndless">{{ wave }} / {{ maxWaves }}</span>
+      <span class="hud-value" [class.wave-start-pulse]="waveStartPulse" *ngIf="isEndless">{{ wave }}</span>
+    </div>
+    <div class="hud-stat secondary">
+      <span class="hud-label">Score</span>
+      <span class="hud-value" [class.score-pulse]="scorePulse">{{ score }}</span>
+    </div>
+    <div class="hud-stat" [class.secondary]="speedRunTimeLimit === 0" [class.speed-run-active]="speedRunTimeLimit > 0">
+      <span class="hud-label" *ngIf="speedRunTimeLimit === 0">Time</span>
+      <span class="hud-label speed-run-label" *ngIf="speedRunTimeLimit > 0">Speed Run</span>
+      <span class="hud-value" *ngIf="speedRunTimeLimit === 0">{{ formattedTime }}</span>
+      <span class="hud-value speed-run-timer"
+            *ngIf="speedRunTimeLimit > 0"
+            [class.warning]="speedRunWarning"
+            [class.critical]="speedRunCritical">
+        {{ formattedSpeedRunRemaining }}
+      </span>
+    </div>
+    <span class="hud-level-name" *ngIf="isCampaignGame && levelName" aria-label="Level name">{{ levelName }}</span>
   </div>
-  <div class="hud-stat">
-    <span class="hud-label">Gold</span>
-    <span class="hud-value gold">{{ gold }}</span>
+  <div class="challenge-indicators" *ngIf="challengeIndicators.length > 0" aria-label="Challenge progress">
+    <span
+      class="challenge-indicator"
+      *ngFor="let ci of challengeIndicators"
+      [class.passing]="ci.passing"
+      [class.failing]="!ci.passing"
+      [attr.aria-label]="ci.label + ': ' + ci.value">
+      {{ ci.label }}: {{ ci.value }}
+    </span>
   </div>
-  <div class="hud-stat">
-    <span class="hud-label">Wave</span>
-    <span class="hud-value" *ngIf="!isEndless">{{ wave }} / {{ maxWaves }}</span>
-    <span class="hud-value" *ngIf="isEndless">{{ wave }}</span>
-  </div>
-  <div class="hud-stat secondary">
-    <span class="hud-label">Score</span>
-    <span class="hud-value">{{ score }}</span>
-  </div>
-  <div class="hud-stat secondary">
-    <span class="hud-label">Time</span>
-    <span class="hud-value">{{ formattedTime }}</span>
-  </div>
-  <span class="hud-level-name" *ngIf="isCampaignGame && levelName" aria-label="Level name">{{ levelName }}</span>
 </div>

@@ -6,31 +6,31 @@ import * as THREE from 'three';
 // ---------------------------------------------------------------------------
 
 const LABEL_CONFIG = {
-  canvasWidth: 128,
-  canvasHeight: 64,
-  fontSize: 32,
+  canvasWidth: 256,
+  canvasHeight: 128,
+  fontSize: 54,
   fontFamily: 'Arial',
   fontWeight: 'bold',
   /** World-unit width/height of the sprite billboard. */
-  spriteWidth: 0.75,
-  spriteHeight: 0.35,
+  spriteWidth: 0.85,
+  spriteHeight: 0.4,
   /** Y position above the tile surface. */
-  yOffset: 0.5,
+  yOffset: 0.3,
   /**
    * Minimum percentIncrease required to show a label.
    * Low-value labels (+3%, +4%) add visual noise on large boards.
    */
   minPercentIncrease: 8,
   /** Stroke width for the dark outline behind text. */
-  strokeWidth: 4,
+  strokeWidth: 6,
 } as const;
 
 const TIER_TEXT_COLORS: Record<string, string> = {
-  base: '#22cc66',
-  low: '#88cc22',
-  medium: '#ccaa00',
-  high: '#dd6600',
-  critical: '#dd2200',
+  base: '#44ee88',
+  low: '#aaee44',
+  medium: '#ffdd33',
+  high: '#ff8833',
+  critical: '#ff4444',
 };
 
 /** Fallback color for unknown tiers. */
@@ -151,6 +151,8 @@ export class PriceLabelService {
     }
 
     const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter; // No mipmaps — keeps text sharp at distance
+    texture.generateMipmaps = false;
     const material = new THREE.SpriteMaterial({
       map: texture,
       transparent: true,

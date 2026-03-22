@@ -1,9 +1,9 @@
-<div class="board-container" [class.dragging]="isDragging">
+<div class="board-container" [class.dragging]="isDragging" (touchstart)="previewTowerType && clearTowerPreview()">
   <div class="canvas-container" #canvasContainer></div>
 
   <!-- Top-right controls -->
   <div class="top-right-controls">
-    <div class="fps-counter">{{ fps }} FPS</div>
+    <div class="fps-counter" aria-hidden="true" *ngIf="showFps">{{ fps }} FPS</div>
     <button class="encyclopedia-btn" (click)="toggleEncyclopedia()" [class.active]="showEncyclopedia" aria-label="Toggle enemy encyclopedia" [attr.aria-pressed]="showEncyclopedia">E</button>
     <button class="help-btn" (click)="showHelpOverlay = !showHelpOverlay" aria-label="Show keyboard shortcuts">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -25,8 +25,22 @@
     [formattedTime]="formattedTime"
     [isEndless]="gameState.isEndless"
     [isCampaignGame]="isCampaignGame"
-    [levelName]="currentCampaignLevel?.name || ''">
+    [levelName]="currentCampaignLevel?.name || ''"
+    [speedRunTimeLimit]="activeSpeedRunTimeLimit"
+    [elapsedTime]="gameState.elapsedTime"
+    [waveStartPulse]="waveStartPulse"
+    [challengeIndicators]="challengeIndicators">
   </app-game-hud>
+
+  <!-- Wave clear banner -->
+  <div
+    class="wave-clear-banner"
+    *ngIf="showWaveClear"
+    [class.perfect]="waveClearMessage.includes('Perfect')"
+    aria-live="assertive"
+    aria-atomic="true">
+    {{ waveClearMessage }}
+  </div>
 
   <!-- Wave status indicator -->
   <div class="hud-wave-status" *ngIf="gameState.phase === GamePhase.COMBAT">
@@ -90,7 +104,17 @@
           [attr.data-type]="entry.type.toLowerCase()"></span>
         <span class="enemy-count">{{ entry.count }}x</span>
         <span class="enemy-label">{{ entry.label }}</span>
-        <span class="wave-preview-new" *ngIf="isNewEnemyType(entry.type)">NEW</span>
+        <!-- NEW badge removed — adds visual noise without actionable value -->
+        <div class="wave-enemy-badges" *ngIf="getEnemyBadges(entry.type).length > 0">
+          <span
+            *ngFor="let badge of getEnemyBadges(entry.type)"
+            class="wave-enemy-badge"
+            [class.badge-info]="badge.severity === 'info'"
+            [class.badge-warning]="badge.severity === 'warning'"
+            [class.badge-danger]="badge.severity === 'danger'">
+            {{ badge.text }}
+          </span>
+        </div>
       </li>
     </ul>
     <!-- Secondary: income earned (only shown between waves, not setup) -->
@@ -166,25 +190,37 @@
     [isNextLevelUnlocked]="isNextLevelUnlocked"
     [nextLevelName]="nextCampaignLevel?.name || ''"
     [isChallengeCompletedFn]="isChallengeCompleted.bind(this)"
+    [isEditorOrigin]="isEditorOrigin"
     (restart)="restartGame()"
     (backToCampaign)="backToCampaign()"
     (editMap)="goToEditor()"
+    (backToEditor)="goToEditor()"
     (playNextLevel)="playNextLevel()">
   </app-game-results-overlay>
+
+  <!-- Game Initialization Failure Overlay -->
+  <div class="context-lost-overlay" *ngIf="initializationFailed" role="alert" aria-live="assertive">
+    <div class="context-lost-content">
+      <h2 class="context-lost-title">Game Failed to Load</h2>
+      <p class="context-lost-message">Game failed to initialize. Your browser may not support WebGL.</p>
+      <button class="context-lost-back-btn" (click)="goBackToMaps()">Go Back</button>
+    </div>
+  </div>
 
   <!-- WebGL Context Lost Overlay -->
   <div class="context-lost-overlay" *ngIf="contextLost" role="alert" aria-live="assertive">
     <div class="context-lost-content">
       <h2 class="context-lost-title">Display Lost</h2>
-      <p class="context-lost-message">The graphics context was interrupted.</p>
+      <p class="context-lost-message">The graphics engine lost its connection. This can happen when your device runs low on memory.</p>
       <p class="context-lost-hint">Waiting for recovery...</p>
+      <button class="context-lost-refresh-btn" (click)="reloadPage()">Try Refreshing</button>
     </div>
   </div>
 
   <!-- Pause overlay -->
-  <div class="pause-overlay" *ngIf="isPaused && (gameState.phase === GamePhase.COMBAT || gameState.phase === GamePhase.INTERMISSION)" (click)="onPauseOverlayClick($event)" role="dialog" aria-modal="true" aria-label="Game paused">
+  <div class="pause-overlay" *ngIf="isPaused && (gameState.phase === GamePhase.COMBAT || gameState.phase === GamePhase.INTERMISSION)" #pauseOverlay (click)="onPauseOverlayClick($event)" role="dialog" aria-modal="true" aria-labelledby="pause-menu-title">
     <div class="pause-menu" (click)="$event.stopPropagation()">
-      <h2 class="pause-menu__title">PAUSED</h2>
+      <h2 class="pause-menu__title" id="pause-menu-title">PAUSED</h2>
 
       <!-- Game stats summary -->
       <div class="pause-menu__stats">
@@ -278,12 +314,14 @@
       *ngFor="let tower of towerTypes"
       class="tower-btn"
       [class.selected]="selectedTowerType === tower.type"
+      [class.previewing]="previewTowerType === tower.type"
       [class.unaffordable]="!gameState || gameState.gold < getEffectiveTowerCost(tower.type)"
-      (click)="selectTowerType(tower.type)"
+      (click)="handleTowerButtonTap($event, tower.type)"
       (mousedown)="onTowerDragStart($event, tower.type)"
       (touchstart)="onTowerDragStart($event, tower.type)"
       [attr.aria-label]="'Select ' + (tower.type | titlecase) + ' Tower'"
-      [attr.aria-pressed]="selectedTowerType === tower.type">
+      [attr.aria-pressed]="selectedTowerType === tower.type"
+      [attr.aria-expanded]="previewTowerType === tower.type || null">
       <div class="tower-tooltip" role="tooltip">
         <div class="tooltip-stat"><span class="tooltip-label">Damage</span><span class="tooltip-val">{{ towerConfigs[tower.type].damage }}</span></div>
         <div class="tooltip-stat"><span class="tooltip-label">Range</span><span class="tooltip-val">{{ towerConfigs[tower.type].range }}</span></div>
@@ -311,13 +349,28 @@
     <span class="mode-hint">Right-click to cancel</span>
   </div>
 
-  <!-- Enemy Encyclopedia -->
-  <div class="encyclopedia-panel" *ngIf="showEncyclopedia" role="dialog" aria-label="Enemy encyclopedia">
+  <!-- Encyclopedia -->
+  <div class="encyclopedia-panel" *ngIf="showEncyclopedia" role="dialog" aria-label="Encyclopedia">
     <div class="encyclopedia-header">
-      <h3>Enemy Types</h3>
-      <button class="encyclopedia-close" (click)="toggleEncyclopedia()" aria-label="Close enemy encyclopedia">&times;</button>
+      <h3>Encyclopedia</h3>
+      <button class="encyclopedia-close" (click)="toggleEncyclopedia()" aria-label="Close encyclopedia">&times;</button>
     </div>
-    <div class="encyclopedia-list">
+    <div class="encyclopedia-tabs" role="tablist">
+      <button
+        class="encyclopedia-tab"
+        [class.active]="encyclopediaTab === 'enemies'"
+        (click)="encyclopediaTab = 'enemies'"
+        role="tab"
+        [attr.aria-selected]="encyclopediaTab === 'enemies'">Enemies</button>
+      <button
+        class="encyclopedia-tab"
+        [class.active]="encyclopediaTab === 'towers'"
+        (click)="encyclopediaTab = 'towers'"
+        role="tab"
+        [attr.aria-selected]="encyclopediaTab === 'towers'">Towers</button>
+    </div>
+    <!-- Enemies tab -->
+    <div class="encyclopedia-list" *ngIf="encyclopediaTab === 'enemies'" role="tabpanel">
       <div class="encyclopedia-entry" *ngFor="let enemy of enemyInfoList">
         <div
           class="encyclopedia-entry__color"
@@ -337,6 +390,31 @@
         </div>
       </div>
     </div>
+    <!-- Towers tab -->
+    <div class="encyclopedia-list" *ngIf="encyclopediaTab === 'towers'" role="tabpanel">
+      <div class="encyclopedia-entry" *ngFor="let tower of towerInfoList">
+        <div
+          class="encyclopedia-entry__color"
+          [style.background-color]="'#' + tower.color.toString(16).padStart(6, '0')"
+          aria-hidden="true"></div>
+        <div class="encyclopedia-entry__info">
+          <span class="encyclopedia-entry__name">{{ tower.name }}</span>
+          <span class="encyclopedia-entry__desc">{{ tower.description }}</span>
+          <div class="encyclopedia-entry__stats">
+            <span>DMG: {{ tower.damage }}</span>
+            <span>RNG: {{ tower.range }}</span>
+            <span>SPD: {{ tower.fireRate }}s</span>
+            <span>Cost: {{ tower.cost }}</span>
+          </div>
+          <div class="encyclopedia-entry__specs">
+            <span class="encyclopedia-entry__spec-label">α {{ tower.alpha.label }}</span>
+            <span class="encyclopedia-entry__spec-desc">{{ tower.alpha.description }}</span>
+            <span class="encyclopedia-entry__spec-label">β {{ tower.beta.label }}</span>
+            <span class="encyclopedia-entry__spec-desc">{{ tower.beta.description }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Help overlay -->
@@ -344,19 +422,22 @@
     <div class="help-content" (click)="$event.stopPropagation()">
       <h3>Keyboard Shortcuts</h3>
       <div class="help-grid">
-        <span class="key">1-6</span><span>Select tower type</span>
-        <span class="key">Space</span><span>Start next wave</span>
-        <span class="key">P</span><span>Pause / Resume</span>
-        <span class="key">Escape</span><span>Pause / Resume (or deselect tower)</span>
-        <span class="key">R</span><span>Toggle all range rings</span>
-        <span class="key">V</span><span>Toggle enemy path</span>
-        <span class="key">M</span><span>Toggle minimap</span>
-        <span class="key">E</span><span>Enemy encyclopedia</span>
-        <span class="key">U</span><span>Upgrade selected tower</span>
-        <span class="key">T</span><span>Cycle targeting mode</span>
-        <span class="key">Del</span><span>Sell selected tower</span>
-        <span class="key">WASD</span><span>Pan camera</span>
-        <span class="key">H</span><span>Toggle this help</span>
+        <kbd>1-6</kbd><span>Select tower type</span>
+        <kbd>Space</kbd><span>Start next wave</span>
+        <kbd>P</kbd><span>Pause / Resume</span>
+        <kbd>Escape</kbd><span>Pause / Resume (or deselect tower)</span>
+        <kbd>R</kbd><span>Toggle all range rings</span>
+        <kbd>V</kbd><span>Toggle enemy path</span>
+        <kbd>M</kbd><span>Toggle minimap</span>
+        <kbd>E</kbd><span>Enemy encyclopedia</span>
+        <kbd>U</kbd><span>Upgrade selected tower</span>
+        <kbd>T</kbd><span>Cycle targeting mode</span>
+        <kbd>Del</kbd><span>Sell selected tower</span>
+        <kbd>W/↑</kbd><span>Pan forward</span>
+        <kbd>S/↓</kbd><span>Pan backward</span>
+        <kbd>A/←</kbd><span>Pan left</span>
+        <kbd>D/→</kbd><span>Pan right</span>
+        <kbd>H</kbd><span>Toggle this help</span>
       </div>
       <p class="help-dismiss">Click anywhere or press H to close</p>
     </div>

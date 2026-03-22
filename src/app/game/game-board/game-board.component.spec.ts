@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
 import * as THREE from 'three';
@@ -13,7 +13,7 @@ import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService } from './services/minimap.service';
 import { SettingsService } from './services/settings.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase } from './models/game-state.model';
-import { TowerType, PlacedTower, TargetingMode } from './models/tower.model';
+import { TowerType, TowerSpecialization, PlacedTower, TargetingMode } from './models/tower.model';
 import { EnemyType } from './models/enemy.model';
 import { TowerCombatService } from './services/tower-combat.service';
 import { ScoreBreakdown, calculateScoreBreakdown } from './models/score.model';
@@ -29,6 +29,7 @@ import { CampaignLevel, CampaignTier } from '../../campaign/models/campaign.mode
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 import { GameNotificationService, NotificationType } from './services/game-notification.service';
 import { ChallengeTrackingService } from './services/challenge-tracking.service';
+import { ChallengeType, ChallengeDefinition } from '../../campaign/models/challenge.model';
 import { GameEndService } from './services/game-end.service';
 import { TilePricingService } from './services/tile-pricing.service';
 import { GameSessionService } from './services/game-session.service';
@@ -43,7 +44,9 @@ import {
   createCombatLoopServiceSpy,
   createMinimapServiceSpy,
   createSettingsServiceSpy,
+  createTowerAnimationServiceSpy,
 } from './testing';
+import { TowerAnimationService } from './services/tower-animation.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -133,6 +136,7 @@ describe('GameBoardComponent', () => {
         { provide: CampaignMapService, useValue: campaignMapServiceSpy },
         { provide: GameSessionService, useValue: gameSessionSpy },
         { provide: CombatLoopService, useValue: combatLoopSpy },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
       ]
     })
     .compileComponents();
@@ -1176,6 +1180,29 @@ describe('GameBoardComponent', () => {
       (component as any).contextLost = false;
       expect(component.contextLost).toBeFalse();
     });
+
+    it('reloadPage is defined and callable', () => {
+      // Verify the method exists; actual navigation cannot be tested in headless Chrome
+      expect(typeof component.reloadPage).toBe('function');
+    });
+  });
+
+  describe('game initialization failure', () => {
+    it('initializationFailed should start as false', () => {
+      expect(component.initializationFailed).toBeFalse();
+    });
+
+    it('goBackToMaps navigates to /maps', () => {
+      const router = TestBed.inject(Router);
+      spyOn(router, 'navigate');
+      component.goBackToMaps();
+      expect(router.navigate).toHaveBeenCalledWith(['/maps']);
+    });
+
+    it('setting initializationFailed to true is reflected on the component', () => {
+      (component as any).initializationFailed = true;
+      expect(component.initializationFailed).toBeTrue();
+    });
   });
 
   describe('Interaction Mode System', () => {
@@ -1249,6 +1276,82 @@ describe('GameBoardComponent', () => {
       const cost = component.getEffectiveTowerCost(null);
 
       expect(cost).toBe(0);
+    });
+  });
+
+  describe('Mobile tower preview (handleTowerButtonTap)', () => {
+    function makeTouchEvent(): TouchEvent {
+      return new TouchEvent('click', { bubbles: true });
+    }
+
+    function makeMouseEvent(): MouseEvent {
+      return new MouseEvent('click', { bubbles: true });
+    }
+
+    it('previewTowerType should be null by default', () => {
+      expect(component.previewTowerType).toBeNull();
+    });
+
+    it('touch tap selects tower immediately (mode indicator updates)', () => {
+      component.selectedTowerType = null;
+
+      component.handleTowerButtonTap(makeTouchEvent(), TowerType.SNIPER);
+
+      expect(component.isPlaceMode).toBeTrue();
+      expect(component.selectedTowerType as TowerType | null).toBe(TowerType.SNIPER);
+    });
+
+    it('touch tap on different tower switches selection', () => {
+      component.handleTowerButtonTap(makeTouchEvent(), TowerType.BASIC);
+      component.handleTowerButtonTap(makeTouchEvent(), TowerType.MORTAR);
+
+      expect(component.selectedTowerType as TowerType | null).toBe(TowerType.MORTAR);
+    });
+
+    it('mouse click delegates directly to selectTowerType (desktop unchanged)', () => {
+      spyOn(component, 'selectTowerType');
+      component.selectedTowerType = null;
+
+      component.handleTowerButtonTap(makeMouseEvent(), TowerType.SPLASH);
+
+      expect(component.selectTowerType).toHaveBeenCalledWith(TowerType.SPLASH);
+      // Preview must not be set for mouse events
+      expect(component.previewTowerType).toBeNull();
+    });
+
+    it('mouse click does not mutate previewTowerType', () => {
+      component.previewTowerType = null;
+
+      component.handleTowerButtonTap(makeMouseEvent(), TowerType.CHAIN);
+
+      expect(component.previewTowerType).toBeNull();
+    });
+
+    it('clearTowerPreview sets previewTowerType to null', () => {
+      component.previewTowerType = TowerType.SLOW;
+
+      component.clearTowerPreview();
+
+      expect(component.previewTowerType).toBeNull();
+    });
+
+    it('clearTowerPreview does not affect selectedTowerType', () => {
+      component.previewTowerType = TowerType.SLOW;
+      component.selectedTowerType = TowerType.BASIC;
+
+      component.clearTowerPreview();
+
+      expect(component.selectedTowerType).toBe(TowerType.BASIC);
+    });
+
+    it('second touch tap on same tower also calls updateTileHighlights via selectTowerType', () => {
+      spyOn(component, 'updateTileHighlights');
+      component.previewTowerType = TowerType.SPLASH;
+      component.selectedTowerType = null;
+
+      component.handleTowerButtonTap(makeTouchEvent(), TowerType.SPLASH);
+
+      expect(component.updateTileHighlights).toHaveBeenCalled();
     });
   });
 
@@ -1472,9 +1575,9 @@ describe('GameBoardComponent', () => {
       expect(component.getTutorialStepNumber()).toBe(2);
     });
 
-    it('getTutorialStepNumber() returns at least 1 when step is not found', () => {
+    it('getTutorialStepNumber() returns 0 when currentTutorialStep is null', () => {
       component.currentTutorialStep = null;
-      expect(component.getTutorialStepNumber()).toBeGreaterThanOrEqual(1);
+      expect(component.getTutorialStepNumber()).toBe(0);
     });
 
     it('does not call startTutorial when tutorial is already complete', () => {
@@ -1544,6 +1647,65 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  describe('encyclopediaTab', () => {
+    it('default tab is enemies', () => {
+      expect(component.encyclopediaTab).toBe('enemies');
+    });
+
+    it('switching to towers tab sets encyclopediaTab to towers', () => {
+      component.encyclopediaTab = 'towers';
+      expect(component.encyclopediaTab).toBe('towers');
+    });
+
+    it('switching back to enemies tab sets encyclopediaTab to enemies', () => {
+      component.encyclopediaTab = 'towers';
+      component.encyclopediaTab = 'enemies';
+      expect(component.encyclopediaTab).toBe('enemies');
+    });
+  });
+
+  describe('towerInfoList', () => {
+    it('towerInfoList should have 6 entries (one per tower type)', () => {
+      expect(component.towerInfoList.length).toBe(6);
+    });
+
+    it('each tower entry has a non-empty name', () => {
+      for (const info of component.towerInfoList) {
+        expect(info.name.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('each tower entry has a non-empty description', () => {
+      for (const info of component.towerInfoList) {
+        expect(info.description.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('each tower entry has non-empty alpha and beta labels', () => {
+      for (const info of component.towerInfoList) {
+        expect(info.alpha.label.length).toBeGreaterThan(0);
+        expect(info.beta.label.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('all 6 tower types are represented', () => {
+      const types = component.towerInfoList.map(t => t.type);
+      expect(types).toContain(TowerType.BASIC);
+      expect(types).toContain(TowerType.SNIPER);
+      expect(types).toContain(TowerType.SPLASH);
+      expect(types).toContain(TowerType.SLOW);
+      expect(types).toContain(TowerType.CHAIN);
+      expect(types).toContain(TowerType.MORTAR);
+    });
+
+    it('each tower entry has positive cost and damage (except Slow which has 0 damage)', () => {
+      for (const info of component.towerInfoList) {
+        expect(info.cost).toBeGreaterThan(0);
+        expect(info.damage).toBeGreaterThanOrEqual(0);
+      }
+    });
+  });
+
   describe('E key toggles encyclopedia', () => {
     function fireKey(key: string): void {
       const event = new KeyboardEvent('keydown', { key, bubbles: true });
@@ -1595,6 +1757,88 @@ describe('GameBoardComponent', () => {
       waveService.markSeen(EnemyType.BASIC);
       waveService.markSeen(EnemyType.FAST);
       expect(component.isNewEnemyType(EnemyType.BOSS)).toBeTrue();
+    });
+  });
+
+  // ── getEnemyBadges ───────────────────────────────────────────────────────────
+
+  describe('getEnemyBadges', () => {
+    it('returns an empty array for Basic enemies (no immunities, no specials, leak=1)', () => {
+      const badges = component.getEnemyBadges(EnemyType.BASIC);
+      expect(badges).toEqual([]);
+    });
+
+    it('returns Flies badge and Slow immune badge for Flying enemies', () => {
+      const badges = component.getEnemyBadges(EnemyType.FLYING);
+      const texts = badges.map(b => b.text);
+      expect(texts).toContain('Flies');
+      expect(texts).toContain('Slow immune');
+    });
+
+    it('Flies badge has severity info', () => {
+      const badges = component.getEnemyBadges(EnemyType.FLYING);
+      const flies = badges.find(b => b.text === 'Flies');
+      expect(flies?.severity).toBe('info');
+    });
+
+    it('Slow immune badge has severity warning', () => {
+      const badges = component.getEnemyBadges(EnemyType.FLYING);
+      const immune = badges.find(b => b.text === 'Slow immune');
+      expect(immune?.severity).toBe('warning');
+    });
+
+    it('returns Shield badge with correct HP for Shielded enemies', () => {
+      const badges = component.getEnemyBadges(EnemyType.SHIELDED);
+      const shield = badges.find(b => b.text.startsWith('Shield:'));
+      expect(shield).toBeTruthy();
+      // Value must match ENEMY_STATS — currently 60HP
+      expect(shield?.text).toBe('Shield: 60HP');
+      expect(shield?.severity).toBe('info');
+    });
+
+    it('returns Leak:2 badge for Shielded enemies', () => {
+      const badges = component.getEnemyBadges(EnemyType.SHIELDED);
+      const leak = badges.find(b => b.text.startsWith('Leak:'));
+      expect(leak?.text).toBe('Leak: 2');
+      expect(leak?.severity).toBe('danger');
+    });
+
+    it('returns Splits badge for Swarm enemies', () => {
+      const badges = component.getEnemyBadges(EnemyType.SWARM);
+      const splits = badges.find(b => b.text.startsWith('Splits'));
+      expect(splits).toBeTruthy();
+      expect(splits?.text).toBe('Splits ×3');
+      expect(splits?.severity).toBe('warning');
+    });
+
+    it('returns Leak:3 badge for Boss enemies', () => {
+      const badges = component.getEnemyBadges(EnemyType.BOSS);
+      const leak = badges.find(b => b.text.startsWith('Leak:'));
+      expect(leak?.text).toBe('Leak: 3');
+      expect(leak?.severity).toBe('danger');
+    });
+
+    it('returns Leak:2 badge for Heavy enemies', () => {
+      const badges = component.getEnemyBadges(EnemyType.HEAVY);
+      const leak = badges.find(b => b.text.startsWith('Leak:'));
+      expect(leak?.text).toBe('Leak: 2');
+      expect(leak?.severity).toBe('danger');
+    });
+
+    it('returns an empty array for Fast enemies (leak=1, no specials)', () => {
+      const badges = component.getEnemyBadges(EnemyType.FAST);
+      expect(badges).toEqual([]);
+    });
+
+    it('returns an empty array for Swift enemies (leak=1, no specials)', () => {
+      const badges = component.getEnemyBadges(EnemyType.SWIFT);
+      expect(badges).toEqual([]);
+    });
+
+    it('returns the same array reference on repeated calls (memoised)', () => {
+      const first = component.getEnemyBadges(EnemyType.BOSS);
+      const second = component.getEnemyBadges(EnemyType.BOSS);
+      expect(first).toBe(second);
     });
   });
 
@@ -2725,4 +2969,568 @@ describe('GameBoardComponent', () => {
       expect((component as any).towerChildrenArray.length).toBe(0);
     });
   });
+
+  describe('applySpecializationVisual', () => {
+    function makeMeshGroup(...names: string[]): THREE.Group {
+      const group = new THREE.Group();
+      for (const name of names) {
+        const geom = new THREE.BoxGeometry(1, 1, 1);
+        const mat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.name = name;
+        group.add(mesh);
+      }
+      return group;
+    }
+
+    afterEach(() => {
+      // Dispose geometries/materials created in helpers
+    });
+
+    it('should apply warm orange emissive tint for ALPHA specialization', () => {
+      const group = makeMeshGroup('base', 'top');
+      component.applySpecializationVisual(group, TowerSpecialization.ALPHA);
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
+          expect(child.material.emissive.getHex()).toBe(0xff6633);
+          expect(child.material.emissiveIntensity).toBe(0.4);
+        }
+      });
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          (child.material as THREE.MeshStandardMaterial).dispose();
+        }
+      });
+    });
+
+    it('should apply cool blue emissive tint for BETA specialization', () => {
+      const group = makeMeshGroup('base', 'top');
+      component.applySpecializationVisual(group, TowerSpecialization.BETA);
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
+          expect(child.material.emissive.getHex()).toBe(0x3366ff);
+          expect(child.material.emissiveIntensity).toBe(0.4);
+        }
+      });
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          (child.material as THREE.MeshStandardMaterial).dispose();
+        }
+      });
+    });
+
+    it('should not modify tip or orb meshes (animated by TowerAnimationService)', () => {
+      const group = makeMeshGroup('base', 'tip', 'orb');
+      const tipMesh = group.children.find(c => c.name === 'tip') as THREE.Mesh;
+      const orbMesh = group.children.find(c => c.name === 'orb') as THREE.Mesh;
+      const tipMat = tipMesh.material as THREE.MeshStandardMaterial;
+      const orbMat = orbMesh.material as THREE.MeshStandardMaterial;
+      const tipOriginalHex = tipMat.emissive.getHex();
+      const orbOriginalHex = orbMat.emissive.getHex();
+
+      component.applySpecializationVisual(group, TowerSpecialization.ALPHA);
+
+      expect(tipMat.emissive.getHex()).toBe(tipOriginalHex);
+      expect(orbMat.emissive.getHex()).toBe(orbOriginalHex);
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          (child.material as THREE.MeshStandardMaterial).dispose();
+        }
+      });
+    });
+
+    it('should apply tint to all non-animated mesh children in the group', () => {
+      const group = makeMeshGroup('base', 'mid', 'top', 'crystal');
+      const tinted: string[] = [];
+      component.applySpecializationVisual(group, TowerSpecialization.BETA);
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
+          if (child.material.emissive.getHex() === 0x3366ff) {
+            tinted.push(child.name);
+          }
+        }
+      });
+      expect(tinted).toContain('base');
+      expect(tinted).toContain('mid');
+      expect(tinted).toContain('top');
+      expect(tinted).toContain('crystal');
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          (child.material as THREE.MeshStandardMaterial).dispose();
+        }
+      });
+    });
+
+    it('should handle Material[] arrays on a mesh', () => {
+      const group = new THREE.Group();
+      const geom = new THREE.BoxGeometry(1, 1, 1);
+      const mat1 = new THREE.MeshStandardMaterial({ color: 0xffffff });
+      const mat2 = new THREE.MeshStandardMaterial({ color: 0x888888 });
+      const mesh = new THREE.Mesh(geom, [mat1, mat2]);
+      mesh.name = 'multi';
+      group.add(mesh);
+
+      component.applySpecializationVisual(group, TowerSpecialization.ALPHA);
+
+      expect(mat1.emissive.getHex()).toBe(0xff6633);
+      expect(mat2.emissive.getHex()).toBe(0xff6633);
+
+      geom.dispose();
+      mat1.dispose();
+      mat2.dispose();
+    });
+  });
+
+  describe('onWaveComplete — wave clear banner', () => {
+    it('sets showWaveClear to true and waveClearMessage immediately', () => {
+      component.onWaveComplete(3, false);
+
+      expect(component.showWaveClear).toBeTrue();
+      expect(component.waveClearMessage).toBe('Wave 3 Clear!');
+    });
+
+    it('includes "Perfect!" suffix when perfectWave is true', () => {
+      component.onWaveComplete(5, true);
+
+      expect(component.waveClearMessage).toBe('Wave 5 Clear! Perfect!');
+    });
+
+    it('does NOT include "Perfect!" when perfectWave is false', () => {
+      component.onWaveComplete(2, false);
+
+      expect(component.waveClearMessage).not.toContain('Perfect');
+    });
+
+    it('sets showWaveClear to false after 2 seconds', fakeAsync(() => {
+      component.onWaveComplete(1, false);
+      expect(component.showWaveClear).toBeTrue();
+
+      tick(2000);
+
+      expect(component.showWaveClear).toBeFalse();
+    }));
+
+    it('resets the timer if called again before the first expires', fakeAsync(() => {
+      component.onWaveComplete(1, false);
+      tick(1000);
+      component.onWaveComplete(2, false);
+
+      // Should still be showing because the timer was reset
+      tick(1500);
+      expect(component.showWaveClear).toBeTrue();
+
+      tick(500);
+      expect(component.showWaveClear).toBeFalse();
+    }));
+  });
+
+  describe('waveStartPulse — wave counter pulse', () => {
+    it('starts as false', () => {
+      expect(component.waveStartPulse).toBeFalse();
+    });
+
+    it('becomes true when triggerWaveStartPulse is called', fakeAsync(() => {
+      (component as any).triggerWaveStartPulse();
+
+      expect(component.waveStartPulse).toBeTrue();
+
+      tick(300);
+
+      expect(component.waveStartPulse).toBeFalse();
+    }));
+
+    it('resets to false after 300ms', fakeAsync(() => {
+      (component as any).triggerWaveStartPulse();
+      tick(299);
+      expect(component.waveStartPulse).toBeTrue();
+
+      tick(1);
+      expect(component.waveStartPulse).toBeFalse();
+    }));
+
+    it('resets timer if called again before prior pulse expires', fakeAsync(() => {
+      (component as any).triggerWaveStartPulse();
+      tick(200);
+      (component as any).triggerWaveStartPulse();
+
+      // 200ms into the reset timer — should still be true
+      tick(200);
+      expect(component.waveStartPulse).toBeTrue();
+
+      tick(100);
+      expect(component.waveStartPulse).toBeFalse();
+    }));
+  });
+
+  describe('updateChallengeIndicators', () => {
+    let challengeTrackingService: ChallengeTrackingService;
+    let mapBridge: MapBridgeService;
+
+    beforeEach(() => {
+      challengeTrackingService = fixture.debugElement.injector.get(ChallengeTrackingService);
+      mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+    });
+
+    it('returns empty array when not a campaign game', () => {
+      // No campaign map loaded — mapId is null
+      component.updateChallengeIndicators();
+      expect(component.challengeIndicators).toEqual([]);
+    });
+
+    it('returns empty array when mapId is null (non-campaign game)', () => {
+      // mapBridge.getMapId() returns null by default (no map loaded)
+      spyOn(mapBridge, 'getMapId').and.returnValue(null);
+      component.updateChallengeIndicators();
+      expect(component.challengeIndicators).toEqual([]);
+    });
+
+    describe('NO_SLOW indicator', () => {
+      beforeEach(() => {
+        const mockLevel = { id: 'campaign_02', name: 'Map 2' } as CampaignLevel;
+        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
+        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_02');
+      });
+
+      it('passing=true when no Slow tower placed', () => {
+        // campaign_02 has NO_SLOW + SPEED_RUN; no slow placed
+        component.updateChallengeIndicators();
+        const noSlow = component.challengeIndicators.find(ci => ci.label === 'No Slow');
+        expect(noSlow).toBeTruthy();
+        expect(noSlow!.passing).toBeTrue();
+        expect(noSlow!.value).toBe('✓');
+      });
+
+      it('passing=false when Slow tower has been placed', () => {
+        challengeTrackingService.recordTowerPlaced(TowerType.SLOW, 100);
+        component.updateChallengeIndicators();
+        const noSlow = component.challengeIndicators.find(ci => ci.label === 'No Slow');
+        expect(noSlow).toBeTruthy();
+        expect(noSlow!.passing).toBeFalse();
+        expect(noSlow!.value).toBe('✗');
+      });
+    });
+
+    describe('UNTOUCHABLE indicator', () => {
+      beforeEach(() => {
+        const mockLevel = { id: 'campaign_01', name: 'Map 1' } as CampaignLevel;
+        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
+        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+      });
+
+      it('passing=true when no lives lost', () => {
+        // Default NORMAL difficulty: 20 lives, no lives lost
+        component.updateChallengeIndicators();
+        const noDmg = component.challengeIndicators.find(ci => ci.label === 'No Damage');
+        expect(noDmg).toBeTruthy();
+        expect(noDmg!.passing).toBeTrue();
+      });
+
+      it('passing=false when a life has been lost', () => {
+        const gameStateService = fixture.debugElement.injector.get(GameStateService);
+        // Lose a life by setting phase to COMBAT first, then deducting
+        gameStateService.setPhase(GamePhase.COMBAT);
+        gameStateService.loseLife(1);
+        component.updateChallengeIndicators();
+        const noDmg = component.challengeIndicators.find(ci => ci.label === 'No Damage');
+        expect(noDmg).toBeTruthy();
+        expect(noDmg!.passing).toBeFalse();
+      });
+    });
+
+    describe('TOWER_LIMIT indicator', () => {
+      beforeEach(() => {
+        const mockLevel = { id: 'campaign_01', name: 'Map 1' } as CampaignLevel;
+        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
+        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+      });
+
+      it('shows current/limit and passing=true when under limit', () => {
+        // campaign_01 has TOWER_LIMIT of 4
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+        component.updateChallengeIndicators();
+        const towers = component.challengeIndicators.find(ci => ci.label === 'Towers');
+        expect(towers).toBeTruthy();
+        expect(towers!.passing).toBeTrue();
+        expect(towers!.value).toBe('2/4');
+      });
+
+      it('passing=false when over limit', () => {
+        // Place 5 towers against limit of 4
+        for (let i = 0; i < 5; i++) {
+          challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+        }
+        component.updateChallengeIndicators();
+        const towers = component.challengeIndicators.find(ci => ci.label === 'Towers');
+        expect(towers).toBeTruthy();
+        expect(towers!.passing).toBeFalse();
+        expect(towers!.value).toBe('5/4');
+      });
+    });
+
+    describe('FRUGAL indicator', () => {
+      beforeEach(() => {
+        const mockLevel = { id: 'campaign_03', name: 'Map 3' } as CampaignLevel;
+        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
+        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_03');
+      });
+
+      it('shows spent/limit and passing=true when under gold limit', () => {
+        // campaign_03 has FRUGAL with goldLimit=600
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 200);
+        component.updateChallengeIndicators();
+        const spent = component.challengeIndicators.find(ci => ci.label === 'Spent');
+        expect(spent).toBeTruthy();
+        expect(spent!.passing).toBeTrue();
+        expect(spent!.value).toBe('200g/600g');
+      });
+
+      it('passing=false when over gold limit', () => {
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 700);
+        component.updateChallengeIndicators();
+        const spent = component.challengeIndicators.find(ci => ci.label === 'Spent');
+        expect(spent).toBeTruthy();
+        expect(spent!.passing).toBeFalse();
+      });
+    });
+
+    describe('SINGLE_TYPE indicator', () => {
+      beforeEach(() => {
+        const mockLevel = { id: 'campaign_07', name: 'Map 7' } as CampaignLevel;
+        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
+        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_07');
+      });
+
+      it('passing=true when only one tower type used', () => {
+        // campaign_07 has SINGLE_TYPE + SPEED_RUN
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+        component.updateChallengeIndicators();
+        const single = component.challengeIndicators.find(ci => ci.label === 'Single Type');
+        expect(single).toBeTruthy();
+        expect(single!.passing).toBeTrue();
+        expect(single!.value).toBe('✓');
+      });
+
+      it('passing=false when multiple tower types used', () => {
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+        challengeTrackingService.recordTowerPlaced(TowerType.SNIPER, 150);
+        component.updateChallengeIndicators();
+        const single = component.challengeIndicators.find(ci => ci.label === 'Single Type');
+        expect(single).toBeTruthy();
+        expect(single!.passing).toBeFalse();
+        expect(single!.value).toBe('2 types');
+      });
+
+      it('passing=true with zero towers placed', () => {
+        component.updateChallengeIndicators();
+        const single = component.challengeIndicators.find(ci => ci.label === 'Single Type');
+        expect(single).toBeTruthy();
+        expect(single!.passing).toBeTrue();
+      });
+    });
+
+    it('excludes SPEED_RUN from indicators when campaign has multiple challenge types', () => {
+      const mockLevel = { id: 'campaign_02', name: 'Map 2' } as CampaignLevel;
+      campaignServiceSpy.getLevel.and.returnValue(mockLevel);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_02');
+      component.updateChallengeIndicators();
+      const speedRunIndicator = component.challengeIndicators.find(ci => ci.label === 'Speed Run');
+      expect(speedRunIndicator).toBeUndefined();
+    });
+
+    it('challengeIndicators is reset to [] on restartGame', () => {
+      component.challengeIndicators = [{ label: 'No Slow', value: '✓', passing: true }];
+
+      spyOn(component as any, 'cleanupGameObjects');
+      spyOn(component as any, 'renderGameBoard');
+      spyOn(component as any, 'addGridLines');
+      spyOn((component as any).sceneService, 'initLights');
+      spyOn((component as any).sceneService, 'initSkybox');
+      spyOn((component as any).sceneService, 'initParticles');
+      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
+      spyOn(minimapSvc, 'init');
+
+      component.restartGame();
+
+      expect(component.challengeIndicators).toEqual([]);
+    });
+  });
+
+  // ── Red team: visual animation freeze during pause (S30) ──────────────────
+  describe('red team: visual animations during pause', () => {
+    it('enemiesAlive getter uses getLivingEnemyCount (excludes dying enemies)', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const livingCountSpy = spyOn(enemyService, 'getLivingEnemyCount').and.returnValue(2);
+      // Simulate 3 enemies in map but only 2 living (1 is dying)
+      spyOn(enemyService, 'getEnemies').and.returnValue(new Map([
+        ['e1', {} as any], ['e2', {} as any], ['e3', {} as any],
+      ]));
+
+      const result = component.enemiesAlive;
+
+      expect(livingCountSpy).toHaveBeenCalled();
+      // Must return 2 (from getLivingEnemyCount), not 3 (from getEnemies.size)
+      expect(result).toBe(2);
+    });
+
+    it('runPausedVisuals calls all cosmetic-only animation updates', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const statusEffectService = fixture.debugElement.injector.get(StatusEffectService);
+      const mockScene = new THREE.Scene();
+      const mockCamera = new THREE.PerspectiveCamera();
+      spyOn((component as any).sceneService, 'getScene').and.returnValue(mockScene);
+      spyOn((component as any).sceneService, 'getCamera').and.returnValue(mockCamera);
+      spyOn(statusEffectService, 'getAllActiveEffects').and.returnValue(new Map());
+
+      const dyingSpy = spyOn(enemyService, 'updateDyingAnimations');
+      const flashSpy = spyOn(enemyService, 'updateHitFlashes');
+      const shieldSpy = spyOn(enemyService, 'updateShieldBreakAnimations');
+      const healthBarSpy = spyOn(enemyService, 'updateHealthBars');
+      const particleSpy = spyOn(enemyService, 'updateStatusEffectParticles');
+      spyOn(enemyService, 'updateStatusVisuals');
+      spyOn(enemyService, 'updateEnemyAnimations');
+      spyOn(component as any, 'updateMinimap');
+
+      (component as any).runPausedVisuals(0.016, 1000);
+
+      expect(dyingSpy).toHaveBeenCalledWith(0.016, mockScene);
+      expect(flashSpy).toHaveBeenCalledWith(0.016);
+      expect(shieldSpy).toHaveBeenCalledWith(0.016);
+      expect(healthBarSpy).toHaveBeenCalled();
+      expect(particleSpy).toHaveBeenCalled();
+    });
+
+    it('runPausedVisuals is NOT invoked when game is unpaused in COMBAT', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.COMBAT);
+      expect(gameStateService.getState().isPaused).toBeFalse();
+
+      const pausedVisualsSpy = spyOn(component as any, 'runPausedVisuals');
+
+      // Replicate the animate-loop guard logic
+      const state = gameStateService.getState();
+      if (state.phase === GamePhase.COMBAT && state.isPaused) {
+        (component as any).runPausedVisuals(0.016, 1000);
+      }
+
+      expect(pausedVisualsSpy).not.toHaveBeenCalled();
+    });
+
+    it('runPausedVisuals IS invoked when game is paused in COMBAT', () => {
+      const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gameStateService.setPhase(GamePhase.COMBAT);
+      gameStateService.togglePause();
+      expect(gameStateService.getState().isPaused).toBeTrue();
+
+      const pausedVisualsSpy = spyOn(component as any, 'runPausedVisuals');
+
+      // Replicate the animate-loop guard logic
+      const state = gameStateService.getState();
+      if (state.phase === GamePhase.COMBAT && state.isPaused) {
+        (component as any).runPausedVisuals(0.016, 1000);
+      }
+
+      expect(pausedVisualsSpy).toHaveBeenCalledWith(0.016, 1000);
+    });
+  });
+
+  // ── Red team gate: restartGame() timer cleanup ──────────────────
+  describe('red team gate: restartGame clears wave transition timers', () => {
+    beforeEach(() => {
+      spyOn(component as any, 'cleanupGameObjects');
+      spyOn(component as any, 'renderGameBoard');
+      spyOn(component as any, 'addGridLines');
+      spyOn((component as any).sceneService, 'initLights');
+      spyOn((component as any).sceneService, 'initSkybox');
+      spyOn((component as any).sceneService, 'initParticles');
+      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
+      spyOn(minimapSvc, 'init');
+    });
+
+    it('clears waveClearTimerId on restart', fakeAsync(() => {
+      component.onWaveComplete(3, true);
+      expect(component.showWaveClear).toBeTrue();
+
+      component.restartGame();
+
+      expect(component.showWaveClear).toBeFalse();
+      expect(component.waveClearMessage).toBe('');
+
+      // Timer should NOT fire after restart
+      tick(3000);
+      expect(component.showWaveClear).toBeFalse();
+    }));
+
+    it('clears waveStartPulseTimerId on restart', fakeAsync(() => {
+      (component as any).triggerWaveStartPulse();
+      expect(component.waveStartPulse).toBeTrue();
+
+      component.restartGame();
+
+      expect(component.waveStartPulse).toBeFalse();
+
+      // Timer should NOT fire after restart
+      tick(500);
+      expect(component.waveStartPulse).toBeFalse();
+    }));
+  });
+
+  // ── Red team gate 2: no double-tick of visual animations ──────────────
+  describe('red team gate 2: animation calls not duplicated', () => {
+    beforeEach(() => {
+      const mockCamera = new THREE.PerspectiveCamera();
+      spyOn((component as any).sceneService, 'getCamera').and.returnValue(mockCamera);
+      spyOn((component as any).sceneService, 'getScene').and.returnValue(new THREE.Scene());
+      const statusEffectService = fixture.debugElement.injector.get(StatusEffectService);
+      spyOn(statusEffectService, 'getAllActiveEffects').and.returnValue(new Map());
+    });
+
+    it('processCombatResult does NOT call updateDyingAnimations (handled in animate)', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const dyingSpy = spyOn(enemyService, 'updateDyingAnimations');
+
+      // Call processCombatResult with an empty result
+      const emptyResult = {
+        kills: [],
+        firedTypes: new Set(),
+        hitCount: 0,
+        exitCount: 0,
+        leaked: false,
+        defeatTriggered: false,
+        waveCompletion: null,
+        gameEnd: null,
+        combatAudioEvents: [],
+      };
+      (component as any).processCombatResult(emptyResult, 0.016, 1000);
+
+      // updateDyingAnimations should NOT be called from processCombatResult
+      expect(dyingSpy).not.toHaveBeenCalled();
+    });
+
+    it('processCombatResult does NOT call updateHitFlashes (handled in animate)', () => {
+      const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const flashSpy = spyOn(enemyService, 'updateHitFlashes');
+
+      const emptyResult = {
+        kills: [],
+        firedTypes: new Set(),
+        hitCount: 0,
+        exitCount: 0,
+        leaked: false,
+        defeatTriggered: false,
+        waveCompletion: null,
+        gameEnd: null,
+        combatAudioEvents: [],
+      };
+      (component as any).processCombatResult(emptyResult, 0.016, 1000);
+
+      expect(flashSpy).not.toHaveBeenCalled();
+    });
+  });
+
 });

@@ -1,7 +1,7 @@
-<div class="game-overlay" role="alertdialog" [attr.aria-label]="isVictory ? 'Victory' : 'Defeat'">
+<div class="game-overlay" role="alertdialog" aria-modal="true" aria-labelledby="results-overlay-title">
   <div class="overlay-content" [class.victory]="isVictory" [class.defeat]="!isVictory">
-    <h2 *ngIf="isVictory">Victory</h2>
-    <h2 *ngIf="!isVictory">Defeat</h2>
+    <h2 *ngIf="isVictory" id="results-overlay-title">Victory</h2>
+    <h2 *ngIf="!isVictory" id="results-overlay-title">Defeat</h2>
 
     <!-- Campaign level identity -->
     <div class="victory-level" *ngIf="isCampaignGame && currentCampaignLevel">
@@ -10,12 +10,15 @@
     </div>
 
     <!-- Star rating -->
-    <div class="star-display" *ngIf="isVictory">
+    <div class="star-display" *ngIf="isVictory" [attr.aria-label]="(scoreBreakdown?.stars ?? 0) + ' out of ' + starArray.length + ' stars'">
       <span
         *ngFor="let s of starArray; let i = index"
         class="overlay-star"
         [class.filled]="s === 'filled'"
         [class.empty]="s === 'empty'"
+        [class.star-1]="i === 0"
+        [class.star-2]="i === 1"
+        [class.star-3]="i === 2"
         [attr.aria-label]="s === 'filled' ? 'Star earned' : 'Star not earned'">
         &#9733;
       </span>
@@ -58,7 +61,7 @@
            class="challenge-result-item"
            [class.challenge-result-item--passed]="isChallengeCompletedFn(challenge)"
            [class.challenge-result-item--failed]="!isChallengeCompletedFn(challenge)">
-        <span class="challenge-result-item__status">{{ isChallengeCompletedFn(challenge) ? '✓' : '✗' }}</span>
+        <span class="challenge-result-item__status" [attr.aria-label]="isChallengeCompletedFn(challenge) ? 'passed' : 'failed'" aria-hidden="false">{{ isChallengeCompletedFn(challenge) ? '✓' : '✗' }}</span>
         <span class="challenge-result-item__name">{{ challenge.name }}</span>
         <span class="challenge-result-item__bonus" *ngIf="isChallengeCompletedFn(challenge)">+{{ challenge.scoreBonus }}</span>
       </div>
@@ -92,7 +95,13 @@
         (click)="backToCampaign.emit()">
         Campaign
       </button>
-      <button class="results-btn results-btn--tertiary" (click)="editMap.emit()">Edit Map</button>
+      <button
+        *ngIf="isEditorOrigin"
+        class="results-btn results-btn--tertiary"
+        (click)="backToEditor.emit()">
+        Back to Editor
+      </button>
+      <button *ngIf="!isEditorOrigin" class="results-btn results-btn--tertiary" (click)="editMap.emit()">Edit Map</button>
     </div>
   </div>
 </div>

@@ -35,15 +35,16 @@ export class MinimapService {
     this.canvas = document.createElement('canvas');
     this.canvas.width = MINIMAP_CONFIG.canvasSize;
     this.canvas.height = MINIMAP_CONFIG.canvasSize;
-    this.canvas.style.position = 'absolute';
-    this.canvas.style.bottom = `${MINIMAP_CONFIG.padding}px`;
-    this.canvas.style.left = `${MINIMAP_CONFIG.padding}px`;
-    this.canvas.style.border = `${MINIMAP_CONFIG.borderWidth}px solid ${MINIMAP_CONFIG.borderColor}`;
-    this.canvas.style.borderRadius = '4px';
-    this.canvas.style.zIndex = '100';
-    this.canvas.style.pointerEvents = 'none';
+    this.canvas.className = 'game-minimap';
+    this.canvas.style.opacity = this.visible ? '1' : '0';
     if (!this.visible) {
       this.canvas.style.display = 'none';
+    }
+
+    // Mobile: smaller canvas
+    if (window.innerWidth <= 480) {
+      this.canvas.width = 60;
+      this.canvas.height = 60;
     }
 
     this.ctx = this.canvas.getContext('2d');
@@ -70,7 +71,7 @@ export class MinimapService {
     }
     this.lastUpdateTime = timeMs;
 
-    const size = MINIMAP_CONFIG.canvasSize;
+    const size = this.canvas.width; // Use actual canvas size (60 on mobile, 150 on desktop)
     const cellW = size / gridWidth;
     const cellH = size / gridHeight;
 
@@ -122,18 +123,40 @@ export class MinimapService {
 
   show(): void {
     this.visible = true;
-    if (this.canvas) this.canvas.style.display = '';
+    if (this.canvas) {
+      // Make element present first so transition plays
+      this.canvas.style.display = '';
+      // Defer to next tick so the display change is painted before opacity transitions
+      requestAnimationFrame(() => {
+        if (this.canvas) this.canvas.style.opacity = '1';
+      });
+    }
   }
 
   hide(): void {
     this.visible = false;
-    if (this.canvas) this.canvas.style.display = 'none';
+    if (this.canvas) {
+      // Instant hide — no transition needed
+      this.canvas.style.display = 'none';
+      this.canvas.style.opacity = '0';
+    }
   }
 
   toggleVisibility(): void {
-    this.visible = !this.visible;
-    if (this.canvas) {
-      this.canvas.style.display = this.visible ? 'block' : 'none';
+    if (this.visible) {
+      this.hide();
+    } else {
+      this.show();
+    }
+  }
+
+  /**
+   * Dims the minimap to indicate a non-live (paused) state.
+   * Uses `MINIMAP_CONFIG.pausedOpacity` when dimmed.
+   */
+  setDimmed(dimmed: boolean): void {
+    if (this.canvas && this.visible) {
+      this.canvas.style.opacity = dimmed ? String(MINIMAP_CONFIG.pausedOpacity) : '1';
     }
   }
 
@@ -147,6 +170,7 @@ export class MinimapService {
     }
     this.canvas = null;
     this.ctx = null;
+    this.visible = false;
     this.lastUpdateTime = 0;
   }
 }

@@ -337,9 +337,9 @@ export class MapStorageService {
 
   /**
    * Create a file input and handle file selection for import
-   * @returns Promise that resolves with imported map ID or null
+   * @returns Promise that resolves with the imported map ID and an error code on failure
    */
-  public promptFileImport(): Promise<string | null> {
+  public promptFileImport(): Promise<{ mapId: string | null; errorCode: 'file_too_large' | 'invalid_json' | 'invalid_schema' | 'general' | null }> {
     return new Promise((resolve) => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -348,7 +348,7 @@ export class MapStorageService {
       input.onchange = async (event) => {
         const file = (event.target as HTMLInputElement).files?.[0];
         if (!file) {
-          resolve(null);
+          resolve({ mapId: null, errorCode: null });
           return;
         }
 
@@ -356,30 +356,38 @@ export class MapStorageService {
         const MAX_MAP_FILE_BYTES = 512 * 1024; // 512 KB
         if (file.size > MAX_MAP_FILE_BYTES) {
           console.error(`Map file too large: ${file.size} bytes (max ${MAX_MAP_FILE_BYTES})`);
-          resolve(null);
+          resolve({ mapId: null, errorCode: 'file_too_large' });
           return;
         }
 
         try {
           const json = await file.text();
-          const validation = this.validateMapJson(json);
 
+          let parsedOk = true;
+          try { JSON.parse(json); } catch { parsedOk = false; }
+          if (!parsedOk) {
+            console.error('Invalid map file: not valid JSON');
+            resolve({ mapId: null, errorCode: 'invalid_json' });
+            return;
+          }
+
+          const validation = this.validateMapJson(json);
           if (!validation.valid) {
             console.error('Invalid map file:', validation.error);
-            resolve(null);
+            resolve({ mapId: null, errorCode: 'invalid_schema' });
             return;
           }
 
           const mapId = this.importMapFromJson(json);
-          resolve(mapId);
+          resolve({ mapId, errorCode: null });
         } catch (e) {
           console.error('Failed to read file:', e);
-          resolve(null);
+          resolve({ mapId: null, errorCode: 'general' });
         }
       };
 
       input.oncancel = () => {
-        resolve(null);
+        resolve({ mapId: null, errorCode: null });
       };
 
       input.click();

@@ -85,6 +85,10 @@ export interface PlacedTower {
   targetingMode: TargetingMode;
   mesh: THREE.Group | null;
   specialization?: TowerSpecialization; // Set when upgraded to L3
+  /** Seconds remaining on the active muzzle flash spike; undefined when idle. */
+  muzzleFlashTimer?: number;
+  /** Per-mesh snapshot of emissiveIntensity before the flash was applied, keyed by mesh uuid. */
+  originalEmissiveIntensity?: Map<string, number>;
 }
 
 export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {

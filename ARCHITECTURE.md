@@ -20,7 +20,7 @@ src/app/
 │   │   │   └── tutorial-spotlight/    # Non-blocking tutorial cards
 │   │   ├── constants/             # 16 config files (see Constants Architecture)
 │   │   ├── models/                # tower, enemy, wave, game-state, score, modifier, wave-preview,
-│   │   │                          #   enemy-info (encyclopedia), endless-wave (template-based gen)
+│   │   │                          #   enemy-info (encyclopedia), tower-info (encyclopedia), endless-wave
 │   │   ├── services/              # 26 services — includes TutorialService (see Service Scopes)
 │   │   │   ├── tile-highlight.service.ts     # Tile heatmap highlighting for tower placement
 │   │   │   ├── tower-animation.service.ts    # Tower idle animations and tile pulse
@@ -45,7 +45,8 @@ src/app/
 │   ├── models/                    # terrain-types.enum.ts
 │   └── novarise.component.ts      # Editor renderer/interactions (1916 LOC)
 ├── landing/                       # Landing page (/) — Campaign button + progress display
-└── profile/                       # Player profile (/profile) — 26 achievements, 4 categories
+├── profile/                       # Player profile (/profile) — 26 achievements, 4 categories, settings
+└── shared/utils/                  # Reusable utilities: focus-trap.util.ts
 ```
 
 ## Module Boundaries
@@ -89,11 +90,12 @@ State changes flow through `GameStateService` BehaviorSubjects. All consumers su
 
 ```
 TowerCombatService
-  ├── EnemyService          (reads enemy positions/health)
+  ├── EnemyService          (reads enemy positions/health, hit flash on damage)
   ├── StatusEffectService   (applies BURN/POISON on hit)
   ├── ParticleService       (VFX on kill/impact — delegated to CombatVFXService)
   ├── AudioService          (SFX on fire/kill)
   ├── GameStatsService      (kill tracking, score)
+  ├── TowerAnimationService (muzzle flash on fire)
   └── CombatVFXService      (chain arcs, impact flashes, mortar blast zones)
 
 EnemyService
@@ -158,9 +160,9 @@ GameBoardComponent
 
 **Endless mode** (`game-board/models/endless-wave.model.ts`): 7 wave templates with boss milestones at waves 5/10/15/20, score streak bonuses, and difficulty-scaled enemy rosters beyond wave 10.
 
-**Tutorial** (`game-board/services/tutorial.service.ts`): 5-step onboarding overlay, localStorage persistence, injected into `GameBoardComponent`.
+**Tutorial** (`game-board/services/tutorial.service.ts`): 6-step onboarding + 3 strategy tips (gated to game 2+), localStorage persistence, injected into `GameBoardComponent`.
 
-**Enemy encyclopedia** (`game-board/models/enemy-info.model.ts`): `EnemyInfo` model with stats, weaknesses, and lore. In-game panel toggled with E key; wave preview shows NEW badges for first-encounter enemies.
+**Encyclopedia** (`game-board/models/enemy-info.model.ts`, `tower-info.model.ts`): Tabbed panel (Enemies/Towers) toggled with E key. Enemy tab: stats, weaknesses, lore. Tower tab: all 6 types with stats, descriptions, L3 specialization branches. Wave preview shows tactical badges (immunities, splits, shield HP, leak damage).
 
 **Achievement categories** (`achievement.model.ts`): 26 achievements across 4 categories: Combat, Campaign, Endless, Challenge. Threshold constants and helper functions extracted from `PlayerProfileService` into a dedicated model file.
 
@@ -187,15 +189,15 @@ Files over 500 LOC — be careful editing these, they are dense:
 
 | File | LOC | Notes |
 |------|-----|-------|
-| `game-board/game-board.component.ts` | ~1978 | Main coordinator — delegates to CombatLoopService (was ~2256) |
-| `games/novarise/novarise.component.ts` | ~1558 | Editor coordinator — delegates to EditorSceneService |
+| `game-board/game-board.component.ts` | ~2380 | Main coordinator — delegates to CombatLoopService (was ~2256) |
+| `games/novarise/novarise.component.ts` | ~1810 | Editor coordinator — inline modals, autosave, delegates to EditorSceneService |
 | `services/scene.service.ts` | ~459 | Game Three.js infrastructure |
 | `core/editor-scene.service.ts` | ~463 | Editor Three.js infrastructure |
-| `services/enemy.service.ts` | ~800 | Spawn + movement (A* in PathfindingService) |
-| `services/tower-combat.service.ts` | ~780 | Targeting + projectiles (VFX in CombatVFXService) |
+| `services/enemy.service.ts` | ~1270 | Spawn + movement + death/hit/shield/status visuals (A* in PathfindingService) |
+| `services/tower-combat.service.ts` | ~860 | Targeting + projectiles + per-tower visuals (VFX in CombatVFXService) |
 | `game-board/game-board.service.ts` | ~432 | Board gen + path-block BFS (was ~708; mesh creation moved to TowerMeshFactoryService) |
 | `services/combat-loop.service.ts` | ~250 | Physics stepping, kill/leak/wave processing |
 | `services/tower-mesh-factory.service.ts` | ~300 | Tower mesh creation (extracted from GameBoardService) |
 | `services/tile-highlight.service.ts` | ~204 | Tile heatmap highlighting for tower placement |
 | `services/range-visualization.service.ts` | ~135 | Range ring and selection ring lifecycle |
-| `services/tower-animation.service.ts` | ~81 | Tower idle animations and tile pulse |
+| `services/tower-animation.service.ts` | ~155 | Tower idle animations, tile pulse, muzzle flash |

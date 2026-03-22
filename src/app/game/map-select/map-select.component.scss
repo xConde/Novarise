@@ -117,6 +117,11 @@
     outline: 2px solid var(--theme-purple-lighter);
     outline-offset: 2px;
   }
+
+  &--last-played {
+    border-color: var(--theme-purple-light);
+    box-shadow: 0 0 10px var(--theme-purple-glow);
+  }
 }
 
 // --- Card actions ---

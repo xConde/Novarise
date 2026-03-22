@@ -76,6 +76,69 @@
       </div>
     </section>
 
+    <section class="settings-section">
+      <h2 class="settings-title">Settings</h2>
+      <div class="settings-grid">
+
+        <div class="setting-row">
+          <span class="setting-label">Audio</span>
+          <button
+            class="setting-toggle"
+            [class.active]="!audioMuted"
+            (click)="toggleAudio()"
+            [attr.aria-pressed]="!audioMuted"
+          >{{ audioMuted ? 'Muted' : 'On' }}</button>
+        </div>
+
+        <div class="setting-row">
+          <span class="setting-label">Default Difficulty</span>
+          <div class="setting-options" role="group" aria-label="Default difficulty">
+            <button
+              *ngFor="let d of difficulties"
+              class="setting-option-btn"
+              [class.active]="currentDifficulty === d"
+              (click)="setDifficulty(d)"
+              [attr.aria-pressed]="currentDifficulty === d"
+            >{{ d | titlecase }}</button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <span class="setting-label">Game Speed</span>
+          <div class="setting-options" role="group" aria-label="Default game speed">
+            <button
+              *ngFor="let s of speeds"
+              class="setting-option-btn"
+              [class.active]="currentSpeed === s"
+              (click)="setSpeed(s)"
+              [attr.aria-pressed]="currentSpeed === s"
+            >{{ s }}×</button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <span class="setting-label">Show FPS</span>
+          <button
+            class="setting-toggle"
+            [class.active]="showFps"
+            (click)="toggleFps()"
+            [attr.aria-pressed]="showFps"
+          >{{ showFps ? 'On' : 'Off' }}</button>
+        </div>
+
+        <div class="setting-row">
+          <span class="setting-label">Reduce Motion</span>
+          <button
+            class="setting-toggle"
+            [class.active]="reduceMotion"
+            (click)="toggleReduceMotion()"
+            [attr.aria-pressed]="reduceMotion"
+          >{{ reduceMotion ? 'On' : 'Off' }}</button>
+        </div>
+
+      </div>
+    </section>
+
     <button class="back-btn" (click)="goHome()">Home</button>
   </div>
 </div>
