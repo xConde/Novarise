@@ -1,6 +1,6 @@
 import { inject } from '@angular/core';
 import { ActivatedRouteSnapshot, CanActivateFn, Router, UrlTree } from '@angular/router';
-import { MapBridgeService } from '../game-board/services/map-bridge.service';
+import { MapBridgeService } from '../../core/services/map-bridge.service';
 
 /** Query parameter that bypasses the map check for Quick Play (default board). */
 export const QUICK_PLAY_PARAM = 'quickplay';

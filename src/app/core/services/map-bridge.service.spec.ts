@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { MapBridgeService, EditorMapState } from './map-bridge.service';
-import { BlockType } from '../models/game-board-tile';
-import { TerrainType } from '../../../games/novarise/models/terrain-types.enum';
+import { BlockType } from '../../game/game-board/models/game-board-tile';
+import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 
 describe('MapBridgeService', () => {
   let service: MapBridgeService;

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
-import { MapScoreRecord } from '../models/score.model';
-import { DifficultyLevel } from '../models/game-state.model';
+import { MapScoreRecord } from '../../game/game-board/models/score.model';
+import { DifficultyLevel } from '../../game/game-board/models/game-state.model';
 import {
   Achievement,
   AchievementCategory,
@@ -8,8 +8,8 @@ import {
   GameEndStats,
   ACHIEVEMENTS,
   TOWER_COLLECTOR_TYPE_COUNT,
-} from '../models/achievement.model';
-import { StorageService } from '../../../core/services/storage.service';
+} from '../../game/game-board/models/achievement.model';
+import { StorageService } from './storage.service';
 
 // Re-export everything so existing callers importing from this file continue to work.
 export {
@@ -19,7 +19,7 @@ export {
   GameEndStats,
   ACHIEVEMENTS,
   TOWER_COLLECTOR_TYPE_COUNT,
-} from '../models/achievement.model';
+} from '../../game/game-board/models/achievement.model';
 
 const PROFILE_STORAGE_KEY = 'novarise-profile';
 

@@ -3,7 +3,7 @@ import { of } from 'rxjs';
 import { GameBoardService } from '../game-board.service';
 import { EnemyService, DamageResult } from '../services/enemy.service';
 import { GameStatsService, GameStats } from '../services/game-stats.service';
-import { TutorialService, TutorialStep, TutorialTip } from '../services/tutorial.service';
+import { TutorialService, TutorialStep, TutorialTip } from '../../../core/services/tutorial.service';
 import { CombatLoopService } from '../services/combat-loop.service';
 import { MinimapService } from '../services/minimap.service';
 import { SettingsService, GameSettings } from '../../../core/services/settings.service';

@@ -5,9 +5,9 @@ import {
   ACHIEVEMENTS,
   AchievementCategory,
 } from './player-profile.service';
-import { MapScoreRecord } from '../models/score.model';
-import { DifficultyLevel } from '../models/game-state.model';
-import { StorageService } from '../../../core/services/storage.service';
+import { MapScoreRecord } from '../../game/game-board/models/score.model';
+import { DifficultyLevel } from '../../game/game-board/models/game-state.model';
+import { StorageService } from './storage.service';
 
 const STORAGE_KEY = 'novarise-profile';
 

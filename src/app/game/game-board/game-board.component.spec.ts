@@ -5,10 +5,10 @@ import * as THREE from 'three';
 
 import { GameBoardComponent } from './game-board.component';
 import { GameBoardService } from './game-board.service';
-import { MapBridgeService } from './services/map-bridge.service';
+import { MapBridgeService } from '../../core/services/map-bridge.service';
 import { GameStateService } from './services/game-state.service';
 import { GameStatsService } from './services/game-stats.service';
-import { PlayerProfileService } from './services/player-profile.service';
+import { PlayerProfileService } from '../../core/services/player-profile.service';
 import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService } from './services/minimap.service';
 import { SettingsService } from '../../core/services/settings.service';
@@ -17,11 +17,11 @@ import { TowerType, TowerSpecialization, PlacedTower, TargetingMode } from './mo
 import { EnemyType } from './models/enemy.model';
 import { TowerCombatService } from './services/tower-combat.service';
 import { ScoreBreakdown, calculateScoreBreakdown } from './models/score.model';
-import { ACHIEVEMENTS, Achievement } from './services/player-profile.service';
+import { ACHIEVEMENTS, Achievement } from '../../core/services/player-profile.service';
 import { WaveService } from './services/wave.service';
 import { StatusEffectService } from './services/status-effect.service';
 import { EnemyService } from './services/enemy.service';
-import { TutorialService, TutorialStep } from './services/tutorial.service';
+import { TutorialService, TutorialStep } from '../../core/services/tutorial.service';
 import { BehaviorSubject } from 'rxjs';
 import { CampaignService } from '../../campaign/services/campaign.service';
 import { CampaignMapService } from '../../campaign/services/campaign-map.service';

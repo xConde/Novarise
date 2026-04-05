@@ -5,7 +5,7 @@ import { ScoreBreakdown } from '../../models/score.model';
 import { DifficultyLevel } from '../../models/game-state.model';
 import { CampaignLevel, CampaignTier } from '../../../../campaign/models/campaign.model';
 import { ChallengeDefinition, ChallengeType } from '../../../../campaign/models/challenge.model';
-import { Achievement } from '../../services/player-profile.service';
+import { Achievement } from '../../../../core/services/player-profile.service';
 
 function makeScoreBreakdown(overrides: Partial<ScoreBreakdown> = {}): ScoreBreakdown {
   return {

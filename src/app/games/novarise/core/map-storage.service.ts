@@ -6,7 +6,7 @@ import {
   validateMapData
 } from './map-schema';
 import { StorageService } from '../../../core/services/storage.service';
-import { MapBridgeService } from '../../../game/game-board/services/map-bridge.service';
+import { MapBridgeService } from '../../../core/services/map-bridge.service';
 
 export interface MapMetadata {
   id: string;

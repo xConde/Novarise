@@ -8,7 +8,7 @@ import { MapStorageService } from './core/map-storage.service';
 import { EditHistoryService, PaintCommand, HeightCommand, SpawnPointCommand, ExitPointCommand, TileState } from './core/edit-history.service';
 import { CameraControlService, MovementInput, RotationInput, JoystickInput } from './core/camera-control.service';
 import { EditorStateService, EditMode, BrushTool } from './core/editor-state.service';
-import { MapBridgeService } from '../../game/game-board/services/map-bridge.service';
+import { MapBridgeService } from '../../core/services/map-bridge.service';
 import { disposeMaterial } from '../../game/game-board/utils/three-utils';
 import { JoystickEvent } from './features/mobile-controls';
 import {

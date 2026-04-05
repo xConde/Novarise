@@ -6,7 +6,7 @@ import {
   PlayerProfile,
   ACHIEVEMENTS,
   AchievementCategory,
-} from '../game/game-board/services/player-profile.service';
+} from '../core/services/player-profile.service';
 import { SettingsService, GameSettings } from '../core/services/settings.service';
 import { DifficultyLevel } from '../game/game-board/models/game-state.model';
 

@@ -1,5 +1,5 @@
 import { TutorialService, TutorialStep, TutorialTip } from './tutorial.service';
-import { StorageService } from '../../../core/services/storage.service';
+import { StorageService } from './storage.service';
 
 const STORAGE_KEY = 'novarise-tutorial';
 

@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { CampaignLevel, CampaignLevelProgress, UnlockRequirement } from './models/campaign.model';
 import { CampaignService } from './services/campaign.service';
 import { CampaignMapService } from './services/campaign-map.service';
-import { MapBridgeService } from '../game/game-board/services/map-bridge.service';
+import { MapBridgeService } from '../core/services/map-bridge.service';
 import { ChallengeDefinition } from './models/challenge.model';
 
 export interface LevelViewModel {

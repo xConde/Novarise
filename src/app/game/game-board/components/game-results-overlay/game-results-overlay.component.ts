@@ -1,5 +1,5 @@
 import { Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewEncapsulation } from '@angular/core';
-import { Achievement } from '../../services/player-profile.service';
+import { Achievement } from '../../../../core/services/player-profile.service';
 import { ScoreBreakdown } from '../../models/score.model';
 import { CampaignLevel } from '../../../../campaign/models/campaign.model';
 import { ChallengeDefinition } from '../../../../campaign/models/challenge.model';

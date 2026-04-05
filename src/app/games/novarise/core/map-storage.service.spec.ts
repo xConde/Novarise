@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { MapStorageService, MapMetadata, SavedMap } from './map-storage.service';
 import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
 import { CURRENT_SCHEMA_VERSION } from './map-schema';
-import { MapBridgeService } from '../../../game/game-board/services/map-bridge.service';
+import { MapBridgeService } from '../../../core/services/map-bridge.service';
 
 function testMapData(overrides?: Record<string, unknown>): TerrainGridState {
   return {

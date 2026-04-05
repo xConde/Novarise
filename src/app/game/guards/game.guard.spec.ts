@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRouteSnapshot, Router, RouterStateSnapshot, UrlTree, convertToParamMap } from '@angular/router';
 import { EnvironmentInjector } from '@angular/core';
 import { gameGuard, QUICK_PLAY_PARAM } from './game.guard';
-import { MapBridgeService } from '../game-board/services/map-bridge.service';
+import { MapBridgeService } from '../../core/services/map-bridge.service';
 
 describe('gameGuard', () => {
   let mapBridge: jasmine.SpyObj<MapBridgeService>;
