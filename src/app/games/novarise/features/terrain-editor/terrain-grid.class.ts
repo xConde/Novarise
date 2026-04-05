@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
-import { disposeMaterial } from '../../../../game/game-board/utils/three-utils';
+import { disposeMaterial } from '@game/game-board/utils/three-utils';
 import { TerrainGridState, TerrainGridStateLegacy } from './terrain-grid-state.interface';
 import { EDITOR_GRID_LINES, EDITOR_HEIGHT } from '../../constants/editor-ui.constants';
 import { MAX_SPAWN_POINTS, MAX_EXIT_POINTS } from '../../constants/editor-ui.constants';

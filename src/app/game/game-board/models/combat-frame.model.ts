@@ -1,7 +1,7 @@
 import { TowerType } from './tower.model';
 import { GamePhase } from './game-state.model';
 import { CombatAudioEvent } from '../services/tower-combat.service';
-import { ChallengeDefinition } from '../../../campaign/models/challenge.model';
+import { ChallengeDefinition } from '@campaign/models/challenge.model';
 
 /** Visual snapshot of a single enemy kill, captured before the enemy is removed from the scene. */
 export interface FrameKillEvent {

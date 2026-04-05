@@ -7,7 +7,7 @@ import {
   Output,
   SimpleChanges,
 } from '@angular/core';
-import { TutorialStep, TutorialTip } from '../../../../core/services/tutorial.service';
+import { TutorialStep, TutorialTip } from '@core/services/tutorial.service';
 
 @Component({
   selector: 'app-tutorial-spotlight',

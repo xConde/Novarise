@@ -9,10 +9,10 @@ import { GameStatsService } from './game-stats.service';
 import { GameNotificationService } from './game-notification.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameEndService } from './game-end.service';
-import { MapBridgeService } from '../../../core/services/map-bridge.service';
+import { MapBridgeService } from '@core/services/map-bridge.service';
 import { StatusEffectService } from './status-effect.service';
-import { TutorialService } from '../../../core/services/tutorial.service';
-import { CAMPAIGN_WAVE_DEFINITIONS } from '../../../campaign/waves/campaign-waves';
+import { TutorialService } from '@core/services/tutorial.service';
+import { CAMPAIGN_WAVE_DEFINITIONS } from '@campaign/waves/campaign-waves';
 
 describe('GameSessionService', () => {
   let service: GameSessionService;

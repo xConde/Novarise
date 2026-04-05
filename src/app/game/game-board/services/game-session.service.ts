@@ -9,10 +9,10 @@ import { GameNotificationService } from './game-notification.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameEndService } from './game-end.service';
 import { StatusEffectService } from './status-effect.service';
-import { MapBridgeService } from '../../../core/services/map-bridge.service';
-import { TutorialService } from '../../../core/services/tutorial.service';
-import { PlayerProfileService } from '../../../core/services/player-profile.service';
-import { CAMPAIGN_WAVE_DEFINITIONS } from '../../../campaign/waves/campaign-waves';
+import { MapBridgeService } from '@core/services/map-bridge.service';
+import { TutorialService } from '@core/services/tutorial.service';
+import { PlayerProfileService } from '@core/services/player-profile.service';
+import { CAMPAIGN_WAVE_DEFINITIONS } from '@campaign/waves/campaign-waves';
 
 /**
  * Orchestrates game-level lifecycle: service resets on restart and campaign wave wiring.

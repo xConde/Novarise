@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { TowerType } from '../models/tower.model';
 import { AUDIO_CONFIG, SFX_CONFIGS, isSfxSequenceConfig } from '../constants/audio.constants';
-import { SettingsService } from '../../../core/services/settings.service';
+import { SettingsService } from '@core/services/settings.service';
 
 @Injectable()
 export class AudioService {

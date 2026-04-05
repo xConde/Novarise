@@ -4,8 +4,8 @@ import { GameSetupPanelComponent } from './game-setup-panel.component';
 import { DifficultyLevel, DIFFICULTY_PRESETS } from '../../models/game-state.model';
 import { DIFFICULTY_SCORE_MULTIPLIER } from '../../models/score.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../../models/game-modifier.model';
-import { CampaignLevel, CampaignTier } from '../../../../campaign/models/campaign.model';
-import { ChallengeDefinition, ChallengeType } from '../../../../campaign/models/challenge.model';
+import { CampaignLevel, CampaignTier } from '@campaign/models/campaign.model';
+import { ChallengeDefinition, ChallengeType } from '@campaign/models/challenge.model';
 
 function makeCampaignLevel(overrides: Partial<CampaignLevel> = {}): CampaignLevel {
   return {
