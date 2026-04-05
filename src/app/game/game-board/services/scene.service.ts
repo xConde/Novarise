@@ -5,7 +5,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
-import { disposeMaterial } from '../utils/three-utils';
+import { disposeMaterial, disposeMesh } from '../utils/three-utils';
 import { SCENE_CONFIG, POST_PROCESSING_CONFIG, SKYBOX_CONFIG, ANIMATION_CONFIG } from '../constants/rendering.constants';
 import { KEY_LIGHT, FILL_LIGHT, RIM_LIGHT, UNDER_LIGHT, ACCENT_LIGHTS, HEMISPHERE_LIGHT } from '../constants/lighting.constants';
 import { CAMERA_CONFIG, CONTROLS_CONFIG } from '../constants/camera.constants';
@@ -426,8 +426,7 @@ export class SceneService {
   disposeSkybox(): void {
     if (this.skybox) {
       this.scene.remove(this.skybox);
-      this.skybox.geometry.dispose();
-      disposeMaterial(this.skybox.material);
+      disposeMesh(this.skybox);
       this.skybox = undefined;
     }
   }

@@ -5,7 +5,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
-import { disposeMaterial } from '../../../game/game-board/utils/three-utils';
+import { disposeMaterial, disposeMesh } from '../../../game/game-board/utils/three-utils';
 import {
   EDITOR_SCENE_CONFIG,
   EDITOR_RENDERER_CONFIG,
@@ -379,8 +379,7 @@ export class EditorSceneService {
   disposeSkybox(): void {
     if (this.skybox) {
       this.scene.remove(this.skybox);
-      this.skybox.geometry.dispose();
-      disposeMaterial(this.skybox.material);
+      disposeMesh(this.skybox);
       this.skybox = undefined;
     }
   }

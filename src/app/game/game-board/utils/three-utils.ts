@@ -8,3 +8,9 @@ export function disposeMaterial(material: THREE.Material | THREE.Material[]): vo
     material.dispose();
   }
 }
+
+/** Dispose a Three.js Mesh's geometry and material in one call. */
+export function disposeMesh(mesh: THREE.Mesh): void {
+  mesh.geometry.dispose();
+  disposeMaterial(mesh.material);
+}

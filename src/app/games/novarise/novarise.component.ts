@@ -9,7 +9,7 @@ import { EditHistoryService, PaintCommand, HeightCommand, SpawnPointCommand, Exi
 import { CameraControlService, MovementInput, RotationInput, JoystickInput } from './core/camera-control.service';
 import { EditorStateService, EditMode, BrushTool } from './core/editor-state.service';
 import { MapBridgeService } from '../../core/services/map-bridge.service';
-import { disposeMaterial } from '../../game/game-board/utils/three-utils';
+import { disposeMesh } from '../../game/game-board/utils/three-utils';
 import { JoystickEvent } from './features/mobile-controls';
 import {
   EDITOR_EDIT_THROTTLE_MS,
@@ -807,8 +807,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     while (this.spawnMarkers.length > points.length) {
       const marker = this.spawnMarkers.pop()!;
       this.editorScene.getScene().remove(marker);
-      marker.geometry.dispose();
-      disposeMaterial(marker.material);
+      disposeMesh(marker);
     }
 
     // Add missing markers
@@ -837,8 +836,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     while (this.exitMarkers.length > points.length) {
       const marker = this.exitMarkers.pop()!;
       this.editorScene.getScene().remove(marker);
-      marker.geometry.dispose();
-      disposeMaterial(marker.material);
+      disposeMesh(marker);
     }
 
     // Add missing markers
@@ -1095,8 +1093,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Clear existing preview meshes
     this.brushPreviewMeshes.forEach(mesh => {
       this.editorScene.getScene().remove(mesh);
-      mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
+      disposeMesh(mesh);
     });
     this.brushPreviewMeshes = [];
 
@@ -1415,8 +1412,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private clearRectanglePreview(): void {
     this.rectanglePreviewMeshes.forEach(mesh => {
       this.editorScene.getScene().remove(mesh);
-      mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
+      disposeMesh(mesh);
     });
     this.rectanglePreviewMeshes = [];
   }
@@ -1682,8 +1678,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const scene = this.editorScene.getScene();
     this.brushPreviewMeshes.forEach(mesh => {
       scene.remove(mesh);
-      mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
+      disposeMesh(mesh);
     });
     this.brushPreviewMeshes = [];
 
@@ -1693,21 +1688,18 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Clean up brush indicator
     if (this.brushIndicator) {
       scene.remove(this.brushIndicator);
-      this.brushIndicator.geometry.dispose();
-      disposeMaterial(this.brushIndicator.material);
+      disposeMesh(this.brushIndicator);
     }
 
     // Clean up spawn/exit markers
     for (const marker of this.spawnMarkers) {
       scene.remove(marker);
-      marker.geometry.dispose();
-      disposeMaterial(marker.material);
+      disposeMesh(marker);
     }
     this.spawnMarkers = [];
     for (const marker of this.exitMarkers) {
       scene.remove(marker);
-      marker.geometry.dispose();
-      disposeMaterial(marker.material);
+      disposeMesh(marker);
     }
     this.exitMarkers = [];
 

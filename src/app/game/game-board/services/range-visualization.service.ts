@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG } from '../constants/ui.constants';
 import { PlacedTower, getEffectiveStats } from '../models/tower.model';
-import { disposeMaterial } from '../utils/three-utils';
+import { disposeMesh } from '../utils/three-utils';
 
 @Injectable()
 export class RangeVisualizationService {
@@ -50,14 +50,12 @@ export class RangeVisualizationService {
   removePreview(scene: THREE.Scene): void {
     if (this.rangePreviewMesh) {
       scene.remove(this.rangePreviewMesh);
-      this.rangePreviewMesh.geometry.dispose();
-      disposeMaterial(this.rangePreviewMesh.material);
+      disposeMesh(this.rangePreviewMesh);
       this.rangePreviewMesh = null;
     }
     if (this.selectionRingMesh) {
       scene.remove(this.selectionRingMesh);
-      this.selectionRingMesh.geometry.dispose();
-      disposeMaterial(this.selectionRingMesh.material);
+      disposeMesh(this.selectionRingMesh);
       this.selectionRingMesh = null;
     }
   }
@@ -79,8 +77,7 @@ export class RangeVisualizationService {
     // Remove existing range rings
     for (const mesh of this.rangeRingMeshes) {
       scene.remove(mesh);
-      mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
+      disposeMesh(mesh);
     }
     this.rangeRingMeshes = [];
 
@@ -109,8 +106,7 @@ export class RangeVisualizationService {
     this.removePreview(scene);
     for (const mesh of this.rangeRingMeshes) {
       scene.remove(mesh);
-      mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
+      disposeMesh(mesh);
     }
     this.rangeRingMeshes = [];
   }
