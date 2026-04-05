@@ -21,12 +21,11 @@ import { MinimapService, MinimapEntityData, MinimapTerrainData } from './service
 import { SettingsService } from '../../core/services/settings.service';
 import { TowerPreviewService } from './services/tower-preview.service';
 import { disposeMaterial } from './utils/three-utils';
-import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TARGETING_MODE_LABELS, TargetingMode, SpecializationStats } from './models/tower.model';
+import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TARGETING_MODE_LABELS } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
-import { GameModifier, GAME_MODIFIER_CONFIGS, GameModifierConfig, calculateModifierScoreMultiplier } from './models/game-modifier.model';
+import { GameModifier, GAME_MODIFIER_CONFIGS, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
-import { CAMERA_CONFIG } from './constants/camera.constants';
 import { TOWER_VISUAL_CONFIG, TILE_EMISSIVE, UI_CONFIG } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG, SPECIALIZATION_VISUAL_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG, DRAG_CONFIG } from './constants/touch.constants';
@@ -160,10 +159,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Tower info panel state (exposed to template)
   selectedTowerInfo: PlacedTower | null = null;
   selectedTowerStats: { damage: number; range: number; fireRate: number; statusEffect?: StatusEffectType } | null = null;
-  selectedTowerUpgradeCost: number = 0;
+  selectedTowerUpgradeCost = 0;
   /** Strategic tile premium % applied to the upgrade cost (0 = no premium). */
-  selectedTowerUpgradePercent: number = 0;
-  selectedTowerSellValue: number = 0;
+  selectedTowerUpgradePercent = 0;
+  selectedTowerSellValue = 0;
   /** Preview of stats after upgrading (null if at max level or below L2→L3 which needs spec). */
   upgradePreview: { damage: number; range: number; fireRate: number } | null = null;
   MAX_TOWER_LEVEL = MAX_TOWER_LEVEL;
@@ -2057,7 +2056,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // --- Game loop ---
 
-  private animate = (time: number = 0): void => {
+  private animate = (time = 0): void => {
     this.animationFrameId = requestAnimationFrame(this.animate);
 
     const rawDelta = this.lastTime === 0 ? 0 : (time - this.lastTime) / 1000;

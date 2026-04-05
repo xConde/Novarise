@@ -20,6 +20,7 @@ export class TowerInfoPanelComponent {
   @Input() sellConfirmPending = false;
   @Input() targetingModeLabels: Record<string, string> = {};
 
+  // eslint-disable-next-line @angular-eslint/no-output-native
   @Output() close = new EventEmitter<void>();
   @Output() upgrade = new EventEmitter<void>();
   @Output() sell = new EventEmitter<void>();

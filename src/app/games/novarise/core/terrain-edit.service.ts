@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { TerrainGrid } from '../features/terrain-editor/terrain-grid.class';
-import { TerrainType } from '../models/terrain-types.enum';
 import {
   EditHistoryService,
   PaintCommand,
@@ -87,7 +86,7 @@ export class TerrainEditService {
    */
   applyBrushEdit(
     affectedTileMeshes: THREE.Mesh[],
-    onPathValidation: () => void
+    _onPathValidation: () => void
   ): THREE.Mesh[] {
     const editMode = this.editorState.getEditMode();
     const flashTargets: THREE.Mesh[] = [];

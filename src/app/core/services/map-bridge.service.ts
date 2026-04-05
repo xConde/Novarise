@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { BlockType, GameBoardTile } from '../../game/game-board/models/game-board-tile';
+import { GameBoardTile } from '../../game/game-board/models/game-board-tile';
 import { TerrainGridState, TerrainGridStateLegacy } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 
 /** @deprecated Use TerrainGridState directly. Kept as alias for backward compatibility. */

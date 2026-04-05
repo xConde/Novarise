@@ -1153,15 +1153,21 @@ For maximum throughput, these sprint groups can run concurrently:
 
 ## Metrics Dashboard (fill in as sprints complete)
 
-| Metric | Before | After S7 | After S18 | After S25 | After S32 | After S38 | After S50 |
-|--------|--------|----------|-----------|-----------|-----------|-----------|-----------|
-| game-board.component.ts LOC | 2,398 | — | ≤800 | — | — | — | ≤800 |
-| novarise.component.ts LOC | 1,721 | — | — | ≤800 | — | — | ≤800 |
-| enemy.service.ts LOC | 1,258 | — | — | — | ≤600 | — | ≤600 |
-| tower-combat.service.ts LOC | 862 | — | — | — | ≤600 | — | ≤600 |
-| styles.css LOC | 3,534 | — | — | — | — | ≤500 | ≤500 |
-| Max spec file LOC | 3,536 | — | — | — | — | — | ≤1,500 |
-| Root services in core/ | 1 | 12+ | — | — | — | — | All |
-| Barrel files | 2 | — | — | — | — | — | 10+ |
-| Test count | 4,024 | 4,024 | 4,050+ | 4,080+ | 4,120+ | 4,120+ | 4,150+ |
-| ESLint passing | No | — | — | — | — | — | Yes |
+| Metric | Before | After S7 | After S18 (partial) | After S25 | After S32 | After S38 | After S50 |
+|--------|--------|----------|---------------------|-----------|-----------|-----------|-----------|
+| game-board.component.ts LOC | 2,398 | 2,398 | 2,336 | — | — | — | ≤800 |
+| novarise.component.ts LOC | 1,721 | 1,721 | — | 1,513 | — | — | ≤800 |
+| enemy.service.ts LOC | 1,258 | 1,258 | — | — | 798 | — | ≤600 |
+| tower-combat.service.ts LOC | 862 | 862 | — | — | 862 | — | ≤600 |
+| styles.css LOC | 3,534 | 3,534 | — | — | — | 3,558 (split to partials) | ≤500 each |
+| Max spec file LOC | 3,536 | 3,536 | — | — | — | — | ≤1,500 |
+| Root services in core/ | 1 | 9 | — | 9 | — | — | All |
+| Barrel files | 2 | 5 | — | 5 | — | — | 10+ |
+| Test count | 4,024 | 4,024 | ~4,050 | ~4,162 | ~4,162 | ~4,162 | 4,200+ |
+| ESLint passing | No | No | No | No | No | No | Yes |
+
+> Current sprint: S49 (documentation refresh). S48 (ESLint) in progress.
+> After S7 values reflect actual state post-S1–S7 (core migration + barrel files + path aliases).
+> After S18 partial: S8 (GameInputService) completed; S9–S18 deferred or not yet started.
+> After S25 partial: S19 (TerrainEditService) + S26–S27 (EnemyMeshFactory, EnemyVisual) completed out of order.
+> styles.css split to src/styles/ partials during S33–S37 (out of original phase order).

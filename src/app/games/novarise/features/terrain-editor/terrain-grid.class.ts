@@ -27,15 +27,13 @@ export class TerrainGrid {
   private exitPoints: { x: number, z: number }[] = [];
   private buildableGrid: boolean[][] = []; // Track which tiles can have towers
 
-  constructor(scene: THREE.Scene, gridSize: number = 25) {
+  constructor(scene: THREE.Scene, gridSize = 25) {
     this.scene = scene;
     this.gridSize = gridSize;
     this.initializeGrid();
   }
 
   private initializeGrid(): void {
-    const halfSize = this.gridSize / 2;
-
     for (let x = 0; x < this.gridSize; x++) {
       this.tiles[x] = [];
       this.heightMap[x] = [];

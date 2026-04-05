@@ -96,7 +96,7 @@ export class WaveService {
    * @param waveNumber 1-based wave index.
    * @param waveCountMultiplier Scales enemy counts per queue (e.g., DOUBLE_SPAWN modifier = 2). Clamped to minimum 1.
    */
-  startWave(waveNumber: number, scene: THREE.Scene, waveCountMultiplier: number = 1): void {
+  startWave(waveNumber: number, scene: THREE.Scene, waveCountMultiplier = 1): void {
     const index = waveNumber - 1;
 
     let waveDef: WaveDefinition | undefined;

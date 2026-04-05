@@ -127,7 +127,7 @@ export class TilePricingService {
    * @param col Board column
    * @param costMultiplier External cost multiplier (from game modifiers, default 1)
    */
-  getTilePrice(type: TowerType, row: number, col: number, costMultiplier: number = 1): TilePriceInfo {
+  getTilePrice(type: TowerType, row: number, col: number, costMultiplier = 1): TilePriceInfo {
     const baseCost = TOWER_CONFIGS[type].cost;
     const strategic = this.getStrategicValue(row, col);
     const totalMultiplier = costMultiplier * (1 + strategic * PRICING_CONFIG.maxStrategicMultiplier);
@@ -148,7 +148,7 @@ export class TilePricingService {
    * @param type Tower type to price
    * @param costMultiplier External cost multiplier (from game modifiers, default 1)
    */
-  getTilePriceMap(type: TowerType, costMultiplier: number = 1): Map<string, TilePriceInfo> {
+  getTilePriceMap(type: TowerType, costMultiplier = 1): Map<string, TilePriceInfo> {
     if (!this.cacheValid) {
       this.computeStrategicValues();
     }

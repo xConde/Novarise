@@ -27,9 +27,9 @@ import { DifficultyLevel } from '../models/game-state.model';
  *   - importBoard — no-op void
  */
 export function createGameBoardServiceSpy(
-  width: number = 10,
-  height: number = 10,
-  tileSize: number = 1,
+  width = 10,
+  height = 10,
+  tileSize = 1,
   boardFn?: () => GameBoardTile[][]
 ): jasmine.SpyObj<GameBoardService> {
   const methods: (keyof GameBoardService)[] = [

@@ -11,12 +11,12 @@ import { MapTemplate } from '@core/models/map-template.model';
 export class EditControlsComponent implements OnInit, OnDestroy {
   @Input() editMode: EditMode = 'paint';
   @Input() selectedTerrainType: TerrainType = TerrainType.BEDROCK;
-  @Input() brushSize: number = 1;
+  @Input() brushSize = 1;
   @Input() activeTool: BrushTool = 'brush';
-  @Input() canPlayMap: boolean = false;
-  @Input() isPathValid: boolean = false;
+  @Input() canPlayMap = false;
+  @Input() isPathValid = false;
   /** True when both spawn and exit points exist (regardless of path validity). */
-  @Input() hasSpawnAndExit: boolean = false;
+  @Input() hasSpawnAndExit = false;
   @Input() templates: MapTemplate[] = [];
 
   @Output() editModeChange = new EventEmitter<EditMode>();

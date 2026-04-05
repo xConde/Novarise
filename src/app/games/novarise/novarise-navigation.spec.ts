@@ -64,7 +64,7 @@ function buildBedrockTiles(gridSize: number): TerrainType[][] {
 function mockTerrainGrid(
   spawn: { x: number; z: number } | null,
   exit: { x: number; z: number } | null,
-  gridSize: number = 6
+  gridSize = 6
 ): TestableNovarise['terrainGrid'] {
   const tiles = buildBedrockTiles(gridSize);
   const heightMap = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));

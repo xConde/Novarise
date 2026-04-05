@@ -7,7 +7,6 @@ import {
   PlayerProfile,
   GameEndStats,
   ACHIEVEMENTS,
-  TOWER_COLLECTOR_TYPE_COUNT,
 } from '../../game/game-board/models/achievement.model';
 import { StorageService } from './storage.service';
 

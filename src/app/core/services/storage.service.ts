@@ -32,7 +32,6 @@ export class StorageService {
   setJSON(key: string, value: unknown): boolean {
     try {
       const serialized = JSON.stringify(value);
-      const bytes = serialized.length * 2; // UTF-16
       localStorage.setItem(key, serialized);
       return true;
     } catch (error) {

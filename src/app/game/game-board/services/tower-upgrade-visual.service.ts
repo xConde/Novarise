@@ -122,7 +122,7 @@ export class TowerUpgradeVisualService {
     }
     this.flashes = [];
 
-    for (const [id, ring] of this.glowRings) {
+    for (const [_id, ring] of this.glowRings) {
       if (scene) {
         scene.remove(ring);
       }
