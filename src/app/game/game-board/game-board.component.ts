@@ -59,6 +59,7 @@ import { TileHighlightService } from './services/tile-highlight.service';
 import { TowerAnimationService } from './services/tower-animation.service';
 import { RangeVisualizationService } from './services/range-visualization.service';
 import { TowerMeshFactoryService } from './services/tower-mesh-factory.service';
+import { GameInputService } from './services/game-input.service';
 import { FocusTrap } from '../../shared/utils/focus-trap.util';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
@@ -123,7 +124,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [SceneService, EnemyService, PathfindingService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService]
+  providers: [SceneService, EnemyService, PathfindingService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, GameInputService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -244,7 +245,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private minimapEntities: MinimapEntityData[] = [];
   private defeatSoundPlayed = false;
   private victorySoundPlayed = false;
-  private keyboardHandler: (event: KeyboardEvent) => void;
   private mousemoveHandler: (event: MouseEvent) => void = () => {};
   private clickHandler: (event: MouseEvent) => void = () => {};
   private contextmenuHandler: (event: MouseEvent) => void = () => {};
@@ -317,15 +317,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.waveService.getCurrentEndlessTemplate();
   }
 
-  // Camera pan state (tracks which keys are currently held)
-  private panKeys = new Set<string>();
-  private keydownPanHandler: (e: KeyboardEvent) => void = () => {};
-  private keyupPanHandler: (e: KeyboardEvent) => void = () => {};
-  // Cached vectors for screen-relative pan (avoid per-frame allocation)
-  private readonly _panForward = new THREE.Vector3();
-  private readonly _panRight = new THREE.Vector3();
-  private readonly _panUp = new THREE.Vector3(0, 1, 0);
-
   constructor(
     private router: Router,
     private sceneService: SceneService,
@@ -362,9 +353,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private tileHighlightService: TileHighlightService,
     private towerAnimationService: TowerAnimationService,
     private rangeVisualizationService: RangeVisualizationService,
-    private towerMeshFactory: TowerMeshFactoryService
+    private towerMeshFactory: TowerMeshFactoryService,
+    private gameInput: GameInputService
   ) {
-    this.keyboardHandler = this.handleKeyboard.bind(this);
     this.gameState = this.gameStateService.getState();
   }
 
@@ -509,7 +500,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     window.addEventListener('resize', this.resizeHandler);
     this.setupMouseInteraction();
     this.setupTouchInteraction();
-    this.setupKeyboardControls();
+    this.gameInput.init();
+    this.gameInput.hotkey$.subscribe(e => this.handleKeyboard(e));
     this.minimapService.init(this.canvasContainer.nativeElement);
     this.setupAutoPause();
     this.animate();
@@ -2061,63 +2053,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  private setupKeyboardControls(): void {
-    window.addEventListener('keydown', this.keyboardHandler);
-
-    // Camera pan: WASD / arrow keys — track held keys
-    this.keydownPanHandler = (e: KeyboardEvent) => {
-      const key = e.key.toLowerCase();
-      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
-        this.panKeys.add(key);
-      }
-    };
-    this.keyupPanHandler = (e: KeyboardEvent) => {
-      this.panKeys.delete(e.key.toLowerCase());
-    };
-    window.addEventListener('keydown', this.keydownPanHandler);
-    window.addEventListener('keyup', this.keyupPanHandler);
-  }
-
-  private updateCameraPan(): void {
-    if (this.panKeys.size === 0) return;
-    const camera = this.sceneService.getCamera();
-    const controls = this.sceneService.getControls();
-    if (!camera || !controls) return;
-
-    // Forward = camera look direction projected onto XZ plane
-    camera.getWorldDirection(this._panForward);
-    this._panForward.y = 0;
-    this._panForward.normalize();
-
-    // Right = forward × up (perpendicular on XZ plane)
-    this._panRight.crossVectors(this._panForward, this._panUp).normalize();
-
-    let moveX = 0;
-    let moveZ = 0;
-
-    if (this.panKeys.has('w') || this.panKeys.has('arrowup')) {
-      moveX += this._panForward.x * CAMERA_CONFIG.panSpeed;
-      moveZ += this._panForward.z * CAMERA_CONFIG.panSpeed;
-    }
-    if (this.panKeys.has('s') || this.panKeys.has('arrowdown')) {
-      moveX -= this._panForward.x * CAMERA_CONFIG.panSpeed;
-      moveZ -= this._panForward.z * CAMERA_CONFIG.panSpeed;
-    }
-    if (this.panKeys.has('a') || this.panKeys.has('arrowleft')) {
-      moveX -= this._panRight.x * CAMERA_CONFIG.panSpeed;
-      moveZ -= this._panRight.z * CAMERA_CONFIG.panSpeed;
-    }
-    if (this.panKeys.has('d') || this.panKeys.has('arrowright')) {
-      moveX += this._panRight.x * CAMERA_CONFIG.panSpeed;
-      moveZ += this._panRight.z * CAMERA_CONFIG.panSpeed;
-    }
-
-    camera.position.x += moveX;
-    camera.position.z += moveZ;
-    controls.target.x += moveX;
-    controls.target.z += moveZ;
-  }
-
   // --- Game loop ---
 
   private animate = (time: number = 0): void => {
@@ -2134,7 +2069,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.fpsCounterService.tick(time);
 
     // Camera pan (WASD / arrows)
-    this.updateCameraPan();
+    const camera = this.sceneService.getCamera();
+    const controls = this.sceneService.getControls();
+    if (camera && controls) {
+      this.gameInput.updateCameraPan(camera, controls);
+    }
 
     if (this.sceneService.getControls()) {
       this.sceneService.getControls().update();
@@ -2351,9 +2290,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.notificationSub.unsubscribe();
     }
 
-    window.removeEventListener('keydown', this.keyboardHandler);
-    window.removeEventListener('keydown', this.keydownPanHandler);
-    window.removeEventListener('keyup', this.keyupPanHandler);
+    this.gameInput.cleanup();
     window.removeEventListener('resize', this.resizeHandler);
     this.removeDragListeners();
 

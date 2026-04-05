@@ -244,19 +244,8 @@ describe('GameBoardComponent', () => {
   describe('keyboard hotkeys', () => {
     function fireKey(key: string): void {
       const event = new KeyboardEvent('keydown', { key, bubbles: true });
-      window.dispatchEvent(event);
+      (component as any).handleKeyboard(event);
     }
-
-    beforeEach(() => {
-      // Set up keyboard controls without a full canvas/renderer
-      // by wiring the keyboardHandler directly to window via setupKeyboardControls stub.
-      // The handler is stored on the component during construction (bound in constructor).
-      window.addEventListener('keydown', (component as any).keyboardHandler);
-    });
-
-    afterEach(() => {
-      window.removeEventListener('keydown', (component as any).keyboardHandler);
-    });
 
     it('pressing 1 selects BASIC tower when a different type is selected', () => {
       component.selectedTowerType = TowerType.SNIPER;
@@ -1050,16 +1039,8 @@ describe('GameBoardComponent', () => {
   describe('keyboard Escape key — pause integration', () => {
     function fireKey(key: string): void {
       const event = new KeyboardEvent('keydown', { key, bubbles: true });
-      window.dispatchEvent(event);
+      (component as any).handleKeyboard(event);
     }
-
-    beforeEach(() => {
-      window.addEventListener('keydown', (component as any).keyboardHandler);
-    });
-
-    afterEach(() => {
-      window.removeEventListener('keydown', (component as any).keyboardHandler);
-    });
 
     it('ESC resumes when paused', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
@@ -1156,10 +1137,8 @@ describe('GameBoardComponent', () => {
       spyOn(pvs, 'hidePath');
       spyOn((component as any).enemyService, 'getPathToExit').and.returnValue([]);
 
-      window.addEventListener('keydown', (component as any).keyboardHandler);
       const event = new KeyboardEvent('keydown', { key: 'v', bubbles: true });
-      window.dispatchEvent(event);
-      window.removeEventListener('keydown', (component as any).keyboardHandler);
+      (component as any).handleKeyboard(event);
 
       expect(component.showPathOverlay).toBeTrue();
     });
@@ -1709,16 +1688,8 @@ describe('GameBoardComponent', () => {
   describe('E key toggles encyclopedia', () => {
     function fireKey(key: string): void {
       const event = new KeyboardEvent('keydown', { key, bubbles: true });
-      window.dispatchEvent(event);
+      (component as any).handleKeyboard(event);
     }
-
-    beforeEach(() => {
-      window.addEventListener('keydown', (component as any).keyboardHandler);
-    });
-
-    afterEach(() => {
-      window.removeEventListener('keydown', (component as any).keyboardHandler);
-    });
 
     it('pressing e opens the encyclopedia', () => {
       component.showEncyclopedia = false;
@@ -2607,19 +2578,11 @@ describe('GameBoardComponent', () => {
 
     function fireKey(key: string): void {
       const event = new KeyboardEvent('keydown', { key, bubbles: true });
-      window.dispatchEvent(event);
+      (component as any).handleKeyboard(event);
     }
 
     beforeEach(() => {
       gameStateService = fixture.debugElement.injector.get(GameStateService);
-      // Wire keyboard handler (ngAfterViewInit skipped in unit tests)
-      (component as any).setupKeyboardControls();
-    });
-
-    afterEach(() => {
-      window.removeEventListener('keydown', (component as any).keyboardHandler);
-      window.removeEventListener('keydown', (component as any).keydownPanHandler);
-      window.removeEventListener('keyup', (component as any).keyupPanHandler);
     });
 
     it('P key toggles pause during INTERMISSION', () => {
