@@ -1,0 +1,278 @@
+/* ============================================================
+   game-board: wave preview panel
+   ============================================================ */
+.board-container .wave-preview {
+  background: rgba(0, 0, 0, 0.82);
+  border-radius: var(--border-radius-md);
+  backdrop-filter: blur(0.625rem);
+  z-index: var(--z-index-overlay);
+  font-family: "Orbitron", sans-serif;
+  position: fixed;
+  top: 8rem;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 12rem;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
+  border-radius: var(--border-radius-lg);
+  animation: wave-preview-in 0.2s ease-out;
+  pointer-events: none;
+  text-align: center;
+  max-height: min(45vh, 350px);
+  overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .board-container .wave-preview { min-width: 10rem; }
+}
+
+@media (max-width: 480px) {
+  .board-container .wave-preview {
+    position: absolute;  /* Override fixed — align with absolute-positioned controls */
+    top: var(--spacing-md);  /* Same top as E/help/audio row */
+    left: var(--spacing-xs);
+    right: auto;
+    transform: none;
+    font-size: var(--font-size-3xs);
+    padding: 0.2rem 0.4rem;
+    min-width: auto;
+    max-width: 55%;
+    max-height: 25vh;
+    text-align: left;
+    border-radius: var(--border-radius-sm);
+  }
+
+  .board-container .wave-preview .wave-preview-header {
+    align-items: flex-start;
+    margin-bottom: 0.15rem;
+    gap: 0;
+  }
+
+  .board-container .wave-preview .wave-preview-list {
+    gap: 0.1rem;
+  }
+
+  .board-container .wave-preview .wave-income {
+    font-size: var(--font-size-3xs);
+    padding: 0.1rem 0;
+    margin-top: 0.1rem;
+  }
+}
+
+.board-container .wave-preview .wave-preview-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--spacing-sm);
+}
+
+.board-container .wave-preview .wave-preview-header .wave-number {
+  font-size: var(--font-size-large);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15rem;
+  color: var(--text-color);
+}
+
+@media (max-width: 480px) {
+  .board-container .wave-preview .wave-preview-header .wave-number {
+    font-size: 0.875rem;
+    letter-spacing: 0.05rem;
+    margin: 0;
+  }
+}
+
+.board-container .wave-preview .wave-income {
+  display: flex;
+  justify-content: center;
+  animation: fade-in 0.2s ease-out;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+  padding-top: var(--spacing-xs);
+  border-top: var(--border-width-thin) solid rgba(255, 255, 255, 0.08);
+  font-size: var(--font-size-xs);
+}
+
+.board-container .wave-preview .wave-income .income-item { font-weight: 600; }
+.board-container .wave-preview .wave-income .reward { color: var(--action-warning); }
+.board-container .wave-preview .wave-income .interest { color: var(--action-success); }
+
+.board-container .wave-preview .wave-preview-header .wave-template-description {
+  font-size: var(--font-size-2xs);
+  color: var(--theme-purple);
+  text-transform: none;
+  letter-spacing: 0.04rem;
+  font-weight: 600;
+  margin-top: 0.125rem;
+}
+
+.board-container .wave-preview .wave-preview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.board-container .wave-preview .wave-preview-entry {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-small);
+}
+
+.board-container .wave-preview .enemy-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.board-container .wave-preview .enemy-dot[data-type='basic']    { background: var(--enemy-color-basic);   box-shadow: 0 0 4px var(--enemy-glow-basic); }
+.board-container .wave-preview .enemy-dot[data-type='fast']     { background: var(--enemy-color-fast);    box-shadow: 0 0 4px var(--enemy-glow-fast); }
+.board-container .wave-preview .enemy-dot[data-type='heavy']    { background: var(--enemy-color-heavy);   box-shadow: 0 0 4px var(--enemy-glow-heavy); }
+.board-container .wave-preview .enemy-dot[data-type='swift']    { background: var(--enemy-color-flying);  box-shadow: 0 0 4px var(--enemy-glow-flying); }
+.board-container .wave-preview .enemy-dot[data-type='boss']     { background: var(--enemy-color-boss);    box-shadow: 0 0 4px var(--enemy-glow-boss); }
+.board-container .wave-preview .enemy-dot[data-type='shielded'] { background: var(--enemy-color-shield);  box-shadow: 0 0 4px var(--enemy-glow-shielded); }
+.board-container .wave-preview .enemy-dot[data-type='swarm']    { background: var(--enemy-color-swarm);   box-shadow: 0 0 4px var(--enemy-glow-swarm); }
+
+.board-container .wave-preview .enemy-count {
+  color: var(--text-color);
+  font-weight: 700;
+  min-width: 2rem;
+  text-align: right;
+}
+
+.board-container .wave-preview .enemy-label {
+  color: rgba(255, 255, 255, 0.75);
+  text-transform: uppercase;
+  letter-spacing: 0.03125rem;
+}
+
+.board-container .wave-preview .wave-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  width: 100%;
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: rgba(255, 255, 255, 0.06);
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--border-radius-md);
+  color: var(--text-color);
+  font-size: var(--font-size-title);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: all var(--transition-medium) ease;
+}
+
+.board-container .wave-preview .wave-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.03);
+}
+
+.board-container .wave-preview .wave-btn:active { transform: scale(0.98); }
+
+.board-container .wave-preview .wave-btn .wave-hint {
+  font-size: 0.5rem;
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.05rem;
+}
+
+@media (max-width: 768px) {
+  .board-container .wave-preview .wave-btn { min-height: 2.75rem; }
+}
+
+@media (max-width: 480px) {
+  .board-container .wave-preview .wave-btn {
+    padding: 0.5rem 1rem;
+    font-size: var(--font-size-xs);
+    min-height: 2.75rem;
+    margin-top: 0.35rem;
+    pointer-events: auto;
+    width: 100%;
+  }
+}
+
+/* Wave clear banner */
+.board-container .wave-clear-banner {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: var(--font-size-hero);
+  font-family: "Orbitron", sans-serif;
+  font-weight: 700;
+  color: var(--text-color);
+  text-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+  animation: wave-clear-in 2s ease-out forwards;
+  pointer-events: none;
+  z-index: var(--z-index-overlay);
+  white-space: nowrap;
+}
+
+.board-container .wave-clear-banner.perfect {
+  color: var(--game-gold);
+}
+
+@media (max-width: 480px) {
+  .board-container .wave-clear-banner {
+    font-size: var(--font-size-large);
+    white-space: normal;
+    max-width: 90vw;
+    text-align: center;
+  }
+}
+
+/* Wave preview NEW badge */
+.wave-preview-new {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.5rem;
+  font-weight: 700;
+  color: var(--game-gold, #ffd700);
+  background: var(--game-gold-a15);
+  border: 1px solid var(--game-gold-a40);
+  border-radius: 3px;
+  padding: 1px 4px;
+  align-self: center;
+  letter-spacing: 0.05em;
+}
+
+/* Wave preview — tactical info badges (immunity, special ability, leak damage) */
+.wave-enemy-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin-top: 0.15rem;
+  /* occupy full width of the list item so badges wrap below the name row */
+  width: 100%;
+}
+
+.wave-enemy-badge {
+  font-size: var(--font-size-3xs);
+  padding: 0.05rem 0.25rem;
+  border-radius: var(--border-radius-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.wave-enemy-badge.badge-info {
+  background: var(--theme-purple-a20);
+  color: var(--text-dim);
+}
+
+.wave-enemy-badge.badge-warning {
+  background: rgba(255, 165, 0, 0.15);
+  color: var(--game-accent-orange);
+}
+
+.wave-enemy-badge.badge-danger {
+  background: rgba(255, 68, 68, 0.15);
+  color: var(--game-health);
+}

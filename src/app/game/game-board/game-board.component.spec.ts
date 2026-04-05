@@ -21,6 +21,7 @@ import { ACHIEVEMENTS, Achievement } from '../../core/services/player-profile.se
 import { WaveService } from './services/wave.service';
 import { StatusEffectService } from './services/status-effect.service';
 import { EnemyService } from './services/enemy.service';
+import { EnemyVisualService } from './services/enemy-visual.service';
 import { TutorialService, TutorialStep } from '../../core/services/tutorial.service';
 import { BehaviorSubject } from 'rxjs';
 import { CampaignService } from '../../campaign/services/campaign.service';
@@ -124,6 +125,7 @@ describe('GameBoardComponent', () => {
         GameStateService,
         PathfindingService,
         EnemyService,
+        EnemyVisualService,
         StatusEffectService,
         CombatVFXService,
         { provide: GameStatsService, useValue: gameStatsSpy },

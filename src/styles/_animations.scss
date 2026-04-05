@@ -1,0 +1,147 @@
+/* ============================================================
+   Global entry animations — used by *ngIf panels
+   ============================================================ */
+
+/* Generic fade — for overlays / backdrop */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Slide up from bottom — for mode-indicator (preserves center-X offset) */
+@keyframes mode-indicator-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Slide in from right — for encyclopedia panel (preserves center-Y offset) */
+@keyframes encyclopedia-in {
+  from { opacity: 0; transform: translateY(-50%) translateX(16px); }
+  to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+
+/* Scale up from center — for spec-choice panel */
+@keyframes scale-up-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Scale in from center — for achievement badge / overlay content */
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes wave-clear-in {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+  20%  { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  80%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes wave-start-pulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@keyframes wave-preview-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Tutorial animations */
+@keyframes tutorial-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(200, 184, 255, 0.8), 0 0 15px rgba(200, 184, 255, 0.3); }
+  50% { box-shadow: 0 0 0 3px rgba(200, 184, 255, 1), 0 0 25px rgba(200, 184, 255, 0.6); }
+}
+
+@keyframes tutorial-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Star reveal */
+@keyframes star-reveal {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.3); opacity: 1; }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Toast slide in */
+@keyframes toast-slide-in {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Pulse critical — HUD lives / speed-run warning */
+@keyframes pulse-critical {
+  from { opacity: 1; }
+  to   { opacity: 0.4; }
+}
+
+/* HUD value pulse */
+@keyframes hud-value-pulse {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* Gold change float */
+@keyframes gold-change-float {
+  0% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-1rem); }
+}
+
+/* Pulse warn — sell-confirm button */
+@keyframes pulse-warn {
+  from { opacity: 0.8; }
+  to   { opacity: 1; }
+}
+
+/* Encyclopedia mobile in */
+@keyframes encyclopedia-mobile-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Wave start pulse utility class */
+.wave-start-pulse {
+  animation: wave-start-pulse var(--transition-medium) ease-out;
+}
+
+/* ============================================================
+   Global prefers-reduced-motion — suppress entry animations
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .board-container .mode-indicator,
+  .encyclopedia-panel,
+  .board-container .wave-preview .wave-income,
+  .board-container .pause-overlay,
+  .board-container .tower-info-panel .spec-choice-panel,
+  .board-container .wave-preview,
+  .board-container .wave-clear-banner,
+  .wave-start-pulse {
+    animation: none !important;
+  }
+}
+
+/* Manual reduce-motion override via .reduce-motion class on body */
+body.reduce-motion .tutorial-target-highlight,
+body.reduce-motion .tutorial-card,
+body.reduce-motion .toast,
+body.reduce-motion .board-container .overlay-content .overlay-star.filled,
+body.reduce-motion .board-container .mode-indicator,
+body.reduce-motion .encyclopedia-panel,
+body.reduce-motion .board-container .wave-preview .wave-income,
+body.reduce-motion .board-container .pause-overlay,
+body.reduce-motion .board-container .tower-info-panel .spec-choice-panel,
+body.reduce-motion .board-container .wave-preview,
+body.reduce-motion .board-container .wave-clear-banner,
+body.reduce-motion .wave-start-pulse {
+  animation: none !important;
+}
+body.reduce-motion .board-container .overlay-content .overlay-star.filled {
+  opacity: 1;
+}

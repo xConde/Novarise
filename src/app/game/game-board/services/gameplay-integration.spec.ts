@@ -13,6 +13,7 @@ import { GameStatsService } from './game-stats.service';
 import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
 import { TowerAnimationService } from './tower-animation.service';
+import { EnemyVisualService } from './enemy-visual.service';
 import { createTowerAnimationServiceSpy } from '../testing';
 
 import { GamePhase, DifficultyLevel, DIFFICULTY_PRESETS, INITIAL_GAME_STATE } from '../models/game-state.model';
@@ -67,6 +68,7 @@ describe('Gameplay Integration', () => {
         WaveService,
         PathfindingService,
         EnemyService,
+        EnemyVisualService,
         EnemyMeshFactoryService,
         TowerCombatService,
         CombatVFXService,

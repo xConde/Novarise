@@ -18,6 +18,7 @@ import { GamePhase, INITIAL_GAME_STATE } from '../models/game-state.model';
 import { WAVE_DEFINITIONS } from '../models/wave.model';
 import { createTestEnemy, createTestBoard, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy } from '../testing';
 import { TowerAnimationService } from './tower-animation.service';
+import { EnemyVisualService } from './enemy-visual.service';
 
 // ============================================================================
 // 1. EnemyService lifecycle
@@ -35,6 +36,7 @@ describe('EnemyService lifecycle', () => {
       providers: [
         PathfindingService,
         EnemyService,
+        EnemyVisualService,
         EnemyMeshFactoryService,
         GameStateService,
         { provide: GameBoardService, useValue: spy }

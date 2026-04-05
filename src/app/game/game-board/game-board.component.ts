@@ -61,6 +61,7 @@ import { RangeVisualizationService } from './services/range-visualization.servic
 import { TowerMeshFactoryService } from './services/tower-mesh-factory.service';
 import { EnemyMeshFactoryService } from './services/enemy-mesh-factory.service';
 import { GameInputService } from './services/game-input.service';
+import { EnemyVisualService } from './services/enemy-visual.service';
 import { FocusTrap } from '../../shared/utils/focus-trap.util';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
@@ -125,7 +126,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [SceneService, EnemyService, PathfindingService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService]
+  providers: [SceneService, EnemyService, EnemyVisualService, PathfindingService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;

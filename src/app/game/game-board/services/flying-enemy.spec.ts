@@ -13,6 +13,7 @@ import { EnemyType, ENEMY_STATS, FLYING_ENEMY_HEIGHT, Enemy } from '../models/en
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
 import { createTestBoard, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy } from '../testing';
 import { TowerAnimationService } from './tower-animation.service';
+import { EnemyVisualService } from './enemy-visual.service';
 
 describe('Flying Enemy', () => {
   let enemyService: EnemyService;
@@ -26,6 +27,7 @@ describe('Flying Enemy', () => {
       providers: [
         PathfindingService,
         EnemyService,
+        EnemyVisualService,
         EnemyMeshFactoryService,
         GameStateService,
         { provide: GameBoardService, useValue: spy }
