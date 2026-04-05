@@ -4,7 +4,7 @@ import { Subscription } from 'rxjs';
 import * as THREE from 'three';
 import { TerrainGrid } from './features/terrain-editor/terrain-grid.class';
 import { TerrainType, TERRAIN_CONFIGS } from './models/terrain-types.enum';
-import { MapStorageService } from './core/map-storage.service';
+import { MapStorageService } from '../../core/services/map-storage.service';
 import { EditHistoryService, PaintCommand, HeightCommand, SpawnPointCommand, ExitPointCommand, TileState } from './core/edit-history.service';
 import { CameraControlService, MovementInput, RotationInput, JoystickInput } from './core/camera-control.service';
 import { EditorStateService, EditMode, BrushTool } from './core/editor-state.service';
@@ -30,8 +30,8 @@ import {
   EDITOR_AUTOSAVE_JUST_NOW_MS,
 } from './constants/editor-ui.constants';
 import { PathValidationService, PathValidationResult } from './core/path-validation.service';
-import { MapTemplateService } from './core/map-template.service';
-import { MapTemplate } from './core/map-template.model';
+import { MapTemplateService } from '../../core/services/map-template.service';
+import { MapTemplate } from '../../core/models/map-template.model';
 import { EditorSceneService } from './core/editor-scene.service';
 import { EditorNotificationService, EditorNotification } from './core/editor-notification.service';
 

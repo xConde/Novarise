@@ -1,8 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { MapStorageService, MapMetadata, SavedMap } from './map-storage.service';
-import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
-import { CURRENT_SCHEMA_VERSION } from './map-schema';
-import { MapBridgeService } from '../../../core/services/map-bridge.service';
+import { TerrainGridState } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
+import { CURRENT_SCHEMA_VERSION } from '../models/map-schema';
+import { MapBridgeService } from './map-bridge.service';
 
 function testMapData(overrides?: Record<string, unknown>): TerrainGridState {
   return {

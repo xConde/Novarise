@@ -1,12 +1,12 @@
 import { Injectable } from '@angular/core';
-import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
+import { TerrainGridState } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 import {
   CURRENT_SCHEMA_VERSION,
   migrateMap,
   validateMapData
-} from './map-schema';
-import { StorageService } from '../../../core/services/storage.service';
-import { MapBridgeService } from '../../../core/services/map-bridge.service';
+} from '../models/map-schema';
+import { StorageService } from './storage.service';
+import { MapBridgeService } from './map-bridge.service';
 
 export interface MapMetadata {
   id: string;

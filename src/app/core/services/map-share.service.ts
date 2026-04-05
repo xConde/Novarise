@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
+import { TerrainGridState } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 
 @Injectable({ providedIn: 'root' })
 export class MapShareService {

@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { NovariseComponent } from './novarise.component';
-import { MapStorageService } from './core/map-storage.service';
+import { MapStorageService } from '../../core/services/map-storage.service';
 import { PathValidationService } from './core/path-validation.service';
 import { CameraControlService } from './core/camera-control.service';
 import { EditorStateService } from './core/editor-state.service';

@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { MapTemplateService } from './map-template.service';
-import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
-import { TerrainType } from '../models/terrain-types.enum';
+import { TerrainGridState } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
+import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 
 describe('MapTemplateService', () => {
   let service: MapTemplateService;

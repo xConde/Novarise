@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
-import { TerrainType } from '../models/terrain-types.enum';
-import { TerrainGridState } from '../features/terrain-editor/terrain-grid-state.interface';
-import { MapTemplate } from './map-template.model';
+import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
+import { TerrainGridState } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
+import { MapTemplate } from '../models/map-template.model';
 
 const TEMPLATE_GRID_SIZE = 25;
 const TEMPLATE_VERSION = '1.0.0';
