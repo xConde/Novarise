@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { TerrainGrid } from './features/terrain-editor/terrain-grid.class';
 import { TerrainType, TERRAIN_CONFIGS } from './models/terrain-types.enum';
 import { MapStorageService } from '../../core/services/map-storage.service';
-import { EditHistoryService, PaintCommand, HeightCommand, SpawnPointCommand, ExitPointCommand, TileState } from './core/edit-history.service';
+import { EditHistoryService, SpawnPointCommand, ExitPointCommand } from './core/edit-history.service';
 import { CameraControlService, MovementInput, RotationInput, JoystickInput } from './core/camera-control.service';
 import { EditorStateService, EditMode, BrushTool } from './core/editor-state.service';
 import { MapBridgeService } from '../../core/services/map-bridge.service';
@@ -20,10 +20,8 @@ import {
   EDITOR_EXIT_MARKER,
   EDITOR_ANIMATION,
   EDITOR_HOVER_EMISSIVE,
-  EDITOR_FLOOD_FILL_MAX_ITERATIONS,
   EDITOR_PATH_INVALID_FLASH_MS,
   EDITOR_PATH_INVALID_FLASH_COLOR,
-  EDITOR_HEIGHT,
   EDITOR_RENDER_ORDER,
   EDITOR_AUTOSAVE_DRAFT_KEY,
   EDITOR_AUTOSAVE_INTERVAL_MS,
@@ -34,6 +32,7 @@ import { MapTemplateService } from '../../core/services/map-template.service';
 import { MapTemplate } from '../../core/models/map-template.model';
 import { EditorSceneService } from './core/editor-scene.service';
 import { EditorNotificationService, EditorNotification } from './core/editor-notification.service';
+import { TerrainEditService } from './core/terrain-edit.service';
 
 // Re-export types for template compatibility
 export { EditMode, BrushTool } from './core/editor-state.service';
@@ -138,11 +137,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   public get undoDescription(): string | null { return this.editHistory.nextUndoDescription; }
   public get redoDescription(): string | null { return this.editHistory.nextRedoDescription; }
 
-  // Track tiles being edited in current stroke for batching
-  private currentStrokeTiles: Map<string, TileState> = new Map();
-  private currentStrokeNewHeights: Map<string, number> = new Map();
-  private isInStroke = false;
-
   constructor(
     private router: Router,
     private mapStorage: MapStorageService,
@@ -153,7 +147,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     private pathValidation: PathValidationService,
     private mapTemplateService: MapTemplateService,
     private editorScene: EditorSceneService,
-    public editorNotificationService: EditorNotificationService
+    public editorNotificationService: EditorNotificationService,
+    private terrainEdit: TerrainEditService,
   ) {
     this.keyboardHandler = this.handleKeyDown.bind(this);
     this.keyUpHandler = this.handleKeyUp.bind(this);
@@ -188,6 +183,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Initialize terrain grid
     this.terrainGrid = new TerrainGrid(this.editorScene.getScene(), 25);
+    this.terrainEdit.setTerrainGrid(this.terrainGrid);
 
     // Create brush indicator for crisp visual feedback
     this.createBrushIndicator();
@@ -398,7 +394,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.isMouseDown = false;
 
     // End stroke and record command for undo/redo
-    if (this.isInStroke) {
+    if (this.terrainEdit.isTracking) {
       this.endStroke();
     }
 
@@ -411,42 +407,18 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private startStroke(): void {
-    this.isInStroke = true;
-    this.currentStrokeTiles.clear();
-    this.currentStrokeNewHeights.clear();
+    this.terrainEdit.startStroke();
   }
 
   private endStroke(): void {
-    this.isInStroke = false;
-
-    // Record command based on edit mode
-    if (this.editMode === 'paint' && this.currentStrokeTiles.size > 0) {
-      const tiles = Array.from(this.currentStrokeTiles.values());
-      const command = new PaintCommand(
-        tiles,
-        this.selectedTerrainType,
-        (x, z, type) => this.terrainGrid.paintTile(x, z, type)
-      );
-      this.editHistory.record(command);
-      this.runPathValidation();
-    } else if (this.editMode === 'height' && this.currentStrokeTiles.size > 0) {
-      const tiles = Array.from(this.currentStrokeTiles.values());
-      const command = new HeightCommand(
-        tiles,
-        new Map(this.currentStrokeNewHeights),
-        (x, z, height) => this.terrainGrid.setHeight(x, z, height)
-      );
-      this.editHistory.record(command);
-    }
-
-    this.currentStrokeTiles.clear();
-    this.currentStrokeNewHeights.clear();
+    this.terrainEdit.endStroke(() => this.runPathValidation());
   }
 
   private applyEdit(mesh: THREE.Mesh): void {
     // Handle different tools
     if (this.activeTool === 'fill') {
-      this.floodFill(mesh);
+      const flashTargets = this.terrainEdit.floodFill(mesh, () => this.runPathValidation());
+      flashTargets.forEach(m => this.flashTileEdit(m));
       return;
     }
 
@@ -457,28 +429,20 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Regular brush tool with multi-tile support
     const affectedTiles = this.getAffectedTiles(mesh);
+    const editMode = this.editMode;
 
+    if (editMode === 'paint' || editMode === 'height') {
+      const flashTargets = this.terrainEdit.applyBrushEdit(affectedTiles, () => this.runPathValidation());
+      flashTargets.forEach(m => this.flashTileEdit(m));
+      return;
+    }
+
+    // Spawn/exit placement — stays in component (marker management)
     affectedTiles.forEach(tileMesh => {
-      const x = tileMesh.userData['gridX'];
-      const z = tileMesh.userData['gridZ'];
+      const x = tileMesh.userData['gridX'] as number;
+      const z = tileMesh.userData['gridZ'] as number;
 
-      if (this.editMode === 'paint') {
-        // Track tile state before painting for undo
-        this.trackTileForUndo(x, z);
-        this.terrainGrid.paintTile(x, z, this.selectedTerrainType);
-        this.flashTileEdit(tileMesh);
-      } else if (this.editMode === 'height') {
-        // Track tile state before height change for undo
-        this.trackTileForUndo(x, z);
-        this.terrainGrid.adjustHeight(x, z, EDITOR_HEIGHT.stepSize);
-        const tile = this.terrainGrid.getTileAt(x, z);
-        if (tile) {
-          // Track new height after change
-          const key = `${x},${z}`;
-          this.currentStrokeNewHeights.set(key, tile.height);
-          this.flashTileEdit(tile.mesh);
-        }
-      } else if (this.editMode === 'spawn') {
+      if (editMode === 'spawn') {
         // Reject placement on non-walkable terrain
         const tile = this.terrainGrid.getTileAt(x, z);
         if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
@@ -511,7 +475,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         );
         this.editHistory.record(command);
         this.runPathValidation();
-      } else if (this.editMode === 'exit') {
+      } else if (editMode === 'exit') {
         // Reject placement on non-walkable terrain
         const tile = this.terrainGrid.getTileAt(x, z);
         if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
@@ -546,25 +510,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.runPathValidation();
       }
     });
-  }
-
-  /**
-   * Track a tile's current state before making changes (for undo)
-   */
-  private trackTileForUndo(x: number, z: number): void {
-    const key = `${x},${z}`;
-    // Only track first state (before any changes in this stroke)
-    if (!this.currentStrokeTiles.has(key)) {
-      const tile = this.terrainGrid.getTileAt(x, z);
-      if (tile) {
-        this.currentStrokeTiles.set(key, {
-          x,
-          z,
-          type: tile.type,
-          height: tile.height
-        });
-      }
-    }
   }
 
   private flashTileEdit(mesh: THREE.Mesh): void {
@@ -1196,158 +1141,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     return tiles;
   }
 
-  private floodFill(startTile: THREE.Mesh): void {
-    // Validate userData exists
-    if (!startTile.userData ||
-        typeof startTile.userData['gridX'] !== 'number' ||
-        typeof startTile.userData['gridZ'] !== 'number') {
-      return;
-    }
-
-    const startX = startTile.userData['gridX'];
-    const startZ = startTile.userData['gridZ'];
-    const startTileData = this.terrainGrid.getTileAt(startX, startZ);
-
-    if (!startTileData) return;
-
-    const targetType = startTileData.type;
-    const replacementType = this.selectedTerrainType;
-
-    // Don't fill if same type
-    if (targetType === replacementType) return;
-
-    // Track tiles for undo
-    const affectedTiles: TileState[] = [];
-
-    const visited = new Set<string>();
-    const queue: [number, number][] = [[startX, startZ]];
-    const maxIterations = EDITOR_FLOOD_FILL_MAX_ITERATIONS; // Max 25x25 grid
-    let iterations = 0;
-
-    while (queue.length > 0 && iterations < maxIterations) {
-      iterations++;
-      const [x, z] = queue.shift()!;
-      const key = `${x},${z}`;
-
-      if (visited.has(key)) continue;
-      visited.add(key);
-
-      const tile = this.terrainGrid.getTileAt(x, z);
-      if (!tile || tile.type !== targetType) continue;
-
-      // Track tile state before change
-      affectedTiles.push({
-        x, z,
-        type: tile.type,
-        height: tile.height
-      });
-
-      // Paint this tile
-      if (this.editMode === 'paint') {
-        this.terrainGrid.paintTile(x, z, replacementType);
-        this.flashTileEdit(tile.mesh);
-      }
-
-      // Add neighbors to queue
-      const neighbors = [
-        [x - 1, z], [x + 1, z],
-        [x, z - 1], [x, z + 1]
-      ];
-
-      neighbors.forEach(([nx, nz]) => {
-        if (!visited.has(`${nx},${nz}`)) {
-          queue.push([nx, nz]);
-        }
-      });
-    }
-
-    // Record command for undo
-    if (affectedTiles.length > 0) {
-      const command = new PaintCommand(
-        affectedTiles,
-        replacementType,
-        (x, z, type) => this.terrainGrid.paintTile(x, z, type)
-      );
-      this.editHistory.record(command);
-      this.runPathValidation();
-    }
-  }
-
   private fillRectangle(startTile: THREE.Mesh, endTile: THREE.Mesh): void {
-    // Validate userData exists for both tiles
-    if (!startTile.userData || !endTile.userData ||
-        typeof startTile.userData['gridX'] !== 'number' ||
-        typeof startTile.userData['gridZ'] !== 'number' ||
-        typeof endTile.userData['gridX'] !== 'number' ||
-        typeof endTile.userData['gridZ'] !== 'number') {
-      this.clearRectanglePreview();
-      this.rectangleStartTile = null;
-      return;
-    }
-
-    const x1 = startTile.userData['gridX'];
-    const z1 = startTile.userData['gridZ'];
-    const x2 = endTile.userData['gridX'];
-    const z2 = endTile.userData['gridZ'];
-
-    const minX = Math.min(x1, x2);
-    const maxX = Math.max(x1, x2);
-    const minZ = Math.min(z1, z2);
-    const maxZ = Math.max(z1, z2);
-
-    // Track tiles for undo
-    const affectedTiles: TileState[] = [];
-    const newHeights = new Map<string, number>();
-
-    for (let x = minX; x <= maxX; x++) {
-      for (let z = minZ; z <= maxZ; z++) {
-        const tile = this.terrainGrid.getTileAt(x, z);
-        if (tile) {
-          // Track tile state before change
-          affectedTiles.push({
-            x, z,
-            type: tile.type,
-            height: tile.height
-          });
-
-          if (this.editMode === 'paint') {
-            this.terrainGrid.paintTile(x, z, this.selectedTerrainType);
-          } else if (this.editMode === 'height') {
-            this.terrainGrid.adjustHeight(x, z, EDITOR_HEIGHT.stepSize);
-            // Track new height after change
-            const updatedTile = this.terrainGrid.getTileAt(x, z);
-            if (updatedTile) {
-              newHeights.set(`${x},${z}`, updatedTile.height);
-            }
-          }
-          this.flashTileEdit(tile.mesh);
-        }
-      }
-    }
-
-    // Record command for undo
-    if (affectedTiles.length > 0) {
-      if (this.editMode === 'paint') {
-        const command = new PaintCommand(
-          affectedTiles,
-          this.selectedTerrainType,
-          (x, z, type) => this.terrainGrid.paintTile(x, z, type)
-        );
-        this.editHistory.record(command);
-      } else if (this.editMode === 'height') {
-        const command = new HeightCommand(
-          affectedTiles,
-          newHeights,
-          (x, z, height) => this.terrainGrid.setHeight(x, z, height)
-        );
-        this.editHistory.record(command);
-      }
-    }
-
-    if (affectedTiles.length > 0 && this.editMode === 'paint') {
-      this.runPathValidation();
-    }
-
+    const flashTargets = this.terrainEdit.fillRectangle(
+      startTile,
+      endTile,
+      () => this.runPathValidation()
+    );
+    flashTargets.forEach(m => this.flashTileEdit(m));
     this.clearRectanglePreview();
     this.rectangleStartTile = null;
   }

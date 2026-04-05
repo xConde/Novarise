@@ -4,3 +4,4 @@ export * from './editor-notification.service';
 export * from './editor-scene.service';
 export * from './editor-state.service';
 export * from './path-validation.service';
+export * from './terrain-edit.service';

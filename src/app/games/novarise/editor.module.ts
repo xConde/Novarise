@@ -11,6 +11,7 @@ import { EditHistoryService } from './core/edit-history.service';
 import { CameraControlService } from './core/camera-control.service';
 import { EditorSceneService } from './core/editor-scene.service';
 import { EditorNotificationService } from './core/editor-notification.service';
+import { TerrainEditService } from './core/terrain-edit.service';
 
 @NgModule({
   declarations: [
@@ -29,7 +30,8 @@ import { EditorNotificationService } from './core/editor-notification.service';
     EditHistoryService,
     CameraControlService,
     EditorSceneService,
-    EditorNotificationService
+    EditorNotificationService,
+    TerrainEditService,
   ]
 })
 export class EditorModule {}

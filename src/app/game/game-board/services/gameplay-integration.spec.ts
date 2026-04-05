@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { GameStateService } from './game-state.service';
 import { WaveService } from './wave.service';
 import { EnemyService } from './enemy.service';
+import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { PathfindingService } from './pathfinding.service';
 import { TowerCombatService } from './tower-combat.service';
 import { CombatVFXService } from './combat-vfx.service';
@@ -66,6 +67,7 @@ describe('Gameplay Integration', () => {
         WaveService,
         PathfindingService,
         EnemyService,
+        EnemyMeshFactoryService,
         TowerCombatService,
         CombatVFXService,
 

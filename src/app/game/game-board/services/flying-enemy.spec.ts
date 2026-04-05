@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { EnemyService, DamageResult } from './enemy.service';
+import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { PathfindingService } from './pathfinding.service';
 import { GameStateService } from './game-state.service';
 import { TowerCombatService } from './tower-combat.service';
@@ -25,6 +26,7 @@ describe('Flying Enemy', () => {
       providers: [
         PathfindingService,
         EnemyService,
+        EnemyMeshFactoryService,
         GameStateService,
         { provide: GameBoardService, useValue: spy }
       ]
