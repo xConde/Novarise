@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { AudioService } from './audio.service';
-import { SettingsService } from './settings.service';
+import { SettingsService } from '../../../core/services/settings.service';
 import { TowerType } from '../models/tower.model';
 import { AUDIO_CONFIG, SFX_CONFIGS, isSfxSequenceConfig, SfxConfig } from '../constants/audio.constants';
 

@@ -5,7 +5,7 @@ import {
   migrateMap,
   validateMapData
 } from './map-schema';
-import { StorageService } from '../../../game/game-board/services/storage.service';
+import { StorageService } from '../../../core/services/storage.service';
 import { MapBridgeService } from '../../../game/game-board/services/map-bridge.service';
 
 export interface MapMetadata {

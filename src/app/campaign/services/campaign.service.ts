@@ -6,7 +6,7 @@ import {
   CAMPAIGN_LEVELS,
 } from '../models/campaign.model';
 import { ChallengeDefinition, getChallengesForLevel } from '../models/challenge.model';
-import { StorageService } from '../../game/game-board/services/storage.service';
+import { StorageService } from '../../core/services/storage.service';
 
 const CAMPAIGN_STORAGE_KEY = 'novarise-campaign';
 

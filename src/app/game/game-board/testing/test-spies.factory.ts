@@ -6,7 +6,7 @@ import { GameStatsService, GameStats } from '../services/game-stats.service';
 import { TutorialService, TutorialStep, TutorialTip } from '../services/tutorial.service';
 import { CombatLoopService } from '../services/combat-loop.service';
 import { MinimapService } from '../services/minimap.service';
-import { SettingsService, GameSettings } from '../services/settings.service';
+import { SettingsService, GameSettings } from '../../../core/services/settings.service';
 import { AudioService } from '../services/audio.service';
 import { SceneService } from '../services/scene.service';
 import { GameNotificationService, GameNotification } from '../services/game-notification.service';

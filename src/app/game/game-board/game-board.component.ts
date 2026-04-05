@@ -18,7 +18,7 @@ import { GameStatsService } from './services/game-stats.service';
 import { PlayerProfileService, ACHIEVEMENTS, Achievement } from './services/player-profile.service';
 import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService, MinimapEntityData, MinimapTerrainData } from './services/minimap.service';
-import { SettingsService } from './services/settings.service';
+import { SettingsService } from '../../core/services/settings.service';
 import { TowerPreviewService } from './services/tower-preview.service';
 import { disposeMaterial } from './utils/three-utils';
 import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, TOWER_SPECIALIZATIONS, PlacedTower, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TARGETING_MODE_LABELS, TargetingMode, SpecializationStats } from './models/tower.model';

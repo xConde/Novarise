@@ -11,7 +11,7 @@ import { GameStatsService } from './services/game-stats.service';
 import { PlayerProfileService } from './services/player-profile.service';
 import { DamagePopupService } from './services/damage-popup.service';
 import { MinimapService } from './services/minimap.service';
-import { SettingsService } from './services/settings.service';
+import { SettingsService } from '../../core/services/settings.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase } from './models/game-state.model';
 import { TowerType, TowerSpecialization, PlacedTower, TargetingMode } from './models/tower.model';
 import { EnemyType } from './models/enemy.model';

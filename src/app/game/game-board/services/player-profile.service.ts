@@ -9,7 +9,7 @@ import {
   ACHIEVEMENTS,
   TOWER_COLLECTOR_TYPE_COUNT,
 } from '../models/achievement.model';
-import { StorageService } from './storage.service';
+import { StorageService } from '../../../core/services/storage.service';
 
 // Re-export everything so existing callers importing from this file continue to work.
 export {

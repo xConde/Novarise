@@ -1,5 +1,5 @@
 import { SettingsService, GameSettings } from './settings.service';
-import { DifficultyLevel } from '../models/game-state.model';
+import { DifficultyLevel } from '../../game/game-board/models/game-state.model';
 import { StorageService } from './storage.service';
 
 const STORAGE_KEY = 'novarise-settings';

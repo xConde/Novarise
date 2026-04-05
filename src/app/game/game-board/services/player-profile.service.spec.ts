@@ -7,7 +7,7 @@ import {
 } from './player-profile.service';
 import { MapScoreRecord } from '../models/score.model';
 import { DifficultyLevel } from '../models/game-state.model';
-import { StorageService } from './storage.service';
+import { StorageService } from '../../../core/services/storage.service';
 
 const STORAGE_KEY = 'novarise-profile';
 
