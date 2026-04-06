@@ -163,7 +163,7 @@
 
 /* Encyclopedia toggle button in top-right controls */
 .encyclopedia-btn {
-  background: rgba(0, 0, 0, 0.75);
+  background: var(--glass-bg);
   border-radius: 4px;
   backdrop-filter: blur(0.625rem);
   z-index: var(--z-index-overlay, 10);

@@ -189,7 +189,7 @@ body .tutorial-target-highlight {
 
 .tutorial-card__btn--next {
   background: var(--theme-purple, #6a5a9a);
-  color: #fff;
+  color: var(--text-color);
 }
 
 .tutorial-card__btn--next:hover {

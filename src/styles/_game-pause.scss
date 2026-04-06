@@ -81,7 +81,7 @@
 
 .board-container .pause-stat__label {
   font-size: var(--font-size-xs, 0.65rem);
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.05rem;
 }
@@ -107,7 +107,7 @@
 
 .board-container .pause-setting__label {
   font-size: var(--font-size-xs, 0.65rem);
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--text-dimmer);
   text-transform: uppercase;
   letter-spacing: 0.05rem;
   flex-shrink: 0;
@@ -213,7 +213,7 @@
 
 .board-container .pause-action.pause-action--primary {
   background: var(--theme-purple, #6a5a9a);
-  color: #fff;
+  color: var(--text-color);
   border: 1px solid var(--theme-purple-lighter, #9a8aca);
 }
 
@@ -223,7 +223,7 @@
 
 .board-container .pause-action.pause-action--quit {
   background: transparent;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--text-dimmer);
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 

@@ -140,7 +140,7 @@
 }
 
 .board-container .overlay-content .score-label {
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--text-dimmer);
   text-transform: uppercase;
   letter-spacing: 0.0313rem;
 }
@@ -210,7 +210,7 @@
 
 .board-container .overlay-content .achievement-desc {
   font-size: var(--font-size-tiny);
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-dim);
 }
 
 /* Overlay action buttons */

@@ -69,7 +69,7 @@
   margin-left: auto;
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-dim);
   font-size: var(--font-size-large);
   cursor: pointer;
   padding: 0 var(--spacing-xs);
@@ -92,7 +92,7 @@
 }
 
 .board-container .tower-info-panel .stat-label {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.0313rem;
 }

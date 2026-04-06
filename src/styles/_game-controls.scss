@@ -33,7 +33,7 @@
    game-board: pause / speed controls
    ============================================================ */
 .board-container .game-controls {
-  background: rgba(0, 0, 0, 0.75);
+  background: var(--glass-bg);
   border-radius: var(--border-radius-md);
   backdrop-filter: blur(0.625rem);
   z-index: var(--z-index-overlay);
@@ -415,7 +415,7 @@
 }
 
 .board-container .tower-selection .tooltip-label {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-subtle);
   letter-spacing: 0.0625rem;
 }
 
@@ -460,7 +460,7 @@
   gap: var(--spacing-xs);
   padding: 0.25rem var(--spacing-sm);
   border-radius: var(--border-radius-md);
-  background: rgba(0, 0, 0, 0.75);
+  background: var(--glass-bg);
   pointer-events: none;
   z-index: var(--z-index-overlay);
   font-family: "Orbitron", sans-serif;

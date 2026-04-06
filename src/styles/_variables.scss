@@ -140,6 +140,9 @@
   --text-subtle: rgba(255, 255, 255, 0.45);
   --text-dimmer: rgba(255, 255, 255, 0.55);
 
+  /* Glass panel backgrounds (semi-transparent dark backgrounds) */
+  --glass-bg: rgba(0, 0, 0, 0.75);
+
   /* Typography Scale */
   --font-size-hero: 3rem;
   --font-size-large: 2rem;
@@ -149,6 +152,7 @@
   --font-size-xs: 0.75rem;
   --font-size-2xs: 0.625rem;
   --font-size-3xs: 0.5625rem;
+  --font-size-tiny: 0.5rem;
 
   /* Spacing System */
   --spacing-xs: 0.3125rem;   /* 5px */
