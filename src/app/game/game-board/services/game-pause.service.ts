@@ -21,6 +21,9 @@ export class GamePauseService implements OnDestroy {
   /** Whether the current pause was triggered by auto-pause (tab switch / window blur). */
   autoPaused = false;
 
+  /** Callback invoked when auto-pause triggers — component uses this to activate focus trap. */
+  onAutoPause: (() => void) | null = null;
+
   constructor(
     private gameStateService: GameStateService,
     private minimapService: MinimapService,
@@ -143,6 +146,7 @@ export class GamePauseService implements OnDestroy {
       this.gameStateService.togglePause();
       this.minimapService.setDimmed(true);
       this.autoPaused = true;
+      this.onAutoPause?.();
       return true;
     }
     return false;

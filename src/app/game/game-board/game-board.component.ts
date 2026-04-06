@@ -1461,6 +1461,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    *  auto-pause triggers, since focus trap requires a ViewChild reference.
    */
   private setupAutoPause(): void {
+    this.gamePauseService.onAutoPause = () => {
+      setTimeout(() => {
+        if (this.pauseOverlayRef) {
+          this.pauseFocusTrap.activate(this.pauseOverlayRef.nativeElement);
+        }
+      }, 0);
+    };
     this.gamePauseService.setupAutoPause();
   }
 
