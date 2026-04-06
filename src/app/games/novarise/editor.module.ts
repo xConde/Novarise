@@ -11,6 +11,13 @@ import { EditHistoryService } from './core/edit-history.service';
 import { CameraControlService } from './core/camera-control.service';
 import { EditorSceneService } from './core/editor-scene.service';
 import { EditorNotificationService } from './core/editor-notification.service';
+import { TerrainEditService } from './core/terrain-edit.service';
+import { MapFileService } from './core/map-file.service';
+import { BrushPreviewService } from './core/brush-preview.service';
+import { RectangleToolService } from './core/rectangle-tool.service';
+import { SpawnExitMarkerService } from './core/spawn-exit-marker.service';
+import { EditorModalService } from './core/editor-modal.service';
+import { EditorKeyboardService } from './core/editor-keyboard.service';
 
 @NgModule({
   declarations: [
@@ -29,7 +36,14 @@ import { EditorNotificationService } from './core/editor-notification.service';
     EditHistoryService,
     CameraControlService,
     EditorSceneService,
-    EditorNotificationService
+    EditorNotificationService,
+    TerrainEditService,
+    MapFileService,
+    BrushPreviewService,
+    RectangleToolService,
+    SpawnExitMarkerService,
+    EditorModalService,
+    EditorKeyboardService,
   ]
 })
 export class EditorModule {}

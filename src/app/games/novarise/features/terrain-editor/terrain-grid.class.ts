@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { TerrainType, TERRAIN_CONFIGS } from '../../models/terrain-types.enum';
-import { disposeMaterial } from '../../../../game/game-board/utils/three-utils';
+import { disposeMaterial } from '@game/game-board/utils/three-utils';
 import { TerrainGridState, TerrainGridStateLegacy } from './terrain-grid-state.interface';
 import { EDITOR_GRID_LINES, EDITOR_HEIGHT } from '../../constants/editor-ui.constants';
 import { MAX_SPAWN_POINTS, MAX_EXIT_POINTS } from '../../constants/editor-ui.constants';
@@ -27,15 +27,13 @@ export class TerrainGrid {
   private exitPoints: { x: number, z: number }[] = [];
   private buildableGrid: boolean[][] = []; // Track which tiles can have towers
 
-  constructor(scene: THREE.Scene, gridSize: number = 25) {
+  constructor(scene: THREE.Scene, gridSize = 25) {
     this.scene = scene;
     this.gridSize = gridSize;
     this.initializeGrid();
   }
 
   private initializeGrid(): void {
-    const halfSize = this.gridSize / 2;
-
     for (let x = 0; x < this.gridSize; x++) {
       this.tiles[x] = [];
       this.heightMap[x] = [];

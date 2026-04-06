@@ -1,3 +1,5 @@
+import { assertNever } from '../../game/game-board/utils/assert-never';
+
 export enum ChallengeType {
   NO_SLOW = 'no_slow',           // Win without using Slow towers
   SPEED_RUN = 'speed_run',       // Win in under N seconds
@@ -408,5 +410,7 @@ export function challengeHasRequiredParam(challenge: ChallengeDefinition): boole
     case ChallengeType.UNTOUCHABLE:
     case ChallengeType.SINGLE_TYPE:
       return true;
+    default:
+      assertNever(challenge.type);
   }
 }

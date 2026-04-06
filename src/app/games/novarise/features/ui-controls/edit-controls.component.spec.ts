@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { EditControlsComponent } from './edit-controls.component';
-import { MapTemplate } from '../../core/map-template.model';
+import { MapTemplate } from '@core/models/map-template.model';
 
 describe('EditControlsComponent', () => {
   let component: EditControlsComponent;

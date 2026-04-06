@@ -1,9 +1,9 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
-import { MapStorageService, MapMetadata } from '../../games/novarise/core/map-storage.service';
-import { MapBridgeService } from '../game-board/services/map-bridge.service';
+import { MapStorageService, MapMetadata } from '../../core/services/map-storage.service';
+import { MapBridgeService } from '../../core/services/map-bridge.service';
 import { QUICK_PLAY_PARAM } from '../guards/game.guard';
-import { PlayerProfileService } from '../game-board/services/player-profile.service';
+import { PlayerProfileService } from '../../core/services/player-profile.service';
 import { MapScoreRecord } from '../game-board/models/score.model';
 
 const DELETE_CONFIRM_TIMEOUT_MS = 3000;

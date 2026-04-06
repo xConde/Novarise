@@ -7,6 +7,8 @@ import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 
 import { TowerCombatService, KillInfo } from './tower-combat.service';
+import { ChainLightningService } from './chain-lightning.service';
+import { ProjectileService } from './projectile.service';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
@@ -38,6 +40,8 @@ describe('combat integration', () => {
     TestBed.configureTestingModule({
       providers: [
         TowerCombatService,
+        ChainLightningService,
+        ProjectileService,
         CombatVFXService,
         StatusEffectService,
         GameStateService,

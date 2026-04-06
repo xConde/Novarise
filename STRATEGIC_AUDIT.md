@@ -1100,3 +1100,134 @@ Test count: 2756 → 3024 (+268 tests)
 **Location:** `game-board.component.ts:2174` and `game-board.component.ts:2186-2189`
 **Risk:** When game is paused during COMBAT, `runPausedVisuals()` (line 2174) calls `updateDyingAnimations`, `updateHitFlashes`, `updateShieldBreakAnimations`. Then the phase-independent block (lines 2186-2189) calls them AGAIN unconditionally. Death animations run at 2× speed while paused. The previous fix removed the duplicate from `processCombatResult` but introduced a new one by adding the phase-independent block without guarding against the pause path.
 **Fix:** Guard lines 2186-2189 to skip when `runPausedVisuals` already handled the tick: add `!(state.phase === GamePhase.COMBAT && state.isPaused)` to the condition.
+
+---
+
+## Red Team Critique — feat/hardening-viii (2026-04-05)
+
+### Finding 1: Status effect particles use wrong material after effect priority change (MEDIUM)
+**Location:** `enemy-visual.service.ts:120-123`
+**Risk:** When the highest-priority status effect changes (e.g., BURN expires while POISON is active), existing particles retain the old effect's material color but animate with the new effect's movement pattern. Example: orange BURN particles drift outward like POISON instead of being replaced with green particles. Cosmetic-only — no gameplay impact, but visually jarring.
+**Fix:** Track the current particle effect type on the enemy. When `activeEffect` differs from the stored type, remove old particles and create new ones with the correct material.
+
+### Finding 2: GameInputService.init() lacks double-call guard — orphaned window listeners (MEDIUM)
+**Location:** `game-input.service.ts:24-37`
+**Risk:** If `init()` is called twice (future code change, hot reload, test re-setup), it creates duplicate `keydown`/`keyup` listeners on `window`. The second call overwrites the stored handler references, orphaning the first pair. The orphaned listeners fire `hotkey$.next()` for the rest of the page lifecycle, causing duplicate key processing. Not currently triggered (init called once in `ngAfterViewInit`), but no guard prevents it.
+**Fix:** Call `cleanup()` at the start of `init()` to tear down any existing listeners before attaching new ones.
+
+### Finding 3: hotkey$ subscription stored without explicit unsubscribe (LOW)
+**Location:** `game-board.component.ts:505`
+**Risk:** `this.gameInput.hotkey$.subscribe(e => this.handleKeyboard(e))` returns a Subscription that is never stored or unsubscribed. Cleanup relies on `hotkey$.complete()` in `gameInput.cleanup()` being called during `ngOnDestroy`. If the cleanup path is disrupted (early return, error), the subscription leaks. Angular best practice: store the subscription and unsubscribe explicitly.
+**Fix:** Store the subscription and add it to the `ngOnDestroy` teardown.
+
+---
+
+## Deployment Checklist — feat/hardening-viii
+- [x] Step 1: Fix Finding 3 — store hotkey$ subscription and unsubscribe in ngOnDestroy
+- [x] Step 2: Update barrel files to include new services (EnemyMeshFactory, EnemyVisual, GameInput, TerrainEdit) — verified: editor barrel already has TerrainEdit; game services are component-scoped (no barrel needed); core barrel complete
+- [x] Step 3: Final convention check — zero console.log, zero TODO/FIXME/HACK, zero debugger; 3 pre-existing catch(e) in map-storage (outside scope)
+- [x] Step 4: Full test suite green (4165/4165) + production build clean
+- [x] Step 5: Push branch
+
+---
+
+## Sprint History — feat/hardening-viii continuation (22 sprints, 2026-04-06)
+
+**Original plan: 50 sprints. First pass shipped 28 (Phases 1, 5–8 mostly complete). This continuation completed the remaining 22 sprints across Phases 2, 3, 4, 5, 7.**
+
+### Phase 2: Game Board Decomposition (S9–S18)
+- S9: CameraPan — already in GameInputService (no-op)
+- S10: TowerPlacementService extracted (229 LOC, drag state machine)
+- S11: GamePauseService extracted (150 LOC, pause/quit/auto-pause)
+- S12: TowerUpgradeVisualService — scale/emissive/specialization tint consolidated
+- S13: TowerSelectionService extracted (124 LOC, inspection panel state)
+- S14: ChallengeDisplayService extracted (93 LOC, HUD indicator computation)
+- S15: GameSessionService.cleanupScene() — component's cleanupGameObjects shrank from ~75 to ~20 LOC
+- S16: Interaction setup simplified via delegation to TowerPlacementService/TowerSelectionService
+- S17: MinimapService enriched with buildTerrainCache + updateWithEntities
+- S18: Final cleanup — dead code removed, handleKeyboard condensed, delegation proxies
+
+### Phase 3: Editor Decomposition (S21, S24)
+- S21: RectangleToolService extracted (161 LOC) — fill/preview/corner tracking
+- S24: EditorModalService (70 LOC) + EditorKeyboardService (121 LOC) extracted; editor component 1089 → 781 LOC
+
+### Phase 4: Service Decomposition (S28–S32)
+- S28: EnemyHealthService extracted (317 LOC) — health bars, hit flash, death anim, shield break
+- S29: Enemy cleanup — enemy.service.ts 789 → 585 LOC (under 600 target)
+- S31: ChainLightningService extracted (149 LOC) — targeting + damage + arcs
+- S32: ProjectileService extracted (362 LOC) — lifecycle + object pool + trails; tower-combat.service.ts 798 → 550 LOC (under 600 target)
+
+### Phase 5: CSS Polish (S33, S38)
+- S33: CSS variable audit — added `--glass-bg`, `--font-size-tiny`; consolidated 17 hardcoded rgba/#fff values across 8 partials
+- S38: CSS dead code audit — zero dead selectors found
+
+### Phase 7: Test Architecture (S45–S47)
+- S45: enemy.service.spec decomposition — tests moved to enemy-health/enemy-visual/enemy-mesh-factory specs
+- S46: tower-combat.service.spec decomposition — duplicated projectile tests removed
+- S47: Coverage gap audit — all new services have spec files with public API coverage
+
+### Red-Team Fixes (continuation)
+- **Lint error:** Fixed unused `file` parameter in map-file.service.ts:177 (commit 7b48973)
+- **CSS miss:** Replaced hardcoded `rgba(255,255,255,0.5)` in `_game-wave.scss` (commit c212ac4)
+- **Regression (HIGH):** Auto-pause focus trap activation was lost during S11 extraction — restored via `onAutoPause` callback (commit ed30ae7)
+- **Memory leaks (MEDIUM):** GamePauseService and TowerPlacementService callbacks not cleared on cleanup — fixed to null out references on ngOnDestroy (commit ee6f987)
+
+### Final Metrics (2026-04-06)
+
+| File | Before S9 | After S18 | Delta |
+|------|-----------|-----------|-------|
+| game-board.component.ts | 2,341 | 1,891 | **−450 (−19%)** |
+| novarise.component.ts | 1,168 | 781 | **−387 (−33%), ≤800 ✓** |
+| enemy.service.ts | 789 | 585 | **−204 (−26%), ≤600 ✓** |
+| tower-combat.service.ts | 879 | 550 | **−329 (−37%), ≤600 ✓** |
+| Tests | 4,215 | **4,453** | +238 |
+| New services this continuation | — | **11** | GamePause, ChallengeDisplay, TowerPlacement, TowerSelection, TowerUpgradeVisual, EnemyHealth, ChainLightning, Projectile, EditorModal, EditorKeyboard, RectangleTool |
+| Lint errors | 1 | **0** | Fixed |
+
+**Game-board component target of ≤800 LOC not achieved** (landed at 1,891). Remaining code is genuine orchestration — animate() loop, processCombatResult(), lifecycle hooks, and template delegation proxies — that does not decompose further without creating artificial service boundaries.
+
+### Deployment Checklist (continuation)
+- [x] All 22 remaining sprints executed
+- [x] Full test suite green (4453/4453)
+- [x] Production build clean (5s build time)
+- [x] Zero lint errors
+- [x] All audit findings resolved (regression + 2 memory leaks fixed)
+- [x] Worktree cleanup complete
+
+---
+
+## Red Team Critique — feat/hardening-viii final gate (2026-04-06)
+
+Hostile review of the 22-sprint continuation (commits 9c97263..7c07a65). Scope locked to files changed this session only. Interrogation lenses: happy-path bias, 3 AM test, integration fragility, config drift, silent failures.
+
+### Finding 1: `GameSessionService.cleanupScene()` dereferences `scene` without null guard (MEDIUM)
+**Location:** `src/app/game/game-board/services/game-session.service.ts:106-171`
+**Risk:** `cleanupScene()` calls `this.sceneService.getScene()` once at line 107 and then dereferences it at lines 136 (`scene.remove(group)`), 148 (`scene.remove(mesh)`), and 156 (`scene.remove(opts.gridLines)`) without checking for null. If the scene is null — possible during WebGL context-loss recovery, mid-disposal race, or when `restartGame()` fires while the renderer is being rebuilt — the cleanup crashes and leaks all tower/tile meshes plus the grid-line group. The `ngOnDestroy` call site DOES guard (`if (this.sceneService.getScene()) { this.cleanupGameObjects(); }` at line 1884), but `restartGame()` at line 959 does NOT, so a restart during context loss is exposed. The original pre-extraction code had the same latent bug, so this is not a regression — but it IS an opportunity to harden the architecture while the code is fresh.
+**Fix:** Add an early return guard at the top of `cleanupScene()`. If scene is null, still clear `opts.tileMeshes`/`opts.towerMeshes` maps and return null so the component's mesh tracking is consistent, but skip Three.js remove calls.
+
+### Finding 2: `GamePauseService.confirmQuit()` does not defend against `recordEnd` failure — but risk is low (LOW)
+**Location:** `src/app/game/game-board/services/game-pause.service.ts:68-72`
+**Risk:** `confirmQuit()` calls `gameEndService.recordEnd(false, null)` without a try/catch and then returns the route string. If `recordEnd` throws, the component's navigation call never fires and the user is stuck on the quit-confirm overlay. Tracing the call chain: `recordEnd` → `playerProfileService.recordGameEnd` → `storageService.setJSON`. The storage service IS guarded (returns `false` on quota exceeded, catches DOMException) so in practice this cannot throw. **Not actionable** — the defensive layer already exists at the right level. Flagged only for completeness so a future refactor that removes the guard in StorageService doesn't silently re-expose this path.
+**Fix:** None required. Add a unit test that verifies `confirmQuit()` returns the route even if `recordEnd` throws, as a regression safeguard.
+
+### Finding 3: `TowerPlacementService.init()` has no double-call guard (LOW)
+**Location:** `src/app/game/game-board/services/tower-placement.service.ts:61-77`
+**Risk:** If `init()` is called twice (hot reload, test re-setup, future code change), the second call overwrites callback references and the `raycaster`/`mouse` fields. The first set of callbacks is orphaned but any closures they captured remain alive until GC. Currently only called once in `ngAfterViewInit`, so not exploitable — but `GameInputService.init()` had the SAME pattern and was flagged as Finding 2 in the original hardening-viii red team (2026-04-05). It's the same class of bug. For consistency with that prior fix, add a double-call guard that invokes `cleanup()` first.
+**Fix:** At the top of `init()`, call `this.cleanup()` to tear down any prior state before wiring new callbacks.
+
+---
+
+## Red Team Hardening — feat/hardening-viii final gate (2026-04-06)
+
+Finding 1 is the most critical — actionable and actually improves resilience. Applying the fix now.
+- [x] Fix Finding 1: Guard `cleanupScene()` against null scene
+- [x] Fix Finding 3: Add double-call guard to `TowerPlacementService.init()` for consistency with GameInputService
+- [x] Finding 2: No code change (defense-in-depth exists at StorageService level)
+
+### Final Deployment Checklist (closer protocol)
+- [x] Step 1: Apply red team fixes (Finding 1 + Finding 3)
+- [x] Step 2: Run affected specs only (tower-placement, game-session)
+- [x] Step 3: Full suite + production build green
+- [x] Step 4: Commit red-team hardening
+- [x] Step 5: Push branch
+- [x] Step 6: Open PR with concise description

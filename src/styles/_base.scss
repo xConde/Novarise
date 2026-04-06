@@ -1,0 +1,72 @@
+/* Font Face Declarations */
+@font-face {
+  font-family: "Orbitron";
+  src: url('/assets/fonts/orbitron/Orbitron-Regular.ttf');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Global Reset and Base Styles */
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--font-size-base);
+  color: var(--text-color);
+  background-color: var(--bg-color);
+}
+
+*, *::before, *::after {
+  box-sizing: inherit;
+}
+
+/* Routed component fills remaining space */
+app-novarise, app-game, app-landing, app-profile {
+  flex: 1;
+  overflow: hidden;
+  display: block;
+}
+
+/* Campaign scrolls — container handles its own overflow */
+app-campaign {
+  flex: 1;
+  overflow: hidden;
+  display: block;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Utility Classes */
+.text-hero { font-size: var(--font-size-hero); }
+.text-large { font-size: var(--font-size-large); }
+.text-title { font-size: var(--font-size-title); }
+.text-base { font-size: var(--font-size-base); }
+.text-small { font-size: var(--font-size-small); }
+
+/* Accessibility */
+.sr-only {
+  position: absolute;
+  width: 0.0625rem;
+  height: 0.0625rem;
+  padding: 0;
+  margin: -0.0625rem;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

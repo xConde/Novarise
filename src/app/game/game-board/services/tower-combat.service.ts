@@ -3,37 +3,19 @@ import * as THREE from 'three';
 import { Enemy } from '../models/enemy.model';
 import { PlacedTower, TowerType, TowerStats, TowerSpecialization, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { assertNever } from '../utils/assert-never';
+import { KillInfo, CombatAudioEvent } from '../models/combat-frame.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
-import { PROJECTILE_CONFIG } from '../constants/ui.constants';
-import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG } from '../constants/combat.constants';
-import { PROJECTILE_VISUAL_CONFIG } from '../constants/effects.constants';
-import { PROJECTILE_POOL_CONFIG } from '../constants/physics.constants';
+import { MORTAR_VISUAL_CONFIG } from '../constants/combat.constants';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { StatusEffectService } from './status-effect.service';
 import { SpatialGrid } from '../utils/spatial-grid';
-import { ObjectPool } from '../utils/object-pool';
 import { gridToWorld } from '../utils/coordinate-utils';
 import { CombatVFXService } from './combat-vfx.service';
 import { GameStateService } from './game-state.service';
 import { TowerAnimationService } from './tower-animation.service';
-
-interface Projectile {
-  id: string;
-  mesh: THREE.Mesh;
-  trail: THREE.Line | null;
-  trailPositions: THREE.Vector3[];
-  towerKey: string;
-  targetId: string;
-  speed: number;
-  damage: number;
-  splashRadius: number;
-  towerType: TowerType;
-  statusEffect?: StatusEffectType;
-}
-
-/** Max trail vertices — matches PROJECTILE_CONFIG.trailLength */
-const TRAIL_MAX_VERTICES = PROJECTILE_CONFIG.trailLength;
+import { ChainLightningService } from './chain-lightning.service';
+import { ProjectileService, ProjectileHit } from './projectile.service';
 
 /** A mortar blast zone that persists and deals DoT. Mesh ownership is in CombatVFXService. */
 interface MortarZone {
@@ -46,23 +28,11 @@ interface MortarZone {
   statusEffect?: StatusEffectType;
 }
 
-/** Info about a tower kill — includes the damage of the final hit. */
-export interface KillInfo {
-  id: string;
-  damage: number;
-}
-
-/** Deferred audio event accumulated during physics steps, drained once per frame by the component. */
-export type CombatAudioEvent =
-  | { type: 'tower_fire'; towerType: TowerType }
-  | { type: 'enemy_hit' }
-  | { type: 'enemy_death' }
-  | { type: 'sfx'; sfxKey: string };
+export { KillInfo, CombatAudioEvent } from '../models/combat-frame.model';
 
 @Injectable()
 export class TowerCombatService {
   private placedTowers: Map<string, PlacedTower> = new Map();
-  private projectiles: Projectile[] = [];
   /**
    * Scratch TowerStats object reused when the tower-damage modifier is active,
    * avoiding a per-tower-per-frame object spread allocation.
@@ -72,18 +42,20 @@ export class TowerCombatService {
     projectileSpeed: 0, splashRadius: 0, color: 0,
   };
   private mortarZones: MortarZone[] = [];
-  private projectileCounter = 0;
   private gameTime = 0;
   private spatialGrid = new SpatialGrid();
-  private projectilePool: ObjectPool<THREE.Mesh>;
   private pendingAudioEvents: CombatAudioEvent[] = [];
 
   /**
-   * Drains and returns all audio events accumulated since the last call.
+   * Drains and returns all audio events accumulated since the last call,
+   * including events from ChainLightningService.
    * Call once per animation frame (not per physics step) so audio throttling stays meaningful.
    */
   drainAudioEvents(): CombatAudioEvent[] {
-    const events = [...this.pendingAudioEvents];
+    const events = [
+      ...this.pendingAudioEvents,
+      ...this.chainLightningService.drainAudioEvents(),
+    ];
     this.pendingAudioEvents = [];
     return events;
   }
@@ -95,52 +67,9 @@ export class TowerCombatService {
     private combatVFXService: CombatVFXService,
     private gameStateService: GameStateService,
     private towerAnimationService: TowerAnimationService,
-  ) {
-    this.projectilePool = new ObjectPool<THREE.Mesh>(
-      () => this.createPooledProjectileMesh(),
-      (mesh) => {
-        mesh.visible = false;
-        const mat = mesh.material as THREE.MeshStandardMaterial;
-        mat.color.setHex(0xffffff);
-        mat.emissive.setHex(0x000000);
-        mat.emissiveIntensity = 0;
-        mesh.scale.set(1, 1, 1);
-      },
-      PROJECTILE_POOL_CONFIG,
-      (mesh) => {
-        if (mesh.parent) mesh.parent.remove(mesh);
-        mesh.geometry.dispose();
-        (mesh.material as THREE.Material).dispose();
-      }
-    );
-  }
-
-  /** Pre-allocate a trail BufferGeometry with fixed-size buffer for in-place updates. */
-  private createTrailGeometry(): THREE.BufferGeometry {
-    const geom = new THREE.BufferGeometry();
-    const positions = new Float32Array(TRAIL_MAX_VERTICES * 3);
-    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geom.setDrawRange(0, 0);
-    return geom;
-  }
-
-  private createPooledProjectileMesh(): THREE.Mesh {
-    const geometry = new THREE.SphereGeometry(
-      PROJECTILE_CONFIG.radius,
-      PROJECTILE_CONFIG.segments,
-      PROJECTILE_CONFIG.segments
-    );
-    const material = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      emissive: 0x000000,
-      emissiveIntensity: 0,
-      transparent: true,
-      opacity: PROJECTILE_CONFIG.opacity
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.visible = false;
-    return mesh;
-  }
+    private chainLightningService: ChainLightningService,
+    private projectileService: ProjectileService,
+  ) {}
 
   /** Registers a newly placed tower so it participates in targeting and firing. `actualCost` tracks the real gold paid (may differ from base cost due to modifiers). */
   registerTower(row: number, col: number, type: TowerType, mesh: THREE.Group, actualCost: number = TOWER_CONFIGS[type].cost): void {
@@ -201,9 +130,26 @@ export class TowerCombatService {
   update(deltaTime: number, scene: THREE.Scene): { killed: KillInfo[]; fired: TowerType[]; hitCount: number } {
     this.gameTime += deltaTime;
     const killedEnemies: KillInfo[] = [];
-    const firedTowerTypes: TowerType[] = [];
 
-    // Rebuild spatial grid for this frame (broad-phase acceleration for range queries)
+    this.rebuildSpatialGrid();
+
+    const dotKills = this.tickStatusEffects();
+    killedEnemies.push(...dotKills);
+
+    const firedTowerTypes = this.processTowerFiring(scene, killedEnemies);
+
+    const hitCount = this.resolveProjectileHits(deltaTime, scene, killedEnemies);
+
+    // Delegate visual expiry to CombatVFXService (arcs, flashes, zone meshes)
+    this.combatVFXService.updateVisuals(this.gameTime, scene);
+
+    this.tickMortarZones(scene, killedEnemies);
+
+    return { killed: killedEnemies, fired: firedTowerTypes, hitCount };
+  }
+
+  /** Phase 1: Rebuild the spatial grid with all living, non-dying enemies. */
+  private rebuildSpatialGrid(): void {
     // Dying enemies are excluded — they are already dead from the targeting perspective.
     this.spatialGrid.clear();
     this.enemyService.getEnemies().forEach(enemy => {
@@ -211,13 +157,18 @@ export class TowerCombatService {
         this.spatialGrid.insert(enemy);
       }
     });
+  }
 
-    // Tick status effects (expire SLOW, deal DoT damage) before tower processing
-    const dotKills = this.statusEffectService.update(this.gameTime);
-    killedEnemies.push(...dotKills);
+  /** Phase 2: Tick status effects (expire SLOW, deal DoT damage). Returns kills from DoT. */
+  private tickStatusEffects(): KillInfo[] {
+    return this.statusEffectService.update(this.gameTime);
+  }
 
-    // Tower targeting and firing — resolve stats per-tower using level
+  /** Phase 3: Per-tower targeting and firing. Pushes kills into `outKilled`. Returns list of tower types that fired. */
+  private processTowerFiring(scene: THREE.Scene, outKilled: KillInfo[]): TowerType[] {
+    const firedTowerTypes: TowerType[] = [];
     const towerDamageMultiplier = this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1;
+
     this.placedTowers.forEach(tower => {
       const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
       let stats: TowerStats;
@@ -262,102 +213,49 @@ export class TowerCombatService {
       this.towerAnimationService.startMuzzleFlash(tower);
 
       if (tower.type === TowerType.CHAIN) {
-        const kills = this.fireChainLightning(tower, target, stats, scene);
-        killedEnemies.push(...kills);
+        const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
+        const kills = this.chainLightningService.fire(
+          tower, target, stats, scene,
+          towerWorldX, towerWorldZ,
+          this.spatialGrid, this.gameTime
+        );
+        outKilled.push(...kills);
         if (kills.length > 0) {
           const t = this.placedTowers.get(tower.id);
           if (t) t.kills += kills.length;
         }
       } else {
-        this.fireProjectile(tower, target, stats, scene);
+        const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
+        this.projectileService.fire(tower, target, stats, towerWorldX, towerWorldZ, scene);
       }
 
       firedTowerTypes.push(tower.type);
     });
 
-    // Update standard projectiles
-    const survivingProjectiles: Projectile[] = [];
-    let hitCount = 0;
-    for (const proj of this.projectiles) {
-      const enemy = this.enemyService.getEnemies().get(proj.targetId);
+    return firedTowerTypes;
+  }
 
-      // Target dead or removed — remove projectile
-      if (!enemy) {
-        this.removeProjectileMesh(proj, scene);
-        continue;
-      }
+  /**
+   * Phase 4: Advance projectiles via ProjectileService, then resolve each hit
+   * into damage / kill tracking. Returns total hit count.
+   */
+  private resolveProjectileHits(deltaTime: number, scene: THREE.Scene, outKilled: KillInfo[]): number {
+    const hits = this.projectileService.advance(
+      deltaTime, scene, this.enemyService.getEnemies(), this.gameTime
+    );
 
-      // Move projectile toward enemy
-      const dx = enemy.position.x - proj.mesh.position.x;
-      const dz = enemy.position.z - proj.mesh.position.z;
-      const dist = Math.sqrt(dx * dx + dz * dz);
-      const moveDistance = proj.speed * deltaTime;
-
-      if (moveDistance >= dist) {
-        // Hit — spawn impact flash at hit position
-        this.combatVFXService.createImpactFlash(proj.mesh.position.x, proj.mesh.position.z, scene, this.gameTime);
-        // Apply damage before disposing mesh (applyDamage reads proj.mesh.position)
-        const kills = this.applyDamage(proj, scene);
-        killedEnemies.push(...kills);
-        hitCount++;
-        this.removeProjectileMesh(proj, scene);
-      } else {
-        // Move toward target
-        const nx = dx / dist;
-        const nz = dz / dist;
-        proj.mesh.position.x += nx * moveDistance;
-        proj.mesh.position.z += nz * moveDistance;
-
-        // Rotate elongated projectiles (e.g. Sniper) to face travel direction
-        const visualCfg = PROJECTILE_VISUAL_CONFIG[proj.towerType];
-        if (visualCfg?.scaleZ !== undefined) {
-          proj.mesh.rotation.y = Math.atan2(nx, nz);
-        }
-
-        // Update trail — reuse Vector3 objects after the buffer is full to avoid allocation
-        if (proj.trailPositions.length < TRAIL_MAX_VERTICES) {
-          proj.trailPositions.push(proj.mesh.position.clone());
-        } else {
-          // Rotate: recycle the oldest entry rather than allocating a new Vector3
-          const recycled = proj.trailPositions.shift()!;
-          recycled.copy(proj.mesh.position);
-          proj.trailPositions.push(recycled);
-        }
-
-        if (proj.trailPositions.length >= 2) {
-          if (!proj.trail) {
-            const projColor = (proj.mesh.material as THREE.MeshStandardMaterial).color;
-            const trailMat = new THREE.LineBasicMaterial({
-              color: projColor,
-              transparent: true,
-              opacity: PROJECTILE_CONFIG.trailOpacity,
-            });
-            proj.trail = new THREE.Line(this.createTrailGeometry(), trailMat);
-            scene.add(proj.trail);
-          }
-
-          // Update positions in-place — no per-frame geometry allocation
-          const posAttr = proj.trail.geometry.getAttribute('position') as THREE.BufferAttribute;
-          const arr = posAttr.array as Float32Array;
-          for (let i = 0; i < proj.trailPositions.length; i++) {
-            arr[i * 3] = proj.trailPositions[i].x;
-            arr[i * 3 + 1] = proj.trailPositions[i].y;
-            arr[i * 3 + 2] = proj.trailPositions[i].z;
-          }
-          posAttr.needsUpdate = true;
-          proj.trail.geometry.setDrawRange(0, proj.trailPositions.length);
-        }
-
-        survivingProjectiles.push(proj);
-      }
+    for (const hit of hits) {
+      const kills = this.applyHitDamage(hit, scene);
+      outKilled.push(...kills);
     }
-    this.projectiles = survivingProjectiles;
 
-    // Delegate visual expiry to CombatVFXService (arcs, flashes, zone meshes)
-    this.combatVFXService.updateVisuals(this.gameTime, scene);
+    return hits.length;
+  }
 
-    // Update mortar zones: deal DoT and expire data records (mesh expiry handled by VFX)
+  /** Phase 5: Tick mortar zones — deal DoT, expire data records (mesh expiry handled by VFX). Pushes kills into `outKilled`. */
+  private tickMortarZones(scene: THREE.Scene, outKilled: KillInfo[]): void {
     const survivingZones: MortarZone[] = [];
+
     for (const zone of this.mortarZones) {
       if (this.gameTime >= zone.expiresAt) {
         // Mesh already removed by combatVFXService.updateVisuals above
@@ -376,7 +274,7 @@ export class TowerCombatService {
           if (Math.sqrt(dx * dx + dz * dz) <= zone.blastRadius) {
             const result = this.enemyService.damageEnemy(enemy.id, zone.dotDamage);
             if (result.killed) {
-              killedEnemies.push({ id: enemy.id, damage: zone.dotDamage });
+              outKilled.push({ id: enemy.id, damage: zone.dotDamage });
             } else {
               this.enemyService.startHitFlash(enemy.id);
               if (zone.statusEffect) {
@@ -394,8 +292,6 @@ export class TowerCombatService {
       survivingZones.push(zone);
     }
     this.mortarZones = survivingZones;
-
-    return { killed: killedEnemies, fired: firedTowerTypes, hitCount };
   }
 
   /** Delegate to shared coordinate utility with current board dimensions. */
@@ -489,174 +385,75 @@ export class TowerCombatService {
     }
   }
 
-  private fireChainLightning(
-    tower: PlacedTower,
-    primaryTarget: Enemy,
-    stats: TowerStats,
-    scene: THREE.Scene
-  ): KillInfo[] {
-    const chainCount = stats.chainCount ?? 3;
-    const chainRange = stats.chainRange ?? 2;
+  /**
+   * Resolves a projectile impact into damage dealt to enemy / enemies.
+   * Returns KillInfo for each enemy that died.
+   */
+  private applyHitDamage(hit: ProjectileHit, scene: THREE.Scene): KillInfo[] {
     const kills: KillInfo[] = [];
-    const hitIds = new Set<string>();
 
-    this.pendingAudioEvents.push({ type: 'sfx', sfxKey: 'chainZap' });
+    if (hit.towerType === TowerType.MORTAR) {
+      // Look up the mortar tower's stats to create the zone
+      const tower = this.placedTowers.get(hit.towerKey);
+      const stats = tower ? getEffectiveStats(tower.type, tower.level, tower.specialization) : null;
+      if (stats) {
+        const dotMult = this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1;
+        const modifiedStats = dotMult !== 1 && stats.dotDamage
+          ? { ...stats, dotDamage: Math.round(stats.dotDamage * dotMult) }
+          : stats;
+        const initialKills = this.createMortarZone(hit.impactX, hit.impactZ, modifiedStats, scene);
+        kills.push(...initialKills);
+      }
+      // Further DoT kills are tracked in tickMortarZones
+    } else if (hit.splashRadius > 0) {
+      // Splash damage — hit all enemies within radius of impact point
+      const splashCandidates = this.spatialGrid.queryRadius(hit.impactX, hit.impactZ, hit.splashRadius);
+      for (const enemy of splashCandidates) {
+        const dx = enemy.position.x - hit.impactX;
+        const dz = enemy.position.z - hit.impactZ;
+        const dist = Math.sqrt(dx * dx + dz * dz);
 
-    let currentTarget: Enemy = primaryTarget;
-    let currentDamage = stats.damage;
-
-    // Track the position we draw each arc *from* — starts at the tower, then
-    // advances to each hit target's position after processing that bounce.
-    const towerPos = this.getTowerWorldPos(tower);
-    let previousX = towerPos.x;
-    let previousZ = towerPos.z;
-
-    for (let bounce = 0; bounce <= chainCount; bounce++) {
-      hitIds.add(currentTarget.id);
-
-      // Delegate arc creation to CombatVFXService
-      this.combatVFXService.createChainArc(
-        previousX, previousZ,
-        currentTarget.position.x, currentTarget.position.z,
-        stats.color, scene, this.gameTime
-      );
-
-      // Deal damage
-      const chainResult = this.enemyService.damageEnemy(currentTarget.id, currentDamage);
-      if (chainResult.killed) {
-        kills.push({ id: currentTarget.id, damage: currentDamage });
-      } else {
-        this.enemyService.startHitFlash(currentTarget.id);
-        if (stats.statusEffect) {
-          this.statusEffectService.apply(currentTarget.id, stats.statusEffect, this.gameTime);
+        // Narrow-phase range check
+        if (dist <= hit.splashRadius) {
+          const result = this.enemyService.damageEnemy(enemy.id, hit.damage);
+          if (result.killed) {
+            kills.push({ id: enemy.id, damage: hit.damage });
+          } else {
+            this.enemyService.startHitFlash(enemy.id);
+            if (hit.statusEffect) {
+              this.statusEffectService.apply(enemy.id, hit.statusEffect, this.gameTime);
+            }
+          }
+          result.spawnedEnemies.forEach(mini => {
+            if (mini.mesh) scene.add(mini.mesh);
+          });
         }
       }
-      // Mini-swarm meshes from chain kills need to be tracked — caller adds to scene
-      // via killedEnemyIds which triggers removeEnemy; spawnedEnemies returned separately
-      chainResult.spawnedEnemies.forEach(mini => {
+    } else {
+      // Single target damage
+      const result = this.enemyService.damageEnemy(hit.targetId, hit.damage);
+      if (result.killed) {
+        kills.push({ id: hit.targetId, damage: hit.damage });
+      } else {
+        this.enemyService.startHitFlash(hit.targetId);
+        if (hit.statusEffect) {
+          this.statusEffectService.apply(hit.targetId, hit.statusEffect, this.gameTime);
+        }
+      }
+      result.spawnedEnemies.forEach(mini => {
         if (mini.mesh) scene.add(mini.mesh);
       });
+    }
 
-      if (bounce === chainCount) break;
-
-      // Find next target: nearest enemy within chainRange not yet hit
-      const nextTarget = this.findChainTarget(currentTarget, chainRange, hitIds);
-      if (!nextTarget) break;
-
-      // Advance "from" position to the current hit before moving to next target
-      previousX = currentTarget.position.x;
-      previousZ = currentTarget.position.z;
-
-      currentDamage = Math.round(currentDamage * CHAIN_LIGHTNING_CONFIG.damageFalloff);
-      if (currentDamage <= 0) break;
-      currentTarget = nextTarget;
+    // Track kills on the tower
+    if (kills.length > 0) {
+      const tower = this.placedTowers.get(hit.towerKey);
+      if (tower) {
+        tower.kills += kills.length;
+      }
     }
 
     return kills;
-  }
-
-  private findChainTarget(
-    from: Enemy,
-    chainRange: number,
-    excludeIds: Set<string>
-  ): Enemy | null {
-    let nearest: Enemy | null = null;
-    let nearestDist = Infinity;
-
-    const candidates = this.spatialGrid.queryRadius(from.position.x, from.position.z, chainRange);
-    for (const enemy of candidates) {
-      if (enemy.health <= 0 || excludeIds.has(enemy.id)) continue;
-
-      const dx = enemy.position.x - from.position.x;
-      const dz = enemy.position.z - from.position.z;
-      const dist = Math.sqrt(dx * dx + dz * dz);
-
-      // Narrow-phase range check
-      if (dist <= chainRange && dist < nearestDist) {
-        nearest = enemy;
-        nearestDist = dist;
-      }
-    }
-
-    return nearest;
-  }
-
-  private fireProjectile(tower: PlacedTower, target: Enemy, stats: TowerStats, scene: THREE.Scene): void {
-    const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
-
-    if (tower.type === TowerType.MORTAR) {
-      // Mortar fires a slow arc projectile to the target's current position
-      this.fireMortarProjectile(tower, target, stats, towerWorldX, towerWorldZ, scene);
-      return;
-    }
-
-    const mesh = this.projectilePool.acquire();
-    const visualCfg = PROJECTILE_VISUAL_CONFIG[tower.type];
-    const mat = mesh.material as THREE.MeshStandardMaterial;
-    if (visualCfg) {
-      mat.color.setHex(visualCfg.color);
-      mat.emissive.setHex(visualCfg.emissive);
-      mat.emissiveIntensity = visualCfg.emissiveIntensity;
-      const s = visualCfg.scale;
-      mesh.scale.set(s, s, visualCfg.scaleZ !== undefined ? s * visualCfg.scaleZ : s);
-    } else {
-      mat.color.setHex(stats.color);
-      mat.emissive.setHex(0x000000);
-      mat.emissiveIntensity = 0;
-      mesh.scale.set(1, 1, 1);
-    }
-    mesh.position.set(towerWorldX, PROJECTILE_CONFIG.spawnHeight, towerWorldZ);
-    mesh.visible = true;
-    if (!mesh.parent) {
-      scene.add(mesh);
-    }
-
-    this.projectiles.push({
-      id: `proj-${this.projectileCounter++}`,
-      mesh,
-      trail: null,
-      trailPositions: [],
-      towerKey: tower.id,
-      targetId: target.id,
-      speed: stats.projectileSpeed,
-      damage: stats.damage,
-      splashRadius: stats.splashRadius,
-      towerType: tower.type,
-      statusEffect: stats.statusEffect,
-    });
-  }
-
-  private fireMortarProjectile(
-    tower: PlacedTower,
-    target: Enemy,
-    stats: TowerStats,
-    towerWorldX: number,
-    towerWorldZ: number,
-    scene: THREE.Scene
-  ): void {
-    const geometry = new THREE.SphereGeometry(PROJECTILE_CONFIG.radius * PROJECTILE_CONFIG.mortarRadiusMultiplier, PROJECTILE_CONFIG.segments, PROJECTILE_CONFIG.segments);
-    const material = new THREE.MeshBasicMaterial({
-      color: stats.color,
-      transparent: true,
-      opacity: PROJECTILE_CONFIG.opacity
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(towerWorldX, PROJECTILE_CONFIG.spawnHeight, towerWorldZ);
-    scene.add(mesh);
-
-    this.projectiles.push({
-      id: `proj-${this.projectileCounter++}`,
-      mesh,
-      trail: null,
-      trailPositions: [],
-      towerKey: tower.id,
-      targetId: target.id,
-      speed: stats.projectileSpeed,
-      damage: stats.damage,
-      splashRadius: 0,
-      towerType: TowerType.MORTAR,
-      statusEffect: stats.statusEffect,
-    });
   }
 
   private createMortarZone(
@@ -711,101 +508,6 @@ export class TowerCombatService {
     return initialKills;
   }
 
-  private applyDamage(proj: Projectile, scene: THREE.Scene): KillInfo[] {
-    const kills: KillInfo[] = [];
-
-    if (proj.towerType === TowerType.MORTAR) {
-      // Look up the mortar tower's stats to create the zone
-      const tower = this.placedTowers.get(proj.towerKey);
-      const stats = tower ? getEffectiveStats(tower.type, tower.level, tower.specialization) : null;
-      if (stats) {
-        const dotMult = this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1;
-        const modifiedStats = dotMult !== 1 && stats.dotDamage
-          ? { ...stats, dotDamage: Math.round(stats.dotDamage * dotMult) }
-          : stats;
-        const initialKills = this.createMortarZone(proj.mesh.position.x, proj.mesh.position.z, modifiedStats, scene);
-        kills.push(...initialKills);
-      }
-      // Further DoT kills are tracked in the zone update loop
-    } else if (proj.splashRadius > 0) {
-      // Splash damage — hit all enemies within radius of impact point
-      const impactX = proj.mesh.position.x;
-      const impactZ = proj.mesh.position.z;
-
-      const splashCandidates = this.spatialGrid.queryRadius(impactX, impactZ, proj.splashRadius);
-      for (const enemy of splashCandidates) {
-        const dx = enemy.position.x - impactX;
-        const dz = enemy.position.z - impactZ;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-
-        // Narrow-phase range check
-        if (dist <= proj.splashRadius) {
-          const result = this.enemyService.damageEnemy(enemy.id, proj.damage);
-          if (result.killed) {
-            kills.push({ id: enemy.id, damage: proj.damage });
-          } else {
-            this.enemyService.startHitFlash(enemy.id);
-            if (proj.statusEffect) {
-              this.statusEffectService.apply(enemy.id, proj.statusEffect, this.gameTime);
-            }
-          }
-          result.spawnedEnemies.forEach(mini => {
-            if (mini.mesh) scene.add(mini.mesh);
-          });
-        }
-      }
-    } else {
-      // Single target damage
-      const result = this.enemyService.damageEnemy(proj.targetId, proj.damage);
-      if (result.killed) {
-        kills.push({ id: proj.targetId, damage: proj.damage });
-      } else {
-        this.enemyService.startHitFlash(proj.targetId);
-        if (proj.statusEffect) {
-          this.statusEffectService.apply(proj.targetId, proj.statusEffect, this.gameTime);
-        }
-      }
-      result.spawnedEnemies.forEach(mini => {
-        if (mini.mesh) scene.add(mini.mesh);
-      });
-    }
-
-    // Track kills on the tower
-    if (kills.length > 0) {
-      const tower = this.placedTowers.get(proj.towerKey);
-      if (tower) {
-        tower.kills += kills.length;
-      }
-    }
-
-    return kills;
-  }
-
-  private removeProjectileMesh(proj: Projectile, scene: THREE.Scene): void {
-    // Clean up trail
-    if (proj.trail) {
-      scene.remove(proj.trail);
-      proj.trail.geometry.dispose();
-      (proj.trail.material as THREE.Material).dispose();
-      proj.trail = null;
-    }
-    proj.trailPositions = [];
-
-    if (proj.towerType === TowerType.MORTAR) {
-      // Mortar projectiles are not pooled — dispose normally
-      scene.remove(proj.mesh);
-      proj.mesh.geometry.dispose();
-      if (Array.isArray(proj.mesh.material)) {
-        proj.mesh.material.forEach(mat => mat.dispose());
-      } else {
-        proj.mesh.material.dispose();
-      }
-    } else {
-      // Standard projectiles: hide and return to pool (keep in scene)
-      this.projectilePool.release(proj.mesh);
-    }
-  }
-
   getTower(key: string): PlacedTower | undefined {
     return this.placedTowers.get(key);
   }
@@ -814,23 +516,10 @@ export class TowerCombatService {
     return this.placedTowers;
   }
 
-  /** Disposes all Three.js objects (projectiles, tower meshes), drains the projectile pool, resets status effects, delegates VFX cleanup, and zeros out game time. Call from both `restartGame()` and `ngOnDestroy()`. */
+  /** Disposes all Three.js objects (projectiles, tower meshes), resets status effects, delegates VFX cleanup, and zeros out game time. Call from both `restartGame()` and `ngOnDestroy()`. */
   cleanup(scene: THREE.Scene): void {
-    for (const proj of this.projectiles) {
-      this.removeProjectileMesh(proj, scene);
-    }
-    this.projectiles = [];
-
-    // Drain the projectile pool — dispose geometry and material for each pooled mesh
-    this.projectilePool.drain((mesh) => {
-      scene.remove(mesh);
-      mesh.geometry.dispose();
-      if (Array.isArray(mesh.material)) {
-        mesh.material.forEach(mat => mat.dispose());
-      } else {
-        mesh.material.dispose();
-      }
-    });
+    // Delegate projectile disposal and pool draining to ProjectileService
+    this.projectileService.cleanup(scene);
 
     // Delegate all VFX cleanup to CombatVFXService
     this.combatVFXService.cleanup(scene);
@@ -856,7 +545,6 @@ export class TowerCombatService {
       }
     });
     this.placedTowers.clear();
-    this.projectileCounter = 0;
     this.gameTime = 0;
   }
 }

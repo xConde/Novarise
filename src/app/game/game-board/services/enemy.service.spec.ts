@@ -11,6 +11,9 @@ import { StatusEffectType } from '../constants/status-effect.constants';
 import { HIT_FLASH_CONFIG } from '../constants/effects.constants';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { createTestBoard, createGameBoardServiceSpy } from '../testing';
+import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
+import { EnemyVisualService } from './enemy-visual.service';
+import { EnemyHealthService } from './enemy-health.service';
 
 /**
  * Helper: configure modifier effects on the real GameStateService.
@@ -34,6 +37,9 @@ describe('EnemyService', () => {
       providers: [
         PathfindingService,
         EnemyService,
+        EnemyVisualService,
+        EnemyHealthService,
+        EnemyMeshFactoryService,
         GameStateService,
         { provide: GameBoardService, useValue: gameBoardServiceSpy }
       ]

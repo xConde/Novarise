@@ -1,0 +1,264 @@
+/* Tutorial — non-blocking spotlight system */
+.tutorial-spotlight {
+  pointer-events: none; /* Let clicks pass through to the game */
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+}
+
+/* Fix 4: Subtle backdrop dim — not blocking, just enough contrast for the card */
+.tutorial-spotlight::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.tutorial-card {
+  pointer-events: auto; /* Card itself is interactive */
+  position: fixed;
+  /* Fix 1: Fully opaque base, progressive enhancement with backdrop-filter */
+  background: rgba(20, 20, 35, 1.0);
+  border: 1px solid var(--theme-purple, #6a5a9a);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 0 20px var(--theme-purple-a40);
+  z-index: 901;
+  /* Fix 6: Fade-in animation on appearance/step change */
+  animation: tutorial-fade-in 0.3s ease-out;
+}
+
+@supports (backdrop-filter: blur(8px)) {
+  .tutorial-card {
+    background: rgba(20, 20, 35, 0.92);
+    backdrop-filter: blur(8px);
+  }
+}
+
+/* Position by step */
+.tutorial-card--welcome,
+.tutorial-card--place_tower,
+.tutorial-card--complete {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.tutorial-card--select_tower {
+  bottom: 8rem; /* Above the tower bar */
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* start_wave: left of the setup panel, arrow points RIGHT toward panel */
+.tutorial-card--start_wave {
+  top: auto;
+  bottom: 4rem;
+  right: 22rem; /* just left of the setup panel (~18rem wide + gap) */
+  left: auto;
+  transform: none;
+}
+
+/* upgrade_tower: above the tower bar, centered */
+.tutorial-card--upgrade_tower {
+  bottom: 8rem; /* above tower bar, similar to select_tower */
+  left: 50%;
+  right: auto;
+  top: auto;
+  transform: translateX(-50%);
+}
+
+/* Strategy tip cards — centered, below nav bar (~3rem) */
+.tutorial-card--tip_placement,
+.tutorial-card--tip_wave_preview,
+.tutorial-card--tip_upgrade,
+.tutorial-card--is-tip {
+  top: max(4rem, var(--spacing-xl, 2rem));
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  transform: translateX(-50%);
+}
+
+/* Fix 5: CSS triangle arrows connecting card to its target element */
+/* select_tower card sits above the tower bar → arrow points DOWN */
+.tutorial-card--select_tower::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid var(--theme-purple, #6a5a9a);
+}
+
+/* start_wave card is left of the setup panel → arrow points RIGHT */
+.tutorial-card--start_wave::after {
+  content: '';
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-left: 8px solid var(--theme-purple, #6a5a9a);
+}
+
+/* upgrade_tower card sits above the tower bar → arrow points DOWN */
+.tutorial-card--upgrade_tower::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid var(--theme-purple, #6a5a9a);
+}
+
+/* Highlight border on target element */
+/* Uses box-shadow (not outline) so :focus-visible outline rings are never overridden.
+   No !important — body prefix provides enough specificity over component styles.
+   When the element is also :focus-visible we layer both: tutorial ring + focus outline. */
+body .tutorial-target-highlight {
+  box-shadow: 0 0 0 3px var(--theme-purple-lighter, #c8b8ff), 0 0 15px rgba(200, 184, 255, 0.4);
+  border-radius: 8px;
+  animation: tutorial-pulse 1.5s ease-in-out infinite;
+}
+
+/* Fix 7: Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  body .tutorial-target-highlight { animation: none; }
+  .tutorial-card { animation: none; }
+}
+
+.tutorial-card__step-indicator {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.75rem;
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--font-size-3xs, 0.6rem);
+  color: var(--theme-purple-mid, #8a7ac0);
+}
+
+.tutorial-card__title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1rem;
+  color: var(--theme-purple-lighter, #c8b8ff);
+  margin: 0 0 0.75rem;
+}
+
+.tutorial-card__message {
+  font-size: 0.85rem;
+  color: var(--text-color, #e0e0e0);
+  line-height: 1.5;
+  margin: 0 0 1rem;
+}
+
+.tutorial-card__actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.tutorial-card__btn {
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  border: 1px solid var(--theme-purple, #6a5a9a);
+  font-family: 'Orbitron', sans-serif;
+  font-size: var(--font-size-2xs, 0.75rem);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  min-height: 2.75rem;
+}
+
+.tutorial-card__btn--skip {
+  background: transparent;
+  color: var(--theme-purple-mid, #8a7ac0);
+}
+
+.tutorial-card__btn--skip:hover {
+  background: var(--theme-purple-a20);
+}
+
+.tutorial-card__btn--next {
+  background: var(--theme-purple, #6a5a9a);
+  color: var(--text-color);
+}
+
+.tutorial-card__btn--next:hover {
+  background: var(--theme-purple-light, #7a6aaa);
+}
+
+/* ===== Tutorial — mobile positioning and touch targets ===== */
+@media (max-width: 768px) {
+  .tutorial-card {
+    max-width: 90vw;
+  }
+
+  .tutorial-card--select_tower {
+    bottom: 7rem;
+  }
+
+  /* On mobile the setup panel collapses to a bottom sheet — center start_wave above tower bar */
+  .tutorial-card--start_wave {
+    right: auto;
+    left: 50%;
+    bottom: 8rem;
+    transform: translateX(-50%);
+    max-width: 280px;
+  }
+
+  .tutorial-card--upgrade_tower {
+    max-width: 280px;
+  }
+
+  .tutorial-card__btn {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.8rem;
+    min-height: 2.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .tutorial-card {
+    max-width: 85vw;
+  }
+
+  .tutorial-card--select_tower {
+    bottom: 6rem;
+  }
+
+  /* On small screens both cards center above the tower bar — arrows hidden */
+  .tutorial-card--start_wave,
+  .tutorial-card--upgrade_tower {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    top: auto;
+    bottom: 8rem;
+    max-width: 85vw;
+  }
+
+  /* Arrows are irrelevant when cards are repositioned to center */
+  .tutorial-card--start_wave::after,
+  .tutorial-card--upgrade_tower::after {
+    display: none;
+  }
+
+  .tutorial-card__actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .tutorial-card__btn {
+    width: 100%;
+  }
+}
+

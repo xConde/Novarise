@@ -6,9 +6,9 @@ import { Enemy, EnemyType, ENEMY_STATS } from '../models/enemy.model';
  */
 export function createTestEnemy(
   id: string,
-  x: number = 0,
-  z: number = 0,
-  health: number = 100,
+  x = 0,
+  z = 0,
+  health = 100,
   options?: {
     type?: EnemyType;
     speed?: number;

@@ -6,7 +6,7 @@ import { GameBoardTile } from '../models/game-board-tile';
  * (non-traversable), simulating placed towers or hard walls.
  */
 export function createTestBoard(
-  size: number = 10,
+  size = 10,
   blockedCells: { row: number; col: number }[] = []
 ): GameBoardTile[][] {
   const blocked = new Set(blockedCells.map(c => `${c.row}-${c.col}`));

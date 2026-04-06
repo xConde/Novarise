@@ -93,7 +93,7 @@ export class GameStateService {
   }
 
   /** Deducts lives by `amount` (default 1). Triggers DEFEAT when lives reach 0. Resets the leak streak. No-op during VICTORY or DEFEAT. */
-  loseLife(amount: number = 1): void {
+  loseLife(amount = 1): void {
     if (this.state.phase === GamePhase.VICTORY || this.state.phase === GamePhase.DEFEAT) return;
     this.state.lives = Math.max(0, this.state.lives - amount);
     this.state.consecutiveWavesWithoutLeak = 0;

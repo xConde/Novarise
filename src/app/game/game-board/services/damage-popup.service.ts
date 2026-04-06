@@ -20,7 +20,7 @@ export class DamagePopupService {
     damage: number,
     position: { x: number; y: number; z: number },
     scene: THREE.Scene,
-    isShieldHit: boolean = false
+    isShieldHit = false
   ): void {
     const canvas = document.createElement('canvas');
     canvas.width = DAMAGE_POPUP_CONFIG.canvasWidth;

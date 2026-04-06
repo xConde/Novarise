@@ -55,6 +55,7 @@ export class MinHeap {
   private sinkDown(index: number): void {
     const length = this.heap.length;
 
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       const left = 2 * index + 1;
       const right = 2 * index + 2;

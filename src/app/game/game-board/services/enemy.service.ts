@@ -1,46 +1,34 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_MESH_SEGMENTS, GridNode, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED } from '../models/enemy.model';
+import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
-import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
-import { GameModifier, ModifierEffects, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
+import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
-import { STATUS_EFFECT_VISUALS, STATUS_EFFECT_VISUAL_CONFIG, STATUS_EFFECT_PRIORITY, ENEMY_ANIM_CONFIG, BOSS_CROWN_CONFIG, DEATH_ANIM_CONFIG, HIT_FLASH_CONFIG, SHIELD_BREAK_CONFIG } from '../constants/effects.constants';
 import { PathfindingService } from './pathfinding.service';
 import { GameStateService } from './game-state.service';
+import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
+import { EnemyVisualService } from './enemy-visual.service';
+import { EnemyHealthService } from './enemy-health.service';
 
-/**
- * Result returned by {@link EnemyService.damageEnemy}.
- * `killed` is true when the hit reduces health to 0 or below.
- * `spawnedEnemies` is non-empty only when a SWARM parent dies; the caller
- * must add each entry's mesh to the Three.js scene.
- */
-export interface DamageResult {
-  killed: boolean;
-  spawnedEnemies: Enemy[];
-}
+export { DamageResult } from '../models/enemy.model';
 
 @Injectable()
 export class EnemyService {
   private enemies: Map<string, Enemy> = new Map();
   private enemyCounter = 0;
-  /** Scratch quaternion reused each frame to avoid per-enemy allocation in billboarding. */
-  private billboardScratchQuat = new THREE.Quaternion();
   /** Scratch Vector3 reused each frame to avoid per-enemy allocation in movement. */
   private scratchDirection = new THREE.Vector3();
   /** Scratch world-position objects reused each frame to avoid per-enemy allocation. */
   private scratchCurrentWorld = { x: 0, z: 0 };
   private scratchNextWorld = { x: 0, z: 0 };
 
-  // Shared geometry and materials for status-effect particles — one per effect type.
-  // Created lazily on first use, disposed in cleanup().
-  private statusParticleGeometry: THREE.SphereGeometry | null = null;
-  private statusParticleMaterials: Partial<Record<StatusEffectType, THREE.MeshBasicMaterial>> = {};
-
   constructor(
     private gameBoardService: GameBoardService,
     private pathfindingService: PathfindingService,
     private gameStateService: GameStateService,
+    private enemyMeshFactory: EnemyMeshFactoryService,
+    private enemyVisual: EnemyVisualService,
+    private enemyHealth: EnemyHealthService,
   ) {}
 
   /**
@@ -57,8 +45,8 @@ export class EnemyService {
   spawnEnemy(
     type: EnemyType,
     scene: THREE.Scene,
-    waveHealthMultiplier: number = 1,
-    waveSpeedMultiplier: number = 1,
+    waveHealthMultiplier = 1,
+    waveSpeedMultiplier = 1,
   ): Enemy | null {
     const spawnerTiles = this.pathfindingService.getSpawnerTiles();
     if (spawnerTiles.length === 0) {
@@ -169,7 +157,7 @@ export class EnemyService {
     }
 
     // Create mesh
-    enemy.mesh = this.createEnemyMesh(enemy);
+    enemy.mesh = this.enemyMeshFactory.createEnemyMesh(enemy);
     scene.add(enemy.mesh);
 
     this.enemies.set(enemy.id, enemy);
@@ -263,7 +251,7 @@ export class EnemyService {
     const enemy = this.enemies.get(enemyId);
     if (enemy) {
       // Remove status-effect particles (geometry/material are shared — just scene.remove)
-      this.removeStatusParticles(enemy, scene);
+      this.enemyVisual.removeStatusParticles(enemy, scene);
 
       if (enemy.mesh) {
         // Dispose health bar and shield children before removing
@@ -321,14 +309,14 @@ export class EnemyService {
         // Shield fully absorbs the hit
         enemy.shield -= damage;
         if (enemy.shield === 0) {
-          this.removeShieldMesh(enemy);
+          this.enemyMeshFactory.removeShieldMesh(enemy);
         }
         return noOp; // Health untouched
       } else {
         // Shield breaks; carry remainder to health
         const remainder = damage - enemy.shield;
         enemy.shield = 0;
-        this.removeShieldMesh(enemy);
+        this.enemyMeshFactory.removeShieldMesh(enemy);
         damage = remainder;
       }
     }
@@ -360,110 +348,34 @@ export class EnemyService {
 
   /**
    * Sync every enemy's health-bar fill and color to its current health ratio.
+   * Delegates to EnemyHealthService.
    * @param cameraQuaternion When provided, billboards health-bar planes to face
    *   the camera, compensating for the parent enemy mesh's own rotation.
    *   Omit during unit tests or when billboarding is not needed.
    */
   updateHealthBars(cameraQuaternion?: THREE.Quaternion): void {
-    this.enemies.forEach(enemy => {
-      if (!enemy.mesh) return;
-      // Hide health bar while dying — avoids flickering during scale-down
-      if (enemy.dying) return;
-      // The health bar is stored in userData
-      const healthBarBg = enemy.mesh.userData?.['healthBarBg'] as THREE.Mesh | undefined;
-      const healthBarFg = enemy.mesh.userData?.['healthBarFg'] as THREE.Mesh | undefined;
-
-      if (healthBarBg && healthBarFg) {
-        const healthPct = Math.max(0, enemy.health / enemy.maxHealth);
-        healthBarFg.scale.x = healthPct;
-        healthBarFg.position.x = -(1 - healthPct) * 0.25;
-
-        // Color transitions: green -> yellow -> red
-        const mat = healthBarFg.material as THREE.MeshBasicMaterial;
-        if (healthPct > HEALTH_BAR_CONFIG.thresholdHigh) {
-          mat.color.setHex(HEALTH_BAR_CONFIG.colorGreen);
-        } else if (healthPct > HEALTH_BAR_CONFIG.thresholdLow) {
-          mat.color.setHex(HEALTH_BAR_CONFIG.colorYellow);
-        } else {
-          mat.color.setHex(HEALTH_BAR_CONFIG.colorRed);
-        }
-
-        // Billboard: face camera (compensate for parent enemy rotation)
-        if (cameraQuaternion) {
-          enemy.mesh.getWorldQuaternion(this.billboardScratchQuat);
-          this.billboardScratchQuat.invert().premultiply(cameraQuaternion);
-          healthBarBg.quaternion.copy(this.billboardScratchQuat);
-          healthBarFg.quaternion.copy(this.billboardScratchQuat);
-        }
-      }
-    });
+    this.enemyHealth.updateHealthBars(this.enemies, cameraQuaternion);
   }
 
   /**
    * Tint enemy mesh emissive color based on active status effects.
-   * Highest-priority effect wins (BURN > POISON > SLOW).
-   * Enemies with no active effects revert to their base emissive.
+   * Delegates to EnemyVisualService.
    */
   updateStatusVisuals(activeEffects: Map<string, StatusEffectType[]>): void {
-    this.enemies.forEach(enemy => {
-      if (!enemy.mesh) return;
-      if (enemy.dying) return;
-      const mat = enemy.mesh.material as THREE.MeshStandardMaterial;
-      if (!mat.emissive) return;
-
-      const effects = activeEffects.get(enemy.id);
-      if (effects && effects.length > 0) {
-        // Pick highest-priority active effect for visual
-        for (const priority of STATUS_EFFECT_PRIORITY) {
-          if (effects.includes(priority)) {
-            const visual = STATUS_EFFECT_VISUALS[priority];
-            mat.emissive.setHex(visual.emissiveColor);
-            mat.emissiveIntensity = visual.emissiveIntensity;
-            this.tintChildMeshes(enemy.mesh, visual.emissiveColor, visual.emissiveIntensity);
-            return;
-          }
-        }
-      }
-
-      // No effects — restore base emissive
-      const stats = ENEMY_STATS[enemy.type];
-      const baseIntensity = enemy.isMiniSwarm
-        ? ENEMY_VISUAL_CONFIG.miniSwarmEmissive
-        : ENEMY_VISUAL_CONFIG.baseEmissive;
-      mat.emissive.setHex(stats.color);
-      mat.emissiveIntensity = baseIntensity;
-      this.tintChildMeshes(enemy.mesh, stats.color, baseIntensity);
-    });
+    this.enemyVisual.updateStatusVisuals(this.enemies, activeEffects);
   }
 
   /**
    * Spin boss crowns for visual flair. Called once per frame.
+   * Delegates to EnemyVisualService.
    */
   updateEnemyAnimations(deltaTime: number): void {
-    this.enemies.forEach(enemy => {
-      if (!enemy.mesh || enemy.health <= 0) return;
-      if (enemy.dying) return;
-      const crown = enemy.mesh.userData['bossCrown'] as THREE.Mesh | undefined;
-      if (crown) {
-        crown.rotation.z += ENEMY_ANIM_CONFIG.bossCrownSpinSpeed * deltaTime;
-      }
-    });
+    this.enemyVisual.updateEnemyAnimations(this.enemies, deltaTime);
   }
 
   /**
    * Create/animate/remove small particle meshes for active status effects.
-   * Particles are added directly to the scene (not as child of enemy mesh) so
-   * they trail slightly behind. Each enemy gets at most
-   * STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy particles per active effect.
-   *
-   * Animation per effect:
-   *   BURN  — particles drift upward from the enemy base, reset when they
-   *            reach the top of the lifetime window.
-   *   POISON — particles drift outward in the XZ plane from the enemy center.
-   *   SLOW  — particles drift downward (ice-crystal feel).
-   *
-   * Shared geometry (SphereGeometry) and one MeshBasicMaterial per effect type
-   * are reused across all enemies to keep draw calls minimal.
+   * Delegates to EnemyVisualService.
    *
    * Call once per render frame (NOT inside the fixed-timestep physics loop).
    */
@@ -472,421 +384,16 @@ export class EnemyService {
     scene: THREE.Scene,
     activeEffects: Map<string, StatusEffectType[]>,
   ): void {
-    if (deltaTime <= 0) return;
-
-    this.enemies.forEach(enemy => {
-      // Skip dying enemies — particles removed below with the rest of cleanup
-      if (enemy.dying) {
-        this.removeStatusParticles(enemy, scene);
-        return;
-      }
-
-      const effects = activeEffects.get(enemy.id);
-
-      if (!effects || effects.length === 0) {
-        // No active effects — remove any lingering particles
-        this.removeStatusParticles(enemy, scene);
-        return;
-      }
-
-      // Determine the highest-priority effect to display (same priority order as emissive tint)
-      let activeEffect: StatusEffectType | null = null;
-      for (const priority of STATUS_EFFECT_PRIORITY) {
-        if (effects.includes(priority)) {
-          activeEffect = priority;
-          break;
-        }
-      }
-      if (!activeEffect) {
-        this.removeStatusParticles(enemy, scene);
-        return;
-      }
-
-      // Create particles on first activation for this effect
-      if (!enemy.statusParticles || enemy.statusParticles.length === 0) {
-        enemy.statusParticles = this.createStatusParticles(activeEffect, scene, enemy);
-      }
-
-      // Animate existing particles
-      const cfg = STATUS_EFFECT_VISUAL_CONFIG[activeEffect === StatusEffectType.BURN
-        ? 'burn' : activeEffect === StatusEffectType.POISON ? 'poison' : 'slow'];
-
-      enemy.statusParticles.forEach((particle, i) => {
-        // Each particle has its own timer stored in userData
-        let timer = (particle.userData['timer'] as number) ?? 0;
-        timer += deltaTime;
-
-        if (timer >= cfg.lifetime) {
-          // Respawn at enemy base with a new random offset
-          timer = 0;
-          this.resetStatusParticlePosition(particle, enemy, activeEffect!, i);
-        }
-
-        // Animate position based on effect type
-        const progress = timer / cfg.lifetime;
-        if (activeEffect === StatusEffectType.BURN) {
-          // Drift upward
-          particle.position.y = enemy.position.y + progress * cfg.speed;
-        } else if (activeEffect === StatusEffectType.POISON) {
-          // Drift outward in XZ plane
-          const angle = particle.userData['angle'] as number;
-          const dist = progress * cfg.speed;
-          particle.position.x = enemy.position.x + Math.cos(angle) * dist;
-          particle.position.z = enemy.position.z + Math.sin(angle) * dist;
-        } else {
-          // SLOW: drift downward
-          particle.position.y = enemy.position.y - progress * cfg.speed;
-        }
-
-        particle.userData['timer'] = timer;
-      });
-    });
-  }
-
-  /** Create maxParticlesPerEnemy particles for the given effect and add them to the scene. */
-  private createStatusParticles(
-    effectType: StatusEffectType,
-    scene: THREE.Scene,
-    enemy: Enemy,
-  ): THREE.Mesh[] {
-    const geometry = this.getStatusParticleGeometry();
-    const material = this.getStatusParticleMaterial(effectType);
-    const count = STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy;
-    const particles: THREE.Mesh[] = [];
-
-    for (let i = 0; i < count; i++) {
-      const mesh = new THREE.Mesh(geometry, material);
-      // Stagger initial timers so particles don't all reset at once
-      const cfg = STATUS_EFFECT_VISUAL_CONFIG[effectType === StatusEffectType.BURN
-        ? 'burn' : effectType === StatusEffectType.POISON ? 'poison' : 'slow'];
-      const initialTimer = (i / count) * cfg.lifetime;
-      mesh.userData['timer'] = initialTimer;
-      this.resetStatusParticlePosition(mesh, enemy, effectType, i);
-      scene.add(mesh);
-      particles.push(mesh);
-    }
-
-    return particles;
-  }
-
-  /** Set the initial/reset position for a status particle with a random spread offset. */
-  private resetStatusParticlePosition(
-    particle: THREE.Mesh,
-    enemy: Enemy,
-    effectType: StatusEffectType,
-    index: number,
-  ): void {
-    const cfg = STATUS_EFFECT_VISUAL_CONFIG[effectType === StatusEffectType.BURN
-      ? 'burn' : effectType === StatusEffectType.POISON ? 'poison' : 'slow'];
-
-    const offsetX = (Math.random() - 0.5) * 2 * cfg.spread;
-    const offsetZ = (Math.random() - 0.5) * 2 * cfg.spread;
-
-    if (effectType === StatusEffectType.BURN) {
-      particle.position.set(
-        enemy.position.x + offsetX,
-        enemy.position.y,
-        enemy.position.z + offsetZ,
-      );
-    } else if (effectType === StatusEffectType.POISON) {
-      // Store a fixed outward angle per particle so it orbits consistently
-      const angle = (index / STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy) * Math.PI * 2
-        + (Math.random() - 0.5) * 0.5;
-      particle.userData['angle'] = angle;
-      particle.position.set(enemy.position.x, enemy.position.y, enemy.position.z);
-    } else {
-      // SLOW: start above enemy center, drift down
-      particle.position.set(
-        enemy.position.x + offsetX,
-        enemy.position.y + cfg.speed,
-        enemy.position.z + offsetZ,
-      );
-    }
-  }
-
-  /** Dispose and remove all status particles from the scene for the given enemy. */
-  private removeStatusParticles(enemy: Enemy, scene: THREE.Scene): void {
-    if (!enemy.statusParticles || enemy.statusParticles.length === 0) return;
-    for (const particle of enemy.statusParticles) {
-      scene.remove(particle);
-      // Geometry is shared — do NOT dispose it here
-      if (Array.isArray(particle.material)) {
-        // MeshBasicMaterial is shared — do not dispose per-particle
-      }
-      // No per-particle disposal needed: geometry and material are both shared
-    }
-    enemy.statusParticles = [];
-  }
-
-  /** Lazily create the shared particle geometry (reused for all effect types). */
-  private getStatusParticleGeometry(): THREE.SphereGeometry {
-    if (!this.statusParticleGeometry) {
-      this.statusParticleGeometry = new THREE.SphereGeometry(
-        STATUS_EFFECT_VISUAL_CONFIG.particleSize, 4, 4,
-      );
-    }
-    return this.statusParticleGeometry;
-  }
-
-  /** Lazily create a shared MeshBasicMaterial for the given effect type. */
-  private getStatusParticleMaterial(effectType: StatusEffectType): THREE.MeshBasicMaterial {
-    let material = this.statusParticleMaterials[effectType];
-    if (!material) {
-      const cfgKey = effectType === StatusEffectType.BURN
-        ? 'burn' : effectType === StatusEffectType.POISON ? 'poison' : 'slow';
-      const cfg = STATUS_EFFECT_VISUAL_CONFIG[cfgKey];
-      material = new THREE.MeshBasicMaterial({ color: cfg.color });
-      this.statusParticleMaterials[effectType] = material;
-    }
-    return material;
-  }
-
-  /**
-   * Apply emissive tint to child meshes that have MeshStandardMaterial (e.g., boss crown).
-   * Skips health bar children (MeshBasicMaterial) and shield mesh.
-   */
-  private tintChildMeshes(mesh: THREE.Mesh, color: number, intensity: number): void {
-    const crown = mesh.userData['bossCrown'] as THREE.Mesh | undefined;
-    if (crown) {
-      const crownMat = crown.material as THREE.MeshStandardMaterial;
-      if (crownMat.emissive) {
-        crownMat.emissive.setHex(color);
-        crownMat.emissiveIntensity = intensity;
-      }
-    }
-  }
-
-  /**
-   * Create a 3D mesh for an enemy.
-   * FLYING enemies use a flat diamond (kite) shape made of 2 triangles,
-   * rotated to lie flat in the XZ plane.
-   * All other enemies get a type-specific geometry for gameplay readability.
-   */
-  private createEnemyMesh(enemy: Enemy): THREE.Mesh {
-    const stats = ENEMY_STATS[enemy.type];
-
-    let geometry: THREE.BufferGeometry;
-    let materialSide: THREE.Side = THREE.FrontSide;
-
-    if (enemy.isFlying) {
-      // Diamond: 4 vertices forming a rhombus in the XZ plane, 2 triangles
-      const s = stats.size;
-      const diamondGeom = new THREE.BufferGeometry();
-      const vertices = new Float32Array([
-         0,  0, -s * 2,  // front tip
-         s,  0,  0,      // right
-         0,  0,  s * 2,  // back tip
-        -s,  0,  0       // left
-      ]);
-      const indices = new Uint16Array([0, 1, 3, 1, 2, 3]);
-      diamondGeom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      diamondGeom.setIndex(new THREE.BufferAttribute(indices, 1));
-      diamondGeom.computeVertexNormals();
-      geometry = diamondGeom;
-      materialSide = THREE.DoubleSide;
-    } else {
-      geometry = this.createEnemyGeometry(enemy.type, stats.size);
-    }
-
-    const material = new THREE.MeshStandardMaterial({
-      color: stats.color,
-      emissive: stats.color,
-      emissiveIntensity: ENEMY_VISUAL_CONFIG.baseEmissive,
-      roughness: ENEMY_VISUAL_CONFIG.roughness,
-      metalness: ENEMY_VISUAL_CONFIG.metalness,
-      side: materialSide
-    });
-
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(enemy.position.x, enemy.position.y, enemy.position.z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-
-    // Add health bar above enemy
-    const barWidth = HEALTH_BAR_CONFIG.width;
-    const barHeight = HEALTH_BAR_CONFIG.height;
-    const barY = stats.size + HEALTH_BAR_CONFIG.yOffset;
-
-    const bgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
-    const bgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.bgColor, side: THREE.DoubleSide });
-    const healthBarBg = new THREE.Mesh(bgGeometry, bgMaterial);
-    healthBarBg.position.set(0, barY, 0);
-
-    const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
-    const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
-    const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
-    healthBarFg.position.set(0, barY + 0.001, 0);
-
-    mesh.add(healthBarBg);
-    mesh.add(healthBarFg);
-    mesh.userData = { healthBarBg, healthBarFg };
-
-    // Add shield visual for SHIELDED enemies
-    if (enemy.type === EnemyType.SHIELDED && enemy.shield !== undefined && enemy.shield > 0) {
-      const shieldMesh = this.createShieldMesh(stats.size);
-      mesh.add(shieldMesh);
-      mesh.userData['shieldMesh'] = shieldMesh;
-    }
-
-    // Add crown ring for BOSS enemies
-    if (enemy.type === EnemyType.BOSS) {
-      this.createBossCrown(mesh, stats.size, stats.color);
-    }
-
-    return mesh;
-  }
-
-  /**
-   * Create type-specific geometry for each enemy.
-   * Each type gets a distinct silhouette for gameplay readability.
-   */
-  private createEnemyGeometry(type: EnemyType, size: number): THREE.BufferGeometry {
-    switch (type) {
-      case EnemyType.FAST:
-        // Elongated capsule — streamlined for speed
-        return new THREE.CapsuleGeometry(size * 0.6, size * 1.2, 4, ENEMY_MESH_SEGMENTS);
-
-      case EnemyType.HEAVY:
-        // Chunky cube — blocky and tanky
-        return new THREE.BoxGeometry(size * 1.6, size * 1.6, size * 1.6);
-
-      case EnemyType.SWIFT:
-        // Tetrahedron — angular, darting
-        return new THREE.TetrahedronGeometry(size * 1.2, 0);
-
-      case EnemyType.BOSS: {
-        // Large sphere merged with torus crown for imposing look
-        // Use sphere as base — the crown ring is added as a child mesh in createBossCrown()
-        return new THREE.SphereGeometry(size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
-      }
-
-      case EnemyType.SHIELDED:
-        // Icosahedron — faceted, armored look
-        return new THREE.IcosahedronGeometry(size, 0);
-
-      case EnemyType.SWARM:
-        // Octahedron — compact, gem-like
-        return new THREE.OctahedronGeometry(size, 0);
-
-      case EnemyType.FLYING:
-        // Diamond geometry is built inline in createEnemyMesh for flying enemies;
-        // this branch is a safety fallback and should never be reached at runtime.
-        return new THREE.SphereGeometry(size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
-
-      case EnemyType.BASIC:
-      default:
-        // Standard sphere
-        return new THREE.SphereGeometry(size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
-    }
-  }
-
-  /**
-   * Create and attach a torus crown ring to the Boss enemy mesh.
-   * Called after the mesh is created to add the distinctive crown.
-   */
-  private createBossCrown(mesh: THREE.Mesh, size: number, color: number): void {
-    const crownGeometry = new THREE.TorusGeometry(
-      size * BOSS_CROWN_CONFIG.radiusMultiplier,
-      size * BOSS_CROWN_CONFIG.tubeMultiplier,
-      BOSS_CROWN_CONFIG.radialSegments,
-      BOSS_CROWN_CONFIG.tubularSegments
-    );
-    const crownMaterial = new THREE.MeshStandardMaterial({
-      color: color,
-      emissive: color,
-      emissiveIntensity: BOSS_CROWN_CONFIG.emissiveIntensity,
-      roughness: BOSS_CROWN_CONFIG.roughness,
-      metalness: BOSS_CROWN_CONFIG.metalness
-    });
-    const crown = new THREE.Mesh(crownGeometry, crownMaterial);
-    crown.rotation.x = Math.PI / 2;
-    crown.position.y = size * BOSS_CROWN_CONFIG.yOffsetMultiplier;
-    crown.castShadow = true;
-    mesh.add(crown);
-    mesh.userData['bossCrown'] = crown;
-  }
-
-  /**
-   * Create a semi-transparent sphere to represent the active shield.
-   */
-  private createShieldMesh(enemySize: number): THREE.Mesh {
-    const shieldRadius = enemySize * SHIELD_VISUAL_CONFIG.radiusMultiplier;
-    const shieldGeometry = new THREE.SphereGeometry(
-      shieldRadius,
-      SHIELD_VISUAL_CONFIG.segments,
-      SHIELD_VISUAL_CONFIG.segments
-    );
-    const shieldMaterial = new THREE.MeshStandardMaterial({
-      color: SHIELD_VISUAL_CONFIG.color,
-      emissive: SHIELD_VISUAL_CONFIG.color,
-      emissiveIntensity: SHIELD_VISUAL_CONFIG.emissiveIntensity,
-      transparent: true,
-      opacity: SHIELD_VISUAL_CONFIG.opacity,
-      side: THREE.DoubleSide
-    });
-    return new THREE.Mesh(shieldGeometry, shieldMaterial);
-  }
-
-  /**
-   * Start the shield break animation when shield HP reaches 0.
-   * The dome scales up and fades out over SHIELD_BREAK_CONFIG.duration seconds.
-   * Actual disposal happens in updateShieldBreakAnimations() when the timer expires.
-   */
-  private removeShieldMesh(enemy: Enemy): void {
-    if (!enemy.mesh) return;
-    const shieldMesh = enemy.mesh.userData['shieldMesh'] as THREE.Mesh | undefined;
-    if (!shieldMesh) return;
-
-    enemy.shieldBreaking = true;
-    enemy.shieldBreakTimer = SHIELD_BREAK_CONFIG.duration;
+    this.enemyVisual.updateStatusEffectParticles(this.enemies, deltaTime, scene, activeEffects);
   }
 
   /**
    * Tick all active shield break animations by `deltaTime` seconds.
-   * Scales the dome up and fades opacity toward 0.
-   * When the timer expires, disposes and removes the dome mesh.
+   * Delegates to EnemyHealthService.
    * Call once per render frame (not inside the fixed-timestep physics loop).
    */
   updateShieldBreakAnimations(deltaTime: number): void {
-    if (deltaTime <= 0) return;
-
-    this.enemies.forEach(enemy => {
-      if (!enemy.shieldBreaking || enemy.shieldBreakTimer === undefined) return;
-
-      enemy.shieldBreakTimer -= deltaTime;
-
-      const shieldMesh = enemy.mesh?.userData['shieldMesh'] as THREE.Mesh | undefined;
-      if (!shieldMesh) return;
-
-      if (enemy.shieldBreakTimer <= 0) {
-        // Animation complete — dispose and remove the dome
-        if (enemy.mesh) {
-          enemy.mesh.remove(shieldMesh);
-          delete enemy.mesh.userData['shieldMesh'];
-        }
-        shieldMesh.geometry.dispose();
-        if (Array.isArray(shieldMesh.material)) {
-          shieldMesh.material.forEach(mat => mat.dispose());
-        } else {
-          shieldMesh.material.dispose();
-        }
-        enemy.shieldBreaking = false;
-        enemy.shieldBreakTimer = undefined;
-        return;
-      }
-
-      // Progress 0 = animation start, 1 = animation end
-      const progress = 1 - (enemy.shieldBreakTimer / SHIELD_BREAK_CONFIG.duration);
-
-      // Scale: 1.0 → SHIELD_BREAK_CONFIG.breakScale
-      const scale = 1 + progress * (SHIELD_BREAK_CONFIG.breakScale - 1);
-      shieldMesh.scale.setScalar(scale);
-
-      // Opacity: SHIELD_VISUAL_CONFIG.opacity → 0
-      const opacity = SHIELD_VISUAL_CONFIG.opacity * (1 - progress);
-      const mat = shieldMesh.material as THREE.MeshStandardMaterial;
-      mat.opacity = opacity;
-    });
+    this.enemyHealth.updateShieldBreakAnimations(this.enemies, deltaTime);
   }
 
   /**
@@ -915,49 +422,9 @@ export class EnemyService {
       isMiniSwarm: true
     };
 
-    mini.mesh = this.createMiniSwarmMesh(mini);
+    mini.mesh = this.enemyMeshFactory.createMiniSwarmMesh(mini);
     this.enemies.set(mini.id, mini);
     return mini;
-  }
-
-  /**
-   * Create a scaled-down mesh for a mini-swarm enemy.
-   * Uses MINI_SWARM_STATS directly rather than ENEMY_STATS to produce the smaller visual.
-   */
-  private createMiniSwarmMesh(mini: Enemy): THREE.Mesh {
-    const geometry = new THREE.OctahedronGeometry(MINI_SWARM_STATS.size, 0);
-    const material = new THREE.MeshStandardMaterial({
-      color: MINI_SWARM_STATS.color,
-      emissive: MINI_SWARM_STATS.color,
-      emissiveIntensity: ENEMY_VISUAL_CONFIG.miniSwarmEmissive,
-      roughness: ENEMY_VISUAL_CONFIG.roughness,
-      metalness: ENEMY_VISUAL_CONFIG.metalness,
-    });
-
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(mini.position.x, mini.position.y, mini.position.z);
-    mesh.castShadow = true;
-
-    // Small health bar
-    const barWidth = HEALTH_BAR_CONFIG.width * 0.5;
-    const barHeight = HEALTH_BAR_CONFIG.height;
-    const barY = MINI_SWARM_STATS.size + HEALTH_BAR_CONFIG.yOffset;
-
-    const bgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
-    const bgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.bgColor, side: THREE.DoubleSide });
-    const healthBarBg = new THREE.Mesh(bgGeometry, bgMaterial);
-    healthBarBg.position.set(0, barY, 0);
-
-    const fgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
-    const fgMaterial = new THREE.MeshBasicMaterial({ color: HEALTH_BAR_CONFIG.colorGreen, side: THREE.DoubleSide });
-    const healthBarFg = new THREE.Mesh(fgGeometry, fgMaterial);
-    healthBarFg.position.set(0, barY + 0.001, 0);
-
-    mesh.add(healthBarBg);
-    mesh.add(healthBarFg);
-    mesh.userData = { healthBarBg, healthBarFg };
-
-    return mesh;
   }
 
   /**
@@ -966,98 +433,28 @@ export class EnemyService {
    * but remains in the enemies map until the animation completes.
    * BOSS enemies use a longer duration for added impact.
    * SWARM mini-spawn happens in damageEnemy() before this is called — no special handling needed here.
+   * Delegates to EnemyHealthService.
    */
   startDyingAnimation(enemyId: string): void {
-    const enemy = this.enemies.get(enemyId);
-    if (!enemy || enemy.dying) return;
-
-    const duration = enemy.type === EnemyType.BOSS
-      ? DEATH_ANIM_CONFIG.durationBoss
-      : DEATH_ANIM_CONFIG.duration;
-
-    enemy.dying = true;
-    enemy.dyingTimer = duration;
-
-    // Make material transparent so we can animate opacity
-    if (enemy.mesh) {
-      this.setMeshTransparent(enemy.mesh, true);
-    }
+    this.enemyHealth.startDyingAnimation(this.enemies, enemyId);
   }
 
   /**
    * Trigger a brief white emissive flash on the hit enemy.
    * No-op if the enemy is dying, already flashing, or not found.
-   * Saves the current emissive color/intensity so they can be restored
-   * when the flash expires — compatible with status-effect tinting.
+   * Delegates to EnemyHealthService.
    */
   startHitFlash(enemyId: string): void {
-    const enemy = this.enemies.get(enemyId);
-    if (!enemy || enemy.dying) return;
-    // Throttle: skip if already mid-flash
-    if (enemy.hitFlashTimer !== undefined && enemy.hitFlashTimer > 0) return;
-    if (!enemy.mesh) return;
-
-    enemy.hitFlashTimer = HIT_FLASH_CONFIG.duration;
-
-    const mat = enemy.mesh.material;
-    if (mat instanceof THREE.MeshStandardMaterial) {
-      // Snapshot current emissive so we can restore it when the flash ends
-      enemy.mesh.userData['preFlashEmissive'] = mat.emissive.getHex();
-      enemy.mesh.userData['preFlashEmissiveIntensity'] = mat.emissiveIntensity;
-      mat.emissive.setHex(HIT_FLASH_CONFIG.color);
-      mat.emissiveIntensity = HIT_FLASH_CONFIG.emissiveIntensity;
-    }
-    // Apply the same flash to the boss crown if present
-    const crown = enemy.mesh.userData['bossCrown'] as THREE.Mesh | undefined;
-    if (crown && crown.material instanceof THREE.MeshStandardMaterial) {
-      crown.userData['preFlashEmissive'] = crown.material.emissive.getHex();
-      crown.userData['preFlashEmissiveIntensity'] = crown.material.emissiveIntensity;
-      crown.material.emissive.setHex(HIT_FLASH_CONFIG.color);
-      crown.material.emissiveIntensity = HIT_FLASH_CONFIG.emissiveIntensity;
-    }
+    this.enemyHealth.startHitFlash(this.enemies, enemyId);
   }
 
   /**
    * Tick all active hit-flash timers and restore emissive when each expires.
-   * Call once per render frame (not inside fixed-timestep physics) so the flash
-   * duration is decoupled from game speed.
+   * Call once per render frame (not inside fixed-timestep physics).
+   * Delegates to EnemyHealthService.
    */
   updateHitFlashes(deltaTime: number): void {
-    if (deltaTime <= 0) return;
-
-    this.enemies.forEach(enemy => {
-      if (enemy.hitFlashTimer === undefined || enemy.hitFlashTimer <= 0) return;
-
-      // Cancel in-progress flash if enemy started dying — let death animation own visuals
-      if (enemy.dying) {
-        enemy.hitFlashTimer = 0;
-        return;
-      }
-
-      enemy.hitFlashTimer -= deltaTime;
-
-      if (enemy.hitFlashTimer <= 0) {
-        enemy.hitFlashTimer = 0;
-        if (!enemy.mesh) return;
-
-        // Restore the snapshotted emissive (may be status-effect color)
-        const savedColor = enemy.mesh.userData['preFlashEmissive'] as number | undefined;
-        const savedIntensity = enemy.mesh.userData['preFlashEmissiveIntensity'] as number | undefined;
-        const mat = enemy.mesh.material;
-        if (mat instanceof THREE.MeshStandardMaterial) {
-          if (savedColor !== undefined) mat.emissive.setHex(savedColor);
-          if (savedIntensity !== undefined) mat.emissiveIntensity = savedIntensity;
-        }
-        // Restore boss crown
-        const crown = enemy.mesh.userData['bossCrown'] as THREE.Mesh | undefined;
-        if (crown && crown.material instanceof THREE.MeshStandardMaterial) {
-          const crownColor = crown.userData['preFlashEmissive'] as number | undefined;
-          const crownIntensity = crown.userData['preFlashEmissiveIntensity'] as number | undefined;
-          if (crownColor !== undefined) crown.material.emissive.setHex(crownColor);
-          if (crownIntensity !== undefined) crown.material.emissiveIntensity = crownIntensity;
-        }
-      }
-    });
+    this.enemyHealth.updateHitFlashes(this.enemies, deltaTime);
   }
 
   /**
@@ -1067,43 +464,10 @@ export class EnemyService {
    *
    * This must be called from the render loop (not inside the fixed-timestep physics loop)
    * so the animation runs at real-time frame rate regardless of game speed.
+   * Delegates to EnemyHealthService.
    */
   updateDyingAnimations(deltaTime: number, scene: THREE.Scene): void {
-    if (deltaTime <= 0) return;
-
-    const toRemove: string[] = [];
-
-    this.enemies.forEach((enemy, id) => {
-      if (!enemy.dying || enemy.dyingTimer === undefined) return;
-
-      enemy.dyingTimer -= deltaTime;
-
-      if (enemy.dyingTimer <= 0) {
-        toRemove.push(id);
-        return;
-      }
-
-      if (!enemy.mesh) return;
-
-      const duration = enemy.type === EnemyType.BOSS
-        ? DEATH_ANIM_CONFIG.durationBoss
-        : DEATH_ANIM_CONFIG.duration;
-
-      // Progress 0 = animation start, 1 = animation end
-      const progress = 1 - (enemy.dyingTimer / duration);
-
-      // Scale: 1.0 → DEATH_ANIM_CONFIG.minScale
-      const scale = 1 - progress * (1 - DEATH_ANIM_CONFIG.minScale);
-      enemy.mesh.scale.setScalar(scale);
-
-      // Opacity: 1.0 → 0
-      const opacity = 1 - progress;
-      this.setMeshOpacity(enemy.mesh, opacity);
-    });
-
-    for (const id of toRemove) {
-      this.removeEnemy(id, scene);
-    }
+    this.enemyHealth.updateDyingAnimations(this.enemies, deltaTime, scene, (id, s) => this.removeEnemy(id, s));
   }
 
   /**
@@ -1118,36 +482,6 @@ export class EnemyService {
       if (!enemy.dying) count++;
     });
     return count;
-  }
-
-  /**
-   * Enable or disable transparent rendering on a mesh and all its children
-   * that use MeshStandardMaterial (skips health bar BasicMaterial children).
-   */
-  private setMeshTransparent(mesh: THREE.Mesh, transparent: boolean): void {
-    if (mesh.material instanceof THREE.MeshStandardMaterial) {
-      mesh.material.transparent = transparent;
-      mesh.material.needsUpdate = true;
-    }
-    const crown = mesh.userData['bossCrown'] as THREE.Mesh | undefined;
-    if (crown && crown.material instanceof THREE.MeshStandardMaterial) {
-      crown.material.transparent = transparent;
-      crown.material.needsUpdate = true;
-    }
-  }
-
-  /**
-   * Set opacity on the main mesh material and its BOSS crown child.
-   * Skips health-bar children (MeshBasicMaterial) since they are already hidden.
-   */
-  private setMeshOpacity(mesh: THREE.Mesh, opacity: number): void {
-    if (mesh.material instanceof THREE.MeshStandardMaterial) {
-      mesh.material.opacity = opacity;
-    }
-    const crown = mesh.userData['bossCrown'] as THREE.Mesh | undefined;
-    if (crown && crown.material instanceof THREE.MeshStandardMaterial) {
-      crown.material.opacity = opacity;
-    }
   }
 
   /**
@@ -1245,14 +579,7 @@ export class EnemyService {
     // any entry was skipped (e.g. enemy with no mesh)
     this.enemies.clear();
 
-    // Dispose shared status-particle geometry and materials
-    if (this.statusParticleGeometry) {
-      this.statusParticleGeometry.dispose();
-      this.statusParticleGeometry = null;
-    }
-    for (const mat of Object.values(this.statusParticleMaterials)) {
-      mat?.dispose();
-    }
-    this.statusParticleMaterials = {};
+    // Dispose shared status-particle geometry and materials (owned by EnemyVisualService)
+    this.enemyVisual.cleanup();
   }
 }

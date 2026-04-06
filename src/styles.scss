@@ -1,0 +1,30 @@
+// Novarise Design System
+// Sprints S33-S37: CSS Architecture — split from monolithic styles.css
+//
+// Import order matters for CSS cascade:
+//   1. Variables first (custom properties, no output until consumed)
+//   2. Base reset (html/body/*, utilities)
+//   3. Animations (keyframes + motion overrides)
+//   4. Feature layers in specificity/dependency order
+
+@import 'styles/variables';
+@import 'styles/base';
+@import 'styles/animations';
+
+// Game Feature Styles
+@import 'styles/game-hud';
+@import 'styles/game-wave';
+@import 'styles/game-tower-info';
+@import 'styles/game-controls';
+
+// Game Overlay Styles
+@import 'styles/game-tutorial';
+@import 'styles/game-encyclopedia';
+@import 'styles/game-victory';
+@import 'styles/game-pause';
+@import 'styles/game-setup';
+
+// Domain Styles
+@import 'styles/editor';
+@import 'styles/campaign';
+@import 'styles/pages';

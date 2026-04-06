@@ -5,7 +5,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
-import { disposeMaterial } from '../../../game/game-board/utils/three-utils';
+import { disposeMaterial, disposeMesh } from '@game/game-board/utils/three-utils';
 import {
   EDITOR_SCENE_CONFIG,
   EDITOR_RENDERER_CONFIG,
@@ -379,8 +379,7 @@ export class EditorSceneService {
   disposeSkybox(): void {
     if (this.skybox) {
       this.scene.remove(this.skybox);
-      this.skybox.geometry.dispose();
-      disposeMaterial(this.skybox.material);
+      disposeMesh(this.skybox);
       this.skybox = undefined;
     }
   }
@@ -451,6 +450,22 @@ export class EditorSceneService {
       }
       this.renderer.dispose();
     }
+  }
+
+  /**
+   * Animate ambient particles: sinusoidal vertical drift + slow Y-rotation.
+   * Call once per animation frame.
+   */
+  animateParticles(): void {
+    if (!this.particles) return;
+    const posAttr = this.particles.geometry.attributes['position'] as THREE.BufferAttribute;
+    const positions = posAttr.array as Float32Array;
+    const now = Date.now();
+    for (let i = 0; i < positions.length; i += 3) {
+      positions[i + 1] += Math.sin(now * 0.001 + i) * 0.002;
+    }
+    posAttr.needsUpdate = true;
+    this.particles.rotation.y += 0.0002;
   }
 
   // ----- Private helpers -----

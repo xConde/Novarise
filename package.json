@@ -9,7 +9,8 @@
     "start": "bash ./nvmrc-check.sh && ng serve",
     "build": "bash ./nvmrc-check.sh && ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "lint": "ng lint"
   },
   "private": true,
   "dependencies": {
@@ -28,6 +29,11 @@
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "^15.2.0",
+    "@angular-eslint/builder": "15.2.1",
+    "@angular-eslint/eslint-plugin": "15.2.1",
+    "@angular-eslint/eslint-plugin-template": "15.2.1",
+    "@angular-eslint/schematics": "15.2.1",
+    "@angular-eslint/template-parser": "15.2.1",
     "@angular/cli": "^15.2.0",
     "@angular/compiler-cli": "^15.2.0",
     "@types/jasmine": "~4.3.0",
@@ -35,6 +41,9 @@
     "@types/offscreencanvas": "^2019.7.0",
     "@types/three": "^0.169.0",
     "@types/webxr": "^0.5.20",
+    "@typescript-eslint/eslint-plugin": "5.62.0",
+    "@typescript-eslint/parser": "5.62.0",
+    "eslint": "8.57.1",
     "jasmine-core": "~3.10.0",
     "karma": "~6.3.0",
     "karma-chrome-launcher": "~3.1.0",

@@ -2,18 +2,18 @@ import { TestBed } from '@angular/core/testing';
 import { GameEndService, GameEndResult } from './game-end.service';
 import { GameStateService } from './game-state.service';
 import { GameStatsService } from './game-stats.service';
-import { PlayerProfileService, ACHIEVEMENTS } from './player-profile.service';
+import { PlayerProfileService, ACHIEVEMENTS } from '@core/services/player-profile.service';
 import { StatusEffectService } from './status-effect.service'; // used as spy type
 import { GameNotificationService, NotificationType } from './game-notification.service';
-import { MapBridgeService } from './map-bridge.service';
+import { MapBridgeService } from '@core/services/map-bridge.service';
 import { AudioService } from './audio.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
-import { CampaignService } from '../../../campaign/services/campaign.service';
-import { ChallengeEvaluatorService } from '../../../campaign/services/challenge-evaluator.service';
+import { CampaignService } from '@campaign/services/campaign.service';
+import { ChallengeEvaluatorService } from '@campaign/services/challenge-evaluator.service';
 import { TowerType } from '../models/tower.model';
 import { GamePhase, DifficultyLevel } from '../models/game-state.model';
 import { ScoreBreakdown } from '../models/score.model';
-import { ChallengeDefinition, ChallengeType } from '../../../campaign/models/challenge.model';
+import { ChallengeDefinition, ChallengeType } from '@campaign/models/challenge.model';
 
 const FAKE_SCORE_BREAKDOWN: ScoreBreakdown = {
   baseScore: 1000,

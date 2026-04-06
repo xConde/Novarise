@@ -1,20 +1,39 @@
-import { of } from 'rxjs';
+import { EMPTY, of } from 'rxjs';
 
 import { GameBoardService } from '../game-board.service';
 import { EnemyService, DamageResult } from '../services/enemy.service';
 import { GameStatsService, GameStats } from '../services/game-stats.service';
-import { TutorialService, TutorialStep, TutorialTip } from '../services/tutorial.service';
+import { TutorialService, TutorialStep, TutorialTip } from '@core/services/tutorial.service';
 import { CombatLoopService } from '../services/combat-loop.service';
 import { MinimapService } from '../services/minimap.service';
-import { SettingsService, GameSettings } from '../services/settings.service';
+import { SettingsService, GameSettings } from '@core/services/settings.service';
 import { AudioService } from '../services/audio.service';
 import { SceneService } from '../services/scene.service';
 import { GameNotificationService, GameNotification } from '../services/game-notification.service';
 import { TowerAnimationService } from '../services/tower-animation.service';
+import { GameStateService } from '../services/game-state.service';
+import { GameEndService } from '../services/game-end.service';
+import { WaveService } from '../services/wave.service';
+import { TowerCombatService } from '../services/tower-combat.service';
+import { ProjectileService } from '../services/projectile.service';
+import { TowerPlacementService } from '../services/tower-placement.service';
+import { TowerSelectionService } from '../services/tower-selection.service';
+import { StatusEffectService } from '../services/status-effect.service';
+import { ChallengeTrackingService } from '../services/challenge-tracking.service';
+import { GamePauseService } from '../services/game-pause.service';
+import { ChallengeDisplayService } from '../services/challenge-display.service';
+import { ChallengeIndicator } from '../components/game-hud/game-hud.component';
+import { MapBridgeService } from '@core/services/map-bridge.service';
+import { MapStorageService, MapMetadata } from '@core/services/map-storage.service';
+import { PlayerProfileService } from '@core/services/player-profile.service';
+import { CampaignService } from '@campaign/services/campaign.service';
 import { Enemy } from '../models/enemy.model';
 import { GameBoardTile } from '../models/game-board-tile';
 import { TowerType } from '../models/tower.model';
-import { DifficultyLevel } from '../models/game-state.model';
+import { DifficultyLevel, GamePhase, INITIAL_GAME_STATE, GameState } from '../models/game-state.model';
+import { PlayerProfile } from '../models/achievement.model';
+import { TowerUpgradeVisualService } from '../services/tower-upgrade-visual.service';
+import { GameSessionService } from '../services/game-session.service';
 
 /**
  * Create a pre-configured GameBoardService spy with standard return values.
@@ -27,9 +46,9 @@ import { DifficultyLevel } from '../models/game-state.model';
  *   - importBoard — no-op void
  */
 export function createGameBoardServiceSpy(
-  width: number = 10,
-  height: number = 10,
-  tileSize: number = 1,
+  width = 10,
+  height = 10,
+  tileSize = 1,
   boardFn?: () => GameBoardTile[][]
 ): jasmine.SpyObj<GameBoardService> {
   const methods: (keyof GameBoardService)[] = [
@@ -197,10 +216,22 @@ export function createMinimapServiceSpy(): jasmine.SpyObj<MinimapService> {
     'show',
     'hide',
     'toggleVisibility',
+    'setDimmed',
     'isVisible',
     'cleanup',
+    'buildTerrainCache',
+    'updateWithEntities',
+    'getCachedTerrain',
   ]);
   spy.isVisible.and.returnValue(false);
+  spy.getCachedTerrain.and.returnValue(null);
+  spy.buildTerrainCache.and.returnValue({
+    gridWidth: 10,
+    gridHeight: 10,
+    isPath: () => false,
+    spawnPoints: [],
+    exitPoints: [],
+  });
   return spy;
 }
 
@@ -332,4 +363,543 @@ export function createTowerAnimationServiceSpy(): jasmine.SpyObj<TowerAnimationS
     'updateTowerAnimations',
     'updateTilePulse',
   ]);
+}
+
+// ---------------------------------------------------------------------------
+// Cross-module service spies (added in Hardening VIII Sprint 44)
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a pre-configured MapBridgeService spy.
+ *
+ * Default return values:
+ *   - getMapId() — null (no saved map loaded)
+ *   - getEditorMapState() — null
+ *   - hasEditorMap() / hasValidSpawnAndExit() — false
+ *   - convertToGameBoard() — empty board
+ *   - All mutating methods — no-op void
+ */
+export function createMapBridgeServiceSpy(): jasmine.SpyObj<MapBridgeService> {
+  const spy = jasmine.createSpyObj<MapBridgeService>('MapBridgeService', [
+    'setEditorMapState',
+    'getMapId',
+    'getEditorMapState',
+    'hasEditorMap',
+    'clearEditorMap',
+    'hasValidSpawnAndExit',
+    'convertToGameBoard',
+  ]);
+  spy.getMapId.and.returnValue(null);
+  spy.getEditorMapState.and.returnValue(null);
+  spy.hasEditorMap.and.returnValue(false);
+  spy.hasValidSpawnAndExit.and.returnValue(false);
+  spy.convertToGameBoard.and.returnValue({ board: [], width: 0, height: 0 });
+  return spy;
+}
+
+/**
+ * Create a pre-configured MapStorageService spy.
+ *
+ * Default return values:
+ *   - getAllMaps() — empty array
+ *   - loadMap() / getMapMetadata() / getCurrentMapId() — null
+ *   - loadCurrentMap() — null
+ *   - saveMap() — 'test-map-id'
+ *   - deleteMap() — true
+ *   - exportMapToJson() — null
+ *   - importMapFromJson() — null
+ *   - All other methods — no-op void or false
+ */
+export function createMapStorageServiceSpy(): jasmine.SpyObj<MapStorageService> {
+  const spy = jasmine.createSpyObj<MapStorageService>('MapStorageService', [
+    'saveMap',
+    'loadMap',
+    'getAllMaps',
+    'getMapMetadata',
+    'deleteMap',
+    'getCurrentMapId',
+    'clearCurrentMapId',
+    'loadCurrentMap',
+    'migrateOldFormat',
+    'exportMapToJson',
+    'downloadMapAsFile',
+    'importMapFromJson',
+    'validateMapJson',
+    'promptFileImport',
+  ]);
+  spy.getAllMaps.and.returnValue([] as MapMetadata[]);
+  spy.loadMap.and.returnValue(null);
+  spy.getMapMetadata.and.returnValue(null);
+  spy.getCurrentMapId.and.returnValue(null);
+  spy.loadCurrentMap.and.returnValue(null);
+  spy.saveMap.and.returnValue('test-map-id');
+  spy.deleteMap.and.returnValue(true);
+  spy.exportMapToJson.and.returnValue(null);
+  spy.importMapFromJson.and.returnValue(null);
+  spy.migrateOldFormat.and.returnValue(false);
+  spy.downloadMapAsFile.and.returnValue(false);
+  spy.validateMapJson.and.returnValue({ valid: false });
+  return spy;
+}
+
+/**
+ * Create a pre-configured PlayerProfileService spy.
+ *
+ * Default return values:
+ *   - getProfile() — minimal zeroed-out profile
+ *   - recordGameEnd() — empty array (no newly unlocked achievements)
+ *   - getMapScore() — null
+ *   - getAllMapScores() — empty object
+ *   - getAchievements() / getUnlockedAchievements() / getLockedAchievements() — empty arrays
+ *   - All mutating methods — no-op void
+ */
+export function createPlayerProfileServiceSpy(): jasmine.SpyObj<PlayerProfileService> {
+  const spy = jasmine.createSpyObj<PlayerProfileService>('PlayerProfileService', [
+    'getProfile',
+    'recordGameEnd',
+    'recordMapScore',
+    'recordChallengeCompleted',
+    'getMapScore',
+    'getAllMapScores',
+    'getAchievements',
+    'getAchievementsByCategory',
+    'getUnlockedAchievements',
+    'getLockedAchievements',
+    'reset',
+    'resetSession',
+  ]);
+  const emptyProfile: PlayerProfile = {
+    totalGamesPlayed: 0,
+    totalVictories: 0,
+    totalDefeats: 0,
+    totalEnemiesKilled: 0,
+    totalGoldEarned: 0,
+    highestWaveReached: 0,
+    highestScore: 0,
+    achievements: [],
+    mapScores: {},
+    towerKills: {},
+    slowEffectsApplied: 0,
+    hasUsedSpecialization: false,
+    hasPlacedAllTowerTypes: false,
+    maxModifiersUsedInVictory: 0,
+    completedChallengeCount: 0,
+  };
+  spy.getProfile.and.returnValue(emptyProfile);
+  spy.recordGameEnd.and.returnValue([]);
+  spy.getMapScore.and.returnValue(null);
+  spy.getAllMapScores.and.returnValue({});
+  spy.getAchievements.and.returnValue([]);
+  spy.getAchievementsByCategory.and.returnValue([]);
+  spy.getUnlockedAchievements.and.returnValue([]);
+  spy.getLockedAchievements.and.returnValue([]);
+  return spy;
+}
+
+/**
+ * Create a pre-configured CampaignService spy.
+ *
+ * Default return values:
+ *   - getAllLevels() — empty array
+ *   - getLevel() — undefined
+ *   - isUnlocked() / isCompleted() — false
+ *   - getLevelProgress() — null
+ *   - getTotalStars() / getCompletedCount() / getCompletedChallengeCount() — 0
+ *   - getNextLevel() — null
+ *   - getChallengesForLevel() — empty array
+ *   - isChallengeCompleted() — false
+ *   - All mutating methods — no-op void
+ */
+export function createCampaignServiceSpy(): jasmine.SpyObj<CampaignService> {
+  const spy = jasmine.createSpyObj<CampaignService>('CampaignService', [
+    'getAllLevels',
+    'getLevel',
+    'isUnlocked',
+    'isCompleted',
+    'getLevelProgress',
+    'getTotalStars',
+    'getCompletedCount',
+    'recordCompletion',
+    'getNextLevel',
+    'getChallengesForLevel',
+    'isChallengeCompleted',
+    'completeChallenge',
+    'getCompletedChallengeCount',
+    'resetProgress',
+  ]);
+  spy.getAllLevels.and.returnValue([]);
+  spy.getLevel.and.returnValue(undefined);
+  spy.isUnlocked.and.returnValue(false);
+  spy.isCompleted.and.returnValue(false);
+  spy.getLevelProgress.and.returnValue(null);
+  spy.getTotalStars.and.returnValue(0);
+  spy.getCompletedCount.and.returnValue(0);
+  spy.getNextLevel.and.returnValue(null);
+  spy.getChallengesForLevel.and.returnValue([]);
+  spy.isChallengeCompleted.and.returnValue(false);
+  spy.getCompletedChallengeCount.and.returnValue(0);
+  return spy;
+}
+
+/**
+ * Create a pre-configured GameStateService spy.
+ *
+ * Default return values:
+ *   - getState() — INITIAL_GAME_STATE snapshot
+ *   - getState$() — Observable of INITIAL_GAME_STATE
+ *   - getPhaseChanges() — Observable<never> (never emits)
+ *   - canAfford() — false
+ *   - spendGold() — false
+ *   - addStreakBonus() / awardInterest() / getStreak() / getModifierScoreMultiplier() — 0
+ *   - getModifierEffects() — empty object
+ *   - All mutating methods — no-op void
+ */
+export function createGameStateServiceSpy(): jasmine.SpyObj<GameStateService> {
+  const spy = jasmine.createSpyObj<GameStateService>('GameStateService', [
+    'getState',
+    'getState$',
+    'getPhaseChanges',
+    'setPhase',
+    'startWave',
+    'completeWave',
+    'setEndlessMode',
+    'loseLife',
+    'addStreakBonus',
+    'getStreak',
+    'addGold',
+    'addGoldAndScore',
+    'awardInterest',
+    'spendGold',
+    'canAfford',
+    'addScore',
+    'togglePause',
+    'setSpeed',
+    'setModifiers',
+    'getModifierEffects',
+    'getModifierScoreMultiplier',
+    'setDifficulty',
+    'addElapsedTime',
+    'setMaxWaves',
+    'reset',
+  ]);
+  const initialState: GameState = { ...INITIAL_GAME_STATE, activeModifiers: new Set() };
+  spy.getState.and.returnValue(initialState);
+  spy.getState$.and.returnValue(of(initialState));
+  spy.getPhaseChanges.and.returnValue(EMPTY);
+  spy.canAfford.and.returnValue(false);
+  spy.spendGold.and.returnValue(false);
+  spy.addStreakBonus.and.returnValue(0);
+  spy.awardInterest.and.returnValue(0);
+  spy.getStreak.and.returnValue(0);
+  spy.getModifierEffects.and.returnValue({});
+  spy.getModifierScoreMultiplier.and.returnValue(1);
+  return spy;
+}
+
+/**
+ * Create a pre-configured GameEndService spy.
+ *
+ * Default return values:
+ *   - isRecorded() — false
+ *   - recordEnd() — empty result (no unlocked achievements, no completed challenges)
+ *   - recordSpecialization() / reset() — no-op void
+ */
+export function createGameEndServiceSpy(): jasmine.SpyObj<GameEndService> {
+  const spy = jasmine.createSpyObj<GameEndService>('GameEndService', [
+    'recordSpecialization',
+    'isRecorded',
+    'recordEnd',
+    'reset',
+  ]);
+  spy.isRecorded.and.returnValue(false);
+  spy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [], completedChallenges: [] });
+  return spy;
+}
+
+/**
+ * Create a pre-configured WaveService spy.
+ *
+ * Default return values:
+ *   - hasCustomWaves() / isEndlessMode() / isSpawning() / isNewType() — false
+ *   - getWaveDefinitions() — empty array
+ *   - getTotalEnemiesInWave() / getWaveReward() / getMaxWaves() / getRemainingToSpawn() — 0
+ *   - getCurrentEndlessTemplate() / getCurrentEndlessResult() — null
+ *   - All mutating methods — no-op void
+ */
+export function createWaveServiceSpy(): jasmine.SpyObj<WaveService> {
+  const spy = jasmine.createSpyObj<WaveService>('WaveService', [
+    'setCustomWaves',
+    'clearCustomWaves',
+    'hasCustomWaves',
+    'getWaveDefinitions',
+    'setEndlessMode',
+    'isEndlessMode',
+    'getCurrentEndlessTemplate',
+    'getCurrentEndlessResult',
+    'startWave',
+    'update',
+    'isSpawning',
+    'getRemainingToSpawn',
+    'getTotalEnemiesInWave',
+    'getWaveReward',
+    'getMaxWaves',
+    'isNewType',
+    'markSeen',
+    'reset',
+  ]);
+  spy.hasCustomWaves.and.returnValue(false);
+  spy.isEndlessMode.and.returnValue(false);
+  spy.isSpawning.and.returnValue(false);
+  spy.isNewType.and.returnValue(false);
+  spy.getWaveDefinitions.and.returnValue([]);
+  spy.getTotalEnemiesInWave.and.returnValue(0);
+  spy.getWaveReward.and.returnValue(0);
+  spy.getMaxWaves.and.returnValue(0);
+  spy.getRemainingToSpawn.and.returnValue(0);
+  spy.getCurrentEndlessTemplate.and.returnValue(null);
+  spy.getCurrentEndlessResult.and.returnValue(null);
+  return spy;
+}
+
+/**
+ * Create a pre-configured TowerCombatService spy.
+ *
+ * Default return values:
+ *   - update() — empty result (no kills, no shots)
+ *   - upgradeTower() / upgradeTowerWithSpec() / setTargetingMode() / cycleTargetingMode() — false/null
+ *   - drainAudioEvents() — empty array
+ *   - unregisterTower() — undefined
+ *   - All other mutating methods — no-op void
+ */
+export function createTowerCombatServiceSpy(): jasmine.SpyObj<TowerCombatService> {
+  const spy = jasmine.createSpyObj<TowerCombatService>('TowerCombatService', [
+    'drainAudioEvents',
+    'registerTower',
+    'upgradeTower',
+    'upgradeTowerWithSpec',
+    'unregisterTower',
+    'update',
+    'setTargetingMode',
+    'cycleTargetingMode',
+    'getTower',
+    'getPlacedTowers',
+  ]);
+  spy.update.and.returnValue({ killed: [], fired: [], hitCount: 0 });
+  spy.upgradeTower.and.returnValue(false);
+  spy.upgradeTowerWithSpec.and.returnValue(false);
+  spy.setTargetingMode.and.returnValue(false);
+  spy.cycleTargetingMode.and.returnValue(null);
+  spy.unregisterTower.and.returnValue(undefined);
+  spy.drainAudioEvents.and.returnValue([]);
+  spy.getTower.and.returnValue(undefined);
+  spy.getPlacedTowers.and.returnValue(new Map());
+  return spy;
+}
+
+/**
+ * Create a pre-configured StatusEffectService spy.
+ *
+ * Default return values:
+ *   - apply() — false (effect not applied)
+ *   - update() — empty array (no kills from DoT)
+ *   - hasEffect() — false
+ *   - getEffects() / getAllActiveEffects() — empty
+ *   - getSlowApplicationCount() — 0
+ *   - All cleanup / removal methods — no-op void
+ */
+export function createStatusEffectServiceSpy(): jasmine.SpyObj<StatusEffectService> {
+  const spy = jasmine.createSpyObj<StatusEffectService>('StatusEffectService', [
+    'apply',
+    'update',
+    'hasEffect',
+    'getEffects',
+    'getAllActiveEffects',
+    'removeAllEffects',
+    'getSlowApplicationCount',
+    'cleanup',
+  ]);
+  spy.apply.and.returnValue(false);
+  spy.update.and.returnValue([]);
+  spy.hasEffect.and.returnValue(false);
+  spy.getEffects.and.returnValue([]);
+  spy.getAllActiveEffects.and.returnValue(new Map());
+  spy.getSlowApplicationCount.and.returnValue(0);
+  return spy;
+}
+
+/**
+ * Create a pre-configured ChallengeTrackingService spy.
+ *
+ * Default return values:
+ *   - getSnapshot() — zeroed snapshot with empty towerTypesUsed Set
+ *   - getTowerTypesUsed() — empty ReadonlySet
+ *   - All record* / reset methods — no-op void
+ */
+export function createChallengeTrackingServiceSpy(): jasmine.SpyObj<ChallengeTrackingService> {
+  const spy = jasmine.createSpyObj<ChallengeTrackingService>('ChallengeTrackingService', [
+    'recordTowerPlaced',
+    'recordTowerUpgraded',
+    'recordTowerSold',
+    'getSnapshot',
+    'getTowerTypesUsed',
+    'reset',
+  ]);
+  spy.getSnapshot.and.returnValue({ totalGoldSpent: 0, maxTowersPlaced: 0, towerTypesUsed: new Set() });
+  spy.getTowerTypesUsed.and.returnValue(new Set<TowerType>());
+  return spy;
+}
+
+export function createGamePauseServiceSpy(): jasmine.SpyObj<GamePauseService> {
+  const spy = jasmine.createSpyObj<GamePauseService>(
+    'GamePauseService',
+    ['togglePause', 'setupAutoPause', 'requestQuit', 'cancelQuit', 'confirmQuit', 'canLeaveGame', 'reset', 'cleanup', 'ngOnDestroy']
+  );
+  // Writable public fields — allow tests to read/write them directly
+  (spy as unknown as { showQuitConfirm: boolean }).showQuitConfirm = false;
+  (spy as unknown as { autoPaused: boolean }).autoPaused = false;
+  (spy as unknown as { isPaused: boolean }).isPaused = false;
+  spy.togglePause.and.returnValue(false);
+  spy.canLeaveGame.and.returnValue(true);
+  spy.confirmQuit.and.returnValue('/');
+  // requestQuit / cancelQuit mutate showQuitConfirm to allow component getter tests to pass
+  spy.requestQuit.and.callFake(() => {
+    (spy as unknown as { showQuitConfirm: boolean }).showQuitConfirm = true;
+  });
+  spy.cancelQuit.and.callFake(() => {
+    (spy as unknown as { showQuitConfirm: boolean }).showQuitConfirm = false;
+  });
+  return spy;
+}
+
+/**
+ * Create a pre-configured ChallengeDisplayService spy.
+ *
+ * Default return values:
+ *   - updateIndicators() — empty array (no active challenges)
+ *   - indicators — empty array
+ */
+export function createChallengeDisplayServiceSpy(): jasmine.SpyObj<ChallengeDisplayService> {
+  const spy = jasmine.createSpyObj<ChallengeDisplayService>(
+    'ChallengeDisplayService',
+    ['updateIndicators'],
+    { indicators: [] as ChallengeIndicator[] }
+  );
+  spy.updateIndicators.and.returnValue([]);
+  return spy;
+}
+
+// ---------------------------------------------------------------------------
+// Service spies added in Hardening VIII Sprint S10 / S13
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a pre-configured TowerPlacementService spy.
+ *
+ * Default return values:
+ *   - isDragging — false
+ *   - onTowerDragStart / cancelDrag / removeDragListeners / init — no-op void
+ */
+export function createTowerPlacementServiceSpy(): jasmine.SpyObj<TowerPlacementService> {
+  const spy = jasmine.createSpyObj<TowerPlacementService>(
+    'TowerPlacementService',
+    ['onTowerDragStart', 'cancelDrag', 'removeDragListeners', 'init', 'cleanup'],
+    { isDragging: false }
+  );
+  return spy;
+}
+
+/**
+ * Create a pre-configured TowerSelectionService spy.
+ *
+ * Default return values:
+ *   - selectedTowerInfo / selectedTowerStats / upgradePreview — null
+ *   - sellConfirmPending / showSpecializationChoice — false
+ *   - specOptions — empty array
+ *   - selectedTowerUpgradeCost / selectedTowerUpgradePercent / selectedTowerSellValue — 0
+ *   - selectPlacedTower / deselectTower / refreshTowerInfoPanel / cycleTargeting — no-op void
+ */
+export function createTowerSelectionServiceSpy(): jasmine.SpyObj<TowerSelectionService> {
+  const spy = jasmine.createSpyObj<TowerSelectionService>(
+    'TowerSelectionService',
+    ['selectPlacedTower', 'deselectTower', 'refreshTowerInfoPanel', 'cycleTargeting'],
+    {
+      selectedTowerInfo: null,
+      selectedTowerStats: null,
+      selectedTowerUpgradeCost: 0,
+      selectedTowerUpgradePercent: 0,
+      selectedTowerSellValue: 0,
+      upgradePreview: null,
+      showSpecializationChoice: false,
+      specOptions: [],
+      sellConfirmPending: false,
+    }
+  );
+  return spy;
+}
+
+/**
+ * Create a pre-configured ProjectileService spy.
+ *
+ * Default return values:
+ *   - getProjectileCount() — 0
+ *   - fire() — no-op void
+ *   - advance() — empty array (no hits)
+ *   - cleanup() — no-op void
+ */
+export function createProjectileServiceSpy(): jasmine.SpyObj<ProjectileService> {
+  const spy = jasmine.createSpyObj<ProjectileService>('ProjectileService', [
+    'getProjectileCount',
+    'fire',
+    'advance',
+    'cleanup',
+  ]);
+  spy.getProjectileCount.and.returnValue(0);
+  spy.advance.and.returnValue([]);
+  return spy;
+}
+
+// ---------------------------------------------------------------------------
+// Service spies added in Hardening VIII Sprint S12 / S15 / S17
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a pre-configured TowerUpgradeVisualService spy.
+ *
+ * Default return values:
+ *   - flashCount / ringCount — 0
+ *   - All visual methods — no-op void
+ */
+export function createTowerUpgradeVisualServiceSpy(): jasmine.SpyObj<TowerUpgradeVisualService> {
+  const spy = jasmine.createSpyObj<TowerUpgradeVisualService>(
+    'TowerUpgradeVisualService',
+    [
+      'applyLevelScale',
+      'spawnUpgradeFlash',
+      'addGlowRing',
+      'removeGlowRing',
+      'update',
+      'cleanup',
+      'applyUpgradeVisuals',
+      'applySpecializationVisual',
+    ],
+    { flashCount: 0, ringCount: 0 }
+  );
+  return spy;
+}
+
+/**
+ * Create a pre-configured GameSessionService spy.
+ *
+ * Default return values:
+ *   - resetAllServices / applyCampaignWaves — no-op void
+ *   - cleanupScene — returns null
+ */
+export function createGameSessionServiceSpy(): jasmine.SpyObj<GameSessionService> {
+  const spy = jasmine.createSpyObj<GameSessionService>('GameSessionService', [
+    'resetAllServices',
+    'applyCampaignWaves',
+    'cleanupScene',
+  ]);
+  spy.cleanupScene.and.returnValue(null);
+  return spy;
 }

@@ -23,7 +23,7 @@ function makeMesh(row: number, col: number, type: BlockType = BlockType.BASE): T
   return mesh;
 }
 
-function makePriceInfo(cost: number, strategicMultiplier: number, percentIncrease: number = 0): TilePriceInfo {
+function makePriceInfo(cost: number, strategicMultiplier: number, percentIncrease = 0): TilePriceInfo {
   return {
     cost,
     strategicMultiplier,
@@ -37,7 +37,7 @@ function makeTile(
   row: number,
   col: number,
   type: BlockType = BlockType.BASE,
-  isPurchasable: boolean = true,
+  isPurchasable = true,
   towerType: TowerType | null = null
 ): GameBoardTile {
   // GameBoardTile stores position as x/y (x=row, y=col) internally

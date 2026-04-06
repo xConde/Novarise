@@ -1,7 +1,5 @@
 import { EnemyType } from './enemy.model';
 import {
-  ENDLESS_CONFIG,
-  EndlessWaveConfig,
   WAVE_DEFINITIONS,
   WaveDefinition,
   WaveEntry
@@ -63,66 +61,6 @@ describe('Wave Model', () => {
       const finalWave = WAVE_DEFINITIONS[WAVE_DEFINITIONS.length - 1];
       const hasBoss = finalWave.entries.some(e => e.type === EnemyType.BOSS);
       expect(hasBoss).toBeTrue();
-    });
-  });
-
-  describe('ENDLESS_CONFIG', () => {
-    it('should be defined', () => {
-      expect(ENDLESS_CONFIG).toBeDefined();
-    });
-
-    it('should have baseHealthMultiplier of 1.0', () => {
-      expect(ENDLESS_CONFIG.baseHealthMultiplier).toBe(1.0);
-    });
-
-    it('should have healthScalePerWave of 0.15', () => {
-      expect(ENDLESS_CONFIG.healthScalePerWave).toBe(0.15);
-    });
-
-    it('should have baseSpeedMultiplier of 1.0', () => {
-      expect(ENDLESS_CONFIG.baseSpeedMultiplier).toBe(1.0);
-    });
-
-    it('should have speedScalePerWave of 0.05', () => {
-      expect(ENDLESS_CONFIG.speedScalePerWave).toBe(0.05);
-    });
-
-    it('should have baseCountMultiplier of 1.0', () => {
-      expect(ENDLESS_CONFIG.baseCountMultiplier).toBe(1.0);
-    });
-
-    it('should have countScalePerWave of 0.1', () => {
-      expect(ENDLESS_CONFIG.countScalePerWave).toBe(0.1);
-    });
-
-    it('should have bossInterval of 5', () => {
-      expect(ENDLESS_CONFIG.bossInterval).toBe(5);
-    });
-
-    it('all numeric values should be positive', () => {
-      const config: EndlessWaveConfig = ENDLESS_CONFIG;
-      expect(config.baseHealthMultiplier).toBeGreaterThan(0);
-      expect(config.healthScalePerWave).toBeGreaterThan(0);
-      expect(config.baseSpeedMultiplier).toBeGreaterThan(0);
-      expect(config.speedScalePerWave).toBeGreaterThan(0);
-      expect(config.baseCountMultiplier).toBeGreaterThan(0);
-      expect(config.countScalePerWave).toBeGreaterThan(0);
-      expect(config.bossInterval).toBeGreaterThan(0);
-    });
-
-    it('bossInterval should be a positive integer', () => {
-      expect(Number.isInteger(ENDLESS_CONFIG.bossInterval)).toBeTrue();
-      expect(ENDLESS_CONFIG.bossInterval).toBeGreaterThan(0);
-    });
-
-    it('scaling values should produce meaningful progression (wave 20 multiplier > wave 1)', () => {
-      const wave1HealthMult =
-        ENDLESS_CONFIG.baseHealthMultiplier +
-        ENDLESS_CONFIG.healthScalePerWave * 0; // wave 1: (waveNumber - 1) = 0
-      const wave20HealthMult =
-        ENDLESS_CONFIG.baseHealthMultiplier +
-        ENDLESS_CONFIG.healthScalePerWave * 19; // wave 20: (20 - 1) = 19
-      expect(wave20HealthMult).toBeGreaterThan(wave1HealthMult);
     });
   });
 

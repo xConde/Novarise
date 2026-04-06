@@ -57,7 +57,7 @@ export function calculateScoreBreakdown(
   difficulty: DifficultyLevel,
   wavesCompleted: number,
   isVictory: boolean,
-  modifierMultiplier: number = 1.0
+  modifierMultiplier = 1.0
 ): ScoreBreakdown {
   const difficultyMultiplier = DIFFICULTY_SCORE_MULTIPLIER[difficulty];
   const finalScore = Math.round(baseScore * difficultyMultiplier * modifierMultiplier);

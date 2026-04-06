@@ -45,6 +45,7 @@ export interface Enemy {
   shieldBreaking?: boolean;    // True while the shield break animation is playing
   shieldBreakTimer?: number;   // Seconds remaining in the shield break animation (counts down to 0)
   statusParticles?: THREE.Mesh[]; // Small particle meshes for active status effect visuals
+  statusParticleEffectType?: string; // Tracks which effect type the current particles belong to
 }
 
 export interface EnemyStats {
@@ -147,3 +148,14 @@ export const MINI_SWARM_STATS = {
   size: 0.15,
   leakDamage: 1
 } as const;
+
+/**
+ * Result returned by {@link EnemyService.damageEnemy}.
+ * `killed` is true when the hit reduces health to 0 or below.
+ * `spawnedEnemies` is non-empty only when a SWARM parent dies; the caller
+ * must add each entry's mesh to the Three.js scene.
+ */
+export interface DamageResult {
+  killed: boolean;
+  spawnedEnemies: Enemy[];
+}

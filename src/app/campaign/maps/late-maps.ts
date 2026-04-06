@@ -1,6 +1,6 @@
 import { TerrainGridState } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
-import { createEmptyGrid, paintRow, paintColumn, paintRect } from './map-helpers';
+import { createEmptyGrid, paintRect } from './map-helpers';
 
 // ---------------------------------------------------------------------------
 // Map 13 — "Fortress"  (18×18, 4 spawners, 1 exit)

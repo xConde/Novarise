@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { SimpleChange } from '@angular/core';
 import { TutorialSpotlightComponent } from './tutorial-spotlight.component';
-import { TutorialStep, TutorialTip } from '../../services/tutorial.service';
+import { TutorialStep, TutorialTip } from '@core/services/tutorial.service';
 
 function makeTip(overrides: Partial<TutorialTip> = {}): TutorialTip {
   return {

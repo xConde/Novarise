@@ -4,7 +4,7 @@ import { CommonModule } from '@angular/common';
 import { CampaignComponent } from './campaign.component';
 import { CampaignService } from './services/campaign.service';
 import { CampaignMapService } from './services/campaign-map.service';
-import { MapBridgeService } from '../game/game-board/services/map-bridge.service';
+import { MapBridgeService } from '../core/services/map-bridge.service';
 import { CAMPAIGN_LEVELS, CAMPAIGN_LEVEL_COUNT } from './models/campaign.model';
 import { TerrainType } from '../games/novarise/models/terrain-types.enum';
 

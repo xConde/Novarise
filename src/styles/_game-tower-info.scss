@@ -1,0 +1,285 @@
+/* ============================================================
+   game-board: tower info panel
+   ============================================================ */
+.board-container .tower-info-panel {
+  background: rgba(0, 0, 0, 0.85);
+  border-radius: var(--border-radius-md);
+  backdrop-filter: blur(0.75rem);
+  z-index: var(--z-index-overlay);
+  font-family: "Orbitron", sans-serif;
+  position: absolute;
+  bottom: calc(var(--spacing-lg) + var(--tower-bar-height));
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 14rem;
+  padding: var(--spacing-md);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
+  animation: scale-in 0.2s ease-out;
+}
+
+@media (max-width: 768px) {
+  .board-container .tower-info-panel {
+    min-width: 12rem;
+    bottom: calc(var(--spacing-md) + var(--tower-bar-height));
+  }
+}
+
+@media (max-width: 480px) {
+  .board-container .tower-info-panel {
+    min-width: auto;
+    width: calc(100vw - 1rem);
+    left: 0.5rem;
+    transform: none;
+    bottom: calc(var(--spacing-xs) + var(--tower-bar-height));
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-3xs);
+  }
+}
+
+.board-container .tower-info-panel .tower-info-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+  padding-bottom: var(--spacing-xs);
+  border-bottom: var(--border-width-thin) solid var(--border-color);
+}
+
+.board-container .tower-info-panel .tower-info-name {
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  color: var(--text-color);
+  text-transform: uppercase;
+  letter-spacing: 0.0625rem;
+}
+
+.board-container .tower-info-panel .tower-info-level {
+  display: flex;
+  gap: 0.125rem;
+}
+
+.board-container .tower-info-panel .level-star {
+  font-size: 0.75rem;
+  color: var(--game-star-filled);
+}
+
+.board-container .tower-info-panel .level-star.empty { color: var(--game-star-empty); }
+
+.board-container .tower-info-panel .tower-info-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: var(--font-size-large);
+  cursor: pointer;
+  padding: 0 var(--spacing-xs);
+  line-height: 1;
+}
+
+.board-container .tower-info-panel .tower-info-close:hover { color: var(--text-color); }
+
+.board-container .tower-info-panel .tower-info-stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+}
+
+.board-container .tower-info-panel .stat-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--font-size-small);
+}
+
+.board-container .tower-info-panel .stat-label {
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.0313rem;
+}
+
+.board-container .tower-info-panel .stat-value {
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+.board-container .tower-info-panel .stat-value.status-effect { text-transform: capitalize; }
+.board-container .tower-info-panel .stat-value.status-effect[data-effect='BURN']   { color: var(--effect-burn); }
+.board-container .tower-info-panel .stat-value.status-effect[data-effect='POISON'] { color: var(--effect-poison); }
+.board-container .tower-info-panel .stat-value.status-effect[data-effect='SLOW']   { color: var(--effect-slow); }
+
+.board-container .tower-info-panel .stat-preview {
+  color: var(--theme-cyan, #00ffff);
+  font-weight: 600;
+  font-size: var(--font-size-2xs);
+  opacity: 0.8;
+}
+
+.board-container .tower-info-panel .stat-preview::before {
+  content: '\2192\00a0';
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.board-container .tower-info-panel .tower-info-targeting { margin-bottom: var(--spacing-xs); }
+
+.board-container .tower-info-panel .targeting-btn {
+  width: 100%;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: var(--border-width-thin) solid rgba(100, 180, 255, 0.3);
+  border-radius: var(--border-radius-sm);
+  background: rgba(30, 80, 140, 0.3);
+  color: #88ccff;
+  font-size: 0.6875rem;
+  cursor: pointer;
+  transition: all var(--transition-medium) ease;
+  text-align: center;
+}
+
+.board-container .tower-info-panel .targeting-btn:hover {
+  background: rgba(40, 100, 180, 0.45);
+  border-color: rgba(100, 180, 255, 0.6);
+}
+
+.board-container .tower-info-panel .tower-info-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.board-container .tower-info-panel .upgrade-btn,
+.board-container .tower-info-panel .sell-btn {
+  flex: 1;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: var(--border-width-thin) solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  font-size: 0.6875rem;
+  cursor: pointer;
+  transition: all var(--transition-medium) ease;
+}
+
+.board-container .tower-info-panel .upgrade-btn {
+  background: rgba(0, 100, 0, 0.3);
+  border-color: rgba(0, 255, 0, 0.3);
+  color: #88ff88;
+}
+
+.board-container .tower-info-panel .upgrade-btn:hover {
+  background: rgba(0, 150, 0, 0.4);
+  border-color: rgba(0, 255, 0, 0.6);
+}
+
+.board-container .tower-info-panel .upgrade-btn.unaffordable {
+  opacity: 0.4;
+  cursor: not-allowed;
+  color: var(--game-health);
+}
+
+.board-container .tower-info-panel .upgrade-tile-percent {
+  color: var(--theme-orange, #dd6600);
+  font-size: var(--font-size-2xs, 0.65rem);
+  margin-left: 0.25rem;
+  opacity: 0.9;
+}
+
+.board-container .tower-info-panel .sell-btn {
+  background: rgba(100, 50, 0, 0.3);
+  border-color: rgba(255, 200, 0, 0.3);
+  color: var(--game-gold);
+}
+
+.board-container .tower-info-panel .sell-btn:hover {
+  background: rgba(150, 75, 0, 0.4);
+  border-color: rgba(255, 200, 0, 0.6);
+}
+
+.board-container .tower-info-panel .sell-btn.confirm {
+  background: rgba(200, 50, 0, 0.5);
+  border-color: rgba(255, 100, 0, 0.8);
+  color: var(--game-health);
+  animation: pulse-warn 0.5s ease-in-out infinite alternate;
+}
+
+.board-container .tower-info-panel .max-level-badge {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6875rem;
+  color: var(--game-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.0625rem;
+}
+
+.board-container .tower-info-panel .spec-choice-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  animation: scale-up-in 0.2s ease-out;
+}
+
+.board-container .tower-info-panel .spec-choice-header {
+  font-size: var(--font-size-small);
+  color: var(--game-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.0625rem;
+  text-align: center;
+  margin-bottom: var(--spacing-xs);
+}
+
+.board-container .tower-info-panel .spec-btn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--border-width-medium);
+  padding: var(--spacing-sm);
+  border: var(--border-width-thin) solid var(--panel-blue-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--panel-blue-bg);
+  cursor: pointer;
+  transition: all var(--transition-medium) ease;
+  text-align: left;
+  min-height: 2.75rem;
+}
+
+.board-container .tower-info-panel .spec-btn:hover {
+  background: var(--panel-blue-hover);
+  border-color: var(--panel-blue-border-hover);
+}
+
+.board-container .tower-info-panel .spec-btn.unaffordable {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.board-container .tower-info-panel .spec-label {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  color: var(--panel-blue-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.0313rem;
+}
+
+.board-container .tower-info-panel .spec-desc {
+  font-size: var(--font-size-2xs);
+  color: var(--text-muted);
+}
+
+.board-container .tower-info-panel .spec-stats {
+  font-size: var(--font-size-3xs);
+  color: var(--text-faint);
+  font-family: monospace;
+}
+
+.board-container .tower-info-panel .spec-cancel-btn {
+  padding: var(--spacing-xs);
+  border: var(--border-width-thin) solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--panel-neutral-bg);
+  color: var(--text-dim);
+  font-size: var(--font-size-2xs);
+  cursor: pointer;
+  transition: all var(--transition-medium) ease;
+  min-height: 2.75rem;
+}
+
+.board-container .tower-info-panel .spec-cancel-btn:hover {
+  background: var(--panel-neutral-hover);
+  color: var(--text-color);
+}

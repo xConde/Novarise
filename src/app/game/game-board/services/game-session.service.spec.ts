@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 
-import { GameSessionService } from './game-session.service';
+import { GameSessionService, CleanupSceneOpts } from './game-session.service';
 import { GameStateService } from './game-state.service';
 import { WaveService } from './wave.service';
 import { EnemyService } from './enemy.service';
@@ -9,10 +9,20 @@ import { GameStatsService } from './game-stats.service';
 import { GameNotificationService } from './game-notification.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameEndService } from './game-end.service';
-import { MapBridgeService } from './map-bridge.service';
+import { MapBridgeService } from '@core/services/map-bridge.service';
 import { StatusEffectService } from './status-effect.service';
-import { TutorialService } from './tutorial.service';
-import { CAMPAIGN_WAVE_DEFINITIONS } from '../../../campaign/waves/campaign-waves';
+import { TutorialService } from '@core/services/tutorial.service';
+import { CAMPAIGN_WAVE_DEFINITIONS } from '@campaign/waves/campaign-waves';
+import { TowerCombatService } from './tower-combat.service';
+import { TowerPreviewService } from './tower-preview.service';
+import { DamagePopupService } from './damage-popup.service';
+import { MinimapService } from './minimap.service';
+import { PathVisualizationService } from './path-visualization.service';
+import { TileHighlightService } from './tile-highlight.service';
+import { RangeVisualizationService } from './range-visualization.service';
+import { TowerUpgradeVisualService } from './tower-upgrade-visual.service';
+import { SceneService } from './scene.service';
+import { PlayerProfileService } from '@core/services/player-profile.service';
 
 describe('GameSessionService', () => {
   let service: GameSessionService;
@@ -26,8 +36,21 @@ describe('GameSessionService', () => {
   let mapBridgeSpy: jasmine.SpyObj<MapBridgeService>;
   let statusEffectSpy: jasmine.SpyObj<StatusEffectService>;
   let tutorialSpy: jasmine.SpyObj<TutorialService>;
+  let towerCombatSpy: jasmine.SpyObj<TowerCombatService>;
+  let towerPreviewSpy: jasmine.SpyObj<TowerPreviewService>;
+  let damagePopupSpy: jasmine.SpyObj<DamagePopupService>;
+  let minimapSpy: jasmine.SpyObj<MinimapService>;
+  let pathVisSpy: jasmine.SpyObj<PathVisualizationService>;
+  let tileHighlightSpy: jasmine.SpyObj<TileHighlightService>;
+  let rangeVisSpy: jasmine.SpyObj<RangeVisualizationService>;
+  let towerUpgradeVisualSpy: jasmine.SpyObj<TowerUpgradeVisualService>;
+  let sceneSpy: jasmine.SpyObj<SceneService>;
+  let playerProfileSpy: jasmine.SpyObj<PlayerProfileService>;
+  let scene: THREE.Scene;
 
   beforeEach(() => {
+    scene = new THREE.Scene();
+
     gameStateSpy = jasmine.createSpyObj('GameStateService', ['reset', 'setMaxWaves', 'getState$', 'getState']);
     gameStateSpy.getState.and.returnValue({
       wave: 0, lives: 7, gold: 150, score: 0, phase: 'SETUP',
@@ -72,6 +95,43 @@ describe('GameSessionService', () => {
     tutorialSpy.isTutorialComplete.and.returnValue(false);
     tutorialSpy.getCurrentStep.and.returnValue({ subscribe: () => ({ unsubscribe: () => {} }) } as any);
 
+    towerCombatSpy = jasmine.createSpyObj('TowerCombatService', ['cleanup', 'getPlacedTowers']);
+    towerCombatSpy.getPlacedTowers.and.returnValue(new Map());
+
+    towerPreviewSpy = jasmine.createSpyObj('TowerPreviewService', ['cleanup']);
+
+    damagePopupSpy = jasmine.createSpyObj('DamagePopupService', ['cleanup']);
+
+    minimapSpy = jasmine.createSpyObj('MinimapService', [
+      'cleanup', 'update', 'show', 'hide', 'isVisible', 'init', 'buildTerrainCache', 'updateWithEntities', 'getCachedTerrain',
+    ]);
+    minimapSpy.isVisible.and.returnValue(false);
+    minimapSpy.getCachedTerrain.and.returnValue(null);
+
+    pathVisSpy = jasmine.createSpyObj('PathVisualizationService', ['hidePath', 'cleanup', 'showPath']);
+
+    tileHighlightSpy = jasmine.createSpyObj('TileHighlightService', ['clearHighlights', 'updateHighlights', 'restoreAfterHover']);
+
+    rangeVisSpy = jasmine.createSpyObj('RangeVisualizationService', ['cleanup', 'showForTower', 'removePreview', 'toggleAllRanges']);
+
+    towerUpgradeVisualSpy = jasmine.createSpyObj('TowerUpgradeVisualService', [
+      'cleanup', 'applyLevelScale', 'spawnUpgradeFlash', 'addGlowRing', 'removeGlowRing',
+      'update', 'applyUpgradeVisuals', 'applySpecializationVisual',
+    ]);
+
+    sceneSpy = jasmine.createSpyObj('SceneService', [
+      'getScene', 'disposeParticles', 'disposeSkybox', 'disposeLights',
+      'getCamera', 'getRenderer', 'getComposer', 'getControls', 'getParticles',
+      'initScene', 'initCamera', 'initRenderer', 'initLights', 'initControls', 'initSkybox',
+      'render', 'resize', 'dispose', 'setBoardSize', 'initPostProcessing', 'initParticles',
+      'tickAmbientVisuals', 'getSkybox',
+    ]);
+    sceneSpy.getScene.and.returnValue(scene);
+    sceneSpy.getParticles.and.returnValue(null);
+    sceneSpy.getSkybox.and.returnValue(undefined);
+
+    playerProfileSpy = jasmine.createSpyObj('PlayerProfileService', ['resetSession']);
+
     TestBed.configureTestingModule({
       providers: [
         GameSessionService,
@@ -85,10 +145,24 @@ describe('GameSessionService', () => {
         { provide: MapBridgeService, useValue: mapBridgeSpy },
         { provide: StatusEffectService, useValue: statusEffectSpy },
         { provide: TutorialService, useValue: tutorialSpy },
+        { provide: TowerCombatService, useValue: towerCombatSpy },
+        { provide: TowerPreviewService, useValue: towerPreviewSpy },
+        { provide: DamagePopupService, useValue: damagePopupSpy },
+        { provide: MinimapService, useValue: minimapSpy },
+        { provide: PathVisualizationService, useValue: pathVisSpy },
+        { provide: TileHighlightService, useValue: tileHighlightSpy },
+        { provide: RangeVisualizationService, useValue: rangeVisSpy },
+        { provide: TowerUpgradeVisualService, useValue: towerUpgradeVisualSpy },
+        { provide: SceneService, useValue: sceneSpy },
+        { provide: PlayerProfileService, useValue: playerProfileSpy },
       ],
     });
 
     service = TestBed.inject(GameSessionService);
+  });
+
+  afterEach(() => {
+    scene.clear();
   });
 
   it('should create', () => {
@@ -240,6 +314,120 @@ describe('GameSessionService', () => {
             .toBeGreaterThan(0);
         });
       });
+    });
+  });
+
+  describe('cleanupScene', () => {
+    function makeOpts(): CleanupSceneOpts {
+      return {
+        tileMeshes: new Map(),
+        towerMeshes: new Map(),
+        gridLines: null,
+      };
+    }
+
+    it('should return null (for gridLines reset)', () => {
+      const opts = makeOpts();
+      expect(service.cleanupScene(opts)).toBeNull();
+    });
+
+    it('should call towerCombatService.cleanup', () => {
+      service.cleanupScene(makeOpts());
+      expect(towerCombatSpy.cleanup).toHaveBeenCalledWith(scene);
+    });
+
+    it('should call towerPreviewService.cleanup', () => {
+      service.cleanupScene(makeOpts());
+      expect(towerPreviewSpy.cleanup).toHaveBeenCalledWith(scene);
+    });
+
+    it('should call damagePopupService.cleanup', () => {
+      service.cleanupScene(makeOpts());
+      expect(damagePopupSpy.cleanup).toHaveBeenCalledWith(scene);
+    });
+
+    it('should call minimapService.cleanup', () => {
+      service.cleanupScene(makeOpts());
+      expect(minimapSpy.cleanup).toHaveBeenCalled();
+    });
+
+    it('should call pathVisualizationService.hidePath and cleanup', () => {
+      service.cleanupScene(makeOpts());
+      expect(pathVisSpy.hidePath).toHaveBeenCalledWith(scene);
+      expect(pathVisSpy.cleanup).toHaveBeenCalled();
+    });
+
+    it('should call tileHighlightService.clearHighlights with the tileMeshes map', () => {
+      const opts = makeOpts();
+      service.cleanupScene(opts);
+      expect(tileHighlightSpy.clearHighlights).toHaveBeenCalledWith(opts.tileMeshes, scene);
+    });
+
+    it('should call rangeVisualizationService.cleanup', () => {
+      service.cleanupScene(makeOpts());
+      expect(rangeVisSpy.cleanup).toHaveBeenCalledWith(scene);
+    });
+
+    it('should call towerUpgradeVisualService.cleanup', () => {
+      service.cleanupScene(makeOpts());
+      expect(towerUpgradeVisualSpy.cleanup).toHaveBeenCalledWith(scene);
+    });
+
+    it('should clear towerMeshes and tileMeshes in-place', () => {
+      const tileMeshes = new Map([['0-0', new THREE.Mesh()]]);
+      const towerMeshes = new Map([['0-0', new THREE.Group()]]);
+      const opts: CleanupSceneOpts = { tileMeshes, towerMeshes, gridLines: null };
+
+      service.cleanupScene(opts);
+
+      expect(tileMeshes.size).toBe(0);
+      expect(towerMeshes.size).toBe(0);
+    });
+
+    it('should dispose tile mesh geometry and material', () => {
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const mat = new THREE.MeshStandardMaterial();
+      const mesh = new THREE.Mesh(geo, mat);
+      scene.add(mesh);
+
+      const tileMeshes = new Map([['0-0', mesh]]);
+      const opts: CleanupSceneOpts = { tileMeshes, towerMeshes: new Map(), gridLines: null };
+
+      const geoSpy = spyOn(geo, 'dispose').and.callThrough();
+      const matSpy = spyOn(mat, 'dispose').and.callThrough();
+
+      service.cleanupScene(opts);
+
+      expect(geoSpy).toHaveBeenCalled();
+      expect(matSpy).toHaveBeenCalled();
+    });
+
+    it('should handle null gridLines without throwing', () => {
+      const opts: CleanupSceneOpts = { tileMeshes: new Map(), towerMeshes: new Map(), gridLines: null };
+      expect(() => service.cleanupScene(opts)).not.toThrow();
+    });
+
+    it('should dispose gridLines group geometry', () => {
+      const gridLines = new THREE.Group();
+      const lineGeo = new THREE.BufferGeometry();
+      const lineMat = new THREE.LineBasicMaterial();
+      const line = new THREE.Line(lineGeo, lineMat);
+      gridLines.add(line);
+      scene.add(gridLines);
+
+      const geoSpy = spyOn(lineGeo, 'dispose').and.callThrough();
+
+      const opts: CleanupSceneOpts = { tileMeshes: new Map(), towerMeshes: new Map(), gridLines };
+      service.cleanupScene(opts);
+
+      expect(geoSpy).toHaveBeenCalled();
+    });
+
+    it('should call sceneService.disposeParticles, disposeSkybox, disposeLights', () => {
+      service.cleanupScene(makeOpts());
+      expect(sceneSpy.disposeParticles).toHaveBeenCalled();
+      expect(sceneSpy.disposeSkybox).toHaveBeenCalled();
+      expect(sceneSpy.disposeLights).toHaveBeenCalled();
     });
   });
 });

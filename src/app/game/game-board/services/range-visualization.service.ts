@@ -2,7 +2,8 @@ import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG } from '../constants/ui.constants';
 import { PlacedTower, getEffectiveStats } from '../models/tower.model';
-import { disposeMaterial } from '../utils/three-utils';
+import { disposeMesh } from '../utils/three-utils';
+import { gridToWorld } from '../utils/coordinate-utils';
 
 @Injectable()
 export class RangeVisualizationService {
@@ -21,8 +22,7 @@ export class RangeVisualizationService {
     this.removePreview(scene);
 
     const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
-    const x = (tower.col - boardWidth / 2) * tileSize;
-    const z = (tower.row - boardHeight / 2) * tileSize;
+    const { x, z } = gridToWorld(tower.row, tower.col, boardWidth, boardHeight, tileSize);
 
     // Range ring
     this.rangePreviewMesh = this.createRangeRing(stats.range, stats.color, RANGE_PREVIEW_CONFIG.opacity, x, z);
@@ -50,14 +50,12 @@ export class RangeVisualizationService {
   removePreview(scene: THREE.Scene): void {
     if (this.rangePreviewMesh) {
       scene.remove(this.rangePreviewMesh);
-      this.rangePreviewMesh.geometry.dispose();
-      disposeMaterial(this.rangePreviewMesh.material);
+      disposeMesh(this.rangePreviewMesh);
       this.rangePreviewMesh = null;
     }
     if (this.selectionRingMesh) {
       scene.remove(this.selectionRingMesh);
-      this.selectionRingMesh.geometry.dispose();
-      disposeMaterial(this.selectionRingMesh.material);
+      disposeMesh(this.selectionRingMesh);
       this.selectionRingMesh = null;
     }
   }
@@ -79,16 +77,14 @@ export class RangeVisualizationService {
     // Remove existing range rings
     for (const mesh of this.rangeRingMeshes) {
       scene.remove(mesh);
-      mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
+      disposeMesh(mesh);
     }
     this.rangeRingMeshes = [];
 
     if (newState) {
       placedTowers.forEach(tower => {
         const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
-        const worldX = (tower.col - boardWidth / 2) * tileSize;
-        const worldZ = (tower.row - boardHeight / 2) * tileSize;
+        const { x: worldX, z: worldZ } = gridToWorld(tower.row, tower.col, boardWidth, boardHeight, tileSize);
         const ring = this.createRangeRing(
           stats.range,
           RANGE_PREVIEW_CONFIG.allRangesColor,
@@ -109,8 +105,7 @@ export class RangeVisualizationService {
     this.removePreview(scene);
     for (const mesh of this.rangeRingMeshes) {
       scene.remove(mesh);
-      mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
+      disposeMesh(mesh);
     }
     this.rangeRingMeshes = [];
   }

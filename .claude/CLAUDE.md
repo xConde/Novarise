@@ -2,9 +2,11 @@
 
 ## Quick Reference
 - Angular 15 + Three.js tower defense game with map editor
-- Tests: `npm test` (Karma, ~1900 specs, headless Chrome)
+- Tests: `npm test` (Karma, ~4162 specs, headless Chrome)
 - Deploy: Cloudflare Pages
 - Routes: `/` landing, `/edit` editor, `/maps` select, `/play` game (guarded)
+- Path aliases: `@core/*` → `src/app/core/*`, `@shared/*` → `src/app/shared/*`, `@game/*` → `src/app/game/*`, `@campaign/*` → `src/app/campaign/*`
+- SCSS partials: `src/styles/_variables.scss`, `_base.scss`, `_animations.scss`, game/editor/page partials
 
 ## See Also
 - `ARCHITECTURE.md` — directory map, module boundaries, service graph, key file sizes
@@ -57,6 +59,7 @@ Every Three.js object you create must be disposed in `ngOnDestroy()`.
 - `fakeAsync()` wraps `it()` blocks, NEVER `describe()` blocks
 - Async subscription tests: unsubscribe in `afterEach()`
 - **Shared test helpers** in `game/game-board/testing/`: `test-enemy.factory.ts`, `test-board.factory.ts`, `test-spies.factory.ts` — use these instead of local helpers
+- Current test count: ~4162 specs
 
 ### State Management
 - BehaviorSubject pattern for all reactive state (GameStateService, EditorStateService)
@@ -67,14 +70,17 @@ Every Three.js object you create must be disposed in `ngOnDestroy()`.
 When adding new towers, enemies, or waves, follow the config-driven pattern:
 - Add enum value to `TowerType` or `EnemyType`
 - Add stats entry to `TOWER_CONFIGS` or `ENEMY_STATS`
-- Add mesh creation case to `GameBoardService.createTowerMesh()`
+- Tower mesh: add case to `TowerMeshFactoryService.createTowerMesh()`
+- Enemy mesh: add case to `EnemyMeshFactoryService.createEnemyMesh()`
 - Add tower button to game-board.component.html tower selection panel
 - Add tests for the new config values
 
 ### Services
 - `GameBoardService` is `@Injectable()` (NOT `providedIn: 'root'`) — provided in `GameModule`
-- `MapBridgeService` IS `providedIn: 'root'` — must persist across route transitions
-- Editor services are provided in `EditorModule`
+- `MapBridgeService` IS `providedIn: 'root'` — lives in `core/services/`, must persist across route transitions
+- All root-scoped services live in `core/services/` with barrel export (`index.ts`)
+- Editor services (`TerrainEditService`, `EditorStateService`, `EditHistoryService`, `CameraControlService`, `PathValidationService`, `EditorSceneService`, `EditorNotificationService`) provided in `EditorModule`
+- New game services (hardening-viii): `GameInputService` (keyboard), `EnemyMeshFactoryService` (enemy meshes), `EnemyVisualService` (status particles/animations) — all component-scoped in `GameBoardComponent`
 
 ### Coordinate Systems
 - **Editor:** `tiles[x][z]` (column-major, x=column, z=row)

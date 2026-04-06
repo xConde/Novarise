@@ -3,37 +3,30 @@ import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import * as THREE from 'three';
 import { TerrainGrid } from './features/terrain-editor/terrain-grid.class';
-import { TerrainType, TERRAIN_CONFIGS } from './models/terrain-types.enum';
-import { MapStorageService } from './core/map-storage.service';
-import { EditHistoryService, PaintCommand, HeightCommand, SpawnPointCommand, ExitPointCommand, TileState } from './core/edit-history.service';
+import { TerrainType } from './models/terrain-types.enum';
+import { MapStorageService } from '../../core/services/map-storage.service';
+import { EditHistoryService, SpawnPointCommand, ExitPointCommand } from './core/edit-history.service';
 import { CameraControlService, MovementInput, RotationInput, JoystickInput } from './core/camera-control.service';
 import { EditorStateService, EditMode, BrushTool } from './core/editor-state.service';
-import { MapBridgeService } from '../../game/game-board/services/map-bridge.service';
-import { disposeMaterial } from '../../game/game-board/utils/three-utils';
+import { MapBridgeService } from '../../core/services/map-bridge.service';
 import { JoystickEvent } from './features/mobile-controls';
 import {
   EDITOR_EDIT_THROTTLE_MS,
-  EDITOR_BRUSH_INDICATOR,
-  EDITOR_BRUSH_PREVIEW,
-  EDITOR_RECTANGLE_PREVIEW,
-  EDITOR_SPAWN_MARKER,
-  EDITOR_EXIT_MARKER,
-  EDITOR_ANIMATION,
-  EDITOR_HOVER_EMISSIVE,
-  EDITOR_FLOOD_FILL_MAX_ITERATIONS,
-  EDITOR_PATH_INVALID_FLASH_MS,
-  EDITOR_PATH_INVALID_FLASH_COLOR,
-  EDITOR_HEIGHT,
-  EDITOR_RENDER_ORDER,
-  EDITOR_AUTOSAVE_DRAFT_KEY,
-  EDITOR_AUTOSAVE_INTERVAL_MS,
   EDITOR_AUTOSAVE_JUST_NOW_MS,
+  EDITOR_HOVER_EMISSIVE,
 } from './constants/editor-ui.constants';
 import { PathValidationService, PathValidationResult } from './core/path-validation.service';
-import { MapTemplateService } from './core/map-template.service';
-import { MapTemplate } from './core/map-template.model';
+import { MapTemplateService } from '../../core/services/map-template.service';
+import { MapTemplate } from '../../core/models/map-template.model';
 import { EditorSceneService } from './core/editor-scene.service';
 import { EditorNotificationService, EditorNotification } from './core/editor-notification.service';
+import { TerrainEditService } from './core/terrain-edit.service';
+import { MapFileService } from './core/map-file.service';
+import { BrushPreviewService } from './core/brush-preview.service';
+import { SpawnExitMarkerService } from './core/spawn-exit-marker.service';
+import { RectangleToolService } from './core/rectangle-tool.service';
+import { EditorModalService } from './core/editor-modal.service';
+import { EditorKeyboardService } from './core/editor-keyboard.service';
 
 // Re-export types for template compatibility
 export { EditMode, BrushTool } from './core/editor-state.service';
@@ -61,30 +54,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private mouse = new THREE.Vector2();
   private hoveredTile: THREE.Mesh | null = null;
   private isMouseDown = false;
-  private brushIndicator!: THREE.Mesh;
-  private brushPreviewMeshes: THREE.Mesh[] = [];
-  private lastEditedTiles = new Set<THREE.Mesh>();
   private lastEditTime = 0;
-  private readonly editThrottleMs = EDITOR_EDIT_THROTTLE_MS; // Throttle edits during drag to 20fps max
-
-  // Rectangle selection state
-  private rectangleStartTile: THREE.Mesh | null = null;
-  private rectanglePreviewMeshes: THREE.Mesh[] = [];
-
-  // Visual markers — arrays for multi-spawn/exit
-  private spawnMarkers: THREE.Mesh[] = [];
-  private exitMarkers: THREE.Mesh[] = [];
-
-  // Camera movement - delegated to CameraControlService
-  private keysPressed = new Set<string>();
+  private readonly editThrottleMs = EDITOR_EDIT_THROTTLE_MS;
 
   // Mobile joystick state (updated via modular VirtualJoystickComponent events)
   private movementJoystick: JoystickInput = { active: false, x: 0, y: 0 };
   private rotationJoystick: JoystickInput = { active: false, x: 0, y: 0 };
 
-  // Event handlers
-  private keyboardHandler: (event: KeyboardEvent) => void;
-  private keyUpHandler: (event: KeyboardEvent) => void;
+  // Event handlers (mouse/touch — keyboard is handled by EditorKeyboardService)
   private mouseDownHandler: (event: MouseEvent) => void;
   private mouseUpHandler: (event: MouseEvent) => void;
   private mousemoveHandler!: (event: MouseEvent) => void;
@@ -120,16 +97,15 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   public editorNotification: EditorNotification | null = null;
   private notificationSub: Subscription | null = null;
 
-  // Modal dialog state (replaces browser prompt()/confirm())
-  public showModal = false;
-  public modalTitle = '';
-  public modalType: 'input' | 'confirm' | 'select' = 'confirm';
-  public modalInputValue = '';
-  public modalSelectOptions: string[] = [];
-  private modalCallback: ((result: string | boolean | number | null) => void) | null = null;
+  // Modal dialog — delegated to EditorModalService (template binds through getters below)
+  public get showModal(): boolean { return this.editorModal.showModal; }
+  public get modalTitle(): string { return this.editorModal.modalTitle; }
+  public get modalType(): 'input' | 'confirm' | 'select' { return this.editorModal.modalType; }
+  public get modalInputValue(): string { return this.editorModal.modalInputValue; }
+  public set modalInputValue(v: string) { this.editorModal.modalInputValue = v; }
+  public get modalSelectOptions(): string[] { return this.editorModal.modalSelectOptions; }
 
-  // Autosave draft
-  private autosaveInterval: ReturnType<typeof setInterval> | null = null;
+  // Autosave draft timestamp (updated when MapFileService triggers a save)
   public lastAutosaveTime: Date | null = null;
 
   // Undo/Redo state - expose for UI binding
@@ -137,11 +113,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   public get canRedo(): boolean { return this.editHistory.canRedo; }
   public get undoDescription(): string | null { return this.editHistory.nextUndoDescription; }
   public get redoDescription(): string | null { return this.editHistory.nextRedoDescription; }
-
-  // Track tiles being edited in current stroke for batching
-  private currentStrokeTiles: Map<string, TileState> = new Map();
-  private currentStrokeNewHeights: Map<string, number> = new Map();
-  private isInStroke = false;
 
   constructor(
     private router: Router,
@@ -153,10 +124,15 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     private pathValidation: PathValidationService,
     private mapTemplateService: MapTemplateService,
     private editorScene: EditorSceneService,
-    public editorNotificationService: EditorNotificationService
+    public editorNotificationService: EditorNotificationService,
+    private terrainEdit: TerrainEditService,
+    private mapFile: MapFileService,
+    private brushPreview: BrushPreviewService,
+    private spawnExitMarker: SpawnExitMarkerService,
+    private rectangleTool: RectangleToolService,
+    public editorModal: EditorModalService,
+    private editorKeyboard: EditorKeyboardService,
   ) {
-    this.keyboardHandler = this.handleKeyDown.bind(this);
-    this.keyUpHandler = this.handleKeyUp.bind(this);
     this.mouseDownHandler = this.handleMouseDown.bind(this);
     this.mouseUpHandler = this.handleMouseUp.bind(this);
   }
@@ -188,18 +164,28 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Initialize terrain grid
     this.terrainGrid = new TerrainGrid(this.editorScene.getScene(), 25);
+    this.terrainEdit.setTerrainGrid(this.terrainGrid);
+    this.mapFile.setTerrainGrid(this.terrainGrid);
+
+    // Wire up extracted services
+    this.brushPreview.setScene(this.editorScene.getScene());
+    this.brushPreview.setTerrainGrid(this.terrainGrid);
+    this.spawnExitMarker.setScene(this.editorScene.getScene());
+    this.spawnExitMarker.setTerrainGrid(this.terrainGrid);
+    this.rectangleTool.setScene(this.editorScene.getScene());
+    this.rectangleTool.setTerrainGrid(this.terrainGrid);
 
     // Create brush indicator for crisp visual feedback
-    this.createBrushIndicator();
+    this.brushPreview.createBrushIndicator();
 
     // Initialize brush preview system
-    this.updateBrushPreview();
+    this.brushPreview.updateBrushPreview();
 
     // Create spawn/exit markers for tower defense
-    this.createSpawnExitMarkers();
+    this.spawnExitMarker.createSpawnExitMarkers();
 
     // Initialize camera rotation to match initial camera view
-    this.initializeCameraRotation();
+    this.cameraControl.initializeFromCamera(this.editorScene.getCamera(), new THREE.Vector3(0, 0, 0));
 
     // Load map templates for the editor UI
     this.templates = this.mapTemplateService.getTemplates();
@@ -214,28 +200,24 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.tryLoadCurrentMap();
 
     // Offer to restore any unsaved draft (only after the named map is loaded)
-    const draft = this.loadDraft();
+    const draft = this.mapFile.loadDraft();
     if (draft) {
-      this.showConfirmModal('An unsaved draft was found. Restore it?', (confirmed) => {
+      this.editorModal.showConfirmModal('An unsaved draft was found. Restore it?', (confirmed) => {
         if (confirmed) {
           this.terrainGrid.importState(draft);
-          this.updateSpawnMarker();
-          this.updateExitMarker();
+          this.spawnExitMarker.updateSpawnMarkers();
+          this.spawnExitMarker.updateExitMarkers();
           this.runPathValidation();
         }
-        this.clearDraft();
+        this.mapFile.clearDraft();
       });
     }
 
-    this.startAutosave();
+    this.mapFile.startAutosave();
 
     this.setupInteraction();
     this.setupKeyboardControls();
     this.animate();
-  }
-
-  private initializeCameraRotation(): void {
-    this.cameraControl.initializeFromCamera(this.editorScene.getCamera(), new THREE.Vector3(0, 0, 0));
   }
 
   private setupInteraction(): void {
@@ -250,20 +232,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       const tileMeshes = this.terrainGrid.getTileMeshes();
       const intersects = this.raycaster.intersectObjects(tileMeshes);
 
-      // Reset previous hover with crisp transition
-      if (this.hoveredTile && !this.lastEditedTiles.has(this.hoveredTile)) {
-        const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
-        // Reset to original terrain emissive intensity from config
-        const x = this.hoveredTile.userData['gridX'];
-        const z = this.hoveredTile.userData['gridZ'];
-        if (typeof x === 'number' && typeof z === 'number') {
-          const tile = this.terrainGrid.getTileAt(x, z);
-          if (tile) {
-            const config = TERRAIN_CONFIGS[tile.type];
-            material.emissiveIntensity = config.emissiveIntensity;
-          }
-        }
-      }
+      // Reset previous hover emissive (delegated to BrushPreviewService)
+      if (this.hoveredTile) this.brushPreview.resetHoverEmissive(this.hoveredTile);
 
       if (intersects.length > 0) {
         this.hoveredTile = intersects[0].object as THREE.Mesh;
@@ -273,27 +243,21 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         material.emissiveIntensity = EDITOR_HOVER_EMISSIVE.hover;
 
         // Position brush indicator at tile location
-        this.brushIndicator.position.copy(this.hoveredTile.position);
-        this.brushIndicator.position.y = this.hoveredTile.position.y + EDITOR_BRUSH_INDICATOR.yOffset;
-        this.brushIndicator.visible = true;
-
-        // Update brush color and cursor from centralized EditorStateService
-        const brushMaterial = this.brushIndicator.material as THREE.MeshBasicMaterial;
-        brushMaterial.color.setHex(this.editorState.getColorForMode());
+        this.brushPreview.positionBrushIndicator(this.hoveredTile);
         canvas.style.cursor = this.editorState.getCursorForMode();
 
         // Update brush preview meshes (only for brush tool)
         if (this.activeTool === 'brush') {
-          this.updateBrushPreviewPositions();
+          this.brushPreview.updateBrushPreviewPositions(this.hoveredTile);
         } else {
-          this.hideBrushPreview();
+          this.brushPreview.hideBrushPreview();
         }
 
         // Apply edit if mouse is down (with throttling for performance)
         if (this.isMouseDown) {
           // Rectangle tool: update preview
-          if (this.activeTool === 'rectangle' && this.rectangleStartTile) {
-            this.updateRectanglePreview(this.rectangleStartTile, this.hoveredTile);
+          if (this.activeTool === 'rectangle' && this.rectangleTool.getStartTile()) {
+            this.rectangleTool.updatePreview(this.rectangleTool.getStartTile()!, this.hoveredTile);
           } else {
             // Other tools: apply edit with throttling
             const now = Date.now();
@@ -305,8 +269,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         }
       } else {
         this.hoveredTile = null;
-        this.brushIndicator.visible = false;
-        this.hideBrushPreview();
+        this.brushPreview.hideBrushIndicator();
+        this.brushPreview.hideBrushPreview();
         canvas.style.cursor = 'default';
       }
     };
@@ -319,38 +283,21 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Touch event support for mobile — stored as named refs for cleanup
     this.touchStartHandler = (event: TouchEvent) => {
       event.preventDefault();
-      const touch = event.touches[0];
-      const rect = canvas.getBoundingClientRect();
-      this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-      this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-
-      this.raycaster.setFromCamera(this.mouse, this.editorScene.getCamera());
-      const tileMeshes = this.terrainGrid.getTileMeshes();
-      const intersects = this.raycaster.intersectObjects(tileMeshes);
-
-      if (intersects.length > 0) {
-        this.hoveredTile = intersects[0].object as THREE.Mesh;
+      const hit = this.raycastFromTouch(event.touches[0], canvas);
+      if (hit) {
+        this.hoveredTile = hit;
         this.handleMouseDown({ button: 0 } as MouseEvent);
       }
     };
 
     this.touchMoveHandler = (event: TouchEvent) => {
       event.preventDefault();
-      const touch = event.touches[0];
-      const rect = canvas.getBoundingClientRect();
-      this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-      this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-
-      this.raycaster.setFromCamera(this.mouse, this.editorScene.getCamera());
-      const tileMeshes = this.terrainGrid.getTileMeshes();
-      const intersects = this.raycaster.intersectObjects(tileMeshes);
-
-      if (intersects.length > 0) {
-        this.hoveredTile = intersects[0].object as THREE.Mesh;
-
+      const hit = this.raycastFromTouch(event.touches[0], canvas);
+      if (hit) {
+        this.hoveredTile = hit;
         if (this.isMouseDown) {
-          if (this.activeTool === 'rectangle' && this.rectangleStartTile) {
-            this.updateRectanglePreview(this.rectangleStartTile, this.hoveredTile);
+          if (this.activeTool === 'rectangle' && this.rectangleTool.getStartTile()) {
+            this.rectangleTool.updatePreview(this.rectangleTool.getStartTile()!, this.hoveredTile);
           } else {
             const now = Date.now();
             if (now - this.lastEditTime >= this.editThrottleMs) {
@@ -373,19 +320,29 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     canvas.addEventListener('touchcancel', this.touchEndHandler);
   }
 
+  /** Convert a Touch to normalized device coords, raycast, and return the first tile hit. */
+  private raycastFromTouch(touch: Touch, canvas: HTMLCanvasElement): THREE.Mesh | null {
+    const rect = canvas.getBoundingClientRect();
+    this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+    this.raycaster.setFromCamera(this.mouse, this.editorScene.getCamera());
+    const intersects = this.raycaster.intersectObjects(this.terrainGrid.getTileMeshes());
+    return intersects.length > 0 ? (intersects[0].object as THREE.Mesh) : null;
+  }
+
   private handleMouseDown(event: MouseEvent): void {
     if (event.button === 0) { // Left click
       this.isMouseDown = true;
 
       // Start tracking stroke for undo/redo (brush tool with paint/height mode)
       if (this.activeTool === 'brush' && (this.editMode === 'paint' || this.editMode === 'height')) {
-        this.startStroke();
+        this.terrainEdit.startStroke();
       }
 
       if (this.hoveredTile) {
         // Rectangle tool: set start point
         if (this.activeTool === 'rectangle') {
-          this.rectangleStartTile = this.hoveredTile;
+          this.rectangleTool.setStartTile(this.hoveredTile);
         } else {
           // Other tools: apply immediately
           this.applyEdit(this.hoveredTile);
@@ -398,55 +355,24 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.isMouseDown = false;
 
     // End stroke and record command for undo/redo
-    if (this.isInStroke) {
-      this.endStroke();
+    if (this.terrainEdit.isTracking) {
+      this.terrainEdit.endStroke(() => this.runPathValidation());
     }
 
     // Rectangle tool: complete selection
-    if (this.activeTool === 'rectangle' && this.rectangleStartTile && this.hoveredTile) {
-      this.fillRectangle(this.rectangleStartTile, this.hoveredTile);
+    const rectStart = this.rectangleTool.getStartTile();
+    if (this.activeTool === 'rectangle' && rectStart && this.hoveredTile) {
+      const flashTargets = this.rectangleTool.fill(rectStart, this.hoveredTile, () => this.runPathValidation());
+      flashTargets.forEach(m => this.brushPreview.flashTileEdit(m));
     }
-
-    this.rectangleStartTile = null;
-  }
-
-  private startStroke(): void {
-    this.isInStroke = true;
-    this.currentStrokeTiles.clear();
-    this.currentStrokeNewHeights.clear();
-  }
-
-  private endStroke(): void {
-    this.isInStroke = false;
-
-    // Record command based on edit mode
-    if (this.editMode === 'paint' && this.currentStrokeTiles.size > 0) {
-      const tiles = Array.from(this.currentStrokeTiles.values());
-      const command = new PaintCommand(
-        tiles,
-        this.selectedTerrainType,
-        (x, z, type) => this.terrainGrid.paintTile(x, z, type)
-      );
-      this.editHistory.record(command);
-      this.runPathValidation();
-    } else if (this.editMode === 'height' && this.currentStrokeTiles.size > 0) {
-      const tiles = Array.from(this.currentStrokeTiles.values());
-      const command = new HeightCommand(
-        tiles,
-        new Map(this.currentStrokeNewHeights),
-        (x, z, height) => this.terrainGrid.setHeight(x, z, height)
-      );
-      this.editHistory.record(command);
-    }
-
-    this.currentStrokeTiles.clear();
-    this.currentStrokeNewHeights.clear();
+    this.rectangleTool.clearStartTile();
   }
 
   private applyEdit(mesh: THREE.Mesh): void {
     // Handle different tools
     if (this.activeTool === 'fill') {
-      this.floodFill(mesh);
+      const flashTargets = this.terrainEdit.floodFill(mesh, () => this.runPathValidation());
+      flashTargets.forEach(m => this.brushPreview.flashTileEdit(m));
       return;
     }
 
@@ -456,90 +382,86 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
 
     // Regular brush tool with multi-tile support
-    const affectedTiles = this.getAffectedTiles(mesh);
+    const affectedTiles = this.brushPreview.getAffectedTiles(mesh);
+    const editMode = this.editMode;
 
+    if (editMode === 'paint' || editMode === 'height') {
+      const flashTargets = this.terrainEdit.applyBrushEdit(affectedTiles, () => this.runPathValidation());
+      flashTargets.forEach(m => this.brushPreview.flashTileEdit(m));
+      return;
+    }
+
+    // Spawn/exit placement — stays in component (marker management)
     affectedTiles.forEach(tileMesh => {
-      const x = tileMesh.userData['gridX'];
-      const z = tileMesh.userData['gridZ'];
+      const x = tileMesh.userData['gridX'] as number;
+      const z = tileMesh.userData['gridZ'] as number;
 
-      if (this.editMode === 'paint') {
-        // Track tile state before painting for undo
-        this.trackTileForUndo(x, z);
-        this.terrainGrid.paintTile(x, z, this.selectedTerrainType);
-        this.flashTileEdit(tileMesh);
-      } else if (this.editMode === 'height') {
-        // Track tile state before height change for undo
-        this.trackTileForUndo(x, z);
-        this.terrainGrid.adjustHeight(x, z, EDITOR_HEIGHT.stepSize);
-        const tile = this.terrainGrid.getTileAt(x, z);
-        if (tile) {
-          // Track new height after change
-          const key = `${x},${z}`;
-          this.currentStrokeNewHeights.set(key, tile.height);
-          this.flashTileEdit(tile.mesh);
-        }
-      } else if (this.editMode === 'spawn') {
+      if (editMode === 'spawn') {
         // Reject placement on non-walkable terrain
         const tile = this.terrainGrid.getTileAt(x, z);
         if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
-          if (this.spawnMarkers.length > 0) this.flashMarkerRejection(this.spawnMarkers[0]);
+          const spawnMs = this.spawnExitMarker.getSpawnMarkers();
+          if (spawnMs.length > 0) this.brushPreview.flashMarkerRejection(spawnMs[0]);
           return;
         }
         // Reject placement on same tile as any exit
         const exitPoints = this.terrainGrid.getExitPoints();
         if (exitPoints.some(ep => ep.x === x && ep.z === z)) {
-          if (this.spawnMarkers.length > 0) this.flashMarkerRejection(this.spawnMarkers[0]);
+          const spawnMs = this.spawnExitMarker.getSpawnMarkers();
+          if (spawnMs.length > 0) this.brushPreview.flashMarkerRejection(spawnMs[0]);
           return;
         }
         // Snapshot full spawn array before toggle for undo
         const previousSpawns = this.terrainGrid.getSpawnPoints().map(p => ({ ...p }));
         this.terrainGrid.addSpawnPoint(x, z);
-        this.updateSpawnMarkers();
-        this.flashTileEdit(tileMesh);
+        this.spawnExitMarker.updateSpawnMarkers();
+        this.brushPreview.flashTileEdit(tileMesh);
         // Record command immediately (not part of stroke)
         const command = new SpawnPointCommand(
           previousSpawns,
           { x, z },
           (points) => {
             this.terrainGrid.setSpawnPoints(points);
-            this.updateSpawnMarkers();
+            this.spawnExitMarker.updateSpawnMarkers();
           },
           (sx, sz) => {
             this.terrainGrid.addSpawnPoint(sx, sz);
-            this.updateSpawnMarkers();
+            this.spawnExitMarker.updateSpawnMarkers();
           }
         );
         this.editHistory.record(command);
         this.runPathValidation();
-      } else if (this.editMode === 'exit') {
+      } else if (editMode === 'exit') {
         // Reject placement on non-walkable terrain
         const tile = this.terrainGrid.getTileAt(x, z);
         if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
-          if (this.exitMarkers.length > 0) this.flashMarkerRejection(this.exitMarkers[0]);
+          const exitMs = this.spawnExitMarker.getExitMarkers();
+          if (exitMs.length > 0) this.brushPreview.flashMarkerRejection(exitMs[0]);
           return;
         }
         // Reject placement on same tile as any spawn
         const spawnPoints = this.terrainGrid.getSpawnPoints();
         if (spawnPoints.some(sp => sp.x === x && sp.z === z)) {
-          if (this.exitMarkers.length > 0) this.flashMarkerRejection(this.exitMarkers[0]);
+          const exitMs = this.spawnExitMarker.getExitMarkers();
+          if (exitMs.length > 0) this.brushPreview.flashMarkerRejection(exitMs[0]);
           return;
         }
         // Snapshot full exit array before toggle for undo
         const previousExits = this.terrainGrid.getExitPoints().map(p => ({ ...p }));
         this.terrainGrid.addExitPoint(x, z);
-        this.updateExitMarkers();
-        this.flashTileEdit(tileMesh);
+        this.spawnExitMarker.updateExitMarkers();
+        this.brushPreview.flashTileEdit(tileMesh);
         // Record command immediately (not part of stroke)
         const command = new ExitPointCommand(
           previousExits,
           { x, z },
           (points) => {
             this.terrainGrid.setExitPoints(points);
-            this.updateExitMarkers();
+            this.spawnExitMarker.updateExitMarkers();
           },
           (ex, ez) => {
             this.terrainGrid.addExitPoint(ex, ez);
-            this.updateExitMarkers();
+            this.spawnExitMarker.updateExitMarkers();
           }
         );
         this.editHistory.record(command);
@@ -548,411 +470,71 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     });
   }
 
-  /**
-   * Track a tile's current state before making changes (for undo)
-   */
-  private trackTileForUndo(x: number, z: number): void {
-    const key = `${x},${z}`;
-    // Only track first state (before any changes in this stroke)
-    if (!this.currentStrokeTiles.has(key)) {
-      const tile = this.terrainGrid.getTileAt(x, z);
-      if (tile) {
-        this.currentStrokeTiles.set(key, {
-          x,
-          z,
-          type: tile.type,
-          height: tile.height
-        });
-      }
-    }
-  }
-
-  private flashTileEdit(mesh: THREE.Mesh): void {
-    // Crisp flash animation for immediate feedback
-    const material = mesh.material as THREE.MeshStandardMaterial;
-
-    // Get original intensity from terrain config
-    const x = mesh.userData['gridX'];
-    const z = mesh.userData['gridZ'];
-    let originalIntensity: number = EDITOR_HOVER_EMISSIVE.defaultFallback; // Default fallback
-
-    if (typeof x === 'number' && typeof z === 'number') {
-      const tile = this.terrainGrid.getTileAt(x, z);
-      if (tile) {
-        const config = TERRAIN_CONFIGS[tile.type];
-        originalIntensity = config.emissiveIntensity;
-      }
-    }
-
-    // Add to edited tiles set
-    this.lastEditedTiles.add(mesh);
-
-    // Instant bright flash
-    material.emissiveIntensity = EDITOR_HOVER_EMISSIVE.flashPeak;
-
-    // Quick fade back for crisp feel
-    setTimeout(() => {
-      material.emissiveIntensity = EDITOR_HOVER_EMISSIVE.flashMid; // Hover state
-      setTimeout(() => {
-        this.lastEditedTiles.delete(mesh);
-        if (this.hoveredTile !== mesh) {
-          material.emissiveIntensity = originalIntensity;
-        }
-      }, EDITOR_HOVER_EMISSIVE.flashFadeBackMs);
-    }, EDITOR_HOVER_EMISSIVE.flashFadeDelayMs);
-  }
-
-  /**
-   * Flash a marker red briefly to signal a rejected spawn/exit placement.
-   */
-  private flashMarkerRejection(marker: THREE.Mesh): void {
-    const material = marker.material as THREE.MeshBasicMaterial;
-    const originalColor = material.color.getHex();
-    material.color.setHex(EDITOR_PATH_INVALID_FLASH_COLOR);
-    setTimeout(() => {
-      material.color.setHex(originalColor);
-    }, EDITOR_PATH_INVALID_FLASH_MS);
-  }
-
-  private handleKeyDown(event: KeyboardEvent): void {
-    const key = event.key.toLowerCase();
-
-    // Ignore all keyboard handling when focus is on an interactive form element
-    const tag = (event.target as HTMLElement)?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
-    this.keysPressed.add(key);
-
-    // Undo/Redo shortcuts (Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z)
-    if (event.ctrlKey || event.metaKey) {
-      if (key === 'z' && !event.shiftKey) {
-        event.preventDefault();
-        this.undo();
-        return;
-      }
-      if (key === 'y' || (key === 'z' && event.shiftKey)) {
-        event.preventDefault();
-        this.redo();
-        return;
-      }
-      // Export map (Ctrl+E)
-      if (key === 'e') {
-        event.preventDefault();
-        this.exportCurrentMap();
-        return;
-      }
-      // Import map (Ctrl+O for "Open")
-      if (key === 'o') {
-        event.preventDefault();
-        this.importMapFromFile();
-        return;
-      }
-    }
-
-    // Mode and terrain shortcuts
-    switch (key) {
-      case 't':
-        this.setEditMode('paint');
-        break;
-      case 'h':
-        this.setEditMode('height');
-        break;
-      case '1':
-        this.setTerrainType(TerrainType.BEDROCK);
-        break;
-      case '2':
-        this.setTerrainType(TerrainType.CRYSTAL);
-        break;
-      case '3':
-        this.setTerrainType(TerrainType.MOSS);
-        break;
-      case '4':
-        this.setTerrainType(TerrainType.ABYSS);
-        break;
-      case 'p':
-        this.setEditMode('spawn');
-        break;
-      case 'x':
-        this.setEditMode('exit');
-        break;
-      case 'g':
-        this.saveGridState();
-        break;
-      case 'l':
-        this.loadGridState();
-        break;
-      case '[':
-        this.cycleBrushSize(-1);
-        break;
-      case ']':
-        this.cycleBrushSize(1);
-        break;
-      case 'f':
-        this.changeActiveTool('fill');
-        break;
-      case 'r':
-        this.changeActiveTool('rectangle');
-        break;
-      case 'b':
-        this.changeActiveTool('brush');
-        break;
-      case 'enter':
-        this.playMap();
-        break;
-    }
-  }
-
-  private handleKeyUp(event: KeyboardEvent): void {
-    this.keysPressed.delete(event.key.toLowerCase());
-  }
-
   private setupKeyboardControls(): void {
-    window.addEventListener('keydown', this.keyboardHandler);
-    window.addEventListener('keyup', this.keyUpHandler);
+    this.editorKeyboard.setup({
+      undo: () => this.undo(),
+      redo: () => this.redo(),
+      exportMap: () => this.exportCurrentMap(),
+      importMap: () => this.importMapFromFile(),
+      saveGrid: () => this.saveGridState(),
+      loadGrid: () => this.loadGridState(),
+      cycleBrushSize: (dir) => { this.editorState.cycleBrushSize(dir); this.brushPreview.updateBrushPreview(); },
+      changeActiveTool: (tool) => this.setActiveTool(tool),
+      playMap: () => this.playMap(),
+      setEditMode: (mode) => this.setEditMode(mode),
+      setTerrainType: (type) => this.setTerrainType(type),
+    });
   }
 
   private updateCameraMovement(): void {
-    // Build movement input from keyboard state
+    const keys = this.editorKeyboard.getKeysPressed();
     const movementInput: MovementInput = {
-      forward: this.keysPressed.has('w'),
-      backward: this.keysPressed.has('s'),
-      left: this.keysPressed.has('a'),
-      right: this.keysPressed.has('d'),
-      up: this.keysPressed.has('e'),
-      down: this.keysPressed.has('q'),
-      fast: this.keysPressed.has('shift')
+      forward: keys.has('w'),
+      backward: keys.has('s'),
+      left: keys.has('a'),
+      right: keys.has('d'),
+      up: keys.has('e'),
+      down: keys.has('q'),
+      fast: keys.has('shift')
     };
-
-    // Build rotation input from arrow keys
     const rotationInput: RotationInput = {
-      left: this.keysPressed.has('arrowleft'),
-      right: this.keysPressed.has('arrowright'),
-      up: this.keysPressed.has('arrowup'),
-      down: this.keysPressed.has('arrowdown')
+      left: keys.has('arrowleft'),
+      right: keys.has('arrowright'),
+      up: keys.has('arrowup'),
+      down: keys.has('arrowdown')
     };
-
-    // Update camera control service
     this.cameraControl.update(movementInput, rotationInput, this.movementJoystick, this.rotationJoystick);
-
-    // Apply camera state to Three.js camera and controls
     this.cameraControl.applyToCamera(this.editorScene.getCamera(), this.editorScene.getControls()?.target);
   }
 
-  private createBrushIndicator(): void {
-    // Create a ring to show brush area - crisp and clear
-    const geometry = new THREE.RingGeometry(
-      EDITOR_BRUSH_INDICATOR.innerRadius,
-      EDITOR_BRUSH_INDICATOR.outerRadius,
-      EDITOR_BRUSH_INDICATOR.segments
-    );
-    const material = new THREE.MeshBasicMaterial({
-      color: EDITOR_BRUSH_INDICATOR.color,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: EDITOR_BRUSH_INDICATOR.opacity,
-      depthTest: false
-    });
-    this.brushIndicator = new THREE.Mesh(geometry, material);
-    this.brushIndicator.rotation.x = -Math.PI / 2;
-    this.brushIndicator.visible = false;
-    this.brushIndicator.renderOrder = EDITOR_RENDER_ORDER.brushIndicator;
-    this.editorScene.getScene().add(this.brushIndicator);
-  }
+  // ── Modal dialog helpers — delegated to EditorModalService ───────────────
 
-  private createSpawnExitMarkers(): void {
-    // Initial markers are created by updateSpawnMarkers/updateExitMarkers
-    this.updateSpawnMarkers();
-    this.updateExitMarkers();
-  }
-
-  private createSpawnMarkerMesh(): THREE.Mesh {
-    const geometry = new THREE.CylinderGeometry(
-      EDITOR_SPAWN_MARKER.radiusTop,
-      EDITOR_SPAWN_MARKER.radiusBottom,
-      EDITOR_SPAWN_MARKER.height,
-      EDITOR_SPAWN_MARKER.radialSegments
-    );
-    const material = new THREE.MeshBasicMaterial({
-      color: EDITOR_SPAWN_MARKER.color,
-      transparent: true,
-      opacity: EDITOR_SPAWN_MARKER.opacity
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.renderOrder = EDITOR_RENDER_ORDER.spawnMarker;
-    return mesh;
-  }
-
-  private createExitMarkerMesh(): THREE.Mesh {
-    const geometry = new THREE.CylinderGeometry(
-      EDITOR_EXIT_MARKER.radiusTop,
-      EDITOR_EXIT_MARKER.radiusBottom,
-      EDITOR_EXIT_MARKER.height,
-      EDITOR_EXIT_MARKER.radialSegments
-    );
-    const material = new THREE.MeshBasicMaterial({
-      color: EDITOR_EXIT_MARKER.color,
-      transparent: true,
-      opacity: EDITOR_EXIT_MARKER.opacity
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.renderOrder = EDITOR_RENDER_ORDER.exitMarker;
-    return mesh;
-  }
-
-  /** Sync spawn marker meshes with the terrainGrid's spawnPoints array. */
-  private updateSpawnMarkers(): void {
-    const points = this.terrainGrid.getSpawnPoints();
-
-    // Remove excess markers
-    while (this.spawnMarkers.length > points.length) {
-      const marker = this.spawnMarkers.pop()!;
-      this.editorScene.getScene().remove(marker);
-      marker.geometry.dispose();
-      disposeMaterial(marker.material);
-    }
-
-    // Add missing markers
-    while (this.spawnMarkers.length < points.length) {
-      const marker = this.createSpawnMarkerMesh();
-      this.spawnMarkers.push(marker);
-      this.editorScene.getScene().add(marker);
-    }
-
-    // Position all markers
-    for (let i = 0; i < points.length; i++) {
-      const tile = this.terrainGrid.getTileAt(points[i].x, points[i].z);
-      if (tile) {
-        this.spawnMarkers[i].position.copy(tile.mesh.position);
-        this.spawnMarkers[i].position.y += EDITOR_SPAWN_MARKER.yBase;
-        this.spawnMarkers[i].visible = true;
-      }
-    }
-  }
-
-  /** Sync exit marker meshes with the terrainGrid's exitPoints array. */
-  private updateExitMarkers(): void {
-    const points = this.terrainGrid.getExitPoints();
-
-    // Remove excess markers
-    while (this.exitMarkers.length > points.length) {
-      const marker = this.exitMarkers.pop()!;
-      this.editorScene.getScene().remove(marker);
-      marker.geometry.dispose();
-      disposeMaterial(marker.material);
-    }
-
-    // Add missing markers
-    while (this.exitMarkers.length < points.length) {
-      const marker = this.createExitMarkerMesh();
-      this.exitMarkers.push(marker);
-      this.editorScene.getScene().add(marker);
-    }
-
-    // Position all markers
-    for (let i = 0; i < points.length; i++) {
-      const tile = this.terrainGrid.getTileAt(points[i].x, points[i].z);
-      if (tile) {
-        this.exitMarkers[i].position.copy(tile.mesh.position);
-        this.exitMarkers[i].position.y += EDITOR_EXIT_MARKER.yBase;
-        this.exitMarkers[i].visible = true;
-      }
-    }
-  }
-
-  private updateSpawnMarker(): void {
-    this.updateSpawnMarkers();
-  }
-
-  private updateExitMarker(): void {
-    this.updateExitMarkers();
-  }
-
-  // ── Modal dialog helpers ──────────────────────────────────────────────────
-
-  private showInputModal(title: string, defaultValue: string, callback: (value: string | null) => void): void {
-    this.modalTitle = title;
-    this.modalType = 'input';
-    this.modalInputValue = defaultValue;
-    this.modalCallback = (result) => callback(result as string | null);
-    this.showModal = true;
-  }
-
-  private showConfirmModal(title: string, callback: (confirmed: boolean) => void): void {
-    this.modalTitle = title;
-    this.modalType = 'confirm';
-    this.modalCallback = (result) => callback(result as boolean);
-    this.showModal = true;
-  }
-
-  private showSelectModal(title: string, options: string[], callback: (index: number | null) => void): void {
-    this.modalTitle = title;
-    this.modalType = 'select';
-    this.modalSelectOptions = options;
-    this.modalCallback = (result) => callback(result === null ? null : (result as unknown as number));
-    this.showModal = true;
-  }
-
-  public confirmModal(): void {
-    const cb = this.modalCallback;
-    const value = this.modalType === 'input' ? (this.modalInputValue || null) : true;
-    this.closeModal();
-    if (cb) cb(value);
-  }
-
-  public selectModalOption(index: number): void {
-    const cb = this.modalCallback;
-    this.closeModal();
-    if (cb) cb(index);
-  }
-
-  public cancelModal(): void {
-    const cb = this.modalCallback;
-    const value = this.modalType === 'input' ? null : false;
-    this.closeModal();
-    if (cb) cb(value);
-  }
-
-  public closeModal(): void {
-    this.showModal = false;
-    this.modalCallback = null;
-  }
+  public confirmModal(): void { this.editorModal.confirmModal(); }
+  public selectModalOption(index: number): void { this.editorModal.selectModalOption(index); }
+  public cancelModal(): void { this.editorModal.cancelModal(); }
+  public closeModal(): void { this.editorModal.closeModal(); }
 
   // ─────────────────────────────────────────────────────────────────────────
 
   private saveGridState(): void {
-    // Warn if map has no valid path (but allow saving anyway — might be in-progress)
     if (!this.isPathValid && this.hasSpawnAndExit) {
-      this.showConfirmModal('This map has no valid path from spawn to exit. Save anyway?', (proceed) => {
+      this.editorModal.showConfirmModal('This map has no valid path from spawn to exit. Save anyway?', (proceed) => {
         if (!proceed) return;
-        this.promptForMapNameAndSave();
+        this.editorModal.showInputModal('Enter map name', this.currentMapName, (mapName) => {
+          if (!mapName) return;
+          this.mapFile.save(mapName);
+        });
       });
       return;
     }
-    this.promptForMapNameAndSave();
-  }
-
-  private promptForMapNameAndSave(): void {
-    this.showInputModal('Enter map name', this.currentMapName, (mapName) => {
-      if (!mapName) return; // User cancelled
-
-      const state = this.terrainGrid.exportState();
-      const currentId = this.mapStorage.getCurrentMapId();
-
-      // Save (will update if ID exists, create new if not)
-      const savedId = this.mapStorage.saveMap(mapName, state, currentId || undefined);
-      if (!savedId) {
-        this.editorNotificationService.show('Storage full — delete unused maps to free space.', 'error');
-        return;
-      }
-      this.currentMapName = mapName;
-      this.clearDraft();
-
-      this.editorNotificationService.show(`Map "${mapName}" saved successfully!`, 'success');
+    this.editorModal.showInputModal('Enter map name', this.currentMapName, (mapName) => {
+      if (!mapName) return;
+      this.mapFile.save(mapName);
     });
   }
 
   private loadGridState(): void {
-    const maps = this.mapStorage.getAllMaps();
+    const maps = this.mapFile.getAllMaps();
 
     if (maps.length === 0) {
       this.editorNotificationService.show('No saved maps found.', 'error');
@@ -964,78 +546,28 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       return `${map.name} — ${date}`;
     });
 
-    this.showSelectModal('Select a map to load', options, (selectedIndex) => {
+    this.editorModal.showSelectModal('Select a map to load', options, (selectedIndex) => {
       if (selectedIndex === null) return; // User cancelled
 
       const selectedMap = maps[selectedIndex];
-      const state = this.mapStorage.loadMap(selectedMap.id);
+      const state = this.mapFile.loadById(selectedMap.id);
 
       if (state) {
         this.terrainGrid.importState(state);
-        this.updateSpawnMarker();
-        this.updateExitMarker();
+        this.spawnExitMarker.updateSpawnMarkers();
+        this.spawnExitMarker.updateExitMarkers();
         this.runPathValidation();
-        this.currentMapName = selectedMap.name;
-        this.clearDraft();
-        this.editorNotificationService.show(`Map "${selectedMap.name}" loaded successfully!`, 'success');
-      } else {
-        this.editorNotificationService.show('Failed to load map.', 'error');
       }
     });
   }
 
   private tryLoadCurrentMap(): void {
-    const state = this.mapStorage.loadCurrentMap();
+    const state = this.mapFile.loadCurrent();
     if (state) {
       this.terrainGrid.importState(state);
-      this.updateSpawnMarker();
-      this.updateExitMarker();
+      this.spawnExitMarker.updateSpawnMarkers();
+      this.spawnExitMarker.updateExitMarkers();
       this.runPathValidation();
-
-      const currentId = this.mapStorage.getCurrentMapId();
-      if (currentId) {
-        const metadata = this.mapStorage.getMapMetadata(currentId);
-        if (metadata) {
-          this.currentMapName = metadata.name;
-        }
-      }
-    }
-  }
-
-  // ── Autosave draft ──────────────────────────────────────────────────────────
-
-  private startAutosave(): void {
-    this.autosaveInterval = setInterval(() => {
-      this.saveDraft();
-    }, EDITOR_AUTOSAVE_INTERVAL_MS);
-  }
-
-  /** Write the current grid state to the draft slot. Silently fails on quota. */
-  private saveDraft(): void {
-    if (!this.terrainGrid) return;
-    const state = this.terrainGrid.exportState();
-    try {
-      localStorage.setItem(EDITOR_AUTOSAVE_DRAFT_KEY, JSON.stringify(state));
-      this.lastAutosaveTime = new Date();
-    } catch {
-      // Quota exceeded — editing must not be disrupted
-    }
-  }
-
-  /** Remove the draft from localStorage and reset the indicator timestamp. */
-  private clearDraft(): void {
-    localStorage.removeItem(EDITOR_AUTOSAVE_DRAFT_KEY);
-    this.lastAutosaveTime = null;
-  }
-
-  /** Read and parse the draft. Returns null if absent or malformed. */
-  private loadDraft(): import('./features/terrain-editor/terrain-grid-state.interface').TerrainGridState | null {
-    const raw = localStorage.getItem(EDITOR_AUTOSAVE_DRAFT_KEY);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as import('./features/terrain-editor/terrain-grid-state.interface').TerrainGridState;
-    } catch {
-      return null;
     }
   }
 
@@ -1049,21 +581,24 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   public loadTemplate(templateId: string): void {
+    const template = this.templates.find(t => t.id === templateId);
+    if (!template) return;
+
     const doLoad = () => {
-      const state = this.mapTemplateService.loadTemplate(templateId);
+      const state = this.mapFile.loadTemplate(template);
       if (!state) return;
       this.terrainGrid.importState(state);
-      this.updateSpawnMarker();
-      this.updateExitMarker();
+      this.spawnExitMarker.updateSpawnMarkers();
+      this.spawnExitMarker.updateExitMarkers();
       this.runPathValidation();
       this.editHistory.clear();
       this.mapStorage.clearCurrentMapId();
       this.currentMapName = '';
-      this.clearDraft();
+      this.mapFile.clearDraft();
     };
 
     if (this.editHistory.canUndo) {
-      this.showConfirmModal('Load template? Unsaved changes will be lost.', (confirmed) => {
+      this.editorModal.showConfirmModal('Load template? Unsaved changes will be lost.', (confirmed) => {
         if (confirmed) doLoad();
       });
     } else {
@@ -1071,359 +606,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private cycleBrushSize(direction: number): void {
-    this.editorState.cycleBrushSize(direction);
-    this.updateBrushPreview();
-  }
-
-  private changeActiveTool(tool: BrushTool): void {
-    this.editorState.setActiveTool(tool);
-
-    // Reset rectangle selection when switching tools
-    if (tool !== 'rectangle') {
-      this.rectangleStartTile = null;
-      this.clearRectanglePreview();
-    }
-
-    // Hide brush previews when switching away from brush tool
-    if (tool !== 'brush') {
-      this.hideBrushPreview();
-    }
-  }
-
-  private updateBrushPreview(): void {
-    // Clear existing preview meshes
-    this.brushPreviewMeshes.forEach(mesh => {
-      this.editorScene.getScene().remove(mesh);
-      mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
-    });
-    this.brushPreviewMeshes = [];
-
-    // Create new preview meshes for current brush size
-    if (this.brushSize > 1) {
-      const halfSize = Math.floor(this.brushSize / 2);
-      for (let dx = -halfSize; dx <= halfSize; dx++) {
-        for (let dz = -halfSize; dz <= halfSize; dz++) {
-          if (dx === 0 && dz === 0) continue; // Skip center (main brush indicator shows it)
-
-          const geometry = new THREE.RingGeometry(
-            EDITOR_BRUSH_PREVIEW.innerRadius,
-            EDITOR_BRUSH_PREVIEW.outerRadius,
-            EDITOR_BRUSH_PREVIEW.segments
-          );
-          const material = new THREE.MeshBasicMaterial({
-            color: EDITOR_BRUSH_PREVIEW.color,
-            side: THREE.DoubleSide,
-            transparent: true,
-            opacity: EDITOR_BRUSH_PREVIEW.opacity,
-            depthTest: false
-          });
-          const mesh = new THREE.Mesh(geometry, material);
-          mesh.rotation.x = -Math.PI / 2;
-          mesh.visible = false;
-          mesh.renderOrder = EDITOR_RENDER_ORDER.brushPreview;
-          mesh.userData = { offsetX: dx, offsetZ: dz };
-          this.editorScene.getScene().add(mesh);
-          this.brushPreviewMeshes.push(mesh);
-        }
-      }
-    }
-  }
-
-  private updateBrushPreviewPositions(): void {
-    if (!this.hoveredTile) {
-      this.hideBrushPreview();
-      return;
-    }
-
-    // Validate userData exists
-    if (!this.hoveredTile.userData ||
-        typeof this.hoveredTile.userData['gridX'] !== 'number' ||
-        typeof this.hoveredTile.userData['gridZ'] !== 'number') {
-      this.hideBrushPreview();
-      return;
-    }
-
-    const centerX = this.hoveredTile.userData['gridX'];
-    const centerZ = this.hoveredTile.userData['gridZ'];
-
-    this.brushPreviewMeshes.forEach(mesh => {
-      const offsetX = mesh.userData['offsetX'];
-      const offsetZ = mesh.userData['offsetZ'];
-      const tile = this.terrainGrid.getTileAt(centerX + offsetX, centerZ + offsetZ);
-
-      if (tile) {
-        mesh.position.copy(tile.mesh.position);
-        mesh.position.y = tile.mesh.position.y + EDITOR_BRUSH_PREVIEW.yOffset;
-        mesh.visible = true;
-      } else {
-        mesh.visible = false;
-      }
-    });
-  }
-
-  private hideBrushPreview(): void {
-    this.brushPreviewMeshes.forEach(mesh => {
-      mesh.visible = false;
-    });
-  }
-
-  private getAffectedTiles(centerTile: THREE.Mesh): THREE.Mesh[] {
-    const tiles: THREE.Mesh[] = [centerTile];
-
-    if (this.brushSize === 1) return tiles;
-
-    // Validate userData exists
-    if (!centerTile.userData ||
-        typeof centerTile.userData['gridX'] !== 'number' ||
-        typeof centerTile.userData['gridZ'] !== 'number') {
-      return tiles;
-    }
-
-    const centerX = centerTile.userData['gridX'];
-    const centerZ = centerTile.userData['gridZ'];
-    const halfSize = Math.floor(this.brushSize / 2);
-
-    for (let dx = -halfSize; dx <= halfSize; dx++) {
-      for (let dz = -halfSize; dz <= halfSize; dz++) {
-        if (dx === 0 && dz === 0) continue;
-
-        const tile = this.terrainGrid.getTileAt(centerX + dx, centerZ + dz);
-        if (tile) {
-          tiles.push(tile.mesh);
-        }
-      }
-    }
-
-    return tiles;
-  }
-
-  private floodFill(startTile: THREE.Mesh): void {
-    // Validate userData exists
-    if (!startTile.userData ||
-        typeof startTile.userData['gridX'] !== 'number' ||
-        typeof startTile.userData['gridZ'] !== 'number') {
-      return;
-    }
-
-    const startX = startTile.userData['gridX'];
-    const startZ = startTile.userData['gridZ'];
-    const startTileData = this.terrainGrid.getTileAt(startX, startZ);
-
-    if (!startTileData) return;
-
-    const targetType = startTileData.type;
-    const replacementType = this.selectedTerrainType;
-
-    // Don't fill if same type
-    if (targetType === replacementType) return;
-
-    // Track tiles for undo
-    const affectedTiles: TileState[] = [];
-
-    const visited = new Set<string>();
-    const queue: [number, number][] = [[startX, startZ]];
-    const maxIterations = EDITOR_FLOOD_FILL_MAX_ITERATIONS; // Max 25x25 grid
-    let iterations = 0;
-
-    while (queue.length > 0 && iterations < maxIterations) {
-      iterations++;
-      const [x, z] = queue.shift()!;
-      const key = `${x},${z}`;
-
-      if (visited.has(key)) continue;
-      visited.add(key);
-
-      const tile = this.terrainGrid.getTileAt(x, z);
-      if (!tile || tile.type !== targetType) continue;
-
-      // Track tile state before change
-      affectedTiles.push({
-        x, z,
-        type: tile.type,
-        height: tile.height
-      });
-
-      // Paint this tile
-      if (this.editMode === 'paint') {
-        this.terrainGrid.paintTile(x, z, replacementType);
-        this.flashTileEdit(tile.mesh);
-      }
-
-      // Add neighbors to queue
-      const neighbors = [
-        [x - 1, z], [x + 1, z],
-        [x, z - 1], [x, z + 1]
-      ];
-
-      neighbors.forEach(([nx, nz]) => {
-        if (!visited.has(`${nx},${nz}`)) {
-          queue.push([nx, nz]);
-        }
-      });
-    }
-
-    // Record command for undo
-    if (affectedTiles.length > 0) {
-      const command = new PaintCommand(
-        affectedTiles,
-        replacementType,
-        (x, z, type) => this.terrainGrid.paintTile(x, z, type)
-      );
-      this.editHistory.record(command);
-      this.runPathValidation();
-    }
-  }
-
-  private fillRectangle(startTile: THREE.Mesh, endTile: THREE.Mesh): void {
-    // Validate userData exists for both tiles
-    if (!startTile.userData || !endTile.userData ||
-        typeof startTile.userData['gridX'] !== 'number' ||
-        typeof startTile.userData['gridZ'] !== 'number' ||
-        typeof endTile.userData['gridX'] !== 'number' ||
-        typeof endTile.userData['gridZ'] !== 'number') {
-      this.clearRectanglePreview();
-      this.rectangleStartTile = null;
-      return;
-    }
-
-    const x1 = startTile.userData['gridX'];
-    const z1 = startTile.userData['gridZ'];
-    const x2 = endTile.userData['gridX'];
-    const z2 = endTile.userData['gridZ'];
-
-    const minX = Math.min(x1, x2);
-    const maxX = Math.max(x1, x2);
-    const minZ = Math.min(z1, z2);
-    const maxZ = Math.max(z1, z2);
-
-    // Track tiles for undo
-    const affectedTiles: TileState[] = [];
-    const newHeights = new Map<string, number>();
-
-    for (let x = minX; x <= maxX; x++) {
-      for (let z = minZ; z <= maxZ; z++) {
-        const tile = this.terrainGrid.getTileAt(x, z);
-        if (tile) {
-          // Track tile state before change
-          affectedTiles.push({
-            x, z,
-            type: tile.type,
-            height: tile.height
-          });
-
-          if (this.editMode === 'paint') {
-            this.terrainGrid.paintTile(x, z, this.selectedTerrainType);
-          } else if (this.editMode === 'height') {
-            this.terrainGrid.adjustHeight(x, z, EDITOR_HEIGHT.stepSize);
-            // Track new height after change
-            const updatedTile = this.terrainGrid.getTileAt(x, z);
-            if (updatedTile) {
-              newHeights.set(`${x},${z}`, updatedTile.height);
-            }
-          }
-          this.flashTileEdit(tile.mesh);
-        }
-      }
-    }
-
-    // Record command for undo
-    if (affectedTiles.length > 0) {
-      if (this.editMode === 'paint') {
-        const command = new PaintCommand(
-          affectedTiles,
-          this.selectedTerrainType,
-          (x, z, type) => this.terrainGrid.paintTile(x, z, type)
-        );
-        this.editHistory.record(command);
-      } else if (this.editMode === 'height') {
-        const command = new HeightCommand(
-          affectedTiles,
-          newHeights,
-          (x, z, height) => this.terrainGrid.setHeight(x, z, height)
-        );
-        this.editHistory.record(command);
-      }
-    }
-
-    if (affectedTiles.length > 0 && this.editMode === 'paint') {
-      this.runPathValidation();
-    }
-
-    this.clearRectanglePreview();
-    this.rectangleStartTile = null;
-  }
-
-  private updateRectanglePreview(startTile: THREE.Mesh, endTile: THREE.Mesh): void {
-    this.clearRectanglePreview();
-
-    // Validate userData exists for both tiles
-    if (!startTile.userData || !endTile.userData ||
-        typeof startTile.userData['gridX'] !== 'number' ||
-        typeof startTile.userData['gridZ'] !== 'number' ||
-        typeof endTile.userData['gridX'] !== 'number' ||
-        typeof endTile.userData['gridZ'] !== 'number') {
-      return;
-    }
-
-    const x1 = startTile.userData['gridX'];
-    const z1 = startTile.userData['gridZ'];
-    const x2 = endTile.userData['gridX'];
-    const z2 = endTile.userData['gridZ'];
-
-    const minX = Math.min(x1, x2);
-    const maxX = Math.max(x1, x2);
-    const minZ = Math.min(z1, z2);
-    const maxZ = Math.max(z1, z2);
-
-    // Performance limit: don't create more than 100 preview meshes
-    const tileCount = (maxX - minX + 1) * (maxZ - minZ + 1);
-    if (tileCount > 100) {
-      // For large selections, only show corner/edge previews
-      return;
-    }
-
-    for (let x = minX; x <= maxX; x++) {
-      for (let z = minZ; z <= maxZ; z++) {
-        const tile = this.terrainGrid.getTileAt(x, z);
-        if (tile) {
-          const geometry = new THREE.RingGeometry(
-            EDITOR_RECTANGLE_PREVIEW.innerRadius,
-            EDITOR_RECTANGLE_PREVIEW.outerRadius,
-            EDITOR_RECTANGLE_PREVIEW.segments
-          );
-          const material = new THREE.MeshBasicMaterial({
-            color: EDITOR_RECTANGLE_PREVIEW.color,
-            side: THREE.DoubleSide,
-            transparent: true,
-            opacity: EDITOR_RECTANGLE_PREVIEW.opacity,
-            depthTest: false
-          });
-          const mesh = new THREE.Mesh(geometry, material);
-          mesh.rotation.x = -Math.PI / 2;
-          mesh.position.copy(tile.mesh.position);
-          mesh.position.y = tile.mesh.position.y + EDITOR_RECTANGLE_PREVIEW.yOffset;
-          mesh.renderOrder = EDITOR_RENDER_ORDER.rectanglePreview;
-          this.editorScene.getScene().add(mesh);
-          this.rectanglePreviewMeshes.push(mesh);
-        }
-      }
-    }
-  }
-
-  private clearRectanglePreview(): void {
-    this.rectanglePreviewMeshes.forEach(mesh => {
-      this.editorScene.getScene().remove(mesh);
-      mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
-    });
-    this.rectanglePreviewMeshes = [];
-  }
-
-  /**
-   * Handle joystick events from the modular VirtualJoystickComponent
-   */
   public onJoystickChange(event: JoystickEvent): void {
     if (event.type === 'movement') {
       this.movementJoystick = {
@@ -1443,67 +625,48 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   public setEditMode(mode: EditMode): void {
     this.editorState.setEditMode(mode);
     // Update brush indicator color immediately for crisp feedback
-    if (this.brushIndicator) {
-      const material = this.brushIndicator.material as THREE.MeshBasicMaterial;
-      material.color.setHex(this.editorState.getColorForMode());
-    }
+    this.brushPreview.updateBrushIndicatorColor();
   }
 
   public setTerrainType(type: TerrainType): void {
     this.editorState.setTerrainType(type);
     // Update brush indicator color since mode may have changed
-    if (this.brushIndicator) {
-      const material = this.brushIndicator.material as THREE.MeshBasicMaterial;
-      material.color.setHex(this.editorState.getColorForMode());
-    }
+    this.brushPreview.updateBrushIndicatorColor();
   }
 
   public setBrushSize(size: number): void {
     this.editorState.setBrushSize(size);
-    this.updateBrushPreview();
+    this.brushPreview.updateBrushPreview();
   }
 
   public setActiveTool(tool: BrushTool): void {
-    this.changeActiveTool(tool);
+    this.editorState.setActiveTool(tool);
+    if (tool !== 'rectangle') this.rectangleTool.reset();
+    if (tool !== 'brush') this.brushPreview.hideBrushPreview();
   }
 
-  /**
-   * Undo the last edit action
-   */
   public undo(): void {
     const command = this.editHistory.undo();
     if (command) {
       // Update markers if spawn/exit was undone
-      this.updateSpawnMarker();
-      this.updateExitMarker();
+      this.spawnExitMarker.updateSpawnMarkers();
+      this.spawnExitMarker.updateExitMarkers();
       this.runPathValidation();
     }
   }
 
-  /**
-   * Redo the last undone action
-   */
   public redo(): void {
     const command = this.editHistory.redo();
     if (command) {
       // Update markers if spawn/exit was redone
-      this.updateSpawnMarker();
-      this.updateExitMarker();
+      this.spawnExitMarker.updateSpawnMarkers();
+      this.spawnExitMarker.updateExitMarkers();
       this.runPathValidation();
     }
   }
 
-  /**
-   * Clear all edit history
-   */
-  public clearHistory(): void {
-    this.editHistory.clear();
-  }
+  public clearHistory(): void { this.editHistory.clear(); }
 
-  /**
-   * Run BFS path validation and cache the result.
-   * Call after any terrain paint, spawn/exit placement, or map load.
-   */
   private runPathValidation(): void {
     if (!this.terrainGrid) {
       this.pathValidationResult = { valid: false };
@@ -1513,10 +676,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.pathValidationResult = this.pathValidation.validate(state);
   }
 
-  /**
-   * Check if the map is ready to play: has both spawn and exit points
-   * AND a valid walkable path exists between them.
-   */
   public get canPlayMap(): boolean {
     if (!this.terrainGrid) return false;
     const hasPoints =
@@ -1525,58 +684,24 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     return hasPoints && this.pathValidationResult.valid;
   }
 
-  /**
-   * Navigate to the game to play the current map
-   */
   public playMap(): void {
     if (!this.canPlayMap) return;
     this.router.navigate(['/play']);
   }
 
-  /**
-   * Export current map to a downloadable file
-   */
   public exportCurrentMap(): void {
-    const currentId = this.mapStorage.getCurrentMapId();
-    if (!currentId) {
-      this.editorNotificationService.show('No map to export. Save a map first (G key).', 'error');
-      return;
-    }
-
-    const success = this.mapStorage.downloadMapAsFile(currentId);
-    if (!success) {
-      this.editorNotificationService.show('Failed to export map.', 'error');
-    }
+    this.mapFile.exportAsJson();
   }
 
-  /**
-   * Import a map from a file
-   */
   public async importMapFromFile(): Promise<void> {
-    const { mapId, errorCode } = await this.mapStorage.promptFileImport();
-    if (mapId) {
-      const state = this.mapStorage.loadMap(mapId);
-      if (state) {
-        this.terrainGrid.importState(state);
-        this.updateSpawnMarker();
-        this.updateExitMarker();
-        this.runPathValidation();
-        const metadata = this.mapStorage.getMapMetadata(mapId);
-        if (metadata) {
-          this.currentMapName = metadata.name;
-        }
-        // Clear edit history when loading a new map
-        this.editHistory.clear();
-        this.editorNotificationService.show(`Map "${this.currentMapName}" imported successfully!`, 'success');
-      }
-    } else if (errorCode) {
-      const importErrorMessages: Record<string, string> = {
-        file_too_large: 'Map file is too large (max 512KB). Try a smaller map.',
-        invalid_json: 'Map file is corrupted or not a valid Novarise map.',
-        invalid_schema: 'Map file format is not recognized. It may be from a different version.',
-        general: 'Failed to import map. Please try a different file.'
-      };
-      this.editorNotificationService.show(importErrorMessages[errorCode] ?? importErrorMessages['general'], 'error');
+    const state = await this.mapFile.importFromJson(new File([], ''));
+    if (state) {
+      this.terrainGrid.importState(state);
+      this.spawnExitMarker.updateSpawnMarkers();
+      this.spawnExitMarker.updateExitMarkers();
+      this.runPathValidation();
+      // Clear edit history when loading a new map
+      this.editHistory.clear();
     }
   }
 
@@ -1591,47 +716,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       controls.update();
     }
 
-    // Animate brush indicator for crisp, noticeable feedback
-    if (this.brushIndicator && this.brushIndicator.visible) {
-      const pulse = Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * EDITOR_ANIMATION.brushPulseAmplitude + 0.9;
-      this.brushIndicator.scale.set(pulse, pulse, 1);
-      const material = this.brushIndicator.material as THREE.MeshBasicMaterial;
-      material.opacity = 0.6 + Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * 0.2;
-    }
-
-    // Animate spawn markers
-    const spawnPoints = this.terrainGrid.getSpawnPoints();
-    for (let i = 0; i < this.spawnMarkers.length && i < spawnPoints.length; i++) {
-      const bounce = Math.abs(Math.sin(Date.now() * EDITOR_ANIMATION.markerBounceSpeed)) * EDITOR_ANIMATION.markerBounceAmplitude;
-      const tile = this.terrainGrid.getTileAt(spawnPoints[i].x, spawnPoints[i].z);
-      if (tile) {
-        this.spawnMarkers[i].position.y = tile.mesh.position.y + EDITOR_SPAWN_MARKER.yBase + bounce;
-      }
-      this.spawnMarkers[i].rotation.y += EDITOR_ANIMATION.spawnRotationSpeed;
-    }
-
-    // Animate exit markers
-    const exitPointsAnim = this.terrainGrid.getExitPoints();
-    for (let i = 0; i < this.exitMarkers.length && i < exitPointsAnim.length; i++) {
-      const bounce = Math.abs(Math.sin(Date.now() * EDITOR_ANIMATION.markerBounceSpeed + EDITOR_ANIMATION.exitBouncePhaseOffset)) * EDITOR_ANIMATION.markerBounceAmplitude;
-      const tile = this.terrainGrid.getTileAt(exitPointsAnim[i].x, exitPointsAnim[i].z);
-      if (tile) {
-        this.exitMarkers[i].position.y = tile.mesh.position.y + EDITOR_EXIT_MARKER.yBase + bounce;
-      }
-      this.exitMarkers[i].rotation.y += EDITOR_ANIMATION.exitRotationSpeed;
-    }
-
-    const particles = this.editorScene.getParticles();
-    if (particles) {
-      const positionAttribute = particles.geometry.attributes['position'] as THREE.BufferAttribute;
-      const positions = positionAttribute.array as Float32Array;
-      for (let i = 0; i < positions.length; i += 3) {
-        positions[i + 1] += Math.sin(Date.now() * 0.001 + i) * 0.002;
-      }
-      positionAttribute.needsUpdate = true;
-      particles.rotation.y += 0.0002;
-    }
-
+    const now = Date.now();
+    this.brushPreview.animateBrushIndicator(now);
+    this.spawnExitMarker.animateMarkers(now);
+    this.editorScene.animateParticles();
     this.editorScene.render();
   }
 
@@ -1639,17 +727,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Stop the animation loop first to prevent calls to disposed resources
     cancelAnimationFrame(this.animationFrameId);
 
-    if (this.autosaveInterval !== null) {
-      clearInterval(this.autosaveInterval);
-      this.autosaveInterval = null;
-    }
+    this.mapFile.stopAutosave();
 
     this.notificationSub?.unsubscribe();
     this.notificationSub = null;
     this.editorNotificationService.clear();
 
-    window.removeEventListener('keydown', this.keyboardHandler);
-    window.removeEventListener('keyup', this.keyUpHandler);
+    this.editorKeyboard.teardown();
 
     const canvas = this.editorScene.getRenderer()?.domElement;
     if (canvas) {
@@ -1678,38 +762,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Clear undo/redo history to prevent stale closures referencing disposed TerrainGrid
     this.editHistory.clear();
 
-    // Clean up brush preview meshes
-    const scene = this.editorScene.getScene();
-    this.brushPreviewMeshes.forEach(mesh => {
-      scene.remove(mesh);
-      mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
-    });
-    this.brushPreviewMeshes = [];
+    // Clean up brush preview meshes and indicator (delegated to service)
+    this.brushPreview.cleanup();
 
     // Clean up rectangle preview meshes
-    this.clearRectanglePreview();
+    this.rectangleTool.cleanup();
 
-    // Clean up brush indicator
-    if (this.brushIndicator) {
-      scene.remove(this.brushIndicator);
-      this.brushIndicator.geometry.dispose();
-      disposeMaterial(this.brushIndicator.material);
-    }
-
-    // Clean up spawn/exit markers
-    for (const marker of this.spawnMarkers) {
-      scene.remove(marker);
-      marker.geometry.dispose();
-      disposeMaterial(marker.material);
-    }
-    this.spawnMarkers = [];
-    for (const marker of this.exitMarkers) {
-      scene.remove(marker);
-      marker.geometry.dispose();
-      disposeMaterial(marker.material);
-    }
-    this.exitMarkers = [];
+    // Clean up spawn/exit markers (delegated to service)
+    this.spawnExitMarker.cleanup();
 
     if (this.terrainGrid) {
       this.terrainGrid.dispose();

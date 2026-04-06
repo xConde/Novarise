@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { MapBridgeService } from '../game/game-board/services/map-bridge.service';
+import { MapBridgeService } from '../core/services/map-bridge.service';
 import { QUICK_PLAY_PARAM } from '../game/guards/game.guard';
 import { CampaignService } from '../campaign/services/campaign.service';
 

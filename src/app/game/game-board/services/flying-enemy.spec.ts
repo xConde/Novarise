@@ -1,9 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { EnemyService, DamageResult } from './enemy.service';
+import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { PathfindingService } from './pathfinding.service';
 import { GameStateService } from './game-state.service';
 import { TowerCombatService } from './tower-combat.service';
+import { ChainLightningService } from './chain-lightning.service';
+import { ProjectileService } from './projectile.service';
 import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
 import { GameBoardService } from '../game-board.service';
@@ -12,6 +15,8 @@ import { EnemyType, ENEMY_STATS, FLYING_ENEMY_HEIGHT, Enemy } from '../models/en
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
 import { createTestBoard, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy } from '../testing';
 import { TowerAnimationService } from './tower-animation.service';
+import { EnemyVisualService } from './enemy-visual.service';
+import { EnemyHealthService } from './enemy-health.service';
 
 describe('Flying Enemy', () => {
   let enemyService: EnemyService;
@@ -25,6 +30,9 @@ describe('Flying Enemy', () => {
       providers: [
         PathfindingService,
         EnemyService,
+        EnemyVisualService,
+        EnemyHealthService,
+        EnemyMeshFactoryService,
         GameStateService,
         { provide: GameBoardService, useValue: spy }
       ]
@@ -242,6 +250,8 @@ describe('Flying Enemy', () => {
         TestBed.configureTestingModule({
           providers: [
             TowerCombatService,
+            ChainLightningService,
+            ProjectileService,
             CombatVFXService,
             StatusEffectService,
             GameStateService,

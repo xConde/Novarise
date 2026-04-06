@@ -1,0 +1,265 @@
+/* ===== Enemy Encyclopedia Panel ===== */
+.encyclopedia-panel {
+  position: fixed;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(320px, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  background: rgba(20, 20, 35, 0.95);
+  border: 1px solid var(--theme-purple, #6a5a9a);
+  border-radius: 8px;
+  padding: 1rem;
+  z-index: 100;
+  box-sizing: border-box;
+  animation: encyclopedia-in 0.25s ease-out;
+}
+
+.encyclopedia-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.encyclopedia-header h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.85rem;
+  color: var(--theme-purple-lighter, #c8b8f8);
+  margin: 0;
+}
+
+.encyclopedia-close {
+  background: none;
+  border: none;
+  color: var(--theme-purple-mid, #9a8aca);
+  font-size: 1.2rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.encyclopedia-close:hover {
+  color: var(--theme-purple-lighter, #c8b8f8);
+}
+
+.encyclopedia-entry {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--theme-purple-a20);
+}
+
+.encyclopedia-entry:last-child {
+  border-bottom: none;
+}
+
+.encyclopedia-entry__color {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 0.2rem;
+}
+
+.encyclopedia-entry__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.encyclopedia-entry__name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--theme-purple-lighter, #c8b8f8);
+}
+
+.encyclopedia-entry__desc {
+  font-size: 0.65rem;
+  color: var(--text-color, #ccc);
+  line-height: 1.3;
+}
+
+.encyclopedia-entry__stats {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.6rem;
+  color: var(--theme-purple-mid, #9a8aca);
+  font-family: 'Orbitron', sans-serif;
+}
+
+.encyclopedia-entry__special {
+  font-size: 0.6rem;
+  color: var(--game-gold, #ffd700);
+  font-style: italic;
+}
+
+.encyclopedia-entry__immunity {
+  font-size: 0.6rem;
+  color: var(--action-danger);
+}
+
+/* Encyclopedia tab bar */
+.encyclopedia-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.encyclopedia-tab {
+  flex: 1;
+  background: none;
+  border: 1px solid var(--theme-purple-a30);
+  border-radius: 4px;
+  color: var(--theme-purple-mid, #9a8aca);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.35rem 0;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  min-height: 2.75rem;
+}
+
+.encyclopedia-tab:hover {
+  color: var(--theme-purple-lighter, #c8b8f8);
+  border-color: var(--theme-purple, #6a5a9a);
+  background: var(--theme-purple-a15);
+}
+
+.encyclopedia-tab.active {
+  color: var(--theme-purple-lighter, #c8b8f8);
+  border-color: var(--theme-purple, #6a5a9a);
+  background: var(--theme-purple-a30);
+}
+
+/* Tower specialization sub-rows inside an encyclopedia entry */
+.encyclopedia-entry__specs {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 0.4rem;
+  margin-top: 3px;
+}
+
+.encyclopedia-entry__spec-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.58rem;
+  color: var(--game-gold, #ffd700);
+  white-space: nowrap;
+}
+
+.encyclopedia-entry__spec-desc {
+  font-size: 0.58rem;
+  color: var(--text-color, #ccc);
+  font-style: italic;
+}
+
+/* Encyclopedia toggle button in top-right controls */
+.encyclopedia-btn {
+  background: var(--glass-bg);
+  border-radius: 4px;
+  backdrop-filter: blur(0.625rem);
+  z-index: var(--z-index-overlay, 10);
+  font-family: 'Orbitron', sans-serif;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 1px solid var(--theme-purple-a50);
+  color: var(--theme-purple-mid, #9a8aca);
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.encyclopedia-btn:hover,
+.encyclopedia-btn.active {
+  color: var(--theme-purple-lighter, #c8b8f8);
+  border-color: var(--theme-purple, #6a5a9a);
+  background: var(--theme-purple-a25);
+}
+
+/* ===== Encyclopedia panel — mobile bottom sheet ===== */
+@media (max-width: 768px) {
+  .encyclopedia-panel {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    top: auto;
+    transform: none;
+    width: 100%;
+    max-height: 55vh;
+    border-radius: 12px 12px 0 0;
+    z-index: 200;
+    animation: encyclopedia-mobile-in 0.25s ease-out;
+  }
+}
+
+@media (max-width: 480px) {
+  .encyclopedia-panel {
+    bottom: var(--tower-bar-height, 6.5rem);
+    max-height: calc(100vh - var(--tower-bar-height, 6.5rem) - 4rem);
+    padding: 0.5rem;
+    font-size: var(--font-size-3xs);
+  }
+
+  .encyclopedia-header {
+    margin-bottom: 0.35rem;
+  }
+
+  .encyclopedia-header h3 {
+    font-size: 0.7rem;
+  }
+
+  .encyclopedia-tabs {
+    gap: 0.2rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .encyclopedia-tab {
+    font-size: 0.5rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .encyclopedia-entry {
+    padding: 0.3rem;
+    gap: 0.2rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .encyclopedia-entry__name {
+    font-size: 0.6rem;
+  }
+
+  .encyclopedia-entry__stats {
+    font-size: 0.45rem;
+    gap: 0.3rem;
+  }
+
+  .encyclopedia-entry__desc {
+    font-size: 0.4rem;
+  }
+
+  .encyclopedia-entry__specs {
+    gap: 0.15rem;
+  }
+
+  .encyclopedia-entry__spec-label {
+    font-size: 0.45rem;
+  }
+
+  .encyclopedia-entry__spec-desc {
+    font-size: 0.4rem;
+  }
+}
+

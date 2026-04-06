@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { TowerType } from '../models/tower.model';
 import { BOARD_CONFIG } from '../constants/board.constants';
+import { gridToWorld } from '../utils/coordinate-utils';
 
 @Injectable()
 export class TowerMeshFactoryService {
@@ -278,8 +279,7 @@ export class TowerMeshFactoryService {
     }
 
     // Position tower on the tile - sitting on top at tileHeight (0.2)
-    const x = (col - boardWidth / 2) * this.tileSize;
-    const z = (row - boardHeight / 2) * this.tileSize;
+    const { x, z } = gridToWorld(row, col, boardWidth, boardHeight, this.tileSize);
 
     towerGroup.scale.set(1.4, 1.4, 1.4);
     towerGroup.position.set(x, tileTop, z);

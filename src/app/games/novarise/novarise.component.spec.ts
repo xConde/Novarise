@@ -3,14 +3,21 @@ import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterTestingModule } from '@angular/router/testing';
 import { NovariseComponent } from './novarise.component';
-import { MapStorageService } from './core/map-storage.service';
+import { MapStorageService } from '../../core/services/map-storage.service';
 import { CameraControlService, JoystickInput, MovementInput, RotationInput } from './core/camera-control.service';
 import { EditorStateService } from './core/editor-state.service';
 import { EditHistoryService } from './core/edit-history.service';
 import { PathValidationService } from './core/path-validation.service';
-import { MapTemplateService } from './core/map-template.service';
+import { MapTemplateService } from '../../core/services/map-template.service';
 import { EditorSceneService } from './core/editor-scene.service';
 import { EditorNotificationService } from './core/editor-notification.service';
+import { TerrainEditService } from './core/terrain-edit.service';
+import { MapFileService } from './core/map-file.service';
+import { BrushPreviewService } from './core/brush-preview.service';
+import { SpawnExitMarkerService } from './core/spawn-exit-marker.service';
+import { RectangleToolService } from './core/rectangle-tool.service';
+import { EditorModalService } from './core/editor-modal.service';
+import { EditorKeyboardService } from './core/editor-keyboard.service';
 import { JoystickEvent } from './features/mobile-controls';
 
 /**
@@ -86,6 +93,13 @@ describe('NovariseComponent', () => {
         EditorStateService,
         EditHistoryService,
         EditorNotificationService,
+        TerrainEditService,
+        MapFileService,
+        BrushPreviewService,
+        SpawnExitMarkerService,
+        RectangleToolService,
+        EditorModalService,
+        EditorKeyboardService,
       ],
       schemas: [NO_ERRORS_SCHEMA] // Ignore unknown elements like app-virtual-joystick
     }).compileComponents();
@@ -429,7 +443,7 @@ describe('NovariseComponent', () => {
 
     describe('showInputModal', () => {
       it('should set showModal, modalType, modalTitle, and modalInputValue', () => {
-        (component as any).showInputModal('Enter map name', 'My Map', () => {});
+        component.editorModal.showInputModal('Enter map name', 'My Map', () => {});
         expect(component.showModal).toBeTrue();
         expect(component.modalType).toBe('input');
         expect(component.modalTitle).toBe('Enter map name');
@@ -439,7 +453,7 @@ describe('NovariseComponent', () => {
 
     describe('showConfirmModal', () => {
       it('should set showModal, modalType, and modalTitle', () => {
-        (component as any).showConfirmModal('Proceed?', () => {});
+        component.editorModal.showConfirmModal('Proceed?', () => {});
         expect(component.showModal).toBeTrue();
         expect(component.modalType).toBe('confirm');
         expect(component.modalTitle).toBe('Proceed?');
@@ -448,7 +462,7 @@ describe('NovariseComponent', () => {
 
     describe('showSelectModal', () => {
       it('should set showModal, modalType, modalTitle, and modalSelectOptions', () => {
-        (component as any).showSelectModal('Pick one', ['Alpha', 'Beta'], () => {});
+        component.editorModal.showSelectModal('Pick one', ['Alpha', 'Beta'], () => {});
         expect(component.showModal).toBeTrue();
         expect(component.modalType).toBe('select');
         expect(component.modalTitle).toBe('Pick one');
@@ -459,21 +473,21 @@ describe('NovariseComponent', () => {
     describe('confirmModal on input type', () => {
       it('should invoke callback with the current input value', () => {
         let received: string | null | boolean = 'unset';
-        (component as any).showInputModal('Name', 'default', (v: string | null) => { received = v; });
+        component.editorModal.showInputModal('Name', 'default', (v: string | null) => { received = v; });
         component.modalInputValue = 'Custom Name';
         component.confirmModal();
         expect(received).toBe('Custom Name');
       });
 
       it('should close the modal after confirm', () => {
-        (component as any).showInputModal('Name', '', () => {});
+        component.editorModal.showInputModal('Name', '', () => {});
         component.confirmModal();
         expect(component.showModal).toBeFalse();
       });
 
       it('should pass null when input value is empty string', () => {
         let received: string | null | boolean = 'unset';
-        (component as any).showInputModal('Name', '', (v: string | null) => { received = v; });
+        component.editorModal.showInputModal('Name', '', (v: string | null) => { received = v; });
         component.modalInputValue = '';
         component.confirmModal();
         expect(received).toBeNull();
@@ -483,13 +497,13 @@ describe('NovariseComponent', () => {
     describe('confirmModal on confirm type', () => {
       it('should invoke callback with true', () => {
         let received: string | null | boolean = false;
-        (component as any).showConfirmModal('Sure?', (v: boolean) => { received = v; });
+        component.editorModal.showConfirmModal('Sure?', (v: boolean) => { received = v; });
         component.confirmModal();
         expect(received).toBeTrue();
       });
 
       it('should close the modal after confirm', () => {
-        (component as any).showConfirmModal('Sure?', () => {});
+        component.editorModal.showConfirmModal('Sure?', () => {});
         component.confirmModal();
         expect(component.showModal).toBeFalse();
       });
@@ -498,13 +512,13 @@ describe('NovariseComponent', () => {
     describe('cancelModal on input type', () => {
       it('should invoke callback with null', () => {
         let received: string | null | boolean = 'unset';
-        (component as any).showInputModal('Name', 'value', (v: string | null) => { received = v; });
+        component.editorModal.showInputModal('Name', 'value', (v: string | null) => { received = v; });
         component.cancelModal();
         expect(received).toBeNull();
       });
 
       it('should close the modal', () => {
-        (component as any).showInputModal('Name', '', () => {});
+        component.editorModal.showInputModal('Name', '', () => {});
         component.cancelModal();
         expect(component.showModal).toBeFalse();
       });
@@ -513,13 +527,13 @@ describe('NovariseComponent', () => {
     describe('cancelModal on confirm type', () => {
       it('should invoke callback with false', () => {
         let received: string | null | boolean = true;
-        (component as any).showConfirmModal('Sure?', (v: boolean) => { received = v; });
+        component.editorModal.showConfirmModal('Sure?', (v: boolean) => { received = v; });
         component.cancelModal();
         expect(received).toBeFalse();
       });
 
       it('should close the modal', () => {
-        (component as any).showConfirmModal('Sure?', () => {});
+        component.editorModal.showConfirmModal('Sure?', () => {});
         component.cancelModal();
         expect(component.showModal).toBeFalse();
       });
@@ -528,7 +542,7 @@ describe('NovariseComponent', () => {
     describe('cancelModal on select type', () => {
       it('should invoke callback with null when cancelled', () => {
         let callbackInvoked = false;
-        (component as any).showSelectModal('Pick', ['A'], (v: number | null) => {
+        component.editorModal.showSelectModal('Pick', ['A'], (v: number | null) => {
           callbackInvoked = true;
           // cancel passes false through the generic callback; the select wrapper
           // receives false (not a number) so consumers should guard with null check
@@ -543,7 +557,7 @@ describe('NovariseComponent', () => {
     describe('selectModalOption', () => {
       it('should invoke callback with the chosen index', () => {
         let received = -1;
-        (component as any).showSelectModal('Pick', ['Alpha', 'Beta'], (i: number | null) => {
+        component.editorModal.showSelectModal('Pick', ['Alpha', 'Beta'], (i: number | null) => {
           if (i !== null) received = i;
         });
         component.selectModalOption(1);
@@ -551,7 +565,7 @@ describe('NovariseComponent', () => {
       });
 
       it('should close the modal after selection', () => {
-        (component as any).showSelectModal('Pick', ['A'], () => {});
+        component.editorModal.showSelectModal('Pick', ['A'], () => {});
         component.selectModalOption(0);
         expect(component.showModal).toBeFalse();
       });
@@ -559,15 +573,15 @@ describe('NovariseComponent', () => {
 
     describe('closeModal', () => {
       it('should set showModal to false and clear callback', () => {
-        (component as any).showConfirmModal('Test', () => {});
+        component.editorModal.showConfirmModal('Test', () => {});
         component.closeModal();
         expect(component.showModal).toBeFalse();
-        expect((component as any).modalCallback).toBeNull();
+        expect((component.editorModal as any).modalCallback).toBeNull();
       });
     });
   });
 
-  describe('Autosave draft', () => {
+  describe('Autosave draft (delegated to MapFileService)', () => {
     const DRAFT_KEY = 'novarise-draft';
 
     beforeEach(() => {
@@ -577,82 +591,63 @@ describe('NovariseComponent', () => {
     });
 
     afterEach(() => {
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      mapFile.stopAutosave();
       localStorage.removeItem(DRAFT_KEY);
     });
 
-    it('saveDraft writes grid state to localStorage under the draft key', () => {
-      const fakeState = { gridSize: 25, tiles: [], heightMap: [], spawnPoints: [], exitPoints: [] };
-      (component as any).terrainGrid = { exportState: () => fakeState, dispose: () => {} };
+    it('saveDraft writes grid state to localStorage via MapFileService', () => {
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      const fakeState = { gridSize: 25, tiles: [], heightMap: [], spawnPoints: [], exitPoints: [], version: '2' };
+      const mockGrid = { exportState: () => fakeState, dispose: () => {} } as any;
+      mapFile.setTerrainGrid(mockGrid);
 
-      (component as any).saveDraft();
+      mapFile.saveDraft();
 
       const stored = localStorage.getItem(DRAFT_KEY);
       expect(stored).not.toBeNull();
       expect(JSON.parse(stored!)).toEqual(fakeState);
     });
 
-    it('saveDraft sets lastAutosaveTime to a Date', () => {
-      (component as any).terrainGrid = { exportState: () => ({ gridSize: 25, tiles: [], heightMap: [], spawnPoints: [], exitPoints: [] }), dispose: () => {} };
-      expect(component.lastAutosaveTime).toBeNull();
-
-      (component as any).saveDraft();
-
-      expect(component.lastAutosaveTime).toBeInstanceOf(Date);
-    });
-
     it('loadDraft returns null when no draft is in localStorage', () => {
-      expect((component as any).loadDraft()).toBeNull();
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      expect(mapFile.loadDraft()).toBeNull();
     });
 
     it('loadDraft returns parsed state when draft exists', () => {
-      const fakeState = { gridSize: 25, tiles: [], heightMap: [], spawnPoints: [], exitPoints: [] };
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      const fakeState = { gridSize: 25, tiles: [], heightMap: [], spawnPoints: [], exitPoints: [], version: '2' };
       localStorage.setItem(DRAFT_KEY, JSON.stringify(fakeState));
-
-      const result = (component as any).loadDraft();
-
-      expect(result).toEqual(fakeState);
+      expect(mapFile.loadDraft()).toEqual(fakeState as any);
     });
 
     it('loadDraft returns null when draft JSON is malformed', () => {
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
       localStorage.setItem(DRAFT_KEY, '{not valid json');
-
-      expect((component as any).loadDraft()).toBeNull();
+      expect(mapFile.loadDraft()).toBeNull();
     });
 
     it('clearDraft removes the draft from localStorage', () => {
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
       localStorage.setItem(DRAFT_KEY, '{}');
-      (component as any).lastAutosaveTime = new Date();
-
-      (component as any).clearDraft();
-
+      mapFile.clearDraft();
       expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
     });
 
-    it('clearDraft resets lastAutosaveTime to null', () => {
-      (component as any).lastAutosaveTime = new Date();
-
-      (component as any).clearDraft();
-
-      expect(component.lastAutosaveTime).toBeNull();
+    it('startAutosave starts the interval on MapFileService', () => {
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      const setSpy = spyOn(window, 'setInterval').and.callThrough();
+      mapFile.startAutosave();
+      expect(setSpy).toHaveBeenCalled();
+      mapFile.stopAutosave();
     });
 
-    it('startAutosave sets a non-null autosaveInterval', () => {
-      expect((component as any).autosaveInterval).toBeNull();
-
-      (component as any).startAutosave();
-
-      expect((component as any).autosaveInterval).not.toBeNull();
-      clearInterval((component as any).autosaveInterval);
-    });
-
-    it('ngOnDestroy clears the autosave interval', () => {
-      (component as any).startAutosave();
-      const id = (component as any).autosaveInterval;
-      expect(id).not.toBeNull();
-
+    it('ngOnDestroy delegates stopAutosave to MapFileService', () => {
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      const stopSpy = spyOn(mapFile, 'stopAutosave').and.callThrough();
+      mapFile.startAutosave();
       component.ngOnDestroy();
-
-      expect((component as any).autosaveInterval).toBeNull();
+      expect(stopSpy).toHaveBeenCalled();
     });
   });
 
@@ -721,20 +716,13 @@ describe('NovariseComponent', () => {
       expect(component.modalType).toBe('input');
     });
 
-    it('should call mapStorage.saveMap when path is invalid and user confirms both dialogs', () => {
+    it('should call mapFile.save when path is invalid and user confirms both dialogs', () => {
       // Arrange
       (component as any).pathValidationResult = { valid: false };
       spyOnProperty(component, 'hasSpawnAndExit').and.returnValue(true);
 
-      const fakeState = { tiles: [], spawnerPoints: [], exitPoints: [] };
-      (component as any).terrainGrid = {
-        exportState: () => fakeState,
-        getSpawnPoints: () => [{}],
-        getExitPoints: () => [{}],
-        dispose: () => {}
-      };
-      mockMapStorageService.saveMap.and.returnValue('map-id-1');
-      mockMapStorageService.getCurrentMapId.and.returnValue(null);
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      const saveSpy = spyOn(mapFile, 'save').and.returnValue(true);
 
       // Act
       (component as any).saveGridState();
@@ -743,7 +731,7 @@ describe('NovariseComponent', () => {
       component.confirmModal(); // confirm map name
 
       // Assert
-      expect(mockMapStorageService.saveMap).toHaveBeenCalledWith('My Map', jasmine.any(Object), undefined);
+      expect(saveSpy).toHaveBeenCalledWith('My Map');
     });
 
     it('should open input modal directly (no confirm) when path is valid', () => {
@@ -758,19 +746,12 @@ describe('NovariseComponent', () => {
       expect(component.modalType).toBe('input');
     });
 
-    it('should call mapStorage.saveMap when path is valid and user enters a name', () => {
+    it('should call mapFile.save when path is valid and user enters a name', () => {
       // Arrange
       (component as any).pathValidationResult = { valid: true };
 
-      const fakeState = { tiles: [], spawnerPoints: [], exitPoints: [] };
-      (component as any).terrainGrid = {
-        exportState: () => fakeState,
-        getSpawnPoints: () => [{}],
-        getExitPoints: () => [{}],
-        dispose: () => {}
-      };
-      mockMapStorageService.saveMap.and.returnValue('map-id-2');
-      mockMapStorageService.getCurrentMapId.and.returnValue(null);
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      const saveSpy = spyOn(mapFile, 'save').and.returnValue(true);
 
       // Act
       (component as any).saveGridState();
@@ -778,7 +759,7 @@ describe('NovariseComponent', () => {
       component.confirmModal();
 
       // Assert
-      expect(mockMapStorageService.saveMap).toHaveBeenCalledWith('Valid Map', jasmine.any(Object), undefined);
+      expect(saveSpy).toHaveBeenCalledWith('Valid Map');
     });
   });
 });

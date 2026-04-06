@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 import { TowerUpgradeVisualService } from './tower-upgrade-visual.service';
-import { TOWER_UPGRADE_VISUAL_CONFIG } from '../constants/effects.constants';
+import { TOWER_UPGRADE_VISUAL_CONFIG, SPECIALIZATION_VISUAL_CONFIG } from '../constants/effects.constants';
+import { TOWER_VISUAL_CONFIG } from '../constants/ui.constants';
+import { TowerSpecialization } from '../models/tower.model';
 
 describe('TowerUpgradeVisualService', () => {
   let service: TowerUpgradeVisualService;
@@ -130,6 +132,147 @@ describe('TowerUpgradeVisualService', () => {
       service.spawnUpgradeFlash(pos, scene);
       service.cleanup();
       expect(service.flashCount).toBe(0);
+    });
+  });
+
+  describe('applyUpgradeVisuals', () => {
+    it('should set scale to level-based value for L2 (newLevel=2)', () => {
+      const group = new THREE.Group();
+      service.applyUpgradeVisuals(group, 2);
+      const expectedScale = TOWER_VISUAL_CONFIG.scaleBase + (2 - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
+      expect(group.scale.x).toBeCloseTo(expectedScale);
+    });
+
+    it('should set scale to level-based value for L3 (newLevel=3)', () => {
+      const group = new THREE.Group();
+      service.applyUpgradeVisuals(group, 3);
+      const expectedScale = TOWER_VISUAL_CONFIG.scaleBase + (3 - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
+      expect(group.scale.x).toBeCloseTo(expectedScale);
+    });
+
+    it('should boost emissive intensity on MeshStandardMaterial children', () => {
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const mat = new THREE.MeshStandardMaterial();
+      mat.emissiveIntensity = 0;
+      const mesh = new THREE.Mesh(geo, mat);
+      const group = new THREE.Group();
+      group.add(mesh);
+
+      service.applyUpgradeVisuals(group, 2);
+
+      const expected = TOWER_VISUAL_CONFIG.emissiveBase + (2 - 1) * TOWER_VISUAL_CONFIG.emissiveIncrement;
+      expect(mat.emissiveIntensity).toBeCloseTo(expected);
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('should skip animated children named "tip" and "orb"', () => {
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const mat = new THREE.MeshStandardMaterial();
+      mat.emissiveIntensity = 0;
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = 'tip';
+      const group = new THREE.Group();
+      group.add(mesh);
+
+      service.applyUpgradeVisuals(group, 2);
+
+      expect(mat.emissiveIntensity).toBe(0);
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('should apply specialization tint when specialization is provided', () => {
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const mat = new THREE.MeshStandardMaterial();
+      const mesh = new THREE.Mesh(geo, mat);
+      const group = new THREE.Group();
+      group.add(mesh);
+
+      service.applyUpgradeVisuals(group, 3, TowerSpecialization.ALPHA);
+
+      expect(mat.emissiveIntensity).toBe(SPECIALIZATION_VISUAL_CONFIG.alpha.emissiveIntensity);
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('should not call applySpecializationVisual when no specialization provided', () => {
+      const spy = spyOn(service, 'applySpecializationVisual').and.callThrough();
+      const group = new THREE.Group();
+
+      service.applyUpgradeVisuals(group, 2);
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('applySpecializationVisual', () => {
+    it('should apply ALPHA warm orange tint to MeshStandardMaterial children', () => {
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const mat = new THREE.MeshStandardMaterial();
+      const mesh = new THREE.Mesh(geo, mat);
+      const group = new THREE.Group();
+      group.add(mesh);
+
+      service.applySpecializationVisual(group, TowerSpecialization.ALPHA);
+
+      expect(mat.emissiveIntensity).toBe(SPECIALIZATION_VISUAL_CONFIG.alpha.emissiveIntensity);
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('should apply BETA cool blue tint to MeshStandardMaterial children', () => {
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const mat = new THREE.MeshStandardMaterial();
+      const mesh = new THREE.Mesh(geo, mat);
+      const group = new THREE.Group();
+      group.add(mesh);
+
+      service.applySpecializationVisual(group, TowerSpecialization.BETA);
+
+      expect(mat.emissiveIntensity).toBe(SPECIALIZATION_VISUAL_CONFIG.beta.emissiveIntensity);
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('should skip animated "tip" children', () => {
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const mat = new THREE.MeshStandardMaterial();
+      mat.emissiveIntensity = 0;
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = 'orb';
+      const group = new THREE.Group();
+      group.add(mesh);
+
+      service.applySpecializationVisual(group, TowerSpecialization.ALPHA);
+
+      expect(mat.emissiveIntensity).toBe(0);
+
+      geo.dispose();
+      mat.dispose();
+    });
+
+    it('should handle material arrays on a child mesh', () => {
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const mat1 = new THREE.MeshStandardMaterial();
+      const mat2 = new THREE.MeshStandardMaterial();
+      const mesh = new THREE.Mesh(geo, [mat1, mat2]);
+      const group = new THREE.Group();
+      group.add(mesh);
+
+      service.applySpecializationVisual(group, TowerSpecialization.BETA);
+
+      expect(mat1.emissiveIntensity).toBe(SPECIALIZATION_VISUAL_CONFIG.beta.emissiveIntensity);
+      expect(mat2.emissiveIntensity).toBe(SPECIALIZATION_VISUAL_CONFIG.beta.emissiveIntensity);
+
+      geo.dispose();
+      mat1.dispose();
+      mat2.dispose();
     });
   });
 });

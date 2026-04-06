@@ -1,0 +1,189 @@
+/* Design System - CSS Custom Properties */
+:root {
+  /* Foundation - Maximum Contrast (Dark Mode) */
+  --bg-color: #000000;
+  --text-color: #FFFFFF;
+  --text-area-color: #0a0a0a;
+
+  /* Borders - Glowing Structure */
+  --border-color: rgba(255, 255, 255, 0.2);
+  --border-color-strong: rgba(255, 255, 255, 0.45);
+  --border-color-subtle: rgba(255, 255, 255, 0.1);
+
+  /* Theme - Purple Accent */
+  --theme-purple: #6a4a8a;
+  --theme-purple-glow: rgba(106, 74, 138, 0.4);
+  --theme-purple-light: #9a8ab0;
+  --theme-purple-mid: #c4b8d8;
+  --theme-purple-lighter: #e0d0f0;
+  --nav-bg: #0a0515;
+
+  /* Purple alpha variants */
+  --theme-purple-a10: rgba(106, 74, 138, 0.1);
+  --theme-purple-a15: rgba(106, 74, 138, 0.15);
+  --theme-purple-a20: rgba(106, 74, 138, 0.2);
+  --theme-purple-a25: rgba(106, 74, 138, 0.25);
+  --theme-purple-a30: rgba(106, 74, 138, 0.3);
+  --theme-purple-a35: rgba(106, 74, 138, 0.35);
+  --theme-purple-a40: rgba(106, 74, 138, 0.4);
+  --theme-purple-a50: rgba(106, 74, 138, 0.5);
+  --theme-purple-a60: rgba(106, 74, 138, 0.6);
+  --theme-purple-a70: rgba(106, 74, 138, 0.7);
+  --theme-purple-a80: rgba(106, 74, 138, 0.8);
+
+  /* Dark purple backgrounds */
+  --theme-purple-dark: rgba(42, 26, 58, 0.3);
+  --theme-purple-dark-hover: rgba(52, 36, 68, 0.5);
+  --theme-purple-dark-strong: rgba(42, 26, 58, 0.5);
+  --theme-purple-dark-hover-strong: rgba(52, 36, 68, 0.7);
+
+  /* Nav background alpha variants */
+  --nav-bg-a60: rgba(10, 5, 21, 0.6);
+  --nav-bg-a90: rgba(10, 5, 21, 0.9);
+
+  /* Action button colors */
+  --action-success: #50ff88;
+  --action-success-bg: rgba(0, 180, 80, 0.25);
+  --action-success-border: rgba(0, 220, 100, 0.5);
+  --action-warning: #ffcc33;
+  --action-danger: #ff6666;
+  --action-danger-bg: rgba(180, 20, 20, 0.2);
+  --action-danger-border: rgba(220, 50, 50, 0.4);
+
+  /* Status effect colors (match Three.js STATUS_EFFECT_VISUALS) */
+  --effect-burn: #ff6622;
+  --effect-poison: #44ff22;
+  --effect-slow: #4488ff;
+
+  /* Game-specific colors */
+  --game-primary: #444444;
+  --game-secondary: #666666;
+  --game-accent-orange: #FF9A66;
+  --game-success: #00AA00;
+  --game-error: #AA0000;
+
+  /* Game state colors */
+  --game-health: #ff4444;
+  --game-gold: #ffd700;
+  --game-gold-a08: rgba(255, 215, 0, 0.08);
+  --game-gold-a15: rgba(255, 215, 0, 0.15);
+  --game-gold-a25: rgba(255, 215, 0, 0.25);
+  --game-gold-a40: rgba(255, 215, 0, 0.4);
+  --game-gold-a50: rgba(255, 215, 0, 0.5);
+  --game-gold-a60: rgba(255, 215, 0, 0.6);
+  --game-victory: #00ff88;
+  --game-defeat: #ff4444;
+  --game-wave-text: #ff8888;
+  --game-star-filled: #ffd700;
+  --game-star-empty: rgba(255, 255, 255, 0.2);
+
+  /* Enemy type colors */
+  --enemy-color-basic: #ff4444;
+  --enemy-color-fast: #ffff00;
+  --enemy-color-heavy: #4444ff;
+  --enemy-color-flying: #44ffff;
+  --enemy-color-shield: #4488ff;
+  --enemy-color-boss: #ff00ff;
+  --enemy-color-swarm: #44ff44;
+
+  /* Enemy glow colors */
+  --enemy-glow-basic: rgba(255, 68, 68, 0.6);
+  --enemy-glow-fast: rgba(255, 255, 0, 0.6);
+  --enemy-glow-heavy: rgba(68, 68, 255, 0.6);
+  --enemy-glow-flying: rgba(68, 255, 255, 0.6);
+  --enemy-glow-boss: rgba(255, 0, 255, 0.7);
+  --enemy-glow-shielded: rgba(68, 136, 255, 0.6);
+  --enemy-glow-swarm: rgba(68, 255, 68, 0.6);
+
+  /* Tower type colors */
+  --tower-color-basic: #ff6600;
+  --tower-color-sniper: #9900ff;
+  --tower-color-splash: #00ff00;
+  --tower-color-slow: #4488ff;
+  --tower-color-chain: #ffdd00;
+  --tower-color-mortar: #664422;
+
+  /* Tower glow colors */
+  --tower-glow-basic: rgba(255, 102, 0, 0.5);
+  --tower-glow-sniper: rgba(153, 0, 255, 0.5);
+  --tower-glow-splash: rgba(0, 255, 0, 0.5);
+  --tower-glow-slow: rgba(68, 136, 255, 0.6);
+  --tower-glow-chain: rgba(255, 221, 0, 0.7);
+  --tower-glow-mortar: rgba(255, 100, 34, 0.4);
+
+  /* Misc UI colors */
+  --score-multiplier: #88aaff;
+  --text-disabled: #8a8a9a;
+  --theme-cyan: #00ffff;
+  --theme-orange: #dd6600;
+
+  /* Rainbow effect colors */
+  --rainbow-red: #FF0000;
+  --rainbow-orange: #FFA500;
+  --rainbow-yellow: #FFFF00;
+  --rainbow-green: #008000;
+  --rainbow-gold: gold;
+
+  /* Panel backgrounds (glass panels with colored tints) */
+  --panel-blue-bg: rgba(20, 60, 120, 0.3);
+  --panel-blue-hover: rgba(30, 90, 160, 0.45);
+  --panel-blue-border: rgba(100, 200, 255, 0.3);
+  --panel-blue-border-hover: rgba(100, 200, 255, 0.6);
+  --panel-blue-accent: #88ddff;
+  --panel-neutral-bg: rgba(80, 80, 80, 0.3);
+  --panel-neutral-hover: rgba(120, 120, 120, 0.4);
+
+  /* Text opacity variants */
+  --text-muted: rgba(255, 255, 255, 0.6);
+  --text-dim: rgba(255, 255, 255, 0.5);
+  --text-faint: rgba(255, 255, 255, 0.4);
+  --text-subtle: rgba(255, 255, 255, 0.45);
+  --text-dimmer: rgba(255, 255, 255, 0.55);
+
+  /* Glass panel backgrounds (semi-transparent dark backgrounds) */
+  --glass-bg: rgba(0, 0, 0, 0.75);
+
+  /* Typography Scale */
+  --font-size-hero: 3rem;
+  --font-size-large: 2rem;
+  --font-size-title: 1.5rem;
+  --font-size-base: 1rem;
+  --font-size-small: 0.875rem;
+  --font-size-xs: 0.75rem;
+  --font-size-2xs: 0.625rem;
+  --font-size-3xs: 0.5625rem;
+  --font-size-tiny: 0.5rem;
+
+  /* Spacing System */
+  --spacing-xs: 0.3125rem;   /* 5px */
+  --spacing-sm: 0.625rem;    /* 10px */
+  --spacing-md: 1rem;        /* 16px */
+  --spacing-lg: 1.5rem;      /* 24px */
+  --spacing-xl: 2rem;        /* 32px */
+  --spacing-2xl: 3rem;       /* 48px */
+
+  /* Border Widths */
+  --border-width-thin: 0.0625rem;   /* 1px */
+  --border-width-medium: 0.125rem;  /* 2px */
+  --border-width-thick: 0.25rem;    /* 4px */
+
+  /* Border Radius */
+  --border-radius-sm: 0.25rem;   /* 4px */
+  --border-radius-md: 0.375rem;  /* 6px */
+  --border-radius-lg: 0.5rem;    /* 8px */
+
+  /* Shadow Sizes */
+  --shadow-sm: 0 0 0.625rem;        /* 10px */
+  --shadow-md: 0 0 1.25rem;         /* 20px */
+  --shadow-lg: 0 0 2.5rem;          /* 40px */
+
+  /* Transition Durations */
+  --transition-fast: 0.2s;
+  --transition-medium: 0.3s;
+  --transition-slow: 1s;
+
+  /* Z-Index Scale */
+  --z-index-base: 1;
+  --z-index-overlay: 10;
+  --z-index-modal: 100;
+}

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y, IMPACT_FLASH_CONFIG } from '../constants/combat.constants';
+import { disposeMesh } from '../utils/three-utils';
 
 /** A chain arc line that persists for a short visual duration before removal. */
 export interface ChainArcEntry {
@@ -174,8 +175,7 @@ export class CombatVFXService {
     for (const zone of this.mortarZoneMeshes) {
       if (gameTime >= zone.expiresAt) {
         scene.remove(zone.mesh);
-        zone.mesh.geometry.dispose();
-        (zone.mesh.material as THREE.Material).dispose();
+        disposeMesh(zone.mesh);
       } else {
         survivingZones.push(zone);
       }
@@ -208,8 +208,7 @@ export class CombatVFXService {
 
     for (const zone of this.mortarZoneMeshes) {
       scene.remove(zone.mesh);
-      zone.mesh.geometry.dispose();
-      (zone.mesh.material as THREE.Material).dispose();
+      disposeMesh(zone.mesh);
     }
     this.mortarZoneMeshes = [];
   }

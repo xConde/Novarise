@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { LandingComponent } from './landing.component';
-import { MapBridgeService } from '../game/game-board/services/map-bridge.service';
+import { MapBridgeService } from '../core/services/map-bridge.service';
 import { CampaignService } from '../campaign/services/campaign.service';
 
 describe('LandingComponent', () => {

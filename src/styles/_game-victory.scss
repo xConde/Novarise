@@ -1,0 +1,328 @@
+/* ==========================================================================
+   Victory / Defeat overlay — moved from game-board.component.scss (CSS budget relief)
+   Selectors prefixed with .board-container to match component template DOM.
+   ========================================================================== */
+
+.board-container .game-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: var(--z-index-modal);
+  animation: fade-in 0.5s ease;
+}
+
+.board-container .overlay-content {
+  text-align: center;
+  padding: var(--spacing-2xl);
+  border-radius: var(--border-radius-lg);
+  backdrop-filter: blur(1rem);
+  animation: scale-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  max-width: min(32rem, 90vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  width: 100%;
+}
+
+.board-container .overlay-content.victory {
+  background: rgba(0, 100, 0, 0.3);
+  border: var(--border-width-medium) solid rgba(0, 255, 0, 0.4);
+  box-shadow: 0 0 2.5rem rgba(0, 255, 0, 0.15);
+}
+
+.board-container .overlay-content.victory h2 {
+  color: var(--game-victory);
+}
+
+.board-container .overlay-content.defeat {
+  background: rgba(100, 0, 0, 0.3);
+  border: var(--border-width-medium) solid rgba(255, 0, 0, 0.4);
+  box-shadow: 0 0 2.5rem rgba(255, 0, 0, 0.15);
+}
+
+.board-container .overlay-content.defeat h2 {
+  color: var(--game-defeat);
+}
+
+.board-container .overlay-content h2 {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-hero);
+  margin-bottom: var(--spacing-md);
+  text-transform: uppercase;
+  letter-spacing: 0.25rem;
+}
+
+.board-container .overlay-content .final-score {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-large);
+  color: var(--game-gold);
+  margin-bottom: var(--spacing-lg);
+}
+
+/* Star rating */
+.board-container .overlay-content .star-display {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+.board-container .overlay-content .overlay-star {
+  font-size: 2.5rem;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+
+.board-container .overlay-content .overlay-star.filled {
+  color: var(--game-star-filled);
+  text-shadow: 0 0 0.75rem var(--game-gold-a60);
+  opacity: 0;
+  animation: star-reveal 0.4s ease-out forwards;
+}
+
+.board-container .overlay-content .overlay-star.filled.star-1 {
+  animation-delay: 0.3s;
+}
+
+.board-container .overlay-content .overlay-star.filled.star-2 {
+  animation-delay: 0.8s;
+}
+
+.board-container .overlay-content .overlay-star.filled.star-3 {
+  animation-delay: 1.3s;
+}
+
+.board-container .overlay-content .overlay-star.empty {
+  color: var(--game-star-empty);
+  opacity: 0.35;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .overlay-content .overlay-star.filled {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* Score breakdown */
+.board-container .overlay-content .score-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-lg);
+  min-width: 18rem;
+  text-align: left;
+}
+
+@media (max-width: 768px) {
+  .board-container .overlay-content .score-breakdown {
+    min-width: 14rem;
+  }
+}
+
+.board-container .overlay-content .score-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) 0;
+  border-bottom: var(--border-width-thin) solid rgba(255, 255, 255, 0.08);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+}
+
+.board-container .overlay-content .score-row.final {
+  border-bottom: none;
+  border-top: var(--border-width-medium) solid rgba(255, 255, 255, 0.2);
+  margin-top: var(--spacing-xs);
+  padding-top: var(--spacing-sm);
+}
+
+.board-container .overlay-content .score-label {
+  color: var(--text-dimmer);
+  text-transform: uppercase;
+  letter-spacing: 0.0313rem;
+}
+
+.board-container .overlay-content .score-value {
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+.board-container .overlay-content .score-value.multiplier {
+  color: var(--score-multiplier);
+}
+
+.board-container .overlay-content .score-value.final-value {
+  color: var(--game-gold);
+  font-size: var(--font-size-large);
+  font-weight: 700;
+}
+
+/* Achievements unlocked */
+.board-container .overlay-content .achievements-unlocked {
+  margin-bottom: var(--spacing-lg);
+}
+
+.board-container .overlay-content .achievements-title {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  color: var(--game-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.0625rem;
+  margin-bottom: var(--spacing-sm);
+}
+
+.board-container .overlay-content .achievement-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.board-container .overlay-content .achievement-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--game-gold-a08);
+  border: var(--border-width-thin) solid var(--game-gold-a25);
+  border-radius: var(--border-radius-sm);
+  animation: scale-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.board-container .overlay-content .achievement-icon {
+  font-size: 1.25rem;
+}
+
+.board-container .overlay-content .achievement-info {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.board-container .overlay-content .achievement-name {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  color: var(--game-gold);
+  font-weight: 600;
+}
+
+.board-container .overlay-content .achievement-desc {
+  font-size: var(--font-size-tiny);
+  color: var(--text-dim);
+}
+
+/* Overlay action buttons */
+.board-container .overlay-content .overlay-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: center;
+}
+
+/* Unified results button */
+.board-container .overlay-content .results-btn {
+  padding: var(--spacing-sm) var(--spacing-xl);
+  background: var(--theme-purple-a20);
+  border: var(--border-width-medium) solid var(--theme-purple-a50);
+  border-radius: var(--border-radius-md);
+  color: var(--text-color);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-base);
+  cursor: pointer;
+  transition: all var(--transition-medium) ease;
+}
+
+.board-container .overlay-content .results-btn:hover {
+  background: var(--theme-purple-a30);
+  border-color: var(--theme-purple-a80);
+}
+
+.board-container .overlay-content .results-btn--primary {
+  background: var(--theme-purple-a50);
+  border-color: var(--theme-purple-light);
+  box-shadow: 0 0 8px var(--theme-purple-glow);
+}
+
+.board-container .overlay-content .results-btn--primary:hover {
+  background: var(--theme-purple-a70);
+  box-shadow: 0 0 14px var(--theme-purple-glow);
+}
+
+.board-container .overlay-content .results-btn--secondary {
+  color: var(--theme-purple-lighter);
+}
+
+.board-container .overlay-content .results-btn--secondary:hover {
+  background: var(--theme-purple-a30);
+  border-color: var(--theme-purple-a80);
+}
+
+.board-container .overlay-content .results-btn--tertiary {
+  color: var(--theme-purple-mid);
+}
+
+.board-container .overlay-content .results-btn--tertiary:hover {
+  background: var(--theme-purple-a20);
+  border-color: var(--theme-purple-a80);
+  color: var(--theme-purple-lighter);
+}
+
+/* Victory/defeat overlay — responsive (moved from component SCSS for child component reach) */
+@media (max-width: 768px) {
+  .board-container .game-overlay .overlay-content {
+    padding: var(--spacing-xl);
+    max-width: 90vw;
+  }
+  .board-container .game-overlay .overlay-content h2 {
+    font-size: var(--font-size-title);
+    letter-spacing: var(--spacing-xs);
+  }
+  .board-container .game-overlay .overlay-content .final-score {
+    font-size: var(--font-size-base);
+    margin-bottom: var(--spacing-md);
+  }
+  .board-container .game-overlay .overlay-content .overlay-actions {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .board-container .game-overlay .overlay-content .overlay-actions .results-btn {
+    min-height: 2.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .board-container .game-overlay {
+    align-items: flex-end;
+  }
+  .board-container .game-overlay .overlay-content {
+    width: 100%;
+    max-width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: var(--spacing-xl) var(--spacing-md);
+    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+  }
+  .board-container .game-overlay .overlay-content h2 {
+    font-size: var(--font-size-large);
+    letter-spacing: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
+  }
+  .board-container .game-overlay .overlay-content .final-score {
+    font-size: var(--font-size-base);
+    margin-bottom: var(--spacing-md);
+  }
+  .board-container .game-overlay .overlay-content .overlay-actions {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+  .board-container .game-overlay .overlay-content .overlay-actions .results-btn {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    min-height: 2.75rem;
+  }
+}
+

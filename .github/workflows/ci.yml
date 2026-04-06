@@ -31,6 +31,9 @@ jobs:
       - name: TypeScript type check
         run: npx tsc --noEmit
 
+      - name: Lint
+        run: npx ng lint
+
       - name: Run tests
         run: npx ng test --no-watch --browsers=ChromeHeadless
 

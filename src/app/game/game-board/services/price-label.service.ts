@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
+import { gridToWorld } from '../utils/coordinate-utils';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -168,9 +169,7 @@ export class PriceLabelService {
 
   /**
    * Parse a "row-col" key and return the world-space X/Z centre of that tile.
-   * Mirrors the formula used throughout the game board:
-   *   worldX = (col - boardWidth  / 2) * tileSize
-   *   worldZ = (row - boardHeight / 2) * tileSize
+   * Delegates to gridToWorld() from coordinate-utils.
    */
   private tileKeyToWorldPos(
     key: string,
@@ -181,10 +180,8 @@ export class PriceLabelService {
     const dashIdx = key.indexOf('-');
     const row = parseInt(key.slice(0, dashIdx), 10);
     const col = parseInt(key.slice(dashIdx + 1), 10);
-    return {
-      worldX: (col - boardWidth  / 2) * tileSize,
-      worldZ: (row - boardHeight / 2) * tileSize,
-    };
+    const { x, z } = gridToWorld(row, col, boardWidth, boardHeight, tileSize);
+    return { worldX: x, worldZ: z };
   }
 
   /** Dispose texture and material for a single sprite. */
