@@ -49,6 +49,7 @@ import {
   createGamePauseServiceSpy,
   createTowerPlacementServiceSpy,
   createTowerSelectionServiceSpy,
+  createTowerUpgradeVisualServiceSpy,
 } from './testing';
 import { TowerAnimationService } from './services/tower-animation.service';
 import { GamePauseService } from './services/game-pause.service';
@@ -57,6 +58,7 @@ import { EnemyHealthService } from './services/enemy-health.service';
 import { ChainLightningService } from './services/chain-lightning.service';
 import { TowerPlacementService } from './services/tower-placement.service';
 import { TowerSelectionService } from './services/tower-selection.service';
+import { TowerUpgradeVisualService } from './services/tower-upgrade-visual.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -123,7 +125,8 @@ describe('GameBoardComponent', () => {
     campaignMapServiceSpy = jasmine.createSpyObj('CampaignMapService', ['loadLevel']);
     campaignMapServiceSpy.loadLevel.and.returnValue(MOCK_MAP_STATE_SPEC);
 
-    gameSessionSpy = jasmine.createSpyObj('GameSessionService', ['resetAllServices', 'applyCampaignWaves']);
+    gameSessionSpy = jasmine.createSpyObj('GameSessionService', ['resetAllServices', 'applyCampaignWaves', 'cleanupScene']);
+    gameSessionSpy.cleanupScene.and.returnValue(null);
 
     combatLoopSpy = createCombatLoopServiceSpy();
 
@@ -152,6 +155,7 @@ describe('GameBoardComponent', () => {
         { provide: CombatLoopService, useValue: combatLoopSpy },
         { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
         { provide: GamePauseService, useValue: gamePauseSpy },
+        { provide: TowerUpgradeVisualService, useValue: createTowerUpgradeVisualServiceSpy() },
         ChallengeDisplayService,
         ChainLightningService,
       ]

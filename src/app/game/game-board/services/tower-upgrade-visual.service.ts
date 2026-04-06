@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { TOWER_UPGRADE_VISUAL_CONFIG } from '../constants/effects.constants';
+import { TOWER_UPGRADE_VISUAL_CONFIG, SPECIALIZATION_VISUAL_CONFIG } from '../constants/effects.constants';
+import { TowerSpecialization } from '../models/tower.model';
+import { TOWER_VISUAL_CONFIG } from '../constants/ui.constants';
 
 interface FlashEffect {
   sprite: THREE.Sprite;
@@ -138,5 +140,54 @@ export class TowerUpgradeVisualService {
 
   get ringCount(): number {
     return this.glowRings.size;
+  }
+
+  /**
+   * Apply level-based scale AND emissive boost to a tower mesh group.
+   * Skips 'tip' and 'orb' children whose emissive is driven per-frame by TowerAnimationService.
+   * Call this after a successful upgrade (L1→L2 or L2→L3).
+   */
+  applyUpgradeVisuals(towerGroup: THREE.Group, newLevel: number, specialization?: TowerSpecialization): void {
+    const scale = TOWER_VISUAL_CONFIG.scaleBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
+    towerGroup.scale.set(scale, scale, scale);
+
+    const animatedNames = new Set(['tip', 'orb']);
+    towerGroup.traverse(child => {
+      if (
+        child instanceof THREE.Mesh &&
+        child.material instanceof THREE.MeshStandardMaterial &&
+        !animatedNames.has(child.name)
+      ) {
+        child.material.emissiveIntensity =
+          TOWER_VISUAL_CONFIG.emissiveBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.emissiveIncrement;
+      }
+    });
+
+    if (specialization) {
+      this.applySpecializationVisual(towerGroup, specialization);
+    }
+  }
+
+  /**
+   * Apply ALPHA (warm orange) or BETA (cool blue) emissive tint to all MeshStandardMaterial
+   * children in the tower group. Skips 'tip' and 'orb' mesh names whose emissive is
+   * driven per-frame by TowerAnimationService.
+   */
+  applySpecializationVisual(towerGroup: THREE.Group, spec: TowerSpecialization): void {
+    const config = spec === TowerSpecialization.ALPHA
+      ? SPECIALIZATION_VISUAL_CONFIG.alpha
+      : SPECIALIZATION_VISUAL_CONFIG.beta;
+    const animatedNames = new Set(['tip', 'orb']);
+    towerGroup.traverse(child => {
+      if (child instanceof THREE.Mesh && !animatedNames.has(child.name)) {
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        for (const mat of materials) {
+          if (mat instanceof THREE.MeshStandardMaterial) {
+            mat.emissive.set(config.emissiveTint);
+            mat.emissiveIntensity = config.emissiveIntensity;
+          }
+        }
+      }
+    });
   }
 }

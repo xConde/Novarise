@@ -1,8 +1,27 @@
 import { Injectable } from '@angular/core';
 import { MINIMAP_CONFIG } from '../constants/minimap.constants';
 import { MinimapEntityData, MinimapTerrainData } from '../models/minimap.model';
+import { BlockType } from '../models/game-board-tile';
 
 export { MinimapEntityData, MinimapTerrainData } from '../models/minimap.model';
+
+/** Minimal board data needed to build the static minimap terrain cache. */
+export interface MinimapBoardSnapshot {
+  boardWidth: number;
+  boardHeight: number;
+  /** `[row, col]` pairs for all spawner tiles. */
+  spawnerTiles: number[][];
+  /** `[row, col]` pairs for all exit tiles. */
+  exitTiles: number[][];
+  /** Returns the tile type for the given (row, col), or undefined if out-of-bounds. */
+  getTileType: (row: number, col: number) => BlockType | undefined;
+}
+
+/** Row/col grid position of an entity — subset of PlacedTower and Enemy. */
+export interface MinimapGridPosition {
+  row: number;
+  col: number;
+}
 
 @Injectable()
 export class MinimapService {
@@ -10,6 +29,10 @@ export class MinimapService {
   private ctx: CanvasRenderingContext2D | null = null;
   private visible = false;
   private lastUpdateTime = 0;
+  /** Cached static terrain data — built once after board setup, cleared on cleanup. */
+  private cachedTerrain: MinimapTerrainData | null = null;
+  /** Reusable entity list — avoids per-frame array allocation in updateWithEntities(). */
+  private readonly entityBuffer: MinimapEntityData[] = [];
 
   /**
    * Creates the minimap canvas and appends it to the given container.
@@ -147,6 +170,57 @@ export class MinimapService {
     return this.visible;
   }
 
+  /**
+   * Build and cache static minimap terrain data from the current board state.
+   * Returns the built terrain so the caller can also store a reference if needed.
+   * Call after board import; the cache is invalidated by cleanup().
+   */
+  buildTerrainCache(snapshot: MinimapBoardSnapshot): MinimapTerrainData {
+    this.cachedTerrain = {
+      gridWidth: snapshot.boardWidth,
+      gridHeight: snapshot.boardHeight,
+      isPath: (row: number, col: number) => {
+        const type = snapshot.getTileType(row, col);
+        return type !== undefined && type !== BlockType.WALL;
+      },
+      spawnPoints: snapshot.spawnerTiles.map(([row, col]) => ({ x: col, z: row })),
+      exitPoints: snapshot.exitTiles.map(([row, col]) => ({ x: col, z: row })),
+    };
+    return this.cachedTerrain;
+  }
+
+  /** Returns the cached terrain, or null if buildTerrainCache() has not been called. */
+  getCachedTerrain(): MinimapTerrainData | null {
+    return this.cachedTerrain;
+  }
+
+  /**
+   * Update the minimap using pre-built tower and enemy position arrays.
+   * Renders immediately using the cached terrain built by buildTerrainCache().
+   * No-op if the terrain cache has not been built yet.
+   *
+   * @param timeMs       Current animation timestamp (milliseconds).
+   * @param towerPositions  Row/col grid positions of all placed towers.
+   * @param enemyPositions  Row/col grid positions of all live enemies.
+   */
+  updateWithEntities(
+    timeMs: number,
+    towerPositions: readonly MinimapGridPosition[],
+    enemyPositions: readonly MinimapGridPosition[],
+  ): void {
+    if (!this.cachedTerrain) return;
+
+    this.entityBuffer.length = 0;
+    for (const pos of towerPositions) {
+      this.entityBuffer.push({ x: pos.col, z: pos.row, type: 'tower' });
+    }
+    for (const pos of enemyPositions) {
+      this.entityBuffer.push({ x: pos.col, z: pos.row, type: 'enemy' });
+    }
+
+    this.update(timeMs, this.cachedTerrain, this.entityBuffer);
+  }
+
   cleanup(): void {
     if (this.canvas && this.canvas.parentElement) {
       this.canvas.parentElement.removeChild(this.canvas);
@@ -155,5 +229,7 @@ export class MinimapService {
     this.ctx = null;
     this.visible = false;
     this.lastUpdateTime = 0;
+    this.cachedTerrain = null;
+    this.entityBuffer.length = 0;
   }
 }

@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { MinimapService, MinimapTerrainData, MinimapEntityData } from './minimap.service';
+import { MinimapService, MinimapTerrainData, MinimapEntityData, MinimapBoardSnapshot, MinimapGridPosition } from './minimap.service';
 import { MINIMAP_CONFIG } from '../constants/minimap.constants';
+import { BlockType } from '../models/game-board-tile';
 
 describe('MinimapService', () => {
   let service: MinimapService;
@@ -218,6 +219,106 @@ describe('MinimapService', () => {
       service.init(container);
       service.cleanup();
       expect(() => service.cleanup()).not.toThrow();
+    });
+
+    it('should clear the terrain cache on cleanup', () => {
+      const snapshot: MinimapBoardSnapshot = {
+        boardWidth: 10,
+        boardHeight: 10,
+        spawnerTiles: [[0, 0]],
+        exitTiles: [[9, 9]],
+        getTileType: () => BlockType.BASE,
+      };
+      service.buildTerrainCache(snapshot);
+      expect(service.getCachedTerrain()).not.toBeNull();
+      service.cleanup();
+      expect(service.getCachedTerrain()).toBeNull();
+    });
+  });
+
+  describe('buildTerrainCache', () => {
+    const snapshot: MinimapBoardSnapshot = {
+      boardWidth: 25,
+      boardHeight: 20,
+      spawnerTiles: [[12, 0]],
+      exitTiles: [[12, 24]],
+      getTileType: (row: number, col: number) => (row === 12 ? BlockType.BASE : BlockType.WALL),
+    };
+
+    it('should return a MinimapTerrainData with correct dimensions', () => {
+      const terrain = service.buildTerrainCache(snapshot);
+      expect(terrain.gridWidth).toBe(25);
+      expect(terrain.gridHeight).toBe(20);
+    });
+
+    it('should cache the terrain (getCachedTerrain returns it)', () => {
+      expect(service.getCachedTerrain()).toBeNull();
+      service.buildTerrainCache(snapshot);
+      expect(service.getCachedTerrain()).not.toBeNull();
+    });
+
+    it('should derive isPath from getTileType (WALL tiles are not path)', () => {
+      const terrain = service.buildTerrainCache(snapshot);
+      expect(terrain.isPath(12, 5)).toBeTrue();   // BASE tile
+      expect(terrain.isPath(0, 0)).toBeFalse();   // WALL tile
+    });
+
+    it('should map spawner/exit tiles to minimap points (col→x, row→z)', () => {
+      const terrain = service.buildTerrainCache(snapshot);
+      expect(terrain.spawnPoints).toEqual([{ x: 0, z: 12 }]);
+      expect(terrain.exitPoints).toEqual([{ x: 24, z: 12 }]);
+    });
+
+    it('should handle out-of-bounds getTileType returning undefined (treated as not-path)', () => {
+      const snap: MinimapBoardSnapshot = {
+        boardWidth: 5,
+        boardHeight: 5,
+        spawnerTiles: [],
+        exitTiles: [],
+        getTileType: () => undefined,
+      };
+      const terrain = service.buildTerrainCache(snap);
+      expect(terrain.isPath(0, 0)).toBeFalse();
+    });
+  });
+
+  describe('updateWithEntities', () => {
+    const snapshot: MinimapBoardSnapshot = {
+      boardWidth: 25,
+      boardHeight: 20,
+      spawnerTiles: [],
+      exitTiles: [],
+      getTileType: () => BlockType.BASE,
+    };
+
+    it('should be a no-op when terrain cache has not been built', () => {
+      // No buildTerrainCache() called — should not throw
+      expect(() =>
+        service.updateWithEntities(0, [{ row: 0, col: 0 }], [])
+      ).not.toThrow();
+    });
+
+    it('should call update() with entity data derived from position arrays', () => {
+      service.init(container);
+      service.show();
+      service.buildTerrainCache(snapshot);
+
+      const updateSpy = spyOn(service, 'update').and.callThrough();
+
+      const towers: MinimapGridPosition[] = [{ row: 5, col: 10 }];
+      const enemies: MinimapGridPosition[] = [{ row: 12, col: 3 }];
+
+      service.updateWithEntities(0, towers, enemies);
+
+      expect(updateSpy).toHaveBeenCalled();
+      const [, , entities] = updateSpy.calls.mostRecent().args as [number, MinimapTerrainData, MinimapEntityData[]];
+      expect(entities.some(e => e.type === 'tower' && e.x === 10 && e.z === 5)).toBeTrue();
+      expect(entities.some(e => e.type === 'enemy' && e.x === 3 && e.z === 12)).toBeTrue();
+    });
+
+    it('should handle empty tower and enemy arrays without error', () => {
+      service.buildTerrainCache(snapshot);
+      expect(() => service.updateWithEntities(0, [], [])).not.toThrow();
     });
   });
 });

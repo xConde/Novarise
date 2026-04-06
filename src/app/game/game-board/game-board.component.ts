@@ -17,7 +17,7 @@ import { FpsCounterService } from './services/fps-counter.service';
 import { GameStatsService } from './services/game-stats.service';
 import { PlayerProfileService, ACHIEVEMENTS, Achievement } from '../../core/services/player-profile.service';
 import { DamagePopupService } from './services/damage-popup.service';
-import { MinimapService, MinimapEntityData, MinimapTerrainData } from './services/minimap.service';
+import { MinimapService, MinimapTerrainData, MinimapBoardSnapshot } from './services/minimap.service';
 import { SettingsService } from '../../core/services/settings.service';
 import { TowerPreviewService } from './services/tower-preview.service';
 import { disposeMaterial } from './utils/three-utils';
@@ -26,8 +26,8 @@ import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
-import { TOWER_VISUAL_CONFIG, TILE_EMISSIVE, UI_CONFIG } from './constants/ui.constants';
-import { SCREEN_SHAKE_CONFIG, SPECIALIZATION_VISUAL_CONFIG } from './constants/effects.constants';
+import { TILE_EMISSIVE, UI_CONFIG } from './constants/ui.constants';
+import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
 import { TOUCH_CONFIG, DRAG_CONFIG } from './constants/touch.constants';
 import { PHYSICS_CONFIG } from './constants/physics.constants';
 import { EnemyType, ENEMY_STATS } from './models/enemy.model';
@@ -51,7 +51,7 @@ import { CampaignMapService } from '../../campaign/services/campaign-map.service
 import { CampaignLevel } from '../../campaign/models/campaign.model';
 import { ChallengeDefinition, ChallengeType, getChallengesForLevel } from '../../campaign/models/challenge.model';
 import { ChallengeIndicator } from './components/game-hud/game-hud.component';
-import { GameSessionService } from './services/game-session.service';
+import { GameSessionService, CleanupSceneOpts } from './services/game-session.service';
 import { CombatLoopService } from './services/combat-loop.service';
 import { CombatFrameResult } from './models/combat-frame.model';
 import { TileHighlightService } from './services/tile-highlight.service';
@@ -66,6 +66,7 @@ import { ChainLightningService } from './services/chain-lightning.service';
 import { ProjectileService } from './services/projectile.service';
 import { GamePauseService } from './services/game-pause.service';
 import { ChallengeDisplayService } from './services/challenge-display.service';
+import { TowerUpgradeVisualService } from './services/tower-upgrade-visual.service';
 import { FocusTrap } from '../../shared/utils/focus-trap.util';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
@@ -130,7 +131,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, ProjectileService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService]
+  providers: [SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, ProjectileService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -247,8 +248,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private lastTime = 0;
   /** Cached minimap terrain data — static after board setup, rebuilt on board import. */
   private cachedMinimapTerrain: MinimapTerrainData | null = null;
-  /** Reusable entity list for updateMinimap() — avoids per-frame array allocation. */
-  private minimapEntities: MinimapEntityData[] = [];
+  /** Reusable tower position list for updateMinimap() — avoids per-frame array allocation. */
+  private readonly minimapTowerPositions: { row: number; col: number }[] = [];
+  /** Reusable enemy position list for updateMinimap() — avoids per-frame array allocation. */
+  private readonly minimapEnemyPositions: { row: number; col: number }[] = [];
   private defeatSoundPlayed = false;
   private victorySoundPlayed = false;
   private mousemoveHandler: (event: MouseEvent) => void = () => {};
@@ -362,7 +365,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private towerMeshFactory: TowerMeshFactoryService,
     private gameInput: GameInputService,
     private gamePauseService: GamePauseService,
-    private challengeDisplayService: ChallengeDisplayService
+    private challengeDisplayService: ChallengeDisplayService,
+    private towerUpgradeVisualService: TowerUpgradeVisualService
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -814,25 +818,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.specOptions = [];
     this.audioService.playTowerUpgrade();
 
-    // Scale tower mesh to reflect upgrade level (visual concern — stays here)
+    // Scale/emissive/specialization tint delegated to TowerUpgradeVisualService
     const towerMesh = this.towerMeshes.get(this.selectedTowerInfo.id);
     if (towerMesh) {
-      const newLevel = result.newLevel;
-      const scale = TOWER_VISUAL_CONFIG.scaleBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.scaleIncrement;
-      towerMesh.scale.set(scale, scale, scale);
-
-      // Boost emissive intensity on upgrade (skip animated children — their emissive is driven per-frame)
-      const animatedNames = new Set(['tip', 'orb']);
-      towerMesh.traverse(child => {
-        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial && !animatedNames.has(child.name)) {
-          child.material.emissiveIntensity = TOWER_VISUAL_CONFIG.emissiveBase + (newLevel - 1) * TOWER_VISUAL_CONFIG.emissiveIncrement;
-        }
-      });
-
-      // Apply specialization tint on L3 upgrade
-      if (result.specialization) {
-        this.applySpecializationVisual(towerMesh, result.specialization);
-      }
+      this.towerUpgradeVisualService.applyUpgradeVisuals(towerMesh, result.newLevel, result.specialization);
     }
 
     // Invalidate muzzle flash saved emissive — upgrade changed the baseline
@@ -858,27 +847,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.upgradeTower(spec);
   }
 
-  /**
-   * Apply ALPHA (warm orange) or BETA (cool blue) emissive tint to all MeshStandardMaterial
-   * children in the tower group. Skips 'tip' and 'orb' mesh names whose emissive is
-   * driven per-frame by TowerAnimationService.
-   */
+  /** @deprecated Use TowerUpgradeVisualService.applySpecializationVisual — kept for template compatibility. */
   applySpecializationVisual(towerMesh: THREE.Group, spec: TowerSpecialization): void {
-    const config = spec === TowerSpecialization.ALPHA
-      ? SPECIALIZATION_VISUAL_CONFIG.alpha
-      : SPECIALIZATION_VISUAL_CONFIG.beta;
-    const animatedNames = new Set(['tip', 'orb']);
-    towerMesh.traverse(child => {
-      if (child instanceof THREE.Mesh && !animatedNames.has(child.name)) {
-        const materials = Array.isArray(child.material) ? child.material : [child.material];
-        for (const mat of materials) {
-          if (mat instanceof THREE.MeshStandardMaterial) {
-            mat.emissive.set(config.emissiveTint);
-            mat.emissiveIntensity = config.emissiveIntensity;
-          }
-        }
-      }
-    });
+    this.towerUpgradeVisualService.applySpecializationVisual(towerMesh, spec);
   }
 
   sellTower(): void {
@@ -1270,28 +1241,19 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.enemyService.removeEnemy(id, this.sceneService.getScene());
     }
 
-    // Clean up tower combat state (projectiles)
-    this.towerCombatService.cleanup(this.sceneService.getScene());
+    // Delegate Three.js disposal + service cleanup to GameSessionService
+    const opts: CleanupSceneOpts = {
+      tileMeshes: this.tileMeshes,
+      towerMeshes: this.towerMeshes,
+      gridLines: this.gridLines,
+    };
+    this.gridLines = this.gameSessionService.cleanupScene(opts);
+    // Maps are cleared in-place by cleanupScene; reset the derived arrays
+    this.towerChildrenArray = [];
+    this.tileMeshArray = [];
 
-    // Clean up tower placement preview
-    this.towerPreviewService.cleanup(this.sceneService.getScene());
-
-    // Clean up damage popups
-    this.damagePopupService.cleanup(this.sceneService.getScene());
-
-    // Clean up minimap
-    this.minimapService.cleanup();
-
-    // Clean up path overlay
-    this.pathVisualizationService.hidePath(this.sceneService.getScene());
-    this.pathVisualizationService.cleanup();
+    // Reset component-owned UI state that references disposed objects
     this.showPathOverlay = false;
-
-    // Clean up tile highlights
-    this.clearTileHighlights();
-
-    // Clean up range preview and range toggle rings
-    this.rangeVisualizationService.cleanup(this.sceneService.getScene());
     this.showAllRanges = false;
     this.selectedTowerInfo = null;
     this.selectedTowerStats = null;
@@ -1299,45 +1261,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedTowerUpgradePercent = 0;
     this.showSpecializationChoice = false;
     this.specOptions = [];
-
-    // Clean up tower meshes
-    this.towerMeshes.forEach(group => {
-      this.sceneService.getScene().remove(group);
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          disposeMaterial(child.material);
-        }
-      });
-    });
-    this.towerMeshes.clear();
-    this.towerChildrenArray = [];
-
-    // Clean up tile meshes
-    this.tileMeshes.forEach(mesh => {
-      this.sceneService.getScene().remove(mesh);
-      mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
-    });
-    this.tileMeshes.clear();
-    this.tileMeshArray = [];
-
-    // Clean up grid lines
-    if (this.gridLines) {
-      this.sceneService.getScene().remove(this.gridLines);
-      this.gridLines.traverse(child => {
-        if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
-          child.geometry.dispose();
-          disposeMaterial(child.material);
-        }
-      });
-      this.gridLines = null;
-    }
-
-    // Delegate particles, skybox, and lights cleanup to SceneService
-    this.sceneService.disposeParticles();
-    this.sceneService.disposeSkybox();
-    this.sceneService.disposeLights();
   }
 
   private renderGameBoard(): void {
@@ -1359,22 +1282,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Builds and caches the static minimap terrain data after board setup. */
   private buildMinimapTerrainCache(): void {
-    const boardWidth = this.gameBoardService.getBoardWidth();
-    const boardHeight = this.gameBoardService.getBoardHeight();
-    const spawnerTiles = this.gameBoardService.getSpawnerTiles();
-    const exitTiles = this.gameBoardService.getExitTiles();
-
-    this.cachedMinimapTerrain = {
-      gridWidth: boardWidth,
-      gridHeight: boardHeight,
-      isPath: (row: number, col: number) => {
+    const snapshot: MinimapBoardSnapshot = {
+      boardWidth: this.gameBoardService.getBoardWidth(),
+      boardHeight: this.gameBoardService.getBoardHeight(),
+      spawnerTiles: this.gameBoardService.getSpawnerTiles(),
+      exitTiles: this.gameBoardService.getExitTiles(),
+      getTileType: (row: number, col: number) => {
         const board = this.gameBoardService.getGameBoard();
-        const tile = board?.[row]?.[col];
-        return tile !== undefined && tile.type !== BlockType.WALL;
+        return board?.[row]?.[col]?.type;
       },
-      spawnPoints: spawnerTiles.map(([row, col]) => ({ x: col, z: row })),
-      exitPoints: exitTiles.map(([row, col]) => ({ x: col, z: row })),
     };
+    this.cachedMinimapTerrain = this.minimapService.buildTerrainCache(snapshot);
   }
 
   private addGridLines(): void {
@@ -2138,20 +2056,22 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private updateMinimap(timeMs: number): void {
-    // Use cached terrain (static after board setup); fall back to building if not yet cached
+    // Ensure terrain cache is ready (fall back to building if not yet cached)
     if (!this.cachedMinimapTerrain) {
       this.buildMinimapTerrainCache();
     }
-    const terrain = this.cachedMinimapTerrain!;
 
-    this.minimapEntities.length = 0;
-    this.towerCombatService.getPlacedTowers().forEach((tower) => {
-      this.minimapEntities.push({ x: tower.col, z: tower.row, type: 'tower' });
+    // Build reusable position arrays — no per-frame allocation
+    this.minimapTowerPositions.length = 0;
+    this.towerCombatService.getPlacedTowers().forEach(tower => {
+      this.minimapTowerPositions.push({ row: tower.row, col: tower.col });
     });
-    this.enemyService.getEnemies().forEach((enemy) => {
-      this.minimapEntities.push({ x: enemy.gridPosition.col, z: enemy.gridPosition.row, type: 'enemy' });
+    this.minimapEnemyPositions.length = 0;
+    this.enemyService.getEnemies().forEach(enemy => {
+      this.minimapEnemyPositions.push({ row: enemy.gridPosition.row, col: enemy.gridPosition.col });
     });
-    this.minimapService.update(timeMs, terrain, this.minimapEntities);
+
+    this.minimapService.updateWithEntities(timeMs, this.minimapTowerPositions, this.minimapEnemyPositions);
   }
 
   // --- Cleanup ---
@@ -2218,7 +2138,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.audioService.cleanup();
     this.particleService.cleanup(this.sceneService.getScene());
     this.goldPopupService.cleanup(this.sceneService.getScene());
-    // priceLabelService already cleaned by cleanupGameObjects → clearTileHighlights
+    // priceLabelService already cleaned by cleanupGameObjects → GameSessionService.cleanupScene → clearHighlights
     this.screenShakeService.cleanup(this.sceneService.getCamera());
     this.fpsCounterService.reset();
 

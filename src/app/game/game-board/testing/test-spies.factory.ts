@@ -32,6 +32,8 @@ import { GameBoardTile } from '../models/game-board-tile';
 import { TowerType } from '../models/tower.model';
 import { DifficultyLevel, GamePhase, INITIAL_GAME_STATE, GameState } from '../models/game-state.model';
 import { PlayerProfile } from '../models/achievement.model';
+import { TowerUpgradeVisualService } from '../services/tower-upgrade-visual.service';
+import { GameSessionService } from '../services/game-session.service';
 
 /**
  * Create a pre-configured GameBoardService spy with standard return values.
@@ -214,10 +216,22 @@ export function createMinimapServiceSpy(): jasmine.SpyObj<MinimapService> {
     'show',
     'hide',
     'toggleVisibility',
+    'setDimmed',
     'isVisible',
     'cleanup',
+    'buildTerrainCache',
+    'updateWithEntities',
+    'getCachedTerrain',
   ]);
   spy.isVisible.and.returnValue(false);
+  spy.getCachedTerrain.and.returnValue(null);
+  spy.buildTerrainCache.and.returnValue({
+    gridWidth: 10,
+    gridHeight: 10,
+    isPath: () => false,
+    spawnPoints: [],
+    exitPoints: [],
+  });
   return spy;
 }
 
@@ -841,5 +855,51 @@ export function createProjectileServiceSpy(): jasmine.SpyObj<ProjectileService> 
   ]);
   spy.getProjectileCount.and.returnValue(0);
   spy.advance.and.returnValue([]);
+  return spy;
+}
+
+// ---------------------------------------------------------------------------
+// Service spies added in Hardening VIII Sprint S12 / S15 / S17
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a pre-configured TowerUpgradeVisualService spy.
+ *
+ * Default return values:
+ *   - flashCount / ringCount — 0
+ *   - All visual methods — no-op void
+ */
+export function createTowerUpgradeVisualServiceSpy(): jasmine.SpyObj<TowerUpgradeVisualService> {
+  const spy = jasmine.createSpyObj<TowerUpgradeVisualService>(
+    'TowerUpgradeVisualService',
+    [
+      'applyLevelScale',
+      'spawnUpgradeFlash',
+      'addGlowRing',
+      'removeGlowRing',
+      'update',
+      'cleanup',
+      'applyUpgradeVisuals',
+      'applySpecializationVisual',
+    ],
+    { flashCount: 0, ringCount: 0 }
+  );
+  return spy;
+}
+
+/**
+ * Create a pre-configured GameSessionService spy.
+ *
+ * Default return values:
+ *   - resetAllServices / applyCampaignWaves — no-op void
+ *   - cleanupScene — returns null
+ */
+export function createGameSessionServiceSpy(): jasmine.SpyObj<GameSessionService> {
+  const spy = jasmine.createSpyObj<GameSessionService>('GameSessionService', [
+    'resetAllServices',
+    'applyCampaignWaves',
+    'cleanupScene',
+  ]);
+  spy.cleanupScene.and.returnValue(null);
   return spy;
 }
