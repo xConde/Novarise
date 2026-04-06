@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { TowerCombatService, KillInfo, CombatAudioEvent } from './tower-combat.service';
 import { ChainLightningService } from './chain-lightning.service';
+import { ProjectileService } from './projectile.service';
 import { CombatVFXService } from './combat-vfx.service';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
@@ -17,6 +18,7 @@ import { TowerAnimationService } from './tower-animation.service';
 
 describe('TowerCombatService', () => {
   let service: TowerCombatService;
+  let projectileService: ProjectileService;
   let combatVFXService: CombatVFXService;
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
   let gameBoardServiceSpy: jasmine.SpyObj<GameBoardService>;
@@ -44,6 +46,7 @@ describe('TowerCombatService', () => {
       providers: [
         TowerCombatService,
         ChainLightningService,
+        ProjectileService,
         CombatVFXService,
         StatusEffectService,
         GameStateService,
@@ -53,6 +56,7 @@ describe('TowerCombatService', () => {
       ]
     });
     service = TestBed.inject(TowerCombatService);
+    projectileService = TestBed.inject(ProjectileService);
     combatVFXService = TestBed.inject(CombatVFXService);
     statusEffectService = TestBed.inject(StatusEffectService);
     mockScene = new THREE.Scene();
@@ -453,7 +457,8 @@ describe('TowerCombatService', () => {
 
       service.update(0.016, mockScene);
 
-      const projectiles = (service as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
+      // Projectile state now lives in ProjectileService
+      const projectiles = (projectileService as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
       expect(projectiles.length).toBeGreaterThan(0);
       // After first update, trail is still null (needs >=2 positions), trailPositions has 1 entry
       expect(projectiles[0].trail).toBeNull();
@@ -471,7 +476,8 @@ describe('TowerCombatService', () => {
       // Frame 2: second move — 2 trail positions, trail created
       service.update(0.016, mockScene);
 
-      const projectiles = (service as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
+      // Projectile state now lives in ProjectileService
+      const projectiles = (projectileService as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
       expect(projectiles.length).toBeGreaterThan(0);
       expect(projectiles[0].trail).not.toBeNull();
       expect(projectiles[0].trailPositions.length).toBeGreaterThanOrEqual(2);
@@ -488,7 +494,8 @@ describe('TowerCombatService', () => {
       service.update(0.016, mockScene);
       service.update(0.016, mockScene);
 
-      const projectiles = (service as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
+      // Projectile state now lives in ProjectileService
+      const projectiles = (projectileService as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
       expect(projectiles.length).toBeGreaterThan(0);
       const trail = projectiles[0].trail;
       expect(trail).not.toBeNull();
@@ -514,7 +521,8 @@ describe('TowerCombatService', () => {
       // Frame 2: trail is created (2 positions)
       service.update(0.016, mockScene);
 
-      const projectiles = (service as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
+      // Projectile state now lives in ProjectileService
+      const projectiles = (projectileService as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
       expect(projectiles.length).toBeGreaterThan(0);
       const trail = projectiles[0].trail!;
       expect(trail).not.toBeNull();
@@ -530,7 +538,7 @@ describe('TowerCombatService', () => {
       // Frame 3: trail grows
       service.update(0.016, mockScene);
 
-      const projectilesAfter = (service as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
+      const projectilesAfter = (projectileService as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
       expect(projectilesAfter.length).toBeGreaterThan(0);
       const trailAfter = projectilesAfter[0].trail!;
 

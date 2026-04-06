@@ -6,6 +6,7 @@ import { PathfindingService } from './pathfinding.service';
 import { GameStateService } from './game-state.service';
 import { TowerCombatService } from './tower-combat.service';
 import { ChainLightningService } from './chain-lightning.service';
+import { ProjectileService } from './projectile.service';
 import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
 import { GameBoardService } from '../game-board.service';
@@ -249,7 +250,8 @@ describe('Flying Enemy', () => {
         TestBed.configureTestingModule({
           providers: [
             TowerCombatService,
-        ChainLightningService,
+            ChainLightningService,
+            ProjectileService,
             CombatVFXService,
             StatusEffectService,
             GameStateService,

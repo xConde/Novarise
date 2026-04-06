@@ -15,6 +15,9 @@ import { GameStateService } from '../services/game-state.service';
 import { GameEndService } from '../services/game-end.service';
 import { WaveService } from '../services/wave.service';
 import { TowerCombatService } from '../services/tower-combat.service';
+import { ProjectileService } from '../services/projectile.service';
+import { TowerPlacementService } from '../services/tower-placement.service';
+import { TowerSelectionService } from '../services/tower-selection.service';
 import { StatusEffectService } from '../services/status-effect.service';
 import { ChallengeTrackingService } from '../services/challenge-tracking.service';
 import { GamePauseService } from '../services/game-pause.service';
@@ -664,6 +667,8 @@ export function createTowerCombatServiceSpy(): jasmine.SpyObj<TowerCombatService
     'update',
     'setTargetingMode',
     'cycleTargetingMode',
+    'getTower',
+    'getPlacedTowers',
   ]);
   spy.update.and.returnValue({ killed: [], fired: [], hitCount: 0 });
   spy.upgradeTower.and.returnValue(false);
@@ -672,6 +677,8 @@ export function createTowerCombatServiceSpy(): jasmine.SpyObj<TowerCombatService
   spy.cycleTargetingMode.and.returnValue(null);
   spy.unregisterTower.and.returnValue(undefined);
   spy.drainAudioEvents.and.returnValue([]);
+  spy.getTower.and.returnValue(undefined);
+  spy.getPlacedTowers.and.returnValue(new Map());
   return spy;
 }
 
@@ -764,5 +771,75 @@ export function createChallengeDisplayServiceSpy(): jasmine.SpyObj<ChallengeDisp
     { indicators: [] as ChallengeIndicator[] }
   );
   spy.updateIndicators.and.returnValue([]);
+  return spy;
+}
+
+// ---------------------------------------------------------------------------
+// Service spies added in Hardening VIII Sprint S10 / S13
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a pre-configured TowerPlacementService spy.
+ *
+ * Default return values:
+ *   - isDragging — false
+ *   - onTowerDragStart / cancelDrag / removeDragListeners / init — no-op void
+ */
+export function createTowerPlacementServiceSpy(): jasmine.SpyObj<TowerPlacementService> {
+  const spy = jasmine.createSpyObj<TowerPlacementService>(
+    'TowerPlacementService',
+    ['onTowerDragStart', 'cancelDrag', 'removeDragListeners', 'init'],
+    { isDragging: false }
+  );
+  return spy;
+}
+
+/**
+ * Create a pre-configured TowerSelectionService spy.
+ *
+ * Default return values:
+ *   - selectedTowerInfo / selectedTowerStats / upgradePreview — null
+ *   - sellConfirmPending / showSpecializationChoice — false
+ *   - specOptions — empty array
+ *   - selectedTowerUpgradeCost / selectedTowerUpgradePercent / selectedTowerSellValue — 0
+ *   - selectPlacedTower / deselectTower / refreshTowerInfoPanel / cycleTargeting — no-op void
+ */
+export function createTowerSelectionServiceSpy(): jasmine.SpyObj<TowerSelectionService> {
+  const spy = jasmine.createSpyObj<TowerSelectionService>(
+    'TowerSelectionService',
+    ['selectPlacedTower', 'deselectTower', 'refreshTowerInfoPanel', 'cycleTargeting'],
+    {
+      selectedTowerInfo: null,
+      selectedTowerStats: null,
+      selectedTowerUpgradeCost: 0,
+      selectedTowerUpgradePercent: 0,
+      selectedTowerSellValue: 0,
+      upgradePreview: null,
+      showSpecializationChoice: false,
+      specOptions: [],
+      sellConfirmPending: false,
+    }
+  );
+  return spy;
+}
+
+/**
+ * Create a pre-configured ProjectileService spy.
+ *
+ * Default return values:
+ *   - getProjectileCount() — 0
+ *   - fire() — no-op void
+ *   - advance() — empty array (no hits)
+ *   - cleanup() — no-op void
+ */
+export function createProjectileServiceSpy(): jasmine.SpyObj<ProjectileService> {
+  const spy = jasmine.createSpyObj<ProjectileService>('ProjectileService', [
+    'getProjectileCount',
+    'fire',
+    'advance',
+    'cleanup',
+  ]);
+  spy.getProjectileCount.and.returnValue(0);
+  spy.advance.and.returnValue([]);
   return spy;
 }

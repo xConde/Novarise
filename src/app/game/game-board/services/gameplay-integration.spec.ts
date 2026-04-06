@@ -8,6 +8,7 @@ import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { PathfindingService } from './pathfinding.service';
 import { TowerCombatService } from './tower-combat.service';
 import { ChainLightningService } from './chain-lightning.service';
+import { ProjectileService } from './projectile.service';
 import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
 import { GameStatsService } from './game-stats.service';
@@ -75,6 +76,7 @@ describe('Gameplay Integration', () => {
         EnemyMeshFactoryService,
         TowerCombatService,
         ChainLightningService,
+        ProjectileService,
         CombatVFXService,
 
         StatusEffectService,

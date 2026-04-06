@@ -24,4 +24,7 @@ export {
   createChallengeTrackingServiceSpy,
   createGamePauseServiceSpy,
   createChallengeDisplayServiceSpy,
+  createTowerPlacementServiceSpy,
+  createTowerSelectionServiceSpy,
+  createProjectileServiceSpy,
 } from './test-spies.factory';
