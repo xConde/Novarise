@@ -1,15 +1,8 @@
 import { Injectable } from '@angular/core';
 import { TowerType } from '../models/tower.model';
+import { GameStats } from '../models/game-stats.model';
 
-export interface GameStats {
-  killsByTowerType: Record<TowerType, number>;
-  totalDamageDealt: number;
-  totalGoldEarned: number;
-  enemiesLeaked: number;
-  towersBuilt: number;
-  towersSold: number;
-  shotsFired: number;
-}
+export { GameStats } from '../models/game-stats.model';
 
 function createEmptyKillsByTowerType(): Record<TowerType, number> {
   return {

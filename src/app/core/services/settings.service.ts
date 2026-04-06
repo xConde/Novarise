@@ -1,16 +1,11 @@
 import { Injectable } from '@angular/core';
 import { DifficultyLevel } from '../../game/game-board/models/game-state.model';
 import { StorageService } from './storage.service';
+import { GameSettings } from '../models/settings.model';
+
+export { GameSettings } from '../models/settings.model';
 
 const STORAGE_KEY = 'novarise-settings';
-
-export interface GameSettings {
-  audioMuted: boolean;
-  difficulty: DifficultyLevel;
-  gameSpeed: number;
-  showFps: boolean;
-  reduceMotion: boolean;
-}
 
 const DEFAULT_SETTINGS: GameSettings = {
   audioMuted: false,

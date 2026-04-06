@@ -23,8 +23,6 @@ import {
   EDITOR_PATH_INVALID_FLASH_MS,
   EDITOR_PATH_INVALID_FLASH_COLOR,
   EDITOR_RENDER_ORDER,
-  EDITOR_AUTOSAVE_DRAFT_KEY,
-  EDITOR_AUTOSAVE_INTERVAL_MS,
   EDITOR_AUTOSAVE_JUST_NOW_MS,
 } from './constants/editor-ui.constants';
 import { PathValidationService, PathValidationResult } from './core/path-validation.service';
@@ -33,6 +31,7 @@ import { MapTemplate } from '../../core/models/map-template.model';
 import { EditorSceneService } from './core/editor-scene.service';
 import { EditorNotificationService, EditorNotification } from './core/editor-notification.service';
 import { TerrainEditService } from './core/terrain-edit.service';
+import { MapFileService } from './core/map-file.service';
 
 // Re-export types for template compatibility
 export { EditMode, BrushTool } from './core/editor-state.service';
@@ -127,8 +126,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   public modalSelectOptions: string[] = [];
   private modalCallback: ((result: string | boolean | number | null) => void) | null = null;
 
-  // Autosave draft
-  private autosaveInterval: ReturnType<typeof setInterval> | null = null;
+  // Autosave draft timestamp (updated when MapFileService triggers a save)
   public lastAutosaveTime: Date | null = null;
 
   // Undo/Redo state - expose for UI binding
@@ -149,6 +147,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     private editorScene: EditorSceneService,
     public editorNotificationService: EditorNotificationService,
     private terrainEdit: TerrainEditService,
+    private mapFile: MapFileService,
   ) {
     this.keyboardHandler = this.handleKeyDown.bind(this);
     this.keyUpHandler = this.handleKeyUp.bind(this);
@@ -184,6 +183,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Initialize terrain grid
     this.terrainGrid = new TerrainGrid(this.editorScene.getScene(), 25);
     this.terrainEdit.setTerrainGrid(this.terrainGrid);
+    this.mapFile.setTerrainGrid(this.terrainGrid);
 
     // Create brush indicator for crisp visual feedback
     this.createBrushIndicator();
@@ -210,7 +210,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.tryLoadCurrentMap();
 
     // Offer to restore any unsaved draft (only after the named map is loaded)
-    const draft = this.loadDraft();
+    const draft = this.mapFile.loadDraft();
     if (draft) {
       this.showConfirmModal('An unsaved draft was found. Restore it?', (confirmed) => {
         if (confirmed) {
@@ -219,11 +219,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           this.updateExitMarker();
           this.runPathValidation();
         }
-        this.clearDraft();
+        this.mapFile.clearDraft();
       });
     }
 
-    this.startAutosave();
+    this.mapFile.startAutosave();
 
     this.setupInteraction();
     this.setupKeyboardControls();
@@ -877,25 +877,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private promptForMapNameAndSave(): void {
     this.showInputModal('Enter map name', this.currentMapName, (mapName) => {
       if (!mapName) return; // User cancelled
-
-      const state = this.terrainGrid.exportState();
-      const currentId = this.mapStorage.getCurrentMapId();
-
-      // Save (will update if ID exists, create new if not)
-      const savedId = this.mapStorage.saveMap(mapName, state, currentId || undefined);
-      if (!savedId) {
-        this.editorNotificationService.show('Storage full — delete unused maps to free space.', 'error');
-        return;
-      }
-      this.currentMapName = mapName;
-      this.clearDraft();
-
-      this.editorNotificationService.show(`Map "${mapName}" saved successfully!`, 'success');
+      this.mapFile.save(mapName);
     });
   }
 
   private loadGridState(): void {
-    const maps = this.mapStorage.getAllMaps();
+    const maps = this.mapFile.getAllMaps();
 
     if (maps.length === 0) {
       this.editorNotificationService.show('No saved maps found.', 'error');
@@ -911,74 +898,24 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       if (selectedIndex === null) return; // User cancelled
 
       const selectedMap = maps[selectedIndex];
-      const state = this.mapStorage.loadMap(selectedMap.id);
+      const state = this.mapFile.loadById(selectedMap.id);
 
       if (state) {
         this.terrainGrid.importState(state);
         this.updateSpawnMarker();
         this.updateExitMarker();
         this.runPathValidation();
-        this.currentMapName = selectedMap.name;
-        this.clearDraft();
-        this.editorNotificationService.show(`Map "${selectedMap.name}" loaded successfully!`, 'success');
-      } else {
-        this.editorNotificationService.show('Failed to load map.', 'error');
       }
     });
   }
 
   private tryLoadCurrentMap(): void {
-    const state = this.mapStorage.loadCurrentMap();
+    const state = this.mapFile.loadCurrent();
     if (state) {
       this.terrainGrid.importState(state);
       this.updateSpawnMarker();
       this.updateExitMarker();
       this.runPathValidation();
-
-      const currentId = this.mapStorage.getCurrentMapId();
-      if (currentId) {
-        const metadata = this.mapStorage.getMapMetadata(currentId);
-        if (metadata) {
-          this.currentMapName = metadata.name;
-        }
-      }
-    }
-  }
-
-  // ── Autosave draft ──────────────────────────────────────────────────────────
-
-  private startAutosave(): void {
-    this.autosaveInterval = setInterval(() => {
-      this.saveDraft();
-    }, EDITOR_AUTOSAVE_INTERVAL_MS);
-  }
-
-  /** Write the current grid state to the draft slot. Silently fails on quota. */
-  private saveDraft(): void {
-    if (!this.terrainGrid) return;
-    const state = this.terrainGrid.exportState();
-    try {
-      localStorage.setItem(EDITOR_AUTOSAVE_DRAFT_KEY, JSON.stringify(state));
-      this.lastAutosaveTime = new Date();
-    } catch {
-      // Quota exceeded — editing must not be disrupted
-    }
-  }
-
-  /** Remove the draft from localStorage and reset the indicator timestamp. */
-  private clearDraft(): void {
-    localStorage.removeItem(EDITOR_AUTOSAVE_DRAFT_KEY);
-    this.lastAutosaveTime = null;
-  }
-
-  /** Read and parse the draft. Returns null if absent or malformed. */
-  private loadDraft(): import('./features/terrain-editor/terrain-grid-state.interface').TerrainGridState | null {
-    const raw = localStorage.getItem(EDITOR_AUTOSAVE_DRAFT_KEY);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as import('./features/terrain-editor/terrain-grid-state.interface').TerrainGridState;
-    } catch {
-      return null;
     }
   }
 
@@ -992,8 +929,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   public loadTemplate(templateId: string): void {
+    const template = this.templates.find(t => t.id === templateId);
+    if (!template) return;
+
     const doLoad = () => {
-      const state = this.mapTemplateService.loadTemplate(templateId);
+      const state = this.mapFile.loadTemplate(template);
       if (!state) return;
       this.terrainGrid.importState(state);
       this.updateSpawnMarker();
@@ -1002,7 +942,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.editHistory.clear();
       this.mapStorage.clearCurrentMapId();
       this.currentMapName = '';
-      this.clearDraft();
+      this.mapFile.clearDraft();
     };
 
     if (this.editHistory.canUndo) {
@@ -1333,46 +1273,21 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
    * Export current map to a downloadable file
    */
   public exportCurrentMap(): void {
-    const currentId = this.mapStorage.getCurrentMapId();
-    if (!currentId) {
-      this.editorNotificationService.show('No map to export. Save a map first (G key).', 'error');
-      return;
-    }
-
-    const success = this.mapStorage.downloadMapAsFile(currentId);
-    if (!success) {
-      this.editorNotificationService.show('Failed to export map.', 'error');
-    }
+    this.mapFile.exportAsJson();
   }
 
   /**
    * Import a map from a file
    */
   public async importMapFromFile(): Promise<void> {
-    const { mapId, errorCode } = await this.mapStorage.promptFileImport();
-    if (mapId) {
-      const state = this.mapStorage.loadMap(mapId);
-      if (state) {
-        this.terrainGrid.importState(state);
-        this.updateSpawnMarker();
-        this.updateExitMarker();
-        this.runPathValidation();
-        const metadata = this.mapStorage.getMapMetadata(mapId);
-        if (metadata) {
-          this.currentMapName = metadata.name;
-        }
-        // Clear edit history when loading a new map
-        this.editHistory.clear();
-        this.editorNotificationService.show(`Map "${this.currentMapName}" imported successfully!`, 'success');
-      }
-    } else if (errorCode) {
-      const importErrorMessages: Record<string, string> = {
-        file_too_large: 'Map file is too large (max 512KB). Try a smaller map.',
-        invalid_json: 'Map file is corrupted or not a valid Novarise map.',
-        invalid_schema: 'Map file format is not recognized. It may be from a different version.',
-        general: 'Failed to import map. Please try a different file.'
-      };
-      this.editorNotificationService.show(importErrorMessages[errorCode] ?? importErrorMessages['general'], 'error');
+    const state = await this.mapFile.importFromJson(new File([], ''));
+    if (state) {
+      this.terrainGrid.importState(state);
+      this.updateSpawnMarker();
+      this.updateExitMarker();
+      this.runPathValidation();
+      // Clear edit history when loading a new map
+      this.editHistory.clear();
     }
   }
 
@@ -1435,10 +1350,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Stop the animation loop first to prevent calls to disposed resources
     cancelAnimationFrame(this.animationFrameId);
 
-    if (this.autosaveInterval !== null) {
-      clearInterval(this.autosaveInterval);
-      this.autosaveInterval = null;
-    }
+    this.mapFile.stopAutosave();
 
     this.notificationSub?.unsubscribe();
     this.notificationSub = null;

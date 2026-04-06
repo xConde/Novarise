@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED } from '../models/enemy.model';
+import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG } from '../constants/ui.constants';
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
@@ -11,16 +11,7 @@ import { GameStateService } from './game-state.service';
 import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { EnemyVisualService } from './enemy-visual.service';
 
-/**
- * Result returned by {@link EnemyService.damageEnemy}.
- * `killed` is true when the hit reduces health to 0 or below.
- * `spawnedEnemies` is non-empty only when a SWARM parent dies; the caller
- * must add each entry's mesh to the Three.js scene.
- */
-export interface DamageResult {
-  killed: boolean;
-  spawnedEnemies: Enemy[];
-}
+export { DamageResult } from '../models/enemy.model';
 
 @Injectable()
 export class EnemyService {

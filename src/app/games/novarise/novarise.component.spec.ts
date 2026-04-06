@@ -12,6 +12,7 @@ import { MapTemplateService } from '../../core/services/map-template.service';
 import { EditorSceneService } from './core/editor-scene.service';
 import { EditorNotificationService } from './core/editor-notification.service';
 import { TerrainEditService } from './core/terrain-edit.service';
+import { MapFileService } from './core/map-file.service';
 import { JoystickEvent } from './features/mobile-controls';
 
 /**
@@ -88,6 +89,7 @@ describe('NovariseComponent', () => {
         EditHistoryService,
         EditorNotificationService,
         TerrainEditService,
+        MapFileService,
       ],
       schemas: [NO_ERRORS_SCHEMA] // Ignore unknown elements like app-virtual-joystick
     }).compileComponents();
@@ -569,7 +571,7 @@ describe('NovariseComponent', () => {
     });
   });
 
-  describe('Autosave draft', () => {
+  describe('Autosave draft (delegated to MapFileService)', () => {
     const DRAFT_KEY = 'novarise-draft';
 
     beforeEach(() => {
@@ -579,82 +581,63 @@ describe('NovariseComponent', () => {
     });
 
     afterEach(() => {
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      mapFile.stopAutosave();
       localStorage.removeItem(DRAFT_KEY);
     });
 
-    it('saveDraft writes grid state to localStorage under the draft key', () => {
-      const fakeState = { gridSize: 25, tiles: [], heightMap: [], spawnPoints: [], exitPoints: [] };
-      (component as any).terrainGrid = { exportState: () => fakeState, dispose: () => {} };
+    it('saveDraft writes grid state to localStorage via MapFileService', () => {
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      const fakeState = { gridSize: 25, tiles: [], heightMap: [], spawnPoints: [], exitPoints: [], version: '2' };
+      const mockGrid = { exportState: () => fakeState, dispose: () => {} } as any;
+      mapFile.setTerrainGrid(mockGrid);
 
-      (component as any).saveDraft();
+      mapFile.saveDraft();
 
       const stored = localStorage.getItem(DRAFT_KEY);
       expect(stored).not.toBeNull();
       expect(JSON.parse(stored!)).toEqual(fakeState);
     });
 
-    it('saveDraft sets lastAutosaveTime to a Date', () => {
-      (component as any).terrainGrid = { exportState: () => ({ gridSize: 25, tiles: [], heightMap: [], spawnPoints: [], exitPoints: [] }), dispose: () => {} };
-      expect(component.lastAutosaveTime).toBeNull();
-
-      (component as any).saveDraft();
-
-      expect(component.lastAutosaveTime).toBeInstanceOf(Date);
-    });
-
     it('loadDraft returns null when no draft is in localStorage', () => {
-      expect((component as any).loadDraft()).toBeNull();
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      expect(mapFile.loadDraft()).toBeNull();
     });
 
     it('loadDraft returns parsed state when draft exists', () => {
-      const fakeState = { gridSize: 25, tiles: [], heightMap: [], spawnPoints: [], exitPoints: [] };
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      const fakeState = { gridSize: 25, tiles: [], heightMap: [], spawnPoints: [], exitPoints: [], version: '2' };
       localStorage.setItem(DRAFT_KEY, JSON.stringify(fakeState));
-
-      const result = (component as any).loadDraft();
-
-      expect(result).toEqual(fakeState);
+      expect(mapFile.loadDraft()).toEqual(fakeState as any);
     });
 
     it('loadDraft returns null when draft JSON is malformed', () => {
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
       localStorage.setItem(DRAFT_KEY, '{not valid json');
-
-      expect((component as any).loadDraft()).toBeNull();
+      expect(mapFile.loadDraft()).toBeNull();
     });
 
     it('clearDraft removes the draft from localStorage', () => {
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
       localStorage.setItem(DRAFT_KEY, '{}');
-      (component as any).lastAutosaveTime = new Date();
-
-      (component as any).clearDraft();
-
+      mapFile.clearDraft();
       expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
     });
 
-    it('clearDraft resets lastAutosaveTime to null', () => {
-      (component as any).lastAutosaveTime = new Date();
-
-      (component as any).clearDraft();
-
-      expect(component.lastAutosaveTime).toBeNull();
+    it('startAutosave starts the interval on MapFileService', () => {
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      const setSpy = spyOn(window, 'setInterval').and.callThrough();
+      mapFile.startAutosave();
+      expect(setSpy).toHaveBeenCalled();
+      mapFile.stopAutosave();
     });
 
-    it('startAutosave sets a non-null autosaveInterval', () => {
-      expect((component as any).autosaveInterval).toBeNull();
-
-      (component as any).startAutosave();
-
-      expect((component as any).autosaveInterval).not.toBeNull();
-      clearInterval((component as any).autosaveInterval);
-    });
-
-    it('ngOnDestroy clears the autosave interval', () => {
-      (component as any).startAutosave();
-      const id = (component as any).autosaveInterval;
-      expect(id).not.toBeNull();
-
+    it('ngOnDestroy delegates stopAutosave to MapFileService', () => {
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      const stopSpy = spyOn(mapFile, 'stopAutosave').and.callThrough();
+      mapFile.startAutosave();
       component.ngOnDestroy();
-
-      expect((component as any).autosaveInterval).toBeNull();
+      expect(stopSpy).toHaveBeenCalled();
     });
   });
 
@@ -723,20 +706,13 @@ describe('NovariseComponent', () => {
       expect(component.modalType).toBe('input');
     });
 
-    it('should call mapStorage.saveMap when path is invalid and user confirms both dialogs', () => {
+    it('should call mapFile.save when path is invalid and user confirms both dialogs', () => {
       // Arrange
       (component as any).pathValidationResult = { valid: false };
       spyOnProperty(component, 'hasSpawnAndExit').and.returnValue(true);
 
-      const fakeState = { tiles: [], spawnerPoints: [], exitPoints: [] };
-      (component as any).terrainGrid = {
-        exportState: () => fakeState,
-        getSpawnPoints: () => [{}],
-        getExitPoints: () => [{}],
-        dispose: () => {}
-      };
-      mockMapStorageService.saveMap.and.returnValue('map-id-1');
-      mockMapStorageService.getCurrentMapId.and.returnValue(null);
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      const saveSpy = spyOn(mapFile, 'save').and.returnValue(true);
 
       // Act
       (component as any).saveGridState();
@@ -745,7 +721,7 @@ describe('NovariseComponent', () => {
       component.confirmModal(); // confirm map name
 
       // Assert
-      expect(mockMapStorageService.saveMap).toHaveBeenCalledWith('My Map', jasmine.any(Object), undefined);
+      expect(saveSpy).toHaveBeenCalledWith('My Map');
     });
 
     it('should open input modal directly (no confirm) when path is valid', () => {
@@ -760,19 +736,12 @@ describe('NovariseComponent', () => {
       expect(component.modalType).toBe('input');
     });
 
-    it('should call mapStorage.saveMap when path is valid and user enters a name', () => {
+    it('should call mapFile.save when path is valid and user enters a name', () => {
       // Arrange
       (component as any).pathValidationResult = { valid: true };
 
-      const fakeState = { tiles: [], spawnerPoints: [], exitPoints: [] };
-      (component as any).terrainGrid = {
-        exportState: () => fakeState,
-        getSpawnPoints: () => [{}],
-        getExitPoints: () => [{}],
-        dispose: () => {}
-      };
-      mockMapStorageService.saveMap.and.returnValue('map-id-2');
-      mockMapStorageService.getCurrentMapId.and.returnValue(null);
+      const mapFile: MapFileService = TestBed.inject(MapFileService);
+      const saveSpy = spyOn(mapFile, 'save').and.returnValue(true);
 
       // Act
       (component as any).saveGridState();
@@ -780,7 +749,7 @@ describe('NovariseComponent', () => {
       component.confirmModal();
 
       // Assert
-      expect(mockMapStorageService.saveMap).toHaveBeenCalledWith('Valid Map', jasmine.any(Object), undefined);
+      expect(saveSpy).toHaveBeenCalledWith('Valid Map');
     });
   });
 });

@@ -12,6 +12,7 @@ import { CameraControlService } from './core/camera-control.service';
 import { EditorSceneService } from './core/editor-scene.service';
 import { EditorNotificationService } from './core/editor-notification.service';
 import { TerrainEditService } from './core/terrain-edit.service';
+import { MapFileService } from './core/map-file.service';
 
 @NgModule({
   declarations: [
@@ -32,6 +33,7 @@ import { TerrainEditService } from './core/terrain-edit.service';
     EditorSceneService,
     EditorNotificationService,
     TerrainEditService,
+    MapFileService,
   ]
 })
 export class EditorModule {}

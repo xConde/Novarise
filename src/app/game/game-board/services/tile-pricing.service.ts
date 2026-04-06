@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { GameBoardService } from '../game-board.service';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
+import { StrategicTier, TilePriceInfo } from '../models/tile-pricing.model';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -61,14 +62,10 @@ export const PRICING_CONFIG = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Exported types
+// Exported types (re-exported from model for backward compatibility)
 // ---------------------------------------------------------------------------
 
-/**
- * Color tier for heatmap rendering, ordered from cheapest to most expensive.
- * Exported so components and constants can reference without a circular dep.
- */
-export type StrategicTier = 'base' | 'low' | 'medium' | 'high' | 'critical';
+export { StrategicTier, TilePriceInfo } from '../models/tile-pricing.model';
 
 /**
  * Tier thresholds based on the strategic multiplier (0.0–1.0).
@@ -81,19 +78,6 @@ export const STRATEGIC_TIERS = {
   critical: 0.62, // 45–62% → high
                   // 62–75% → critical
 } as const;
-
-export interface TilePriceInfo {
-  /** The final cost to place this tower type on this tile. */
-  cost: number;
-  /** Raw strategic multiplier (0.0 = no premium, 1.0 = maximum premium). */
-  strategicMultiplier: number;
-  /** Percentage increase over base cost (0–100), for display labels. */
-  percentIncrease: number;
-  /** Color tier for heatmap rendering. */
-  tier: StrategicTier;
-  /** Whether this tile has any strategic premium. */
-  isPremium: boolean;
-}
 
 // ---------------------------------------------------------------------------
 // Internal helpers

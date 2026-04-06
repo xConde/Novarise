@@ -1,7 +1,19 @@
 import { TowerType } from './tower.model';
 import { GamePhase } from './game-state.model';
-import { CombatAudioEvent } from '../services/tower-combat.service';
 import { ChallengeDefinition } from '@campaign/models/challenge.model';
+
+/** Info about a tower kill — includes the damage of the final hit. */
+export interface KillInfo {
+  id: string;
+  damage: number;
+}
+
+/** Deferred audio event accumulated during physics steps, drained once per frame by the component. */
+export type CombatAudioEvent =
+  | { type: 'tower_fire'; towerType: TowerType }
+  | { type: 'enemy_hit' }
+  | { type: 'enemy_death' }
+  | { type: 'sfx'; sfxKey: string };
 
 /** Visual snapshot of a single enemy kill, captured before the enemy is removed from the scene. */
 export interface FrameKillEvent {

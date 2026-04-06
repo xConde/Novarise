@@ -148,3 +148,14 @@ export const MINI_SWARM_STATS = {
   size: 0.15,
   leakDamage: 1
 } as const;
+
+/**
+ * Result returned by {@link EnemyService.damageEnemy}.
+ * `killed` is true when the hit reduces health to 0 or below.
+ * `spawnedEnemies` is non-empty only when a SWARM parent dies; the caller
+ * must add each entry's mesh to the Three.js scene.
+ */
+export interface DamageResult {
+  killed: boolean;
+  spawnedEnemies: Enemy[];
+}

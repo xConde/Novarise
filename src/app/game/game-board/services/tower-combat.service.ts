@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Enemy } from '../models/enemy.model';
 import { PlacedTower, TowerType, TowerStats, TowerSpecialization, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { assertNever } from '../utils/assert-never';
+import { KillInfo, CombatAudioEvent } from '../models/combat-frame.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
@@ -46,18 +47,7 @@ interface MortarZone {
   statusEffect?: StatusEffectType;
 }
 
-/** Info about a tower kill — includes the damage of the final hit. */
-export interface KillInfo {
-  id: string;
-  damage: number;
-}
-
-/** Deferred audio event accumulated during physics steps, drained once per frame by the component. */
-export type CombatAudioEvent =
-  | { type: 'tower_fire'; towerType: TowerType }
-  | { type: 'enemy_hit' }
-  | { type: 'enemy_death' }
-  | { type: 'sfx'; sfxKey: string };
+export { KillInfo, CombatAudioEvent } from '../models/combat-frame.model';
 
 @Injectable()
 export class TowerCombatService {

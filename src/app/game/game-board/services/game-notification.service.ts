@@ -1,20 +1,8 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { NotificationType, GameNotification } from '../models/game-notification.model';
 
-export enum NotificationType {
-  ACHIEVEMENT = 'achievement',
-  CHALLENGE = 'challenge',
-  STREAK = 'streak',
-  INFO = 'info',
-}
-
-export interface GameNotification {
-  id: number;
-  type: NotificationType;
-  title: string;
-  message: string;
-  duration: number; // ms before auto-dismiss
-}
+export { NotificationType, GameNotification } from '../models/game-notification.model';
 
 const MAX_VISIBLE_NOTIFICATIONS = 3;
 const DEFAULT_DURATION_MS = 3500;
