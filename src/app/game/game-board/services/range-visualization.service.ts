@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG } from '../constants/ui.constants';
 import { PlacedTower, getEffectiveStats } from '../models/tower.model';
 import { disposeMesh } from '../utils/three-utils';
+import { gridToWorld } from '../utils/coordinate-utils';
 
 @Injectable()
 export class RangeVisualizationService {
@@ -21,8 +22,7 @@ export class RangeVisualizationService {
     this.removePreview(scene);
 
     const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
-    const x = (tower.col - boardWidth / 2) * tileSize;
-    const z = (tower.row - boardHeight / 2) * tileSize;
+    const { x, z } = gridToWorld(tower.row, tower.col, boardWidth, boardHeight, tileSize);
 
     // Range ring
     this.rangePreviewMesh = this.createRangeRing(stats.range, stats.color, RANGE_PREVIEW_CONFIG.opacity, x, z);
@@ -84,8 +84,7 @@ export class RangeVisualizationService {
     if (newState) {
       placedTowers.forEach(tower => {
         const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
-        const worldX = (tower.col - boardWidth / 2) * tileSize;
-        const worldZ = (tower.row - boardHeight / 2) * tileSize;
+        const { x: worldX, z: worldZ } = gridToWorld(tower.row, tower.col, boardWidth, boardHeight, tileSize);
         const ring = this.createRangeRing(
           stats.range,
           RANGE_PREVIEW_CONFIG.allRangesColor,

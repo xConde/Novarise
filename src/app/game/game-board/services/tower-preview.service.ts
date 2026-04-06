@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { TowerType, TOWER_CONFIGS, getEffectiveStats } from '../models/tower.model';
 import { PREVIEW_CONFIG } from '../constants/preview.constants';
 import { PREVIEW_GHOST_CONFIG, PREVIEW_GHOST_DEFAULT } from '../constants/ui.constants';
+import { BOARD_CONFIG } from '../constants/board.constants';
+import { gridToWorld } from '../utils/coordinate-utils';
 
 /** Tracks which tower type the current preview meshes were built for. */
 type PreviewState = {
@@ -38,8 +40,7 @@ export class TowerPreviewService {
     scene: THREE.Scene
   ): void {
     // Convert grid coords to world-space (board is centered at origin)
-    const worldX = (col - this.boardWidth / 2) * 1; // tileSize = 1
-    const worldZ = (row - this.boardHeight / 2) * 1;
+    const { x: worldX, z: worldZ } = gridToWorld(row, col, this.boardWidth, this.boardHeight, BOARD_CONFIG.tileSize);
 
     if (this.previewState?.towerType !== towerType) {
       this.removeMeshesFromScene(scene);

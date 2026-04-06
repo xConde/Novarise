@@ -1,9 +1,16 @@
 /**
- * Shared coordinate conversion between grid (row/col) and world (x/z) space.
+ * Shared coordinate conversion utilities for Novarise.
  *
- * Grid origin is top-left. World origin is board center.
- * Formula: worldX = (col - boardWidth/2) * tileSize
- *          worldZ = (row - boardHeight/2) * tileSize
+ * Coordinate Systems:
+ * - Editor: tiles[x][z] where x=column, z=row (column-major)
+ * - Game:   board[row][col] (row-major)
+ * - World:  {x, y, z} where y=height, x/z map to grid
+ * - Conversion: board[row][col] = editor.tiles[col][row]
+ *
+ * Grid ↔ World:
+ *   Grid origin is top-left. World origin is board center.
+ *   worldX = (col - boardWidth/2)  * tileSize
+ *   worldZ = (row - boardHeight/2) * tileSize
  */
 
 /** Convert grid row/col to world x/z coordinates, centered on the board. */
