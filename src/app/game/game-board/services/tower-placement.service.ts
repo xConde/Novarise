@@ -68,6 +68,9 @@ export class TowerPlacementService {
       onDeselectTower: () => void;
     }
   ): void {
+    // Guard: tear down prior state before attaching new refs/callbacks.
+    // Matches the double-call guard pattern used by GameInputService.init().
+    this.cleanup();
     this.raycaster = raycaster;
     this.mouse = mouse;
     this.tileMeshArrayRef = tileMeshArrayRef;

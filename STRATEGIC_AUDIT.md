@@ -1193,3 +1193,41 @@ Test count: 2756 → 3024 (+268 tests)
 - [x] Zero lint errors
 - [x] All audit findings resolved (regression + 2 memory leaks fixed)
 - [x] Worktree cleanup complete
+
+---
+
+## Red Team Critique — feat/hardening-viii final gate (2026-04-06)
+
+Hostile review of the 22-sprint continuation (commits 9c97263..7c07a65). Scope locked to files changed this session only. Interrogation lenses: happy-path bias, 3 AM test, integration fragility, config drift, silent failures.
+
+### Finding 1: `GameSessionService.cleanupScene()` dereferences `scene` without null guard (MEDIUM)
+**Location:** `src/app/game/game-board/services/game-session.service.ts:106-171`
+**Risk:** `cleanupScene()` calls `this.sceneService.getScene()` once at line 107 and then dereferences it at lines 136 (`scene.remove(group)`), 148 (`scene.remove(mesh)`), and 156 (`scene.remove(opts.gridLines)`) without checking for null. If the scene is null — possible during WebGL context-loss recovery, mid-disposal race, or when `restartGame()` fires while the renderer is being rebuilt — the cleanup crashes and leaks all tower/tile meshes plus the grid-line group. The `ngOnDestroy` call site DOES guard (`if (this.sceneService.getScene()) { this.cleanupGameObjects(); }` at line 1884), but `restartGame()` at line 959 does NOT, so a restart during context loss is exposed. The original pre-extraction code had the same latent bug, so this is not a regression — but it IS an opportunity to harden the architecture while the code is fresh.
+**Fix:** Add an early return guard at the top of `cleanupScene()`. If scene is null, still clear `opts.tileMeshes`/`opts.towerMeshes` maps and return null so the component's mesh tracking is consistent, but skip Three.js remove calls.
+
+### Finding 2: `GamePauseService.confirmQuit()` does not defend against `recordEnd` failure — but risk is low (LOW)
+**Location:** `src/app/game/game-board/services/game-pause.service.ts:68-72`
+**Risk:** `confirmQuit()` calls `gameEndService.recordEnd(false, null)` without a try/catch and then returns the route string. If `recordEnd` throws, the component's navigation call never fires and the user is stuck on the quit-confirm overlay. Tracing the call chain: `recordEnd` → `playerProfileService.recordGameEnd` → `storageService.setJSON`. The storage service IS guarded (returns `false` on quota exceeded, catches DOMException) so in practice this cannot throw. **Not actionable** — the defensive layer already exists at the right level. Flagged only for completeness so a future refactor that removes the guard in StorageService doesn't silently re-expose this path.
+**Fix:** None required. Add a unit test that verifies `confirmQuit()` returns the route even if `recordEnd` throws, as a regression safeguard.
+
+### Finding 3: `TowerPlacementService.init()` has no double-call guard (LOW)
+**Location:** `src/app/game/game-board/services/tower-placement.service.ts:61-77`
+**Risk:** If `init()` is called twice (hot reload, test re-setup, future code change), the second call overwrites callback references and the `raycaster`/`mouse` fields. The first set of callbacks is orphaned but any closures they captured remain alive until GC. Currently only called once in `ngAfterViewInit`, so not exploitable — but `GameInputService.init()` had the SAME pattern and was flagged as Finding 2 in the original hardening-viii red team (2026-04-05). It's the same class of bug. For consistency with that prior fix, add a double-call guard that invokes `cleanup()` first.
+**Fix:** At the top of `init()`, call `this.cleanup()` to tear down any prior state before wiring new callbacks.
+
+---
+
+## Red Team Hardening — feat/hardening-viii final gate (2026-04-06)
+
+Finding 1 is the most critical — actionable and actually improves resilience. Applying the fix now.
+- [x] Fix Finding 1: Guard `cleanupScene()` against null scene
+- [x] Fix Finding 3: Add double-call guard to `TowerPlacementService.init()` for consistency with GameInputService
+- [x] Finding 2: No code change (defense-in-depth exists at StorageService level)
+
+### Final Deployment Checklist (closer protocol)
+- [x] Step 1: Apply red team fixes (Finding 1 + Finding 3)
+- [x] Step 2: Run affected specs only (tower-placement, game-session)
+- [x] Step 3: Full suite + production build green
+- [x] Step 4: Commit red-team hardening
+- [x] Step 5: Push branch
+- [x] Step 6: Open PR with concise description

@@ -106,6 +106,14 @@ export class GameSessionService {
   cleanupScene(opts: CleanupSceneOpts): null {
     const scene = this.sceneService.getScene();
 
+    // Guard: scene may be null during WebGL context-loss recovery or mid-disposal.
+    // Clear the component's mesh maps so its cached arrays rebuild empty, then bail.
+    if (!scene) {
+      opts.tileMeshes.clear();
+      opts.towerMeshes.clear();
+      return null;
+    }
+
     // Clean up tower combat state (projectiles)
     this.towerCombatService.cleanup(scene);
 
