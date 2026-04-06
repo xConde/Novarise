@@ -10,6 +10,8 @@ import { GameHudComponent } from './game-board/components/game-hud/game-hud.comp
 import { GameSetupPanelComponent } from './game-board/components/game-setup-panel/game-setup-panel.component';
 import { TowerInfoPanelComponent } from './game-board/components/tower-info-panel/tower-info-panel.component';
 import { GameResultsOverlayComponent } from './game-board/components/game-results-overlay/game-results-overlay.component';
+import { GamePauseService } from './game-board/services/game-pause.service';
+import { ChallengeDisplayService } from './game-board/services/challenge-display.service';
 @NgModule({
   declarations: [
     GameComponent,
@@ -24,6 +26,6 @@ import { GameResultsOverlayComponent } from './game-board/components/game-result
     CommonModule,
     RouterModule.forChild([{ path: '', component: GameComponent }])
   ],
-  providers: [GameBoardService, CombatVFXService]
+  providers: [GameBoardService, CombatVFXService, GamePauseService, ChallengeDisplayService]
 })
 export class GameModule {}

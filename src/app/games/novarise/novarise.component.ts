@@ -9,20 +9,20 @@ import { EditHistoryService, SpawnPointCommand, ExitPointCommand } from './core/
 import { CameraControlService, MovementInput, RotationInput, JoystickInput } from './core/camera-control.service';
 import { EditorStateService, EditMode, BrushTool } from './core/editor-state.service';
 import { MapBridgeService } from '../../core/services/map-bridge.service';
-import { disposeMesh } from '../../game/game-board/utils/three-utils';
 import { JoystickEvent } from './features/mobile-controls';
 import {
   EDITOR_EDIT_THROTTLE_MS,
-  EDITOR_RECTANGLE_PREVIEW,
   EDITOR_SPAWN_MARKER,
   EDITOR_EXIT_MARKER,
   EDITOR_ANIMATION,
   EDITOR_HOVER_EMISSIVE,
   EDITOR_PATH_INVALID_FLASH_MS,
   EDITOR_PATH_INVALID_FLASH_COLOR,
-  EDITOR_RENDER_ORDER,
   EDITOR_AUTOSAVE_JUST_NOW_MS,
+  EDITOR_RECTANGLE_PREVIEW,
+  EDITOR_RENDER_ORDER,
 } from './constants/editor-ui.constants';
+import { disposeMesh } from '../../game/game-board/utils/three-utils';
 import { PathValidationService, PathValidationResult } from './core/path-validation.service';
 import { MapTemplateService } from '../../core/services/map-template.service';
 import { MapTemplate } from '../../core/models/map-template.model';

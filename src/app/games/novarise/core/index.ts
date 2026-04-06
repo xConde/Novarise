@@ -6,5 +6,6 @@ export * from './editor-scene.service';
 export * from './editor-state.service';
 export * from './map-file.service';
 export * from './path-validation.service';
+export * from './rectangle-tool.service';
 export * from './spawn-exit-marker.service';
 export * from './terrain-edit.service';

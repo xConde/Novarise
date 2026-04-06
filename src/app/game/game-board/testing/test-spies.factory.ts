@@ -18,6 +18,8 @@ import { TowerCombatService } from '../services/tower-combat.service';
 import { StatusEffectService } from '../services/status-effect.service';
 import { ChallengeTrackingService } from '../services/challenge-tracking.service';
 import { GamePauseService } from '../services/game-pause.service';
+import { ChallengeDisplayService } from '../services/challenge-display.service';
+import { ChallengeIndicator } from '../components/game-hud/game-hud.component';
 import { MapBridgeService } from '@core/services/map-bridge.service';
 import { MapStorageService, MapMetadata } from '@core/services/map-storage.service';
 import { PlayerProfileService } from '@core/services/player-profile.service';
@@ -729,11 +731,38 @@ export function createChallengeTrackingServiceSpy(): jasmine.SpyObj<ChallengeTra
 export function createGamePauseServiceSpy(): jasmine.SpyObj<GamePauseService> {
   const spy = jasmine.createSpyObj<GamePauseService>(
     'GamePauseService',
-    ['togglePause', 'setupAutoPause', 'requestQuit', 'cancelQuit', 'confirmQuit', 'canLeaveGame', 'reset', 'cleanup', 'ngOnDestroy'],
-    { showQuitConfirm: false, autoPaused: false, isPaused: false }
+    ['togglePause', 'setupAutoPause', 'requestQuit', 'cancelQuit', 'confirmQuit', 'canLeaveGame', 'reset', 'cleanup', 'ngOnDestroy']
   );
+  // Writable public fields — allow tests to read/write them directly
+  (spy as unknown as { showQuitConfirm: boolean }).showQuitConfirm = false;
+  (spy as unknown as { autoPaused: boolean }).autoPaused = false;
+  (spy as unknown as { isPaused: boolean }).isPaused = false;
   spy.togglePause.and.returnValue(false);
   spy.canLeaveGame.and.returnValue(true);
   spy.confirmQuit.and.returnValue('/');
+  // requestQuit / cancelQuit mutate showQuitConfirm to allow component getter tests to pass
+  spy.requestQuit.and.callFake(() => {
+    (spy as unknown as { showQuitConfirm: boolean }).showQuitConfirm = true;
+  });
+  spy.cancelQuit.and.callFake(() => {
+    (spy as unknown as { showQuitConfirm: boolean }).showQuitConfirm = false;
+  });
+  return spy;
+}
+
+/**
+ * Create a pre-configured ChallengeDisplayService spy.
+ *
+ * Default return values:
+ *   - updateIndicators() — empty array (no active challenges)
+ *   - indicators — empty array
+ */
+export function createChallengeDisplayServiceSpy(): jasmine.SpyObj<ChallengeDisplayService> {
+  const spy = jasmine.createSpyObj<ChallengeDisplayService>(
+    'ChallengeDisplayService',
+    ['updateIndicators'],
+    { indicators: [] as ChallengeIndicator[] }
+  );
+  spy.updateIndicators.and.returnValue([]);
   return spy;
 }

@@ -14,6 +14,7 @@ import { EditorNotificationService } from './core/editor-notification.service';
 import { TerrainEditService } from './core/terrain-edit.service';
 import { MapFileService } from './core/map-file.service';
 import { BrushPreviewService } from './core/brush-preview.service';
+import { RectangleToolService } from './core/rectangle-tool.service';
 import { SpawnExitMarkerService } from './core/spawn-exit-marker.service';
 
 @NgModule({
@@ -37,6 +38,7 @@ import { SpawnExitMarkerService } from './core/spawn-exit-marker.service';
     TerrainEditService,
     MapFileService,
     BrushPreviewService,
+    RectangleToolService,
     SpawnExitMarkerService,
   ]
 })
