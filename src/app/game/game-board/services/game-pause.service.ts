@@ -108,7 +108,7 @@ export class GamePauseService implements OnDestroy {
     this.showQuitConfirm = false;
   }
 
-  /** Clean up global event listeners. */
+  /** Clean up global event listeners and clear the auto-pause callback. */
   cleanup(): void {
     if (this.visibilityChangeHandler) {
       document.removeEventListener('visibilitychange', this.visibilityChangeHandler);
@@ -118,6 +118,7 @@ export class GamePauseService implements OnDestroy {
       window.removeEventListener('blur', this.windowBlurPauseHandler);
       this.windowBlurPauseHandler = null;
     }
+    this.onAutoPause = null;
   }
 
   ngOnDestroy(): void {

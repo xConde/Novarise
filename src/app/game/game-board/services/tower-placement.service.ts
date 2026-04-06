@@ -226,4 +226,18 @@ export class TowerPlacementService {
     }
     window.removeEventListener('blur', this.blurDragHandler);
   }
+
+  /**
+   * Full cleanup — remove any active drag listeners and clear all callback references.
+   * Call from the component's `ngOnDestroy` to prevent leaks across instance reuse.
+   */
+  cleanup(): void {
+    this.removeDragListeners();
+    this.raycaster = null;
+    this.mouse = null;
+    this.tileMeshArrayRef = () => [];
+    this.onEnterPlaceMode = null;
+    this.onPlaceAttempt = null;
+    this.onDeselectTower = null;
+  }
 }

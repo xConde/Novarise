@@ -802,7 +802,7 @@ export function createChallengeDisplayServiceSpy(): jasmine.SpyObj<ChallengeDisp
 export function createTowerPlacementServiceSpy(): jasmine.SpyObj<TowerPlacementService> {
   const spy = jasmine.createSpyObj<TowerPlacementService>(
     'TowerPlacementService',
-    ['onTowerDragStart', 'cancelDrag', 'removeDragListeners', 'init'],
+    ['onTowerDragStart', 'cancelDrag', 'removeDragListeners', 'init', 'cleanup'],
     { isDragging: false }
   );
   return spy;

@@ -1864,7 +1864,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gameInput.cleanup();
     this.gamePauseService.cleanup();
     window.removeEventListener('resize', this.resizeHandler);
-    this.towerPlacementService.removeDragListeners();
+    this.towerPlacementService.cleanup();
 
     // Remove canvas event listeners (stored as named references)
     if (this.sceneService.getRenderer()) {
