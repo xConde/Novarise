@@ -61,6 +61,10 @@ import { TowerMeshFactoryService } from './services/tower-mesh-factory.service';
 import { EnemyMeshFactoryService } from './services/enemy-mesh-factory.service';
 import { GameInputService } from './services/game-input.service';
 import { EnemyVisualService } from './services/enemy-visual.service';
+import { EnemyHealthService } from './services/enemy-health.service';
+import { ChainLightningService } from './services/chain-lightning.service';
+import { GamePauseService } from './services/game-pause.service';
+import { ChallengeDisplayService } from './services/challenge-display.service';
 import { FocusTrap } from '../../shared/utils/focus-trap.util';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
@@ -125,7 +129,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [SceneService, EnemyService, EnemyVisualService, PathfindingService, GameStateService, WaveService, TowerCombatService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService]
+  providers: [SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -203,8 +207,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Challenge completions awarded at end of this game session. */
   completedChallenges: ChallengeDefinition[] = [];
 
-  /** Live challenge progress badges shown in HUD during campaign games. Updated on tower events. */
-  challengeIndicators: ChallengeIndicator[] = [];
+  /** Live challenge progress badges shown in HUD during campaign games. Delegated to ChallengeDisplayService. */
+  get challengeIndicators(): ChallengeIndicator[] { return this.challengeDisplayService.indicators; }
 
   // Wave preview — shown during SETUP and INTERMISSION
   wavePreview: WavePreviewEntry[] = [];
@@ -284,10 +288,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private blurDragHandler: () => void = () => {};
   private dragIsTouch = false;
 
-  // Auto-pause on visibility/focus loss
-  private visibilityChangeHandler: (() => void) | null = null;
-  private windowBlurPauseHandler: (() => void) | null = null;
-  autoPaused = false;
+  // Auto-pause / quit state delegated to GamePauseService
+  get autoPaused(): boolean { return this.gamePauseService.autoPaused; }
+  get showQuitConfirm(): boolean { return this.gamePauseService.showQuitConfirm; }
 
   // Tutorial state
   currentTutorialStep: TutorialStep | null = null;
@@ -356,7 +359,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private towerAnimationService: TowerAnimationService,
     private rangeVisualizationService: RangeVisualizationService,
     private towerMeshFactory: TowerMeshFactoryService,
-    private gameInput: GameInputService
+    private gameInput: GameInputService,
+    private gamePauseService: GamePauseService,
+    private challengeDisplayService: ChallengeDisplayService
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -1055,61 +1060,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Recomputes challenge progress badges for the HUD.
+   * Recomputes challenge progress badges for the HUD via ChallengeDisplayService.
    * Called after any tower event (place, sell, upgrade) and on restart.
-   * SPEED_RUN challenges are excluded — they are handled by the countdown timer.
    */
   updateChallengeIndicators(): void {
-    if (!this.isCampaignGame || !this.currentCampaignLevel) {
-      this.challengeIndicators = [];
-      return;
-    }
-    const challenges = getChallengesForLevel(this.currentCampaignLevel.id);
-    const nonSpeedRun = challenges.filter(c => c.type !== ChallengeType.SPEED_RUN);
-    if (nonSpeedRun.length === 0) {
-      this.challengeIndicators = [];
-      return;
-    }
-    const snapshot = this.challengeTrackingService.getSnapshot();
-    const initialLives = DIFFICULTY_PRESETS[this.gameState.difficulty].lives;
-    this.challengeIndicators = nonSpeedRun.map(c => this.buildIndicator(c, snapshot, initialLives));
-  }
-
-  private buildIndicator(
-    challenge: ChallengeDefinition,
-    snapshot: { totalGoldSpent: number; maxTowersPlaced: number; towerTypesUsed: Set<string> },
-    initialLives: number,
-  ): ChallengeIndicator {
-    switch (challenge.type) {
-      case ChallengeType.UNTOUCHABLE: {
-        const passing = this.gameState.lives >= initialLives;
-        return { label: 'No Damage', value: passing ? '✓' : '✗', passing };
-      }
-      case ChallengeType.TOWER_LIMIT: {
-        const limit = challenge.towerLimit ?? 0;
-        const current = snapshot.maxTowersPlaced;
-        const passing = current <= limit;
-        return { label: 'Towers', value: `${current}/${limit}`, passing };
-      }
-      case ChallengeType.FRUGAL: {
-        const limit = challenge.goldLimit ?? 0;
-        const spent = snapshot.totalGoldSpent;
-        const passing = spent <= limit;
-        return { label: 'Spent', value: `${spent}g/${limit}g`, passing };
-      }
-      case ChallengeType.SINGLE_TYPE: {
-        const count = snapshot.towerTypesUsed.size;
-        const passing = count <= 1;
-        return { label: 'Single Type', value: count <= 1 ? '✓' : `${count} types`, passing };
-      }
-      case ChallengeType.NO_SLOW: {
-        const passing = !snapshot.towerTypesUsed.has(TowerType.SLOW);
-        return { label: 'No Slow', value: passing ? '✓' : '✗', passing };
-      }
-      // SPEED_RUN excluded by caller — should never reach here
-      default:
-        return { label: 'Challenge', value: '?', passing: true };
-    }
+    const levelId = this.currentCampaignLevel?.id ?? null;
+    this.challengeDisplayService.updateIndicators(levelId);
   }
 
   /** Loads the next campaign level and restarts the game. No-op if no next level. */
@@ -1232,7 +1188,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.newlyUnlockedAchievements = [];
     this.achievementDetails = [];
     this.completedChallenges = [];
-    this.challengeIndicators = [];
+    this.challengeDisplayService.updateIndicators(null); // clear on restart; re-populated by updateChallengeIndicators()
     this.lastWaveReward = 0;
     this.lastInterestEarned = 0;
     this.activeModifiers = new Set<GameModifier>();
@@ -1244,8 +1200,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.showHelpOverlay = false;
     this.showEncyclopedia = false;
     this.showPathOverlay = false;
-    this.autoPaused = false;
-    this.showQuitConfirm = false;
+    this.gamePauseService.reset();
     this.sellConfirmPending = false;
     this.contextLost = false;
     this.pathBlocked = false;
@@ -1745,73 +1700,37 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Named constant for speed buttons (HUD and pause menu) — avoids template literal arrays. */
   readonly validGameSpeeds: readonly GameSpeed[] = VALID_GAME_SPEEDS;
 
-  /** Whether the quit-confirmation sub-panel is visible inside the pause menu. */
-  showQuitConfirm = false;
-
   onPauseOverlayClick(_event: MouseEvent): void {
     // Clicking the dark backdrop resumes the game
     this.togglePause();
   }
 
   requestQuit(): void {
-    this.showQuitConfirm = true;
+    this.gamePauseService.requestQuit();
   }
 
   cancelQuit(): void {
-    this.showQuitConfirm = false;
+    this.gamePauseService.cancelQuit();
   }
 
   confirmQuit(): void {
-    this.showQuitConfirm = false;
-    this.gameEndService.recordEnd(false, null);
-    if (this.isCampaignGame) {
-      this.router.navigate(['/campaign']);
-    } else {
-      this.router.navigate(['/']);
-    }
+    const route = this.gamePauseService.confirmQuit(this.isCampaignGame);
+    this.router.navigate([route]);
   }
 
   /**
    * Called by the CanDeactivate guard when the player tries to navigate away mid-game.
-   * Auto-pauses if in COMBAT, asks for confirmation, then records a defeat if confirmed.
-   * Returns true to allow navigation, false to stay.
+   * Delegates to GamePauseService.
    */
   canLeaveGame(): boolean {
-    const state = this.gameStateService.getState();
-
-    // Allow free navigation when game is not actively in progress
-    if (
-      state.phase === GamePhase.SETUP ||
-      state.phase === GamePhase.VICTORY ||
-      state.phase === GamePhase.DEFEAT
-    ) {
-      return true;
-    }
-
-    // Game is in COMBAT or INTERMISSION — auto-pause first so the loop stops
-    if (!state.isPaused) {
-      this.gameStateService.togglePause();
-    }
-
-    const shouldLeave = confirm('Leave game? Progress will be lost.');
-    if (!shouldLeave) {
-      return false;
-    }
-
-    this.gameEndService.recordEnd(false, null);
-    return true;
+    return this.gamePauseService.canLeaveGame();
   }
 
   togglePause(): void {
-    this.showQuitConfirm = false;
-    this.autoPaused = false;
-    const willPause = !this.isPaused;
+    const willPause = this.gamePauseService.togglePause();
     if (!willPause) {
       this.pauseFocusTrap.deactivate();
-    }
-    this.gameStateService.togglePause();
-    this.minimapService.setDimmed(willPause);
-    if (willPause) {
+    } else {
       setTimeout(() => {
         if (this.pauseOverlayRef) {
           this.pauseFocusTrap.activate(this.pauseOverlayRef.nativeElement);
@@ -1820,37 +1739,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  /** Register visibility/focus-loss listeners for auto-pause. Called once in ngAfterViewInit. */
+  /** Register visibility/focus-loss listeners for auto-pause via GamePauseService.
+   *  The service handles core pause logic; the component activates the focus trap after
+   *  auto-pause triggers, since focus trap requires a ViewChild reference.
+   */
   private setupAutoPause(): void {
-    this.visibilityChangeHandler = () => this.onVisibilityChange();
-    document.addEventListener('visibilitychange', this.visibilityChangeHandler);
-
-    this.windowBlurPauseHandler = () => this.onWindowBlurPause();
-    window.addEventListener('blur', this.windowBlurPauseHandler);
-  }
-
-  private onVisibilityChange(): void {
-    if (document.hidden) {
-      this.autoPauseIfActive();
-    }
-  }
-
-  private onWindowBlurPause(): void {
-    this.autoPauseIfActive();
-  }
-
-  private autoPauseIfActive(): void {
-    const state = this.gameStateService.getState();
-    if ((state.phase === GamePhase.COMBAT || state.phase === GamePhase.INTERMISSION) && !state.isPaused) {
-      this.gameStateService.togglePause();
-      this.minimapService.setDimmed(true);
-      this.autoPaused = true;
-      setTimeout(() => {
-        if (this.pauseOverlayRef) {
-          this.pauseFocusTrap.activate(this.pauseOverlayRef.nativeElement);
-        }
-      }, 0);
-    }
+    this.gamePauseService.setupAutoPause();
   }
 
   setSpeed(speed: number): void {
@@ -2297,17 +2191,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.gameInput.cleanup();
+    this.gamePauseService.cleanup();
     window.removeEventListener('resize', this.resizeHandler);
     this.removeDragListeners();
-
-    if (this.visibilityChangeHandler) {
-      document.removeEventListener('visibilitychange', this.visibilityChangeHandler);
-      this.visibilityChangeHandler = null;
-    }
-    if (this.windowBlurPauseHandler) {
-      window.removeEventListener('blur', this.windowBlurPauseHandler);
-      this.windowBlurPauseHandler = null;
-    }
 
     // Remove canvas event listeners (stored as named references)
     if (this.sceneService.getRenderer()) {

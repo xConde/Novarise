@@ -7,6 +7,7 @@ import { EnemyService } from './enemy.service';
 import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { PathfindingService } from './pathfinding.service';
 import { TowerCombatService } from './tower-combat.service';
+import { ChainLightningService } from './chain-lightning.service';
 import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
 import { GameStatsService } from './game-stats.service';
@@ -14,6 +15,7 @@ import { GameBoardService } from '../game-board.service';
 import { AudioService } from './audio.service';
 import { TowerAnimationService } from './tower-animation.service';
 import { EnemyVisualService } from './enemy-visual.service';
+import { EnemyHealthService } from './enemy-health.service';
 import { createTowerAnimationServiceSpy } from '../testing';
 
 import { GamePhase, DifficultyLevel, DIFFICULTY_PRESETS, INITIAL_GAME_STATE } from '../models/game-state.model';
@@ -69,8 +71,10 @@ describe('Gameplay Integration', () => {
         PathfindingService,
         EnemyService,
         EnemyVisualService,
+        EnemyHealthService,
         EnemyMeshFactoryService,
         TowerCombatService,
+        ChainLightningService,
         CombatVFXService,
 
         StatusEffectService,

@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { TowerCombatService, KillInfo, CombatAudioEvent } from './tower-combat.service';
+import { ChainLightningService } from './chain-lightning.service';
 import { CombatVFXService } from './combat-vfx.service';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
@@ -42,6 +43,7 @@ describe('TowerCombatService', () => {
     TestBed.configureTestingModule({
       providers: [
         TowerCombatService,
+        ChainLightningService,
         CombatVFXService,
         StatusEffectService,
         GameStateService,

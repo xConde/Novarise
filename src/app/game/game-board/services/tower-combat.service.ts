@@ -7,7 +7,7 @@ import { KillInfo, CombatAudioEvent } from '../models/combat-frame.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { PROJECTILE_CONFIG } from '../constants/ui.constants';
-import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG } from '../constants/combat.constants';
+import { MORTAR_VISUAL_CONFIG } from '../constants/combat.constants';
 import { PROJECTILE_VISUAL_CONFIG } from '../constants/effects.constants';
 import { PROJECTILE_POOL_CONFIG } from '../constants/physics.constants';
 import { StatusEffectType } from '../constants/status-effect.constants';
@@ -18,6 +18,7 @@ import { gridToWorld } from '../utils/coordinate-utils';
 import { CombatVFXService } from './combat-vfx.service';
 import { GameStateService } from './game-state.service';
 import { TowerAnimationService } from './tower-animation.service';
+import { ChainLightningService } from './chain-lightning.service';
 
 interface Projectile {
   id: string;
@@ -69,11 +70,15 @@ export class TowerCombatService {
   private pendingAudioEvents: CombatAudioEvent[] = [];
 
   /**
-   * Drains and returns all audio events accumulated since the last call.
+   * Drains and returns all audio events accumulated since the last call,
+   * including events from ChainLightningService.
    * Call once per animation frame (not per physics step) so audio throttling stays meaningful.
    */
   drainAudioEvents(): CombatAudioEvent[] {
-    const events = [...this.pendingAudioEvents];
+    const events = [
+      ...this.pendingAudioEvents,
+      ...this.chainLightningService.drainAudioEvents(),
+    ];
     this.pendingAudioEvents = [];
     return events;
   }
@@ -85,6 +90,7 @@ export class TowerCombatService {
     private combatVFXService: CombatVFXService,
     private gameStateService: GameStateService,
     private towerAnimationService: TowerAnimationService,
+    private chainLightningService: ChainLightningService,
   ) {
     this.projectilePool = new ObjectPool<THREE.Mesh>(
       () => this.createPooledProjectileMesh(),
@@ -274,7 +280,12 @@ export class TowerCombatService {
       this.towerAnimationService.startMuzzleFlash(tower);
 
       if (tower.type === TowerType.CHAIN) {
-        const kills = this.fireChainLightning(tower, target, stats, scene);
+        const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
+        const kills = this.chainLightningService.fire(
+          tower, target, stats, scene,
+          towerWorldX, towerWorldZ,
+          this.spatialGrid, this.gameTime
+        );
         outKilled.push(...kills);
         if (kills.length > 0) {
           const t = this.placedTowers.get(tower.id);
@@ -504,98 +515,6 @@ export class TowerCombatService {
       // StatusEffectService handles immunity (flying), duration refresh, and speed mutation
       this.statusEffectService.apply(enemy.id, StatusEffectType.SLOW, this.gameTime, stats.slowFactor);
     }
-  }
-
-  private fireChainLightning(
-    tower: PlacedTower,
-    primaryTarget: Enemy,
-    stats: TowerStats,
-    scene: THREE.Scene
-  ): KillInfo[] {
-    const chainCount = stats.chainCount ?? 3;
-    const chainRange = stats.chainRange ?? 2;
-    const kills: KillInfo[] = [];
-    const hitIds = new Set<string>();
-
-    this.pendingAudioEvents.push({ type: 'sfx', sfxKey: 'chainZap' });
-
-    let currentTarget: Enemy = primaryTarget;
-    let currentDamage = stats.damage;
-
-    // Track the position we draw each arc *from* — starts at the tower, then
-    // advances to each hit target's position after processing that bounce.
-    const towerPos = this.getTowerWorldPos(tower);
-    let previousX = towerPos.x;
-    let previousZ = towerPos.z;
-
-    for (let bounce = 0; bounce <= chainCount; bounce++) {
-      hitIds.add(currentTarget.id);
-
-      // Delegate arc creation to CombatVFXService
-      this.combatVFXService.createChainArc(
-        previousX, previousZ,
-        currentTarget.position.x, currentTarget.position.z,
-        stats.color, scene, this.gameTime
-      );
-
-      // Deal damage
-      const chainResult = this.enemyService.damageEnemy(currentTarget.id, currentDamage);
-      if (chainResult.killed) {
-        kills.push({ id: currentTarget.id, damage: currentDamage });
-      } else {
-        this.enemyService.startHitFlash(currentTarget.id);
-        if (stats.statusEffect) {
-          this.statusEffectService.apply(currentTarget.id, stats.statusEffect, this.gameTime);
-        }
-      }
-      // Mini-swarm meshes from chain kills need to be tracked — caller adds to scene
-      // via killedEnemyIds which triggers removeEnemy; spawnedEnemies returned separately
-      chainResult.spawnedEnemies.forEach(mini => {
-        if (mini.mesh) scene.add(mini.mesh);
-      });
-
-      if (bounce === chainCount) break;
-
-      // Find next target: nearest enemy within chainRange not yet hit
-      const nextTarget = this.findChainTarget(currentTarget, chainRange, hitIds);
-      if (!nextTarget) break;
-
-      // Advance "from" position to the current hit before moving to next target
-      previousX = currentTarget.position.x;
-      previousZ = currentTarget.position.z;
-
-      currentDamage = Math.round(currentDamage * CHAIN_LIGHTNING_CONFIG.damageFalloff);
-      if (currentDamage <= 0) break;
-      currentTarget = nextTarget;
-    }
-
-    return kills;
-  }
-
-  private findChainTarget(
-    from: Enemy,
-    chainRange: number,
-    excludeIds: Set<string>
-  ): Enemy | null {
-    let nearest: Enemy | null = null;
-    let nearestDist = Infinity;
-
-    const candidates = this.spatialGrid.queryRadius(from.position.x, from.position.z, chainRange);
-    for (const enemy of candidates) {
-      if (enemy.health <= 0 || excludeIds.has(enemy.id)) continue;
-
-      const dx = enemy.position.x - from.position.x;
-      const dz = enemy.position.z - from.position.z;
-      const dist = Math.sqrt(dx * dx + dz * dz);
-
-      // Narrow-phase range check
-      if (dist <= chainRange && dist < nearestDist) {
-        nearest = enemy;
-        nearestDist = dist;
-      }
-    }
-
-    return nearest;
   }
 
   private fireProjectile(tower: PlacedTower, target: Enemy, stats: TowerStats, scene: THREE.Scene): void {

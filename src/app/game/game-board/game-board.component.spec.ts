@@ -46,8 +46,13 @@ import {
   createMinimapServiceSpy,
   createSettingsServiceSpy,
   createTowerAnimationServiceSpy,
+  createGamePauseServiceSpy,
 } from './testing';
 import { TowerAnimationService } from './services/tower-animation.service';
+import { GamePauseService } from './services/game-pause.service';
+import { ChallengeDisplayService } from './services/challenge-display.service';
+import { EnemyHealthService } from './services/enemy-health.service';
+import { ChainLightningService } from './services/chain-lightning.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -72,9 +77,11 @@ describe('GameBoardComponent', () => {
   let campaignMapServiceSpy: jasmine.SpyObj<CampaignMapService>;
   let gameSessionSpy: jasmine.SpyObj<GameSessionService>;
   let combatLoopSpy: jasmine.SpyObj<CombatLoopService>;
+  let gamePauseSpy: jasmine.SpyObj<GamePauseService>;
 
   beforeEach(async () => {
     gameStatsSpy = createGameStatsServiceSpy();
+    gamePauseSpy = createGamePauseServiceSpy();
 
     playerProfileSpy = jasmine.createSpyObj('PlayerProfileService', ['recordGameEnd', 'getProfile', 'recordMapScore', 'recordChallengeCompleted', 'resetSession']);
     playerProfileSpy.recordGameEnd.and.returnValue([]);
@@ -126,6 +133,7 @@ describe('GameBoardComponent', () => {
         PathfindingService,
         EnemyService,
         EnemyVisualService,
+        EnemyHealthService,
         StatusEffectService,
         CombatVFXService,
         { provide: GameStatsService, useValue: gameStatsSpy },
@@ -139,6 +147,9 @@ describe('GameBoardComponent', () => {
         { provide: GameSessionService, useValue: gameSessionSpy },
         { provide: CombatLoopService, useValue: combatLoopSpy },
         { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: GamePauseService, useValue: gamePauseSpy },
+        ChallengeDisplayService,
+        ChainLightningService,
       ]
     })
     .compileComponents();
@@ -810,6 +821,7 @@ describe('GameBoardComponent', () => {
 
   describe('pause menu', () => {
     let gameStateService: GameStateService;
+    let gamePauseService: GamePauseService;
 
     function enterCombatAndPause(): void {
       gameStateService.setPhase(GamePhase.COMBAT);
@@ -819,17 +831,18 @@ describe('GameBoardComponent', () => {
 
     beforeEach(() => {
       gameStateService = fixture.debugElement.injector.get(GameStateService);
+      gamePauseService = fixture.debugElement.injector.get(GamePauseService);
     });
 
     it('showQuitConfirm defaults to false', () => {
       expect(component.showQuitConfirm).toBeFalse();
     });
 
-    it('togglePause resets showQuitConfirm', () => {
+    it('togglePause delegates to GamePauseService.togglePause', () => {
       enterCombatAndPause();
-      component.showQuitConfirm = true;
+      spyOn(gamePauseService, 'togglePause').and.returnValue(false);
       component.togglePause();
-      expect(component.showQuitConfirm).toBeFalse();
+      expect(gamePauseService.togglePause).toHaveBeenCalled();
     });
 
     it('onPauseOverlayClick calls togglePause', () => {
@@ -861,10 +874,10 @@ describe('GameBoardComponent', () => {
       expect(component.showQuitConfirm).toBeTrue();
     });
 
-    it('cancelQuit sets showQuitConfirm to false', () => {
-      component.showQuitConfirm = true;
+    it('cancelQuit delegates to GamePauseService.cancelQuit', () => {
+      spyOn(gamePauseService, 'cancelQuit');
       component.cancelQuit();
-      expect(component.showQuitConfirm).toBeFalse();
+      expect(gamePauseService.cancelQuit).toHaveBeenCalled();
     });
 
     it('confirmQuit navigates to / when not a campaign game', () => {
@@ -875,166 +888,55 @@ describe('GameBoardComponent', () => {
       expect(router.navigate).toHaveBeenCalledWith(['/']);
     });
 
-    it('confirmQuit resets showQuitConfirm', () => {
+    it('confirmQuit delegates to GamePauseService.confirmQuit', () => {
       const router = TestBed.inject(Router);
       spyOn(router, 'navigate');
-      component.showQuitConfirm = true;
+      spyOn(gamePauseService, 'confirmQuit').and.returnValue('/');
       component.confirmQuit();
-      expect(component.showQuitConfirm).toBeFalse();
+      expect(gamePauseService.confirmQuit).toHaveBeenCalled();
     });
 
     it('validGameSpeeds contains [1, 2, 3]', () => {
       expect(component.validGameSpeeds).toEqual([1, 2, 3] as any);
     });
 
-    it('confirmQuit records defeat even during SETUP (delegates to GameEndService — no phase gate)', () => {
+    it('confirmQuit navigates to returned route from GamePauseService', () => {
       const router = TestBed.inject(Router);
       spyOn(router, 'navigate');
-      // Phase is SETUP by default — GameEndService.recordEnd always records (no phase gate)
-      // In practice, confirmQuit is only reachable from the pause menu (COMBAT/INTERMISSION).
+      spyOn(gamePauseService, 'confirmQuit').and.returnValue('/campaign');
+      // Simulate campaign game by making mapBridge return a campaign mapId
+      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
+      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+
       component.confirmQuit();
-      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
-        jasmine.objectContaining({ isVictory: false })
-      );
+
+      expect(gamePauseService.confirmQuit).toHaveBeenCalledWith(true);
+      expect(router.navigate).toHaveBeenCalledWith(['/campaign']);
     });
 
-    it('confirmQuit records defeat when quitting during COMBAT', () => {
+    it('confirmQuit passes isCampaign=false for non-campaign games', () => {
       const router = TestBed.inject(Router);
       spyOn(router, 'navigate');
-      gameStateService.setPhase(GamePhase.COMBAT);
-      component.confirmQuit();
-      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
-        jasmine.objectContaining({ isVictory: false })
-      );
-    });
+      spyOn(gamePauseService, 'confirmQuit').and.returnValue('/');
 
-    it('confirmQuit records defeat when quitting during INTERMISSION', () => {
-      const router = TestBed.inject(Router);
-      spyOn(router, 'navigate');
-      gameStateService.startWave();
-      gameStateService.completeWave(0); // → INTERMISSION
       component.confirmQuit();
-      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
-        jasmine.objectContaining({ isVictory: false })
-      );
-    });
 
-    it('confirmQuit does not double-record defeat when game end already recorded', () => {
-      const router = TestBed.inject(Router);
-      spyOn(router, 'navigate');
-      gameStateService.setPhase(GamePhase.COMBAT);
-      // Pre-record a game end so the service's idempotency guard fires
-      const gameEndService = fixture.debugElement.injector.get(GameEndService);
-      gameEndService.recordEnd(false, null);
-      playerProfileSpy.recordGameEnd.calls.reset();
-      component.confirmQuit();
-      expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
+      expect(gamePauseService.confirmQuit).toHaveBeenCalledWith(false);
     });
   });
 
   describe('canLeaveGame', () => {
-    let gameStateService: GameStateService;
-
-    beforeEach(() => {
-      gameStateService = fixture.debugElement.injector.get(GameStateService);
-    });
-
-    it('returns true during SETUP (no confirmation needed)', () => {
-      // Phase defaults to SETUP
+    it('delegates to GamePauseService.canLeaveGame', () => {
+      const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
+      spyOn(gamePauseService, 'canLeaveGame').and.returnValue(true);
       expect(component.canLeaveGame()).toBeTrue();
+      expect(gamePauseService.canLeaveGame).toHaveBeenCalled();
     });
 
-    it('returns true during VICTORY (no confirmation needed)', () => {
-      gameStateService.setMaxWaves(1);
-      gameStateService.startWave();
-      gameStateService.completeWave(0); // → VICTORY
-      expect(component.canLeaveGame()).toBeTrue();
-    });
-
-    it('returns true during DEFEAT (no confirmation needed)', () => {
-      gameStateService.startWave();
-      gameStateService.loseLife(gameStateService.getState().lives); // → DEFEAT
-      expect(component.canLeaveGame()).toBeTrue();
-    });
-
-    it('auto-pauses during COMBAT before showing confirm', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
-      spyOn(window, 'confirm').and.returnValue(false);
-      spyOn(gameStateService, 'togglePause').and.callThrough();
-
-      component.canLeaveGame();
-
-      expect(gameStateService.togglePause).toHaveBeenCalled();
-    });
-
-    it('does not double-pause when already paused in COMBAT', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
-      gameStateService.togglePause(); // already paused
-      spyOn(window, 'confirm').and.returnValue(false);
-      spyOn(gameStateService, 'togglePause').and.callThrough();
-
-      component.canLeaveGame();
-
-      expect(gameStateService.togglePause).not.toHaveBeenCalled();
-    });
-
-    it('returns false when player cancels the confirm dialog', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
-      spyOn(window, 'confirm').and.returnValue(false);
-
+    it('returns false when GamePauseService returns false', () => {
+      const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
+      spyOn(gamePauseService, 'canLeaveGame').and.returnValue(false);
       expect(component.canLeaveGame()).toBeFalse();
-    });
-
-    it('returns true when player confirms leaving', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
-      spyOn(window, 'confirm').and.returnValue(true);
-
-      expect(component.canLeaveGame()).toBeTrue();
-    });
-
-    it('records defeat on confirmed leave during COMBAT', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
-      spyOn(window, 'confirm').and.returnValue(true);
-
-      component.canLeaveGame();
-
-      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
-        jasmine.objectContaining({ isVictory: false })
-      );
-    });
-
-    it('records defeat on confirmed leave during INTERMISSION', () => {
-      gameStateService.startWave();
-      gameStateService.completeWave(0); // → INTERMISSION
-      spyOn(window, 'confirm').and.returnValue(true);
-
-      component.canLeaveGame();
-
-      expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
-        jasmine.objectContaining({ isVictory: false })
-      );
-    });
-
-    it('does not record defeat when player cancels', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
-      spyOn(window, 'confirm').and.returnValue(false);
-
-      component.canLeaveGame();
-
-      expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
-    });
-
-    it('does not double-record defeat when game end already recorded', () => {
-      gameStateService.setPhase(GamePhase.COMBAT);
-      spyOn(window, 'confirm').and.returnValue(true);
-      // Pre-record via the service so idempotency guard fires
-      const gameEndService = fixture.debugElement.injector.get(GameEndService);
-      gameEndService.recordEnd(false, null);
-      playerProfileSpy.recordGameEnd.calls.reset();
-
-      component.canLeaveGame();
-
-      expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
     });
   });
 
@@ -2421,15 +2323,8 @@ describe('GameBoardComponent', () => {
     });
 
     afterEach(() => {
-      // Clean up document/window listeners to avoid leaking between tests
-      if ((component as any).visibilityChangeHandler) {
-        document.removeEventListener('visibilitychange', (component as any).visibilityChangeHandler);
-        (component as any).visibilityChangeHandler = null;
-      }
-      if ((component as any).windowBlurPauseHandler) {
-        window.removeEventListener('blur', (component as any).windowBlurPauseHandler);
-        (component as any).windowBlurPauseHandler = null;
-      }
+      // Clean up document/window listeners registered by GamePauseService
+      fixture.debugElement.injector.get(GamePauseService).cleanup();
     });
 
     it('visibility change to hidden during COMBAT triggers pause', () => {
@@ -2493,8 +2388,10 @@ describe('GameBoardComponent', () => {
     });
 
     it('autoPaused flag is reset to false on manual togglePause (resume)', () => {
+      const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
       gameStateService.setPhase(GamePhase.COMBAT);
-      (component as any).autoPaused = true;
+      // Simulate that the service flagged an auto-pause
+      gamePauseService.autoPaused = true;
 
       component.togglePause();
 
@@ -2502,7 +2399,8 @@ describe('GameBoardComponent', () => {
     });
 
     it('autoPaused flag is reset in restartGame', () => {
-      (component as any).autoPaused = true;
+      const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
+      gamePauseService.autoPaused = true;
       spyOn(component as any, 'cleanupGameObjects');
       spyOn(component as any, 'renderGameBoard');
       spyOn(component as any, 'addGridLines');
@@ -2621,20 +2519,14 @@ describe('GameBoardComponent', () => {
     });
 
     it('autoPaused flag set when auto-pausing during INTERMISSION', () => {
+      const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
       gameStateService.startWave();
       gameStateService.completeWave(0); // → INTERMISSION
+      spyOn(gamePauseService, 'setupAutoPause');
       (component as any).setupAutoPause();
 
-      spyOnProperty(document, 'hidden').and.returnValue(true);
-      document.dispatchEvent(new Event('visibilitychange'));
-
-      expect(component.autoPaused).toBeTrue();
-
-      // cleanup
-      document.removeEventListener('visibilitychange', (component as any).visibilityChangeHandler);
-      window.removeEventListener('blur', (component as any).windowBlurPauseHandler);
-      (component as any).visibilityChangeHandler = null;
-      (component as any).windowBlurPauseHandler = null;
+      // setupAutoPause is now delegated to GamePauseService
+      expect(gamePauseService.setupAutoPause).toHaveBeenCalled();
     });
   });
 
@@ -2651,10 +2543,11 @@ describe('GameBoardComponent', () => {
       const minimapSvc = fixture.debugElement.injector.get(MinimapService);
       spyOn(minimapSvc, 'init');
 
-      component.showQuitConfirm = true;
+      const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
+      spyOn(gamePauseService, 'reset');
       component.restartGame();
 
-      expect(component.showQuitConfirm).toBeFalse();
+      expect(gamePauseService.reset).toHaveBeenCalled();
     });
   });
 
@@ -3309,7 +3202,9 @@ describe('GameBoardComponent', () => {
     });
 
     it('challengeIndicators is reset to [] on restartGame', () => {
-      component.challengeIndicators = [{ label: 'No Slow', value: '✓', passing: true }];
+      // Set indicators via service (challengeIndicators is now a read-only getter)
+      fixture.debugElement.injector.get(ChallengeDisplayService).indicators =
+        [{ label: 'No Slow', value: '✓', passing: true }];
 
       spyOn(component as any, 'cleanupGameObjects');
       spyOn(component as any, 'renderGameBoard');

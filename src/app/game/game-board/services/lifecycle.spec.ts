@@ -4,6 +4,7 @@ import { EnemyService } from './enemy.service';
 import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { PathfindingService } from './pathfinding.service';
 import { TowerCombatService } from './tower-combat.service';
+import { ChainLightningService } from './chain-lightning.service';
 import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
 import { AudioService } from './audio.service';
@@ -19,6 +20,7 @@ import { WAVE_DEFINITIONS } from '../models/wave.model';
 import { createTestEnemy, createTestBoard, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy } from '../testing';
 import { TowerAnimationService } from './tower-animation.service';
 import { EnemyVisualService } from './enemy-visual.service';
+import { EnemyHealthService } from './enemy-health.service';
 
 // ============================================================================
 // 1. EnemyService lifecycle
@@ -37,6 +39,7 @@ describe('EnemyService lifecycle', () => {
         PathfindingService,
         EnemyService,
         EnemyVisualService,
+        EnemyHealthService,
         EnemyMeshFactoryService,
         GameStateService,
         { provide: GameBoardService, useValue: spy }
@@ -124,6 +127,7 @@ describe('TowerCombatService lifecycle', () => {
     TestBed.configureTestingModule({
       providers: [
         TowerCombatService,
+        ChainLightningService,
         CombatVFXService,
         StatusEffectService,
         GameStateService,
