@@ -1124,7 +1124,7 @@ Test count: 2756 → 3024 (+268 tests)
 
 ## Deployment Checklist — feat/hardening-viii
 - [x] Step 1: Fix Finding 3 — store hotkey$ subscription and unsubscribe in ngOnDestroy
-- [ ] Step 2: Update barrel files to include new services (EnemyMeshFactory, EnemyVisual, GameInput, TerrainEdit)
-- [ ] Step 3: Final convention check — grep for console.log, TODO, catch(e), leftover debugs
-- [ ] Step 4: Full test suite green (hard gate) + production build clean
+- [x] Step 2: Update barrel files to include new services (EnemyMeshFactory, EnemyVisual, GameInput, TerrainEdit) — verified: editor barrel already has TerrainEdit; game services are component-scoped (no barrel needed); core barrel complete
+- [x] Step 3: Final convention check — zero console.log, zero TODO/FIXME/HACK, zero debugger; 3 pre-existing catch(e) in map-storage (outside scope)
+- [x] Step 4: Full test suite green (4165/4165) + production build clean
 - [ ] Step 5: Push branch
