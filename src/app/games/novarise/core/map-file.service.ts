@@ -174,7 +174,7 @@ export class MapFileService {
    * Shows appropriate error notification on failure.
    * Caller is responsible for clearing edit history.
    */
-  async importFromJson(file: File): Promise<TerrainGridState | null> {
+  async importFromJson(_file: File): Promise<TerrainGridState | null> {
     const { mapId, errorCode } = await this.mapStorage.promptFileImport();
 
     if (mapId) {
