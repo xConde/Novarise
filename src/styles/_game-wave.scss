@@ -171,7 +171,7 @@
 
 .board-container .wave-preview .wave-btn:hover {
   background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.5);
+  border-color: var(--text-dim);
   transform: scale(1.03);
 }
 
