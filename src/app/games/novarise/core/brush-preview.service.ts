@@ -7,7 +7,11 @@ import {
   EDITOR_BRUSH_INDICATOR,
   EDITOR_BRUSH_PREVIEW,
   EDITOR_RENDER_ORDER,
+  EDITOR_HOVER_EMISSIVE,
+  EDITOR_PATH_INVALID_FLASH_MS,
+  EDITOR_PATH_INVALID_FLASH_COLOR,
 } from '../constants/editor-ui.constants';
+import { TERRAIN_CONFIGS } from '../models/terrain-types.enum';
 
 /**
  * Manages the brush indicator ring and multi-tile brush preview meshes
@@ -182,6 +186,62 @@ export class BrushPreviewService {
     }
 
     return tiles;
+  }
+
+  // ── Tile flash feedback ───────────────────────────────────────────────────
+
+  /**
+   * Set tracking for tiles that have been edited this stroke (used to
+   * suppress the hover-emissive reset while a flash is in progress).
+   */
+  private lastEditedTiles = new Set<THREE.Mesh>();
+
+  /** Returns the set of meshes currently mid-flash (for hover emissive gating). */
+  getLastEditedTiles(): Set<THREE.Mesh> {
+    return this.lastEditedTiles;
+  }
+
+  /**
+   * Crisp flash animation on a tile mesh after an edit.
+   * Reads original emissive intensity from TERRAIN_CONFIGS via the TerrainGrid.
+   */
+  flashTileEdit(mesh: THREE.Mesh): void {
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    const x = mesh.userData['gridX'];
+    const z = mesh.userData['gridZ'];
+    let originalIntensity: number = EDITOR_HOVER_EMISSIVE.defaultFallback;
+
+    if (typeof x === 'number' && typeof z === 'number') {
+      const tile = this.terrainGrid.getTileAt(x, z);
+      if (tile) {
+        originalIntensity = TERRAIN_CONFIGS[tile.type].emissiveIntensity;
+      }
+    }
+
+    this.lastEditedTiles.add(mesh);
+    material.emissiveIntensity = EDITOR_HOVER_EMISSIVE.flashPeak;
+
+    setTimeout(() => {
+      material.emissiveIntensity = EDITOR_HOVER_EMISSIVE.flashMid;
+      setTimeout(() => {
+        this.lastEditedTiles.delete(mesh);
+        // Only restore if the mesh is no longer the hovered tile —
+        // the caller must pass its hoveredTile ref for this check.
+        material.emissiveIntensity = originalIntensity;
+      }, EDITOR_HOVER_EMISSIVE.flashFadeBackMs);
+    }, EDITOR_HOVER_EMISSIVE.flashFadeDelayMs);
+  }
+
+  /**
+   * Flash a marker red briefly to indicate a rejected spawn/exit placement.
+   */
+  flashMarkerRejection(marker: THREE.Mesh): void {
+    const material = marker.material as THREE.MeshBasicMaterial;
+    const originalColor = material.color.getHex();
+    material.color.setHex(EDITOR_PATH_INVALID_FLASH_COLOR);
+    setTimeout(() => {
+      material.color.setHex(originalColor);
+    }, EDITOR_PATH_INVALID_FLASH_MS);
   }
 
   // ── Disposal ───────────────────────────────────────────────────────────────

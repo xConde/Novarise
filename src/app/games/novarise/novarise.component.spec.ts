@@ -15,6 +15,9 @@ import { TerrainEditService } from './core/terrain-edit.service';
 import { MapFileService } from './core/map-file.service';
 import { BrushPreviewService } from './core/brush-preview.service';
 import { SpawnExitMarkerService } from './core/spawn-exit-marker.service';
+import { RectangleToolService } from './core/rectangle-tool.service';
+import { EditorModalService } from './core/editor-modal.service';
+import { EditorKeyboardService } from './core/editor-keyboard.service';
 import { JoystickEvent } from './features/mobile-controls';
 
 /**
@@ -94,6 +97,9 @@ describe('NovariseComponent', () => {
         MapFileService,
         BrushPreviewService,
         SpawnExitMarkerService,
+        RectangleToolService,
+        EditorModalService,
+        EditorKeyboardService,
       ],
       schemas: [NO_ERRORS_SCHEMA] // Ignore unknown elements like app-virtual-joystick
     }).compileComponents();
@@ -437,7 +443,7 @@ describe('NovariseComponent', () => {
 
     describe('showInputModal', () => {
       it('should set showModal, modalType, modalTitle, and modalInputValue', () => {
-        (component as any).showInputModal('Enter map name', 'My Map', () => {});
+        component.editorModal.showInputModal('Enter map name', 'My Map', () => {});
         expect(component.showModal).toBeTrue();
         expect(component.modalType).toBe('input');
         expect(component.modalTitle).toBe('Enter map name');
@@ -447,7 +453,7 @@ describe('NovariseComponent', () => {
 
     describe('showConfirmModal', () => {
       it('should set showModal, modalType, and modalTitle', () => {
-        (component as any).showConfirmModal('Proceed?', () => {});
+        component.editorModal.showConfirmModal('Proceed?', () => {});
         expect(component.showModal).toBeTrue();
         expect(component.modalType).toBe('confirm');
         expect(component.modalTitle).toBe('Proceed?');
@@ -456,7 +462,7 @@ describe('NovariseComponent', () => {
 
     describe('showSelectModal', () => {
       it('should set showModal, modalType, modalTitle, and modalSelectOptions', () => {
-        (component as any).showSelectModal('Pick one', ['Alpha', 'Beta'], () => {});
+        component.editorModal.showSelectModal('Pick one', ['Alpha', 'Beta'], () => {});
         expect(component.showModal).toBeTrue();
         expect(component.modalType).toBe('select');
         expect(component.modalTitle).toBe('Pick one');
@@ -467,21 +473,21 @@ describe('NovariseComponent', () => {
     describe('confirmModal on input type', () => {
       it('should invoke callback with the current input value', () => {
         let received: string | null | boolean = 'unset';
-        (component as any).showInputModal('Name', 'default', (v: string | null) => { received = v; });
+        component.editorModal.showInputModal('Name', 'default', (v: string | null) => { received = v; });
         component.modalInputValue = 'Custom Name';
         component.confirmModal();
         expect(received).toBe('Custom Name');
       });
 
       it('should close the modal after confirm', () => {
-        (component as any).showInputModal('Name', '', () => {});
+        component.editorModal.showInputModal('Name', '', () => {});
         component.confirmModal();
         expect(component.showModal).toBeFalse();
       });
 
       it('should pass null when input value is empty string', () => {
         let received: string | null | boolean = 'unset';
-        (component as any).showInputModal('Name', '', (v: string | null) => { received = v; });
+        component.editorModal.showInputModal('Name', '', (v: string | null) => { received = v; });
         component.modalInputValue = '';
         component.confirmModal();
         expect(received).toBeNull();
@@ -491,13 +497,13 @@ describe('NovariseComponent', () => {
     describe('confirmModal on confirm type', () => {
       it('should invoke callback with true', () => {
         let received: string | null | boolean = false;
-        (component as any).showConfirmModal('Sure?', (v: boolean) => { received = v; });
+        component.editorModal.showConfirmModal('Sure?', (v: boolean) => { received = v; });
         component.confirmModal();
         expect(received).toBeTrue();
       });
 
       it('should close the modal after confirm', () => {
-        (component as any).showConfirmModal('Sure?', () => {});
+        component.editorModal.showConfirmModal('Sure?', () => {});
         component.confirmModal();
         expect(component.showModal).toBeFalse();
       });
@@ -506,13 +512,13 @@ describe('NovariseComponent', () => {
     describe('cancelModal on input type', () => {
       it('should invoke callback with null', () => {
         let received: string | null | boolean = 'unset';
-        (component as any).showInputModal('Name', 'value', (v: string | null) => { received = v; });
+        component.editorModal.showInputModal('Name', 'value', (v: string | null) => { received = v; });
         component.cancelModal();
         expect(received).toBeNull();
       });
 
       it('should close the modal', () => {
-        (component as any).showInputModal('Name', '', () => {});
+        component.editorModal.showInputModal('Name', '', () => {});
         component.cancelModal();
         expect(component.showModal).toBeFalse();
       });
@@ -521,13 +527,13 @@ describe('NovariseComponent', () => {
     describe('cancelModal on confirm type', () => {
       it('should invoke callback with false', () => {
         let received: string | null | boolean = true;
-        (component as any).showConfirmModal('Sure?', (v: boolean) => { received = v; });
+        component.editorModal.showConfirmModal('Sure?', (v: boolean) => { received = v; });
         component.cancelModal();
         expect(received).toBeFalse();
       });
 
       it('should close the modal', () => {
-        (component as any).showConfirmModal('Sure?', () => {});
+        component.editorModal.showConfirmModal('Sure?', () => {});
         component.cancelModal();
         expect(component.showModal).toBeFalse();
       });
@@ -536,7 +542,7 @@ describe('NovariseComponent', () => {
     describe('cancelModal on select type', () => {
       it('should invoke callback with null when cancelled', () => {
         let callbackInvoked = false;
-        (component as any).showSelectModal('Pick', ['A'], (v: number | null) => {
+        component.editorModal.showSelectModal('Pick', ['A'], (v: number | null) => {
           callbackInvoked = true;
           // cancel passes false through the generic callback; the select wrapper
           // receives false (not a number) so consumers should guard with null check
@@ -551,7 +557,7 @@ describe('NovariseComponent', () => {
     describe('selectModalOption', () => {
       it('should invoke callback with the chosen index', () => {
         let received = -1;
-        (component as any).showSelectModal('Pick', ['Alpha', 'Beta'], (i: number | null) => {
+        component.editorModal.showSelectModal('Pick', ['Alpha', 'Beta'], (i: number | null) => {
           if (i !== null) received = i;
         });
         component.selectModalOption(1);
@@ -559,7 +565,7 @@ describe('NovariseComponent', () => {
       });
 
       it('should close the modal after selection', () => {
-        (component as any).showSelectModal('Pick', ['A'], () => {});
+        component.editorModal.showSelectModal('Pick', ['A'], () => {});
         component.selectModalOption(0);
         expect(component.showModal).toBeFalse();
       });
@@ -567,10 +573,10 @@ describe('NovariseComponent', () => {
 
     describe('closeModal', () => {
       it('should set showModal to false and clear callback', () => {
-        (component as any).showConfirmModal('Test', () => {});
+        component.editorModal.showConfirmModal('Test', () => {});
         component.closeModal();
         expect(component.showModal).toBeFalse();
-        expect((component as any).modalCallback).toBeNull();
+        expect((component.editorModal as any).modalCallback).toBeNull();
       });
     });
   });

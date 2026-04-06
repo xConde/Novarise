@@ -14,6 +14,9 @@ import { TerrainEditService } from './core/terrain-edit.service';
 import { MapFileService } from './core/map-file.service';
 import { BrushPreviewService } from './core/brush-preview.service';
 import { SpawnExitMarkerService } from './core/spawn-exit-marker.service';
+import { RectangleToolService } from './core/rectangle-tool.service';
+import { EditorModalService } from './core/editor-modal.service';
+import { EditorKeyboardService } from './core/editor-keyboard.service';
 import { TerrainGridState } from './features/terrain-editor/terrain-grid-state.interface';
 import { TerrainType } from './models/terrain-types.enum';
 import * as THREE from 'three';
@@ -31,9 +34,8 @@ interface TestableNovarise {
     exportState(): TerrainGridState;
     dispose(): void;
   } | null;
-  keysPressed: Set<string>;
   pathValidationResult: { valid: boolean };
-  handleKeyDown(event: KeyboardEvent): void;
+  editorKeyboard: EditorKeyboardService;
 }
 
 function makeEditorSceneSpy(): jasmine.SpyObj<EditorSceneService> {
@@ -129,6 +131,9 @@ describe('NovariseComponent Navigation', () => {
         MapFileService,
         BrushPreviewService,
         SpawnExitMarkerService,
+        RectangleToolService,
+        EditorModalService,
+        EditorKeyboardService,
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();
@@ -195,8 +200,22 @@ describe('NovariseComponent Navigation', () => {
   });
 
   describe('Keyboard Guard', () => {
+    let editorKeyboard: EditorKeyboardService;
+
     beforeEach(() => {
-      testable.keysPressed = new Set<string>();
+      editorKeyboard = testable.editorKeyboard;
+      // Setup the keyboard service with no-op callbacks so hotkeys are processed
+      editorKeyboard.setup({
+        undo: () => {}, redo: () => {},
+        exportMap: () => {}, importMap: () => {},
+        saveGrid: () => {}, loadGrid: () => {},
+        cycleBrushSize: () => {}, changeActiveTool: () => {},
+        playMap: () => {}, setEditMode: () => {}, setTerrainType: () => {}
+      });
+    });
+
+    afterEach(() => {
+      editorKeyboard.teardown();
     });
 
     it('should not add key to keysPressed when target is an input element', () => {
@@ -204,9 +223,9 @@ describe('NovariseComponent Navigation', () => {
       const event = new KeyboardEvent('keydown', { key: 'w' });
       Object.defineProperty(event, 'target', { value: input });
 
-      testable.handleKeyDown(event);
+      window.dispatchEvent(event);
 
-      expect(testable.keysPressed.has('w')).toBe(false);
+      expect(editorKeyboard.getKeysPressed().has('w')).toBe(false);
     });
 
     it('should not add key to keysPressed when target is a textarea', () => {
@@ -214,9 +233,9 @@ describe('NovariseComponent Navigation', () => {
       const event = new KeyboardEvent('keydown', { key: 'a' });
       Object.defineProperty(event, 'target', { value: textarea });
 
-      testable.handleKeyDown(event);
+      window.dispatchEvent(event);
 
-      expect(testable.keysPressed.has('a')).toBe(false);
+      expect(editorKeyboard.getKeysPressed().has('a')).toBe(false);
     });
 
     it('should add key to keysPressed when target is a regular element', () => {
@@ -224,9 +243,9 @@ describe('NovariseComponent Navigation', () => {
       const event = new KeyboardEvent('keydown', { key: 'w' });
       Object.defineProperty(event, 'target', { value: div });
 
-      testable.handleKeyDown(event);
+      window.dispatchEvent(event);
 
-      expect(testable.keysPressed.has('w')).toBe(true);
+      expect(editorKeyboard.getKeysPressed().has('w')).toBe(true);
     });
   });
 });

@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import * as THREE from 'three';
 import { TerrainGrid } from './features/terrain-editor/terrain-grid.class';
-import { TerrainType, TERRAIN_CONFIGS } from './models/terrain-types.enum';
+import { TerrainType } from './models/terrain-types.enum';
 import { MapStorageService } from '../../core/services/map-storage.service';
 import { EditHistoryService, SpawnPointCommand, ExitPointCommand } from './core/edit-history.service';
 import { CameraControlService, MovementInput, RotationInput, JoystickInput } from './core/camera-control.service';
@@ -12,17 +12,11 @@ import { MapBridgeService } from '../../core/services/map-bridge.service';
 import { JoystickEvent } from './features/mobile-controls';
 import {
   EDITOR_EDIT_THROTTLE_MS,
-  EDITOR_SPAWN_MARKER,
-  EDITOR_EXIT_MARKER,
   EDITOR_ANIMATION,
-  EDITOR_HOVER_EMISSIVE,
-  EDITOR_PATH_INVALID_FLASH_MS,
-  EDITOR_PATH_INVALID_FLASH_COLOR,
   EDITOR_AUTOSAVE_JUST_NOW_MS,
-  EDITOR_RECTANGLE_PREVIEW,
-  EDITOR_RENDER_ORDER,
+  EDITOR_HOVER_EMISSIVE,
 } from './constants/editor-ui.constants';
-import { disposeMesh } from '../../game/game-board/utils/three-utils';
+import { TERRAIN_CONFIGS } from './models/terrain-types.enum';
 import { PathValidationService, PathValidationResult } from './core/path-validation.service';
 import { MapTemplateService } from '../../core/services/map-template.service';
 import { MapTemplate } from '../../core/models/map-template.model';
@@ -32,6 +26,9 @@ import { TerrainEditService } from './core/terrain-edit.service';
 import { MapFileService } from './core/map-file.service';
 import { BrushPreviewService } from './core/brush-preview.service';
 import { SpawnExitMarkerService } from './core/spawn-exit-marker.service';
+import { RectangleToolService } from './core/rectangle-tool.service';
+import { EditorModalService } from './core/editor-modal.service';
+import { EditorKeyboardService } from './core/editor-keyboard.service';
 
 // Re-export types for template compatibility
 export { EditMode, BrushTool } from './core/editor-state.service';
@@ -59,24 +56,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private mouse = new THREE.Vector2();
   private hoveredTile: THREE.Mesh | null = null;
   private isMouseDown = false;
-  private lastEditedTiles = new Set<THREE.Mesh>();
   private lastEditTime = 0;
-  private readonly editThrottleMs = EDITOR_EDIT_THROTTLE_MS; // Throttle edits during drag to 20fps max
-
-  // Rectangle selection state
-  private rectangleStartTile: THREE.Mesh | null = null;
-  private rectanglePreviewMeshes: THREE.Mesh[] = [];
-
-  // Camera movement - delegated to CameraControlService
-  private keysPressed = new Set<string>();
+  private readonly editThrottleMs = EDITOR_EDIT_THROTTLE_MS;
 
   // Mobile joystick state (updated via modular VirtualJoystickComponent events)
   private movementJoystick: JoystickInput = { active: false, x: 0, y: 0 };
   private rotationJoystick: JoystickInput = { active: false, x: 0, y: 0 };
 
-  // Event handlers
-  private keyboardHandler: (event: KeyboardEvent) => void;
-  private keyUpHandler: (event: KeyboardEvent) => void;
+  // Event handlers (mouse/touch — keyboard is handled by EditorKeyboardService)
   private mouseDownHandler: (event: MouseEvent) => void;
   private mouseUpHandler: (event: MouseEvent) => void;
   private mousemoveHandler!: (event: MouseEvent) => void;
@@ -112,13 +99,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   public editorNotification: EditorNotification | null = null;
   private notificationSub: Subscription | null = null;
 
-  // Modal dialog state (replaces browser prompt()/confirm())
-  public showModal = false;
-  public modalTitle = '';
-  public modalType: 'input' | 'confirm' | 'select' = 'confirm';
-  public modalInputValue = '';
-  public modalSelectOptions: string[] = [];
-  private modalCallback: ((result: string | boolean | number | null) => void) | null = null;
+  // Modal dialog — delegated to EditorModalService (template binds through getters below)
+  public get showModal(): boolean { return this.editorModal.showModal; }
+  public get modalTitle(): string { return this.editorModal.modalTitle; }
+  public get modalType(): 'input' | 'confirm' | 'select' { return this.editorModal.modalType; }
+  public get modalInputValue(): string { return this.editorModal.modalInputValue; }
+  public set modalInputValue(v: string) { this.editorModal.modalInputValue = v; }
+  public get modalSelectOptions(): string[] { return this.editorModal.modalSelectOptions; }
 
   // Autosave draft timestamp (updated when MapFileService triggers a save)
   public lastAutosaveTime: Date | null = null;
@@ -144,9 +131,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     private mapFile: MapFileService,
     private brushPreview: BrushPreviewService,
     private spawnExitMarker: SpawnExitMarkerService,
+    private rectangleTool: RectangleToolService,
+    public editorModal: EditorModalService,
+    private editorKeyboard: EditorKeyboardService,
   ) {
-    this.keyboardHandler = this.handleKeyDown.bind(this);
-    this.keyUpHandler = this.handleKeyUp.bind(this);
     this.mouseDownHandler = this.handleMouseDown.bind(this);
     this.mouseUpHandler = this.handleMouseUp.bind(this);
   }
@@ -186,6 +174,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.brushPreview.setTerrainGrid(this.terrainGrid);
     this.spawnExitMarker.setScene(this.editorScene.getScene());
     this.spawnExitMarker.setTerrainGrid(this.terrainGrid);
+    this.rectangleTool.setScene(this.editorScene.getScene());
+    this.rectangleTool.setTerrainGrid(this.terrainGrid);
 
     // Create brush indicator for crisp visual feedback
     this.brushPreview.createBrushIndicator();
@@ -214,7 +204,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Offer to restore any unsaved draft (only after the named map is loaded)
     const draft = this.mapFile.loadDraft();
     if (draft) {
-      this.showConfirmModal('An unsaved draft was found. Restore it?', (confirmed) => {
+      this.editorModal.showConfirmModal('An unsaved draft was found. Restore it?', (confirmed) => {
         if (confirmed) {
           this.terrainGrid.importState(draft);
           this.spawnExitMarker.updateSpawnMarkers();
@@ -249,7 +239,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       const intersects = this.raycaster.intersectObjects(tileMeshes);
 
       // Reset previous hover with crisp transition
-      if (this.hoveredTile && !this.lastEditedTiles.has(this.hoveredTile)) {
+      if (this.hoveredTile && !this.brushPreview.getLastEditedTiles().has(this.hoveredTile)) {
         const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
         // Reset to original terrain emissive intensity from config
         const x = this.hoveredTile.userData['gridX'];
@@ -284,8 +274,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         // Apply edit if mouse is down (with throttling for performance)
         if (this.isMouseDown) {
           // Rectangle tool: update preview
-          if (this.activeTool === 'rectangle' && this.rectangleStartTile) {
-            this.updateRectanglePreview(this.rectangleStartTile, this.hoveredTile);
+          if (this.activeTool === 'rectangle' && this.rectangleTool.getStartTile()) {
+            this.rectangleTool.updatePreview(this.rectangleTool.getStartTile()!, this.hoveredTile);
           } else {
             // Other tools: apply edit with throttling
             const now = Date.now();
@@ -341,8 +331,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         this.hoveredTile = intersects[0].object as THREE.Mesh;
 
         if (this.isMouseDown) {
-          if (this.activeTool === 'rectangle' && this.rectangleStartTile) {
-            this.updateRectanglePreview(this.rectangleStartTile, this.hoveredTile);
+          if (this.activeTool === 'rectangle' && this.rectangleTool.getStartTile()) {
+            this.rectangleTool.updatePreview(this.rectangleTool.getStartTile()!, this.hoveredTile);
           } else {
             const now = Date.now();
             if (now - this.lastEditTime >= this.editThrottleMs) {
@@ -377,7 +367,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       if (this.hoveredTile) {
         // Rectangle tool: set start point
         if (this.activeTool === 'rectangle') {
-          this.rectangleStartTile = this.hoveredTile;
+          this.rectangleTool.setStartTile(this.hoveredTile);
         } else {
           // Other tools: apply immediately
           this.applyEdit(this.hoveredTile);
@@ -395,11 +385,12 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
 
     // Rectangle tool: complete selection
-    if (this.activeTool === 'rectangle' && this.rectangleStartTile && this.hoveredTile) {
-      this.fillRectangle(this.rectangleStartTile, this.hoveredTile);
+    const rectStart = this.rectangleTool.getStartTile();
+    if (this.activeTool === 'rectangle' && rectStart && this.hoveredTile) {
+      const flashTargets = this.rectangleTool.fill(rectStart, this.hoveredTile, () => this.runPathValidation());
+      flashTargets.forEach(m => this.flashTileEdit(m));
     }
-
-    this.rectangleStartTile = null;
+    this.rectangleTool.clearStartTile();
   }
 
   private startStroke(): void {
@@ -513,232 +504,62 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private flashTileEdit(mesh: THREE.Mesh): void {
-    // Crisp flash animation for immediate feedback
-    const material = mesh.material as THREE.MeshStandardMaterial;
-
-    // Get original intensity from terrain config
-    const x = mesh.userData['gridX'];
-    const z = mesh.userData['gridZ'];
-    let originalIntensity: number = EDITOR_HOVER_EMISSIVE.defaultFallback; // Default fallback
-
-    if (typeof x === 'number' && typeof z === 'number') {
-      const tile = this.terrainGrid.getTileAt(x, z);
-      if (tile) {
-        const config = TERRAIN_CONFIGS[tile.type];
-        originalIntensity = config.emissiveIntensity;
-      }
-    }
-
-    // Add to edited tiles set
-    this.lastEditedTiles.add(mesh);
-
-    // Instant bright flash
-    material.emissiveIntensity = EDITOR_HOVER_EMISSIVE.flashPeak;
-
-    // Quick fade back for crisp feel
-    setTimeout(() => {
-      material.emissiveIntensity = EDITOR_HOVER_EMISSIVE.flashMid; // Hover state
-      setTimeout(() => {
-        this.lastEditedTiles.delete(mesh);
-        if (this.hoveredTile !== mesh) {
-          material.emissiveIntensity = originalIntensity;
-        }
-      }, EDITOR_HOVER_EMISSIVE.flashFadeBackMs);
-    }, EDITOR_HOVER_EMISSIVE.flashFadeDelayMs);
+    this.brushPreview.flashTileEdit(mesh);
   }
 
-  /**
-   * Flash a marker red briefly to signal a rejected spawn/exit placement.
-   */
   private flashMarkerRejection(marker: THREE.Mesh): void {
-    const material = marker.material as THREE.MeshBasicMaterial;
-    const originalColor = material.color.getHex();
-    material.color.setHex(EDITOR_PATH_INVALID_FLASH_COLOR);
-    setTimeout(() => {
-      material.color.setHex(originalColor);
-    }, EDITOR_PATH_INVALID_FLASH_MS);
-  }
-
-  private handleKeyDown(event: KeyboardEvent): void {
-    const key = event.key.toLowerCase();
-
-    // Ignore all keyboard handling when focus is on an interactive form element
-    const tag = (event.target as HTMLElement)?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
-    this.keysPressed.add(key);
-
-    // Undo/Redo shortcuts (Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z)
-    if (event.ctrlKey || event.metaKey) {
-      if (key === 'z' && !event.shiftKey) {
-        event.preventDefault();
-        this.undo();
-        return;
-      }
-      if (key === 'y' || (key === 'z' && event.shiftKey)) {
-        event.preventDefault();
-        this.redo();
-        return;
-      }
-      // Export map (Ctrl+E)
-      if (key === 'e') {
-        event.preventDefault();
-        this.exportCurrentMap();
-        return;
-      }
-      // Import map (Ctrl+O for "Open")
-      if (key === 'o') {
-        event.preventDefault();
-        this.importMapFromFile();
-        return;
-      }
-    }
-
-    // Mode and terrain shortcuts
-    switch (key) {
-      case 't':
-        this.setEditMode('paint');
-        break;
-      case 'h':
-        this.setEditMode('height');
-        break;
-      case '1':
-        this.setTerrainType(TerrainType.BEDROCK);
-        break;
-      case '2':
-        this.setTerrainType(TerrainType.CRYSTAL);
-        break;
-      case '3':
-        this.setTerrainType(TerrainType.MOSS);
-        break;
-      case '4':
-        this.setTerrainType(TerrainType.ABYSS);
-        break;
-      case 'p':
-        this.setEditMode('spawn');
-        break;
-      case 'x':
-        this.setEditMode('exit');
-        break;
-      case 'g':
-        this.saveGridState();
-        break;
-      case 'l':
-        this.loadGridState();
-        break;
-      case '[':
-        this.cycleBrushSize(-1);
-        break;
-      case ']':
-        this.cycleBrushSize(1);
-        break;
-      case 'f':
-        this.changeActiveTool('fill');
-        break;
-      case 'r':
-        this.changeActiveTool('rectangle');
-        break;
-      case 'b':
-        this.changeActiveTool('brush');
-        break;
-      case 'enter':
-        this.playMap();
-        break;
-    }
-  }
-
-  private handleKeyUp(event: KeyboardEvent): void {
-    this.keysPressed.delete(event.key.toLowerCase());
+    this.brushPreview.flashMarkerRejection(marker);
   }
 
   private setupKeyboardControls(): void {
-    window.addEventListener('keydown', this.keyboardHandler);
-    window.addEventListener('keyup', this.keyUpHandler);
+    this.editorKeyboard.setup({
+      undo: () => this.undo(),
+      redo: () => this.redo(),
+      exportMap: () => this.exportCurrentMap(),
+      importMap: () => this.importMapFromFile(),
+      saveGrid: () => this.saveGridState(),
+      loadGrid: () => this.loadGridState(),
+      cycleBrushSize: (dir) => this.cycleBrushSize(dir),
+      changeActiveTool: (tool) => this.changeActiveTool(tool),
+      playMap: () => this.playMap(),
+      setEditMode: (mode) => this.setEditMode(mode),
+      setTerrainType: (type) => this.setTerrainType(type),
+    });
   }
 
   private updateCameraMovement(): void {
-    // Build movement input from keyboard state
+    const keys = this.editorKeyboard.getKeysPressed();
     const movementInput: MovementInput = {
-      forward: this.keysPressed.has('w'),
-      backward: this.keysPressed.has('s'),
-      left: this.keysPressed.has('a'),
-      right: this.keysPressed.has('d'),
-      up: this.keysPressed.has('e'),
-      down: this.keysPressed.has('q'),
-      fast: this.keysPressed.has('shift')
+      forward: keys.has('w'),
+      backward: keys.has('s'),
+      left: keys.has('a'),
+      right: keys.has('d'),
+      up: keys.has('e'),
+      down: keys.has('q'),
+      fast: keys.has('shift')
     };
-
-    // Build rotation input from arrow keys
     const rotationInput: RotationInput = {
-      left: this.keysPressed.has('arrowleft'),
-      right: this.keysPressed.has('arrowright'),
-      up: this.keysPressed.has('arrowup'),
-      down: this.keysPressed.has('arrowdown')
+      left: keys.has('arrowleft'),
+      right: keys.has('arrowright'),
+      up: keys.has('arrowup'),
+      down: keys.has('arrowdown')
     };
-
-    // Update camera control service
     this.cameraControl.update(movementInput, rotationInput, this.movementJoystick, this.rotationJoystick);
-
-    // Apply camera state to Three.js camera and controls
     this.cameraControl.applyToCamera(this.editorScene.getCamera(), this.editorScene.getControls()?.target);
   }
 
-  // ── Modal dialog helpers ──────────────────────────────────────────────────
+  // ── Modal dialog helpers — delegated to EditorModalService ───────────────
 
-  private showInputModal(title: string, defaultValue: string, callback: (value: string | null) => void): void {
-    this.modalTitle = title;
-    this.modalType = 'input';
-    this.modalInputValue = defaultValue;
-    this.modalCallback = (result) => callback(result as string | null);
-    this.showModal = true;
-  }
-
-  private showConfirmModal(title: string, callback: (confirmed: boolean) => void): void {
-    this.modalTitle = title;
-    this.modalType = 'confirm';
-    this.modalCallback = (result) => callback(result as boolean);
-    this.showModal = true;
-  }
-
-  private showSelectModal(title: string, options: string[], callback: (index: number | null) => void): void {
-    this.modalTitle = title;
-    this.modalType = 'select';
-    this.modalSelectOptions = options;
-    this.modalCallback = (result) => callback(result === null ? null : (result as unknown as number));
-    this.showModal = true;
-  }
-
-  public confirmModal(): void {
-    const cb = this.modalCallback;
-    const value = this.modalType === 'input' ? (this.modalInputValue || null) : true;
-    this.closeModal();
-    if (cb) cb(value);
-  }
-
-  public selectModalOption(index: number): void {
-    const cb = this.modalCallback;
-    this.closeModal();
-    if (cb) cb(index);
-  }
-
-  public cancelModal(): void {
-    const cb = this.modalCallback;
-    const value = this.modalType === 'input' ? null : false;
-    this.closeModal();
-    if (cb) cb(value);
-  }
-
-  public closeModal(): void {
-    this.showModal = false;
-    this.modalCallback = null;
-  }
+  public confirmModal(): void { this.editorModal.confirmModal(); }
+  public selectModalOption(index: number): void { this.editorModal.selectModalOption(index); }
+  public cancelModal(): void { this.editorModal.cancelModal(); }
+  public closeModal(): void { this.editorModal.closeModal(); }
 
   // ─────────────────────────────────────────────────────────────────────────
 
   private saveGridState(): void {
-    // Warn if map has no valid path (but allow saving anyway — might be in-progress)
     if (!this.isPathValid && this.hasSpawnAndExit) {
-      this.showConfirmModal('This map has no valid path from spawn to exit. Save anyway?', (proceed) => {
+      this.editorModal.showConfirmModal('This map has no valid path from spawn to exit. Save anyway?', (proceed) => {
         if (!proceed) return;
         this.promptForMapNameAndSave();
       });
@@ -748,8 +569,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   private promptForMapNameAndSave(): void {
-    this.showInputModal('Enter map name', this.currentMapName, (mapName) => {
-      if (!mapName) return; // User cancelled
+    this.editorModal.showInputModal('Enter map name', this.currentMapName, (mapName) => {
+      if (!mapName) return;
       this.mapFile.save(mapName);
     });
   }
@@ -767,7 +588,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       return `${map.name} — ${date}`;
     });
 
-    this.showSelectModal('Select a map to load', options, (selectedIndex) => {
+    this.editorModal.showSelectModal('Select a map to load', options, (selectedIndex) => {
       if (selectedIndex === null) return; // User cancelled
 
       const selectedMap = maps[selectedIndex];
@@ -819,7 +640,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     };
 
     if (this.editHistory.canUndo) {
-      this.showConfirmModal('Load template? Unsaved changes will be lost.', (confirmed) => {
+      this.editorModal.showConfirmModal('Load template? Unsaved changes will be lost.', (confirmed) => {
         if (confirmed) doLoad();
       });
     } else {
@@ -837,90 +658,13 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Reset rectangle selection when switching tools
     if (tool !== 'rectangle') {
-      this.rectangleStartTile = null;
-      this.clearRectanglePreview();
+      this.rectangleTool.reset();
     }
 
     // Hide brush previews when switching away from brush tool
     if (tool !== 'brush') {
       this.brushPreview.hideBrushPreview();
     }
-  }
-
-  private fillRectangle(startTile: THREE.Mesh, endTile: THREE.Mesh): void {
-    const flashTargets = this.terrainEdit.fillRectangle(
-      startTile,
-      endTile,
-      () => this.runPathValidation()
-    );
-    flashTargets.forEach(m => this.flashTileEdit(m));
-    this.clearRectanglePreview();
-    this.rectangleStartTile = null;
-  }
-
-  private updateRectanglePreview(startTile: THREE.Mesh, endTile: THREE.Mesh): void {
-    this.clearRectanglePreview();
-
-    // Validate userData exists for both tiles
-    if (!startTile.userData || !endTile.userData ||
-        typeof startTile.userData['gridX'] !== 'number' ||
-        typeof startTile.userData['gridZ'] !== 'number' ||
-        typeof endTile.userData['gridX'] !== 'number' ||
-        typeof endTile.userData['gridZ'] !== 'number') {
-      return;
-    }
-
-    const x1 = startTile.userData['gridX'];
-    const z1 = startTile.userData['gridZ'];
-    const x2 = endTile.userData['gridX'];
-    const z2 = endTile.userData['gridZ'];
-
-    const minX = Math.min(x1, x2);
-    const maxX = Math.max(x1, x2);
-    const minZ = Math.min(z1, z2);
-    const maxZ = Math.max(z1, z2);
-
-    // Performance limit: don't create more than 100 preview meshes
-    const tileCount = (maxX - minX + 1) * (maxZ - minZ + 1);
-    if (tileCount > 100) {
-      // For large selections, only show corner/edge previews
-      return;
-    }
-
-    for (let x = minX; x <= maxX; x++) {
-      for (let z = minZ; z <= maxZ; z++) {
-        const tile = this.terrainGrid.getTileAt(x, z);
-        if (tile) {
-          const geometry = new THREE.RingGeometry(
-            EDITOR_RECTANGLE_PREVIEW.innerRadius,
-            EDITOR_RECTANGLE_PREVIEW.outerRadius,
-            EDITOR_RECTANGLE_PREVIEW.segments
-          );
-          const material = new THREE.MeshBasicMaterial({
-            color: EDITOR_RECTANGLE_PREVIEW.color,
-            side: THREE.DoubleSide,
-            transparent: true,
-            opacity: EDITOR_RECTANGLE_PREVIEW.opacity,
-            depthTest: false
-          });
-          const mesh = new THREE.Mesh(geometry, material);
-          mesh.rotation.x = -Math.PI / 2;
-          mesh.position.copy(tile.mesh.position);
-          mesh.position.y = tile.mesh.position.y + EDITOR_RECTANGLE_PREVIEW.yOffset;
-          mesh.renderOrder = EDITOR_RENDER_ORDER.rectanglePreview;
-          this.editorScene.getScene().add(mesh);
-          this.rectanglePreviewMeshes.push(mesh);
-        }
-      }
-    }
-  }
-
-  private clearRectanglePreview(): void {
-    this.rectanglePreviewMeshes.forEach(mesh => {
-      this.editorScene.getScene().remove(mesh);
-      disposeMesh(mesh);
-    });
-    this.rectanglePreviewMeshes = [];
   }
 
   /**
@@ -1071,29 +815,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       material.opacity = 0.6 + Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * 0.2;
     }
 
-    // Animate spawn markers
-    const spawnPoints = this.terrainGrid.getSpawnPoints();
-    const spawnMarkers = this.spawnExitMarker.getSpawnMarkers();
-    for (let i = 0; i < spawnMarkers.length && i < spawnPoints.length; i++) {
-      const bounce = Math.abs(Math.sin(Date.now() * EDITOR_ANIMATION.markerBounceSpeed)) * EDITOR_ANIMATION.markerBounceAmplitude;
-      const tile = this.terrainGrid.getTileAt(spawnPoints[i].x, spawnPoints[i].z);
-      if (tile) {
-        spawnMarkers[i].position.y = tile.mesh.position.y + EDITOR_SPAWN_MARKER.yBase + bounce;
-      }
-      spawnMarkers[i].rotation.y += EDITOR_ANIMATION.spawnRotationSpeed;
-    }
-
-    // Animate exit markers
-    const exitPointsAnim = this.terrainGrid.getExitPoints();
-    const exitMarkers = this.spawnExitMarker.getExitMarkers();
-    for (let i = 0; i < exitMarkers.length && i < exitPointsAnim.length; i++) {
-      const bounce = Math.abs(Math.sin(Date.now() * EDITOR_ANIMATION.markerBounceSpeed + EDITOR_ANIMATION.exitBouncePhaseOffset)) * EDITOR_ANIMATION.markerBounceAmplitude;
-      const tile = this.terrainGrid.getTileAt(exitPointsAnim[i].x, exitPointsAnim[i].z);
-      if (tile) {
-        exitMarkers[i].position.y = tile.mesh.position.y + EDITOR_EXIT_MARKER.yBase + bounce;
-      }
-      exitMarkers[i].rotation.y += EDITOR_ANIMATION.exitRotationSpeed;
-    }
+    // Animate spawn/exit markers (delegated to SpawnExitMarkerService)
+    this.spawnExitMarker.animateMarkers(Date.now());
 
     const particles = this.editorScene.getParticles();
     if (particles) {
@@ -1119,8 +842,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.notificationSub = null;
     this.editorNotificationService.clear();
 
-    window.removeEventListener('keydown', this.keyboardHandler);
-    window.removeEventListener('keyup', this.keyUpHandler);
+    this.editorKeyboard.teardown();
 
     const canvas = this.editorScene.getRenderer()?.domElement;
     if (canvas) {
@@ -1153,7 +875,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.brushPreview.cleanup();
 
     // Clean up rectangle preview meshes
-    this.clearRectanglePreview();
+    this.rectangleTool.cleanup();
 
     // Clean up spawn/exit markers (delegated to service)
     this.spawnExitMarker.cleanup();

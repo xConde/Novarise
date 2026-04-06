@@ -16,6 +16,8 @@ import { MapFileService } from './core/map-file.service';
 import { BrushPreviewService } from './core/brush-preview.service';
 import { RectangleToolService } from './core/rectangle-tool.service';
 import { SpawnExitMarkerService } from './core/spawn-exit-marker.service';
+import { EditorModalService } from './core/editor-modal.service';
+import { EditorKeyboardService } from './core/editor-keyboard.service';
 
 @NgModule({
   declarations: [
@@ -40,6 +42,8 @@ import { SpawnExitMarkerService } from './core/spawn-exit-marker.service';
     BrushPreviewService,
     RectangleToolService,
     SpawnExitMarkerService,
+    EditorModalService,
+    EditorKeyboardService,
   ]
 })
 export class EditorModule {}

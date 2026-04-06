@@ -6,6 +6,7 @@ import {
   EDITOR_SPAWN_MARKER,
   EDITOR_EXIT_MARKER,
   EDITOR_RENDER_ORDER,
+  EDITOR_ANIMATION,
 } from '../constants/editor-ui.constants';
 
 /**
@@ -141,6 +142,39 @@ export class SpawnExitMarkerService {
 
   getExitMarkers(): THREE.Mesh[] {
     return this.exitMarkers;
+  }
+
+  /**
+   * Tick spawn/exit marker animations (bounce + rotation).
+   * Call once per animation frame, passing `Date.now()` as `now`.
+   */
+  animateMarkers(now: number): void {
+    const spawnPoints = this.terrainGrid.getSpawnPoints();
+    for (let i = 0; i < this.spawnMarkers.length && i < spawnPoints.length; i++) {
+      const bounce =
+        Math.abs(Math.sin(now * EDITOR_ANIMATION.markerBounceSpeed)) *
+        EDITOR_ANIMATION.markerBounceAmplitude;
+      const tile = this.terrainGrid.getTileAt(spawnPoints[i].x, spawnPoints[i].z);
+      if (tile) {
+        this.spawnMarkers[i].position.y =
+          tile.mesh.position.y + EDITOR_SPAWN_MARKER.yBase + bounce;
+      }
+      this.spawnMarkers[i].rotation.y += EDITOR_ANIMATION.spawnRotationSpeed;
+    }
+
+    const exitPoints = this.terrainGrid.getExitPoints();
+    for (let i = 0; i < this.exitMarkers.length && i < exitPoints.length; i++) {
+      const bounce =
+        Math.abs(
+          Math.sin(now * EDITOR_ANIMATION.markerBounceSpeed + EDITOR_ANIMATION.exitBouncePhaseOffset)
+        ) * EDITOR_ANIMATION.markerBounceAmplitude;
+      const tile = this.terrainGrid.getTileAt(exitPoints[i].x, exitPoints[i].z);
+      if (tile) {
+        this.exitMarkers[i].position.y =
+          tile.mesh.position.y + EDITOR_EXIT_MARKER.yBase + bounce;
+      }
+      this.exitMarkers[i].rotation.y += EDITOR_ANIMATION.exitRotationSpeed;
+    }
   }
 
   // ── Disposal ───────────────────────────────────────────────────────────────
