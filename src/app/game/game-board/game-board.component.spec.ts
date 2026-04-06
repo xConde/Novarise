@@ -658,51 +658,51 @@ describe('GameBoardComponent', () => {
       expect((component as any).touchIsDragging).toBeFalse();
     });
 
-    it('touchEndHandler calls handleTapAsClick for a short tap with no drag', () => {
+    it('touchEndHandler calls handleInteraction for a short tap with no drag', () => {
       (component as any).setupTouchInteraction();
       (component as any).touchStartX = 100;
       (component as any).touchStartY = 200;
       (component as any).touchStartTime = performance.now() - 50; // 50ms ago — within 300ms threshold
       (component as any).touchIsDragging = false;
 
-      spyOn(component as any, 'handleTapAsClick');
+      spyOn(component as any, 'handleInteraction');
 
       const touch = { clientX: 100, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
 
       (component as any).touchEndHandler(event);
 
-      expect((component as any).handleTapAsClick).toHaveBeenCalledWith(100, 200);
+      expect((component as any).handleInteraction).toHaveBeenCalledWith(100, 200);
     });
 
-    it('touchEndHandler does not call handleTapAsClick when drag occurred', () => {
+    it('touchEndHandler does not call handleInteraction when drag occurred', () => {
       (component as any).setupTouchInteraction();
       (component as any).touchStartTime = performance.now() - 50;
       (component as any).touchIsDragging = true;
 
-      spyOn(component as any, 'handleTapAsClick');
+      spyOn(component as any, 'handleInteraction');
 
       const touch = { clientX: 100, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
 
       (component as any).touchEndHandler(event);
 
-      expect((component as any).handleTapAsClick).not.toHaveBeenCalled();
+      expect((component as any).handleInteraction).not.toHaveBeenCalled();
     });
 
-    it('touchEndHandler does not call handleTapAsClick when tap duration exceeds threshold', () => {
+    it('touchEndHandler does not call handleInteraction when tap duration exceeds threshold', () => {
       (component as any).setupTouchInteraction();
       (component as any).touchStartTime = performance.now() - 500; // 500ms — exceeds 300ms threshold
       (component as any).touchIsDragging = false;
 
-      spyOn(component as any, 'handleTapAsClick');
+      spyOn(component as any, 'handleInteraction');
 
       const touch = { clientX: 100, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
 
       (component as any).touchEndHandler(event);
 
-      expect((component as any).handleTapAsClick).not.toHaveBeenCalled();
+      expect((component as any).handleInteraction).not.toHaveBeenCalled();
     });
 
     it('touchEndHandler resets touchIsDragging and pinchStartDistance', () => {
