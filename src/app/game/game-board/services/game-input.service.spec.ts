@@ -52,6 +52,27 @@ describe('GameInputService', () => {
       expect(calls.some(args => args[0] === 'keyup')).toBeTrue();
       service.cleanup();
     });
+
+    it('double-init does not orphan listeners', () => {
+      service.init();
+      const firstHandler = (service as unknown as Record<string, unknown>)['keydownHandler'];
+
+      // Spy on removeEventListener to verify cleanup during second init
+      spyOn(window, 'removeEventListener').and.callThrough();
+      service.init();
+
+      // First handler should have been removed
+      const removeCalls: readonly unknown[][] = (window.removeEventListener as jasmine.Spy).calls.allArgs();
+      expect(removeCalls.some(args => args[0] === 'keydown' && args[1] === firstHandler)).toBeTrue();
+
+      // Only one keydown event should fire per key press (not two)
+      let count = 0;
+      service.hotkey$.subscribe(() => count++);
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+      expect(count).toBe(1);
+
+      service.cleanup();
+    });
   });
 
   // -----------------------------------------------------------------------

@@ -45,6 +45,7 @@ export interface Enemy {
   shieldBreaking?: boolean;    // True while the shield break animation is playing
   shieldBreakTimer?: number;   // Seconds remaining in the shield break animation (counts down to 0)
   statusParticles?: THREE.Mesh[]; // Small particle meshes for active status effect visuals
+  statusParticleEffectType?: string; // Tracks which effect type the current particles belong to
 }
 
 export interface EnemyStats {

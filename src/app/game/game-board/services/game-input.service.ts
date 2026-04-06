@@ -22,6 +22,12 @@ export class GameInputService implements OnDestroy {
   ];
 
   init(): void {
+    // Guard: tear down existing listeners before attaching new ones (prevents orphaned listeners on double-init)
+    if (this.keydownHandler) {
+      window.removeEventListener('keydown', this.keydownHandler);
+      window.removeEventListener('keyup', this.keyupHandler);
+      this.panKeys.clear();
+    }
     this.keydownHandler = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       if (GameInputService.PAN_KEYS.includes(key)) {

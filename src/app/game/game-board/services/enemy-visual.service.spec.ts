@@ -317,6 +317,53 @@ describe('EnemyVisualService', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // effect transition
+  // ---------------------------------------------------------------------------
+
+  describe('effect transition', () => {
+    it('recreates particles when highest-priority effect changes', () => {
+      const enemy = makeEnemy('e1');
+      mockScene.add(enemy.mesh!);
+      const enemies = new Map([['e1', enemy]]);
+
+      // Start with BURN particles
+      const burnEffects = new Map([['e1', [StatusEffectType.BURN]]]);
+      service.updateStatusEffectParticles(enemies, 0.016, mockScene, burnEffects);
+      expect(enemy.statusParticles!.length).toBeGreaterThan(0);
+      expect(enemy.statusParticleEffectType).toBe(StatusEffectType.BURN);
+
+      const burnParticles = enemy.statusParticles!.slice();
+
+      // Transition to POISON (BURN expired)
+      const poisonEffects = new Map([['e1', [StatusEffectType.POISON]]]);
+      service.updateStatusEffectParticles(enemies, 0.016, mockScene, poisonEffects);
+
+      // Particles should be recreated (not the same references)
+      expect(enemy.statusParticleEffectType).toBe(StatusEffectType.POISON);
+      expect(enemy.statusParticles!.length).toBeGreaterThan(0);
+      // Old particles should have been removed from scene
+      burnParticles.forEach(p => {
+        expect(mockScene.children).not.toContain(p);
+      });
+    });
+
+    it('clears effect type tracking when particles are removed', () => {
+      const enemy = makeEnemy('e1');
+      mockScene.add(enemy.mesh!);
+      const enemies = new Map([['e1', enemy]]);
+
+      // Create BURN particles
+      const effects = new Map([['e1', [StatusEffectType.BURN]]]);
+      service.updateStatusEffectParticles(enemies, 0.016, mockScene, effects);
+      expect(enemy.statusParticleEffectType).toBe(StatusEffectType.BURN);
+
+      // Remove all effects
+      service.updateStatusEffectParticles(enemies, 0.016, mockScene, new Map());
+      expect(enemy.statusParticles!.length).toBe(0);
+      expect(enemy.statusParticleEffectType).toBeUndefined();
+    });
+  });
+
   // cleanup
   // ---------------------------------------------------------------------------
 

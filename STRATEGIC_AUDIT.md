@@ -1100,3 +1100,22 @@ Test count: 2756 → 3024 (+268 tests)
 **Location:** `game-board.component.ts:2174` and `game-board.component.ts:2186-2189`
 **Risk:** When game is paused during COMBAT, `runPausedVisuals()` (line 2174) calls `updateDyingAnimations`, `updateHitFlashes`, `updateShieldBreakAnimations`. Then the phase-independent block (lines 2186-2189) calls them AGAIN unconditionally. Death animations run at 2× speed while paused. The previous fix removed the duplicate from `processCombatResult` but introduced a new one by adding the phase-independent block without guarding against the pause path.
 **Fix:** Guard lines 2186-2189 to skip when `runPausedVisuals` already handled the tick: add `!(state.phase === GamePhase.COMBAT && state.isPaused)` to the condition.
+
+---
+
+## Red Team Critique — feat/hardening-viii (2026-04-05)
+
+### Finding 1: Status effect particles use wrong material after effect priority change (MEDIUM)
+**Location:** `enemy-visual.service.ts:120-123`
+**Risk:** When the highest-priority status effect changes (e.g., BURN expires while POISON is active), existing particles retain the old effect's material color but animate with the new effect's movement pattern. Example: orange BURN particles drift outward like POISON instead of being replaced with green particles. Cosmetic-only — no gameplay impact, but visually jarring.
+**Fix:** Track the current particle effect type on the enemy. When `activeEffect` differs from the stored type, remove old particles and create new ones with the correct material.
+
+### Finding 2: GameInputService.init() lacks double-call guard — orphaned window listeners (MEDIUM)
+**Location:** `game-input.service.ts:24-37`
+**Risk:** If `init()` is called twice (future code change, hot reload, test re-setup), it creates duplicate `keydown`/`keyup` listeners on `window`. The second call overwrites the stored handler references, orphaning the first pair. The orphaned listeners fire `hotkey$.next()` for the rest of the page lifecycle, causing duplicate key processing. Not currently triggered (init called once in `ngAfterViewInit`), but no guard prevents it.
+**Fix:** Call `cleanup()` at the start of `init()` to tear down any existing listeners before attaching new ones.
+
+### Finding 3: hotkey$ subscription stored without explicit unsubscribe (LOW)
+**Location:** `game-board.component.ts:505`
+**Risk:** `this.gameInput.hotkey$.subscribe(e => this.handleKeyboard(e))` returns a Subscription that is never stored or unsubscribed. Cleanup relies on `hotkey$.complete()` in `gameInput.cleanup()` being called during `ngOnDestroy`. If the cleanup path is disrupted (early return, error), the subscription leaks. Angular best practice: store the subscription and unsubscribe explicitly.
+**Fix:** Store the subscription and add it to the `ngOnDestroy` teardown.

@@ -117,9 +117,16 @@ export class EnemyVisualService {
         return;
       }
 
-      // Create particles on first activation for this effect
+      // Create particles on first activation, or recreate if effect type changed
       if (!enemy.statusParticles || enemy.statusParticles.length === 0) {
         enemy.statusParticles = this.createStatusParticles(activeEffect, scene, enemy);
+        enemy.statusParticleEffectType = activeEffect;
+      } else if (enemy.statusParticleEffectType !== activeEffect) {
+        // Effect priority changed (e.g., BURN expired → POISON now highest)
+        // Remove old particles and create new ones with correct material
+        this.removeStatusParticles(enemy, scene);
+        enemy.statusParticles = this.createStatusParticles(activeEffect, scene, enemy);
+        enemy.statusParticleEffectType = activeEffect;
       }
 
       // Animate existing particles
@@ -187,6 +194,7 @@ export class EnemyVisualService {
       // Geometry and material are shared — do NOT dispose per-particle
     }
     enemy.statusParticles = [];
+    enemy.statusParticleEffectType = undefined;
   }
 
   /**
