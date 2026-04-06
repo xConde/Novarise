@@ -41,4 +41,13 @@
       {{ ci.label }}: {{ ci.value }}
     </span>
   </div>
+  <div class="hud-wave-status" *ngIf="isCombat">
+    <span class="wave-enemy-count">{{ enemiesRemaining }}</span> enemies remaining
+    <span
+      *ngIf="isEndless && currentEndlessTemplate"
+      class="wave-template-badge"
+      aria-label="Current wave type">
+      {{ currentEndlessTemplate }}
+    </span>
+  </div>
 </div>

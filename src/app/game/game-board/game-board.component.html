@@ -29,7 +29,10 @@
     [speedRunTimeLimit]="activeSpeedRunTimeLimit"
     [elapsedTime]="gameState.elapsedTime"
     [waveStartPulse]="waveStartPulse"
-    [challengeIndicators]="challengeIndicators">
+    [challengeIndicators]="challengeIndicators"
+    [isCombat]="gameState.phase === GamePhase.COMBAT"
+    [enemiesRemaining]="enemiesAlive + enemiesToSpawn"
+    [currentEndlessTemplate]="currentEndlessTemplate">
   </app-game-hud>
 
   <!-- Wave clear banner -->
@@ -40,17 +43,6 @@
     aria-live="assertive"
     aria-atomic="true">
     {{ waveClearMessage }}
-  </div>
-
-  <!-- Wave status indicator -->
-  <div class="hud-wave-status" *ngIf="gameState.phase === GamePhase.COMBAT">
-    <span class="wave-enemy-count">{{ enemiesAlive + enemiesToSpawn }}</span> enemies remaining
-    <span
-      *ngIf="gameState.isEndless && currentEndlessTemplate"
-      class="wave-template-badge"
-      aria-label="Current wave type">
-      {{ currentEndlessTemplate }}
-    </span>
   </div>
 
   <!-- Path blocked warning -->
