@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { MapBridgeService, EditorMapState } from './map-bridge.service';
+import { MapBridgeService } from './map-bridge.service';
+import { TerrainGridState } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 import { BlockType } from '../../game/game-board/models/game-board-tile';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 
@@ -385,7 +386,7 @@ describe('MapBridgeService', () => {
 /**
  * Helper to create a minimal valid editor state with all bedrock tiles.
  */
-function createMinimalState(gridSize: number): EditorMapState {
+function createMinimalState(gridSize: number): TerrainGridState {
   const tiles: TerrainType[][] = [];
   const heightMap: number[][] = [];
 

@@ -2,9 +2,6 @@ import { Injectable } from '@angular/core';
 import { GameBoardTile } from '../../game/game-board/models/game-board-tile';
 import { TerrainGridState, TerrainGridStateLegacy } from '../../games/novarise/features/terrain-editor/terrain-grid-state.interface';
 
-/** @deprecated Use TerrainGridState directly. Kept as alias for backward compatibility. */
-export type EditorMapState = TerrainGridState;
-
 export interface ConvertedBoard {
   board: GameBoardTile[][];
   width: number;
@@ -28,7 +25,7 @@ export interface ConvertedBoard {
   providedIn: 'root'
 })
 export class MapBridgeService {
-  private editorMapState: EditorMapState | null = null;
+  private editorMapState: TerrainGridState | null = null;
   private currentMapId: string | null = null;
 
   /**
@@ -36,7 +33,7 @@ export class MapBridgeService {
    * Called by NovariseComponent.ngOnDestroy() before terrain is disposed.
    * Optionally accepts a mapId to track which saved map is being played.
    */
-  setEditorMapState(state: EditorMapState, mapId?: string): void {
+  setEditorMapState(state: TerrainGridState, mapId?: string): void {
     this.editorMapState = state;
     this.currentMapId = mapId ?? null;
   }
@@ -52,7 +49,7 @@ export class MapBridgeService {
   /**
    * Retrieve the stored editor map state.
    */
-  getEditorMapState(): EditorMapState | null {
+  getEditorMapState(): TerrainGridState | null {
     return this.editorMapState;
   }
 
@@ -93,7 +90,7 @@ export class MapBridgeService {
    *
    * Handles both v2 (spawnPoints/exitPoints arrays) and v1 (single point) formats.
    */
-  convertToGameBoard(state: EditorMapState): ConvertedBoard {
+  convertToGameBoard(state: TerrainGridState): ConvertedBoard {
     const gridSize = state.gridSize;
     const board: GameBoardTile[][] = [];
 
@@ -129,7 +126,7 @@ export class MapBridgeService {
     return { board, width: gridSize, height: gridSize };
   }
 
-  private resolveSpawnPoints(state: EditorMapState): { x: number; z: number }[] {
+  private resolveSpawnPoints(state: TerrainGridState): { x: number; z: number }[] {
     if (state.spawnPoints && Array.isArray(state.spawnPoints) && state.spawnPoints.length > 0) {
       return state.spawnPoints;
     }
@@ -140,7 +137,7 @@ export class MapBridgeService {
     return [];
   }
 
-  private resolveExitPoints(state: EditorMapState): { x: number; z: number }[] {
+  private resolveExitPoints(state: TerrainGridState): { x: number; z: number }[] {
     if (state.exitPoints && Array.isArray(state.exitPoints) && state.exitPoints.length > 0) {
       return state.exitPoints;
     }

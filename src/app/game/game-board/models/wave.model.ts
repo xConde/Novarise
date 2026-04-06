@@ -11,42 +11,6 @@ export interface WaveDefinition {
   reward: number; // bonus gold for completing wave
 }
 
-export interface EndlessWaveConfig {
-  baseHealthMultiplier: number;
-  healthScalePerWave: number; // additive per-wave multiplier increase
-  baseSpeedMultiplier: number;
-  speedScalePerWave: number;
-  baseCountMultiplier: number;
-  countScalePerWave: number;
-  bossInterval: number; // boss wave every N waves (relative to endless wave number)
-}
-
-/**
- * @deprecated Use constants from endless-wave.model.ts instead.
- * Kept for backward compatibility — wave.model.spec.ts tests this object directly.
- * The authoritative scaling constants are: ENDLESS_HEALTH_SCALE_PER_WAVE (0.2),
- * ENDLESS_SPEED_SCALE_PER_WAVE (0.03), ENDLESS_COUNT_SCALE_PER_WAVE (0.8),
- * ENDLESS_BOSS_INTERVAL (5) — all exported from endless-wave.model.ts.
- * Note: countScalePerWave here (0.1) diverges from the real value (0.8).
- */
-export const ENDLESS_CONFIG: EndlessWaveConfig = {
-  baseHealthMultiplier: 1.0,
-  healthScalePerWave: 0.15,
-  baseSpeedMultiplier: 1.0,
-  speedScalePerWave: 0.05,
-  baseCountMultiplier: 1.0,
-  countScalePerWave: 0.1,
-  bossInterval: 5
-};
-
-/** Base values for endless wave generation — scaled by ENDLESS_CONFIG multipliers. */
-export const ENDLESS_BASE_COUNT = 10;
-export const ENDLESS_BASE_SPAWN_INTERVAL = 0.8;
-export const ENDLESS_BASE_REWARD = 200;
-export const ENDLESS_REWARD_SCALE_PER_WAVE = 50;
-export const ENDLESS_BOSS_COUNT = 1;
-export const ENDLESS_BOSS_SPAWN_INTERVAL = 0;
-
 export const WAVE_DEFINITIONS: WaveDefinition[] = [
   // Wave 1: Easy intro
   {
