@@ -10,6 +10,7 @@ import {
   EDITOR_HOVER_EMISSIVE,
   EDITOR_PATH_INVALID_FLASH_MS,
   EDITOR_PATH_INVALID_FLASH_COLOR,
+  EDITOR_ANIMATION,
 } from '../constants/editor-ui.constants';
 import { TERRAIN_CONFIGS } from '../models/terrain-types.enum';
 
@@ -80,6 +81,35 @@ export class BrushPreviewService {
   hideBrushIndicator(): void {
     if (this.brushIndicator) {
       this.brushIndicator.visible = false;
+    }
+  }
+
+  /**
+   * Animate the brush indicator pulse (scale + opacity). Call once per frame.
+   * No-op when indicator is not visible.
+   */
+  animateBrushIndicator(now: number): void {
+    if (!this.brushIndicator?.visible) return;
+    const pulse = Math.sin(now * EDITOR_ANIMATION.brushPulseSpeed) * EDITOR_ANIMATION.brushPulseAmplitude + 0.9;
+    this.brushIndicator.scale.set(pulse, pulse, 1);
+    (this.brushIndicator.material as THREE.MeshBasicMaterial).opacity =
+      0.6 + Math.sin(now * EDITOR_ANIMATION.brushPulseSpeed) * 0.2;
+  }
+
+  /**
+   * Reset a previously-hovered tile's emissive intensity to its terrain config value.
+   * No-op if the tile is currently mid-flash.
+   */
+  resetHoverEmissive(tile: THREE.Mesh): void {
+    if (this.lastEditedTiles.has(tile)) return;
+    const x = tile.userData['gridX'];
+    const z = tile.userData['gridZ'];
+    if (typeof x === 'number' && typeof z === 'number') {
+      const tileData = this.terrainGrid.getTileAt(x, z);
+      if (tileData) {
+        (tile.material as THREE.MeshStandardMaterial).emissiveIntensity =
+          TERRAIN_CONFIGS[tileData.type].emissiveIntensity;
+      }
     }
   }
 

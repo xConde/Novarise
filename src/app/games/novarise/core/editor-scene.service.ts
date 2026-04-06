@@ -452,6 +452,22 @@ export class EditorSceneService {
     }
   }
 
+  /**
+   * Animate ambient particles: sinusoidal vertical drift + slow Y-rotation.
+   * Call once per animation frame.
+   */
+  animateParticles(): void {
+    if (!this.particles) return;
+    const posAttr = this.particles.geometry.attributes['position'] as THREE.BufferAttribute;
+    const positions = posAttr.array as Float32Array;
+    const now = Date.now();
+    for (let i = 0; i < positions.length; i += 3) {
+      positions[i + 1] += Math.sin(now * 0.001 + i) * 0.002;
+    }
+    posAttr.needsUpdate = true;
+    this.particles.rotation.y += 0.0002;
+  }
+
   // ----- Private helpers -----
 
   /**

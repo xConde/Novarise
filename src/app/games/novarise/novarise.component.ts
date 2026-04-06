@@ -12,11 +12,9 @@ import { MapBridgeService } from '../../core/services/map-bridge.service';
 import { JoystickEvent } from './features/mobile-controls';
 import {
   EDITOR_EDIT_THROTTLE_MS,
-  EDITOR_ANIMATION,
   EDITOR_AUTOSAVE_JUST_NOW_MS,
   EDITOR_HOVER_EMISSIVE,
 } from './constants/editor-ui.constants';
-import { TERRAIN_CONFIGS } from './models/terrain-types.enum';
 import { PathValidationService, PathValidationResult } from './core/path-validation.service';
 import { MapTemplateService } from '../../core/services/map-template.service';
 import { MapTemplate } from '../../core/models/map-template.model';
@@ -234,20 +232,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       const tileMeshes = this.terrainGrid.getTileMeshes();
       const intersects = this.raycaster.intersectObjects(tileMeshes);
 
-      // Reset previous hover with crisp transition
-      if (this.hoveredTile && !this.brushPreview.getLastEditedTiles().has(this.hoveredTile)) {
-        const material = this.hoveredTile.material as THREE.MeshStandardMaterial;
-        // Reset to original terrain emissive intensity from config
-        const x = this.hoveredTile.userData['gridX'];
-        const z = this.hoveredTile.userData['gridZ'];
-        if (typeof x === 'number' && typeof z === 'number') {
-          const tile = this.terrainGrid.getTileAt(x, z);
-          if (tile) {
-            const config = TERRAIN_CONFIGS[tile.type];
-            material.emissiveIntensity = config.emissiveIntensity;
-          }
-        }
-      }
+      // Reset previous hover emissive (delegated to BrushPreviewService)
+      if (this.hoveredTile) this.brushPreview.resetHoverEmissive(this.hoveredTile);
 
       if (intersects.length > 0) {
         this.hoveredTile = intersects[0].object as THREE.Mesh;
@@ -377,7 +363,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const rectStart = this.rectangleTool.getStartTile();
     if (this.activeTool === 'rectangle' && rectStart && this.hoveredTile) {
       const flashTargets = this.rectangleTool.fill(rectStart, this.hoveredTile, () => this.runPathValidation());
-      flashTargets.forEach(m => this.flashTileEdit(m));
+      flashTargets.forEach(m => this.brushPreview.flashTileEdit(m));
     }
     this.rectangleTool.clearStartTile();
   }
@@ -386,7 +372,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Handle different tools
     if (this.activeTool === 'fill') {
       const flashTargets = this.terrainEdit.floodFill(mesh, () => this.runPathValidation());
-      flashTargets.forEach(m => this.flashTileEdit(m));
+      flashTargets.forEach(m => this.brushPreview.flashTileEdit(m));
       return;
     }
 
@@ -401,7 +387,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     if (editMode === 'paint' || editMode === 'height') {
       const flashTargets = this.terrainEdit.applyBrushEdit(affectedTiles, () => this.runPathValidation());
-      flashTargets.forEach(m => this.flashTileEdit(m));
+      flashTargets.forEach(m => this.brushPreview.flashTileEdit(m));
       return;
     }
 
@@ -415,21 +401,21 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         const tile = this.terrainGrid.getTileAt(x, z);
         if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
           const spawnMs = this.spawnExitMarker.getSpawnMarkers();
-          if (spawnMs.length > 0) this.flashMarkerRejection(spawnMs[0]);
+          if (spawnMs.length > 0) this.brushPreview.flashMarkerRejection(spawnMs[0]);
           return;
         }
         // Reject placement on same tile as any exit
         const exitPoints = this.terrainGrid.getExitPoints();
         if (exitPoints.some(ep => ep.x === x && ep.z === z)) {
           const spawnMs = this.spawnExitMarker.getSpawnMarkers();
-          if (spawnMs.length > 0) this.flashMarkerRejection(spawnMs[0]);
+          if (spawnMs.length > 0) this.brushPreview.flashMarkerRejection(spawnMs[0]);
           return;
         }
         // Snapshot full spawn array before toggle for undo
         const previousSpawns = this.terrainGrid.getSpawnPoints().map(p => ({ ...p }));
         this.terrainGrid.addSpawnPoint(x, z);
         this.spawnExitMarker.updateSpawnMarkers();
-        this.flashTileEdit(tileMesh);
+        this.brushPreview.flashTileEdit(tileMesh);
         // Record command immediately (not part of stroke)
         const command = new SpawnPointCommand(
           previousSpawns,
@@ -450,21 +436,21 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         const tile = this.terrainGrid.getTileAt(x, z);
         if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
           const exitMs = this.spawnExitMarker.getExitMarkers();
-          if (exitMs.length > 0) this.flashMarkerRejection(exitMs[0]);
+          if (exitMs.length > 0) this.brushPreview.flashMarkerRejection(exitMs[0]);
           return;
         }
         // Reject placement on same tile as any spawn
         const spawnPoints = this.terrainGrid.getSpawnPoints();
         if (spawnPoints.some(sp => sp.x === x && sp.z === z)) {
           const exitMs = this.spawnExitMarker.getExitMarkers();
-          if (exitMs.length > 0) this.flashMarkerRejection(exitMs[0]);
+          if (exitMs.length > 0) this.brushPreview.flashMarkerRejection(exitMs[0]);
           return;
         }
         // Snapshot full exit array before toggle for undo
         const previousExits = this.terrainGrid.getExitPoints().map(p => ({ ...p }));
         this.terrainGrid.addExitPoint(x, z);
         this.spawnExitMarker.updateExitMarkers();
-        this.flashTileEdit(tileMesh);
+        this.brushPreview.flashTileEdit(tileMesh);
         // Record command immediately (not part of stroke)
         const command = new ExitPointCommand(
           previousExits,
@@ -484,14 +470,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     });
   }
 
-  private flashTileEdit(mesh: THREE.Mesh): void {
-    this.brushPreview.flashTileEdit(mesh);
-  }
-
-  private flashMarkerRejection(marker: THREE.Mesh): void {
-    this.brushPreview.flashMarkerRejection(marker);
-  }
-
   private setupKeyboardControls(): void {
     this.editorKeyboard.setup({
       undo: () => this.undo(),
@@ -500,8 +478,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       importMap: () => this.importMapFromFile(),
       saveGrid: () => this.saveGridState(),
       loadGrid: () => this.loadGridState(),
-      cycleBrushSize: (dir) => this.cycleBrushSize(dir),
-      changeActiveTool: (tool) => this.changeActiveTool(tool),
+      cycleBrushSize: (dir) => { this.editorState.cycleBrushSize(dir); this.brushPreview.updateBrushPreview(); },
+      changeActiveTool: (tool) => this.setActiveTool(tool),
       playMap: () => this.playMap(),
       setEditMode: (mode) => this.setEditMode(mode),
       setTerrainType: (type) => this.setTerrainType(type),
@@ -536,32 +514,19 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   public cancelModal(): void { this.editorModal.cancelModal(); }
   public closeModal(): void { this.editorModal.closeModal(); }
 
-  private showInputModal(title: string, defaultValue: string, callback: (value: string | null) => void): void {
-    this.editorModal.showInputModal(title, defaultValue, callback);
-  }
-
-  private showConfirmModal(title: string, callback: (confirmed: boolean) => void): void {
-    this.editorModal.showConfirmModal(title, callback);
-  }
-
-  private showSelectModal(title: string, options: string[], callback: (index: number | null) => void): void {
-    this.editorModal.showSelectModal(title, options, callback);
-  }
-
   // ─────────────────────────────────────────────────────────────────────────
 
   private saveGridState(): void {
     if (!this.isPathValid && this.hasSpawnAndExit) {
       this.editorModal.showConfirmModal('This map has no valid path from spawn to exit. Save anyway?', (proceed) => {
         if (!proceed) return;
-        this.promptForMapNameAndSave();
+        this.editorModal.showInputModal('Enter map name', this.currentMapName, (mapName) => {
+          if (!mapName) return;
+          this.mapFile.save(mapName);
+        });
       });
       return;
     }
-    this.promptForMapNameAndSave();
-  }
-
-  private promptForMapNameAndSave(): void {
     this.editorModal.showInputModal('Enter map name', this.currentMapName, (mapName) => {
       if (!mapName) return;
       this.mapFile.save(mapName);
@@ -641,28 +606,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private cycleBrushSize(direction: number): void {
-    this.editorState.cycleBrushSize(direction);
-    this.brushPreview.updateBrushPreview();
-  }
-
-  private changeActiveTool(tool: BrushTool): void {
-    this.editorState.setActiveTool(tool);
-
-    // Reset rectangle selection when switching tools
-    if (tool !== 'rectangle') {
-      this.rectangleTool.reset();
-    }
-
-    // Hide brush previews when switching away from brush tool
-    if (tool !== 'brush') {
-      this.brushPreview.hideBrushPreview();
-    }
-  }
-
-  /**
-   * Handle joystick events from the modular VirtualJoystickComponent
-   */
   public onJoystickChange(event: JoystickEvent): void {
     if (event.type === 'movement') {
       this.movementJoystick = {
@@ -697,12 +640,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   }
 
   public setActiveTool(tool: BrushTool): void {
-    this.changeActiveTool(tool);
+    this.editorState.setActiveTool(tool);
+    if (tool !== 'rectangle') this.rectangleTool.reset();
+    if (tool !== 'brush') this.brushPreview.hideBrushPreview();
   }
 
-  /**
-   * Undo the last edit action
-   */
   public undo(): void {
     const command = this.editHistory.undo();
     if (command) {
@@ -713,9 +655,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  /**
-   * Redo the last undone action
-   */
   public redo(): void {
     const command = this.editHistory.redo();
     if (command) {
@@ -726,17 +665,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  /**
-   * Clear all edit history
-   */
-  public clearHistory(): void {
-    this.editHistory.clear();
-  }
+  public clearHistory(): void { this.editHistory.clear(); }
 
-  /**
-   * Run BFS path validation and cache the result.
-   * Call after any terrain paint, spawn/exit placement, or map load.
-   */
   private runPathValidation(): void {
     if (!this.terrainGrid) {
       this.pathValidationResult = { valid: false };
@@ -746,10 +676,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.pathValidationResult = this.pathValidation.validate(state);
   }
 
-  /**
-   * Check if the map is ready to play: has both spawn and exit points
-   * AND a valid walkable path exists between them.
-   */
   public get canPlayMap(): boolean {
     if (!this.terrainGrid) return false;
     const hasPoints =
@@ -758,24 +684,15 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     return hasPoints && this.pathValidationResult.valid;
   }
 
-  /**
-   * Navigate to the game to play the current map
-   */
   public playMap(): void {
     if (!this.canPlayMap) return;
     this.router.navigate(['/play']);
   }
 
-  /**
-   * Export current map to a downloadable file
-   */
   public exportCurrentMap(): void {
     this.mapFile.exportAsJson();
   }
 
-  /**
-   * Import a map from a file
-   */
   public async importMapFromFile(): Promise<void> {
     const state = await this.mapFile.importFromJson(new File([], ''));
     if (state) {
@@ -799,29 +716,10 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       controls.update();
     }
 
-    // Animate brush indicator for crisp, noticeable feedback
-    const brushIndicator = this.brushPreview.getBrushIndicator();
-    if (brushIndicator && brushIndicator.visible) {
-      const pulse = Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * EDITOR_ANIMATION.brushPulseAmplitude + 0.9;
-      brushIndicator.scale.set(pulse, pulse, 1);
-      const material = brushIndicator.material as THREE.MeshBasicMaterial;
-      material.opacity = 0.6 + Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * 0.2;
-    }
-
-    // Animate spawn/exit markers (delegated to SpawnExitMarkerService)
-    this.spawnExitMarker.animateMarkers(Date.now());
-
-    const particles = this.editorScene.getParticles();
-    if (particles) {
-      const positionAttribute = particles.geometry.attributes['position'] as THREE.BufferAttribute;
-      const positions = positionAttribute.array as Float32Array;
-      for (let i = 0; i < positions.length; i += 3) {
-        positions[i + 1] += Math.sin(Date.now() * 0.001 + i) * 0.002;
-      }
-      positionAttribute.needsUpdate = true;
-      particles.rotation.y += 0.0002;
-    }
-
+    const now = Date.now();
+    this.brushPreview.animateBrushIndicator(now);
+    this.spawnExitMarker.animateMarkers(now);
+    this.editorScene.animateParticles();
     this.editorScene.render();
   }
 
