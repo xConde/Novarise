@@ -187,7 +187,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.spawnExitMarker.createSpawnExitMarkers();
 
     // Initialize camera rotation to match initial camera view
-    this.initializeCameraRotation();
+    this.cameraControl.initializeFromCamera(this.editorScene.getCamera(), new THREE.Vector3(0, 0, 0));
 
     // Load map templates for the editor UI
     this.templates = this.mapTemplateService.getTemplates();
@@ -220,10 +220,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.setupInteraction();
     this.setupKeyboardControls();
     this.animate();
-  }
-
-  private initializeCameraRotation(): void {
-    this.cameraControl.initializeFromCamera(this.editorScene.getCamera(), new THREE.Vector3(0, 0, 0));
   }
 
   private setupInteraction(): void {
@@ -301,35 +297,18 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Touch event support for mobile — stored as named refs for cleanup
     this.touchStartHandler = (event: TouchEvent) => {
       event.preventDefault();
-      const touch = event.touches[0];
-      const rect = canvas.getBoundingClientRect();
-      this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-      this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-
-      this.raycaster.setFromCamera(this.mouse, this.editorScene.getCamera());
-      const tileMeshes = this.terrainGrid.getTileMeshes();
-      const intersects = this.raycaster.intersectObjects(tileMeshes);
-
-      if (intersects.length > 0) {
-        this.hoveredTile = intersects[0].object as THREE.Mesh;
+      const hit = this.raycastFromTouch(event.touches[0], canvas);
+      if (hit) {
+        this.hoveredTile = hit;
         this.handleMouseDown({ button: 0 } as MouseEvent);
       }
     };
 
     this.touchMoveHandler = (event: TouchEvent) => {
       event.preventDefault();
-      const touch = event.touches[0];
-      const rect = canvas.getBoundingClientRect();
-      this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-      this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-
-      this.raycaster.setFromCamera(this.mouse, this.editorScene.getCamera());
-      const tileMeshes = this.terrainGrid.getTileMeshes();
-      const intersects = this.raycaster.intersectObjects(tileMeshes);
-
-      if (intersects.length > 0) {
-        this.hoveredTile = intersects[0].object as THREE.Mesh;
-
+      const hit = this.raycastFromTouch(event.touches[0], canvas);
+      if (hit) {
+        this.hoveredTile = hit;
         if (this.isMouseDown) {
           if (this.activeTool === 'rectangle' && this.rectangleTool.getStartTile()) {
             this.rectangleTool.updatePreview(this.rectangleTool.getStartTile()!, this.hoveredTile);
@@ -355,13 +334,23 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     canvas.addEventListener('touchcancel', this.touchEndHandler);
   }
 
+  /** Convert a Touch to normalized device coords, raycast, and return the first tile hit. */
+  private raycastFromTouch(touch: Touch, canvas: HTMLCanvasElement): THREE.Mesh | null {
+    const rect = canvas.getBoundingClientRect();
+    this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+    this.raycaster.setFromCamera(this.mouse, this.editorScene.getCamera());
+    const intersects = this.raycaster.intersectObjects(this.terrainGrid.getTileMeshes());
+    return intersects.length > 0 ? (intersects[0].object as THREE.Mesh) : null;
+  }
+
   private handleMouseDown(event: MouseEvent): void {
     if (event.button === 0) { // Left click
       this.isMouseDown = true;
 
       // Start tracking stroke for undo/redo (brush tool with paint/height mode)
       if (this.activeTool === 'brush' && (this.editMode === 'paint' || this.editMode === 'height')) {
-        this.startStroke();
+        this.terrainEdit.startStroke();
       }
 
       if (this.hoveredTile) {
@@ -381,7 +370,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // End stroke and record command for undo/redo
     if (this.terrainEdit.isTracking) {
-      this.endStroke();
+      this.terrainEdit.endStroke(() => this.runPathValidation());
     }
 
     // Rectangle tool: complete selection
@@ -391,14 +380,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       flashTargets.forEach(m => this.flashTileEdit(m));
     }
     this.rectangleTool.clearStartTile();
-  }
-
-  private startStroke(): void {
-    this.terrainEdit.startStroke();
-  }
-
-  private endStroke(): void {
-    this.terrainEdit.endStroke(() => this.runPathValidation());
   }
 
   private applyEdit(mesh: THREE.Mesh): void {
@@ -554,6 +535,18 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   public selectModalOption(index: number): void { this.editorModal.selectModalOption(index); }
   public cancelModal(): void { this.editorModal.cancelModal(); }
   public closeModal(): void { this.editorModal.closeModal(); }
+
+  private showInputModal(title: string, defaultValue: string, callback: (value: string | null) => void): void {
+    this.editorModal.showInputModal(title, defaultValue, callback);
+  }
+
+  private showConfirmModal(title: string, callback: (confirmed: boolean) => void): void {
+    this.editorModal.showConfirmModal(title, callback);
+  }
+
+  private showSelectModal(title: string, options: string[], callback: (index: number | null) => void): void {
+    this.editorModal.showSelectModal(title, options, callback);
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
 
