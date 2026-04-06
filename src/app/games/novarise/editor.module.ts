@@ -13,6 +13,8 @@ import { EditorSceneService } from './core/editor-scene.service';
 import { EditorNotificationService } from './core/editor-notification.service';
 import { TerrainEditService } from './core/terrain-edit.service';
 import { MapFileService } from './core/map-file.service';
+import { BrushPreviewService } from './core/brush-preview.service';
+import { SpawnExitMarkerService } from './core/spawn-exit-marker.service';
 
 @NgModule({
   declarations: [
@@ -34,6 +36,8 @@ import { MapFileService } from './core/map-file.service';
     EditorNotificationService,
     TerrainEditService,
     MapFileService,
+    BrushPreviewService,
+    SpawnExitMarkerService,
   ]
 })
 export class EditorModule {}

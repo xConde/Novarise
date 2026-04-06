@@ -191,9 +191,26 @@ export class TowerCombatService {
   update(deltaTime: number, scene: THREE.Scene): { killed: KillInfo[]; fired: TowerType[]; hitCount: number } {
     this.gameTime += deltaTime;
     const killedEnemies: KillInfo[] = [];
-    const firedTowerTypes: TowerType[] = [];
 
-    // Rebuild spatial grid for this frame (broad-phase acceleration for range queries)
+    this.rebuildSpatialGrid();
+
+    const dotKills = this.tickStatusEffects();
+    killedEnemies.push(...dotKills);
+
+    const firedTowerTypes = this.processTowerFiring(scene, killedEnemies);
+
+    const hitCount = this.advanceProjectiles(deltaTime, scene, killedEnemies);
+
+    // Delegate visual expiry to CombatVFXService (arcs, flashes, zone meshes)
+    this.combatVFXService.updateVisuals(this.gameTime, scene);
+
+    this.tickMortarZones(scene, killedEnemies);
+
+    return { killed: killedEnemies, fired: firedTowerTypes, hitCount };
+  }
+
+  /** Phase 1: Rebuild the spatial grid with all living, non-dying enemies. */
+  private rebuildSpatialGrid(): void {
     // Dying enemies are excluded — they are already dead from the targeting perspective.
     this.spatialGrid.clear();
     this.enemyService.getEnemies().forEach(enemy => {
@@ -201,13 +218,18 @@ export class TowerCombatService {
         this.spatialGrid.insert(enemy);
       }
     });
+  }
 
-    // Tick status effects (expire SLOW, deal DoT damage) before tower processing
-    const dotKills = this.statusEffectService.update(this.gameTime);
-    killedEnemies.push(...dotKills);
+  /** Phase 2: Tick status effects (expire SLOW, deal DoT damage). Returns kills from DoT. */
+  private tickStatusEffects(): KillInfo[] {
+    return this.statusEffectService.update(this.gameTime);
+  }
 
-    // Tower targeting and firing — resolve stats per-tower using level
+  /** Phase 3: Per-tower targeting and firing. Pushes kills into `outKilled`. Returns list of tower types that fired. */
+  private processTowerFiring(scene: THREE.Scene, outKilled: KillInfo[]): TowerType[] {
+    const firedTowerTypes: TowerType[] = [];
     const towerDamageMultiplier = this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1;
+
     this.placedTowers.forEach(tower => {
       const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
       let stats: TowerStats;
@@ -253,7 +275,7 @@ export class TowerCombatService {
 
       if (tower.type === TowerType.CHAIN) {
         const kills = this.fireChainLightning(tower, target, stats, scene);
-        killedEnemies.push(...kills);
+        outKilled.push(...kills);
         if (kills.length > 0) {
           const t = this.placedTowers.get(tower.id);
           if (t) t.kills += kills.length;
@@ -265,9 +287,14 @@ export class TowerCombatService {
       firedTowerTypes.push(tower.type);
     });
 
-    // Update standard projectiles
+    return firedTowerTypes;
+  }
+
+  /** Phase 4: Move projectiles toward their targets, detect hits. Pushes kills into `outKilled`. Returns hit count. */
+  private advanceProjectiles(deltaTime: number, scene: THREE.Scene, outKilled: KillInfo[]): number {
     const survivingProjectiles: Projectile[] = [];
     let hitCount = 0;
+
     for (const proj of this.projectiles) {
       const enemy = this.enemyService.getEnemies().get(proj.targetId);
 
@@ -288,7 +315,7 @@ export class TowerCombatService {
         this.combatVFXService.createImpactFlash(proj.mesh.position.x, proj.mesh.position.z, scene, this.gameTime);
         // Apply damage before disposing mesh (applyDamage reads proj.mesh.position)
         const kills = this.applyDamage(proj, scene);
-        killedEnemies.push(...kills);
+        outKilled.push(...kills);
         hitCount++;
         this.removeProjectileMesh(proj, scene);
       } else {
@@ -343,11 +370,13 @@ export class TowerCombatService {
     }
     this.projectiles = survivingProjectiles;
 
-    // Delegate visual expiry to CombatVFXService (arcs, flashes, zone meshes)
-    this.combatVFXService.updateVisuals(this.gameTime, scene);
+    return hitCount;
+  }
 
-    // Update mortar zones: deal DoT and expire data records (mesh expiry handled by VFX)
+  /** Phase 5: Tick mortar zones — deal DoT, expire data records (mesh expiry handled by VFX). Pushes kills into `outKilled`. */
+  private tickMortarZones(scene: THREE.Scene, outKilled: KillInfo[]): void {
     const survivingZones: MortarZone[] = [];
+
     for (const zone of this.mortarZones) {
       if (this.gameTime >= zone.expiresAt) {
         // Mesh already removed by combatVFXService.updateVisuals above
@@ -366,7 +395,7 @@ export class TowerCombatService {
           if (Math.sqrt(dx * dx + dz * dz) <= zone.blastRadius) {
             const result = this.enemyService.damageEnemy(enemy.id, zone.dotDamage);
             if (result.killed) {
-              killedEnemies.push({ id: enemy.id, damage: zone.dotDamage });
+              outKilled.push({ id: enemy.id, damage: zone.dotDamage });
             } else {
               this.enemyService.startHitFlash(enemy.id);
               if (zone.statusEffect) {
@@ -384,8 +413,6 @@ export class TowerCombatService {
       survivingZones.push(zone);
     }
     this.mortarZones = survivingZones;
-
-    return { killed: killedEnemies, fired: firedTowerTypes, hitCount };
   }
 
   /** Delegate to shared coordinate utility with current board dimensions. */

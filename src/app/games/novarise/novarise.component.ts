@@ -13,8 +13,6 @@ import { disposeMesh } from '../../game/game-board/utils/three-utils';
 import { JoystickEvent } from './features/mobile-controls';
 import {
   EDITOR_EDIT_THROTTLE_MS,
-  EDITOR_BRUSH_INDICATOR,
-  EDITOR_BRUSH_PREVIEW,
   EDITOR_RECTANGLE_PREVIEW,
   EDITOR_SPAWN_MARKER,
   EDITOR_EXIT_MARKER,
@@ -32,6 +30,8 @@ import { EditorSceneService } from './core/editor-scene.service';
 import { EditorNotificationService, EditorNotification } from './core/editor-notification.service';
 import { TerrainEditService } from './core/terrain-edit.service';
 import { MapFileService } from './core/map-file.service';
+import { BrushPreviewService } from './core/brush-preview.service';
+import { SpawnExitMarkerService } from './core/spawn-exit-marker.service';
 
 // Re-export types for template compatibility
 export { EditMode, BrushTool } from './core/editor-state.service';
@@ -59,8 +59,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   private mouse = new THREE.Vector2();
   private hoveredTile: THREE.Mesh | null = null;
   private isMouseDown = false;
-  private brushIndicator!: THREE.Mesh;
-  private brushPreviewMeshes: THREE.Mesh[] = [];
   private lastEditedTiles = new Set<THREE.Mesh>();
   private lastEditTime = 0;
   private readonly editThrottleMs = EDITOR_EDIT_THROTTLE_MS; // Throttle edits during drag to 20fps max
@@ -68,10 +66,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   // Rectangle selection state
   private rectangleStartTile: THREE.Mesh | null = null;
   private rectanglePreviewMeshes: THREE.Mesh[] = [];
-
-  // Visual markers — arrays for multi-spawn/exit
-  private spawnMarkers: THREE.Mesh[] = [];
-  private exitMarkers: THREE.Mesh[] = [];
 
   // Camera movement - delegated to CameraControlService
   private keysPressed = new Set<string>();
@@ -148,6 +142,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     public editorNotificationService: EditorNotificationService,
     private terrainEdit: TerrainEditService,
     private mapFile: MapFileService,
+    private brushPreview: BrushPreviewService,
+    private spawnExitMarker: SpawnExitMarkerService,
   ) {
     this.keyboardHandler = this.handleKeyDown.bind(this);
     this.keyUpHandler = this.handleKeyUp.bind(this);
@@ -185,14 +181,20 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.terrainEdit.setTerrainGrid(this.terrainGrid);
     this.mapFile.setTerrainGrid(this.terrainGrid);
 
+    // Wire up extracted services
+    this.brushPreview.setScene(this.editorScene.getScene());
+    this.brushPreview.setTerrainGrid(this.terrainGrid);
+    this.spawnExitMarker.setScene(this.editorScene.getScene());
+    this.spawnExitMarker.setTerrainGrid(this.terrainGrid);
+
     // Create brush indicator for crisp visual feedback
-    this.createBrushIndicator();
+    this.brushPreview.createBrushIndicator();
 
     // Initialize brush preview system
-    this.updateBrushPreview();
+    this.brushPreview.updateBrushPreview();
 
     // Create spawn/exit markers for tower defense
-    this.createSpawnExitMarkers();
+    this.spawnExitMarker.createSpawnExitMarkers();
 
     // Initialize camera rotation to match initial camera view
     this.initializeCameraRotation();
@@ -215,8 +217,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       this.showConfirmModal('An unsaved draft was found. Restore it?', (confirmed) => {
         if (confirmed) {
           this.terrainGrid.importState(draft);
-          this.updateSpawnMarker();
-          this.updateExitMarker();
+          this.spawnExitMarker.updateSpawnMarkers();
+          this.spawnExitMarker.updateExitMarkers();
           this.runPathValidation();
         }
         this.mapFile.clearDraft();
@@ -269,20 +271,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         material.emissiveIntensity = EDITOR_HOVER_EMISSIVE.hover;
 
         // Position brush indicator at tile location
-        this.brushIndicator.position.copy(this.hoveredTile.position);
-        this.brushIndicator.position.y = this.hoveredTile.position.y + EDITOR_BRUSH_INDICATOR.yOffset;
-        this.brushIndicator.visible = true;
-
-        // Update brush color and cursor from centralized EditorStateService
-        const brushMaterial = this.brushIndicator.material as THREE.MeshBasicMaterial;
-        brushMaterial.color.setHex(this.editorState.getColorForMode());
+        this.brushPreview.positionBrushIndicator(this.hoveredTile);
         canvas.style.cursor = this.editorState.getCursorForMode();
 
         // Update brush preview meshes (only for brush tool)
         if (this.activeTool === 'brush') {
-          this.updateBrushPreviewPositions();
+          this.brushPreview.updateBrushPreviewPositions(this.hoveredTile);
         } else {
-          this.hideBrushPreview();
+          this.brushPreview.hideBrushPreview();
         }
 
         // Apply edit if mouse is down (with throttling for performance)
@@ -301,8 +297,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         }
       } else {
         this.hoveredTile = null;
-        this.brushIndicator.visible = false;
-        this.hideBrushPreview();
+        this.brushPreview.hideBrushIndicator();
+        this.brushPreview.hideBrushPreview();
         canvas.style.cursor = 'default';
       }
     };
@@ -428,7 +424,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
 
     // Regular brush tool with multi-tile support
-    const affectedTiles = this.getAffectedTiles(mesh);
+    const affectedTiles = this.brushPreview.getAffectedTiles(mesh);
     const editMode = this.editMode;
 
     if (editMode === 'paint' || editMode === 'height') {
@@ -446,19 +442,21 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         // Reject placement on non-walkable terrain
         const tile = this.terrainGrid.getTileAt(x, z);
         if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
-          if (this.spawnMarkers.length > 0) this.flashMarkerRejection(this.spawnMarkers[0]);
+          const spawnMs = this.spawnExitMarker.getSpawnMarkers();
+          if (spawnMs.length > 0) this.flashMarkerRejection(spawnMs[0]);
           return;
         }
         // Reject placement on same tile as any exit
         const exitPoints = this.terrainGrid.getExitPoints();
         if (exitPoints.some(ep => ep.x === x && ep.z === z)) {
-          if (this.spawnMarkers.length > 0) this.flashMarkerRejection(this.spawnMarkers[0]);
+          const spawnMs = this.spawnExitMarker.getSpawnMarkers();
+          if (spawnMs.length > 0) this.flashMarkerRejection(spawnMs[0]);
           return;
         }
         // Snapshot full spawn array before toggle for undo
         const previousSpawns = this.terrainGrid.getSpawnPoints().map(p => ({ ...p }));
         this.terrainGrid.addSpawnPoint(x, z);
-        this.updateSpawnMarkers();
+        this.spawnExitMarker.updateSpawnMarkers();
         this.flashTileEdit(tileMesh);
         // Record command immediately (not part of stroke)
         const command = new SpawnPointCommand(
@@ -466,11 +464,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           { x, z },
           (points) => {
             this.terrainGrid.setSpawnPoints(points);
-            this.updateSpawnMarkers();
+            this.spawnExitMarker.updateSpawnMarkers();
           },
           (sx, sz) => {
             this.terrainGrid.addSpawnPoint(sx, sz);
-            this.updateSpawnMarkers();
+            this.spawnExitMarker.updateSpawnMarkers();
           }
         );
         this.editHistory.record(command);
@@ -479,19 +477,21 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
         // Reject placement on non-walkable terrain
         const tile = this.terrainGrid.getTileAt(x, z);
         if (!tile || tile.type === TerrainType.CRYSTAL || tile.type === TerrainType.ABYSS) {
-          if (this.exitMarkers.length > 0) this.flashMarkerRejection(this.exitMarkers[0]);
+          const exitMs = this.spawnExitMarker.getExitMarkers();
+          if (exitMs.length > 0) this.flashMarkerRejection(exitMs[0]);
           return;
         }
         // Reject placement on same tile as any spawn
         const spawnPoints = this.terrainGrid.getSpawnPoints();
         if (spawnPoints.some(sp => sp.x === x && sp.z === z)) {
-          if (this.exitMarkers.length > 0) this.flashMarkerRejection(this.exitMarkers[0]);
+          const exitMs = this.spawnExitMarker.getExitMarkers();
+          if (exitMs.length > 0) this.flashMarkerRejection(exitMs[0]);
           return;
         }
         // Snapshot full exit array before toggle for undo
         const previousExits = this.terrainGrid.getExitPoints().map(p => ({ ...p }));
         this.terrainGrid.addExitPoint(x, z);
-        this.updateExitMarkers();
+        this.spawnExitMarker.updateExitMarkers();
         this.flashTileEdit(tileMesh);
         // Record command immediately (not part of stroke)
         const command = new ExitPointCommand(
@@ -499,11 +499,11 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
           { x, z },
           (points) => {
             this.terrainGrid.setExitPoints(points);
-            this.updateExitMarkers();
+            this.spawnExitMarker.updateExitMarkers();
           },
           (ex, ez) => {
             this.terrainGrid.addExitPoint(ex, ez);
-            this.updateExitMarkers();
+            this.spawnExitMarker.updateExitMarkers();
           }
         );
         this.editHistory.record(command);
@@ -683,133 +683,6 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     this.cameraControl.applyToCamera(this.editorScene.getCamera(), this.editorScene.getControls()?.target);
   }
 
-  private createBrushIndicator(): void {
-    // Create a ring to show brush area - crisp and clear
-    const geometry = new THREE.RingGeometry(
-      EDITOR_BRUSH_INDICATOR.innerRadius,
-      EDITOR_BRUSH_INDICATOR.outerRadius,
-      EDITOR_BRUSH_INDICATOR.segments
-    );
-    const material = new THREE.MeshBasicMaterial({
-      color: EDITOR_BRUSH_INDICATOR.color,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: EDITOR_BRUSH_INDICATOR.opacity,
-      depthTest: false
-    });
-    this.brushIndicator = new THREE.Mesh(geometry, material);
-    this.brushIndicator.rotation.x = -Math.PI / 2;
-    this.brushIndicator.visible = false;
-    this.brushIndicator.renderOrder = EDITOR_RENDER_ORDER.brushIndicator;
-    this.editorScene.getScene().add(this.brushIndicator);
-  }
-
-  private createSpawnExitMarkers(): void {
-    // Initial markers are created by updateSpawnMarkers/updateExitMarkers
-    this.updateSpawnMarkers();
-    this.updateExitMarkers();
-  }
-
-  private createSpawnMarkerMesh(): THREE.Mesh {
-    const geometry = new THREE.CylinderGeometry(
-      EDITOR_SPAWN_MARKER.radiusTop,
-      EDITOR_SPAWN_MARKER.radiusBottom,
-      EDITOR_SPAWN_MARKER.height,
-      EDITOR_SPAWN_MARKER.radialSegments
-    );
-    const material = new THREE.MeshBasicMaterial({
-      color: EDITOR_SPAWN_MARKER.color,
-      transparent: true,
-      opacity: EDITOR_SPAWN_MARKER.opacity
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.renderOrder = EDITOR_RENDER_ORDER.spawnMarker;
-    return mesh;
-  }
-
-  private createExitMarkerMesh(): THREE.Mesh {
-    const geometry = new THREE.CylinderGeometry(
-      EDITOR_EXIT_MARKER.radiusTop,
-      EDITOR_EXIT_MARKER.radiusBottom,
-      EDITOR_EXIT_MARKER.height,
-      EDITOR_EXIT_MARKER.radialSegments
-    );
-    const material = new THREE.MeshBasicMaterial({
-      color: EDITOR_EXIT_MARKER.color,
-      transparent: true,
-      opacity: EDITOR_EXIT_MARKER.opacity
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.renderOrder = EDITOR_RENDER_ORDER.exitMarker;
-    return mesh;
-  }
-
-  /** Sync spawn marker meshes with the terrainGrid's spawnPoints array. */
-  private updateSpawnMarkers(): void {
-    const points = this.terrainGrid.getSpawnPoints();
-
-    // Remove excess markers
-    while (this.spawnMarkers.length > points.length) {
-      const marker = this.spawnMarkers.pop()!;
-      this.editorScene.getScene().remove(marker);
-      disposeMesh(marker);
-    }
-
-    // Add missing markers
-    while (this.spawnMarkers.length < points.length) {
-      const marker = this.createSpawnMarkerMesh();
-      this.spawnMarkers.push(marker);
-      this.editorScene.getScene().add(marker);
-    }
-
-    // Position all markers
-    for (let i = 0; i < points.length; i++) {
-      const tile = this.terrainGrid.getTileAt(points[i].x, points[i].z);
-      if (tile) {
-        this.spawnMarkers[i].position.copy(tile.mesh.position);
-        this.spawnMarkers[i].position.y += EDITOR_SPAWN_MARKER.yBase;
-        this.spawnMarkers[i].visible = true;
-      }
-    }
-  }
-
-  /** Sync exit marker meshes with the terrainGrid's exitPoints array. */
-  private updateExitMarkers(): void {
-    const points = this.terrainGrid.getExitPoints();
-
-    // Remove excess markers
-    while (this.exitMarkers.length > points.length) {
-      const marker = this.exitMarkers.pop()!;
-      this.editorScene.getScene().remove(marker);
-      disposeMesh(marker);
-    }
-
-    // Add missing markers
-    while (this.exitMarkers.length < points.length) {
-      const marker = this.createExitMarkerMesh();
-      this.exitMarkers.push(marker);
-      this.editorScene.getScene().add(marker);
-    }
-
-    // Position all markers
-    for (let i = 0; i < points.length; i++) {
-      const tile = this.terrainGrid.getTileAt(points[i].x, points[i].z);
-      if (tile) {
-        this.exitMarkers[i].position.copy(tile.mesh.position);
-        this.exitMarkers[i].position.y += EDITOR_EXIT_MARKER.yBase;
-        this.exitMarkers[i].visible = true;
-      }
-    }
-  }
-
-  private updateSpawnMarker(): void {
-    this.updateSpawnMarkers();
-  }
-
-  private updateExitMarker(): void {
-    this.updateExitMarkers();
-  }
-
   // ── Modal dialog helpers ──────────────────────────────────────────────────
 
   private showInputModal(title: string, defaultValue: string, callback: (value: string | null) => void): void {
@@ -902,8 +775,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
       if (state) {
         this.terrainGrid.importState(state);
-        this.updateSpawnMarker();
-        this.updateExitMarker();
+        this.spawnExitMarker.updateSpawnMarkers();
+        this.spawnExitMarker.updateExitMarkers();
         this.runPathValidation();
       }
     });
@@ -913,8 +786,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const state = this.mapFile.loadCurrent();
     if (state) {
       this.terrainGrid.importState(state);
-      this.updateSpawnMarker();
-      this.updateExitMarker();
+      this.spawnExitMarker.updateSpawnMarkers();
+      this.spawnExitMarker.updateExitMarkers();
       this.runPathValidation();
     }
   }
@@ -936,8 +809,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
       const state = this.mapFile.loadTemplate(template);
       if (!state) return;
       this.terrainGrid.importState(state);
-      this.updateSpawnMarker();
-      this.updateExitMarker();
+      this.spawnExitMarker.updateSpawnMarkers();
+      this.spawnExitMarker.updateExitMarkers();
       this.runPathValidation();
       this.editHistory.clear();
       this.mapStorage.clearCurrentMapId();
@@ -956,7 +829,7 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
   private cycleBrushSize(direction: number): void {
     this.editorState.cycleBrushSize(direction);
-    this.updateBrushPreview();
+    this.brushPreview.updateBrushPreview();
   }
 
   private changeActiveTool(tool: BrushTool): void {
@@ -970,115 +843,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
 
     // Hide brush previews when switching away from brush tool
     if (tool !== 'brush') {
-      this.hideBrushPreview();
+      this.brushPreview.hideBrushPreview();
     }
-  }
-
-  private updateBrushPreview(): void {
-    // Clear existing preview meshes
-    this.brushPreviewMeshes.forEach(mesh => {
-      this.editorScene.getScene().remove(mesh);
-      disposeMesh(mesh);
-    });
-    this.brushPreviewMeshes = [];
-
-    // Create new preview meshes for current brush size
-    if (this.brushSize > 1) {
-      const halfSize = Math.floor(this.brushSize / 2);
-      for (let dx = -halfSize; dx <= halfSize; dx++) {
-        for (let dz = -halfSize; dz <= halfSize; dz++) {
-          if (dx === 0 && dz === 0) continue; // Skip center (main brush indicator shows it)
-
-          const geometry = new THREE.RingGeometry(
-            EDITOR_BRUSH_PREVIEW.innerRadius,
-            EDITOR_BRUSH_PREVIEW.outerRadius,
-            EDITOR_BRUSH_PREVIEW.segments
-          );
-          const material = new THREE.MeshBasicMaterial({
-            color: EDITOR_BRUSH_PREVIEW.color,
-            side: THREE.DoubleSide,
-            transparent: true,
-            opacity: EDITOR_BRUSH_PREVIEW.opacity,
-            depthTest: false
-          });
-          const mesh = new THREE.Mesh(geometry, material);
-          mesh.rotation.x = -Math.PI / 2;
-          mesh.visible = false;
-          mesh.renderOrder = EDITOR_RENDER_ORDER.brushPreview;
-          mesh.userData = { offsetX: dx, offsetZ: dz };
-          this.editorScene.getScene().add(mesh);
-          this.brushPreviewMeshes.push(mesh);
-        }
-      }
-    }
-  }
-
-  private updateBrushPreviewPositions(): void {
-    if (!this.hoveredTile) {
-      this.hideBrushPreview();
-      return;
-    }
-
-    // Validate userData exists
-    if (!this.hoveredTile.userData ||
-        typeof this.hoveredTile.userData['gridX'] !== 'number' ||
-        typeof this.hoveredTile.userData['gridZ'] !== 'number') {
-      this.hideBrushPreview();
-      return;
-    }
-
-    const centerX = this.hoveredTile.userData['gridX'];
-    const centerZ = this.hoveredTile.userData['gridZ'];
-
-    this.brushPreviewMeshes.forEach(mesh => {
-      const offsetX = mesh.userData['offsetX'];
-      const offsetZ = mesh.userData['offsetZ'];
-      const tile = this.terrainGrid.getTileAt(centerX + offsetX, centerZ + offsetZ);
-
-      if (tile) {
-        mesh.position.copy(tile.mesh.position);
-        mesh.position.y = tile.mesh.position.y + EDITOR_BRUSH_PREVIEW.yOffset;
-        mesh.visible = true;
-      } else {
-        mesh.visible = false;
-      }
-    });
-  }
-
-  private hideBrushPreview(): void {
-    this.brushPreviewMeshes.forEach(mesh => {
-      mesh.visible = false;
-    });
-  }
-
-  private getAffectedTiles(centerTile: THREE.Mesh): THREE.Mesh[] {
-    const tiles: THREE.Mesh[] = [centerTile];
-
-    if (this.brushSize === 1) return tiles;
-
-    // Validate userData exists
-    if (!centerTile.userData ||
-        typeof centerTile.userData['gridX'] !== 'number' ||
-        typeof centerTile.userData['gridZ'] !== 'number') {
-      return tiles;
-    }
-
-    const centerX = centerTile.userData['gridX'];
-    const centerZ = centerTile.userData['gridZ'];
-    const halfSize = Math.floor(this.brushSize / 2);
-
-    for (let dx = -halfSize; dx <= halfSize; dx++) {
-      for (let dz = -halfSize; dz <= halfSize; dz++) {
-        if (dx === 0 && dz === 0) continue;
-
-        const tile = this.terrainGrid.getTileAt(centerX + dx, centerZ + dz);
-        if (tile) {
-          tiles.push(tile.mesh);
-        }
-      }
-    }
-
-    return tiles;
   }
 
   private fillRectangle(startTile: THREE.Mesh, endTile: THREE.Mesh): void {
@@ -1179,24 +945,18 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
   public setEditMode(mode: EditMode): void {
     this.editorState.setEditMode(mode);
     // Update brush indicator color immediately for crisp feedback
-    if (this.brushIndicator) {
-      const material = this.brushIndicator.material as THREE.MeshBasicMaterial;
-      material.color.setHex(this.editorState.getColorForMode());
-    }
+    this.brushPreview.updateBrushIndicatorColor();
   }
 
   public setTerrainType(type: TerrainType): void {
     this.editorState.setTerrainType(type);
     // Update brush indicator color since mode may have changed
-    if (this.brushIndicator) {
-      const material = this.brushIndicator.material as THREE.MeshBasicMaterial;
-      material.color.setHex(this.editorState.getColorForMode());
-    }
+    this.brushPreview.updateBrushIndicatorColor();
   }
 
   public setBrushSize(size: number): void {
     this.editorState.setBrushSize(size);
-    this.updateBrushPreview();
+    this.brushPreview.updateBrushPreview();
   }
 
   public setActiveTool(tool: BrushTool): void {
@@ -1210,8 +970,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const command = this.editHistory.undo();
     if (command) {
       // Update markers if spawn/exit was undone
-      this.updateSpawnMarker();
-      this.updateExitMarker();
+      this.spawnExitMarker.updateSpawnMarkers();
+      this.spawnExitMarker.updateExitMarkers();
       this.runPathValidation();
     }
   }
@@ -1223,8 +983,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const command = this.editHistory.redo();
     if (command) {
       // Update markers if spawn/exit was redone
-      this.updateSpawnMarker();
-      this.updateExitMarker();
+      this.spawnExitMarker.updateSpawnMarkers();
+      this.spawnExitMarker.updateExitMarkers();
       this.runPathValidation();
     }
   }
@@ -1283,8 +1043,8 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     const state = await this.mapFile.importFromJson(new File([], ''));
     if (state) {
       this.terrainGrid.importState(state);
-      this.updateSpawnMarker();
-      this.updateExitMarker();
+      this.spawnExitMarker.updateSpawnMarkers();
+      this.spawnExitMarker.updateExitMarkers();
       this.runPathValidation();
       // Clear edit history when loading a new map
       this.editHistory.clear();
@@ -1303,33 +1063,36 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     }
 
     // Animate brush indicator for crisp, noticeable feedback
-    if (this.brushIndicator && this.brushIndicator.visible) {
+    const brushIndicator = this.brushPreview.getBrushIndicator();
+    if (brushIndicator && brushIndicator.visible) {
       const pulse = Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * EDITOR_ANIMATION.brushPulseAmplitude + 0.9;
-      this.brushIndicator.scale.set(pulse, pulse, 1);
-      const material = this.brushIndicator.material as THREE.MeshBasicMaterial;
+      brushIndicator.scale.set(pulse, pulse, 1);
+      const material = brushIndicator.material as THREE.MeshBasicMaterial;
       material.opacity = 0.6 + Math.sin(Date.now() * EDITOR_ANIMATION.brushPulseSpeed) * 0.2;
     }
 
     // Animate spawn markers
     const spawnPoints = this.terrainGrid.getSpawnPoints();
-    for (let i = 0; i < this.spawnMarkers.length && i < spawnPoints.length; i++) {
+    const spawnMarkers = this.spawnExitMarker.getSpawnMarkers();
+    for (let i = 0; i < spawnMarkers.length && i < spawnPoints.length; i++) {
       const bounce = Math.abs(Math.sin(Date.now() * EDITOR_ANIMATION.markerBounceSpeed)) * EDITOR_ANIMATION.markerBounceAmplitude;
       const tile = this.terrainGrid.getTileAt(spawnPoints[i].x, spawnPoints[i].z);
       if (tile) {
-        this.spawnMarkers[i].position.y = tile.mesh.position.y + EDITOR_SPAWN_MARKER.yBase + bounce;
+        spawnMarkers[i].position.y = tile.mesh.position.y + EDITOR_SPAWN_MARKER.yBase + bounce;
       }
-      this.spawnMarkers[i].rotation.y += EDITOR_ANIMATION.spawnRotationSpeed;
+      spawnMarkers[i].rotation.y += EDITOR_ANIMATION.spawnRotationSpeed;
     }
 
     // Animate exit markers
     const exitPointsAnim = this.terrainGrid.getExitPoints();
-    for (let i = 0; i < this.exitMarkers.length && i < exitPointsAnim.length; i++) {
+    const exitMarkers = this.spawnExitMarker.getExitMarkers();
+    for (let i = 0; i < exitMarkers.length && i < exitPointsAnim.length; i++) {
       const bounce = Math.abs(Math.sin(Date.now() * EDITOR_ANIMATION.markerBounceSpeed + EDITOR_ANIMATION.exitBouncePhaseOffset)) * EDITOR_ANIMATION.markerBounceAmplitude;
       const tile = this.terrainGrid.getTileAt(exitPointsAnim[i].x, exitPointsAnim[i].z);
       if (tile) {
-        this.exitMarkers[i].position.y = tile.mesh.position.y + EDITOR_EXIT_MARKER.yBase + bounce;
+        exitMarkers[i].position.y = tile.mesh.position.y + EDITOR_EXIT_MARKER.yBase + bounce;
       }
-      this.exitMarkers[i].rotation.y += EDITOR_ANIMATION.exitRotationSpeed;
+      exitMarkers[i].rotation.y += EDITOR_ANIMATION.exitRotationSpeed;
     }
 
     const particles = this.editorScene.getParticles();
@@ -1386,34 +1149,14 @@ export class NovariseComponent implements AfterViewInit, OnDestroy {
     // Clear undo/redo history to prevent stale closures referencing disposed TerrainGrid
     this.editHistory.clear();
 
-    // Clean up brush preview meshes
-    const scene = this.editorScene.getScene();
-    this.brushPreviewMeshes.forEach(mesh => {
-      scene.remove(mesh);
-      disposeMesh(mesh);
-    });
-    this.brushPreviewMeshes = [];
+    // Clean up brush preview meshes and indicator (delegated to service)
+    this.brushPreview.cleanup();
 
     // Clean up rectangle preview meshes
     this.clearRectanglePreview();
 
-    // Clean up brush indicator
-    if (this.brushIndicator) {
-      scene.remove(this.brushIndicator);
-      disposeMesh(this.brushIndicator);
-    }
-
-    // Clean up spawn/exit markers
-    for (const marker of this.spawnMarkers) {
-      scene.remove(marker);
-      disposeMesh(marker);
-    }
-    this.spawnMarkers = [];
-    for (const marker of this.exitMarkers) {
-      scene.remove(marker);
-      disposeMesh(marker);
-    }
-    this.exitMarkers = [];
+    // Clean up spawn/exit markers (delegated to service)
+    this.spawnExitMarker.cleanup();
 
     if (this.terrainGrid) {
       this.terrainGrid.dispose();

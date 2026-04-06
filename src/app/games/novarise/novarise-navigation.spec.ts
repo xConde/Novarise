@@ -12,6 +12,8 @@ import { EditorSceneService } from './core/editor-scene.service';
 import { EditorNotificationService } from './core/editor-notification.service';
 import { TerrainEditService } from './core/terrain-edit.service';
 import { MapFileService } from './core/map-file.service';
+import { BrushPreviewService } from './core/brush-preview.service';
+import { SpawnExitMarkerService } from './core/spawn-exit-marker.service';
 import { TerrainGridState } from './features/terrain-editor/terrain-grid-state.interface';
 import { TerrainType } from './models/terrain-types.enum';
 import * as THREE from 'three';
@@ -125,6 +127,8 @@ describe('NovariseComponent Navigation', () => {
         EditorNotificationService,
         TerrainEditService,
         MapFileService,
+        BrushPreviewService,
+        SpawnExitMarkerService,
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();

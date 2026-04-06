@@ -13,6 +13,8 @@ import { EditorSceneService } from './core/editor-scene.service';
 import { EditorNotificationService } from './core/editor-notification.service';
 import { TerrainEditService } from './core/terrain-edit.service';
 import { MapFileService } from './core/map-file.service';
+import { BrushPreviewService } from './core/brush-preview.service';
+import { SpawnExitMarkerService } from './core/spawn-exit-marker.service';
 import { JoystickEvent } from './features/mobile-controls';
 
 /**
@@ -90,6 +92,8 @@ describe('NovariseComponent', () => {
         EditorNotificationService,
         TerrainEditService,
         MapFileService,
+        BrushPreviewService,
+        SpawnExitMarkerService,
       ],
       schemas: [NO_ERRORS_SCHEMA] // Ignore unknown elements like app-virtual-joystick
     }).compileComponents();
