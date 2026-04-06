@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { BlockType, GameBoardTile, SpawnerType } from './models/game-board-tile';
 import { TowerType } from './models/tower.model';
 import { BOARD_CONFIG } from './constants/board.constants';
+import { assertNever } from './utils/assert-never';
 
 @Injectable()
 export class GameBoardService {
@@ -88,6 +89,8 @@ export class GameBoardService {
         return { minRow: h - 2, maxRow: h - 1, minCol: 0, maxCol: 1, centerX: h - 2, centerY: 0 };
       case SpawnerType.BOTTOM_RIGHT:
         return { minRow: h - 2, maxRow: h - 1, minCol: w - 2, maxCol: w - 1, centerX: h - 2, centerY: w - 1 };
+      default:
+        assertNever(type);
     }
   }
 

@@ -6,6 +6,7 @@ import {
   getChallengesForLevel,
 } from '../models/challenge.model';
 import { TowerType } from '../../game/game-board/models/tower.model';
+import { assertNever } from '../../game/game-board/utils/assert-never';
 
 @Injectable({ providedIn: 'root' })
 export class ChallengeEvaluatorService {
@@ -39,6 +40,8 @@ export class ChallengeEvaluatorService {
         return state.maxTowersPlaced <= (challenge.towerLimit ?? Infinity);
       case ChallengeType.SINGLE_TYPE:
         return state.towerTypesUsed.size === 1;
+      default:
+        assertNever(challenge.type);
     }
   }
 }
