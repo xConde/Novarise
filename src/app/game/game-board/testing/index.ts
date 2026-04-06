@@ -12,4 +12,5 @@ export {
   createSceneServiceSpy,
   createGameNotificationServiceSpy,
   createTowerAnimationServiceSpy,
+  createGamePauseServiceSpy,
 } from './test-spies.factory';

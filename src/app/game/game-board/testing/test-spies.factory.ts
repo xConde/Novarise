@@ -17,6 +17,7 @@ import { WaveService } from '../services/wave.service';
 import { TowerCombatService } from '../services/tower-combat.service';
 import { StatusEffectService } from '../services/status-effect.service';
 import { ChallengeTrackingService } from '../services/challenge-tracking.service';
+import { GamePauseService } from '../services/game-pause.service';
 import { MapBridgeService } from '@core/services/map-bridge.service';
 import { MapStorageService, MapMetadata } from '@core/services/map-storage.service';
 import { PlayerProfileService } from '@core/services/player-profile.service';
@@ -722,5 +723,17 @@ export function createChallengeTrackingServiceSpy(): jasmine.SpyObj<ChallengeTra
   ]);
   spy.getSnapshot.and.returnValue({ totalGoldSpent: 0, maxTowersPlaced: 0, towerTypesUsed: new Set() });
   spy.getTowerTypesUsed.and.returnValue(new Set<TowerType>());
+  return spy;
+}
+
+export function createGamePauseServiceSpy(): jasmine.SpyObj<GamePauseService> {
+  const spy = jasmine.createSpyObj<GamePauseService>(
+    'GamePauseService',
+    ['togglePause', 'setupAutoPause', 'requestQuit', 'cancelQuit', 'confirmQuit', 'canLeaveGame', 'reset', 'cleanup', 'ngOnDestroy'],
+    { showQuitConfirm: false, autoPaused: false, isPaused: false }
+  );
+  spy.togglePause.and.returnValue(false);
+  spy.canLeaveGame.and.returnValue(true);
+  spy.confirmQuit.and.returnValue('/');
   return spy;
 }
