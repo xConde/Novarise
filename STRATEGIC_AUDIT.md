@@ -1128,3 +1128,68 @@ Test count: 2756 → 3024 (+268 tests)
 - [x] Step 3: Final convention check — zero console.log, zero TODO/FIXME/HACK, zero debugger; 3 pre-existing catch(e) in map-storage (outside scope)
 - [x] Step 4: Full test suite green (4165/4165) + production build clean
 - [x] Step 5: Push branch
+
+---
+
+## Sprint History — feat/hardening-viii continuation (22 sprints, 2026-04-06)
+
+**Original plan: 50 sprints. First pass shipped 28 (Phases 1, 5–8 mostly complete). This continuation completed the remaining 22 sprints across Phases 2, 3, 4, 5, 7.**
+
+### Phase 2: Game Board Decomposition (S9–S18)
+- S9: CameraPan — already in GameInputService (no-op)
+- S10: TowerPlacementService extracted (229 LOC, drag state machine)
+- S11: GamePauseService extracted (150 LOC, pause/quit/auto-pause)
+- S12: TowerUpgradeVisualService — scale/emissive/specialization tint consolidated
+- S13: TowerSelectionService extracted (124 LOC, inspection panel state)
+- S14: ChallengeDisplayService extracted (93 LOC, HUD indicator computation)
+- S15: GameSessionService.cleanupScene() — component's cleanupGameObjects shrank from ~75 to ~20 LOC
+- S16: Interaction setup simplified via delegation to TowerPlacementService/TowerSelectionService
+- S17: MinimapService enriched with buildTerrainCache + updateWithEntities
+- S18: Final cleanup — dead code removed, handleKeyboard condensed, delegation proxies
+
+### Phase 3: Editor Decomposition (S21, S24)
+- S21: RectangleToolService extracted (161 LOC) — fill/preview/corner tracking
+- S24: EditorModalService (70 LOC) + EditorKeyboardService (121 LOC) extracted; editor component 1089 → 781 LOC
+
+### Phase 4: Service Decomposition (S28–S32)
+- S28: EnemyHealthService extracted (317 LOC) — health bars, hit flash, death anim, shield break
+- S29: Enemy cleanup — enemy.service.ts 789 → 585 LOC (under 600 target)
+- S31: ChainLightningService extracted (149 LOC) — targeting + damage + arcs
+- S32: ProjectileService extracted (362 LOC) — lifecycle + object pool + trails; tower-combat.service.ts 798 → 550 LOC (under 600 target)
+
+### Phase 5: CSS Polish (S33, S38)
+- S33: CSS variable audit — added `--glass-bg`, `--font-size-tiny`; consolidated 17 hardcoded rgba/#fff values across 8 partials
+- S38: CSS dead code audit — zero dead selectors found
+
+### Phase 7: Test Architecture (S45–S47)
+- S45: enemy.service.spec decomposition — tests moved to enemy-health/enemy-visual/enemy-mesh-factory specs
+- S46: tower-combat.service.spec decomposition — duplicated projectile tests removed
+- S47: Coverage gap audit — all new services have spec files with public API coverage
+
+### Red-Team Fixes (continuation)
+- **Lint error:** Fixed unused `file` parameter in map-file.service.ts:177 (commit 7b48973)
+- **CSS miss:** Replaced hardcoded `rgba(255,255,255,0.5)` in `_game-wave.scss` (commit c212ac4)
+- **Regression (HIGH):** Auto-pause focus trap activation was lost during S11 extraction — restored via `onAutoPause` callback (commit ed30ae7)
+- **Memory leaks (MEDIUM):** GamePauseService and TowerPlacementService callbacks not cleared on cleanup — fixed to null out references on ngOnDestroy (commit ee6f987)
+
+### Final Metrics (2026-04-06)
+
+| File | Before S9 | After S18 | Delta |
+|------|-----------|-----------|-------|
+| game-board.component.ts | 2,341 | 1,891 | **−450 (−19%)** |
+| novarise.component.ts | 1,168 | 781 | **−387 (−33%), ≤800 ✓** |
+| enemy.service.ts | 789 | 585 | **−204 (−26%), ≤600 ✓** |
+| tower-combat.service.ts | 879 | 550 | **−329 (−37%), ≤600 ✓** |
+| Tests | 4,215 | **4,453** | +238 |
+| New services this continuation | — | **11** | GamePause, ChallengeDisplay, TowerPlacement, TowerSelection, TowerUpgradeVisual, EnemyHealth, ChainLightning, Projectile, EditorModal, EditorKeyboard, RectangleTool |
+| Lint errors | 1 | **0** | Fixed |
+
+**Game-board component target of ≤800 LOC not achieved** (landed at 1,891). Remaining code is genuine orchestration — animate() loop, processCombatResult(), lifecycle hooks, and template delegation proxies — that does not decompose further without creating artificial service boundaries.
+
+### Deployment Checklist (continuation)
+- [x] All 22 remaining sprints executed
+- [x] Full test suite green (4453/4453)
+- [x] Production build clean (5s build time)
+- [x] Zero lint errors
+- [x] All audit findings resolved (regression + 2 memory leaks fixed)
+- [x] Worktree cleanup complete
