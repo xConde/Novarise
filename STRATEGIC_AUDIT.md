@@ -1119,3 +1119,12 @@ Test count: 2756 → 3024 (+268 tests)
 **Location:** `game-board.component.ts:505`
 **Risk:** `this.gameInput.hotkey$.subscribe(e => this.handleKeyboard(e))` returns a Subscription that is never stored or unsubscribed. Cleanup relies on `hotkey$.complete()` in `gameInput.cleanup()` being called during `ngOnDestroy`. If the cleanup path is disrupted (early return, error), the subscription leaks. Angular best practice: store the subscription and unsubscribe explicitly.
 **Fix:** Store the subscription and add it to the `ngOnDestroy` teardown.
+
+---
+
+## Deployment Checklist — feat/hardening-viii
+- [x] Step 1: Fix Finding 3 — store hotkey$ subscription and unsubscribe in ngOnDestroy
+- [ ] Step 2: Update barrel files to include new services (EnemyMeshFactory, EnemyVisual, GameInput, TerrainEdit)
+- [ ] Step 3: Final convention check — grep for console.log, TODO, catch(e), leftover debugs
+- [ ] Step 4: Full test suite green (hard gate) + production build clean
+- [ ] Step 5: Push branch

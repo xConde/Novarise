@@ -252,6 +252,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private animationFrameId = 0;
   private resizeHandler: () => void = () => {};
   private stateSubscription: Subscription | null = null;
+  private hotkeySubscription: Subscription | null = null;
 
   // WebGL context loss recovery (handlers live in SceneService; component owns the flag)
   contextLost = false;
@@ -502,7 +503,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.setupMouseInteraction();
     this.setupTouchInteraction();
     this.gameInput.init();
-    this.gameInput.hotkey$.subscribe(e => this.handleKeyboard(e));
+    this.hotkeySubscription = this.gameInput.hotkey$.subscribe(e => this.handleKeyboard(e));
     this.minimapService.init(this.canvasContainer.nativeElement);
     this.setupAutoPause();
     this.animate();
@@ -2289,6 +2290,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (this.notificationSub) {
       this.notificationSub.unsubscribe();
+    }
+
+    if (this.hotkeySubscription) {
+      this.hotkeySubscription.unsubscribe();
     }
 
     this.gameInput.cleanup();
