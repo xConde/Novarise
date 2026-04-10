@@ -7,6 +7,7 @@ import { RunState, RunStatus } from './models/run-state.model';
 import { MapNode, NodeMap, NodeType, getAvailableNodes } from './models/node-map.model';
 import { RelicDefinition, RELIC_DEFINITIONS, RelicId } from './models/relic.model';
 import { RewardScreenConfig, RewardItem, ShopItem, RunEvent } from './models/encounter.model';
+import { AscensionLevel, ASCENSION_LEVELS } from './models/ascension.model';
 
 /**
  * Ascent Mode root component.
@@ -37,7 +38,18 @@ export class AscentComponent implements OnInit, OnDestroy {
   activeRelics: RelicDefinition[] = [];
 
   /** Current view mode. */
-  viewMode: 'start' | 'map' | 'reward' | 'shop' | 'rest' | 'event' | 'summary' = 'start';
+  viewMode: 'start' | 'map' | 'reward' | 'shop' | 'rest' | 'event' | 'act-transition' | 'summary' = 'start';
+
+  /** Boss preset name for the act-transition screen. */
+  actTransitionBossName: string = '';
+
+  /** Currently selected ascension level in the start screen selector. */
+  selectedAscension: number = 0;
+
+  /** All ascension levels the player has unlocked (up to maxAscension). */
+  get ascensionLevelOptions(): AscensionLevel[] {
+    return ASCENSION_LEVELS.slice(0, this.maxAscension);
+  }
 
   /** Reward screen config, set after combat victory. */
   rewardConfig: RewardScreenConfig | null = null;
@@ -147,14 +159,32 @@ export class AscentComponent implements OnInit, OnDestroy {
     this.runService.collectReward(reward);
   }
 
-  /** Close reward screen and return to map. */
+  /** Close reward screen and return to map (or show act-transition if act is complete). */
   closeRewardScreen(): void {
     this.rewardConfig = null;
 
     if (this.runService.isActComplete()) {
+      const state = this.runState;
+      if (state && state.actIndex + 1 < state.config.actsCount) {
+        // More acts remain — show act-transition screen before advancing
+        this.actTransitionBossName = this.runService.getBossName(state.actIndex, state.seed);
+        this.viewMode = 'act-transition';
+        return;
+      }
+      // No more acts — advance triggers VICTORY
       this.runService.advanceAct();
     }
 
+    if (this.runState?.status === RunStatus.VICTORY) {
+      this.viewMode = 'summary';
+    } else {
+      this.viewMode = 'map';
+    }
+  }
+
+  /** Continue after act-transition screen. */
+  onActTransitionContinued(): void {
+    this.runService.advanceAct();
     if (this.runState?.status === RunStatus.VICTORY) {
       this.viewMode = 'summary';
     } else {
@@ -237,6 +267,22 @@ export class AscentComponent implements OnInit, OnDestroy {
   /** Highest ascension level unlocked. */
   get maxAscension(): number {
     return this.runService.getMaxAscension();
+  }
+
+  /** Returns all ascension levels from 1 up to and including the given level. */
+  ascensionLevelsUpTo(level: number): AscensionLevel[] {
+    return ASCENSION_LEVELS.slice(0, level);
+  }
+
+  /**
+   * Returns a CSS class suffix for color-coding ascension difficulty.
+   * Levels 1-5: easy (green), 6-10: medium (yellow), 11-15: hard (orange), 16-20: extreme (red).
+   */
+  getAscensionDifficultyClass(level: number): string {
+    if (level <= 5) return 'easy';
+    if (level <= 10) return 'medium';
+    if (level <= 15) return 'hard';
+    return 'extreme';
   }
 
   private updateRelicDisplay(relicIds: string[]): void {

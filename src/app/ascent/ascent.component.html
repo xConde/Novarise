@@ -31,13 +31,44 @@
     </div>
 
     <div class="ascent-ascension-select" *ngIf="maxAscension > 0">
-      <label for="ascension-level">Ascension Level:</label>
-      <select id="ascension-level" #ascensionSelect>
-        <option *ngFor="let i of [].constructor(maxAscension + 1); let idx = index" [value]="idx">
-          {{ idx === 0 ? 'None' : 'Ascension ' + idx }}
+      <label for="ascension-level" class="ascension-select__label">Ascension Level</label>
+      <select
+        id="ascension-level"
+        class="ascension-select__dropdown"
+        #ascensionSelect
+        [ngModel]="selectedAscension"
+        (ngModelChange)="selectedAscension = $event"
+      >
+        <option [value]="0">None — Standard run</option>
+        <option
+          *ngFor="let lvl of ascensionLevelOptions"
+          [value]="lvl.level"
+        >
+          {{ lvl.level }}: {{ lvl.label }} — {{ lvl.description }}
         </option>
       </select>
-      <button class="ascent-btn ascent-btn--primary" (click)="startNewRun(+ascensionSelect.value)">
+
+      <!-- Cumulative effects at selected level -->
+      <div class="ascension-info" *ngIf="selectedAscension > 0" aria-live="polite">
+        <h3 class="ascension-info__title">
+          Ascension {{ selectedAscension }} — Active Modifiers
+        </h3>
+        <ul class="ascension-info__effects">
+          <li
+            *ngFor="let lvl of ascensionLevelsUpTo(selectedAscension)"
+            class="ascension-info__effect"
+            [class]="'ascension-info__effect--' + getAscensionDifficultyClass(lvl.level)"
+          >
+            <span class="ascension-info__effect-level">{{ lvl.level }}</span>
+            <span class="ascension-info__effect-text">{{ lvl.description }}</span>
+          </li>
+        </ul>
+      </div>
+
+      <button
+        class="ascent-btn ascent-btn--primary"
+        (click)="startNewRun(selectedAscension)"
+      >
         Start Ascension Run
       </button>
     </div>
@@ -95,6 +126,16 @@
     [event]="currentEvent"
     (choiceMade)="completeEvent($event)"
   ></app-event-screen>
+
+  <!-- ── Act Transition ────────────────────────────────────── -->
+  <app-act-transition
+    *ngIf="viewMode === 'act-transition' && runState"
+    [completedAct]="runState.actIndex"
+    [bossName]="actTransitionBossName"
+    [relicCount]="runState.relicIds.length"
+    [encounterCount]="runState.encounterResults.length"
+    (continued)="onActTransitionContinued()"
+  ></app-act-transition>
 
   <!-- ── Run Summary ─────────────────────────────────────── -->
   <div class="ascent-summary" *ngIf="viewMode === 'summary' && runState">

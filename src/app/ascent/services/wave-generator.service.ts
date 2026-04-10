@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { WaveDefinition, WaveEntry } from '../../game/game-board/models/wave.model';
 import { EnemyType } from '../../game/game-board/models/enemy.model';
 import { ENCOUNTER_CONFIG, createSeededRng } from '../constants/ascent.constants';
+import { BossPreset, ACT1_BOSS_PRESETS, ACT2_BOSS_PRESETS } from '../constants/boss-presets';
 
 // ── Enemy pool constants ───────────────────────────────────────
 
@@ -81,34 +82,24 @@ export class WaveGeneratorService {
   }
 
   /**
-   * Generate waves for the act boss node.
-   * Heavily scaled — final wave is always a single BOSS enemy with max scaling.
+   * Generate waves for the act boss node using themed preset compositions.
+   *
+   * The preset is chosen deterministically from ACT1_BOSS_PRESETS or
+   * ACT2_BOSS_PRESETS based on actIndex and seed. Act 1 presets have
+   * 6 waves; Act 2 presets have 7 waves.
    */
   generateBossWaves(actIndex: number, seed: number): WaveDefinition[] {
-    // Boss row is always the last row (rowsPerAct = 11)
-    const bossRow = 11;
-    const rng = createSeededRng(seed + bossRow * 1000 + actIndex * 10000);
-    const pool = getEnemyPool(bossRow, actIndex);
-    const waves = this.buildWaves(
-      rng,
-      pool,
-      bossRow,
-      actIndex,
-      ENCOUNTER_CONFIG.wavesPerBoss - 1, // reserve last wave for solo boss
-      ENCOUNTER_CONFIG.bossHealthMultiplier,
-      ENCOUNTER_CONFIG.bossGoldMultiplier,
-    );
+    return this.getBossPreset(actIndex, seed).waves;
+  }
 
-    // Final wave: single BOSS entry with max gold scaling
-    const finalGold = Math.round(
-      (WAVE_GOLD_BASE + bossRow * WAVE_GOLD_PER_ROW) * ENCOUNTER_CONFIG.bossGoldMultiplier * 2,
-    );
-    const finalWave: WaveDefinition = {
-      entries: [{ type: EnemyType.BOSS, count: 1, spawnInterval: 0 }],
-      reward: finalGold,
-    };
-
-    return [...waves, finalWave];
+  /**
+   * Return the BossPreset that will be used for the given act and seed.
+   * Used by AscentComponent to display the boss name before entering the node.
+   */
+  getBossPreset(actIndex: number, seed: number): BossPreset {
+    const rng = createSeededRng(seed);
+    const presets = actIndex === 0 ? ACT1_BOSS_PRESETS : ACT2_BOSS_PRESETS;
+    return presets[Math.floor(rng() * presets.length)];
   }
 
   // ── Private builders ──────────────────────────────────────

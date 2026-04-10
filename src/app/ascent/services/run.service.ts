@@ -111,6 +111,14 @@ export class RunService {
     return state.completedNodeIds.includes(map.bossNodeId);
   }
 
+  /**
+   * Returns the boss preset name for the given act index and run seed.
+   * Used by ActTransitionComponent to display the defeated boss name.
+   */
+  getBossName(actIndex: number, seed: number): string {
+    return this.encounterService.getBossPresetName(actIndex, seed);
+  }
+
   getCurrentEncounter(): EncounterConfig | null {
     return this.currentEncounter;
   }

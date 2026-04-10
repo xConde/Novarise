@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { WaveGeneratorService } from './wave-generator.service';
 import { EnemyType } from '../../game/game-board/models/enemy.model';
 import { ENCOUNTER_CONFIG } from '../constants/ascent.constants';
+import { ACT1_BOSS_PRESETS, ACT2_BOSS_PRESETS } from '../constants/boss-presets';
 
 describe('WaveGeneratorService', () => {
   let service: WaveGeneratorService;
@@ -142,23 +143,32 @@ describe('WaveGeneratorService', () => {
   // ── generateBossWaves ─────────────────────────────────────
 
   describe('generateBossWaves()', () => {
-    it('should produce wavesPerBoss (6) waves', () => {
+    it('act 1 (actIndex=0) should produce 6 waves from the act 1 preset pool', () => {
+      // All act 1 presets have 6 waves
       const waves = service.generateBossWaves(0, 42);
-      expect(waves.length).toBe(ENCOUNTER_CONFIG.wavesPerBoss);
+      expect(ACT1_BOSS_PRESETS.some(p => p.waves.length === waves.length)).toBeTrue();
+      expect(waves.length).toBe(6);
     });
 
-    it('final wave should be a solo BOSS entry', () => {
-      const waves = service.generateBossWaves(0, 42);
-      const finalWave = waves[waves.length - 1];
-      expect(finalWave.entries.length).toBe(1);
-      expect(finalWave.entries[0].type).toBe(EnemyType.BOSS);
-      expect(finalWave.entries[0].count).toBe(1);
+    it('act 2 (actIndex=1) should produce 7 waves from the act 2 preset pool', () => {
+      // All act 2 presets have 7 waves
+      const waves = service.generateBossWaves(1, 42);
+      expect(ACT2_BOSS_PRESETS.some(p => p.waves.length === waves.length)).toBeTrue();
+      expect(waves.length).toBe(7);
     });
 
-    it('final wave should have spawnInterval of 0', () => {
+    it('act 1 final wave should contain a BOSS entry', () => {
       const waves = service.generateBossWaves(0, 42);
       const finalWave = waves[waves.length - 1];
-      expect(finalWave.entries[0].spawnInterval).toBe(0);
+      const hasBoss = finalWave.entries.some(e => e.type === EnemyType.BOSS);
+      expect(hasBoss).toBeTrue();
+    });
+
+    it('act 1 final wave solo BOSS should have spawnInterval of 0', () => {
+      const waves = service.generateBossWaves(0, 42);
+      const finalWave = waves[waves.length - 1];
+      const bossEntry = finalWave.entries.find(e => e.type === EnemyType.BOSS);
+      expect(bossEntry?.spawnInterval).toBe(0);
     });
 
     it('final wave should have a positive gold reward', () => {
@@ -173,22 +183,42 @@ describe('WaveGeneratorService', () => {
       expect(JSON.stringify(waves1)).toBe(JSON.stringify(waves2));
     });
 
-    it('all non-final waves should have positive gold reward', () => {
+    it('all waves should have positive gold reward', () => {
       const waves = service.generateBossWaves(0, 42);
-      const nonFinalWaves = waves.slice(0, -1);
-      nonFinalWaves.forEach((w, i) => {
+      waves.forEach((w, i) => {
         expect(w.reward).toBeGreaterThan(0, `boss wave ${i} has non-positive reward`);
       });
     });
 
-    it('act 1 boss should produce higher enemy counts than act 0 boss', () => {
-      // act multiplier = 1.4 applies for actIndex > 0
-      const act0Waves = service.generateBossWaves(0, 42);
-      const act1Waves = service.generateBossWaves(1, 42);
-      // Compare total enemy count across all non-final waves
-      const countWaves = (waves: typeof act0Waves) =>
-        waves.slice(0, -1).reduce((s, w) => s + w.entries.reduce((es, e) => es + e.count, 0), 0);
-      expect(countWaves(act1Waves)).toBeGreaterThan(countWaves(act0Waves));
+    it('act 2 boss should have more total waves than act 1 boss', () => {
+      const act1Waves = service.generateBossWaves(0, 42);
+      const act2Waves = service.generateBossWaves(1, 42);
+      expect(act2Waves.length).toBeGreaterThan(act1Waves.length);
+    });
+  });
+
+  // ── getBossPreset ──────────────────────────────────────────
+
+  describe('getBossPreset()', () => {
+    it('should return an act 1 preset for actIndex=0', () => {
+      const preset = service.getBossPreset(0, 42);
+      expect(ACT1_BOSS_PRESETS.some(p => p.id === preset.id)).toBeTrue();
+    });
+
+    it('should return an act 2 preset for actIndex=1', () => {
+      const preset = service.getBossPreset(1, 42);
+      expect(ACT2_BOSS_PRESETS.some(p => p.id === preset.id)).toBeTrue();
+    });
+
+    it('should be deterministic for the same seed', () => {
+      const preset1 = service.getBossPreset(0, 99);
+      const preset2 = service.getBossPreset(0, 99);
+      expect(preset1.id).toBe(preset2.id);
+    });
+
+    it('should return a preset with a non-empty name', () => {
+      const preset = service.getBossPreset(0, 42);
+      expect(preset.name.length).toBeGreaterThan(0);
     });
   });
 });

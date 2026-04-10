@@ -8,6 +8,8 @@ export class GameStateService {
   private state: GameState = { ...INITIAL_GAME_STATE, activeModifiers: new Set<GameModifier>() };
   private state$ = new BehaviorSubject<GameState>(this.state);
   private modifierEffects: ModifierEffects = {};
+  /** Additional effects from Ascent Mode ascension levels, stacked on top of player modifiers. */
+  private ascensionEffects: ModifierEffects = {};
   private phaseChange$ = new Subject<{ from: GamePhase; to: GamePhase }>();
   /** Cumulative gold spent during SETUP (tower placement before wave 1). Prevents difficulty/modifier toggle exploits. */
   private setupGoldSpent = 0;
@@ -218,9 +220,41 @@ export class GameStateService {
     this.emit();
   }
 
-  /** Returns the merged modifier effects from all active modifiers. */
+  /**
+   * Returns the merged modifier effects from all active modifiers combined with
+   * any ascension effects set via setAscensionModifierEffects().
+   */
   getModifierEffects(): ModifierEffects {
-    return this.modifierEffects;
+    const a = this.ascensionEffects;
+    const m = this.modifierEffects;
+    // Fast path: nothing from ascension
+    if (Object.keys(a).length === 0) return m;
+    // Merge: multiplicative stacking for numeric multipliers, OR for booleans
+    return {
+      enemyHealthMultiplier: (m.enemyHealthMultiplier ?? 1) * (a.enemyHealthMultiplier ?? 1),
+      enemySpeedMultiplier: (m.enemySpeedMultiplier ?? 1) * (a.enemySpeedMultiplier ?? 1),
+      towerCostMultiplier: (m.towerCostMultiplier ?? 1) * (a.towerCostMultiplier ?? 1),
+      towerDamageMultiplier: m.towerDamageMultiplier !== undefined || a.towerDamageMultiplier !== undefined
+        ? (m.towerDamageMultiplier ?? 1) * (a.towerDamageMultiplier ?? 1)
+        : undefined,
+      waveCountMultiplier: m.waveCountMultiplier !== undefined || a.waveCountMultiplier !== undefined
+        ? (m.waveCountMultiplier ?? 1) * (a.waveCountMultiplier ?? 1)
+        : undefined,
+      startingGoldMultiplier: m.startingGoldMultiplier !== undefined || a.startingGoldMultiplier !== undefined
+        ? (m.startingGoldMultiplier ?? 1) * (a.startingGoldMultiplier ?? 1)
+        : undefined,
+      disableInterest: (m.disableInterest || a.disableInterest) ? true : undefined,
+    };
+  }
+
+  /**
+   * Injects Ascent Mode ascension difficulty multipliers as additional modifier
+   * effects that stack on top of any player-chosen GameModifiers.
+   * Should be called during ngOnInit of GameBoardComponent when isInRun() is true.
+   * No-op for empty effects objects.
+   */
+  setAscensionModifierEffects(effects: ModifierEffects): void {
+    this.ascensionEffects = { ...effects };
   }
 
   /** Returns the score multiplier from active modifiers (1.0 = no change). */
@@ -259,11 +293,12 @@ export class GameStateService {
     this.emit();
   }
 
-  /** Resets all game state to initial values and clears modifiers. Call from `restartGame()` before a new game begins. */
+  /** Resets all game state to initial values and clears modifiers and ascension effects. Call from `restartGame()` before a new game begins. */
   reset(): void {
     const from = this.state.phase;
     this.state = { ...INITIAL_GAME_STATE, activeModifiers: new Set<GameModifier>() };
     this.modifierEffects = {};
+    this.ascensionEffects = {};
     this.setupGoldSpent = 0;
     this.phaseChange$.next({ from, to: GamePhase.SETUP });
     this.emit();

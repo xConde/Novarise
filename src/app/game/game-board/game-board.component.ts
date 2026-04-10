@@ -73,6 +73,8 @@ import { FocusTrap } from '../../shared/utils/focus-trap.util';
 import { RunService } from '../../ascent/services/run.service';
 import { RelicService } from '../../ascent/services/relic.service';
 import { EncounterResult } from '../../ascent/models/run-state.model';
+import { AscensionEffectType, getAscensionEffects } from '../../ascent/models/ascension.model';
+import { ModifierEffects } from './models/game-modifier.model';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
 export interface EnemyBadge {
@@ -466,7 +468,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Apply per-campaign-level wave definitions if this is a campaign map
     this.gameSessionService.applyCampaignWaves();
 
-    // Ascent Mode: override lives and gold from run state
+    // Ascent Mode: override lives, gold, waves, and apply ascension difficulty modifiers
     if (this.runService.isInRun()) {
       const encounter = this.runService.getCurrentEncounter();
       const runState = this.runService.runState;
@@ -475,6 +477,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.gameStateService.addGold(this.relicService.getStartingGoldBonus());
         this.waveService.setCustomWaves(encounter.waves);
         this.gameStateService.setMaxWaves(encounter.waves.length);
+        this.applyAscentAscensionModifiers(runState.ascensionLevel);
       }
     }
 
@@ -1046,7 +1049,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Re-apply campaign waves after waveService.reset() (which clears custom waves)
     this.gameSessionService.applyCampaignWaves();
 
-    // Ascent Mode: override lives and gold from run state
+    // Ascent Mode: override lives, gold, waves, and apply ascension difficulty modifiers
     if (this.runService.isInRun()) {
       const encounter = this.runService.getCurrentEncounter();
       const runState = this.runService.runState;
@@ -1055,6 +1058,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.gameStateService.addGold(this.relicService.getStartingGoldBonus());
         this.waveService.setCustomWaves(encounter.waves);
         this.gameStateService.setMaxWaves(encounter.waves.length);
+        this.applyAscentAscensionModifiers(runState.ascensionLevel);
       }
     }
 
@@ -1071,6 +1075,24 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.updateTileHighlights();
   }
 
+
+  /**
+   * Translate Ascent Mode ascension effects into ModifierEffects and inject them
+   * into GameStateService so EnemyService picks them up at spawn time.
+   * Must be called during SETUP phase (wave 0) — before the first wave starts.
+   */
+  private applyAscentAscensionModifiers(ascensionLevel: number): void {
+    if (ascensionLevel <= 0) return;
+    const ascEffects = getAscensionEffects(ascensionLevel);
+    const effects: ModifierEffects = {};
+    const healthMult = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER);
+    const speedMult = ascEffects.get(AscensionEffectType.ENEMY_SPEED_MULTIPLIER);
+    const costMult = ascEffects.get(AscensionEffectType.TOWER_COST_MULTIPLIER);
+    if (healthMult !== undefined) effects.enemyHealthMultiplier = healthMult;
+    if (speedMult !== undefined) effects.enemySpeedMultiplier = speedMult;
+    if (costMult !== undefined) effects.towerCostMultiplier = costMult;
+    this.gameStateService.setAscensionModifierEffects(effects);
+  }
 
   /**
    * Import the editor map into the game board service, or reset to default if no valid map.

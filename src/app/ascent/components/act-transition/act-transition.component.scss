@@ -1,0 +1,169 @@
+@import '../../../../styles/variables';
+
+// ── Fade-in entrance animation ────────────────────────────────────
+@keyframes act-fade-in {
+  from { opacity: 0; transform: translateY(1.5rem); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50%       { opacity: 0.55; transform: scale(1.06); }
+}
+
+// ── Root overlay ─────────────────────────────────────────────────
+.act-transition {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  flex: 1;
+  min-height: 100%;
+  padding: 3rem 1.5rem 2.5rem;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 40%, #1a0a2e 0%, #0a0010 60%, #000 100%);
+  color: #e0e0e0;
+  overflow: hidden;
+  animation: act-fade-in 0.6s ease-out both;
+}
+
+// ── Background glow orb ──────────────────────────────────────────
+.act-transition__glow {
+  position: absolute;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28rem;
+  height: 28rem;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(126, 87, 194, 0.4) 0%, rgba(55, 0, 110, 0.2) 50%, transparent 70%);
+  animation: glow-pulse 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+// ── Title ────────────────────────────────────────────────────────
+.act-transition__title {
+  position: relative;
+  font-size: 2.8rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  background: linear-gradient(135deg, #f5d020, #f39c12, #d4ac0d);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+  text-shadow: none; // -webkit-text-fill-color overrides shadow; skip
+
+  @media (max-width: 768px) { font-size: 2rem; }
+  @media (max-width: 480px) { font-size: 1.6rem; }
+}
+
+// ── Boss defeat line ─────────────────────────────────────────────
+.act-transition__boss {
+  position: relative;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.act-transition__boss-label {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.act-transition__boss-name {
+  font-weight: 700;
+  color: #e74c3c;
+}
+
+// ── Stats cards ──────────────────────────────────────────────────
+.act-transition__stats {
+  position: relative;
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1rem 2rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(126, 87, 194, 0.4);
+  border-radius: 0.75rem;
+  min-width: 8rem;
+  backdrop-filter: blur(4px);
+
+  &:hover {
+    border-color: rgba(126, 87, 194, 0.7);
+    background: rgba(126, 87, 194, 0.1);
+  }
+}
+
+.stat-card__value {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #f39c12;
+  line-height: 1;
+}
+
+.stat-card__label {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+// ── Continue button ───────────────────────────────────────────────
+.act-transition__btn {
+  position: relative;
+  padding: 0.85rem 2.5rem;
+  min-height: 2.75rem; // WCAG 44px
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: linear-gradient(135deg, #7e57c2, #512da8);
+  color: #fff;
+  letter-spacing: 0.03em;
+  transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+  box-shadow: 0 0 1.5rem rgba(126, 87, 194, 0.35);
+
+  &:hover {
+    opacity: 0.92;
+    transform: translateY(-2px);
+    box-shadow: 0 0 2rem rgba(126, 87, 194, 0.55);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #f39c12;
+    outline-offset: 3px;
+  }
+}
+
+// ── Reduced motion ────────────────────────────────────────────────
+@media (prefers-reduced-motion: reduce) {
+  .act-transition {
+    animation: none;
+  }
+
+  .act-transition__glow {
+    animation: none;
+  }
+
+  .act-transition__btn {
+    transition: none;
+    &:hover { transform: none; }
+  }
+}

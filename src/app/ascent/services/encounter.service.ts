@@ -66,6 +66,15 @@ export class EncounterService {
     this.mapBridge.setEditorMapState(mapState, config.campaignMapId);
   }
 
+  /**
+   * Returns the name of the boss preset selected for the given act and seed.
+   * Delegates to WaveGeneratorService so both the encounter content and the
+   * act-transition display derive from the same deterministic selection.
+   */
+  getBossPresetName(actIndex: number, seed: number): string {
+    return this.waveGenerator.getBossPreset(actIndex, seed).name;
+  }
+
   // ── Private helpers ───────────────────────────────────────
 
   /** Routes to the correct WaveGeneratorService method based on node type. */
