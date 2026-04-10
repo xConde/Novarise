@@ -52,44 +52,13 @@
   <div class="ascent-map" *ngIf="viewMode === 'map' && nodeMap">
     <h2 class="ascent-map-title">Act {{ (runState?.actIndex ?? 0) + 1 }} — Choose Your Path</h2>
 
-    <div class="ascent-node-grid" role="navigation" aria-label="Encounter map">
-      <div
-        class="ascent-node-row"
-        *ngFor="let row of [].constructor(nodeMap.rows + 1); let rowIdx = index"
-      >
-        <ng-container *ngFor="let node of nodeMap.nodes">
-          <button
-            *ngIf="node.row === rowIdx"
-            class="ascent-node"
-            [class.ascent-node--selectable]="isNodeSelectable(node)"
-            [class.ascent-node--visited]="node.visited"
-            [class.ascent-node--current]="node.id === runState?.currentNodeId"
-            [class.ascent-node--combat]="node.type === NodeType.COMBAT"
-            [class.ascent-node--elite]="node.type === NodeType.ELITE"
-            [class.ascent-node--boss]="node.type === NodeType.BOSS"
-            [class.ascent-node--rest]="node.type === NodeType.REST"
-            [class.ascent-node--shop]="node.type === NodeType.SHOP"
-            [class.ascent-node--event]="node.type === NodeType.EVENT"
-            [class.ascent-node--unknown]="node.type === NodeType.UNKNOWN"
-            [disabled]="!isNodeSelectable(node)"
-            (click)="selectNode(node)"
-            [attr.aria-label]="node.type + ' encounter at row ' + node.row"
-          >
-            <span class="ascent-node-icon">
-              <ng-container [ngSwitch]="node.type">
-                <span *ngSwitchCase="NodeType.COMBAT">&#9876;</span>
-                <span *ngSwitchCase="NodeType.ELITE">&#9873;</span>
-                <span *ngSwitchCase="NodeType.BOSS">&#9760;</span>
-                <span *ngSwitchCase="NodeType.REST">&#9749;</span>
-                <span *ngSwitchCase="NodeType.SHOP">&#9879;</span>
-                <span *ngSwitchCase="NodeType.EVENT">&#63;</span>
-                <span *ngSwitchCase="NodeType.UNKNOWN">&#63;</span>
-              </ng-container>
-            </span>
-          </button>
-        </ng-container>
-      </div>
-    </div>
+    <app-node-map
+      [nodeMap]="nodeMap"
+      [currentNodeId]="runState?.currentNodeId ?? null"
+      [completedNodeIds]="runState?.completedNodeIds ?? []"
+      [availableNodes]="availableNodes"
+      (nodeSelected)="selectNode($event)"
+    ></app-node-map>
 
     <button class="ascent-btn ascent-btn--danger" (click)="abandonRun()">
       Abandon Run

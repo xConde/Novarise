@@ -1,0 +1,226 @@
+@import '../../../../styles/variables';
+
+// ── Node type color tokens ───────────────────────────────────────────────────
+// These are local to this component — derive from the design system where possible.
+$node-color-combat:  #3498db;
+$node-color-elite:   #f39c12;
+$node-color-boss:    #e74c3c;
+$node-color-rest:    #2ecc71;
+$node-color-shop:    #f1c40f;
+$node-color-event:   #9b59b6;
+$node-color-unknown: rgba(255, 255, 255, 0.35);
+$node-color-current: #f1c40f;
+$node-color-select:  #9b59b6;
+
+// ── Scroll container ─────────────────────────────────────────────────────────
+
+.node-map-container {
+  // Constrain visible viewport; inner scroll reveals the full map
+  max-height: 70vh;
+  overflow-y: auto;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(155, 89, 182, 0.4) transparent;
+
+  &::-webkit-scrollbar {
+    width: 0.375rem;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(155, 89, 182, 0.4);
+    border-radius: 0.25rem;
+  }
+}
+
+// ── Map canvas (absolutely-positioned nodes + SVG layer) ─────────────────────
+
+.node-map-scroll {
+  position: relative;
+  // Width/height are set inline by the component
+}
+
+// ── SVG connection lines ─────────────────────────────────────────────────────
+
+.node-map-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.node-connection {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+  stroke-linecap: round;
+  transition: stroke 0.3s ease, opacity 0.3s ease;
+
+  &--visited {
+    stroke: rgba(255, 255, 255, 0.3);
+    stroke-dasharray: none;
+    opacity: 0.6;
+  }
+
+  &--active {
+    stroke: $node-color-select;
+    stroke-dasharray: none;
+    stroke-width: 2.5;
+    opacity: 1;
+    filter: drop-shadow(0 0 4px rgba(155, 89, 182, 0.6));
+    animation: pulse-line 2s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse-line {
+  0%, 100% { opacity: 0.8; filter: drop-shadow(0 0 4px rgba(155, 89, 182, 0.6)); }
+  50%       { opacity: 1;   filter: drop-shadow(0 0 8px rgba(155, 89, 182, 0.9)); }
+}
+
+// ── Node buttons ─────────────────────────────────────────────────────────────
+
+.map-node {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  // WCAG 2.5.5 minimum touch target — 2.75rem = 44px
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  background: rgba(10, 10, 26, 0.85);
+  color: var(--color-text, #e0e0e0);
+  font-size: 1.125rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease, box-shadow 0.2s ease;
+
+  // Hardware-accelerate for smooth absolute-position layout
+  will-change: transform;
+
+  &:focus-visible {
+    outline: 2px solid $node-color-select;
+    outline-offset: 3px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.3;
+  }
+
+  // ── Type variants ──────────────────────────────────────────
+  &--combat  { border-color: $node-color-combat; }
+  &--elite   { border-color: $node-color-elite; }
+  &--rest    { border-color: $node-color-rest; }
+  &--shop    { border-color: $node-color-shop; }
+  &--event   { border-color: $node-color-event; }
+  &--unknown { border-color: $node-color-unknown; }
+
+  // Boss: larger, red, threatening
+  &--boss {
+    width: 3.5rem;
+    height: 3.5rem;
+    // Recenter — getNodeLeft/Top accounts for radius=22 but boss is 28px radius
+    // We shift via margin trick; actual centering is done in the TS via nodeRadius constant
+    border-color: $node-color-boss;
+    border-width: 3px;
+    font-size: 1.375rem;
+    background: rgba(60, 10, 10, 0.9);
+    box-shadow: 0 0 12px rgba(231, 76, 60, 0.3);
+
+    &:not(:disabled):hover {
+      background: rgba(80, 15, 15, 0.95);
+      box-shadow: 0 0 20px rgba(231, 76, 60, 0.5);
+      transform: scale(1.08);
+    }
+  }
+
+  // ── State modifiers ────────────────────────────────────────
+
+  // Available / selectable node — pulses with purple glow
+  &--selectable {
+    border-color: $node-color-select;
+    box-shadow: 0 0 8px rgba(155, 89, 182, 0.35);
+    animation: pulse-node 2s ease-in-out infinite;
+
+    &:hover {
+      background: rgba(155, 89, 182, 0.18);
+      transform: scale(1.12);
+      box-shadow: 0 0 16px rgba(155, 89, 182, 0.55);
+    }
+  }
+
+  // Already visited — dimmed, dashed border
+  &--visited {
+    opacity: 0.38;
+    border-style: dashed;
+    animation: none;
+
+    &.map-node--selectable {
+      // Visited nodes are never selectable, but guard the override just in case
+      opacity: 0.38;
+    }
+  }
+
+  // Current position — gold ring
+  &--current {
+    border-color: $node-color-current;
+    border-width: 3px;
+    box-shadow:
+      0 0 0 3px rgba(241, 196, 15, 0.25),
+      0 0 14px rgba(241, 196, 15, 0.4);
+    animation: none;
+  }
+}
+
+.map-node-icon {
+  pointer-events: none;
+  user-select: none;
+  line-height: 1;
+}
+
+@keyframes pulse-node {
+  0%, 100% { box-shadow: 0 0 8px rgba(155, 89, 182, 0.35); }
+  50%       { box-shadow: 0 0 18px rgba(155, 89, 182, 0.6); }
+}
+
+// ── Responsive ───────────────────────────────────────────────────────────────
+
+@media (max-width: 768px) {
+  .node-map-container {
+    max-height: 60vh;
+  }
+}
+
+@media (max-width: 480px) {
+  .node-map-container {
+    max-height: 55vh;
+  }
+
+  // Keep WCAG minimum even on very small screens
+  .map-node {
+    width: 2.75rem;   // 44px — do NOT shrink below this
+    height: 2.75rem;
+    font-size: 1rem;
+  }
+
+  .map-node--boss {
+    width: 3rem;
+    height: 3rem;
+    font-size: 1.125rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-node--selectable,
+  .node-connection--active {
+    animation: none;
+  }
+}
