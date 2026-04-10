@@ -187,6 +187,10 @@ export class RunService {
     this.updateState(state);
     this.nodeMapSubject.next(map);
     this.relicService.setActiveRelics(state.relicIds);
+
+    // Reinitialize deck from persisted card IDs so DeckService state is
+    // consistent with the saved run after a page reload.
+    this.deckService.initializeDeck(state.deckCardIds, state.seed);
   }
 
   /** Abandon the current run. */

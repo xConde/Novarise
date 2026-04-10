@@ -72,3 +72,31 @@ Calling `advanceAct()` on a run in VICTORY or DEFEAT status is a no-op. Without 
 - Shop: add a card section alongside the relic section in `generateShopItems()`
 - Rest: add "upgrade card" option alongside heal (new `RestOption.UPGRADE_CARD`)
 - `collectReward()`: add `case 'card'` to apply card to run state
+
+## Card System (S6-30)
+
+### Timing
+- Cards played during SETUP and INTERMISSION phases (not real-time during combat)
+- Each wave: draw hand → play cards → start wave → discard hand
+- Strategic tension: 5-card hand, 3 energy = forced choices
+
+### Card types
+- Tower cards: ONLY way to place towers during Ascent encounters
+- Spell cards: instant effects (gold, heal, damage, slow)
+- Modifier cards: persist for 1-3 waves (damage/range/fire rate buffs)
+- Utility cards: deck manipulation (draw, energy)
+
+### Energy
+- 3 base energy per wave (relics can increase)
+- Tower cards cost 1-3 energy (proportional to tower gold cost ÷ 50, rounded)
+- Spells cost 0-2, modifiers cost 1-2, utilities cost 0-1
+
+### Starter deck
+- 10 cards: 4x Basic Tower, 2x Sniper, 1x Splash, 1x Slow, 1x Gold Rush, 1x Damage Boost
+- Intentionally weak — forces card rewards to matter
+
+### Known limitations
+- Salvage/Fortify spells not fully implemented (need tower selection UI)
+- scout_ahead is a no-op (needs wave preview extension)
+- Card upgrade effects are defined but balance needs tuning
+- EnemyService.slowAllEnemies uses setTimeout (not physics-step safe)
