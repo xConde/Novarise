@@ -43,6 +43,39 @@
       </div>
     </section>
 
+    <section class="stats-section ascent-stats-section">
+      <h2 class="ascent-stats-title">Ascent Mode</h2>
+      <p class="ascent-stats-hint" *ngIf="profile.ascentRunsAttempted === 0">
+        Complete an Ascent Mode run to track your roguelite stats.
+      </p>
+      <div class="stats-grid" *ngIf="profile.ascentRunsAttempted > 0">
+        <div class="stat-card">
+          <span class="stat-label">Runs Attempted</span>
+          <span class="stat-value">{{ profile.ascentRunsAttempted }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Runs Completed</span>
+          <span class="stat-value stat-value--victory">{{ profile.ascentRunsCompleted }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Win Rate</span>
+          <span class="stat-value">{{ ascentWinRate }}%</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Highest Ascension</span>
+          <span class="stat-value">{{ profile.highestAscensionBeaten > 0 ? 'Level ' + profile.highestAscensionBeaten : '—' }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Best Score</span>
+          <span class="stat-value">{{ profile.ascentBestScore }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Total Kills</span>
+          <span class="stat-value">{{ profile.ascentTotalKills }}</span>
+        </div>
+      </div>
+    </section>
+
     <section class="achievements-section">
       <h2 class="achievements-title">
         Achievements

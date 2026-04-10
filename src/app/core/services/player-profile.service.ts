@@ -9,6 +9,7 @@ import {
   ACHIEVEMENTS,
 } from '../../game/game-board/models/achievement.model';
 import { StorageService } from './storage.service';
+import { RunState, RunStatus } from '../../ascent/models/run-state.model';
 
 // Re-export everything so existing callers importing from this file continue to work.
 export {
@@ -38,6 +39,11 @@ const DEFAULT_PROFILE: PlayerProfile = {
   hasPlacedAllTowerTypes: false,
   maxModifiersUsedInVictory: 0,
   completedChallengeCount: 0,
+  ascentRunsAttempted: 0,
+  ascentRunsCompleted: 0,
+  highestAscensionBeaten: 0,
+  ascentTotalKills: 0,
+  ascentBestScore: 0,
 };
 
 @Injectable({ providedIn: 'root' })
@@ -183,6 +189,26 @@ export class PlayerProfileService {
     this.save();
   }
 
+  /**
+   * Record the end of an Ascent Mode run.
+   * Safe to call on victory, defeat, or abandon.
+   */
+  recordAscentRun(runState: RunState): void {
+    this.profile.ascentRunsAttempted += 1;
+    if (runState.status === RunStatus.VICTORY) {
+      this.profile.ascentRunsCompleted += 1;
+      if (runState.ascensionLevel > this.profile.highestAscensionBeaten) {
+        this.profile.highestAscensionBeaten = runState.ascensionLevel;
+      }
+    }
+    const totalKills = runState.encounterResults.reduce((s, r) => s + r.enemiesKilled, 0);
+    this.profile.ascentTotalKills += totalKills;
+    if (runState.score > this.profile.ascentBestScore) {
+      this.profile.ascentBestScore = runState.score;
+    }
+    this.save();
+  }
+
   getMapScore(mapId: string): MapScoreRecord | null {
     const record = this.profile.mapScores[mapId];
     return record ? { ...record } : null;
@@ -258,6 +284,12 @@ export class PlayerProfileService {
       hasPlacedAllTowerTypes: typeof parsed.hasPlacedAllTowerTypes === 'boolean' ? parsed.hasPlacedAllTowerTypes : false,
       maxModifiersUsedInVictory: typeof parsed.maxModifiersUsedInVictory === 'number' ? parsed.maxModifiersUsedInVictory : 0,
       completedChallengeCount: typeof parsed.completedChallengeCount === 'number' ? parsed.completedChallengeCount : 0,
+      // Migration: Ascent stats default to 0 for existing profiles
+      ascentRunsAttempted: typeof parsed.ascentRunsAttempted === 'number' ? parsed.ascentRunsAttempted : 0,
+      ascentRunsCompleted: typeof parsed.ascentRunsCompleted === 'number' ? parsed.ascentRunsCompleted : 0,
+      highestAscensionBeaten: typeof parsed.highestAscensionBeaten === 'number' ? parsed.highestAscensionBeaten : 0,
+      ascentTotalKills: typeof parsed.ascentTotalKills === 'number' ? parsed.ascentTotalKills : 0,
+      ascentBestScore: typeof parsed.ascentBestScore === 'number' ? parsed.ascentBestScore : 0,
     };
   }
 

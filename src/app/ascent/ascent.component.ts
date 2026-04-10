@@ -264,6 +264,22 @@ export class AscentComponent implements OnInit, OnDestroy {
     return this.runService.hasSavedRun();
   }
 
+  /**
+   * Returns a brief snapshot of the paused run for the start-screen resume button.
+   * Returns null when no saved run exists.
+   */
+  get savedRunSummary(): { act: number; encounters: number; lives: number; relics: number } | null {
+    if (!this.canResume) return null;
+    const state = this.runService.loadSavedRunPreview();
+    if (!state) return null;
+    return {
+      act: state.actIndex + 1,
+      encounters: state.encounterResults.length,
+      lives: state.lives,
+      relics: state.relicIds.length,
+    };
+  }
+
   /** Highest ascension level unlocked. */
   get maxAscension(): number {
     return this.runService.getMaxAscension();

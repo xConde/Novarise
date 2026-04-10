@@ -53,6 +53,11 @@ function makeProfile(overrides: Partial<PlayerProfile> = {}): PlayerProfile {
     hasPlacedAllTowerTypes: false,
     maxModifiersUsedInVictory: 0,
     completedChallengeCount: 0,
+    ascentRunsAttempted: 0,
+    ascentRunsCompleted: 0,
+    highestAscensionBeaten: 0,
+    ascentTotalKills: 0,
+    ascentBestScore: 0,
     ...overrides,
   };
 }

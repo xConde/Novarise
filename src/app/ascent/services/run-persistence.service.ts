@@ -52,6 +52,14 @@ export class RunPersistenceService {
     }
   }
 
+  /**
+   * Load saved run state for preview purposes (does NOT clear corrupt saves).
+   * Used by the start screen to show resume-run details.
+   */
+  loadSavedRunPreview(): RunState | null {
+    return this.loadRunState();
+  }
+
   /** Check if a saved run exists. */
   hasSavedRun(): boolean {
     return localStorage.getItem(RUN_STATE_KEY) !== null;

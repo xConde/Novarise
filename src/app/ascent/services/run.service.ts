@@ -38,6 +38,7 @@ import { RelicService } from './relic.service';
 import { RunPersistenceService } from './run-persistence.service';
 import { RunEventBusService, RunEventType } from './run-event-bus.service';
 import { RUN_EVENTS } from '../constants/run-events';
+import { PlayerProfileService } from '../../core/services/player-profile.service';
 
 /**
  * Central orchestrator for Ascent Mode runs.
@@ -77,6 +78,7 @@ export class RunService {
     private relicService: RelicService,
     private persistence: RunPersistenceService,
     private eventBus: RunEventBusService,
+    private playerProfile: PlayerProfileService,
   ) {}
 
   // ── Queries ─────────────────────────────────────────────
@@ -102,6 +104,11 @@ export class RunService {
 
   getMaxAscension(): number {
     return this.persistence.getMaxAscension();
+  }
+
+  /** Load saved run state for preview (start screen resume info). */
+  loadSavedRunPreview(): RunState | null {
+    return this.persistence.loadSavedRunPreview();
   }
 
   isActComplete(): boolean {
@@ -166,7 +173,9 @@ export class RunService {
   /** Abandon the current run. */
   abandonRun(): void {
     if (!this.runState) return;
-    this.updateState({ ...this.runState, status: RunStatus.ABANDONED });
+    const abandonedState = { ...this.runState, status: RunStatus.ABANDONED };
+    this.updateState(abandonedState);
+    this.playerProfile.recordAscentRun(abandonedState);
     this.cleanup();
   }
 
@@ -236,12 +245,14 @@ export class RunService {
       });
     } else {
       // Defeat — run over
-      this.updateState({
+      const defeatState = {
         ...state,
         lives: 0,
         encounterResults: newEncounterResults,
         status: RunStatus.DEFEAT,
-      });
+      };
+      this.updateState(defeatState);
+      this.playerProfile.recordAscentRun(defeatState);
     }
 
     this.currentEncounter = null;
@@ -461,8 +472,10 @@ export class RunService {
 
     if (nextAct >= state.config.actsCount) {
       // Run complete — victory!
-      this.updateState({ ...state, status: RunStatus.VICTORY });
+      const victoryState = { ...state, status: RunStatus.VICTORY };
+      this.updateState(victoryState);
       this.persistence.setMaxAscension(state.ascensionLevel + 1);
+      this.playerProfile.recordAscentRun(victoryState);
       this.cleanup();
       return;
     }

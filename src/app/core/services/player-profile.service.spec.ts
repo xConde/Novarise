@@ -771,6 +771,11 @@ describe('PlayerProfileService', () => {
         hasPlacedAllTowerTypes: false,
         maxModifiersUsedInVictory: 2,
         completedChallengeCount: 3,
+        ascentRunsAttempted: 0,
+        ascentRunsCompleted: 0,
+        highestAscensionBeaten: 0,
+        ascentTotalKills: 0,
+        ascentBestScore: 0,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
       const fresh = new PlayerProfileService(new StorageService());

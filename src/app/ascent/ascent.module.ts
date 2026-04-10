@@ -10,6 +10,7 @@ import { ShopScreenComponent } from './components/shop-screen/shop-screen.compon
 import { EventScreenComponent } from './components/event-screen/event-screen.component';
 import { RelicInventoryComponent } from './components/relic-inventory/relic-inventory.component';
 import { ActTransitionComponent } from './components/act-transition/act-transition.component';
+import { RunSummaryComponent } from './components/run-summary/run-summary.component';
 
 @NgModule({
   declarations: [
@@ -21,6 +22,7 @@ import { ActTransitionComponent } from './components/act-transition/act-transiti
     EventScreenComponent,
     RelicInventoryComponent,
     ActTransitionComponent,
+    RunSummaryComponent,
   ],
   imports: [
     CommonModule,

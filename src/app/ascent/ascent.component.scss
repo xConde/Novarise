@@ -95,6 +95,33 @@
   justify-content: center;
 }
 
+// ── Resume run block ─────────────────────────────────────────────
+
+.ascent-resume-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ascent-resume-info {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.ascent-resume-info__item {
+  white-space: nowrap;
+}
+
+.ascent-resume-info__sep {
+  color: rgba(255, 255, 255, 0.25);
+}
+
 .ascent-ascension-select {
   display: flex;
   flex-direction: column;

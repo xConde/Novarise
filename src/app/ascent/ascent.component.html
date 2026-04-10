@@ -21,13 +21,23 @@
       <button class="ascent-btn ascent-btn--primary" (click)="startNewRun(0)">
         New Run
       </button>
-      <button
-        class="ascent-btn ascent-btn--secondary"
-        *ngIf="canResume"
-        (click)="resumeRun()"
-      >
-        Resume Run
-      </button>
+      <div class="ascent-resume-block" *ngIf="canResume">
+        <button
+          class="ascent-btn ascent-btn--secondary"
+          (click)="resumeRun()"
+        >
+          Resume Run
+        </button>
+        <div class="ascent-resume-info" *ngIf="savedRunSummary" aria-label="Saved run details">
+          <span class="ascent-resume-info__item">Act {{ savedRunSummary.act }}</span>
+          <span class="ascent-resume-info__sep" aria-hidden="true">&#183;</span>
+          <span class="ascent-resume-info__item">{{ savedRunSummary.encounters }} encounters</span>
+          <span class="ascent-resume-info__sep" aria-hidden="true">&#183;</span>
+          <span class="ascent-resume-info__item">&#9829; {{ savedRunSummary.lives }} lives</span>
+          <span class="ascent-resume-info__sep" aria-hidden="true">&#183;</span>
+          <span class="ascent-resume-info__item">{{ savedRunSummary.relics }} relics</span>
+        </div>
+      </div>
     </div>
 
     <div class="ascent-ascension-select" *ngIf="maxAscension > 0">
@@ -138,17 +148,11 @@
   ></app-act-transition>
 
   <!-- ── Run Summary ─────────────────────────────────────── -->
-  <div class="ascent-summary" *ngIf="viewMode === 'summary' && runState">
-    <h2>{{ runState.status === 'victory' ? 'Ascent Complete!' : 'Run Over' }}</h2>
-    <div class="ascent-summary-stats">
-      <p>Score: {{ runState.score }}</p>
-      <p>Encounters: {{ runState.encounterResults.length }}</p>
-      <p>Relics: {{ runState.relicIds.length }}</p>
-      <p>Enemies Killed: {{ getTotalKills() }}</p>
-    </div>
-    <button class="ascent-btn ascent-btn--primary" (click)="returnToMenu()">
-      Return to Menu
-    </button>
-  </div>
+  <app-run-summary
+    *ngIf="viewMode === 'summary' && runState"
+    [runState]="runState"
+    (returnToMenu)="returnToMenu()"
+    (startNewRun)="startNewRun(0)"
+  ></app-run-summary>
 
 </div>
