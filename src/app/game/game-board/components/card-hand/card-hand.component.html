@@ -1,14 +1,17 @@
 <div class="card-hand" role="toolbar" aria-label="Card hand">
 
-  <!-- Energy display -->
-  <div class="card-hand__energy" [attr.aria-label]="'Energy: ' + energy.current + ' of ' + energy.max">
-    <svg class="energy-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-         fill="currentColor" aria-hidden="true">
-      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-    </svg>
-    <span class="energy-current">{{ energy.current }}</span>
-    <span class="energy-separator">/</span>
-    <span class="energy-max">{{ energy.max }}</span>
+  <!-- Energy display — pip orbs -->
+  <div class="card-hand__energy"
+       [attr.aria-label]="'Energy: ' + energy.current + ' of ' + energy.max">
+    <span class="energy-label">ENERGY</span>
+    <div class="energy-pips" aria-hidden="true">
+      <span
+        *ngFor="let pip of energyPips; let i = index"
+        class="energy-pip"
+        [class.energy-pip--filled]="i < energy.current">
+      </span>
+    </div>
+    <span class="energy-fraction">{{ energy.current }}/{{ energy.max }}</span>
   </div>
 
   <!-- Cards -->
@@ -18,18 +21,63 @@
       class="card"
       role="listitem"
       [ngClass]="[getCardTypeClass(card.definition.type), getRarityClass(card.definition.rarity)]"
-      [class.card--playable]="card.canPlay"
+      [class.card--playable]="card.canPlay && pendingCardId === null"
       [class.card--unplayable]="!card.canPlay"
       [class.card--upgraded]="card.instance.upgraded"
-      [disabled]="!card.canPlay"
+      [class.card--pending]="card.instance.instanceId === pendingCardId"
+      [class.card--dimmed]="pendingCardId !== null && card.instance.instanceId !== pendingCardId"
+      [disabled]="!card.canPlay || (pendingCardId !== null && card.instance.instanceId !== pendingCardId)"
       (click)="playCard(card)"
-      [attr.aria-label]="card.definition.name + ' — ' + card.definition.description + ' — Energy cost: ' + card.definition.energyCost"
+      [attr.aria-label]="card.definition.name + ' — ' + card.definition.description + ' — Energy cost: ' + card.definition.energyCost + (card.instance.upgraded ? ' (upgraded)' : '')"
+      [attr.aria-pressed]="card.instance.instanceId === pendingCardId"
       [attr.aria-disabled]="!card.canPlay">
+
+      <!-- Energy cost badge -->
       <span class="card__cost" [class.card__cost--affordable]="card.canPlay"
             aria-hidden="true">{{ card.definition.energyCost }}</span>
+
+      <!-- Upgraded indicator -->
+      <span class="card__upgraded-badge" *ngIf="card.instance.upgraded" aria-hidden="true">+</span>
+
+      <!-- Card name -->
       <span class="card__name">{{ card.definition.name }}</span>
-      <span class="card__type" aria-hidden="true">{{ card.definition.type }}</span>
+
+      <!-- Type icon (SVG, no text) -->
+      <span class="card__type-icon" aria-hidden="true">
+        <!-- Tower: sword -->
+        <svg *ngIf="card.definition.type === CardType.TOWER"
+             xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="2" x2="12" y2="10"/><line x1="12" y1="14" x2="12" y2="22"/>
+          <line x1="4" y1="12" x2="20" y2="12"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+        </svg>
+        <!-- Spell: lightning bolt -->
+        <svg *ngIf="card.definition.type === CardType.SPELL"
+             xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24"
+             fill="currentColor" aria-hidden="true">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+        </svg>
+        <!-- Modifier: shield -->
+        <svg *ngIf="card.definition.type === CardType.MODIFIER"
+             xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2l9 4v6c0 5.25-3.75 10.15-9 11.25C6.75 22.15 3 17.25 3 12V6l9-4z"/>
+        </svg>
+        <!-- Utility: gear -->
+        <svg *ngIf="card.definition.type === CardType.UTILITY"
+             xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </span>
+
     </button>
+  </div>
+
+  <!-- Placement mode hint -->
+  <div class="card-hand__placement-hint" *ngIf="pendingCardId !== null" aria-live="polite">
+    <span class="placement-hint-text">Place tower on the board...</span>
   </div>
 
   <!-- Draw / discard pile counts -->

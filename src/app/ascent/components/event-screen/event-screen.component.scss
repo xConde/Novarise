@@ -228,8 +228,24 @@
     padding: var(--spacing-xl) var(--spacing-xs) var(--spacing-lg);
   }
 
+  .event-card {
+    padding: var(--spacing-md) var(--spacing-sm);
+    max-width: 100%;
+  }
+
+  // Event choice buttons are already width:100% — ensure card container respects viewport
+  .event-choices {
+    width: 100%;
+  }
+
   .event-outcome__deltas {
     flex-direction: column;
+  }
+
+  // Continue button full-width on mobile
+  .event-continue-btn {
+    width: 100%;
+    max-width: 16rem;
   }
 }
 

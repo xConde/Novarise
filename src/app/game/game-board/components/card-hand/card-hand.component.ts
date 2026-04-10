@@ -25,6 +25,9 @@ export interface HandCard {
   canPlay: boolean;
 }
 
+/** Maximum energy pips shown in the pip row (matches max playable energy). */
+const MAX_ENERGY_PIPS = 6;
+
 /**
  * CardHandComponent — displays the player's current hand during Ascent encounters.
  *
@@ -40,10 +43,22 @@ export interface HandCard {
 export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   @Input() deckState!: DeckState;
   @Input() energy!: EnergyState;
+  /**
+   * instanceId of the tower card currently in placement mode.
+   * When set, that card is highlighted and all others are dimmed.
+   */
+  @Input() pendingCardId: string | null = null;
   @Output() cardPlayed = new EventEmitter<CardInstance>();
 
   /** Pre-computed view models — avoids per-template-check allocation. */
   handCards: HandCard[] = [];
+
+  /**
+   * Array used to render energy pips in the template.
+   * Length = energy.max (capped at MAX_ENERGY_PIPS); filled vs empty
+   * determined by index vs energy.current in the template.
+   */
+  energyPips: readonly number[] = [];
 
   // Expose enum to template
   readonly CardType = CardType;
@@ -52,10 +67,12 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
 
   ngOnInit(): void {
     this.resolveHand();
+    this.resolvePips();
   }
 
   ngOnChanges(): void {
     this.resolveHand();
+    this.resolvePips();
   }
 
   ngOnDestroy(): void {
@@ -75,6 +92,16 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
         canPlay: this.energy.current >= definition.energyCost,
       };
     });
+  }
+
+  /** Rebuild the pips array when energy.max changes. */
+  resolvePips(): void {
+    if (!this.energy) {
+      this.energyPips = [];
+      return;
+    }
+    const count = Math.min(this.energy.max, MAX_ENERGY_PIPS);
+    this.energyPips = Array.from({ length: count }, (_, i) => i);
   }
 
   playCard(card: HandCard): void {

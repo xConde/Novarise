@@ -305,6 +305,7 @@
     *ngIf="isAscentRun && deckState && energyState"
     [deckState]="deckState"
     [energy]="energyState"
+    [pendingCardId]="pendingTowerCardId"
     (cardPlayed)="onCardPlayed($event)">
   </app-card-hand>
 

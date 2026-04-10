@@ -197,6 +197,43 @@ describe('CardHandComponent', () => {
     });
   });
 
+  describe('resolvePips', () => {
+    it('creates an array whose length matches energy.max', () => {
+      component.energy = makeEnergy(2, 3);
+      component.resolvePips();
+      expect(component.energyPips.length).toBe(3);
+    });
+
+    it('caps pip count at 6 regardless of energy.max', () => {
+      component.energy = makeEnergy(6, 10);
+      component.resolvePips();
+      expect(component.energyPips.length).toBe(6);
+    });
+
+    it('returns empty array when energy is not set', () => {
+      (component as unknown as { energy: EnergyState | null }).energy = null;
+      component.resolvePips();
+      expect(component.energyPips.length).toBe(0);
+    });
+
+    it('is called by ngOnChanges', () => {
+      spyOn(component, 'resolvePips');
+      component.ngOnChanges();
+      expect(component.resolvePips).toHaveBeenCalled();
+    });
+  });
+
+  describe('pendingCardId', () => {
+    it('defaults to null', () => {
+      expect(component.pendingCardId).toBeNull();
+    });
+
+    it('accepts an instanceId string', () => {
+      component.pendingCardId = 'inst_tower_basic';
+      expect(component.pendingCardId).toBe('inst_tower_basic');
+    });
+  });
+
   describe('ngOnDestroy', () => {
     it('cleans up subscriptions without error', () => {
       expect(() => component.ngOnDestroy()).not.toThrow();

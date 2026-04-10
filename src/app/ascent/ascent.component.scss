@@ -288,14 +288,53 @@
     padding: var(--spacing-xs);
   }
 
+  // ── Relic bar: tighter layout, prevent overflow ────────────
+  .ascent-relic-bar {
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    overflow: hidden;
+  }
+
+  .ascent-relics {
+    margin-left: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-shrink: 1;
+    max-width: 100%;
+
+    &::-webkit-scrollbar { display: none; }
+  }
+
+  // ── Start screen ───────────────────────────────────────────
+  .ascent-start {
+    padding-top: 8vh;
+  }
+
   .ascent-start-actions {
     flex-direction: column;
     align-items: center;
     width: 100%;
   }
 
+  // Make primary/secondary buttons full-width on mobile
+  .ascent-btn--full {
+    width: 100%;
+  }
+
+  .ascent-ascension-select {
+    width: 100%;
+    max-width: 100%;
+  }
+
   .ascent-ascension-select .ascension-select__dropdown {
     min-width: unset;
     width: 100%;
+  }
+
+  // ── Map title ──────────────────────────────────────────────
+  .ascent-map-title {
+    font-size: var(--font-size-base);
+    text-align: center;
   }
 }

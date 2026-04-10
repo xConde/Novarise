@@ -185,9 +185,21 @@
 @media (max-width: 480px) {
   .node-map-container {
     max-height: 55vh;
+    width: 100%;
+    // Hide the right-edge scrollbar without losing scroll functionality
+    scrollbar-width: none;
+    overflow-y: auto;
+    overflow-x: auto;
+
+    &::-webkit-scrollbar { display: none; }
   }
 
-  // Keep WCAG minimum on very small screens
+  .node-map-scroll {
+    // Ensure the scroll area fills available width
+    min-width: 100%;
+  }
+
+  // Keep WCAG minimum on very small screens (2.75rem = 44px — exactly the minimum)
   .map-node {
     width: 2.75rem;
     height: 2.75rem;

@@ -713,6 +713,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   private pendingTowerCard: CardInstance | null = null;
 
+  /** Expose pending tower card instanceId to template for CardHandComponent binding. */
+  get pendingTowerCardId(): string | null {
+    return this.pendingTowerCard?.instanceId ?? null;
+  }
+
   /**
    * Handle a card played from CardHandComponent.
    *
