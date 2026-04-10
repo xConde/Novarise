@@ -1,0 +1,169 @@
+<!-- Ascent Mode Root Template -->
+<div class="ascent-container">
+
+  <!-- ── Relic Bar (persistent across views) ─────────────── -->
+  <div class="ascent-relic-bar" *ngIf="runState">
+    <span class="ascent-lives">&#9829; {{ runState.lives }}/{{ runState.maxLives }}</span>
+    <span class="ascent-gold">&#9733; {{ runState.gold }}g</span>
+    <span class="ascent-floor">Act {{ runState.actIndex + 1 }}</span>
+    <span class="ascent-score">Score: {{ runState.score }}</span>
+    <div class="ascent-relics" *ngIf="activeRelics.length > 0">
+      <span
+        class="relic-icon"
+        *ngFor="let relic of activeRelics"
+        [title]="relic.name + ': ' + relic.description"
+        [attr.aria-label]="relic.name + ' — ' + relic.description"
+      >&#9830;</span>
+    </div>
+  </div>
+
+  <!-- ── Start Screen ────────────────────────────────────── -->
+  <div class="ascent-start" *ngIf="viewMode === 'start'">
+    <h1 class="ascent-title">Ascent</h1>
+    <p class="ascent-subtitle">A roguelite tower defense run</p>
+
+    <div class="ascent-start-actions">
+      <button class="ascent-btn ascent-btn--primary" (click)="startNewRun(0)">
+        New Run
+      </button>
+      <button
+        class="ascent-btn ascent-btn--secondary"
+        *ngIf="canResume"
+        (click)="resumeRun()"
+      >
+        Resume Run
+      </button>
+    </div>
+
+    <div class="ascent-ascension-select" *ngIf="maxAscension > 0">
+      <label for="ascension-level">Ascension Level:</label>
+      <select id="ascension-level" #ascensionSelect>
+        <option *ngFor="let i of [].constructor(maxAscension + 1); let idx = index" [value]="idx">
+          {{ idx === 0 ? 'None' : 'Ascension ' + idx }}
+        </option>
+      </select>
+      <button class="ascent-btn ascent-btn--primary" (click)="startNewRun(+ascensionSelect.value)">
+        Start Ascension Run
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Node Map ────────────────────────────────────────── -->
+  <div class="ascent-map" *ngIf="viewMode === 'map' && nodeMap">
+    <h2 class="ascent-map-title">Act {{ (runState?.actIndex ?? 0) + 1 }} — Choose Your Path</h2>
+
+    <div class="ascent-node-grid" role="navigation" aria-label="Encounter map">
+      <div
+        class="ascent-node-row"
+        *ngFor="let row of [].constructor(nodeMap.rows + 1); let rowIdx = index"
+      >
+        <ng-container *ngFor="let node of nodeMap.nodes">
+          <button
+            *ngIf="node.row === rowIdx"
+            class="ascent-node"
+            [class.ascent-node--selectable]="isNodeSelectable(node)"
+            [class.ascent-node--visited]="node.visited"
+            [class.ascent-node--current]="node.id === runState?.currentNodeId"
+            [class.ascent-node--combat]="node.type === NodeType.COMBAT"
+            [class.ascent-node--elite]="node.type === NodeType.ELITE"
+            [class.ascent-node--boss]="node.type === NodeType.BOSS"
+            [class.ascent-node--rest]="node.type === NodeType.REST"
+            [class.ascent-node--shop]="node.type === NodeType.SHOP"
+            [class.ascent-node--event]="node.type === NodeType.EVENT"
+            [class.ascent-node--unknown]="node.type === NodeType.UNKNOWN"
+            [disabled]="!isNodeSelectable(node)"
+            (click)="selectNode(node)"
+            [attr.aria-label]="node.type + ' encounter at row ' + node.row"
+          >
+            <span class="ascent-node-icon">
+              <ng-container [ngSwitch]="node.type">
+                <span *ngSwitchCase="NodeType.COMBAT">&#9876;</span>
+                <span *ngSwitchCase="NodeType.ELITE">&#9873;</span>
+                <span *ngSwitchCase="NodeType.BOSS">&#9760;</span>
+                <span *ngSwitchCase="NodeType.REST">&#9749;</span>
+                <span *ngSwitchCase="NodeType.SHOP">&#9879;</span>
+                <span *ngSwitchCase="NodeType.EVENT">&#63;</span>
+                <span *ngSwitchCase="NodeType.UNKNOWN">&#63;</span>
+              </ng-container>
+            </span>
+          </button>
+        </ng-container>
+      </div>
+    </div>
+
+    <button class="ascent-btn ascent-btn--danger" (click)="abandonRun()">
+      Abandon Run
+    </button>
+  </div>
+
+  <!-- ── Reward Screen ───────────────────────────────────── -->
+  <div class="ascent-reward" *ngIf="viewMode === 'reward' && rewardConfig">
+    <h2>Victory!</h2>
+    <p class="ascent-reward-gold">+{{ rewardConfig.goldPickup }}g</p>
+
+    <div class="ascent-reward-choices" *ngIf="rewardConfig.relicChoices.length > 0">
+      <h3>Choose a Relic</h3>
+      <div class="ascent-reward-list">
+        <button
+          class="ascent-reward-card"
+          *ngFor="let reward of rewardConfig.relicChoices"
+          (click)="collectReward(reward)"
+        >
+          <span class="reward-icon">&#9830;</span>
+          <span class="reward-name">{{ reward.relicId }}</span>
+        </button>
+      </div>
+    </div>
+
+    <button class="ascent-btn ascent-btn--primary" (click)="closeRewardScreen()">
+      Continue
+    </button>
+  </div>
+
+  <!-- ── Rest Screen ─────────────────────────────────────── -->
+  <div class="ascent-rest" *ngIf="viewMode === 'rest'">
+    <h2>Rest Site</h2>
+    <p>Take a moment to recover.</p>
+    <button class="ascent-btn ascent-btn--primary" (click)="restHeal()">
+      Rest — Heal {{ runState ? (runState.maxLives * 0.3 | number:'1.0-0') : 0 }} lives
+    </button>
+    <button class="ascent-btn ascent-btn--secondary" (click)="viewMode = 'map'">
+      Skip
+    </button>
+  </div>
+
+  <!-- ── Shop Screen ─────────────────────────────────────── -->
+  <div class="ascent-shop" *ngIf="viewMode === 'shop'">
+    <h2>Shop</h2>
+    <p>Spend gold on relics and healing.</p>
+    <!-- Shop items rendered by RunService.getShopItems() — wired in shop epic -->
+    <button class="ascent-btn ascent-btn--secondary" (click)="leaveShop()">
+      Leave Shop
+    </button>
+  </div>
+
+  <!-- ── Event Screen ────────────────────────────────────── -->
+  <div class="ascent-event" *ngIf="viewMode === 'event'">
+    <h2>Event</h2>
+    <p>An unexpected encounter...</p>
+    <!-- Event rendering wired in event epic -->
+    <button class="ascent-btn ascent-btn--secondary" (click)="completeEvent(0)">
+      Continue
+    </button>
+  </div>
+
+  <!-- ── Run Summary ─────────────────────────────────────── -->
+  <div class="ascent-summary" *ngIf="viewMode === 'summary' && runState">
+    <h2>{{ runState.status === 'victory' ? 'Ascent Complete!' : 'Run Over' }}</h2>
+    <div class="ascent-summary-stats">
+      <p>Score: {{ runState.score }}</p>
+      <p>Encounters: {{ runState.encounterResults.length }}</p>
+      <p>Relics: {{ runState.relicIds.length }}</p>
+      <p>Enemies Killed: {{ getTotalKills() }}</p>
+    </div>
+    <button class="ascent-btn ascent-btn--primary" (click)="returnToMenu()">
+      Return to Menu
+    </button>
+  </div>
+
+</div>

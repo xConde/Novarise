@@ -1,0 +1,255 @@
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Router } from '@angular/router';
+import { Subscription } from 'rxjs';
+
+import { RunService } from './services/run.service';
+import { RunState, RunStatus } from './models/run-state.model';
+import { MapNode, NodeMap, NodeType, getAvailableNodes } from './models/node-map.model';
+import { RelicDefinition, RELIC_DEFINITIONS, RelicId } from './models/relic.model';
+import { RewardScreenConfig, RewardItem } from './models/encounter.model';
+
+/**
+ * Ascent Mode root component.
+ *
+ * Manages three views inline (no child routes):
+ * 1. Node map — path selection between encounters
+ * 2. Reward screen — shown after combat victory
+ * 3. Run summary — shown on run end (victory/defeat)
+ *
+ * Combat encounters delegate to GameBoardComponent via navigation to /play.
+ */
+@Component({
+  selector: 'app-ascent',
+  templateUrl: './ascent.component.html',
+  styleUrls: ['./ascent.component.scss'],
+})
+export class AscentComponent implements OnInit, OnDestroy {
+  /** Current run state, updated reactively. */
+  runState: RunState | null = null;
+
+  /** Current act's node map. */
+  nodeMap: NodeMap | null = null;
+
+  /** Nodes available for selection (one step ahead). */
+  availableNodes: MapNode[] = [];
+
+  /** Active relics for display. */
+  activeRelics: RelicDefinition[] = [];
+
+  /** Current view mode. */
+  viewMode: 'start' | 'map' | 'reward' | 'shop' | 'rest' | 'event' | 'summary' = 'start';
+
+  /** Reward screen config, set after combat victory. */
+  rewardConfig: RewardScreenConfig | null = null;
+
+  private subscriptions = new Subscription();
+
+  readonly NodeType = NodeType;
+
+  constructor(
+    private runService: RunService,
+    private router: Router,
+  ) {}
+
+  ngOnInit(): void {
+    this.subscriptions.add(
+      this.runService.runState$.subscribe(state => {
+        this.runState = state;
+        if (state) {
+          this.updateRelicDisplay(state.relicIds);
+          this.updateAvailableNodes();
+        }
+      }),
+    );
+
+    this.subscriptions.add(
+      this.runService.nodeMap$.subscribe(map => {
+        this.nodeMap = map;
+        this.updateAvailableNodes();
+      }),
+    );
+
+    // Check if returning from an encounter
+    if (this.runService.hasPendingEncounterResult()) {
+      this.handleEncounterReturn();
+    } else if (this.runService.hasActiveRun()) {
+      this.viewMode = 'map';
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
+  }
+
+  /** Start a new run with default config. */
+  startNewRun(ascensionLevel: number = 0): void {
+    this.runService.startNewRun(ascensionLevel);
+    this.viewMode = 'map';
+  }
+
+  /** Resume an in-progress run from localStorage. */
+  resumeRun(): void {
+    this.runService.resumeRun();
+    this.viewMode = 'map';
+  }
+
+  /** Select a node on the map to visit next. */
+  selectNode(node: MapNode): void {
+    if (!this.isNodeSelectable(node)) return;
+
+    this.runService.selectNode(node.id);
+
+    switch (node.type) {
+      case NodeType.COMBAT:
+      case NodeType.ELITE:
+      case NodeType.BOSS:
+        this.startEncounter(node);
+        break;
+      case NodeType.REST:
+        this.viewMode = 'rest';
+        break;
+      case NodeType.SHOP:
+        this.viewMode = 'shop';
+        break;
+      case NodeType.EVENT:
+        this.viewMode = 'event';
+        break;
+      case NodeType.UNKNOWN:
+        // Reveal the node type and handle accordingly
+        this.handleUnknownNode(node);
+        break;
+    }
+  }
+
+  /** Navigate to /play to start combat encounter. */
+  startEncounter(node: MapNode): void {
+    this.runService.prepareEncounter(node);
+    this.router.navigate(['/play']);
+  }
+
+  /** Handle return from /play after encounter completion. */
+  handleEncounterReturn(): void {
+    const result = this.runService.consumePendingEncounterResult();
+    if (!result) return;
+
+    if (result.victory) {
+      this.rewardConfig = this.runService.generateRewards();
+      this.viewMode = 'reward';
+    } else {
+      this.viewMode = 'summary';
+    }
+  }
+
+  /** Collect a reward from the reward screen. */
+  collectReward(reward: RewardItem): void {
+    this.runService.collectReward(reward);
+  }
+
+  /** Close reward screen and return to map. */
+  closeRewardScreen(): void {
+    this.rewardConfig = null;
+
+    if (this.runService.isActComplete()) {
+      this.runService.advanceAct();
+    }
+
+    if (this.runState?.status === RunStatus.VICTORY) {
+      this.viewMode = 'summary';
+    } else {
+      this.viewMode = 'map';
+    }
+  }
+
+  /** Rest: heal lives. */
+  restHeal(): void {
+    this.runService.restHeal();
+    this.viewMode = 'map';
+  }
+
+  /** Complete event choice. */
+  completeEvent(choiceIndex: number): void {
+    this.runService.resolveEvent(choiceIndex);
+    this.viewMode = 'map';
+  }
+
+  /** Buy item from shop. */
+  buyShopItem(index: number): void {
+    this.runService.buyShopItem(index);
+  }
+
+  /** Leave shop, return to map. */
+  leaveShop(): void {
+    this.viewMode = 'map';
+  }
+
+  /** Abandon run and return to landing. */
+  abandonRun(): void {
+    this.runService.abandonRun();
+    this.router.navigate(['/']);
+  }
+
+  /** Return to landing after run ends. */
+  returnToMenu(): void {
+    this.router.navigate(['/']);
+  }
+
+  isNodeSelectable(node: MapNode): boolean {
+    return this.availableNodes.some(n => n.id === node.id);
+  }
+
+  /** Can we resume a saved run? */
+  get canResume(): boolean {
+    return this.runService.hasSavedRun();
+  }
+
+  /** Highest ascension level unlocked. */
+  get maxAscension(): number {
+    return this.runService.getMaxAscension();
+  }
+
+  private updateRelicDisplay(relicIds: string[]): void {
+    this.activeRelics = relicIds
+      .map(id => RELIC_DEFINITIONS[id as RelicId])
+      .filter((r): r is RelicDefinition => r !== undefined);
+  }
+
+  private updateAvailableNodes(): void {
+    if (!this.nodeMap || !this.runState?.currentNodeId) {
+      // If no current node, start nodes are available
+      this.availableNodes = this.nodeMap
+        ? this.nodeMap.startNodeIds
+            .map(id => this.nodeMap!.nodes.find(n => n.id === id))
+            .filter((n): n is MapNode => n !== undefined)
+        : [];
+      return;
+    }
+    this.availableNodes = getAvailableNodes(this.nodeMap, this.runState.currentNodeId);
+  }
+
+  getTotalKills(): number {
+    if (!this.runState) return 0;
+    return this.runState.encounterResults.reduce((sum, r) => sum + r.enemiesKilled, 0);
+  }
+
+  private handleUnknownNode(node: MapNode): void {
+    const revealedType = this.runService.revealUnknownNode(node.id);
+    switch (revealedType) {
+      case NodeType.COMBAT:
+      case NodeType.ELITE:
+        this.startEncounter(node);
+        break;
+      case NodeType.REST:
+        this.viewMode = 'rest';
+        break;
+      case NodeType.SHOP:
+        this.viewMode = 'shop';
+        break;
+      case NodeType.EVENT:
+        this.viewMode = 'event';
+        break;
+      default:
+        this.startEncounter(node);
+        break;
+    }
+  }
+}

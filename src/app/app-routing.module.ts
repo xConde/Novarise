@@ -9,7 +9,8 @@ const routes: Routes = [
   { path: 'play', loadChildren: () => import('./game/game.module').then(m => m.GameModule), canActivate: [gameGuard], canDeactivate: [gameLeaveGuard] },
   { path: 'maps', loadChildren: () => import('./game/map-select/map-select.module').then(m => m.MapSelectModule) },
   { path: 'profile', loadChildren: () => import('./profile/profile.module').then(m => m.ProfileModule) },
-  { path: 'campaign', loadChildren: () => import('./campaign/campaign.module').then(m => m.CampaignModule) }
+  { path: 'campaign', loadChildren: () => import('./campaign/campaign.module').then(m => m.CampaignModule) },
+  { path: 'ascent', loadChildren: () => import('./ascent/ascent.module').then(m => m.AscentModule) }
 ];
 
 @NgModule({

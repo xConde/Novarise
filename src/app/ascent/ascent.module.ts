@@ -1,0 +1,13 @@
+import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
+import { AscentComponent } from './ascent.component';
+
+@NgModule({
+  declarations: [AscentComponent],
+  imports: [
+    CommonModule,
+    RouterModule.forChild([{ path: '', component: AscentComponent }]),
+  ],
+})
+export class AscentModule {}
