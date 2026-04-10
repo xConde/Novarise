@@ -9,6 +9,7 @@ import {
   ViewChild,
   ElementRef,
 } from '@angular/core';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MapNode, NodeMap, NodeType, getNodeEdges } from '../../models/node-map.model';
 
 /** Pixel dimensions for the SVG map canvas. */
@@ -66,49 +67,8 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit {
 
   readonly NodeType = NodeType;
 
-  /** Inline SVG icon per node type (16×16 display, 24×24 viewBox, stroke-based). */
-  readonly nodeIcons: Record<string, string> = {
-    [NodeType.COMBAT]:
-      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<line x1="18" y1="6" x2="6" y2="18"/>' +
-      '<line x1="6" y1="6" x2="18" y2="18"/>' +
-      '<line x1="6" y1="2" x2="6" y2="10"/>' +
-      '<line x1="18" y1="14" x2="18" y2="22"/>' +
-      '</svg>',
-    [NodeType.ELITE]:
-      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<path d="M12 2 C10 6 7 8 7 12 C7 16 9.5 19 12 20 C14.5 19 17 16 17 12 C17 8 14 6 12 2Z"/>' +
-      '<line x1="12" y1="20" x2="12" y2="22"/>' +
-      '</svg>',
-    [NodeType.BOSS]:
-      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<circle cx="12" cy="10" r="7"/>' +
-      '<path d="M9 9 L9.5 11 M15 9 L14.5 11"/>' +
-      '<path d="M9 14 Q12 16 15 14"/>' +
-      '</svg>',
-    [NodeType.REST]:
-      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>' +
-      '</svg>',
-    [NodeType.SHOP]:
-      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<circle cx="12" cy="12" r="8"/>' +
-      '<line x1="12" y1="7" x2="12" y2="17"/>' +
-      '<path d="M9 10 Q9 8 12 8 Q15 8 15 10 Q15 12 12 12 Q9 12 9 14 Q9 16 12 16 Q15 16 15 14"/>' +
-      '</svg>',
-    [NodeType.EVENT]:
-      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<circle cx="12" cy="12" r="9"/>' +
-      '<line x1="12" y1="8" x2="12" y2="13"/>' +
-      '<line x1="12" y1="16" x2="12.01" y2="16"/>' +
-      '</svg>',
-    [NodeType.UNKNOWN]:
-      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<circle cx="12" cy="12" r="9"/>' +
-      '<path d="M9.5 9 C9.5 7 14.5 7 14.5 10 C14.5 12 12 12 12 14"/>' +
-      '<line x1="12" y1="17" x2="12.01" y2="17"/>' +
-      '</svg>',
-  };
+  /** Inline SVG icon per node type (16×16 display, 24×24 viewBox, stroke-based). Pre-sanitized as SafeHtml. */
+  readonly nodeIcons: Record<string, SafeHtml>;
 
   readonly nodeLabels: Record<string, string> = {
     [NodeType.COMBAT]: 'Combat',
@@ -119,6 +79,59 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit {
     [NodeType.EVENT]: 'Event',
     [NodeType.UNKNOWN]: 'Unknown',
   };
+
+  constructor(private sanitizer: DomSanitizer) {
+    const s = (html: string): SafeHtml => this.sanitizer.bypassSecurityTrustHtml(html);
+    this.nodeIcons = {
+      [NodeType.COMBAT]: s(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<line x1="18" y1="6" x2="6" y2="18"/>' +
+        '<line x1="6" y1="6" x2="18" y2="18"/>' +
+        '<line x1="6" y1="2" x2="6" y2="10"/>' +
+        '<line x1="18" y1="14" x2="18" y2="22"/>' +
+        '</svg>',
+      ),
+      [NodeType.ELITE]: s(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M12 2 C10 6 7 8 7 12 C7 16 9.5 19 12 20 C14.5 19 17 16 17 12 C17 8 14 6 12 2Z"/>' +
+        '<line x1="12" y1="20" x2="12" y2="22"/>' +
+        '</svg>',
+      ),
+      [NodeType.BOSS]: s(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<circle cx="12" cy="10" r="7"/>' +
+        '<path d="M9 9 L9.5 11 M15 9 L14.5 11"/>' +
+        '<path d="M9 14 Q12 16 15 14"/>' +
+        '</svg>',
+      ),
+      [NodeType.REST]: s(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>' +
+        '</svg>',
+      ),
+      [NodeType.SHOP]: s(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<circle cx="12" cy="12" r="8"/>' +
+        '<line x1="12" y1="7" x2="12" y2="17"/>' +
+        '<path d="M9 10 Q9 8 12 8 Q15 8 15 10 Q15 12 12 12 Q9 12 9 14 Q9 16 12 16 Q15 16 15 14"/>' +
+        '</svg>',
+      ),
+      [NodeType.EVENT]: s(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<circle cx="12" cy="12" r="9"/>' +
+        '<line x1="12" y1="8" x2="12" y2="13"/>' +
+        '<line x1="12" y1="16" x2="12.01" y2="16"/>' +
+        '</svg>',
+      ),
+      [NodeType.UNKNOWN]: s(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<circle cx="12" cy="12" r="9"/>' +
+        '<path d="M9.5 9 C9.5 7 14.5 7 14.5 10 C14.5 12 12 12 12 14"/>' +
+        '<line x1="12" y1="17" x2="12.01" y2="17"/>' +
+        '</svg>',
+      ),
+    };
+  }
 
   ngOnInit(): void {
     this.computeLayout();

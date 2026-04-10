@@ -68,7 +68,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  // Upper-third placement instead of dead-center — avoids empty space top/bottom
+  padding-top: 15vh;
   flex: 1;
   gap: var(--spacing-lg);
   text-align: center;
@@ -90,9 +91,11 @@
 
 .ascent-start-actions {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: var(--spacing-md);
-  flex-wrap: wrap;
-  justify-content: center;
+  width: 100%;
+  max-width: 24rem;
 }
 
 // ── Resume run block ──────────────────────────────────────────────────────────
@@ -101,7 +104,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--glass-bg);
+  border: var(--border-width-thin) solid var(--border-color);
+  border-radius: var(--border-radius-lg);
 }
 
 .ascent-resume-info {

@@ -104,7 +104,10 @@ export class AscentComponent implements OnInit, OnDestroy {
   /** Resume an in-progress run from localStorage. */
   resumeRun(): void {
     this.runService.resumeRun();
-    this.viewMode = 'map';
+    // Only advance to map if the service successfully restored state
+    if (this.runService.hasActiveRun()) {
+      this.viewMode = 'map';
+    }
   }
 
   /** Select a node on the map to visit next. */
@@ -272,9 +275,13 @@ export class AscentComponent implements OnInit, OnDestroy {
     return this.availableNodes.some(n => n.id === node.id);
   }
 
-  /** Can we resume a saved run? */
+  /** Can we resume a saved run? Only true when saved data is complete and valid. */
   get canResume(): boolean {
-    return this.runService.hasSavedRun();
+    if (!this.runService.hasSavedRun()) return false;
+    const preview = this.runService.loadSavedRunPreview();
+    if (!preview) return false;
+    // Require a meaningful run: must have a valid actIndex and at least one encounter result
+    return preview.actIndex >= 0 && preview.encounterResults !== undefined;
   }
 
   /**

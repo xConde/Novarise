@@ -1,8 +1,8 @@
 <!-- Ascent Mode Root Template -->
 <div class="ascent-container">
 
-  <!-- ── Relic Bar (persistent across views) ─────────────── -->
-  <div class="ascent-relic-bar" *ngIf="runState">
+  <!-- ── Relic Bar (persistent across views, hidden on start screen) ─────────────── -->
+  <div class="ascent-relic-bar" *ngIf="runState && viewMode !== 'start'">
     <span class="ascent-lives"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg> {{ runState.lives }}/{{ runState.maxLives }}</span>
     <span class="ascent-gold"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="7" x2="12" y2="17"/><path d="M9 10 Q9 8 12 8 Q15 8 15 10 Q15 12 12 12 Q9 12 9 14 Q9 16 12 16 Q15 16 15 14"/></svg> {{ runState.gold }}g</span>
     <span class="ascent-floor">Act {{ runState.actIndex + 1 }}</span>
@@ -18,12 +18,12 @@
     <p class="ascent-subtitle">A roguelite tower defense run</p>
 
     <div class="ascent-start-actions">
-      <button class="ascent-btn ascent-btn--primary" (click)="startNewRun(0)">
+      <button class="ascent-btn ascent-btn--primary ascent-btn--full" (click)="startNewRun(0)">
         New Run
       </button>
       <div class="ascent-resume-block" *ngIf="canResume">
         <button
-          class="ascent-btn ascent-btn--secondary"
+          class="ascent-btn ascent-btn--secondary ascent-btn--full"
           (click)="resumeRun()"
         >
           Resume Run

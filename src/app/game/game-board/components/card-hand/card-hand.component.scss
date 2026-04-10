@@ -89,9 +89,10 @@ $card-rarity-glows: (
 .card-hand__cards {
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-end; // anchor cards to bottom so hover lifts upward within bar
   gap: var(--spacing-xs);
   overflow-x: auto;
+  overflow-y: visible; // allow hover lift to show above the scrollable row
   scrollbar-width: none;
 
   &::-webkit-scrollbar { display: none; }
@@ -172,9 +173,12 @@ $card-rarity-glows: (
 
 .card--playable {
   &:hover {
-    transform: translateY(-0.25rem) scale(1.04);
+    // 8px upward lift — subtle enough to stay within the card-hand bar
+    // (bar is ~5.5rem tall; card is ~5.5rem; 0.5rem lift stays inside)
+    transform: translateY(-0.5rem) scale(1.04);
     filter: brightness(1.15);
     box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.5);
+    z-index: 1; // stack above siblings without leaving the bar stacking context
   }
 
   &:active { transform: translateY(-0.1rem) scale(1.01); }
@@ -260,26 +264,43 @@ $card-rarity-glows: (
 .card-hand__piles {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
+  align-items: flex-start;
+  gap: 0.3rem;
   flex-shrink: 0;
-  min-width: 2rem;
+  min-width: 3.5rem;
 }
 
 .pile-count {
   display: flex;
   align-items: center;
-  gap: 0.2rem;
-  font-size: var(--font-size-2xs);
+  gap: 0.25rem;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--text-muted);
   cursor: default;
 }
 
+.pile-label {
+  font-size: var(--font-size-2xs);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pile-value {
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  line-height: 1;
+}
+
 .pile-count--draw {
   color: var(--panel-blue-accent);
+
+  .pile-value { color: var(--panel-blue-accent); }
 }
 
 .pile-count--discard {
   color: var(--text-dim);
+
+  .pile-value { color: var(--text-dim); }
 }

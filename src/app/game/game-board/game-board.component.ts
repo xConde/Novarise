@@ -688,6 +688,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Exit PLACE mode — clears tower type selection, hides ghost preview, removes tile highlights. */
   cancelPlacement(): void {
+    this.cancelPendingTowerCard();
     this.selectedTowerType = null;
     this.lastPreviewKey = '';
     this.hoveredTileCost = 0;
@@ -706,20 +707,41 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // --- Ascent Mode: card hand ---
 
   /**
+   * Tower card waiting to be consumed — held in limbo between card click
+   * and actual tower placement. Energy is deducted only on successful
+   * placement; cancel returns the card to hand.
+   */
+  private pendingTowerCard: CardInstance | null = null;
+
+  /**
    * Handle a card played from CardHandComponent.
-   * Deducts energy via DeckService then dispatches the card effect.
+   *
+   * Tower cards: defer consumption — enter placement mode, consume on
+   * actual tile click. Cancel returns card to hand.
+   *
+   * Spell/modifier/utility: consume immediately (instant effects).
    */
   onCardPlayed(card: CardInstance): void {
-    if (!this.deckService.playCard(card.instanceId)) return;
-
     const def = getCardDefinition(card.cardId);
     const effect = card.upgraded && def.upgradedEffect ? def.upgradedEffect : def.effect;
 
+    if (effect.type === 'tower') {
+      // Cancel any existing pending tower card first
+      this.cancelPendingTowerCard();
+
+      // Check energy affordability without consuming
+      if (this.deckService.getEnergy().current < def.energyCost) return;
+
+      // Hold the card in limbo — don't consume yet
+      this.pendingTowerCard = card;
+      this.selectedTowerType = effect.towerType;
+      return;
+    }
+
+    // Non-tower cards: consume immediately
+    if (!this.deckService.playCard(card.instanceId)) return;
+
     switch (effect.type) {
-      case 'tower':
-        // Enter tower placement mode — player must click a tile to place
-        this.selectedTowerType = effect.towerType;
-        break;
       case 'spell':
         this.cardEffectService.applySpell(effect as SpellCardEffect, this.gameStateService, this.enemyService);
         break;
@@ -730,6 +752,21 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.executeUtilityCard(effect as UtilityCardEffect);
         break;
     }
+  }
+
+  /** Cancel the pending tower card — return it to hand without consuming energy. */
+  private cancelPendingTowerCard(): void {
+    this.pendingTowerCard = null;
+  }
+
+  /**
+   * Consume the pending tower card after successful tower placement.
+   * Called from tryPlaceTower() on successful placement.
+   */
+  private consumePendingTowerCard(): void {
+    if (!this.pendingTowerCard) return;
+    this.deckService.playCard(this.pendingTowerCard.instanceId);
+    this.pendingTowerCard = null;
   }
 
   /** @deprecated Delegated to CardEffectService.applySpell — kept only as a reference. */
@@ -1552,6 +1589,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const result = this.towerInteractionService.placeTower(row, col, this.selectedTowerType);
     if (!result.success) return;
+
+    // Ascent Mode: consume the pending tower card now that placement succeeded
+    if (this.pendingTowerCard) {
+      this.consumePendingTowerCard();
+    }
 
     // Create tower mesh and add to scene (visual concern — stays here)
     const towerMesh = this.towerMeshFactory.createTowerMesh(row, col, this.selectedTowerType, this.gameBoardService.getBoardWidth(), this.gameBoardService.getBoardHeight());

@@ -1,4 +1,4 @@
-<div class="board-container" [class.dragging]="isDragging" (touchstart)="previewTowerType && clearTowerPreview()">
+<div class="board-container" [class.dragging]="isDragging" [class.board-container--ascent]="isAscentRun" (touchstart)="previewTowerType && clearTowerPreview()">
   <div class="canvas-container" #canvasContainer></div>
 
   <!-- Top-right controls -->
