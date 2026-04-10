@@ -57,6 +57,7 @@ import {
 import { RelicService } from '../../ascent/services/relic.service';
 import { RunService } from '../../ascent/services/run.service';
 import { DeckService } from '../../ascent/services/deck.service';
+import { CardId, CardInstance, EnergyState } from '../../ascent/models/card.model';
 import { TowerAnimationService } from './services/tower-animation.service';
 import { GamePauseService } from './services/game-pause.service';
 import { ChallengeDisplayService } from './services/challenge-display.service';
@@ -3316,6 +3317,80 @@ describe('GameBoardComponent', () => {
       tick(500);
       expect(component.waveStartPulse).toBeFalse();
     }));
+  });
+
+  // ── Ascent Mode: card play mechanics ─────────────────────────────────
+  describe('Ascent Mode: card play mechanics', () => {
+    let deckSpy: jasmine.SpyObj<DeckService>;
+    let runSpy: jasmine.SpyObj<RunService>;
+
+    function makeTowerCard(cardId: CardId = CardId.TOWER_BASIC): CardInstance {
+      return { instanceId: `inst_${cardId}`, cardId, upgraded: false };
+    }
+
+    beforeEach(() => {
+      deckSpy = fixture.debugElement.injector.get(DeckService) as jasmine.SpyObj<DeckService>;
+      runSpy = fixture.debugElement.injector.get(RunService) as jasmine.SpyObj<RunService>;
+    });
+
+    it('onCardPlayed with tower card sets pendingTowerCard and selectedTowerType', () => {
+      runSpy.isInRun.and.returnValue(true);
+      const energy: EnergyState = { current: 3, max: 3 };
+      deckSpy.getEnergy.and.returnValue(energy);
+
+      const card = makeTowerCard(CardId.TOWER_BASIC);
+      component.onCardPlayed(card);
+
+      expect((component as any).pendingTowerCard).toBe(card);
+      expect(component.selectedTowerType).toBe(TowerType.BASIC);
+      // Energy not consumed yet — playCard should not have been called
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    it('onCardPlayed blocks second card while pendingTowerCard is set', () => {
+      runSpy.isInRun.and.returnValue(true);
+      const energy: EnergyState = { current: 3, max: 3 };
+      deckSpy.getEnergy.and.returnValue(energy);
+
+      const first = makeTowerCard(CardId.TOWER_BASIC);
+      component.onCardPlayed(first);
+      expect((component as any).pendingTowerCard).toBe(first);
+
+      const second = makeTowerCard(CardId.TOWER_SNIPER);
+      component.onCardPlayed(second);
+
+      // Second card should be blocked — pendingTowerCard stays as first
+      expect((component as any).pendingTowerCard).toBe(first);
+    });
+
+    it('cancelPlacement clears pendingTowerCard', () => {
+      runSpy.isInRun.and.returnValue(true);
+      const energy: EnergyState = { current: 3, max: 3 };
+      deckSpy.getEnergy.and.returnValue(energy);
+
+      const card = makeTowerCard(CardId.TOWER_BASIC);
+      component.onCardPlayed(card);
+      expect((component as any).pendingTowerCard).not.toBeNull();
+
+      component.cancelPlacement();
+      expect((component as any).pendingTowerCard).toBeNull();
+      expect(component.selectedTowerType).toBeNull();
+    });
+
+    it('pendingTowerCardId getter returns instanceId when card is pending', () => {
+      runSpy.isInRun.and.returnValue(true);
+      const energy: EnergyState = { current: 3, max: 3 };
+      deckSpy.getEnergy.and.returnValue(energy);
+
+      const card = makeTowerCard(CardId.TOWER_BASIC);
+      component.onCardPlayed(card);
+
+      expect(component.pendingTowerCardId).toBe(card.instanceId);
+    });
+
+    it('pendingTowerCardId is null when no card is pending', () => {
+      expect(component.pendingTowerCardId).toBeNull();
+    });
   });
 
   // ── Red team gate 2: no double-tick of visual animations ──────────────

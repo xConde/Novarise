@@ -355,6 +355,20 @@ $card-rarity-glows: (
   }
 }
 
+// Gold cost — shown below card name on tower cards
+.card__gold-cost {
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  color: var(--gold-color, #f5c542);
+  text-align: center;
+  letter-spacing: 0.02em;
+  line-height: 1;
+
+  @media (max-width: 480px) {
+    font-size: var(--font-size-3xs);
+  }
+}
+
 // Type icon — bottom of card
 .card__type-icon {
   margin-top: auto;

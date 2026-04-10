@@ -17,12 +17,15 @@ import {
   EnergyState,
 } from '../../../../ascent/models/card.model';
 import { getCardDefinition } from '../../../../ascent/constants/card-definitions';
+import { TOWER_CONFIGS } from '../../models/tower.model';
 
 /** Pre-computed view model for a single card in hand. */
 export interface HandCard {
   instance: CardInstance;
   definition: CardDefinition;
   canPlay: boolean;
+  /** Gold cost shown on tower cards (from TOWER_CONFIGS). Null for non-tower cards. */
+  goldCost: number | null;
 }
 
 /** Maximum energy pips shown in the pip row (matches max playable energy). */
@@ -86,10 +89,13 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
     }
     this.handCards = this.deckState.hand.map(instance => {
       const definition = getCardDefinition(instance.cardId);
+      const effect = instance.upgraded && definition.upgradedEffect ? definition.upgradedEffect : definition.effect;
+      const goldCost = effect.type === 'tower' ? (TOWER_CONFIGS[effect.towerType]?.cost ?? null) : null;
       return {
         instance,
         definition,
         canPlay: this.energy.current >= definition.energyCost,
+        goldCost,
       };
     });
   }

@@ -727,11 +727,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    * Spell/modifier/utility: consume immediately (instant effects).
    */
   onCardPlayed(card: CardInstance): void {
+    // Block new card plays while a tower card is awaiting placement
+    if (this.pendingTowerCard) return;
+
     const def = getCardDefinition(card.cardId);
     const effect = card.upgraded && def.upgradedEffect ? def.upgradedEffect : def.effect;
 
     if (effect.type === 'tower') {
-      // Cancel any existing pending tower card first
+      // Cancel any existing pending tower card first (defensive — pendingTowerCard is null here due to guard above)
       this.cancelPendingTowerCard();
 
       // Check energy affordability without consuming
@@ -747,9 +750,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!this.deckService.playCard(card.instanceId)) return;
 
     switch (effect.type) {
-      case 'spell':
-        this.cardEffectService.applySpell(effect as SpellCardEffect, this.gameStateService, this.enemyService);
+      case 'spell': {
+        const spellEffect = effect as SpellCardEffect;
+        if (spellEffect.spellId === 'fortify') {
+          this.fortifyRandomTower();
+        } else if (spellEffect.spellId === 'salvage') {
+          this.salvageLastTower();
+        } else {
+          this.cardEffectService.applySpell(spellEffect, this.gameStateService, this.enemyService);
+        }
         break;
+      }
       case 'modifier':
         this.cardEffectService.applyModifier(effect as ModifierCardEffect);
         break;
@@ -772,6 +783,91 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!this.pendingTowerCard) return;
     this.deckService.playCard(this.pendingTowerCard.instanceId);
     this.pendingTowerCard = null;
+  }
+
+  /**
+   * Fortify spell — upgrade a random tower one level for free.
+   * If no tower can be upgraded (all at max level), this is a no-op.
+   * Only L1→L2 upgrades are applied; L2→L3 requires specialization choice
+   * which cannot be automated, so those towers are excluded.
+   */
+  private fortifyRandomTower(): void {
+    const towers = Array.from(this.towerCombatService.getPlacedTowers().values());
+    // Exclude max-level towers and L2 towers (L2→L3 requires specialization)
+    const upgradable = towers.filter(t => t.level < MAX_TOWER_LEVEL - 1);
+    if (upgradable.length === 0) return;
+
+    const target = upgradable[Math.floor(Math.random() * upgradable.length)];
+    const key = `${target.row}-${target.col}`;
+
+    // Bypass gold cost — free upgrade. Pass actualCost=0 so totalInvested stays clean.
+    const upgraded = this.towerCombatService.upgradeTower(key, 0);
+    if (!upgraded) return;
+
+    this.audioService.playTowerUpgrade();
+
+    const towerMesh = this.towerMeshes.get(key);
+    if (towerMesh) {
+      this.towerUpgradeVisualService.applyUpgradeVisuals(towerMesh, target.level + 1, undefined);
+    }
+
+    // Invalidate muzzle flash saved emissive — upgrade changed the baseline
+    target.originalEmissiveIntensity = undefined;
+    target.muzzleFlashTimer = undefined;
+
+    this.updateChallengeIndicators();
+  }
+
+  /**
+   * Salvage spell — sell the most recently placed tower for a 100% refund.
+   * If no towers are placed, this is a no-op.
+   */
+  private salvageLastTower(): void {
+    const towers = Array.from(this.towerCombatService.getPlacedTowers().values());
+    if (towers.length === 0) return;
+
+    // Most recently placed tower is last in insertion order (Map preserves order)
+    const last = towers[towers.length - 1];
+    const key = `${last.row}-${last.col}`;
+
+    // Unregister from combat first (confirm-before-refund pattern)
+    const soldTower = this.towerCombatService.unregisterTower(key);
+    if (!soldTower) return;
+
+    // 100% refund — salvage overrides the normal sell rate
+    this.gameStateService.addGold(soldTower.totalInvested);
+    this.gameBoardService.removeTower(soldTower.row, soldTower.col);
+
+    this.audioService.playTowerSell();
+    this.gameStatsService.recordTowerSold();
+
+    // Dispose and remove mesh
+    const towerMesh = this.towerMeshes.get(key);
+    if (towerMesh) {
+      this.sceneService.getScene().remove(towerMesh);
+      towerMesh.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          disposeMaterial(child.material);
+        }
+      });
+      this.towerMeshes.delete(key);
+      this.rebuildTowerChildrenArray();
+    }
+
+    // Repath ground enemies — freed tile may open shorter paths
+    this.enemyService.repathAffectedEnemies(-1, -1);
+
+    this.lastPreviewKey = '';
+    this.refreshPathOverlay();
+
+    // If this was the selected tower, deselect it
+    if (this.selectedTowerInfo?.id === key) {
+      this.deselectTower();
+    }
+
+    this.updateTileHighlights();
+    this.updateChallengeIndicators();
   }
 
   /** @deprecated Delegated to CardEffectService.applySpell — kept only as a reference. */
@@ -1598,6 +1694,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Ascent Mode: consume the pending tower card now that placement succeeded
     if (this.pendingTowerCard) {
       this.consumePendingTowerCard();
+      // Each card = exactly one tower. Exit placement mode so the player
+      // can't place more of the same type for free.
+      this.cancelPlacement();
     }
 
     // Create tower mesh and add to scene (visual concern — stays here)
