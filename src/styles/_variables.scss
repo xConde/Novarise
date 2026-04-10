@@ -186,4 +186,30 @@
   --z-index-base: 1;
   --z-index-overlay: 10;
   --z-index-modal: 100;
+
+  /* ── Ascent Mode ─────────────────────────────────────── */
+
+  /* Node type colors (derived from existing palette) */
+  --ascent-node-combat: var(--panel-blue-accent);
+  --ascent-node-elite: var(--game-accent-orange);
+  --ascent-node-boss: var(--game-health);
+  --ascent-node-rest: var(--action-success);
+  --ascent-node-shop: var(--game-gold);
+  --ascent-node-event: var(--theme-purple-light);
+  --ascent-node-unknown: var(--text-faint);
+
+  /* Relic rarity colors */
+  --ascent-relic-common: var(--text-muted);
+  --ascent-relic-uncommon: var(--panel-blue-accent);
+  --ascent-relic-rare: var(--game-gold);
+
+  /* Relic rarity backgrounds (low-alpha tints) */
+  --ascent-relic-common-bg: rgba(255, 255, 255, 0.06);
+  --ascent-relic-uncommon-bg: rgba(100, 200, 255, 0.08);
+  --ascent-relic-rare-bg: var(--game-gold-a08);
+
+  /* Relic rarity borders */
+  --ascent-relic-common-border: var(--border-color);
+  --ascent-relic-uncommon-border: var(--panel-blue-border);
+  --ascent-relic-rare-border: var(--game-gold-a40);
 }

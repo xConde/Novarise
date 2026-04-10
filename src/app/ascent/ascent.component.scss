@@ -1,4 +1,4 @@
-@import '../../styles/variables';
+// ── Root container ────────────────────────────────────────────────────────────
 
 .ascent-container {
   display: flex;
@@ -6,45 +6,46 @@
   min-height: 100vh;
   background: var(--bg-color);
   color: var(--text-color);
-  font-family: sans-serif;
-  padding: 1rem;
+  font-family: "Orbitron", sans-serif;
+  padding: var(--spacing-md);
 }
 
-// ── Relic Bar ───────────────────────────────────────────────
+// ── Relic bar ─────────────────────────────────────────────────────────────────
 
 .ascent-relic-bar {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 0.5rem;
-  margin-bottom: 1rem;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--glass-bg);
+  border: var(--border-width-thin) solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  margin-bottom: var(--spacing-md);
   flex-wrap: wrap;
 }
 
 .ascent-lives {
-  color: #e74c3c;
+  color: var(--game-health);
   font-weight: 700;
 }
 
 .ascent-gold {
-  color: #f1c40f;
+  color: var(--game-gold);
   font-weight: 700;
 }
 
 .ascent-floor {
-  color: #9b59b6;
+  color: var(--theme-purple-light);
   font-weight: 600;
 }
 
 .ascent-score {
-  color: #3498db;
+  color: var(--text-muted);
 }
 
 .ascent-relics {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--spacing-xs);
   margin-left: auto;
 }
 
@@ -54,13 +55,14 @@
   justify-content: center;
   width: 1.75rem;
   height: 1.75rem;
-  background: rgba(255, 215, 0, 0.15);
-  border-radius: 0.25rem;
-  font-size: 0.875rem;
+  background: var(--game-gold-a15);
+  border: var(--border-width-thin) solid var(--game-gold-a40);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-small);
   cursor: help;
 }
 
-// ── Start Screen ────────────────────────────────────────────
+// ── Start screen ──────────────────────────────────────────────────────────────
 
 .ascent-start {
   display: flex;
@@ -68,48 +70,46 @@
   align-items: center;
   justify-content: center;
   flex: 1;
-  gap: 1.5rem;
+  gap: var(--spacing-lg);
   text-align: center;
 }
 
 .ascent-title {
-  font-size: 3rem;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-hero);
   font-weight: 800;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
-  background: linear-gradient(135deg, #9b59b6, #3498db);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--theme-purple-lighter);
 }
 
 .ascent-subtitle {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 1.125rem;
+  color: var(--text-muted);
+  font-size: var(--font-size-base);
 }
 
 .ascent-start-actions {
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-md);
   flex-wrap: wrap;
   justify-content: center;
 }
 
-// ── Resume run block ─────────────────────────────────────────────
+// ── Resume run block ──────────────────────────────────────────────────────────
 
 .ascent-resume-block {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--spacing-xs);
 }
 
 .ascent-resume-info {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.5);
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-small);
+  color: var(--text-muted);
   flex-wrap: wrap;
   justify-content: center;
 }
@@ -119,15 +119,17 @@
 }
 
 .ascent-resume-info__sep {
-  color: rgba(255, 255, 255, 0.25);
+  color: var(--text-faint);
 }
+
+// ── Ascension select ──────────────────────────────────────────────────────────
 
 .ascent-ascension-select {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
-  margin-top: 1rem;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
   flex-wrap: wrap;
   justify-content: center;
   width: 100%;
@@ -135,43 +137,49 @@
 }
 
 .ascension-select__label {
-  color: rgba(255, 255, 255, 0.7);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
   font-weight: 600;
-  font-size: 0.95rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .ascension-select__dropdown {
-  background: rgba(255, 255, 255, 0.08);
-  color: #e0e0e0;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 0.375rem;
-  padding: 0.5rem 0.75rem;
+  background: var(--theme-purple-a10);
+  color: var(--text-color);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-xs) var(--spacing-sm);
   min-width: 20rem;
   max-width: 100%;
-  font-size: 0.9rem;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
 
   option {
-    background: #1a1a2e;
-    color: #e0e0e0;
+    background: var(--nav-bg);
+    color: var(--text-color);
   }
 }
 
-// ── Ascension info panel ─────────────────────────────────────────
+// ── Ascension info panel ──────────────────────────────────────────────────────
+
 .ascension-info {
   width: 100%;
   max-width: 32rem;
-  background: rgba(126, 87, 194, 0.07);
-  border: 1px solid rgba(126, 87, 194, 0.25);
-  border-radius: 0.6rem;
-  padding: 0.9rem 1.1rem;
+  background: var(--theme-purple-a10);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
   text-align: left;
 }
 
 .ascension-info__title {
-  font-size: 0.875rem;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.6);
-  margin: 0 0 0.6rem;
+  color: var(--text-dim);
+  margin: 0 0 var(--spacing-sm);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -182,19 +190,20 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--spacing-xs);
 }
 
 .ascension-info__effect {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
-  font-size: 0.82rem;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-small);
 }
 
 .ascension-info__effect-level {
+  font-family: "Orbitron", sans-serif;
   font-weight: 700;
-  font-size: 0.72rem;
+  font-size: var(--font-size-2xs);
   min-width: 1.4rem;
   text-align: right;
   opacity: 0.7;
@@ -204,211 +213,32 @@
   flex: 1;
 }
 
-// Difficulty color-coding
-.ascension-info__effect--easy   { color: #2ecc71; }
-.ascension-info__effect--medium { color: #f1c40f; }
-.ascension-info__effect--hard   { color: #e67e22; }
-.ascension-info__effect--extreme { color: #e74c3c; }
+// Difficulty color-coding via design system
+.ascension-info__effect--easy   { color: var(--action-success); }
+.ascension-info__effect--medium { color: var(--action-warning); }
+.ascension-info__effect--hard   { color: var(--game-accent-orange); }
+.ascension-info__effect--extreme { color: var(--game-health); }
 
-// ── Shared Button ───────────────────────────────────────────
-
-.ascent-btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
-  min-width: 2.75rem;
-  min-height: 2.75rem;
-
-  &:hover:not(:disabled) {
-    opacity: 0.9;
-    transform: translateY(-1px);
-  }
-
-  &:active:not(:disabled) {
-    transform: translateY(0);
-  }
-
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  &--primary {
-    background: linear-gradient(135deg, #9b59b6, #8e44ad);
-    color: #fff;
-  }
-
-  &--secondary {
-    background: rgba(255, 255, 255, 0.1);
-    color: #e0e0e0;
-  }
-
-  &--danger {
-    background: rgba(231, 76, 60, 0.2);
-    color: #e74c3c;
-  }
-}
-
-// ── Node Map ────────────────────────────────────────────────
+// ── Map wrapper ───────────────────────────────────────────────────────────────
 
 .ascent-map {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: var(--spacing-md);
   flex: 1;
 }
 
 .ascent-map-title {
-  font-size: 1.5rem;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-title);
   font-weight: 700;
+  color: var(--theme-purple-lighter);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
-.ascent-node-grid {
-  display: flex;
-  flex-direction: column-reverse; // Bottom = row 0, top = boss
-  gap: 0.5rem;
-  padding: 1rem;
-  max-width: 40rem;
-  width: 100%;
-}
-
-.ascent-node-row {
-  display: flex;
-  justify-content: center;
-  gap: 0.75rem;
-}
-
-.ascent-node {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 3.5rem;
-  height: 3.5rem;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.05);
-  color: #e0e0e0;
-  font-size: 1.25rem;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, transform 0.1s;
-
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.35;
-  }
-
-  &--selectable {
-    border-color: #9b59b6;
-    box-shadow: 0 0 8px rgba(155, 89, 182, 0.3);
-    animation: pulse-node 2s ease-in-out infinite;
-
-    &:hover {
-      background: rgba(155, 89, 182, 0.2);
-      transform: scale(1.1);
-    }
-  }
-
-  &--visited {
-    opacity: 0.4;
-    border-style: dashed;
-  }
-
-  &--current {
-    border-color: #f1c40f;
-    box-shadow: 0 0 12px rgba(241, 196, 15, 0.4);
-  }
-
-  &--combat { border-color: #3498db; }
-  &--elite { border-color: #f39c12; }
-  &--boss { border-color: #e74c3c; }
-  &--rest { border-color: #2ecc71; }
-  &--shop { border-color: #f1c40f; }
-  &--event { border-color: #9b59b6; }
-  &--unknown { border-color: rgba(255, 255, 255, 0.3); }
-}
-
-.ascent-node-icon {
-  pointer-events: none;
-}
-
-@keyframes pulse-node {
-  0%, 100% { box-shadow: 0 0 8px rgba(155, 89, 182, 0.3); }
-  50% { box-shadow: 0 0 16px rgba(155, 89, 182, 0.5); }
-}
-
-// ── Reward Screen ───────────────────────────────────────────
-
-.ascent-reward {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.5rem;
-  flex: 1;
-  padding-top: 3rem;
-
-  h2 {
-    font-size: 2rem;
-    color: #2ecc71;
-  }
-}
-
-.ascent-reward-gold {
-  font-size: 1.5rem;
-  color: #f1c40f;
-  font-weight: 700;
-}
-
-.ascent-reward-choices {
-  text-align: center;
-
-  h3 {
-    margin-bottom: 1rem;
-    color: rgba(255, 255, 255, 0.7);
-  }
-}
-
-.ascent-reward-list {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.ascent-reward-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1.25rem 1.5rem;
-  border: 2px solid rgba(255, 215, 0, 0.3);
-  border-radius: 0.75rem;
-  background: rgba(255, 215, 0, 0.05);
-  color: #e0e0e0;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-  min-width: 8rem;
-
-  &:hover {
-    border-color: #f1c40f;
-    background: rgba(255, 215, 0, 0.12);
-  }
-}
-
-.reward-icon {
-  font-size: 2rem;
-  color: #f1c40f;
-}
-
-.reward-name {
-  font-size: 0.875rem;
-}
-
-// ── Rest / Shop / Event / Summary ───────────────────────────
+// ── Content screens (rest/shop/event/summary — layout shells) ─────────────────
 
 .ascent-rest,
 .ascent-shop,
@@ -417,53 +247,47 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5rem;
+  gap: var(--spacing-lg);
   flex: 1;
-  padding-top: 3rem;
+  padding-top: var(--spacing-2xl);
   text-align: center;
 }
 
-.ascent-summary-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  font-size: 1.125rem;
+// ── Abandon button ────────────────────────────────────────────────────────────
 
-  p {
-    margin: 0;
-  }
+.ascent-abandon-btn {
+  // Extends ascent-btn--danger visually via classes in template;
+  // this rule ensures layout sizing only
+  min-width: 9rem;
+  min-height: 2.75rem;
 }
 
-// ── Responsive ──────────────────────────────────────────────
+// ── Responsive ────────────────────────────────────────────────────────────────
 
 @media (max-width: 768px) {
   .ascent-title {
-    font-size: 2rem;
-  }
-
-  .ascent-node {
-    width: 2.75rem;
-    height: 2.75rem;
-    font-size: 1rem;
+    font-size: var(--font-size-large);
   }
 
   .ascent-relic-bar {
-    gap: 0.75rem;
-    font-size: 0.875rem;
+    gap: var(--spacing-sm);
+    font-size: var(--font-size-small);
   }
 }
 
 @media (max-width: 480px) {
   .ascent-container {
-    padding: 0.5rem;
+    padding: var(--spacing-xs);
   }
 
-  .ascent-node-row {
-    gap: 0.5rem;
-  }
-
-  .ascent-reward-list {
+  .ascent-start-actions {
     flex-direction: column;
     align-items: center;
+    width: 100%;
+  }
+
+  .ascent-ascension-select .ascension-select__dropdown {
+    min-width: unset;
+    width: 100%;
   }
 }

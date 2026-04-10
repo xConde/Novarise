@@ -1,24 +1,9 @@
-@import '../../../../styles/variables';
+// ── Card entrance animation ───────────────────────────────────────────────────
 
-// ── Rarity color tokens ─────────────────────────────────────────
-$rarity-common:   #aaaaaa;
-$rarity-uncommon: #3498db;
-$rarity-rare:     #f1c40f;
-
-// ── Shop palette ────────────────────────────────────────────────
-$shop-gold:         #f1c40f;
-$shop-gold-dim:     rgba(241, 196, 15, 0.15);
-$shop-gold-border:  rgba(241, 196, 15, 0.35);
-$shop-heal:         #2ecc71;
-$shop-heal-dim:     rgba(46, 204, 113, 0.12);
-$shop-heal-border:  rgba(46, 204, 113, 0.35);
-$shop-unaffordable: rgba(231, 76, 60, 0.7);
-
-// ── Card entrance animation ─────────────────────────────────────
 @keyframes shop-card-in {
   from {
     opacity: 0;
-    transform: translateY(1rem);
+    transform: translateY(var(--spacing-md));
   }
   to {
     opacity: 1;
@@ -26,195 +11,212 @@ $shop-unaffordable: rgba(231, 76, 60, 0.7);
   }
 }
 
-// ── Root container ──────────────────────────────────────────────
+// ── Root container ────────────────────────────────────────────────────────────
+
 .shop-screen {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2rem;
+  gap: var(--spacing-xl);
   flex: 1;
-  padding: 3rem 1rem 2rem;
+  padding: var(--spacing-2xl) var(--spacing-md) var(--spacing-xl);
   text-align: center;
   color: var(--text-color);
 }
 
-// ── Header ──────────────────────────────────────────────────────
+// ── Header ────────────────────────────────────────────────────────────────────
+
 .shop-header {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-xs);
 }
 
 .shop-title {
-  font-size: 2.5rem;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-large);
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: $shop-gold;
+  color: var(--game-gold);
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-xs);
 }
 
 .shop-icon {
-  font-size: 2rem;
+  font-size: var(--font-size-large);
   opacity: 0.85;
 }
 
 .shop-gold {
-  font-size: 1.25rem;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-base);
   font-weight: 700;
-  color: $shop-gold;
+  color: var(--game-gold);
   margin: 0;
 }
 
-// ── Section title ───────────────────────────────────────────────
+// ── Section title ─────────────────────────────────────────────────────────────
+
 .shop-section-title {
-  font-size: 1rem;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-2xs);
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.5);
-  margin: 0 0 1rem;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  margin: 0 0 var(--spacing-md);
 }
 
-// ── Items section ───────────────────────────────────────────────
+// ── Items section ─────────────────────────────────────────────────────────────
+
 .shop-items {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-xs);
   width: 100%;
   max-width: 56rem;
 }
 
 .shop-item-list {
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-md);
   flex-wrap: wrap;
   justify-content: center;
   width: 100%;
 }
 
 .shop-empty {
-  font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.4);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  color: var(--text-faint);
   font-style: italic;
   margin: 0;
 }
 
-// ── Shop card ───────────────────────────────────────────────────
+// ── Shop card ─────────────────────────────────────────────────────────────────
+
 .shop-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
-  padding: 1.25rem 1rem 1rem;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md) var(--spacing-sm) var(--spacing-sm);
   width: 13rem;
-  border: 2px solid rgba(255, 255, 255, 0.12);
-  border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.04);
-  color: #e0e0e0;
+  border: var(--border-width-medium) solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  background: var(--theme-purple-a10);
+  color: var(--text-color);
+  font-family: "Orbitron", sans-serif;
   position: relative;
   animation: shop-card-in 0.3s ease both;
-  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  transition: border-color var(--transition-fast) ease,
+              background var(--transition-fast) ease,
+              box-shadow var(--transition-fast) ease;
 
   &:nth-child(2) { animation-delay: 0.06s; }
   &:nth-child(3) { animation-delay: 0.12s; }
 
-  // ── Rarity variants ──────────────────────────────────────────
-  &--common {
-    border-color: rgba($rarity-common, 0.35);
+  // ── Rarity variants ───────────────────────────────────────────────────
 
-    .shop-card__rarity { color: $rarity-common; }
-    .shop-card__icon   { color: $rarity-common; }
+  &--common {
+    background: var(--ascent-relic-common-bg);
+    border-color: var(--ascent-relic-common-border);
+
+    .shop-card__rarity { color: var(--ascent-relic-common); }
+    .shop-card__icon   { color: var(--ascent-relic-common); }
   }
 
   &--uncommon {
-    border-color: rgba($rarity-uncommon, 0.4);
+    background: var(--ascent-relic-uncommon-bg);
+    border-color: var(--ascent-relic-uncommon-border);
 
-    .shop-card__rarity { color: $rarity-uncommon; }
-    .shop-card__icon   { color: $rarity-uncommon; }
+    .shop-card__rarity { color: var(--ascent-relic-uncommon); }
+    .shop-card__icon   { color: var(--ascent-relic-uncommon); }
   }
 
   &--rare {
-    border-color: rgba($rarity-rare, 0.5);
+    background: var(--ascent-relic-rare-bg);
+    border-color: var(--ascent-relic-rare-border);
 
-    .shop-card__rarity { color: $rarity-rare; }
-    .shop-card__icon   { color: $rarity-rare; }
+    .shop-card__rarity { color: var(--ascent-relic-rare); }
+    .shop-card__icon   { color: var(--ascent-relic-rare); }
   }
 
-  // ── Unaffordable state ───────────────────────────────────────
+  // ── Unaffordable state ─────────────────────────────────────────────────
+
   &--unaffordable {
-    filter: saturate(0.35);
-    opacity: 0.7;
+    opacity: 0.4;
+    filter: grayscale(0.5);
   }
 }
 
-// ── Card inner elements ─────────────────────────────────────────
+// ── Card inner elements ───────────────────────────────────────────────────────
+
 .shop-card__icon {
-  font-size: 1.75rem;
+  font-size: var(--font-size-title);
   line-height: 1;
 }
 
 .shop-card__rarity {
-  font-size: 0.7rem;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-2xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
 .shop-card__name {
-  font-size: 1rem;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-base);
   font-weight: 700;
-  color: #ffffff;
+  color: var(--text-color);
 }
 
 .shop-card__description {
-  font-size: 0.825rem;
-  color: rgba(255, 255, 255, 0.75);
+  font-size: var(--font-size-small);
+  color: var(--text-muted);
   line-height: 1.4;
 }
 
 .shop-card__flavor {
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.35);
+  font-size: var(--font-size-xs);
+  color: var(--text-faint);
   line-height: 1.4;
   font-style: italic;
 }
 
-// ── Buy button ──────────────────────────────────────────────────
+// ── Buy button ────────────────────────────────────────────────────────────────
+
 .shop-card__buy-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  margin-top: 0.5rem;
-  padding: 0.5rem 1rem;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-md);
   min-height: 2.75rem; // WCAG 44px
-  border: 1px solid $shop-gold-border;
-  border-radius: 0.375rem;
-  background: $shop-gold-dim;
-  color: $shop-gold;
-  font-size: 0.9rem;
+  border: var(--border-width-thin) solid var(--game-gold-a40);
+  border-radius: var(--border-radius-md);
+  background: var(--game-gold-a15);
+  color: var(--game-gold);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s;
-  font-family: inherit;
+  transition: background var(--transition-fast) ease,
+              border-color var(--transition-fast) ease;
 
   &:hover:not(:disabled) {
-    background: rgba(241, 196, 15, 0.25);
-    border-color: $shop-gold;
-    transform: translateY(-1px);
-  }
-
-  &:active:not(:disabled) {
-    transform: translateY(0);
+    background: var(--game-gold-a25);
+    border-color: var(--game-gold-a60);
   }
 
   &:focus-visible {
-    outline: 2px solid $shop-gold;
+    outline: var(--border-width-medium) solid var(--game-gold);
     outline-offset: 3px;
   }
 
@@ -224,78 +226,77 @@ $shop-unaffordable: rgba(231, 76, 60, 0.7);
   }
 
   &--unaffordable {
-    color: $shop-unaffordable;
-    border-color: rgba(231, 76, 60, 0.3);
-    background: rgba(231, 76, 60, 0.08);
+    color: var(--action-danger);
+    border-color: var(--action-danger-border);
+    background: var(--action-danger-bg);
   }
 }
 
 .shop-price-coin {
-  font-size: 0.85rem;
+  font-size: var(--font-size-small);
 }
 
-// ── Heal section ────────────────────────────────────────────────
+// ── Heal section ──────────────────────────────────────────────────────────────
+
 .shop-heal {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1.5rem;
-  border: 1px solid $shop-heal-border;
-  border-radius: 0.75rem;
-  background: $shop-heal-dim;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  border: var(--border-width-thin) solid var(--action-success-border);
+  border-radius: var(--border-radius-lg);
+  background: var(--action-success-bg);
   width: 100%;
   max-width: 22rem;
 }
 
 .shop-heal-info {
   display: flex;
-  gap: 1rem;
+  gap: var(--spacing-md);
   align-items: center;
-  font-size: 0.875rem;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
   flex-wrap: wrap;
   justify-content: center;
 }
 
 .shop-heal-status {
-  color: #e74c3c;
+  color: var(--game-health);
   font-weight: 700;
 }
 
 .shop-heal-count {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-size: var(--font-size-small);
 }
 
 .shop-heal-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.6rem 1.5rem;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-lg);
   min-height: 2.75rem; // WCAG 44px
   min-width: 12rem;
-  border: 1px solid $shop-heal-border;
-  border-radius: 0.5rem;
-  background: rgba(46, 204, 113, 0.15);
-  color: $shop-heal;
-  font-size: 0.95rem;
+  border: var(--border-width-thin) solid var(--action-success-border);
+  border-radius: var(--border-radius-md);
+  background: var(--action-success-bg);
+  color: var(--action-success);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s;
-  font-family: inherit;
+  transition: background var(--transition-fast) ease,
+              border-color var(--transition-fast) ease;
 
   &:hover:not(:disabled) {
-    background: rgba(46, 204, 113, 0.28);
-    border-color: $shop-heal;
-    transform: translateY(-1px);
-  }
-
-  &:active:not(:disabled) {
-    transform: translateY(0);
+    background: var(--action-success-bg);
+    filter: brightness(1.5);
+    border-color: var(--action-success);
   }
 
   &:focus-visible {
-    outline: 2px solid $shop-heal;
+    outline: var(--border-width-medium) solid var(--action-success);
     outline-offset: 3px;
   }
 
@@ -307,68 +308,38 @@ $shop-unaffordable: rgba(231, 76, 60, 0.7);
 
 .shop-heal-cost {
   &--unaffordable {
-    color: $shop-unaffordable;
+    color: var(--action-danger);
   }
 }
 
 .shop-heal-disabled-hint {
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.4);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-xs);
+  color: var(--text-faint);
   margin: 0;
   font-style: italic;
 }
 
-// ── Leave button ────────────────────────────────────────────────
+// ── Leave button ──────────────────────────────────────────────────────────────
+
 .shop-leave-btn {
   min-width: 10rem;
   min-height: 2.75rem; // WCAG 44px
 }
 
-// ── Shared ascent-btn (mirrored from parent for isolation) ──────
-.ascent-btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
+// ── Responsive ────────────────────────────────────────────────────────────────
 
-  &:hover:not(:disabled) {
-    opacity: 0.9;
-    transform: translateY(-1px);
-  }
-
-  &:active:not(:disabled) { transform: translateY(0); }
-
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  &:focus-visible {
-    outline: 2px solid #3498db;
-    outline-offset: 3px;
-  }
-
-  &--secondary {
-    background: rgba(255, 255, 255, 0.1);
-    color: #e0e0e0;
-  }
-}
-
-// ── Responsive ──────────────────────────────────────────────────
 @media (max-width: 768px) {
   .shop-item-list {
-    gap: 0.75rem;
+    gap: var(--spacing-sm);
   }
 
   .shop-card {
     width: 11rem;
-    padding: 1rem 0.875rem;
+    padding: var(--spacing-sm) var(--spacing-xs);
   }
 
-  .shop-title { font-size: 2rem; }
+  .shop-title { font-size: var(--font-size-title); }
 }
 
 @media (max-width: 480px) {
@@ -383,7 +354,8 @@ $shop-unaffordable: rgba(231, 76, 60, 0.7);
   }
 }
 
-// ── Reduced motion ──────────────────────────────────────────────
+// ── Reduced motion ────────────────────────────────────────────────────────────
+
 @media (prefers-reduced-motion: reduce) {
   .shop-card {
     animation: none;
@@ -391,10 +363,7 @@ $shop-unaffordable: rgba(231, 76, 60, 0.7);
   }
 
   .shop-card__buy-btn,
-  .shop-heal-btn,
-  .ascent-btn {
+  .shop-heal-btn {
     transition: none;
-
-    &:hover:not(:disabled) { transform: none; }
   }
 }
