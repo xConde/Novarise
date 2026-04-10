@@ -26,7 +26,7 @@
       [class.card--upgraded]="card.instance.upgraded"
       [class.card--pending]="card.instance.instanceId === pendingCardId"
       [class.card--dimmed]="pendingCardId !== null && card.instance.instanceId !== pendingCardId"
-      [disabled]="!card.canPlay || pendingCardId !== null"
+      [disabled]="!card.canPlay || (pendingCardId !== null && card.instance.instanceId !== pendingCardId)"
       (click)="playCard(card)"
       [attr.aria-label]="card.definition.name + ' — ' + card.definition.description + ' — Energy cost: ' + card.definition.energyCost + (card.instance.upgraded ? ' (upgraded)' : '')"
       [attr.aria-pressed]="card.instance.instanceId === pendingCardId"

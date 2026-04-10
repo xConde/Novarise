@@ -233,9 +233,9 @@ $card-rarity-glows: (
 
 .card--playable {
   &:hover {
-    transform: translateY(-0.55rem) scale(1.05);
+    transform: translateY(-0.25rem) scale(1.03);
     filter: brightness(1.18);
-    box-shadow: 0 0.55rem 1.5rem rgba(0, 0, 0, 0.55);
+    box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.4);
     z-index: 1;
   }
 
@@ -253,9 +253,8 @@ $card-rarity-glows: (
   border-top-width: 0.25rem; // slightly thicker top accent
 }
 
-// Pending card (active placement mode) — raised + glowing
+// Pending card (active placement mode) — glowing border, no lift (avoids clipping)
 .card--pending {
-  transform: translateY(-0.75rem) scale(1.08) !important;
   filter: brightness(1.3) !important;
   z-index: 2;
   box-shadow:

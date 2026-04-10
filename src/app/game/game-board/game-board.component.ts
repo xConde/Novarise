@@ -727,7 +727,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    * Spell/modifier/utility: consume immediately (instant effects).
    */
   onCardPlayed(card: CardInstance): void {
-    // Block new card plays while a tower card is awaiting placement
+    // Clicking the pending tower card again cancels placement
+    if (this.pendingTowerCard && this.pendingTowerCard.instanceId === card.instanceId) {
+      this.cancelPlacement();
+      return;
+    }
+    // Block other card plays while a tower card is awaiting placement
     if (this.pendingTowerCard) return;
 
     const def = getCardDefinition(card.cardId);
