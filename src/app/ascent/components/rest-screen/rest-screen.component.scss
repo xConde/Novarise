@@ -1,0 +1,260 @@
+@import '../../../../styles/variables';
+
+// ── Campfire fire animation ─────────────────────────────────────
+@keyframes flicker {
+  0%, 100% { transform: scaleX(1)    scaleY(1)    translateY(0); }
+  25%       { transform: scaleX(0.9) scaleY(1.05) translateY(-2px); }
+  50%       { transform: scaleX(1.05) scaleY(0.95) translateY(1px); }
+  75%       { transform: scaleX(0.95) scaleY(1.08) translateY(-3px); }
+}
+
+@keyframes ember-glow {
+  0%, 100% { opacity: 0.7; }
+  50%       { opacity: 1; }
+}
+
+// ── Root container ──────────────────────────────────────────────
+.rest-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  flex: 1;
+  padding: 2.5rem 1rem 2rem;
+  text-align: center;
+  color: var(--color-text, #e0e0e0);
+}
+
+// ── CSS-only campfire ───────────────────────────────────────────
+.campfire {
+  position: relative;
+  width: 7rem;
+  height: 6rem;
+  margin-bottom: 0.5rem;
+}
+
+// Crossed logs
+.campfire__log {
+  position: absolute;
+  bottom: 0.25rem;
+  width: 3.25rem;
+  height: 0.65rem;
+  background: #5c3317;
+  border-radius: 0.35rem;
+
+  &--left {
+    left: 0.5rem;
+    transform: rotate(30deg);
+    transform-origin: left center;
+  }
+
+  &--right {
+    right: 0.5rem;
+    transform: rotate(-30deg);
+    transform-origin: right center;
+  }
+}
+
+// Ember bed
+.campfire__embers {
+  position: absolute;
+  bottom: 0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2.5rem;
+  height: 0.5rem;
+  background: radial-gradient(ellipse at center, #ff6a00, #cc3300 60%, transparent 100%);
+  border-radius: 50%;
+  animation: ember-glow 1.4s ease-in-out infinite;
+}
+
+// Flame layers — stacked, decreasing width
+.campfire__flame {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 50% 50% 30% 30%;
+  animation: flicker 0.6s ease-in-out infinite;
+  transform-origin: bottom center;
+
+  &--outer {
+    bottom: 0.9rem;
+    width: 2.8rem;
+    height: 3.6rem;
+    background: radial-gradient(ellipse at 50% 80%, #ff6a00, #cc3300 70%, transparent 100%);
+    animation-duration: 0.7s;
+  }
+
+  &--mid {
+    bottom: 1.2rem;
+    width: 1.9rem;
+    height: 2.8rem;
+    background: radial-gradient(ellipse at 50% 80%, #ffaa00, #ff6a00 65%, transparent 100%);
+    animation-duration: 0.55s;
+    animation-delay: 0.08s;
+  }
+
+  &--inner {
+    bottom: 1.5rem;
+    width: 1rem;
+    height: 1.8rem;
+    background: radial-gradient(ellipse at 50% 80%, #fff8c0, #ffdd00 60%, transparent 100%);
+    animation-duration: 0.45s;
+    animation-delay: 0.15s;
+  }
+}
+
+// ── Text ────────────────────────────────────────────────────────
+.rest-title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #f39c12;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.rest-subtitle {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.95rem;
+  margin: 0;
+  max-width: 24rem;
+}
+
+// ── Lives display ───────────────────────────────────────────────
+.rest-lives {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.rest-lives__heart {
+  color: #e74c3c;
+}
+
+.rest-lives__value {
+  color: #e0e0e0;
+}
+
+// ── Heal preview ─────────────────────────────────────────────────
+.rest-heal-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  background: rgba(46, 204, 113, 0.1);
+  border: 1px solid rgba(46, 204, 113, 0.3);
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+}
+
+.rest-heal-preview__amount {
+  color: #2ecc71;
+  font-weight: 700;
+}
+
+.rest-heal-preview__arrow {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.rest-heal-preview__result {
+  color: #e0e0e0;
+  font-weight: 600;
+}
+
+.rest-full-notice {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+// ── Action buttons ──────────────────────────────────────────────
+.rest-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.rest-btn {
+  min-width: 9rem;
+  min-height: 2.75rem; // WCAG 44px
+}
+
+// ── Shared ascent-btn (mirrored for isolation) ──────────────────
+.ascent-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+
+  &:hover:not(:disabled) {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) { transform: translateY(0); }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #f39c12;
+    outline-offset: 3px;
+  }
+
+  &--primary {
+    background: linear-gradient(135deg, #e67e22, #d35400);
+    color: #fff;
+  }
+
+  &--secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+  }
+}
+
+// ── Responsive ──────────────────────────────────────────────────
+@media (max-width: 768px) {
+  .rest-title { font-size: 1.6rem; }
+
+  .campfire {
+    width: 5.5rem;
+    height: 4.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .rest-screen { padding: 1.5rem 0.75rem; }
+
+  .rest-actions {
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+
+  .rest-btn {
+    width: 100%;
+    max-width: 16rem;
+  }
+}
+
+// ── Reduced motion ──────────────────────────────────────────────
+@media (prefers-reduced-motion: reduce) {
+  .campfire__flame,
+  .campfire__embers {
+    animation: none;
+  }
+
+  .ascent-btn {
+    transition: none;
+
+    &:hover:not(:disabled) { transform: none; }
+  }
+}

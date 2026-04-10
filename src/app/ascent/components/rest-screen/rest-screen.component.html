@@ -1,0 +1,58 @@
+<div class="rest-screen" role="main" aria-label="Rest site">
+
+  <!-- CSS-only campfire -->
+  <div class="campfire" aria-hidden="true">
+    <div class="campfire__log campfire__log--left"></div>
+    <div class="campfire__log campfire__log--right"></div>
+    <div class="campfire__embers"></div>
+    <div class="campfire__flame campfire__flame--outer"></div>
+    <div class="campfire__flame campfire__flame--mid"></div>
+    <div class="campfire__flame campfire__flame--inner"></div>
+  </div>
+
+  <!-- Title -->
+  <h2 class="rest-title">Rest Site</h2>
+  <p class="rest-subtitle">Take a moment to recover before the next encounter.</p>
+
+  <!-- Lives display -->
+  <div class="rest-lives" aria-label="Current lives: {{ currentLives }} of {{ maxLives }}">
+    <span class="rest-lives__heart" aria-hidden="true">&#9829;</span>
+    <span class="rest-lives__value">{{ currentLives }} / {{ maxLives }}</span>
+  </div>
+
+  <!-- Heal preview -->
+  <div class="rest-heal-preview" *ngIf="!atFullHealth">
+    <span class="rest-heal-preview__amount" aria-label="Healing {{ actualHeal }} lives">
+      +{{ actualHeal }} lives
+    </span>
+    <span class="rest-heal-preview__arrow" aria-hidden="true"> &#8594; </span>
+    <span class="rest-heal-preview__result">{{ livesAfterHeal }} / {{ maxLives }}</span>
+  </div>
+
+  <p class="rest-full-notice" *ngIf="atFullHealth" aria-live="polite">
+    You are already at full health.
+  </p>
+
+  <!-- Actions -->
+  <div class="rest-actions">
+    <button
+      class="ascent-btn ascent-btn--primary rest-btn"
+      type="button"
+      (click)="rest()"
+      [disabled]="atFullHealth"
+      [attr.aria-label]="atFullHealth ? 'Already at full health' : 'Rest and heal ' + actualHeal + ' lives'"
+    >
+      {{ atFullHealth ? 'Already at full health' : 'Rest' }}
+    </button>
+
+    <button
+      class="ascent-btn ascent-btn--secondary rest-btn"
+      type="button"
+      (click)="skip()"
+      aria-label="Skip rest and continue to the node map"
+    >
+      Skip
+    </button>
+  </div>
+
+</div>

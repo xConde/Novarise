@@ -1,0 +1,306 @@
+@import '../../../../styles/variables';
+
+// ── Rarity color tokens ─────────────────────────────────────────
+$rarity-common:   #aaaaaa;
+$rarity-uncommon: #3498db;
+$rarity-rare:     #f1c40f;
+
+// ── Card entrance animation ─────────────────────────────────────
+@keyframes card-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ── Root container ──────────────────────────────────────────────
+.reward-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  flex: 1;
+  padding: 3rem 1rem 2rem;
+  text-align: center;
+  color: var(--color-text, #e0e0e0);
+}
+
+// ── Header ──────────────────────────────────────────────────────
+.reward-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.reward-title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #2ecc71;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.reward-gold {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #f1c40f;
+  margin: 0;
+}
+
+// ── Choices section ─────────────────────────────────────────────
+.reward-choices {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 56rem;
+}
+
+.reward-choices-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+}
+
+.reward-choices-hint {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0;
+}
+
+// ── Card list ───────────────────────────────────────────────────
+.reward-card-list {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+
+// ── Individual card ─────────────────────────────────────────────
+.reward-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem 1.25rem;
+  width: 13rem;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: #e0e0e0;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+  transition: transform 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  position: relative;
+  min-height: 2.75rem; // WCAG 44px
+
+  // Staggered entrance animation
+  animation: card-slide-in 0.35s ease both;
+
+  &:nth-child(2) { animation-delay: 0.07s; }
+  &:nth-child(3) { animation-delay: 0.14s; }
+
+  &:hover:not(:disabled) {
+    transform: scale(1.05);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $rarity-uncommon;
+    outline-offset: 3px;
+  }
+
+  // ── Rarity variants ──────────────────────────────────────────
+  &--common {
+    border-color: rgba($rarity-common, 0.4);
+
+    &:hover:not(:disabled) {
+      border-color: $rarity-common;
+      box-shadow: 0 0 12px rgba($rarity-common, 0.2);
+    }
+
+    .reward-card__rarity { color: $rarity-common; }
+    .reward-card__icon   { color: $rarity-common; }
+  }
+
+  &--uncommon {
+    border-color: rgba($rarity-uncommon, 0.4);
+
+    &:hover:not(:disabled) {
+      border-color: $rarity-uncommon;
+      box-shadow: 0 0 12px rgba($rarity-uncommon, 0.3);
+    }
+
+    .reward-card__rarity { color: $rarity-uncommon; }
+    .reward-card__icon   { color: $rarity-uncommon; }
+  }
+
+  &--rare {
+    border-color: rgba($rarity-rare, 0.5);
+
+    &:hover:not(:disabled) {
+      border-color: $rarity-rare;
+      box-shadow: 0 0 16px rgba($rarity-rare, 0.4);
+    }
+
+    .reward-card__rarity { color: $rarity-rare; }
+    .reward-card__icon   { color: $rarity-rare; }
+  }
+
+  // ── Selected state ───────────────────────────────────────────
+  &--selected {
+    border-color: $rarity-rare !important;
+    background: rgba($rarity-rare, 0.1) !important;
+    box-shadow: 0 0 20px rgba($rarity-rare, 0.35) !important;
+  }
+}
+
+// ── Card inner elements ─────────────────────────────────────────
+.reward-card__icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.reward-card__rarity {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.reward-card__name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.reward-card__description {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.4;
+}
+
+.reward-card__flavor {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
+  line-height: 1.4;
+  font-style: italic;
+}
+
+.reward-card__check {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.75rem;
+  font-size: 1.25rem;
+  color: $rarity-rare;
+  font-weight: 900;
+}
+
+// ── Skip / continue buttons ─────────────────────────────────────
+.reward-skip-btn,
+.reward-continue-btn {
+  min-width: 10rem;
+  min-height: 2.75rem; // WCAG 44px
+}
+
+// ── Post-pick confirmation ──────────────────────────────────────
+.reward-picked {
+  font-size: 1.1rem;
+}
+
+.reward-picked__message {
+  margin: 0;
+
+  &--selected { color: #2ecc71; }
+  &--skipped  { color: rgba(255, 255, 255, 0.5); }
+}
+
+// ── Shared ascent-btn (mirrored from parent for isolation) ──────
+.ascent-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+
+  &:hover:not(:disabled) {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) { transform: translateY(0); }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #3498db;
+    outline-offset: 3px;
+  }
+
+  &--primary {
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    color: #fff;
+  }
+
+  &--secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+  }
+}
+
+// ── Responsive ──────────────────────────────────────────────────
+@media (max-width: 768px) {
+  .reward-card-list {
+    gap: 0.75rem;
+  }
+
+  .reward-card {
+    width: 11rem;
+    padding: 1.25rem 1rem;
+  }
+
+  .reward-title { font-size: 2rem; }
+}
+
+@media (max-width: 480px) {
+  .reward-card-list {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .reward-card {
+    width: 100%;
+    max-width: 18rem;
+  }
+}
+
+// ── Reduced motion ──────────────────────────────────────────────
+@media (prefers-reduced-motion: reduce) {
+  .reward-card {
+    animation: none;
+    transition: none;
+
+    &:hover:not(:disabled) { transform: none; }
+  }
+
+  .ascent-btn {
+    transition: none;
+
+    &:hover:not(:disabled) { transform: none; }
+  }
+}

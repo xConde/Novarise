@@ -351,6 +351,21 @@ export class RunService {
     this.persist();
   }
 
+  /** Buy one life heal from the shop. */
+  buyShopHeal(): void {
+    const state = this.runState;
+    if (!state) return;
+    if (state.gold < SHOP_CONFIG.healCostPerLife) return;
+    if (state.lives >= state.maxLives) return;
+
+    this.updateState({
+      ...state,
+      gold: state.gold - SHOP_CONFIG.healCostPerLife,
+      lives: Math.min(state.maxLives, state.lives + 1),
+    });
+    this.persist();
+  }
+
   /** Leave shop (marks node as completed). */
   leaveShop(): void {
     this.markCurrentNodeCompleted();

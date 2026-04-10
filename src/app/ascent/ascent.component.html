@@ -66,60 +66,40 @@
   </div>
 
   <!-- ── Reward Screen ───────────────────────────────────── -->
-  <div class="ascent-reward" *ngIf="viewMode === 'reward' && rewardConfig">
-    <h2>Victory!</h2>
-    <p class="ascent-reward-gold">+{{ rewardConfig.goldPickup }}g</p>
-
-    <div class="ascent-reward-choices" *ngIf="rewardConfig.relicChoices.length > 0">
-      <h3>Choose a Relic</h3>
-      <div class="ascent-reward-list">
-        <button
-          class="ascent-reward-card"
-          *ngFor="let reward of rewardConfig.relicChoices"
-          (click)="collectReward(reward)"
-        >
-          <span class="reward-icon">&#9830;</span>
-          <span class="reward-name">{{ reward.relicId }}</span>
-        </button>
-      </div>
-    </div>
-
-    <button class="ascent-btn ascent-btn--primary" (click)="closeRewardScreen()">
-      Continue
-    </button>
-  </div>
+  <app-reward-screen
+    *ngIf="viewMode === 'reward' && rewardConfig"
+    [config]="rewardConfig"
+    (rewardCollected)="collectReward($event)"
+    (screenClosed)="closeRewardScreen()"
+  ></app-reward-screen>
 
   <!-- ── Rest Screen ─────────────────────────────────────── -->
-  <div class="ascent-rest" *ngIf="viewMode === 'rest'">
-    <h2>Rest Site</h2>
-    <p>Take a moment to recover.</p>
-    <button class="ascent-btn ascent-btn--primary" (click)="restHeal()">
-      Rest — Heal {{ runState ? (runState.maxLives * 0.3 | number:'1.0-0') : 0 }} lives
-    </button>
-    <button class="ascent-btn ascent-btn--secondary" (click)="viewMode = 'map'">
-      Skip
-    </button>
-  </div>
+  <app-rest-screen
+    *ngIf="viewMode === 'rest' && runState"
+    [currentLives]="runState.lives"
+    [maxLives]="runState.maxLives"
+    [healAmount]="getHealAmount()"
+    (restChosen)="restHeal()"
+    (skipChosen)="viewMode = 'map'"
+  ></app-rest-screen>
 
   <!-- ── Shop Screen ─────────────────────────────────────── -->
-  <div class="ascent-shop" *ngIf="viewMode === 'shop'">
-    <h2>Shop</h2>
-    <p>Spend gold on relics and healing.</p>
-    <!-- Shop items rendered by RunService.getShopItems() — wired in shop epic -->
-    <button class="ascent-btn ascent-btn--secondary" (click)="leaveShop()">
-      Leave Shop
-    </button>
-  </div>
+  <app-shop-screen
+    *ngIf="viewMode === 'shop' && runState"
+    [shopItems]="shopItems"
+    [currentGold]="runState.gold"
+    [currentLives]="runState.lives"
+    [maxLives]="runState.maxLives"
+    (itemBought)="onShopBuy($event)"
+    (shopLeft)="leaveShop()"
+  ></app-shop-screen>
 
   <!-- ── Event Screen ────────────────────────────────────── -->
-  <div class="ascent-event" *ngIf="viewMode === 'event'">
-    <h2>Event</h2>
-    <p>An unexpected encounter...</p>
-    <!-- Event rendering wired in event epic -->
-    <button class="ascent-btn ascent-btn--secondary" (click)="completeEvent(0)">
-      Continue
-    </button>
-  </div>
+  <app-event-screen
+    *ngIf="viewMode === 'event' && currentEvent"
+    [event]="currentEvent"
+    (choiceMade)="completeEvent($event)"
+  ></app-event-screen>
 
   <!-- ── Run Summary ─────────────────────────────────────── -->
   <div class="ascent-summary" *ngIf="viewMode === 'summary' && runState">

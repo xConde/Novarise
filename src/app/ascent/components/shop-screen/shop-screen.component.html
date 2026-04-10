@@ -1,0 +1,105 @@
+<div class="shop-screen" role="main" aria-label="Shop">
+
+  <!-- Header -->
+  <div class="shop-header">
+    <h2 class="shop-title">
+      <span class="shop-icon" aria-hidden="true">&#9775;</span>
+      Shop
+    </h2>
+    <p class="shop-gold" aria-label="Your gold: {{ currentGold }}">
+      <span aria-hidden="true">&#9733;</span> Your Gold: {{ currentGold }}g
+    </p>
+  </div>
+
+  <!-- Relic Items -->
+  <section class="shop-items" aria-label="Relics for sale">
+    <h3 class="shop-section-title">Relics</h3>
+
+    <div class="shop-item-list" role="list">
+      <div
+        class="shop-card"
+        [class]="'shop-card shop-card--' + getRarityClass(item)"
+        [class.shop-card--unaffordable]="!canAfford(item.cost)"
+        *ngFor="let item of shopItems; let i = index"
+        role="listitem"
+      >
+        <span class="shop-card__icon" aria-hidden="true">&#9830;</span>
+        <span class="shop-card__rarity" *ngIf="getRelicDef(item) as relic">
+          {{ relic.rarity }}
+        </span>
+        <span class="shop-card__name">
+          {{ getRelicDef(item)?.name ?? item.item.type }}
+        </span>
+        <span class="shop-card__description">
+          {{ getRelicDef(item)?.description }}
+        </span>
+        <em class="shop-card__flavor" *ngIf="getRelicDef(item)?.flavorText">
+          {{ getRelicDef(item)!.flavorText }}
+        </em>
+        <button
+          class="shop-card__buy-btn"
+          [class.shop-card__buy-btn--unaffordable]="!canAfford(item.cost)"
+          [disabled]="!canAfford(item.cost)"
+          (click)="buyItem(i)"
+          [attr.aria-label]="'Buy ' + (getRelicDef(item)?.name ?? 'item') + ' for ' + item.cost + ' gold'"
+          type="button"
+        >
+          <span class="shop-price-coin" aria-hidden="true">&#9733;</span>
+          {{ item.cost }}g
+        </button>
+      </div>
+    </div>
+
+    <p class="shop-empty" *ngIf="shopItems.length === 0">
+      The merchant has nothing left to offer.
+    </p>
+  </section>
+
+  <!-- Heal Section -->
+  <section class="shop-heal" aria-label="Healing">
+    <h3 class="shop-section-title">Healing</h3>
+
+    <div class="shop-heal-info">
+      <span class="shop-heal-status" aria-live="polite">
+        <span aria-hidden="true">&#9829;</span>
+        {{ currentLives }}/{{ maxLives }} lives
+      </span>
+      <span class="shop-heal-count">
+        {{ healCount }}/{{ maxHealPerVisit }} heals purchased
+      </span>
+    </div>
+
+    <button
+      class="shop-heal-btn"
+      [disabled]="!canHeal()"
+      (click)="buyHeal()"
+      [attr.aria-label]="'Heal 1 life for ' + healCost + ' gold. Currently at ' + currentLives + ' of ' + maxLives + ' lives.'"
+      type="button"
+    >
+      <span class="shop-price-coin" aria-hidden="true">&#9829;</span>
+      Heal 1 Life —
+      <span
+        class="shop-heal-cost"
+        [class.shop-heal-cost--unaffordable]="!canAfford(healCost)"
+      >{{ healCost }}g</span>
+    </button>
+
+    <p class="shop-heal-disabled-hint" *ngIf="currentLives >= maxLives" aria-live="polite">
+      Already at full health.
+    </p>
+    <p class="shop-heal-disabled-hint" *ngIf="currentLives < maxLives && healCount >= maxHealPerVisit" aria-live="polite">
+      Heal limit reached for this visit.
+    </p>
+  </section>
+
+  <!-- Leave -->
+  <button
+    class="shop-leave-btn ascent-btn ascent-btn--secondary"
+    type="button"
+    (click)="leave()"
+    aria-label="Leave the shop and return to the map"
+  >
+    Leave Shop
+  </button>
+
+</div>

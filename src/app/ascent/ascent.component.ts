@@ -6,7 +6,7 @@ import { RunService } from './services/run.service';
 import { RunState, RunStatus } from './models/run-state.model';
 import { MapNode, NodeMap, NodeType, getAvailableNodes } from './models/node-map.model';
 import { RelicDefinition, RELIC_DEFINITIONS, RelicId } from './models/relic.model';
-import { RewardScreenConfig, RewardItem } from './models/encounter.model';
+import { RewardScreenConfig, RewardItem, ShopItem, RunEvent } from './models/encounter.model';
 
 /**
  * Ascent Mode root component.
@@ -109,9 +109,11 @@ export class AscentComponent implements OnInit, OnDestroy {
         this.viewMode = 'rest';
         break;
       case NodeType.SHOP:
+        this.runService.generateShopItems();
         this.viewMode = 'shop';
         break;
       case NodeType.EVENT:
+        this.runService.generateEvent();
         this.viewMode = 'event';
         break;
       case NodeType.UNKNOWN:
@@ -177,9 +179,39 @@ export class AscentComponent implements OnInit, OnDestroy {
     this.runService.buyShopItem(index);
   }
 
+  /**
+   * Unified shop buy handler for ShopScreenComponent.
+   * index === -1 is the heal-purchase signal.
+   */
+  onShopBuy(index: number): void {
+    if (index === -1) {
+      this.runService.buyShopHeal();
+    } else {
+      this.runService.buyShopItem(index);
+    }
+  }
+
+  /** Current shop items exposed for ShopScreenComponent binding. */
+  get shopItems(): ShopItem[] {
+    return this.runService.getShopItems();
+  }
+
+  /** Current event exposed for EventScreenComponent binding. */
+  get currentEvent(): RunEvent | null {
+    return this.runService.getCurrentEvent();
+  }
+
   /** Leave shop, return to map. */
   leaveShop(): void {
+    this.runService.leaveShop();
     this.viewMode = 'map';
+  }
+
+  /** Calculate heal amount for rest site (30% of maxLives, minimum 2). */
+  getHealAmount(): number {
+    if (!this.runState) return 0;
+    const heal = Math.floor(this.runState.maxLives * 0.3);
+    return Math.max(2, heal);
   }
 
   /** Abandon run and return to landing. */
@@ -242,9 +274,11 @@ export class AscentComponent implements OnInit, OnDestroy {
         this.viewMode = 'rest';
         break;
       case NodeType.SHOP:
+        this.runService.generateShopItems();
         this.viewMode = 'shop';
         break;
       case NodeType.EVENT:
+        this.runService.generateEvent();
         this.viewMode = 'event';
         break;
       default:
