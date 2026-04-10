@@ -111,11 +111,11 @@ describe('NodeMapComponent', () => {
       expect(posRow1!.y).not.toBe(posRow2!.y);
     });
 
-    it('row 0 is at a greater y (lower on screen) than row 2 (boss at top)', () => {
+    it('row 0 is at a smaller y (top of canvas) than row 2 (boss at bottom)', () => {
       const posRow0 = component.nodePositions.get('r0c0')!;
       const posRow2 = component.nodePositions.get('r2c0')!;
-      // Y increases downward; row 0 should have larger y than boss row
-      expect(posRow0.y).toBeGreaterThan(posRow2.y);
+      // Y increases downward; row 0 (start) should have smaller y than boss row
+      expect(posRow0.y).toBeLessThan(posRow2.y);
     });
 
     it('mapHeight is positive and scales with row count', () => {

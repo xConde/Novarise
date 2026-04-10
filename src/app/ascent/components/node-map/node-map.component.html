@@ -44,7 +44,7 @@
       [title]="getNodeTooltip(node)"
       [attr.aria-label]="getNodeTooltip(node)"
     >
-      <span class="map-node-icon" aria-hidden="true">{{ nodeIcons[node.type] }}</span>
+      <span class="map-node-icon" aria-hidden="true" [innerHTML]="nodeIcons[node.type]"></span>
     </button>
 
   </div>

@@ -25,12 +25,12 @@
         role="listitem"
         type="button"
       >
-        <span class="reward-card__icon" aria-hidden="true">&#9830;</span>
+        <span class="reward-card__icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 22 9 12 22 2 9"/></svg></span>
         <span class="reward-card__rarity">{{ relic.rarity }}</span>
         <span class="reward-card__name">{{ relic.name }}</span>
         <span class="reward-card__description">{{ relic.description }}</span>
         <em class="reward-card__flavor">{{ relic.flavorText }}</em>
-        <span class="reward-card__check" *ngIf="selectedRelic === relic.id" aria-hidden="true">&#10003;</span>
+        <span class="reward-card__check" *ngIf="selectedRelic === relic.id" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg></span>
       </button>
     </div>
 

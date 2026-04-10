@@ -66,15 +66,48 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit {
 
   readonly NodeType = NodeType;
 
-  /** Unicode / HTML-entity icon per node type. */
+  /** Inline SVG icon per node type (16×16 display, 24×24 viewBox, stroke-based). */
   readonly nodeIcons: Record<string, string> = {
-    [NodeType.COMBAT]: '\u2694',    // ⚔
-    [NodeType.ELITE]: '\u26A1',     // ⚡
-    [NodeType.BOSS]: '\u2620',      // ☠
-    [NodeType.REST]: '\u2615',      // ☕
-    [NodeType.SHOP]: '\u25A0',      // ■ (coin-like square)
-    [NodeType.EVENT]: '?',
-    [NodeType.UNKNOWN]: '?',
+    [NodeType.COMBAT]:
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<line x1="18" y1="6" x2="6" y2="18"/>' +
+      '<line x1="6" y1="6" x2="18" y2="18"/>' +
+      '<line x1="6" y1="2" x2="6" y2="10"/>' +
+      '<line x1="18" y1="14" x2="18" y2="22"/>' +
+      '</svg>',
+    [NodeType.ELITE]:
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M12 2 C10 6 7 8 7 12 C7 16 9.5 19 12 20 C14.5 19 17 16 17 12 C17 8 14 6 12 2Z"/>' +
+      '<line x1="12" y1="20" x2="12" y2="22"/>' +
+      '</svg>',
+    [NodeType.BOSS]:
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<circle cx="12" cy="10" r="7"/>' +
+      '<path d="M9 9 L9.5 11 M15 9 L14.5 11"/>' +
+      '<path d="M9 14 Q12 16 15 14"/>' +
+      '</svg>',
+    [NodeType.REST]:
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>' +
+      '</svg>',
+    [NodeType.SHOP]:
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<circle cx="12" cy="12" r="8"/>' +
+      '<line x1="12" y1="7" x2="12" y2="17"/>' +
+      '<path d="M9 10 Q9 8 12 8 Q15 8 15 10 Q15 12 12 12 Q9 12 9 14 Q9 16 12 16 Q15 16 15 14"/>' +
+      '</svg>',
+    [NodeType.EVENT]:
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<circle cx="12" cy="12" r="9"/>' +
+      '<line x1="12" y1="8" x2="12" y2="13"/>' +
+      '<line x1="12" y1="16" x2="12.01" y2="16"/>' +
+      '</svg>',
+    [NodeType.UNKNOWN]:
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<circle cx="12" cy="12" r="9"/>' +
+      '<path d="M9.5 9 C9.5 7 14.5 7 14.5 10 C14.5 12 12 12 12 14"/>' +
+      '<line x1="12" y1="17" x2="12.01" y2="17"/>' +
+      '</svg>',
   };
 
   readonly nodeLabels: Record<string, string> = {
@@ -103,9 +136,10 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit {
    * Computes pixel positions for every node and builds SVG bezier paths.
    *
    * Visual coordinate system:
-   * - Row 0 (start) is rendered at the BOTTOM of the canvas.
-   * - Boss row is rendered at the TOP.
+   * - Row 0 (start) is rendered at the TOP of the canvas (smallest y).
+   * - Boss row is rendered at the BOTTOM (largest y).
    * - Within each row, nodes are evenly distributed horizontally.
+   * - Player reads top-to-bottom and progresses downward.
    */
   computeLayout(): void {
     if (!this.nodeMap) return;
@@ -129,8 +163,8 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit {
 
     for (const [row, rowNodes] of nodesByRow.entries()) {
       const count = rowNodes.length;
-      // Flip Y: row 0 is at bottom
-      const y = this.mapHeight - NODE_MAP_LAYOUT.paddingY - row * NODE_MAP_LAYOUT.rowSpacing;
+      // Natural Y: row 0 at top, boss at bottom
+      const y = NODE_MAP_LAYOUT.paddingY + row * NODE_MAP_LAYOUT.rowSpacing;
 
       for (let i = 0; i < count; i++) {
         const usableWidth = this.mapWidth - NODE_MAP_LAYOUT.paddingX * 2;
@@ -161,11 +195,12 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit {
         const from = this.nodePositions.get(edge.fromId)!;
         const to = this.nodePositions.get(edge.toId)!;
 
-        // Anchor at top/bottom of the node circle
+        // Anchor at bottom of source node and top of target node
+        // (row 0 is at top, so connections flow downward)
         const x1 = from.x;
-        const y1 = from.y - NODE_MAP_LAYOUT.nodeRadius;
+        const y1 = from.y + NODE_MAP_LAYOUT.nodeRadius;
         const x2 = to.x;
-        const y2 = to.y + NODE_MAP_LAYOUT.nodeRadius;
+        const y2 = to.y - NODE_MAP_LAYOUT.nodeRadius;
 
         // Cubic bezier control points for a smooth S-curve
         const midY = (y1 + y2) / 2;
@@ -179,7 +214,11 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit {
       });
   }
 
-  /** After view init, scroll so the current node row is centered in the viewport. */
+  /**
+   * Scrolls the map container so the current node is visible.
+   * Row 0 (start nodes) is at the top, so no scroll is needed at run start.
+   * Only scrolls when the current node is below the visible fold.
+   */
   scrollToCurrentNode(): void {
     if (!this.currentNodeId || !this.mapContainer) return;
     const pos = this.nodePositions.get(this.currentNodeId);
@@ -187,8 +226,14 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit {
 
     const container = this.mapContainer.nativeElement;
     const containerHeight = container.clientHeight;
-    const scrollTarget = pos.y - containerHeight / 2;
-    container.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'smooth' });
+    const nodeBottom = pos.y + NODE_MAP_LAYOUT.nodeRadius;
+    const visibleBottom = container.scrollTop + containerHeight;
+
+    if (nodeBottom > visibleBottom) {
+      // Node is below the fold — scroll to center it
+      const scrollTarget = pos.y - containerHeight / 2;
+      container.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'smooth' });
+    }
   }
 
   isSelectable(node: MapNode): boolean {

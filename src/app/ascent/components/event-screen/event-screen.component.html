@@ -57,7 +57,7 @@
         [class.negative]="currentOutcome.goldDelta < 0"
         [attr.aria-label]="(currentOutcome.goldDelta > 0 ? 'Gained' : 'Lost') + ' ' + (currentOutcome.goldDelta | number) + ' gold'"
       >
-        <span aria-hidden="true">&#9733;</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="7" x2="12" y2="17"/><path d="M9 10 Q9 8 12 8 Q15 8 15 10 Q15 12 12 12 Q9 12 9 14 Q9 16 12 16 Q15 16 15 14"/></svg>
         {{ formatDelta(currentOutcome.goldDelta) }}g
       </span>
 
@@ -69,7 +69,7 @@
         [class.negative]="currentOutcome.livesDelta < 0"
         [attr.aria-label]="(currentOutcome.livesDelta > 0 ? 'Gained' : 'Lost') + ' ' + (currentOutcome.livesDelta | number) + ' ' + (currentOutcome.livesDelta === 1 || currentOutcome.livesDelta === -1 ? 'life' : 'lives')"
       >
-        <span aria-hidden="true">&#9829;</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg>
         {{ formatDelta(currentOutcome.livesDelta) }}
       </span>
 
@@ -79,7 +79,7 @@
         *ngIf="currentOutcome.relicId"
         [attr.aria-label]="'Gained relic: ' + currentOutcome.relicId"
       >
-        <span aria-hidden="true">&#9830;</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 22 9 12 22 2 9"/></svg>
         Gained: {{ currentOutcome.relicId }}
       </span>
 
@@ -89,7 +89,7 @@
         *ngIf="currentOutcome.removeRelicId"
         [attr.aria-label]="'Lost relic: ' + currentOutcome.removeRelicId"
       >
-        <span aria-hidden="true">&#9830;</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 22 9 12 22 2 9"/></svg>
         Lost: {{ currentOutcome.removeRelicId }}
       </span>
     </div>
