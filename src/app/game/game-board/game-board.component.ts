@@ -399,6 +399,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gameState = this.gameStateService.getState();
   }
 
+  /** Whether the current game is part of an Ascent run (used by template). */
+  get isAscentRun(): boolean {
+    return this.runService.isInRun();
+  }
+
   ngOnInit(): void {
     this.showFps = this.settingsService.get().showFps;
 

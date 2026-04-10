@@ -1,7 +1,7 @@
 <div class="card-hand" role="toolbar" aria-label="Card hand">
 
   <!-- Energy display -->
-  <div class="card-hand__energy" aria-label="Energy: {{ energy.current }} of {{ energy.max }}">
+  <div class="card-hand__energy" [attr.aria-label]="'Energy: ' + energy.current + ' of ' + energy.max">
     <svg class="energy-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
          fill="currentColor" aria-hidden="true">
       <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
@@ -33,7 +33,7 @@
   </div>
 
   <!-- Draw / discard pile counts -->
-  <div class="card-hand__piles" aria-label="Deck piles">
+  <div class="card-hand__piles" [attr.aria-label]="'Deck piles'">
     <span class="pile-count pile-count--draw"
           [attr.aria-label]="deckState.drawPile.length + ' cards in draw pile'"
           title="Draw pile">
