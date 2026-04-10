@@ -20,6 +20,7 @@ function makeRunState(overrides: Partial<RunState> = {}): RunState {
     maxLives: 20,
     gold: 150,
     relicIds: [],
+    deckCardIds: [],
     encounterResults: [],
     status: RunStatus.IN_PROGRESS,
     startedAt: 1000000,

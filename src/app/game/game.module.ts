@@ -12,6 +12,7 @@ import { TowerInfoPanelComponent } from './game-board/components/tower-info-pane
 import { GameResultsOverlayComponent } from './game-board/components/game-results-overlay/game-results-overlay.component';
 import { GamePauseService } from './game-board/services/game-pause.service';
 import { ChallengeDisplayService } from './game-board/services/challenge-display.service';
+import { CardHandComponent } from './game-board/components/card-hand/card-hand.component';
 @NgModule({
   declarations: [
     GameComponent,
@@ -21,6 +22,7 @@ import { ChallengeDisplayService } from './game-board/services/challenge-display
     GameSetupPanelComponent,
     TowerInfoPanelComponent,
     GameResultsOverlayComponent,
+    CardHandComponent,
   ],
   imports: [
     CommonModule,

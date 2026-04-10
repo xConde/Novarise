@@ -36,6 +36,8 @@ export interface EncounterResult {
   readonly wavesCompleted: number;
 }
 
+import { CardId } from './card.model';
+
 export interface RunState {
   readonly id: string;
   readonly seed: number;
@@ -48,6 +50,8 @@ export interface RunState {
   readonly maxLives: number;
   readonly gold: number;
   readonly relicIds: string[];
+  /** Card IDs in the player's deck — persists across encounters within a run. */
+  readonly deckCardIds: CardId[];
   readonly encounterResults: EncounterResult[];
   readonly status: RunStatus;
   readonly startedAt: number;
@@ -71,6 +75,7 @@ export function createInitialRunState(
     maxLives: config.startingLives,
     gold: config.startingGold,
     relicIds: [],
+    deckCardIds: [],
     encounterResults: [],
     status: RunStatus.IN_PROGRESS,
     startedAt: Date.now(),

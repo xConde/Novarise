@@ -11,6 +11,7 @@
 import { WaveDefinition } from '../../game/game-board/models/wave.model';
 import { NodeType } from './node-map.model';
 import { RelicId } from './relic.model';
+import { CardId } from './card.model';
 
 export interface EncounterConfig {
   readonly nodeId: string;
@@ -23,7 +24,7 @@ export interface EncounterConfig {
 }
 
 /** Reward offered after a combat encounter. */
-export type RewardItem = RelicReward | GoldReward;
+export type RewardItem = RelicReward | GoldReward | CardReward;
 
 export interface RelicReward {
   readonly type: 'relic';
@@ -33,6 +34,11 @@ export interface RelicReward {
 export interface GoldReward {
   readonly type: 'gold';
   readonly amount: number;
+}
+
+export interface CardReward {
+  readonly type: 'card';
+  readonly cardId: CardId;
 }
 
 /** Reward screen config generated after encounter victory. */

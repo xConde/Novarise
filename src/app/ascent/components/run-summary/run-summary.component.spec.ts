@@ -17,6 +17,7 @@ function makeRunState(overrides: Partial<RunState> = {}): RunState {
     maxLives: 20,
     gold: 80,
     relicIds: [RelicId.IRON_HEART, RelicId.CHAIN_REACTION],
+    deckCardIds: [],
     encounterResults: [
       {
         nodeId: 'node_1',

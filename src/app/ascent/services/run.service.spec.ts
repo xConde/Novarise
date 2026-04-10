@@ -393,6 +393,7 @@ describe('RunService', () => {
       maxLives: 20,
       gold: 200,
       relicIds: [RelicId.QUICK_DRAW],
+      deckCardIds: [],
       encounterResults: [],
       status: RunStatus.IN_PROGRESS,
       startedAt: 999,

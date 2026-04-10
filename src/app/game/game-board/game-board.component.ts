@@ -72,9 +72,19 @@ import { TowerSelectionService } from './services/tower-selection.service';
 import { FocusTrap } from '../../shared/utils/focus-trap.util';
 import { RunService } from '../../ascent/services/run.service';
 import { RelicService } from '../../ascent/services/relic.service';
+import { DeckService } from '../../ascent/services/deck.service';
 import { EncounterResult } from '../../ascent/models/run-state.model';
 import { AscensionEffectType, getAscensionEffects } from '../../ascent/models/ascension.model';
 import { ModifierEffects } from './models/game-modifier.model';
+import {
+  CardInstance,
+  DeckState,
+  EnergyState,
+  SpellCardEffect,
+  ModifierCardEffect,
+  UtilityCardEffect,
+} from '../../ascent/models/card.model';
+import { getCardDefinition } from '../../ascent/constants/card-definitions';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
 export interface EnemyBadge {
@@ -275,6 +285,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private stateSubscription: Subscription | null = null;
   private hotkeySubscription: Subscription | null = null;
 
+  // Ascent Mode — deck state exposed to CardHandComponent via template
+  deckState: DeckState | null = null;
+  energyState: EnergyState | null = null;
+  private deckSub: Subscription | null = null;
+  private energySub: Subscription | null = null;
+
   // WebGL context loss recovery (handlers live in SceneService; component owns the flag)
   contextLost = false;
 
@@ -376,6 +392,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private towerSelectionService: TowerSelectionService,
     private runService: RunService,
     private relicService: RelicService,
+    private deckService: DeckService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -468,7 +485,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Apply per-campaign-level wave definitions if this is a campaign map
     this.gameSessionService.applyCampaignWaves();
 
-    // Ascent Mode: override lives, gold, waves, and apply ascension difficulty modifiers
+    // Ascent Mode: override lives, gold, waves, apply ascension modifiers, and init deck
     if (this.runService.isInRun()) {
       const encounter = this.runService.getCurrentEncounter();
       const runState = this.runService.runState;
@@ -479,6 +496,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.gameStateService.setMaxWaves(encounter.waves.length);
         this.applyAscentAscensionModifiers(runState.ascensionLevel);
       }
+
+      // Subscribe to deck/energy state for the card hand UI
+      this.deckSub = this.deckService.deckState$.subscribe(s => { this.deckState = s; });
+      this.energySub = this.deckService.energy$.subscribe(e => { this.energyState = e; });
+
+      // Initialize deck for this encounter and draw the opening hand
+      this.deckService.resetForEncounter();
+      this.deckService.drawForWave();
     }
 
     this.sceneService.initScene();
@@ -669,6 +694,89 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Whether a tower type is selected for placement (PLACE mode). */
   get isPlaceMode(): boolean {
     return this.selectedTowerType !== null;
+  }
+
+  // --- Ascent Mode: card hand ---
+
+  /**
+   * Handle a card played from CardHandComponent.
+   * Deducts energy via DeckService then dispatches the card effect.
+   */
+  onCardPlayed(card: CardInstance): void {
+    if (!this.deckService.playCard(card.instanceId)) return;
+
+    const def = getCardDefinition(card.cardId);
+    const effect = card.upgraded && def.upgradedEffect ? def.upgradedEffect : def.effect;
+
+    switch (effect.type) {
+      case 'tower':
+        // Enter tower placement mode — player must click a tile to place
+        this.selectedTowerType = effect.towerType;
+        break;
+      case 'spell':
+        this.executeSpellCard(effect as SpellCardEffect);
+        break;
+      case 'modifier':
+        this.executeModifierCard(effect as ModifierCardEffect);
+        break;
+      case 'utility':
+        this.executeUtilityCard(effect as UtilityCardEffect);
+        break;
+    }
+  }
+
+  private executeSpellCard(effect: SpellCardEffect): void {
+    switch (effect.spellId) {
+      case 'gold_rush':
+        this.gameStateService.addGold(effect.value);
+        break;
+      case 'lightning_strike': {
+        // Deal damage to the strongest living enemy
+        const enemies = this.enemyService.getEnemies();
+        let strongest: { id: string; health: number } | null = null;
+        for (const [id, enemy] of enemies) {
+          if (!strongest || enemy.health > strongest.health) {
+            strongest = { id, health: enemy.health };
+          }
+        }
+        if (strongest) {
+          this.enemyService.damageEnemy(strongest.id, effect.value);
+        }
+        break;
+      }
+      // repair_walls, frost_wave, overclock, scout_ahead, salvage, fortify:
+      // Full implementations deferred — require GameStateService API extensions.
+      default:
+        break;
+    }
+  }
+
+  private executeModifierCard(_effect: ModifierCardEffect): void {
+    // Modifier persistence deferred — requires GameStateService wave-countdown API.
+    // Active modifiers will be read by combat services each frame once that API exists.
+  }
+
+  private executeUtilityCard(effect: UtilityCardEffect): void {
+    switch (effect.utilityId) {
+      case 'draw':
+        for (let i = 0; i < effect.value; i++) {
+          this.deckService.drawOne();
+        }
+        break;
+      case 'energy':
+        this.deckService.addEnergy(effect.value);
+        break;
+      case 'recycle': {
+        const handSize = this.deckState?.hand.length ?? 0;
+        this.deckService.discardHand();
+        for (let i = 0; i < handSize + effect.value; i++) {
+          this.deckService.drawOne();
+        }
+        break;
+      }
+      default:
+        break;
+    }
   }
 
   // --- Drag-and-drop tower placement ---
@@ -942,6 +1050,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.combatLoopService.resetLeakState();
     this.relicService.resetWaveState();
     this.minimapService.show();
+
+    // Ascent Mode: discard previous hand and draw new wave hand
+    if (this.runService.isInRun() && state.wave > 0) {
+      this.deckService.discardHand();
+      this.deckService.drawForWave();
+    }
 
     this.gameStateService.startWave();
     const modEffects = this.gameStateService.getModifierEffects();
@@ -1932,6 +2046,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (this.hotkeySubscription) {
       this.hotkeySubscription.unsubscribe();
+    }
+
+    if (this.deckSub) {
+      this.deckSub.unsubscribe();
+      this.deckSub = null;
+    }
+
+    if (this.energySub) {
+      this.energySub.unsubscribe();
+      this.energySub = null;
     }
 
     this.gameInput.cleanup();

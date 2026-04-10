@@ -31,4 +31,5 @@ export {
   createGameSessionServiceSpy,
   createRelicServiceSpy,
   createRunServiceSpy,
+  createDeckServiceSpy,
 } from './test-spies.factory';

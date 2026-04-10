@@ -1,7 +1,9 @@
-import { EMPTY, of } from 'rxjs';
+import { BehaviorSubject, EMPTY, of } from 'rxjs';
 
 import { RelicService } from '../../../ascent/services/relic.service';
 import { RunService } from '../../../ascent/services/run.service';
+import { DeckService } from '../../../ascent/services/deck.service';
+import { DECK_CONFIG, DeckState, EnergyState } from '../../../ascent/models/card.model';
 import { GameBoardService } from '../game-board.service';
 import { EnemyService, DamageResult } from '../services/enemy.service';
 import { GameStatsService, GameStats } from '../services/game-stats.service';
@@ -958,6 +960,62 @@ export function createRunServiceSpy(): jasmine.SpyObj<RunService> {
   spy.hasActiveRun.and.returnValue(false);
   spy.getCurrentEncounter.and.returnValue(null);
   (Object.getOwnPropertyDescriptor(spy, 'runState')!.get as jasmine.Spy).and.returnValue(null);
+
+  return spy;
+}
+
+/**
+ * Create a pre-configured DeckService spy for use in GameBoardComponent tests.
+ *
+ * Default return values:
+ *   - deckState$ — Observable of an empty DeckState
+ *   - energy$ — Observable of { current: 0, max: DECK_CONFIG.baseEnergy }
+ *   - playCard() — true (success)
+ *   - drawOne() — true (success)
+ *   - All other methods — no-op void or safe defaults
+ */
+export function createDeckServiceSpy(): jasmine.SpyObj<DeckService> {
+  const emptyDeckState: DeckState = {
+    drawPile: [],
+    hand: [],
+    discardPile: [],
+    exhaustPile: [],
+  };
+  const emptyEnergy: EnergyState = { current: 0, max: DECK_CONFIG.baseEnergy };
+
+  const deckState$ = new BehaviorSubject<DeckState>(emptyDeckState);
+  const energy$ = new BehaviorSubject<EnergyState>(emptyEnergy);
+
+  const spy = jasmine.createSpyObj<DeckService>('DeckService', [
+    'initializeDeck',
+    'resetForEncounter',
+    'drawForWave',
+    'discardHand',
+    'playCard',
+    'drawOne',
+    'addCard',
+    'removeCard',
+    'upgradeCard',
+    'getAllCards',
+    'getEnergy',
+    'getDeckState',
+    'setMaxEnergy',
+    'addEnergy',
+    'clear',
+  ]);
+
+  // DeckService exposes deckState$ and energy$ as readonly Observables.
+  // We assign observables directly using type bypass.
+  (spy as unknown as { deckState$: ReturnType<typeof deckState$.asObservable> }).deckState$ = deckState$.asObservable();
+  (spy as unknown as { energy$: ReturnType<typeof energy$.asObservable> }).energy$ = energy$.asObservable();
+
+  spy.playCard.and.returnValue(true);
+  spy.drawOne.and.returnValue(true);
+  spy.removeCard.and.returnValue(true);
+  spy.upgradeCard.and.returnValue(true);
+  spy.getAllCards.and.returnValue([]);
+  spy.getEnergy.and.returnValue(emptyEnergy);
+  spy.getDeckState.and.returnValue(emptyDeckState);
 
   return spy;
 }

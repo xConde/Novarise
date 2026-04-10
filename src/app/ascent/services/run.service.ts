@@ -36,10 +36,12 @@ import {
 import { NodeMapGeneratorService } from './node-map-generator.service';
 import { EncounterService } from './encounter.service';
 import { RelicService } from './relic.service';
+import { DeckService } from './deck.service';
 import { RunPersistenceService } from './run-persistence.service';
 import { RunEventBusService, RunEventType } from './run-event-bus.service';
 import { RUN_EVENTS } from '../constants/run-events';
 import { PlayerProfileService } from '../../core/services/player-profile.service';
+import { getStarterDeck } from '../constants/card-definitions';
 
 /**
  * Central orchestrator for Ascent Mode runs.
@@ -77,6 +79,7 @@ export class RunService {
     private nodeMapGenerator: NodeMapGeneratorService,
     private encounterService: EncounterService,
     private relicService: RelicService,
+    private deckService: DeckService,
     private persistence: RunPersistenceService,
     private eventBus: RunEventBusService,
     private playerProfile: PlayerProfileService,
@@ -156,10 +159,15 @@ export class RunService {
 
     const seed = Date.now();
     const config = this.applyAscensionToConfig(DEFAULT_RUN_CONFIG, ascensionLevel);
+    const starterDeck = getStarterDeck();
     const state = createInitialRunState(seed, config, ascensionLevel);
+    const stateWithDeck = { ...state, deckCardIds: starterDeck };
 
     this.runRng = createSeededRng(seed);
-    this.updateState(state);
+    this.updateState(stateWithDeck);
+
+    // Initialize the deck service with the starter deck
+    this.deckService.initializeDeck(starterDeck, seed);
 
     // Generate act 1 map
     const map = this.nodeMapGenerator.generateActMap(0, seed);
@@ -310,6 +318,10 @@ export class RunService {
         break;
       case 'gold':
         this.updateState({ ...state, gold: state.gold + reward.amount });
+        break;
+      case 'card':
+        this.deckService.addCard(reward.cardId);
+        this.updateState({ ...state, deckCardIds: [...state.deckCardIds, reward.cardId] });
         break;
     }
     this.persist();
@@ -584,5 +596,6 @@ export class RunService {
     this.currentEvent = null;
     this.runRng = null;
     this.relicService.clearRelics();
+    this.deckService.clear();
   }
 }

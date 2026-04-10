@@ -1,0 +1,205 @@
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { CommonModule } from '@angular/common';
+import { CardHandComponent, HandCard } from './card-hand.component';
+import {
+  CardId,
+  CardRarity,
+  CardType,
+  CardInstance,
+  DeckState,
+  EnergyState,
+} from '../../../../ascent/models/card.model';
+
+// Minimal deck state helpers ────────────────────────────────────────────────
+
+function makeInstance(cardId: CardId, upgraded = false): CardInstance {
+  return { instanceId: `inst_${cardId}`, cardId, upgraded };
+}
+
+function makeDeckState(hand: CardInstance[] = []): DeckState {
+  return {
+    drawPile: [makeInstance(CardId.TOWER_BASIC)],
+    hand,
+    discardPile: [makeInstance(CardId.GOLD_RUSH)],
+    exhaustPile: [],
+  };
+}
+
+function makeEnergy(current = 3, max = 3): EnergyState {
+  return { current, max };
+}
+
+describe('CardHandComponent', () => {
+  let component: CardHandComponent;
+  let fixture: ComponentFixture<CardHandComponent>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      declarations: [CardHandComponent],
+      imports: [CommonModule],
+    }).compileComponents();
+  });
+
+  beforeEach(() => {
+    fixture = TestBed.createComponent(CardHandComponent);
+    component = fixture.componentInstance;
+    component.deckState = makeDeckState();
+    component.energy = makeEnergy();
+  });
+
+  it('should create', () => {
+    expect(component).toBeTruthy();
+  });
+
+  describe('resolveHand', () => {
+    it('renders the correct number of cards from hand', () => {
+      const hand = [
+        makeInstance(CardId.TOWER_BASIC),
+        makeInstance(CardId.GOLD_RUSH),
+        makeInstance(CardId.DAMAGE_BOOST),
+      ];
+      component.deckState = makeDeckState(hand);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+
+      expect(component.handCards.length).toBe(3);
+    });
+
+    it('resolves correct definition for each card', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+
+      expect(component.handCards[0].definition.id).toBe(CardId.TOWER_BASIC);
+      expect(component.handCards[0].definition.type).toBe(CardType.TOWER);
+    });
+
+    it('marks card as playable when energy is sufficient', () => {
+      // TOWER_BASIC costs 1 energy
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC)]);
+      component.energy = makeEnergy(1, 3);
+      component.resolveHand();
+
+      expect(component.handCards[0].canPlay).toBeTrue();
+    });
+
+    it('marks card as unplayable when energy is insufficient', () => {
+      // TOWER_MORTAR costs 3 energy
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_MORTAR)]);
+      component.energy = makeEnergy(1, 3);
+      component.resolveHand();
+
+      expect(component.handCards[0].canPlay).toBeFalse();
+    });
+
+    it('returns empty array when deckState is not set', () => {
+      (component as unknown as { deckState: DeckState | null }).deckState = null;
+      component.resolveHand();
+
+      expect(component.handCards).toEqual([]);
+    });
+
+    it('handles empty hand', () => {
+      component.deckState = makeDeckState([]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+
+      expect(component.handCards).toEqual([]);
+    });
+
+    it('reflects upgraded flag on HandCard instance', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_BASIC, true)]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+
+      expect(component.handCards[0].instance.upgraded).toBeTrue();
+    });
+  });
+
+  describe('playCard', () => {
+    it('emits cardPlayed with the card instance when card is playable', () => {
+      const instance = makeInstance(CardId.TOWER_BASIC);
+      component.deckState = makeDeckState([instance]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+
+      const emitted: CardInstance[] = [];
+      component.cardPlayed.subscribe(c => emitted.push(c));
+      component.playCard(component.handCards[0]);
+
+      expect(emitted.length).toBe(1);
+      expect(emitted[0]).toBe(instance);
+    });
+
+    it('does not emit when card is unplayable', () => {
+      component.deckState = makeDeckState([makeInstance(CardId.TOWER_MORTAR)]);
+      component.energy = makeEnergy(0, 3);
+      component.resolveHand();
+
+      const emitted: CardInstance[] = [];
+      component.cardPlayed.subscribe(c => emitted.push(c));
+      const unplayable: HandCard = { ...component.handCards[0], canPlay: false };
+      component.playCard(unplayable);
+
+      expect(emitted.length).toBe(0);
+    });
+  });
+
+  describe('getCardTypeClass', () => {
+    it('returns card--tower for TOWER type', () => {
+      expect(component.getCardTypeClass(CardType.TOWER)).toBe('card--tower');
+    });
+
+    it('returns card--spell for SPELL type', () => {
+      expect(component.getCardTypeClass(CardType.SPELL)).toBe('card--spell');
+    });
+
+    it('returns card--modifier for MODIFIER type', () => {
+      expect(component.getCardTypeClass(CardType.MODIFIER)).toBe('card--modifier');
+    });
+
+    it('returns card--utility for UTILITY type', () => {
+      expect(component.getCardTypeClass(CardType.UTILITY)).toBe('card--utility');
+    });
+  });
+
+  describe('getRarityClass', () => {
+    it('returns correct class for each rarity', () => {
+      expect(component.getRarityClass(CardRarity.STARTER)).toBe('card--starter');
+      expect(component.getRarityClass(CardRarity.COMMON)).toBe('card--common');
+      expect(component.getRarityClass(CardRarity.UNCOMMON)).toBe('card--uncommon');
+      expect(component.getRarityClass(CardRarity.RARE)).toBe('card--rare');
+    });
+  });
+
+  describe('pile counts', () => {
+    it('reflects draw pile and discard pile lengths from deckState', () => {
+      const state: DeckState = {
+        drawPile: [makeInstance(CardId.TOWER_BASIC), makeInstance(CardId.TOWER_BASIC)],
+        hand: [],
+        discardPile: [makeInstance(CardId.GOLD_RUSH)],
+        exhaustPile: [],
+      };
+      component.deckState = state;
+      component.energy = makeEnergy();
+      component.resolveHand();
+
+      expect(component.deckState.drawPile.length).toBe(2);
+      expect(component.deckState.discardPile.length).toBe(1);
+    });
+  });
+
+  describe('energy display', () => {
+    it('exposes current and max from the energy input', () => {
+      component.energy = makeEnergy(2, 5);
+      expect(component.energy.current).toBe(2);
+      expect(component.energy.max).toBe(5);
+    });
+  });
+
+  describe('ngOnDestroy', () => {
+    it('cleans up subscriptions without error', () => {
+      expect(() => component.ngOnDestroy()).not.toThrow();
+    });
+  });
+});

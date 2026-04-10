@@ -1,0 +1,60 @@
+<div class="card-hand" role="toolbar" aria-label="Card hand">
+
+  <!-- Energy display -->
+  <div class="card-hand__energy" aria-label="Energy: {{ energy.current }} of {{ energy.max }}">
+    <svg class="energy-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+         fill="currentColor" aria-hidden="true">
+      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+    </svg>
+    <span class="energy-current">{{ energy.current }}</span>
+    <span class="energy-separator">/</span>
+    <span class="energy-max">{{ energy.max }}</span>
+  </div>
+
+  <!-- Cards -->
+  <div class="card-hand__cards" role="list">
+    <button
+      *ngFor="let card of handCards"
+      class="card"
+      role="listitem"
+      [ngClass]="[getCardTypeClass(card.definition.type), getRarityClass(card.definition.rarity)]"
+      [class.card--playable]="card.canPlay"
+      [class.card--unplayable]="!card.canPlay"
+      [class.card--upgraded]="card.instance.upgraded"
+      [disabled]="!card.canPlay"
+      (click)="playCard(card)"
+      [attr.aria-label]="card.definition.name + ' — ' + card.definition.description + ' — Energy cost: ' + card.definition.energyCost"
+      [attr.aria-disabled]="!card.canPlay">
+      <span class="card__cost" [class.card__cost--affordable]="card.canPlay"
+            aria-hidden="true">{{ card.definition.energyCost }}</span>
+      <span class="card__name">{{ card.definition.name }}</span>
+      <span class="card__type" aria-hidden="true">{{ card.definition.type }}</span>
+    </button>
+  </div>
+
+  <!-- Draw / discard pile counts -->
+  <div class="card-hand__piles" aria-label="Deck piles">
+    <span class="pile-count pile-count--draw"
+          [attr.aria-label]="deckState.drawPile.length + ' cards in draw pile'"
+          title="Draw pile">
+      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <rect x="3" y="7" width="18" height="14" rx="2"/>
+        <path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/>
+      </svg>
+      {{ deckState.drawPile.length }}
+    </span>
+    <span class="pile-count pile-count--discard"
+          [attr.aria-label]="deckState.discardPile.length + ' cards in discard pile'"
+          title="Discard pile">
+      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+        <path d="M10 11v6M14 11v6"/>
+      </svg>
+      {{ deckState.discardPile.length }}
+    </span>
+  </div>
+
+</div>

@@ -300,8 +300,16 @@
     (cancelSpecialization)="showSpecializationChoice = false">
   </app-tower-info-panel>
 
-  <!-- Tower selection -->
-  <div class="tower-selection" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
+  <!-- Card hand — Ascent Mode only (replaces tower selection bar) -->
+  <app-card-hand
+    *ngIf="runService.isInRun() && deckState && energyState"
+    [deckState]="deckState"
+    [energy]="energyState"
+    (cardPlayed)="onCardPlayed($event)">
+  </app-card-hand>
+
+  <!-- Tower selection — hidden during Ascent Mode (cards replace free tower placement) -->
+  <div class="tower-selection" *ngIf="!runService.isInRun() && gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
     <button
       *ngFor="let tower of towerTypes"
       class="tower-btn"
