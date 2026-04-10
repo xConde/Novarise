@@ -33,30 +33,6 @@
   }
 }
 
-// ── Content block — matches overlay-content ───────────────────────────────────
-
-.run-summary__content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-xl);
-  padding: var(--spacing-2xl);
-  backdrop-filter: blur(1rem);
-  border-radius: var(--border-radius-lg);
-  max-width: min(44rem, 90vw);
-  width: 100%;
-
-  .run-summary--victory & {
-    border: var(--border-width-medium) solid rgba(0, 255, 0, 0.4);
-    box-shadow: var(--shadow-lg) rgba(0, 255, 0, 0.15);
-  }
-
-  .run-summary--defeat & {
-    border: var(--border-width-medium) solid rgba(255, 0, 0, 0.4);
-    box-shadow: var(--shadow-lg) rgba(255, 0, 0, 0.15);
-  }
-}
-
 // ── Background glow (aria-hidden decoration) — no gradient per design rules ───
 
 .run-summary__glow {
@@ -374,7 +350,6 @@
 
 @media (max-width: 768px) {
   .run-summary__title { font-size: var(--font-size-large); }
-  .run-summary__content { padding: var(--spacing-xl); }
 
   .run-summary__stats {
     max-width: 22rem;
@@ -383,7 +358,6 @@
 
 @media (max-width: 480px) {
   .run-summary__title { font-size: var(--font-size-title); }
-  .run-summary__content { padding: var(--spacing-lg) var(--spacing-md); }
   .run-summary__score-value { font-size: var(--font-size-large); }
 
   .run-summary__actions {

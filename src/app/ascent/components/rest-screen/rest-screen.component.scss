@@ -39,21 +39,6 @@
   max-width: 24rem;
 }
 
-// ── Dark panel wrapping the heal content ──────────────────────────────────────
-
-.rest-panel {
-  background: var(--glass-bg);
-  border: var(--border-width-thin) solid var(--theme-purple-a50);
-  border-radius: var(--border-radius-lg);
-  padding: var(--spacing-lg) var(--spacing-xl);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-md);
-  width: 100%;
-  max-width: 22rem;
-}
-
 // ── Lives display ─────────────────────────────────────────────────────────────
 
 .rest-lives {
