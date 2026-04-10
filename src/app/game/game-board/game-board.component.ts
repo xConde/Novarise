@@ -70,6 +70,9 @@ import { TowerUpgradeVisualService } from './services/tower-upgrade-visual.servi
 import { TowerPlacementService } from './services/tower-placement.service';
 import { TowerSelectionService } from './services/tower-selection.service';
 import { FocusTrap } from '../../shared/utils/focus-trap.util';
+import { RunService } from '../../ascent/services/run.service';
+import { RelicService } from '../../ascent/services/relic.service';
+import { EncounterResult } from '../../ascent/models/run-state.model';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
 export interface EnemyBadge {
@@ -368,7 +371,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private challengeDisplayService: ChallengeDisplayService,
     private towerUpgradeVisualService: TowerUpgradeVisualService,
     private towerPlacementService: TowerPlacementService,
-    private towerSelectionService: TowerSelectionService
+    private towerSelectionService: TowerSelectionService,
+    private runService: RunService,
+    private relicService: RelicService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -396,6 +401,27 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         prevPhase !== GamePhase.VICTORY &&
         prevPhase !== GamePhase.DEFEAT
       ) {
+        // Ascent Mode: record encounter result and route back to /ascent
+        if (this.runService.isInRun()) {
+          this.combatLoopService.flushElapsedTime();
+          const isVictory = state.phase === GamePhase.VICTORY;
+          const livesAtStart = DIFFICULTY_PRESETS[state.difficulty].lives;
+          const killStats = this.gameStatsService.getStats();
+          const totalKills = Object.values(killStats.killsByTowerType).reduce((a, b) => a + b, 0);
+          const result: EncounterResult = {
+            nodeId: this.runService.getCurrentEncounter()?.nodeId ?? '',
+            nodeType: this.runService.getCurrentEncounter()?.nodeType ?? 'combat',
+            victory: isVictory,
+            livesLost: livesAtStart - state.lives,
+            goldEarned: state.gold,
+            enemiesKilled: totalKills,
+            wavesCompleted: state.wave,
+          };
+          this.runService.recordEncounterResult(result);
+          this.router.navigate(['/ascent']);
+          return;
+        }
+
         // Flush any accumulated elapsed time before scoring so the final time is accurate
         this.combatLoopService.flushElapsedTime();
         const livesTotal = DIFFICULTY_PRESETS[state.difficulty].lives;
@@ -439,6 +465,18 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Apply per-campaign-level wave definitions if this is a campaign map
     this.gameSessionService.applyCampaignWaves();
+
+    // Ascent Mode: override lives and gold from run state
+    if (this.runService.isInRun()) {
+      const encounter = this.runService.getCurrentEncounter();
+      const runState = this.runService.runState;
+      if (runState && encounter) {
+        this.gameStateService.setInitialLives(runState.lives, runState.maxLives + this.relicService.getMaxLivesBonus());
+        this.gameStateService.addGold(this.relicService.getStartingGoldBonus());
+        this.waveService.setCustomWaves(encounter.waves);
+        this.gameStateService.setMaxWaves(encounter.waves.length);
+      }
+    }
 
     this.sceneService.initScene();
     this.sceneService.initCamera();
@@ -1006,6 +1044,18 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Re-apply campaign waves after waveService.reset() (which clears custom waves)
     this.gameSessionService.applyCampaignWaves();
+
+    // Ascent Mode: override lives and gold from run state
+    if (this.runService.isInRun()) {
+      const encounter = this.runService.getCurrentEncounter();
+      const runState = this.runService.runState;
+      if (runState && encounter) {
+        this.gameStateService.setInitialLives(runState.lives, runState.maxLives + this.relicService.getMaxLivesBonus());
+        this.gameStateService.addGold(this.relicService.getStartingGoldBonus());
+        this.waveService.setCustomWaves(encounter.waves);
+        this.gameStateService.setMaxWaves(encounter.waves.length);
+      }
+    }
 
     this.renderGameBoard();
     this.addGridLines();

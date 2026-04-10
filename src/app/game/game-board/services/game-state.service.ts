@@ -124,6 +124,13 @@ export class GameStateService {
     return this.state.consecutiveWavesWithoutLeak;
   }
 
+  /** Override initial lives and max lives for Ascent Mode encounters. Only works during SETUP before wave 1. */
+  setInitialLives(lives: number, _maxLives: number): void {
+    if (this.state.phase !== GamePhase.SETUP || this.state.wave !== 0) return;
+    this.state.lives = lives;
+    this.emit();
+  }
+
   /** Adds gold only. Use for sell refunds (should not count toward score). */
   addGold(amount: number): void {
     this.state.gold += amount;

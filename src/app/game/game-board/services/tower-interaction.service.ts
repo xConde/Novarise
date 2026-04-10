@@ -5,7 +5,6 @@ import {
   TOWER_SPECIALIZATIONS,
   MAX_TOWER_LEVEL,
   getUpgradeCost,
-  getSellValue,
   getEffectiveStats,
 } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
@@ -17,6 +16,7 @@ import { TilePricingService, TilePriceInfo } from './tile-pricing.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameEndService } from './game-end.service';
 import { EnemyService } from './enemy.service';
+import { RelicService } from '../../../ascent/services/relic.service';
 
 export interface PlaceTowerResult {
   success: boolean;
@@ -63,6 +63,7 @@ export class TowerInteractionService {
     private challengeTrackingService: ChallengeTrackingService,
     private gameEndService: GameEndService,
     private enemyService: EnemyService,
+    private relicService: RelicService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -87,7 +88,12 @@ export class TowerInteractionService {
     if (!this.gameBoardService.canPlaceTower(row, col)) return FAIL;
 
     const priceInfo = this.getTileCost(row, col, type);
-    const effectiveCost = priceInfo.cost;
+    let effectiveCost = Math.round(priceInfo.cost * this.relicService.getTowerCostMultiplier());
+
+    if (this.relicService.isNextTowerFree()) {
+      this.relicService.consumeFreeTower();
+      effectiveCost = 0;
+    }
 
     if (!this.gameStateService.canAfford(effectiveCost)) return FAIL;
 
@@ -145,7 +151,8 @@ export class TowerInteractionService {
     const soldTower = this.towerCombatService.unregisterTower(towerKey);
     if (!soldTower) return FAIL;
 
-    const refund = getSellValue(soldTower.totalInvested);
+    const sellRate = this.relicService.getSellRefundRate();
+    const refund = Math.round(soldTower.totalInvested * sellRate);
     this.gameStateService.addGold(refund);
 
     // Remove tile from board state
@@ -183,7 +190,7 @@ export class TowerInteractionService {
     if (!tower) return FAIL;
     if (tower.level >= MAX_TOWER_LEVEL) return FAIL;
 
-    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+    const costMult = (this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1) * this.relicService.getUpgradeCostMultiplier();
     const tileStrategic = this.tilePricingService.getStrategicValue(tower.row, tower.col);
     const cost = getUpgradeCost(tower.type, tower.level, costMult, tileStrategic);
 

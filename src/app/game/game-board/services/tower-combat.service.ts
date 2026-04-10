@@ -16,6 +16,7 @@ import { GameStateService } from './game-state.service';
 import { TowerAnimationService } from './tower-animation.service';
 import { ChainLightningService } from './chain-lightning.service';
 import { ProjectileService, ProjectileHit } from './projectile.service';
+import { RelicService } from '../../../ascent/services/relic.service';
 
 /** A mortar blast zone that persists and deals DoT. Mesh ownership is in CombatVFXService. */
 interface MortarZone {
@@ -69,6 +70,7 @@ export class TowerCombatService {
     private towerAnimationService: TowerAnimationService,
     private chainLightningService: ChainLightningService,
     private projectileService: ProjectileService,
+    private relicService: RelicService,
   ) {}
 
   /** Registers a newly placed tower so it participates in targeting and firing. `actualCost` tracks the real gold paid (may differ from base cost due to modifiers). */
@@ -168,26 +170,29 @@ export class TowerCombatService {
   private processTowerFiring(scene: THREE.Scene, outKilled: KillInfo[]): TowerType[] {
     const firedTowerTypes: TowerType[] = [];
     const towerDamageMultiplier = this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1;
+    const hasRelicModifiers = this.relicService.relicCount > 0;
 
     this.placedTowers.forEach(tower => {
       const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
       let stats: TowerStats;
-      if (towerDamageMultiplier !== 1) {
-        // Copy all fields into scratch object — avoids per-tower-per-frame spread allocation
-        this.scratchStats.damage = Math.round(baseStats.damage * towerDamageMultiplier);
-        this.scratchStats.range = baseStats.range;
-        this.scratchStats.fireRate = baseStats.fireRate;
+      if (towerDamageMultiplier !== 1 || hasRelicModifiers) {
+        const relicDamage = this.relicService.getDamageMultiplier(tower.type);
+        const relicFireRate = this.relicService.getFireRateMultiplier();
+        const relicRange = this.relicService.getRangeMultiplier(tower.type);
+        this.scratchStats.damage = Math.round(baseStats.damage * towerDamageMultiplier * relicDamage);
+        this.scratchStats.range = baseStats.range * relicRange;
+        this.scratchStats.fireRate = baseStats.fireRate * relicFireRate;
         this.scratchStats.cost = baseStats.cost;
         this.scratchStats.projectileSpeed = baseStats.projectileSpeed;
-        this.scratchStats.splashRadius = baseStats.splashRadius;
+        this.scratchStats.splashRadius = baseStats.splashRadius * this.relicService.getSplashRadiusMultiplier();
         this.scratchStats.color = baseStats.color;
         this.scratchStats.slowFactor = baseStats.slowFactor;
-        this.scratchStats.slowDuration = baseStats.slowDuration;
-        this.scratchStats.chainCount = baseStats.chainCount;
+        this.scratchStats.slowDuration = baseStats.slowDuration != null ? baseStats.slowDuration * this.relicService.getSlowDurationMultiplier() : baseStats.slowDuration;
+        this.scratchStats.chainCount = baseStats.chainCount != null ? baseStats.chainCount + this.relicService.getChainBounceBonus() : baseStats.chainCount;
         this.scratchStats.chainRange = baseStats.chainRange;
         this.scratchStats.blastRadius = baseStats.blastRadius;
         this.scratchStats.dotDuration = baseStats.dotDuration;
-        this.scratchStats.dotDamage = baseStats.dotDamage;
+        this.scratchStats.dotDamage = baseStats.dotDamage != null ? baseStats.dotDamage * this.relicService.getDotDamageMultiplier() : baseStats.dotDamage;
         this.scratchStats.statusEffect = baseStats.statusEffect;
         stats = this.scratchStats;
       } else {

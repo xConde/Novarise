@@ -1,5 +1,7 @@
 import { EMPTY, of } from 'rxjs';
 
+import { RelicService } from '../../../ascent/services/relic.service';
+import { RunService } from '../../../ascent/services/run.service';
 import { GameBoardService } from '../game-board.service';
 import { EnemyService, DamageResult } from '../services/enemy.service';
 import { GameStatsService, GameStats } from '../services/game-stats.service';
@@ -580,6 +582,7 @@ export function createGameStateServiceSpy(): jasmine.SpyObj<GameStateService> {
     'setDifficulty',
     'addElapsedTime',
     'setMaxWaves',
+    'setInitialLives',
     'reset',
   ]);
   const initialState: GameState = { ...INITIAL_GAME_STATE, activeModifiers: new Set() };
@@ -901,5 +904,55 @@ export function createGameSessionServiceSpy(): jasmine.SpyObj<GameSessionService
     'cleanupScene',
   ]);
   spy.cleanupScene.and.returnValue(null);
+  return spy;
+}
+
+export function createRelicServiceSpy(): jasmine.SpyObj<RelicService> {
+  const spy = jasmine.createSpyObj('RelicService', [
+    'setActiveRelics', 'clearRelics', 'resetEncounterState', 'resetWaveState',
+    'hasRelic', 'getModifiers', 'getDamageMultiplier', 'getFireRateMultiplier',
+    'getRangeMultiplier', 'getTowerCostMultiplier', 'getUpgradeCostMultiplier',
+    'getSellRefundRate', 'getGoldMultiplier', 'getEnemySpeedMultiplier',
+    'getSpawnIntervalMultiplier', 'getMaxLivesBonus', 'getStartingGoldBonus',
+    'getSplashRadiusMultiplier', 'getChainBounceBonus', 'getSlowDurationMultiplier',
+    'getDotDamageMultiplier', 'isNextTowerFree', 'consumeFreeTower',
+    'shouldBlockLeak', 'rollLuckyCoin', 'getAvailableRelics',
+  ], ['relicCount']);
+
+  spy.getDamageMultiplier.and.returnValue(1);
+  spy.getFireRateMultiplier.and.returnValue(1);
+  spy.getRangeMultiplier.and.returnValue(1);
+  spy.getTowerCostMultiplier.and.returnValue(1);
+  spy.getUpgradeCostMultiplier.and.returnValue(1);
+  spy.getSellRefundRate.and.returnValue(0.5);
+  spy.getGoldMultiplier.and.returnValue(1);
+  spy.getEnemySpeedMultiplier.and.returnValue(0.92);
+  spy.getSpawnIntervalMultiplier.and.returnValue(1);
+  spy.getMaxLivesBonus.and.returnValue(0);
+  spy.getStartingGoldBonus.and.returnValue(0);
+  spy.getSplashRadiusMultiplier.and.returnValue(1);
+  spy.getChainBounceBonus.and.returnValue(0);
+  spy.getSlowDurationMultiplier.and.returnValue(1);
+  spy.getDotDamageMultiplier.and.returnValue(1);
+  spy.isNextTowerFree.and.returnValue(false);
+  spy.shouldBlockLeak.and.returnValue(false);
+  spy.rollLuckyCoin.and.returnValue(1);
+  spy.getAvailableRelics.and.returnValue([]);
+  (Object.getOwnPropertyDescriptor(spy, 'relicCount')!.get as jasmine.Spy).and.returnValue(0);
+
+  return spy;
+}
+
+export function createRunServiceSpy(): jasmine.SpyObj<RunService> {
+  const spy = jasmine.createSpyObj('RunService', [
+    'isInRun', 'hasActiveRun', 'getCurrentEncounter', 'recordEncounterResult',
+    'startNewRun', 'resumeRun', 'abandonRun', 'selectNode', 'prepareEncounter',
+  ], ['runState']);
+
+  spy.isInRun.and.returnValue(false);
+  spy.hasActiveRun.and.returnValue(false);
+  spy.getCurrentEncounter.and.returnValue(null);
+  (Object.getOwnPropertyDescriptor(spy, 'runState')!.get as jasmine.Spy).and.returnValue(null);
+
   return spy;
 }

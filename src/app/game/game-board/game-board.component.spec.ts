@@ -50,7 +50,11 @@ import {
   createTowerPlacementServiceSpy,
   createTowerSelectionServiceSpy,
   createTowerUpgradeVisualServiceSpy,
+  createRelicServiceSpy,
+  createRunServiceSpy,
 } from './testing';
+import { RelicService } from '../../ascent/services/relic.service';
+import { RunService } from '../../ascent/services/run.service';
 import { TowerAnimationService } from './services/tower-animation.service';
 import { GamePauseService } from './services/game-pause.service';
 import { ChallengeDisplayService } from './services/challenge-display.service';
@@ -156,6 +160,8 @@ describe('GameBoardComponent', () => {
         { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
         { provide: GamePauseService, useValue: gamePauseSpy },
         { provide: TowerUpgradeVisualService, useValue: createTowerUpgradeVisualServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: RunService, useValue: createRunServiceSpy() },
         ChallengeDisplayService,
         ChainLightningService,
       ]

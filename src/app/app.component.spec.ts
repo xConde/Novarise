@@ -29,9 +29,10 @@ describe('AppComponent', () => {
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     const links = compiled.querySelectorAll('.app-nav a');
-    expect(links.length).toBe(3);
+    expect(links.length).toBe(4);
     expect(links[0].textContent).toContain('Home');
     expect(links[1].textContent).toContain('Editor');
-    expect(links[2].textContent).toContain('Play');
+    expect(links[2].textContent).toContain('Ascent');
+    expect(links[3].textContent).toContain('Play');
   });
 });

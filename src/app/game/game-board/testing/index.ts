@@ -29,4 +29,6 @@ export {
   createProjectileServiceSpy,
   createTowerUpgradeVisualServiceSpy,
   createGameSessionServiceSpy,
+  createRelicServiceSpy,
+  createRunServiceSpy,
 } from './test-spies.factory';

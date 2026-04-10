@@ -8,6 +8,8 @@ import { TowerCombatService } from './tower-combat.service';
 import { EnemyService } from './enemy.service';
 import { GameStatsService } from './game-stats.service';
 import { GameEndService } from './game-end.service';
+import { RelicService } from '../../../ascent/services/relic.service';
+import { createRelicServiceSpy } from '../testing';
 
 import { GamePhase } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
@@ -112,6 +114,7 @@ describe('CombatLoopService', () => {
         { provide: EnemyService, useValue: enemySpy },
         { provide: GameStatsService, useValue: gameStatsSpy },
         { provide: GameEndService, useValue: gameEndSpy },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
       ],
     });
 

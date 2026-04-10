@@ -7,6 +7,7 @@ import { TowerCombatService } from './tower-combat.service';
 import { EnemyService } from './enemy.service';
 import { GameStatsService } from './game-stats.service';
 import { GameEndService } from './game-end.service';
+import { RelicService } from '../../../ascent/services/relic.service';
 
 import { GamePhase } from '../models/game-state.model';
 import { ENEMY_STATS } from '../models/enemy.model';
@@ -53,6 +54,7 @@ export class CombatLoopService {
     private enemyService: EnemyService,
     private gameStatsService: GameStatsService,
     private gameEndService: GameEndService,
+    private relicService: RelicService,
   ) {}
 
   /**
@@ -125,8 +127,10 @@ export class CombatLoopService {
       for (const killInfo of killedByTowers) {
         const enemy = this.enemyService.getEnemies().get(killInfo.id);
         if (enemy && !enemy.dying) {
-          this.gameStateService.addGoldAndScore(enemy.value);
-          this.gameStatsService.recordGoldEarned(enemy.value);
+          const goldMult = this.relicService.getGoldMultiplier() * this.relicService.rollLuckyCoin();
+          const adjustedGold = Math.round(enemy.value * goldMult);
+          this.gameStateService.addGoldAndScore(adjustedGold);
+          this.gameStatsService.recordGoldEarned(adjustedGold);
 
           this.frameKills.push({
             damage: killInfo.damage,
@@ -145,6 +149,11 @@ export class CombatLoopService {
 
       // Enemies reaching the exit cost lives scaled by enemy type
       for (const enemyId of reachedExit) {
+        // REINFORCED_WALLS: block first leak each wave
+        if (this.relicService.shouldBlockLeak()) {
+          this.enemyService.removeEnemy(enemyId, scene);
+          continue;
+        }
         const leakedEnemy = this.enemyService.getEnemies().get(enemyId);
         const leakCost = leakedEnemy?.leakDamage ?? 1;
         this.gameStateService.loseLife(leakCost);

@@ -20,6 +20,8 @@ import { GamePhase } from '../models/game-state.model';
 import { BlockType } from '../models/game-board-tile';
 import { PathfindingService } from './pathfinding.service';
 import { StatusEffectService } from './status-effect.service';
+import { RelicService } from '../../../ascent/services/relic.service';
+import { createRelicServiceSpy } from '../testing';
 
 function makeMockTower(overrides: Partial<PlacedTower> = {}): PlacedTower {
   return {
@@ -89,6 +91,7 @@ describe('TowerInteractionService', () => {
         { provide: ChallengeTrackingService, useValue: challengeSpy },
         { provide: GameEndService, useValue: gameEndSpy },
         { provide: EnemyService, useValue: enemySpy },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
       ],
     });
 
