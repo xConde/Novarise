@@ -145,6 +145,14 @@ export class RunService {
     this.persistence.clearSavedRun();
     this.relicService.clearRelics();
 
+    // Ensure all transient run state is cleared before starting fresh
+    // (guards against re-using stale state if a previous run ended mid-flight)
+    this.currentEncounter = null;
+    this.pendingResult = null;
+    this.shopItems = [];
+    this.currentEvent = null;
+    this.runRng = null;
+
     const seed = Date.now();
     const config = this.applyAscensionToConfig(DEFAULT_RUN_CONFIG, ascensionLevel);
     const state = createInitialRunState(seed, config, ascensionLevel);
@@ -230,6 +238,9 @@ export class RunService {
 
     if (!result || !this.runState) return null;
 
+    // Double-call guard: only process results for in-progress runs
+    if (this.runState.status !== RunStatus.IN_PROGRESS) return null;
+
     const state = this.runState;
     const newEncounterResults = [...state.encounterResults, result];
 
@@ -293,6 +304,8 @@ export class RunService {
 
     switch (reward.type) {
       case 'relic':
+        // Duplicate-relic guard: silently skip if already owned
+        if (state.relicIds.includes(reward.relicId)) return;
         this.addRelic(reward.relicId);
         break;
       case 'gold':
@@ -467,6 +480,9 @@ export class RunService {
   advanceAct(): void {
     const state = this.runState;
     if (!state) return;
+
+    // Idempotency guard: only advance from an in-progress run
+    if (state.status !== RunStatus.IN_PROGRESS) return;
 
     const nextAct = state.actIndex + 1;
 
