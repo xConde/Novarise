@@ -379,7 +379,7 @@ export class RunService {
 
     this.updateState({ ...state, gold: state.gold - item.cost });
     this.collectReward(item.item);
-    this.shopItems.splice(index, 1);
+    this.shopItems = this.shopItems.filter((_, i) => i !== index);
     this.persist();
   }
 
