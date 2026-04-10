@@ -13,7 +13,6 @@ import {
   NodeMap,
   MapNode,
   NodeType,
-  getAvailableNodes,
   getNodeById,
 } from '../models/node-map.model';
 import {
@@ -23,7 +22,7 @@ import {
   ShopItem,
   RunEvent,
 } from '../models/encounter.model';
-import { RelicId, RelicRarity, RELIC_DEFINITIONS, getRelicsByRarity } from '../models/relic.model';
+import { RelicId } from '../models/relic.model';
 import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
 import {
   RELIC_EFFECT_CONFIG,
@@ -143,7 +142,7 @@ export class RunService {
   // ── Run Lifecycle ───────────────────────────────────────
 
   /** Start a new run with a fresh seed. */
-  startNewRun(ascensionLevel: number = 0): void {
+  startNewRun(ascensionLevel = 0): void {
     this.persistence.clearSavedRun();
     this.relicService.clearRelics();
 
@@ -278,7 +277,6 @@ export class RunService {
 
   /** Generate reward choices after a victorious encounter. */
   generateRewards(): RewardScreenConfig {
-    const state = this.runState;
     const encounter = this.currentEncounter;
     const rng = this.runRng ?? Math.random;
 

@@ -104,7 +104,7 @@ export class EncounterService {
    * designed to award gold via their wave rewards, so this is
    * supplemental pickup gold shown on the reward screen.
    */
-  private computeGoldReward(node: MapNode, runState: RunState): number {
+  private computeGoldReward(node: MapNode, _runState: RunState): number {
     const baseGold = REWARD_CONFIG.combatGoldBase + node.row * REWARD_CONFIG.combatGoldPerRow;
 
     switch (node.type) {

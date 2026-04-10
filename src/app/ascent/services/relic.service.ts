@@ -160,7 +160,7 @@ export class RelicService {
   }
 
   /** Get gold multiplier for kill rewards. */
-  getGoldMultiplier(isElite: boolean = false): number {
+  getGoldMultiplier(isElite = false): number {
     let mult = this.getModifiers().goldMultiplier;
     if (isElite && this.hasRelic(RelicId.BOUNTY_HUNTER)) {
       mult *= RELIC_EFFECT_CONFIG.bountyHunterEliteGoldMultiplier;

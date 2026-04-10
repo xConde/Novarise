@@ -25,9 +25,9 @@ export interface ResolvedShopItem {
 })
 export class ShopScreenComponent implements OnChanges {
   @Input() shopItems: ShopItem[] = [];
-  @Input() currentGold: number = 0;
-  @Input() currentLives: number = 0;
-  @Input() maxLives: number = 0;
+  @Input() currentGold = 0;
+  @Input() currentLives = 0;
+  @Input() maxLives = 0;
   /** Emits item index, or -1 for heal purchase. */
   @Output() itemBought = new EventEmitter<number>();
   @Output() shopLeft = new EventEmitter<void>();

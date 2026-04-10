@@ -10,13 +10,13 @@ export class ActTransitionComponent {
   @Input() completedAct!: number;
 
   /** Name of the boss that was defeated (empty string if not a boss encounter). */
-  @Input() bossName: string = '';
+  @Input() bossName = '';
 
   /** Number of relics collected during the completed act. */
-  @Input() relicCount: number = 0;
+  @Input() relicCount = 0;
 
   /** Number of encounters completed during the completed act. */
-  @Input() encounterCount: number = 0;
+  @Input() encounterCount = 0;
 
   /** Emitted when the player clicks "Continue". */
   @Output() continued = new EventEmitter<void>();

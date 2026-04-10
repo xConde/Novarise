@@ -42,10 +42,10 @@ export class AscentComponent implements OnInit, OnDestroy {
   viewMode: 'start' | 'map' | 'reward' | 'shop' | 'rest' | 'event' | 'act-transition' | 'summary' = 'start';
 
   /** Boss preset name for the act-transition screen. */
-  actTransitionBossName: string = '';
+  actTransitionBossName = '';
 
   /** Currently selected ascension level in the start screen selector. */
-  selectedAscension: number = 0;
+  selectedAscension = 0;
 
   /** All ascension levels the player has unlocked (up to maxAscension). */
   get ascensionLevelOptions(): AscensionLevel[] {
@@ -95,7 +95,7 @@ export class AscentComponent implements OnInit, OnDestroy {
   }
 
   /** Start a new run with default config. */
-  startNewRun(ascensionLevel: number = 0): void {
+  startNewRun(ascensionLevel = 0): void {
     this.runService.startNewRun(ascensionLevel);
     this.viewMode = 'map';
   }
