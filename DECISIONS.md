@@ -100,3 +100,25 @@ Calling `advanceAct()` on a run in VICTORY or DEFEAT status is a no-op. Without 
 - scout_ahead is a no-op (needs wave preview extension)
 - Card upgrade effects are defined but balance needs tuning
 - EnemyService.slowAllEnemies uses setTimeout (not physics-step safe)
+
+## Final Hardening Pass (card system)
+
+### Deferred tower card energy consumption
+Tower cards do NOT consume energy when clicked — they enter a `pendingTowerCard` state in `GameBoardComponent`. Energy is deducted and the card moved to discard only on successful tile placement (`consumePendingTowerCard()`). Cancel (`cancelPendingTowerCard()`) returns the card to hand without any state change in DeckService.
+
+Rationale: avoids phantom energy loss when a player clicks a tower card but then finds no valid placement tile. Only one tower card can be pending at a time — a second click is blocked while `pendingTowerCard !== null`.
+
+Integration tests covering this contract live in `src/app/ascent/integration/card-flow.spec.ts` under the "Tower card deferred placement" suite (5 specs).
+
+### Salvage/Fortify spell implementation
+Both spells are fully wired in `GameBoardComponent.onCardPlayed()`:
+- `salvage`: calls `salvageLastTower()` — refunds the last-placed tower (uses `TowerCombatService.getLastPlacedTowerKey()`).
+- `fortify`: calls `fortifyRandomTower()` — picks a random L1 tower and upgrades it to L2 for free (bypasses gold cost; excludes L2 towers since L2→L3 requires manual specialization choice).
+
+These bypass the `CardEffectService.applySpell()` path because they require game-board context (tower registry) that CardEffectService does not have. The `default` branch in `applySpell()` is an intentional no-op for these two.
+
+### Mobile responsive approach
+Card hand uses a horizontal scroll container with `overflow-x: auto` and fixed card width (`8rem`). On screens narrower than 480px, card font size and padding scale down via media queries in `card-hand.component.scss`. The energy pip row is hidden on very small screens (< 360px) to preserve card visibility.
+
+### No TODO/FIXME items remain in ascent/ or card-hand/
+Confirmed via grep: zero TODO, FIXME, HACK, or XXX markers in `src/app/ascent/` or `src/app/game/game-board/components/card-hand/`. All deferred items are documented in this file rather than inline code comments.

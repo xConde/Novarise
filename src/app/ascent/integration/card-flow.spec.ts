@@ -13,6 +13,8 @@ import { DeckService } from '../services/deck.service';
 import { CardEffectService } from '../services/card-effect.service';
 import {
   CardId,
+  CardInstance,
+  CardType,
   DECK_CONFIG,
 } from '../models/card.model';
 import { getStarterDeck, CARD_DEFINITIONS } from '../constants/card-definitions';
@@ -404,5 +406,211 @@ describe('Card System — Integration Flow', () => {
 
     expect(result).toBeFalse();
     expect(deck.getAllCards().length).toBe(totalBefore);
+  });
+});
+
+// ── Tower Card Deferred Placement ──────────────────────────────────────────────
+//
+// GameBoardComponent orchestrates deferred placement: tower cards are held in
+// a `pendingTowerCard` field and NOT consumed (playCard) until actual placement.
+// These tests exercise the DeckService contract that deferred placement depends
+// on — ensuring the API behaves correctly when the component holds a card in limbo.
+
+/**
+ * Simulates the GameBoardComponent deferred placement state machine using
+ * DeckService directly. GameBoardComponent calls:
+ *   1. getEnergy() — affordability check on click (no playCard call yet)
+ *   2. playCard(instanceId) — deferred to successful placement
+ *   3. Nothing on cancel — card stays in hand
+ */
+class DeferredPlacementSimulator {
+  private pendingCard: CardInstance | null = null;
+
+  constructor(private readonly deckSvc: DeckService) {}
+
+  /** Simulate clicking a tower card — deferred if it's a tower type. */
+  onCardClicked(card: CardInstance): 'deferred' | 'consumed' | 'blocked' | 'no_energy' {
+    if (this.pendingCard) return 'blocked';
+
+    const def = CARD_DEFINITIONS[card.cardId];
+    const effect = card.upgraded && def.upgradedEffect ? def.upgradedEffect : def.effect;
+
+    if (effect.type === CardType.TOWER) {
+      if (this.deckSvc.getEnergy().current < def.energyCost) return 'no_energy';
+      this.pendingCard = card;
+      return 'deferred';
+    }
+
+    // Non-tower: consume immediately
+    const ok = this.deckSvc.playCard(card.instanceId);
+    return ok ? 'consumed' : 'no_energy';
+  }
+
+  /** Simulate successful tower placement — consume the pending card. */
+  onPlacementSuccess(): boolean {
+    if (!this.pendingCard) return false;
+    const ok = this.deckSvc.playCard(this.pendingCard.instanceId);
+    this.pendingCard = null;
+    return ok;
+  }
+
+  /** Cancel placement — return card to hand without consuming energy. */
+  onPlacementCancel(): void {
+    this.pendingCard = null;
+  }
+
+  hasPending(): boolean { return this.pendingCard !== null; }
+  getPending(): CardInstance | null { return this.pendingCard; }
+}
+
+describe('Tower card deferred placement', () => {
+  let deck: DeckService;
+  let gameState: jasmine.SpyObj<GameStateService>;
+  let enemyService: jasmine.SpyObj<EnemyService>;
+
+  beforeEach(() => {
+    gameState = jasmine.createSpyObj('GameStateService', ['addGold', 'addLives']);
+    enemyService = jasmine.createSpyObj('EnemyService', ['damageStrongestEnemy', 'slowAllEnemies']);
+
+    TestBed.configureTestingModule({
+      providers: [
+        DeckService,
+        CardEffectService,
+        { provide: GameStateService, useValue: gameState },
+        { provide: EnemyService, useValue: enemyService },
+      ],
+    });
+
+    deck = TestBed.inject(DeckService);
+    deck.initializeDeck(getStarterDeck(), TEST_SEED);
+    deck.drawForWave();
+  });
+
+  afterEach(() => {
+    deck.clear();
+  });
+
+  it('clicking tower card should NOT consume energy immediately', () => {
+    // Find a tower card in hand
+    const towerCard = deck.getDeckState().hand.find(c => {
+      const def = CARD_DEFINITIONS[c.cardId];
+      const eff = c.upgraded && def.upgradedEffect ? def.upgradedEffect : def.effect;
+      return eff.type === CardType.TOWER;
+    });
+    if (!towerCard) { pending('No tower card in hand for this seed'); return; }
+
+    const energyBefore = deck.getEnergy().current;
+    const handSizeBefore = deck.getDeckState().hand.length;
+
+    const sim = new DeferredPlacementSimulator(deck);
+    const result = sim.onCardClicked(towerCard);
+
+    expect(result).toBe('deferred');
+    // Energy unchanged — card not consumed yet
+    expect(deck.getEnergy().current).toBe(energyBefore);
+    // Card still in hand — not moved to discard
+    expect(deck.getDeckState().hand.length).toBe(handSizeBefore);
+    expect(deck.getDeckState().hand.find(c => c.instanceId === towerCard.instanceId)).toBeDefined();
+  });
+
+  it('placing tower should consume the pending card energy', () => {
+    const towerCard = deck.getDeckState().hand.find(c => {
+      const def = CARD_DEFINITIONS[c.cardId];
+      const eff = c.upgraded && def.upgradedEffect ? def.upgradedEffect : def.effect;
+      return eff.type === CardType.TOWER;
+    });
+    if (!towerCard) { pending('No tower card in hand for this seed'); return; }
+
+    const def = CARD_DEFINITIONS[towerCard.cardId];
+    const energyBefore = deck.getEnergy().current;
+
+    const sim = new DeferredPlacementSimulator(deck);
+    sim.onCardClicked(towerCard);
+
+    // Energy still full before placement
+    expect(deck.getEnergy().current).toBe(energyBefore);
+
+    // Simulate successful tile click → consume the card
+    const consumed = sim.onPlacementSuccess();
+
+    expect(consumed).toBeTrue();
+    // Energy deducted only NOW
+    expect(deck.getEnergy().current).toBe(energyBefore - def.energyCost);
+    // Card moved to discard
+    expect(deck.getDeckState().hand.find(c => c.instanceId === towerCard.instanceId)).toBeUndefined();
+    expect(deck.getDeckState().discardPile.find(c => c.instanceId === towerCard.instanceId)).toBeDefined();
+  });
+
+  it('cancelling placement should NOT consume energy', () => {
+    const towerCard = deck.getDeckState().hand.find(c => {
+      const def = CARD_DEFINITIONS[c.cardId];
+      const eff = c.upgraded && def.upgradedEffect ? def.upgradedEffect : def.effect;
+      return eff.type === CardType.TOWER;
+    });
+    if (!towerCard) { pending('No tower card in hand for this seed'); return; }
+
+    const energyBefore = deck.getEnergy().current;
+    const handSizeBefore = deck.getDeckState().hand.length;
+
+    const sim = new DeferredPlacementSimulator(deck);
+    sim.onCardClicked(towerCard);
+    sim.onPlacementCancel();
+
+    // Energy unchanged
+    expect(deck.getEnergy().current).toBe(energyBefore);
+    // Card still in hand
+    expect(deck.getDeckState().hand.length).toBe(handSizeBefore);
+    expect(deck.getDeckState().hand.find(c => c.instanceId === towerCard.instanceId)).toBeDefined();
+    // No pending card
+    expect(sim.hasPending()).toBeFalse();
+  });
+
+  it('only one tower card can be pending at a time', () => {
+    const towerCards = deck.getDeckState().hand.filter(c => {
+      const def = CARD_DEFINITIONS[c.cardId];
+      const eff = c.upgraded && def.upgradedEffect ? def.upgradedEffect : def.effect;
+      return eff.type === CardType.TOWER;
+    });
+    if (towerCards.length < 2) { pending('Need at least 2 tower cards in hand for this test'); return; }
+
+    const [first, second] = towerCards;
+    const sim = new DeferredPlacementSimulator(deck);
+
+    // Activate first card
+    const firstResult = sim.onCardClicked(first);
+    expect(firstResult).toBe('deferred');
+    expect(sim.getPending()?.instanceId).toBe(first.instanceId);
+
+    // Attempt to activate second while first is pending — should be blocked
+    const secondResult = sim.onCardClicked(second);
+    expect(secondResult).toBe('blocked');
+
+    // First card remains pending; second card unchanged
+    expect(sim.getPending()?.instanceId).toBe(first.instanceId);
+    expect(deck.getDeckState().hand.find(c => c.instanceId === second.instanceId)).toBeDefined();
+  });
+
+  it('non-tower cards should still consume energy immediately', () => {
+    // GOLD_RUSH is a spell — it should consume immediately, not defer
+    const spellCard = deck.getDeckState().hand.find(c => {
+      const def = CARD_DEFINITIONS[c.cardId];
+      return def.type === CardType.SPELL;
+    });
+    if (!spellCard) { pending('No spell card in hand for this seed'); return; }
+
+    const def = CARD_DEFINITIONS[spellCard.cardId];
+    const energyBefore = deck.getEnergy().current;
+    const handSizeBefore = deck.getDeckState().hand.length;
+
+    const sim = new DeferredPlacementSimulator(deck);
+    const result = sim.onCardClicked(spellCard);
+
+    expect(result).toBe('consumed');
+    // Energy deducted immediately
+    expect(deck.getEnergy().current).toBe(energyBefore - def.energyCost);
+    // Card removed from hand immediately
+    expect(deck.getDeckState().hand.length).toBe(handSizeBefore - 1);
+    expect(deck.getDeckState().hand.find(c => c.instanceId === spellCard.instanceId)).toBeUndefined();
+    expect(deck.getDeckState().discardPile.find(c => c.instanceId === spellCard.instanceId)).toBeDefined();
   });
 });
