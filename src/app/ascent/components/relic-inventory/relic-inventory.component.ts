@@ -65,9 +65,14 @@ export class RelicInventoryComponent implements OnInit, OnDestroy {
     }
   }
 
-  showTooltip(relic: RelicDefinition, event: MouseEvent): void {
+  showTooltip(relic: RelicDefinition, event: MouseEvent | FocusEvent): void {
     this.hoveredRelic = relic;
-    this.updateTooltipPosition(event.clientX, event.clientY);
+    if (event instanceof MouseEvent) {
+      this.updateTooltipPosition(event.clientX, event.clientY);
+    } else {
+      const rect = (event.target as HTMLElement).getBoundingClientRect();
+      this.updateTooltipPosition(rect.left + rect.width / 2, rect.top);
+    }
   }
 
   hideTooltip(): void {

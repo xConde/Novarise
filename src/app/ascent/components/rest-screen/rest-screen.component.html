@@ -8,14 +8,14 @@
   <p class="rest-subtitle">Take a moment to recover before the next encounter.</p>
 
   <!-- Lives display -->
-  <div class="rest-lives" aria-label="Current lives: {{ currentLives }} of {{ maxLives }}">
+  <div class="rest-lives" [attr.aria-label]="'Current lives: ' + currentLives + ' of ' + maxLives">
     <span class="rest-lives__heart" aria-hidden="true">&#9829;</span>
     <span class="rest-lives__value">{{ currentLives }} / {{ maxLives }}</span>
   </div>
 
   <!-- Heal preview -->
   <div class="rest-heal-preview" *ngIf="!atFullHealth">
-    <span class="rest-heal-preview__amount" aria-label="Healing {{ actualHeal }} lives">
+    <span class="rest-heal-preview__amount" [attr.aria-label]="'Healing ' + actualHeal + ' lives'">
       +{{ actualHeal }} lives
     </span>
     <span class="rest-heal-preview__arrow" aria-hidden="true"> &#8594; </span>

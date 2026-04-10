@@ -3,7 +3,7 @@
   <!-- Header -->
   <div class="reward-header">
     <h2 class="reward-title" aria-live="polite">Victory!</h2>
-    <p class="reward-gold" aria-label="Gold earned: {{ config.goldPickup }} gold">
+    <p class="reward-gold" [attr.aria-label]="'Gold earned: ' + config.goldPickup + ' gold'">
       +{{ config.goldPickup }}g
     </p>
   </div>

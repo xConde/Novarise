@@ -21,7 +21,7 @@
   </header>
 
   <!-- Score -->
-  <div class="run-summary__score" aria-label="Final score {{ runState.score }}">
+  <div class="run-summary__score" [attr.aria-label]="'Final score ' + runState.score">
     <span class="run-summary__score-label">Score</span>
     <span class="run-summary__score-value">{{ runState.score }}</span>
   </div>

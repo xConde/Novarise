@@ -1,4 +1,4 @@
-<div class="act-transition" role="main" aria-label="Act {{ completedActLabel }} complete">
+<div class="act-transition" role="main" [attr.aria-label]="'Act ' + completedActLabel + ' complete'">
 
   <!-- Glow orb (CSS only) -->
   <div class="act-transition__glow" aria-hidden="true"></div>
@@ -13,7 +13,7 @@
   </p>
 
   <!-- Stats cards -->
-  <div class="act-transition__stats" aria-label="Run statistics for Act {{ completedActLabel }}">
+  <div class="act-transition__stats" [attr.aria-label]="'Run statistics for Act ' + completedActLabel">
     <div class="stat-card">
       <span class="stat-card__value">{{ encounterCount }}</span>
       <span class="stat-card__label">Encounters</span>
@@ -29,7 +29,7 @@
     class="act-transition__btn"
     type="button"
     (click)="continue()"
-    aria-label="Continue to Act {{ nextActLabel }}"
+    [attr.aria-label]="'Continue to Act ' + nextActLabel"
   >
     Continue to Act {{ nextActLabel }}
   </button>

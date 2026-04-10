@@ -6,7 +6,7 @@
       <span class="shop-icon" aria-hidden="true">&#9775;</span>
       Shop
     </h2>
-    <p class="shop-gold" aria-label="Your gold: {{ currentGold }}">
+    <p class="shop-gold" [attr.aria-label]="'Your gold: ' + currentGold">
       <span aria-hidden="true">&#9733;</span> Your Gold: {{ currentGold }}g
     </p>
   </div>
