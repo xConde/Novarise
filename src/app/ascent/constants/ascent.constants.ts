@@ -94,6 +94,12 @@ export const REWARD_CONFIG = {
   combatGoldBase: 25,
   combatGoldPerRow: 3,
 
+  /** Gold multiplier applied to base reward for elite encounters. */
+  eliteGoldRewardMultiplier: 1.5,
+
+  /** Gold multiplier applied to base reward for boss encounters. */
+  bossGoldRewardMultiplier: 2.0,
+
   /** Number of relic choices offered after combat. */
   relicChoicesCombat: 3,
   relicChoicesElite: 3,
@@ -132,6 +138,58 @@ export const REST_CONFIG = {
 
   /** Minimum lives restored (floor). */
   minHeal: 2,
+} as const;
+
+// ── Run Progression ───────────────────────────────────────────
+
+export const RUN_CONFIG = {
+  /**
+   * Prime multiplier used when re-seeding the RNG on run resume.
+   * Advances the seed by a prime amount per completed encounter
+   * to avoid repeating the same sequence.
+   */
+  resumeSeedPrime: 7919,
+
+  /**
+   * Prime offset applied per act when generating subsequent act maps.
+   * Ensures each act gets a distinct seed even with the same run seed.
+   */
+  actSeedPrime: 99991,
+
+  /** Score points awarded per enemy killed during an encounter. */
+  scorePerKill: 10,
+
+  /** Minimum starting gold after ascension reductions. */
+  minStartingGold: 50,
+
+  /** Minimum starting lives after ascension reductions. */
+  minStartingLives: 5,
+} as const;
+
+// ── Relic Effect Constants ────────────────────────────────────
+
+/**
+ * Numeric effect values for relics that use non-obvious constants.
+ * Obvious single-purpose values (e.g. +1 bounce) stay inline in RelicService.
+ */
+export const RELIC_EFFECT_CONFIG = {
+  /** IRON_HEART: max lives granted when the relic is acquired. */
+  ironHeartMaxLivesBonus: 3,
+
+  /** LUCKY_COIN: probability of triggering the bonus gold roll (20%). */
+  luckyCoinTriggerChance: 0.2,
+
+  /** LUCKY_COIN: gold multiplier when the coin triggers (50% bonus). */
+  luckyCoinGoldMultiplier: 1.5,
+
+  /** BASIC_TRAINING: damage multiplier for basic tower (+35%). */
+  basicTrainingDamageMultiplier: 1.35,
+
+  /** SNIPER_SCOPE: range multiplier for sniper tower (+25%). */
+  sniperScopeRangeMultiplier: 1.25,
+
+  /** BOUNTY_HUNTER: gold multiplier for elite kills (double). */
+  bountyHunterEliteGoldMultiplier: 2,
 } as const;
 
 // ── Seeded RNG ────────────────────────────────────────────────

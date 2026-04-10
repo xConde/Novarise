@@ -26,8 +26,10 @@ import {
 import { RelicId, RelicRarity, RELIC_DEFINITIONS, getRelicsByRarity } from '../models/relic.model';
 import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
 import {
+  RELIC_EFFECT_CONFIG,
   REWARD_CONFIG,
   REST_CONFIG,
+  RUN_CONFIG,
   SHOP_CONFIG,
   createSeededRng,
 } from '../constants/ascent.constants';
@@ -172,7 +174,7 @@ export class RunService {
     const map = this.persistence.loadNodeMap();
     if (!state || !map) return;
 
-    this.runRng = createSeededRng(state.seed + state.encounterResults.length * 7919);
+    this.runRng = createSeededRng(state.seed + state.encounterResults.length * RUN_CONFIG.resumeSeedPrime);
     this.updateState(state);
     this.nodeMapSubject.next(map);
     this.relicService.setActiveRelics(state.relicIds);
@@ -250,7 +252,7 @@ export class RunService {
         ...state,
         lives: state.lives - result.livesLost,
         gold: state.gold + result.goldEarned + goldBonus,
-        score: state.score + result.goldEarned + result.enemiesKilled * 10,
+        score: state.score + result.goldEarned + result.enemiesKilled * RUN_CONFIG.scorePerKill,
         completedNodeIds: [...state.completedNodeIds, result.nodeId],
         encounterResults: newEncounterResults,
       });
@@ -497,7 +499,7 @@ export class RunService {
     }
 
     // Generate next act map
-    const newMap = this.nodeMapGenerator.generateActMap(nextAct, state.seed + nextAct * 99991);
+    const newMap = this.nodeMapGenerator.generateActMap(nextAct, state.seed + nextAct * RUN_CONFIG.actSeedPrime);
     this.nodeMapSubject.next(newMap);
 
     this.updateState({
@@ -515,7 +517,7 @@ export class RunService {
     if (!state) return;
 
     const newRelicIds = [...state.relicIds, relicId];
-    const maxLivesBonus = relicId === RelicId.IRON_HEART ? 3 : 0;
+    const maxLivesBonus = relicId === RelicId.IRON_HEART ? RELIC_EFFECT_CONFIG.ironHeartMaxLivesBonus : 0;
 
     this.updateState({
       ...state,
@@ -559,8 +561,8 @@ export class RunService {
 
     return {
       ...config,
-      startingGold: Math.max(50, config.startingGold - goldReduction),
-      startingLives: Math.max(5, config.startingLives - livesReduction),
+      startingGold: Math.max(RUN_CONFIG.minStartingGold, config.startingGold - goldReduction),
+      startingLives: Math.max(RUN_CONFIG.minStartingLives, config.startingLives - livesReduction),
     };
   }
 

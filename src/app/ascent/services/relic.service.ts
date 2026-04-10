@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { RelicId, RELIC_DEFINITIONS, RelicRarity, getRelicsByRarity, RelicDefinition } from '../models/relic.model';
 import { TowerType } from '../../game/game-board/models/tower.model';
+import { RELIC_EFFECT_CONFIG } from '../constants/ascent.constants';
 
 /**
  * Relic effect engine — pull model.
@@ -122,7 +123,7 @@ export class RelicService {
 
     // Tower-specific relic bonuses
     if (towerType === TowerType.BASIC && this.hasRelic(RelicId.BASIC_TRAINING)) {
-      mult *= 1.35;
+      mult *= RELIC_EFFECT_CONFIG.basicTrainingDamageMultiplier;
     }
     return mult;
   }
@@ -138,7 +139,7 @@ export class RelicService {
     let mult = mods.rangeMultiplier;
 
     if (towerType === TowerType.SNIPER && this.hasRelic(RelicId.SNIPER_SCOPE)) {
-      mult *= 1.25;
+      mult *= RELIC_EFFECT_CONFIG.sniperScopeRangeMultiplier;
     }
     return mult;
   }
@@ -162,7 +163,7 @@ export class RelicService {
   getGoldMultiplier(isElite: boolean = false): number {
     let mult = this.getModifiers().goldMultiplier;
     if (isElite && this.hasRelic(RelicId.BOUNTY_HUNTER)) {
-      mult *= 2;
+      mult *= RELIC_EFFECT_CONFIG.bountyHunterEliteGoldMultiplier;
     }
     return mult;
   }
@@ -236,11 +237,13 @@ export class RelicService {
 
   /**
    * LUCKY_COIN: Roll for bonus gold on kill.
-   * Returns the gold multiplier for this specific kill (1.0 or 1.5).
+   * Returns the gold multiplier for this specific kill (1.0 or RELIC_EFFECT_CONFIG.luckyCoinGoldMultiplier).
    */
   rollLuckyCoin(): number {
     if (!this.hasRelic(RelicId.LUCKY_COIN)) return 1;
-    return Math.random() < 0.2 ? 1.5 : 1;
+    return Math.random() < RELIC_EFFECT_CONFIG.luckyCoinTriggerChance
+      ? RELIC_EFFECT_CONFIG.luckyCoinGoldMultiplier
+      : 1;
   }
 
   // ── Relic Pool Management ───────────────────────────────
@@ -260,7 +263,7 @@ export class RelicService {
       switch (id) {
         // Common
         case RelicId.IRON_HEART:
-          mods.maxLivesBonus += 3;
+          mods.maxLivesBonus += RELIC_EFFECT_CONFIG.ironHeartMaxLivesBonus;
           break;
         case RelicId.GOLD_MAGNET:
           mods.goldMultiplier *= 1.15;

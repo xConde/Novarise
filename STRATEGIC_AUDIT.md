@@ -1231,3 +1231,72 @@ Finding 1 is the most critical — actionable and actually improves resilience. 
 - [x] Step 4: Commit red-team hardening
 - [x] Step 5: Push branch
 - [x] Step 6: Open PR with concise description
+
+---
+
+## Ascent Mode (feat/ascent) — 2026-04-09
+
+### What shipped
+
+A complete roguelite shell wrapping the existing tower defense engine:
+
+| Component / Service | Responsibility |
+|--------------------|----------------|
+| `AscentComponent` | Root coordinator; 8-mode view state machine; run lifecycle delegate |
+| `NodeMapComponent` | SVG bezier-curve node map with absolute-positioned WCAG-compliant buttons |
+| `RewardScreenComponent` | Post-combat relic choice with staggered card animation |
+| `ShopScreenComponent` | Relic shop + per-life healing with visit limit |
+| `RestScreenComponent` | CSS-only campfire with 30% max-lives heal |
+| `EventScreenComponent` | Narrative choice events with outcome panel and aria-live feedback |
+| `ActTransitionComponent` | Act completion overlay with boss name and stats |
+| `RunSummaryComponent` | End-of-run score, stats grid, relic strip, encounter timeline |
+| `RelicInventoryComponent` | Compact relic bar with mouse-clamped tooltips |
+| `RunService` | Central orchestrator; `runState$` + `nodeMap$` BehaviorSubjects; full lifecycle |
+| `RelicService` | Pull-model relic effects; cached `RelicModifiers`; trigger relics (LUCKY_COIN, REINFORCED_WALLS, ARCHITECTS_BLUEPRINT) |
+| `NodeMapGeneratorService` | Deterministic mulberry32 node graph; 11 rows + boss; guaranteed SHOP row 5, REST row 8 |
+| `WaveGeneratorService` | Depth-tiered enemy pools; elite boss injection; themed boss presets |
+| `EncounterService` | Node → `EncounterConfig`; loads map into `MapBridgeService` before `/play` |
+| `RunEventBusService` | Pub-sub `Subject<RunEvent>` for cross-service events |
+| `RunPersistenceService` | localStorage save/resume; max-ascension tracking |
+
+**Content:** 20 relics (10 common, 7 uncommon, 3 rare) across 3 rarities. 20 ascension levels, each adding one difficulty twist (health multipliers, gold reductions, shop price increases, heal reductions, fewer relic choices). 3 boss presets per act.
+
+**Constants architecture:**
+- `NODE_MAP_CONFIG`, `ENCOUNTER_CONFIG`, `REWARD_CONFIG`, `SHOP_CONFIG`, `REST_CONFIG` — structural/balance config
+- `RUN_CONFIG` — seed primes, score per kill, min gold/lives floors
+- `RELIC_EFFECT_CONFIG` — non-obvious relic numeric values centralized
+
+### Integration with Existing Engine
+
+All relic effects consumed via pull API in existing game services — zero changes to service signatures:
+- `TowerCombatService`, `CombatLoopService`, `TowerInteractionService`, `EnemyService` all read from `RelicService`
+- `GameBoardComponent` calls `RunService.recordEncounterResult()` on game end
+- `EncounterService` injects `MapBridgeService` and `CampaignMapService` (both root-scoped)
+
+### Red Team Critique — Ascent Mode (2026-04-09)
+
+#### Finding 1: `generateShopItems()` sort with `() => rng() - 0.5` is biased (LOW)
+**Location:** `run.service.ts:352`
+**Risk:** Fisher-Yates shuffle via `sort(() => rng() - 0.5)` is statistically biased — items near the start are slightly over-represented. For a 3-item shop this is negligible. Accepted.
+**Status:** Accepted. No fix required for a 3-item pool.
+
+#### Finding 2: `loadSavedRunPreview()` and `loadRunState()` are the same call (LOW)
+**Location:** `run-persistence.service.ts:59-61`
+**Risk:** `loadSavedRunPreview()` delegates directly to `loadRunState()`, which clears corrupt saves. A corrupt save wipes the resume button silently. Correct behavior, but the method name implies read-only semantics.
+**Status:** Accepted. The behavior is correct; renaming would be cosmetic churn.
+
+#### Finding 3: `revealUnknownNode()` probabilities (50/25/15/10) are undocumented inline (LOW)
+**Location:** `run.service.ts:465-468`
+**Risk:** Three threshold values (`0.5`, `0.75`, `0.9`) are single-use with a clear explanatory comment. Per project rule, single-use well-commented values don't need extraction.
+**Status:** Accepted.
+
+### Final Deployment Checklist — Ascent Mode
+- [x] Step 1: Magic number extraction (RUN_CONFIG, RELIC_EFFECT_CONFIG, REWARD_CONFIG multipliers)
+- [x] Step 2: Fix CSS variable names (`--color-bg/--color-text` → `--bg-color/--text-color`) in all 6 ascent SCSS files
+- [x] Step 3: Verify WCAG touch targets ≥ 2.75rem across all ascent components
+- [x] Step 4: Verify `prefers-reduced-motion` in all animation-containing SCSS files
+- [x] Step 5: Verify responsive breakpoints (768px + 480px) in all ascent SCSS files
+- [x] Step 6: Update ARCHITECTURE.md with Ascent Mode section
+- [x] Step 7: Update STRATEGIC_AUDIT.md (this entry)
+- [x] Step 8: Run full test suite — 4907/4907 green (up from 4162 with ascent specs)
+- [x] Step 9: `npx tsc --noEmit` clean — zero errors

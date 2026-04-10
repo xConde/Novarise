@@ -109,9 +109,9 @@ export class EncounterService {
 
     switch (node.type) {
       case NodeType.ELITE:
-        return Math.round(baseGold * 1.5);
+        return Math.round(baseGold * REWARD_CONFIG.eliteGoldRewardMultiplier);
       case NodeType.BOSS:
-        return Math.round(baseGold * 2.0);
+        return Math.round(baseGold * REWARD_CONFIG.bossGoldRewardMultiplier);
       default:
         return baseGold;
     }

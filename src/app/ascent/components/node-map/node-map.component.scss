@@ -97,7 +97,7 @@ $node-color-select:  #9b59b6;
 
   border: 2px solid rgba(255, 255, 255, 0.18);
   background: rgba(10, 10, 26, 0.85);
-  color: var(--color-text, #e0e0e0);
+  color: var(--text-color);
   font-size: 1.125rem;
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease, box-shadow 0.2s ease;

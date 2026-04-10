@@ -8,6 +8,7 @@ import { MapNode, NodeMap, NodeType, getAvailableNodes } from './models/node-map
 import { RelicDefinition, RELIC_DEFINITIONS, RelicId } from './models/relic.model';
 import { RewardScreenConfig, RewardItem, ShopItem, RunEvent } from './models/encounter.model';
 import { AscensionLevel, ASCENSION_LEVELS } from './models/ascension.model';
+import { REST_CONFIG } from './constants/ascent.constants';
 
 /**
  * Ascent Mode root component.
@@ -237,11 +238,11 @@ export class AscentComponent implements OnInit, OnDestroy {
     this.viewMode = 'map';
   }
 
-  /** Calculate heal amount for rest site (30% of maxLives, minimum 2). */
+  /** Calculate heal amount for rest site (REST_CONFIG.healPercentage of maxLives, minimum REST_CONFIG.minHeal). */
   getHealAmount(): number {
     if (!this.runState) return 0;
-    const heal = Math.floor(this.runState.maxLives * 0.3);
-    return Math.max(2, heal);
+    const heal = Math.floor(this.runState.maxLives * REST_CONFIG.healPercentage);
+    return Math.max(REST_CONFIG.minHeal, heal);
   }
 
   /** Abandon run and return to landing. */

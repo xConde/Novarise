@@ -17,10 +17,15 @@ const RARITY_BORDER: Record<RelicRarity, string> = {
 
 /** Viewport margin so tooltips never clip off-screen edges (px). */
 const TOOLTIP_VIEWPORT_MARGIN = 8;
-/** Tooltip offset above the cursor (px). */
+/** Tooltip offset above/below the cursor (px). */
 const TOOLTIP_Y_OFFSET = 12;
 /** Maximum tooltip width matches the CSS max-width (px). */
 const TOOLTIP_MAX_WIDTH = 240;
+/**
+ * Approximate tooltip height used when flipping below the cursor near the top of the viewport (px).
+ * Allows the tooltip to clear the cursor when it must render below instead of above.
+ */
+const TOOLTIP_FLIP_CLEARANCE = 24;
 
 @Component({
   selector: 'app-relic-inventory',
@@ -76,7 +81,7 @@ export class RelicInventoryComponent {
     x = Math.max(TOOLTIP_VIEWPORT_MARGIN, Math.min(x, vw - TOOLTIP_MAX_WIDTH - TOOLTIP_VIEWPORT_MARGIN));
     // Clamp vertically (flip below cursor if near top)
     if (y < TOOLTIP_VIEWPORT_MARGIN) {
-      y = clientY + TOOLTIP_Y_OFFSET + 24; // below cursor
+      y = clientY + TOOLTIP_Y_OFFSET + TOOLTIP_FLIP_CLEARANCE; // below cursor
     }
     y = Math.min(y, vh - TOOLTIP_VIEWPORT_MARGIN);
 
