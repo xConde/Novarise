@@ -17,6 +17,7 @@ import { TowerAnimationService } from './tower-animation.service';
 import { ChainLightningService } from './chain-lightning.service';
 import { ProjectileService, ProjectileHit } from './projectile.service';
 import { RelicService } from '../../../ascent/services/relic.service';
+import { CardEffectService } from '../../../ascent/services/card-effect.service';
 
 /** A mortar blast zone that persists and deals DoT. Mesh ownership is in CombatVFXService. */
 interface MortarZone {
@@ -71,6 +72,7 @@ export class TowerCombatService {
     private chainLightningService: ChainLightningService,
     private projectileService: ProjectileService,
     private relicService: RelicService,
+    private cardEffectService: CardEffectService,
   ) {}
 
   /** Registers a newly placed tower so it participates in targeting and firing. `actualCost` tracks the real gold paid (may differ from base cost due to modifiers). */
@@ -172,16 +174,22 @@ export class TowerCombatService {
     const towerDamageMultiplier = this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1;
     const hasRelicModifiers = this.relicService.relicCount > 0;
 
+    // Pre-read card modifier values once per frame (avoids per-tower repeat calls).
+    const cardDamageBoost = this.cardEffectService.getModifierValue('damage');
+    const cardRangeBoost = this.cardEffectService.getModifierValue('range');
+    const cardFireRateBoost = this.cardEffectService.getModifierValue('fire_rate');
+    const hasCardModifiers = cardDamageBoost !== 0 || cardRangeBoost !== 0 || cardFireRateBoost !== 0;
+
     this.placedTowers.forEach(tower => {
       const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
       let stats: TowerStats;
-      if (towerDamageMultiplier !== 1 || hasRelicModifiers) {
+      if (towerDamageMultiplier !== 1 || hasRelicModifiers || hasCardModifiers) {
         const relicDamage = this.relicService.getDamageMultiplier(tower.type);
         const relicFireRate = this.relicService.getFireRateMultiplier();
         const relicRange = this.relicService.getRangeMultiplier(tower.type);
-        this.scratchStats.damage = Math.round(baseStats.damage * towerDamageMultiplier * relicDamage);
-        this.scratchStats.range = baseStats.range * relicRange;
-        this.scratchStats.fireRate = baseStats.fireRate * relicFireRate;
+        this.scratchStats.damage = Math.round(baseStats.damage * towerDamageMultiplier * relicDamage * (1 + cardDamageBoost));
+        this.scratchStats.range = baseStats.range * relicRange * (1 + cardRangeBoost);
+        this.scratchStats.fireRate = baseStats.fireRate * relicFireRate * (1 - cardFireRateBoost);
         this.scratchStats.cost = baseStats.cost;
         this.scratchStats.projectileSpeed = baseStats.projectileSpeed;
         this.scratchStats.splashRadius = baseStats.splashRadius * this.relicService.getSplashRadiusMultiplier();

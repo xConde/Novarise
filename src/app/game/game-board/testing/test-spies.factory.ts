@@ -3,6 +3,7 @@ import { BehaviorSubject, EMPTY, of } from 'rxjs';
 import { RelicService } from '../../../ascent/services/relic.service';
 import { RunService } from '../../../ascent/services/run.service';
 import { DeckService } from '../../../ascent/services/deck.service';
+import { CardEffectService } from '../../../ascent/services/card-effect.service';
 import { DECK_CONFIG, DeckState, EnergyState } from '../../../ascent/models/card.model';
 import { GameBoardService } from '../game-board.service';
 import { EnemyService, DamageResult } from '../services/enemy.service';
@@ -87,7 +88,10 @@ export function createGameBoardServiceSpy(
 export function createEnemyServiceSpy(
   enemyMap: Map<string, Enemy>
 ): jasmine.SpyObj<EnemyService> {
-  const methods: (keyof EnemyService)[] = ['getEnemies', 'damageEnemy', 'spawnEnemy', 'removeEnemy', 'startHitFlash'];
+  const methods: (keyof EnemyService)[] = [
+    'getEnemies', 'damageEnemy', 'damageStrongestEnemy', 'slowAllEnemies',
+    'spawnEnemy', 'removeEnemy', 'startHitFlash',
+  ];
   const spy = jasmine.createSpyObj<EnemyService>('EnemyService', methods);
   spy.getEnemies.and.returnValue(enemyMap);
   spy.damageEnemy.and.callFake((id: string, damage: number): DamageResult => {
@@ -576,6 +580,7 @@ export function createGameStateServiceSpy(): jasmine.SpyObj<GameStateService> {
     'addStreakBonus',
     'getStreak',
     'addGold',
+    'addLives',
     'addGoldAndScore',
     'awardInterest',
     'spendGold',
@@ -974,6 +979,31 @@ export function createRunServiceSpy(): jasmine.SpyObj<RunService> {
  *   - drawOne() — true (success)
  *   - All other methods — no-op void or safe defaults
  */
+/**
+ * Create a pre-configured CardEffectService spy.
+ *
+ * Default return values:
+ *   - getModifierValue() — 0 (no active modifiers)
+ *   - hasActiveModifier() — false
+ *   - getActiveModifiers() — empty readonly array
+ *   - applySpell / applyModifier / tickWave / reset — no-op void
+ */
+export function createCardEffectServiceSpy(): jasmine.SpyObj<CardEffectService> {
+  const spy = jasmine.createSpyObj<CardEffectService>('CardEffectService', [
+    'applySpell',
+    'applyModifier',
+    'tickWave',
+    'getModifierValue',
+    'hasActiveModifier',
+    'getActiveModifiers',
+    'reset',
+  ]);
+  spy.getModifierValue.and.returnValue(0);
+  spy.hasActiveModifier.and.returnValue(false);
+  spy.getActiveModifiers.and.returnValue([]);
+  return spy;
+}
+
 export function createDeckServiceSpy(): jasmine.SpyObj<DeckService> {
   const emptyDeckState: DeckState = {
     drawPile: [],

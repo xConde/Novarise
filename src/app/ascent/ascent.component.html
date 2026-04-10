@@ -115,8 +115,10 @@
     [currentLives]="runState.lives"
     [maxLives]="runState.maxLives"
     [healAmount]="getHealAmount()"
+    [deckCards]="getDeckCards()"
     (restChosen)="restHeal()"
     (skipChosen)="viewMode = 'map'"
+    (cardUpgraded)="onCardUpgraded($event)"
   ></app-rest-screen>
 
   <!-- ── Shop Screen ─────────────────────────────────────── -->

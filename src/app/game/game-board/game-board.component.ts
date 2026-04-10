@@ -73,6 +73,7 @@ import { FocusTrap } from '../../shared/utils/focus-trap.util';
 import { RunService } from '../../ascent/services/run.service';
 import { RelicService } from '../../ascent/services/relic.service';
 import { DeckService } from '../../ascent/services/deck.service';
+import { CardEffectService } from '../../ascent/services/card-effect.service';
 import { EncounterResult } from '../../ascent/models/run-state.model';
 import { AscensionEffectType, getAscensionEffects } from '../../ascent/models/ascension.model';
 import { ModifierEffects } from './models/game-modifier.model';
@@ -393,6 +394,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private runService: RunService,
     private relicService: RelicService,
     private deckService: DeckService,
+    private cardEffectService: CardEffectService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -714,10 +716,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.selectedTowerType = effect.towerType;
         break;
       case 'spell':
-        this.executeSpellCard(effect as SpellCardEffect);
+        this.cardEffectService.applySpell(effect as SpellCardEffect, this.gameStateService, this.enemyService);
         break;
       case 'modifier':
-        this.executeModifierCard(effect as ModifierCardEffect);
+        this.cardEffectService.applyModifier(effect as ModifierCardEffect);
         break;
       case 'utility':
         this.executeUtilityCard(effect as UtilityCardEffect);
@@ -725,36 +727,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  private executeSpellCard(effect: SpellCardEffect): void {
-    switch (effect.spellId) {
-      case 'gold_rush':
-        this.gameStateService.addGold(effect.value);
-        break;
-      case 'lightning_strike': {
-        // Deal damage to the strongest living enemy
-        const enemies = this.enemyService.getEnemies();
-        let strongest: { id: string; health: number } | null = null;
-        for (const [id, enemy] of enemies) {
-          if (!strongest || enemy.health > strongest.health) {
-            strongest = { id, health: enemy.health };
-          }
-        }
-        if (strongest) {
-          this.enemyService.damageEnemy(strongest.id, effect.value);
-        }
-        break;
-      }
-      // repair_walls, frost_wave, overclock, scout_ahead, salvage, fortify:
-      // Full implementations deferred — require GameStateService API extensions.
-      default:
-        break;
-    }
-  }
+  /** @deprecated Delegated to CardEffectService.applySpell — kept only as a reference. */
+  private executeSpellCard(_effect: SpellCardEffect): void { /* no-op */ }
 
-  private executeModifierCard(_effect: ModifierCardEffect): void {
-    // Modifier persistence deferred — requires GameStateService wave-countdown API.
-    // Active modifiers will be read by combat services each frame once that API exists.
-  }
+  /** @deprecated Delegated to CardEffectService.applyModifier — kept only as a reference. */
+  private executeModifierCard(_effect: ModifierCardEffect): void { /* no-op */ }
 
   private executeUtilityCard(effect: UtilityCardEffect): void {
     switch (effect.utilityId) {
@@ -1919,6 +1896,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const completedWave = this.gameStateService.getState().wave;
         const perfectWave = wc.streakBonus > 0;
         this.onWaveComplete(completedWave, perfectWave);
+        // Tick card modifier wave-countdowns when in an Ascent run.
+        if (this.runService.isInRun()) {
+          this.cardEffectService.tickWave();
+        }
         // Hide minimap during intermission on mobile — frees space for Next Wave button
         if (window.innerWidth <= 480) {
           this.minimapService.hide();

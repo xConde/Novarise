@@ -5,7 +5,7 @@
 
   <!-- Title -->
   <h2 class="rest-title">Rest Site</h2>
-  <p class="rest-subtitle">Take a moment to recover before the next encounter.</p>
+  <p class="rest-subtitle">Take a moment to recover or upgrade a card.</p>
 
   <!-- Lives display -->
   <div class="rest-lives" [attr.aria-label]="'Current lives: ' + currentLives + ' of ' + maxLives">
@@ -14,7 +14,7 @@
   </div>
 
   <!-- Heal preview -->
-  <div class="rest-heal-preview" *ngIf="!atFullHealth">
+  <div class="rest-heal-preview" *ngIf="!atFullHealth && activeAction !== 'upgrade'">
     <span class="rest-heal-preview__amount" [attr.aria-label]="'Healing ' + actualHeal + ' lives'">
       +{{ actualHeal }} lives
     </span>
@@ -22,12 +22,45 @@
     <span class="rest-heal-preview__result">{{ livesAfterHeal }} / {{ maxLives }}</span>
   </div>
 
-  <p class="rest-full-notice" *ngIf="atFullHealth" aria-live="polite">
+  <p class="rest-full-notice" *ngIf="atFullHealth && activeAction !== 'upgrade'" aria-live="polite">
     You are already at full health.
   </p>
 
-  <!-- Actions -->
-  <div class="rest-actions">
+  <!-- Card upgrade selection panel -->
+  <div class="rest-upgrade-panel" *ngIf="activeAction === 'upgrade'" role="region" aria-label="Select a card to upgrade">
+    <h3 class="rest-upgrade-title">Select a card to upgrade</h3>
+    <p class="rest-upgrade-hint" *ngIf="getUniqueUpgradableCards().length === 0" aria-live="polite">
+      No upgradable cards in your deck.
+    </p>
+    <ul class="rest-card-list" role="list" *ngIf="getUniqueUpgradableCards().length > 0">
+      <li
+        *ngFor="let card of getUniqueUpgradableCards()"
+        class="rest-card-item"
+        role="listitem"
+      >
+        <button
+          class="rest-card-btn ascent-btn ascent-btn--secondary"
+          type="button"
+          (click)="selectCardToUpgrade(card)"
+          [attr.aria-label]="'Upgrade ' + getCardName(card)"
+        >
+          <span class="rest-card-btn__name">{{ getCardName(card) }}</span>
+          <span class="rest-card-btn__desc">{{ getCardDescription(card) }}</span>
+        </button>
+      </li>
+    </ul>
+    <button
+      class="ascent-btn ascent-btn--secondary rest-btn"
+      type="button"
+      (click)="cancelUpgrade()"
+      aria-label="Cancel card upgrade"
+    >
+      Cancel
+    </button>
+  </div>
+
+  <!-- Main actions (hidden while selecting upgrade) -->
+  <div class="rest-actions" *ngIf="activeAction !== 'upgrade'">
     <button
       class="ascent-btn ascent-btn--primary rest-btn"
       type="button"
@@ -36,6 +69,16 @@
       [attr.aria-label]="atFullHealth ? 'Already at full health' : 'Rest and heal ' + actualHeal + ' lives'"
     >
       {{ atFullHealth ? 'Already at full health' : 'Rest' }}
+    </button>
+
+    <button
+      class="ascent-btn ascent-btn--secondary rest-btn"
+      type="button"
+      (click)="showUpgradePanel()"
+      [disabled]="upgradableCards.length === 0"
+      aria-label="Upgrade a card from your deck"
+    >
+      Upgrade a Card
     </button>
 
     <button

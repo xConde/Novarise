@@ -3,6 +3,8 @@
  *
  * Each event presents a narrative choice with trade-off outcomes.
  * StS-faithful design: events are opportunities with risk, not free rewards.
+ *
+ * Events with `outcome.removeCard: true` trigger a random card removal in RunService.resolveEvent.
  */
 
 import { RunEvent } from '../models/encounter.model';
@@ -261,6 +263,40 @@ export const RUN_EVENTS: ReadonlyArray<RunEvent> = [
         label: 'Study the architecture',
         description: 'Gain 40 gold from insights.',
         outcome: { goldDelta: 40, livesDelta: 0, description: 'Even ruins teach the observant.' },
+      },
+    ],
+  },
+  {
+    id: 'card_purifier',
+    title: 'The Purifier',
+    description: 'A hooded figure offers to remove impurities from your arsenal. "Dead weight has no place in a warrior\'s deck."',
+    choices: [
+      {
+        label: 'Remove a card',
+        description: 'Remove one card from your deck permanently.',
+        outcome: { goldDelta: -25, livesDelta: 0, removeCard: true, description: 'One card purged from your deck.' },
+      },
+      {
+        label: 'Decline',
+        description: 'Keep your deck as-is.',
+        outcome: { goldDelta: 0, livesDelta: 0, description: 'You leave your deck untouched.' },
+      },
+    ],
+  },
+  {
+    id: 'ruined_lab',
+    title: 'Ruined Laboratory',
+    description: 'Shattered equipment and scattered notes. A faded journal offers two paths: burn the useless research or keep it intact.',
+    choices: [
+      {
+        label: 'Burn the deadwood',
+        description: 'Remove a card, but gain 30 gold from the cleared space.',
+        outcome: { goldDelta: 30, livesDelta: 0, removeCard: true, description: 'The purge makes room for what matters.' },
+      },
+      {
+        label: 'Preserve everything',
+        description: 'Take nothing. Leave everything unchanged.',
+        outcome: { goldDelta: 0, livesDelta: 0, description: 'Knowledge — even useless knowledge — has its place.' },
       },
     ],
   },

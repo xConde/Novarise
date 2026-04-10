@@ -186,6 +186,18 @@ export class GameStateService {
     return this.state.gold >= amount;
   }
 
+  /**
+   * Restore lives from a card effect (e.g. Repair Walls spell).
+   * Caps at the starting-lives ceiling for the current difficulty so healing
+   * cannot exceed the normal max. Amount must be positive; no-ops otherwise.
+   */
+  addLives(amount: number): void {
+    if (amount <= 0) return;
+    const maxLives = DIFFICULTY_PRESETS[this.state.difficulty].lives;
+    this.state.lives = Math.min(this.state.lives + amount, maxLives);
+    this.emit();
+  }
+
   /** Adds to score without awarding gold. Use for score-only bonuses (e.g., modifier multiplier adjustments). */
   addScore(points: number): void {
     this.state.score += points;

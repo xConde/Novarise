@@ -9,6 +9,7 @@ import { RelicDefinition, RELIC_DEFINITIONS, RelicId } from './models/relic.mode
 import { RewardScreenConfig, RewardItem, ShopItem, RunEvent } from './models/encounter.model';
 import { AscensionLevel, ASCENSION_LEVELS } from './models/ascension.model';
 import { REST_CONFIG } from './constants/ascent.constants';
+import { CardInstance } from './models/card.model';
 
 /**
  * Ascent Mode root component.
@@ -196,6 +197,17 @@ export class AscentComponent implements OnInit, OnDestroy {
   /** Rest: heal lives. */
   restHeal(): void {
     this.runService.restHeal();
+    this.viewMode = 'map';
+  }
+
+  /** Returns all card instances across the deck for rest-screen upgrade selection. */
+  getDeckCards(): CardInstance[] {
+    return this.runService.getDeckCards();
+  }
+
+  /** Handle card upgrade selection from rest screen. */
+  onCardUpgraded(instanceId: string): void {
+    this.runService.upgradeCard(instanceId);
     this.viewMode = 'map';
   }
 

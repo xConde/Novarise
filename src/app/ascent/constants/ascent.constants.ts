@@ -116,6 +116,9 @@ export const SHOP_CONFIG = {
   /** Number of relics available in shop. */
   relicsInShop: 3,
 
+  /** Number of cards available in shop. */
+  cardsInShop: 3,
+
   /** Base price by rarity. */
   priceByRarity: {
     common: 50,

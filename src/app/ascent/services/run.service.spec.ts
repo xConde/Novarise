@@ -1,5 +1,6 @@
 import { TestBed, fakeAsync } from '@angular/core/testing';
 import { RunService } from './run.service';
+import { DeckService } from './deck.service';
 import { NodeMapGeneratorService } from './node-map-generator.service';
 import { EncounterService } from './encounter.service';
 import { RelicService } from './relic.service';
@@ -123,6 +124,7 @@ describe('RunService', () => {
     TestBed.configureTestingModule({
       providers: [
         RunService,
+        DeckService,
         { provide: NodeMapGeneratorService, useValue: nodeMapGenerator },
         { provide: EncounterService, useValue: encounterService },
         { provide: RelicService, useValue: relicService },
@@ -486,5 +488,90 @@ describe('RunService', () => {
 
     expect(service.runState!.deckCardIds.length).toBe(deckBefore + 1);
     expect(service.runState!.deckCardIds).toContain(cardChoices[0].cardId);
+  }));
+
+  // ── upgradeCard ───────────────────────────────────────────────
+
+  it('upgradeCard() marks currentNodeId as completed', fakeAsync(() => {
+    service.startNewRun();
+    service.selectNode('node_1_0');
+
+    // getDeckCards returns instances from DeckService (injected via TestBed)
+    const cards = service.getDeckCards();
+    if (cards.length === 0) {
+      pending('deck empty — no cards to upgrade');
+      return;
+    }
+
+    service.upgradeCard(cards[0].instanceId);
+    expect(service.runState!.completedNodeIds).toContain('node_1_0');
+  }));
+
+  it('upgradeCard() calls DeckService.upgradeCard with the instance ID', fakeAsync(() => {
+    service.startNewRun();
+    service.selectNode('node_1_0');
+
+    const deckService = TestBed.inject(DeckService);
+    spyOn(deckService, 'upgradeCard').and.callThrough();
+
+    const cards = service.getDeckCards();
+    if (cards.length === 0) { pending('deck empty'); return; }
+
+    service.upgradeCard(cards[0].instanceId);
+    expect(deckService.upgradeCard).toHaveBeenCalledWith(cards[0].instanceId);
+  }));
+
+  // ── resolveEvent with removeCard ──────────────────────────────
+
+  it('resolveEvent() with removeCard:true removes a card from the deck', fakeAsync(() => {
+    service.startNewRun();
+    service.selectNode('node_1_0');
+
+    // Generate the card_purifier event manually
+    const deckService = TestBed.inject(DeckService);
+    const cardsBefore = deckService.getAllCards().length;
+
+    // Inject the card_purifier event directly
+    (service as any).currentEvent = {
+      id: 'card_purifier',
+      title: 'The Purifier',
+      description: 'Test',
+      choices: [
+        {
+          label: 'Remove a card',
+          description: 'Remove one card.',
+          outcome: { goldDelta: -25, livesDelta: 0, removeCard: true, description: 'Purged.' },
+        },
+      ],
+    };
+
+    service.resolveEvent(0);
+
+    const cardsAfter = deckService.getAllCards().length;
+    expect(cardsAfter).toBe(cardsBefore - 1);
+  }));
+
+  it('resolveEvent() without removeCard leaves deck unchanged', fakeAsync(() => {
+    service.startNewRun();
+    service.selectNode('node_1_0');
+
+    const deckService = TestBed.inject(DeckService);
+    const cardsBefore = deckService.getAllCards().length;
+
+    (service as any).currentEvent = {
+      id: 'test_event',
+      title: 'Test',
+      description: 'Test',
+      choices: [
+        {
+          label: 'No-op',
+          description: 'Nothing happens.',
+          outcome: { goldDelta: 0, livesDelta: 0, description: 'OK.' },
+        },
+      ],
+    };
+
+    service.resolveEvent(0);
+    expect(deckService.getAllCards().length).toBe(cardsBefore);
   }));
 });

@@ -43,7 +43,7 @@ import { RunEventBusService, RunEventType } from './run-event-bus.service';
 import { RUN_EVENTS } from '../constants/run-events';
 import { PlayerProfileService } from '../../core/services/player-profile.service';
 import { getStarterDeck, CARD_DEFINITIONS } from '../constants/card-definitions';
-import { CardRarity } from '../models/card.model';
+import { CardId, CardInstance, CardRarity } from '../models/card.model';
 
 /**
  * Central orchestrator for Ascent Mode runs.
@@ -355,6 +355,18 @@ export class RunService {
 
   // ── Non-Combat Nodes ────────────────────────────────────
 
+  /** Returns all card instances across draw pile, hand, discard, and exhaust (for deck viewer / rest upgrade). */
+  getDeckCards(): CardInstance[] {
+    return this.deckService.getAllCards();
+  }
+
+  /** Upgrade a card by instance ID (rest site action). Marks the node completed and persists. */
+  upgradeCard(instanceId: string): void {
+    this.deckService.upgradeCard(instanceId);
+    this.markCurrentNodeCompleted();
+    this.persist();
+  }
+
   /** Rest: heal lives. */
   restHeal(): void {
     const state = this.runState;
@@ -399,6 +411,20 @@ export class RunService {
       const basePrice = SHOP_CONFIG.priceByRarity[relic.rarity];
       items.push({
         item: { type: 'relic', relicId: relic.id },
+        cost: Math.round(basePrice * priceMultiplier),
+      });
+    }
+
+    // Card items — 3 random non-starter cards from the full card pool.
+    const cardPool = Object.values(CARD_DEFINITIONS).filter(c => c.rarity !== CardRarity.STARTER);
+    const shuffledCards = [...cardPool].sort(() => rng() - 0.5);
+    const shopCards = shuffledCards.slice(0, SHOP_CONFIG.cardsInShop);
+
+    for (const card of shopCards) {
+      const rarityKey = card.rarity as keyof typeof SHOP_CONFIG.priceByRarity;
+      const basePrice = SHOP_CONFIG.priceByRarity[rarityKey] ?? SHOP_CONFIG.priceByRarity.common;
+      items.push({
+        item: { type: 'card', cardId: card.id },
         cost: Math.round(basePrice * priceMultiplier),
       });
     }
@@ -462,6 +488,11 @@ export class RunService {
       if (idx >= 0) newRelicIds.splice(idx, 1);
     }
 
+    // Card removal: remove a random non-starter card from the deck.
+    if (outcome.removeCard) {
+      this.removeRandomNonStarterCard();
+    }
+
     // Check for death by event
     const newStatus = newLives <= 0 ? RunStatus.DEFEAT : state.status;
     if (newLives <= 0) newLives = 0;
@@ -478,6 +509,25 @@ export class RunService {
     this.relicService.setActiveRelics(newRelicIds);
     this.currentEvent = null;
     this.persist();
+  }
+
+  /**
+   * Remove a random non-starter card from the deck.
+   * If no non-starter cards exist, removes the last card in the deck as a fallback.
+   */
+  private removeRandomNonStarterCard(): void {
+    const allCards = this.deckService.getAllCards();
+    const nonStarters = allCards.filter(c => {
+      const def = CARD_DEFINITIONS[c.cardId as CardId];
+      return def && def.rarity !== CardRarity.STARTER;
+    });
+
+    const pool = nonStarters.length > 0 ? nonStarters : allCards;
+    if (pool.length === 0) return;
+
+    const rng = this.runRng ?? Math.random;
+    const index = Math.floor(rng() * pool.length);
+    this.deckService.removeCard(pool[index].instanceId);
   }
 
   /** Generate a random event for the current node. */

@@ -13,9 +13,10 @@ import { StatusEffectType, STATUS_EFFECT_CONFIGS } from '../constants/status-eff
 import { CHAIN_LIGHTNING_CONFIG, IMPACT_FLASH_CONFIG } from '../constants/combat.constants';
 import { PROJECTILE_VISUAL_CONFIG } from '../constants/effects.constants';
 import * as THREE from 'three';
-import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy, createRelicServiceSpy } from '../testing';
+import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy, createRelicServiceSpy, createCardEffectServiceSpy } from '../testing';
 import { TowerAnimationService } from './tower-animation.service';
 import { RelicService } from '../../../ascent/services/relic.service';
+import { CardEffectService } from '../../../ascent/services/card-effect.service';
 
 describe('TowerCombatService', () => {
   let service: TowerCombatService;
@@ -55,6 +56,7 @@ describe('TowerCombatService', () => {
         { provide: GameBoardService, useValue: gameBoardServiceSpy },
         { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
         { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
       ]
     });
     service = TestBed.inject(TowerCombatService);

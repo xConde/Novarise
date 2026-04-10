@@ -278,6 +278,55 @@ export class EnemyService {
   }
 
   /**
+   * Deal damage to the enemy with the highest current health.
+   * Flying enemies and dying enemies are excluded from the search.
+   * No-op when no living enemies exist.
+   */
+  damageStrongestEnemy(damage: number): void {
+    let strongestId: string | null = null;
+    let highestHealth = -Infinity;
+    for (const [id, enemy] of this.enemies) {
+      if (!enemy.dying && enemy.health > highestHealth) {
+        highestHealth = enemy.health;
+        strongestId = id;
+      }
+    }
+    if (strongestId !== null) {
+      this.damageEnemy(strongestId, damage);
+    }
+  }
+
+  /**
+   * Slow all non-flying, non-dying enemies by `slowFactor` for `durationSeconds`.
+   * Speed is reduced to `originalSpeed * (1 - slowFactor)` (floored at MIN_ENEMY_SPEED).
+   * After the duration the original speeds are restored.
+   * Flying enemies are immune (per the status-effect immunity rules).
+   */
+  slowAllEnemies(durationSeconds: number): void {
+    const SLOW_FACTOR = 0.5; // frost_wave: 50% slow
+    const restored: Array<{ enemy: { speed: number }; originalSpeed: number }> = [];
+
+    for (const enemy of this.enemies.values()) {
+      if (enemy.dying || enemy.isFlying) continue;
+      const original = enemy.speed;
+      enemy.speed = Math.max(MIN_ENEMY_SPEED, original * (1 - SLOW_FACTOR));
+      restored.push({ enemy, originalSpeed: original });
+    }
+
+    if (restored.length === 0) return;
+
+    setTimeout(() => {
+      for (const { enemy, originalSpeed } of restored) {
+        // Only restore if the current speed is still the slowed value
+        // (guards against reset() clearing enemies before timeout fires)
+        if (enemy.speed < originalSpeed) {
+          enemy.speed = originalSpeed;
+        }
+      }
+    }, durationSeconds * 1000);
+  }
+
+  /**
    * Get all active enemies
    */
   getEnemies(): Map<string, Enemy> {

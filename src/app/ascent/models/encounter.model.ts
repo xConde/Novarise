@@ -85,5 +85,7 @@ export interface EventOutcome {
   readonly livesDelta: number;
   readonly relicId?: RelicId;
   readonly removeRelicId?: RelicId;
+  /** When true, resolveEvent removes a random non-starter card from the deck. */
+  readonly removeCard?: boolean;
   readonly description: string;
 }

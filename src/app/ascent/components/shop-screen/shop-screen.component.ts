@@ -1,20 +1,24 @@
 import { Component, Input, Output, EventEmitter, OnChanges } from '@angular/core';
 import { ShopItem } from '../../models/encounter.model';
 import { RelicDefinition, RelicRarity, RELIC_DEFINITIONS } from '../../models/relic.model';
+import { CardDefinition, CardRarity } from '../../models/card.model';
+import { getCardDefinition } from '../../constants/card-definitions';
 import { SHOP_CONFIG } from '../../constants/ascent.constants';
 
 /** CSS class suffix returned per rarity. */
-const RARITY_CLASS: Record<RelicRarity, string> = {
+const RARITY_CLASS: Record<RelicRarity | CardRarity, string> = {
   [RelicRarity.COMMON]: 'common',
   [RelicRarity.UNCOMMON]: 'uncommon',
   [RelicRarity.RARE]: 'rare',
+  [CardRarity.STARTER]: 'common',
 };
 
-/** Pre-resolved shop item with relic definition cached. */
+/** Pre-resolved shop item with relic or card definition cached. */
 export interface ResolvedShopItem {
   readonly item: ShopItem;
   readonly index: number;
   readonly relic: RelicDefinition | null;
+  readonly card: CardDefinition | null;
   readonly rarityClass: string;
 }
 
@@ -42,14 +46,23 @@ export class ShopScreenComponent implements OnChanges {
   ngOnChanges(): void {
     this.resolvedItems = this.shopItems.map((item, index) => {
       const relic = this.resolveRelicDef(item);
+      const card = this.resolveCardDef(item);
+      const rarity = relic?.rarity ?? card?.rarity;
       return {
         item,
         index,
         relic,
-        rarityClass: relic ? (RARITY_CLASS[relic.rarity] ?? 'common') : 'common',
+        card,
+        rarityClass: rarity ? (RARITY_CLASS[rarity] ?? 'common') : 'common',
       };
     });
+    this.relicItems = this.resolvedItems.filter(r => r.item.item.type === 'relic');
+    this.cardItems = this.resolvedItems.filter(r => r.item.item.type === 'card');
   }
+
+  /** Pre-computed lists used in template to avoid pure-pipe allocation per-CD. */
+  relicItems: ResolvedShopItem[] = [];
+  cardItems: ResolvedShopItem[] = [];
 
   canAfford(cost: number): boolean {
     return this.currentGold >= cost;
@@ -66,6 +79,13 @@ export class ShopScreenComponent implements OnChanges {
   private resolveRelicDef(item: ShopItem): RelicDefinition | null {
     if (item.item.type === 'relic') {
       return RELIC_DEFINITIONS[item.item.relicId] ?? null;
+    }
+    return null;
+  }
+
+  private resolveCardDef(item: ShopItem): CardDefinition | null {
+    if (item.item.type === 'card') {
+      return getCardDefinition(item.item.cardId) ?? null;
     }
     return null;
   }

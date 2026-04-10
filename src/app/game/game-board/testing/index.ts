@@ -32,4 +32,5 @@ export {
   createRelicServiceSpy,
   createRunServiceSpy,
   createDeckServiceSpy,
+  createCardEffectServiceSpy,
 } from './test-spies.factory';
