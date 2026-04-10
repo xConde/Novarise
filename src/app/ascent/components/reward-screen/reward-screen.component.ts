@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { RelicDefinition, RELIC_DEFINITIONS, RelicId, RelicRarity } from '../../models/relic.model';
-import { RewardScreenConfig, RewardItem } from '../../models/encounter.model';
+import { RewardScreenConfig, RewardItem, CardReward } from '../../models/encounter.model';
 
 /** CSS class suffix returned per rarity. */
 const RARITY_CLASS: Record<RelicRarity, string> = {
@@ -21,6 +21,7 @@ export class RewardScreenComponent {
 
   selectedRelic: RelicId | null = null;
   relicPicked = false;
+  cardPicked = false;
 
   /** Resolve relic definitions from reward IDs for display. */
   get relicCards(): RelicDefinition[] {
@@ -41,6 +42,21 @@ export class RewardScreenComponent {
 
   skipRelics(): void {
     this.relicPicked = true;
+  }
+
+  onCardPicked(reward: CardReward): void {
+    this.cardPicked = true;
+    this.rewardCollected.emit(reward);
+  }
+
+  onCardSkipped(): void {
+    this.cardPicked = true;
+  }
+
+  get canContinue(): boolean {
+    const relicDone = this.relicPicked || this.config.relicChoices.length === 0;
+    const cardDone = this.cardPicked || this.config.cardChoices.length === 0;
+    return relicDone && cardDone;
   }
 
   continue(): void {

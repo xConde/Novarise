@@ -16,6 +16,7 @@ import {
   getNodeById,
 } from '../models/node-map.model';
 import {
+  CardReward,
   EncounterConfig,
   RewardItem,
   RewardScreenConfig,
@@ -41,7 +42,8 @@ import { RunPersistenceService } from './run-persistence.service';
 import { RunEventBusService, RunEventType } from './run-event-bus.service';
 import { RUN_EVENTS } from '../constants/run-events';
 import { PlayerProfileService } from '../../core/services/player-profile.service';
-import { getStarterDeck } from '../constants/card-definitions';
+import { getStarterDeck, CARD_DEFINITIONS } from '../constants/card-definitions';
+import { CardRarity } from '../models/card.model';
 
 /**
  * Central orchestrator for Ascent Mode runs.
@@ -298,11 +300,35 @@ export class RunService {
     // Pick relics from available pool
     const relicChoices = this.pickRelicRewards(choiceCount, rng);
 
+    // Pick 3 cards not already in deck, weighted by rarity
+    const cardChoices = this.pickCardRewards(3, rng);
+
     return {
       goldPickup,
       relicChoices,
+      cardChoices,
       bonusRewards: [],
     };
+  }
+
+  private pickCardRewards(count: number, rng: () => number): CardReward[] {
+    const state = this.runState;
+    if (!state) return [];
+
+    // Pool: all non-starter cards (duplicates allowed — StS allows multiple copies)
+    const pool = Object.values(CARD_DEFINITIONS)
+      .filter(c => c.rarity !== CardRarity.STARTER);
+
+    // Weighted selection: sort randomly then pick first `count`
+    const shuffled = [...pool].sort(() => rng() - 0.5);
+
+    const picked: CardReward[] = [];
+    for (const card of shuffled) {
+      if (picked.length >= count) break;
+      picked.push({ type: 'card', cardId: card.id });
+    }
+
+    return picked;
   }
 
   /** Collect a reward (relic or gold). */

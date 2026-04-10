@@ -54,11 +54,19 @@
     </ng-template>
   </section>
 
+  <!-- Card choices (shown after relic section is resolved) -->
+  <app-card-draft
+    *ngIf="config.cardChoices.length > 0 && !cardPicked && relicPicked"
+    [cardChoices]="config.cardChoices"
+    (cardPicked)="onCardPicked($event)"
+    (skipped)="onCardSkipped()">
+  </app-card-draft>
+
   <!-- Continue -->
   <button
     class="ascent-btn ascent-btn--primary reward-continue-btn"
     type="button"
-    *ngIf="relicPicked || relicCards.length === 0"
+    *ngIf="canContinue"
     (click)="continue()"
     aria-label="Continue to the node map"
   >

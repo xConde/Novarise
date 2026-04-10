@@ -45,6 +45,7 @@ export interface CardReward {
 export interface RewardScreenConfig {
   readonly goldPickup: number;
   readonly relicChoices: RelicReward[];
+  readonly cardChoices: CardReward[];
   readonly bonusRewards: RewardItem[];
 }
 

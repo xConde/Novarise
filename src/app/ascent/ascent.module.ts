@@ -11,6 +11,7 @@ import { EventScreenComponent } from './components/event-screen/event-screen.com
 import { RelicInventoryComponent } from './components/relic-inventory/relic-inventory.component';
 import { ActTransitionComponent } from './components/act-transition/act-transition.component';
 import { RunSummaryComponent } from './components/run-summary/run-summary.component';
+import { CardDraftComponent } from './components/card-draft/card-draft.component';
 
 @NgModule({
   declarations: [
@@ -23,6 +24,7 @@ import { RunSummaryComponent } from './components/run-summary/run-summary.compon
     RelicInventoryComponent,
     ActTransitionComponent,
     RunSummaryComponent,
+    CardDraftComponent,
   ],
   imports: [
     CommonModule,

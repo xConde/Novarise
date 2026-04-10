@@ -1,8 +1,21 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { RewardScreenComponent } from './reward-screen.component';
-import { RewardScreenConfig, RewardItem } from '../../models/encounter.model';
+import { RewardScreenConfig, RewardItem, CardReward } from '../../models/encounter.model';
 import { RelicId, RelicRarity } from '../../models/relic.model';
+import { CardId } from '../../models/card.model';
+
+// Stub for CardDraftComponent so we don't pull in its full dependency tree
+@Component({
+  selector: 'app-card-draft',
+  template: '',
+})
+class CardDraftStubComponent {
+  @Input() cardChoices: CardReward[] = [];
+  @Output() cardPicked = new EventEmitter<CardReward>();
+  @Output() skipped = new EventEmitter<void>();
+}
 
 const MOCK_CONFIG: RewardScreenConfig = {
   goldPickup: 40,
@@ -11,6 +24,20 @@ const MOCK_CONFIG: RewardScreenConfig = {
     { type: 'relic', relicId: RelicId.CHAIN_REACTION },
     { type: 'relic', relicId: RelicId.COMMANDERS_BANNER },
   ],
+  cardChoices: [
+    { type: 'card', cardId: CardId.GOLD_RUSH },
+    { type: 'card', cardId: CardId.DAMAGE_BOOST },
+    { type: 'card', cardId: CardId.FORTIFY },
+  ],
+  bonusRewards: [],
+};
+
+const MOCK_CONFIG_NO_CARDS: RewardScreenConfig = {
+  goldPickup: 40,
+  relicChoices: [
+    { type: 'relic', relicId: RelicId.IRON_HEART },
+  ],
+  cardChoices: [],
   bonusRewards: [],
 };
 
@@ -20,7 +47,7 @@ describe('RewardScreenComponent', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      declarations: [RewardScreenComponent],
+      declarations: [RewardScreenComponent, CardDraftStubComponent],
       imports: [CommonModule],
     });
 
@@ -76,7 +103,9 @@ describe('RewardScreenComponent', () => {
     let closed = false;
     component.screenClosed.subscribe(() => (closed = true));
 
-    component.skipRelics(); // put into relicPicked=true state
+    // Resolve both reward sections so canContinue becomes true
+    component.skipRelics();
+    component.onCardSkipped();
     fixture.detectChanges();
 
     const continueBtn = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.reward-continue-btn');
@@ -110,5 +139,59 @@ describe('RewardScreenComponent', () => {
     expect(component.relicCards.length).toBe(3);
     expect(component.relicCards[0].id).toBe(RelicId.IRON_HEART);
     expect(component.relicCards[2].id).toBe(RelicId.COMMANDERS_BANNER);
+  });
+
+  // ── Card draft integration ─────────────────────────────────────────────
+
+  it('canContinue is false when relic and card sections are both unresolved', () => {
+    expect(component.canContinue).toBeFalse();
+  });
+
+  it('canContinue remains false after only relic is resolved (card choices pending)', () => {
+    component.skipRelics();
+    expect(component.canContinue).toBeFalse();
+  });
+
+  it('canContinue is true after both relic and card sections are resolved', () => {
+    component.skipRelics();
+    component.onCardSkipped();
+    expect(component.canContinue).toBeTrue();
+  });
+
+  it('onCardPicked sets cardPicked=true and emits rewardCollected', () => {
+    const emitted: RewardItem[] = [];
+    component.rewardCollected.subscribe(r => emitted.push(r));
+
+    const reward: CardReward = { type: 'card', cardId: CardId.GOLD_RUSH };
+    component.onCardPicked(reward);
+
+    expect(component.cardPicked).toBeTrue();
+    expect(emitted.length).toBe(1);
+    expect(emitted[0].type).toBe('card');
+    if (emitted[0].type === 'card') {
+      expect(emitted[0].cardId).toBe(CardId.GOLD_RUSH);
+    }
+  });
+
+  it('onCardSkipped sets cardPicked=true without emitting rewardCollected', () => {
+    const emitted: RewardItem[] = [];
+    component.rewardCollected.subscribe(r => emitted.push(r));
+
+    component.onCardSkipped();
+
+    expect(component.cardPicked).toBeTrue();
+    expect(emitted.length).toBe(0);
+  });
+
+  it('canContinue is true immediately when both relicChoices and cardChoices are empty', () => {
+    component.config = { goldPickup: 10, relicChoices: [], cardChoices: [], bonusRewards: [] };
+    expect(component.canContinue).toBeTrue();
+  });
+
+  it('canContinue is true after resolving relics when no card choices exist', () => {
+    component.config = MOCK_CONFIG_NO_CARDS;
+    fixture.detectChanges();
+    component.skipRelics();
+    expect(component.canContinue).toBeTrue();
   });
 });

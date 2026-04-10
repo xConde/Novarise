@@ -9,6 +9,8 @@ import { RunStatus, DEFAULT_RUN_CONFIG, EncounterResult } from '../models/run-st
 import { NodeMap, MapNode, NodeType } from '../models/node-map.model';
 import { EncounterConfig } from '../models/encounter.model';
 import { RelicId } from '../models/relic.model';
+import { CardRarity } from '../models/card.model';
+import { CARD_DEFINITIONS } from '../constants/card-definitions';
 
 // ── Test fixtures ───────────────────────────────────────────────
 
@@ -418,5 +420,71 @@ describe('RunService', () => {
 
     service.resumeRun();
     expect(service.runState).toBeNull();
+  }));
+
+  // ── generateRewards — card choices ────────────────────────────
+
+  it('generateRewards() includes cardChoices array in the result', fakeAsync(() => {
+    service.startNewRun();
+    service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+    const rewards = service.generateRewards();
+
+    expect(rewards.cardChoices).toBeDefined();
+    expect(Array.isArray(rewards.cardChoices)).toBeTrue();
+  }));
+
+  it('generateRewards() returns exactly 3 card choices', fakeAsync(() => {
+    service.startNewRun();
+    service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+    const rewards = service.generateRewards();
+
+    expect(rewards.cardChoices.length).toBe(3);
+  }));
+
+  it('generateRewards() card choices all have type "card"', fakeAsync(() => {
+    service.startNewRun();
+    service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+    const rewards = service.generateRewards();
+
+    for (const choice of rewards.cardChoices) {
+      expect(choice.type).toBe('card');
+    }
+  }));
+
+  it('generateRewards() card choices are all non-starter cards', fakeAsync(() => {
+    service.startNewRun();
+    service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+    const rewards = service.generateRewards();
+
+    for (const choice of rewards.cardChoices) {
+      const def = CARD_DEFINITIONS[choice.cardId];
+      expect(def.rarity).not.toBe(CardRarity.STARTER);
+    }
+  }));
+
+  it('generateRewards() card choice cardIds are valid CardIds', fakeAsync(() => {
+    service.startNewRun();
+    service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+    const rewards = service.generateRewards();
+
+    for (const choice of rewards.cardChoices) {
+      expect(CARD_DEFINITIONS[choice.cardId]).toBeDefined();
+    }
+  }));
+
+  it('collectReward() with card reward adds card to deck', fakeAsync(() => {
+    service.startNewRun();
+    const deckBefore = service.runState!.deckCardIds.length;
+
+    const cardChoices = service.generateRewards().cardChoices;
+    service.collectReward(cardChoices[0]);
+
+    expect(service.runState!.deckCardIds.length).toBe(deckBefore + 1);
+    expect(service.runState!.deckCardIds).toContain(cardChoices[0].cardId);
   }));
 });
