@@ -9,6 +9,7 @@ import { EnemyService } from './enemy.service';
 import { GameStatsService } from './game-stats.service';
 import { GameEndService } from './game-end.service';
 import { RelicService } from '../../../ascent/services/relic.service';
+import { RunEventBusService } from '../../../ascent/services/run-event-bus.service';
 import { createRelicServiceSpy } from '../testing';
 
 import { GamePhase } from '../models/game-state.model';
@@ -115,6 +116,7 @@ describe('CombatLoopService', () => {
         { provide: GameStatsService, useValue: gameStatsSpy },
         { provide: GameEndService, useValue: gameEndSpy },
         { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: RunEventBusService, useValue: jasmine.createSpyObj('RunEventBusService', ['emit']) },
       ],
     });
 

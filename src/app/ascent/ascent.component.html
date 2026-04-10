@@ -7,13 +7,8 @@
     <span class="ascent-gold">&#9733; {{ runState.gold }}g</span>
     <span class="ascent-floor">Act {{ runState.actIndex + 1 }}</span>
     <span class="ascent-score">Score: {{ runState.score }}</span>
-    <div class="ascent-relics" *ngIf="activeRelics.length > 0">
-      <span
-        class="relic-icon"
-        *ngFor="let relic of activeRelics"
-        [title]="relic.name + ': ' + relic.description"
-        [attr.aria-label]="relic.name + ' — ' + relic.description"
-      >&#9830;</span>
+    <div class="ascent-relics">
+      <app-relic-inventory [relics]="activeRelics"></app-relic-inventory>
     </div>
   </div>
 

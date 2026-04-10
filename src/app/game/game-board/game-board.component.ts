@@ -937,6 +937,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.lastWaveReward = 0;
     this.lastInterestEarned = 0;
     this.combatLoopService.resetLeakState();
+    this.relicService.resetWaveState();
     this.minimapService.show();
 
     this.gameStateService.startWave();

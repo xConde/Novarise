@@ -8,6 +8,7 @@ import { EnemyService } from './enemy.service';
 import { GameStatsService } from './game-stats.service';
 import { GameEndService } from './game-end.service';
 import { RelicService } from '../../../ascent/services/relic.service';
+import { RunEventBusService, RunEventType } from '../../../ascent/services/run-event-bus.service';
 
 import { GamePhase } from '../models/game-state.model';
 import { ENEMY_STATS } from '../models/enemy.model';
@@ -55,6 +56,7 @@ export class CombatLoopService {
     private gameStatsService: GameStatsService,
     private gameEndService: GameEndService,
     private relicService: RelicService,
+    private runEventBus: RunEventBusService,
   ) {}
 
   /**
@@ -141,6 +143,7 @@ export class CombatLoopService {
 
           // Start death animation — actual disposal happens in updateDyingAnimations()
           this.enemyService.startDyingAnimation(killInfo.id);
+          this.runEventBus.emit(RunEventType.ENEMY_KILLED, { enemyType: enemy.type, value: enemy.value });
         }
       }
 
@@ -208,6 +211,7 @@ export class CombatLoopService {
         }
 
         waveCompletion = { reward, streakBonus, streakCount, interestEarned, resultPhase: postWavePhase };
+        this.runEventBus.emit(RunEventType.WAVE_COMPLETE, { wave: waveAtFrameStart });
 
         // Record game end on VICTORY or DEFEAT (idempotent in GameEndService)
         if (postWavePhase === GamePhase.VICTORY || postWavePhase === GamePhase.DEFEAT) {

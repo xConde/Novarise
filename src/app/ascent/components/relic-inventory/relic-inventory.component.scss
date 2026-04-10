@@ -1,0 +1,144 @@
+// Relic Inventory Component
+// Sizing tokens
+$badge-size: 1.75rem;        // 28px
+$badge-size-mobile: 1.5rem;  // 24px
+$badge-gap: 0.25rem;         // 4px
+$tooltip-max-width: 15rem;   // 240px
+$tooltip-z: 100;
+
+.relic-inventory {
+  display: flex;
+  align-items: center;
+  gap: $badge-gap;
+  flex-wrap: wrap;
+  position: relative; // stacking context for tooltip
+}
+
+// ── Empty state ─────────────────────────────────────────────
+
+.relic-inventory__empty {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.35);
+  font-style: italic;
+}
+
+// ── Relic badge ──────────────────────────────────────────────
+
+.relic-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: $badge-size;
+  height: $badge-size;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  padding: 0;
+  transition: box-shadow 0.15s, transform 0.1s;
+  // Ensure minimum touch target
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+
+  &:hover,
+  &:focus-visible {
+    transform: scale(1.15);
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
+  }
+
+  // Rarity glow on hover/focus
+  &.relic--common:hover,
+  &.relic--common:focus-visible {
+    box-shadow: 0 0 8px rgba(170, 170, 170, 0.7);
+  }
+
+  &.relic--uncommon:hover,
+  &.relic--uncommon:focus-visible {
+    box-shadow: 0 0 8px rgba(52, 152, 219, 0.7);
+  }
+
+  &.relic--rare:hover,
+  &.relic--rare:focus-visible {
+    box-shadow: 0 0 10px rgba(241, 196, 15, 0.8);
+  }
+}
+
+// ── Tooltip ──────────────────────────────────────────────────
+
+.relic-tooltip {
+  position: fixed;
+  z-index: $tooltip-z;
+  max-width: $tooltip-max-width;
+  padding: 0.625rem 0.75rem;
+  background: #1a1a2e;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+
+  &.relic--uncommon {
+    border-color: rgba(52, 152, 219, 0.4);
+  }
+
+  &.relic--rare {
+    border-color: rgba(241, 196, 15, 0.4);
+  }
+}
+
+.relic-tooltip__name {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #e0e0e0;
+  margin-bottom: 0.3rem;
+}
+
+.relic-tooltip__desc {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.4;
+  margin-bottom: 0.4rem;
+}
+
+.relic-tooltip__flavor {
+  font-size: 0.75rem;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.4);
+  line-height: 1.4;
+  margin-bottom: 0.4rem;
+}
+
+.relic-tooltip__rarity {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.25rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+
+  .relic--uncommon & {
+    color: #3498db;
+    background: rgba(52, 152, 219, 0.12);
+  }
+
+  .relic--rare & {
+    color: #f1c40f;
+    background: rgba(241, 196, 15, 0.12);
+  }
+}
+
+// ── Responsive ───────────────────────────────────────────────
+
+@media (max-width: 768px) {
+  .relic-badge {
+    width: $badge-size-mobile;
+    height: $badge-size-mobile;
+    font-size: 0.7rem;
+  }
+}
