@@ -1,19 +1,5 @@
-import { Component, Input, HostListener } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit, Renderer2 } from '@angular/core';
 import { RelicDefinition, RelicRarity } from '../../models/relic.model';
-
-/** Color per rarity for badge backgrounds. */
-const RARITY_COLOR: Record<RelicRarity, string> = {
-  [RelicRarity.COMMON]: 'rgba(170, 170, 170, 0.2)',
-  [RelicRarity.UNCOMMON]: 'rgba(52, 152, 219, 0.25)',
-  [RelicRarity.RARE]: 'rgba(241, 196, 15, 0.25)',
-};
-
-/** Border/glow color per rarity. */
-const RARITY_BORDER: Record<RelicRarity, string> = {
-  [RelicRarity.COMMON]: '#aaaaaa',
-  [RelicRarity.UNCOMMON]: '#3498db',
-  [RelicRarity.RARE]: '#f1c40f',
-};
 
 /** Viewport margin so tooltips never clip off-screen edges (px). */
 const TOOLTIP_VIEWPORT_MARGIN = 8;
@@ -32,26 +18,51 @@ const TOOLTIP_FLIP_CLEARANCE = 24;
   templateUrl: './relic-inventory.component.html',
   styleUrls: ['./relic-inventory.component.scss'],
 })
-export class RelicInventoryComponent {
+export class RelicInventoryComponent implements OnInit, OnDestroy {
   @Input() relics: RelicDefinition[] = [];
 
   hoveredRelic: RelicDefinition | null = null;
   tooltipX = 0;
   tooltipY = 0;
 
+  private scrollUnlisten: (() => void) | null = null;
+
+  constructor(private renderer: Renderer2) {}
+
+  ngOnInit(): void {
+    this.scrollUnlisten = this.renderer.listen('window', 'scroll', () => {
+      this.hoveredRelic = null;
+    });
+  }
+
+  ngOnDestroy(): void {
+    if (this.scrollUnlisten) {
+      this.scrollUnlisten();
+      this.scrollUnlisten = null;
+    }
+  }
+
   /** CSS class suffix based on rarity. */
   getRarityClass(rarity: RelicRarity): string {
     return `relic--${rarity}`;
   }
 
-  /** Background color for a relic badge. */
+  /** Background color for a relic badge (inline style — replaced by CSS vars in restyle). */
   getBadgeBg(rarity: RelicRarity): string {
-    return RARITY_COLOR[rarity] ?? RARITY_COLOR[RelicRarity.COMMON];
+    switch (rarity) {
+      case RelicRarity.COMMON: return 'rgba(170, 170, 170, 0.2)';
+      case RelicRarity.UNCOMMON: return 'rgba(52, 152, 219, 0.25)';
+      case RelicRarity.RARE: return 'rgba(241, 196, 15, 0.25)';
+    }
   }
 
-  /** Border color for a relic badge. */
+  /** Border color for a relic badge (inline style — replaced by CSS vars in restyle). */
   getBadgeBorder(rarity: RelicRarity): string {
-    return RARITY_BORDER[rarity] ?? RARITY_BORDER[RelicRarity.COMMON];
+    switch (rarity) {
+      case RelicRarity.COMMON: return '#aaaaaa';
+      case RelicRarity.UNCOMMON: return '#3498db';
+      case RelicRarity.RARE: return '#f1c40f';
+    }
   }
 
   showTooltip(relic: RelicDefinition, event: MouseEvent): void {
@@ -63,14 +74,7 @@ export class RelicInventoryComponent {
     this.hoveredRelic = null;
   }
 
-  @HostListener('window:scroll')
-  onScroll(): void {
-    // Hide tooltip on scroll to avoid stale positions
-    this.hoveredRelic = null;
-  }
-
   private updateTooltipPosition(clientX: number, clientY: number): void {
-    // Position tooltip above the cursor, clamped within the viewport
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
@@ -81,7 +85,7 @@ export class RelicInventoryComponent {
     x = Math.max(TOOLTIP_VIEWPORT_MARGIN, Math.min(x, vw - TOOLTIP_MAX_WIDTH - TOOLTIP_VIEWPORT_MARGIN));
     // Clamp vertically (flip below cursor if near top)
     if (y < TOOLTIP_VIEWPORT_MARGIN) {
-      y = clientY + TOOLTIP_Y_OFFSET + TOOLTIP_FLIP_CLEARANCE; // below cursor
+      y = clientY + TOOLTIP_Y_OFFSET + TOOLTIP_FLIP_CLEARANCE;
     }
     y = Math.min(y, vh - TOOLTIP_VIEWPORT_MARGIN);
 

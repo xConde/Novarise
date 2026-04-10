@@ -84,35 +84,37 @@ describe('ShopScreenComponent', () => {
     });
   });
 
-  describe('getRelicDef()', () => {
-    it('returns RelicDefinition for a relic item', () => {
-      const def = component.getRelicDef(COMMON_ITEM);
-      expect(def).toBeDefined();
-      expect(def!.id).toBe(RelicId.IRON_HEART);
+  describe('resolvedItems (pre-computed relic defs)', () => {
+    beforeEach(() => {
+      component.ngOnChanges();
     });
 
-    it('returns the correct rarity', () => {
-      const def = component.getRelicDef(RARE_ITEM);
-      expect(def!.rarity).toBe(RelicRarity.RARE);
+    it('resolves RelicDefinition for relic items', () => {
+      expect(component.resolvedItems[0].relic).toBeDefined();
+      expect(component.resolvedItems[0].relic!.id).toBe(RelicId.IRON_HEART);
     });
 
-    it('returns null for a gold item', () => {
+    it('resolves the correct rarity', () => {
+      expect(component.resolvedItems[2].relic!.rarity).toBe(RelicRarity.RARE);
+    });
+
+    it('resolves null for a gold item', () => {
       const goldItem: ShopItem = { item: { type: 'gold', amount: 50 }, cost: 0 };
-      expect(component.getRelicDef(goldItem)).toBeNull();
-    });
-  });
-
-  describe('getRarityClass()', () => {
-    it('returns common for a common relic', () => {
-      expect(component.getRarityClass(COMMON_ITEM)).toBe('common');
+      component.shopItems = [goldItem];
+      component.ngOnChanges();
+      expect(component.resolvedItems[0].relic).toBeNull();
     });
 
-    it('returns uncommon for an uncommon relic', () => {
-      expect(component.getRarityClass(UNCOMMON_ITEM)).toBe('uncommon');
+    it('computes rarityClass common for a common relic', () => {
+      expect(component.resolvedItems[0].rarityClass).toBe('common');
     });
 
-    it('returns rare for a rare relic', () => {
-      expect(component.getRarityClass(RARE_ITEM)).toBe('rare');
+    it('computes rarityClass uncommon for an uncommon relic', () => {
+      expect(component.resolvedItems[1].rarityClass).toBe('uncommon');
+    });
+
+    it('computes rarityClass rare for a rare relic', () => {
+      expect(component.resolvedItems[2].rarityClass).toBe('rare');
     });
   });
 

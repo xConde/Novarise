@@ -931,7 +931,7 @@ export function createRelicServiceSpy(): jasmine.SpyObj<RelicService> {
   spy.getUpgradeCostMultiplier.and.returnValue(1);
   spy.getSellRefundRate.and.returnValue(0.5);
   spy.getGoldMultiplier.and.returnValue(1);
-  spy.getEnemySpeedMultiplier.and.returnValue(0.92);
+  spy.getEnemySpeedMultiplier.and.returnValue(1);
   spy.getSpawnIntervalMultiplier.and.returnValue(1);
   spy.getMaxLivesBonus.and.returnValue(0);
   spy.getStartingGoldBonus.and.returnValue(0);

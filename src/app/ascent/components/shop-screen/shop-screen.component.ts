@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges } from '@angular/core';
 import { ShopItem } from '../../models/encounter.model';
 import { RelicDefinition, RelicRarity, RELIC_DEFINITIONS } from '../../models/relic.model';
 import { SHOP_CONFIG } from '../../constants/ascent.constants';
@@ -10,12 +10,20 @@ const RARITY_CLASS: Record<RelicRarity, string> = {
   [RelicRarity.RARE]: 'rare',
 };
 
+/** Pre-resolved shop item with relic definition cached. */
+export interface ResolvedShopItem {
+  readonly item: ShopItem;
+  readonly index: number;
+  readonly relic: RelicDefinition | null;
+  readonly rarityClass: string;
+}
+
 @Component({
   selector: 'app-shop-screen',
   templateUrl: './shop-screen.component.html',
   styleUrls: ['./shop-screen.component.scss'],
 })
-export class ShopScreenComponent {
+export class ShopScreenComponent implements OnChanges {
   @Input() shopItems: ShopItem[] = [];
   @Input() currentGold: number = 0;
   @Input() currentLives: number = 0;
@@ -27,6 +35,21 @@ export class ShopScreenComponent {
   readonly healCost = SHOP_CONFIG.healCostPerLife;
   readonly maxHealPerVisit = SHOP_CONFIG.maxHealPerVisit;
   healCount = 0;
+
+  /** Pre-computed relic definitions — avoids per-CD-cycle allocations in template. */
+  resolvedItems: ResolvedShopItem[] = [];
+
+  ngOnChanges(): void {
+    this.resolvedItems = this.shopItems.map((item, index) => {
+      const relic = this.resolveRelicDef(item);
+      return {
+        item,
+        index,
+        relic,
+        rarityClass: relic ? (RARITY_CLASS[relic.rarity] ?? 'common') : 'common',
+      };
+    });
+  }
 
   canAfford(cost: number): boolean {
     return this.currentGold >= cost;
@@ -40,17 +63,11 @@ export class ShopScreenComponent {
     );
   }
 
-  getRelicDef(item: ShopItem): RelicDefinition | null {
+  private resolveRelicDef(item: ShopItem): RelicDefinition | null {
     if (item.item.type === 'relic') {
       return RELIC_DEFINITIONS[item.item.relicId] ?? null;
     }
     return null;
-  }
-
-  getRarityClass(item: ShopItem): string {
-    const relic = this.getRelicDef(item);
-    if (!relic) return 'common';
-    return RARITY_CLASS[relic.rarity] ?? 'common';
   }
 
   buyItem(index: number): void {
