@@ -11,7 +11,6 @@ export interface TowerInfo {
   description: string;
   damage: number;
   range: number;
-  fireRate: number;
   cost: number;
   color: number;
   alpha: TowerSpecInfo;
@@ -40,7 +39,6 @@ export const TOWER_INFO: Record<TowerType, TowerInfo> = (
     description: TOWER_DESCRIPTIONS[type],
     damage: cfg.damage,
     range: cfg.range,
-    fireRate: cfg.fireRate,
     cost: cfg.cost,
     color: cfg.color,
     alpha: {

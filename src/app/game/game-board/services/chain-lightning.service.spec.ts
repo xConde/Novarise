@@ -32,7 +32,6 @@ describe('ChainLightningService', () => {
     level: 1,
     row,
     col,
-    lastFireTime: -Infinity,
     kills: 0,
     totalInvested: TOWER_CONFIGS[TowerType.CHAIN].cost,
     targetingMode: 'nearest' as PlacedTower['targetingMode'],

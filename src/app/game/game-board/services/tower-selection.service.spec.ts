@@ -24,7 +24,6 @@ function createMockTower(overrides: Partial<PlacedTower> = {}): PlacedTower {
     level: 1,
     row: 0,
     col: 0,
-    lastFireTime: 0,
     kills: 0,
     totalInvested: 100,
     mesh: null as unknown as THREE.Group,

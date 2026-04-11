@@ -56,20 +56,6 @@ const NIGHTMARE_MIN_BASIC_TOWERS = 1;
 const MAX_TOWER_COST_RATIO = 3;
 
 /**
- * Maximum allowed ratio between the highest and second-highest DPS/cost
- * efficiency among damage-dealing towers.
- *
- * Mortar and Splash have intentionally low raw DPS because their value is
- * AoE/DoT/status — comparing max-to-min would always flag them. Comparing the
- * top two efficiencies catches a scenario where one direct-damage tower is
- * tuned to be absurdly dominant over the next best option.
- *
- * Current values (Basic 0.500, Sniper 0.256, Chain 0.156, Splash 0.133):
- * ratio = 0.500 / 0.256 ≈ 1.95×.  A limit of 4× gives a comfortable buffer.
- */
-const MAX_DPS_COST_EFFICIENCY_RATIO = 4;
-
-/**
  * Multiplier applied to gridSize to estimate the minimum number of towers
  * needed for a viable defense. Rough heuristic: one tower per 3 grid units.
  */
@@ -333,41 +319,6 @@ describe('Balance — Tower Viability', () => {
       .toBeLessThanOrEqual(minCost * MAX_TOWER_COST_RATIO);
   });
 
-  it('DPS/cost efficiency varies across damage-dealing towers (no single dominant tower)', () => {
-    // Compare top-2 DPS/cost efficiencies to catch a scenario where one direct-damage
-    // tower is tuned absurdly better than all alternatives.
-    //
-    // Mortar and Splash have intentionally low raw DPS (their value is AoE/DoT/status),
-    // so comparing max-to-min would trivially fail. Comparing top-two isolates the
-    // "direct damage" towers where dominance would actually be a balance problem.
-    //
-    // Current top-2: Basic (0.500) / Sniper (0.256) ≈ 1.95×.
-    // MAX_DPS_COST_EFFICIENCY_RATIO = 4 gives stable headroom.
-    const damagingTowers = Object.values(TOWER_CONFIGS).filter(c => c.damage > 0);
-    const efficiencies = damagingTowers
-      .map(c => (c.damage / c.fireRate) / c.cost)
-      .sort((a, b) => b - a); // descending
-
-    expect(efficiencies.length)
-      .withContext('Need at least 2 damage-dealing tower types to compare')
-      .toBeGreaterThanOrEqual(2);
-
-    const topEfficiency = efficiencies[0];
-    const secondEfficiency = efficiencies[1];
-
-    expect(topEfficiency)
-      .withContext('DPS/cost standard deviation should be > 0 across damage-dealing towers')
-      .toBeGreaterThan(secondEfficiency);
-
-    expect(topEfficiency / secondEfficiency)
-      .withContext(
-        `Top DPS/cost efficiency (${topEfficiency.toFixed(4)}) is more than ` +
-        `${MAX_DPS_COST_EFFICIENCY_RATIO}× the second-highest (${secondEfficiency.toFixed(4)}). ` +
-        `A single tower is dominantly more efficient than all others.`
-      )
-      .toBeLessThanOrEqual(MAX_DPS_COST_EFFICIENCY_RATIO);
-  });
-
   it('Slow tower has zero damage — it is a utility tower only', () => {
     expect(TOWER_CONFIGS[TowerType.SLOW].damage).toBe(0);
   });
@@ -379,21 +330,6 @@ describe('Balance — Tower Viability', () => {
         expect(sniperRange)
           .withContext(`Sniper range (${sniperRange}) should exceed ${type} range (${config.range})`)
           .toBeGreaterThanOrEqual(config.range);
-      }
-    }
-  });
-
-  it('Mortar has the slowest fire rate (longest interval = highest fireRate value)', () => {
-    // fireRate = seconds between shots; higher = slower.
-    // Mortar is an artillery piece — it should have the worst fire rate.
-    const mortarRate = TOWER_CONFIGS[TowerType.MORTAR].fireRate;
-    for (const [type, config] of Object.entries(TOWER_CONFIGS)) {
-      if (type !== TowerType.MORTAR) {
-        expect(mortarRate)
-          .withContext(
-            `Mortar fireRate (${mortarRate}s) should be >= ${type} fireRate (${config.fireRate}s)`
-          )
-          .toBeGreaterThanOrEqual(config.fireRate);
       }
     }
   });
@@ -829,14 +765,9 @@ describe('Balance — Tower Upgrades', () => {
     expect(UPGRADE_MULTIPLIERS[1].range).toBeGreaterThan(UPGRADE_MULTIPLIERS[0].range);
   });
 
-  it('Level 2 improves fire rate over Level 1 (lower interval = faster)', () => {
-    expect(UPGRADE_MULTIPLIERS[1].fireRate).toBeLessThan(UPGRADE_MULTIPLIERS[0].fireRate);
-  });
-
   it('Level 3 is strictly better than Level 2 on all multipliers', () => {
     expect(UPGRADE_MULTIPLIERS[2].damage).toBeGreaterThan(UPGRADE_MULTIPLIERS[1].damage);
     expect(UPGRADE_MULTIPLIERS[2].range).toBeGreaterThan(UPGRADE_MULTIPLIERS[1].range);
-    expect(UPGRADE_MULTIPLIERS[2].fireRate).toBeLessThan(UPGRADE_MULTIPLIERS[1].fireRate);
   });
 
   it('Level 3 damage multiplier is at least 2× base (meaningful upgrade ceiling)', () => {
@@ -846,13 +777,11 @@ describe('Balance — Tower Upgrades', () => {
   });
 
   it('upgrade multipliers are strictly monotone across all three levels', () => {
-    // Damage and range go up. FireRate goes down (lower = faster = better).
+    // Damage and range go up monotonically.
     const [l1, l2, l3] = UPGRADE_MULTIPLIERS;
     expect(l1.damage).toBeLessThan(l2.damage);
     expect(l2.damage).toBeLessThan(l3.damage);
     expect(l1.range).toBeLessThan(l2.range);
     expect(l2.range).toBeLessThan(l3.range);
-    expect(l1.fireRate).toBeGreaterThan(l2.fireRate);
-    expect(l2.fireRate).toBeGreaterThan(l3.fireRate);
   });
 });

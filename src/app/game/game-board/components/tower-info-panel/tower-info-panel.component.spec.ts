@@ -11,7 +11,6 @@ function makeTower(overrides: Partial<PlacedTower> = {}): PlacedTower {
     level: 1,
     row: 0,
     col: 0,
-    lastFireTime: 0,
     kills: 5,
     totalInvested: 50,
     targetingMode: TargetingMode.NEAREST,
@@ -36,7 +35,7 @@ describe('TowerInfoPanelComponent', () => {
     component = fixture.componentInstance;
 
     component.towerInfo = makeTower();
-    component.towerStats = { damage: 25, range: 3, fireRate: 1.0 };
+    component.towerStats = { damage: 25, range: 3 };
     component.upgradeCost = 75;
     component.upgradePercent = 0;
     component.sellValue = 25;
@@ -87,33 +86,26 @@ describe('TowerInfoPanelComponent', () => {
       expect(rangeRow.querySelector('.stat-value').textContent.trim()).toBe('3');
     });
 
-    it('should show fireRate stat with s suffix', () => {
-      const rows = fixture.nativeElement.querySelectorAll('.stat-row');
-      const fireRateRow = rows[2];
-      expect(fireRateRow.querySelector('.stat-label').textContent.trim()).toBe('Fire Rate');
-      expect(fireRateRow.querySelector('.stat-value').textContent.trim()).toBe('1s');
-    });
-
     it('should show kills stat', () => {
       const rows = fixture.nativeElement.querySelectorAll('.stat-row');
-      const killsRow = rows[3];
+      const killsRow = rows[2];
       expect(killsRow.querySelector('.stat-label').textContent.trim()).toBe('Kills');
       expect(killsRow.querySelector('.stat-value').textContent.trim()).toBe('5');
     });
 
     it('should show status effect row when statusEffect is present', () => {
-      component.towerStats = { damage: 25, range: 3, fireRate: 1.0, statusEffect: 'BURN' as any };
+      component.towerStats = { damage: 25, range: 3, statusEffect: 'BURN' as any };
       fixture.detectChanges();
-      const effectRow = fixture.nativeElement.querySelectorAll('.stat-row')[4];
+      const effectRow = fixture.nativeElement.querySelectorAll('.stat-row')[3];
       expect(effectRow.querySelector('.stat-label').textContent.trim()).toBe('Effect');
       expect(effectRow.querySelector('.stat-value').textContent.trim()).toBe('BURN');
     });
 
     it('should not show status effect row when no statusEffect', () => {
-      component.towerStats = { damage: 25, range: 3, fireRate: 1.0 };
+      component.towerStats = { damage: 25, range: 3 };
       fixture.detectChanges();
       const rows = fixture.nativeElement.querySelectorAll('.stat-row');
-      expect(rows.length).toBe(4);
+      expect(rows.length).toBe(3);
     });
   });
 

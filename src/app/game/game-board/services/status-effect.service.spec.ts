@@ -142,7 +142,7 @@ describe('StatusEffectService', () => {
   });
 
   // --- tickTurn() BURN ticking ---
-  // Turn-based: DoT fires exactly once per tickTurn() call (tickInterval is ignored).
+  // Turn-based: DoT fires exactly once per tickTurn() call.
   // apply(id, BURN, 1) → expiresAt = 1 + duration = 4. tickTurn(2) deals damage.
 
   describe('tickTurn() BURN ticking', () => {
@@ -207,7 +207,7 @@ describe('StatusEffectService', () => {
   });
 
   // --- POISON ticking ---
-  // Turn-based: tickInterval is ignored. Both BURN and POISON apply damagePerTick
+  // Turn-based: Both BURN and POISON apply damagePerTick
   // exactly once per tickTurn() call. Both fire on the same turn.
 
   describe('POISON ticking', () => {

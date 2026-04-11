@@ -38,7 +38,6 @@ describe('TOWER_INFO', () => {
       const cfg = TOWER_CONFIGS[type];
       expect(info.damage).toBe(cfg.damage);
       expect(info.range).toBe(cfg.range);
-      expect(info.fireRate).toBe(cfg.fireRate);
       expect(info.cost).toBe(cfg.cost);
       expect(info.color).toBe(cfg.color);
     });

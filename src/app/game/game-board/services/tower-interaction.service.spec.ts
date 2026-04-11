@@ -30,7 +30,6 @@ function makeMockTower(overrides: Partial<PlacedTower> = {}): PlacedTower {
     level: 1,
     row: 2,
     col: 3,
-    lastFireTime: 0,
     kills: 0,
     totalInvested: 100,
     mesh: null as any,

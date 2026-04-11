@@ -17,7 +17,6 @@ import { RELIC_EFFECT_CONFIG } from '../constants/run.constants';
 /** Relic stat modifiers returned by the pull API. */
 export interface RelicModifiers {
   damageMultiplier: number;
-  fireRateMultiplier: number;
   rangeMultiplier: number;
   towerCostMultiplier: number;
   upgradeCostMultiplier: number;
@@ -36,7 +35,6 @@ export interface RelicModifiers {
 
 const BASELINE_MODIFIERS: RelicModifiers = {
   damageMultiplier: 1,
-  fireRateMultiplier: 1,
   rangeMultiplier: 1,
   towerCostMultiplier: 1,
   upgradeCostMultiplier: 1,
@@ -126,11 +124,6 @@ export class RelicService {
       mult *= RELIC_EFFECT_CONFIG.basicTrainingDamageMultiplier;
     }
     return mult;
-  }
-
-  /** Get fire rate multiplier (lower = faster). */
-  getFireRateMultiplier(): number {
-    return this.getModifiers().fireRateMultiplier;
   }
 
   /** Get range multiplier, optionally filtered by tower type. */
@@ -272,7 +265,9 @@ export class RelicService {
           mods.enemySpeedMultiplier *= 0.92;
           break;
         case RelicId.QUICK_DRAW:
-          mods.fireRateMultiplier *= 0.9; // lower = faster
+          // NO-OP post-pivot. Was a real-time fire-rate multiplier; turn-based fire is `shotsPerTurn`-based and not multiplicative.
+          // Catalog entry preserved to avoid save-game churn; M4 S9 (relic content audit) should retarget this relic
+          // (e.g. grant a `fireRate` modifier card stack on encounter start, or +1 shotsPerTurn for the first wave).
           break;
         case RelicId.SALVAGE_KIT:
           mods.sellRefundRate = 0.75;

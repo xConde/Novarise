@@ -9,15 +9,6 @@ export const CHAIN_LIGHTNING_CONFIG = {
   arcOpacity: 0.85,
 } as const;
 
-export const IMPACT_FLASH_CONFIG = {
-  radius: 0.15,
-  segments: 8,
-  color: 0xffffff,
-  opacity: 0.9,
-  lifetime: 0.08,
-  spawnHeight: 0.5,
-} as const;
-
 export const MORTAR_VISUAL_CONFIG = {
   zoneColor: 0xff4400,
   zoneOpacity: 0.4,

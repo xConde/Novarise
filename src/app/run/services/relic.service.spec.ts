@@ -23,10 +23,6 @@ describe('RelicService', () => {
     expect(service.getDamageMultiplier()).toBe(1);
   });
 
-  it('should return 1.0 fire rate multiplier with no relics', () => {
-    expect(service.getFireRateMultiplier()).toBe(1);
-  });
-
   it('should return 1.0 range multiplier with no relics', () => {
     expect(service.getRangeMultiplier()).toBe(1);
   });
@@ -70,7 +66,6 @@ describe('RelicService', () => {
     service.clearRelics();
 
     expect(service.getDamageMultiplier()).toBe(1);
-    expect(service.getFireRateMultiplier()).toBe(1);
     expect(service.getSellRefundRate()).toBe(0.5);
     expect(service.relicCount).toBe(0);
   });
@@ -100,11 +95,9 @@ describe('RelicService', () => {
   });
 
   // ── QUICK_DRAW ────────────────────────────────────────────────
-
-  it('getFireRateMultiplier() returns 0.9 with QUICK_DRAW', () => {
-    service.setActiveRelics([RelicId.QUICK_DRAW]);
-    expect(service.getFireRateMultiplier()).toBeCloseTo(0.9, 5);
-  });
+  // Post-pivot: QUICK_DRAW is a no-op (real-time fire-rate multiplier no longer
+  // applies in turn-based mode). Catalog entry preserved to avoid save churn.
+  // M4 S9 should retarget the relic effect.
 
   // ── SNIPER_SCOPE ──────────────────────────────────────────────
 

@@ -37,7 +37,7 @@ export interface UpgradeTowerResult {
   /** True when L2→L3 spec is required but was not provided — caller must show spec chooser. */
   needsSpecialization?: boolean;
   /** Pre-computed spec options for the chooser UI (only set when needsSpecialization=true). */
-  specOptions?: { spec: TowerSpecialization; label: string; description: string; damage: number; range: number; fireRate: number }[];
+  specOptions?: { spec: TowerSpecialization; label: string; description: string; damage: number; range: number }[];
 }
 
 /**
@@ -213,14 +213,12 @@ export class TowerInteractionService {
               ...specs[TowerSpecialization.ALPHA],
               damage: alphaStats.damage,
               range: alphaStats.range,
-              fireRate: alphaStats.fireRate,
             },
             {
               spec: TowerSpecialization.BETA,
               ...specs[TowerSpecialization.BETA],
               damage: betaStats.damage,
               range: betaStats.range,
-              fireRate: betaStats.fireRate,
             },
           ],
         };

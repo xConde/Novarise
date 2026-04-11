@@ -28,7 +28,7 @@ export class StatusEffectService {
    * If the effect already exists and doesn't stack, refreshes duration.
    * Returns false if enemy is immune (e.g., flying enemies immune to SLOW).
    */
-  apply(enemyId: string, effectType: StatusEffectType, gameTime: number, speedMultiplierOverride?: number): boolean {
+  apply(enemyId: string, effectType: StatusEffectType, turnNumber: number, speedMultiplierOverride?: number): boolean {
     const enemy = this.enemyService.getEnemies().get(enemyId);
     if (!enemy || enemy.health <= 0) return false;
 
@@ -46,15 +46,15 @@ export class StatusEffectService {
     const existing = enemyEffects.get(effectType);
     if (existing) {
       // Effect already active — refresh duration (no stacking)
-      existing.expiresAt = gameTime + config.duration;
+      existing.expiresAt = turnNumber + config.duration;
       return true;
     }
 
     // New effect
     const active: ActiveEffect = {
       config,
-      expiresAt: gameTime + config.duration,
-      lastTickTime: gameTime,
+      expiresAt: turnNumber + config.duration,
+      lastTickTime: turnNumber,
     };
 
     // SLOW: mutate enemy speed, store original
@@ -75,9 +75,9 @@ export class StatusEffectService {
    * Called once per resolution phase from CombatLoopService.resolveTurn().
    * Treats `config.duration` as TURNS (not seconds) — BURN 5 → expires after 5
    * turns. DoT effects (BURN, POISON) apply their `damagePerTick` exactly once
-   * per turn (turn-based ticks are coarse; the `tickInterval` field is ignored).
+   * per turn (turn-based ticks are coarse; DoT effects fire exactly once per turn).
    *
-   * @param turnNumber Monotonically-increasing turn counter from TurnManager/CombatLoop.
+   * @param turnNumber Monotonically-increasing turn counter from CombatLoopService.
    * @returns KillInfo[] for enemies killed by DoT this turn.
    */
   tickTurn(turnNumber: number): KillInfo[] {
@@ -102,7 +102,7 @@ export class StatusEffectService {
           continue;
         }
 
-        // DoT: apply damagePerTick exactly once per turn regardless of tickInterval.
+        // DoT: apply damagePerTick exactly once per turn.
         const damagePerTick = active.config.damagePerTick;
         if (damagePerTick !== undefined && damagePerTick > 0) {
           const result: DamageResult = this.enemyService.damageEnemy(enemyId, damagePerTick);

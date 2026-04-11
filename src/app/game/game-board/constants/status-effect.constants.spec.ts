@@ -43,11 +43,6 @@ describe('STATUS_EFFECT_CONFIGS', () => {
       expect(cfg.damagePerTick!).toBeGreaterThan(0);
     });
 
-    it('should have positive tickInterval', () => {
-      expect(cfg.tickInterval).toBeDefined();
-      expect(cfg.tickInterval!).toBeGreaterThan(0);
-    });
-
     it('should not stack', () => {
       expect(cfg.stacks).toBe(false);
     });
@@ -59,11 +54,6 @@ describe('STATUS_EFFECT_CONFIGS', () => {
     it('should have positive damagePerTick', () => {
       expect(cfg.damagePerTick).toBeDefined();
       expect(cfg.damagePerTick!).toBeGreaterThan(0);
-    });
-
-    it('should have positive tickInterval', () => {
-      expect(cfg.tickInterval).toBeDefined();
-      expect(cfg.tickInterval!).toBeGreaterThan(0);
     });
 
     it('should not stack', () => {

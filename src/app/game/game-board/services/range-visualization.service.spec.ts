@@ -15,7 +15,6 @@ function makePlacedTower(row: number, col: number, type: TowerType = TowerType.B
     row,
     col,
     level: 1,
-    lastFireTime: 0,
     kills: 0,
     totalInvested: 100,
     targetingMode: TargetingMode.NEAREST,

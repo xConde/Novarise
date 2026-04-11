@@ -296,7 +296,7 @@ describe('GameBoardComponent', () => {
 
     it('pressing Escape in INSPECT mode deselects placed tower info', () => {
       component.selectedTowerType = null;
-      (component as any).selectedTowerInfo = { id: 'fake', type: TowerType.SNIPER, level: 1, row: 0, col: 0, lastFireTime: 0, kills: 0, totalInvested: 50, mesh: null, targetingMode: TargetingMode.NEAREST };
+      (component as any).selectedTowerInfo = { id: 'fake', type: TowerType.SNIPER, level: 1, row: 0, col: 0, kills: 0, totalInvested: 50, mesh: null, targetingMode: TargetingMode.NEAREST };
       fireKey('Escape');
       expect(component.selectedTowerInfo).toBeNull();
     });
@@ -405,7 +405,7 @@ describe('GameBoardComponent', () => {
     it('cycleTargeting skips SLOW towers', () => {
       component.selectedTowerInfo = {
         id: 'tower-slow', type: TowerType.SLOW, level: 1,
-        row: 0, col: 0, lastFireTime: 0, kills: 0, totalInvested: 75,
+        row: 0, col: 0, kills: 0, totalInvested: 75,
         targetingMode: TargetingMode.NEAREST, mesh: null,
       } as PlacedTower;
       const towerCombat = fixture.debugElement.injector.get(TowerCombatService);
@@ -1175,7 +1175,7 @@ describe('GameBoardComponent', () => {
     it('refreshTowerInfoPanel should compute upgrade preview for L1 tower', () => {
       const fakeTower: PlacedTower = {
         id: '5-5', type: TowerType.BASIC, level: 1, row: 5, col: 5,
-        lastFireTime: 0, kills: 3, totalInvested: 50, mesh: null,
+        kills: 3, totalInvested: 50, mesh: null,
         targetingMode: TargetingMode.NEAREST
       };
       (component as any).selectedTowerInfo = fakeTower;
@@ -1193,7 +1193,7 @@ describe('GameBoardComponent', () => {
     it('refreshTowerInfoPanel should not compute preview for L2 tower (needs spec choice)', () => {
       const fakeTower: PlacedTower = {
         id: '5-5', type: TowerType.BASIC, level: 2, row: 5, col: 5,
-        lastFireTime: 0, kills: 0, totalInvested: 100, mesh: null,
+        kills: 0, totalInvested: 100, mesh: null,
         targetingMode: TargetingMode.NEAREST
       };
       (component as any).selectedTowerInfo = fakeTower;
@@ -1210,7 +1210,7 @@ describe('GameBoardComponent', () => {
     it('refreshTowerInfoPanel should not compute preview for max level tower', () => {
       const fakeTower: PlacedTower = {
         id: '5-5', type: TowerType.BASIC, level: 3, row: 5, col: 5,
-        lastFireTime: 0, kills: 0, totalInvested: 150, mesh: null,
+        kills: 0, totalInvested: 150, mesh: null,
         targetingMode: TargetingMode.NEAREST, specialization: 'alpha' as any
       };
       (component as any).selectedTowerInfo = fakeTower;
@@ -1224,7 +1224,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('deselectTower should clear upgradePreview', () => {
-      component.upgradePreview = { damage: 50, range: 4, fireRate: 0.8 };
+      component.upgradePreview = { damage: 50, range: 4 };
       component.deselectTower();
       expect(component.upgradePreview).toBeNull();
     });
@@ -2138,7 +2138,6 @@ describe('GameBoardComponent', () => {
         level: 1,
         row: 0,
         col: 0,
-        lastFireTime: 0,
         kills: 0,
         totalInvested: 100,
         mesh: null as any,
@@ -2174,7 +2173,6 @@ describe('GameBoardComponent', () => {
         level: 1,
         row: 1,
         col: 1,
-        lastFireTime: 0,
         kills: 0,
         totalInvested: 100,
         mesh: null as any,
