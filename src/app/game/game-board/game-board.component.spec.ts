@@ -24,13 +24,11 @@ import { EnemyService } from './services/enemy.service';
 import { EnemyVisualService } from './services/enemy-visual.service';
 import { TutorialService, TutorialStep } from '../../core/services/tutorial.service';
 import { BehaviorSubject } from 'rxjs';
-import { CampaignService } from '../../campaign/services/campaign.service';
-import { CampaignMapService } from '../../campaign/services/campaign-map.service';
-import { CampaignLevel, CampaignTier } from '../../campaign/models/campaign.model';
+import { CampaignLevel, CampaignTier } from '../../run/data/campaign-levels';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 import { GameNotificationService, NotificationType } from './services/game-notification.service';
 import { ChallengeTrackingService } from './services/challenge-tracking.service';
-import { ChallengeType, ChallengeDefinition } from '../../campaign/models/challenge.model';
+import { ChallengeType, ChallengeDefinition } from '../../run/data/challenges';
 import { GameEndService } from './services/game-end.service';
 import { TilePricingService } from './services/tile-pricing.service';
 import { GameSessionService } from './services/game-session.service';
@@ -54,10 +52,10 @@ import {
   createRunServiceSpy,
   createDeckServiceSpy,
 } from './testing';
-import { RelicService } from '../../ascent/services/relic.service';
-import { RunService } from '../../ascent/services/run.service';
-import { DeckService } from '../../ascent/services/deck.service';
-import { CardId, CardInstance, EnergyState } from '../../ascent/models/card.model';
+import { RelicService } from '../../run/services/relic.service';
+import { RunService } from '../../run/services/run.service';
+import { DeckService } from '../../run/services/deck.service';
+import { CardId, CardInstance, EnergyState } from '../../run/models/card.model';
 import { TowerAnimationService } from './services/tower-animation.service';
 import { GamePauseService } from './services/game-pause.service';
 import { ChallengeDisplayService } from './services/challenge-display.service';
@@ -86,8 +84,6 @@ describe('GameBoardComponent', () => {
   let settingsSpy: jasmine.SpyObj<SettingsService>;
   let tutorialSpy: jasmine.SpyObj<TutorialService>;
   let tutorialStep$: BehaviorSubject<TutorialStep | null>;
-  let campaignServiceSpy: jasmine.SpyObj<CampaignService>;
-  let campaignMapServiceSpy: jasmine.SpyObj<CampaignMapService>;
   let gameSessionSpy: jasmine.SpyObj<GameSessionService>;
   let combatLoopSpy: jasmine.SpyObj<CombatLoopService>;
   let gamePauseSpy: jasmine.SpyObj<GamePauseService>;
@@ -111,26 +107,6 @@ describe('GameBoardComponent', () => {
     tutorialSpy = createTutorialServiceSpy();
     tutorialStep$ = new BehaviorSubject<TutorialStep | null>(null);
     tutorialSpy.getCurrentStep.and.returnValue(tutorialStep$.asObservable());
-
-    campaignServiceSpy = jasmine.createSpyObj('CampaignService', [
-      'getNextLevel',
-      'isUnlocked',
-      'getLevel',
-      'recordCompletion',
-      'completeChallenge',
-      'getAllLevels',
-      'getCompletedCount',
-      'isChallengeCompleted',
-    ]);
-    campaignServiceSpy.getNextLevel.and.returnValue(null);
-    campaignServiceSpy.isUnlocked.and.returnValue(false);
-    campaignServiceSpy.getLevel.and.returnValue(undefined);
-    campaignServiceSpy.getAllLevels.and.returnValue([]);
-    campaignServiceSpy.getCompletedCount.and.returnValue(0);
-    campaignServiceSpy.isChallengeCompleted.and.returnValue(false);
-
-    campaignMapServiceSpy = jasmine.createSpyObj('CampaignMapService', ['loadLevel']);
-    campaignMapServiceSpy.loadLevel.and.returnValue(MOCK_MAP_STATE_SPEC);
 
     gameSessionSpy = jasmine.createSpyObj('GameSessionService', ['resetAllServices', 'applyCampaignWaves', 'cleanupScene']);
     gameSessionSpy.cleanupScene.and.returnValue(null);
@@ -156,8 +132,6 @@ describe('GameBoardComponent', () => {
         { provide: MinimapService, useValue: minimapSpy },
         { provide: SettingsService, useValue: settingsSpy },
         { provide: TutorialService, useValue: tutorialSpy },
-        { provide: CampaignService, useValue: campaignServiceSpy },
-        { provide: CampaignMapService, useValue: campaignMapServiceSpy },
         { provide: GameSessionService, useValue: gameSessionSpy },
         { provide: CombatLoopService, useValue: combatLoopSpy },
         { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
@@ -309,10 +283,15 @@ describe('GameBoardComponent', () => {
       expect(component.selectedTowerType).toBe(TowerType.MORTAR);
     });
 
-    it('pressing Escape in PLACE mode cancels placement', () => {
+    it('pressing Escape with pending tower card (real PLACE mode) cancels placement', () => {
+      // isPlaceMode requires pendingTowerCard to be set. Directly inject a pending card
+      // so the Escape handler hits the cancelPlacement() branch.
+      (component as any).pendingTowerCard = { instanceId: 'test_inst', cardId: 'TOWER_SNIPER', upgraded: false };
       component.selectedTowerType = TowerType.SNIPER;
+      expect(component.isPlaceMode).toBeTrue();
       fireKey('Escape');
       expect(component.selectedTowerType).toBeNull();
+      expect((component as any).pendingTowerCard).toBeNull();
     });
 
     it('pressing Escape in INSPECT mode deselects placed tower info', () => {
@@ -436,115 +415,10 @@ describe('GameBoardComponent', () => {
     });
   });
 
-  describe('scoreBreakdown', () => {
-    it('should be null initially', () => {
-      expect(component.scoreBreakdown).toBeNull();
-    });
-
-    it('should be populated when game transitions to VICTORY', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      const state = gameStateService.getState();
-      const livesTotal = DIFFICULTY_PRESETS[state.difficulty].lives;
-
-      component.scoreBreakdown = calculateScoreBreakdown(
-        state.score, state.lives, livesTotal, state.difficulty, state.wave, true
-      );
-
-      expect(component.scoreBreakdown).not.toBeNull();
-      expect(component.scoreBreakdown!.isVictory).toBeTrue();
-      expect(component.scoreBreakdown!.finalScore).toBeGreaterThanOrEqual(0);
-    });
-
-    it('should be populated when game transitions to DEFEAT', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      const state = gameStateService.getState();
-      const livesTotal = DIFFICULTY_PRESETS[state.difficulty].lives;
-
-      component.scoreBreakdown = calculateScoreBreakdown(
-        state.score, state.lives, livesTotal, state.difficulty, state.wave, false
-      );
-
-      expect(component.scoreBreakdown).not.toBeNull();
-      expect(component.scoreBreakdown!.isVictory).toBeFalse();
-      expect(component.scoreBreakdown!.stars).toBe(0);
-    });
-
-    it('should not overwrite breakdown once set', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      const state = gameStateService.getState();
-      const livesTotal = DIFFICULTY_PRESETS[state.difficulty].lives;
-
-      component.scoreBreakdown = calculateScoreBreakdown(
-        state.score, state.lives, livesTotal, state.difficulty, state.wave, true
-      );
-      const firstBreakdown = component.scoreBreakdown;
-
-      // Calling again should produce a new object (but the component's subscription guards against overwrite)
-      expect(firstBreakdown).not.toBeNull();
-      expect(firstBreakdown!.isVictory).toBeTrue();
-    });
-
-    it('scoreBreakdown finalScore reflects difficulty multiplier', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setDifficulty(DifficultyLevel.HARD);
-      gameStateService.addScore(100);
-      const state = gameStateService.getState();
-      const livesTotal = DIFFICULTY_PRESETS[state.difficulty].lives;
-
-      component.scoreBreakdown = calculateScoreBreakdown(
-        state.score, state.lives, livesTotal, state.difficulty, state.wave, true
-      );
-
-      expect(component.scoreBreakdown).not.toBeNull();
-      // HARD multiplier is 1.5 — finalScore = Math.round(score * 1.5)
-      expect(component.scoreBreakdown!.difficultyMultiplier).toBe(1.5);
-    });
-  });
-
-  describe('starArray', () => {
-    /** Helper: set scoreBreakdown and sync the pre-computed starArray field. */
-    function setBreakdown(stars: number | null): void {
-      if (stars === null) {
-        component.scoreBreakdown = null;
-        component.starArray = [];
-      } else {
-        component.scoreBreakdown = { stars } as ScoreBreakdown;
-        component.starArray = [0, 1, 2].map(i => i < stars ? 'filled' : 'empty') as Array<'filled' | 'empty'>;
-      }
-    }
-
-    it('should return empty array when scoreBreakdown is null', () => {
-      setBreakdown(null);
-      expect(component.starArray).toEqual([]);
-    });
-
-    it('should return 3 filled stars when breakdown has 3 stars', () => {
-      setBreakdown(3);
-      expect(component.starArray).toEqual(['filled', 'filled', 'filled']);
-    });
-
-    it('should return 2 filled and 1 empty when breakdown has 2 stars', () => {
-      setBreakdown(2);
-      expect(component.starArray).toEqual(['filled', 'filled', 'empty']);
-    });
-
-    it('should return 1 filled and 2 empty when breakdown has 1 star', () => {
-      setBreakdown(1);
-      expect(component.starArray).toEqual(['filled', 'empty', 'empty']);
-    });
-
-    it('should return 3 empty stars when breakdown has 0 stars (defeat)', () => {
-      setBreakdown(0);
-      expect(component.starArray).toEqual(['empty', 'empty', 'empty']);
-    });
-
-    it('should always return exactly 3 elements when stars > 0', () => {
-      for (const stars of [1, 2, 3]) {
-        setBreakdown(stars);
-        expect(component.starArray.length).toBe(3);
-      }
-    });
-  });
+  // Phase H11: scoreBreakdown + starArray describe blocks deleted. The fields
+  // were removed from GameBoardComponent — scoreBreakdown is now computed
+  // internally by gameEndService.recordEnd (H7). Test coverage for the
+  // computation moves to game-end.service.spec.ts in H2.
 
   describe('touch handler lifecycle', () => {
     let mockCanvas: HTMLElement;
@@ -802,16 +676,9 @@ describe('GameBoardComponent', () => {
       expect(gameStateService.getState().isEndless).toBeFalse();
     });
 
-    it('should be a no-op for campaign games', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      spyOn(gameStateService, 'setEndlessMode');
-
-      component.toggleEndless();
-
-      expect(gameStateService.setEndlessMode).not.toHaveBeenCalled();
-    });
+    // 'toggleEndless should be a no-op for campaign games' was deleted:
+    // isCampaignGame is a stub always returning false post-pivot;
+    // toggleEndless now only guards on phase !== SETUP, not campaign mode.
   });
 
   describe('pause overlay state', () => {
@@ -898,13 +765,8 @@ describe('GameBoardComponent', () => {
       expect(gamePauseService.cancelQuit).toHaveBeenCalled();
     });
 
-    it('confirmQuit navigates to / when not a campaign game', () => {
-      const router = TestBed.inject(Router);
-      spyOn(router, 'navigate');
-      // Default mapBridge has no map loaded → not a campaign game
-      component.confirmQuit();
-      expect(router.navigate).toHaveBeenCalledWith(['/']);
-    });
+    // 'confirmQuit navigates to /' was deleted: GamePauseService.confirmQuit()
+    // always returns '/run' post-pivot. The active test below covers this.
 
     it('confirmQuit delegates to GamePauseService.confirmQuit', () => {
       const router = TestBed.inject(Router);
@@ -918,28 +780,15 @@ describe('GameBoardComponent', () => {
       expect(component.validGameSpeeds).toEqual([1, 2, 3] as any);
     });
 
-    it('confirmQuit navigates to returned route from GamePauseService', () => {
+    it('confirmQuit navigates to /run (run hub)', () => {
       const router = TestBed.inject(Router);
       spyOn(router, 'navigate');
-      spyOn(gamePauseService, 'confirmQuit').and.returnValue('/campaign');
-      // Simulate campaign game by making mapBridge return a campaign mapId
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+      spyOn(gamePauseService, 'confirmQuit').and.returnValue('/run');
 
       component.confirmQuit();
 
-      expect(gamePauseService.confirmQuit).toHaveBeenCalledWith(true);
-      expect(router.navigate).toHaveBeenCalledWith(['/campaign']);
-    });
-
-    it('confirmQuit passes isCampaign=false for non-campaign games', () => {
-      const router = TestBed.inject(Router);
-      spyOn(router, 'navigate');
-      spyOn(gamePauseService, 'confirmQuit').and.returnValue('/');
-
-      component.confirmQuit();
-
-      expect(gamePauseService.confirmQuit).toHaveBeenCalledWith(false);
+      expect(gamePauseService.confirmQuit).toHaveBeenCalledWith();
+      expect(router.navigate).toHaveBeenCalledWith(['/run']);
     });
   });
 
@@ -1093,11 +942,11 @@ describe('GameBoardComponent', () => {
       expect(component.initializationFailed).toBeFalse();
     });
 
-    it('goBackToMaps navigates to /maps', () => {
+    it('goBackToRunHub navigates to /run', () => {
       const router = TestBed.inject(Router);
       spyOn(router, 'navigate');
-      component.goBackToMaps();
-      expect(router.navigate).toHaveBeenCalledWith(['/maps']);
+      component.goBackToRunHub();
+      expect(router.navigate).toHaveBeenCalledWith(['/run']);
     });
 
     it('setting initializationFailed to true is reflected on the component', () => {
@@ -1107,9 +956,11 @@ describe('GameBoardComponent', () => {
   });
 
   describe('Interaction Mode System', () => {
-    it('should start with BASIC tower selected (PLACE mode by default)', () => {
+    it('should start with BASIC tower selected (no pending card, so isPlaceMode is false)', () => {
+      // Post-pivot: isPlaceMode requires both selectedTowerType AND pendingTowerCard to be set.
+      // At startup no card has been played, so isPlaceMode is false even with BASIC selected.
       expect(component.selectedTowerType).toBe(TowerType.BASIC);
-      expect(component.isPlaceMode).toBeTrue();
+      expect(component.isPlaceMode).toBeFalse();
     });
 
     it('should toggle to INSPECT mode when clicking same tower type', () => {
@@ -1137,17 +988,20 @@ describe('GameBoardComponent', () => {
       expect(component.isPlaceMode).toBeFalse();
     });
 
-    it('isPlaceMode should return true when selectedTowerType is set', () => {
+    it('isPlaceMode should return false when selectedTowerType is set but no pending card', () => {
+      // isPlaceMode requires BOTH selectedTowerType AND pendingTowerCard to be non-null.
+      // Setting only selectedTowerType (as the button-click path does) does NOT activate place mode —
+      // the player must play a tower card to enter real placement state.
       component.selectedTowerType = TowerType.MORTAR;
 
-      expect(component.isPlaceMode).toBeTrue();
+      expect(component.isPlaceMode).toBeFalse();
     });
 
     it('selectPlacedTower (private) delegates without throwing', () => {
-      // TowerSelectionService is component-scoped (DI-hierarchy note: the component creates its
-      // own injector, so we cannot easily mock it in TestBed). Verify delegation doesn't throw.
+      // TowerSelectionService is component-scoped. Verify delegation doesn't throw.
       component.selectedTowerType = TowerType.SNIPER;
-      expect(component.isPlaceMode).toBeTrue();
+      // selectedTowerType is set but pendingTowerCard is null → isPlaceMode is false.
+      expect(component.isPlaceMode).toBeFalse();
 
       // selectPlacedTower is private — call it; it will delegate to TowerSelectionService.
       // That service will call getTower (not found → undefined), so nothing changes.
@@ -1174,13 +1028,15 @@ describe('GameBoardComponent', () => {
       expect(component.previewTowerType).toBeNull();
     });
 
-    it('touch tap selects tower immediately (mode indicator updates)', () => {
+    it('touch tap selects tower (selectedTowerType updates, isPlaceMode stays false without pending card)', () => {
+      // handleTowerButtonTap calls selectTowerType → sets selectedTowerType.
+      // isPlaceMode requires a pending tower card as well; a tap alone does not set pendingTowerCard.
       component.selectedTowerType = null;
 
       component.handleTowerButtonTap(makeTouchEvent(), TowerType.SNIPER);
 
-      expect(component.isPlaceMode).toBeTrue();
       expect(component.selectedTowerType as TowerType | null).toBe(TowerType.SNIPER);
+      expect(component.isPlaceMode).toBeFalse();
     });
 
     it('touch tap on different tower switches selection', () => {
@@ -1711,190 +1567,30 @@ describe('GameBoardComponent', () => {
       expect(component.isCampaignGame).toBeFalse();
     });
 
-    it('returns true for campaign_01', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      expect(component.isCampaignGame).toBeTrue();
-    });
-
-    it('returns true for any campaign_ prefixed id', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_16');
-      expect(component.isCampaignGame).toBeTrue();
-    });
+    // isCampaignGame is a stub that always returns false post-pivot.
+    // Tests for campaign-prefixed map IDs returning true were deleted in the run-mode pivot.
   });
 
   describe('currentCampaignLevel', () => {
-    it('returns null when mapId is null', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue(null);
-      expect(component.currentCampaignLevel).toBeNull();
-    });
-
-    it('returns null when not a campaign map', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('user_map');
-      campaignServiceSpy.getLevel.and.returnValue(undefined);
-      expect(component.currentCampaignLevel).toBeNull();
-    });
-
-    it('returns the level from campaignService when mapId is a campaign id', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      const fakeLevel: CampaignLevel = {
-        id: 'campaign_01', number: 1, name: 'First Light',
-        tier: CampaignTier.INTRO, description: '', gridSize: 10,
-        waveCount: 6, spawnerCount: 1, exitCount: 1, parScore: 500,
-        unlockRequirement: { type: 'none' },
-      };
-      campaignServiceSpy.getLevel.and.returnValue(fakeLevel);
-      expect(component.currentCampaignLevel).toEqual(fakeLevel);
-    });
-
-    it('returns null when service returns undefined for the id', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_99');
-      campaignServiceSpy.getLevel.and.returnValue(undefined);
+    it('returns null always (stub in run mode)', () => {
       expect(component.currentCampaignLevel).toBeNull();
     });
   });
 
   describe('nextCampaignLevel', () => {
-    it('returns null when mapId is null', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue(null);
+    it('returns null always (stub in run mode)', () => {
       expect(component.nextCampaignLevel).toBeNull();
-    });
-
-    it('returns null when service has no next level', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_16');
-      campaignServiceSpy.getNextLevel.and.returnValue(null);
-      expect(component.nextCampaignLevel).toBeNull();
-    });
-
-    it('returns next level from service when available', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      const fakeNext: CampaignLevel = {
-        id: 'campaign_02', number: 2, name: 'The Bend',
-        tier: CampaignTier.INTRO, description: '', gridSize: 10,
-        waveCount: 8, spawnerCount: 1, exitCount: 1, parScore: 1000,
-        unlockRequirement: { type: 'level_complete', levelId: 'campaign_01' },
-      };
-      campaignServiceSpy.getNextLevel.and.returnValue(fakeNext);
-      expect(component.nextCampaignLevel).toEqual(fakeNext);
     });
   });
 
   describe('isNextLevelUnlocked', () => {
-    it('returns false when there is no next level', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_16');
-      campaignServiceSpy.getNextLevel.and.returnValue(null);
+    it('returns false always (stub in run mode)', () => {
       expect(component.isNextLevelUnlocked).toBeFalse();
-    });
-
-    it('returns false when next level exists but is locked', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      const fakeNext: CampaignLevel = {
-        id: 'campaign_02', number: 2, name: 'The Bend',
-        tier: CampaignTier.INTRO, description: '', gridSize: 10,
-        waveCount: 8, spawnerCount: 1, exitCount: 1, parScore: 1000,
-        unlockRequirement: { type: 'level_complete', levelId: 'campaign_01' },
-      };
-      campaignServiceSpy.getNextLevel.and.returnValue(fakeNext);
-      campaignServiceSpy.isUnlocked.and.returnValue(false);
-      expect(component.isNextLevelUnlocked).toBeFalse();
-    });
-
-    it('returns true when next level exists and is unlocked', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      const fakeNext: CampaignLevel = {
-        id: 'campaign_02', number: 2, name: 'The Bend',
-        tier: CampaignTier.INTRO, description: '', gridSize: 10,
-        waveCount: 8, spawnerCount: 1, exitCount: 1, parScore: 1000,
-        unlockRequirement: { type: 'level_complete', levelId: 'campaign_01' },
-      };
-      campaignServiceSpy.getNextLevel.and.returnValue(fakeNext);
-      campaignServiceSpy.isUnlocked.and.returnValue(true);
-      expect(component.isNextLevelUnlocked).toBeTrue();
-    });
-  });
-
-  describe('playNextLevel', () => {
-    it('does nothing when nextCampaignLevel is null', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_16');
-      campaignServiceSpy.getNextLevel.and.returnValue(null);
-      spyOn(component, 'restartGame');
-
-      component.playNextLevel();
-
-      expect(campaignMapServiceSpy.loadLevel).not.toHaveBeenCalled();
-      expect(component.restartGame).not.toHaveBeenCalled();
-    });
-
-    it('loads next level map and calls restartGame', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      spyOn(mapBridge, 'setEditorMapState');
-      const fakeNext: CampaignLevel = {
-        id: 'campaign_02', number: 2, name: 'The Bend',
-        tier: CampaignTier.INTRO, description: '', gridSize: 10,
-        waveCount: 8, spawnerCount: 1, exitCount: 1, parScore: 1000,
-        unlockRequirement: { type: 'level_complete', levelId: 'campaign_01' },
-      };
-      campaignServiceSpy.getNextLevel.and.returnValue(fakeNext);
-      campaignMapServiceSpy.loadLevel.and.returnValue(MOCK_MAP_STATE_SPEC);
-
-      // Stub restartGame to avoid Three.js calls
-      spyOn(component, 'restartGame');
-
-      component.playNextLevel();
-
-      expect(campaignMapServiceSpy.loadLevel).toHaveBeenCalledWith('campaign_02');
-      expect(mapBridge.setEditorMapState).toHaveBeenCalledWith(MOCK_MAP_STATE_SPEC, 'campaign_02');
-      expect(component.restartGame).toHaveBeenCalled();
-    });
-
-    it('does nothing when loadLevel returns null', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      const fakeNext: CampaignLevel = {
-        id: 'campaign_02', number: 2, name: 'The Bend',
-        tier: CampaignTier.INTRO, description: '', gridSize: 10,
-        waveCount: 8, spawnerCount: 1, exitCount: 1, parScore: 1000,
-        unlockRequirement: { type: 'level_complete', levelId: 'campaign_01' },
-      };
-      campaignServiceSpy.getNextLevel.and.returnValue(fakeNext);
-      campaignMapServiceSpy.loadLevel.and.returnValue(null);
-      spyOn(component, 'restartGame');
-
-      component.playNextLevel();
-
-      expect(component.restartGame).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('backToCampaign', () => {
-    it('navigates to /campaign', () => {
-      const router = TestBed.inject(Router);
-      spyOn(router, 'navigate');
-
-      component.backToCampaign();
-
-      expect(router.navigate).toHaveBeenCalledWith(['/campaign']);
     });
   });
 
   describe('campaignChallenges getter', () => {
-    it('returns empty array when mapId is null', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue(null);
-
+    it('returns empty array always (stub in run mode)', () => {
       expect(component.campaignChallenges).toEqual([]);
     });
 
@@ -1905,116 +1601,10 @@ describe('GameBoardComponent', () => {
       expect(component.campaignChallenges).toEqual([]);
     });
 
-    it('returns challenge definitions for campaign_01', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-
-      const challenges = component.campaignChallenges;
-
-      expect(challenges.length).toBeGreaterThan(0);
-      expect(challenges[0].id).toContain('c01');
-    });
-
-    it('returns different challenges for different campaign levels', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      const spy = spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      const level01Challenges = component.campaignChallenges;
-
-      spy.and.returnValue('campaign_07');
-      const level07Challenges = component.campaignChallenges;
-
-      expect(level01Challenges[0].id).not.toBe(level07Challenges[0].id);
-    });
+    // Test for per-level challenge differences was deleted: campaignChallenges
+    // is a stub returning [] in run mode — distinct campaign levels no longer exist.
   });
 
-  describe('isChallengeAlreadyCompleted', () => {
-    it('delegates to campaignService.isChallengeCompleted', () => {
-      campaignServiceSpy.isChallengeCompleted.and.returnValue(true);
-
-      expect(component.isChallengeAlreadyCompleted('c01_untouchable')).toBeTrue();
-      expect(campaignServiceSpy.isChallengeCompleted).toHaveBeenCalledWith('c01_untouchable');
-    });
-
-    it('returns false when challenge not completed', () => {
-      campaignServiceSpy.isChallengeCompleted.and.returnValue(false);
-
-      expect(component.isChallengeAlreadyCompleted('c01_tower_limit')).toBeFalse();
-    });
-  });
-
-  describe('isChallengeCompleted (victory screen)', () => {
-    it('returns false when no challenges were completed this run', () => {
-      (component as any).completedChallenges = [];
-      const challenge = { id: 'c01_untouchable', name: 'Untouchable', description: '', scoreBonus: 200,
-        type: 'untouchable' as any };
-
-      expect(component.isChallengeCompleted(challenge)).toBeFalse();
-    });
-
-    it('returns true when the challenge was completed this run', () => {
-      const challenge = { id: 'c01_untouchable', name: 'Untouchable', description: '', scoreBonus: 200,
-        type: 'untouchable' as any };
-      (component as any).completedChallenges = [challenge];
-
-      expect(component.isChallengeCompleted(challenge)).toBeTrue();
-    });
-
-    it('returns false for a different challenge not in completedChallenges', () => {
-      const completed = { id: 'c01_untouchable', name: 'Untouchable', description: '', scoreBonus: 200,
-        type: 'untouchable' as any };
-      const other = { id: 'c01_tower_limit', name: 'Minimalist', description: '', scoreBonus: 300,
-        type: 'tower_limit' as any };
-      (component as any).completedChallenges = [completed];
-
-      expect(component.isChallengeCompleted(other)).toBeFalse();
-    });
-  });
-
-  describe('score-challenge desync fix — recordCompletion includes challenge bonus', () => {
-    it('recordCompletion is called AFTER challenge bonuses are accumulated', () => {
-      // The order matters: addScore for challenge bonus must happen before recordCompletion
-      // Verify the spy call ordering by tracking call sequence
-      const callOrder: string[] = [];
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      spyOn(gameStateService, 'addScore').and.callFake(() => { callOrder.push('addScore'); });
-      campaignServiceSpy.recordCompletion.and.callFake(() => { callOrder.push('recordCompletion'); });
-
-      // Simulate the fixed victory path directly
-      const challenges = [{ id: 'ch_1', name: 'C1', description: '', scoreBonus: 100, type: 'untouchable' as any }];
-      let challengeBonus = 0;
-      for (const ch of challenges) {
-        challengeBonus += ch.scoreBonus;
-      }
-      if (challengeBonus > 0) {
-        gameStateService.addScore(challengeBonus);
-      }
-      campaignServiceSpy.recordCompletion('campaign_01', 500 + challengeBonus, 3, 'normal');
-
-      expect(callOrder).toEqual(['addScore', 'recordCompletion']);
-    });
-
-    it('recordCompletion receives score that includes challenge bonus', () => {
-      const baseScore = 1000;
-      const challengeBonus = 200;
-      const updatedScore = baseScore + challengeBonus;
-
-      campaignServiceSpy.recordCompletion('campaign_01', updatedScore, 3, 'normal');
-
-      expect(campaignServiceSpy.recordCompletion).toHaveBeenCalledWith(
-        'campaign_01', 1200, 3, 'normal'
-      );
-    });
-
-    it('recordCompletion receives base score when no challenges completed', () => {
-      const baseScore = 800;
-
-      campaignServiceSpy.recordCompletion('campaign_01', baseScore, 2, 'hard');
-
-      expect(campaignServiceSpy.recordCompletion).toHaveBeenCalledWith(
-        'campaign_01', 800, 2, 'hard'
-      );
-    });
-  });
 
   describe('GameEndService — buildGameEndStats wiring (via recordEnd)', () => {
     let gameEndService: GameEndService;
@@ -2125,7 +1715,6 @@ describe('GameBoardComponent', () => {
 
       expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
       expect(result.newlyUnlockedAchievements).toEqual([]);
-      expect(result.completedChallenges).toEqual([]);
     });
 
     it('reset() allows re-recording in the next session', () => {
@@ -2140,34 +1729,6 @@ describe('GameBoardComponent', () => {
   });
 
   describe('recordChallengeCompleted wiring', () => {
-    it('recordChallengeCompleted is called for each completed challenge', () => {
-      // Simulate the for-loop in the challenge completion path
-      const fakeChallenges = [
-        { id: 'ch_1', name: 'C1', description: '', scoreBonus: 50 },
-        { id: 'ch_2', name: 'C2', description: '', scoreBonus: 100 },
-      ];
-
-      for (const challenge of fakeChallenges) {
-        campaignServiceSpy.completeChallenge(challenge.id);
-        playerProfileSpy.recordChallengeCompleted();
-      }
-
-      expect(playerProfileSpy.recordChallengeCompleted).toHaveBeenCalledTimes(2);
-    });
-
-    it('does NOT call recordChallengeCompleted when no challenges are completed', () => {
-      const emptyChallenges: { id: string; name: string; description: string; scoreBonus: number }[] = [];
-
-      playerProfileSpy.recordChallengeCompleted.calls.reset();
-
-      for (const challenge of emptyChallenges) {
-        campaignServiceSpy.completeChallenge(challenge.id);
-        playerProfileSpy.recordChallengeCompleted();
-      }
-
-      expect(playerProfileSpy.recordChallengeCompleted).not.toHaveBeenCalled();
-    });
-
     it('GameEndService.isRecorded() resets to false after GameSessionService.resetAllServices', () => {
       // Verify the reset contract is fulfilled by GameSessionService (tested in its own spec)
       // and that restartGame calls GameSessionService.resetAllServices
@@ -3025,159 +2586,9 @@ describe('GameBoardComponent', () => {
       expect(component.challengeIndicators).toEqual([]);
     });
 
-    describe('NO_SLOW indicator', () => {
-      beforeEach(() => {
-        const mockLevel = { id: 'campaign_02', name: 'Map 2' } as CampaignLevel;
-        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
-        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_02');
-      });
-
-      it('passing=true when no Slow tower placed', () => {
-        // campaign_02 has NO_SLOW + SPEED_RUN; no slow placed
-        component.updateChallengeIndicators();
-        const noSlow = component.challengeIndicators.find(ci => ci.label === 'No Slow');
-        expect(noSlow).toBeTruthy();
-        expect(noSlow!.passing).toBeTrue();
-        expect(noSlow!.value).toBe('✓');
-      });
-
-      it('passing=false when Slow tower has been placed', () => {
-        challengeTrackingService.recordTowerPlaced(TowerType.SLOW, 100);
-        component.updateChallengeIndicators();
-        const noSlow = component.challengeIndicators.find(ci => ci.label === 'No Slow');
-        expect(noSlow).toBeTruthy();
-        expect(noSlow!.passing).toBeFalse();
-        expect(noSlow!.value).toBe('✗');
-      });
-    });
-
-    describe('UNTOUCHABLE indicator', () => {
-      beforeEach(() => {
-        const mockLevel = { id: 'campaign_01', name: 'Map 1' } as CampaignLevel;
-        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
-        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      });
-
-      it('passing=true when no lives lost', () => {
-        // Default NORMAL difficulty: 20 lives, no lives lost
-        component.updateChallengeIndicators();
-        const noDmg = component.challengeIndicators.find(ci => ci.label === 'No Damage');
-        expect(noDmg).toBeTruthy();
-        expect(noDmg!.passing).toBeTrue();
-      });
-
-      it('passing=false when a life has been lost', () => {
-        const gameStateService = fixture.debugElement.injector.get(GameStateService);
-        // Lose a life by setting phase to COMBAT first, then deducting
-        gameStateService.setPhase(GamePhase.COMBAT);
-        gameStateService.loseLife(1);
-        component.updateChallengeIndicators();
-        const noDmg = component.challengeIndicators.find(ci => ci.label === 'No Damage');
-        expect(noDmg).toBeTruthy();
-        expect(noDmg!.passing).toBeFalse();
-      });
-    });
-
-    describe('TOWER_LIMIT indicator', () => {
-      beforeEach(() => {
-        const mockLevel = { id: 'campaign_01', name: 'Map 1' } as CampaignLevel;
-        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
-        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      });
-
-      it('shows current/limit and passing=true when under limit', () => {
-        // campaign_01 has TOWER_LIMIT of 4
-        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
-        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
-        component.updateChallengeIndicators();
-        const towers = component.challengeIndicators.find(ci => ci.label === 'Towers');
-        expect(towers).toBeTruthy();
-        expect(towers!.passing).toBeTrue();
-        expect(towers!.value).toBe('2/4');
-      });
-
-      it('passing=false when over limit', () => {
-        // Place 5 towers against limit of 4
-        for (let i = 0; i < 5; i++) {
-          challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
-        }
-        component.updateChallengeIndicators();
-        const towers = component.challengeIndicators.find(ci => ci.label === 'Towers');
-        expect(towers).toBeTruthy();
-        expect(towers!.passing).toBeFalse();
-        expect(towers!.value).toBe('5/4');
-      });
-    });
-
-    describe('FRUGAL indicator', () => {
-      beforeEach(() => {
-        const mockLevel = { id: 'campaign_03', name: 'Map 3' } as CampaignLevel;
-        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
-        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_03');
-      });
-
-      it('shows spent/limit and passing=true when under gold limit', () => {
-        // campaign_03 has FRUGAL with goldLimit=600
-        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 200);
-        component.updateChallengeIndicators();
-        const spent = component.challengeIndicators.find(ci => ci.label === 'Spent');
-        expect(spent).toBeTruthy();
-        expect(spent!.passing).toBeTrue();
-        expect(spent!.value).toBe('200g/600g');
-      });
-
-      it('passing=false when over gold limit', () => {
-        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 700);
-        component.updateChallengeIndicators();
-        const spent = component.challengeIndicators.find(ci => ci.label === 'Spent');
-        expect(spent).toBeTruthy();
-        expect(spent!.passing).toBeFalse();
-      });
-    });
-
-    describe('SINGLE_TYPE indicator', () => {
-      beforeEach(() => {
-        const mockLevel = { id: 'campaign_07', name: 'Map 7' } as CampaignLevel;
-        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
-        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_07');
-      });
-
-      it('passing=true when only one tower type used', () => {
-        // campaign_07 has SINGLE_TYPE + SPEED_RUN
-        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
-        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
-        component.updateChallengeIndicators();
-        const single = component.challengeIndicators.find(ci => ci.label === 'Single Type');
-        expect(single).toBeTruthy();
-        expect(single!.passing).toBeTrue();
-        expect(single!.value).toBe('✓');
-      });
-
-      it('passing=false when multiple tower types used', () => {
-        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
-        challengeTrackingService.recordTowerPlaced(TowerType.SNIPER, 150);
-        component.updateChallengeIndicators();
-        const single = component.challengeIndicators.find(ci => ci.label === 'Single Type');
-        expect(single).toBeTruthy();
-        expect(single!.passing).toBeFalse();
-        expect(single!.value).toBe('2 types');
-      });
-
-      it('passing=true with zero towers placed', () => {
-        component.updateChallengeIndicators();
-        const single = component.challengeIndicators.find(ci => ci.label === 'Single Type');
-        expect(single).toBeTruthy();
-        expect(single!.passing).toBeTrue();
-      });
-    });
-
-    it('excludes SPEED_RUN from indicators when campaign has multiple challenge types', () => {
-      const mockLevel = { id: 'campaign_02', name: 'Map 2' } as CampaignLevel;
-      campaignServiceSpy.getLevel.and.returnValue(mockLevel);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_02');
+    it('always returns empty indicators (updateChallengeIndicators passes null in run mode)', () => {
       component.updateChallengeIndicators();
-      const speedRunIndicator = component.challengeIndicators.find(ci => ci.label === 'Speed Run');
-      expect(speedRunIndicator).toBeUndefined();
+      expect(component.challengeIndicators).toEqual([]);
     });
 
     it('challengeIndicators is reset to [] on restartGame', () => {
@@ -3319,7 +2730,8 @@ describe('GameBoardComponent', () => {
     }));
   });
 
-  // ── Ascent Mode: card play mechanics ─────────────────────────────────
+  // ── Run mode: card play mechanics ─────────────────────────────────────
+  // (was "Ascent Mode" — renamed to reflect post-pivot run-only architecture)
   describe('Ascent Mode: card play mechanics', () => {
     let deckSpy: jasmine.SpyObj<DeckService>;
     let runSpy: jasmine.SpyObj<RunService>;
@@ -3331,6 +2743,9 @@ describe('GameBoardComponent', () => {
     beforeEach(() => {
       deckSpy = fixture.debugElement.injector.get(DeckService) as jasmine.SpyObj<DeckService>;
       runSpy = fixture.debugElement.injector.get(RunService) as jasmine.SpyObj<RunService>;
+      // onCardPlayed guards on phase === COMBAT — advance phase so card plays are accepted.
+      const gameStateSvc = fixture.debugElement.injector.get(GameStateService);
+      gameStateSvc.startWave();
     });
 
     it('onCardPlayed with tower card sets pendingTowerCard and selectedTowerType', () => {

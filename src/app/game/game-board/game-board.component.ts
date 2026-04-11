@@ -45,11 +45,14 @@ import { ChallengeTrackingService } from './services/challenge-tracking.service'
 import { GameEndService } from './services/game-end.service';
 import { TowerInteractionService } from './services/tower-interaction.service';
 import { PathfindingService } from './services/pathfinding.service';
-import { CampaignService } from '../../campaign/services/campaign.service';
-import { CampaignMapService } from '../../campaign/services/campaign-map.service';
-
-import { CampaignLevel } from '../../campaign/models/campaign.model';
-import { ChallengeDefinition, ChallengeType, getChallengesForLevel } from '../../campaign/models/challenge.model';
+// Phase H5: CampaignService + CampaignMapService constructor injections deleted.
+// game-board no longer depends on the campaign runtime. CampaignLevel and
+// ChallengeDefinition types are still imported ONLY for the game-setup-panel
+// template binding contract — the values passed are always null/empty in the
+// unified run-only architecture. These imports go away in H10/H14 when the
+// setup panel is refactored for the run context.
+import type { CampaignLevel } from '../../run/data/campaign-levels';
+import type { ChallengeDefinition } from '../../run/data/challenges';
 import { ChallengeIndicator } from './components/game-hud/game-hud.component';
 import { GameSessionService, CleanupSceneOpts } from './services/game-session.service';
 import { CombatLoopService } from './services/combat-loop.service';
@@ -63,19 +66,19 @@ import { GameInputService } from './services/game-input.service';
 import { EnemyVisualService } from './services/enemy-visual.service';
 import { EnemyHealthService } from './services/enemy-health.service';
 import { ChainLightningService } from './services/chain-lightning.service';
-import { ProjectileService } from './services/projectile.service';
+// M2 S5: ProjectileService import removed — file deleted in this phase.
 import { GamePauseService } from './services/game-pause.service';
 import { ChallengeDisplayService } from './services/challenge-display.service';
 import { TowerUpgradeVisualService } from './services/tower-upgrade-visual.service';
 import { TowerPlacementService } from './services/tower-placement.service';
 import { TowerSelectionService } from './services/tower-selection.service';
 import { FocusTrap } from '../../shared/utils/focus-trap.util';
-import { RunService } from '../../ascent/services/run.service';
-import { RelicService } from '../../ascent/services/relic.service';
-import { DeckService } from '../../ascent/services/deck.service';
-import { CardEffectService } from '../../ascent/services/card-effect.service';
-import { EncounterResult } from '../../ascent/models/run-state.model';
-import { AscensionEffectType, getAscensionEffects } from '../../ascent/models/ascension.model';
+import { RunService } from '../../run/services/run.service';
+import { RelicService } from '../../run/services/relic.service';
+import { DeckService } from '../../run/services/deck.service';
+import { CardEffectService } from '../../run/services/card-effect.service';
+import { EncounterResult } from '../../run/models/run-state.model';
+import { AscensionEffectType, getAscensionEffects } from '../../run/models/ascension.model';
 import { ModifierEffects } from './models/game-modifier.model';
 import {
   CardInstance,
@@ -84,14 +87,17 @@ import {
   SpellCardEffect,
   ModifierCardEffect,
   UtilityCardEffect,
-} from '../../ascent/models/card.model';
-import { getCardDefinition } from '../../ascent/constants/card-definitions';
+} from '../../run/models/card.model';
+import { getCardDefinition } from '../../run/constants/card-definitions';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
 export interface EnemyBadge {
   text: string;
   severity: 'info' | 'warning' | 'danger';
 }
+
+/** Phase 4: how many upcoming turns to show in the combat shell spawn preview. */
+const SPAWN_PREVIEW_TURNS = 4;
 
 const TOWER_HOTKEYS: Record<string, TowerType> = {
   '1': TowerType.BASIC,
@@ -149,7 +155,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, ProjectileService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService]
+  providers: [SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -221,16 +227,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   );
 
   // Score breakdown — populated when game ends (VICTORY or DEFEAT)
-  scoreBreakdown: ScoreBreakdown | null = null;
-  /** Pre-computed star array — set alongside scoreBreakdown to avoid per-CD allocation. */
-  starArray: Array<'filled' | 'empty'> = [];
+  // Phase H11: scoreBreakdown + starArray fields deleted. gameEndService.recordEnd
+  // computes the breakdown internally from GameState (H7). They were dead after
+  // Phase 3 removed the state subscription's terminal-phase compute block; H11
+  // finishes the cleanup.
 
   // Achievements unlocked at game end
   newlyUnlockedAchievements: string[] = [];
   achievementDetails: Achievement[] = [];
 
-  /** Challenge completions awarded at end of this game session. */
-  completedChallenges: ChallengeDefinition[] = [];
 
   /** Live challenge progress badges shown in HUD during campaign games. Delegated to ChallengeDisplayService. */
   get challengeIndicators(): ChallengeIndicator[] { return this.challengeDisplayService.indicators; }
@@ -373,8 +378,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private tilePricingService: TilePricingService,
     private priceLabelService: PriceLabelService,
     private tutorialService: TutorialService,
-    private campaignService: CampaignService,
-    private campaignMapService: CampaignMapService,
     private notificationService: GameNotificationService,
     private challengeTrackingService: ChallengeTrackingService,
     private gameEndService: GameEndService,
@@ -391,17 +394,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private towerUpgradeVisualService: TowerUpgradeVisualService,
     private towerPlacementService: TowerPlacementService,
     private towerSelectionService: TowerSelectionService,
+    // Phase H5: campaignService + campaignMapService removed — game-board
+    // no longer depends on campaign runtime. Getters below return safe defaults.
     private runService: RunService,
     private relicService: RelicService,
     private deckService: DeckService,
     private cardEffectService: CardEffectService,
   ) {
     this.gameState = this.gameStateService.getState();
-  }
-
-  /** Whether the current game is part of an Ascent run (used by template). */
-  get isAscentRun(): boolean {
-    return this.runService.isInRun();
   }
 
   ngOnInit(): void {
@@ -421,46 +421,30 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.activeModifiers = state.activeModifiers;
       this.modifierScoreMultiplier = calculateModifierScoreMultiplier(state.activeModifiers);
 
-      // Compute score breakdown the first time we enter a terminal phase
+      // Terminal phase: record encounter result and route back to the run hub.
+      // There is no standalone scoring overlay — run summary is shown by the run module.
       if (
         (state.phase === GamePhase.VICTORY || state.phase === GamePhase.DEFEAT) &&
         prevPhase !== GamePhase.VICTORY &&
         prevPhase !== GamePhase.DEFEAT
       ) {
-        // Ascent Mode: record encounter result and route back to /ascent
-        if (this.runService.isInRun()) {
-          this.combatLoopService.flushElapsedTime();
-          const isVictory = state.phase === GamePhase.VICTORY;
-          const livesAtStart = DIFFICULTY_PRESETS[state.difficulty].lives;
-          const killStats = this.gameStatsService.getStats();
-          const totalKills = Object.values(killStats.killsByTowerType).reduce((a, b) => a + b, 0);
-          const result: EncounterResult = {
-            nodeId: this.runService.getCurrentEncounter()?.nodeId ?? '',
-            nodeType: this.runService.getCurrentEncounter()?.nodeType ?? 'combat',
-            victory: isVictory,
-            livesLost: livesAtStart - state.lives,
-            goldEarned: state.gold,
-            enemiesKilled: totalKills,
-            wavesCompleted: state.wave,
-          };
-          this.runService.recordEncounterResult(result);
-          this.router.navigate(['/ascent']);
-          return;
-        }
-
-        // Flush any accumulated elapsed time before scoring so the final time is accurate
         this.combatLoopService.flushElapsedTime();
-        const livesTotal = DIFFICULTY_PRESETS[state.difficulty].lives;
-        this.scoreBreakdown = calculateScoreBreakdown(
-          state.score,
-          state.lives,
-          livesTotal,
-          state.difficulty,
-          state.wave,
-          state.phase === GamePhase.VICTORY,
-          this.gameStateService.getModifierScoreMultiplier()
-        );
-        this.starArray = [0, 1, 2].map(i => i < this.scoreBreakdown!.stars ? 'filled' : 'empty') as Array<'filled' | 'empty'>;
+        const isVictory = state.phase === GamePhase.VICTORY;
+        const livesAtStart = DIFFICULTY_PRESETS[state.difficulty].lives;
+        const killStats = this.gameStatsService.getStats();
+        const totalKills = Object.values(killStats.killsByTowerType).reduce((a, b) => a + b, 0);
+        const result: EncounterResult = {
+          nodeId: this.runService.getCurrentEncounter()?.nodeId ?? '',
+          nodeType: this.runService.getCurrentEncounter()?.nodeType ?? 'combat',
+          victory: isVictory,
+          livesLost: livesAtStart - state.lives,
+          goldEarned: state.gold,
+          enemiesKilled: totalKills,
+          wavesCompleted: state.wave,
+        };
+        this.runService.recordEncounterResult(result);
+        this.router.navigate(['/run']);
+        return;
       }
 
       // Refresh wave preview when entering SETUP/INTERMISSION or when the wave number changes
@@ -492,26 +476,29 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Apply per-campaign-level wave definitions if this is a campaign map
     this.gameSessionService.applyCampaignWaves();
 
-    // Ascent Mode: override lives, gold, waves, apply ascension modifiers, and init deck
-    if (this.runService.isInRun()) {
-      const encounter = this.runService.getCurrentEncounter();
-      const runState = this.runService.runState;
-      if (runState && encounter) {
-        this.gameStateService.setInitialLives(runState.lives, runState.maxLives + this.relicService.getMaxLivesBonus());
-        this.gameStateService.addGold(this.relicService.getStartingGoldBonus());
-        this.waveService.setCustomWaves(encounter.waves);
-        this.gameStateService.setMaxWaves(encounter.waves.length);
-        this.applyAscentAscensionModifiers(runState.ascensionLevel);
-      }
-
-      // Subscribe to deck/energy state for the card hand UI
-      this.deckSub = this.deckService.deckState$.subscribe(s => { this.deckState = s; });
-      this.energySub = this.deckService.energy$.subscribe(e => { this.energyState = e; });
-
-      // Initialize deck for this encounter and draw the opening hand
-      this.deckService.resetForEncounter();
-      this.deckService.drawForWave();
+    // Combat requires an active run encounter. Guard against direct /play navigation
+    // without a run — bail early and route back to the run hub.
+    const encounter = this.runService.getCurrentEncounter();
+    const runState = this.runService.runState;
+    if (!runState || !encounter) {
+      this.router.navigate(['/run']);
+      return;
     }
+
+    // Apply run encounter config: lives, gold, waves, ascension modifiers
+    this.gameStateService.setInitialLives(runState.lives, runState.maxLives + this.relicService.getMaxLivesBonus());
+    this.gameStateService.addGold(this.relicService.getStartingGoldBonus());
+    this.waveService.setCustomWaves(encounter.waves);
+    this.gameStateService.setMaxWaves(encounter.waves.length);
+    this.applyAscensionModifiers(runState.ascensionLevel);
+
+    // Subscribe to deck/energy state for the card hand UI
+    this.deckSub = this.deckService.deckState$.subscribe(s => { this.deckState = s; });
+    this.energySub = this.deckService.energy$.subscribe(e => { this.energyState = e; });
+
+    // Initialize deck for this encounter and draw the opening hand
+    this.deckService.resetForEncounter();
+    this.deckService.drawForWave();
 
     this.sceneService.initScene();
     this.sceneService.initCamera();
@@ -614,9 +601,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     window.location.reload();
   }
 
-  /** Navigate back to map select — used by the game initialization failure overlay. */
-  goBackToMaps(): void {
-    this.router.navigate(['/maps']);
+  /** Navigate back to the run hub — used by the game initialization failure overlay. */
+  goBackToRunHub(): void {
+    this.router.navigate(['/run']);
   }
 
   dismissNotification(id: number): void {
@@ -699,12 +686,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  /** Whether a tower type is selected for placement (PLACE mode). */
+  /** Whether a tower type is selected for placement (PLACE mode).
+   *  Placement always requires a pending tower card — cards are the only path to tower placement. */
   get isPlaceMode(): boolean {
-    return this.selectedTowerType !== null;
+    return this.selectedTowerType !== null && this.pendingTowerCard !== null;
   }
 
-  // --- Ascent Mode: card hand ---
+  // --- Card hand ---
 
   /**
    * Tower card waiting to be consumed — held in limbo between card click
@@ -727,6 +715,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    * Spell/modifier/utility: consume immediately (instant effects).
    */
   onCardPlayed(card: CardInstance): void {
+    // M3 S5: card play locked to COMBAT phase. INTERMISSION/SETUP/VICTORY/DEFEAT
+    // do NOT accept card plays — prevents stale-hand exploits between waves and
+    // matches the StS turn-discrete model.
+    const phase = this.gameStateService.getState().phase;
+    if (phase !== GamePhase.COMBAT) {
+      return;
+    }
     // Clicking the pending tower card again cancels placement
     if (this.pendingTowerCard && this.pendingTowerCard.instanceId === card.instanceId) {
       this.cancelPlacement();
@@ -1056,88 +1051,55 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.router.navigate(['/edit']);
   }
 
-  /** True when the current map is a campaign level (mapId starts with 'campaign_'). */
-  get isCampaignGame(): boolean {
-    const mapId = this.mapBridge.getMapId();
-    return !!mapId && mapId.startsWith('campaign_');
-  }
+  // ── Phase H5: campaign getters neutered ─────────────────────────────────
+  // These getters are stubs returning safe defaults. They exist solely so the
+  // game-setup-panel template binding contract remains satisfied. Every value
+  // is effectively dead in the run-only architecture.
 
-  /**
-   * True when the game was launched from the editor (map state loaded but no saved mapId).
-   * The editor calls setEditorMapState(state) without a mapId, while map-select and campaign
-   * always pass one. Quickplay has no map state at all.
-   */
+  /** @deprecated Phase H5 — always false in run-only architecture. */
+  get isCampaignGame(): boolean { return false; }
+
+  /** True when the game was launched from the editor (map state loaded but no saved mapId). */
   get isEditorOrigin(): boolean {
     return this.mapBridge.hasEditorMap() && this.mapBridge.getMapId() === null;
   }
 
-  /** Returns the CampaignLevel for the current map, or null if not a campaign game. */
-  get currentCampaignLevel(): CampaignLevel | null {
-    const mapId = this.mapBridge.getMapId();
-    if (!mapId) return null;
-    return this.campaignService.getLevel(mapId) ?? null;
-  }
+  /** @deprecated Phase H5 — always null. */
+  get currentCampaignLevel(): CampaignLevel | null { return null; }
 
-  /** Returns the next campaign level after the current one, or null if none exists. */
-  get nextCampaignLevel(): CampaignLevel | null {
-    const mapId = this.mapBridge.getMapId();
-    if (!mapId) return null;
-    return this.campaignService.getNextLevel(mapId);
-  }
+  /** @deprecated Phase H5 — always null. */
+  get nextCampaignLevel(): CampaignLevel | null { return null; }
 
-  /** Returns the SPEED_RUN timeLimit for the current campaign level, or 0 if none. */
-  get activeSpeedRunTimeLimit(): number {
-    if (!this.isCampaignGame || !this.currentCampaignLevel) return 0;
-    const challenges = getChallengesForLevel(this.currentCampaignLevel.id);
-    const speedRun = challenges.find((c: ChallengeDefinition) => c.type === ChallengeType.SPEED_RUN);
-    return speedRun?.timeLimit ?? 0;
-  }
+  /** @deprecated Phase H5 — always 0. */
+  get activeSpeedRunTimeLimit(): number { return 0; }
 
-  /** True when the next campaign level exists and is unlocked. */
-  get isNextLevelUnlocked(): boolean {
-    const next = this.nextCampaignLevel;
-    return !!next && this.campaignService.isUnlocked(next.id);
-  }
+  /** @deprecated Phase H5 — always false. */
+  get isNextLevelUnlocked(): boolean { return false; }
 
-  /** Returns all challenge definitions for the current campaign level. Empty for non-campaign maps. */
-  get campaignChallenges(): ChallengeDefinition[] {
-    const mapId = this.mapBridge.getMapId();
-    if (!mapId) return [];
-    return getChallengesForLevel(mapId);
-  }
+  /** @deprecated Phase H5 — always empty. */
+  get campaignChallenges(): ChallengeDefinition[] { return []; }
 
-  /** True when the given challenge was already completed in a previous run. */
-  isChallengeAlreadyCompleted(challengeId: string): boolean {
-    return this.campaignService.isChallengeCompleted(challengeId);
-  }
+  /** @deprecated Phase H5 — always false. */
+  isChallengeAlreadyCompleted(_challengeId: string): boolean { return false; }
 
-  /** True when the challenge was completed in the current run (victory screen). */
-  isChallengeCompleted(challenge: ChallengeDefinition): boolean {
-    return this.completedChallenges.some(c => c.id === challenge.id);
-  }
+  /** @deprecated Phase H5 — always false. */
+  isChallengeCompleted(_challenge: ChallengeDefinition): boolean { return false; }
 
   /**
    * Recomputes challenge progress badges for the HUD via ChallengeDisplayService.
-   * Called after any tower event (place, sell, upgrade) and on restart.
+   * H5: always passes null (no campaign level). Kept as a no-op hook for tower
+   * events until H14 decides whether to introduce per-encounter challenges.
    */
   updateChallengeIndicators(): void {
-    const levelId = this.currentCampaignLevel?.id ?? null;
-    this.challengeDisplayService.updateIndicators(levelId);
+    this.challengeDisplayService.updateIndicators(null);
   }
 
-  /** Loads the next campaign level and restarts the game. No-op if no next level. */
-  playNextLevel(): void {
-    const next = this.nextCampaignLevel;
-    if (!next) return;
-    const mapState = this.campaignMapService.loadLevel(next.id);
-    if (!mapState) return;
-    this.mapBridge.setEditorMapState(mapState, next.id);
-    this.restartGame();
-  }
+  /** @deprecated Phase H5 — no-op. playNextLevel was the campaign auto-advance. */
+  playNextLevel(): void { /* no-op */ }
 
-  /** Navigate back to the campaign level select screen. */
+  /** @deprecated Phase H5 — navigates to /run instead of /campaign. */
   backToCampaign(): void {
-    this.router.navigate(['/campaign']);
+    this.router.navigate(['/run']);
   }
 
   /** Show a centered "Wave X Clear!" banner for 2 seconds. Call when transitioning to INTERMISSION. */
@@ -1176,8 +1138,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.relicService.resetWaveState();
     this.minimapService.show();
 
-    // Ascent Mode: discard previous hand and draw new wave hand
-    if (this.runService.isInRun() && state.wave > 0) {
+    // Discard previous hand and draw new wave hand (skip on the very first wave —
+    // ngOnInit already drew the opening hand during encounter setup).
+    if (state.wave > 0) {
       this.deckService.discardHand();
       this.deckService.drawForWave();
     }
@@ -1229,6 +1192,67 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.enemyBadgeMap.get(type) ?? [];
   }
 
+  /**
+   * Phase 4: advance combat by one discrete turn.
+   *
+   * Runs the resolution sequence (spawns → tower fire → enemy move → status
+   * tick → kills/leaks → wave completion) via CombatLoopService.resolveTurn(),
+   * dispatches audio and visual events, then draws a new hand for the next
+   * player turn if combat continues.
+   *
+   * Guards: only runs during COMBAT phase; aborts if a tower card is mid-placement
+   * (pending card is first cancelled to refund energy, then endTurn is re-invoked
+   * by the user). No-op during VICTORY/DEFEAT.
+   */
+  endTurn(): void {
+    const state = this.gameStateService.getState();
+    if (state.phase !== GamePhase.COMBAT) return;
+    if (this.initializationFailed || this.contextLost) return;
+
+    // If a tower card is waiting for tile placement, cancel it first so the
+    // player doesn't accidentally lose the card by ending the turn.
+    if (this.pendingTowerCard) {
+      this.cancelPlacement();
+      return;
+    }
+
+    const result = this.combatLoopService.resolveTurn(
+      this.sceneService.getScene(),
+    );
+
+    // Phase 5: resolution feedback — brief screen-shake punctuates the
+    // discrete turn so the player feels *something* happened, even when no
+    // enemies are damaged. Scales up if leaks or kills occurred.
+    const shakeIntensity = result.exitCount > 0
+      ? SCREEN_SHAKE_CONFIG.lifeLossIntensity
+      : result.kills.length > 0 ? 0.08 : 0.04;
+    const shakeDuration = result.exitCount > 0
+      ? SCREEN_SHAKE_CONFIG.lifeLossDuration
+      : 0.12;
+    this.screenShakeService.trigger(shakeIntensity, shakeDuration);
+
+    // Dispatch audio, kill particles, wave banner, achievement pop-ups.
+    // deltaTime=0 because discrete turn resolution doesn't advance real time.
+    this.processCombatResult(result, 0, performance.now());
+
+    // Draw a new hand for the next player turn if combat continues.
+    const postPhase = this.gameStateService.getState().phase;
+    if (postPhase === GamePhase.COMBAT) {
+      this.deckService.discardHand();
+      this.deckService.drawForWave();
+    }
+  }
+
+  /**
+   * @deprecated Phase H13: `restartGame` has no live callers after Phase 8
+   * deleted the game-results-overlay template (which had the `(restart)` binding).
+   * Roguelites do not let players restart encounters — the outcome is committed
+   * and the player either progresses (reward node) or abandons the run (quit).
+   * The method body is kept intact because ~20 spec tests still exercise its
+   * reset paths (valuable coverage for the cleanup sequence), but no
+   * production code path calls it. H2 test rewrite can decide whether to
+   * retarget those tests against ngOnDestroy → re-init instead of delete.
+   */
   restartGame(): void {
     // Reset interaction state — old references point to disposed meshes
     this.hoveredTile = null;
@@ -1243,12 +1267,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gameSessionService.resetAllServices(this.sceneService.getScene());
     this.combatLoopService.reset();
 
-    // Reset component-only UI state
-    this.scoreBreakdown = null;
-    this.starArray = [];
+    // Reset component-only UI state (scoreBreakdown + starArray fields removed in H11)
     this.newlyUnlockedAchievements = [];
     this.achievementDetails = [];
-    this.completedChallenges = [];
     this.challengeDisplayService.updateIndicators(null); // clear on restart; re-populated by updateChallengeIndicators()
     this.lastWaveReward = 0;
     this.lastInterestEarned = 0;
@@ -1288,18 +1309,19 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Re-apply campaign waves after waveService.reset() (which clears custom waves)
     this.gameSessionService.applyCampaignWaves();
 
-    // Ascent Mode: override lives, gold, waves, and apply ascension difficulty modifiers
-    if (this.runService.isInRun()) {
-      const encounter = this.runService.getCurrentEncounter();
-      const runState = this.runService.runState;
-      if (runState && encounter) {
-        this.gameStateService.setInitialLives(runState.lives, runState.maxLives + this.relicService.getMaxLivesBonus());
-        this.gameStateService.addGold(this.relicService.getStartingGoldBonus());
-        this.waveService.setCustomWaves(encounter.waves);
-        this.gameStateService.setMaxWaves(encounter.waves.length);
-        this.applyAscentAscensionModifiers(runState.ascensionLevel);
-      }
+    // Re-apply run encounter config on restart. If the run was cleared between
+    // the original load and the restart click, route back to the run hub.
+    const encounter = this.runService.getCurrentEncounter();
+    const runState = this.runService.runState;
+    if (!runState || !encounter) {
+      this.router.navigate(['/run']);
+      return;
     }
+    this.gameStateService.setInitialLives(runState.lives, runState.maxLives + this.relicService.getMaxLivesBonus());
+    this.gameStateService.addGold(this.relicService.getStartingGoldBonus());
+    this.waveService.setCustomWaves(encounter.waves);
+    this.gameStateService.setMaxWaves(encounter.waves.length);
+    this.applyAscensionModifiers(runState.ascensionLevel);
 
     this.renderGameBoard();
     this.addGridLines();
@@ -1316,11 +1338,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
 
   /**
-   * Translate Ascent Mode ascension effects into ModifierEffects and inject them
+   * Translate run ascension effects into ModifierEffects and inject them
    * into GameStateService so EnemyService picks them up at spawn time.
    * Must be called during SETUP phase (wave 0) — before the first wave starts.
    */
-  private applyAscentAscensionModifiers(ascensionLevel: number): void {
+  private applyAscensionModifiers(ascensionLevel: number): void {
     if (ascensionLevel <= 0) return;
     const ascEffects = getAscensionEffects(ascensionLevel);
     const effects: ModifierEffects = {};
@@ -1683,7 +1705,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private tryPlaceTower(row: number, col: number): void {
-    if (!this.selectedTowerType) return;
+    // Towers can ONLY be placed via tower cards. No card = no placement.
+    if (!this.selectedTowerType || !this.pendingTowerCard) return;
 
     if (!this.gameBoardService.canPlaceTower(row, col)) {
       // Check specifically if this was a path-blocking rejection
@@ -1696,13 +1719,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const result = this.towerInteractionService.placeTower(row, col, this.selectedTowerType);
     if (!result.success) return;
 
-    // Ascent Mode: consume the pending tower card now that placement succeeded
-    if (this.pendingTowerCard) {
-      this.consumePendingTowerCard();
-      // Each card = exactly one tower. Exit placement mode so the player
-      // can't place more of the same type for free.
-      this.cancelPlacement();
-    }
+    // Capture the pending card BEFORE consuming — consumePendingTowerCard() nulls it.
+    const placedCard = this.pendingTowerCard;
+
+    // Consume the pending tower card and exit placement mode.
+    // Each card = exactly one tower.
+    this.consumePendingTowerCard();
+    this.cancelPlacement();
 
     // Create tower mesh and add to scene (visual concern — stays here)
     const towerMesh = this.towerMeshFactory.createTowerMesh(row, col, this.selectedTowerType, this.gameBoardService.getBoardWidth(), this.gameBoardService.getBoardHeight());
@@ -1712,6 +1735,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Register tower with combat service (needs the mesh reference)
     this.towerCombatService.registerTower(row, col, this.selectedTowerType, towerMesh, result.cost);
+
+    // Sub-task B: upgraded tower cards start at level 2 (player effectively
+    // pre-paid the L1→L2 upgrade cost via the card upgrade).
+    // Resolve the active effect from the card (upgraded flag selects upgradedEffect).
+    if (placedCard) {
+      const placedDef = getCardDefinition(placedCard.cardId);
+      const activeEffect = (placedCard.upgraded && placedDef.upgradedEffect)
+        ? placedDef.upgradedEffect
+        : placedDef.effect;
+      if (activeEffect.type !== 'tower') return;
+      // activeEffect is now narrowed to TowerCardEffect
+      if (activeEffect.startLevel === 2) {
+        // Upgrade to L2 at zero additional cost — the card's upgrade already
+        // accounts for the value. actualCost: 0 keeps totalInvested accurate.
+        this.towerCombatService.upgradeTower(`${row}-${col}`, 0);
+      }
+    }
 
     this.audioService.playTowerPlace();
     this.gameStatsService.recordTowerBuilt();
@@ -1751,7 +1791,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   confirmQuit(): void {
-    const route = this.gamePauseService.confirmQuit(this.isCampaignGame);
+    const route = this.gamePauseService.confirmQuit();
     this.router.navigate([route]);
   }
 
@@ -1803,7 +1843,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   toggleEndless(): void {
-    if (this.isCampaignGame) return;
     if (this.gameState.phase !== GamePhase.SETUP) return;
     const newValue = !this.gameState.isEndless;
     this.gameStateService.setEndlessMode(newValue);
@@ -1877,6 +1916,21 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.waveService.getRemainingToSpawn();
   }
 
+  /**
+   * Phase 4: at-a-glance spawn preview for the next few turns. Populated by
+   * the combat shell during PLAYER_TURN so the player can plan ahead. Empty
+   * array when not in COMBAT. User-requested feature.
+   */
+  get upcomingSpawns(): Array<{ turnOffset: number; spawns: { type: EnemyType; count: number }[] }> {
+    if (this.gameState.phase !== GamePhase.COMBAT) return [];
+    return this.waveService.getUpcomingSpawnsPreview(SPAWN_PREVIEW_TURNS);
+  }
+
+  /** Phase 4: current turn number (1-indexed for display). */
+  get currentTurnNumber(): number {
+    return this.combatLoopService.getTurnNumber() + 1;
+  }
+
   toggleAllRanges(): void {
     this.showAllRanges = this.rangeVisualizationService.toggleAllRanges(
       this.showAllRanges,
@@ -1915,7 +1969,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (TOWER_HOTKEYS[event.key]) { event.preventDefault(); this.selectTowerType(TOWER_HOTKEYS[event.key]); return; }
 
     switch (event.key) {
-      case ' ': event.preventDefault(); this.startWave(); break;
+      case ' ':
+        event.preventDefault();
+        // Phase 4 context-aware Space: END TURN during combat, otherwise START WAVE.
+        if (phase === GamePhase.COMBAT) {
+          this.endTurn();
+        } else {
+          this.startWave();
+        }
+        break;
       case 'p': case 'P': event.preventDefault(); this.togglePause(); break;
       case 'Escape':
         event.preventDefault();
@@ -1967,20 +2029,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Ambient visuals (particles, skybox)
     this.sceneService.tickAmbientVisuals(time);
 
-    // Combat tick
+    // Phase 4: Turn-based combat — the physics loop is gone. The simulation only
+    // advances when the player clicks "End Turn" (see endTurn() below). animate()
+    // runs cosmetic visuals continuously so health bars, status particles, and
+    // minimap stay responsive between turns.
     if (deltaTime > 0) {
       const state = this.gameStateService.getState();
-      if (state.phase === GamePhase.COMBAT && !state.isPaused) {
-        const result = this.combatLoopService.tick(
-          deltaTime,
-          state.gameSpeed,
-          this.sceneService.getScene(),
-          this.scoreBreakdown,
-        );
-        this.processCombatResult(result, deltaTime, time);
-      } else if (state.phase === GamePhase.COMBAT && state.isPaused) {
-        // Even while paused, run cosmetic-only animations so they don't freeze.
-        // Physics, spawning, and movement are NOT ticked.
+      if (state.phase === GamePhase.COMBAT) {
         this.runPausedVisuals(deltaTime, time);
       }
     }
@@ -1993,11 +2048,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Dying/hit/shield animations must run in ALL phases (not just COMBAT)
     // so enemies that die at the end of a wave finish their death animation
     // during INTERMISSION instead of freezing on the board.
-    // Skip when runPausedVisuals already handled it (COMBAT + paused) to avoid double-tick.
-    const pauseHandled = deltaTime > 0
-      && this.gameStateService.getState().phase === GamePhase.COMBAT
-      && this.gameStateService.getState().isPaused;
-    if (deltaTime > 0 && !pauseHandled && this.enemyService.getEnemies().size > 0) {
+    // Phase 4: runPausedVisuals runs on ALL COMBAT frames now (turn-based), so
+    // skip COMBAT here to avoid double-tick.
+    const combatHandledByCosmetic = deltaTime > 0
+      && this.gameStateService.getState().phase === GamePhase.COMBAT;
+    if (deltaTime > 0 && !combatHandledByCosmetic && this.enemyService.getEnemies().size > 0) {
       this.enemyService.updateDyingAnimations(deltaTime, this.sceneService.getScene());
       this.enemyService.updateHitFlashes(deltaTime);
       this.enemyService.updateShieldBreakAnimations(deltaTime);
@@ -2052,10 +2107,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const completedWave = this.gameStateService.getState().wave;
         const perfectWave = wc.streakBonus > 0;
         this.onWaveComplete(completedWave, perfectWave);
-        // Tick card modifier wave-countdowns when in an Ascent run.
-        if (this.runService.isInRun()) {
-          this.cardEffectService.tickWave();
-        }
+        // Tick card modifier wave-countdowns.
+        this.cardEffectService.tickWave();
         // Hide minimap during intermission on mobile — frees space for Next Wave button
         if (window.innerWidth <= 480) {
           this.minimapService.hide();
@@ -2066,7 +2119,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Game end (achievements, challenges)
     if (result.gameEnd) {
       this.newlyUnlockedAchievements = result.gameEnd.newlyUnlockedAchievements;
-      this.completedChallenges = result.gameEnd.completedChallenges;
       this.updateAchievementDetails();
     }
 
