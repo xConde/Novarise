@@ -9,7 +9,7 @@ import {
   ACHIEVEMENTS,
 } from '../../game/game-board/models/achievement.model';
 import { StorageService } from './storage.service';
-import { RunState, RunStatus } from '../../ascent/models/run-state.model';
+import { RunState, RunStatus } from '../../run/models/run-state.model';
 
 // Re-export everything so existing callers importing from this file continue to work.
 export {
@@ -39,11 +39,11 @@ const DEFAULT_PROFILE: PlayerProfile = {
   hasPlacedAllTowerTypes: false,
   maxModifiersUsedInVictory: 0,
   completedChallengeCount: 0,
-  ascentRunsAttempted: 0,
-  ascentRunsCompleted: 0,
+  runsAttempted: 0,
+  runsCompleted: 0,
   highestAscensionBeaten: 0,
-  ascentTotalKills: 0,
-  ascentBestScore: 0,
+  runTotalKills: 0,
+  runBestScore: 0,
 };
 
 @Injectable({ providedIn: 'root' })
@@ -190,21 +190,21 @@ export class PlayerProfileService {
   }
 
   /**
-   * Record the end of an Ascent Mode run.
+   * Record the end of a run.
    * Safe to call on victory, defeat, or abandon.
    */
-  recordAscentRun(runState: RunState): void {
-    this.profile.ascentRunsAttempted += 1;
+  recordRun(runState: RunState): void {
+    this.profile.runsAttempted += 1;
     if (runState.status === RunStatus.VICTORY) {
-      this.profile.ascentRunsCompleted += 1;
+      this.profile.runsCompleted += 1;
       if (runState.ascensionLevel > this.profile.highestAscensionBeaten) {
         this.profile.highestAscensionBeaten = runState.ascensionLevel;
       }
     }
     const totalKills = runState.encounterResults.reduce((s, r) => s + r.enemiesKilled, 0);
-    this.profile.ascentTotalKills += totalKills;
-    if (runState.score > this.profile.ascentBestScore) {
-      this.profile.ascentBestScore = runState.score;
+    this.profile.runTotalKills += totalKills;
+    if (runState.score > this.profile.runBestScore) {
+      this.profile.runBestScore = runState.score;
     }
     this.save();
   }
@@ -284,12 +284,16 @@ export class PlayerProfileService {
       hasPlacedAllTowerTypes: typeof parsed.hasPlacedAllTowerTypes === 'boolean' ? parsed.hasPlacedAllTowerTypes : false,
       maxModifiersUsedInVictory: typeof parsed.maxModifiersUsedInVictory === 'number' ? parsed.maxModifiersUsedInVictory : 0,
       completedChallengeCount: typeof parsed.completedChallengeCount === 'number' ? parsed.completedChallengeCount : 0,
-      // Migration: Ascent stats default to 0 for existing profiles
-      ascentRunsAttempted: typeof parsed.ascentRunsAttempted === 'number' ? parsed.ascentRunsAttempted : 0,
-      ascentRunsCompleted: typeof parsed.ascentRunsCompleted === 'number' ? parsed.ascentRunsCompleted : 0,
+      // Migration: run stats — prefer new field names, fall back to pre-pivot ascent* names
+      runsAttempted: typeof parsed.runsAttempted === 'number' ? parsed.runsAttempted
+        : typeof (parsed as Record<string, unknown>)['ascentRunsAttempted'] === 'number' ? (parsed as Record<string, unknown>)['ascentRunsAttempted'] as number : 0,
+      runsCompleted: typeof parsed.runsCompleted === 'number' ? parsed.runsCompleted
+        : typeof (parsed as Record<string, unknown>)['ascentRunsCompleted'] === 'number' ? (parsed as Record<string, unknown>)['ascentRunsCompleted'] as number : 0,
       highestAscensionBeaten: typeof parsed.highestAscensionBeaten === 'number' ? parsed.highestAscensionBeaten : 0,
-      ascentTotalKills: typeof parsed.ascentTotalKills === 'number' ? parsed.ascentTotalKills : 0,
-      ascentBestScore: typeof parsed.ascentBestScore === 'number' ? parsed.ascentBestScore : 0,
+      runTotalKills: typeof parsed.runTotalKills === 'number' ? parsed.runTotalKills
+        : typeof (parsed as Record<string, unknown>)['ascentTotalKills'] === 'number' ? (parsed as Record<string, unknown>)['ascentTotalKills'] as number : 0,
+      runBestScore: typeof parsed.runBestScore === 'number' ? parsed.runBestScore
+        : typeof (parsed as Record<string, unknown>)['ascentBestScore'] === 'number' ? (parsed as Record<string, unknown>)['ascentBestScore'] as number : 0,
     };
   }
 

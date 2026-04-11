@@ -1,17 +1,20 @@
 /* ============================================================
    game-board: wave preview panel
+   Phase H9: grid-anchored to `sidepanel` area (right side of combat shell).
+   Previously position: fixed + transform. The board-container grid guarantees
+   the panel has a reserved slot even when *ngIf hides it.
    ============================================================ */
 .board-container .wave-preview {
   background: rgba(0, 0, 0, 0.82);
-  border-radius: var(--border-radius-md);
   backdrop-filter: blur(0.625rem);
   z-index: var(--z-index-overlay);
   font-family: "Orbitron", sans-serif;
-  position: fixed;
-  top: 8rem;
-  left: 50%;
-  transform: translateX(-50%);
-  min-width: 12rem;
+  grid-area: sidepanel;
+  align-self: start;
+  justify-self: end;
+  margin: var(--spacing-md);
+  min-width: 14rem;
+  max-width: 18rem;
   padding: var(--spacing-md) var(--spacing-lg);
   border: var(--border-width-thin) solid var(--theme-purple-a50);
   border-radius: var(--border-radius-lg);
@@ -22,17 +25,13 @@
   overflow-y: auto;
 }
 
-@media (max-width: 768px) {
-  .board-container .wave-preview { min-width: 10rem; }
+@media (max-width: 1023px) {
+  // Shell collapses sidepanel — hide wave preview entirely on tablet/mobile.
+  .board-container .wave-preview { display: none; }
 }
 
 @media (max-width: 480px) {
   .board-container .wave-preview {
-    position: absolute;  /* Override fixed — align with absolute-positioned controls */
-    top: var(--spacing-md);  /* Same top as E/help/audio row */
-    left: var(--spacing-xs);
-    right: auto;
-    transform: none;
     font-size: var(--font-size-3xs);
     padding: 0.2rem 0.4rem;
     min-width: auto;

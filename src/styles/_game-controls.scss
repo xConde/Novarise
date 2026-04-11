@@ -16,8 +16,8 @@
   transition: opacity 300ms ease;
 }
 
-// When card hand is visible (Ascent mode), offset minimap upward so they don't overlap
-.board-container--ascent .game-minimap {
+// When card hand is visible (run mode), offset minimap upward so they don't overlap
+.board-container--run .game-minimap {
   bottom: calc(var(--card-hand-height, 7rem) + 1rem);
 }
 

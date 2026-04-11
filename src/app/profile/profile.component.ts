@@ -99,9 +99,9 @@ export class ProfileComponent implements OnInit {
     return ((this.profile.totalVictories / this.profile.totalGamesPlayed) * 100).toFixed(0);
   }
 
-  get ascentWinRate(): string {
-    if (this.profile.ascentRunsAttempted === 0) return '0';
-    return ((this.profile.ascentRunsCompleted / this.profile.ascentRunsAttempted) * 100).toFixed(0);
+  get runWinRate(): string {
+    if (this.profile.runsAttempted === 0) return '0';
+    return ((this.profile.runsCompleted / this.profile.runsAttempted) * 100).toFixed(0);
   }
 
   get unlockedCount(): number {

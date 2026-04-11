@@ -43,23 +43,23 @@
       </div>
     </section>
 
-    <section class="stats-section ascent-stats-section">
-      <h2 class="ascent-stats-title">Ascent Mode</h2>
-      <p class="ascent-stats-hint" *ngIf="profile.ascentRunsAttempted === 0">
-        Complete an Ascent Mode run to track your roguelite stats.
+    <section class="stats-section run-stats-section">
+      <h2 class="run-stats-title">Roguelite Runs</h2>
+      <p class="run-stats-hint" *ngIf="profile.runsAttempted === 0">
+        Complete a run to track your roguelite stats.
       </p>
-      <div class="stats-grid" *ngIf="profile.ascentRunsAttempted > 0">
+      <div class="stats-grid" *ngIf="profile.runsAttempted > 0">
         <div class="stat-card">
           <span class="stat-label">Runs Attempted</span>
-          <span class="stat-value">{{ profile.ascentRunsAttempted }}</span>
+          <span class="stat-value">{{ profile.runsAttempted }}</span>
         </div>
         <div class="stat-card">
           <span class="stat-label">Runs Completed</span>
-          <span class="stat-value stat-value--victory">{{ profile.ascentRunsCompleted }}</span>
+          <span class="stat-value stat-value--victory">{{ profile.runsCompleted }}</span>
         </div>
         <div class="stat-card">
           <span class="stat-label">Win Rate</span>
-          <span class="stat-value">{{ ascentWinRate }}%</span>
+          <span class="stat-value">{{ runWinRate }}%</span>
         </div>
         <div class="stat-card">
           <span class="stat-label">Highest Ascension</span>
@@ -67,11 +67,11 @@
         </div>
         <div class="stat-card">
           <span class="stat-label">Best Score</span>
-          <span class="stat-value">{{ profile.ascentBestScore }}</span>
+          <span class="stat-value">{{ profile.runBestScore }}</span>
         </div>
         <div class="stat-card">
           <span class="stat-label">Total Kills</span>
-          <span class="stat-value">{{ profile.ascentTotalKills }}</span>
+          <span class="stat-value">{{ profile.runTotalKills }}</span>
         </div>
       </div>
     </section>

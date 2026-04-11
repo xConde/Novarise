@@ -41,11 +41,11 @@ describe('ProfileComponent', () => {
     hasPlacedAllTowerTypes: false,
     maxModifiersUsedInVictory: 0,
     completedChallengeCount: 0,
-    ascentRunsAttempted: 0,
-    ascentRunsCompleted: 0,
+    runsAttempted: 0,
+    runsCompleted: 0,
     highestAscensionBeaten: 0,
-    ascentTotalKills: 0,
-    ascentBestScore: 0,
+    runTotalKills: 0,
+    runBestScore: 0,
   };
 
   beforeEach(async () => {

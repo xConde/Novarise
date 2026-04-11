@@ -8,7 +8,7 @@ import {
   CardInstance,
   DeckState,
   EnergyState,
-} from '../../../../ascent/models/card.model';
+} from '../../../../run/models/card.model';
 
 // Minimal deck state helpers ────────────────────────────────────────────────
 

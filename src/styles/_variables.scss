@@ -187,29 +187,29 @@
   --z-index-overlay: 10;
   --z-index-modal: 100;
 
-  /* ── Ascent Mode ─────────────────────────────────────── */
+  /* ── Run Mode ────────────────────────────────────────── */
 
   /* Node type colors (derived from existing palette) */
-  --ascent-node-combat: var(--panel-blue-accent);
-  --ascent-node-elite: var(--game-accent-orange);
-  --ascent-node-boss: var(--game-health);
-  --ascent-node-rest: var(--action-success);
-  --ascent-node-shop: var(--game-gold);
-  --ascent-node-event: var(--theme-purple-light);
-  --ascent-node-unknown: var(--text-faint);
+  --run-node-combat: var(--panel-blue-accent);
+  --run-node-elite: var(--game-accent-orange);
+  --run-node-boss: var(--game-health);
+  --run-node-rest: var(--action-success);
+  --run-node-shop: var(--game-gold);
+  --run-node-event: var(--theme-purple-light);
+  --run-node-unknown: var(--text-faint);
 
   /* Relic rarity colors */
-  --ascent-relic-common: var(--text-muted);
-  --ascent-relic-uncommon: var(--panel-blue-accent);
-  --ascent-relic-rare: var(--game-gold);
+  --run-relic-common: var(--text-muted);
+  --run-relic-uncommon: var(--panel-blue-accent);
+  --run-relic-rare: var(--game-gold);
 
   /* Relic rarity backgrounds (low-alpha tints) */
-  --ascent-relic-common-bg: rgba(255, 255, 255, 0.06);
-  --ascent-relic-uncommon-bg: rgba(100, 200, 255, 0.08);
-  --ascent-relic-rare-bg: var(--game-gold-a08);
+  --run-relic-common-bg: rgba(255, 255, 255, 0.06);
+  --run-relic-uncommon-bg: rgba(100, 200, 255, 0.08);
+  --run-relic-rare-bg: var(--game-gold-a08);
 
   /* Relic rarity borders */
-  --ascent-relic-common-border: var(--border-color);
-  --ascent-relic-uncommon-border: var(--panel-blue-border);
-  --ascent-relic-rare-border: var(--game-gold-a40);
+  --run-relic-common-border: var(--border-color);
+  --run-relic-uncommon-border: var(--panel-blue-border);
+  --run-relic-rare-border: var(--game-gold-a40);
 }

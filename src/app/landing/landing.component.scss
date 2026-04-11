@@ -1,7 +1,16 @@
+// M5 S1: Home shell — CSS Grid with named template areas. Reserved slots
+// for [glow] background, [content] center column, [version] footer.
+// Mobile breakpoints scale grid track sizes (--landing-content-width)
+// rather than reshuffling areas.
 .landing-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-rows: 1fr [content] auto 1fr [version] auto;
+  grid-template-columns: 1fr [content] minmax(280px, 360px) 1fr;
+  grid-template-areas:
+    ".       .       ."
+    ".       content ."
+    ".       .       ."
+    "version version version";
   min-height: 100vh;
   background-color: var(--bg-color);
   color: var(--text-color);
@@ -9,7 +18,7 @@
   overflow: hidden;
   padding: var(--spacing-md);
 
-  // Subtle radial gradient behind content
+  // Subtle radial gradient behind content (decorative — does not occupy a grid slot)
   &::before {
     content: '';
     position: absolute;
@@ -25,9 +34,10 @@
 }
 
 .landing-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  grid-area: content;
+  display: grid;
+  grid-template-rows: [title] auto [subtitle] auto [actions] auto;
+  justify-items: center;
   gap: var(--spacing-lg);
   position: relative;
   z-index: 1;
@@ -56,8 +66,10 @@
 }
 
 .landing-actions {
-  display: flex;
-  flex-direction: column;
+  // M5 S1: grid with reserved slots for each action button (content-driven
+  // ordering preserved by *ngIf order, but the grid tracks are uniform).
+  display: grid;
+  grid-auto-rows: minmax(2.75rem, auto); // WCAG min touch target
   gap: var(--spacing-md);
   width: 100%;
   max-width: 280px;
@@ -118,12 +130,21 @@
 }
 
 .landing-version {
-  position: absolute;
-  bottom: var(--spacing-md);
-  right: var(--spacing-md);
+  // M5 S1: assigned to the [version] grid row instead of position:absolute.
+  grid-area: version;
+  justify-self: end;
+  align-self: end;
+  padding-right: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
   font-size: 0.7rem;
   color: var(--theme-purple-mid);
   opacity: 0.5;
+}
+
+// Phase H4 demoted profile button — slightly muted to communicate "secondary action"
+.landing-btn--muted {
+  opacity: 0.65;
+  &:hover { opacity: 1; }
 }
 
 // Responsive

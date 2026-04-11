@@ -1,4 +1,4 @@
-<div class="board-container" [class.dragging]="isDragging" [class.board-container--ascent]="isAscentRun" (touchstart)="previewTowerType && clearTowerPreview()">
+<div class="board-container" [class.dragging]="isDragging" (touchstart)="previewTowerType && clearTowerPreview()">
   <div class="canvas-container" #canvasContainer></div>
 
   <!-- Top-right controls -->
@@ -125,6 +125,43 @@
     </button>
   </div>
 
+  <!-- Phase 4: End Turn button — only during combat (turn-based). -->
+  <button
+    class="end-turn-btn"
+    *ngIf="gameState.phase === GamePhase.COMBAT"
+    (click)="endTurn()"
+    [disabled]="!!pendingTowerCardId"
+    [attr.aria-label]="pendingTowerCardId ? 'Place or cancel pending tower card first' : 'End turn and resolve combat'">
+    <span class="end-turn-label">End Turn</span>
+    <span class="end-turn-hint">Turn {{ currentTurnNumber }} · Space</span>
+  </button>
+
+  <!-- Phase 4: Spawn preview — shows what's coming in the next few turns. -->
+  <aside
+    class="spawn-preview"
+    *ngIf="gameState.phase === GamePhase.COMBAT"
+    aria-label="Upcoming enemy spawns">
+    <h4 class="spawn-preview__title">Incoming</h4>
+    <ol class="spawn-preview__list">
+      <li
+        *ngFor="let entry of upcomingSpawns"
+        class="spawn-preview__turn"
+        [class.spawn-preview__turn--empty]="entry.spawns.length === 0">
+        <span class="spawn-preview__label">T+{{ entry.turnOffset }}</span>
+        <span class="spawn-preview__spawns" *ngIf="entry.spawns.length > 0">
+          <span
+            *ngFor="let s of entry.spawns"
+            class="spawn-preview__enemy"
+            [attr.data-type]="s.type.toLowerCase()">
+            <span class="enemy-dot spawn-preview__dot" [attr.data-type]="s.type.toLowerCase()"></span>
+            <span class="spawn-preview__count">{{ s.count }}×</span>
+          </span>
+        </span>
+        <span class="spawn-preview__empty" *ngIf="entry.spawns.length === 0">—</span>
+      </li>
+    </ol>
+  </aside>
+
   <!-- Pause/Speed controls -->
   <div class="game-controls" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT && gameState.wave > 0">
     <button
@@ -165,37 +202,17 @@
     </button>
   </div>
 
-  <!-- Victory/Defeat overlay -->
-  <app-game-results-overlay
-    *ngIf="gameState.phase === GamePhase.VICTORY || gameState.phase === GamePhase.DEFEAT"
-    [isVictory]="gameState.phase === GamePhase.VICTORY"
-    [scoreBreakdown]="scoreBreakdown"
-    [starArray]="starArray"
-    [gameScore]="gameState.score"
-    [maxWaves]="gameState.maxWaves"
-    [isCampaignGame]="isCampaignGame"
-    [currentCampaignLevel]="currentCampaignLevel"
-    [campaignChallenges]="campaignChallenges"
-    [completedChallenges]="completedChallenges"
-    [achievementDetails]="achievementDetails"
-    [newlyUnlockedCount]="newlyUnlockedAchievements.length"
-    [isNextLevelUnlocked]="isNextLevelUnlocked"
-    [nextLevelName]="nextCampaignLevel?.name || ''"
-    [isChallengeCompletedFn]="isChallengeCompleted.bind(this)"
-    [isEditorOrigin]="isEditorOrigin"
-    (restart)="restartGame()"
-    (backToCampaign)="backToCampaign()"
-    (editMap)="goToEditor()"
-    (backToEditor)="goToEditor()"
-    (playNextLevel)="playNextLevel()">
-  </app-game-results-overlay>
+  <!-- Phase 8: Victory/Defeat overlay removed — the game-board navigates away
+       to /run on terminal phases (see component state subscription). The run
+       module's run-summary and reward screens handle post-combat flow. -->
+
 
   <!-- Game Initialization Failure Overlay -->
   <div class="context-lost-overlay" *ngIf="initializationFailed" role="alert" aria-live="assertive">
     <div class="context-lost-content">
       <h2 class="context-lost-title">Game Failed to Load</h2>
       <p class="context-lost-message">Game failed to initialize. Your browser may not support WebGL.</p>
-      <button class="context-lost-back-btn" (click)="goBackToMaps()">Go Back</button>
+      <button class="context-lost-back-btn" (click)="goBackToRunHub()">Go Back</button>
     </div>
   </div>
 
@@ -260,7 +277,7 @@
       <div class="pause-menu__actions" *ngIf="!showQuitConfirm">
         <button class="pause-action pause-action--primary" (click)="togglePause()">Resume</button>
         <button class="pause-action pause-action--quit" (click)="requestQuit()">
-          {{ isCampaignGame ? 'Quit to Campaign' : 'Quit to Menu' }}
+          Abandon Run
         </button>
       </div>
 
@@ -300,42 +317,14 @@
     (cancelSpecialization)="showSpecializationChoice = false">
   </app-tower-info-panel>
 
-  <!-- Card hand — Ascent Mode only (replaces tower selection bar) -->
+  <!-- Card hand — the only way to place towers, cast spells, or apply modifiers -->
   <app-card-hand
-    *ngIf="isAscentRun && deckState && energyState"
+    *ngIf="deckState && energyState"
     [deckState]="deckState"
     [energy]="energyState"
     [pendingCardId]="pendingTowerCardId"
     (cardPlayed)="onCardPlayed($event)">
   </app-card-hand>
-
-  <!-- Tower selection — hidden during Ascent Mode (cards replace free tower placement) -->
-  <div class="tower-selection" *ngIf="!isAscentRun && gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT">
-    <button
-      *ngFor="let tower of towerTypes"
-      class="tower-btn"
-      [class.selected]="selectedTowerType === tower.type"
-      [class.previewing]="previewTowerType === tower.type"
-      [class.unaffordable]="!gameState || gameState.gold < getEffectiveTowerCost(tower.type)"
-      (click)="handleTowerButtonTap($event, tower.type)"
-      (mousedown)="onTowerDragStart($event, tower.type)"
-      (touchstart)="onTowerDragStart($event, tower.type)"
-      [attr.aria-label]="'Select ' + (tower.type | titlecase) + ' Tower'"
-      [attr.aria-pressed]="selectedTowerType === tower.type"
-      [attr.aria-expanded]="previewTowerType === tower.type || null">
-      <div class="tower-tooltip" role="tooltip">
-        <div class="tooltip-stat"><span class="tooltip-label">Damage</span><span class="tooltip-val">{{ towerConfigs[tower.type].damage }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">Range</span><span class="tooltip-val">{{ towerConfigs[tower.type].range }}</span></div>
-        <div class="tooltip-stat"><span class="tooltip-label">Rate</span><span class="tooltip-val">{{ towerConfigs[tower.type].fireRate }}s</span></div>
-        <div class="tooltip-desc">{{ towerDescriptions[tower.type] }}</div>
-        <div class="tooltip-arrow"></div>
-      </div>
-      <div class="tower-icon" [ngClass]="tower.type"></div>
-      <span class="tower-name">{{ tower.type | titlecase }}</span>
-      <span class="tower-cost">{{ getEffectiveTowerCost(tower.type) }}g</span>
-      <span class="tower-hotkey">{{ tower.hotkey }}</span>
-    </button>
-  </div>
 
   <!-- Interaction mode indicator -->
   <div class="mode-indicator"

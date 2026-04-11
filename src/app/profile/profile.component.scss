@@ -116,13 +116,13 @@
 }
 
 // Achievements Section
-// ── Ascent stats section ──────────────────────────────────────────
+// ── Run stats section ──────────────────────────────────────────
 
-.ascent-stats-section {
+.run-stats-section {
   width: 100%;
 }
 
-.ascent-stats-title {
+.run-stats-title {
   font-family: "Orbitron", sans-serif;
   font-size: var(--font-size-base);
   font-weight: 600;
@@ -132,7 +132,7 @@
   text-align: center;
 }
 
-.ascent-stats-hint {
+.run-stats-hint {
   font-size: var(--font-size-sm, 0.875rem);
   color: rgba(255, 255, 255, 0.45);
   text-align: center;

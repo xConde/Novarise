@@ -15,8 +15,8 @@ import {
   CardType,
   DeckState,
   EnergyState,
-} from '../../../../ascent/models/card.model';
-import { getCardDefinition } from '../../../../ascent/constants/card-definitions';
+} from '../../../../run/models/card.model';
+import { getCardDefinition } from '../../../../run/constants/card-definitions';
 import { TOWER_CONFIGS } from '../../models/tower.model';
 
 /** Pre-computed view model for a single card in hand. */
