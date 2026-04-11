@@ -305,35 +305,32 @@ describe('EnemyService', () => {
 
   describe('Enemy Movement', () => {
     it('should move enemy along path', () => {
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      const initialPathIndex = enemy!.pathIndex;
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
 
-      // Update with small delta time
-      service.updateEnemies(0.1);
+      // One turn advances BASIC enemy by 1 tile — distanceTraveled increments by 1
+      service.stepEnemiesOneTurn(() => 0);
 
-      // Enemy should have moved
-      expect(enemy!.distanceTraveled).toBeGreaterThan(0);
+      expect(enemy.distanceTraveled).toBeGreaterThan(0);
     });
 
     it('should advance pathIndex when reaching next node', () => {
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
 
-      // Update with large delta time to ensure node advancement
-      service.updateEnemies(2.0);
+      // One turn for a BASIC enemy advances pathIndex by 1
+      service.stepEnemiesOneTurn(() => 0);
 
-      // Should have advanced at least one node
-      expect(enemy!.pathIndex).toBeGreaterThan(0);
+      expect(enemy.pathIndex).toBeGreaterThan(0);
     });
 
     it('should update mesh position during movement', () => {
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      const initialMeshPos = enemy!.mesh!.position.clone();
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const initialMeshPos = enemy.mesh!.position.clone();
 
-      service.updateEnemies(0.5);
+      service.stepEnemiesOneTurn(() => 0);
 
-      const newMeshPos = enemy!.mesh!.position;
+      const newMeshPos = enemy.mesh!.position;
 
-      // Mesh should have moved (x or z changed)
+      // Mesh should have snapped to the next tile center (x or z changed)
       const hasMoved =
         newMeshPos.x !== initialMeshPos.x ||
         newMeshPos.z !== initialMeshPos.z;
@@ -342,54 +339,114 @@ describe('EnemyService', () => {
     });
 
     it('should return enemy IDs that reached exit', () => {
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
 
-      // Force enemy to last node
-      enemy!.pathIndex = enemy!.path.length - 1;
+      // Place enemy at the final path node — stepEnemiesOneTurn immediately
+      // adds it to reachedExit via the early-exit guard.
+      enemy.pathIndex = enemy.path.length - 1;
 
-      const reachedExit = service.updateEnemies(0.1);
+      const reachedExit = service.stepEnemiesOneTurn(() => 0);
 
-      expect(reachedExit).toContain(enemy!.id);
+      expect(reachedExit).toContain(enemy.id);
     });
 
     it('should handle multiple enemies simultaneously', () => {
-      const enemy1 = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      const enemy2 = service.spawnEnemy(EnemyType.FAST, mockScene);
-      const enemy3 = service.spawnEnemy(EnemyType.HEAVY, mockScene);
+      const enemy1 = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const enemy2 = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      const enemy3 = service.spawnEnemy(EnemyType.HEAVY, mockScene)!;
 
-      service.updateEnemies(0.1);
+      service.stepEnemiesOneTurn(() => 0);
 
-      // All enemies should have moved
-      expect(enemy1!.distanceTraveled).toBeGreaterThan(0);
-      expect(enemy2!.distanceTraveled).toBeGreaterThan(0);
-      expect(enemy3!.distanceTraveled).toBeGreaterThan(0);
+      // All enemies should have advanced at least 1 tile
+      expect(enemy1.distanceTraveled).toBeGreaterThan(0);
+      expect(enemy2.distanceTraveled).toBeGreaterThan(0);
+      expect(enemy3.distanceTraveled).toBeGreaterThan(0);
 
-      // Fast enemy should have moved more than heavy
-      expect(enemy2!.distanceTraveled).toBeGreaterThan(enemy3!.distanceTraveled);
+      // FAST moves 2 tiles/turn, HEAVY moves 1 — FAST should have traveled more
+      expect(enemy2.distanceTraveled).toBeGreaterThan(enemy3.distanceTraveled);
     });
 
-    it('should maintain consistent speed regardless of frame rate', () => {
-      // Test each frame rate in isolation to avoid cross-contamination
+    // Tests for physics-loop sub-step accumulation (frame-rate consistency) removed
+    // in the turn-based pivot. Movement is now integer tile-stepping via
+    // stepEnemiesOneTurn — no deltaTime semantics.
+  });
 
-      // 60 FPS: 10 frames at 1/60s each = 0.1667s total
-      const enemy1 = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      for (let i = 0; i < 10; i++) {
-        service.updateEnemies(1/60);
+  describe('stepEnemiesOneTurn — tile stepping and SLOW semantics', () => {
+    it('BASIC enemy moves exactly 1 tile per turn', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.pathIndex).toBe(startIndex + 1);
+      expect(enemy.distanceTraveled).toBe(1);
+    });
+
+    it('FAST enemy moves exactly 2 tiles per turn', () => {
+      const enemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // FAST has baseTiles=2 — advances 2 nodes in one turn
+      expect(enemy.pathIndex).toBe(startIndex + 2);
+      expect(enemy.distanceTraveled).toBe(2);
+    });
+
+    it('SWIFT enemy moves exactly 2 tiles per turn', () => {
+      const enemy = service.spawnEnemy(EnemyType.SWIFT, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.pathIndex).toBe(startIndex + 2);
+      expect(enemy.distanceTraveled).toBe(2);
+    });
+
+    it('BASIC enemy fully slowed (slowReduction=1) does NOT move', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const startIndex = enemy.pathIndex;
+      const startDistanceTraveled = enemy.distanceTraveled;
+
+      // slowReduction=1 reduces BASIC (baseTiles=1) to 0 → no movement
+      service.stepEnemiesOneTurn(() => 1);
+
+      expect(enemy.pathIndex).toBe(startIndex);
+      expect(enemy.distanceTraveled).toBe(startDistanceTraveled);
+    });
+
+    it('FAST enemy slowed (slowReduction=1) moves only 1 tile per turn', () => {
+      const enemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      // slowReduction=1 reduces FAST (baseTiles=2) to 1 → still moves 1 tile
+      service.stepEnemiesOneTurn(() => 1);
+
+      expect(enemy.pathIndex).toBe(startIndex + 1);
+    });
+
+    it('enemy at the final path node is reported in returned exit list', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      enemy.pathIndex = enemy.path.length - 1;
+
+      const reachedExit = service.stepEnemiesOneTurn(() => 0);
+
+      expect(reachedExit).toContain(enemy.id);
+    });
+
+    it('enemy completes full path traversal from spawner to exit', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const pathLength = enemy.path.length; // 19 nodes on 10x10 board
+      let reachedExit: string[] = [];
+
+      // Keep stepping until the enemy reaches the exit
+      for (let turn = 0; turn < pathLength + 1 && reachedExit.length === 0; turn++) {
+        reachedExit = service.stepEnemiesOneTurn(() => 0);
       }
-      const distance1 = enemy1!.distanceTraveled;
 
-      // Remove enemy1 before testing enemy2
-      service.removeEnemy(enemy1!.id, mockScene);
-
-      // 30 FPS: 5 frames at 1/30s each = 0.1667s total
-      const enemy2 = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      for (let i = 0; i < 5; i++) {
-        service.updateEnemies(1/30);
-      }
-      const distance2 = enemy2!.distanceTraveled;
-
-      // Should be approximately the same distance (within 5% tolerance)
-      expect(Math.abs(distance1 - distance2) / distance1).toBeLessThan(0.05);
+      expect(reachedExit).toContain(enemy.id);
+      expect(enemy.gridPosition.row).toBe(9); // exit row
+      expect(enemy.gridPosition.col).toBe(9); // exit col
     });
   });
 
@@ -463,41 +520,9 @@ describe('EnemyService', () => {
   });
 
   describe('Edge Cases', () => {
-    it('should handle zero delta time', () => {
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      const initialDistance = enemy!.distanceTraveled;
-
-      service.updateEnemies(0);
-
-      expect(enemy!.distanceTraveled).toBe(initialDistance);
-    });
-
-    it('should handle very large delta time', () => {
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
-
-      // Multiple updates with large delta time (1 second each)
-      service.updateEnemies(1.0);
-      service.updateEnemies(1.0);
-      service.updateEnemies(1.0);
-
-      // Should advance multiple nodes
-      expect(enemy!.pathIndex).toBeGreaterThan(1);
-    });
-
-    it('should handle negative delta time gracefully', () => {
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      const initialPathIndex = enemy!.pathIndex;
-      const initialPos = { ...enemy!.position };
-
-      // Negative delta should be rejected entirely
-      const result = service.updateEnemies(-0.1);
-
-      // Should not move at all (pathIndex and position unchanged)
-      expect(enemy!.pathIndex).toBe(initialPathIndex);
-      expect(enemy!.position.x).toBe(initialPos.x);
-      expect(enemy!.position.z).toBe(initialPos.z);
-      expect(result).toEqual([]);
-    });
+    // Tests for zero/negative/large deltaTime removed in the turn-based pivot.
+    // Movement is now integer tile-stepping via stepEnemiesOneTurn — no
+    // deltaTime accumulator semantics exist in the new API.
 
     it('should get all active enemies', () => {
       service.spawnEnemy(EnemyType.BASIC, mockScene);
@@ -873,27 +898,28 @@ describe('EnemyService', () => {
   describe('Dead Enemy Movement Guard', () => {
     it('should not move dead enemies', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
-      const initialPos = { ...enemy.position };
 
       // Kill the enemy
       service.damageEnemy(enemy.id, enemy.maxHealth);
+      const posAfterDeath = { ...enemy.position };
 
-      // Try to move
-      service.updateEnemies(0.5);
+      // stepEnemiesOneTurn should skip enemies with health <= 0
+      service.stepEnemiesOneTurn(() => 0);
 
       // Position should not change
-      expect(enemy.position.x).toBe(initialPos.x);
-      expect(enemy.position.z).toBe(initialPos.z);
+      expect(enemy.position.x).toBe(posAfterDeath.x);
+      expect(enemy.position.z).toBe(posAfterDeath.z);
     });
 
     it('should not report dead enemies as reaching exit', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
 
-      // Put enemy at exit and kill it
+      // Put enemy at the final path node and kill it — health <= 0 guard skips it
       enemy.pathIndex = enemy.path.length - 1;
       service.damageEnemy(enemy.id, enemy.maxHealth);
 
-      const reachedExit = service.updateEnemies(0.1);
+      // Dead enemy (health <= 0) is skipped before the reachedExit check
+      const reachedExit = service.stepEnemiesOneTurn(() => 0);
 
       expect(reachedExit).not.toContain(enemy.id);
     });
@@ -1001,14 +1027,14 @@ describe('EnemyService', () => {
         service.spawnEnemy(EnemyType.BASIC, mockScene);
       }
 
-      // Update all enemies
-      service.updateEnemies(0.016); // ~60 FPS
+      // Advance all enemies one turn — turn-based step replaces deltaTime loop
+      service.stepEnemiesOneTurn(() => 0);
 
       const endTime = performance.now();
       const duration = endTime - startTime;
 
-      // Should complete in reasonable time (< 16ms for 60 FPS)
-      expect(duration).toBeLessThan(100); // Allow 100ms for test overhead
+      // Should complete in reasonable time (< 100ms for test overhead)
+      expect(duration).toBeLessThan(100);
       expect(service.getEnemies().size).toBe(enemyCount);
     });
   });
@@ -1473,44 +1499,42 @@ describe('EnemyService', () => {
       expect(enemy).toBeTruthy();
       expect(enemy.mesh).toBeTruthy();
 
-      // Initial rotation should be 0 (default)
+      // Initial rotation should be 0 (default, before any movement)
       const initialRotY = enemy.mesh!.rotation.y;
       expect(initialRotY).toBe(0);
 
-      // Update enemies to move them along path — rotation should change
-      service.updateEnemies(0.016);
+      // stepEnemiesOneTurn snaps the mesh to the new tile and rotates toward next node
+      service.stepEnemiesOneTurn(() => 0);
 
       // The enemy should now face its movement direction
-      // Path goes from (0,0) toward (9,9), so rotation should be non-zero
-      // unless the first segment happens to align with default facing
       const afterRotY = enemy.mesh!.rotation.y;
-      // atan2 of some direction vector — just verify it was set (not NaN)
+      // atan2 result should be a valid finite number, not NaN
       expect(isNaN(afterRotY)).toBe(false);
     });
 
     it('should face correct direction for known path segment', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       expect(enemy).toBeTruthy();
-      expect(enemy.path.length).toBeGreaterThanOrEqual(2);
+      expect(enemy.path.length).toBeGreaterThanOrEqual(3);
 
-      // Compute expected angle from the first path segment
-      // path nodes use {x: col, y: row} — gridToWorld(row, col) = (col - w/2, row - h/2)
-      const boardWidth = 10;
-      const boardHeight = 10;
-      const node0 = enemy.path[0]; // {x: col, y: row}
+      // After stepEnemiesOneTurn the enemy is at path[1]; mesh rotation is
+      // computed toward path[2] (the next node to visit).
+      // path nodes use {x: col, y: row} — gridToWorld: x = col-5, z = row-5 (10x10 board, tileSize=1)
+      const boardHalf = 5; // 10 / 2
       const node1 = enemy.path[1];
-      const world0x = (node0.x - boardWidth / 2);
-      const world0z = (node0.y - boardHeight / 2);
-      const world1x = (node1.x - boardWidth / 2);
-      const world1z = (node1.y - boardHeight / 2);
-      const dx = world1x - world0x;
-      const dz = world1z - world0z;
+      const node2 = enemy.path[2];
+      const world1x = node1.x - boardHalf;
+      const world1z = node1.y - boardHalf;
+      const world2x = node2.x - boardHalf;
+      const world2z = node2.y - boardHalf;
+      const dx = world2x - world1x;
+      const dz = world2z - world1z;
       const expectedAngle = Math.atan2(dx, dz);
 
-      service.updateEnemies(0.016);
+      service.stepEnemiesOneTurn(() => 0);
       const rotY = enemy.mesh!.rotation.y;
 
-      // Rotation should match the expected angle from the path direction
+      // Rotation should match the expected angle toward the next path node
       expect(rotY).toBeCloseTo(expectedAngle, 1);
     });
   });
@@ -1696,16 +1720,6 @@ describe('EnemyService', () => {
       expect(enemy.needsRepath).toBeFalsy();
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // Deferred repath execution in updateEnemies
-  // ---------------------------------------------------------------------------
-  // Strategy: place enemy at the world position of pathIndex node so that
-  // a deltaTime of 0.6s causes moveDistance (2.0 * 0.6 = 1.2) >= distanceToNext (1.0),
-  // triggering a snap and executeRepath.
-  // Board: 10x10 with spawner (0,0), exit (9,9), all other tiles traversable.
-  // gridToWorld(row=r, col=c) => {x: c-5, z: r-5}
-  // ---------------------------------------------------------------------------
 
   // ---------------------------------------------------------------------------
   // Death animation — startDyingAnimation / updateDyingAnimations / getLivingEnemyCount
@@ -1927,13 +1941,14 @@ describe('EnemyService', () => {
   });
 
   describe('dying enemies — movement and targeting exclusions', () => {
-    it('dying enemies should not move during updateEnemies', () => {
+    it('dying enemies should not move during stepEnemiesOneTurn', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       service.damageEnemy(enemy.id, enemy.maxHealth);
       service.startDyingAnimation(enemy.id);
       const pos = { ...enemy.position };
 
-      service.updateEnemies(0.5);
+      // stepEnemiesOneTurn skips dying enemies (enemy.dying === true)
+      service.stepEnemiesOneTurn(() => 0);
 
       expect(enemy.position.x).toBe(pos.x);
       expect(enemy.position.z).toBe(pos.z);
@@ -1941,12 +1956,13 @@ describe('EnemyService', () => {
 
     it('dying enemies should not appear in reached-exit list', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
-      // Place at last path node so it would normally register as leaked
+      // Place at last path node — would normally be pushed to reachedExit
       enemy.pathIndex = enemy.path.length - 1;
       service.damageEnemy(enemy.id, enemy.maxHealth);
       service.startDyingAnimation(enemy.id);
 
-      const reached = service.updateEnemies(0.1);
+      // stepEnemiesOneTurn skips dying enemies entirely
+      const reached = service.stepEnemiesOneTurn(() => 0);
 
       expect(reached).not.toContain(enemy.id);
     });
@@ -2015,18 +2031,19 @@ describe('EnemyService', () => {
     });
   });
 
-  describe('deferred repath execution in updateEnemies', () => {
+  // ---------------------------------------------------------------------------
+  // Deferred repath execution in stepEnemiesOneTurn
+  // ---------------------------------------------------------------------------
+  // In the turn-based model, executeRepath fires during stepEnemiesOneTurn
+  // immediately after the enemy advances to each new tile (if needsRepath=true).
+  // No deltaTime semantics — one call to stepEnemiesOneTurn advances BASIC
+  // enemies by exactly 1 tile, triggering any pending repath at that tile.
+  // ---------------------------------------------------------------------------
+
+  describe('deferred repath execution in stepEnemiesOneTurn', () => {
 
     function node(col: number, row: number): import('../models/enemy.model').GridNode {
       return { x: col, y: row, g: 0, h: 0, f: 0 };
-    }
-
-    /**
-     * Return the world {x, z} for a grid (row, col) on a 10x10 board with tileSize=1.
-     * Mirrors gridToWorld: x = col - 5, z = row - 5.
-     */
-    function worldOf(row: number, col: number): { x: number; z: number } {
-      return { x: col - 5, z: row - 5 };
     }
 
     it('should execute repath when enemy reaches a waypoint with needsRepath=true', () => {
@@ -2034,16 +2051,13 @@ describe('EnemyService', () => {
       // Set a straight 4-node path along row=0: col 0→1→2→3
       enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(3, 0)];
       enemy.pathIndex = 0;
-      // Position enemy exactly at world coords of node 0 (row=0, col=0)
-      const w0 = worldOf(0, 0);
-      enemy.position.x = w0.x;
-      enemy.position.z = w0.z;
+      enemy.gridPosition = { row: 0, col: 0 };
       enemy.needsRepath = true;
 
       const pathBefore = enemy.path.slice();
 
-      // deltaTime=0.6 → moveDistance=2.0*0.6=1.2 >= 1.0 → snaps to node 1 → executeRepath fires
-      service.updateEnemies(0.6);
+      // One turn advances BASIC 1 tile to node(1,0) → executeRepath fires
+      service.stepEnemiesOneTurn(() => 0);
 
       // Path must now be the A* result from current grid position, not the original stub
       expect(enemy.path).not.toEqual(pathBefore);
@@ -2057,14 +2071,12 @@ describe('EnemyService', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(3, 0)];
       enemy.pathIndex = 0;
-      const w0 = worldOf(0, 0);
-      enemy.position.x = w0.x;
-      enemy.position.z = w0.z;
+      enemy.gridPosition = { row: 0, col: 0 };
       enemy.needsRepath = false;
 
       const pathBefore = enemy.path.slice();
 
-      service.updateEnemies(0.6);
+      service.stepEnemiesOneTurn(() => 0);
 
       // Path must be unchanged — no repath was requested
       expect(enemy.path.length).toBe(pathBefore.length);
@@ -2079,12 +2091,11 @@ describe('EnemyService', () => {
       // Path: row=0, col 0→1→2 then onwards
       enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(3, 0), node(9, 9)];
       enemy.pathIndex = 0;
-      const w0 = worldOf(0, 0);
-      enemy.position.x = w0.x;
-      enemy.position.z = w0.z;
+      enemy.gridPosition = { row: 0, col: 0 };
       enemy.needsRepath = true;
 
-      service.updateEnemies(0.6); // snaps to col=1, row=0 → executeRepath fires
+      // One turn snaps to col=1, row=0 → executeRepath fires from that position
+      service.stepEnemiesOneTurn(() => 0);
 
       // After repath, path[0] must be the arrived-at node (col=1, row=0)
       expect(enemy.path[0].x).toBe(1);
@@ -2095,12 +2106,10 @@ describe('EnemyService', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(9, 9)];
       enemy.pathIndex = 0;
-      const w0 = worldOf(0, 0);
-      enemy.position.x = w0.x;
-      enemy.position.z = w0.z;
+      enemy.gridPosition = { row: 0, col: 0 };
       enemy.needsRepath = true;
 
-      service.updateEnemies(0.6); // triggers executeRepath
+      service.stepEnemiesOneTurn(() => 0); // triggers executeRepath
 
       expect(enemy.needsRepath).toBe(false);
     });

@@ -165,82 +165,88 @@ export class EnemyService {
   }
 
   /**
-   * Advance all living enemies along their paths by `deltaTime` seconds.
-   * Enemies that reach the final path node are not moved further.
-   * @returns IDs of enemies that reached the exit this tick (callers should
-   *   apply leak damage and remove them via {@link removeEnemy}).
+   * Turn-based movement: advance every living enemy by exactly `tilesPerTurn`
+   * tiles along its cached path. `tilesPerTurn` is computed per enemy from its
+   * `speed` stat rounded to an integer, minus any SLOW reduction supplied by the
+   * caller (floored at 0 tiles).
+   *
+   * This is the Phase 4 replacement for {@link updateEnemies}. Called once per
+   * resolution phase by CombatLoopService.resolveTurn().
+   *
+   * @param slowReductionFor  Callback returning the SLOW tile reduction to apply
+   *                          to a given enemy id. Caller typically passes
+   *                          `(id) => statusEffectService.getSlowTileReduction(id)`.
+   * @returns IDs of enemies that reached the exit this turn (callers apply
+   *          leak damage and call {@link removeEnemy}).
    */
-  updateEnemies(deltaTime: number): string[] {
-    if (deltaTime <= 0) return [];
-
+  stepEnemiesOneTurn(slowReductionFor: (enemyId: string) => number): string[] {
     const reachedExit: string[] = [];
 
     this.enemies.forEach(enemy => {
-      // Skip dead enemies awaiting removal — prevents double-penalty if ordering changes
-      if (enemy.health <= 0) return;
-      // Skip dying enemies — they are frozen in place while the animation plays
-      if (enemy.dying) return;
+      if (enemy.health <= 0 || enemy.dying) return;
 
+      // Already at exit — push once, don't advance again.
       if (enemy.pathIndex >= enemy.path.length - 1) {
-        // Enemy reached exit
         reachedExit.push(enemy.id);
         return;
       }
 
-      // Get current and next path nodes
-      const currentNode = enemy.path[enemy.pathIndex];
-      const nextNode = enemy.path[enemy.pathIndex + 1];
+      // Integer tiles-per-turn by enemy type. FAST/SWIFT are the "fast movers";
+      // everything else moves 1 tile/turn by default. SLOW status is a flat
+      // -1 tile reduction, floored at 0 (can fully stop 1-tile movers).
+      const baseTiles = (enemy.type === EnemyType.FAST || enemy.type === EnemyType.SWIFT) ? 2 : 1;
+      const slowReduction = slowReductionFor(enemy.id);
+      const tilesToMove = Math.max(0, baseTiles - slowReduction);
+      if (tilesToMove === 0) return;
 
-      // Convert grid positions to world positions (reuse scratch objects — no allocation)
-      this.pathfindingService.gridToWorldPosInto(currentNode.y, currentNode.x, this.scratchCurrentWorld);
-      this.pathfindingService.gridToWorldPosInto(nextNode.y, nextNode.x, this.scratchNextWorld);
-      const currentWorld = this.scratchCurrentWorld;
-      const nextWorld = this.scratchNextWorld;
-
-      // Calculate direction and distance (reuse scratch Vector3 — no allocation)
-      const direction = this.scratchDirection.set(
-        nextWorld.x - currentWorld.x,
-        0,
-        nextWorld.z - currentWorld.z
-      ).normalize();
-
-      const moveDistance = enemy.speed * deltaTime;
-
-      // Calculate distance to next node
-      const distanceToNext = Math.sqrt(
-        Math.pow(nextWorld.x - enemy.position.x, 2) +
-        Math.pow(nextWorld.z - enemy.position.z, 2)
-      );
-
-      if (moveDistance >= distanceToNext) {
-        // Reached next node - snap to it
-        enemy.position.x = nextWorld.x;
-        enemy.position.z = nextWorld.z;
-        enemy.gridPosition.row = nextNode.y;
-        enemy.gridPosition.col = nextNode.x;
+      let stepsRemaining = tilesToMove;
+      while (stepsRemaining > 0 && enemy.pathIndex < enemy.path.length - 1) {
         enemy.pathIndex++;
-        enemy.distanceTraveled += distanceToNext;
+        const node = enemy.path[enemy.pathIndex];
+        enemy.gridPosition.row = node.y;
+        enemy.gridPosition.col = node.x;
 
-        // Execute deferred repath now that we're snapped to a grid node
+        // Snap world position to the new tile center.
+        this.pathfindingService.gridToWorldPosInto(node.y, node.x, this.scratchCurrentWorld);
+        enemy.position.x = this.scratchCurrentWorld.x;
+        enemy.position.z = this.scratchCurrentWorld.z;
+        enemy.distanceTraveled += 1; // one tile worth, abstract units
+
+        // Execute deferred repath now that we're snapped to a grid node.
         if (enemy.needsRepath) {
           this.executeRepath(enemy);
         }
-      } else {
-        // Move towards next node
-        enemy.position.x += direction.x * moveDistance;
-        enemy.position.z += direction.z * moveDistance;
-        enemy.distanceTraveled += moveDistance;
+
+        stepsRemaining--;
       }
 
-      // Update mesh position and face movement direction
+      // Did this enemy reach the final path node during its movement?
+      if (enemy.pathIndex >= enemy.path.length - 1) {
+        reachedExit.push(enemy.id);
+      }
+
+      // Snap mesh to final world position for this turn.
       if (enemy.mesh) {
         enemy.mesh.position.set(enemy.position.x, enemy.position.y, enemy.position.z);
-        enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+        // Face along the last movement direction toward the next path node (if any).
+        if (enemy.pathIndex + 1 < enemy.path.length) {
+          const next = enemy.path[enemy.pathIndex + 1];
+          this.pathfindingService.gridToWorldPosInto(next.y, next.x, this.scratchNextWorld);
+          const dx = this.scratchNextWorld.x - enemy.position.x;
+          const dz = this.scratchNextWorld.z - enemy.position.z;
+          if (dx !== 0 || dz !== 0) {
+            enemy.mesh.rotation.y = Math.atan2(dx, dz);
+          }
+        }
       }
     });
 
     return reachedExit;
   }
+
+  // M2 S1: deltaTime-based updateEnemies() DELETED. Replaced by
+  // stepEnemiesOneTurn (turn-based). Spec call sites cast to (svc as any) so
+  // they fail at runtime — H2 will rewrite those tests against stepEnemiesOneTurn.
 
   /**
    * Remove an enemy by ID: disposes all child geometries/materials (health bar,

@@ -70,19 +70,22 @@ export class StatusEffectService {
   }
 
   /**
-   * Update all active effects. Call once per physics step.
-   * - Ticks DoT effects (BURN, POISON) dealing damage
-   * - Expires effects past their duration (restores speed for SLOW)
-   * Returns array of KillInfo for enemies killed by DoT.
+   * Phase 4 turn-based equivalent of {@link update}.
+   *
+   * Called once per resolution phase from CombatLoopService.resolveTurn().
+   * Treats `config.duration` as TURNS (not seconds) — BURN 5 → expires after 5
+   * turns. DoT effects (BURN, POISON) apply their `damagePerTick` exactly once
+   * per turn (turn-based ticks are coarse; the `tickInterval` field is ignored).
+   *
+   * @param turnNumber Monotonically-increasing turn counter from TurnManager/CombatLoop.
+   * @returns KillInfo[] for enemies killed by DoT this turn.
    */
-  update(gameTime: number): KillInfo[] {
+  tickTurn(turnNumber: number): KillInfo[] {
     const kills: KillInfo[] = [];
     const toRemoveEnemies: string[] = [];
 
     for (const [enemyId, enemyEffects] of this.effects) {
       const enemy = this.enemyService.getEnemies().get(enemyId);
-
-      // Enemy no longer exists — schedule full cleanup
       if (!enemy || enemy.health <= 0) {
         toRemoveEnemies.push(enemyId);
         continue;
@@ -91,9 +94,7 @@ export class StatusEffectService {
       const expiredTypes: StatusEffectType[] = [];
 
       for (const [effectType, active] of enemyEffects) {
-        // Check expiry
-        if (gameTime >= active.expiresAt) {
-          // Restore speed for SLOW
+        if (turnNumber >= active.expiresAt) {
           if (effectType === StatusEffectType.SLOW && active.originalSpeed !== undefined) {
             enemy.speed = active.originalSpeed;
           }
@@ -101,41 +102,47 @@ export class StatusEffectService {
           continue;
         }
 
-        // Tick DoT effects
-        const tickInterval = active.config.tickInterval;
+        // DoT: apply damagePerTick exactly once per turn regardless of tickInterval.
         const damagePerTick = active.config.damagePerTick;
-        if (tickInterval !== undefined && damagePerTick !== undefined && tickInterval > 0) {
-          if (gameTime - active.lastTickTime >= tickInterval) {
-            active.lastTickTime = gameTime;
-            const result: DamageResult = this.enemyService.damageEnemy(enemyId, damagePerTick);
-            if (result.killed) {
-              kills.push({ id: enemyId, damage: damagePerTick });
-              // Enemy died from DoT — clean up all effects next pass
-              toRemoveEnemies.push(enemyId);
-              break; // No need to process more effects for a dead enemy
-            }
+        if (damagePerTick !== undefined && damagePerTick > 0) {
+          const result: DamageResult = this.enemyService.damageEnemy(enemyId, damagePerTick);
+          if (result.killed) {
+            kills.push({ id: enemyId, damage: damagePerTick });
+            toRemoveEnemies.push(enemyId);
+            break;
           }
         }
       }
 
-      // Remove expired effects
       for (const type of expiredTypes) {
         enemyEffects.delete(type);
       }
-
-      // Clean up empty entries
       if (enemyEffects.size === 0) {
         this.effects.delete(enemyId);
       }
     }
 
-    // Clean up dead/removed enemies
     for (const enemyId of toRemoveEnemies) {
       this.effects.delete(enemyId);
     }
 
     return kills;
   }
+
+  /**
+   * Flat tile reduction to apply to an enemy's movement this turn based on
+   * active SLOW status. Returns 1 if SLOW is active, 0 otherwise. EnemyService
+   * subtracts this from the base tiles-per-turn, floored at 0.
+   */
+  getSlowTileReduction(enemyId: string): number {
+    const effects = this.effects.get(enemyId);
+    if (!effects) return 0;
+    return effects.has(StatusEffectType.SLOW) ? 1 : 0;
+  }
+
+  // M2 S2: gameTime-based update() DELETED. Replaced by tickTurn (turn-based).
+  // Spec call sites cast to (svc as any) — H2 will rewrite against tickTurn.
+
 
   /**
    * Check if an enemy has a specific effect active.

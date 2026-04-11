@@ -16,7 +16,7 @@ import { TilePricingService, TilePriceInfo } from './tile-pricing.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameEndService } from './game-end.service';
 import { EnemyService } from './enemy.service';
-import { RelicService } from '../../../ascent/services/relic.service';
+import { RelicService } from '../../../run/services/relic.service';
 
 export interface PlaceTowerResult {
   success: boolean;

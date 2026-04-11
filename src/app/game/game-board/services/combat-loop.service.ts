@@ -7,8 +7,8 @@ import { TowerCombatService } from './tower-combat.service';
 import { EnemyService } from './enemy.service';
 import { GameStatsService } from './game-stats.service';
 import { GameEndService } from './game-end.service';
-import { RelicService } from '../../../ascent/services/relic.service';
-import { RunEventBusService, RunEventType } from '../../../ascent/services/run-event-bus.service';
+import { RelicService } from '../../../run/services/relic.service';
+import { RunEventBusService, RunEventType } from '../../../run/services/run-event-bus.service';
 
 import { GamePhase } from '../models/game-state.model';
 import { ENEMY_STATS } from '../models/enemy.model';
@@ -17,6 +17,7 @@ import { PHYSICS_CONFIG } from '../constants/physics.constants';
 import { ScoreBreakdown } from '../models/score.model';
 import { CombatFrameResult, FrameKillEvent, WaveCompletionEvent, GameEndEvent } from '../models/combat-frame.model';
 import { TowerType } from '../models/tower.model';
+import { StatusEffectService } from './status-effect.service';
 
 /**
  * Owns the fixed-timestep physics loop for the COMBAT phase.
@@ -38,14 +39,16 @@ import { TowerType } from '../models/tower.model';
  */
 @Injectable()
 export class CombatLoopService {
-  private physicsAccumulator = 0;
   private elapsedTimeAccumulator = 0;
   /** Whether any enemy has leaked during the current wave (for streak bonus calculation). */
   private leakedThisWave = false;
 
-  /** Reused per-frame kill accumulator — cleared at the start of each tick(). */
+  /** Phase 4: monotonically-increasing turn counter across the entire encounter. */
+  private turnNumber = 0;
+
+  /** Reused per-turn kill accumulator — cleared at the start of each resolveTurn(). */
   private frameKills: FrameKillEvent[] = [];
-  /** Reused per-frame fired-tower-type set — cleared at the start of each tick(). */
+  /** Reused per-turn fired-tower-type set — cleared at the start of each resolveTurn(). */
   private frameFiredTypes = new Set<TowerType>();
 
   constructor(
@@ -57,194 +60,12 @@ export class CombatLoopService {
     private gameEndService: GameEndService,
     private relicService: RelicService,
     private runEventBus: RunEventBusService,
+    private statusEffectService: StatusEffectService,
   ) {}
 
-  /**
-   * Run all physics steps for this animation frame.
-   *
-   * Must be called only when phase === COMBAT and !isPaused.
-   * The component is responsible for the phase/pause guard.
-   *
-   * @param deltaTime   Capped frame delta in real seconds.
-   * @param gameSpeed   Current speed multiplier (1/2/3).
-   * @param scene       The active Three.js scene (needed by WaveService / EnemyService).
-   * @param scoreBreakdown Current score breakdown (passed to GameEndService on game end).
-   * @returns           Accumulated frame events for the component to consume.
-   *
-   * The returned `kills` array and `firedTypes` set are **defensive copies** of
-   * the internal reused collections. They are safe to hold across frames — the
-   * internal arrays are cleared at the start of the NEXT tick() but the copies
-   * are independent snapshots.
-   */
-  tick(
-    deltaTime: number,
-    gameSpeed: number,
-    scene: THREE.Scene,
-    scoreBreakdown: ScoreBreakdown | null,
-  ): CombatFrameResult {
-    this.physicsAccumulator += deltaTime * gameSpeed;
-    let stepCount = 0;
-
-    // Elapsed time tracking — accumulate real (unscaled) time, flush every ~1 second
-    this.elapsedTimeAccumulator += deltaTime;
-    if (this.elapsedTimeAccumulator >= PHYSICS_CONFIG.elapsedTimeFlushIntervalS) {
-      this.gameStateService.addElapsedTime(this.elapsedTimeAccumulator);
-      this.elapsedTimeAccumulator = 0;
-    }
-
-    // Reset per-frame accumulators
-    this.frameKills.length = 0;
-    this.frameFiredTypes.clear();
-    let frameHitCount = 0;
-    let frameExitCount = 0;
-    let frameLeaked = false;
-    let defeatTriggered = false;
-    let waveCompletion: WaveCompletionEvent | null = null;
-    let gameEnd: GameEndEvent | null = null;
-
-    // We need the wave number at the start of the frame (captured once; safe because
-    // startWave() cannot be called during COMBAT)
-    const waveAtFrameStart = this.gameStateService.getState().wave;
-
-    while (
-      this.physicsAccumulator >= PHYSICS_CONFIG.fixedTimestep &&
-      stepCount < PHYSICS_CONFIG.maxStepsPerFrame
-    ) {
-      // Wave spawning
-      this.waveService.update(PHYSICS_CONFIG.fixedTimestep, scene);
-
-      // Tower combat — returns killed enemies, tower types that fired, and hit count
-      const { killed: killedByTowers, fired: firedTowerTypes, hitCount } =
-        this.towerCombatService.update(PHYSICS_CONFIG.fixedTimestep, scene);
-
-      // Accumulate fired tower types and hit counts for audio (deferred to post-frame)
-      for (const towerType of firedTowerTypes) {
-        this.frameFiredTypes.add(towerType);
-      }
-      frameHitCount += hitCount;
-
-      // Collect gold from tower kills and snapshot visual data.
-      // Start the death animation instead of immediately removing — the enemy stays in
-      // the map during the animation but is excluded from targeting (dying flag).
-      for (const killInfo of killedByTowers) {
-        const enemy = this.enemyService.getEnemies().get(killInfo.id);
-        if (enemy && !enemy.dying) {
-          const goldMult = this.relicService.getGoldMultiplier() * this.relicService.rollLuckyCoin();
-          const adjustedGold = Math.round(enemy.value * goldMult);
-          this.gameStateService.addGoldAndScore(adjustedGold);
-          this.gameStatsService.recordGoldEarned(adjustedGold);
-
-          this.frameKills.push({
-            damage: killInfo.damage,
-            position: { ...enemy.position },
-            color: ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackColor,
-            value: enemy.value,
-          });
-
-          // Start death animation — actual disposal happens in updateDyingAnimations()
-          this.enemyService.startDyingAnimation(killInfo.id);
-          this.runEventBus.emit(RunEventType.ENEMY_KILLED, { enemyType: enemy.type, value: enemy.value });
-        }
-      }
-
-      // Move enemies along paths
-      const reachedExit = this.enemyService.updateEnemies(PHYSICS_CONFIG.fixedTimestep);
-
-      // Enemies reaching the exit cost lives scaled by enemy type
-      for (const enemyId of reachedExit) {
-        // REINFORCED_WALLS: block first leak each wave
-        if (this.relicService.shouldBlockLeak()) {
-          this.enemyService.removeEnemy(enemyId, scene);
-          continue;
-        }
-        const leakedEnemy = this.enemyService.getEnemies().get(enemyId);
-        const leakCost = leakedEnemy?.leakDamage ?? 1;
-        this.gameStateService.loseLife(leakCost);
-        frameLeaked = true;
-        this.leakedThisWave = true;
-        this.gameStatsService.recordEnemyLeaked();
-        frameExitCount++;
-        this.enemyService.removeEnemy(enemyId, scene);
-      }
-
-      // Re-read phase — loseLife() above may have set DEFEAT mid-frame
-      const currentPhase = this.gameStateService.getState().phase;
-
-      if (currentPhase === GamePhase.DEFEAT) {
-        defeatTriggered = true;
-        // DEFEAT mid-frame (from loseLife) — record game end if not yet done
-        if (!this.gameEndService.isRecorded()) {
-          const result = this.gameEndService.recordEnd(false, scoreBreakdown);
-          gameEnd = {
-            isVictory: false,
-            newlyUnlockedAchievements: result.newlyUnlockedAchievements,
-            completedChallenges: result.completedChallenges,
-          };
-        }
-      }
-
-      // Check wave completion: no spawning and no living enemies.
-      // Dying enemies are still in the map during their animation — use getLivingEnemyCount()
-      // which excludes them, so the wave completes as soon as all enemies are killed.
-      if (
-        currentPhase === GamePhase.COMBAT &&
-        !this.waveService.isSpawning() &&
-        this.enemyService.getLivingEnemyCount() === 0
-      ) {
-        const reward = this.waveService.getWaveReward(waveAtFrameStart);
-        let streakBonus = 0;
-        let streakCount = 0;
-
-        // Award streak bonus before completeWave transitions out of COMBAT
-        // leakedThisWave is already true if any enemy leaked this frame (set above)
-        if (!this.leakedThisWave) {
-          streakBonus = this.gameStateService.addStreakBonus();
-          streakCount = this.gameStateService.getStreak();
-        }
-
-        this.gameStateService.completeWave(reward);
-        const postWavePhase = this.gameStateService.getState().phase;
-
-        let interestEarned = 0;
-        if (postWavePhase === GamePhase.INTERMISSION) {
-          interestEarned = this.gameStateService.awardInterest();
-        }
-
-        waveCompletion = { reward, streakBonus, streakCount, interestEarned, resultPhase: postWavePhase };
-        this.runEventBus.emit(RunEventType.WAVE_COMPLETE, { wave: waveAtFrameStart });
-
-        // Record game end on VICTORY or DEFEAT (idempotent in GameEndService)
-        if (postWavePhase === GamePhase.VICTORY || postWavePhase === GamePhase.DEFEAT) {
-          if (!this.gameEndService.isRecorded()) {
-            const isVictory = postWavePhase === GamePhase.VICTORY;
-            const result = this.gameEndService.recordEnd(isVictory, scoreBreakdown);
-            gameEnd = {
-              isVictory,
-              newlyUnlockedAchievements: result.newlyUnlockedAchievements,
-              completedChallenges: result.completedChallenges,
-            };
-          }
-        }
-      }
-
-      this.physicsAccumulator -= PHYSICS_CONFIG.fixedTimestep;
-      stepCount++;
-    }
-
-    // Drain deferred audio events from TowerCombatService (chain lightning, mortar, etc.)
-    const combatAudioEvents = this.towerCombatService.drainAudioEvents();
-
-    return {
-      kills: [...this.frameKills],              // defensive copy — internal array is cleared on next tick()
-      firedTypes: new Set(this.frameFiredTypes), // defensive copy — internal set is cleared on next tick()
-      hitCount: frameHitCount,
-      exitCount: frameExitCount,
-      leaked: frameLeaked,
-      defeatTriggered,
-      waveCompletion,
-      gameEnd,
-      combatAudioEvents,
-    };
+  /** Phase 4: current turn number, exposed for UI bindings. */
+  getTurnNumber(): number {
+    return this.turnNumber;
   }
 
   /**
@@ -274,10 +95,204 @@ export class CombatLoopService {
    * Call on game restart (in restartGame() alongside GameSessionService.resetAllServices()).
    */
   reset(): void {
-    this.physicsAccumulator = 0;
     this.elapsedTimeAccumulator = 0;
     this.leakedThisWave = false;
+    this.turnNumber = 0;
     this.frameKills.length = 0;
     this.frameFiredTypes.clear();
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Phase 4: Turn-based resolution (replaces tick() physics loop)
+  // ────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Phase 4: run one discrete turn of combat resolution. Replaces the
+   * fixed-timestep `tick()` physics loop for turn-based combat.
+   *
+   * Order of operations (matches project_turn_model_spec.md):
+   *   1. Increment turn counter
+   *   2. Spawn this turn's scheduled enemies
+   *   3. Tower fire (each tower fires shotsPerTurn times, damage instant)
+   *   4. Enemy movement (each enemy advances by tiles-per-turn)
+   *   5. Status effect tick (DoT damage, duration decrement)
+   *   6. Process kills (gold, stats, run events)
+   *   7. Process leaks (lives, defeat check)
+   *   8. Wave completion check (streak, intermission/victory)
+   *
+   * Returns CombatFrameResult with the same shape as tick() so the component's
+   * existing processCombatResult() wiring applies unchanged.
+   */
+  resolveTurn(scene: THREE.Scene): CombatFrameResult {
+    this.turnNumber++;
+
+    // Reset per-turn accumulators
+    this.frameKills.length = 0;
+    this.frameFiredTypes.clear();
+    let frameHitCount = 0;
+    let frameExitCount = 0;
+    let frameLeaked = false;
+    let defeatTriggered = false;
+    let waveCompletion: WaveCompletionEvent | null = null;
+    let gameEnd: GameEndEvent | null = null;
+
+    const waveAtTurnStart = this.gameStateService.getState().wave;
+
+    // 1. Spawn this turn's scheduled enemies
+    this.waveService.spawnForTurn(scene);
+
+    // 2. Tower fire — picks targets and applies damage instantly
+    const fireResult = this.towerCombatService.fireTurn(scene, this.turnNumber);
+    for (const towerType of fireResult.fired) {
+      this.frameFiredTypes.add(towerType);
+    }
+    frameHitCount += fireResult.hitCount;
+
+    // 3. Process tower kills — gold award, stat recording, run events
+    for (const killInfo of fireResult.killed) {
+      const enemy = this.enemyService.getEnemies().get(killInfo.id);
+      if (enemy && !enemy.dying) {
+        const goldMult = this.relicService.getGoldMultiplier() * this.relicService.rollLuckyCoin();
+        const adjustedGold = Math.round(enemy.value * goldMult);
+        this.gameStateService.addGoldAndScore(adjustedGold);
+        this.gameStatsService.recordGoldEarned(adjustedGold);
+
+        this.frameKills.push({
+          damage: killInfo.damage,
+          position: { ...enemy.position },
+          color: ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackColor,
+          value: enemy.value,
+        });
+
+        this.enemyService.startDyingAnimation(killInfo.id);
+        this.runEventBus.emit(RunEventType.ENEMY_KILLED, { enemyType: enemy.type, value: enemy.value });
+      }
+    }
+
+    // 4. Enemy movement — each enemy advances its tiles-per-turn count
+    const reachedExit = this.enemyService.stepEnemiesOneTurn(
+      (enemyId) => this.statusEffectService.getSlowTileReduction(enemyId),
+    );
+
+    // 5a. Mortar zone tick — turn-ticked DoT from M3 S4 mortar zones
+    const mortarKills = this.towerCombatService.tickMortarZonesForTurn(scene, this.turnNumber);
+    for (const killInfo of mortarKills) {
+      const enemy = this.enemyService.getEnemies().get(killInfo.id);
+      if (enemy && !enemy.dying) {
+        const goldMult = this.relicService.getGoldMultiplier() * this.relicService.rollLuckyCoin();
+        const adjustedGold = Math.round(enemy.value * goldMult);
+        this.gameStateService.addGoldAndScore(adjustedGold);
+        this.gameStatsService.recordGoldEarned(adjustedGold);
+        this.frameKills.push({
+          damage: killInfo.damage,
+          position: { ...enemy.position },
+          color: ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackColor,
+          value: enemy.value,
+        });
+        this.enemyService.startDyingAnimation(killInfo.id);
+        this.runEventBus.emit(RunEventType.ENEMY_KILLED, { enemyType: enemy.type, value: enemy.value });
+      }
+    }
+
+    // 5b. Status effect tick — DoT damage, duration expiry
+    const dotKills = this.statusEffectService.tickTurn(this.turnNumber);
+    for (const killInfo of dotKills) {
+      const enemy = this.enemyService.getEnemies().get(killInfo.id);
+      if (enemy && !enemy.dying) {
+        const goldMult = this.relicService.getGoldMultiplier() * this.relicService.rollLuckyCoin();
+        const adjustedGold = Math.round(enemy.value * goldMult);
+        this.gameStateService.addGoldAndScore(adjustedGold);
+        this.gameStatsService.recordGoldEarned(adjustedGold);
+        this.frameKills.push({
+          damage: killInfo.damage,
+          position: { ...enemy.position },
+          color: ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackColor,
+          value: enemy.value,
+        });
+        this.enemyService.startDyingAnimation(killInfo.id);
+        this.runEventBus.emit(RunEventType.ENEMY_KILLED, { enemyType: enemy.type, value: enemy.value });
+      }
+    }
+
+    // 6. Process leaks — enemies that reached the exit cost lives
+    for (const enemyId of reachedExit) {
+      if (this.relicService.shouldBlockLeak()) {
+        this.enemyService.removeEnemy(enemyId, scene);
+        continue;
+      }
+      const leakedEnemy = this.enemyService.getEnemies().get(enemyId);
+      const leakCost = leakedEnemy?.leakDamage ?? 1;
+      this.gameStateService.loseLife(leakCost);
+      frameLeaked = true;
+      this.leakedThisWave = true;
+      this.gameStatsService.recordEnemyLeaked();
+      frameExitCount++;
+      this.enemyService.removeEnemy(enemyId, scene);
+    }
+
+    // 7. Re-read phase — loseLife() above may have set DEFEAT
+    const currentPhase = this.gameStateService.getState().phase;
+    if (currentPhase === GamePhase.DEFEAT) {
+      defeatTriggered = true;
+      if (!this.gameEndService.isRecorded()) {
+        const result = this.gameEndService.recordEnd(false);
+        gameEnd = {
+          isVictory: false,
+          newlyUnlockedAchievements: result.newlyUnlockedAchievements,
+        };
+      }
+    }
+
+    // 8. Wave completion check
+    if (
+      currentPhase === GamePhase.COMBAT &&
+      !this.waveService.isSpawning() &&
+      this.enemyService.getLivingEnemyCount() === 0
+    ) {
+      const reward = this.waveService.getWaveReward(waveAtTurnStart);
+      let streakBonus = 0;
+      let streakCount = 0;
+
+      if (!this.leakedThisWave) {
+        streakBonus = this.gameStateService.addStreakBonus();
+        streakCount = this.gameStateService.getStreak();
+      }
+
+      this.gameStateService.completeWave(reward);
+      const postWavePhase = this.gameStateService.getState().phase;
+
+      let interestEarned = 0;
+      if (postWavePhase === GamePhase.INTERMISSION) {
+        interestEarned = this.gameStateService.awardInterest();
+      }
+
+      waveCompletion = { reward, streakBonus, streakCount, interestEarned, resultPhase: postWavePhase };
+      this.runEventBus.emit(RunEventType.WAVE_COMPLETE, { wave: waveAtTurnStart });
+
+      if (postWavePhase === GamePhase.VICTORY || postWavePhase === GamePhase.DEFEAT) {
+        if (!this.gameEndService.isRecorded()) {
+          const isVictory = postWavePhase === GamePhase.VICTORY;
+          const result = this.gameEndService.recordEnd(isVictory);
+          gameEnd = {
+            isVictory,
+            newlyUnlockedAchievements: result.newlyUnlockedAchievements,
+          };
+        }
+      }
+    }
+
+    const combatAudioEvents = this.towerCombatService.drainAudioEvents();
+
+    return {
+      kills: [...this.frameKills],
+      firedTypes: new Set(this.frameFiredTypes),
+      hitCount: frameHitCount,
+      exitCount: frameExitCount,
+      leaked: frameLeaked,
+      defeatTriggered,
+      waveCompletion,
+      gameEnd,
+      combatAudioEvents,
+    };
   }
 }

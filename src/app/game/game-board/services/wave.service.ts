@@ -26,6 +26,16 @@ export class WaveService {
   /** Tracks which enemy types have been introduced to the player (for "NEW" badge notifications). */
   private seenEnemyTypes = new Set<EnemyType>();
 
+  /**
+   * Phase 4: per-turn spawn schedule for the active wave. Index = turns since
+   * startWave(). Built from the wave's entries[] by distributing enemies one
+   * per entry per turn until all counts are exhausted. Wave 1 (5 BASIC,
+   * interval 1.5) becomes 5 turns of 1 BASIC each.
+   */
+  private turnSchedule: EnemyType[][] = [];
+  /** Next turn index into turnSchedule. Resets to 0 on each startWave(). */
+  private turnScheduleIndex = 0;
+
   constructor(private enemyService: EnemyService) {}
 
   /**
@@ -128,41 +138,140 @@ export class WaveService {
       timeSinceLastSpawn: entry.spawnInterval // spawn first immediately
     }));
 
+    // Phase 4: build the per-turn spawn schedule. Distributes enemies by
+    // interleaving one-per-entry-per-turn until all entries are exhausted.
+    // Preserves wave "shape" (e.g., FAST + BASIC interleave) across turns.
+    this.turnSchedule = this.buildTurnSchedule(waveDef.entries, countMultiplier);
+    this.turnScheduleIndex = 0;
+
     this.active = true;
   }
 
   /**
-   * Per-physics-step spawn tick. Advances timers on each queue and spawns enemies when
-   * their interval elapses. Sets `active = false` once all queues are exhausted.
-   * @param deltaTime Elapsed time in seconds since last physics step.
+   * Phase 4: convert time-based WaveEntries into a per-turn spawn schedule.
+   * One enemy from each entry spawns per turn until all counts hit zero.
+   *
+   * Example: [{ BASIC x5 }, { FAST x3 }] →
+   *   turn 0: [BASIC, FAST]
+   *   turn 1: [BASIC, FAST]
+   *   turn 2: [BASIC, FAST]
+   *   turn 3: [BASIC]
+   *   turn 4: [BASIC]
+   *
+   * Future: author spawnTurns[][] directly in wave data files for more
+   * intentional pacing (empty prep turns before bosses, bursts, etc.).
    */
-  update(deltaTime: number, scene: THREE.Scene): void {
-    if (!this.active) return;
-
-    let allDone = true;
-
-    for (const queue of this.spawnQueues) {
-      if (queue.remaining <= 0) continue;
-
-      allDone = false;
-      queue.timeSinceLastSpawn += deltaTime;
-
-      if (queue.timeSinceLastSpawn >= queue.spawnInterval) {
-        const waveHealthMult = this.currentEndlessResult?.healthMultiplier ?? 1;
-        const waveSpeedMult  = this.currentEndlessResult?.speedMultiplier  ?? 1;
-        const spawned = this.enemyService.spawnEnemy(queue.type, scene, waveHealthMult, waveSpeedMult);
-        if (spawned) {
-          queue.remaining--;
-          queue.timeSinceLastSpawn = 0;
+  private buildTurnSchedule(entries: WaveDefinition['entries'], countMultiplier: number): EnemyType[][] {
+    const schedule: EnemyType[][] = [];
+    const remaining = entries.map(e => ({ type: e.type, left: Math.round(e.count * countMultiplier) }));
+    while (remaining.some(r => r.left > 0)) {
+      const turn: EnemyType[] = [];
+      for (const r of remaining) {
+        if (r.left > 0) {
+          turn.push(r.type);
+          r.left--;
         }
-        // If spawn failed (no valid path), keep in queue and retry next tick
       }
+      schedule.push(turn);
+    }
+    return schedule;
+  }
+
+  /**
+   * Phase 4: spawn whatever is scheduled for the current turn within the
+   * active wave. Advances the internal turn counter and sets `active=false`
+   * when the schedule is exhausted. Called once per resolution phase from
+   * CombatLoopService.resolveTurn().
+   *
+   * @returns The number of enemies actually spawned this call (may be 0 for
+   *          intentional empty prep turns, or when a spawn fails due to path
+   *          invalidation — retried next turn).
+   */
+  spawnForTurn(scene: THREE.Scene): number {
+    if (!this.active) return 0;
+    if (this.turnScheduleIndex >= this.turnSchedule.length) {
+      this.active = false;
+      return 0;
     }
 
-    if (allDone) {
+    const turnSpawns = this.turnSchedule[this.turnScheduleIndex];
+    this.turnScheduleIndex++;
+
+    if (turnSpawns.length === 0) {
+      // Intentional empty prep turn (boss buildup etc.). Still consume the turn.
+      if (this.turnScheduleIndex >= this.turnSchedule.length) this.active = false;
+      return 0;
+    }
+
+    const waveHealthMult = this.currentEndlessResult?.healthMultiplier ?? 1;
+    const waveSpeedMult = this.currentEndlessResult?.speedMultiplier ?? 1;
+
+    let spawned = 0;
+    for (const type of turnSpawns) {
+      const enemy = this.enemyService.spawnEnemy(type, scene, waveHealthMult, waveSpeedMult);
+      if (enemy) spawned++;
+    }
+
+    // Also mirror into the legacy spawnQueues counter so getRemainingToSpawn()
+    // reflects accurate UI state. (Phase 5 deletes spawnQueues entirely.)
+    for (const type of turnSpawns) {
+      const queue = this.spawnQueues.find(q => q.type === type && q.remaining > 0);
+      if (queue) queue.remaining--;
+    }
+
+    if (this.turnScheduleIndex >= this.turnSchedule.length) {
       this.active = false;
     }
+
+    return spawned;
   }
+
+  /** Phase 4: turn-based "remaining spawns" count computed from the turn schedule. */
+  getRemainingInTurnSchedule(): number {
+    let total = 0;
+    for (let t = this.turnScheduleIndex; t < this.turnSchedule.length; t++) {
+      total += this.turnSchedule[t].length;
+    }
+    return total;
+  }
+
+  /**
+   * Phase 4: forward-looking spawn preview for the combat shell HUD. Returns
+   * grouped spawn counts for the next N turns so the player can plan ahead.
+   * User direction: "proper good indicators of how many are remaining to spawn
+   * as a quick at a glance understandable thing."
+   *
+   * Entry for a turn with no spawns (boss prep window) returns an empty
+   * `spawns` array but is still included so the UI can render a "—" placeholder.
+   *
+   * @param lookaheadTurns How many upcoming resolution turns to include.
+   */
+  getUpcomingSpawnsPreview(lookaheadTurns: number): Array<{
+    turnOffset: number;
+    spawns: { type: EnemyType; count: number }[];
+  }> {
+    const out: Array<{ turnOffset: number; spawns: { type: EnemyType; count: number }[] }> = [];
+    for (let offset = 0; offset < lookaheadTurns; offset++) {
+      const scheduleIndex = this.turnScheduleIndex + offset;
+      if (scheduleIndex >= this.turnSchedule.length) {
+        out.push({ turnOffset: offset + 1, spawns: [] });
+        continue;
+      }
+      const turnSpawns = this.turnSchedule[scheduleIndex];
+      const grouped = new Map<EnemyType, number>();
+      for (const type of turnSpawns) {
+        grouped.set(type, (grouped.get(type) ?? 0) + 1);
+      }
+      out.push({
+        turnOffset: offset + 1,
+        spawns: Array.from(grouped.entries()).map(([type, count]) => ({ type, count })),
+      });
+    }
+    return out;
+  }
+
+  // M2 S3: deltaTime-based update() DELETED. Replaced by spawnForTurn (turn-based).
+
 
   /** Returns true while enemies are still queued to spawn in the current wave. */
   isSpawning(): boolean {
@@ -235,6 +344,8 @@ export class WaveService {
     this.endlessMode = false;
     this.currentEndlessResult = null;
     this.seenEnemyTypes.clear();
+    this.turnSchedule = [];
+    this.turnScheduleIndex = 0;
     this.clearCustomWaves();
   }
 }

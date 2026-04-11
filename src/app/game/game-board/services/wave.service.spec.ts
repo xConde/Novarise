@@ -82,16 +82,16 @@ describe('WaveService', () => {
       expect(service.isSpawning()).toBeTrue();
     });
 
-    it('should not activate when called while already spawning (replaces queue)', () => {
+    it('should replace the active wave queue when called while already spawning', () => {
       service.startWave(1, mockScene);
-      service.update(0.016, mockScene); // spawn first from wave 1
+      service.spawnForTurn(mockScene); // spawn first from wave 1
       const callsAfterWave1Start = enemyServiceSpy.spawnEnemy.calls.count();
 
       // Start wave 2 while wave 1 is active — replaces queues
       service.startWave(2, mockScene);
       expect(service.isSpawning()).toBeTrue();
 
-      service.update(0.016, mockScene);
+      service.spawnForTurn(mockScene);
       // Should now be spawning wave 2 enemies (BASIC + FAST)
       const callsAfterWave2Start = enemyServiceSpy.spawnEnemy.calls.count();
       expect(callsAfterWave2Start).toBeGreaterThan(callsAfterWave1Start);
@@ -119,83 +119,73 @@ describe('WaveService', () => {
     });
   });
 
-  // --- update (spawn processing) ---
+  // --- spawnForTurn (turn-based spawn processing) ---
+  // NOTE: deltaTime-based update() was deleted in M2 S3. All spawn processing
+  // is now turn-based via spawnForTurn(scene).
 
-  describe('update', () => {
-    it('should spawn first enemy immediately on first update', () => {
+  describe('spawnForTurn', () => {
+    it('should spawn first enemy on first spawnForTurn call', () => {
       service.startWave(1, mockScene);
-      service.update(0.016, mockScene); // ~1 frame
+      service.spawnForTurn(mockScene); // turn 1
 
       expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1);
     });
 
-    it('should respect spawn interval between enemies', () => {
+    it('should spawn one enemy per turn (Wave 1: 5 BASIC across 5 turns)', () => {
       service.startWave(1, mockScene);
 
-      // Wave 1: 5 BASIC enemies, spawnInterval 1.5s
-      // First spawns immediately (timeSinceLastSpawn initialized to spawnInterval)
-      service.update(0.016, mockScene);
+      // Wave 1: 5 BASIC — turnSchedule has 5 turns of 1 BASIC each
+      service.spawnForTurn(mockScene); // turn 1
       expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(1);
 
-      // 0.5s later — should NOT spawn another yet
-      service.update(0.5, mockScene);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(1);
-
-      // Another 1.1s later (total 1.616s since last spawn) — should spawn
-      service.update(1.1, mockScene);
+      service.spawnForTurn(mockScene); // turn 2
       expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(2);
+
+      service.spawnForTurn(mockScene); // turn 3
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(3);
     });
 
-    it('should retry failed spawns without decrementing count', () => {
+    it('should stop spawning when all enemies in the turn schedule are consumed', () => {
       service.startWave(1, mockScene);
 
-      // First spawn fails
-      enemyServiceSpy.spawnEnemy.and.returnValue(null);
-      service.update(0.016, mockScene);
-
-      // Should have tried but still be spawning (remaining not decremented)
-      expect(service.isSpawning()).toBeTrue();
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(1);
-
-      // Next tick — retry succeeds
-      enemyServiceSpy.spawnEnemy.and.returnValue({ id: 'enemy-1' } as any);
-      service.update(1.6, mockScene);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(2);
-    });
-
-    it('should stop spawning when all enemies are spawned', () => {
-      service.startWave(1, mockScene);
-
-      // Wave 1: 5 BASIC enemies, interval 1.5s
-      // Spawn all 5 (first immediate, then 4 more at intervals)
-      service.update(0.016, mockScene); // spawn 1
-      for (let i = 0; i < 4; i++) {
-        service.update(1.6, mockScene); // spawn 2-5
+      // Wave 1: 5 BASIC enemies across 5 turns
+      for (let i = 0; i < 5; i++) {
+        service.spawnForTurn(mockScene);
       }
-
       expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(5);
 
-      // Next update should detect all done
-      service.update(1.6, mockScene);
+      // After schedule exhausted, isSpawning becomes false
+      service.spawnForTurn(mockScene);
       expect(service.isSpawning()).toBeFalse();
     });
 
     it('should not spawn when not active', () => {
-      service.update(1.0, mockScene);
+      service.spawnForTurn(mockScene);
       expect(enemyServiceSpy.spawnEnemy).not.toHaveBeenCalled();
     });
 
-    it('should handle multi-entry waves (wave 3 has BASIC + FAST)', () => {
+    it('should handle multi-entry waves (wave 3 has BASIC + FAST interleaved)', () => {
       service.startWave(3, mockScene);
 
-      // Wave 3: 5 BASIC @ 1.0s interval, 3 FAST @ 0.8s interval
-      // Both entries spawn first enemy immediately
-      service.update(0.016, mockScene);
+      // Wave 3: 5 BASIC + 3 FAST — first turn has [BASIC, FAST]
+      service.spawnForTurn(mockScene);
 
       const calls = enemyServiceSpy.spawnEnemy.calls.allArgs();
       const typesSpawned = calls.map(c => c[0]);
       expect(typesSpawned).toContain(EnemyType.BASIC);
       expect(typesSpawned).toContain(EnemyType.FAST);
+    });
+
+    it('should return spawn count from spawnForTurn', () => {
+      service.startWave(1, mockScene);
+      const count = service.spawnForTurn(mockScene);
+      // Wave 1 turn 1 spawns 1 BASIC
+      expect(count).toBe(1);
+    });
+
+    it('should return 0 from spawnForTurn when not active', () => {
+      const count = service.spawnForTurn(mockScene);
+      expect(count).toBe(0);
     });
   });
 
@@ -274,10 +264,10 @@ describe('WaveService', () => {
       expect(service.isSpawning()).toBeFalse();
     });
 
-    it('should not spawn after reset even with update', () => {
+    it('should not spawn after reset even with spawnForTurn', () => {
       service.startWave(1, mockScene);
       service.reset();
-      service.update(5.0, mockScene);
+      service.spawnForTurn(mockScene);
 
       expect(enemyServiceSpy.spawnEnemy).not.toHaveBeenCalled();
     });
@@ -438,7 +428,7 @@ describe('WaveService', () => {
       service.setEndlessMode(true);
       const beyondMax = WAVE_DEFINITIONS.length + 1;
       service.startWave(beyondMax, mockScene);
-      service.update(0.016, mockScene); // first tick triggers immediate spawn
+      service.spawnForTurn(mockScene); // first turn spawns immediately
       expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalled();
     });
 
@@ -447,9 +437,9 @@ describe('WaveService', () => {
       const beyondMax = WAVE_DEFINITIONS.length + 1;
       service.startWave(beyondMax, mockScene);
 
-      // Drain the queue — large deltaTime to bypass all intervals
-      for (let i = 0; i < 50; i++) {
-        service.update(5.0, mockScene);
+      // Drain the turn schedule — endless waves have bounded enemy counts
+      for (let i = 0; i < 100; i++) {
+        service.spawnForTurn(mockScene);
       }
 
       expect(service.isSpawning()).toBeFalse();
@@ -558,7 +548,7 @@ describe('WaveService', () => {
       const beyondMax = WAVE_DEFINITIONS.length + 10; // endless wave 10 has notable scaling
       service.startWave(beyondMax, mockScene);
 
-      service.update(0.016, mockScene); // trigger first spawn
+      service.spawnForTurn(mockScene); // trigger first spawn
 
       const callArgs = enemyServiceSpy.spawnEnemy.calls.mostRecent().args as [EnemyType, THREE.Scene, number, number];
       const waveHealthMult = callArgs[2];
@@ -570,7 +560,7 @@ describe('WaveService', () => {
       const beyondMax = WAVE_DEFINITIONS.length + 10;
       service.startWave(beyondMax, mockScene);
 
-      service.update(0.016, mockScene);
+      service.spawnForTurn(mockScene);
 
       const callArgs = enemyServiceSpy.spawnEnemy.calls.mostRecent().args as [EnemyType, THREE.Scene, number, number];
       const waveSpeedMult = callArgs[3];
@@ -579,7 +569,7 @@ describe('WaveService', () => {
 
     it('passes multipliers = 1 to spawnEnemy during a scripted wave', () => {
       service.startWave(1, mockScene);
-      service.update(0.016, mockScene);
+      service.spawnForTurn(mockScene);
 
       const callArgs = enemyServiceSpy.spawnEnemy.calls.mostRecent().args as [EnemyType, THREE.Scene, number, number];
       expect(callArgs[2]).toBe(1);
@@ -590,11 +580,11 @@ describe('WaveService', () => {
       service.setEndlessMode(true);
 
       service.startWave(WAVE_DEFINITIONS.length + 1, mockScene);
-      service.update(0.016, mockScene);
+      service.spawnForTurn(mockScene);
       const earlyMult = (enemyServiceSpy.spawnEnemy.calls.mostRecent().args as [EnemyType, THREE.Scene, number, number])[2];
 
       service.startWave(WAVE_DEFINITIONS.length + 20, mockScene);
-      service.update(0.016, mockScene);
+      service.spawnForTurn(mockScene);
       const laterMult = (enemyServiceSpy.spawnEnemy.calls.mostRecent().args as [EnemyType, THREE.Scene, number, number])[2];
 
       expect(laterMult).toBeGreaterThan(earlyMult);
@@ -642,7 +632,7 @@ describe('WaveService', () => {
     it('startWave() spawns FAST enemies in custom wave 2', () => {
       service.setCustomWaves(CUSTOM_WAVES);
       service.startWave(2, mockScene);
-      service.update(0.016, mockScene);
+      service.spawnForTurn(mockScene);
       expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1);
     });
 

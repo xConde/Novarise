@@ -8,7 +8,7 @@ import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { PathfindingService } from './pathfinding.service';
 import { TowerCombatService } from './tower-combat.service';
 import { ChainLightningService } from './chain-lightning.service';
-import { ProjectileService } from './projectile.service';
+// M2 S5: ProjectileService import removed (file deleted)
 import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
 import { GameStatsService } from './game-stats.service';
@@ -76,7 +76,6 @@ describe('Gameplay Integration', () => {
         EnemyMeshFactoryService,
         TowerCombatService,
         ChainLightningService,
-        ProjectileService,
         CombatVFXService,
 
         StatusEffectService,
@@ -185,18 +184,18 @@ describe('Gameplay Integration', () => {
   // ─── 2. Wave start → enemy spawn → wave complete ───
 
   describe('wave start → enemy spawn → wave complete', () => {
-    it('should spawn enemies when wave is started and ticked', () => {
+    it('should spawn enemies when wave is started and spawnForTurn is called per turn', () => {
       gameStateService.startWave(); // wave 1, COMBAT
 
       waveService.startWave(1, scene);
       expect(waveService.isSpawning()).toBeTrue();
 
-      // Tick enough times to spawn all enemies in wave 1
-      // Wave 1: 5 basic enemies at 1.5s interval (first spawns immediately)
+      // Drive the per-turn schedule until exhausted.
+      // Wave 1 distributes one enemy per turn, so the loop runs exactly
+      // getTotalEnemiesInWave(1) times and then isSpawning() goes false.
       const wave1Total = waveService.getTotalEnemiesInWave(1);
-      const tickCount = wave1Total * 20; // generous ticks
-      for (let i = 0; i < tickCount; i++) {
-        waveService.update(0.2, scene);
+      while (waveService.isSpawning()) {
+        waveService.spawnForTurn(scene);
       }
 
       expect(enemyService.getEnemies().size).toBe(wave1Total);
@@ -207,9 +206,9 @@ describe('Gameplay Integration', () => {
       gameStateService.startWave(); // wave 1
       waveService.startWave(1, scene);
 
-      // Spawn all enemies
-      for (let i = 0; i < 100; i++) {
-        waveService.update(0.2, scene);
+      // Drain the full turn schedule to spawn all enemies
+      while (waveService.isSpawning()) {
+        waveService.spawnForTurn(scene);
       }
       expect(waveService.isSpawning()).toBeFalse();
 

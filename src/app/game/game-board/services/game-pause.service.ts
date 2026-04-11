@@ -65,13 +65,14 @@ export class GamePauseService implements OnDestroy {
 
   /**
    * Confirm quit: record defeat and return the navigation target route.
-   * @param isCampaign Whether this is a campaign game.
-   * @returns The route to navigate to.
+   * Phase H12: post-pivot there is no campaign/standalone distinction —
+   * all quits abandon the current run and return to the run hub.
+   * @returns The route to navigate to (always '/run').
    */
-  confirmQuit(isCampaign: boolean): string {
+  confirmQuit(): string {
     this.showQuitConfirm = false;
     this.gameEndService.recordEnd(false, null);
-    return isCampaign ? '/campaign' : '/';
+    return '/run';
   }
 
   /**

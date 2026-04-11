@@ -80,16 +80,11 @@ describe('GamePauseService', () => {
       expect(service.showQuitConfirm).toBeFalse();
     });
 
-    it('should record defeat and return campaign route for campaign games', () => {
-      const route = service.confirmQuit(true);
-      expect(route).toBe('/campaign');
+    it('should record defeat and return /run route (run hub)', () => {
+      const route = service.confirmQuit();
+      expect(route).toBe('/run');
       expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false, null);
       expect(service.showQuitConfirm).toBeFalse();
-    });
-
-    it('should return home route for non-campaign games', () => {
-      const route = service.confirmQuit(false);
-      expect(route).toBe('/');
     });
   });
 

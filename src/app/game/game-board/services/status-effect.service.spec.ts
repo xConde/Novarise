@@ -89,33 +89,36 @@ describe('StatusEffectService', () => {
     });
   });
 
-  // --- update() SLOW expiry ---
+  // --- tickTurn() SLOW expiry ---
+  // Turn-based: apply(id, SLOW, gameTime) sets expiresAt = gameTime + duration (turns).
+  // tickTurn(turnNumber) removes the effect when turnNumber >= expiresAt.
 
-  describe('update() SLOW expiry', () => {
-    it('should expire SLOW and restore original speed', () => {
+  describe('tickTurn() SLOW expiry', () => {
+    it('should expire SLOW and restore original speed when turn >= expiresAt', () => {
       const enemy = createEnemy('e1', 100, 4);
       enemyMap.set('e1', enemy);
 
+      // apply at turnNumber=0 → expiresAt = 0 + duration = 2
       service.apply('e1', StatusEffectType.SLOW, 0);
       const slowDuration = STATUS_EFFECT_CONFIGS[StatusEffectType.SLOW].duration;
 
-      // Advance past duration
-      service.update(slowDuration);
+      // Tick at turnNumber=expiresAt — effect should expire
+      service.tickTurn(slowDuration);
 
       expect(enemy.speed).toBe(4); // restored
       expect(service.hasEffect('e1', StatusEffectType.SLOW)).toBe(false);
     });
 
-    it('should not expire SLOW before duration elapses', () => {
+    it('should not expire SLOW before expiresAt is reached', () => {
       const enemy = createEnemy('e1', 100, 4);
       enemyMap.set('e1', enemy);
 
+      // apply at turnNumber=0 → expiresAt = 2
       service.apply('e1', StatusEffectType.SLOW, 0);
-      const slowDuration = STATUS_EFFECT_CONFIGS[StatusEffectType.SLOW].duration;
       const expectedSpeed = 4 * STATUS_EFFECT_CONFIGS[StatusEffectType.SLOW].speedMultiplier!;
 
-      // Update just before expiry
-      service.update(slowDuration - 0.1);
+      // Tick at turn 1 — still before expiresAt (2)
+      service.tickTurn(1);
 
       expect(enemy.speed).toBe(expectedSpeed);
       expect(service.hasEffect('e1', StatusEffectType.SLOW)).toBe(true);
@@ -138,33 +141,38 @@ describe('StatusEffectService', () => {
     });
   });
 
-  // --- update() BURN ticking ---
+  // --- tickTurn() BURN ticking ---
+  // Turn-based: DoT fires exactly once per tickTurn() call (tickInterval is ignored).
+  // apply(id, BURN, 1) → expiresAt = 1 + duration = 4. tickTurn(2) deals damage.
 
-  describe('update() BURN ticking', () => {
-    it('should tick BURN damage at correct interval', () => {
+  describe('tickTurn() BURN ticking', () => {
+    it('should tick BURN damage once per tickTurn call', () => {
       const enemy = createEnemy('e1', 100, 4);
       enemyMap.set('e1', enemy);
 
-      service.apply('e1', StatusEffectType.BURN, 0);
+      // Apply at turn 1 → expiresAt = 1 + 3 = 4
+      service.apply('e1', StatusEffectType.BURN, 1);
       const burnCfg = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN];
 
-      // Advance exactly one tick interval
-      service.update(burnCfg.tickInterval!);
+      // Tick at turn 2 — within duration, should apply damage once
+      service.tickTurn(2);
 
       expect(enemyServiceSpy.damageEnemy).toHaveBeenCalledWith('e1', burnCfg.damagePerTick!);
     });
 
-    it('should not tick BURN before interval elapses', () => {
+    it('should not tick BURN after duration expires', () => {
       const enemy = createEnemy('e1', 100, 4);
       enemyMap.set('e1', enemy);
 
-      service.apply('e1', StatusEffectType.BURN, 0);
       const burnCfg = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN];
+      // Apply at turn 0 → expiresAt = 3
+      service.apply('e1', StatusEffectType.BURN, 0);
 
-      // Advance less than one tick interval
-      service.update(burnCfg.tickInterval! - 0.01);
+      // Tick at turn 3 (= expiresAt) — effect should be removed, no damage
+      service.tickTurn(burnCfg.duration);
 
       expect(enemyServiceSpy.damageEnemy).not.toHaveBeenCalled();
+      expect(service.hasEffect('e1', StatusEffectType.BURN)).toBe(false);
     });
 
     it('should kill enemy when health reaches 0 from DoT', () => {
@@ -173,9 +181,11 @@ describe('StatusEffectService', () => {
       const enemy = createEnemy('e1', burnCfg.damagePerTick!, 4);
       enemyMap.set('e1', enemy);
 
-      service.apply('e1', StatusEffectType.BURN, 0);
+      // Apply at turn 1 → expiresAt = 4
+      service.apply('e1', StatusEffectType.BURN, 1);
 
-      const kills = service.update(burnCfg.tickInterval!);
+      // Tick at turn 2 — within duration, should apply damage and kill
+      const kills = service.tickTurn(2);
 
       expect(kills.length).toBe(1);
       expect(kills[0].id).toBe('e1');
@@ -187,39 +197,54 @@ describe('StatusEffectService', () => {
       const enemy = createEnemy('e1', 1, 4); // very low health
       enemyMap.set('e1', enemy);
 
-      service.apply('e1', StatusEffectType.BURN, 0);
-      const kills = service.update(burnCfg.tickInterval!);
+      // Apply at turn 1 → expiresAt = 4
+      service.apply('e1', StatusEffectType.BURN, 1);
+      const kills = service.tickTurn(2);
 
       expect(kills.length).toBe(1);
       expect(kills[0]).toEqual({ id: 'e1', damage: burnCfg.damagePerTick! });
     });
   });
 
-  // --- POISON independent ticking ---
+  // --- POISON ticking ---
+  // Turn-based: tickInterval is ignored. Both BURN and POISON apply damagePerTick
+  // exactly once per tickTurn() call. Both fire on the same turn.
 
   describe('POISON ticking', () => {
-    it('should tick at its own interval, independent of BURN', () => {
+    it('should apply POISON damage once per tickTurn call', () => {
+      const enemy = createEnemy('e1', 200, 4);
+      enemyMap.set('e1', enemy);
+
+      const poisonCfg = STATUS_EFFECT_CONFIGS[StatusEffectType.POISON];
+
+      // Apply at turn 1 → expiresAt = 1 + 4 = 5
+      service.apply('e1', StatusEffectType.POISON, 1);
+
+      // Tick at turn 2 — should deal damage once
+      service.tickTurn(2);
+      expect(enemyServiceSpy.damageEnemy).toHaveBeenCalledTimes(1);
+      expect(enemyServiceSpy.damageEnemy).toHaveBeenCalledWith('e1', poisonCfg.damagePerTick!);
+    });
+
+    it('should apply both BURN and POISON damage in a single tickTurn call', () => {
       const enemy = createEnemy('e1', 200, 4);
       enemyMap.set('e1', enemy);
 
       const burnCfg = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN];
       const poisonCfg = STATUS_EFFECT_CONFIGS[StatusEffectType.POISON];
 
-      // Apply both at time 0
-      service.apply('e1', StatusEffectType.BURN, 0);
-      service.apply('e1', StatusEffectType.POISON, 0);
+      // Apply both at turn 1
+      service.apply('e1', StatusEffectType.BURN, 1);
+      service.apply('e1', StatusEffectType.POISON, 1);
 
-      // BURN tickInterval=0.5, POISON tickInterval=1.0
-      // At time 0.5: only BURN should tick
-      service.update(burnCfg.tickInterval!);
-      expect(enemyServiceSpy.damageEnemy).toHaveBeenCalledTimes(1);
-      expect(enemyServiceSpy.damageEnemy).toHaveBeenCalledWith('e1', burnCfg.damagePerTick!);
-
-      enemyServiceSpy.damageEnemy.calls.reset();
-
-      // At time 1.0: both should tick
-      service.update(poisonCfg.tickInterval!);
+      // Tick at turn 2 — both fire in the same call (no interval differentiation in turn-based)
+      service.tickTurn(2);
       expect(enemyServiceSpy.damageEnemy).toHaveBeenCalledTimes(2);
+      // Both damage values should appear in calls (order may vary)
+      const callArgs = enemyServiceSpy.damageEnemy.calls.allArgs();
+      const damages = callArgs.map(a => a[1]).sort((a, b) => a - b);
+      expect(damages).toContain(burnCfg.damagePerTick!);
+      expect(damages).toContain(poisonCfg.damagePerTick!);
     });
   });
 
@@ -313,16 +338,18 @@ describe('StatusEffectService', () => {
   // --- Dead enemy auto-cleanup ---
 
   describe('dead enemy auto-cleanup', () => {
-    it('should auto-clean effects for dead enemies on next update', () => {
+    it('should auto-clean effects for dead enemies on next tickTurn', () => {
       const enemy = createEnemy('e1', 100, 4);
       enemyMap.set('e1', enemy);
 
-      service.apply('e1', StatusEffectType.BURN, 0);
+      // Apply at turn 1 → expiresAt = 4
+      service.apply('e1', StatusEffectType.BURN, 1);
 
       // Kill the enemy externally
       enemy.health = 0;
 
-      service.update(1);
+      // tickTurn at turn 2 — enemy is dead, should clean up its effects
+      service.tickTurn(2);
 
       expect(service.hasEffect('e1', StatusEffectType.BURN)).toBe(false);
       expect(service.getEffects('e1')).toEqual([]);
@@ -337,7 +364,8 @@ describe('StatusEffectService', () => {
       // Remove enemy from map entirely
       enemyMap.delete('e1');
 
-      service.update(1);
+      // tickTurn at turn 1 — enemy gone, should clean up
+      service.tickTurn(1);
 
       expect(service.hasEffect('e1', StatusEffectType.SLOW)).toBe(false);
     });
@@ -388,11 +416,12 @@ describe('StatusEffectService', () => {
       const e1 = createEnemy('e1', 100, 4);
       enemyMap.set('e1', e1);
 
+      // Apply at turn 0 → expiresAt = 3
       service.apply('e1', StatusEffectType.BURN, 0);
 
       const burnDuration = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN].duration;
-      // Advance past expiry
-      service.update(burnDuration);
+      // Tick at turnNumber = duration (= expiresAt) — effect should expire
+      service.tickTurn(burnDuration);
 
       const result = service.getAllActiveEffects();
 

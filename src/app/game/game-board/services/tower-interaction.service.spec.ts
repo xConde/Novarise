@@ -20,7 +20,7 @@ import { GamePhase } from '../models/game-state.model';
 import { BlockType } from '../models/game-board-tile';
 import { PathfindingService } from './pathfinding.service';
 import { StatusEffectService } from './status-effect.service';
-import { RelicService } from '../../../ascent/services/relic.service';
+import { RelicService } from '../../../run/services/relic.service';
 import { createRelicServiceSpy } from '../testing';
 
 function makeMockTower(overrides: Partial<PlacedTower> = {}): PlacedTower {
