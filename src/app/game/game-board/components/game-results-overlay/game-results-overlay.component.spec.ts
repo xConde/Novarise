@@ -3,8 +3,8 @@ import { CommonModule } from '@angular/common';
 import { GameResultsOverlayComponent } from './game-results-overlay.component';
 import { ScoreBreakdown } from '../../models/score.model';
 import { DifficultyLevel } from '../../models/game-state.model';
-import { CampaignLevel, CampaignTier } from '@campaign/models/campaign.model';
-import { ChallengeDefinition, ChallengeType } from '@campaign/models/challenge.model';
+import { CampaignLevel, CampaignTier } from '../../../../run/data/campaign-levels';
+import { ChallengeDefinition, ChallengeType } from '../../../../run/data/challenges';
 import { Achievement } from '@core/services/player-profile.service';
 
 function makeScoreBreakdown(overrides: Partial<ScoreBreakdown> = {}): ScoreBreakdown {

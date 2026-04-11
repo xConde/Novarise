@@ -12,7 +12,7 @@ import { StatusEffectService } from './status-effect.service';
 import { MapBridgeService } from '@core/services/map-bridge.service';
 import { TutorialService } from '@core/services/tutorial.service';
 import { PlayerProfileService } from '@core/services/player-profile.service';
-import { CAMPAIGN_WAVE_DEFINITIONS } from '@campaign/waves/campaign-waves';
+import { CAMPAIGN_WAVE_DEFINITIONS } from '../../../run/data/waves/campaign-waves';
 import { TowerCombatService } from './tower-combat.service';
 import { TowerPreviewService } from './tower-preview.service';
 import { DamagePopupService } from './damage-popup.service';

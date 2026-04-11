@@ -3,7 +3,7 @@ import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameStateService } from './game-state.service';
 import { DIFFICULTY_PRESETS } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
-import { ChallengeDefinition, ChallengeType, getChallengesForLevel } from '../../../campaign/models/challenge.model';
+import { ChallengeDefinition, ChallengeType, getChallengesForLevel } from '../../../run/data/challenges';
 import { ChallengeIndicator } from '../components/game-hud/game-hud.component';
 
 /**

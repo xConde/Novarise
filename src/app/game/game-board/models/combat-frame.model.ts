@@ -1,6 +1,5 @@
 import { TowerType } from './tower.model';
 import { GamePhase } from './game-state.model';
-import { ChallengeDefinition } from '@campaign/models/challenge.model';
 
 /** Info about a tower kill — includes the damage of the final hit. */
 export interface KillInfo {
@@ -37,7 +36,6 @@ export interface WaveCompletionEvent {
 export interface GameEndEvent {
   isVictory: boolean;
   newlyUnlockedAchievements: string[];
-  completedChallenges: ChallengeDefinition[];
 }
 
 /**

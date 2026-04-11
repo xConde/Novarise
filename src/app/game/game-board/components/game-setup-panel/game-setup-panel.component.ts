@@ -2,8 +2,8 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation } from '@angu
 import { DifficultyLevel, DIFFICULTY_PRESETS } from '../../models/game-state.model';
 import { DIFFICULTY_SCORE_MULTIPLIER } from '../../models/score.model';
 import { GameModifier, GameModifierConfig } from '../../models/game-modifier.model';
-import { CampaignLevel } from '@campaign/models/campaign.model';
-import { ChallengeDefinition } from '@campaign/models/challenge.model';
+import { CampaignLevel } from '../../../../run/data/campaign-levels';
+import { ChallengeDefinition } from '../../../../run/data/challenges';
 
 @Component({
   selector: 'app-game-setup-panel',

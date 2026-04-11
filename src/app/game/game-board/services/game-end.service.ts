@@ -7,16 +7,12 @@ import { GameNotificationService, NotificationType } from './game-notification.s
 import { MapBridgeService } from '@core/services/map-bridge.service';
 import { AudioService } from './audio.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
-import { CampaignService } from '@campaign/services/campaign.service';
-import { ChallengeEvaluatorService } from '@campaign/services/challenge-evaluator.service';
-import { ChallengeDefinition } from '@campaign/models/challenge.model';
-import { ScoreBreakdown } from '../models/score.model';
+import { calculateScoreBreakdown, ScoreBreakdown } from '../models/score.model';
 import { DIFFICULTY_PRESETS } from '../models/game-state.model';
 
 /** Data returned from recordEnd() for use by the component (display/UI updates). */
 export interface GameEndResult {
   newlyUnlockedAchievements: string[];
-  completedChallenges: ChallengeDefinition[];
 }
 
 /**
@@ -39,8 +35,6 @@ export class GameEndService {
     private mapBridge: MapBridgeService,
     private audioService: AudioService,
     private challengeTrackingService: ChallengeTrackingService,
-    private campaignService: CampaignService,
-    private challengeEvaluatorService: ChallengeEvaluatorService,
   ) {}
 
   /** Call once when the player confirms a L3 specialization upgrade. */
@@ -59,14 +53,32 @@ export class GameEndService {
    * Idempotent — subsequent calls within the same session return an empty result without
    * re-recording anything.
    *
-   * @param isVictory      True for VICTORY, false for DEFEAT or quit.
-   * @param scoreBreakdown Score data computed at transition time. Null for quit before first wave.
+   * Phase H7: scoreBreakdown is COMPUTED here from current GameState. All
+   * legacy callers that passed a null/pre-computed scoreBreakdown are now
+   * tolerated via a legacy second parameter that is IGNORED — the service
+   * always computes. A pre-wave quit (wave=0, score=0) still produces a
+   * valid (zeroed) scoreBreakdown that recordMapScore handles correctly.
+   *
+   * @param isVictory True for VICTORY, false for DEFEAT or quit.
+   * @param _legacyScoreBreakdown Ignored — kept for call-site compatibility.
    */
-  recordEnd(isVictory: boolean, scoreBreakdown: ScoreBreakdown | null): GameEndResult {
+  recordEnd(isVictory: boolean, _legacyScoreBreakdown?: ScoreBreakdown | null): GameEndResult {
     if (this.gameEndRecorded) {
-      return { newlyUnlockedAchievements: [], completedChallenges: [] };
+      return { newlyUnlockedAchievements: [] };
     }
     this.gameEndRecorded = true;
+
+    // H7: compute scoreBreakdown from current state — never trust the caller.
+    const state = this.gameStateService.getState();
+    const scoreBreakdown: ScoreBreakdown = calculateScoreBreakdown(
+      state.score,
+      state.lives,
+      DIFFICULTY_PRESETS[state.difficulty].lives,
+      state.difficulty,
+      state.wave,
+      isVictory,
+      this.gameStateService.getModifierScoreMultiplier(),
+    );
 
     // Build GameEndStats from current service state
     const challengeSnapshot = this.challengeTrackingService.getSnapshot();
@@ -88,11 +100,10 @@ export class GameEndService {
       }
     }
 
-    // Record map score. scoreBreakdown.stars is already 0 when isVictory=false
-    // (the score model computes 0 stars on defeat). For quit, scoreBreakdown is null
-    // (only computed on entering VICTORY/DEFEAT), so this block is skipped entirely.
+    // Record map score. scoreBreakdown is always non-null after H7.
+    // scoreBreakdown.stars is 0 on defeat (per the score model).
     const mapId = this.mapBridge.getMapId();
-    if (mapId && scoreBreakdown) {
+    if (mapId) {
       this.playerProfileService.recordMapScore(
         mapId,
         scoreBreakdown.finalScore,
@@ -101,50 +112,7 @@ export class GameEndService {
       );
     }
 
-    // Campaign-specific: evaluate challenges and record completion (VICTORY on campaign levels only)
-    let completedChallenges: ChallengeDefinition[] = [];
-    if (isVictory && mapId && this.campaignService.getLevel(mapId)) {
-      const endState = this.gameStateService.getState();
-      const challengeInput = {
-        livesLost: gameEndStats.livesLost,
-        elapsedTime: endState.elapsedTime,
-        totalGoldSpent: challengeSnapshot.totalGoldSpent,
-        maxTowersPlaced: challengeSnapshot.maxTowersPlaced,
-        towerTypesUsed: challengeSnapshot.towerTypesUsed,
-      };
-
-      const newlyChallenged = this.challengeEvaluatorService.evaluateChallenges(mapId, challengeInput);
-      completedChallenges = newlyChallenged;
-
-      let challengeBonus = 0;
-      for (const challenge of newlyChallenged) {
-        if (!this.campaignService.isChallengeCompleted(challenge.id)) {
-          this.playerProfileService.recordChallengeCompleted();
-        }
-        this.campaignService.completeChallenge(challenge.id);
-        challengeBonus += challenge.scoreBonus;
-        this.audioService.playChallengeSound();
-        this.notificationService.show(
-          NotificationType.CHALLENGE,
-          'Challenge Complete!',
-          `${challenge.name} (+${challenge.scoreBonus} pts)`,
-        );
-      }
-
-      if (challengeBonus > 0) {
-        this.gameStateService.addScore(challengeBonus);
-      }
-
-      const updatedScore = (scoreBreakdown?.finalScore ?? 0) + challengeBonus;
-      this.campaignService.recordCompletion(
-        mapId,
-        updatedScore,
-        scoreBreakdown?.stars ?? 0,
-        endState.difficulty,
-      );
-    }
-
-    return { newlyUnlockedAchievements: newlyUnlocked, completedChallenges };
+    return { newlyUnlockedAchievements: newlyUnlocked };
   }
 
   /**

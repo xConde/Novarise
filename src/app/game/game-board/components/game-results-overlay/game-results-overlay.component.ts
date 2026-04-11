@@ -1,8 +1,8 @@
 import { Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewEncapsulation } from '@angular/core';
 import { Achievement } from '@core/services/player-profile.service';
 import { ScoreBreakdown } from '../../models/score.model';
-import { CampaignLevel } from '@campaign/models/campaign.model';
-import { ChallengeDefinition } from '@campaign/models/challenge.model';
+import { CampaignLevel } from '../../../../run/data/campaign-levels';
+import { ChallengeDefinition } from '../../../../run/data/challenges';
 import { FocusTrap } from '../../../../shared/utils/focus-trap.util';
 
 @Component({

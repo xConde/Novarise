@@ -4,7 +4,7 @@ import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameStateService } from './game-state.service';
 import { DifficultyLevel, INITIAL_GAME_STATE } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
-import { ChallengeType } from '../../../campaign/models/challenge.model';
+import { ChallengeType } from '../../../run/data/challenges';
 
 describe('ChallengeDisplayService', () => {
   let service: ChallengeDisplayService;

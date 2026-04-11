@@ -8,12 +8,9 @@ import { GameNotificationService, NotificationType } from './game-notification.s
 import { MapBridgeService } from '@core/services/map-bridge.service';
 import { AudioService } from './audio.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
-import { CampaignService } from '@campaign/services/campaign.service';
-import { ChallengeEvaluatorService } from '@campaign/services/challenge-evaluator.service';
 import { TowerType } from '../models/tower.model';
-import { GamePhase, DifficultyLevel } from '../models/game-state.model';
+import { DifficultyLevel } from '../models/game-state.model';
 import { ScoreBreakdown } from '../models/score.model';
-import { ChallengeDefinition, ChallengeType } from '@campaign/models/challenge.model';
 
 const FAKE_SCORE_BREAKDOWN: ScoreBreakdown = {
   baseScore: 1000,
@@ -48,8 +45,6 @@ describe('GameEndService', () => {
   let playerProfileSpy: jasmine.SpyObj<PlayerProfileService>;
   let notificationSpy: jasmine.SpyObj<GameNotificationService>;
   let audioSpy: jasmine.SpyObj<AudioService>;
-  let campaignSpy: jasmine.SpyObj<CampaignService>;
-  let challengeEvaluatorSpy: jasmine.SpyObj<ChallengeEvaluatorService>;
   let mapBridgeSpy: jasmine.SpyObj<MapBridgeService>;
   let statusEffectSpy: jasmine.SpyObj<StatusEffectService>;
   let gameStateService: GameStateService;
@@ -76,15 +71,6 @@ describe('GameEndService', () => {
       'playStreakSound', 'toggleMute',
     ]);
 
-    campaignSpy = jasmine.createSpyObj('CampaignService', [
-      'getLevel', 'recordCompletion', 'completeChallenge', 'getNextLevel',
-      'isUnlocked', 'getAllLevels', 'getCompletedCount', 'isChallengeCompleted',
-    ]);
-    campaignSpy.getLevel.and.returnValue(undefined);
-
-    challengeEvaluatorSpy = jasmine.createSpyObj('ChallengeEvaluatorService', ['evaluateChallenges']);
-    challengeEvaluatorSpy.evaluateChallenges.and.returnValue([]);
-
     mapBridgeSpy = jasmine.createSpyObj('MapBridgeService', [
       'getMapId', 'hasEditorMap', 'getEditorMapState', 'setEditorMapState', 'convertToGameBoard',
     ]);
@@ -100,8 +86,6 @@ describe('GameEndService', () => {
         { provide: PlayerProfileService, useValue: playerProfileSpy },
         { provide: GameNotificationService, useValue: notificationSpy },
         { provide: AudioService, useValue: audioSpy },
-        { provide: CampaignService, useValue: campaignSpy },
-        { provide: ChallengeEvaluatorService, useValue: challengeEvaluatorSpy },
         { provide: MapBridgeService, useValue: mapBridgeSpy },
       ],
     });
@@ -138,7 +122,6 @@ describe('GameEndService', () => {
 
       expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
       expect(result.newlyUnlockedAchievements).toEqual([]);
-      expect(result.completedChallenges).toEqual([]);
     });
 
     it('reset() clears recorded state so next recordEnd() fires again', () => {
@@ -250,25 +233,37 @@ describe('GameEndService', () => {
   // ---------------------------------------------------------------------------
 
   describe('map score recording', () => {
-    it('records map score when mapId and scoreBreakdown are present', () => {
+    it('records map score when mapId is present (always computed from GameStateService)', () => {
+      // H7: recordEnd always computes scoreBreakdown from GameStateService — the second
+      // parameter is a legacy ignored arg. With a fresh GameStateService (score=0,
+      // lives=20, difficulty=NORMAL, wave=0, victory=true) the computed breakdown is:
+      // finalScore=0, stars=3 (full lives), difficulty=NORMAL.
       mapBridgeSpy.getMapId.and.returnValue('map_01');
 
       service.recordEnd(true, FAKE_SCORE_BREAKDOWN);
 
       expect(playerProfileSpy.recordMapScore).toHaveBeenCalledOnceWith(
         'map_01',
-        FAKE_SCORE_BREAKDOWN.finalScore,
-        FAKE_SCORE_BREAKDOWN.stars,
-        FAKE_SCORE_BREAKDOWN.difficulty
+        0,           // computed baseScore=0 × 1.0 difficulty × 1.0 modifier = 0
+        3,           // stars=3: lives fully intact on victory (20/20)
+        DifficultyLevel.NORMAL
       );
     });
 
-    it('skips recordMapScore when scoreBreakdown is null (quit path)', () => {
+    it('quit path (recordEnd false, null) still records map score (H7: always computed)', () => {
+      // H7 removed the skip-on-null shortcut: scoreBreakdown is always computed from
+      // GameStateService, so recordMapScore is always called when mapId is present.
+      // A pre-wave quit produces score=0, stars=0 (isVictory=false).
       mapBridgeSpy.getMapId.and.returnValue('map_01');
 
       service.recordEnd(false, null);
 
-      expect(playerProfileSpy.recordMapScore).not.toHaveBeenCalled();
+      expect(playerProfileSpy.recordMapScore).toHaveBeenCalledOnceWith(
+        'map_01',
+        0,           // score=0
+        0,           // stars=0 on defeat/quit
+        DifficultyLevel.NORMAL
+      );
     });
 
     it('skips recordMapScore when mapId is null', () => {
@@ -279,16 +274,19 @@ describe('GameEndService', () => {
       expect(playerProfileSpy.recordMapScore).not.toHaveBeenCalled();
     });
 
-    it('defeat records score with stars=0 (scoreBreakdown.stars already 0 on defeat)', () => {
+    it('defeat records score with stars=0 (computed from GameStateService on defeat)', () => {
+      // H7: scoreBreakdown is always computed — FAKE_DEFEAT_BREAKDOWN is ignored.
+      // With fresh state (score=0, lives=20, difficulty=NORMAL, wave=0, isVictory=false):
+      // finalScore=0, stars=0.
       mapBridgeSpy.getMapId.and.returnValue('map_01');
 
       service.recordEnd(false, FAKE_DEFEAT_BREAKDOWN);
 
       expect(playerProfileSpy.recordMapScore).toHaveBeenCalledOnceWith(
         'map_01',
-        FAKE_DEFEAT_BREAKDOWN.finalScore,
-        0,
-        FAKE_DEFEAT_BREAKDOWN.difficulty
+        0,           // computed finalScore=0
+        0,           // stars=0 on defeat
+        DifficultyLevel.NORMAL
       );
     });
   });
@@ -331,146 +329,5 @@ describe('GameEndService', () => {
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // Defeat path — skips challenges
-  // ---------------------------------------------------------------------------
-
-  describe('defeat path', () => {
-    it('does not evaluate challenges on defeat', () => {
-      mapBridgeSpy.getMapId.and.returnValue('campaign_01');
-      const fakeLevel = { id: 'campaign_01' } as any;
-      campaignSpy.getLevel.and.returnValue(fakeLevel);
-
-      service.recordEnd(false, FAKE_DEFEAT_BREAKDOWN);
-
-      expect(challengeEvaluatorSpy.evaluateChallenges).not.toHaveBeenCalled();
-    });
-
-    it('returns empty completedChallenges on defeat', () => {
-      const result = service.recordEnd(false, null);
-      expect(result.completedChallenges).toEqual([]);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Victory path — challenges and campaign completion
-  // ---------------------------------------------------------------------------
-
-  describe('victory path — campaign challenges', () => {
-    const CAMPAIGN_MAP_ID = 'campaign_01';
-    const FAKE_CHALLENGE: ChallengeDefinition = {
-      id: 'ch_flawless',
-      type: ChallengeType.UNTOUCHABLE,
-      name: 'Flawless Victory',
-      description: 'Win without losing a life.',
-      scoreBonus: 500,
-    };
-
-    beforeEach(() => {
-      mapBridgeSpy.getMapId.and.returnValue(CAMPAIGN_MAP_ID);
-      campaignSpy.getLevel.and.returnValue({ id: CAMPAIGN_MAP_ID } as any);
-      gameStateService.setPhase(GamePhase.VICTORY);
-    });
-
-    it('evaluates challenges on victory for campaign maps', () => {
-      challengeEvaluatorSpy.evaluateChallenges.and.returnValue([]);
-
-      service.recordEnd(true, FAKE_SCORE_BREAKDOWN);
-
-      expect(challengeEvaluatorSpy.evaluateChallenges).toHaveBeenCalledWith(
-        CAMPAIGN_MAP_ID,
-        jasmine.objectContaining({ livesLost: jasmine.any(Number) })
-      );
-    });
-
-    it('returns completed challenges in result', () => {
-      challengeEvaluatorSpy.evaluateChallenges.and.returnValue([FAKE_CHALLENGE]);
-
-      const result = service.recordEnd(true, FAKE_SCORE_BREAKDOWN);
-
-      expect(result.completedChallenges).toEqual([FAKE_CHALLENGE]);
-    });
-
-    it('calls recordChallengeCompleted for each completed challenge', () => {
-      const challenges: ChallengeDefinition[] = [FAKE_CHALLENGE, { id: 'ch_2', type: ChallengeType.FRUGAL, name: 'C2', description: '', scoreBonus: 100 }];
-      challengeEvaluatorSpy.evaluateChallenges.and.returnValue(challenges);
-      campaignSpy.isChallengeCompleted.and.returnValue(false);
-
-      service.recordEnd(true, FAKE_SCORE_BREAKDOWN);
-
-      expect(playerProfileSpy.recordChallengeCompleted).toHaveBeenCalledTimes(2);
-    });
-
-    it('does not call recordChallengeCompleted for already-completed challenges', () => {
-      const ch2: ChallengeDefinition = { id: 'ch_2', type: ChallengeType.FRUGAL, name: 'C2', description: '', scoreBonus: 100 };
-      challengeEvaluatorSpy.evaluateChallenges.and.returnValue([FAKE_CHALLENGE, ch2]);
-      // FAKE_CHALLENGE already completed in a previous session, ch2 is new
-      campaignSpy.isChallengeCompleted.and.callFake((id: string) => id === FAKE_CHALLENGE.id);
-
-      service.recordEnd(true, FAKE_SCORE_BREAKDOWN);
-
-      expect(playerProfileSpy.recordChallengeCompleted).toHaveBeenCalledTimes(1);
-    });
-
-    it('fires challenge toast for each completed challenge', () => {
-      challengeEvaluatorSpy.evaluateChallenges.and.returnValue([FAKE_CHALLENGE]);
-
-      service.recordEnd(true, FAKE_SCORE_BREAKDOWN);
-
-      expect(audioSpy.playChallengeSound).toHaveBeenCalled();
-      expect(notificationSpy.show).toHaveBeenCalledWith(
-        NotificationType.CHALLENGE,
-        'Challenge Complete!',
-        jasmine.stringContaining(FAKE_CHALLENGE.name)
-      );
-    });
-
-    it('adds challenge bonus to score', () => {
-      challengeEvaluatorSpy.evaluateChallenges.and.returnValue([FAKE_CHALLENGE]);
-      spyOn(gameStateService, 'addScore').and.callThrough();
-
-      service.recordEnd(true, FAKE_SCORE_BREAKDOWN);
-
-      expect(gameStateService.addScore).toHaveBeenCalledWith(FAKE_CHALLENGE.scoreBonus);
-    });
-
-    it('does not add score when no challenges completed', () => {
-      challengeEvaluatorSpy.evaluateChallenges.and.returnValue([]);
-      spyOn(gameStateService, 'addScore').and.callThrough();
-
-      service.recordEnd(true, FAKE_SCORE_BREAKDOWN);
-
-      expect(gameStateService.addScore).not.toHaveBeenCalled();
-    });
-
-    it('records campaign completion with updated score including challenge bonus', () => {
-      challengeEvaluatorSpy.evaluateChallenges.and.returnValue([FAKE_CHALLENGE]);
-
-      service.recordEnd(true, FAKE_SCORE_BREAKDOWN);
-
-      const expectedScore = FAKE_SCORE_BREAKDOWN.finalScore + FAKE_CHALLENGE.scoreBonus;
-      expect(campaignSpy.recordCompletion).toHaveBeenCalledWith(
-        CAMPAIGN_MAP_ID,
-        expectedScore,
-        FAKE_SCORE_BREAKDOWN.stars,
-        jasmine.any(String)
-      );
-    });
-
-    it('does not evaluate challenges for non-campaign maps', () => {
-      campaignSpy.getLevel.and.returnValue(undefined);
-
-      service.recordEnd(true, FAKE_SCORE_BREAKDOWN);
-
-      expect(challengeEvaluatorSpy.evaluateChallenges).not.toHaveBeenCalled();
-    });
-
-    it('does not record campaign completion when not a campaign map', () => {
-      campaignSpy.getLevel.and.returnValue(undefined);
-
-      service.recordEnd(true, FAKE_SCORE_BREAKDOWN);
-
-      expect(campaignSpy.recordCompletion).not.toHaveBeenCalled();
-    });
-  });
 });
+

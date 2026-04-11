@@ -12,7 +12,7 @@ import { GameEndService } from './game-end.service';
 import { MapBridgeService } from '@core/services/map-bridge.service';
 import { StatusEffectService } from './status-effect.service';
 import { TutorialService } from '@core/services/tutorial.service';
-import { CAMPAIGN_WAVE_DEFINITIONS } from '@campaign/waves/campaign-waves';
+import { CAMPAIGN_WAVE_DEFINITIONS } from '../../../run/data/waves/campaign-waves';
 import { TowerCombatService } from './tower-combat.service';
 import { TowerPreviewService } from './tower-preview.service';
 import { DamagePopupService } from './damage-popup.service';
@@ -78,7 +78,7 @@ describe('GameSessionService', () => {
     challengeSpy.getSnapshot.and.returnValue({} as any);
 
     gameEndSpy = jasmine.createSpyObj('GameEndService', ['reset', 'recordEnd', 'recordSpecialization']);
-    gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [], completedChallenges: [] });
+    gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [] });
 
     mapBridgeSpy = jasmine.createSpyObj('MapBridgeService', [
       'getMapId', 'hasEditorMap', 'getEditorMapState', 'convertToGameBoard', 'setEditorMapState',

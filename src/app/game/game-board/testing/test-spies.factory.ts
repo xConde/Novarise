@@ -1,10 +1,10 @@
 import { BehaviorSubject, EMPTY, of } from 'rxjs';
 
-import { RelicService } from '../../../ascent/services/relic.service';
-import { RunService } from '../../../ascent/services/run.service';
-import { DeckService } from '../../../ascent/services/deck.service';
-import { CardEffectService } from '../../../ascent/services/card-effect.service';
-import { DECK_CONFIG, DeckState, EnergyState } from '../../../ascent/models/card.model';
+import { RelicService } from '../../../run/services/relic.service';
+import { RunService } from '../../../run/services/run.service';
+import { DeckService } from '../../../run/services/deck.service';
+import { CardEffectService } from '../../../run/services/card-effect.service';
+import { DECK_CONFIG, DeckState, EnergyState } from '../../../run/models/card.model';
 import { GameBoardService } from '../game-board.service';
 import { EnemyService, DamageResult } from '../services/enemy.service';
 import { GameStatsService, GameStats } from '../services/game-stats.service';
@@ -20,7 +20,7 @@ import { GameStateService } from '../services/game-state.service';
 import { GameEndService } from '../services/game-end.service';
 import { WaveService } from '../services/wave.service';
 import { TowerCombatService } from '../services/tower-combat.service';
-import { ProjectileService } from '../services/projectile.service';
+// M2 S5: ProjectileService import + createProjectileServiceSpy removed (file deleted).
 import { TowerPlacementService } from '../services/tower-placement.service';
 import { TowerSelectionService } from '../services/tower-selection.service';
 import { StatusEffectService } from '../services/status-effect.service';
@@ -31,7 +31,6 @@ import { ChallengeIndicator } from '../components/game-hud/game-hud.component';
 import { MapBridgeService } from '@core/services/map-bridge.service';
 import { MapStorageService, MapMetadata } from '@core/services/map-storage.service';
 import { PlayerProfileService } from '@core/services/player-profile.service';
-import { CampaignService } from '@campaign/services/campaign.service';
 import { Enemy } from '../models/enemy.model';
 import { GameBoardTile } from '../models/game-board-tile';
 import { TowerType } from '../models/tower.model';
@@ -184,20 +183,27 @@ export function createTutorialServiceSpy(): jasmine.SpyObj<TutorialService> {
  * Create a pre-configured CombatLoopService spy.
  *
  * Default return values:
- *   - tick() — empty CombatFrameResult (no kills, no events)
+ *   - resolveTurn() — empty CombatFrameResult (no kills, no events)
  *   - flushElapsedTime() — 0
+ *   - getTurnNumber() — 0
  *   - reset() / resetLeakState() — no-op void
+ *
+ * Hardening H1: tick() was deleted — the physics loop is gone. Any spec that
+ * still needs tick() semantics should cast to any and call it as a missing
+ * member (that's a runtime error — those specs are xdescribe'd in H1 and
+ * rewritten in H2).
  */
 export function createCombatLoopServiceSpy(): jasmine.SpyObj<CombatLoopService> {
   const spy = jasmine.createSpyObj<CombatLoopService>('CombatLoopService', [
-    'tick',
+    'resolveTurn',
     'flushElapsedTime',
     'resetLeakState',
     'reset',
+    'getTurnNumber',
   ]);
-  spy.tick.and.returnValue({
+  const emptyFrame = {
     kills: [],
-    firedTypes: new Set(),
+    firedTypes: new Set<TowerType>(),
     hitCount: 0,
     exitCount: 0,
     leaked: false,
@@ -205,8 +211,10 @@ export function createCombatLoopServiceSpy(): jasmine.SpyObj<CombatLoopService> 
     waveCompletion: null,
     gameEnd: null,
     combatAudioEvents: [],
-  });
+  };
+  spy.resolveTurn.and.returnValue(emptyFrame);
   spy.flushElapsedTime.and.returnValue(0);
+  spy.getTurnNumber.and.returnValue(0);
   return spy;
 }
 
@@ -492,11 +500,11 @@ export function createPlayerProfileServiceSpy(): jasmine.SpyObj<PlayerProfileSer
     hasPlacedAllTowerTypes: false,
     maxModifiersUsedInVictory: 0,
     completedChallengeCount: 0,
-    ascentRunsAttempted: 0,
-    ascentRunsCompleted: 0,
+    runsAttempted: 0,
+    runsCompleted: 0,
     highestAscensionBeaten: 0,
-    ascentTotalKills: 0,
-    ascentBestScore: 0,
+    runTotalKills: 0,
+    runBestScore: 0,
   };
   spy.getProfile.and.returnValue(emptyProfile);
   spy.recordGameEnd.and.returnValue([]);
@@ -509,50 +517,6 @@ export function createPlayerProfileServiceSpy(): jasmine.SpyObj<PlayerProfileSer
   return spy;
 }
 
-/**
- * Create a pre-configured CampaignService spy.
- *
- * Default return values:
- *   - getAllLevels() — empty array
- *   - getLevel() — undefined
- *   - isUnlocked() / isCompleted() — false
- *   - getLevelProgress() — null
- *   - getTotalStars() / getCompletedCount() / getCompletedChallengeCount() — 0
- *   - getNextLevel() — null
- *   - getChallengesForLevel() — empty array
- *   - isChallengeCompleted() — false
- *   - All mutating methods — no-op void
- */
-export function createCampaignServiceSpy(): jasmine.SpyObj<CampaignService> {
-  const spy = jasmine.createSpyObj<CampaignService>('CampaignService', [
-    'getAllLevels',
-    'getLevel',
-    'isUnlocked',
-    'isCompleted',
-    'getLevelProgress',
-    'getTotalStars',
-    'getCompletedCount',
-    'recordCompletion',
-    'getNextLevel',
-    'getChallengesForLevel',
-    'isChallengeCompleted',
-    'completeChallenge',
-    'getCompletedChallengeCount',
-    'resetProgress',
-  ]);
-  spy.getAllLevels.and.returnValue([]);
-  spy.getLevel.and.returnValue(undefined);
-  spy.isUnlocked.and.returnValue(false);
-  spy.isCompleted.and.returnValue(false);
-  spy.getLevelProgress.and.returnValue(null);
-  spy.getTotalStars.and.returnValue(0);
-  spy.getCompletedCount.and.returnValue(0);
-  spy.getNextLevel.and.returnValue(null);
-  spy.getChallengesForLevel.and.returnValue([]);
-  spy.isChallengeCompleted.and.returnValue(false);
-  spy.getCompletedChallengeCount.and.returnValue(0);
-  return spy;
-}
 
 /**
  * Create a pre-configured GameStateService spy.
@@ -627,7 +591,7 @@ export function createGameEndServiceSpy(): jasmine.SpyObj<GameEndService> {
     'reset',
   ]);
   spy.isRecorded.and.returnValue(false);
-  spy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [], completedChallenges: [] });
+  spy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [] });
   return spy;
 }
 
@@ -642,6 +606,7 @@ export function createGameEndServiceSpy(): jasmine.SpyObj<GameEndService> {
  *   - All mutating methods — no-op void
  */
 export function createWaveServiceSpy(): jasmine.SpyObj<WaveService> {
+  // M2 S3: 'update' removed; spawnForTurn is the turn-based replacement.
   const spy = jasmine.createSpyObj<WaveService>('WaveService', [
     'setCustomWaves',
     'clearCustomWaves',
@@ -652,7 +617,9 @@ export function createWaveServiceSpy(): jasmine.SpyObj<WaveService> {
     'getCurrentEndlessTemplate',
     'getCurrentEndlessResult',
     'startWave',
-    'update',
+    'spawnForTurn',
+    'getRemainingInTurnSchedule',
+    'getUpcomingSpawnsPreview',
     'isSpawning',
     'getRemainingToSpawn',
     'getTotalEnemiesInWave',
@@ -662,6 +629,9 @@ export function createWaveServiceSpy(): jasmine.SpyObj<WaveService> {
     'markSeen',
     'reset',
   ]);
+  spy.spawnForTurn.and.returnValue(0);
+  spy.getRemainingInTurnSchedule.and.returnValue(0);
+  spy.getUpcomingSpawnsPreview.and.returnValue([]);
   spy.hasCustomWaves.and.returnValue(false);
   spy.isEndlessMode.and.returnValue(false);
   spy.isSpawning.and.returnValue(false);
@@ -687,19 +657,22 @@ export function createWaveServiceSpy(): jasmine.SpyObj<WaveService> {
  *   - All other mutating methods — no-op void
  */
 export function createTowerCombatServiceSpy(): jasmine.SpyObj<TowerCombatService> {
+  // M2 S4: 'update' removed; fireTurn + tickMortarZonesForTurn are the turn-based replacements.
   const spy = jasmine.createSpyObj<TowerCombatService>('TowerCombatService', [
     'drainAudioEvents',
     'registerTower',
     'upgradeTower',
     'upgradeTowerWithSpec',
     'unregisterTower',
-    'update',
+    'fireTurn',
+    'tickMortarZonesForTurn',
     'setTargetingMode',
     'cycleTargetingMode',
     'getTower',
     'getPlacedTowers',
   ]);
-  spy.update.and.returnValue({ killed: [], fired: [], hitCount: 0 });
+  spy.fireTurn.and.returnValue({ killed: [], fired: [], hitCount: 0 });
+  spy.tickMortarZonesForTurn.and.returnValue([]);
   spy.upgradeTower.and.returnValue(false);
   spy.upgradeTowerWithSpec.and.returnValue(false);
   spy.setTargetingMode.and.returnValue(false);
@@ -723,9 +696,12 @@ export function createTowerCombatServiceSpy(): jasmine.SpyObj<TowerCombatService
  *   - All cleanup / removal methods — no-op void
  */
 export function createStatusEffectServiceSpy(): jasmine.SpyObj<StatusEffectService> {
+  // M2 S2: 'update' removed from spy method list (deleted from production).
+  // tickTurn + getSlowTileReduction are the turn-based replacements.
   const spy = jasmine.createSpyObj<StatusEffectService>('StatusEffectService', [
     'apply',
-    'update',
+    'tickTurn',
+    'getSlowTileReduction',
     'hasEffect',
     'getEffects',
     'getAllActiveEffects',
@@ -734,7 +710,8 @@ export function createStatusEffectServiceSpy(): jasmine.SpyObj<StatusEffectServi
     'cleanup',
   ]);
   spy.apply.and.returnValue(false);
-  spy.update.and.returnValue([]);
+  spy.tickTurn.and.returnValue([]);
+  spy.getSlowTileReduction.and.returnValue(0);
   spy.hasEffect.and.returnValue(false);
   spy.getEffects.and.returnValue([]);
   spy.getAllActiveEffects.and.returnValue(new Map());
@@ -855,23 +832,7 @@ export function createTowerSelectionServiceSpy(): jasmine.SpyObj<TowerSelectionS
 /**
  * Create a pre-configured ProjectileService spy.
  *
- * Default return values:
- *   - getProjectileCount() — 0
- *   - fire() — no-op void
- *   - advance() — empty array (no hits)
- *   - cleanup() — no-op void
- */
-export function createProjectileServiceSpy(): jasmine.SpyObj<ProjectileService> {
-  const spy = jasmine.createSpyObj<ProjectileService>('ProjectileService', [
-    'getProjectileCount',
-    'fire',
-    'advance',
-    'cleanup',
-  ]);
-  spy.getProjectileCount.and.returnValue(0);
-  spy.advance.and.returnValue([]);
-  return spy;
-}
+// M2 S5: createProjectileServiceSpy DELETED (production service removed).
 
 // ---------------------------------------------------------------------------
 // Service spies added in Hardening VIII Sprint S12 / S15 / S17
@@ -961,10 +922,33 @@ export function createRunServiceSpy(): jasmine.SpyObj<RunService> {
     'startNewRun', 'resumeRun', 'abandonRun', 'selectNode', 'prepareEncounter',
   ], ['runState']);
 
-  spy.isInRun.and.returnValue(false);
-  spy.hasActiveRun.and.returnValue(false);
-  spy.getCurrentEncounter.and.returnValue(null);
-  (Object.getOwnPropertyDescriptor(spy, 'runState')!.get as jasmine.Spy).and.returnValue(null);
+  // Post-pivot default: there is ALWAYS an active run. Combat cannot happen
+  // outside a run encounter, so GameBoardComponent tests assume a happy-path
+  // run/encounter exists. Tests that specifically exercise "no run" paths
+  // should override isInRun / runState / getCurrentEncounter individually.
+  spy.isInRun.and.returnValue(true);
+  spy.hasActiveRun.and.returnValue(true);
+  spy.getCurrentEncounter.and.returnValue({
+    nodeId: 'test-node',
+    nodeType: 'combat',
+    waves: [],
+    enemyHealthMultiplier: 1,
+    enemySpeedMultiplier: 1,
+    goldMultiplier: 1,
+  } as any);
+  (Object.getOwnPropertyDescriptor(spy, 'runState')!.get as jasmine.Spy).and.returnValue({
+    id: 'test-run',
+    seed: 0,
+    ascensionLevel: 0,
+    lives: 7,
+    maxLives: 7,
+    gold: 0,
+    relicIds: [],
+    deckCardIds: [],
+    encounterResults: [],
+    status: 'in_progress',
+    score: 0,
+  } as any);
 
   return spy;
 }
