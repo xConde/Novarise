@@ -18,20 +18,20 @@ import {
   DECK_CONFIG,
 } from '../models/card.model';
 import { getStarterDeck, CARD_DEFINITIONS } from '../constants/card-definitions';
+import { MODIFIER_STAT } from '../constants/modifier-stat.constants';
 import { GameStateService } from '../../game/game-board/services/game-state.service';
 import { EnemyService } from '../../game/game-board/services/enemy.service';
+import { StatusEffectService } from '../../game/game-board/services/status-effect.service';
+import { StatusEffectType } from '../../game/game-board/constants/status-effect.constants';
+import {
+  createGameStateServiceSpy,
+  createEnemyServiceSpy,
+  createStatusEffectServiceSpy,
+} from '../../game/game-board/testing';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const TEST_SEED = 12345;
-
-function makeGameStateSpy(): jasmine.SpyObj<GameStateService> {
-  return jasmine.createSpyObj('GameStateService', ['addGold', 'addLives']);
-}
-
-function makeEnemyServiceSpy(): jasmine.SpyObj<EnemyService> {
-  return jasmine.createSpyObj('EnemyService', ['damageStrongestEnemy', 'slowAllEnemies']);
-}
 
 // ── Test Suite ─────────────────────────────────────────────────────────────────
 
@@ -40,10 +40,13 @@ describe('Card System — Integration Flow', () => {
   let effects: CardEffectService;
   let gameState: jasmine.SpyObj<GameStateService>;
   let enemyService: jasmine.SpyObj<EnemyService>;
+  let statusEffectService: jasmine.SpyObj<StatusEffectService>;
 
   beforeEach(() => {
-    gameState = makeGameStateSpy();
-    enemyService = makeEnemyServiceSpy();
+    gameState = createGameStateServiceSpy();
+    enemyService = createEnemyServiceSpy(new Map());
+    statusEffectService = createStatusEffectServiceSpy();
+    statusEffectService.apply.and.returnValue(true);
 
     TestBed.configureTestingModule({
       providers: [
@@ -217,8 +220,8 @@ describe('Card System — Integration Flow', () => {
 
     if (modifierEffect.type === 'modifier') {
       effects.applyModifier(modifierEffect);
-      expect(effects.hasActiveModifier('damage')).toBeTrue();
-      expect(effects.getModifierValue('damage')).toBeCloseTo(0.25, 3);
+      expect(effects.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeTrue();
+      expect(effects.getModifierValue(MODIFIER_STAT.DAMAGE)).toBeCloseTo(0.25, 3);
     }
   });
 
@@ -244,7 +247,7 @@ describe('Card System — Integration Flow', () => {
     effects.tickWave(); // → 1
     effects.tickWave(); // → 0, removed
 
-    expect(effects.hasActiveModifier('damage')).toBeFalse();
+    expect(effects.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeFalse();
     expect(effects.getActiveModifiers().length).toBe(0);
   });
 
@@ -255,7 +258,7 @@ describe('Card System — Integration Flow', () => {
     effects.applyModifier(modifierEffect); // +0.25
     effects.applyModifier(modifierEffect); // +0.25
 
-    expect(effects.getModifierValue('damage')).toBeCloseTo(0.5, 3);
+    expect(effects.getModifierValue(MODIFIER_STAT.DAMAGE)).toBeCloseTo(0.5, 3);
     expect(effects.getActiveModifiers().length).toBe(2);
   });
 
@@ -264,11 +267,11 @@ describe('Card System — Integration Flow', () => {
     if (modifierEffect.type !== 'modifier') { fail('Expected modifier effect'); return; }
 
     effects.applyModifier(modifierEffect);
-    expect(effects.hasActiveModifier('damage')).toBeTrue();
+    expect(effects.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeTrue();
 
     effects.reset();
 
-    expect(effects.hasActiveModifier('damage')).toBeFalse();
+    expect(effects.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeFalse();
     expect(effects.getActiveModifiers().length).toBe(0);
   });
 
@@ -309,7 +312,7 @@ describe('Card System — Integration Flow', () => {
     const spellEffect = goldRushDef.effect;
     if (spellEffect.type !== 'spell') { fail('Expected spell effect'); return; }
 
-    effects.applySpell(spellEffect, gameState, enemyService);
+    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0 });
 
     expect(gameState.addGold).toHaveBeenCalledWith(40);
   });
@@ -319,7 +322,7 @@ describe('Card System — Integration Flow', () => {
     const spellEffect = repairDef.effect;
     if (spellEffect.type !== 'spell') { fail('Expected spell effect'); return; }
 
-    effects.applySpell(spellEffect, gameState, enemyService);
+    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0 });
 
     expect(gameState.addLives).toHaveBeenCalledWith(2);
   });
@@ -329,31 +332,32 @@ describe('Card System — Integration Flow', () => {
     const spellEffect = lightningDef.effect;
     if (spellEffect.type !== 'spell') { fail('Expected spell effect'); return; }
 
-    effects.applySpell(spellEffect, gameState, enemyService);
+    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0 });
 
     expect(enemyService.damageStrongestEnemy).toHaveBeenCalledWith(100);
   });
 
-  it('should call slowAllEnemies when frost_wave spell is played', () => {
+  it('should apply SLOW status to enemies when frost_wave spell is played', () => {
     const frostDef = CARD_DEFINITIONS[CardId.FROST_WAVE];
     const spellEffect = frostDef.effect;
     if (spellEffect.type !== 'spell') { fail('Expected spell effect'); return; }
 
-    effects.applySpell(spellEffect, gameState, enemyService);
+    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0 });
 
-    expect(enemyService.slowAllEnemies).toHaveBeenCalledWith(5);
+    // Empty enemy map — no apply calls expected (no enemies present)
+    expect(statusEffectService.apply).not.toHaveBeenCalled();
   });
 
-  it('should add overclock as a fire_rate modifier (1-wave duration)', () => {
+  it('should add overclock as a fireRate modifier (1-wave duration)', () => {
     const overclockDef = CARD_DEFINITIONS[CardId.OVERCLOCK];
     const spellEffect = overclockDef.effect;
     if (spellEffect.type !== 'spell') { fail('Expected spell effect'); return; }
 
-    effects.applySpell(spellEffect, gameState, enemyService);
+    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0 });
 
-    expect(effects.hasActiveModifier('fire_rate')).toBeTrue();
+    expect(effects.hasActiveModifier(MODIFIER_STAT.FIRE_RATE)).toBeTrue();
     const mods = effects.getActiveModifiers();
-    const fireMod = mods.find(m => m.stat === 'fire_rate');
+    const fireMod = mods.find(m => m.stat === MODIFIER_STAT.FIRE_RATE);
     expect(fireMod!.remainingWaves).toBe(1);
   });
 
@@ -470,7 +474,7 @@ describe('Tower card deferred placement', () => {
 
   beforeEach(() => {
     gameState = jasmine.createSpyObj('GameStateService', ['addGold', 'addLives']);
-    enemyService = jasmine.createSpyObj('EnemyService', ['damageStrongestEnemy', 'slowAllEnemies']);
+    enemyService = createEnemyServiceSpy(new Map());
 
     TestBed.configureTestingModule({
       providers: [

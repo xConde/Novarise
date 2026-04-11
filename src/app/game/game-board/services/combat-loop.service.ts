@@ -9,22 +9,21 @@ import { GameStatsService } from './game-stats.service';
 import { GameEndService } from './game-end.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { RunEventBusService, RunEventType } from '../../../run/services/run-event-bus.service';
+import { CardEffectService } from '../../../run/services/card-effect.service';
+import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 
 import { GamePhase } from '../models/game-state.model';
 import { ENEMY_STATS } from '../models/enemy.model';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
-import { PHYSICS_CONFIG } from '../constants/physics.constants';
 import { ScoreBreakdown } from '../models/score.model';
-import { CombatFrameResult, FrameKillEvent, WaveCompletionEvent, GameEndEvent } from '../models/combat-frame.model';
+import { CombatFrameResult, FrameKillEvent, KillInfo, WaveCompletionEvent, GameEndEvent } from '../models/combat-frame.model';
 import { TowerType } from '../models/tower.model';
 import { StatusEffectService } from './status-effect.service';
 
 /**
- * Owns the fixed-timestep physics loop for the COMBAT phase.
+ * Owns the turn-based combat resolution for the COMBAT phase.
  *
  * Responsibilities:
- * - Physics accumulator management
- * - Elapsed time tracking + periodic flush to GameStateService
  * - Wave spawning delegation to WaveService
  * - Tower combat delegation to TowerCombatService
  * - Kill processing (gold award, stat recording, visual snapshot)
@@ -39,7 +38,6 @@ import { StatusEffectService } from './status-effect.service';
  */
 @Injectable()
 export class CombatLoopService {
-  private elapsedTimeAccumulator = 0;
   /** Whether any enemy has leaked during the current wave (for streak bonus calculation). */
   private leakedThisWave = false;
 
@@ -61,25 +59,12 @@ export class CombatLoopService {
     private relicService: RelicService,
     private runEventBus: RunEventBusService,
     private statusEffectService: StatusEffectService,
+    private cardEffectService: CardEffectService,
   ) {}
 
   /** Phase 4: current turn number, exposed for UI bindings. */
   getTurnNumber(): number {
     return this.turnNumber;
-  }
-
-  /**
-   * Flush accumulated elapsed time to GameStateService and return the flushed amount.
-   * Called from the component's state subscription when entering a terminal phase,
-   * so the final elapsed time is recorded before the score is calculated.
-   */
-  flushElapsedTime(): number {
-    const amount = this.elapsedTimeAccumulator;
-    if (amount > 0) {
-      this.gameStateService.addElapsedTime(amount);
-      this.elapsedTimeAccumulator = 0;
-    }
-    return amount;
   }
 
   /**
@@ -95,7 +80,6 @@ export class CombatLoopService {
    * Call on game restart (in restartGame() alongside GameSessionService.resetAllServices()).
    */
   reset(): void {
-    this.elapsedTimeAccumulator = 0;
     this.leakedThisWave = false;
     this.turnNumber = 0;
     this.frameKills.length = 0;
@@ -125,6 +109,7 @@ export class CombatLoopService {
    */
   resolveTurn(scene: THREE.Scene): CombatFrameResult {
     this.turnNumber++;
+    const cardGoldMult = 1 + this.cardEffectService.getModifierValue(MODIFIER_STAT.GOLD_MULTIPLIER);
 
     // Reset per-turn accumulators
     this.frameKills.length = 0;
@@ -150,23 +135,7 @@ export class CombatLoopService {
 
     // 3. Process tower kills — gold award, stat recording, run events
     for (const killInfo of fireResult.killed) {
-      const enemy = this.enemyService.getEnemies().get(killInfo.id);
-      if (enemy && !enemy.dying) {
-        const goldMult = this.relicService.getGoldMultiplier() * this.relicService.rollLuckyCoin();
-        const adjustedGold = Math.round(enemy.value * goldMult);
-        this.gameStateService.addGoldAndScore(adjustedGold);
-        this.gameStatsService.recordGoldEarned(adjustedGold);
-
-        this.frameKills.push({
-          damage: killInfo.damage,
-          position: { ...enemy.position },
-          color: ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackColor,
-          value: enemy.value,
-        });
-
-        this.enemyService.startDyingAnimation(killInfo.id);
-        this.runEventBus.emit(RunEventType.ENEMY_KILLED, { enemyType: enemy.type, value: enemy.value });
-      }
+      this.processKill(killInfo, cardGoldMult);
     }
 
     // 4. Enemy movement — each enemy advances its tiles-per-turn count
@@ -177,46 +146,22 @@ export class CombatLoopService {
     // 5a. Mortar zone tick — turn-ticked DoT from M3 S4 mortar zones
     const mortarKills = this.towerCombatService.tickMortarZonesForTurn(scene, this.turnNumber);
     for (const killInfo of mortarKills) {
-      const enemy = this.enemyService.getEnemies().get(killInfo.id);
-      if (enemy && !enemy.dying) {
-        const goldMult = this.relicService.getGoldMultiplier() * this.relicService.rollLuckyCoin();
-        const adjustedGold = Math.round(enemy.value * goldMult);
-        this.gameStateService.addGoldAndScore(adjustedGold);
-        this.gameStatsService.recordGoldEarned(adjustedGold);
-        this.frameKills.push({
-          damage: killInfo.damage,
-          position: { ...enemy.position },
-          color: ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackColor,
-          value: enemy.value,
-        });
-        this.enemyService.startDyingAnimation(killInfo.id);
-        this.runEventBus.emit(RunEventType.ENEMY_KILLED, { enemyType: enemy.type, value: enemy.value });
-      }
+      this.processKill(killInfo, cardGoldMult);
     }
 
     // 5b. Status effect tick — DoT damage, duration expiry
     const dotKills = this.statusEffectService.tickTurn(this.turnNumber);
     for (const killInfo of dotKills) {
-      const enemy = this.enemyService.getEnemies().get(killInfo.id);
-      if (enemy && !enemy.dying) {
-        const goldMult = this.relicService.getGoldMultiplier() * this.relicService.rollLuckyCoin();
-        const adjustedGold = Math.round(enemy.value * goldMult);
-        this.gameStateService.addGoldAndScore(adjustedGold);
-        this.gameStatsService.recordGoldEarned(adjustedGold);
-        this.frameKills.push({
-          damage: killInfo.damage,
-          position: { ...enemy.position },
-          color: ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackColor,
-          value: enemy.value,
-        });
-        this.enemyService.startDyingAnimation(killInfo.id);
-        this.runEventBus.emit(RunEventType.ENEMY_KILLED, { enemyType: enemy.type, value: enemy.value });
-      }
+      this.processKill(killInfo, cardGoldMult);
     }
 
     // 6. Process leaks — enemies that reached the exit cost lives
     for (const enemyId of reachedExit) {
       if (this.relicService.shouldBlockLeak()) {
+        this.enemyService.removeEnemy(enemyId, scene);
+        continue;
+      }
+      if (this.cardEffectService.tryConsumeLeakBlock()) {
         this.enemyService.removeEnemy(enemyId, scene);
         continue;
       }
@@ -294,5 +239,29 @@ export class CombatLoopService {
       gameEnd,
       combatAudioEvents,
     };
+  }
+
+  /**
+   * Process a single kill: gold award, stats, run event, frame visual snapshot.
+   * Shared between fireTurn kills, mortar zone kills, and DoT kills.
+   */
+  private processKill(killInfo: KillInfo, cardGoldMult: number): void {
+    const enemy = this.enemyService.getEnemies().get(killInfo.id);
+    if (!enemy || enemy.dying) return;
+
+    const goldMult = this.relicService.getGoldMultiplier() * this.relicService.rollLuckyCoin();
+    const adjustedGold = Math.round(enemy.value * goldMult * cardGoldMult);
+    this.gameStateService.addGoldAndScore(adjustedGold);
+    this.gameStatsService.recordGoldEarned(adjustedGold);
+
+    this.frameKills.push({
+      damage: killInfo.damage,
+      position: { ...enemy.position },
+      color: ENEMY_STATS[enemy.type]?.color ?? ENEMY_VISUAL_CONFIG.fallbackColor,
+      value: enemy.value,
+    });
+
+    this.enemyService.startDyingAnimation(killInfo.id);
+    this.runEventBus.emit(RunEventType.ENEMY_KILLED, { enemyType: enemy.type, value: enemy.value });
   }
 }

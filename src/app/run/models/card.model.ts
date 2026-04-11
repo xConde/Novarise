@@ -12,6 +12,7 @@
  */
 
 import { TowerType } from '../../game/game-board/models/tower.model';
+import { ModifierStat } from '../constants/modifier-stat.constants';
 
 // ── Card Identity ─────────────────────────────────────────────
 
@@ -139,7 +140,7 @@ export interface SpellCardEffect {
 
 export interface ModifierCardEffect {
   readonly type: 'modifier';
-  readonly stat: string;
+  readonly stat: ModifierStat;
   readonly value: number;
   readonly duration: number;
 }

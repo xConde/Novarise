@@ -88,8 +88,8 @@ export function createEnemyServiceSpy(
   enemyMap: Map<string, Enemy>
 ): jasmine.SpyObj<EnemyService> {
   const methods: (keyof EnemyService)[] = [
-    'getEnemies', 'damageEnemy', 'damageStrongestEnemy', 'slowAllEnemies',
-    'spawnEnemy', 'removeEnemy', 'startHitFlash',
+    'getEnemies', 'damageEnemy', 'damageStrongestEnemy',
+    'spawnEnemy', 'removeEnemy', 'startHitFlash', 'stepEnemiesOneTurn',
   ];
   const spy = jasmine.createSpyObj<EnemyService>('EnemyService', methods);
   spy.getEnemies.and.returnValue(enemyMap);
@@ -99,6 +99,7 @@ export function createEnemyServiceSpy(
     enemy.health -= damage;
     return { killed: enemy.health <= 0, spawnedEnemies: [] };
   });
+  spy.stepEnemiesOneTurn.and.returnValue([]);
   return spy;
 }
 
@@ -184,7 +185,6 @@ export function createTutorialServiceSpy(): jasmine.SpyObj<TutorialService> {
  *
  * Default return values:
  *   - resolveTurn() — empty CombatFrameResult (no kills, no events)
- *   - flushElapsedTime() — 0
  *   - getTurnNumber() — 0
  *   - reset() / resetLeakState() — no-op void
  *
@@ -196,7 +196,6 @@ export function createTutorialServiceSpy(): jasmine.SpyObj<TutorialService> {
 export function createCombatLoopServiceSpy(): jasmine.SpyObj<CombatLoopService> {
   const spy = jasmine.createSpyObj<CombatLoopService>('CombatLoopService', [
     'resolveTurn',
-    'flushElapsedTime',
     'resetLeakState',
     'reset',
     'getTurnNumber',
@@ -213,7 +212,6 @@ export function createCombatLoopServiceSpy(): jasmine.SpyObj<CombatLoopService> 
     combatAudioEvents: [],
   };
   spy.resolveTurn.and.returnValue(emptyFrame);
-  spy.flushElapsedTime.and.returnValue(0);
   spy.getTurnNumber.and.returnValue(0);
   return spy;
 }
@@ -883,7 +881,7 @@ export function createGameSessionServiceSpy(): jasmine.SpyObj<GameSessionService
 export function createRelicServiceSpy(): jasmine.SpyObj<RelicService> {
   const spy = jasmine.createSpyObj('RelicService', [
     'setActiveRelics', 'clearRelics', 'resetEncounterState', 'resetWaveState',
-    'hasRelic', 'getModifiers', 'getDamageMultiplier', 'getFireRateMultiplier',
+    'hasRelic', 'getModifiers', 'getDamageMultiplier',
     'getRangeMultiplier', 'getTowerCostMultiplier', 'getUpgradeCostMultiplier',
     'getSellRefundRate', 'getGoldMultiplier', 'getEnemySpeedMultiplier',
     'getSpawnIntervalMultiplier', 'getMaxLivesBonus', 'getStartingGoldBonus',
@@ -893,7 +891,6 @@ export function createRelicServiceSpy(): jasmine.SpyObj<RelicService> {
   ], ['relicCount']);
 
   spy.getDamageMultiplier.and.returnValue(1);
-  spy.getFireRateMultiplier.and.returnValue(1);
   spy.getRangeMultiplier.and.returnValue(1);
   spy.getTowerCostMultiplier.and.returnValue(1);
   spy.getUpgradeCostMultiplier.and.returnValue(1);
@@ -980,11 +977,13 @@ export function createCardEffectServiceSpy(): jasmine.SpyObj<CardEffectService> 
     'getModifierValue',
     'hasActiveModifier',
     'getActiveModifiers',
+    'tryConsumeLeakBlock',
     'reset',
   ]);
   spy.getModifierValue.and.returnValue(0);
   spy.hasActiveModifier.and.returnValue(false);
   spy.getActiveModifiers.and.returnValue([]);
+  spy.tryConsumeLeakBlock.and.returnValue(false);
   return spy;
 }
 

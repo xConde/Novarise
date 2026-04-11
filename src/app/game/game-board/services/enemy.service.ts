@@ -9,6 +9,8 @@ import { GameStateService } from './game-state.service';
 import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { EnemyVisualService } from './enemy-visual.service';
 import { EnemyHealthService } from './enemy-health.service';
+import { CardEffectService } from '../../../run/services/card-effect.service';
+import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 
 export { DamageResult } from '../models/enemy.model';
 
@@ -29,6 +31,7 @@ export class EnemyService {
     private enemyMeshFactory: EnemyMeshFactoryService,
     private enemyVisual: EnemyVisualService,
     private enemyHealth: EnemyHealthService,
+    private cardEffectService: CardEffectService,
   ) {}
 
   /**
@@ -181,6 +184,9 @@ export class EnemyService {
    */
   stepEnemiesOneTurn(slowReductionFor: (enemyId: string) => number): string[] {
     const reachedExit: string[] = [];
+    // enemySpeed modifier: floored integer reduction. Weak (<50%) modifiers won't affect FAST/SWIFT,
+    // won't affect 1-tile movers at all. Balance in M4 S5.
+    const enemySpeedSlow = this.cardEffectService.getModifierValue(MODIFIER_STAT.ENEMY_SPEED);
 
     this.enemies.forEach(enemy => {
       if (enemy.health <= 0 || enemy.dying) return;
@@ -196,7 +202,8 @@ export class EnemyService {
       // -1 tile reduction, floored at 0 (can fully stop 1-tile movers).
       const baseTiles = (enemy.type === EnemyType.FAST || enemy.type === EnemyType.SWIFT) ? 2 : 1;
       const slowReduction = slowReductionFor(enemy.id);
-      const tilesToMove = Math.max(0, baseTiles - slowReduction);
+      const enemySpeedReduction = enemySpeedSlow > 0 ? Math.floor(baseTiles * enemySpeedSlow) : 0;
+      const tilesToMove = Math.max(0, baseTiles - slowReduction - enemySpeedReduction);
       if (tilesToMove === 0) return;
 
       let stepsRemaining = tilesToMove;
@@ -300,36 +307,6 @@ export class EnemyService {
     if (strongestId !== null) {
       this.damageEnemy(strongestId, damage);
     }
-  }
-
-  /**
-   * Slow all non-flying, non-dying enemies by `slowFactor` for `durationSeconds`.
-   * Speed is reduced to `originalSpeed * (1 - slowFactor)` (floored at MIN_ENEMY_SPEED).
-   * After the duration the original speeds are restored.
-   * Flying enemies are immune (per the status-effect immunity rules).
-   */
-  slowAllEnemies(durationSeconds: number): void {
-    const SLOW_FACTOR = 0.5; // frost_wave: 50% slow
-    const restored: Array<{ enemy: { speed: number }; originalSpeed: number }> = [];
-
-    for (const enemy of this.enemies.values()) {
-      if (enemy.dying || enemy.isFlying) continue;
-      const original = enemy.speed;
-      enemy.speed = Math.max(MIN_ENEMY_SPEED, original * (1 - SLOW_FACTOR));
-      restored.push({ enemy, originalSpeed: original });
-    }
-
-    if (restored.length === 0) return;
-
-    setTimeout(() => {
-      for (const { enemy, originalSpeed } of restored) {
-        // Only restore if the current speed is still the slowed value
-        // (guards against reset() clearing enemies before timeout fires)
-        if (enemy.speed < originalSpeed) {
-          enemy.speed = originalSpeed;
-        }
-      }
-    }, durationSeconds * 1000);
   }
 
   /**

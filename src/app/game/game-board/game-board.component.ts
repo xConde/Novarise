@@ -66,6 +66,7 @@ import { GameInputService } from './services/game-input.service';
 import { EnemyVisualService } from './services/enemy-visual.service';
 import { EnemyHealthService } from './services/enemy-health.service';
 import { ChainLightningService } from './services/chain-lightning.service';
+import { CombatVFXService } from './services/combat-vfx.service';
 // M2 S5: ProjectileService import removed — file deleted in this phase.
 import { GamePauseService } from './services/game-pause.service';
 import { ChallengeDisplayService } from './services/challenge-display.service';
@@ -76,7 +77,7 @@ import { FocusTrap } from '../../shared/utils/focus-trap.util';
 import { RunService } from '../../run/services/run.service';
 import { RelicService } from '../../run/services/relic.service';
 import { DeckService } from '../../run/services/deck.service';
-import { CardEffectService } from '../../run/services/card-effect.service';
+import { CardEffectService, SpellContext } from '../../run/services/card-effect.service';
 import { EncounterResult } from '../../run/models/run-state.model';
 import { AscensionEffectType, getAscensionEffects } from '../../run/models/ascension.model';
 import { ModifierEffects } from './models/game-modifier.model';
@@ -189,23 +190,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Tower info panel state — delegated to TowerSelectionService (get/set for template + test compat)
   get selectedTowerInfo(): PlacedTower | null { return this.towerSelectionService.selectedTowerInfo; }
   set selectedTowerInfo(v: PlacedTower | null) { this.towerSelectionService.selectedTowerInfo = v; }
-  get selectedTowerStats(): { damage: number; range: number; fireRate: number; statusEffect?: StatusEffectType } | null { return this.towerSelectionService.selectedTowerStats; }
-  set selectedTowerStats(v: { damage: number; range: number; fireRate: number; statusEffect?: StatusEffectType } | null) { this.towerSelectionService.selectedTowerStats = v; }
+  get selectedTowerStats(): { damage: number; range: number; statusEffect?: StatusEffectType } | null { return this.towerSelectionService.selectedTowerStats; }
+  set selectedTowerStats(v: { damage: number; range: number; statusEffect?: StatusEffectType } | null) { this.towerSelectionService.selectedTowerStats = v; }
   get selectedTowerUpgradeCost(): number { return this.towerSelectionService.selectedTowerUpgradeCost; }
   /** Strategic tile premium % applied to the upgrade cost (0 = no premium). */
   get selectedTowerUpgradePercent(): number { return this.towerSelectionService.selectedTowerUpgradePercent; }
   get selectedTowerSellValue(): number { return this.towerSelectionService.selectedTowerSellValue; }
   /** Preview of stats after upgrading (null if at max level or below L2→L3 which needs spec). */
-  get upgradePreview(): { damage: number; range: number; fireRate: number } | null { return this.towerSelectionService.upgradePreview; }
-  set upgradePreview(v: { damage: number; range: number; fireRate: number } | null) { this.towerSelectionService.upgradePreview = v; }
+  get upgradePreview(): { damage: number; range: number } | null { return this.towerSelectionService.upgradePreview; }
+  set upgradePreview(v: { damage: number; range: number } | null) { this.towerSelectionService.upgradePreview = v; }
   MAX_TOWER_LEVEL = MAX_TOWER_LEVEL;
   TowerSpecialization = TowerSpecialization;
 
   // Specialization choice state — delegated to TowerSelectionService
   get showSpecializationChoice(): boolean { return this.towerSelectionService.showSpecializationChoice; }
   set showSpecializationChoice(v: boolean) { this.towerSelectionService.showSpecializationChoice = v; }
-  get specOptions(): { spec: TowerSpecialization; label: string; description: string; damage: number; range: number; fireRate: number }[] { return this.towerSelectionService.specOptions; }
-  set specOptions(v: { spec: TowerSpecialization; label: string; description: string; damage: number; range: number; fireRate: number }[]) { this.towerSelectionService.specOptions = v; }
+  get specOptions(): { spec: TowerSpecialization; label: string; description: string; damage: number; range: number }[] { return this.towerSelectionService.specOptions; }
+  set specOptions(v: { spec: TowerSpecialization; label: string; description: string; damage: number; range: number }[]) { this.towerSelectionService.specOptions = v; }
 
   // Game state exposed to template
   gameState: GameState;
@@ -400,6 +401,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private relicService: RelicService,
     private deckService: DeckService,
     private cardEffectService: CardEffectService,
+    private combatVFXService: CombatVFXService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -428,7 +430,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         prevPhase !== GamePhase.VICTORY &&
         prevPhase !== GamePhase.DEFEAT
       ) {
-        this.combatLoopService.flushElapsedTime();
         const isVictory = state.phase === GamePhase.VICTORY;
         const livesAtStart = DIFFICULTY_PRESETS[state.difficulty].lives;
         const killStats = this.gameStatsService.getStats();
@@ -757,7 +758,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         } else if (spellEffect.spellId === 'salvage') {
           this.salvageLastTower();
         } else {
-          this.cardEffectService.applySpell(spellEffect, this.gameStateService, this.enemyService);
+          this.cardEffectService.applySpell(spellEffect, {
+            gameState: this.gameStateService,
+            enemyService: this.enemyService,
+            statusEffectService: this.statusEffectService,
+            currentTurn: this.combatLoopService.getTurnNumber(),
+          } satisfies SpellContext);
         }
         break;
       }
@@ -1217,6 +1223,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     const result = this.combatLoopService.resolveTurn(
+      this.sceneService.getScene(),
+    );
+
+    // Expire mortar zone visuals whose turn count has elapsed.
+    // Must run after resolveTurn so the turn counter has already advanced.
+    this.combatVFXService.tickMortarZoneVisualsForTurn(
+      this.combatLoopService.getTurnNumber(),
       this.sceneService.getScene(),
     );
 
@@ -2065,6 +2078,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.goldPopupService.update(deltaTime);
       this.damagePopupService.update(deltaTime);
       this.screenShakeService.update(deltaTime, this.sceneService.getCamera());
+      this.combatVFXService.updateVisuals(this.sceneService.getScene());
     }
 
     // Render

@@ -13,6 +13,7 @@ import {
   CardRarity,
   CardType,
 } from '../models/card.model';
+import { MODIFIER_STAT } from './modifier-stat.constants';
 
 // ── Card Effect Value Constants ───────────────────────────────
 
@@ -322,13 +323,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgraded: false,
     effect: {
       type: 'modifier',
-      stat: 'damage',
+      stat: MODIFIER_STAT.DAMAGE,
       value: CARD_VALUES.damageBoostPercent,
       duration: CARD_VALUES.damageBoostDuration,
     },
     upgradedEffect: {
       type: 'modifier',
-      stat: 'damage',
+      stat: MODIFIER_STAT.DAMAGE,
       value: CARD_VALUES.damageBoostUpgradedPercent,
       duration: CARD_VALUES.damageBoostDuration,
     },
@@ -344,13 +345,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgraded: false,
     effect: {
       type: 'modifier',
-      stat: 'range',
+      stat: MODIFIER_STAT.RANGE,
       value: CARD_VALUES.rangeExtendPercent,
       duration: CARD_VALUES.rangeExtendDuration,
     },
     upgradedEffect: {
       type: 'modifier',
-      stat: 'range',
+      stat: MODIFIER_STAT.RANGE,
       value: CARD_VALUES.rangeExtendUpgradedPercent,
       duration: CARD_VALUES.rangeExtendDuration,
     },
@@ -366,13 +367,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgraded: false,
     effect: {
       type: 'modifier',
-      stat: 'fireRate',
+      stat: MODIFIER_STAT.FIRE_RATE,
       value: CARD_VALUES.rapidFirePercent,
       duration: CARD_VALUES.rapidFireDuration,
     },
     upgradedEffect: {
       type: 'modifier',
-      stat: 'fireRate',
+      stat: MODIFIER_STAT.FIRE_RATE,
       value: CARD_VALUES.rapidFireUpgradedPercent,
       duration: CARD_VALUES.rapidFireDuration,
     },
@@ -388,13 +389,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgraded: false,
     effect: {
       type: 'modifier',
-      stat: 'enemySpeed',
+      stat: MODIFIER_STAT.ENEMY_SPEED,
       value: CARD_VALUES.enemySlowPercent,
       duration: CARD_VALUES.enemySlowDuration,
     },
     upgradedEffect: {
       type: 'modifier',
-      stat: 'enemySpeed',
+      stat: MODIFIER_STAT.ENEMY_SPEED,
       value: CARD_VALUES.enemySlowUpgradedPercent,
       duration: CARD_VALUES.enemySlowDuration,
     },
@@ -410,13 +411,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgraded: false,
     effect: {
       type: 'modifier',
-      stat: 'goldMultiplier',
+      stat: MODIFIER_STAT.GOLD_MULTIPLIER,
       value: CARD_VALUES.goldInterestPercent,
       duration: CARD_VALUES.goldInterestDuration,
     },
     upgradedEffect: {
       type: 'modifier',
-      stat: 'goldMultiplier',
+      stat: MODIFIER_STAT.GOLD_MULTIPLIER,
       value: CARD_VALUES.goldInterestUpgradedPercent,
       duration: CARD_VALUES.goldInterestDuration,
     },
@@ -432,13 +433,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgraded: false,
     effect: {
       type: 'modifier',
-      stat: 'leakBlock',
+      stat: MODIFIER_STAT.LEAK_BLOCK,
       value: CARD_VALUES.shieldWallBlocks,
       duration: 0,
     },
     upgradedEffect: {
       type: 'modifier',
-      stat: 'leakBlock',
+      stat: MODIFIER_STAT.LEAK_BLOCK,
       value: CARD_VALUES.shieldWallUpgradedBlocks,
       duration: 0,
     },
@@ -454,13 +455,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgraded: false,
     effect: {
       type: 'modifier',
-      stat: 'chainBounces',
+      stat: MODIFIER_STAT.CHAIN_BOUNCES,
       value: CARD_VALUES.chainLightningBounces,
       duration: CARD_VALUES.chainLightningDuration,
     },
     upgradedEffect: {
       type: 'modifier',
-      stat: 'chainBounces',
+      stat: MODIFIER_STAT.CHAIN_BOUNCES,
       value: CARD_VALUES.chainLightningUpgradedBounces,
       duration: CARD_VALUES.chainLightningDuration,
     },
@@ -476,13 +477,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgraded: false,
     effect: {
       type: 'modifier',
-      stat: 'sniperDamage',
+      stat: MODIFIER_STAT.SNIPER_DAMAGE,
       value: CARD_VALUES.precisionPercent,
       duration: CARD_VALUES.precisionDuration,
     },
     upgradedEffect: {
       type: 'modifier',
-      stat: 'sniperDamage',
+      stat: MODIFIER_STAT.SNIPER_DAMAGE,
       value: CARD_VALUES.precisionUpgradedPercent,
       duration: CARD_VALUES.precisionDuration,
     },
@@ -562,13 +563,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     exhaust: true,
     effect: {
       type: 'modifier',
-      stat: 'damage',
+      stat: MODIFIER_STAT.DAMAGE,
       value: CARD_VALUES.overloadDamageBoost,
       duration: CARD_VALUES.overloadDuration,
     },
     upgradedEffect: {
       type: 'modifier',
-      stat: 'damage',
+      stat: MODIFIER_STAT.DAMAGE,
       value: CARD_VALUES.overloadUpgradedDamageBoost,
       duration: CARD_VALUES.overloadDuration,
     },
@@ -606,13 +607,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     exhaust: true,
     effect: {
       type: 'modifier',
-      stat: 'range',
+      stat: MODIFIER_STAT.RANGE,
       value: CARD_VALUES.ironWillRangeBoost,
       duration: CARD_VALUES.ironWillDuration,
     },
     upgradedEffect: {
       type: 'modifier',
-      stat: 'range',
+      stat: MODIFIER_STAT.RANGE,
       value: CARD_VALUES.ironWillUpgradedRangeBoost,
       duration: CARD_VALUES.ironWillDuration,
     },
@@ -669,13 +670,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     retain: true,
     effect: {
       type: 'modifier',
-      stat: 'damage',
+      stat: MODIFIER_STAT.DAMAGE,
       value: CARD_VALUES.vanguardDamageBoost,
       duration: CARD_VALUES.vanguardDuration,
     },
     upgradedEffect: {
       type: 'modifier',
-      stat: 'damage',
+      stat: MODIFIER_STAT.DAMAGE,
       value: CARD_VALUES.vanguardUpgradedDamageBoost,
       duration: CARD_VALUES.vanguardDuration,
     },
@@ -696,13 +697,13 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     retain: true,
     effect: {
       type: 'modifier',
-      stat: 'range',
+      stat: MODIFIER_STAT.RANGE,
       value: CARD_VALUES.bulwarkRangeBoost,
       duration: CARD_VALUES.bulwarkDuration,
     },
     upgradedEffect: {
       type: 'modifier',
-      stat: 'range',
+      stat: MODIFIER_STAT.RANGE,
       value: CARD_VALUES.bulwarkUpgradedRangeBoost,
       duration: CARD_VALUES.bulwarkDuration,
     },

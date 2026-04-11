@@ -43,7 +43,7 @@ export class ChainLightningService {
    * @param towerWorldX  Pre-computed world X of the firing tower.
    * @param towerWorldZ  Pre-computed world Z of the firing tower.
    * @param spatialGrid  The spatial grid rebuilt this physics step by TowerCombatService.
-   * @param gameTime     Current accumulated game time for VFX expiry timestamps.
+   * @param turnNumber   Current turn counter, used for status-effect expiry timestamps.
    * @returns List of enemies killed by this chain.
    */
   fire(
@@ -54,9 +54,10 @@ export class ChainLightningService {
     towerWorldX: number,
     towerWorldZ: number,
     spatialGrid: SpatialGrid,
-    gameTime: number,
+    turnNumber: number,
+    extraBounces: number = 0,
   ): KillInfo[] {
-    const chainCount = stats.chainCount ?? 3;
+    const chainCount = (stats.chainCount ?? 3) + extraBounces;
     const chainRange = stats.chainRange ?? 2;
     const kills: KillInfo[] = [];
     const hitIds = new Set<string>();
@@ -78,7 +79,7 @@ export class ChainLightningService {
       this.combatVFXService.createChainArc(
         previousX, previousZ,
         currentTarget.position.x, currentTarget.position.z,
-        stats.color, scene, gameTime
+        stats.color, scene,
       );
 
       // Deal damage
@@ -88,7 +89,7 @@ export class ChainLightningService {
       } else {
         this.enemyService.startHitFlash(currentTarget.id);
         if (stats.statusEffect) {
-          this.statusEffectService.apply(currentTarget.id, stats.statusEffect, gameTime);
+          this.statusEffectService.apply(currentTarget.id, stats.statusEffect, turnNumber);
         }
       }
       // Mini-swarm meshes from chain kills are added to scene here

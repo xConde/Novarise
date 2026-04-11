@@ -19,6 +19,7 @@ import { ChainLightningService } from './chain-lightning.service';
 // scheduled for file deletion in this same phase.
 import { RelicService } from '../../../run/services/relic.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
+import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 
 /** M3 S4: turn-based mortar DoT zone. Replaces the legacy real-time path for fireTurn. */
 interface TurnMortarZone {
@@ -41,12 +42,11 @@ export class TowerCombatService {
    * avoiding a per-tower-per-frame object spread allocation.
    */
   private scratchStats: TowerStats = {
-    damage: 0, range: 0, fireRate: 0, cost: 0,
-    projectileSpeed: 0, splashRadius: 0, color: 0,
+    damage: 0, range: 0, cost: 0,
+    splashRadius: 0, color: 0,
   };
   /** M3 S4: turn-ticked mortar zones for the new turn-based engine. */
   private turnMortarZones: TurnMortarZone[] = [];
-  private gameTime = 0;
   private spatialGrid = new SpatialGrid();
   private pendingAudioEvents: CombatAudioEvent[] = [];
 
@@ -86,7 +86,6 @@ export class TowerCombatService {
       level: 1,
       row,
       col,
-      lastFireTime: -Infinity,
       kills: 0,
       totalInvested: actualCost,
       targetingMode: DEFAULT_TARGETING_MODE,
@@ -142,9 +141,12 @@ export class TowerCombatService {
 
     const towerDamageMultiplier = this.gameStateService.getModifierEffects().towerDamageMultiplier ?? 1;
     const hasRelicModifiers = this.relicService.relicCount > 0;
-    const cardDamageBoost = this.cardEffectService.getModifierValue('damage');
-    const cardRangeBoost = this.cardEffectService.getModifierValue('range');
-    const hasCardModifiers = cardDamageBoost !== 0 || cardRangeBoost !== 0;
+    const cardDamageBoost = this.cardEffectService.getModifierValue(MODIFIER_STAT.DAMAGE);
+    const cardRangeBoost = this.cardEffectService.getModifierValue(MODIFIER_STAT.RANGE);
+    const sniperDamageBoost = this.cardEffectService.getModifierValue(MODIFIER_STAT.SNIPER_DAMAGE);
+    const fireRateBoost = this.cardEffectService.getModifierValue(MODIFIER_STAT.FIRE_RATE);
+    const chainBouncesBonus = this.cardEffectService.getModifierValue(MODIFIER_STAT.CHAIN_BOUNCES);
+    const hasCardModifiers = cardDamageBoost !== 0 || cardRangeBoost !== 0 || sniperDamageBoost !== 0;
 
     // Deterministic firing order: row then col.
     const towerList = Array.from(this.placedTowers.values()).sort((a, b) => {
@@ -158,15 +160,13 @@ export class TowerCombatService {
       if (towerDamageMultiplier !== 1 || hasRelicModifiers || hasCardModifiers) {
         const relicDamage = this.relicService.getDamageMultiplier(tower.type);
         const relicRange = this.relicService.getRangeMultiplier(tower.type);
-        this.scratchStats.damage = Math.round(baseStats.damage * towerDamageMultiplier * relicDamage * (1 + cardDamageBoost));
+        const sniperBoost = (tower.type === TowerType.SNIPER && sniperDamageBoost !== 0) ? (1 + sniperDamageBoost) : 1;
+        this.scratchStats.damage = Math.round(baseStats.damage * towerDamageMultiplier * relicDamage * (1 + cardDamageBoost) * sniperBoost);
         this.scratchStats.range = baseStats.range * relicRange * (1 + cardRangeBoost);
-        this.scratchStats.fireRate = baseStats.fireRate;
         this.scratchStats.cost = baseStats.cost;
-        this.scratchStats.projectileSpeed = baseStats.projectileSpeed;
         this.scratchStats.splashRadius = (baseStats.splashRadius ?? 0) * this.relicService.getSplashRadiusMultiplier();
         this.scratchStats.color = baseStats.color;
         this.scratchStats.slowFactor = baseStats.slowFactor;
-        this.scratchStats.slowDuration = baseStats.slowDuration;
         this.scratchStats.chainCount = baseStats.chainCount != null ? baseStats.chainCount + this.relicService.getChainBounceBonus() : baseStats.chainCount;
         this.scratchStats.chainRange = baseStats.chainRange;
         this.scratchStats.blastRadius = baseStats.blastRadius;
@@ -178,8 +178,9 @@ export class TowerCombatService {
         stats = baseStats;
       }
 
-      // Phase 10 content hook: bump `shotsPerTurn` via upgrades/relics/cards.
-      const shotsPerTurn = 1;
+      // Phase 10 modifier: fireRate boost gives +1 shotsPerTurn at any positive value (ceil semantic).
+      // 30% boost (RAPID_FIRE) → ceil(1.3) = 2. 50% (OVERCLOCK) → ceil(1.5) = 2. Stacked → ceil(1.8) = 2.
+      const shotsPerTurn = Math.max(1, Math.ceil(1 + fireRateBoost));
 
       for (let shot = 0; shot < shotsPerTurn; shot++) {
         if (tower.type === TowerType.SLOW) {
@@ -201,9 +202,10 @@ export class TowerCombatService {
             tower, target, stats, scene,
             towerWorldX, towerWorldZ,
             this.spatialGrid, turnNumber,
+            chainBouncesBonus,
           );
           killed.push(...chainKills);
-          hitCount += 1 + (stats.chainCount ?? 0);
+          hitCount += 1 + (stats.chainCount ?? 0) + chainBouncesBonus;
           if (chainKills.length > 0) tower.kills += chainKills.length;
         } else if (tower.type === TowerType.MORTAR) {
           // M3 S4: mortar drops a turn-ticked DoT zone instead of one-shot.
@@ -459,8 +461,7 @@ export class TowerCombatService {
       if (dist > stats.range) continue;
 
       // StatusEffectService handles immunity (flying), duration refresh, and speed mutation.
-      // turnNumber is the StatusEffectService clock in turn-based mode — passing this.gameTime
-      // (always 0 post-pivot) caused the SLOW status to expire on the very next tickTurn().
+      // turnNumber is the StatusEffectService clock in turn-based mode.
       this.statusEffectService.apply(enemy.id, StatusEffectType.SLOW, turnNumber, stats.slowFactor);
     }
   }
@@ -477,7 +478,7 @@ export class TowerCombatService {
     return this.placedTowers;
   }
 
-  /** Disposes all Three.js objects (tower meshes), resets status effects, delegates VFX cleanup, and zeros out game time. Call from both `restartGame()` and `ngOnDestroy()`. */
+  /** Disposes all Three.js objects (tower meshes), resets status effects, and delegates VFX cleanup. Call from both `restartGame()` and `ngOnDestroy()`. */
   cleanup(scene: THREE.Scene): void {
     // M2 S5: ProjectileService.cleanup call removed — service deleted.
 
@@ -505,6 +506,5 @@ export class TowerCombatService {
       }
     });
     this.placedTowers.clear();
-    this.gameTime = 0;
   }
 }

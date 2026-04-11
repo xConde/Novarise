@@ -1546,6 +1546,76 @@ describe('TowerCombatService', () => {
     });
   });
 
+  // --- Card Modifier Wiring Tests ---
+
+  describe('card modifier wiring', () => {
+    let cardEffectSpy: jasmine.SpyObj<CardEffectService>;
+
+    beforeEach(() => {
+      cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+    });
+
+    it('fireRate: positive boost gives 2 shots per turn (ceil semantic)', () => {
+      // BASIC tower at tower position, enemy at tower position — always in range
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      // 30% fireRate boost → ceil(1.3) = 2 shots per turn
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) => stat === 'fireRate' ? 0.3 : 0);
+
+      const result = service.fireTurn(mockScene, TURN_1);
+
+      // Two shots fired — both hit the same enemy (only one in range)
+      expect(result.fired.length).toBe(2);
+    });
+
+    it('sniperDamage: boosts SNIPER damage but leaves BASIC tower unchanged', () => {
+      // SNIPER tower and BASIC tower, each at different rows so firing order is deterministic
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SNIPER, new THREE.Group());
+      service.registerTower(TOWER_ROW + 1, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      const sniperEnemy = createEnemy('se', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const basicEnemy = createEnemy('be', TOWER_WORLD_X, TOWER_WORLD_Z + 0.01, 10000);
+      enemyMap.set('se', sniperEnemy);
+      enemyMap.set('be', basicEnemy);
+
+      const baseSniperDamage = 80; // TOWER_CONFIGS[SNIPER].damage
+      const baseBasicDamage = 25;  // TOWER_CONFIGS[BASIC].damage
+
+      // Apply 50% sniperDamage boost
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) => stat === 'sniperDamage' ? 0.5 : 0);
+
+      service.fireTurn(mockScene, TURN_1);
+
+      // SNIPER damage should be boosted by 50%
+      const sniperDamageTaken = 10000 - sniperEnemy.health;
+      expect(sniperDamageTaken).toBe(Math.round(baseSniperDamage * 1.5));
+
+      // BASIC damage should be unchanged
+      const basicDamageTaken = 10000 - basicEnemy.health;
+      expect(basicDamageTaken).toBe(baseBasicDamage);
+    });
+
+    it('chainBounces: extra bounces increase hitCount beyond chainCount', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      // 5 enemies at tower position so chain has targets for extra bounces
+      for (let i = 0; i < 5; i++) {
+        const e = createEnemy(`e${i}`, TOWER_WORLD_X + i * 0.2, TOWER_WORLD_Z, 10000);
+        enemyMap.set(`e${i}`, e);
+      }
+
+      // 2 extra bounces on top of chainCount=3
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) => stat === 'chainBounces' ? 2 : 0);
+
+      const result = service.fireTurn(mockScene, TURN_1);
+
+      // hitCount = 1 (primary) + chainCount(3) + extraBounces(2) = 6
+      expect(result.hitCount).toBeGreaterThanOrEqual(1 + 3 + 2);
+    });
+  });
+
 });
 
 // --- Tower Model Pure Function Tests ---
@@ -1606,7 +1676,6 @@ describe('Tower Model Functions', () => {
         const stats = getEffectiveStats(type, 1);
         expect(stats.damage).toBe(TOWER_CONFIGS[type].damage);
         expect(stats.range).toBe(TOWER_CONFIGS[type].range);
-        expect(stats.fireRate).toBe(TOWER_CONFIGS[type].fireRate);
       }
     });
 
@@ -1620,14 +1689,8 @@ describe('Tower Model Functions', () => {
       expect(stats.range).toBeGreaterThan(TOWER_CONFIGS[TowerType.BASIC].range);
     });
 
-    it('should decrease fire rate (faster) at level 2', () => {
-      const stats = getEffectiveStats(TowerType.BASIC, 2);
-      expect(stats.fireRate).toBeLessThan(TOWER_CONFIGS[TowerType.BASIC].fireRate);
-    });
-
-    it('should preserve non-scaling stats (projectileSpeed, splashRadius, color)', () => {
+    it('should preserve non-scaling stats (splashRadius, color)', () => {
       const stats = getEffectiveStats(TowerType.SPLASH, 3);
-      expect(stats.projectileSpeed).toBe(TOWER_CONFIGS[TowerType.SPLASH].projectileSpeed);
       expect(stats.splashRadius).toBe(TOWER_CONFIGS[TowerType.SPLASH].splashRadius);
       expect(stats.color).toBe(TOWER_CONFIGS[TowerType.SPLASH].color);
     });
@@ -1637,7 +1700,6 @@ describe('Tower Model Functions', () => {
       const lvl3 = getEffectiveStats(TowerType.SNIPER, MAX_TOWER_LEVEL);
       expect(lvl3.damage).toBeGreaterThan(lvl1.damage);
       expect(lvl3.range).toBeGreaterThan(lvl1.range);
-      expect(lvl3.fireRate).toBeLessThan(lvl1.fireRate);
     });
 
     it('should clamp level 0 to base stats (defensive)', () => {
@@ -1656,7 +1718,6 @@ describe('Tower Model Functions', () => {
         const lvl3 = getEffectiveStats(type, 3);
         expect(lvl3.damage).toBeGreaterThan(base.damage);
         expect(lvl3.range).toBeGreaterThan(base.range);
-        expect(lvl3.fireRate).toBeLessThan(base.fireRate);
       }
     });
 
@@ -1671,7 +1732,6 @@ describe('Tower Model Functions', () => {
     it('should preserve SLOW-specific optional stats through getEffectiveStats', () => {
       const stats = getEffectiveStats(TowerType.SLOW, 1);
       expect(stats.slowFactor).toBe(TOWER_CONFIGS[TowerType.SLOW].slowFactor);
-      expect(stats.slowDuration).toBe(TOWER_CONFIGS[TowerType.SLOW].slowDuration);
     });
 
     it('should preserve CHAIN-specific optional stats through getEffectiveStats', () => {
@@ -1714,7 +1774,6 @@ describe('Tower Model Functions', () => {
           const s = TOWER_SPECIALIZATIONS[type as TowerType][spec];
           expect(s.damage).toBeGreaterThan(0);
           expect(s.range).toBeGreaterThan(0);
-          expect(s.fireRate).toBeGreaterThan(0);
         }
       }
     });
@@ -1746,7 +1805,6 @@ describe('Tower Model Functions', () => {
       const stats = getEffectiveStats(TowerType.BASIC, MAX_TOWER_LEVEL, TowerSpecialization.ALPHA);
       expect(stats.damage).toBe(Math.round(base.damage * spec.damage));
       expect(stats.range).toBe(+(base.range * spec.range).toFixed(2));
-      expect(stats.fireRate).toBe(+(base.fireRate * spec.fireRate).toFixed(2));
     });
 
     it('should use standard L3 multipliers when no specialization is provided', () => {
@@ -1797,7 +1855,7 @@ describe('Tower Model Functions', () => {
       const alpha = getEffectiveStats(TowerType.SNIPER, MAX_TOWER_LEVEL, TowerSpecialization.ALPHA);
       const beta = getEffectiveStats(TowerType.SNIPER, MAX_TOWER_LEVEL, TowerSpecialization.BETA);
       // At least one stat should differ
-      const differs = alpha.damage !== beta.damage || alpha.range !== beta.range || alpha.fireRate !== beta.fireRate;
+      const differs = alpha.damage !== beta.damage || alpha.range !== beta.range;
       expect(differs).toBeTrue();
     });
   });
@@ -1811,8 +1869,6 @@ describe('Tower Model Functions', () => {
       expect(cfg.slowFactor).toBeDefined();
       expect(cfg.slowFactor!).toBeGreaterThan(0);
       expect(cfg.slowFactor!).toBeLessThan(1);
-      expect(cfg.slowDuration).toBeDefined();
-      expect(cfg.slowDuration!).toBeGreaterThan(0);
     });
 
     it('should have CHAIN tower config with required fields', () => {

@@ -10,10 +10,11 @@ import { GameBoardTile } from '../models/game-board-tile';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { HIT_FLASH_CONFIG } from '../constants/effects.constants';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
-import { createTestBoard, createGameBoardServiceSpy } from '../testing';
+import { createTestBoard, createGameBoardServiceSpy, createCardEffectServiceSpy } from '../testing';
 import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { EnemyVisualService } from './enemy-visual.service';
 import { EnemyHealthService } from './enemy-health.service';
+import { CardEffectService } from '../../../run/services/card-effect.service';
 
 /**
  * Helper: configure modifier effects on the real GameStateService.
@@ -41,7 +42,8 @@ describe('EnemyService', () => {
         EnemyHealthService,
         EnemyMeshFactoryService,
         GameStateService,
-        { provide: GameBoardService, useValue: gameBoardServiceSpy }
+        { provide: GameBoardService, useValue: gameBoardServiceSpy },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
       ]
     });
 
@@ -2038,6 +2040,41 @@ describe('EnemyService', () => {
   // immediately after the enemy advances to each new tile (if needsRepath=true).
   // No deltaTime semantics — one call to stepEnemiesOneTurn advances BASIC
   // enemies by exactly 1 tile, triggering any pending repath at that tile.
+  // ---------------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------------
+  // Card modifier wiring: enemySpeed
+  // ---------------------------------------------------------------------------
+
+  describe('card modifier wiring — enemySpeed', () => {
+    it('enemySpeed 0.5 reduces FAST enemy (2 tiles/turn) to 1 tile', () => {
+      const cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) => stat === 'enemySpeed' ? 0.5 : 0);
+
+      const enemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      // 50% of baseTiles(2) = floor(1.0) = 1 reduction → moves 1 tile
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.pathIndex).toBe(startIndex + 1);
+    });
+
+    it('enemySpeed 0 leaves FAST enemy movement unchanged (2 tiles/turn)', () => {
+      const cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+      cardEffectSpy.getModifierValue.and.returnValue(0);
+
+      const enemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.pathIndex).toBe(startIndex + 2);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Deferred repath execution in stepEnemiesOneTurn
   // ---------------------------------------------------------------------------
 
   describe('deferred repath execution in stepEnemiesOneTurn', () => {

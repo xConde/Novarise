@@ -11,7 +11,8 @@ import { GameEndService } from './game-end.service';
 import { StatusEffectService } from './status-effect.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { RunEventBusService } from '../../../run/services/run-event-bus.service';
-import { createRelicServiceSpy } from '../testing';
+import { CardEffectService } from '../../../run/services/card-effect.service';
+import { createRelicServiceSpy, createCardEffectServiceSpy } from '../testing';
 
 import { GamePhase } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
@@ -154,6 +155,7 @@ describe('CombatLoopService', () => {
         { provide: StatusEffectService, useValue: statusEffectSpy },
         { provide: RelicService, useValue: createRelicServiceSpy() },
         { provide: RunEventBusService, useValue: jasmine.createSpyObj('RunEventBusService', ['emit']) },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
       ],
     });
 
@@ -302,38 +304,6 @@ describe('CombatLoopService', () => {
       service.resolveTurn(scene);
       service.reset();
       expect(service.getTurnNumber()).toBe(0);
-    });
-  });
-
-  // ─── flushElapsedTime() ─────────────────────────────────────────────────────
-
-  describe('flushElapsedTime()', () => {
-    it('should return 0 and not call addElapsedTime if nothing accumulated', () => {
-      const flushed = service.flushElapsedTime();
-
-      expect(flushed).toBe(0);
-      expect(gameStateSpy.addElapsedTime).not.toHaveBeenCalled();
-    });
-
-    it('should reset accumulator to 0 after flush so second call returns 0', () => {
-      // Turn-based: elapsedTimeAccumulator is not driven by deltaTime anymore,
-      // but flushElapsedTime() contract (flush and zero) still holds.
-      // Prime the accumulator directly for the unit test.
-      (service as any).elapsedTimeAccumulator = 0.7;
-
-      service.flushElapsedTime();
-      const second = service.flushElapsedTime();
-
-      expect(second).toBe(0);
-    });
-
-    it('should flush accumulated elapsed time and return the amount', () => {
-      (service as any).elapsedTimeAccumulator = 1.5;
-
-      const flushed = service.flushElapsedTime();
-
-      expect(flushed).toBeCloseTo(1.5, 5);
-      expect(gameStateSpy.addElapsedTime).toHaveBeenCalledWith(1.5);
     });
   });
 
@@ -843,6 +813,64 @@ describe('CombatLoopService', () => {
       // The first result should still hold the original kill (it's a copy, not a reference)
       expect(first.kills.length).toBe(1);
       expect(first.kills[0].damage).toBe(3);
+    });
+  });
+
+  // ─── card modifier wiring ────────────────────────────────────────────────────
+
+  describe('card modifier wiring', () => {
+    let cardEffectSpy: jasmine.SpyObj<CardEffectService>;
+
+    beforeEach(() => {
+      cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+    });
+
+    it('goldMultiplier: 0.5 modifier multiplies awarded gold by 1.5x', () => {
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) => stat === 'goldMultiplier' ? 0.5 : 0);
+
+      const enemy = makeEnemy({ id: 'e1', value: 20 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 20 }], fired: [], hitCount: 0 });
+
+      service.resolveTurn(scene);
+
+      // relicSpy returns 1.0 gold mult by default, cardGoldMult=1.5 → 20 * 1 * 1.5 = 30
+      expect(gameStateSpy.addGoldAndScore).toHaveBeenCalledWith(30);
+    });
+
+    it('leakBlock: first leak blocked (no life lost), second leak blocked, third leak costs life', () => {
+      cardEffectSpy.getModifierValue.and.returnValue(0);
+      // Register 2 charges of leakBlock in the real cardEffectService via spy on tryConsumeLeakBlock
+      let leakBlockCharges = 2;
+      cardEffectSpy.tryConsumeLeakBlock.and.callFake(() => {
+        if (leakBlockCharges > 0) {
+          leakBlockCharges--;
+          return true;
+        }
+        return false;
+      });
+
+      const enemy1 = makeEnemy({ id: 'e1', leakDamage: 1 });
+      const enemy2 = makeEnemy({ id: 'e2', leakDamage: 1 });
+      const enemy3 = makeEnemy({ id: 'e3', leakDamage: 1 });
+
+      // Turn 1: e1 leaks — should be blocked
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy1]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
+      service.resolveTurn(scene);
+      expect(gameStateSpy.loseLife).not.toHaveBeenCalled();
+
+      // Turn 2: e2 leaks — should be blocked
+      enemySpy.getEnemies.and.returnValue(new Map([['e2', enemy2]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e2']);
+      service.resolveTurn(scene);
+      expect(gameStateSpy.loseLife).not.toHaveBeenCalled();
+
+      // Turn 3: e3 leaks — no charges left, life should be lost
+      enemySpy.getEnemies.and.returnValue(new Map([['e3', enemy3]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e3']);
+      service.resolveTurn(scene);
+      expect(gameStateSpy.loseLife).toHaveBeenCalledWith(1);
     });
   });
 
