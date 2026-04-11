@@ -1,0 +1,238 @@
+// ── Shell grid ────────────────────────────────────────────────────────────────
+// M5 P4: CSS Grid shell with a single named `canvas` area. The map uses an
+// absolutely-positioned node layer, so the grid simply reserves a stable
+// scroll-viewport slot rather than imposing flow layout on the canvas children.
+
+:host {
+  display: grid;
+  grid-template-rows: 1fr;
+  grid-template-columns: 1fr;
+  grid-template-areas: "canvas";
+  // Let the parent (run-content flex column) drive height allocation
+  min-height: 0;
+}
+
+// ── Scroll container ──────────────────────────────────────────────────────────
+
+.node-map-container {
+  grid-area: canvas;
+  // Shell custom property — override in media queries without reshuffling areas
+  --node-map-max-height: 70vh;
+  max-height: var(--node-map-max-height);
+  overflow-y: auto;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--theme-purple-a50) transparent;
+
+  &::-webkit-scrollbar {
+    width: var(--spacing-xs);
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--theme-purple-a50);
+    border-radius: var(--border-radius-sm);
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--theme-purple-a70);
+  }
+}
+
+// ── Map canvas (absolutely-positioned nodes + SVG layer) ──────────────────────
+
+.node-map-scroll {
+  position: relative;
+}
+
+// ── SVG connection lines ──────────────────────────────────────────────────────
+
+.node-map-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.node-connection {
+  fill: none;
+  stroke: var(--border-color-subtle);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+  stroke-linecap: round;
+  transition: stroke var(--transition-medium) ease, opacity var(--transition-medium) ease;
+
+  &--visited {
+    stroke: var(--border-color);
+    stroke-dasharray: none;
+    opacity: 0.6;
+  }
+
+  &--active {
+    stroke: var(--theme-purple);
+    stroke-dasharray: none;
+    stroke-width: 2.5;
+    opacity: 1;
+    filter: drop-shadow(0 0 4px var(--theme-purple-glow));
+    animation: pulse-line 2s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse-line {
+  0%, 100% { opacity: 0.8; filter: drop-shadow(0 0 4px var(--theme-purple-glow)); }
+  50%       { opacity: 1;   filter: drop-shadow(0 0 8px var(--theme-purple-a60)); }
+}
+
+// ── Node buttons ──────────────────────────────────────────────────────────────
+
+.map-node {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  // WCAG 2.5.5 minimum touch target — 2.75rem = 44px
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+
+  border: var(--border-width-medium) solid var(--border-color);
+  background: var(--nav-bg-a90);
+  color: var(--text-color);
+  font-size: var(--font-size-base);
+  cursor: pointer;
+  transition: border-color var(--transition-fast) ease,
+              background var(--transition-fast) ease,
+              transform var(--transition-fast) ease,
+              box-shadow var(--transition-medium) ease;
+
+  will-change: transform;
+
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--theme-purple-light);
+    outline-offset: 3px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.3;
+  }
+
+  // ── Type variants — use design system node color tokens ───────────────
+  &--combat  { border-color: var(--run-node-combat); }
+  &--elite   { border-color: var(--run-node-elite); }
+  &--rest    { border-color: var(--run-node-rest); }
+  &--shop    { border-color: var(--run-node-shop); }
+  &--event   { border-color: var(--run-node-event); }
+  &--unknown { border-color: var(--run-node-unknown); }
+
+  // Boss: larger, health-red, threatening
+  &--boss {
+    width: 3.5rem;
+    height: 3.5rem;
+    border-color: var(--run-node-boss);
+    border-width: var(--border-width-thick);
+    font-size: 1.375rem;
+    background: rgba(60, 10, 10, 0.9);
+    box-shadow: var(--shadow-sm) var(--enemy-glow-basic);
+
+    &:not(:disabled):hover {
+      background: rgba(80, 15, 15, 0.95);
+      box-shadow: var(--shadow-md) var(--enemy-glow-basic);
+      transform: scale(1.08);
+    }
+  }
+
+  // ── State modifiers ───────────────────────────────────────────────────
+
+  // Available / selectable — pulses with purple glow
+  &--selectable {
+    border-color: var(--theme-purple);
+    box-shadow: var(--shadow-sm) var(--theme-purple-glow);
+    animation: pulse-node 2s ease-in-out infinite;
+
+    &:hover {
+      background: var(--theme-purple-a20);
+      transform: scale(1.12);
+      box-shadow: var(--shadow-md) var(--theme-purple-glow);
+    }
+  }
+
+  // Already visited — dimmed, dashed border
+  &--visited {
+    opacity: 0.38;
+    border-style: dashed;
+    animation: none;
+  }
+
+  // Current position — gold ring
+  &--current {
+    border-color: var(--game-gold);
+    border-width: var(--border-width-thick);
+    box-shadow:
+      0 0 0 3px var(--game-gold-a25),
+      var(--shadow-md) var(--game-gold-a40);
+    animation: none;
+  }
+}
+
+.map-node-icon {
+  pointer-events: none;
+  user-select: none;
+  line-height: 1;
+}
+
+@keyframes pulse-node {
+  0%, 100% { box-shadow: var(--shadow-sm) var(--theme-purple-glow); }
+  50%       { box-shadow: var(--shadow-md) var(--theme-purple-a60); }
+}
+
+// ── Responsive ────────────────────────────────────────────────────────────────
+
+@media (max-width: 768px) {
+  .node-map-container {
+    --node-map-max-height: 60vh;
+  }
+}
+
+@media (max-width: 480px) {
+  .node-map-container {
+    --node-map-max-height: 55vh;
+    width: 100%;
+    // Hide the right-edge scrollbar without losing scroll functionality
+    scrollbar-width: none;
+    overflow-y: auto;
+    overflow-x: auto;
+
+    &::-webkit-scrollbar { display: none; }
+  }
+
+  .node-map-scroll {
+    // Ensure the scroll area fills available width
+    min-width: 100%;
+  }
+
+  // Keep WCAG minimum on very small screens (2.75rem = 44px — exactly the minimum)
+  .map-node {
+    width: 2.75rem;
+    height: 2.75rem;
+    font-size: var(--font-size-base);
+  }
+
+  .map-node--boss {
+    width: 3rem;
+    height: 3rem;
+    font-size: var(--font-size-base);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-node--selectable,
+  .node-connection--active {
+    animation: none;
+  }
+}

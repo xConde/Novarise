@@ -1,0 +1,35 @@
+import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { RouterModule } from '@angular/router';
+import { RunComponent } from './run.component';
+import { NodeMapComponent } from './components/node-map/node-map.component';
+import { RewardScreenComponent } from './components/reward-screen/reward-screen.component';
+import { RestScreenComponent } from './components/rest-screen/rest-screen.component';
+import { ShopScreenComponent } from './components/shop-screen/shop-screen.component';
+import { EventScreenComponent } from './components/event-screen/event-screen.component';
+import { RelicInventoryComponent } from './components/relic-inventory/relic-inventory.component';
+import { ActTransitionComponent } from './components/act-transition/act-transition.component';
+import { RunSummaryComponent } from './components/run-summary/run-summary.component';
+import { CardDraftComponent } from './components/card-draft/card-draft.component';
+
+@NgModule({
+  declarations: [
+    RunComponent,
+    NodeMapComponent,
+    RewardScreenComponent,
+    RestScreenComponent,
+    ShopScreenComponent,
+    EventScreenComponent,
+    RelicInventoryComponent,
+    ActTransitionComponent,
+    RunSummaryComponent,
+    CardDraftComponent,
+  ],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterModule.forChild([{ path: '', component: RunComponent }]),
+  ],
+})
+export class RunModule {}

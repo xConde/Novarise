@@ -1,32 +1,19 @@
+/**
+ * M2 S10: Shrunk to the only fields still in use.
+ *
+ * After the Phase 4 turn-based engine swap and M2 dead-code sweep, the game
+ * loop no longer uses fixedTimestep / maxStepsPerFrame / elapsedTimeFlushIntervalS
+ * — those were physics-accumulator values for the deleted CombatLoopService.tick.
+ * The only live field is `maxDeltaTime`, which game-board.animate() uses to cap
+ * raw RAF deltas before passing them to the cosmetic visual update path.
+ *
+ * PROJECTILE_POOL_CONFIG also deleted (projectile.service.ts removed in M2 S5).
+ */
 export interface PhysicsConfig {
-  /** Fixed timestep in seconds (60 Hz simulation) */
-  readonly fixedTimestep: number;
-  /** Maximum steps per frame to prevent spiral of death */
-  readonly maxStepsPerFrame: number;
   /** Maximum raw delta before capping (prevents burst after tab switch) */
   readonly maxDeltaTime: number;
 }
 
-export interface PhysicsConfigFull extends PhysicsConfig {
-  /** How often (in real seconds) to flush accumulated elapsed time to the game state. */
-  readonly elapsedTimeFlushIntervalS: number;
-}
-
-export const PHYSICS_CONFIG: PhysicsConfigFull = {
-  fixedTimestep: 1 / 60,
-  maxStepsPerFrame: 5,
+export const PHYSICS_CONFIG: PhysicsConfig = {
   maxDeltaTime: 0.1,
-  elapsedTimeFlushIntervalS: 1,
-} as const;
-
-export interface PoolConfig {
-  /** Initial pool capacity */
-  readonly initialSize: number;
-  /** Maximum pool size (limits memory growth) */
-  readonly maxSize: number;
-}
-
-export const PROJECTILE_POOL_CONFIG: PoolConfig = {
-  initialSize: 20,
-  maxSize: 50,
 } as const;

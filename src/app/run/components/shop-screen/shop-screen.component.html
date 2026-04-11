@@ -1,0 +1,148 @@
+<div class="shop-screen" role="main" aria-label="Shop">
+
+  <!-- Header -->
+  <div class="shop-header">
+    <h2 class="shop-title">
+      <span class="shop-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></span>
+      Shop
+    </h2>
+    <p class="shop-gold" [attr.aria-label]="'Your gold: ' + currentGold">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="7" x2="12" y2="17"/><path d="M9 10 Q9 8 12 8 Q15 8 15 10 Q15 12 12 12 Q9 12 9 14 Q9 16 12 16 Q15 16 15 14"/></svg> Your Gold: {{ currentGold }}g
+    </p>
+  </div>
+
+  <!-- Relic Items -->
+  <section class="shop-items shop-items--relics" aria-label="Relics for sale">
+    <h3 class="shop-section-title">Relics</h3>
+
+    <div class="shop-item-list" role="list">
+      <div
+        class="shop-card"
+        [class]="'shop-card shop-card--' + resolved.rarityClass"
+        [class.shop-card--unaffordable]="!canAfford(resolved.item.cost)"
+        *ngFor="let resolved of relicItems"
+        role="listitem"
+      >
+        <span class="shop-card__icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 22 9 12 22 2 9"/></svg></span>
+        <span class="shop-card__rarity" *ngIf="resolved.relic">
+          {{ resolved.relic.rarity }}
+        </span>
+        <span class="shop-card__name">
+          {{ resolved.relic?.name ?? resolved.item.item.type }}
+        </span>
+        <span class="shop-card__description">
+          {{ resolved.relic?.description }}
+        </span>
+        <em class="shop-card__flavor" *ngIf="resolved.relic?.flavorText">
+          {{ resolved.relic!.flavorText }}
+        </em>
+        <button
+          class="shop-card__buy-btn"
+          [class.shop-card__buy-btn--unaffordable]="!canAfford(resolved.item.cost)"
+          [disabled]="!canAfford(resolved.item.cost)"
+          (click)="buyItem(resolved.index)"
+          [attr.aria-label]="'Buy ' + (resolved.relic?.name ?? 'item') + ' for ' + resolved.item.cost + ' gold'"
+          type="button"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="7" x2="12" y2="17"/><path d="M9 10 Q9 8 12 8 Q15 8 15 10 Q15 12 12 12 Q9 12 9 14 Q9 16 12 16 Q15 16 15 14"/></svg>
+          {{ resolved.item.cost }}g
+        </button>
+      </div>
+    </div>
+
+    <p class="shop-empty" *ngIf="relicItems.length === 0">
+      No relics available.
+    </p>
+  </section>
+
+  <!-- Card Items -->
+  <section class="shop-items shop-items--cards" aria-label="Cards for sale">
+    <h3 class="shop-section-title">Cards</h3>
+
+    <div class="shop-item-list" role="list">
+      <div
+        [class]="'shop-card shop-card--card-item shop-card--' + resolved.rarityClass"
+        [class.shop-card--unaffordable]="!canAfford(resolved.item.cost)"
+        *ngFor="let resolved of cardItems"
+        role="listitem"
+      >
+        <span class="shop-card__icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="2" width="14" height="20" rx="2"/><line x1="7" y1="8" x2="13" y2="8"/><line x1="7" y1="12" x2="13" y2="12"/><line x1="7" y1="16" x2="10" y2="16"/></svg></span>
+        <span class="shop-card__rarity" *ngIf="resolved.card">
+          {{ resolved.card.rarity }}
+        </span>
+        <span class="shop-card__name">
+          {{ resolved.card?.name ?? 'Card' }}
+        </span>
+        <span class="shop-card__type" *ngIf="resolved.card">
+          {{ resolved.card.type }} &bull; {{ resolved.card.energyCost }} energy
+        </span>
+        <span class="shop-card__description">
+          {{ resolved.card?.description }}
+        </span>
+        <button
+          class="shop-card__buy-btn"
+          [class.shop-card__buy-btn--unaffordable]="!canAfford(resolved.item.cost)"
+          [disabled]="!canAfford(resolved.item.cost)"
+          (click)="buyItem(resolved.index)"
+          [attr.aria-label]="'Buy ' + (resolved.card?.name ?? 'card') + ' for ' + resolved.item.cost + ' gold'"
+          type="button"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="7" x2="12" y2="17"/><path d="M9 10 Q9 8 12 8 Q15 8 15 10 Q15 12 12 12 Q9 12 9 14 Q9 16 12 16 Q15 16 15 14"/></svg>
+          {{ resolved.item.cost }}g
+        </button>
+      </div>
+    </div>
+
+    <p class="shop-empty" *ngIf="cardItems.length === 0">
+      No cards available.
+    </p>
+  </section>
+
+  <!-- Heal Section -->
+  <section class="shop-heal" aria-label="Healing">
+    <h3 class="shop-section-title">Healing</h3>
+
+    <div class="shop-heal-info">
+      <span class="shop-heal-status" aria-live="polite">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg>
+        {{ currentLives }}/{{ maxLives }} lives
+      </span>
+      <span class="shop-heal-count">
+        {{ healCount }}/{{ maxHealPerVisit }} heals purchased
+      </span>
+    </div>
+
+    <button
+      class="shop-heal-btn"
+      [disabled]="!canHeal()"
+      (click)="buyHeal()"
+      [attr.aria-label]="'Heal 1 life for ' + healCost + ' gold. Currently at ' + currentLives + ' of ' + maxLives + ' lives.'"
+      type="button"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg>
+      Heal 1 Life —
+      <span
+        class="shop-heal-cost"
+        [class.shop-heal-cost--unaffordable]="!canAfford(healCost)"
+      >{{ healCost }}g</span>
+    </button>
+
+    <p class="shop-heal-disabled-hint" *ngIf="currentLives >= maxLives" aria-live="polite">
+      Already at full health.
+    </p>
+    <p class="shop-heal-disabled-hint" *ngIf="currentLives < maxLives && healCount >= maxHealPerVisit" aria-live="polite">
+      Heal limit reached for this visit.
+    </p>
+  </section>
+
+  <!-- Leave -->
+  <button
+    class="shop-leave-btn run-btn run-btn--secondary"
+    type="button"
+    (click)="leave()"
+    aria-label="Leave the shop and return to the map"
+  >
+    Leave Shop
+  </button>
+
+</div>

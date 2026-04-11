@@ -1,0 +1,165 @@
+<!-- Run Mode Root Template -->
+<div class="run-container">
+
+  <!-- ── Relic Bar (persistent across views, hidden on start screen) ─────────────── -->
+  <div class="run-relic-bar" *ngIf="runState && viewMode !== 'start'">
+    <span class="run-lives"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg> {{ runState.lives }}/{{ runState.maxLives }}</span>
+    <span class="run-gold"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="7" x2="12" y2="17"/><path d="M9 10 Q9 8 12 8 Q15 8 15 10 Q15 12 12 12 Q9 12 9 14 Q9 16 12 16 Q15 16 15 14"/></svg> {{ runState.gold }}g</span>
+    <span class="run-floor">Act {{ runState.actIndex + 1 }}</span>
+    <span class="run-score">Score: {{ runState.score }}</span>
+    <div class="run-relics">
+      <app-relic-inventory [relics]="activeRelics"></app-relic-inventory>
+    </div>
+  </div>
+
+  <!-- ── Content slot (M5 S2: grid-area: content) — only one view renders at a time, but the SLOT is reserved by the parent grid so structure is constant. ────────────── -->
+  <div class="run-content">
+
+  <!-- ── Start Screen ────────────────────────────────────── -->
+  <div class="run-start" *ngIf="viewMode === 'start'">
+    <h1 class="run-title">Run</h1>
+    <p class="run-subtitle">A roguelite tower defense run</p>
+
+    <div class="run-start-actions">
+      <button class="run-btn run-btn--primary run-btn--full" (click)="startNewRun(0)">
+        New Run
+      </button>
+      <div class="run-resume-block" *ngIf="canResume">
+        <button
+          class="run-btn run-btn--secondary run-btn--full"
+          (click)="resumeRun()"
+        >
+          Resume Run
+        </button>
+        <div class="run-resume-info" *ngIf="savedRunSummary" aria-label="Saved run details">
+          <span class="run-resume-info__item">Act {{ savedRunSummary.act }}</span>
+          <span class="run-resume-info__sep" aria-hidden="true">&#183;</span>
+          <span class="run-resume-info__item">{{ savedRunSummary.encounters }} encounters</span>
+          <span class="run-resume-info__sep" aria-hidden="true">&#183;</span>
+          <span class="run-resume-info__item"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg> {{ savedRunSummary.lives }} lives</span>
+          <span class="run-resume-info__sep" aria-hidden="true">&#183;</span>
+          <span class="run-resume-info__item">{{ savedRunSummary.relics }} relics</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="run-ascension-select" *ngIf="maxAscension > 0">
+      <label for="ascension-level" class="ascension-select__label">Ascension Level</label>
+      <select
+        id="ascension-level"
+        class="ascension-select__dropdown"
+        #ascensionSelect
+        [ngModel]="selectedAscension"
+        (ngModelChange)="selectedAscension = $event"
+      >
+        <option [value]="0">None — Standard run</option>
+        <option
+          *ngFor="let lvl of ascensionLevelOptions"
+          [value]="lvl.level"
+        >
+          {{ lvl.level }}: {{ lvl.label }} — {{ lvl.description }}
+        </option>
+      </select>
+
+      <!-- Cumulative effects at selected level -->
+      <div class="ascension-info" *ngIf="selectedAscension > 0" aria-live="polite">
+        <h3 class="ascension-info__title">
+          Ascension {{ selectedAscension }} — Active Modifiers
+        </h3>
+        <ul class="ascension-info__effects">
+          <li
+            *ngFor="let lvl of ascensionLevelsUpTo(selectedAscension)"
+            class="ascension-info__effect"
+            [class]="'ascension-info__effect--' + getAscensionDifficultyClass(lvl.level)"
+          >
+            <span class="ascension-info__effect-level">{{ lvl.level }}</span>
+            <span class="ascension-info__effect-text">{{ lvl.description }}</span>
+          </li>
+        </ul>
+      </div>
+
+      <button
+        class="run-btn run-btn--primary"
+        (click)="startNewRun(selectedAscension)"
+      >
+        Start Ascension Run
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Node Map ────────────────────────────────────────── -->
+  <div class="run-map" *ngIf="viewMode === 'map' && nodeMap">
+    <h2 class="run-map-title">Act {{ (runState?.actIndex ?? 0) + 1 }} — Choose Your Path</h2>
+
+    <app-node-map
+      [nodeMap]="nodeMap"
+      [currentNodeId]="runState?.currentNodeId ?? null"
+      [completedNodeIds]="runState?.completedNodeIds ?? []"
+      [availableNodes]="availableNodes"
+      (nodeSelected)="selectNode($event)"
+    ></app-node-map>
+
+    <button class="run-btn run-btn--danger" (click)="abandonRun()">
+      Abandon Run
+    </button>
+  </div>
+
+  <!-- ── Reward Screen ───────────────────────────────────── -->
+  <app-reward-screen
+    *ngIf="viewMode === 'reward' && rewardConfig"
+    [config]="rewardConfig"
+    (rewardCollected)="collectReward($event)"
+    (screenClosed)="closeRewardScreen()"
+  ></app-reward-screen>
+
+  <!-- ── Rest Screen ─────────────────────────────────────── -->
+  <app-rest-screen
+    *ngIf="viewMode === 'rest' && runState"
+    [currentLives]="runState.lives"
+    [maxLives]="runState.maxLives"
+    [healAmount]="getHealAmount()"
+    [deckCards]="getDeckCards()"
+    (restChosen)="restHeal()"
+    (skipChosen)="viewMode = 'map'"
+    (cardUpgraded)="onCardUpgraded($event)"
+  ></app-rest-screen>
+
+  <!-- ── Shop Screen ─────────────────────────────────────── -->
+  <app-shop-screen
+    *ngIf="viewMode === 'shop' && runState"
+    [shopItems]="shopItems"
+    [currentGold]="runState.gold"
+    [currentLives]="runState.lives"
+    [maxLives]="runState.maxLives"
+    (itemBought)="onShopBuy($event)"
+    (shopLeft)="leaveShop()"
+  ></app-shop-screen>
+
+  <!-- ── Event Screen ────────────────────────────────────── -->
+  <app-event-screen
+    *ngIf="viewMode === 'event' && currentEvent"
+    [event]="currentEvent"
+    (choiceMade)="completeEvent($event)"
+  ></app-event-screen>
+
+  <!-- ── Act Transition ────────────────────────────────────── -->
+  <app-act-transition
+    *ngIf="viewMode === 'act-transition' && runState"
+    [completedAct]="runState.actIndex"
+    [bossName]="actTransitionBossName"
+    [relicCount]="runState.relicIds.length"
+    [encounterCount]="runState.encounterResults.length"
+    (continued)="onActTransitionContinued()"
+  ></app-act-transition>
+
+  <!-- ── Run Summary ─────────────────────────────────────── -->
+  <app-run-summary
+    *ngIf="viewMode === 'summary' && runState"
+    [runState]="runState"
+    (returnToMenu)="returnToMenu()"
+    (startNewRun)="startNewRun(0)"
+  ></app-run-summary>
+
+  </div><!-- /run-content -->
+
+</div>

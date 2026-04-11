@@ -1,0 +1,291 @@
+// ── Outcome slide-in animation ────────────────────────────────────────────────
+
+@keyframes outcome-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--spacing-lg));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ── Root container ────────────────────────────────────────────────────────────
+// M5 P4: CSS Grid shell with named template areas.
+// Reserved slots: [header] top padding row, [card] event card, [outcome] slide-in
+// result panel (visibility:hidden when empty keeps the slot reserved),
+// [spacer] bottom flex row so the shell fills its parent.
+// flex: 1 on :host is replaced by the parent run-content grid-area assignment;
+// the shell itself expands via min-height.
+
+.event-screen {
+  --event-screen-header-height: var(--spacing-2xl);
+  --event-screen-footer-height: var(--spacing-xl);
+
+  display: grid;
+  grid-template-rows:
+    [header-start] var(--event-screen-header-height) [header-end card-start]
+    auto [card-end outcome-start]
+    auto [outcome-end spacer-start]
+    1fr [spacer-end];
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "header"
+    "card"
+    "outcome"
+    "spacer";
+  min-height: 100%;
+  padding: 0 var(--spacing-md) var(--event-screen-footer-height);
+  text-align: center;
+  color: var(--text-color);
+  justify-items: center;
+}
+
+// ── Event card ────────────────────────────────────────────────────────────────
+
+.event-card {
+  grid-area: card;
+  display: grid;
+  grid-template-rows: [title-start] auto [title-end desc-start] auto [desc-end choices-start] auto [choices-end];
+  grid-template-areas:
+    "title"
+    "desc"
+    "choices";
+  justify-items: center;
+  gap: var(--spacing-lg);
+  width: 100%;
+  max-width: 38rem;
+  padding: var(--spacing-xl) var(--spacing-lg);
+  border: var(--border-width-medium) solid var(--theme-purple-a50);
+  border-radius: var(--border-radius-lg);
+  background: var(--theme-purple-a10);
+  position: relative;
+  overflow: hidden;
+}
+
+.event-title {
+  grid-area: title;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-title);
+  font-weight: 800;
+  color: var(--text-color);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.event-description {
+  grid-area: desc;
+  font-size: var(--font-size-base);
+  line-height: 1.65;
+  color: var(--text-muted);
+  margin: 0;
+  max-width: 30rem;
+}
+
+// ── Choices ───────────────────────────────────────────────────────────────────
+
+.event-choices {
+  grid-area: choices;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  width: 100%;
+
+  &--resolved {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}
+
+.event-choice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  min-height: 2.75rem; // WCAG 44px
+  width: 100%;
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
+  border-radius: var(--border-radius-md);
+  background: var(--theme-purple-a10);
+  color: var(--text-color);
+  font-family: "Orbitron", sans-serif;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast) ease,
+              border-color var(--transition-fast) ease,
+              box-shadow var(--transition-fast) ease;
+
+  &:hover:not(:disabled) {
+    background: var(--theme-purple-a20);
+    border-color: var(--theme-purple);
+    box-shadow: var(--shadow-sm) var(--theme-purple-glow);
+  }
+
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--theme-purple-light);
+    outline-offset: 3px;
+  }
+
+  &--disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  &--selected {
+    border-color: var(--theme-purple) !important;
+    background: var(--theme-purple-a25) !important;
+    opacity: 1 !important;
+  }
+}
+
+.event-choice-btn__label {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  color: var(--text-color);
+  line-height: 1.3;
+}
+
+.event-choice-btn__desc {
+  font-size: var(--font-size-small);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+// ── Outcome panel ─────────────────────────────────────────────────────────────
+
+.event-outcome {
+  grid-area: outcome;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  width: 100%;
+  max-width: 38rem;
+  padding: var(--spacing-lg);
+  border: var(--border-width-medium) solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  background: var(--theme-purple-a10);
+  margin-top: var(--spacing-xl);
+  animation: outcome-slide-in 0.3s ease both;
+
+  &--positive {
+    border-color: var(--action-success-border);
+    background: var(--action-success-bg);
+  }
+
+  &--negative {
+    border-color: var(--action-danger-border);
+    background: var(--action-danger-bg);
+  }
+
+  &--neutral {
+    border-color: var(--border-color);
+    background: var(--theme-purple-a10);
+  }
+}
+
+.event-outcome__description {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin: 0;
+  font-style: italic;
+}
+
+// ── Delta row ─────────────────────────────────────────────────────────────────
+
+.event-outcome__deltas {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.event-outcome__delta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-md);
+
+  &--gold {
+    &.positive  { color: var(--game-gold);      background: var(--game-gold-a15); }
+    &.negative  { color: var(--action-danger);   background: var(--action-danger-bg); }
+  }
+
+  &--lives {
+    &.positive  { color: var(--action-success);  background: var(--action-success-bg); }
+    &.negative  { color: var(--action-danger);   background: var(--action-danger-bg); }
+  }
+
+  &--relic {
+    &.positive  { color: var(--game-gold);       background: var(--game-gold-a15); }
+    &.negative  { color: var(--action-danger);   background: var(--action-danger-bg); }
+  }
+}
+
+// ── Continue button ───────────────────────────────────────────────────────────
+
+.event-continue-btn {
+  min-width: 10rem;
+  min-height: 2.75rem; // WCAG 44px
+}
+
+// ── Responsive ────────────────────────────────────────────────────────────────
+
+@media (max-width: 768px) {
+  .event-card {
+    padding: var(--spacing-lg) var(--spacing-md);
+  }
+
+  .event-title { font-size: var(--font-size-base); }
+  .event-description { font-size: var(--font-size-small); }
+}
+
+@media (max-width: 480px) {
+  .event-screen {
+    --event-screen-header-height: var(--spacing-xl);
+    padding: 0 var(--spacing-xs) var(--spacing-lg);
+  }
+
+  .event-card {
+    padding: var(--spacing-md) var(--spacing-sm);
+    max-width: 100%;
+  }
+
+  // Event choice buttons are already width:100% — ensure card container respects viewport
+  .event-choices {
+    width: 100%;
+  }
+
+  .event-outcome__deltas {
+    flex-direction: column;
+  }
+
+  // Continue button full-width on mobile
+  .event-continue-btn {
+    width: 100%;
+    max-width: 16rem;
+  }
+}
+
+// ── Reduced motion ────────────────────────────────────────────────────────────
+
+@media (prefers-reduced-motion: reduce) {
+  .event-outcome {
+    animation: none;
+  }
+
+  .event-choice-btn {
+    transition: none;
+  }
+}

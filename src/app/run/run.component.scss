@@ -1,0 +1,359 @@
+// ── Root container ────────────────────────────────────────────────────────────
+// M5 S2: Run shell as a CSS Grid with named template areas. The relic-bar
+// occupies the persistent `topbar` slot; all view-mode swaps render into the
+// `content` slot below. The grid structure stays constant across view-mode
+// transitions — only the children inside `content` change.
+
+.run-container {
+  display: grid;
+  grid-template-rows: [topbar-start] auto [topbar-end content-start] 1fr [content-end];
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "topbar"
+    "content";
+  min-height: 100vh;
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-family: "Orbitron", sans-serif;
+  padding: var(--spacing-md);
+  gap: var(--spacing-md);
+}
+
+// ── Relic bar ─────────────────────────────────────────────────────────────────
+
+.run-relic-bar {
+  grid-area: topbar;
+  display: grid;
+  grid-template-columns: auto auto auto auto 1fr;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--glass-bg);
+  border: var(--border-width-thin) solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+}
+
+.run-lives {
+  color: var(--game-health);
+  font-weight: 700;
+}
+
+.run-gold {
+  color: var(--game-gold);
+  font-weight: 700;
+}
+
+.run-floor {
+  color: var(--theme-purple-light);
+  font-weight: 600;
+}
+
+.run-score {
+  color: var(--text-muted);
+}
+
+.run-relics {
+  // M5 S2: in the topbar grid, relics occupy the rightmost track via grid placement
+  grid-column: -1;
+  justify-self: end;
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.relic-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  background: var(--game-gold-a15);
+  border: var(--border-width-thin) solid var(--game-gold-a40);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-small);
+  cursor: help;
+}
+
+// ── Content slot (M5 S2: persistent grid area for view-mode swaps) ───────────
+.run-content {
+  grid-area: content;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+// ── Start screen ──────────────────────────────────────────────────────────────
+
+.run-start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  // Upper-third placement instead of dead-center — avoids empty space top/bottom
+  padding-top: 15vh;
+  flex: 1;
+  gap: var(--spacing-lg);
+  text-align: center;
+}
+
+.run-title {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-hero);
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--theme-purple-lighter);
+}
+
+.run-subtitle {
+  color: var(--text-muted);
+  font-size: var(--font-size-base);
+}
+
+.run-start-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  width: 100%;
+  max-width: 24rem;
+}
+
+// ── Resume run block ──────────────────────────────────────────────────────────
+
+.run-resume-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--glass-bg);
+  border: var(--border-width-thin) solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+}
+
+.run-resume-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-small);
+  color: var(--text-muted);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.run-resume-info__item {
+  white-space: nowrap;
+}
+
+.run-resume-info__sep {
+  color: var(--text-faint);
+}
+
+// ── Ascension select ──────────────────────────────────────────────────────────
+
+.run-ascension-select {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+  max-width: 36rem;
+}
+
+.ascension-select__label {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ascension-select__dropdown {
+  background: var(--theme-purple-a10);
+  color: var(--text-color);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  min-width: 20rem;
+  max-width: 100%;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+
+  option {
+    background: var(--nav-bg);
+    color: var(--text-color);
+  }
+}
+
+// ── Ascension info panel ──────────────────────────────────────────────────────
+
+.ascension-info {
+  width: 100%;
+  max-width: 32rem;
+  background: var(--theme-purple-a10);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
+  text-align: left;
+}
+
+.ascension-info__title {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  color: var(--text-dim);
+  margin: 0 0 var(--spacing-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ascension-info__effects {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.ascension-info__effect {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-small);
+}
+
+.ascension-info__effect-level {
+  font-family: "Orbitron", sans-serif;
+  font-weight: 700;
+  font-size: var(--font-size-2xs);
+  min-width: 1.4rem;
+  text-align: right;
+  opacity: 0.7;
+}
+
+.ascension-info__effect-text {
+  flex: 1;
+}
+
+// Difficulty color-coding via design system
+.ascension-info__effect--easy   { color: var(--action-success); }
+.ascension-info__effect--medium { color: var(--action-warning); }
+.ascension-info__effect--hard   { color: var(--game-accent-orange); }
+.ascension-info__effect--extreme { color: var(--game-health); }
+
+// ── Map wrapper ───────────────────────────────────────────────────────────────
+
+.run-map {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex: 1;
+}
+
+.run-map-title {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-title);
+  font-weight: 700;
+  color: var(--theme-purple-lighter);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+// ── Content screens (rest/shop/event/summary — layout shells) ─────────────────
+
+.run-rest,
+.run-shop,
+.run-event,
+.run-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-lg);
+  flex: 1;
+  padding-top: var(--spacing-2xl);
+  text-align: center;
+}
+
+// ── Abandon button ────────────────────────────────────────────────────────────
+
+.run-abandon-btn {
+  // Extends run-btn--danger visually via classes in template;
+  // this rule ensures layout sizing only
+  min-width: 9rem;
+  min-height: 2.75rem;
+}
+
+// ── Responsive ────────────────────────────────────────────────────────────────
+
+@media (max-width: 768px) {
+  .run-title {
+    font-size: var(--font-size-large);
+  }
+
+  .run-relic-bar {
+    gap: var(--spacing-sm);
+    font-size: var(--font-size-small);
+  }
+}
+
+@media (max-width: 480px) {
+  .run-container {
+    padding: var(--spacing-xs);
+  }
+
+  // ── Relic bar: tighter layout, prevent overflow ────────────
+  .run-relic-bar {
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    overflow: hidden;
+  }
+
+  .run-relics {
+    margin-left: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-shrink: 1;
+    max-width: 100%;
+
+    &::-webkit-scrollbar { display: none; }
+  }
+
+  // ── Start screen ───────────────────────────────────────────
+  .run-start {
+    padding-top: 8vh;
+  }
+
+  .run-start-actions {
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+
+  // Make primary/secondary buttons full-width on mobile
+  .run-btn--full {
+    width: 100%;
+  }
+
+  .run-ascension-select {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .run-ascension-select .ascension-select__dropdown {
+    min-width: unset;
+    width: 100%;
+  }
+
+  // ── Map title ──────────────────────────────────────────────
+  .run-map-title {
+    font-size: var(--font-size-base);
+    text-align: center;
+  }
+}
