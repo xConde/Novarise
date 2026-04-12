@@ -2,10 +2,11 @@
 
 .run-container {
   display: grid;
-  grid-template-rows: [topbar-start] auto [topbar-end content-start] 1fr [content-end];
+  grid-template-rows: auto auto 1fr;
   grid-template-columns: 1fr;
   grid-template-areas:
     "topbar"
+    "stats"
     "content";
   min-height: 100vh;
   background: var(--bg-color);
@@ -27,7 +28,6 @@
   align-items: center;
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--bg-color);
-  border-bottom: 1px solid var(--border-structural);
   user-select: none;
 }
 
@@ -67,6 +67,7 @@
 // ── Stats Strip (below nav, scrolls with content) ───────────────────────────
 
 .run-stats-strip {
+  grid-area: stats;
   display: flex;
   align-items: center;
   justify-content: center;
