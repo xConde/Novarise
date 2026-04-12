@@ -1,92 +1,128 @@
 <div class="profile-container">
   <div class="profile-content">
-    <h1 class="profile-title">PROFILE</h1>
+
+    <!-- Header: compact row -->
+    <header class="profile-header">
+      <div class="header-left">
+        <h1 class="profile-title">PROFILE</h1>
+        <span class="header-stat">{{ profile.totalEnemiesKilled | number }} kills · {{ profile.totalGoldEarned | number }} gold</span>
+      </div>
+      <div class="banner-rank-badge">
+        <span class="banner-rank-title">{{ rankTitle }}</span>
+      </div>
+    </header>
+
+    <!-- Achievement progress: thin strip -->
+    <div class="progress-strip">
+      <div class="progress-track">
+        <div class="banner-progress-fill" [style.width.%]="achievementProgressPct"></div>
+      </div>
+      <span class="progress-label">{{ unlockedCount }}/{{ totalAchievements }}</span>
+    </div>
 
     <p class="first-time-hint" *ngIf="profile.totalGamesPlayed === 0">
       Play your first game to start tracking stats!
     </p>
 
-    <section class="stats-section">
-      <div class="stats-grid">
-        <div class="stat-card">
-          <span class="stat-label">Games Played</span>
-          <span class="stat-value">{{ profile.totalGamesPlayed }}</span>
+    <!-- Two-column stat tables -->
+    <div class="stats-columns">
+      <section class="stat-panel">
+        <h2 class="panel-heading">Combat</h2>
+        <div class="stat-table">
+          <div class="stat-row">
+            <span class="stat-label">Games Played</span>
+            <span class="stat-value">{{ profile.totalGamesPlayed }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Victories</span>
+            <span class="stat-value stat-value--victory">{{ profile.totalVictories }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Defeats</span>
+            <span class="stat-value stat-value--defeat">{{ profile.totalDefeats }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Win Rate</span>
+            <span class="stat-value">{{ winRate }}%</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Enemies Killed</span>
+            <span class="stat-value">{{ profile.totalEnemiesKilled }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Gold Earned</span>
+            <span class="stat-value stat-value--gold">{{ profile.totalGoldEarned }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Highest Wave</span>
+            <span class="stat-value">{{ profile.highestWaveReached }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Highest Score</span>
+            <span class="stat-value">{{ profile.highestScore }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Challenges</span>
+            <span class="stat-value stat-value--gold">{{ profile.completedChallengeCount }}</span>
+          </div>
         </div>
-        <div class="stat-card">
-          <span class="stat-label">Victories</span>
-          <span class="stat-value stat-value--victory">{{ profile.totalVictories }}</span>
+      </section>
+
+      <section class="stat-panel">
+        <h2 class="panel-heading">Runs</h2>
+        <div class="stat-table" *ngIf="profile.runsAttempted > 0">
+          <div class="stat-row">
+            <span class="stat-label">Attempted</span>
+            <span class="stat-value">{{ profile.runsAttempted }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Completed</span>
+            <span class="stat-value stat-value--victory">{{ profile.runsCompleted }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Win Rate</span>
+            <span class="stat-value">{{ runWinRate }}%</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Best Ascension</span>
+            <span class="stat-value">{{ profile.highestAscensionBeaten > 0 ? profile.highestAscensionBeaten : '—' }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Best Score</span>
+            <span class="stat-value">{{ profile.runBestScore }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Total Kills</span>
+            <span class="stat-value">{{ profile.runTotalKills }}</span>
+          </div>
         </div>
-        <div class="stat-card">
-          <span class="stat-label">Defeats</span>
-          <span class="stat-value stat-value--defeat">{{ profile.totalDefeats }}</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Win Rate</span>
-          <span class="stat-value">{{ winRate }}%</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Enemies Killed</span>
-          <span class="stat-value">{{ profile.totalEnemiesKilled }}</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Gold Earned</span>
-          <span class="stat-value stat-value--gold">{{ profile.totalGoldEarned }}</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Highest Wave</span>
-          <span class="stat-value">{{ profile.highestWaveReached }}</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Highest Score</span>
-          <span class="stat-value">{{ profile.highestScore }}</span>
+        <p class="empty-hint" *ngIf="profile.runsAttempted === 0">Complete a run to track stats.</p>
+      </section>
+    </div>
+
+    <!-- Tower Arsenal -->
+    <section class="arsenal-section">
+      <h2 class="panel-heading">Tower Arsenal</h2>
+      <div class="arsenal-grid">
+        <div *ngFor="let row of towerKillRows" class="arsenal-row" [attr.data-tower]="row.type">
+          <span class="arsenal-label">{{ row.label }}</span>
+          <div class="arsenal-bar-wrap">
+            <div class="arsenal-bar-fill" [style.width.%]="row.pct"></div>
+          </div>
+          <span class="arsenal-kills">{{ row.kills }}</span>
         </div>
       </div>
     </section>
 
-    <section class="stats-section run-stats-section">
-      <h2 class="run-stats-title">Roguelite Runs</h2>
-      <p class="run-stats-hint" *ngIf="profile.runsAttempted === 0">
-        Complete a run to track your roguelite stats.
-      </p>
-      <div class="stats-grid" *ngIf="profile.runsAttempted > 0">
-        <div class="stat-card">
-          <span class="stat-label">Runs Attempted</span>
-          <span class="stat-value">{{ profile.runsAttempted }}</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Runs Completed</span>
-          <span class="stat-value stat-value--victory">{{ profile.runsCompleted }}</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Win Rate</span>
-          <span class="stat-value">{{ runWinRate }}%</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Highest Ascension</span>
-          <span class="stat-value">{{ profile.highestAscensionBeaten > 0 ? 'Level ' + profile.highestAscensionBeaten : '—' }}</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Best Score</span>
-          <span class="stat-value">{{ profile.runBestScore }}</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Total Kills</span>
-          <span class="stat-value">{{ profile.runTotalKills }}</span>
-        </div>
-      </div>
-    </section>
-
+    <!-- Achievements -->
     <section class="achievements-section">
-      <h2 class="achievements-title">
-        Achievements
+      <div class="section-header">
+        <h2 class="panel-heading">Achievements</h2>
         <span class="achievements-count">{{ unlockedCount }} / {{ allAchievements.length }} Unlocked</span>
-      </h2>
+      </div>
 
       <div class="achievement-categories">
-        <div
-          *ngFor="let group of categoryGroups"
-          class="achievement-category"
-        >
+        <div *ngFor="let group of categoryGroups" class="achievement-category">
           <div class="category-header">
             <h3 class="category-name">{{ group.label }}</h3>
             <span class="category-count">{{ group.unlockedCount }} / {{ group.achievements.length }}</span>
@@ -99,76 +135,12 @@
               [class.unlocked]="isUnlocked(achievement.id)"
               [class.locked]="!isUnlocked(achievement.id)"
             >
-              <span class="achievement-icon">{{ isUnlocked(achievement.id) ? '&#127942;' : '&#128274;' }}</span>
               <span class="achievement-name">{{ achievement.name }}</span>
               <span class="achievement-hint" *ngIf="!isUnlocked(achievement.id)">How to unlock:</span>
               <span class="achievement-desc">{{ achievement.description }}</span>
             </div>
           </div>
         </div>
-      </div>
-    </section>
-
-    <section class="settings-section">
-      <h2 class="settings-title">Settings</h2>
-      <div class="settings-grid">
-
-        <div class="setting-row">
-          <span class="setting-label">Audio</span>
-          <button
-            class="setting-toggle"
-            [class.active]="!audioMuted"
-            (click)="toggleAudio()"
-            [attr.aria-pressed]="!audioMuted"
-          >{{ audioMuted ? 'Muted' : 'On' }}</button>
-        </div>
-
-        <div class="setting-row">
-          <span class="setting-label">Default Difficulty</span>
-          <div class="setting-options" role="group" aria-label="Default difficulty">
-            <button
-              *ngFor="let d of difficulties"
-              class="setting-option-btn"
-              [class.active]="currentDifficulty === d"
-              (click)="setDifficulty(d)"
-              [attr.aria-pressed]="currentDifficulty === d"
-            >{{ d | titlecase }}</button>
-          </div>
-        </div>
-
-        <div class="setting-row">
-          <span class="setting-label">Game Speed</span>
-          <div class="setting-options" role="group" aria-label="Default game speed">
-            <button
-              *ngFor="let s of speeds"
-              class="setting-option-btn"
-              [class.active]="currentSpeed === s"
-              (click)="setSpeed(s)"
-              [attr.aria-pressed]="currentSpeed === s"
-            >{{ s }}×</button>
-          </div>
-        </div>
-
-        <div class="setting-row">
-          <span class="setting-label">Show FPS</span>
-          <button
-            class="setting-toggle"
-            [class.active]="showFps"
-            (click)="toggleFps()"
-            [attr.aria-pressed]="showFps"
-          >{{ showFps ? 'On' : 'Off' }}</button>
-        </div>
-
-        <div class="setting-row">
-          <span class="setting-label">Reduce Motion</span>
-          <button
-            class="setting-toggle"
-            [class.active]="reduceMotion"
-            (click)="toggleReduceMotion()"
-            [attr.aria-pressed]="reduceMotion"
-          >{{ reduceMotion ? 'On' : 'Off' }}</button>
-        </div>
-
       </div>
     </section>
 

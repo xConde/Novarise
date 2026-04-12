@@ -7,6 +7,7 @@
   "scripts": {
     "ng": "ng",
     "start": "bash ./nvmrc-check.sh && ng serve",
+    "dev": "ng serve --port 3999",
     "build": "bash ./nvmrc-check.sh && ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",

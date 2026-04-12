@@ -145,7 +145,7 @@
 
     .spawn-preview__title {
       margin: 0 0 var(--spacing-xs) 0;
-      font-size: 0.7rem;
+      font-size: var(--font-size-xs);
       text-transform: uppercase;
       letter-spacing: 0.12em;
       opacity: 0.7;
@@ -165,7 +165,7 @@
       display: flex;
       align-items: center;
       gap: var(--spacing-sm);
-      font-size: 0.75rem;
+      font-size: var(--font-size-xs);
 
       &--empty {
         opacity: 0.4;
@@ -219,7 +219,7 @@
     padding: var(--spacing-sm) var(--spacing-xl);
     border: var(--border-width-medium) solid var(--theme-purple-a80);
     color: var(--text-color);
-    font-size: var(--font-size-lg);
+    font-size: var(--font-size-small);
     font-weight: 700;
     letter-spacing: 0.05em;
     cursor: pointer;
@@ -255,7 +255,7 @@
     }
 
     .end-turn-hint {
-      font-size: 0.65rem;
+      font-size: var(--font-size-xs);
       opacity: 0.7;
       font-weight: 400;
       letter-spacing: 0.1em;
@@ -299,7 +299,7 @@
   .fps-counter {
     color: var(--theme-purple-mid);
     font-family: "Orbitron", sans-serif;
-    font-size: 0.7rem;
+    font-size: var(--font-size-xs);
     opacity: 0.6;
   }
 
@@ -338,7 +338,7 @@
     border-radius: var(--border-radius-md);
     color: #fff;
     font-family: "Orbitron", sans-serif;
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
     font-weight: 600;
     white-space: nowrap;
     z-index: var(--z-index-overlay);
@@ -407,7 +407,7 @@
       background: var(--theme-purple);
       color: var(--text-color);
       border: none;
-      border-radius: 4px;
+      border-radius: var(--border-radius-sm);
       cursor: pointer;
       min-height: 2.75rem;
 

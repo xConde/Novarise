@@ -8,10 +8,10 @@
   max-height: 80vh;
   overflow-y: auto;
   background: rgba(20, 20, 35, 0.95);
-  border: 1px solid var(--theme-purple, #6a5a9a);
-  border-radius: 8px;
-  padding: 1rem;
-  z-index: 100;
+  border: var(--border-width-thin) solid var(--theme-purple);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-md);
+  z-index: var(--z-index-modal);
   box-sizing: border-box;
   animation: encyclopedia-in 0.25s ease-out;
 }
@@ -26,14 +26,14 @@
 .encyclopedia-header h3 {
   font-family: 'Orbitron', sans-serif;
   font-size: 0.85rem;
-  color: var(--theme-purple-lighter, #c8b8f8);
+  color: var(--theme-purple-lighter);
   margin: 0;
 }
 
 .encyclopedia-close {
   background: none;
   border: none;
-  color: var(--theme-purple-mid, #9a8aca);
+  color: var(--theme-purple-mid);
   font-size: 1.2rem;
   cursor: pointer;
   line-height: 1;
@@ -46,14 +46,14 @@
 }
 
 .encyclopedia-close:hover {
-  color: var(--theme-purple-lighter, #c8b8f8);
+  color: var(--theme-purple-lighter);
 }
 
 .encyclopedia-entry {
   display: flex;
   gap: 0.5rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid var(--theme-purple-a20);
+  border-bottom: var(--border-width-thin) solid var(--theme-purple-a20);
 }
 
 .encyclopedia-entry:last-child {
@@ -76,14 +76,14 @@
 
 .encyclopedia-entry__name {
   font-family: 'Orbitron', sans-serif;
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   font-weight: 600;
-  color: var(--theme-purple-lighter, #c8b8f8);
+  color: var(--theme-purple-lighter);
 }
 
 .encyclopedia-entry__desc {
   font-size: 0.65rem;
-  color: var(--text-color, #ccc);
+  color: var(--text-color);
   line-height: 1.3;
 }
 
@@ -91,13 +91,13 @@
   display: flex;
   gap: 0.5rem;
   font-size: 0.6rem;
-  color: var(--theme-purple-mid, #9a8aca);
+  color: var(--theme-purple-mid);
   font-family: 'Orbitron', sans-serif;
 }
 
 .encyclopedia-entry__special {
   font-size: 0.6rem;
-  color: var(--game-gold, #ffd700);
+  color: var(--game-gold);
   font-style: italic;
 }
 
@@ -116,9 +116,9 @@
 .encyclopedia-tab {
   flex: 1;
   background: none;
-  border: 1px solid var(--theme-purple-a30);
-  border-radius: 4px;
-  color: var(--theme-purple-mid, #9a8aca);
+  border: var(--border-width-thin) solid var(--theme-purple-a30);
+  border-radius: var(--border-radius-sm);
+  color: var(--theme-purple-mid);
   font-family: 'Orbitron', sans-serif;
   font-size: 0.65rem;
   font-weight: 600;
@@ -129,14 +129,14 @@
 }
 
 .encyclopedia-tab:hover {
-  color: var(--theme-purple-lighter, #c8b8f8);
-  border-color: var(--theme-purple, #6a5a9a);
+  color: var(--theme-purple-lighter);
+  border-color: var(--theme-purple);
   background: var(--theme-purple-a15);
 }
 
 .encyclopedia-tab.active {
-  color: var(--theme-purple-lighter, #c8b8f8);
-  border-color: var(--theme-purple, #6a5a9a);
+  color: var(--theme-purple-lighter);
+  border-color: var(--theme-purple);
   background: var(--theme-purple-a30);
 }
 
@@ -151,28 +151,28 @@
 .encyclopedia-entry__spec-label {
   font-family: 'Orbitron', sans-serif;
   font-size: 0.58rem;
-  color: var(--game-gold, #ffd700);
+  color: var(--game-gold);
   white-space: nowrap;
 }
 
 .encyclopedia-entry__spec-desc {
   font-size: 0.58rem;
-  color: var(--text-color, #ccc);
+  color: var(--text-color);
   font-style: italic;
 }
 
 /* Encyclopedia toggle button in top-right controls */
 .encyclopedia-btn {
   background: var(--glass-bg);
-  border-radius: 4px;
+  border-radius: var(--border-radius-sm);
   backdrop-filter: blur(0.625rem);
-  z-index: var(--z-index-overlay, 10);
+  z-index: var(--z-index-overlay);
   font-family: 'Orbitron', sans-serif;
   width: 2.75rem;
   height: 2.75rem;
   padding: 0;
-  border: 1px solid var(--theme-purple-a50);
-  color: var(--theme-purple-mid, #9a8aca);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
+  color: var(--theme-purple-mid);
   font-size: 0.7rem;
   font-weight: 700;
   cursor: pointer;
@@ -183,8 +183,8 @@
 
 .encyclopedia-btn:hover,
 .encyclopedia-btn.active {
-  color: var(--theme-purple-lighter, #c8b8f8);
-  border-color: var(--theme-purple, #6a5a9a);
+  color: var(--theme-purple-lighter);
+  border-color: var(--theme-purple);
   background: var(--theme-purple-a25);
 }
 
@@ -227,7 +227,7 @@
   }
 
   .encyclopedia-tab {
-    font-size: 0.5rem;
+    font-size: var(--font-size-tiny);
     padding: 0.25rem 0.5rem;
   }
 

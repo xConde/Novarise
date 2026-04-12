@@ -1,0 +1,49 @@
+<div class="settings-container">
+  <div class="settings-content">
+    <header class="settings-header">
+      <h1 class="settings-page-title">SETTINGS</h1>
+    </header>
+
+    <div class="settings-grid">
+      <div class="setting-row">
+        <span class="setting-label">Audio</span>
+        <button
+          class="setting-toggle"
+          [class.active]="!audioMuted"
+          (click)="toggleAudio()"
+          [attr.aria-pressed]="!audioMuted"
+        >{{ audioMuted ? 'Muted' : 'On' }}</button>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Difficulty</span>
+        <div class="setting-options" role="group" aria-label="Default difficulty">
+          <button
+            *ngFor="let d of difficulties"
+            class="setting-option-btn"
+            [class.active]="currentDifficulty === d"
+            (click)="setDifficulty(d)"
+            [attr.aria-pressed]="currentDifficulty === d"
+          >{{ d | titlecase }}</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Show FPS</span>
+        <button
+          class="setting-toggle"
+          [class.active]="showFps"
+          (click)="toggleFps()"
+          [attr.aria-pressed]="showFps"
+        >{{ showFps ? 'On' : 'Off' }}</button>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Reduce Motion</span>
+        <button
+          class="setting-toggle"
+          [class.active]="reduceMotion"
+          (click)="toggleReduceMotion()"
+          [attr.aria-pressed]="reduceMotion"
+        >{{ reduceMotion ? 'On' : 'Off' }}</button>
+      </div>
+    </div>
+  </div>
+</div>

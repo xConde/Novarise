@@ -200,7 +200,7 @@ $card-rarity-glows: (
   // Focus visible ring
   &:focus-visible {
     outline: var(--border-width-medium) solid var(--theme-cyan);
-    outline-offset: 2px;
+    outline-offset: var(--border-width-medium);
   }
 
   @media (max-width: 768px) {
@@ -304,7 +304,7 @@ $card-rarity-glows: (
   justify-content: center;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.08);
-  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.2);
+  border: var(--border-width-thin) solid var(--border-interactive-hover);
   font-size: var(--font-size-xs);
   font-weight: 700;
   color: var(--text-dim);
@@ -410,7 +410,7 @@ $card-rarity-glows: (
   background: rgba(255, 215, 0, 0.1);
   border: var(--border-width-thin) solid rgba(255, 215, 0, 0.3);
   border-radius: var(--border-radius-sm);
-  animation: hint-fade-in 0.2s ease;
+  animation: hint-fade-in var(--transition-fast) ease;
 
   @media (max-width: 480px) {
     display: none; // too cramped on mobile — the raised card is enough feedback

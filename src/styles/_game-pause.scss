@@ -23,10 +23,10 @@
 
 .board-container .pause-menu {
   cursor: default;
-  background: var(--panel-blue-bg, #1a1a2e);
-  border: 1px solid var(--theme-purple, #6a5a9a);
+  background: var(--panel-blue-bg);
+  border: var(--border-width-thin) solid var(--theme-purple);
   border-radius: var(--border-radius-md);
-  box-shadow: 0 0 2rem var(--theme-purple-a50, rgba(106, 90, 154, 0.5));
+  box-shadow: 0 0 2rem var(--theme-purple-a50);
   padding: 1.5rem 2rem;
   width: min(22rem, 90vw);
   display: flex;
@@ -68,8 +68,8 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.5rem 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: var(--border-width-thin) solid var(--border-interactive);
+  border-bottom: var(--border-width-thin) solid var(--border-interactive);
   padding: 0.75rem 0;
 }
 
@@ -80,14 +80,14 @@
 }
 
 .board-container .pause-stat__label {
-  font-size: var(--font-size-xs, 0.65rem);
+  font-size: var(--font-size-xs);
   color: var(--text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.05rem;
 }
 
 .board-container .pause-stat__value {
-  font-size: var(--font-size-small, 0.8rem);
+  font-size: var(--font-size-small);
   color: var(--text-color);
   font-weight: 600;
 }
@@ -106,7 +106,7 @@
 }
 
 .board-container .pause-setting__label {
-  font-size: var(--font-size-xs, 0.65rem);
+  font-size: var(--font-size-xs);
   color: var(--text-dimmer);
   text-transform: uppercase;
   letter-spacing: 0.05rem;
@@ -115,10 +115,10 @@
 
 .board-container .pause-setting__btn {
   font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-xs, 0.65rem);
+  font-size: var(--font-size-xs);
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-color);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: var(--border-width-thin) solid var(--border-color);
   border-radius: var(--border-radius-sm);
   padding: 0.4rem 0.875rem;
   min-height: 2.75rem;
@@ -144,10 +144,10 @@
 
 .board-container .pause-speed-btn {
   font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-xs, 0.65rem);
+  font-size: var(--font-size-xs);
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-color);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: var(--border-width-thin) solid var(--border-color);
   border-radius: var(--border-radius-sm);
   padding: 0.4rem 0.625rem;
   min-height: 2.75rem;
@@ -180,7 +180,7 @@
 }
 
 .board-container .quit-confirm__text {
-  font-size: var(--font-size-small, 0.8rem);
+  font-size: var(--font-size-small);
   color: rgba(255, 255, 255, 0.7);
   text-align: center;
   margin: 0 0 0.25rem;
@@ -195,7 +195,7 @@
 
 .board-container .pause-action {
   font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-small, 0.8rem);
+  font-size: var(--font-size-small);
   border-radius: var(--border-radius-sm);
   padding: 0.75rem 1rem;
   min-height: 2.75rem;
@@ -212,19 +212,19 @@
 }
 
 .board-container .pause-action.pause-action--primary {
-  background: var(--theme-purple, #6a5a9a);
+  background: var(--theme-purple);
   color: var(--text-color);
-  border: 1px solid var(--theme-purple-lighter, #9a8aca);
+  border: var(--border-width-thin) solid var(--theme-purple-lighter);
 }
 
 .board-container .pause-action.pause-action--primary:hover {
-  background: var(--theme-purple-lighter, #9a8aca);
+  background: var(--theme-purple-lighter);
 }
 
 .board-container .pause-action.pause-action--quit {
   background: transparent;
   color: var(--text-dimmer);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: var(--border-width-thin) solid var(--border-color);
 }
 
 .board-container .pause-action.pause-action--quit:hover {
@@ -234,7 +234,7 @@
 }
 
 .board-container .pause-menu__auto-hint {
-  font-size: var(--font-size-xs, 0.65rem);
+  font-size: var(--font-size-xs);
   color: rgba(255, 200, 80, 0.75);
   text-align: center;
   margin: 0 0 0.25rem;
@@ -242,7 +242,7 @@
 }
 
 .board-container .pause-menu__hint {
-  font-size: var(--font-size-xs, 0.65rem);
+  font-size: var(--font-size-xs);
   color: rgba(255, 255, 255, 0.3);
   text-align: center;
   margin: 0;

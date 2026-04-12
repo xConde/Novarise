@@ -59,7 +59,7 @@
 }
 
 .board-container .tower-info-panel .level-star {
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   color: var(--game-star-filled);
 }
 
@@ -108,7 +108,7 @@
 .board-container .tower-info-panel .stat-value.status-effect[data-effect='SLOW']   { color: var(--effect-slow); }
 
 .board-container .tower-info-panel .stat-preview {
-  color: var(--theme-cyan, #00ffff);
+  color: var(--theme-cyan);
   font-weight: 600;
   font-size: var(--font-size-2xs);
   opacity: 0.8;
@@ -173,8 +173,8 @@
 }
 
 .board-container .tower-info-panel .upgrade-tile-percent {
-  color: var(--theme-orange, #dd6600);
-  font-size: var(--font-size-2xs, 0.65rem);
+  color: var(--theme-orange);
+  font-size: var(--font-size-2xs);
   margin-left: 0.25rem;
   opacity: 0.9;
 }

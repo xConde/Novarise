@@ -15,6 +15,7 @@ const routes: Routes = [
   { path: 'play', loadChildren: () => import('./game/game.module').then(m => m.GameModule), canDeactivate: [gameLeaveGuard] },
   { path: 'run', loadChildren: () => import('./run/run.module').then(m => m.RunModule) },
   { path: 'profile', loadChildren: () => import('./profile/profile.module').then(m => m.ProfileModule) },
+  { path: 'settings', loadChildren: () => import('./settings/settings.module').then(m => m.SettingsModule) },
   // Fallback — anything else routes to Home
   { path: '**', redirectTo: '' },
 ];

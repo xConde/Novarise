@@ -75,7 +75,7 @@
 
 @media (max-width: 480px) {
   .board-container .wave-preview .wave-preview-header .wave-number {
-    font-size: 0.875rem;
+    font-size: var(--font-size-small);
     letter-spacing: 0.05rem;
     margin: 0;
   }
@@ -158,8 +158,8 @@
   width: 100%;
   margin-top: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  background: rgba(255, 255, 255, 0.06);
-  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.2);
+  background: var(--border-structural);
+  border: var(--border-width-thin) solid var(--border-color);
   border-radius: var(--border-radius-md);
   color: var(--text-color);
   font-size: var(--font-size-title);
@@ -177,7 +177,7 @@
 .board-container .wave-preview .wave-btn:active { transform: scale(0.98); }
 
 .board-container .wave-preview .wave-btn .wave-hint {
-  font-size: 0.5rem;
+  font-size: var(--font-size-tiny);
   color: rgba(255, 255, 255, 0.3);
   text-transform: uppercase;
   letter-spacing: 0.05rem;
@@ -231,11 +231,11 @@
 /* Wave preview NEW badge */
 .wave-preview-new {
   font-family: 'Orbitron', sans-serif;
-  font-size: 0.5rem;
+  font-size: var(--font-size-tiny);
   font-weight: 700;
-  color: var(--game-gold, #ffd700);
+  color: var(--game-gold);
   background: var(--game-gold-a15);
-  border: 1px solid var(--game-gold-a40);
+  border: var(--border-width-thin) solid var(--game-gold-a40);
   border-radius: 3px;
   padding: 1px 4px;
   align-self: center;

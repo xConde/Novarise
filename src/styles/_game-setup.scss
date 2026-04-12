@@ -26,7 +26,7 @@
 .encyclopedia-panel,
 .editor-modal-list {
   scrollbar-width: thin;
-  scrollbar-color: var(--theme-purple-a50, rgba(106, 90, 154, 0.5)) transparent;
+  scrollbar-color: var(--theme-purple-a50) transparent;
 }
 
 .board-container .setup-panel::-webkit-scrollbar,
@@ -44,14 +44,14 @@
 .board-container .setup-panel::-webkit-scrollbar-thumb,
 .encyclopedia-panel::-webkit-scrollbar-thumb,
 .editor-modal-list::-webkit-scrollbar-thumb {
-  background: var(--theme-purple-a50, rgba(106, 90, 154, 0.5));
-  border-radius: 4px;
+  background: var(--theme-purple-a50);
+  border-radius: var(--border-radius-sm);
 }
 
 .board-container .setup-panel::-webkit-scrollbar-thumb:hover,
 .encyclopedia-panel::-webkit-scrollbar-thumb:hover,
 .editor-modal-list::-webkit-scrollbar-thumb:hover {
-  background: var(--theme-purple-a70, rgba(106, 90, 154, 0.7));
+  background: var(--theme-purple-a70);
 }
 
 .board-container .setup-section-label {
@@ -270,7 +270,7 @@
 
   /* Section label (Difficulty / Modifiers headings) */
   .board-container .setup-panel .setup-section-label {
-    font-size: 0.5rem;
+    font-size: var(--font-size-tiny);
     margin-bottom: 0.1rem;
     letter-spacing: 0.05rem;
   }
@@ -283,7 +283,7 @@
   }
 
   .board-container .setup-panel .campaign-level-info__number {
-    font-size: 0.5rem;
+    font-size: var(--font-size-tiny);
   }
 
   .board-container .setup-panel .campaign-level-info__name {
@@ -303,14 +303,14 @@
   }
 
   .board-container .setup-panel .campaign-challenges-preview__title {
-    font-size: 0.5rem;
+    font-size: var(--font-size-tiny);
     margin-bottom: 0.1rem;
     letter-spacing: 0.05rem;
   }
 
   .board-container .setup-panel .challenge-preview-item {
     padding: 0.15rem 0.3rem;
-    font-size: 0.5rem;
+    font-size: var(--font-size-tiny);
     gap: 0.2rem;
   }
 
@@ -357,7 +357,7 @@
     min-height: 2.5rem;
     font-size: 0.65rem;
     padding: 0.25rem;
-    z-index: 1;
+    z-index: var(--z-index-base);
   }
 }
 
