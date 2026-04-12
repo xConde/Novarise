@@ -3,7 +3,6 @@ import { TowerInteractionService, PlaceTowerResult, SellTowerResult, UpgradeTowe
 import { GameStateService } from './game-state.service';
 import { GameBoardService } from '../game-board.service';
 import { TowerCombatService } from './tower-combat.service';
-import { TilePricingService } from './tile-pricing.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameEndService } from './game-end.service';
 import { EnemyService } from './enemy.service';
@@ -18,8 +17,6 @@ import {
 } from '../models/tower.model';
 import { GamePhase } from '../models/game-state.model';
 import { BlockType } from '../models/game-board-tile';
-import { PathfindingService } from './pathfinding.service';
-import { StatusEffectService } from './status-effect.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { createRelicServiceSpy } from '../testing';
 
@@ -43,7 +40,6 @@ describe('TowerInteractionService', () => {
   let gameStateSpy: jasmine.SpyObj<GameStateService>;
   let gameBoardSpy: jasmine.SpyObj<GameBoardService>;
   let towerCombatSpy: jasmine.SpyObj<TowerCombatService>;
-  let tilePricingSpy: jasmine.SpyObj<TilePricingService>;
   let challengeSpy: jasmine.SpyObj<ChallengeTrackingService>;
   let gameEndSpy: jasmine.SpyObj<GameEndService>;
   let enemySpy: jasmine.SpyObj<EnemyService>;
@@ -58,9 +54,6 @@ describe('TowerInteractionService', () => {
     towerCombatSpy = jasmine.createSpyObj('TowerCombatService', [
       'registerTower', 'unregisterTower', 'upgradeTower', 'upgradeTowerWithSpec', 'getTower',
     ]);
-    tilePricingSpy = jasmine.createSpyObj('TilePricingService', [
-      'getTilePrice', 'getStrategicValue', 'invalidateCache',
-    ]);
     challengeSpy = jasmine.createSpyObj('ChallengeTrackingService', [
       'recordTowerPlaced', 'recordTowerUpgraded', 'recordTowerSold',
     ]);
@@ -71,14 +64,6 @@ describe('TowerInteractionService', () => {
     gameStateSpy.getState.and.returnValue({ phase: GamePhase.SETUP, gold: 1000 } as any);
     gameStateSpy.canAfford.and.returnValue(true);
     gameStateSpy.getModifierEffects.and.returnValue({ towerCostMultiplier: 1 } as any);
-    tilePricingSpy.getStrategicValue.and.returnValue(0);
-    tilePricingSpy.getTilePrice.and.callFake((type: TowerType) => ({
-      cost: TOWER_CONFIGS[type].cost,
-      strategicMultiplier: 0,
-      percentIncrease: 0,
-      tier: 'base' as any,
-      isPremium: false,
-    }));
 
     TestBed.configureTestingModule({
       providers: [
@@ -86,7 +71,6 @@ describe('TowerInteractionService', () => {
         { provide: GameStateService, useValue: gameStateSpy },
         { provide: GameBoardService, useValue: gameBoardSpy },
         { provide: TowerCombatService, useValue: towerCombatSpy },
-        { provide: TilePricingService, useValue: tilePricingSpy },
         { provide: ChallengeTrackingService, useValue: challengeSpy },
         { provide: GameEndService, useValue: gameEndSpy },
         { provide: EnemyService, useValue: enemySpy },
@@ -156,12 +140,11 @@ describe('TowerInteractionService', () => {
       expect(challengeSpy.recordTowerPlaced).toHaveBeenCalledWith(TowerType.SNIPER, TOWER_CONFIGS[TowerType.SNIPER].cost);
     });
 
-    it('repaths enemies and invalidates cache on success', () => {
+    it('repaths enemies on success', () => {
       gameBoardSpy.canPlaceTower.and.returnValue(true);
       gameBoardSpy.placeTower.and.returnValue(true);
       service.placeTower(2, 3, TowerType.BASIC);
       expect(enemySpy.repathAffectedEnemies).toHaveBeenCalledWith(2, 3);
-      expect(tilePricingSpy.invalidateCache).toHaveBeenCalled();
     });
 
     it('does not double-spend gold when placeTower returns false after canPlaceTower', () => {
@@ -246,12 +229,11 @@ describe('TowerInteractionService', () => {
       expect(challengeSpy.recordTowerSold).toHaveBeenCalled();
     });
 
-    it('repaths ALL enemies and invalidates cache on sell', () => {
+    it('repaths ALL enemies on sell', () => {
       const tower = makeMockTower();
       towerCombatSpy.unregisterTower.and.returnValue(tower);
       service.sellTower('2-3');
       expect(enemySpy.repathAffectedEnemies).toHaveBeenCalledWith(-1, -1);
-      expect(tilePricingSpy.invalidateCache).toHaveBeenCalled();
     });
 
     it('confirms unregistration BEFORE adding gold (confirm-before-refund)', () => {
@@ -353,42 +335,6 @@ describe('TowerInteractionService', () => {
       const result = service.upgradeTower('2-3', TowerSpecialization.ALPHA);
       expect(result.success).toBeFalse();
       expect(gameStateSpy.spendGold).not.toHaveBeenCalled();
-    });
-  });
-
-  // ─── getTileCost ───────────────────────────────────────────────────────────
-
-  describe('getTileCost', () => {
-    it('returns base cost when no strategic premium', () => {
-      const info = service.getTileCost(0, 0, TowerType.BASIC);
-      expect(info.cost).toBe(TOWER_CONFIGS[TowerType.BASIC].cost);
-    });
-
-    it('applies cost multiplier from modifiers', () => {
-      gameStateSpy.getModifierEffects.and.returnValue({ towerCostMultiplier: 2 } as any);
-      tilePricingSpy.getTilePrice.and.callFake((type: TowerType, _r: number, _c: number, mult: number) => ({
-        cost: Math.round(TOWER_CONFIGS[type].cost * mult),
-        strategicMultiplier: 0,
-        percentIncrease: 0,
-        tier: 'base' as any,
-        isPremium: false,
-      }));
-      const info = service.getTileCost(0, 0, TowerType.BASIC);
-      expect(info.cost).toBe(TOWER_CONFIGS[TowerType.BASIC].cost * 2);
-    });
-
-    it('includes strategic pricing via TilePricingService', () => {
-      tilePricingSpy.getTilePrice.and.returnValue({
-        cost: 999,
-        strategicMultiplier: 0.5,
-        percentIncrease: 25,
-        tier: 'high' as any,
-        isPremium: true,
-      });
-      const info = service.getTileCost(5, 5, TowerType.SNIPER);
-      expect(info.cost).toBe(999);
-      expect(info.isPremium).toBeTrue();
-      expect(info.percentIncrease).toBe(25);
     });
   });
 });

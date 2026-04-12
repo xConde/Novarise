@@ -173,17 +173,6 @@
       <svg *ngIf="isPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       <svg *ngIf="!isPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
     </button>
-    <div class="speed-controls">
-      <button
-        *ngFor="let s of validGameSpeeds"
-        class="control-btn speed-btn"
-        [class.active]="gameSpeed === s"
-        (click)="setSpeed(s)"
-        [attr.aria-label]="s + 'x speed'"
-        [attr.aria-pressed]="gameSpeed === s">
-        {{ s }}x
-      </button>
-    </div>
     <button
       class="control-btn range-btn"
       (click)="toggleAllRanges()"
@@ -260,17 +249,6 @@
             {{ audioMuted ? 'Unmute' : 'Mute' }}
           </button>
         </div>
-        <div class="pause-setting">
-          <span class="pause-setting__label">Speed</span>
-          <div class="pause-speed-btns">
-            <button *ngFor="let speed of validGameSpeeds"
-                    class="pause-speed-btn"
-                    [class.pause-speed-btn--active]="gameState.gameSpeed === speed"
-                    (click)="setSpeed(speed)">
-              {{ speed }}x
-            </button>
-          </div>
-        </div>
       </div>
 
       <!-- Normal actions -->
@@ -334,8 +312,6 @@
     <span class="mode-label place-mode">
       {{ selectedTowerType | titlecase }}
     </span>
-    <span class="mode-cost" *ngIf="hoveredTileCost > 0">{{ hoveredTileCost }}g</span>
-    <span class="mode-percent" *ngIf="hoveredTilePercent > 0">+{{ hoveredTilePercent }}%</span>
     <span class="mode-hint">Right-click to cancel</span>
   </div>
 

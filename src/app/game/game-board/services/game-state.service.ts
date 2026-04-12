@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_GAME_SPEEDS, VALID_TRANSITIONS } from '../models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_TRANSITIONS } from '../models/game-state.model';
 import { GameModifier, ModifierEffects, mergeModifierEffects, calculateModifierScoreMultiplier } from '../models/game-modifier.model';
 
 @Injectable()
@@ -208,13 +208,6 @@ export class GameStateService {
   togglePause(): void {
     if (this.state.phase !== GamePhase.COMBAT && this.state.phase !== GamePhase.INTERMISSION) return;
     this.state.isPaused = !this.state.isPaused;
-    this.emit();
-  }
-
-  /** Sets game speed multiplier. No-op for values not in VALID_GAME_SPEEDS. */
-  setSpeed(speed: GameSpeed): void {
-    if (!VALID_GAME_SPEEDS.includes(speed)) return;
-    this.state.gameSpeed = speed;
     this.emit();
   }
 

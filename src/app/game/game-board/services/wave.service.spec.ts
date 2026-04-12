@@ -858,8 +858,8 @@ describe('WaveService', () => {
     });
   });
 
-  describe('deriveSpawnQueuesFromTurns aggregate counts', () => {
-    it('correctly aggregates BASIC×3 + FAST×1 from [[BASIC, BASIC], [FAST], [BASIC]]', () => {
+  describe('getRemainingToSpawn with authored spawnTurns', () => {
+    it('correctly counts BASIC×3 + FAST×1 from [[BASIC, BASIC], [FAST], [BASIC]]', () => {
       const wave = {
         spawnTurns: [
           [EnemyType.BASIC, EnemyType.BASIC],
@@ -870,7 +870,7 @@ describe('WaveService', () => {
       };
       service.setCustomWaves([wave]);
       service.startWave(1, mockScene);
-      // getRemainingToSpawn = sum of all remaining in spawnQueues = 3 + 1 = 4
+      // getRemainingToSpawn delegates to getRemainingInTurnSchedule = 4 total
       expect(service.getRemainingToSpawn()).toBe(4);
     });
   });

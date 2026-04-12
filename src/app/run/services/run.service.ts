@@ -66,6 +66,10 @@ export class RunService {
   /** Stores the current encounter config while in /play. */
   private currentEncounter: EncounterConfig | null = null;
 
+  /** Stash of the completed encounter, set in consumePendingEncounterResult() before
+   *  nulling currentEncounter so generateRewards() can still read goldReward/isElite/isBoss. */
+  private lastCompletedEncounter: EncounterConfig | null = null;
+
   /** Pending encounter result set by GameBoardComponent on return from /play. */
   private pendingResult: EncounterResult | null = null;
 
@@ -282,6 +286,7 @@ export class RunService {
       this.playerProfile.recordRun(defeatState);
     }
 
+    this.lastCompletedEncounter = this.currentEncounter;
     this.currentEncounter = null;
     this.eventBus.emit(RunEventType.ENCOUNTER_END, { victory: result.victory });
     this.persist();
@@ -292,7 +297,9 @@ export class RunService {
 
   /** Generate reward choices after a victorious encounter. */
   generateRewards(): RewardScreenConfig {
-    const encounter = this.currentEncounter;
+    // Use lastCompletedEncounter — consumePendingEncounterResult() nulls currentEncounter
+    // before generateRewards() is called (per run.component.ts handleEncounterReturn ordering).
+    const encounter = this.lastCompletedEncounter;
     const rng = this.runRng ?? Math.random;
 
     const baseGold = encounter?.goldReward ?? 0;

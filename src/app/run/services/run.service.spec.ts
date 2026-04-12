@@ -631,6 +631,10 @@ describe('RunService', () => {
         makeEncounterConfig({ isElite: true, isBoss: false }),
       );
       service.prepareEncounter(service.nodeMap!.nodes[0]);
+      // Must consume before generateRewards — consume stashes lastCompletedEncounter
+      // so isElite/isBoss are preserved for the reward screen.
+      service.recordEncounterResult(makeEncounterResult({ victory: true }));
+      service.consumePendingEncounterResult();
 
       const rewards = service.generateRewards();
 
@@ -646,6 +650,10 @@ describe('RunService', () => {
       service.prepareEncounter(service.nodeMap!.nodes[0]);
       // Use boss node so prepareEncounter is resolved against the boss node
       service.selectNode(service.nodeMap!.bossNodeId);
+      // Must consume before generateRewards — consume stashes lastCompletedEncounter
+      // so isElite/isBoss are preserved for the reward screen.
+      service.recordEncounterResult(makeEncounterResult({ victory: true }));
+      service.consumePendingEncounterResult();
 
       const rewards = service.generateRewards();
 
@@ -690,27 +698,27 @@ describe('RunService', () => {
   }
 
   describe('generateRewards — challenge gold bonus', () => {
-    // Note: consumePendingEncounterResult() nulls currentEncounter before generateRewards
-    // is called (per run.component.ts handleEncounterReturn ordering). The encounter
+    // consumePendingEncounterResult() stashes currentEncounter into lastCompletedEncounter
+    // before nulling it (per run.component.ts handleEncounterReturn ordering). The encounter
     // goldReward is auto-credited to runState.gold inside consume(); the reward-screen
-    // goldPickup therefore reflects ONLY challenge bonuses (baseGold = 0 post-consume).
-    // This is pre-existing behavior — not introduced by R4.
+    // goldPickup therefore includes both baseGold (from lastCompletedEncounter) and any
+    // challenge bonus gold.
     beforeEach(() => {
       service.startNewRun();
       encounterService.prepareEncounter.and.returnValue(makeEncounterConfig({ goldReward: 40 }));
       service.prepareEncounter(service.nodeMap!.nodes[0]);
     });
 
-    it('zero challenges: goldPickup is 0 (currentEncounter nulled post-consume)', fakeAsync(() => {
+    it('zero challenges: goldPickup is baseGold only (40)', fakeAsync(() => {
       service.recordEncounterResult(makeEncounterResult({ victory: true, completedChallenges: [] }));
       service.consumePendingEncounterResult();
 
       const rewards = service.generateRewards();
 
-      expect(rewards.goldPickup).toBe(0);
+      expect(rewards.goldPickup).toBe(40); // baseGold=40, challengeGold=0
     }));
 
-    it('1 challenge scoreBonus 200 → goldPickup = Math.round(200/5) = 40', fakeAsync(() => {
+    it('1 challenge scoreBonus 200 → goldPickup = 40 + Math.round(200/5) = 80', fakeAsync(() => {
       service.recordEncounterResult(makeEncounterResult({
         victory: true,
         completedChallenges: [makeChallenge('c01_test', 200)],
@@ -719,10 +727,10 @@ describe('RunService', () => {
 
       const rewards = service.generateRewards();
 
-      expect(rewards.goldPickup).toBe(40); // Math.round(200/5)=40
+      expect(rewards.goldPickup).toBe(80); // baseGold=40 + challengeGold=40
     }));
 
-    it('2 challenges scoreBonuses 200 + 350 → goldPickup = 40 + 70 = 110', fakeAsync(() => {
+    it('2 challenges scoreBonuses 200 + 350 → goldPickup = 40 + 40 + 70 = 150', fakeAsync(() => {
       service.recordEncounterResult(makeEncounterResult({
         victory: true,
         completedChallenges: [
@@ -734,10 +742,10 @@ describe('RunService', () => {
 
       const rewards = service.generateRewards();
 
-      expect(rewards.goldPickup).toBe(110); // 40 + 70
+      expect(rewards.goldPickup).toBe(150); // baseGold=40 + challengeGold=110
     }));
 
-    it('rounding: scoreBonus 250 → Math.round(50) = 50', fakeAsync(() => {
+    it('rounding: scoreBonus 250 → goldPickup = 40 + Math.round(50) = 90', fakeAsync(() => {
       service.recordEncounterResult(makeEncounterResult({
         victory: true,
         completedChallenges: [makeChallenge('c01_round', 250)],
@@ -746,10 +754,10 @@ describe('RunService', () => {
 
       const rewards = service.generateRewards();
 
-      expect(rewards.goldPickup).toBe(50);
+      expect(rewards.goldPickup).toBe(90); // baseGold=40 + challengeGold=50
     }));
 
-    it('rounding: scoreBonus 247 → Math.round(49.4) = 49', fakeAsync(() => {
+    it('rounding: scoreBonus 247 → goldPickup = 40 + Math.round(49.4) = 89', fakeAsync(() => {
       service.recordEncounterResult(makeEncounterResult({
         victory: true,
         completedChallenges: [makeChallenge('c01_round247', 247)],
@@ -758,15 +766,15 @@ describe('RunService', () => {
 
       const rewards = service.generateRewards();
 
-      expect(rewards.goldPickup).toBe(49);
+      expect(rewards.goldPickup).toBe(89); // baseGold=40 + challengeGold=49
     }));
 
     it('empty encounterResults: no crash, goldPickup === 0, completedChallenges === []', fakeAsync(() => {
-      // No consumePendingEncounterResult called — encounterResults stays []
-      // currentEncounter is still set (prepareEncounter above) so baseGold = 40
+      // No consumePendingEncounterResult called — lastCompletedEncounter stays null
+      // so baseGold = 0; encounterResults is also empty so challengeGold = 0.
       const rewards = service.generateRewards();
 
-      expect(rewards.goldPickup).toBe(40);
+      expect(rewards.goldPickup).toBe(0);
       expect(rewards.completedChallenges).toEqual([]);
     }));
 
@@ -804,8 +812,8 @@ describe('RunService', () => {
 
       const rewards = service.generateRewards();
 
-      // Gold: 0 base (currentEncounter nulled by consume) + 40 challenge bonus
-      expect(rewards.goldPickup).toBe(40);
+      // Gold: 40 base (lastCompletedEncounter.goldReward) + 40 challenge bonus
+      expect(rewards.goldPickup).toBe(80);
       // Relics: relicChoicesCombat - 1 = reduced
       expect(rewards.relicChoices.length).toBe(Math.max(1, REWARD_CONFIG.relicChoicesCombat - 1));
     }));

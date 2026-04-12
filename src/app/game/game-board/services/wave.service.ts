@@ -6,21 +6,11 @@ import { EndlessWaveTemplate, EndlessWaveResult, generateEndlessWave } from '../
 import { EnemyService } from './enemy.service';
 import { RelicService } from '../../../run/services/relic.service';
 
-interface SpawnQueue {
-  type: EnemyType;
-  /** Irrelevant for authored spawnTurns waves (set to 0). Only used for legacy entries[] scheduling. */
-  spawnInterval: number;
-  remaining: number;
-  timeSinceLastSpawn: number;
-}
-
-
 @Injectable()
 export class WaveService {
   private waveDefinitions: WaveDefinition[] = WAVE_DEFINITIONS;
   /** Custom wave definitions set for a specific campaign level. Null means use WAVE_DEFINITIONS. */
   private customWaves: WaveDefinition[] | null = null;
-  private spawnQueues: SpawnQueue[] = [];
   private active = false;
   private currentWaveIndex = -1;
   private endlessMode = false;
@@ -139,15 +129,8 @@ export class WaveService {
     if (waveDef.spawnTurns !== undefined) {
       // Authored per-turn schedule — use directly after TEMPORAL_RIFT delay.
       this.turnSchedule = this.buildTurnScheduleFromSpawnTurns(waveDef.spawnTurns);
-      this.spawnQueues = this.deriveSpawnQueuesFromTurns(waveDef.spawnTurns, countMultiplier);
     } else if (waveDef.entries !== undefined) {
       // Legacy entries[] — convert to per-turn schedule via interleaving.
-      this.spawnQueues = waveDef.entries.map(entry => ({
-        type: entry.type,
-        spawnInterval: entry.spawnInterval,
-        remaining: Math.round(entry.count * countMultiplier),
-        timeSinceLastSpawn: entry.spawnInterval, // spawn first immediately
-      }));
       // Phase 4: build the per-turn spawn schedule. Distributes enemies by
       // interleaving one-per-entry-per-turn until all entries are exhausted.
       // Preserves wave "shape" (e.g., FAST + BASIC interleave) across turns.
@@ -217,31 +200,6 @@ export class WaveService {
   }
 
   /**
-   * Derive aggregate spawn counts from an authored spawnTurns schedule so the
-   * HUD's getRemainingToSpawn() reflects accurate UI state. Flattens
-   * spawnTurns into per-type totals. spawnInterval is irrelevant for
-   * authored waves (turn-based) — set to 0.
-   *
-   * Note: countMultiplier is NOT applied here — authored spawnTurns are literal
-   * counts, not scaled by difficulty multipliers. Authored waves are intentionally
-   * paced; scaling is applied at authoring time if needed.
-   */
-  private deriveSpawnQueuesFromTurns(spawnTurns: EnemyType[][], _countMultiplier: number): SpawnQueue[] {
-    const counts = new Map<EnemyType, number>();
-    for (const turn of spawnTurns) {
-      for (const type of turn) {
-        counts.set(type, (counts.get(type) ?? 0) + 1);
-      }
-    }
-    return Array.from(counts.entries()).map(([type, count]) => ({
-      type,
-      spawnInterval: 0,
-      remaining: count,
-      timeSinceLastSpawn: 0,
-    }));
-  }
-
-  /**
    * Phase 4: spawn whatever is scheduled for the current turn within the
    * active wave. Advances the internal turn counter and sets `active=false`
    * when the schedule is exhausted. Called once per resolution phase from
@@ -274,13 +232,6 @@ export class WaveService {
     for (const type of turnSpawns) {
       const enemy = this.enemyService.spawnEnemy(type, scene, waveHealthMult, waveSpeedMult);
       if (enemy) spawned++;
-    }
-
-    // Also mirror into the legacy spawnQueues counter so getRemainingToSpawn()
-    // reflects accurate UI state. (Phase 5 deletes spawnQueues entirely.)
-    for (const type of turnSpawns) {
-      const queue = this.spawnQueues.find(q => q.type === type && q.remaining > 0);
-      if (queue) queue.remaining--;
     }
 
     if (this.turnScheduleIndex >= this.turnSchedule.length) {
@@ -344,7 +295,7 @@ export class WaveService {
 
   /** Returns number of enemies still queued to spawn in current wave. */
   getRemainingToSpawn(): number {
-    return this.spawnQueues.reduce((sum, q) => sum + Math.max(0, q.remaining), 0);
+    return this.getRemainingInTurnSchedule();
   }
 
   /** Returns the total enemy count for a given wave (pre-`waveCountMultiplier`). Used for UI progress display. */
@@ -400,9 +351,8 @@ export class WaveService {
     this.seenEnemyTypes.add(type);
   }
 
-  /** Clears all spawn queues and resets wave state. Call from `restartGame()` before a new game begins. Clears custom waves — re-apply via `setCustomWaves()` if restarting a campaign level. */
+  /** Resets wave state. Call from `restartGame()` before a new game begins. Clears custom waves — re-apply via `setCustomWaves()` if restarting a campaign level. */
   reset(): void {
-    this.spawnQueues = [];
     this.active = false;
     this.currentWaveIndex = -1;
     this.endlessMode = false;

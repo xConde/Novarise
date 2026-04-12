@@ -10,7 +10,6 @@ const STORAGE_KEY = 'novarise-settings';
 const DEFAULT_SETTINGS: GameSettings = {
   audioMuted: false,
   difficulty: DifficultyLevel.NORMAL,
-  gameSpeed: 1,
   showFps: false,
   reduceMotion: false,
 };

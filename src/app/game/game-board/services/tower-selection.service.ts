@@ -10,7 +10,6 @@ import {
 } from '../models/tower.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { TowerCombatService } from './tower-combat.service';
-import { TilePricingService } from './tile-pricing.service';
 import { GameStateService } from './game-state.service';
 import { RangeVisualizationService } from './range-visualization.service';
 import { GameBoardService } from '../game-board.service';
@@ -43,7 +42,6 @@ export class TowerSelectionService {
 
   constructor(
     private towerCombatService: TowerCombatService,
-    private tilePricingService: TilePricingService,
     private gameStateService: GameStateService,
     private rangeVisualizationService: RangeVisualizationService,
     private gameBoardService: GameBoardService,
@@ -85,9 +83,8 @@ export class TowerSelectionService {
     const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
     this.selectedTowerStats = { damage: stats.damage, range: stats.range, statusEffect: stats.statusEffect };
     const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-    const tileStrategic = this.tilePricingService.getStrategicValue(tower.row, tower.col);
-    this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level, costMult, tileStrategic);
-    this.selectedTowerUpgradePercent = Math.round(tileStrategic * 100);
+    this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level, costMult);
+    this.selectedTowerUpgradePercent = 0;
     this.selectedTowerSellValue = getSellValue(tower.totalInvested);
 
     // Compute upgrade preview (L1→L2 only; L2→L3 requires spec choice so preview is per-spec)

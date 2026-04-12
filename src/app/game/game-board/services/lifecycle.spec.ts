@@ -329,7 +329,6 @@ describe('GameStateService lifecycle', () => {
     expect(state.isEndless).toBe(INITIAL_GAME_STATE.isEndless);
     expect(state.highestWave).toBe(INITIAL_GAME_STATE.highestWave);
     expect(state.isPaused).toBe(INITIAL_GAME_STATE.isPaused);
-    expect(state.gameSpeed).toBe(INITIAL_GAME_STATE.gameSpeed);
     expect(state.elapsedTime).toBe(INITIAL_GAME_STATE.elapsedTime);
     expect(state.difficulty).toBe(INITIAL_GAME_STATE.difficulty);
   });

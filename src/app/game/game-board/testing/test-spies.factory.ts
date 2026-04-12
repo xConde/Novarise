@@ -265,7 +265,6 @@ export function createSettingsServiceSpy(): jasmine.SpyObj<SettingsService> {
   const defaultSettings: GameSettings = {
     audioMuted: false,
     difficulty: DifficultyLevel.NORMAL,
-    gameSpeed: 1,
     showFps: false,
     reduceMotion: false,
   };
@@ -549,7 +548,7 @@ export function createGameStateServiceSpy(): jasmine.SpyObj<GameStateService> {
     'canAfford',
     'addScore',
     'togglePause',
-    'setSpeed',
+
     'setModifiers',
     'getModifierEffects',
     'getModifierScoreMultiplier',

@@ -53,7 +53,7 @@ describe('GameSessionService', () => {
     gameStateSpy = jasmine.createSpyObj('GameStateService', ['reset', 'setMaxWaves', 'getState$', 'getState']);
     gameStateSpy.getState.and.returnValue({
       wave: 0, lives: 7, gold: 150, score: 0, phase: 'SETUP',
-      isPaused: false, isEndless: false, gameSpeed: 1,
+      isPaused: false, isEndless: false,
       difficulty: 'normal', streak: 0, maxWaves: 10, elapsedTime: 0,
     } as any);
 

@@ -23,7 +23,7 @@ import { TowerPreviewService } from './services/tower-preview.service';
 import { disposeMaterial } from './utils/three-utils';
 import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, TARGETING_MODE_LABELS } from './models/tower.model';
 import { BlockType } from './models/game-board-tile';
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, VALID_GAME_SPEEDS } from './models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState } from './models/game-state.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
 import { TILE_EMISSIVE, UI_CONFIG } from './constants/ui.constants';
@@ -37,8 +37,6 @@ import { WavePreviewEntry, getWavePreview, getWavePreviewFull } from './models/w
 import { PathVisualizationService } from './services/path-visualization.service';
 import { StatusEffectService } from './services/status-effect.service';
 import { StatusEffectType } from './constants/status-effect.constants';
-import { TilePricingService, TilePriceInfo } from './services/tile-pricing.service';
-import { PriceLabelService } from './services/price-label.service';
 import { TutorialService, TutorialStep, TutorialTip } from '../../core/services/tutorial.service';
 import { GameNotificationService, GameNotification, NotificationType } from './services/game-notification.service';
 import { ChallengeTrackingService } from './services/challenge-tracking.service';
@@ -156,7 +154,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, TilePricingService, PriceLabelService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService]
+  providers: [SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -182,10 +180,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private gridLines: THREE.Group | null = null;
   selectedTowerType: TowerType | null = TowerType.BASIC;
   private lastPreviewKey = ''; // "row-col-towerType-gold" — skip preview rebuild when unchanged
-  /** Tile-specific cost shown in mode indicator during PLACE mode hover. 0 = not hovering a valid tile. */
-  hoveredTileCost = 0;
-  /** % increase over base cost for the hovered tile. */
-  hoveredTilePercent = 0;
 
   // Tower info panel state — delegated to TowerSelectionService (get/set for template + test compat)
   get selectedTowerInfo(): PlacedTower | null { return this.towerSelectionService.selectedTowerInfo; }
@@ -380,8 +374,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private towerPreviewService: TowerPreviewService,
     private pathVisualizationService: PathVisualizationService,
     private statusEffectService: StatusEffectService,
-    private tilePricingService: TilePricingService,
-    private priceLabelService: PriceLabelService,
     private tutorialService: TutorialService,
     private notificationService: GameNotificationService,
     private challengeTrackingService: ChallengeTrackingService,
@@ -638,15 +630,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return Math.round(TOWER_CONFIGS[type].cost * costMult);
   }
 
-  /**
-   * Tile-specific tower cost including strategic pricing.
-   * Returns the actual cost to place the selected tower on this tile.
-   */
-  getTileTowerCost(type: TowerType, row: number, col: number): TilePriceInfo {
-    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-    return this.tilePricingService.getTilePrice(type, row, col, costMult);
-  }
-
   selectTowerType(type: TowerType): void {
     // Toggle: clicking the same type deselects (enters INSPECT mode)
     if (this.selectedTowerType === type) {
@@ -684,8 +667,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.cancelPendingTowerCard();
     this.selectedTowerType = null;
     this.lastPreviewKey = '';
-    this.hoveredTileCost = 0;
-    this.hoveredTilePercent = 0;
     this.clearTileHighlights();
     if (this.sceneService.getScene()) {
       this.towerPreviewService.hidePreview(this.sceneService.getScene());
@@ -1349,7 +1330,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sceneService.initSkybox();
     this.sceneService.initParticles();
     this.minimapService.init(this.canvasContainer.nativeElement);
-    this.tilePricingService.invalidateCache();
     this.cachedMinimapTerrain = null;
     this.lastPreviewKey = '';
     this.lastTime = 0;
@@ -1524,26 +1504,20 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           const previewKey = `${row}-${col}-${this.selectedTowerType}-${this.gameState.gold}`;
           if (previewKey !== this.lastPreviewKey) {
             this.lastPreviewKey = previewKey;
-            const tilePrice = this.getTileTowerCost(this.selectedTowerType!, row, col);
-            this.hoveredTileCost = tilePrice.cost;
-            this.hoveredTilePercent = tilePrice.percentIncrease;
-            const tileCost = tilePrice.cost;
+            const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+            const tileCost = Math.round(TOWER_CONFIGS[this.selectedTowerType!].cost * costMult);
             const canPlace = this.gameBoardService.canPlaceTower(row, col)
               && this.gameStateService.canAfford(tileCost);
             this.towerPreviewService.showPreview(this.selectedTowerType!, row, col, canPlace, this.sceneService.getScene());
           }
         } else {
           this.lastPreviewKey = '';
-          this.hoveredTileCost = 0;
-    this.hoveredTilePercent = 0;
           this.towerPreviewService.hidePreview(this.sceneService.getScene());
         }
       } else {
         this.hoveredTile = null;
         canvas.style.cursor = 'default';
         this.lastPreviewKey = '';
-        this.hoveredTileCost = 0;
-    this.hoveredTilePercent = 0;
         this.towerPreviewService.hidePreview(this.sceneService.getScene());
       }
     };
@@ -1795,9 +1769,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // --- Pause menu ---
 
-  /** Named constant for speed buttons (HUD and pause menu) — avoids template literal arrays. */
-  readonly validGameSpeeds: readonly GameSpeed[] = VALID_GAME_SPEEDS;
-
   onPauseOverlayClick(_event: MouseEvent): void {
     // Clicking the dark backdrop resumes the game
     this.togglePause();
@@ -1850,13 +1821,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }, 0);
     };
     this.gamePauseService.setupAutoPause();
-  }
-
-  setSpeed(speed: number): void {
-    if ((VALID_GAME_SPEEDS as readonly number[]).includes(speed)) {
-      this.gameStateService.setSpeed(speed as GameSpeed);
-      this.settingsService.update({ gameSpeed: speed });
-    }
   }
 
   get isPaused(): boolean {
@@ -1915,10 +1879,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   skipTutorial(): void {
     this.tutorialService.skipTutorial();
-  }
-
-  get gameSpeed(): number {
-    return this.gameState.gameSpeed;
   }
 
   /** Formats the total COMBAT elapsed time as "MM:SS". */
@@ -2297,7 +2257,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.audioService.cleanup();
     this.particleService.cleanup(this.sceneService.getScene());
     this.goldPopupService.cleanup(this.sceneService.getScene());
-    // priceLabelService already cleaned by cleanupGameObjects → GameSessionService.cleanupScene → clearHighlights
     this.screenShakeService.cleanup(this.sceneService.getCamera());
     this.fpsCounterService.reset();
 

@@ -3,6 +3,7 @@ import {
   TowerType,
   TowerSpecialization,
   TOWER_SPECIALIZATIONS,
+  TOWER_CONFIGS,
   MAX_TOWER_LEVEL,
   getUpgradeCost,
   getEffectiveStats,
@@ -12,7 +13,6 @@ import { GamePhase } from '../models/game-state.model';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
 import { TowerCombatService } from './tower-combat.service';
-import { TilePricingService, TilePriceInfo } from './tile-pricing.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameEndService } from './game-end.service';
 import { EnemyService } from './enemy.service';
@@ -59,7 +59,6 @@ export class TowerInteractionService {
     private gameStateService: GameStateService,
     private gameBoardService: GameBoardService,
     private towerCombatService: TowerCombatService,
-    private tilePricingService: TilePricingService,
     private challengeTrackingService: ChallengeTrackingService,
     private gameEndService: GameEndService,
     private enemyService: EnemyService,
@@ -75,7 +74,7 @@ export class TowerInteractionService {
    *
    * Checks: terminal phase, bounds, tile type, path blocking, gold.
    * On success: places tower on board, spends gold, registers with combat service,
-   * repaths enemies, invalidates pricing cache.
+   * repaths enemies.
    *
    * Does NOT create the mesh — returns result for the component to handle visuals.
    */
@@ -87,8 +86,9 @@ export class TowerInteractionService {
 
     if (!this.gameBoardService.canPlaceTower(row, col)) return FAIL;
 
-    const priceInfo = this.getTileCost(row, col, type);
-    let effectiveCost = Math.round(priceInfo.cost * this.relicService.getTowerCostMultiplier());
+    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+    const baseCost = Math.round(TOWER_CONFIGS[type].cost * costMult);
+    let effectiveCost = Math.round(baseCost * this.relicService.getTowerCostMultiplier());
 
     if (this.relicService.isNextTowerFree()) {
       this.relicService.consumeFreeTower();
@@ -109,7 +109,6 @@ export class TowerInteractionService {
 
     // Repath enemies whose path crosses the newly placed tile
     this.enemyService.repathAffectedEnemies(row, col);
-    this.tilePricingService.invalidateCache();
 
     return { success: true, cost: effectiveCost, towerKey };
   }
@@ -162,7 +161,6 @@ export class TowerInteractionService {
 
     // Repath ALL ground enemies — freed tile may open shorter paths
     this.enemyService.repathAffectedEnemies(-1, -1);
-    this.tilePricingService.invalidateCache();
 
     return { success: true, refundAmount: refund };
   }
@@ -191,8 +189,7 @@ export class TowerInteractionService {
     if (tower.level >= MAX_TOWER_LEVEL) return FAIL;
 
     const costMult = (this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1) * this.relicService.getUpgradeCostMultiplier();
-    const tileStrategic = this.tilePricingService.getStrategicValue(tower.row, tower.col);
-    const cost = getUpgradeCost(tower.type, tower.level, costMult, tileStrategic);
+    const cost = getUpgradeCost(tower.type, tower.level, costMult);
 
     if (!this.gameStateService.canAfford(cost)) return FAIL;
 
@@ -242,16 +239,4 @@ export class TowerInteractionService {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Tile cost
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Get the strategic cost for placing a tower on a specific tile.
-   * Applies modifier cost multiplier and strategic tile premium.
-   */
-  getTileCost(row: number, col: number, baseType: TowerType): TilePriceInfo {
-    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-    return this.tilePricingService.getTilePrice(baseType, row, col, costMult);
-  }
 }

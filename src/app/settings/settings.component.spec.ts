@@ -11,7 +11,6 @@ describe('SettingsComponent', () => {
   const mockSettings: GameSettings = {
     audioMuted: false,
     difficulty: DifficultyLevel.NORMAL,
-    gameSpeed: 1,
     showFps: false,
     reduceMotion: false,
   };
@@ -143,7 +142,6 @@ describe('SettingsComponent', () => {
     settingsService.get.and.returnValue({
       audioMuted: false,
       difficulty: DifficultyLevel.NORMAL,
-      gameSpeed: 1,
       showFps: false,
       reduceMotion: true,
     });

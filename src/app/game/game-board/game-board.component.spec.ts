@@ -30,7 +30,6 @@ import { GameNotificationService, NotificationType } from './services/game-notif
 import { ChallengeTrackingService } from './services/challenge-tracking.service';
 import { ChallengeType, ChallengeDefinition } from '../../run/data/challenges';
 import { GameEndService } from './services/game-end.service';
-import { TilePricingService } from './services/tile-pricing.service';
 import { GameSessionService } from './services/game-session.service';
 import { SceneService } from './services/scene.service';
 import { PathfindingService } from './services/pathfinding.service';
@@ -190,37 +189,6 @@ describe('GameBoardComponent', () => {
 
     it('isPaused should be false in SETUP phase', () => {
       expect(component.isPaused).toBeFalse();
-    });
-  });
-
-  describe('setSpeed', () => {
-    it('should delegate to GameStateService.setSpeed', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      spyOn(gameStateService, 'setSpeed');
-
-      component.setSpeed(2);
-
-      expect(gameStateService.setSpeed).toHaveBeenCalledWith(2);
-    });
-
-    it('should not delegate for invalid speed values', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      spyOn(gameStateService, 'setSpeed');
-
-      component.setSpeed(99);
-
-      expect(gameStateService.setSpeed).not.toHaveBeenCalled();
-    });
-
-    it('gameSpeed getter should reflect gameState.gameSpeed', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setSpeed(3);
-
-      expect(component.gameSpeed).toBe(3);
-    });
-
-    it('gameSpeed should default to 1', () => {
-      expect(component.gameSpeed).toBe(1);
     });
   });
 
@@ -749,12 +717,6 @@ describe('GameBoardComponent', () => {
       expect((component as any).audioService.toggleMute).toHaveBeenCalled();
     });
 
-    it('setSpeed updates game speed via GameStateService for valid speeds', () => {
-      spyOn(gameStateService, 'setSpeed');
-      component.setSpeed(2);
-      expect(gameStateService.setSpeed).toHaveBeenCalledWith(2);
-    });
-
     it('requestQuit sets showQuitConfirm to true', () => {
       component.requestQuit();
       expect(component.showQuitConfirm).toBeTrue();
@@ -775,10 +737,6 @@ describe('GameBoardComponent', () => {
       spyOn(gamePauseService, 'confirmQuit').and.returnValue('/');
       component.confirmQuit();
       expect(gamePauseService.confirmQuit).toHaveBeenCalled();
-    });
-
-    it('validGameSpeeds contains [1, 2, 3]', () => {
-      expect(component.validGameSpeeds).toEqual([1, 2, 3] as any);
     });
 
     it('confirmQuit navigates to /run (run hub)', () => {
@@ -1182,9 +1140,6 @@ describe('GameBoardComponent', () => {
       (component as any).selectedTowerInfo = fakeTower;
       // Stub showRangePreview to avoid Three.js canvas crash
       spyOn((component as any).rangeVisualizationService, 'showForTower');
-      // Stub tilePricingService to avoid board-not-initialized crash
-      const tilePricingService = (component as any).tilePricingService;
-      spyOn(tilePricingService, 'getStrategicValue').and.returnValue(0);
       (component as any).refreshTowerInfoPanel();
 
       expect(component.upgradePreview).toBeTruthy();
@@ -1199,9 +1154,6 @@ describe('GameBoardComponent', () => {
       };
       (component as any).selectedTowerInfo = fakeTower;
       spyOn((component as any).rangeVisualizationService, 'showForTower');
-      // Stub tilePricingService to avoid board-not-initialized crash
-      const tilePricingService = (component as any).tilePricingService;
-      spyOn(tilePricingService, 'getStrategicValue').and.returnValue(0);
       (component as any).refreshTowerInfoPanel();
 
       // L2→L3 requires specialization choice, no generic preview
@@ -1216,9 +1168,6 @@ describe('GameBoardComponent', () => {
       };
       (component as any).selectedTowerInfo = fakeTower;
       spyOn((component as any).rangeVisualizationService, 'showForTower');
-      // Stub tilePricingService to avoid board-not-initialized crash
-      const tilePricingService = (component as any).tilePricingService;
-      spyOn(tilePricingService, 'getStrategicValue').and.returnValue(0);
       (component as any).refreshTowerInfoPanel();
 
       expect(component.upgradePreview).toBeNull();
@@ -2149,10 +2098,6 @@ describe('GameBoardComponent', () => {
       spyOn(towerCombatService, 'getTower').and.returnValue(mockTower);
       spyOn(towerCombatService, 'upgradeTower').and.returnValue(true);
 
-      // Stub pricing service so it doesn't crash on missing board state
-      const tilePricingService = fixture.debugElement.injector.get(TilePricingService);
-      spyOn(tilePricingService, 'getStrategicValue').and.returnValue(0);
-
       (component as any).selectedTowerInfo = mockTower;
       component.selectedTowerType = null; // INSPECT mode
       spyOn(component as any, 'refreshTowerInfoPanel');
@@ -2186,8 +2131,6 @@ describe('GameBoardComponent', () => {
       spyOn(gameBoardSvc, 'removeTower');
       const enemyService = fixture.debugElement.injector.get(EnemyService);
       spyOn(enemyService, 'repathAffectedEnemies');
-      const tilePricingService = fixture.debugElement.injector.get(TilePricingService);
-      spyOn(tilePricingService, 'invalidateCache');
       spyOn(component as any, 'deselectTower');
       spyOn(component as any, 'updateTileHighlights');
       spyOn(component as any, 'refreshPathOverlay');

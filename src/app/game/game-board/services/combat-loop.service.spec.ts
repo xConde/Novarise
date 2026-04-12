@@ -64,7 +64,7 @@ describe('CombatLoopService', () => {
       score: 0,
       isPaused: false,
       isEndless: false,
-      gameSpeed: 1,
+      
       difficulty: 'normal',
       maxWaves: 10,
       elapsedTime: 0,
@@ -230,7 +230,7 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
@@ -266,7 +266,7 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 2, lives: 9, gold: 100, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
@@ -474,7 +474,7 @@ describe('CombatLoopService', () => {
         // call 1: currentPhase after leaks → DEFEAT
         phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
         wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
@@ -491,7 +491,7 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
         wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
@@ -509,7 +509,7 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
         wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
@@ -526,7 +526,7 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
         wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
@@ -568,7 +568,7 @@ describe('CombatLoopService', () => {
         phase: callCount++ < 2 ? GamePhase.COMBAT : resultPhase,
         wave,
         lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
@@ -646,7 +646,7 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 1, lives: 9, gold: 100, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
@@ -698,7 +698,7 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
         wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
@@ -890,7 +890,7 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
@@ -925,7 +925,7 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 3, lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 3, consecutiveWavesWithoutLeak: 3,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
@@ -950,7 +950,7 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
@@ -968,7 +968,7 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
         wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
@@ -992,7 +992,7 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.VICTORY,
         wave: 10, lives: 10, gold: 100, score: 500, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 60, consecutiveWavesWithoutLeak: 5,
         highestWave: 0, activeModifiers: new Set(),
       } as any));

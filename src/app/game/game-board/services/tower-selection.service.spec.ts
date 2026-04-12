@@ -3,7 +3,6 @@ import * as THREE from 'three';
 
 import { TowerSelectionService } from './tower-selection.service';
 import { TowerCombatService } from './tower-combat.service';
-import { TilePricingService } from './tile-pricing.service';
 import { GameStateService } from './game-state.service';
 import { RangeVisualizationService } from './range-visualization.service';
 import { GameBoardService } from '../game-board.service';
@@ -36,7 +35,6 @@ function createMockTower(overrides: Partial<PlacedTower> = {}): PlacedTower {
 describe('TowerSelectionService', () => {
   let service: TowerSelectionService;
   let towerCombatSpy: jasmine.SpyObj<TowerCombatService>;
-  let tilePricingSpy: jasmine.SpyObj<TilePricingService>;
   let gameStateSpy: jasmine.SpyObj<GameStateService>;
   let rangeVisSpy: jasmine.SpyObj<RangeVisualizationService>;
   let gameBoardSpy: jasmine.SpyObj<GameBoardService>;
@@ -44,11 +42,6 @@ describe('TowerSelectionService', () => {
 
   beforeEach(() => {
     towerCombatSpy = createTowerCombatServiceSpy();
-
-    tilePricingSpy = jasmine.createSpyObj<TilePricingService>('TilePricingService', [
-      'getTilePrice', 'getStrategicValue', 'invalidateCache',
-    ]);
-    tilePricingSpy.getStrategicValue.and.returnValue(0);
     gameStateSpy = createGameStateServiceSpy();
     rangeVisSpy = jasmine.createSpyObj<RangeVisualizationService>('RangeVisualizationService', [
       'showForTower', 'removePreview', 'cleanup', 'toggleAllRanges',
@@ -60,7 +53,6 @@ describe('TowerSelectionService', () => {
       providers: [
         TowerSelectionService,
         { provide: TowerCombatService, useValue: towerCombatSpy },
-        { provide: TilePricingService, useValue: tilePricingSpy },
         { provide: GameStateService, useValue: gameStateSpy },
         { provide: RangeVisualizationService, useValue: rangeVisSpy },
         { provide: GameBoardService, useValue: gameBoardSpy },

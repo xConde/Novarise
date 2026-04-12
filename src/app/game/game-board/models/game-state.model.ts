@@ -59,9 +59,6 @@ export const DIFFICULTY_PRESETS: Record<DifficultyLevel, DifficultyPreset> = {
   }
 };
 
-export const VALID_GAME_SPEEDS = [1, 2, 3] as const;
-export type GameSpeed = typeof VALID_GAME_SPEEDS[number];
-
 export interface GameState {
   phase: GamePhase;
   wave: number;
@@ -73,7 +70,6 @@ export interface GameState {
   isEndless: boolean;
   highestWave: number; // tracks best wave reached in endless mode
   isPaused: boolean;
-  gameSpeed: GameSpeed;
   elapsedTime: number; // total seconds spent in COMBAT phase
   activeModifiers: Set<GameModifier>;
   /** Number of consecutive waves completed without any enemy leaks. Resets to 0 on any leak. */
@@ -102,7 +98,6 @@ export const INITIAL_GAME_STATE: GameState = {
   isEndless: false,
   highestWave: 0,
   isPaused: false,
-  gameSpeed: 1,
   elapsedTime: 0,
   activeModifiers: new Set<GameModifier>(),
   consecutiveWavesWithoutLeak: 0,
