@@ -193,16 +193,15 @@
 @media (max-width: 768px) {
 }
 
-@media (max-width: 480px) {
+@media (max-width: 520px) {
   .node-map-container {
     width: 100%;
-    scrollbar-width: none;
-    &::-webkit-scrollbar { display: none; }
+    overflow: hidden;
   }
 
   .node-map-scroll {
-    // Ensure the scroll area fills available width
-    min-width: 100%;
+    transform-origin: top left;
+    transform: scale(calc(min(100vw - 2rem, 500px) / 500));
   }
 
   // Keep WCAG minimum on very small screens (2.75rem = 44px — exactly the minimum)
