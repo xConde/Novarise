@@ -24,8 +24,8 @@ const NODE_MAP_LAYOUT = {
   paddingX: 50,
   /** Top padding in px. */
   paddingY: 40,
-  /** Bottom padding below last node's edge. */
-  paddingBottom: 8,
+  /** Bottom padding below last node's edge (accounts for boss being larger than nodeRadius). */
+  paddingBottom: 16,
   /** Node button diameter in px — WCAG minimum (2.75rem = 44px). */
   nodeSize: 44,
   /** Radius of the node circle for SVG path anchoring. */
