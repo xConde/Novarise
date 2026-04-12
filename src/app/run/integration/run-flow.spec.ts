@@ -27,8 +27,9 @@ import { RunStatus, DEFAULT_RUN_CONFIG, EncounterResult } from '../models/run-st
 import { getWaveEnemyCount } from '../../game/game-board/models/wave.model';
 import { NodeType } from '../models/node-map.model';
 import { RelicId, RELIC_DEFINITIONS, RelicRarity } from '../models/relic.model';
-import { REWARD_CONFIG, REST_CONFIG, NODE_MAP_CONFIG } from '../constants/run.constants';
+import { REWARD_CONFIG, REST_CONFIG, NODE_MAP_CONFIG, SHOP_CONFIG } from '../constants/run.constants';
 import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
+import { CardId } from '../models/card.model';
 import { STUB_MAP_STATE } from './integration-fixtures';
 
 // ── Shared fixtures ──────────────────────────────────────────────────────────
@@ -563,5 +564,141 @@ describe('Ascent Mode — Integration Flow', () => {
     const ids = runService.runState!.relicIds;
     const count = ids.filter(id => id === RelicId.GOLD_MAGNET).length;
     expect(count).toBe(1);
+  }));
+
+  // ── Node progression gate (skip-bug regression) ─────────────────────────
+
+  it('should NOT add nodeId to completedNodeIds on selectNode', fakeAsync(() => {
+    runService.startNewRun();
+    const firstNodeId = runService.nodeMap!.startNodeIds[0];
+
+    runService.selectNode(firstNodeId);
+
+    expect(runService.runState!.currentNodeId).toBe(firstNodeId);
+    expect(runService.runState!.completedNodeIds).not.toContain(firstNodeId);
+  }));
+
+  it('should add nodeId to completedNodeIds only after victory consumption', fakeAsync(() => {
+    runService.startNewRun();
+    const combatNode = runService.nodeMap!.nodes.find(n => n.type === NodeType.COMBAT)!;
+
+    runService.selectNode(combatNode.id);
+    expect(runService.runState!.completedNodeIds).not.toContain(combatNode.id);
+
+    runService.prepareEncounter(combatNode);
+    runService.recordEncounterResult(makeVictoryResult(combatNode.id));
+    runService.consumePendingEncounterResult();
+
+    expect(runService.runState!.completedNodeIds).toContain(combatNode.id);
+  }));
+
+  // ── Non-combat node completion ──────────────────────────────────────────
+
+  it('should mark node completed when leaving shop', fakeAsync(() => {
+    runService.startNewRun();
+    const shopNode = runService.nodeMap!.nodes.find(n => n.type === NodeType.SHOP);
+    if (!shopNode) { pending('No shop node in generated map'); return; }
+
+    runService.selectNode(shopNode.id);
+    expect(runService.runState!.completedNodeIds).not.toContain(shopNode.id);
+
+    runService.leaveShop();
+
+    expect(runService.runState!.completedNodeIds).toContain(shopNode.id);
+  }));
+
+  it('should mark node completed when resolving an event', fakeAsync(() => {
+    runService.startNewRun();
+    runService['updateState']({ ...runService.runState!, currentNodeId: 'event_node_test' });
+    runService.generateEvent();
+
+    runService.resolveEvent(0);
+
+    expect(runService.runState!.completedNodeIds).toContain('event_node_test');
+  }));
+
+  it('should mark node completed when resting', fakeAsync(() => {
+    runService.startNewRun();
+    // Drain some lives so restHeal has something to heal
+    const combatNode = runService.nodeMap!.nodes.find(n => n.type === NodeType.COMBAT)!;
+    runService.prepareEncounter(combatNode);
+    runService.recordEncounterResult(makeVictoryResult(combatNode.id, { livesLost: 5 }));
+    runService.consumePendingEncounterResult();
+
+    const restNodeId = 'rest_node_test';
+    runService['updateState']({ ...runService.runState!, currentNodeId: restNodeId });
+    runService.restHeal();
+
+    expect(runService.runState!.completedNodeIds).toContain(restNodeId);
+  }));
+
+  // ── Reward types ────────────────────────────────────────────────────────
+
+  it('should collect a gold reward and increase gold', fakeAsync(() => {
+    runService.startNewRun();
+    const goldBefore = runService.runState!.gold;
+
+    runService.collectReward({ type: 'gold', amount: 50 });
+
+    expect(runService.runState!.gold).toBe(goldBefore + 50);
+  }));
+
+  it('should collect a card reward and add to deckCardIds', fakeAsync(() => {
+    runService.startNewRun();
+
+    runService.collectReward({ type: 'card', cardId: CardId.TOWER_SNIPER });
+
+    expect(runService.runState!.deckCardIds).toContain(CardId.TOWER_SNIPER);
+  }));
+
+  // ── Shop heal ───────────────────────────────────────────────────────────
+
+  it('should heal one life and deduct gold via buyShopHeal', fakeAsync(() => {
+    runService.startNewRun();
+    // Drain a life and ensure enough gold
+    const state = runService.runState!;
+    runService['updateState']({
+      ...state,
+      lives: state.maxLives - 2,
+      gold: Math.max(state.gold, SHOP_CONFIG.healCostPerLife + 10),
+    });
+
+    const livesBefore = runService.runState!.lives;
+    const goldBefore = runService.runState!.gold;
+
+    runService.buyShopHeal();
+
+    expect(runService.runState!.lives).toBe(livesBefore + 1);
+    expect(runService.runState!.gold).toBe(goldBefore - SHOP_CONFIG.healCostPerLife);
+  }));
+
+  it('should refuse buyShopHeal when lives are already at max', fakeAsync(() => {
+    runService.startNewRun();
+    const state = runService.runState!;
+    runService['updateState']({ ...state, gold: 999 });
+
+    const livesBefore = runService.runState!.lives;
+    const goldBefore = runService.runState!.gold;
+
+    runService.buyShopHeal();
+
+    expect(runService.runState!.lives).toBe(livesBefore);
+    expect(runService.runState!.gold).toBe(goldBefore);
+  }));
+
+  // ── Act completion gate ─────────────────────────────────────────────────
+
+  it('should report isActComplete only when boss node is in completedNodeIds', fakeAsync(() => {
+    runService.startNewRun();
+    const bossNodeId = runService.nodeMap!.bossNodeId;
+
+    expect(runService.isActComplete()).toBeFalse();
+
+    runService['updateState']({
+      ...runService.runState!,
+      completedNodeIds: [bossNodeId],
+    });
+
+    expect(runService.isActComplete()).toBeTrue();
   }));
 });

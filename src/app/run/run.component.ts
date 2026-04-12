@@ -4,7 +4,7 @@ import { Subscription } from 'rxjs';
 
 import { RunService } from './services/run.service';
 import { RunState, RunStatus } from './models/run-state.model';
-import { MapNode, NodeMap, NodeType, getAvailableNodes } from './models/node-map.model';
+import { MapNode, NodeMap, NodeType, getSelectableNodes } from './models/node-map.model';
 import { RelicDefinition, RELIC_DEFINITIONS, RelicId } from './models/relic.model';
 import { RewardScreenConfig, RewardItem, ShopItem, RunEvent } from './models/encounter.model';
 import { AscensionLevel, ASCENSION_LEVELS } from './models/ascension.model';
@@ -330,16 +330,16 @@ export class RunComponent implements OnInit, OnDestroy {
   }
 
   private updateAvailableNodes(): void {
-    if (!this.nodeMap || !this.runState?.currentNodeId) {
-      // If no current node, start nodes are available
-      this.availableNodes = this.nodeMap
-        ? this.nodeMap.startNodeIds
-            .map(id => this.nodeMap!.nodes.find(n => n.id === id))
-            .filter((n): n is MapNode => n !== undefined)
-        : [];
+    if (!this.nodeMap || !this.runState) {
+      this.availableNodes = [];
       return;
     }
-    this.availableNodes = getAvailableNodes(this.nodeMap, this.runState.currentNodeId);
+
+    this.availableNodes = getSelectableNodes(
+      this.nodeMap,
+      this.runState.currentNodeId,
+      this.runState.completedNodeIds,
+    );
   }
 
   getTotalKills(): number {

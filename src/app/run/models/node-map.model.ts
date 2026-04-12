@@ -78,3 +78,30 @@ export function getAvailableNodes(map: NodeMap, currentNodeId: string): MapNode[
 export function getNodeById(map: NodeMap, nodeId: string): MapNode | undefined {
   return map.nodes.find(n => n.id === nodeId);
 }
+
+/**
+ * Returns nodes the player can currently select.
+ *
+ * - No currentNodeId → start nodes are available (fresh act).
+ * - currentNodeId NOT completed → only that node is selectable
+ *   (prevents skipping encounters by exiting mid-combat).
+ * - currentNodeId completed → its forward connections are available.
+ */
+export function getSelectableNodes(
+  map: NodeMap,
+  currentNodeId: string | null,
+  completedNodeIds: string[],
+): MapNode[] {
+  if (!currentNodeId) {
+    return map.startNodeIds
+      .map(id => map.nodes.find(n => n.id === id))
+      .filter((n): n is MapNode => n !== undefined);
+  }
+
+  if (!completedNodeIds.includes(currentNodeId)) {
+    const currentNode = map.nodes.find(n => n.id === currentNodeId);
+    return currentNode ? [currentNode] : [];
+  }
+
+  return getAvailableNodes(map, currentNodeId);
+}

@@ -2,6 +2,7 @@ import {
   getAvailableNodes,
   getNodeById,
   getNodeEdges,
+  getSelectableNodes,
   MapNode,
   NodeMap,
   NodeType,
@@ -144,6 +145,70 @@ describe('NodeMap Model', () => {
       const map = makeMap(nodes);
       const found = getNodeById(map, 'a');
       expect(found!.column).toBe(2);
+    });
+  });
+
+  describe('getSelectableNodes()', () => {
+    const nodes = [
+      makeNode('s1', 0, 0, ['m1', 'm2']),
+      makeNode('s2', 0, 1, ['m2']),
+      makeNode('m1', 1, 0, ['boss']),
+      makeNode('m2', 1, 1, ['boss']),
+      makeNode('boss', 2, 0, [], NodeType.BOSS),
+    ];
+    const map = makeMap(nodes);
+
+    it('should return start nodes when currentNodeId is null', () => {
+      const result = getSelectableNodes(map, null, []);
+      const ids = result.map(n => n.id);
+      expect(ids).toContain('s1');
+      expect(ids).toContain('s2');
+      expect(ids.length).toBe(2);
+    });
+
+    it('should return only the current node when it is not completed', () => {
+      const result = getSelectableNodes(map, 's1', []);
+      expect(result.length).toBe(1);
+      expect(result[0].id).toBe('s1');
+    });
+
+    it('should return connections when current node IS completed', () => {
+      const result = getSelectableNodes(map, 's1', ['s1']);
+      const ids = result.map(n => n.id);
+      expect(ids).toContain('m1');
+      expect(ids).toContain('m2');
+      expect(ids.length).toBe(2);
+    });
+
+    it('should return empty array when current node is not in the map', () => {
+      const result = getSelectableNodes(map, 'nonexistent', []);
+      expect(result).toEqual([]);
+    });
+
+    it('should not leak next-row nodes for uncompleted combat node (the skip bug)', () => {
+      // Player selected s1 but exited combat without completing — must NOT see m1/m2
+      const result = getSelectableNodes(map, 's1', []);
+      expect(result.length).toBe(1);
+      expect(result[0].id).toBe('s1');
+      expect(result.some(n => n.id === 'm1')).toBeFalse();
+      expect(result.some(n => n.id === 'm2')).toBeFalse();
+    });
+
+    it('should handle multi-node progression correctly', () => {
+      // Complete s1, then select m1 (not yet completed)
+      const afterS1 = getSelectableNodes(map, 'm1', ['s1']);
+      expect(afterS1.length).toBe(1);
+      expect(afterS1[0].id).toBe('m1');
+
+      // Complete m1 — boss becomes available
+      const afterM1 = getSelectableNodes(map, 'm1', ['s1', 'm1']);
+      expect(afterM1.length).toBe(1);
+      expect(afterM1[0].id).toBe('boss');
+    });
+
+    it('should return empty connections for completed boss (end of act)', () => {
+      const result = getSelectableNodes(map, 'boss', ['s1', 'm1', 'boss']);
+      expect(result).toEqual([]);
     });
   });
 });
