@@ -64,7 +64,7 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit, OnDes
   connectionPaths: ConnectionPath[] = [];
 
   /** Total pixel height of the SVG canvas (derived from row count). */
-  mapHeight = NODE_MAP_LAYOUT.rowSpacing * 12 + NODE_MAP_LAYOUT.paddingY + NODE_MAP_LAYOUT.paddingBottom;
+  mapHeight = 11 * NODE_MAP_LAYOUT.rowSpacing + NODE_MAP_LAYOUT.paddingY + NODE_MAP_LAYOUT.paddingBottom + NODE_MAP_LAYOUT.nodeSize;
 
   mapWidth: number = NODE_MAP_LAYOUT.width;
   readonly nodeSize = NODE_MAP_LAYOUT.nodeSize;
@@ -185,7 +185,7 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit, OnDes
     if (!this.nodeMap) return;
 
     const totalRows = this.nodeMap.rows; // includes boss row
-    this.mapHeight = totalRows * NODE_MAP_LAYOUT.rowSpacing + NODE_MAP_LAYOUT.paddingY + NODE_MAP_LAYOUT.paddingBottom;
+    this.mapHeight = (totalRows - 1) * NODE_MAP_LAYOUT.rowSpacing + NODE_MAP_LAYOUT.paddingY + NODE_MAP_LAYOUT.paddingBottom + NODE_MAP_LAYOUT.nodeSize;
 
     // Group nodes by row
     const nodesByRow = new Map<number, MapNode[]>();
