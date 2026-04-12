@@ -64,12 +64,26 @@
   text-transform: uppercase;
 }
 
-.run-nav-stats {
-  justify-self: end;
+// ── Stats Strip (below nav, scrolls with content) ───────────────────────────
+
+.run-stats-strip {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
+  justify-content: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xs) var(--spacing-md);
   font-size: var(--font-size-xs);
+  user-select: none;
+}
+
+.run-score {
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.run-relics {
+  display: flex;
+  gap: var(--spacing-xs);
 }
 
 .run-lives {
@@ -301,7 +315,7 @@
     font-size: var(--font-size-large);
   }
 
-  .run-nav-stats {
+  .run-stats-strip {
     gap: var(--spacing-sm);
   }
 }
@@ -315,7 +329,7 @@
     padding: var(--spacing-xs) var(--spacing-sm);
   }
 
-  .run-nav-stats {
+  .run-stats-strip {
     gap: var(--spacing-xs);
     font-size: var(--font-size-2xs);
   }
