@@ -1,23 +1,29 @@
 <div class="profile-container">
+
+  <!-- Sticky nav bar -->
+  <div class="profile-nav">
+    <button class="nav-back" (click)="goBack()">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 12L6 8l4-4"/>
+      </svg>
+      Back
+    </button>
+    <h1 class="profile-title">Profile</h1>
+  </div>
+
   <div class="profile-content">
 
-    <!-- Header: compact row -->
-    <header class="profile-header">
-      <div class="header-left">
-        <h1 class="profile-title">PROFILE</h1>
-        <span class="header-stat">{{ profile.totalEnemiesKilled | number }} kills · {{ profile.totalGoldEarned | number }} gold</span>
-      </div>
+    <!-- Rank + progress -->
+    <div class="rank-strip">
       <div class="banner-rank-badge">
         <span class="banner-rank-title">{{ rankTitle }}</span>
       </div>
-    </header>
-
-    <!-- Achievement progress: thin strip -->
-    <div class="progress-strip">
-      <div class="progress-track">
-        <div class="banner-progress-fill" [style.width.%]="achievementProgressPct"></div>
+      <div class="rank-progress">
+        <div class="progress-track">
+          <div class="banner-progress-fill" [style.width.%]="achievementProgressPct"></div>
+        </div>
+        <span class="progress-label">{{ unlockedCount }}/{{ totalAchievements }}</span>
       </div>
-      <span class="progress-label">{{ unlockedCount }}/{{ totalAchievements }}</span>
     </div>
 
     <p class="first-time-hint" *ngIf="profile.totalGamesPlayed === 0">
@@ -100,21 +106,26 @@
       </section>
     </div>
 
-    <!-- Tower Arsenal -->
-    <section class="arsenal-section">
-      <h2 class="panel-heading">Tower Arsenal</h2>
-      <div class="arsenal-grid">
-        <div *ngFor="let row of towerKillRows" class="arsenal-row" [attr.data-tower]="row.type">
-          <span class="arsenal-label">{{ row.label }}</span>
-          <div class="arsenal-bar-wrap">
-            <div class="arsenal-bar-fill" [style.width.%]="row.pct"></div>
+    <!-- Tower Arsenal (collapsible) -->
+    <section class="collapsible-section">
+      <button class="collapsible-header" (click)="arsenalExpanded = !arsenalExpanded">
+        <h2 class="panel-heading">Tower Arsenal</h2>
+        <span class="chevron" [class.expanded]="arsenalExpanded"></span>
+      </button>
+      <div class="collapsible-body" *ngIf="arsenalExpanded">
+        <div class="arsenal-grid">
+          <div *ngFor="let row of towerKillRows" class="arsenal-row" [attr.data-tower]="row.type">
+            <span class="arsenal-label">{{ row.label }}</span>
+            <div class="arsenal-bar-wrap">
+              <div class="arsenal-bar-fill" [style.width.%]="row.pct"></div>
+            </div>
+            <span class="arsenal-kills">{{ row.kills }}</span>
           </div>
-          <span class="arsenal-kills">{{ row.kills }}</span>
         </div>
       </div>
     </section>
 
-    <!-- Achievements -->
+    <!-- Achievements (collapsible categories) -->
     <section class="achievements-section">
       <div class="section-header">
         <h2 class="panel-heading">Achievements</h2>
@@ -123,12 +134,15 @@
 
       <div class="achievement-categories">
         <div *ngFor="let group of categoryGroups" class="achievement-category">
-          <div class="category-header">
+          <button class="category-header" (click)="toggleCategory(group.category)">
             <h3 class="category-name">{{ group.label }}</h3>
-            <span class="category-count">{{ group.unlockedCount }} / {{ group.achievements.length }}</span>
-          </div>
+            <div class="category-right">
+              <span class="category-count">{{ group.unlockedCount }}/{{ group.achievements.length }}</span>
+              <span class="chevron" [class.expanded]="isCategoryExpanded(group.category)"></span>
+            </div>
+          </button>
 
-          <div class="achievements-grid">
+          <div class="achievements-grid" *ngIf="isCategoryExpanded(group.category)">
             <div
               *ngFor="let achievement of group.achievements"
               class="achievement-card"
@@ -144,6 +158,5 @@
       </div>
     </section>
 
-    <button class="back-btn" (click)="goHome()">Home</button>
   </div>
 </div>

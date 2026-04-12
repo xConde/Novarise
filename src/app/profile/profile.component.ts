@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
+import { Location } from '@angular/common';
 import {
   PlayerProfileService,
   PlayerProfile,
@@ -71,13 +71,15 @@ export class ProfileComponent implements OnInit {
   allAchievements: Achievement[] = ACHIEVEMENTS;
   categoryGroups: AchievementCategoryGroup[] = [];
   towerKillRows: TowerKillRow[] = [];
+  arsenalExpanded = false;
   private unlockedSet = new Set<string>();
+  private expandedCategories = new Set<AchievementCategory>();
 
   readonly totalAchievements = TOTAL_ACHIEVEMENTS;
 
   constructor(
     private profileService: PlayerProfileService,
-    private router: Router
+    private location: Location
   ) {}
 
   ngOnInit(): void {
@@ -116,6 +118,18 @@ export class ProfileComponent implements OnInit {
     return this.unlockedSet.has(achievementId);
   }
 
+  toggleCategory(category: AchievementCategory): void {
+    if (this.expandedCategories.has(category)) {
+      this.expandedCategories.delete(category);
+    } else {
+      this.expandedCategories.add(category);
+    }
+  }
+
+  isCategoryExpanded(category: AchievementCategory): boolean {
+    return this.expandedCategories.has(category);
+  }
+
   get winRate(): string {
     if (this.profile.totalGamesPlayed === 0) return '0';
     return ((this.profile.totalVictories / this.profile.totalGamesPlayed) * 100).toFixed(0);
@@ -144,7 +158,7 @@ export class ProfileComponent implements OnInit {
     return Math.round((this.unlockedCount / TOTAL_ACHIEVEMENTS) * 100);
   }
 
-  goHome(): void {
-    this.router.navigate(['/']);
+  goBack(): void {
+    this.location.back();
   }
 }

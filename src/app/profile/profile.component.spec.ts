@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { Location } from '@angular/common';
 import { ProfileComponent } from './profile.component';
 import {
   PlayerProfileService,
@@ -11,7 +11,7 @@ import {
 describe('ProfileComponent', () => {
   let component: ProfileComponent;
   let fixture: ComponentFixture<ProfileComponent>;
-  let router: jasmine.SpyObj<Router>;
+  let location: jasmine.SpyObj<Location>;
   let profileService: jasmine.SpyObj<PlayerProfileService>;
 
   const mockProfile: PlayerProfile = {
@@ -38,14 +38,14 @@ describe('ProfileComponent', () => {
   };
 
   beforeEach(async () => {
-    router = jasmine.createSpyObj('Router', ['navigate']);
+    location = jasmine.createSpyObj('Location', ['back']);
     profileService = jasmine.createSpyObj('PlayerProfileService', ['getProfile']);
     profileService.getProfile.and.returnValue({ ...mockProfile, achievements: [...mockProfile.achievements] });
 
     await TestBed.configureTestingModule({
       declarations: [ProfileComponent],
       providers: [
-        { provide: Router, useValue: router },
+        { provide: Location, useValue: location },
         { provide: PlayerProfileService, useValue: profileService },
       ]
     }).compileComponents();
@@ -61,7 +61,7 @@ describe('ProfileComponent', () => {
 
   it('should display profile title', () => {
     const title = fixture.nativeElement.querySelector('.profile-title');
-    expect(title.textContent).toContain('PROFILE');
+    expect(title.textContent).toContain('Profile');
   });
 
   it('should render stats grid with correct values', () => {
@@ -112,21 +112,32 @@ describe('ProfileComponent', () => {
     expect(countEl.textContent).toContain(`2 / ${ACHIEVEMENTS.length} Unlocked`);
   });
 
-  it('should render all achievement cards across all categories', () => {
+  it('should render all achievement cards when categories are expanded', () => {
+    // Expand all categories to make cards visible
+    component.categoryGroups.forEach(g => component.toggleCategory(g.category));
+    fixture.detectChanges();
     const cards = fixture.nativeElement.querySelectorAll('.achievement-card');
     expect(cards.length).toBe(ACHIEVEMENTS.length);
   });
 
   it('should apply unlocked class to unlocked achievements', () => {
+    component.categoryGroups.forEach(g => component.toggleCategory(g.category));
+    fixture.detectChanges();
     const unlockedCards = fixture.nativeElement.querySelectorAll('.achievement-card.unlocked');
     const lockedCards = fixture.nativeElement.querySelectorAll('.achievement-card.locked');
     expect(unlockedCards.length).toBe(2);
     expect(lockedCards.length).toBe(ACHIEVEMENTS.length - 2);
   });
 
-  it('should navigate home on goHome()', () => {
-    component.goHome();
-    expect(router.navigate).toHaveBeenCalledWith(['/']);
+  it('should navigate back on goBack()', () => {
+    component.goBack();
+    expect(location.back).toHaveBeenCalled();
+  });
+
+  it('should render back button in nav', () => {
+    const backBtn = fixture.nativeElement.querySelector('.nav-back');
+    expect(backBtn).toBeTruthy();
+    expect(backBtn.textContent).toContain('Back');
   });
 
   it('should not show first-time hint when games have been played', () => {
@@ -150,6 +161,8 @@ describe('ProfileComponent', () => {
   });
 
   it('should show "How to unlock:" hint on locked achievement cards', () => {
+    component.categoryGroups.forEach(g => component.toggleCategory(g.category));
+    fixture.detectChanges();
     const lockedCards = fixture.nativeElement.querySelectorAll('.achievement-card.locked');
     expect(lockedCards.length).toBeGreaterThan(0);
     const hints = lockedCards[0].querySelectorAll('.achievement-hint');
@@ -158,10 +171,42 @@ describe('ProfileComponent', () => {
   });
 
   it('should not show "How to unlock:" hint on unlocked achievement cards', () => {
+    component.categoryGroups.forEach(g => component.toggleCategory(g.category));
+    fixture.detectChanges();
     const unlockedCards = fixture.nativeElement.querySelectorAll('.achievement-card.unlocked');
     expect(unlockedCards.length).toBeGreaterThan(0);
     const hints = unlockedCards[0].querySelectorAll('.achievement-hint');
     expect(hints.length).toBe(0);
+  });
+
+  // ── Collapsible Sections ──────────────────────────────────────────────────
+
+  describe('collapsible sections', () => {
+    it('should start with arsenal collapsed', () => {
+      expect(component.arsenalExpanded).toBeFalse();
+      const rows = fixture.nativeElement.querySelectorAll('.arsenal-row');
+      expect(rows.length).toBe(0);
+    });
+
+    it('should expand arsenal on toggle', () => {
+      component.arsenalExpanded = true;
+      fixture.detectChanges();
+      const rows = fixture.nativeElement.querySelectorAll('.arsenal-row');
+      expect(rows.length).toBe(6);
+    });
+
+    it('should start with achievement categories collapsed', () => {
+      const cards = fixture.nativeElement.querySelectorAll('.achievement-card');
+      expect(cards.length).toBe(0);
+    });
+
+    it('should toggle a category open and closed', () => {
+      expect(component.isCategoryExpanded('combat')).toBeFalse();
+      component.toggleCategory('combat');
+      expect(component.isCategoryExpanded('combat')).toBeTrue();
+      component.toggleCategory('combat');
+      expect(component.isCategoryExpanded('combat')).toBeFalse();
+    });
   });
 
   // ── Player Banner ──────────────────────────────────────────────────────────
@@ -179,7 +224,6 @@ describe('ProfileComponent', () => {
     });
 
     it('should compute correct achievementProgressPct', () => {
-      // 2 unlocked out of 26 = Math.round(7.69) = 8%
       expect(component.achievementProgressPct).toBe(8);
     });
 
@@ -247,7 +291,9 @@ describe('ProfileComponent', () => {
       expect(sniperRow.pct).toBe(50);
     });
 
-    it('should render 6 arsenal-row elements in the DOM', () => {
+    it('should render 6 arsenal-row elements when expanded', () => {
+      component.arsenalExpanded = true;
+      fixture.detectChanges();
       const rows = fixture.nativeElement.querySelectorAll('.arsenal-row');
       expect(rows.length).toBe(6);
     });
@@ -288,7 +334,6 @@ describe('ProfileComponent', () => {
     });
 
     it('should show correct unlockedCount per category', () => {
-      // first_victory = combat, veteran = combat
       const combatGroup = component.categoryGroups.find((g) => g.category === 'combat')!;
       expect(combatGroup.unlockedCount).toBe(2);
 
@@ -341,4 +386,3 @@ describe('ProfileComponent', () => {
   });
 
 });
-
