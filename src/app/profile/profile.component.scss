@@ -5,6 +5,7 @@
   min-height: 100%;
   background-color: var(--bg-color);
   color: var(--text-color);
+  user-select: none;
 
   &::before {
     content: '';
@@ -39,17 +40,21 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  margin: calc(var(--spacing-xs) * -1) calc(var(--spacing-sm) * -1);
   border: none;
+  border-radius: var(--border-radius-sm);
   background: none;
   color: var(--text-faint);
   font-size: var(--font-size-xs);
   font-weight: 500;
   cursor: pointer;
-  transition: color var(--transition-fast);
+  transition: color var(--transition-fast), background var(--transition-fast);
+  min-height: 2.75rem;
 
   &:hover {
     color: var(--theme-purple-lighter);
+    background: var(--theme-purple-a10);
   }
 
   svg {
@@ -72,13 +77,13 @@
 .profile-content {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xl);
+  gap: var(--spacing-lg);
   position: relative;
   z-index: 1;
   width: 100%;
   max-width: 640px;
   margin: 0 auto;
-  padding: var(--spacing-lg) var(--spacing-md) var(--spacing-2xl);
+  padding: var(--spacing-md) var(--spacing-md) var(--spacing-2xl);
 }
 
 // ── Rank Strip ──────────────────────────────────────────────────────────────
@@ -155,6 +160,12 @@
 .stat-panel {
   display: flex;
   flex-direction: column;
+
+  > .panel-heading {
+    margin-bottom: var(--spacing-sm);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-structural);
+  }
 }
 
 .panel-heading {
@@ -218,12 +229,19 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 0 0 8px;
+  min-height: 2.75rem;
+  padding: var(--spacing-xs) 0;
   border: none;
   border-bottom: 1px solid var(--border-structural);
   background: none;
+  color: inherit;
   cursor: pointer;
-  user-select: none;
+  transition: color var(--transition-fast);
+
+  &:hover {
+    .panel-heading { color: var(--theme-purple-lighter); }
+    .chevron { border-top-color: var(--theme-purple-lighter); }
+  }
 
   .panel-heading {
     pointer-events: none;
@@ -335,12 +353,19 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 8px 0;
+  min-height: 2.75rem;
+  padding: var(--spacing-xs) 0;
   border: none;
   border-bottom: 1px solid var(--border-structural);
   background: none;
+  color: inherit;
   cursor: pointer;
-  user-select: none;
+  transition: color var(--transition-fast);
+
+  &:hover {
+    .category-name { color: var(--text-color); }
+    .chevron { border-top-color: var(--theme-purple-lighter); }
+  }
 }
 
 .category-name {
