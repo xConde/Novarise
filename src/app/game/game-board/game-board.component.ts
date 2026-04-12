@@ -237,6 +237,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   newlyUnlockedAchievements: string[] = [];
   achievementDetails: Achievement[] = [];
 
+  /** Challenges completed this encounter — stashed by processCombatResult, consumed by the
+   *  terminal-phase block in stateSubscription to populate EncounterResult. Cleared on restart. */
+  private lastCompletedChallenges: readonly ChallengeDefinition[] = [];
+
 
   /** Live challenge progress badges shown in HUD during campaign games. Delegated to ChallengeDisplayService. */
   get challengeIndicators(): ChallengeIndicator[] { return this.challengeDisplayService.indicators; }
@@ -442,6 +446,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           goldEarned: state.gold,
           enemiesKilled: totalKills,
           wavesCompleted: state.wave,
+          // Stashed by processCombatResult when gameEndService.recordEnd fires;
+          // always [] on defeat (R3 guarantees challenge eval is skipped on defeat).
+          completedChallenges: this.lastCompletedChallenges,
         };
         this.runService.recordEncounterResult(result);
         this.router.navigate(['/run']);
@@ -489,6 +496,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.waveService.setCustomWaves(encounter.waves);
     this.gameStateService.setMaxWaves(encounter.waves.length);
     this.applyAscensionModifiers(runState.ascensionLevel, encounter.isElite, encounter.isBoss);
+    this.updateChallengeIndicators();
 
     // Subscribe to deck/energy state for the card hand UI
     this.deckSub = this.deckService.deckState$.subscribe(s => { this.deckState = s; });
@@ -1091,11 +1099,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /**
    * Recomputes challenge progress badges for the HUD via ChallengeDisplayService.
-   * H5: always passes null (no campaign level). Kept as a no-op hook for tower
-   * events until H14 decides whether to introduce per-encounter challenges.
+   * Passes the current encounter's campaignMapId so ChallengeDisplayService can
+   * look up and evaluate any challenges attached to that map.
    */
   updateChallengeIndicators(): void {
-    this.challengeDisplayService.updateIndicators(null);
+    const encounter = this.runService.getCurrentEncounter();
+    this.challengeDisplayService.updateIndicators(encounter?.campaignMapId ?? null);
   }
 
   /** @deprecated Phase H5 — no-op. playNextLevel was the campaign auto-advance. */
@@ -1281,7 +1290,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Reset component-only UI state (scoreBreakdown + starArray fields removed in H11)
     this.newlyUnlockedAchievements = [];
     this.achievementDetails = [];
-    this.challengeDisplayService.updateIndicators(null); // clear on restart; re-populated by updateChallengeIndicators()
+    this.lastCompletedChallenges = [];
+    // Refresh challenge indicators for the current encounter on restart.
+    // The encounter is still live (same node re-entered), so pass the mapId directly.
+    this.updateChallengeIndicators();
     this.lastWaveReward = 0;
     this.lastInterestEarned = 0;
     this.activeModifiers = new Set<GameModifier>();
@@ -2129,6 +2141,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Game end (achievements, challenges)
     if (result.gameEnd) {
       this.newlyUnlockedAchievements = result.gameEnd.newlyUnlockedAchievements;
+      this.lastCompletedChallenges = result.gameEnd.completedChallenges;
       this.updateAchievementDetails();
     }
 

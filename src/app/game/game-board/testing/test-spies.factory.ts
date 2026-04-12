@@ -589,7 +589,7 @@ export function createGameEndServiceSpy(): jasmine.SpyObj<GameEndService> {
     'reset',
   ]);
   spy.isRecorded.and.returnValue(false);
-  spy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [] });
+  spy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [], completedChallenges: [] });
   return spy;
 }
 

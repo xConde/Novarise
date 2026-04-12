@@ -184,6 +184,7 @@ export class CombatLoopService {
         gameEnd = {
           isVictory: false,
           newlyUnlockedAchievements: result.newlyUnlockedAchievements,
+          completedChallenges: result.completedChallenges,
         };
       }
     }
@@ -221,6 +222,7 @@ export class CombatLoopService {
           gameEnd = {
             isVictory,
             newlyUnlockedAchievements: result.newlyUnlockedAchievements,
+            completedChallenges: result.completedChallenges,
           };
         }
       }

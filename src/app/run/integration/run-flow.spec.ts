@@ -43,6 +43,7 @@ function makeVictoryResult(nodeId = 'node_id', overrides: Partial<EncounterResul
     goldEarned: 60,
     enemiesKilled: 8,
     wavesCompleted: 4,
+    completedChallenges: [],
     ...overrides,
   };
 }
@@ -56,6 +57,7 @@ function makeDefeatResult(nodeId = 'node_id'): EncounterResult {
     goldEarned: 30,
     enemiesKilled: 3,
     wavesCompleted: 1,
+    completedChallenges: [],
   };
 }
 

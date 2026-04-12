@@ -5,6 +5,8 @@
  * 2 acts of ~12 nodes each, seeded RNG for deterministic replay.
  */
 
+import { ChallengeDefinition } from '../data/challenges';
+
 export enum RunStatus {
   IN_PROGRESS = 'in_progress',
   VICTORY = 'victory',
@@ -34,6 +36,13 @@ export interface EncounterResult {
   readonly goldEarned: number;
   readonly enemiesKilled: number;
   readonly wavesCompleted: number;
+  /**
+   * Challenges the player completed on this encounter (evaluated by
+   * `GameEndService.recordEnd` via `evaluateChallenges`). Empty on defeat,
+   * non-campaign maps, or when no mastery conditions were met. Consumed by
+   * `RunService.generateRewards` to compute a per-encounter gold bonus.
+   */
+  readonly completedChallenges: readonly ChallengeDefinition[];
 }
 
 import { CardId } from './card.model';

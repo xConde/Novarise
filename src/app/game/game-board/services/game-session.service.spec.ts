@@ -77,7 +77,7 @@ describe('GameSessionService', () => {
     challengeSpy.getSnapshot.and.returnValue({} as any);
 
     gameEndSpy = jasmine.createSpyObj('GameEndService', ['reset', 'recordEnd', 'recordSpecialization']);
-    gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [] });
+    gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [], completedChallenges: [] });
 
     mapBridgeSpy = jasmine.createSpyObj('MapBridgeService', [
       'getMapId', 'hasEditorMap', 'getEditorMapState', 'convertToGameBoard', 'setEditorMapState',

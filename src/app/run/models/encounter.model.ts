@@ -12,6 +12,7 @@ import { WaveDefinition } from '../../game/game-board/models/wave.model';
 import { NodeType } from './node-map.model';
 import { RelicId } from './relic.model';
 import { CardId } from './card.model';
+import { ChallengeDefinition } from '../data/challenges';
 
 export interface EncounterConfig {
   readonly nodeId: string;
@@ -47,6 +48,13 @@ export interface RewardScreenConfig {
   readonly relicChoices: RelicReward[];
   readonly cardChoices: CardReward[];
   readonly bonusRewards: RewardItem[];
+  /**
+   * Challenges completed on the just-finished encounter. `goldPickup` already
+   * includes the gold bonus from these (see RunService.generateRewards).
+   * This field is for UI display — a reward-screen update in a follow-up
+   * sprint will render a "Challenges completed" breakdown section.
+   */
+  readonly completedChallenges: readonly ChallengeDefinition[];
 }
 
 /** Shop item in a shop node. */

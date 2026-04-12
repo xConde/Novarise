@@ -14,6 +14,7 @@ import { CardRarity } from '../models/card.model';
 import { CARD_DEFINITIONS } from '../constants/card-definitions';
 import { REWARD_CONFIG } from '../constants/run.constants';
 import { AscensionEffectType } from '../models/ascension.model';
+import { ChallengeDefinition, ChallengeType } from '../data/challenges';
 
 // ── Test fixtures ───────────────────────────────────────────────
 
@@ -77,6 +78,7 @@ function makeEncounterResult(overrides: Partial<EncounterResult> = {}): Encounte
     goldEarned: 80,
     enemiesKilled: 10,
     wavesCompleted: 4,
+    completedChallenges: [],
     ...overrides,
   };
 }
@@ -674,4 +676,155 @@ describe('RunService', () => {
       expect(rewards.relicChoices.length).toBe(1);
     }));
   });
+
+  // ── generateRewards — challenge gold bonus ────────────────────
+
+  function makeChallenge(id: string, scoreBonus: number): ChallengeDefinition {
+    return {
+      id,
+      type: ChallengeType.UNTOUCHABLE,
+      name: id,
+      description: '',
+      scoreBonus,
+    };
+  }
+
+  describe('generateRewards — challenge gold bonus', () => {
+    // Note: consumePendingEncounterResult() nulls currentEncounter before generateRewards
+    // is called (per run.component.ts handleEncounterReturn ordering). The encounter
+    // goldReward is auto-credited to runState.gold inside consume(); the reward-screen
+    // goldPickup therefore reflects ONLY challenge bonuses (baseGold = 0 post-consume).
+    // This is pre-existing behavior — not introduced by R4.
+    beforeEach(() => {
+      service.startNewRun();
+      encounterService.prepareEncounter.and.returnValue(makeEncounterConfig({ goldReward: 40 }));
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+    });
+
+    it('zero challenges: goldPickup is 0 (currentEncounter nulled post-consume)', fakeAsync(() => {
+      service.recordEncounterResult(makeEncounterResult({ victory: true, completedChallenges: [] }));
+      service.consumePendingEncounterResult();
+
+      const rewards = service.generateRewards();
+
+      expect(rewards.goldPickup).toBe(0);
+    }));
+
+    it('1 challenge scoreBonus 200 → goldPickup = Math.round(200/5) = 40', fakeAsync(() => {
+      service.recordEncounterResult(makeEncounterResult({
+        victory: true,
+        completedChallenges: [makeChallenge('c01_test', 200)],
+      }));
+      service.consumePendingEncounterResult();
+
+      const rewards = service.generateRewards();
+
+      expect(rewards.goldPickup).toBe(40); // Math.round(200/5)=40
+    }));
+
+    it('2 challenges scoreBonuses 200 + 350 → goldPickup = 40 + 70 = 110', fakeAsync(() => {
+      service.recordEncounterResult(makeEncounterResult({
+        victory: true,
+        completedChallenges: [
+          makeChallenge('c01_a', 200),
+          makeChallenge('c01_b', 350),
+        ],
+      }));
+      service.consumePendingEncounterResult();
+
+      const rewards = service.generateRewards();
+
+      expect(rewards.goldPickup).toBe(110); // 40 + 70
+    }));
+
+    it('rounding: scoreBonus 250 → Math.round(50) = 50', fakeAsync(() => {
+      service.recordEncounterResult(makeEncounterResult({
+        victory: true,
+        completedChallenges: [makeChallenge('c01_round', 250)],
+      }));
+      service.consumePendingEncounterResult();
+
+      const rewards = service.generateRewards();
+
+      expect(rewards.goldPickup).toBe(50);
+    }));
+
+    it('rounding: scoreBonus 247 → Math.round(49.4) = 49', fakeAsync(() => {
+      service.recordEncounterResult(makeEncounterResult({
+        victory: true,
+        completedChallenges: [makeChallenge('c01_round247', 247)],
+      }));
+      service.consumePendingEncounterResult();
+
+      const rewards = service.generateRewards();
+
+      expect(rewards.goldPickup).toBe(49);
+    }));
+
+    it('empty encounterResults: no crash, goldPickup === 0, completedChallenges === []', fakeAsync(() => {
+      // No consumePendingEncounterResult called — encounterResults stays []
+      // currentEncounter is still set (prepareEncounter above) so baseGold = 40
+      const rewards = service.generateRewards();
+
+      expect(rewards.goldPickup).toBe(40);
+      expect(rewards.completedChallenges).toEqual([]);
+    }));
+
+    it('completedChallenges in returned config matches last result challenges', fakeAsync(() => {
+      const challenges = [makeChallenge('c01_x', 200), makeChallenge('c01_y', 350)];
+      service.recordEncounterResult(makeEncounterResult({
+        victory: true,
+        completedChallenges: challenges,
+      }));
+      service.consumePendingEncounterResult();
+
+      const rewards = service.generateRewards();
+
+      expect(rewards.completedChallenges).toEqual(challenges);
+    }));
+
+    it('ascension 11 + 1 challenge: both relic reduction AND gold bonus apply', fakeAsync(() => {
+      // Need enough relics available for the relic-reduction test to be visible
+      const stubRelics: RelicDefinition[] = [
+        RELIC_DEFINITIONS[RelicId.IRON_HEART],
+        RELIC_DEFINITIONS[RelicId.QUICK_DRAW],
+        RELIC_DEFINITIONS[RelicId.COMMANDERS_BANNER],
+      ];
+      relicService.getAvailableRelics.and.returnValue(stubRelics);
+
+      service.startNewRun(11); // FEWER_RELIC_CHOICES=1 at ascension 11
+      encounterService.prepareEncounter.and.returnValue(makeEncounterConfig({ goldReward: 40 }));
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+      service.recordEncounterResult(makeEncounterResult({
+        victory: true,
+        completedChallenges: [makeChallenge('c01_z', 200)],
+      }));
+      service.consumePendingEncounterResult();
+
+      const rewards = service.generateRewards();
+
+      // Gold: 0 base (currentEncounter nulled by consume) + 40 challenge bonus
+      expect(rewards.goldPickup).toBe(40);
+      // Relics: relicChoicesCombat - 1 = reduced
+      expect(rewards.relicChoices.length).toBe(Math.max(1, REWARD_CONFIG.relicChoicesCombat - 1));
+    }));
+  });
+
+  // ── consumePendingEncounterResult — challenge round-trip ──────
+
+  it('consumePendingEncounterResult preserves completedChallenges in encounterResults', fakeAsync(() => {
+    service.startNewRun();
+    service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+    const challenges = [makeChallenge('c01_roundtrip', 200)];
+    service.recordEncounterResult(makeEncounterResult({
+      victory: true,
+      completedChallenges: challenges,
+    }));
+    service.consumePendingEncounterResult();
+
+    const stored = service.runState!.encounterResults[0];
+    expect(stored.completedChallenges).toEqual(challenges);
+  }));
 });

@@ -9,10 +9,18 @@ import { AudioService } from './audio.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { calculateScoreBreakdown, ScoreBreakdown } from '../models/score.model';
 import { DIFFICULTY_PRESETS } from '../models/game-state.model';
+import { ChallengeDefinition, evaluateChallenges, GameEndState } from '../../../run/data/challenges';
 
 /** Data returned from recordEnd() for use by the component (display/UI updates). */
 export interface GameEndResult {
   newlyUnlockedAchievements: string[];
+  /**
+   * Challenges the player satisfied on this encounter victory (computed by
+   * `evaluateChallenges` against the end-of-encounter snapshot). Empty on
+   * defeat, quit, non-campaign maps, or when no challenges were met.
+   * Consumed by RunService.completeEncounter (Sprint R4) to award gold bonuses.
+   */
+  completedChallenges: ChallengeDefinition[];
 }
 
 /**
@@ -64,7 +72,7 @@ export class GameEndService {
    */
   recordEnd(isVictory: boolean, _legacyScoreBreakdown?: ScoreBreakdown | null): GameEndResult {
     if (this.gameEndRecorded) {
-      return { newlyUnlockedAchievements: [] };
+      return { newlyUnlockedAchievements: [], completedChallenges: [] };
     }
     this.gameEndRecorded = true;
 
@@ -112,7 +120,40 @@ export class GameEndService {
       );
     }
 
-    return { newlyUnlockedAchievements: newlyUnlocked };
+    // Challenge evaluation — only on victory. Defeat and quit never complete challenges.
+    // Campaign map check: getChallengesForLevel returns [] for non-campaign maps, so
+    // evaluateChallenges() is safe to call unconditionally — it will just return [].
+    let completedChallenges: ChallengeDefinition[] = [];
+    if (isVictory && mapId) {
+      const snapshot = this.challengeTrackingService.getSnapshot();
+      const endState = this.gameStateService.getState();
+      const gameEndState: GameEndState = {
+        livesLost: gameEndStats.livesLost,
+        elapsedTime: endState.elapsedTime ?? 0,   // unused by non-SPEED_RUN challenges
+        totalGoldSpent: snapshot.totalGoldSpent,
+        maxTowersPlaced: snapshot.maxTowersPlaced,
+        towerTypesUsed: snapshot.towerTypesUsed,
+      };
+
+      completedChallenges = evaluateChallenges(mapId, gameEndState);
+
+      // Side effects: sound + notification per completion. Reward translation
+      // (challenge.scoreBonus → run-mode gold) happens later in
+      // RunService.generateRewards; this service just emits the list and the
+      // immediate player-facing feedback. Notification body uses the challenge
+      // description rather than the raw scoreBonus to avoid lying about currency
+      // units ("pts" vs. gold).
+      for (const challenge of completedChallenges) {
+        this.audioService.playChallengeSound();
+        this.notificationService.show(
+          NotificationType.CHALLENGE,
+          `Challenge: ${challenge.name}`,
+          challenge.description,
+        );
+      }
+    }
+
+    return { newlyUnlockedAchievements: newlyUnlocked, completedChallenges };
   }
 
   /**

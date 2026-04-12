@@ -23,6 +23,7 @@ import {
   ShopItem,
   RunEvent,
 } from '../models/encounter.model';
+import { ChallengeDefinition, computeChallengeGoldBonus } from '../data/challenges';
 import { RelicId } from '../models/relic.model';
 import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
 import {
@@ -294,7 +295,17 @@ export class RunService {
     const encounter = this.currentEncounter;
     const rng = this.runRng ?? Math.random;
 
-    const goldPickup = encounter?.goldReward ?? 0;
+    const baseGold = encounter?.goldReward ?? 0;
+
+    // Read challenges from the most-recent encounter result (stashed by
+    // consumePendingEncounterResult into runState.encounterResults — safe because
+    // run.component.ts calls consume() before generateRewards() in handleEncounterReturn).
+    const state = this.runState;
+    const lastResult = state?.encounterResults[state.encounterResults.length - 1];
+    const completedChallenges: readonly ChallengeDefinition[] = lastResult?.completedChallenges ?? [];
+    const challengeGold = computeChallengeGoldBonus(completedChallenges);
+
+    const goldPickup = baseGold + challengeGold;
 
     // Determine relic choice count
     let choiceCount: number = REWARD_CONFIG.relicChoicesCombat;
@@ -302,7 +313,6 @@ export class RunService {
     if (encounter?.isBoss) choiceCount = REWARD_CONFIG.relicChoicesBoss;
 
     // Apply ascension relic reduction (FEWER_RELIC_CHOICES stacks additively; floor at 1)
-    const state = this.runState;
     if (state) {
       const ascEffects = getAscensionEffects(state.ascensionLevel);
       const relicReduction = ascEffects.get(AscensionEffectType.FEWER_RELIC_CHOICES) ?? 0;
@@ -320,6 +330,7 @@ export class RunService {
       relicChoices,
       cardChoices,
       bonusRewards: [],
+      completedChallenges,
     };
   }
 

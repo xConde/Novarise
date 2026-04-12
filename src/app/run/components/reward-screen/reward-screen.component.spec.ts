@@ -30,6 +30,7 @@ const MOCK_CONFIG: RewardScreenConfig = {
     { type: 'card', cardId: CardId.FORTIFY },
   ],
   bonusRewards: [],
+  completedChallenges: [],
 };
 
 const MOCK_CONFIG_NO_CARDS: RewardScreenConfig = {
@@ -39,6 +40,7 @@ const MOCK_CONFIG_NO_CARDS: RewardScreenConfig = {
   ],
   cardChoices: [],
   bonusRewards: [],
+  completedChallenges: [],
 };
 
 describe('RewardScreenComponent', () => {
@@ -184,7 +186,7 @@ describe('RewardScreenComponent', () => {
   });
 
   it('canContinue is true immediately when both relicChoices and cardChoices are empty', () => {
-    component.config = { goldPickup: 10, relicChoices: [], cardChoices: [], bonusRewards: [] };
+    component.config = { goldPickup: 10, relicChoices: [], cardChoices: [], bonusRewards: [], completedChallenges: [] };
     expect(component.canContinue).toBeTrue();
   });
 

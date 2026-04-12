@@ -22,11 +22,11 @@ export interface ChallengeDefinition {
 }
 
 /**
- * Input state for evaluating per-level challenges.
+ * Input state for evaluating per-encounter challenges.
  *
- * Pre-pivot relic — `ChallengeEvaluatorService` was deleted with the campaign
- * runtime in M2 S6-S9. Type kept for `ChallengeDisplayService` (HUD badges) and
- * setup-panel binding contract per project_pivot_handoff.md §10.
+ * Used by `evaluateChallenges()` below and `ChallengeDisplayService` for live HUD
+ * badge computation. In the turn-based run mode, `elapsedTime` is used only by
+ * SPEED_RUN challenges which are excluded from evaluation (see `evaluateChallenges`).
  */
 export interface GameEndState {
   livesLost: number;
@@ -401,6 +401,111 @@ export const CAMPAIGN_CHALLENGES: Record<string, ChallengeDefinition[]> = {
 /** Returns challenges for a campaign level, or empty array for non-campaign maps. */
 export function getChallengesForLevel(levelId: string): ChallengeDefinition[] {
   return CAMPAIGN_CHALLENGES[levelId] ?? [];
+}
+
+/**
+ * Evaluate which challenges the player completed for a given campaign map.
+ *
+ * Pure function — no side effects, no service dependencies. Called from
+ * `GameEndService.recordEnd` on encounter victory. Returns the subset of
+ * `getChallengesForLevel(mapId)` that the player's end state satisfies.
+ *
+ * SPEED_RUN challenges are excluded from turn-based run-mode evaluation —
+ * `elapsedTime` doesn't have consistent meaning when players end turns
+ * manually. Future work may re-add them as a `TURN_LIMIT` type with
+ * rebalanced targets.
+ *
+ * @param mapId Campaign map ID (e.g., 'campaign_01').
+ * @param state End-state snapshot computed at encounter-end.
+ * @returns ChallengeDefinitions that evaluated as passing. Empty array if the
+ *          map has no challenges OR if no challenges were satisfied.
+ */
+export function evaluateChallenges(
+  mapId: string,
+  state: GameEndState,
+): ChallengeDefinition[] {
+  const challenges = getChallengesForLevel(mapId);
+  if (challenges.length === 0) return [];
+
+  const completed: ChallengeDefinition[] = [];
+  for (const challenge of challenges) {
+    if (isChallengeSatisfied(challenge, state)) {
+      completed.push(challenge);
+    }
+  }
+  return completed;
+}
+
+/**
+ * Check whether a single challenge is satisfied by the given end state.
+ * Exported for unit testing; production callers should use `evaluateChallenges`.
+ *
+ * SPEED_RUN always returns false in the current implementation (excluded).
+ */
+export function isChallengeSatisfied(
+  challenge: ChallengeDefinition,
+  state: GameEndState,
+): boolean {
+  switch (challenge.type) {
+    case ChallengeType.UNTOUCHABLE:
+      return state.livesLost === 0;
+
+    case ChallengeType.TOWER_LIMIT:
+      // `towerLimit` is required per challengeHasRequiredParam; default to 0
+      // for type-safety — a TOWER_LIMIT challenge with no limit is data error.
+      return state.maxTowersPlaced <= (challenge.towerLimit ?? 0);
+
+    case ChallengeType.FRUGAL:
+      return state.totalGoldSpent <= (challenge.goldLimit ?? 0);
+
+    case ChallengeType.NO_SLOW:
+      // Don't import TowerType at module level to avoid a cross-layer cycle;
+      // compare against the string literal which matches TowerType.SLOW's value.
+      // (TowerType is a string-backed enum; TowerType.SLOW = 'slow'.)
+      return !state.towerTypesUsed.has('slow');
+
+    case ChallengeType.SINGLE_TYPE:
+      // Strict: exactly one tower type used. 0-tower victories (theoretically
+      // possible via pure spell damage) do NOT qualify — the challenge rewards
+      // specialist mastery, not absence of towers. ChallengeDisplayService uses
+      // the same strict semantics so HUD badges and end-of-encounter evaluation
+      // agree.
+      return state.towerTypesUsed.size === 1;
+
+    case ChallengeType.SPEED_RUN:
+      // Turn-based run mode excludes SPEED_RUN evaluation. `elapsedTime` has no
+      // consistent meaning when players control turn pacing. Future work: rebalance
+      // as a TURN_LIMIT type with explicit turn budgets per level.
+      return false;
+
+    default:
+      assertNever(challenge.type);
+  }
+}
+
+/**
+ * Divisor used to translate a challenge's pre-pivot `scoreBonus` (200-350 pts)
+ * into a run-mode gold reward. Keeps the translation in one place so rebalancing
+ * is a single-line change. At /5, a 200-pt challenge grants 40 gold, 250 → 50,
+ * 350 → 70. Rounded to integer gold.
+ */
+export const CHALLENGE_SCORE_TO_GOLD_RATIO = 5;
+
+/**
+ * Sum the gold reward from a list of completed challenges. Each challenge grants
+ * `Math.round(scoreBonus / CHALLENGE_SCORE_TO_GOLD_RATIO)` gold; the sum is
+ * added to the encounter's base reward in `RunService.generateRewards`.
+ *
+ * Pure function; lives here (next to `evaluateChallenges`) rather than on
+ * RunService so the challenge data layer owns all challenge-related math.
+ */
+export function computeChallengeGoldBonus(
+  challenges: readonly ChallengeDefinition[],
+): number {
+  return challenges.reduce(
+    (sum, c) => sum + Math.round(c.scoreBonus / CHALLENGE_SCORE_TO_GOLD_RATIO),
+    0,
+  );
 }
 
 /** Validates that a ChallengeDefinition has the required type-specific param. */

@@ -77,9 +77,12 @@ export class ChallengeDisplayService {
         return { label: 'Spent', value: `${spent}g/${limit}g`, passing };
       }
       case ChallengeType.SINGLE_TYPE: {
+        // Strict: exactly one tower type used. 0-tower states do not qualify
+        // (consistent with evaluateChallenges in challenges.ts). The HUD badge
+        // shows '✓' only when the specialist condition is actively met.
         const count = snapshot.towerTypesUsed.size;
-        const passing = count <= 1;
-        return { label: 'Single Type', value: count <= 1 ? '✓' : `${count} types`, passing };
+        const passing = count === 1;
+        return { label: 'Single Type', value: passing ? '✓' : `${count} types`, passing };
       }
       case ChallengeType.NO_SLOW: {
         const passing = !snapshot.towerTypesUsed.has(TowerType.SLOW);

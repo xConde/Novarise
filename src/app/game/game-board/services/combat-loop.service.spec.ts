@@ -124,7 +124,7 @@ describe('CombatLoopService', () => {
 
     gameEndSpy = jasmine.createSpyObj('GameEndService', ['isRecorded', 'recordEnd']);
     gameEndSpy.isRecorded.and.returnValue(false);
-    gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [] });
+    gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [], completedChallenges: [] });
 
     scene = new THREE.Scene();
 
@@ -534,6 +534,7 @@ describe('CombatLoopService', () => {
       enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy({ id: 'e1' })]]));
       gameEndSpy.recordEnd.and.returnValue({
         newlyUnlockedAchievements: ['ach1'],
+        completedChallenges: [],
       });
 
       const result = service.resolveTurn(scene);
@@ -663,7 +664,7 @@ describe('CombatLoopService', () => {
 
     it('should record game end on VICTORY', () => {
       setupWaveClear(GamePhase.VICTORY);
-      gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: ['ach1'] });
+      gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: ['ach1'], completedChallenges: [] });
 
       const result = service.resolveTurn(scene);
 
@@ -986,7 +987,7 @@ describe('CombatLoopService', () => {
       gameStateSpy.addStreakBonus.and.returnValue(0);
       gameStateSpy.getStreak.and.returnValue(0);
       gameStateSpy.awardInterest.and.returnValue(0);
-      gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [] });
+      gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [], completedChallenges: [] });
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.VICTORY,

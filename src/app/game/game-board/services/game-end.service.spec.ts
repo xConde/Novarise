@@ -11,6 +11,7 @@ import { ChallengeTrackingService } from './challenge-tracking.service';
 import { TowerType } from '../models/tower.model';
 import { DifficultyLevel } from '../models/game-state.model';
 import { ScoreBreakdown } from '../models/score.model';
+import { ChallengeType } from '../../../run/data/challenges';
 
 const FAKE_SCORE_BREAKDOWN: ScoreBreakdown = {
   baseScore: 1000,
@@ -326,6 +327,119 @@ describe('GameEndService', () => {
       const result = service.recordEnd(true, null);
 
       expect(result.newlyUnlockedAchievements).toEqual(achIds);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Challenge evaluation
+  // ---------------------------------------------------------------------------
+
+  describe('challenge evaluation', () => {
+    beforeEach(() => {
+      // Default: campaign_01 map — has UNTOUCHABLE + TOWER_LIMIT(≤4)
+      mapBridgeSpy.getMapId.and.returnValue('campaign_01');
+    });
+
+    it('victory on campaign map with all challenges satisfied returns completedChallenges', () => {
+      // UNTOUCHABLE: lives intact (no lives lost on fresh state)
+      // TOWER_LIMIT(≤4): place 2 towers
+      challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+      challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+
+      const result = service.recordEnd(true, null);
+
+      expect(result.completedChallenges.length).toBe(2);
+      expect(audioSpy.playChallengeSound).toHaveBeenCalledTimes(2);
+      expect(notificationSpy.show).toHaveBeenCalledTimes(2);
+      notificationSpy.show.calls.all().forEach(call => {
+        expect(call.args[0]).toBe(NotificationType.CHALLENGE);
+        // Title is "Challenge: <name>"; body is the challenge description.
+        // (Avoids the "+N pts" currency lie — the scoreBonus is pre-pivot score,
+        // not run-mode gold. R4 translates scoreBonus → gold at reward time.)
+        expect(call.args[1] as string).toMatch(/^Challenge: /);
+      });
+    });
+
+    it('victory with no satisfiable challenges returns empty completedChallenges', () => {
+      // Fail UNTOUCHABLE by losing a life, fail TOWER_LIMIT by placing 5 towers
+      for (let i = 0; i < 5; i++) {
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+      }
+      // Simulate a life lost by mutating game state directly via service
+      gameStateService.loseLife();
+
+      const result = service.recordEnd(true, null);
+
+      expect(result.completedChallenges).toEqual([]);
+      expect(audioSpy.playChallengeSound).not.toHaveBeenCalled();
+      expect(notificationSpy.show).not.toHaveBeenCalled();
+    });
+
+    it('victory on non-campaign map returns empty completedChallenges with no side effects', () => {
+      mapBridgeSpy.getMapId.and.returnValue('custom_user_map');
+
+      const result = service.recordEnd(true, null);
+
+      expect(result.completedChallenges).toEqual([]);
+      expect(audioSpy.playChallengeSound).not.toHaveBeenCalled();
+      expect(notificationSpy.show).not.toHaveBeenCalled();
+    });
+
+    it('victory with no mapId returns empty completedChallenges', () => {
+      mapBridgeSpy.getMapId.and.returnValue(undefined as any);
+
+      const result = service.recordEnd(true, null);
+
+      expect(result.completedChallenges).toEqual([]);
+      expect(audioSpy.playChallengeSound).not.toHaveBeenCalled();
+    });
+
+    it('defeat returns empty completedChallenges regardless of state', () => {
+      // All challenges would pass on victory — but this is a defeat
+      const result = service.recordEnd(false, null);
+
+      expect(result.completedChallenges).toEqual([]);
+      expect(audioSpy.playChallengeSound).not.toHaveBeenCalled();
+      expect(notificationSpy.show).not.toHaveBeenCalled();
+    });
+
+    it('idempotency: second recordEnd() returns empty completedChallenges without firing side effects again', () => {
+      // First call completes challenges
+      const first = service.recordEnd(true, null);
+      expect(first.completedChallenges.length).toBeGreaterThan(0);
+
+      audioSpy.playChallengeSound.calls.reset();
+      notificationSpy.show.calls.reset();
+
+      const second = service.recordEnd(true, null);
+
+      expect(second.completedChallenges).toEqual([]);
+      expect(audioSpy.playChallengeSound).not.toHaveBeenCalled();
+      expect(notificationSpy.show).not.toHaveBeenCalled();
+    });
+
+    it('mixed result: UNTOUCHABLE passes, TOWER_LIMIT fails when 10 towers placed', () => {
+      for (let i = 0; i < 10; i++) {
+        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 50);
+      }
+      // lives intact — UNTOUCHABLE should pass
+
+      const result = service.recordEnd(true, null);
+
+      expect(result.completedChallenges.length).toBe(1);
+      expect(result.completedChallenges[0].type).toBe(ChallengeType.UNTOUCHABLE);
+    });
+
+    it('campaign_02: only NO_SLOW completes — SPEED_RUN is always excluded from evaluation', () => {
+      // campaign_02 has NO_SLOW + SPEED_RUN
+      mapBridgeSpy.getMapId.and.returnValue('campaign_02');
+      // towerTypesUsed has no 'slow' — NO_SLOW should pass
+      challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+
+      const result = service.recordEnd(true, null);
+
+      expect(result.completedChallenges.length).toBe(1);
+      expect(result.completedChallenges[0].type).toBe(ChallengeType.NO_SLOW);
     });
   });
 

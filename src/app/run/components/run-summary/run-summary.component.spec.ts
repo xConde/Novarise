@@ -27,6 +27,7 @@ function makeRunState(overrides: Partial<RunState> = {}): RunState {
         goldEarned: 50,
         enemiesKilled: 30,
         wavesCompleted: 5,
+        completedChallenges: [],
       },
       {
         nodeId: 'node_2',
@@ -36,6 +37,7 @@ function makeRunState(overrides: Partial<RunState> = {}): RunState {
         goldEarned: 75,
         enemiesKilled: 20,
         wavesCompleted: 4,
+        completedChallenges: [],
       },
     ],
     status: RunStatus.VICTORY,
@@ -102,9 +104,9 @@ describe('RunSummaryComponent', () => {
   it('encountersCompleted counts only victorious encounters', () => {
     component.runState = makeRunState({
       encounterResults: [
-        { nodeId: 'n1', nodeType: 'combat', victory: true, livesLost: 0, goldEarned: 50, enemiesKilled: 10, wavesCompleted: 3 },
-        { nodeId: 'n2', nodeType: 'elite', victory: false, livesLost: 5, goldEarned: 0, enemiesKilled: 5, wavesCompleted: 2 },
-        { nodeId: 'n3', nodeType: 'combat', victory: true, livesLost: 1, goldEarned: 40, enemiesKilled: 12, wavesCompleted: 4 },
+        { nodeId: 'n1', nodeType: 'combat', victory: true, livesLost: 0, goldEarned: 50, enemiesKilled: 10, wavesCompleted: 3, completedChallenges: [] },
+        { nodeId: 'n2', nodeType: 'elite', victory: false, livesLost: 5, goldEarned: 0, enemiesKilled: 5, wavesCompleted: 2, completedChallenges: [] },
+        { nodeId: 'n3', nodeType: 'combat', victory: true, livesLost: 1, goldEarned: 40, enemiesKilled: 12, wavesCompleted: 4, completedChallenges: [] },
       ],
     });
     expect(component.encountersCompleted).toBe(2);
