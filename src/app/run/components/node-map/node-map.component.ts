@@ -22,8 +22,10 @@ const NODE_MAP_LAYOUT = {
   rowSpacing: 90,
   /** Horizontal padding on each side of the canvas in px. */
   paddingX: 50,
-  /** Top/bottom padding in px. */
-  paddingY: 60,
+  /** Top padding in px. */
+  paddingY: 40,
+  /** Bottom padding in px (tighter — container padding handles the rest). */
+  paddingBottom: 24,
   /** Node button diameter in px — WCAG minimum (2.75rem = 44px). */
   nodeSize: 44,
   /** Radius of the node circle for SVG path anchoring. */
@@ -62,7 +64,7 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit, OnDes
   connectionPaths: ConnectionPath[] = [];
 
   /** Total pixel height of the SVG canvas (derived from row count). */
-  mapHeight = NODE_MAP_LAYOUT.rowSpacing * 12 + NODE_MAP_LAYOUT.paddingY * 2;
+  mapHeight = NODE_MAP_LAYOUT.rowSpacing * 12 + NODE_MAP_LAYOUT.paddingY + NODE_MAP_LAYOUT.paddingBottom;
 
   mapWidth: number = NODE_MAP_LAYOUT.width;
   readonly nodeSize = NODE_MAP_LAYOUT.nodeSize;
@@ -183,7 +185,7 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit, OnDes
     if (!this.nodeMap) return;
 
     const totalRows = this.nodeMap.rows; // includes boss row
-    this.mapHeight = totalRows * NODE_MAP_LAYOUT.rowSpacing + NODE_MAP_LAYOUT.paddingY * 2;
+    this.mapHeight = totalRows * NODE_MAP_LAYOUT.rowSpacing + NODE_MAP_LAYOUT.paddingY + NODE_MAP_LAYOUT.paddingBottom;
 
     // Group nodes by row
     const nodesByRow = new Map<number, MapNode[]>();
