@@ -64,6 +64,7 @@ import { ChainLightningService } from './services/chain-lightning.service';
 import { TowerPlacementService } from './services/tower-placement.service';
 import { TowerSelectionService } from './services/tower-selection.service';
 import { TowerUpgradeVisualService } from './services/tower-upgrade-visual.service';
+import { getAscensionEffects, AscensionEffectType } from '../../run/models/ascension.model';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -108,7 +109,7 @@ describe('GameBoardComponent', () => {
     tutorialStep$ = new BehaviorSubject<TutorialStep | null>(null);
     tutorialSpy.getCurrentStep.and.returnValue(tutorialStep$.asObservable());
 
-    gameSessionSpy = jasmine.createSpyObj('GameSessionService', ['resetAllServices', 'applyCampaignWaves', 'cleanupScene']);
+    gameSessionSpy = jasmine.createSpyObj('GameSessionService', ['resetAllServices', 'cleanupScene']);
     gameSessionSpy.cleanupScene.and.returnValue(null);
 
     combatLoopSpy = createCombatLoopServiceSpy();
@@ -2856,6 +2857,89 @@ describe('GameBoardComponent', () => {
       (component as any).processCombatResult(emptyResult, 0.016, 1000);
 
       expect(flashSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── applyAscensionModifiers — elite/boss health mult composition ──────────
+  describe('applyAscensionModifiers — elite/boss health mult composition', () => {
+    let gameStateSvc: GameStateService;
+    let setAscensionSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      gameStateSvc = fixture.debugElement.injector.get(GameStateService);
+      setAscensionSpy = spyOn(gameStateSvc, 'setAscensionModifierEffects').and.callThrough();
+    });
+
+    function callApply(level: number, isElite: boolean, isBoss: boolean): void {
+      (component as any).applyAscensionModifiers(level, isElite, isBoss);
+    }
+
+    it('ascension 0: no call made (early-return guard)', () => {
+      callApply(0, false, false);
+      expect(setAscensionSpy).not.toHaveBeenCalled();
+    });
+
+    it('ascension 1 (ENEMY_HEALTH = 1.1), not elite/boss: enemyHealthMultiplier ≈ 1.1', () => {
+      callApply(1, false, false);
+      const effects = gameStateSvc.getModifierEffects();
+      const expected = getAscensionEffects(1).get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER)!;
+      expect(effects.enemyHealthMultiplier).toBeCloseTo(expected, 5);
+    });
+
+    it('ascension 5 (ELITE_HEALTH = 1.25), isElite=true: enemyHealthMultiplier ≈ 1.25', () => {
+      // Level 5 has only ELITE_HEALTH_MULTIPLIER; no base ENEMY_HEALTH_MULTIPLIER yet
+      // (level 1 has 1.1, but level 5 cumulative base is also 1.1)
+      callApply(5, true, false);
+      const ascEffects = getAscensionEffects(5);
+      const base = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER) ?? 1;
+      const elite = ascEffects.get(AscensionEffectType.ELITE_HEALTH_MULTIPLIER) ?? 1;
+      const expected = base * elite;
+      const effects = gameStateSvc.getModifierEffects();
+      expect(effects.enemyHealthMultiplier).toBeCloseTo(expected, 5);
+    });
+
+    it('ascension 5 (ELITE_HEALTH = 1.25), isElite=false: elite mult NOT applied', () => {
+      callApply(5, false, false);
+      const ascEffects = getAscensionEffects(5);
+      const base = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER) ?? 1;
+      // Without elite flag, elite mult must NOT be folded in
+      const eliteMult = ascEffects.get(AscensionEffectType.ELITE_HEALTH_MULTIPLIER)!;
+      const effects = gameStateSvc.getModifierEffects();
+      expect(effects.enemyHealthMultiplier).toBeCloseTo(base, 5);
+      expect(effects.enemyHealthMultiplier).not.toBeCloseTo(base * eliteMult, 5);
+    });
+
+    it('ascension 10 (BOSS_HEALTH = 1.3), isBoss=true: boss mult applied', () => {
+      callApply(10, false, true);
+      const ascEffects = getAscensionEffects(10);
+      const base = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER) ?? 1;
+      const boss = ascEffects.get(AscensionEffectType.BOSS_HEALTH_MULTIPLIER) ?? 1;
+      const expected = base * boss;
+      const effects = gameStateSvc.getModifierEffects();
+      expect(effects.enemyHealthMultiplier).toBeCloseTo(expected, 5);
+    });
+
+    it('ascension 10 (BOSS_HEALTH = 1.3), isBoss=false: boss mult NOT applied', () => {
+      callApply(10, false, false);
+      const ascEffects = getAscensionEffects(10);
+      const base = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER) ?? 1;
+      const bossMult = ascEffects.get(AscensionEffectType.BOSS_HEALTH_MULTIPLIER)!;
+      const effects = gameStateSvc.getModifierEffects();
+      expect(effects.enemyHealthMultiplier).toBeCloseTo(base, 5);
+      expect(effects.enemyHealthMultiplier).not.toBeCloseTo(base * bossMult, 5);
+    });
+
+    it('ascension 18 (ENEMY_HEALTH stacked + ELITE_HEALTH = 1.5), isElite=true: multiplicative stacking', () => {
+      callApply(18, true, false);
+      const ascEffects = getAscensionEffects(18);
+      const base = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER) ?? 1;
+      const elite = ascEffects.get(AscensionEffectType.ELITE_HEALTH_MULTIPLIER) ?? 1;
+      const expected = base * elite;
+      const effects = gameStateSvc.getModifierEffects();
+      expect(effects.enemyHealthMultiplier).toBeCloseTo(expected, 5);
+      // Sanity: both base and elite are above 1, so product must exceed each individually
+      expect(effects.enemyHealthMultiplier!).toBeGreaterThan(base);
+      expect(effects.enemyHealthMultiplier!).toBeGreaterThan(elite);
     });
   });
 

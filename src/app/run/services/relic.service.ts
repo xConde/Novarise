@@ -23,12 +23,10 @@ export interface RelicModifiers {
   sellRefundRate: number;
   goldMultiplier: number;
   enemySpeedMultiplier: number;
-  spawnIntervalMultiplier: number;
   maxLivesBonus: number;
   startingGoldBonus: number;
   splashRadiusMultiplier: number;
   chainBounceBonus: number;
-  slowDurationMultiplier: number;
   dotDamageMultiplier: number;
   wavePreviewBonus: number;
 }
@@ -41,12 +39,10 @@ const BASELINE_MODIFIERS: RelicModifiers = {
   sellRefundRate: 0.5,
   goldMultiplier: 1,
   enemySpeedMultiplier: 1,
-  spawnIntervalMultiplier: 1,
   maxLivesBonus: 0,
   startingGoldBonus: 0,
   splashRadiusMultiplier: 1,
   chainBounceBonus: 0,
-  slowDurationMultiplier: 1,
   dotDamageMultiplier: 1,
   wavePreviewBonus: 0,
 };
@@ -166,11 +162,6 @@ export class RelicService {
     return this.getModifiers().enemySpeedMultiplier;
   }
 
-  /** Get spawn interval multiplier (>1 = slower spawning). */
-  getSpawnIntervalMultiplier(): number {
-    return this.getModifiers().spawnIntervalMultiplier;
-  }
-
   /** Get max lives bonus. */
   getMaxLivesBonus(): number {
     return this.getModifiers().maxLivesBonus;
@@ -191,14 +182,35 @@ export class RelicService {
     return this.getModifiers().chainBounceBonus;
   }
 
-  /** Get slow duration multiplier. */
-  getSlowDurationMultiplier(): number {
-    return this.getModifiers().slowDurationMultiplier;
-  }
-
   /** Get DoT damage multiplier (mortar). */
   getDotDamageMultiplier(): number {
     return this.getModifiers().dotDamageMultiplier;
+  }
+
+  // ── Turn-based relic accessors ──────────────────────────
+
+  /**
+   * QUICK_DRAW: returns true when the relic is owned.
+   * TowerCombatService uses this to grant +1 shot on the turn a tower is placed.
+   */
+  hasQuickDraw(): boolean {
+    return this.hasRelic(RelicId.QUICK_DRAW);
+  }
+
+  /**
+   * FROST_NOVA: returns +1 when owned, 0 otherwise.
+   * StatusEffectService adds this bonus turns to every SLOW application.
+   */
+  getSlowDurationBonus(): number {
+    return this.hasRelic(RelicId.FROST_NOVA) ? 1 : 0;
+  }
+
+  /**
+   * TEMPORAL_RIFT: returns 1 when owned, 0 otherwise.
+   * WaveService prepends this many empty turns to each wave's turn schedule.
+   */
+  getTurnDelayPerWave(): number {
+    return this.hasRelic(RelicId.TEMPORAL_RIFT) ? 1 : 0;
   }
 
   // ── Trigger-based Relics ────────────────────────────────
@@ -265,9 +277,7 @@ export class RelicService {
           mods.enemySpeedMultiplier *= 0.92;
           break;
         case RelicId.QUICK_DRAW:
-          // NO-OP post-pivot. Was a real-time fire-rate multiplier; turn-based fire is `shotsPerTurn`-based and not multiplicative.
-          // Catalog entry preserved to avoid save-game churn; M4 S9 (relic content audit) should retarget this relic
-          // (e.g. grant a `fireRate` modifier card stack on encounter start, or +1 shotsPerTurn for the first wave).
+          // Handled by hasQuickDraw() — TowerCombatService grants +1 shot on the placement turn.
           break;
         case RelicId.SALVAGE_KIT:
           mods.sellRefundRate = 0.75;
@@ -289,7 +299,7 @@ export class RelicService {
           mods.chainBounceBonus += 1;
           break;
         case RelicId.FROST_NOVA:
-          mods.slowDurationMultiplier *= 1.5;
+          // Handled by getSlowDurationBonus() — StatusEffectService adds +1 turn to SLOW duration.
           break;
         case RelicId.MORTAR_SHELL:
           mods.dotDamageMultiplier *= 2;
@@ -304,7 +314,7 @@ export class RelicService {
         // Rare
         // ARCHITECTS_BLUEPRINT — trigger-based
         case RelicId.TEMPORAL_RIFT:
-          mods.spawnIntervalMultiplier *= 1.25;
+          // Handled by getTurnDelayPerWave() — WaveService prepends 1 empty turn to each wave schedule.
           break;
         case RelicId.COMMANDERS_BANNER:
           mods.damageMultiplier *= 1.15;

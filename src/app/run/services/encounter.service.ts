@@ -7,6 +7,7 @@ import { MapBridgeService } from '../../core/services/map-bridge.service';
 import { RunMapService } from './run-map.service';
 import { WaveGeneratorService } from './wave-generator.service';
 import { REWARD_CONFIG } from '../constants/run.constants';
+import { CAMPAIGN_WAVE_DEFINITIONS } from '../data/waves/campaign-waves';
 
 /**
  * Orchestrates encounter preparation for Ascent Mode.
@@ -88,9 +89,21 @@ export class EncounterService {
       case NodeType.BOSS:
         return this.waveGenerator.generateBossWaves(actIndex, seed);
       case NodeType.COMBAT:
-      case NodeType.UNKNOWN:
+      case NodeType.UNKNOWN: {
+        // Hand-authored waves take priority over procedural generation.
+        // CAMPAIGN_WAVE_DEFINITIONS[campaignMapId] contains designer-tuned waves
+        // that teach game mechanics progressively. Fall back to procedural only
+        // when no hand-authored entry exists for the map (e.g. empty string id,
+        // custom user maps, or a missing definition).
+        const handAuthored = CAMPAIGN_WAVE_DEFINITIONS[node.campaignMapId];
+        if (handAuthored && handAuthored.length > 0) {
+          // Shallow-clone each wave object so downstream mutations
+          // (e.g. wave rewards being consumed) cannot corrupt the shared data.
+          return handAuthored.map(w => ({ ...w }));
+        }
         // UNKNOWN reveals itself as combat when entered
         return this.waveGenerator.generateCombatWaves(row, actIndex, seed);
+      }
       default:
         // Non-combat nodes (REST, SHOP, EVENT) have no waves
         return [];

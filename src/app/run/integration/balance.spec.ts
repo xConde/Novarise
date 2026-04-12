@@ -35,7 +35,7 @@ import { NodeType } from '../models/node-map.model';
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function totalEnemiesPerEncounter(waves: ReturnType<WaveGeneratorService['generateCombatWaves']>): number {
-  return waves.reduce((sum, w) => sum + w.entries.reduce((s, e) => s + e.count, 0), 0);
+  return waves.reduce((sum, w) => sum + w.entries!.reduce((s, e) => s + e.count, 0), 0);
 }
 
 function totalGoldPerEncounter(waves: ReturnType<WaveGeneratorService['generateCombatWaves']>): number {
@@ -64,7 +64,7 @@ describe('Ascent Mode — Balance', () => {
     for (let seed = 1; seed <= 5; seed++) {
       const waves = waveGen.generateCombatWaves(0, 0, seed * 10000);
       waves.forEach((w, wi) => {
-        w.entries.forEach((e, ei) => {
+        w.entries!.forEach((e, ei) => {
           expect(e.count).withContext(`seed=${seed} wave[${wi}] entry[${ei}]: count=${e.count} expected >= 4`).toBeGreaterThanOrEqual(4);
           expect(e.count).withContext(`seed=${seed} wave[${wi}] entry[${ei}]: count=${e.count} expected <= 6`).toBeLessThanOrEqual(6);
         });
@@ -77,7 +77,7 @@ describe('Ascent Mode — Balance', () => {
     for (let seed = 1; seed <= 5; seed++) {
       const waves = waveGen.generateCombatWaves(10, 0, seed * 10000);
       waves.forEach((w, wi) => {
-        w.entries.forEach((e, ei) => {
+        w.entries!.forEach((e, ei) => {
           expect(e.count).withContext(`seed=${seed} wave[${wi}] entry[${ei}]: count=${e.count} expected >= 9`).toBeGreaterThanOrEqual(9);
           expect(e.count).withContext(`seed=${seed} wave[${wi}] entry[${ei}]: count=${e.count} expected <= 12`).toBeLessThanOrEqual(12);
         });
@@ -90,7 +90,7 @@ describe('Ascent Mode — Balance', () => {
     for (let seed = 1; seed <= 5; seed++) {
       const waves = waveGen.generateCombatWaves(0, 1, seed * 10000);
       waves.forEach((w, wi) => {
-        w.entries.forEach((e, ei) => {
+        w.entries!.forEach((e, ei) => {
           expect(e.count).withContext(`seed=${seed} act2 wave[${wi}] entry[${ei}]: count=${e.count} expected >= 6`).toBeGreaterThanOrEqual(6);
           expect(e.count).withContext(`seed=${seed} act2 wave[${wi}] entry[${ei}]: count=${e.count} expected <= 9`).toBeLessThanOrEqual(9);
         });
@@ -119,13 +119,13 @@ describe('Ascent Mode — Balance', () => {
   it('boss waves should have at least 1 BOSS-type enemy', () => {
     for (let seed = 0; seed < 3; seed++) {
       const waves = waveGen.generateBossWaves(0, seed * 100000);
-      const allTypes = waves.flatMap(w => w.entries.map(e => e.type));
+      const allTypes = waves.flatMap(w => w.entries!.map(e => e.type));
       expect(allTypes).toContain(EnemyType.BOSS);
     }
     // Also check act 2
     for (let seed = 0; seed < 3; seed++) {
       const waves = waveGen.generateBossWaves(1, seed * 100000);
-      const allTypes = waves.flatMap(w => w.entries.map(e => e.type));
+      const allTypes = waves.flatMap(w => w.entries!.map(e => e.type));
       expect(allTypes).toContain(EnemyType.BOSS);
     }
   });
@@ -303,7 +303,7 @@ describe('Ascent Mode — Balance', () => {
     const allPresets = [...ACT1_BOSS_PRESETS, ...ACT2_BOSS_PRESETS];
     for (const preset of allPresets) {
       const finalWave = preset.waves[preset.waves.length - 1];
-      const hasBoss = finalWave.entries.some(e => e.type === EnemyType.BOSS);
+      const hasBoss = finalWave.entries!.some(e => e.type === EnemyType.BOSS);
       expect(hasBoss).withContext(`Preset "${preset.name}": final wave missing BOSS entry`).toBeTrue();
     }
   });

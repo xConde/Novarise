@@ -24,6 +24,7 @@ import { RunMapService } from '../services/run-map.service';
 import { PlayerProfileService } from '../../core/services/player-profile.service';
 
 import { RunStatus, DEFAULT_RUN_CONFIG, EncounterResult } from '../models/run-state.model';
+import { getWaveEnemyCount } from '../../game/game-board/models/wave.model';
 import { NodeType } from '../models/node-map.model';
 import { RelicId, RELIC_DEFINITIONS, RelicRarity } from '../models/relic.model';
 import { REWARD_CONFIG, REST_CONFIG, NODE_MAP_CONFIG } from '../constants/run.constants';
@@ -164,7 +165,7 @@ describe('Ascent Mode — Integration Flow', () => {
     expect(encounter!.nodeId).toBe(combatNode!.id);
     expect(encounter!.waves.length).toBeGreaterThan(0);
     encounter!.waves.forEach(w => {
-      expect(w.entries.length).toBeGreaterThan(0);
+      expect(getWaveEnemyCount(w)).toBeGreaterThan(0);
     });
   }));
 

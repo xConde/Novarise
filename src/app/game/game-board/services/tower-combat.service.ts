@@ -20,6 +20,7 @@ import { ChainLightningService } from './chain-lightning.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
+import { TowerStatOverrides } from '../../../run/models/card.model';
 
 /** M3 S4: turn-based mortar DoT zone. Replaces the legacy real-time path for fireTurn. */
 interface TurnMortarZone {
@@ -33,6 +34,13 @@ interface TurnMortarZone {
 }
 
 export { KillInfo, CombatAudioEvent } from '../models/combat-frame.model';
+
+export interface RegisterTowerOptions {
+  /** Turn the tower was placed on. Defaults to 0 (pre-combat SETUP phase). */
+  placedAtTurn?: number;
+  /** Per-card stat multipliers applied to this specific tower instance. */
+  cardStatOverrides?: TowerStatOverrides;
+}
 
 @Injectable()
 export class TowerCombatService {
@@ -77,8 +85,22 @@ export class TowerCombatService {
     private cardEffectService: CardEffectService,
   ) {}
 
-  /** Registers a newly placed tower so it participates in targeting and firing. `actualCost` tracks the real gold paid (may differ from base cost due to modifiers). */
-  registerTower(row: number, col: number, type: TowerType, mesh: THREE.Group, actualCost: number = TOWER_CONFIGS[type].cost): void {
+  /**
+   * Registers a newly placed tower so it participates in targeting and firing.
+   * `actualCost` tracks the real gold paid (may differ from base cost due to modifiers).
+   * `opts.placedAtTurn` is the combat turn number when placed — used by QUICK_DRAW relic
+   * (+1 shot on the placement turn). Defaults to 0 for setup-phase placements.
+   */
+  registerTower(
+    row: number,
+    col: number,
+    type: TowerType,
+    mesh: THREE.Group,
+    actualCost: number = TOWER_CONFIGS[type].cost,
+    opts: RegisterTowerOptions = {},
+  ): void {
+    const placedAtTurn = opts.placedAtTurn ?? 0;
+    const cardStatOverrides = opts.cardStatOverrides;
     const key = `${row}-${col}`;
     this.placedTowers.set(key, {
       id: key,
@@ -89,7 +111,9 @@ export class TowerCombatService {
       kills: 0,
       totalInvested: actualCost,
       targetingMode: DEFAULT_TARGETING_MODE,
-      mesh
+      mesh,
+      placedAtTurn,
+      cardStatOverrides,
     });
   }
 
@@ -157,21 +181,31 @@ export class TowerCombatService {
     for (const tower of towerList) {
       const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
       let stats: TowerStats;
-      if (towerDamageMultiplier !== 1 || hasRelicModifiers || hasCardModifiers) {
+      const hasCardStatOverrides = tower.cardStatOverrides !== undefined;
+      if (towerDamageMultiplier !== 1 || hasRelicModifiers || hasCardModifiers || hasCardStatOverrides) {
         const relicDamage = this.relicService.getDamageMultiplier(tower.type);
         const relicRange = this.relicService.getRangeMultiplier(tower.type);
         const sniperBoost = (tower.type === TowerType.SNIPER && sniperDamageBoost !== 0) ? (1 + sniperDamageBoost) : 1;
-        this.scratchStats.damage = Math.round(baseStats.damage * towerDamageMultiplier * relicDamage * (1 + cardDamageBoost) * sniperBoost);
-        this.scratchStats.range = baseStats.range * relicRange * (1 + cardRangeBoost);
+        const cardDamageMult = tower.cardStatOverrides?.damageMultiplier ?? 1;
+        this.scratchStats.damage = Math.round(baseStats.damage * towerDamageMultiplier * relicDamage * (1 + cardDamageBoost) * sniperBoost * cardDamageMult);
+        const cardRangeMult = tower.cardStatOverrides?.rangeMultiplier ?? 1;
+        this.scratchStats.range = baseStats.range * relicRange * (1 + cardRangeBoost) * cardRangeMult;
         this.scratchStats.cost = baseStats.cost;
-        this.scratchStats.splashRadius = (baseStats.splashRadius ?? 0) * this.relicService.getSplashRadiusMultiplier();
+        const cardSplashMult = tower.cardStatOverrides?.splashRadiusMultiplier ?? 1;
+        this.scratchStats.splashRadius = (baseStats.splashRadius ?? 0) * this.relicService.getSplashRadiusMultiplier() * cardSplashMult;
         this.scratchStats.color = baseStats.color;
         this.scratchStats.slowFactor = baseStats.slowFactor;
-        this.scratchStats.chainCount = baseStats.chainCount != null ? baseStats.chainCount + this.relicService.getChainBounceBonus() : baseStats.chainCount;
+        const cardChainBonus = tower.cardStatOverrides?.chainBounceBonus ?? 0;
+        this.scratchStats.chainCount = baseStats.chainCount != null
+          ? baseStats.chainCount + this.relicService.getChainBounceBonus() + cardChainBonus
+          : baseStats.chainCount;
         this.scratchStats.chainRange = baseStats.chainRange;
         this.scratchStats.blastRadius = baseStats.blastRadius;
         this.scratchStats.dotDuration = baseStats.dotDuration;
-        this.scratchStats.dotDamage = baseStats.dotDamage != null ? baseStats.dotDamage * this.relicService.getDotDamageMultiplier() : baseStats.dotDamage;
+        const cardDotMult = tower.cardStatOverrides?.dotDamageMultiplier ?? 1;
+        this.scratchStats.dotDamage = baseStats.dotDamage != null
+          ? baseStats.dotDamage * this.relicService.getDotDamageMultiplier() * cardDotMult
+          : baseStats.dotDamage;
         this.scratchStats.statusEffect = baseStats.statusEffect;
         stats = this.scratchStats;
       } else {
@@ -180,7 +214,10 @@ export class TowerCombatService {
 
       // Phase 10 modifier: fireRate boost gives +1 shotsPerTurn at any positive value (ceil semantic).
       // 30% boost (RAPID_FIRE) → ceil(1.3) = 2. 50% (OVERCLOCK) → ceil(1.5) = 2. Stacked → ceil(1.8) = 2.
-      const shotsPerTurn = Math.max(1, Math.ceil(1 + fireRateBoost));
+      const baseShots = Math.max(1, Math.ceil(1 + fireRateBoost));
+      // QUICK_DRAW relic: +1 extra shot on the turn the tower was placed.
+      const quickDrawBonus = this.relicService.hasQuickDraw() && (tower.placedAtTurn ?? 0) === turnNumber ? 1 : 0;
+      const shotsPerTurn = baseShots + quickDrawBonus;
 
       for (let shot = 0; shot < shotsPerTurn; shot++) {
         if (tower.type === TowerType.SLOW) {

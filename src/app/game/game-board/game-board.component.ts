@@ -89,7 +89,7 @@ import {
   ModifierCardEffect,
   UtilityCardEffect,
 } from '../../run/models/card.model';
-import { getCardDefinition } from '../../run/constants/card-definitions';
+import { getCardDefinition, getActiveTowerEffect } from '../../run/constants/card-definitions';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
 export interface EnemyBadge {
@@ -474,9 +474,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Import editor map if it has spawn and exit points; otherwise use default board
     this.importBoard();
 
-    // Apply per-campaign-level wave definitions if this is a campaign map
-    this.gameSessionService.applyCampaignWaves();
-
     // Combat requires an active run encounter. Guard against direct /play navigation
     // without a run — bail early and route back to the run hub.
     const encounter = this.runService.getCurrentEncounter();
@@ -491,7 +488,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gameStateService.addGold(this.relicService.getStartingGoldBonus());
     this.waveService.setCustomWaves(encounter.waves);
     this.gameStateService.setMaxWaves(encounter.waves.length);
-    this.applyAscensionModifiers(runState.ascensionLevel);
+    this.applyAscensionModifiers(runState.ascensionLevel, encounter.isElite, encounter.isBoss);
 
     // Subscribe to deck/energy state for the card hand UI
     this.deckSub = this.deckService.deckState$.subscribe(s => { this.deckState = s; });
@@ -514,7 +511,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.updateTileHighlights();
     }
 
-    // Seed initial wave preview for the first wave (after applyCampaignWaves sets custom defs)
+    // Seed initial wave preview for the first wave (after setCustomWaves(encounter.waves) applies hand-authored or procedural waves)
     const initialState = this.gameStateService.getState();
     const initialCustomDefs = this.waveService.hasCustomWaves()
       ? this.waveService.getWaveDefinitions()
@@ -763,6 +760,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
             enemyService: this.enemyService,
             statusEffectService: this.statusEffectService,
             currentTurn: this.combatLoopService.getTurnNumber(),
+            deckService: this.deckService,
           } satisfies SpellContext);
         }
         break;
@@ -1319,9 +1317,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.importBoard();
 
-    // Re-apply campaign waves after waveService.reset() (which clears custom waves)
-    this.gameSessionService.applyCampaignWaves();
-
     // Re-apply run encounter config on restart. If the run was cleared between
     // the original load and the restart click, route back to the run hub.
     const encounter = this.runService.getCurrentEncounter();
@@ -1334,7 +1329,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gameStateService.addGold(this.relicService.getStartingGoldBonus());
     this.waveService.setCustomWaves(encounter.waves);
     this.gameStateService.setMaxWaves(encounter.waves.length);
-    this.applyAscensionModifiers(runState.ascensionLevel);
+    this.applyAscensionModifiers(runState.ascensionLevel, encounter.isElite, encounter.isBoss);
 
     this.renderGameBoard();
     this.addGridLines();
@@ -1355,14 +1350,18 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    * into GameStateService so EnemyService picks them up at spawn time.
    * Must be called during SETUP phase (wave 0) — before the first wave starts.
    */
-  private applyAscensionModifiers(ascensionLevel: number): void {
+  private applyAscensionModifiers(ascensionLevel: number, isElite: boolean, isBoss: boolean): void {
     if (ascensionLevel <= 0) return;
     const ascEffects = getAscensionEffects(ascensionLevel);
     const effects: ModifierEffects = {};
-    const healthMult = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER);
+    const baseHealthMult = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER) ?? 1;
+    const eliteHealthMult = isElite ? (ascEffects.get(AscensionEffectType.ELITE_HEALTH_MULTIPLIER) ?? 1) : 1;
+    const bossHealthMult  = isBoss  ? (ascEffects.get(AscensionEffectType.BOSS_HEALTH_MULTIPLIER) ?? 1)  : 1;
+    const finalHealthMult = baseHealthMult * eliteHealthMult * bossHealthMult;
+    // Only emit the multiplier if at least one health effect is active
+    if (finalHealthMult !== 1) effects.enemyHealthMultiplier = finalHealthMult;
     const speedMult = ascEffects.get(AscensionEffectType.ENEMY_SPEED_MULTIPLIER);
     const costMult = ascEffects.get(AscensionEffectType.TOWER_COST_MULTIPLIER);
-    if (healthMult !== undefined) effects.enemyHealthMultiplier = healthMult;
     if (speedMult !== undefined) effects.enemySpeedMultiplier = speedMult;
     if (costMult !== undefined) effects.towerCostMultiplier = costMult;
     this.gameStateService.setAscensionModifierEffects(effects);
@@ -1746,24 +1745,21 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sceneService.getScene().add(towerMesh);
     this.rebuildTowerChildrenArray();
 
+    // Resolve the active card effect BEFORE registerTower so we have statOverrides available.
+    const activeTowerEffect = placedCard ? getActiveTowerEffect(placedCard) : undefined;
+    const cardStatOverrides = activeTowerEffect?.statOverrides;
+
     // Register tower with combat service (needs the mesh reference)
-    this.towerCombatService.registerTower(row, col, this.selectedTowerType, towerMesh, result.cost);
+    this.towerCombatService.registerTower(row, col, this.selectedTowerType, towerMesh, result.cost, {
+      cardStatOverrides,
+    });
 
     // Sub-task B: upgraded tower cards start at level 2 (player effectively
     // pre-paid the L1→L2 upgrade cost via the card upgrade).
-    // Resolve the active effect from the card (upgraded flag selects upgradedEffect).
-    if (placedCard) {
-      const placedDef = getCardDefinition(placedCard.cardId);
-      const activeEffect = (placedCard.upgraded && placedDef.upgradedEffect)
-        ? placedDef.upgradedEffect
-        : placedDef.effect;
-      if (activeEffect.type !== 'tower') return;
-      // activeEffect is now narrowed to TowerCardEffect
-      if (activeEffect.startLevel === 2) {
-        // Upgrade to L2 at zero additional cost — the card's upgrade already
-        // accounts for the value. actualCost: 0 keeps totalInvested accurate.
-        this.towerCombatService.upgradeTower(`${row}-${col}`, 0);
-      }
+    if (activeTowerEffect?.startLevel === 2) {
+      // Upgrade to L2 at zero additional cost — the card's upgrade already
+      // accounts for the value. actualCost: 0 keeps totalInvested accurate.
+      this.towerCombatService.upgradeTower(`${row}-${col}`, 0);
     }
 
     this.audioService.playTowerPlace();

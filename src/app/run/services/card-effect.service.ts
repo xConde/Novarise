@@ -16,8 +16,10 @@ import { ModifierCardEffect, SpellCardEffect } from '../models/card.model';
 import { MODIFIER_STAT, ModifierStat } from '../constants/modifier-stat.constants';
 import { GameStateService } from '../../game/game-board/services/game-state.service';
 import { EnemyService } from '../../game/game-board/services/enemy.service';
+import { Enemy } from '../../game/game-board/models/enemy.model';
 import { StatusEffectService } from '../../game/game-board/services/status-effect.service';
 import { StatusEffectType } from '../../game/game-board/constants/status-effect.constants';
+import { DeckService } from './deck.service';
 
 /** A single active modifier with a wave-based countdown. */
 export interface ActiveModifier {
@@ -32,6 +34,7 @@ export interface SpellContext {
   enemyService: EnemyService;
   statusEffectService: StatusEffectService;
   currentTurn: number;
+  deckService: DeckService;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -74,11 +77,87 @@ export class CardEffectService {
         // are immune (handled inside StatusEffectService.apply). The effect.value
         // field is ignored — duration is fixed by status config. Ignored value is
         // a balance lever for a future content sprint.
+        this.applyStatusToAllEnemies(ctx, StatusEffectType.SLOW);
+        break;
+
+      case 'incinerate':
+        // Apply BURN to every non-dying enemy. Flying enemies are NOT immune to BURN
+        // (flying immunity is scoped to SLOW only inside StatusEffectService.apply).
+        // Duration is governed by STATUS_EFFECT_CONFIGS[BURN].duration. The effect.value
+        // flag (0 = base, 1 = upgraded) is reserved for a future balance sprint that may
+        // extend duration; this handler intentionally ignores it.
+        this.applyStatusToAllEnemies(ctx, StatusEffectType.BURN);
+        break;
+
+      case 'toxic_spray':
+        // Apply POISON to every non-dying enemy. Same flying-not-immune caveat as INCINERATE.
+        // POISON stacks over 4 turns (vs BURN's 3) at 3 dmg/tick — higher sustained value.
+        // effect.value flag reserved for future balance; ignored here.
+        this.applyStatusToAllEnemies(ctx, StatusEffectType.POISON);
+        break;
+
+      case 'cryo_pulse': {
+        // Single-target SLOW on the lead enemy (highest distanceTraveled among non-dying).
+        // The draw always happens — even on an empty board. Rationale: card economy should
+        // never be lost to empty-board timing. Tradeoff: holding CRYO_PULSE between waves
+        // to draw for free is slightly exploitable; accepted because it requires holding a
+        // cost-1 card which has opportunity cost. Lead-enemy selection uses distanceTraveled
+        // (Enemy.distanceTraveled — the actual field name; pathProgress does not exist).
+        let lead: Enemy | null = null;
         for (const enemy of ctx.enemyService.getEnemies().values()) {
           if (enemy.dying) continue;
-          ctx.statusEffectService.apply(enemy.id, StatusEffectType.SLOW, ctx.currentTurn);
+          if (!lead || enemy.distanceTraveled > lead.distanceTraveled) {
+            lead = enemy;
+          }
+        }
+        if (lead) {
+          ctx.statusEffectService.apply(lead.id, StatusEffectType.SLOW, ctx.currentTurn);
+        }
+        // effect.value = draw count (1 base, 2 upgraded). Respects hand-size cap via drawCards.
+        ctx.deckService.drawCards(effect.value);
+        break;
+      }
+
+      case 'detonate': {
+        // Deal `effect.value` damage to every enemy with BURN active, then consume
+        // the BURN status. Snapshot IDs first because damageEnemy may mutate health
+        // (and flag dying), though it does not remove enemies from the map during
+        // this call. Two-pass is defensive and safe regardless.
+        // Kill bookkeeping (gold, wave progress) is handled by the combat loop's
+        // normal kill-processing path — consistent with how damageStrongestEnemy
+        // (lightning_strike) works (no post-call kill bookkeeping here).
+        const burningIds: string[] = [];
+        for (const enemy of ctx.enemyService.getEnemies().values()) {
+          if (enemy.dying) continue;
+          if (ctx.statusEffectService.hasEffect(enemy.id, StatusEffectType.BURN)) {
+            burningIds.push(enemy.id);
+          }
+        }
+        for (const id of burningIds) {
+          ctx.enemyService.damageEnemy(id, effect.value);
+          ctx.statusEffectService.removeEffect(id, StatusEffectType.BURN);
         }
         break;
+      }
+
+      case 'epidemic': {
+        // If the number of currently-poisoned non-dying enemies meets the critical
+        // mass threshold (effect.value), apply POISON to all non-dying enemies.
+        // Already-poisoned enemies receive a duration refresh (apply handles that
+        // internally). Simpler than skipping already-poisoned: one pass, same result.
+        // Upgraded lowers threshold to 1 (effect.value = epidemicUpgradedCriticalMass).
+        const poisonedCount = Array.from(ctx.enemyService.getEnemies().values())
+          .filter(e => !e.dying && ctx.statusEffectService.hasEffect(e.id, StatusEffectType.POISON))
+          .length;
+
+        if (poisonedCount < effect.value) break;
+
+        for (const enemy of ctx.enemyService.getEnemies().values()) {
+          if (enemy.dying) continue;
+          ctx.statusEffectService.apply(enemy.id, StatusEffectType.POISON, ctx.currentTurn);
+        }
+        break;
+      }
 
       case 'overclock':
         // Treat overclock as a 1-wave fire-rate modifier.
@@ -163,6 +242,19 @@ export class CardEffectService {
   }
 
   // ── Internal helpers ──────────────────────────────────────
+
+  /**
+   * Apply a status effect to every non-dying enemy. Shared between spell cards
+   * that broadcast a status across the whole board (FROST_WAVE → SLOW,
+   * INCINERATE → BURN, TOXIC_SPRAY → POISON). StatusEffectService.apply
+   * handles flying-immunity and refresh semantics internally.
+   */
+  private applyStatusToAllEnemies(ctx: SpellContext, statusType: StatusEffectType): void {
+    for (const enemy of ctx.enemyService.getEnemies().values()) {
+      if (enemy.dying) continue;
+      ctx.statusEffectService.apply(enemy.id, statusType, ctx.currentTurn);
+    }
+  }
 
   private addModifier(stat: ModifierStat, value: number, remainingWaves: number): void {
     this.activeModifiers.push({ stat, value, remainingWaves });

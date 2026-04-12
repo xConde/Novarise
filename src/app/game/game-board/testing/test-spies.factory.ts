@@ -703,6 +703,7 @@ export function createStatusEffectServiceSpy(): jasmine.SpyObj<StatusEffectServi
     'hasEffect',
     'getEffects',
     'getAllActiveEffects',
+    'removeEffect',
     'removeAllEffects',
     'getSlowApplicationCount',
     'cleanup',
@@ -865,13 +866,12 @@ export function createTowerUpgradeVisualServiceSpy(): jasmine.SpyObj<TowerUpgrad
  * Create a pre-configured GameSessionService spy.
  *
  * Default return values:
- *   - resetAllServices / applyCampaignWaves — no-op void
+ *   - resetAllServices — no-op void
  *   - cleanupScene — returns null
  */
 export function createGameSessionServiceSpy(): jasmine.SpyObj<GameSessionService> {
   const spy = jasmine.createSpyObj<GameSessionService>('GameSessionService', [
     'resetAllServices',
-    'applyCampaignWaves',
     'cleanupScene',
   ]);
   spy.cleanupScene.and.returnValue(null);
@@ -884,10 +884,11 @@ export function createRelicServiceSpy(): jasmine.SpyObj<RelicService> {
     'hasRelic', 'getModifiers', 'getDamageMultiplier',
     'getRangeMultiplier', 'getTowerCostMultiplier', 'getUpgradeCostMultiplier',
     'getSellRefundRate', 'getGoldMultiplier', 'getEnemySpeedMultiplier',
-    'getSpawnIntervalMultiplier', 'getMaxLivesBonus', 'getStartingGoldBonus',
-    'getSplashRadiusMultiplier', 'getChainBounceBonus', 'getSlowDurationMultiplier',
+    'getMaxLivesBonus', 'getStartingGoldBonus',
+    'getSplashRadiusMultiplier', 'getChainBounceBonus',
     'getDotDamageMultiplier', 'isNextTowerFree', 'consumeFreeTower',
     'shouldBlockLeak', 'rollLuckyCoin', 'getAvailableRelics',
+    'hasQuickDraw', 'getSlowDurationBonus', 'getTurnDelayPerWave',
   ], ['relicCount']);
 
   spy.getDamageMultiplier.and.returnValue(1);
@@ -897,13 +898,14 @@ export function createRelicServiceSpy(): jasmine.SpyObj<RelicService> {
   spy.getSellRefundRate.and.returnValue(0.5);
   spy.getGoldMultiplier.and.returnValue(1);
   spy.getEnemySpeedMultiplier.and.returnValue(1);
-  spy.getSpawnIntervalMultiplier.and.returnValue(1);
   spy.getMaxLivesBonus.and.returnValue(0);
   spy.getStartingGoldBonus.and.returnValue(0);
   spy.getSplashRadiusMultiplier.and.returnValue(1);
   spy.getChainBounceBonus.and.returnValue(0);
-  spy.getSlowDurationMultiplier.and.returnValue(1);
   spy.getDotDamageMultiplier.and.returnValue(1);
+  spy.hasQuickDraw.and.returnValue(false);
+  spy.getSlowDurationBonus.and.returnValue(0);
+  spy.getTurnDelayPerWave.and.returnValue(0);
   spy.isNextTowerFree.and.returnValue(false);
   spy.shouldBlockLeak.and.returnValue(false);
   spy.rollLuckyCoin.and.returnValue(1);
@@ -1006,6 +1008,7 @@ export function createDeckServiceSpy(): jasmine.SpyObj<DeckService> {
     'discardHand',
     'playCard',
     'drawOne',
+    'drawCards',
     'addCard',
     'removeCard',
     'upgradeCard',

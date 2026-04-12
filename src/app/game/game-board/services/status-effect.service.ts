@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { StatusEffectType, StatusEffectConfig, STATUS_EFFECT_CONFIGS } from '../constants/status-effect.constants';
 import { EnemyService, DamageResult } from './enemy.service';
 import { KillInfo } from './tower-combat.service';
+import { RelicService } from '../../../run/services/relic.service';
 
 interface ActiveEffect {
   config: StatusEffectConfig;
@@ -21,7 +22,10 @@ export class StatusEffectService {
   /** Total number of SLOW applications this game session (for achievement tracking). */
   private slowApplicationCount = 0;
 
-  constructor(private enemyService: EnemyService) {}
+  constructor(
+    private enemyService: EnemyService,
+    private relicService: RelicService,
+  ) {}
 
   /**
    * Apply a status effect to an enemy.
@@ -43,17 +47,20 @@ export class StatusEffectService {
       this.effects.set(enemyId, enemyEffects);
     }
 
+    // FROST_NOVA relic grants +1 turn to SLOW duration.
+    const durationBonus = effectType === StatusEffectType.SLOW ? this.relicService.getSlowDurationBonus() : 0;
+
     const existing = enemyEffects.get(effectType);
     if (existing) {
       // Effect already active — refresh duration (no stacking)
-      existing.expiresAt = turnNumber + config.duration;
+      existing.expiresAt = turnNumber + config.duration + durationBonus;
       return true;
     }
 
     // New effect
     const active: ActiveEffect = {
       config,
-      expiresAt: turnNumber + config.duration,
+      expiresAt: turnNumber + config.duration + durationBonus,
       lastTickTime: turnNumber,
     };
 
@@ -184,6 +191,37 @@ export class StatusEffectService {
       }
     }
     return this.activeEffectsResult;
+  }
+
+  /**
+   * Remove a specific status effect from an enemy, leaving other effects intact.
+   * Restores any mutated stats associated with the removed effect (e.g. SLOW's
+   * speed mutation). If the enemy has no effects after removal, prunes the inner
+   * map. No-op if the enemy has no effects or the specific effect isn't active.
+   *
+   * Use case: DETONATE spell card consumes BURN on each burning enemy.
+   */
+  removeEffect(enemyId: string, effectType: StatusEffectType): void {
+    const enemyEffects = this.effects.get(enemyId);
+    if (!enemyEffects) return;
+
+    const active = enemyEffects.get(effectType);
+    if (!active) return;
+
+    // SLOW restores the original enemy speed. Other effects (BURN, POISON) are
+    // passive DoT with no stat mutations to restore.
+    if (effectType === StatusEffectType.SLOW && active.originalSpeed !== undefined) {
+      const enemy = this.enemyService.getEnemies().get(enemyId);
+      if (enemy) {
+        enemy.speed = active.originalSpeed;
+      }
+    }
+
+    enemyEffects.delete(effectType);
+    if (enemyEffects.size === 0) {
+      this.effects.delete(enemyId);
+      this.effectArrayCache.delete(enemyId);
+    }
   }
 
   /**

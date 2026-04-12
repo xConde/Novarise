@@ -10,8 +10,10 @@ import { TowerType } from '../../game/game-board/models/tower.model';
 import {
   CardDefinition,
   CardId,
+  CardInstance,
   CardRarity,
   CardType,
+  TowerCardEffect,
 } from '../models/card.model';
 import { MODIFIER_STAT } from './modifier-stat.constants';
 
@@ -129,6 +131,43 @@ const CARD_VALUES = {
   warpStrikeUpgradedDamage: 120,
   phantomGoldAmount: 50,
   phantomGoldUpgradedAmount: 75,
+
+  // Tower variant stat multipliers
+  sniperLightDamageMult: 0.7,
+  sniperLightUpgradedDamageMult: 1.0,
+  splashClusterRadiusMult: 0.6,
+  splashClusterUpgradedRadiusMult: 0.85,
+  slowAuraRangeMult: 1.5,
+  slowAuraUpgradedRangeMult: 1.8,
+  chainTeslaBounceBonus: 1,
+  chainTeslaUpgradedBounceBonus: 2,
+  mortarBarrageRadiusMult: 0.7,
+  mortarBarrageUpgradedRadiusMult: 0.85,
+  mortarBarrageDotMult: 0.8,
+  mortarBarrageUpgradedDotMult: 0.9,
+  basicReinforcedUpgradedDamageMult: 1.2,
+  // Tower variant energy costs
+  energyBasicReinforced: 2,
+  energySniperLight: 2,
+  energySplashCluster: 1,
+  energySlowAura: 2,
+  energyChainTesla: 3,
+  energyMortarBarrage: 2,
+
+  // ── Status-applying spell costs (Sprint 2b) ───────────────
+  // Duration is governed by STATUS_EFFECT_CONFIGS — these are energy costs only.
+  incinerateCost: 2,   // COMMON — matches FROST_WAVE cost parity (archetype swap: burn vs slow)
+  toxicSprayCost: 2,   // UNCOMMON — POISON stacks over more turns, higher long-run value
+  cryoPulseCost: 1,    // COMMON — single-target but gains card draw for extra economy
+  cryoPulseDrawCount: 1,
+
+  // ── Status payoff spell values (Sprint 2c) ────────────────
+  detonateDamagePerBurning: 25,
+  detonateUpgradedDamagePerBurning: 35,
+  detonateCost: 1,
+  epidemicCost: 2,
+  epidemicCriticalMass: 2,       // need 2+ poisoned enemies to trigger
+  epidemicUpgradedCriticalMass: 1, // upgraded: only need 1
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -211,6 +250,80 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgraded: false,
     effect: { type: 'tower', towerType: TowerType.MORTAR },
     upgradedEffect: { type: 'tower', towerType: TowerType.MORTAR, startLevel: 2 },
+  },
+
+  // ── Tower Card Variants (6 — one per tower type) ─────────────
+
+  [CardId.TOWER_BASIC_REINFORCED]: {
+    id: CardId.TOWER_BASIC_REINFORCED,
+    name: 'Reinforced Basic',
+    description: 'Deploy a Basic tower at level 2. Pre-paid upgrade.',
+    type: CardType.TOWER,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.energyBasicReinforced,
+    upgraded: false,
+    effect: { type: 'tower' as const, towerType: TowerType.BASIC, startLevel: 2 },
+    upgradedEffect: { type: 'tower' as const, towerType: TowerType.BASIC, startLevel: 2, statOverrides: { damageMultiplier: CARD_VALUES.basicReinforcedUpgradedDamageMult } },
+  },
+
+  [CardId.TOWER_SNIPER_LIGHT]: {
+    id: CardId.TOWER_SNIPER_LIGHT,
+    name: 'Light Sniper',
+    description: 'Deploy a Sniper tower with 30% less damage.',
+    type: CardType.TOWER,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.energySniperLight,
+    upgraded: false,
+    effect: { type: 'tower' as const, towerType: TowerType.SNIPER, statOverrides: { damageMultiplier: CARD_VALUES.sniperLightDamageMult } },
+    upgradedEffect: { type: 'tower' as const, towerType: TowerType.SNIPER, statOverrides: { damageMultiplier: CARD_VALUES.sniperLightUpgradedDamageMult } },
+  },
+
+  [CardId.TOWER_SPLASH_CLUSTER]: {
+    id: CardId.TOWER_SPLASH_CLUSTER,
+    name: 'Cluster Splash',
+    description: 'Deploy a Splash tower with 40% smaller radius.',
+    type: CardType.TOWER,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.energySplashCluster,
+    upgraded: false,
+    effect: { type: 'tower' as const, towerType: TowerType.SPLASH, statOverrides: { splashRadiusMultiplier: CARD_VALUES.splashClusterRadiusMult } },
+    upgradedEffect: { type: 'tower' as const, towerType: TowerType.SPLASH, statOverrides: { splashRadiusMultiplier: CARD_VALUES.splashClusterUpgradedRadiusMult } },
+  },
+
+  [CardId.TOWER_SLOW_AURA]: {
+    id: CardId.TOWER_SLOW_AURA,
+    name: 'Aura Slow',
+    description: 'Deploy a Slow tower with 50% larger aura range.',
+    type: CardType.TOWER,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.energySlowAura,
+    upgraded: false,
+    effect: { type: 'tower' as const, towerType: TowerType.SLOW, statOverrides: { rangeMultiplier: CARD_VALUES.slowAuraRangeMult } },
+    upgradedEffect: { type: 'tower' as const, towerType: TowerType.SLOW, statOverrides: { rangeMultiplier: CARD_VALUES.slowAuraUpgradedRangeMult } },
+  },
+
+  [CardId.TOWER_CHAIN_TESLA]: {
+    id: CardId.TOWER_CHAIN_TESLA,
+    name: 'Tesla Chain',
+    description: 'Deploy a Chain tower with +1 starting chain bounce.',
+    type: CardType.TOWER,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.energyChainTesla,
+    upgraded: false,
+    effect: { type: 'tower' as const, towerType: TowerType.CHAIN, statOverrides: { chainBounceBonus: CARD_VALUES.chainTeslaBounceBonus } },
+    upgradedEffect: { type: 'tower' as const, towerType: TowerType.CHAIN, statOverrides: { chainBounceBonus: CARD_VALUES.chainTeslaUpgradedBounceBonus } },
+  },
+
+  [CardId.TOWER_MORTAR_BARRAGE]: {
+    id: CardId.TOWER_MORTAR_BARRAGE,
+    name: 'Barrage Mortar',
+    description: 'Deploy a Mortar tower with 30% smaller radius and 20% less DoT damage.',
+    type: CardType.TOWER,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.energyMortarBarrage,
+    upgraded: false,
+    effect: { type: 'tower' as const, towerType: TowerType.MORTAR, statOverrides: { splashRadiusMultiplier: CARD_VALUES.mortarBarrageRadiusMult, dotDamageMultiplier: CARD_VALUES.mortarBarrageDotMult } },
+    upgradedEffect: { type: 'tower' as const, towerType: TowerType.MORTAR, statOverrides: { splashRadiusMultiplier: CARD_VALUES.mortarBarrageUpgradedRadiusMult, dotDamageMultiplier: CARD_VALUES.mortarBarrageUpgradedDotMult } },
   },
 
   // ── Spell Cards (8) ─────────────────────────────────────────
@@ -309,6 +422,75 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgraded: false,
     effect: { type: 'spell', spellId: 'overclock', value: CARD_VALUES.overclockFireRateBoost },
     upgradedEffect: { type: 'spell', spellId: 'overclock', value: CARD_VALUES.overclockUpgradedFireRateBoost },
+  },
+
+  // ── Status-applying Spell Cards (3) — Sprint 2b ─────────────
+
+  [CardId.INCINERATE]: {
+    id: CardId.INCINERATE,
+    name: 'Incinerate',
+    description: 'Apply Burn to all enemies.',
+    type: CardType.SPELL,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.incinerateCost,
+    upgraded: false,
+    // value field unused for gameplay — duration is governed by STATUS_EFFECT_CONFIGS[BURN].
+    // value > 0 in upgradedEffect is a balance flag reserved for a future content sprint
+    // (e.g. extend duration). Handler ignores value in Sprint 2b.
+    effect: { type: 'spell', spellId: 'incinerate', value: 0 },
+    upgradedEffect: { type: 'spell', spellId: 'incinerate', value: 1 },
+  },
+
+  [CardId.TOXIC_SPRAY]: {
+    id: CardId.TOXIC_SPRAY,
+    name: 'Toxic Spray',
+    description: 'Apply Poison to all enemies.',
+    type: CardType.SPELL,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.toxicSprayCost,
+    upgraded: false,
+    // Same value-as-flag convention as INCINERATE. Handler ignores value in Sprint 2b.
+    effect: { type: 'spell', spellId: 'toxic_spray', value: 0 },
+    upgradedEffect: { type: 'spell', spellId: 'toxic_spray', value: 1 },
+  },
+
+  [CardId.CRYO_PULSE]: {
+    id: CardId.CRYO_PULSE,
+    name: 'Cryo Pulse',
+    description: 'Apply Slow to the lead enemy. Draw 1 card.',
+    type: CardType.SPELL,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.cryoPulseCost,
+    upgraded: false,
+    // effect.value = draw count. Upgraded draws 2 cards instead of 1.
+    effect: { type: 'spell', spellId: 'cryo_pulse', value: CARD_VALUES.cryoPulseDrawCount },
+    upgradedEffect: { type: 'spell', spellId: 'cryo_pulse', value: 2 },
+  },
+
+  // ── Status Payoff Spell Cards (2) — Sprint 2c ────────────────
+
+  [CardId.DETONATE]: {
+    id: CardId.DETONATE,
+    name: 'Detonate',
+    description: 'Deal 25 damage to each burning enemy. Consume Burn.',
+    type: CardType.SPELL,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.detonateCost,
+    upgraded: false,
+    effect: { type: 'spell', spellId: 'detonate', value: CARD_VALUES.detonateDamagePerBurning },
+    upgradedEffect: { type: 'spell', spellId: 'detonate', value: CARD_VALUES.detonateUpgradedDamagePerBurning },
+  },
+
+  [CardId.EPIDEMIC]: {
+    id: CardId.EPIDEMIC,
+    name: 'Epidemic',
+    description: 'If 2 or more enemies are Poisoned, apply Poison to all other enemies.',
+    type: CardType.SPELL,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.epidemicCost,
+    upgraded: false,
+    effect: { type: 'spell', spellId: 'epidemic', value: CARD_VALUES.epidemicCriticalMass },
+    upgradedEffect: { type: 'spell', spellId: 'epidemic', value: CARD_VALUES.epidemicUpgradedCriticalMass },
   },
 
   // ── Modifier Cards (8) ───────────────────────────────────────
@@ -863,6 +1045,18 @@ export function getCardsByRarity(rarity: CardRarity): CardDefinition[] {
  *   1x DRAW_TWO      — utility
  *   1x ENERGY_SURGE  — utility
  */
+/**
+ * Resolve the active (upgraded or base) effect from a card instance.
+ * Returns the `TowerCardEffect` if the card is a tower card, undefined otherwise.
+ * Used by callers that need to read tower-card fields (startLevel, statOverrides)
+ * at placement time.
+ */
+export function getActiveTowerEffect(card: CardInstance): TowerCardEffect | undefined {
+  const def = getCardDefinition(card.cardId);
+  const effect = (card.upgraded && def.upgradedEffect) ? def.upgradedEffect : def.effect;
+  return effect.type === 'tower' ? effect : undefined;
+}
+
 export function getStarterDeck(): CardId[] {
   return [
     // Tower cards (16) — heavy basic mix

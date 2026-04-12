@@ -5,11 +5,14 @@ import { GameBoardService } from '../game-board.service';
 import { EnemyType } from '../models/enemy.model';
 import { WAVE_DEFINITIONS } from '../models/wave.model';
 import { generateEndlessWave, ENDLESS_BOSS_INTERVAL, ENDLESS_MIN_SPAWN_INTERVAL_S } from '../models/endless-wave.model';
+import { createRelicServiceSpy } from '../testing';
+import { RelicService } from '../../../run/services/relic.service';
 import * as THREE from 'three';
 
 describe('WaveService', () => {
   let service: WaveService;
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
+  let relicServiceSpy: jasmine.SpyObj<RelicService>;
   let mockScene: THREE.Scene;
 
   beforeEach(() => {
@@ -17,10 +20,15 @@ describe('WaveService', () => {
     // Default: spawnEnemy succeeds
     enemyServiceSpy.spawnEnemy.and.returnValue({ id: 'enemy-0' } as any);
 
+    relicServiceSpy = createRelicServiceSpy();
+    // Default: no TEMPORAL_RIFT
+    relicServiceSpy.getTurnDelayPerWave.and.returnValue(0);
+
     TestBed.configureTestingModule({
       providers: [
         WaveService,
         { provide: EnemyService, useValue: enemyServiceSpy },
+        { provide: RelicService, useValue: relicServiceSpy },
         GameBoardService
       ]
     });
@@ -687,6 +695,243 @@ describe('WaveService', () => {
       service.reset();
       service.startWave(1, mockScene);
       expect(service.isSpawning()).toBeTrue();
+    });
+  });
+
+  // --- TEMPORAL_RIFT relic: +1 empty prep turn at wave start ---
+
+  describe('TEMPORAL_RIFT relic (getTurnDelayPerWave)', () => {
+    it('without TEMPORAL_RIFT: first spawnForTurn spawns immediately (no empty prep turn)', () => {
+      relicServiceSpy.getTurnDelayPerWave.and.returnValue(0);
+      service.startWave(1, mockScene);
+
+      service.spawnForTurn(mockScene);
+
+      // Wave 1 has 5 BASIC enemies; first turn should spawn at least one
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalled();
+    });
+
+    it('with TEMPORAL_RIFT: first spawnForTurn is an empty prep turn (no spawns)', () => {
+      relicServiceSpy.getTurnDelayPerWave.and.returnValue(1);
+      service.startWave(1, mockScene);
+
+      // First turn should be the empty prep turn — no enemy spawns
+      service.spawnForTurn(mockScene);
+
+      expect(enemyServiceSpy.spawnEnemy).not.toHaveBeenCalled();
+    });
+
+    it('with TEMPORAL_RIFT: second spawnForTurn spawns enemies normally', () => {
+      relicServiceSpy.getTurnDelayPerWave.and.returnValue(1);
+      service.startWave(1, mockScene);
+
+      service.spawnForTurn(mockScene); // empty prep turn
+      service.spawnForTurn(mockScene); // first real spawn turn
+
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalled();
+    });
+
+    it('with TEMPORAL_RIFT: total enemy count in the schedule is unchanged', () => {
+      const wave1TotalEnemies = WAVE_DEFINITIONS[0].entries!.reduce((s, e) => s + e.count, 0);
+
+      relicServiceSpy.getTurnDelayPerWave.and.returnValue(1);
+      service.startWave(1, mockScene);
+
+      // Drain all turns
+      for (let i = 0; i < wave1TotalEnemies + 5; i++) {
+        service.spawnForTurn(mockScene);
+      }
+
+      // All enemy types should have been spawned — total calls matches wave definition
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(wave1TotalEnemies);
+    });
+
+    it('without TEMPORAL_RIFT: total enemy count matches wave definition (regression)', () => {
+      const wave1TotalEnemies = WAVE_DEFINITIONS[0].entries!.reduce((s, e) => s + e.count, 0);
+
+      relicServiceSpy.getTurnDelayPerWave.and.returnValue(0);
+      service.startWave(1, mockScene);
+
+      for (let i = 0; i < wave1TotalEnemies + 5; i++) {
+        service.spawnForTurn(mockScene);
+      }
+
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(wave1TotalEnemies);
+    });
+  });
+
+  // --- authored spawnTurns[][] path ---
+
+  describe('startWave with authored spawnTurns', () => {
+    const AUTHORED_WAVE = {
+      spawnTurns: [
+        [EnemyType.BASIC, EnemyType.BASIC],
+        [],
+        [EnemyType.FAST],
+      ],
+      reward: 50,
+    };
+
+    it('should activate when given a spawnTurns wave', () => {
+      service.setCustomWaves([AUTHORED_WAVE]);
+      service.startWave(1, mockScene);
+      expect(service.isSpawning()).toBeTrue();
+    });
+
+    it('turn 0 spawns 2 BASIC enemies', () => {
+      service.setCustomWaves([AUTHORED_WAVE]);
+      service.startWave(1, mockScene);
+      const count = service.spawnForTurn(mockScene);
+      expect(count).toBe(2);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(2);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1);
+    });
+
+    it('turn 1 is an empty prep turn — 0 enemies spawned and schedule still active', () => {
+      service.setCustomWaves([AUTHORED_WAVE]);
+      service.startWave(1, mockScene);
+      service.spawnForTurn(mockScene); // turn 0: 2 BASIC
+      const count = service.spawnForTurn(mockScene); // turn 1: empty prep
+      expect(count).toBe(0);
+      expect(service.isSpawning()).toBeTrue(); // still active — turn 2 has FAST
+    });
+
+    it('turn 2 spawns 1 FAST enemy', () => {
+      service.setCustomWaves([AUTHORED_WAVE]);
+      service.startWave(1, mockScene);
+      service.spawnForTurn(mockScene); // turn 0
+      service.spawnForTurn(mockScene); // turn 1
+      const count = service.spawnForTurn(mockScene); // turn 2
+      expect(count).toBe(1);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1);
+    });
+
+    it('becomes inactive after turn 2 (schedule exhausted)', () => {
+      service.setCustomWaves([AUTHORED_WAVE]);
+      service.startWave(1, mockScene);
+      service.spawnForTurn(mockScene); // turn 0
+      service.spawnForTurn(mockScene); // turn 1
+      service.spawnForTurn(mockScene); // turn 2
+      expect(service.isSpawning()).toBeFalse();
+    });
+
+    it('getRemainingToSpawn reflects aggregate counts from spawnTurns', () => {
+      service.setCustomWaves([AUTHORED_WAVE]);
+      service.startWave(1, mockScene);
+      // 2 BASIC + 0 + 1 FAST = 3 total
+      expect(service.getRemainingToSpawn()).toBe(3);
+    });
+  });
+
+  describe('startWave: legacy entries[] path unchanged', () => {
+    it('entries[] wave still spawns correctly after refactor', () => {
+      // Wave 1 is an entries-format wave with 5 BASIC
+      service.startWave(1, mockScene);
+      expect(service.getRemainingToSpawn()).toBe(5);
+      service.spawnForTurn(mockScene);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1);
+    });
+  });
+
+  describe('startWave: spawnTurns takes precedence when both fields are set', () => {
+    it('uses spawnTurns path and ignores entries when both are present', () => {
+      const bothFieldsWave = {
+        entries: [{ type: EnemyType.HEAVY, count: 10, spawnInterval: 1.0 }],
+        spawnTurns: [[EnemyType.FAST]], // only 1 FAST
+        reward: 20,
+      };
+      service.setCustomWaves([bothFieldsWave]);
+      service.startWave(1, mockScene);
+      service.spawnForTurn(mockScene);
+      // Should spawn FAST (from spawnTurns), not HEAVY (from entries)
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1);
+      expect(enemyServiceSpy.spawnEnemy).not.toHaveBeenCalledWith(EnemyType.HEAVY, mockScene, 1, 1);
+    });
+  });
+
+  describe('startWave: neither entries nor spawnTurns throws', () => {
+    it('throws a runtime error when wave has no format', () => {
+      const emptyWave = { reward: 10 } as any; // intentionally malformed
+      service.setCustomWaves([emptyWave]);
+      expect(() => service.startWave(1, mockScene))
+        .toThrowError(/neither entries\[\] nor spawnTurns\[\]\[\]/);
+    });
+  });
+
+  describe('deriveSpawnQueuesFromTurns aggregate counts', () => {
+    it('correctly aggregates BASIC×3 + FAST×1 from [[BASIC, BASIC], [FAST], [BASIC]]', () => {
+      const wave = {
+        spawnTurns: [
+          [EnemyType.BASIC, EnemyType.BASIC],
+          [EnemyType.FAST],
+          [EnemyType.BASIC],
+        ],
+        reward: 30,
+      };
+      service.setCustomWaves([wave]);
+      service.startWave(1, mockScene);
+      // getRemainingToSpawn = sum of all remaining in spawnQueues = 3 + 1 = 4
+      expect(service.getRemainingToSpawn()).toBe(4);
+    });
+  });
+
+  describe('TEMPORAL_RIFT with authored spawnTurns', () => {
+    it('with TEMPORAL_RIFT: first spawnForTurn is empty (delay turn prepended)', () => {
+      relicServiceSpy.getTurnDelayPerWave.and.returnValue(1);
+      const wave = {
+        spawnTurns: [[EnemyType.BASIC]],
+        reward: 10,
+      };
+      service.setCustomWaves([wave]);
+      service.startWave(1, mockScene);
+
+      // First turn should be the TEMPORAL_RIFT empty delay — no spawns
+      const count = service.spawnForTurn(mockScene);
+      expect(count).toBe(0);
+      expect(enemyServiceSpy.spawnEnemy).not.toHaveBeenCalled();
+    });
+
+    it('with TEMPORAL_RIFT: second spawnForTurn spawns the authored schedule', () => {
+      relicServiceSpy.getTurnDelayPerWave.and.returnValue(1);
+      const wave = {
+        spawnTurns: [[EnemyType.BASIC]],
+        reward: 10,
+      };
+      service.setCustomWaves([wave]);
+      service.startWave(1, mockScene);
+
+      service.spawnForTurn(mockScene); // delay turn
+      service.spawnForTurn(mockScene); // authored turn 0: BASIC
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1);
+    });
+  });
+
+  describe('authored empty prep turn advances schedule index', () => {
+    it('[[BASIC], [], [FAST]] — empty turn 1 is consumed, FAST spawns on turn 2', () => {
+      relicServiceSpy.getTurnDelayPerWave.and.returnValue(0);
+      const wave = {
+        spawnTurns: [
+          [EnemyType.BASIC],
+          [], // intentional prep turn
+          [EnemyType.FAST],
+        ],
+        reward: 15,
+      };
+      service.setCustomWaves([wave]);
+      service.startWave(1, mockScene);
+
+      service.spawnForTurn(mockScene); // turn 0: BASIC
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(1);
+
+      service.spawnForTurn(mockScene); // turn 1: empty
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(1); // no new spawns
+      expect(service.isSpawning()).toBeTrue(); // FAST still pending
+
+      service.spawnForTurn(mockScene); // turn 2: FAST
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(2);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1);
+
+      expect(service.isSpawning()).toBeFalse();
     });
   });
 });

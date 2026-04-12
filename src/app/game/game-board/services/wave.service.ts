@@ -1,12 +1,14 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { EnemyType } from '../models/enemy.model';
-import { WaveDefinition, WAVE_DEFINITIONS } from '../models/wave.model';
+import { WaveDefinition, WAVE_DEFINITIONS, getWaveEnemyCount } from '../models/wave.model';
 import { EndlessWaveTemplate, EndlessWaveResult, generateEndlessWave } from '../models/endless-wave.model';
 import { EnemyService } from './enemy.service';
+import { RelicService } from '../../../run/services/relic.service';
 
 interface SpawnQueue {
   type: EnemyType;
+  /** Irrelevant for authored spawnTurns waves (set to 0). Only used for legacy entries[] scheduling. */
   spawnInterval: number;
   remaining: number;
   timeSinceLastSpawn: number;
@@ -36,7 +38,10 @@ export class WaveService {
   /** Next turn index into turnSchedule. Resets to 0 on each startWave(). */
   private turnScheduleIndex = 0;
 
-  constructor(private enemyService: EnemyService) {}
+  constructor(
+    private enemyService: EnemyService,
+    private relicService: RelicService,
+  ) {}
 
   /**
    * Overrides wave definitions with a custom set for the current session (e.g., campaign level).
@@ -131,19 +136,28 @@ export class WaveService {
 
     const countMultiplier = Math.max(1, waveCountMultiplier);
 
-    this.spawnQueues = waveDef.entries.map(entry => ({
-      type: entry.type,
-      spawnInterval: entry.spawnInterval,
-      remaining: Math.round(entry.count * countMultiplier),
-      timeSinceLastSpawn: entry.spawnInterval // spawn first immediately
-    }));
+    if (waveDef.spawnTurns !== undefined) {
+      // Authored per-turn schedule — use directly after TEMPORAL_RIFT delay.
+      this.turnSchedule = this.buildTurnScheduleFromSpawnTurns(waveDef.spawnTurns);
+      this.spawnQueues = this.deriveSpawnQueuesFromTurns(waveDef.spawnTurns, countMultiplier);
+    } else if (waveDef.entries !== undefined) {
+      // Legacy entries[] — convert to per-turn schedule via interleaving.
+      this.spawnQueues = waveDef.entries.map(entry => ({
+        type: entry.type,
+        spawnInterval: entry.spawnInterval,
+        remaining: Math.round(entry.count * countMultiplier),
+        timeSinceLastSpawn: entry.spawnInterval, // spawn first immediately
+      }));
+      // Phase 4: build the per-turn spawn schedule. Distributes enemies by
+      // interleaving one-per-entry-per-turn until all entries are exhausted.
+      // Preserves wave "shape" (e.g., FAST + BASIC interleave) across turns.
+      this.turnSchedule = this.buildTurnSchedule(waveDef.entries, countMultiplier);
+    } else {
+      // Runtime invariant violation — wave has neither format.
+      throw new Error(`WaveService.startWave: wave ${waveNumber} has neither entries[] nor spawnTurns[][]`);
+    }
 
-    // Phase 4: build the per-turn spawn schedule. Distributes enemies by
-    // interleaving one-per-entry-per-turn until all entries are exhausted.
-    // Preserves wave "shape" (e.g., FAST + BASIC interleave) across turns.
-    this.turnSchedule = this.buildTurnSchedule(waveDef.entries, countMultiplier);
     this.turnScheduleIndex = 0;
-
     this.active = true;
   }
 
@@ -157,11 +171,8 @@ export class WaveService {
    *   turn 2: [BASIC, FAST]
    *   turn 3: [BASIC]
    *   turn 4: [BASIC]
-   *
-   * Future: author spawnTurns[][] directly in wave data files for more
-   * intentional pacing (empty prep turns before bosses, bursts, etc.).
    */
-  private buildTurnSchedule(entries: WaveDefinition['entries'], countMultiplier: number): EnemyType[][] {
+  private buildTurnSchedule(entries: NonNullable<WaveDefinition['entries']>, countMultiplier: number): EnemyType[][] {
     const schedule: EnemyType[][] = [];
     const remaining = entries.map(e => ({ type: e.type, left: Math.round(e.count * countMultiplier) }));
     while (remaining.some(r => r.left > 0)) {
@@ -174,7 +185,60 @@ export class WaveService {
       }
       schedule.push(turn);
     }
+    // TEMPORAL_RIFT relic: prepend empty prep turns so the first enemy spawns later.
+    this.prependTemporalRiftDelay(schedule);
     return schedule;
+  }
+
+  /**
+   * Build turnSchedule from an authored spawnTurns[][] field. Applies the
+   * TEMPORAL_RIFT relic delay by prepending empty turns, the same way
+   * buildTurnSchedule does for legacy entries. Returns a deep clone
+   * (each inner array is a fresh array) so runtime turnScheduleIndex advance
+   * can't corrupt the authored source.
+   */
+  private buildTurnScheduleFromSpawnTurns(spawnTurns: EnemyType[][]): EnemyType[][] {
+    const schedule = spawnTurns.map(turn => [...turn]);
+    this.prependTemporalRiftDelay(schedule);
+    return schedule;
+  }
+
+  /**
+   * Prepend empty "prep" turns to the schedule to model the TEMPORAL_RIFT
+   * relic's "first enemy spawns 1 turn later" effect. Called by both the
+   * legacy entries[]-based schedule builder and the authored spawnTurns
+   * schedule builder.
+   */
+  private prependTemporalRiftDelay(schedule: EnemyType[][]): void {
+    const delayTurns = this.relicService.getTurnDelayPerWave();
+    for (let i = 0; i < delayTurns; i++) {
+      schedule.unshift([]);
+    }
+  }
+
+  /**
+   * Derive aggregate spawn counts from an authored spawnTurns schedule so the
+   * HUD's getRemainingToSpawn() reflects accurate UI state. Flattens
+   * spawnTurns into per-type totals. spawnInterval is irrelevant for
+   * authored waves (turn-based) — set to 0.
+   *
+   * Note: countMultiplier is NOT applied here — authored spawnTurns are literal
+   * counts, not scaled by difficulty multipliers. Authored waves are intentionally
+   * paced; scaling is applied at authoring time if needed.
+   */
+  private deriveSpawnQueuesFromTurns(spawnTurns: EnemyType[][], _countMultiplier: number): SpawnQueue[] {
+    const counts = new Map<EnemyType, number>();
+    for (const turn of spawnTurns) {
+      for (const type of turn) {
+        counts.set(type, (counts.get(type) ?? 0) + 1);
+      }
+    }
+    return Array.from(counts.entries()).map(([type, count]) => ({
+      type,
+      spawnInterval: 0,
+      remaining: count,
+      timeSinceLastSpawn: 0,
+    }));
   }
 
   /**
@@ -288,7 +352,7 @@ export class WaveService {
     const index = waveNumber - 1;
     if (index < 0) return 0;
     if (index < this.waveDefinitions.length) {
-      return this.waveDefinitions[index].entries.reduce((sum, e) => sum + e.count, 0);
+      return getWaveEnemyCount(this.waveDefinitions[index]);
     }
     if (this.endlessMode) {
       // Use cached result when available for the requested wave to avoid regenerating on every UI query.

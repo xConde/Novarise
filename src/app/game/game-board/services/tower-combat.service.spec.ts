@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { TowerCombatService, KillInfo, CombatAudioEvent } from './tower-combat.service';
+import { TowerCombatService, KillInfo, CombatAudioEvent, RegisterTowerOptions } from './tower-combat.service';
 import { ChainLightningService } from './chain-lightning.service';
 // M2 S5: ProjectileService import removed (file deleted)
 import { CombatVFXService } from './combat-vfx.service';
@@ -23,6 +23,7 @@ describe('TowerCombatService', () => {
   let combatVFXService: CombatVFXService;
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
   let gameBoardServiceSpy: jasmine.SpyObj<GameBoardService>;
+  let relicServiceSpy: jasmine.SpyObj<RelicService>;
   let statusEffectService: StatusEffectService;
   let mockScene: THREE.Scene;
   let enemyMap: Map<string, Enemy>;
@@ -47,6 +48,7 @@ describe('TowerCombatService', () => {
 
     enemyServiceSpy = createEnemyServiceSpy(enemyMap);
     gameBoardServiceSpy = createGameBoardServiceSpy(25, 20, 1);
+    relicServiceSpy = createRelicServiceSpy();
 
     TestBed.configureTestingModule({
       providers: [
@@ -58,7 +60,7 @@ describe('TowerCombatService', () => {
         { provide: EnemyService, useValue: enemyServiceSpy },
         { provide: GameBoardService, useValue: gameBoardServiceSpy },
         { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
-        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: RelicService, useValue: relicServiceSpy },
         { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
       ]
     });
@@ -90,6 +92,32 @@ describe('TowerCombatService', () => {
       expect(tower.col).toBe(7);
       expect(tower.kills).toBe(0);
       expect(tower.mesh).toBe(mesh);
+    });
+
+    it('should store placedAtTurn when provided', () => {
+      service.registerTower(3, 7, TowerType.BASIC, new THREE.Group(), 50, { placedAtTurn: 5 });
+      const tower = service.getTower('3-7')!;
+      expect(tower.placedAtTurn).toBe(5);
+    });
+
+    it('should default placedAtTurn to 0 when not provided', () => {
+      service.registerTower(3, 7, TowerType.BASIC, new THREE.Group());
+      const tower = service.getTower('3-7')!;
+      expect(tower.placedAtTurn).toBe(0);
+    });
+
+    it('should assign the same placedAtTurn when two towers are placed on the same turn', () => {
+      service.registerTower(1, 1, TowerType.BASIC, new THREE.Group(), 50, { placedAtTurn: 3 });
+      service.registerTower(2, 2, TowerType.SNIPER, new THREE.Group(), 125, { placedAtTurn: 3 });
+      expect(service.getTower('1-1')!.placedAtTurn).toBe(3);
+      expect(service.getTower('2-2')!.placedAtTurn).toBe(3);
+    });
+
+    it('should assign different placedAtTurn for towers placed on different turns', () => {
+      service.registerTower(1, 1, TowerType.BASIC, new THREE.Group(), 50, { placedAtTurn: 2 });
+      service.registerTower(2, 2, TowerType.SNIPER, new THREE.Group(), 125, { placedAtTurn: 7 });
+      expect(service.getTower('1-1')!.placedAtTurn).toBe(2);
+      expect(service.getTower('2-2')!.placedAtTurn).toBe(7);
     });
 
     it('should allow multiple towers', () => {
@@ -1616,6 +1644,257 @@ describe('TowerCombatService', () => {
     });
   });
 
+  // --- QUICK_DRAW relic: +1 shot on tower placement turn ---
+
+  describe('QUICK_DRAW relic (hasQuickDraw)', () => {
+    const PLACEMENT_TURN = 3;
+
+    it('tower placed on turn N with QUICK_DRAW fires 2 shots on turn N', () => {
+      relicServiceSpy.hasQuickDraw.and.returnValue(true);
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group(), 50, { placedAtTurn: PLACEMENT_TURN });
+
+      // Two enemies at tower position, enough health to survive one shot each
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + 0.1, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      const result = service.fireTurn(mockScene, PLACEMENT_TURN);
+
+      // With QUICK_DRAW, 2 shots fired — both enemies should take damage
+      expect(result.fired.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('tower placed on turn N with QUICK_DRAW fires only 1 shot on turn N+1', () => {
+      relicServiceSpy.hasQuickDraw.and.returnValue(true);
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group(), 50, { placedAtTurn: PLACEMENT_TURN });
+
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + 0.1, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      // Fire on turn N+1 — no bonus
+      const result = service.fireTurn(mockScene, PLACEMENT_TURN + 1);
+
+      expect(result.fired.length).toBe(1);
+    });
+
+    it('tower without QUICK_DRAW fires only 1 shot even on placement turn', () => {
+      relicServiceSpy.hasQuickDraw.and.returnValue(false);
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group(), 50, { placedAtTurn: PLACEMENT_TURN });
+
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + 0.1, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      const result = service.fireTurn(mockScene, PLACEMENT_TURN);
+
+      expect(result.fired.length).toBe(1);
+    });
+
+    it('QUICK_DRAW + FIRE_RATE modifier stack additively on placement turn', () => {
+      relicServiceSpy.hasQuickDraw.and.returnValue(true);
+      // fireRateBoost = 0.3 → baseShots = ceil(1.3) = 2, then +1 QUICK_DRAW = 3 shots
+      // MODIFIER_STAT.FIRE_RATE = 'fireRate' (see modifier-stat.constants.ts)
+      const cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === 'fireRate' ? 0.3 : 0
+      );
+
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group(), 50, { placedAtTurn: PLACEMENT_TURN });
+
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + 0.1, TOWER_WORLD_Z, 10000);
+      const e3 = createEnemy('e3', TOWER_WORLD_X + 0.2, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+      enemyMap.set('e3', e3);
+
+      const result = service.fireTurn(mockScene, PLACEMENT_TURN);
+
+      // baseShots=2 (from FIRE_RATE 0.3) + 1 (QUICK_DRAW) = 3 shots
+      expect(result.fired.length).toBe(3);
+    });
+  });
+
+});
+
+// --- cardStatOverrides Tests ---
+// Separate top-level describes because the nested scope of 'TowerCombatService'
+// describe is only accessible within that block.
+
+describe('TowerCombatService registerTower cardStatOverrides', () => {
+  // Tower at row=5, col=5 on a 25x20 board
+  const ROW = 5;
+  const COL = 5;
+  let svc: TowerCombatService;
+
+  beforeEach(() => {
+    const localEnemyMap = new Map<string, Enemy>();
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(localEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+      ]
+    });
+    svc = TestBed.inject(TowerCombatService);
+  });
+
+  it('stores undefined cardStatOverrides when not provided', () => {
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50);
+    const tower = svc.getTower(`${ROW}-${COL}`)!;
+    expect(tower.cardStatOverrides).toBeUndefined();
+  });
+
+  it('stores the provided cardStatOverrides object on the placed tower', () => {
+    const overrides = { damageMultiplier: 0.5 };
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: overrides });
+    const tower = svc.getTower(`${ROW}-${COL}`)!;
+    expect(tower.cardStatOverrides).toEqual(overrides);
+  });
+});
+
+describe('TowerCombatService fireTurn cardStatOverrides composition', () => {
+  // Tower at row=10, col=12 on a 25x20 board (world position -0.5, 0)
+  const ROW = 10;
+  const COL = 12;
+  const WORLD_X = -0.5;
+  const WORLD_Z = 0;
+
+  let svc: TowerCombatService;
+  let localEnemyMap: Map<string, Enemy>;
+  let relicSpy: jasmine.SpyObj<RelicService>;
+  let scene: THREE.Scene;
+
+  beforeEach(() => {
+    localEnemyMap = new Map<string, Enemy>();
+    relicSpy = createRelicServiceSpy();
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(localEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: relicSpy },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+      ]
+    });
+    svc = TestBed.inject(TowerCombatService);
+    scene = new THREE.Scene();
+  });
+
+  afterEach(() => {
+    scene.clear();
+  });
+
+  it('applies damageMultiplier 0.7 reduces damage to round(base times 0.7)', () => {
+    const baseDmg = TOWER_CONFIGS[TowerType.BASIC].damage;
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: { damageMultiplier: 0.7 } });
+    const enemy = createTestEnemy('e1', WORLD_X, WORLD_Z, 10000);
+    localEnemyMap.set('e1', enemy);
+    svc.fireTurn(scene, 1);
+    const expectedDamage = Math.round(baseDmg * 0.7);
+    expect(enemy.health).toBe(10000 - expectedDamage);
+  });
+
+  it('composes damageMultiplier with relic getDamageMultiplier multiplicatively', () => {
+    relicSpy.getDamageMultiplier.and.returnValue(1.2);
+    (Object.getOwnPropertyDescriptor(relicSpy, 'relicCount')!.get as jasmine.Spy).and.returnValue(1);
+    const baseDmg = TOWER_CONFIGS[TowerType.BASIC].damage;
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: { damageMultiplier: 0.7 } });
+    const enemy = createTestEnemy('e1', WORLD_X, WORLD_Z, 10000);
+    localEnemyMap.set('e1', enemy);
+    svc.fireTurn(scene, 1);
+    const expectedDamage = Math.round(baseDmg * 1.2 * 0.7);
+    expect(enemy.health).toBe(10000 - expectedDamage);
+  });
+
+  it('rangeMultiplier 1.5 enemy at 1.4x base range is hit', () => {
+    const baseRange = TOWER_CONFIGS[TowerType.BASIC].range;
+    const extendedX = WORLD_X + baseRange * 1.4;
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: { rangeMultiplier: 1.5 } });
+    const enemy = createTestEnemy('e1', extendedX, WORLD_Z, 10000);
+    localEnemyMap.set('e1', enemy);
+    svc.fireTurn(scene, 1);
+    expect(enemy.health).toBeLessThan(10000);
+  });
+
+  it('rangeMultiplier 1.5 enemy beyond extended range is NOT hit', () => {
+    const baseRange = TOWER_CONFIGS[TowerType.BASIC].range;
+    const beyondX = WORLD_X + baseRange * 1.6;
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: { rangeMultiplier: 1.5 } });
+    const enemy = createTestEnemy('e1', beyondX, WORLD_Z, 10000);
+    localEnemyMap.set('e1', enemy);
+    svc.fireTurn(scene, 1);
+    expect(enemy.health).toBe(10000);
+  });
+
+  it('splashRadiusMultiplier 0.6 SPLASH tower secondary outside reduced radius is NOT hit', () => {
+    const baseSplash = TOWER_CONFIGS[TowerType.SPLASH].splashRadius;
+    const outsideReducedRadius = baseSplash * 0.7;
+    svc.registerTower(ROW, COL, TowerType.SPLASH, new THREE.Group(), 75, { cardStatOverrides: { splashRadiusMultiplier: 0.6 } });
+    const primary = createTestEnemy('primary', WORLD_X, WORLD_Z, 10000);
+    const secondary = createTestEnemy('secondary', WORLD_X + outsideReducedRadius, WORLD_Z, 10000);
+    localEnemyMap.set('primary', primary);
+    localEnemyMap.set('secondary', secondary);
+    svc.fireTurn(scene, 1);
+    expect(primary.health).toBeLessThan(10000);
+    expect(secondary.health).toBe(10000);
+  });
+
+  it('chainBounceBonus 1 on CHAIN tower is stored additively', () => {
+    svc.registerTower(ROW, COL, TowerType.CHAIN, new THREE.Group(), 120, { cardStatOverrides: { chainBounceBonus: 1 } });
+    const tower = svc.getTower(`${ROW}-${COL}`)!;
+    expect(tower.cardStatOverrides?.chainBounceBonus).toBe(1);
+  });
+
+  it('chainBounceBonus and relic getChainBounceBonus stack additively both equal 1', () => {
+    relicSpy.getChainBounceBonus.and.returnValue(1);
+    (Object.getOwnPropertyDescriptor(relicSpy, 'relicCount')!.get as jasmine.Spy).and.returnValue(1);
+    svc.registerTower(ROW, COL, TowerType.CHAIN, new THREE.Group(), 120, { cardStatOverrides: { chainBounceBonus: 1 } });
+    const tower = svc.getTower(`${ROW}-${COL}`)!;
+    // Combined = baseChainCount + 1 (relic) + 1 (card) = base + 2
+    expect(tower.cardStatOverrides?.chainBounceBonus).toBe(1);
+    expect(relicSpy.getChainBounceBonus()).toBe(1);
+  });
+
+  it('dotDamageMultiplier 0.8 on MORTAR tower is stored', () => {
+    svc.registerTower(ROW, COL, TowerType.MORTAR, new THREE.Group(), 140, { cardStatOverrides: { dotDamageMultiplier: 0.8 } });
+    const tower = svc.getTower(`${ROW}-${COL}`)!;
+    expect(tower.cardStatOverrides?.dotDamageMultiplier).toBe(0.8);
+  });
+
+  it('undefined cardStatOverrides applies identity no change to base damage', () => {
+    const baseDmg = TOWER_CONFIGS[TowerType.BASIC].damage;
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50);
+    const enemy = createTestEnemy('e1', WORLD_X, WORLD_Z, 10000);
+    localEnemyMap.set('e1', enemy);
+    svc.fireTurn(scene, 1);
+    expect(enemy.health).toBe(10000 - baseDmg);
+  });
+
+  it('empty cardStatOverrides uses identity values final damage equals baseDamage', () => {
+    const baseDmg = TOWER_CONFIGS[TowerType.BASIC].damage;
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: {} });
+    const enemy = createTestEnemy('e1', WORLD_X, WORLD_Z, 10000);
+    localEnemyMap.set('e1', enemy);
+    svc.fireTurn(scene, 1);
+    expect(enemy.health).toBe(10000 - baseDmg);
+  });
 });
 
 // --- Tower Model Pure Function Tests ---
@@ -1949,4 +2228,5 @@ describe('Tower Model Functions', () => {
       );
     });
   });
+
 });

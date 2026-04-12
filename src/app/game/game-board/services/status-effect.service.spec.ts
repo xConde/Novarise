@@ -3,11 +3,13 @@ import { StatusEffectService } from './status-effect.service';
 import { EnemyService } from './enemy.service';
 import { StatusEffectType, STATUS_EFFECT_CONFIGS } from '../constants/status-effect.constants';
 import { Enemy, EnemyType } from '../models/enemy.model';
-import { createTestEnemy, createEnemyServiceSpy } from '../testing';
+import { createTestEnemy, createEnemyServiceSpy, createRelicServiceSpy } from '../testing';
+import { RelicService } from '../../../run/services/relic.service';
 
 describe('StatusEffectService', () => {
   let service: StatusEffectService;
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
+  let relicServiceSpy: jasmine.SpyObj<RelicService>;
   let enemyMap: Map<string, Enemy>;
 
   /** Adapter matching the local (id, health, speed, isFlying) call signature. */
@@ -23,11 +25,13 @@ describe('StatusEffectService', () => {
     enemyMap = new Map();
 
     enemyServiceSpy = createEnemyServiceSpy(enemyMap);
+    relicServiceSpy = createRelicServiceSpy();
 
     TestBed.configureTestingModule({
       providers: [
         StatusEffectService,
         { provide: EnemyService, useValue: enemyServiceSpy },
+        { provide: RelicService, useValue: relicServiceSpy },
       ],
     });
     service = TestBed.inject(StatusEffectService);
@@ -245,6 +249,75 @@ describe('StatusEffectService', () => {
       const damages = callArgs.map(a => a[1]).sort((a, b) => a - b);
       expect(damages).toContain(burnCfg.damagePerTick!);
       expect(damages).toContain(poisonCfg.damagePerTick!);
+    });
+  });
+
+  // --- removeEffect ---
+
+  describe('removeEffect()', () => {
+    it('removes BURN from an enemy with BURN active', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+
+      service.apply('e1', StatusEffectType.BURN, 0);
+      service.removeEffect('e1', StatusEffectType.BURN);
+
+      expect(service.hasEffect('e1', StatusEffectType.BURN)).toBe(false);
+    });
+
+    it('removes BURN but leaves POISON intact on an enemy with both', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+
+      service.apply('e1', StatusEffectType.BURN, 0);
+      service.apply('e1', StatusEffectType.POISON, 0);
+
+      service.removeEffect('e1', StatusEffectType.BURN);
+
+      expect(service.hasEffect('e1', StatusEffectType.BURN)).toBe(false);
+      expect(service.hasEffect('e1', StatusEffectType.POISON)).toBe(true);
+    });
+
+    it('is a no-op for an enemy with no effects', () => {
+      expect(() => service.removeEffect('e1', StatusEffectType.BURN)).not.toThrow();
+    });
+
+    it('is a no-op when the enemy has only POISON and BURN is removed', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+
+      service.apply('e1', StatusEffectType.POISON, 0);
+      service.removeEffect('e1', StatusEffectType.BURN);
+
+      expect(service.hasEffect('e1', StatusEffectType.POISON)).toBe(true);
+    });
+
+    it('removes SLOW and restores enemy speed to originalSpeed', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+
+      service.apply('e1', StatusEffectType.SLOW, 0);
+      expect(enemy.speed).toBeLessThan(4);
+
+      service.removeEffect('e1', StatusEffectType.SLOW);
+
+      expect(enemy.speed).toBe(4);
+      expect(service.hasEffect('e1', StatusEffectType.SLOW)).toBe(false);
+    });
+
+    it('prunes the inner map when removing the last effect', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+
+      service.apply('e1', StatusEffectType.BURN, 0);
+      service.removeEffect('e1', StatusEffectType.BURN);
+
+      expect(service.getEffects('e1')).toEqual([]);
+    });
+
+    it('is a no-op for an enemy that was never tracked', () => {
+      expect(() => service.removeEffect('never-tracked', StatusEffectType.POISON)).not.toThrow();
+      expect(service.hasEffect('never-tracked', StatusEffectType.POISON)).toBe(false);
     });
   });
 
@@ -490,6 +563,79 @@ describe('StatusEffectService', () => {
       service.cleanup();
 
       expect(service.getSlowApplicationCount()).toBe(0);
+    });
+  });
+
+  // --- FROST_NOVA relic: +1 turn to SLOW duration ---
+
+  describe('FROST_NOVA relic (getSlowDurationBonus)', () => {
+    const slowBaseDuration = STATUS_EFFECT_CONFIGS[StatusEffectType.SLOW].duration; // 2
+
+    it('SLOW without FROST_NOVA uses baseline duration', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+      relicServiceSpy.getSlowDurationBonus.and.returnValue(0);
+
+      service.apply('e1', StatusEffectType.SLOW, 0);
+
+      // Effect should expire at turnNumber = slowBaseDuration (expiresAt = 0 + 2 = 2)
+      const effects = (service as any).effects as Map<string, Map<StatusEffectType, { expiresAt: number }>>;
+      const slowEffect = effects.get('e1')?.get(StatusEffectType.SLOW);
+      expect(slowEffect?.expiresAt).toBe(slowBaseDuration);
+    });
+
+    it('SLOW with FROST_NOVA extends duration by +1 turn', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+      relicServiceSpy.getSlowDurationBonus.and.returnValue(1);
+
+      service.apply('e1', StatusEffectType.SLOW, 0);
+
+      const effects = (service as any).effects as Map<string, Map<StatusEffectType, { expiresAt: number }>>;
+      const slowEffect = effects.get('e1')?.get(StatusEffectType.SLOW);
+      expect(slowEffect?.expiresAt).toBe(slowBaseDuration + 1);
+    });
+
+    it('BURN duration is NOT affected by FROST_NOVA', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+      relicServiceSpy.getSlowDurationBonus.and.returnValue(1);
+
+      const burnBaseDuration = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN].duration; // 3
+      service.apply('e1', StatusEffectType.BURN, 0);
+
+      const effects = (service as any).effects as Map<string, Map<StatusEffectType, { expiresAt: number }>>;
+      const burnEffect = effects.get('e1')?.get(StatusEffectType.BURN);
+      expect(burnEffect?.expiresAt).toBe(burnBaseDuration); // no bonus
+    });
+
+    it('POISON duration is NOT affected by FROST_NOVA', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+      relicServiceSpy.getSlowDurationBonus.and.returnValue(1);
+
+      const poisonBaseDuration = STATUS_EFFECT_CONFIGS[StatusEffectType.POISON].duration; // 4
+      service.apply('e1', StatusEffectType.POISON, 0);
+
+      const effects = (service as any).effects as Map<string, Map<StatusEffectType, { expiresAt: number }>>;
+      const poisonEffect = effects.get('e1')?.get(StatusEffectType.POISON);
+      expect(poisonEffect?.expiresAt).toBe(poisonBaseDuration); // no bonus
+    });
+
+    it('SLOW refresh with FROST_NOVA also applies the bonus', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+      relicServiceSpy.getSlowDurationBonus.and.returnValue(1);
+
+      // Apply at turn 0
+      service.apply('e1', StatusEffectType.SLOW, 0);
+      // Refresh at turn 2
+      service.apply('e1', StatusEffectType.SLOW, 2);
+
+      const effects = (service as any).effects as Map<string, Map<StatusEffectType, { expiresAt: number }>>;
+      const slowEffect = effects.get('e1')?.get(StatusEffectType.SLOW);
+      // expiresAt = 2 + slowBaseDuration + 1 bonus
+      expect(slowEffect?.expiresAt).toBe(2 + slowBaseDuration + 1);
     });
   });
 });

@@ -284,6 +284,22 @@ export class DeckService {
     this.emit();
   }
 
+  /**
+   * Draw N cards from the draw pile into hand.
+   * Thin wrapper over drawOne() — respects hand-size cap (DECK_CONFIG.maxHandSize)
+   * and reshuffles discard into draw pile when the draw pile runs out. If the
+   * combined draw + discard pile is exhausted before N draws, the remaining draws
+   * are silently dropped (not an error). This matches the StS convention.
+   *
+   * Use case: CRYO_PULSE spell card draws 1 card as part of its effect.
+   */
+  drawCards(count: number): void {
+    for (let i = 0; i < count; i++) {
+      if (!this.drawOne()) break;
+    }
+    this.emit();
+  }
+
   /** Add energy this wave (utility card effect). */
   addEnergy(amount: number): void {
     this.energyState = { ...this.energyState, current: this.energyState.current + amount };

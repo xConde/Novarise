@@ -7,7 +7,7 @@ describe('Boss Presets', () => {
 
   function finalWaveHasBoss(preset: BossPreset): boolean {
     const finalWave = preset.waves[preset.waves.length - 1];
-    return finalWave.entries.some(e => e.type === EnemyType.BOSS && e.count >= 1);
+    return finalWave.entries!.some(e => e.type === EnemyType.BOSS && e.count >= 1);
   }
 
   function allWavesHavePositiveReward(preset: BossPreset): boolean {
@@ -15,11 +15,11 @@ describe('Boss Presets', () => {
   }
 
   function allWavesHaveEntries(preset: BossPreset): boolean {
-    return preset.waves.every(w => w.entries.length > 0);
+    return preset.waves.every(w => (w.entries?.length ?? 0) > 0);
   }
 
   function allEntriesHavePositiveCount(preset: BossPreset): boolean {
-    return preset.waves.every(w => w.entries.every(e => e.count > 0));
+    return preset.waves.every(w => w.entries!.every(e => e.count > 0));
   }
 
   // ── ACT1 presets ───────────────────────────────────────────────────
@@ -83,7 +83,7 @@ describe('Boss Presets', () => {
     it('siege_commander preset should use HEAVY and SHIELDED enemies (non-final waves)', () => {
       const preset = ACT1_BOSS_PRESETS.find(p => p.id === 'siege_commander')!;
       const nonFinalWaves = preset.waves.slice(0, -1);
-      const types = new Set(nonFinalWaves.flatMap(w => w.entries.map(e => e.type)));
+      const types = new Set(nonFinalWaves.flatMap(w => w.entries!.map(e => e.type)));
       expect(types.has(EnemyType.HEAVY)).toBeTrue();
       expect(types.has(EnemyType.SHIELDED)).toBeTrue();
     });
@@ -91,21 +91,21 @@ describe('Boss Presets', () => {
     it('swarm_queen preset should use SWARM enemies (non-final waves)', () => {
       const preset = ACT1_BOSS_PRESETS.find(p => p.id === 'swarm_queen')!;
       const nonFinalWaves = preset.waves.slice(0, -1);
-      const types = new Set(nonFinalWaves.flatMap(w => w.entries.map(e => e.type)));
+      const types = new Set(nonFinalWaves.flatMap(w => w.entries!.map(e => e.type)));
       expect(types.has(EnemyType.SWARM)).toBeTrue();
     });
 
     it('sky_marshal preset should use FLYING enemies (non-final waves)', () => {
       const preset = ACT1_BOSS_PRESETS.find(p => p.id === 'sky_marshal')!;
       const nonFinalWaves = preset.waves.slice(0, -1);
-      const types = new Set(nonFinalWaves.flatMap(w => w.entries.map(e => e.type)));
+      const types = new Set(nonFinalWaves.flatMap(w => w.entries!.map(e => e.type)));
       expect(types.has(EnemyType.FLYING)).toBeTrue();
     });
 
     it('act 1 final wave should have exactly 1 BOSS and spawnInterval 0', () => {
       for (const preset of ACT1_BOSS_PRESETS) {
         const finalWave = preset.waves[preset.waves.length - 1];
-        const bossEntry = finalWave.entries.find(e => e.type === EnemyType.BOSS);
+        const bossEntry = finalWave.entries!.find(e => e.type === EnemyType.BOSS);
         expect(bossEntry).withContext(`${preset.id} boss entry`).toBeDefined();
         expect(bossEntry!.spawnInterval).withContext(`${preset.id} boss spawnInterval`).toBe(0);
       }
@@ -158,7 +158,7 @@ describe('Boss Presets', () => {
     it('act 2 final wave must have at least 1 BOSS', () => {
       for (const preset of ACT2_BOSS_PRESETS) {
         const finalWave = preset.waves[preset.waves.length - 1];
-        const bossCount = finalWave.entries
+        const bossCount = finalWave.entries!
           .filter(e => e.type === EnemyType.BOSS)
           .reduce((sum, e) => sum + e.count, 0);
         expect(bossCount).withContext(`${preset.id} boss count`).toBeGreaterThanOrEqual(1);
@@ -169,7 +169,7 @@ describe('Boss Presets', () => {
       const countAllEnemies = (presets: BossPreset[]) =>
         presets.reduce((total, p) =>
           total + p.waves.slice(0, -1).reduce((wt, w) =>
-            wt + w.entries.reduce((et, e) => et + e.count, 0), 0), 0);
+            wt + w.entries!.reduce((et, e) => et + e.count, 0), 0), 0);
 
       const act1Total = countAllEnemies(ACT1_BOSS_PRESETS);
       const act2Total = countAllEnemies(ACT2_BOSS_PRESETS);
@@ -178,7 +178,7 @@ describe('Boss Presets', () => {
 
     it('dark_nexus preset should use all major enemy types across its waves', () => {
       const preset = ACT2_BOSS_PRESETS.find(p => p.id === 'dark_nexus')!;
-      const allTypes = new Set(preset.waves.flatMap(w => w.entries.map(e => e.type)));
+      const allTypes = new Set(preset.waves.flatMap(w => w.entries!.map(e => e.type)));
       expect(allTypes.has(EnemyType.HEAVY)).toBeTrue();
       expect(allTypes.has(EnemyType.SHIELDED)).toBeTrue();
       expect(allTypes.has(EnemyType.FLYING)).toBeTrue();

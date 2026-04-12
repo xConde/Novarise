@@ -21,6 +21,7 @@ import { CAMPAIGN_WAVE_DEFINITIONS } from './campaign-waves';
 import { CAMPAIGN_LEVELS, CampaignTier } from '../campaign-levels';
 import { TOWER_CONFIGS, UPGRADE_MULTIPLIERS, TowerType } from '../../../game/game-board/models/tower.model';
 import { ENEMY_STATS, EnemyType } from '../../../game/game-board/models/enemy.model';
+import { WaveDefinition, getWaveEnemyCount, getWaveEnemyTypes } from '../../../game/game-board/models/wave.model';
 import {
   DIFFICULTY_PRESETS,
   DifficultyLevel,
@@ -112,20 +113,26 @@ const ENDGAME_VS_INTRO_HP_RATIO = 4;
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Sum total raw HP for a single wave (excludes shield HP — tests raw health). */
-function waveTotalHp(wave: { entries: { type: EnemyType; count: number }[] }): number {
-  return wave.entries.reduce(
-    (sum, entry) => sum + ENEMY_STATS[entry.type].health * entry.count,
-    0,
-  );
+/** Sum total raw HP for a single wave (excludes shield HP — tests raw health). Handles both entries[] and spawnTurns[][]. */
+function waveTotalHp(wave: WaveDefinition): number {
+  if (wave.spawnTurns) {
+    return wave.spawnTurns.flat().reduce((sum, type) => sum + ENEMY_STATS[type].health, 0);
+  }
+  if (wave.entries) {
+    return wave.entries.reduce((sum, entry) => sum + ENEMY_STATS[entry.type].health * entry.count, 0);
+  }
+  return 0;
 }
 
-/** Sum total kill value for a single wave. */
-function waveTotalKillValue(wave: { entries: { type: EnemyType; count: number }[] }): number {
-  return wave.entries.reduce(
-    (sum, entry) => sum + ENEMY_STATS[entry.type].value * entry.count,
-    0,
-  );
+/** Sum total kill value for a single wave. Handles both entries[] and spawnTurns[][]. */
+function waveTotalKillValue(wave: WaveDefinition): number {
+  if (wave.spawnTurns) {
+    return wave.spawnTurns.flat().reduce((sum, type) => sum + ENEMY_STATS[type].value, 0);
+  }
+  if (wave.entries) {
+    return wave.entries.reduce((sum, entry) => sum + ENEMY_STATS[entry.type].value * entry.count, 0);
+  }
+  return 0;
 }
 
 /** Total kill gold for all waves in a level. */
@@ -437,7 +444,7 @@ describe('Balance — Difficulty Curve', () => {
       const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
       if (!waves) { fail(`No wave definitions for ${id}`); continue; }
       const finalWave = waves[waves.length - 1];
-      const hasBoss = finalWave.entries.some(e => e.type === EnemyType.BOSS);
+      const hasBoss = getWaveEnemyTypes(finalWave).has(EnemyType.BOSS);
       expect(hasBoss)
         .withContext(`${id} final wave should contain a Boss — mid tier climax`)
         .toBeTrue();
@@ -452,7 +459,7 @@ describe('Balance — Difficulty Curve', () => {
       const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
       if (!waves) { fail(`No wave definitions for ${id}`); continue; }
       const finalWave = waves[waves.length - 1];
-      const hasBoss = finalWave.entries.some(e => e.type === EnemyType.BOSS);
+      const hasBoss = getWaveEnemyTypes(finalWave).has(EnemyType.BOSS);
       expect(hasBoss)
         .withContext(`${id} final wave should contain a Boss — late tier climax`)
         .toBeTrue();
@@ -468,7 +475,7 @@ describe('Balance — Difficulty Curve', () => {
       const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
       if (!waves) { fail(`No wave definitions for ${id}`); continue; }
       const finalWave = waves[waves.length - 1];
-      const hasBoss = finalWave.entries.some(e => e.type === EnemyType.BOSS);
+      const hasBoss = getWaveEnemyTypes(finalWave).has(EnemyType.BOSS);
       expect(hasBoss)
         .withContext(`${id} final wave should contain a Boss — endgame tier climax`)
         .toBeTrue();
@@ -591,10 +598,12 @@ describe('Balance — Spawn Intervals', () => {
     // Spawn intervals below MIN_ALLOWED_SPAWN_INTERVAL_S are nearly impossible
     // for game logic to process cleanly and create an overwhelming visual and
     // mechanical wall. The only exception is 0.0 (used for solo Boss spawns).
+    // spawnTurns waves have no spawnInterval concept — they are skipped.
     for (const level of CAMPAIGN_LEVELS) {
       const waves = CAMPAIGN_WAVE_DEFINITIONS[level.id] ?? [];
       for (let w = 0; w < waves.length; w++) {
-        for (const entry of waves[w].entries) {
+        if (!waves[w].entries) continue; // spawnTurns format: no spawnInterval
+        for (const entry of waves[w].entries!) {
           const interval = entry.spawnInterval;
           // 0.0 is allowed — it means "spawn immediately" for single-enemy entries
           if (interval === 0) continue;
@@ -613,10 +622,12 @@ describe('Balance — Spawn Intervals', () => {
     // A 0.0 spawn interval on a multi-enemy entry would dump all enemies
     // simultaneously, which is unintended behavior. Solo Boss spawns use 0.0
     // to mean "spawn the only enemy immediately, no delay needed."
+    // spawnTurns waves have no spawnInterval concept — they are skipped.
     for (const level of CAMPAIGN_LEVELS) {
       const waves = CAMPAIGN_WAVE_DEFINITIONS[level.id] ?? [];
       for (let w = 0; w < waves.length; w++) {
-        for (const entry of waves[w].entries) {
+        if (!waves[w].entries) continue; // spawnTurns format: no spawnInterval
+        for (const entry of waves[w].entries!) {
           if (entry.spawnInterval === 0) {
             expect(entry.count)
               .withContext(
@@ -632,12 +643,13 @@ describe('Balance — Spawn Intervals', () => {
 
   it('every wave has at least one entry with a non-zero spawn interval (wave is not instant)', () => {
     // A wave where ALL entries have interval=0 would spawn everything simultaneously.
+    // spawnTurns waves have no spawnInterval concept — they are skipped (turn-based by design).
     for (const level of CAMPAIGN_LEVELS) {
       const waves = CAMPAIGN_WAVE_DEFINITIONS[level.id] ?? [];
       for (let w = 0; w < waves.length; w++) {
         const wave = waves[w];
-        // Only matters if there's more than one entry total across the wave.
-        const totalEnemies = wave.entries.reduce((sum, e) => sum + e.count, 0);
+        if (!wave.entries) continue; // spawnTurns format: turn-based, no interval concerns
+        const totalEnemies = getWaveEnemyCount(wave);
         if (totalEnemies <= 1) continue;
 
         const hasNonZeroInterval = wave.entries.some(e => e.spawnInterval > 0 || e.count === 1);

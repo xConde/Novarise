@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { StatusEffectType } from '../constants/status-effect.constants';
+import { TowerStatOverrides } from '../../../run/models/card.model';
 
 export enum TargetingMode {
   NEAREST = 'nearest',
@@ -84,6 +85,20 @@ export interface PlacedTower {
   muzzleFlashTimer?: number;
   /** Per-mesh snapshot of emissiveIntensity before the flash was applied, keyed by mesh uuid. */
   originalEmissiveIntensity?: Map<string, number>;
+  /**
+   * The combat turn number on which this tower was placed. Set by
+   * TowerCombatService.registerTower() using the caller-supplied turn number.
+   * Defaults to 0 for towers placed before combat begins (setup phase).
+   * Used by the QUICK_DRAW relic: fires +1 extra shot on the placement turn.
+   */
+  placedAtTurn?: number;
+  /**
+   * Optional per-card stat overrides baked in at placement time.
+   * Composed multiplicatively (or additively for bonuses) with relic and
+   * card-modifier effects in TowerCombatService.fireTurn(). Undefined means
+   * no override — identical to pre-extension behavior.
+   */
+  cardStatOverrides?: TowerStatOverrides;
 }
 
 export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {

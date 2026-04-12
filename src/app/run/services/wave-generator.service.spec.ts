@@ -29,7 +29,7 @@ describe('WaveGeneratorService', () => {
     it('every wave should have at least one entry', () => {
       const waves = service.generateCombatWaves(3, 0, 42);
       waves.forEach((w, i) => {
-        expect(w.entries.length).toBeGreaterThan(0, `wave ${i} has no entries`);
+        expect(w.entries!.length).toBeGreaterThan(0, `wave ${i} has no entries`);
       });
     });
 
@@ -45,7 +45,7 @@ describe('WaveGeneratorService', () => {
       for (let row = 0; row <= 3; row++) {
         const waves = service.generateCombatWaves(row, 0, 42 + row);
         waves.forEach(w => {
-          w.entries.forEach(e => {
+          w.entries!.forEach(e => {
             expect(allowedTypes.has(e.type)).withContext(
               `row ${row} contains unexpected enemy type ${e.type}`,
             ).toBeTrue();
@@ -57,7 +57,7 @@ describe('WaveGeneratorService', () => {
     it('spawn intervals should be within [0.4, 1.0]', () => {
       const waves = service.generateCombatWaves(5, 0, 42);
       waves.forEach(w => {
-        w.entries.forEach(e => {
+        w.entries!.forEach(e => {
           expect(e.spawnInterval).toBeGreaterThanOrEqual(0.4);
           expect(e.spawnInterval).toBeLessThanOrEqual(1.0);
         });
@@ -67,7 +67,7 @@ describe('WaveGeneratorService', () => {
     it('enemy counts should be positive', () => {
       const waves = service.generateCombatWaves(5, 0, 42);
       waves.forEach(w => {
-        w.entries.forEach(e => {
+        w.entries!.forEach(e => {
           expect(e.count).toBeGreaterThan(0);
         });
       });
@@ -84,8 +84,8 @@ describe('WaveGeneratorService', () => {
       // Use enough samples to average out the ±1 variance
       const deepWaves = service.generateCombatWaves(8, 0, 42);
       const shallowWaves = service.generateCombatWaves(1, 0, 42);
-      const deepTotal = deepWaves.reduce((s, w) => s + w.entries.reduce((es, e) => es + e.count, 0), 0);
-      const shallowTotal = shallowWaves.reduce((s, w) => s + w.entries.reduce((es, e) => es + e.count, 0), 0);
+      const deepTotal = deepWaves.reduce((s, w) => s + w.entries!.reduce((es, e) => es + e.count, 0), 0);
+      const shallowTotal = shallowWaves.reduce((s, w) => s + w.entries!.reduce((es, e) => es + e.count, 0), 0);
       expect(deepTotal).toBeGreaterThan(shallowTotal);
     });
   });
@@ -100,7 +100,7 @@ describe('WaveGeneratorService', () => {
 
     it('should have at least one wave containing a BOSS-type entry', () => {
       const waves = service.generateEliteWaves(4, 0, 42);
-      const hasBossEntry = waves.some(w => w.entries.some(e => e.type === EnemyType.BOSS));
+      const hasBossEntry = waves.some(w => w.entries!.some(e => e.type === EnemyType.BOSS));
       expect(hasBossEntry).toBeTrue();
     });
 
@@ -129,7 +129,7 @@ describe('WaveGeneratorService', () => {
     it('spawn intervals should be within [0.4, 1.0]', () => {
       const waves = service.generateEliteWaves(5, 0, 42);
       waves.forEach(w => {
-        w.entries.forEach(e => {
+        w.entries!.forEach(e => {
           if (e.spawnInterval > 0) {
             // boss solo entry uses spawnInterval 0 — skip that
             expect(e.spawnInterval).toBeGreaterThanOrEqual(0.4);
@@ -160,14 +160,14 @@ describe('WaveGeneratorService', () => {
     it('act 1 final wave should contain a BOSS entry', () => {
       const waves = service.generateBossWaves(0, 42);
       const finalWave = waves[waves.length - 1];
-      const hasBoss = finalWave.entries.some(e => e.type === EnemyType.BOSS);
+      const hasBoss = finalWave.entries!.some(e => e.type === EnemyType.BOSS);
       expect(hasBoss).toBeTrue();
     });
 
     it('act 1 final wave solo BOSS should have spawnInterval of 0', () => {
       const waves = service.generateBossWaves(0, 42);
       const finalWave = waves[waves.length - 1];
-      const bossEntry = finalWave.entries.find(e => e.type === EnemyType.BOSS);
+      const bossEntry = finalWave.entries!.find(e => e.type === EnemyType.BOSS);
       expect(bossEntry?.spawnInterval).toBe(0);
     });
 

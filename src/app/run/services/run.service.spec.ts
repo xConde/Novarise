@@ -9,9 +9,11 @@ import { RunEventBusService } from './run-event-bus.service';
 import { RunStatus, DEFAULT_RUN_CONFIG, EncounterResult } from '../models/run-state.model';
 import { NodeMap, MapNode, NodeType } from '../models/node-map.model';
 import { EncounterConfig } from '../models/encounter.model';
-import { RelicId } from '../models/relic.model';
+import { RelicId, RelicDefinition, RelicRarity, RELIC_DEFINITIONS } from '../models/relic.model';
 import { CardRarity } from '../models/card.model';
 import { CARD_DEFINITIONS } from '../constants/card-definitions';
+import { REWARD_CONFIG } from '../constants/run.constants';
+import { AscensionEffectType } from '../models/ascension.model';
 
 // ── Test fixtures ───────────────────────────────────────────────
 
@@ -574,4 +576,102 @@ describe('RunService', () => {
     service.resolveEvent(0);
     expect(deckService.getAllCards().length).toBe(cardsBefore);
   }));
+
+  // ── generateRewards — FEWER_RELIC_CHOICES ascension effect ───────
+
+  describe('generateRewards — FEWER_RELIC_CHOICES ascension reduction', () => {
+    // Provide enough relic definitions so pickRelicRewards doesn't early-return [].
+    // The outer beforeEach sets getAvailableRelics to [] — override it here.
+    beforeEach(() => {
+      const stubRelics: RelicDefinition[] = [
+        RELIC_DEFINITIONS[RelicId.IRON_HEART],
+        RELIC_DEFINITIONS[RelicId.GOLD_MAGNET],
+        RELIC_DEFINITIONS[RelicId.STURDY_BOOTS],
+        RELIC_DEFINITIONS[RelicId.QUICK_DRAW],
+        RELIC_DEFINITIONS[RelicId.LUCKY_COIN],
+      ];
+      relicService.getAvailableRelics.and.returnValue(stubRelics);
+    });
+
+    it('ascension 0: relic choice count equals REWARD_CONFIG.relicChoicesCombat', fakeAsync(() => {
+      service.startNewRun(0);
+      encounterService.prepareEncounter.and.returnValue(makeEncounterConfig());
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+      const rewards = service.generateRewards();
+
+      expect(rewards.relicChoices.length).toBe(REWARD_CONFIG.relicChoicesCombat);
+    }));
+
+    it('ascension 11 (FEWER_RELIC_CHOICES = 1): relic count is relicChoicesCombat - 1', fakeAsync(() => {
+      service.startNewRun(11);
+      encounterService.prepareEncounter.and.returnValue(makeEncounterConfig());
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+      const rewards = service.generateRewards();
+
+      expect(rewards.relicChoices.length).toBe(REWARD_CONFIG.relicChoicesCombat - 1);
+    }));
+
+    it('ascension 20: relic count is floored at 1, never 0 or negative', fakeAsync(() => {
+      service.startNewRun(20);
+      encounterService.prepareEncounter.and.returnValue(makeEncounterConfig());
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+      const rewards = service.generateRewards();
+
+      expect(rewards.relicChoices.length).toBeGreaterThanOrEqual(1);
+    }));
+
+    it('elite encounter at ascension 11: relicChoicesElite - 1, floored at 1', fakeAsync(() => {
+      service.startNewRun(11);
+      encounterService.prepareEncounter.and.returnValue(
+        makeEncounterConfig({ isElite: true, isBoss: false }),
+      );
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+      const rewards = service.generateRewards();
+
+      const expected = Math.max(1, REWARD_CONFIG.relicChoicesElite - 1);
+      expect(rewards.relicChoices.length).toBe(expected);
+    }));
+
+    it('boss encounter at ascension 11: relicChoicesBoss - 1, floored at 1', fakeAsync(() => {
+      service.startNewRun(11);
+      encounterService.prepareEncounter.and.returnValue(
+        makeEncounterConfig({ isElite: false, isBoss: true }),
+      );
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      // Use boss node so prepareEncounter is resolved against the boss node
+      service.selectNode(service.nodeMap!.bossNodeId);
+
+      const rewards = service.generateRewards();
+
+      const expected = Math.max(1, REWARD_CONFIG.relicChoicesBoss - 1);
+      expect(rewards.relicChoices.length).toBe(expected);
+    }));
+
+    it('regression guard: reduction exceeding baseline still returns 1', fakeAsync(() => {
+      // Simulate a hypothetical scenario where future ascension stacking could
+      // push the reduction above the baseline count. Inject a mock ascensionEffects
+      // by using a very large internal ascensionLevel that the model clamps to 20.
+      // At level 20, reduction is 1 and REWARD_CONFIG.relicChoicesCombat is 3, so
+      // the direct floor check is tested by patching relicChoicesCombat to 1.
+      // This exercises the Math.max(1, 1 - 1) = Math.max(1, 0) = 1 path.
+      service.startNewRun(11);
+      encounterService.prepareEncounter.and.returnValue(makeEncounterConfig());
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+      // Temporarily patch REWARD_CONFIG to simulate a baseline of 1 relic choice
+      const orig = REWARD_CONFIG.relicChoicesCombat;
+      (REWARD_CONFIG as any).relicChoicesCombat = 1;
+
+      const rewards = service.generateRewards();
+
+      (REWARD_CONFIG as any).relicChoicesCombat = orig;
+
+      // reduction=1, baseline=1 → Math.max(1, 0) → must be 1, not 0
+      expect(rewards.relicChoices.length).toBe(1);
+    }));
+  });
 });

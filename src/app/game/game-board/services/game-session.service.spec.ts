@@ -12,7 +12,6 @@ import { GameEndService } from './game-end.service';
 import { MapBridgeService } from '@core/services/map-bridge.service';
 import { StatusEffectService } from './status-effect.service';
 import { TutorialService } from '@core/services/tutorial.service';
-import { CAMPAIGN_WAVE_DEFINITIONS } from '../../../run/data/waves/campaign-waves';
 import { TowerCombatService } from './tower-combat.service';
 import { TowerPreviewService } from './tower-preview.service';
 import { DamagePopupService } from './damage-popup.service';
@@ -196,124 +195,6 @@ describe('GameSessionService', () => {
       expect(enemySpy.reset).toHaveBeenCalledWith(scene);
 
       scene.clear();
-    });
-  });
-
-  describe('applyCampaignWaves', () => {
-    it('should be a no-op for null mapId', () => {
-      mapBridgeSpy.getMapId.and.returnValue(null);
-
-      service.applyCampaignWaves();
-
-      expect(waveSpy.setCustomWaves).not.toHaveBeenCalled();
-      expect(gameStateSpy.setMaxWaves).not.toHaveBeenCalled();
-    });
-
-    it('should be a no-op for non-campaign map ids', () => {
-      mapBridgeSpy.getMapId.and.returnValue('my-custom-map');
-
-      service.applyCampaignWaves();
-
-      expect(waveSpy.setCustomWaves).not.toHaveBeenCalled();
-      expect(gameStateSpy.setMaxWaves).not.toHaveBeenCalled();
-    });
-
-    it('should be a no-op for unknown campaign map ids', () => {
-      mapBridgeSpy.getMapId.and.returnValue('campaign_unknown_level_that_does_not_exist');
-
-      service.applyCampaignWaves();
-
-      expect(waveSpy.setCustomWaves).not.toHaveBeenCalled();
-      expect(gameStateSpy.setMaxWaves).not.toHaveBeenCalled();
-    });
-
-    it('should load wave definitions for a known campaign map', () => {
-      const knownId = Object.keys(CAMPAIGN_WAVE_DEFINITIONS)[0];
-      if (!knownId) {
-        pending('No campaign wave definitions available — skip test');
-        return;
-      }
-      mapBridgeSpy.getMapId.and.returnValue(knownId);
-      const expectedWaves = CAMPAIGN_WAVE_DEFINITIONS[knownId];
-
-      service.applyCampaignWaves();
-
-      expect(waveSpy.setCustomWaves).toHaveBeenCalledWith(expectedWaves);
-      expect(gameStateSpy.setMaxWaves).toHaveBeenCalledWith(expectedWaves.length);
-    });
-
-    it('should be a no-op for an empty string mapId', () => {
-      mapBridgeSpy.getMapId.and.returnValue('');
-
-      service.applyCampaignWaves();
-
-      expect(waveSpy.setCustomWaves).not.toHaveBeenCalled();
-      expect(gameStateSpy.setMaxWaves).not.toHaveBeenCalled();
-    });
-
-    it('should be a no-op for a map id that starts with "campaign_" but has no definition', () => {
-      mapBridgeSpy.getMapId.and.returnValue('campaign_99');
-
-      service.applyCampaignWaves();
-
-      expect(waveSpy.setCustomWaves).not.toHaveBeenCalled();
-      expect(gameStateSpy.setMaxWaves).not.toHaveBeenCalled();
-    });
-
-    // --- All 16 campaign level IDs ---
-
-    const ALL_CAMPAIGN_IDS = [
-      'campaign_01', 'campaign_02', 'campaign_03', 'campaign_04',
-      'campaign_05', 'campaign_06', 'campaign_07', 'campaign_08',
-      'campaign_09', 'campaign_10', 'campaign_11', 'campaign_12',
-      'campaign_13', 'campaign_14', 'campaign_15', 'campaign_16',
-    ];
-
-    ALL_CAMPAIGN_IDS.forEach(mapId => {
-      it(`should load non-empty wave definitions for ${mapId}`, () => {
-        mapBridgeSpy.getMapId.and.returnValue(mapId);
-
-        service.applyCampaignWaves();
-
-        const waves = CAMPAIGN_WAVE_DEFINITIONS[mapId];
-        expect(waves).toBeTruthy();
-        expect(waves.length).toBeGreaterThan(0);
-        expect(waveSpy.setCustomWaves).toHaveBeenCalledWith(waves);
-        expect(gameStateSpy.setMaxWaves).toHaveBeenCalledWith(waves.length);
-      });
-    });
-
-    ALL_CAMPAIGN_IDS.forEach(mapId => {
-      it(`should set maxWaves to match wave array length for ${mapId}`, () => {
-        mapBridgeSpy.getMapId.and.returnValue(mapId);
-
-        service.applyCampaignWaves();
-
-        const expectedLength = CAMPAIGN_WAVE_DEFINITIONS[mapId].length;
-        expect(gameStateSpy.setMaxWaves).toHaveBeenCalledWith(expectedLength);
-      });
-    });
-
-    ALL_CAMPAIGN_IDS.forEach(mapId => {
-      it(`each wave entry for ${mapId} should have at least one enemy entry`, () => {
-        const waves = CAMPAIGN_WAVE_DEFINITIONS[mapId];
-        waves.forEach((wave, i) => {
-          expect(wave.entries.length)
-            .withContext(`${mapId} wave[${i}].entries must be non-empty`)
-            .toBeGreaterThan(0);
-        });
-      });
-    });
-
-    ALL_CAMPAIGN_IDS.forEach(mapId => {
-      it(`each wave entry for ${mapId} should have a positive reward`, () => {
-        const waves = CAMPAIGN_WAVE_DEFINITIONS[mapId];
-        waves.forEach((wave, i) => {
-          expect(wave.reward)
-            .withContext(`${mapId} wave[${i}].reward must be > 0`)
-            .toBeGreaterThan(0);
-        });
-      });
     });
   });
 

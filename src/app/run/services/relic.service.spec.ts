@@ -95,9 +95,21 @@ describe('RelicService', () => {
   });
 
   // ── QUICK_DRAW ────────────────────────────────────────────────
-  // Post-pivot: QUICK_DRAW is a no-op (real-time fire-rate multiplier no longer
-  // applies in turn-based mode). Catalog entry preserved to avoid save churn.
-  // M4 S9 should retarget the relic effect.
+
+  it('hasQuickDraw() returns false when QUICK_DRAW not owned', () => {
+    expect(service.hasQuickDraw()).toBeFalse();
+  });
+
+  it('hasQuickDraw() returns true when QUICK_DRAW is owned', () => {
+    service.setActiveRelics([RelicId.QUICK_DRAW]);
+    expect(service.hasQuickDraw()).toBeTrue();
+  });
+
+  it('hasQuickDraw() returns false after relics are cleared', () => {
+    service.setActiveRelics([RelicId.QUICK_DRAW]);
+    service.clearRelics();
+    expect(service.hasQuickDraw()).toBeFalse();
+  });
 
   // ── SNIPER_SCOPE ──────────────────────────────────────────────
 
@@ -185,6 +197,40 @@ describe('RelicService', () => {
     expect(service.shouldBlockLeak()).toBeTrue();
   });
 
+  // ── FROST_NOVA ────────────────────────────────────────────────
+
+  it('getSlowDurationBonus() returns 0 when FROST_NOVA not owned', () => {
+    expect(service.getSlowDurationBonus()).toBe(0);
+  });
+
+  it('getSlowDurationBonus() returns 1 when FROST_NOVA is owned', () => {
+    service.setActiveRelics([RelicId.FROST_NOVA]);
+    expect(service.getSlowDurationBonus()).toBe(1);
+  });
+
+  it('getSlowDurationBonus() returns 0 after clearRelics()', () => {
+    service.setActiveRelics([RelicId.FROST_NOVA]);
+    service.clearRelics();
+    expect(service.getSlowDurationBonus()).toBe(0);
+  });
+
+  // ── TEMPORAL_RIFT ─────────────────────────────────────────────
+
+  it('getTurnDelayPerWave() returns 0 when TEMPORAL_RIFT not owned', () => {
+    expect(service.getTurnDelayPerWave()).toBe(0);
+  });
+
+  it('getTurnDelayPerWave() returns 1 when TEMPORAL_RIFT is owned', () => {
+    service.setActiveRelics([RelicId.TEMPORAL_RIFT]);
+    expect(service.getTurnDelayPerWave()).toBe(1);
+  });
+
+  it('getTurnDelayPerWave() returns 0 after clearRelics()', () => {
+    service.setActiveRelics([RelicId.TEMPORAL_RIFT]);
+    service.clearRelics();
+    expect(service.getTurnDelayPerWave()).toBe(0);
+  });
+
   // ── Stacking relics ───────────────────────────────────────────
 
   it('COMMANDERS_BANNER + BASIC_TRAINING stack correctly on basic tower damage', () => {
@@ -198,6 +244,20 @@ describe('RelicService', () => {
     // GOLD_MAGNET: ×1.15; BOUNTY_HUNTER adds ×2 for elite
     expect(service.getGoldMultiplier(true)).toBeCloseTo(1.15 * 2, 5);
     expect(service.getGoldMultiplier(false)).toBeCloseTo(1.15, 5);
+  });
+
+  it('QUICK_DRAW + FROST_NOVA both active — each accessor returns independently correct value', () => {
+    service.setActiveRelics([RelicId.QUICK_DRAW, RelicId.FROST_NOVA]);
+    expect(service.hasQuickDraw()).toBeTrue();
+    expect(service.getSlowDurationBonus()).toBe(1);
+    expect(service.getTurnDelayPerWave()).toBe(0); // TEMPORAL_RIFT not owned
+  });
+
+  it('QUICK_DRAW + FROST_NOVA + TEMPORAL_RIFT all active simultaneously', () => {
+    service.setActiveRelics([RelicId.QUICK_DRAW, RelicId.FROST_NOVA, RelicId.TEMPORAL_RIFT]);
+    expect(service.hasQuickDraw()).toBeTrue();
+    expect(service.getSlowDurationBonus()).toBe(1);
+    expect(service.getTurnDelayPerWave()).toBe(1);
   });
 
   // ── getAvailableRelics ────────────────────────────────────────

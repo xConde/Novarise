@@ -221,7 +221,7 @@ function injectBossWave(waves: WaveDefinition[], rng: () => number, goldMultipli
 
   const updated = [...waves];
   updated[targetIdx] = {
-    entries: [...waves[targetIdx].entries, bossEntry],
+    entries: [...(waves[targetIdx].entries ?? []), bossEntry],
     reward: bossGold,
   };
   return updated;

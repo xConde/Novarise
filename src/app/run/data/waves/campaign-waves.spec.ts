@@ -1,6 +1,7 @@
 import { CAMPAIGN_WAVE_DEFINITIONS } from './campaign-waves';
 import { CAMPAIGN_LEVELS } from '../campaign-levels';
 import { EnemyType } from '../../../game/game-board/models/enemy.model';
+import { WaveDefinition, getWaveEnemyCount, getWaveEnemyTypes } from '../../../game/game-board/models/wave.model';
 
 /** Enemy types considered "intro-safe": only Basic, Fast, Heavy. */
 const INTRO_SAFE_TYPES = new Set<EnemyType>([
@@ -55,10 +56,10 @@ describe('CAMPAIGN_WAVE_DEFINITIONS', () => {
       describe(level.id, () => {
         const waves = CAMPAIGN_WAVE_DEFINITIONS[level.id] ?? [];
 
-        it('each wave should have at least 1 entry', () => {
+        it('each wave should have at least 1 enemy (entries or spawnTurns)', () => {
           for (let i = 0; i < waves.length; i++) {
-            expect(waves[i].entries.length)
-              .withContext(`${level.id} wave ${i + 1} has no entries`)
+            expect(getWaveEnemyCount(waves[i]))
+              .withContext(`${level.id} wave ${i + 1} has no enemies (neither entries nor spawnTurns)`)
               .toBeGreaterThan(0);
           }
         });
@@ -71,20 +72,21 @@ describe('CAMPAIGN_WAVE_DEFINITIONS', () => {
           }
         });
 
-        it('every WaveEntry should have a valid EnemyType', () => {
+        it('every enemy type in a wave should be a valid EnemyType', () => {
           const validTypes = Object.values(EnemyType) as string[];
           for (let i = 0; i < waves.length; i++) {
-            for (const entry of waves[i].entries) {
+            for (const type of getWaveEnemyTypes(waves[i])) {
               expect(validTypes)
-                .withContext(`${level.id} wave ${i + 1} has unknown type "${entry.type}"`)
-                .toContain(entry.type);
+                .withContext(`${level.id} wave ${i + 1} has unknown type "${type}"`)
+                .toContain(type);
             }
           }
         });
 
-        it('every WaveEntry should have a positive enemy count', () => {
+        it('every WaveEntry (legacy format) should have a positive enemy count', () => {
           for (let i = 0; i < waves.length; i++) {
-            for (const entry of waves[i].entries) {
+            if (!waves[i].entries) continue; // spawnTurns format: count checking done in total enemy count test
+            for (const entry of waves[i].entries!) {
               expect(entry.count)
                 .withContext(`${level.id} wave ${i + 1} entry ${entry.type} has non-positive count`)
                 .toBeGreaterThan(0);
@@ -92,9 +94,10 @@ describe('CAMPAIGN_WAVE_DEFINITIONS', () => {
           }
         });
 
-        it('every WaveEntry should have a non-negative spawnInterval', () => {
+        it('every WaveEntry (legacy format) should have a non-negative spawnInterval', () => {
           for (let i = 0; i < waves.length; i++) {
-            for (const entry of waves[i].entries) {
+            if (!waves[i].entries) continue; // spawnTurns format: no spawnInterval concept
+            for (const entry of waves[i].entries!) {
               expect(entry.spawnInterval)
                 .withContext(`${level.id} wave ${i + 1} entry ${entry.type} has negative spawnInterval`)
                 .toBeGreaterThanOrEqual(0);
@@ -113,9 +116,9 @@ describe('CAMPAIGN_WAVE_DEFINITIONS', () => {
       for (const id of introIds) {
         const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
         for (let i = 0; i < waves.length; i++) {
-          for (const entry of waves[i].entries) {
-            expect(INTRO_SAFE_TYPES.has(entry.type))
-              .withContext(`Intro map ${id} wave ${i + 1} uses advanced enemy type "${entry.type}"`)
+          for (const type of getWaveEnemyTypes(waves[i])) {
+            expect(INTRO_SAFE_TYPES.has(type))
+              .withContext(`Intro map ${id} wave ${i + 1} uses advanced enemy type "${type}"`)
               .toBeTrue();
           }
         }
@@ -126,7 +129,7 @@ describe('CAMPAIGN_WAVE_DEFINITIONS', () => {
       const endgameIds = ['campaign_15', 'campaign_16'];
       for (const id of endgameIds) {
         const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
-        const hasBoss = waves.some(w => w.entries.some(e => e.type === EnemyType.BOSS));
+        const hasBoss = waves.some(w => getWaveEnemyTypes(w).has(EnemyType.BOSS));
         expect(hasBoss)
           .withContext(`Endgame map ${id} must have at least one BOSS wave`)
           .toBeTrue();
@@ -135,20 +138,20 @@ describe('CAMPAIGN_WAVE_DEFINITIONS', () => {
 
     it('Map 16 (Novarise) should have BOSS in wave 6 and wave 12', () => {
       const waves = CAMPAIGN_WAVE_DEFINITIONS['campaign_16'];
-      expect(waves[5].entries.some(e => e.type === EnemyType.BOSS))
+      expect(getWaveEnemyTypes(waves[5]).has(EnemyType.BOSS))
         .withContext('campaign_16 wave 6 should have a BOSS')
         .toBeTrue();
-      expect(waves[11].entries.some(e => e.type === EnemyType.BOSS))
+      expect(getWaveEnemyTypes(waves[11]).has(EnemyType.BOSS))
         .withContext('campaign_16 wave 12 should have a BOSS')
         .toBeTrue();
     });
 
     it('Map 15 (Storm) should have BOSS in wave 8 and wave 12', () => {
       const waves = CAMPAIGN_WAVE_DEFINITIONS['campaign_15'];
-      expect(waves[7].entries.some(e => e.type === EnemyType.BOSS))
+      expect(getWaveEnemyTypes(waves[7]).has(EnemyType.BOSS))
         .withContext('campaign_15 wave 8 should have a BOSS')
         .toBeTrue();
-      expect(waves[11].entries.some(e => e.type === EnemyType.BOSS))
+      expect(getWaveEnemyTypes(waves[11]).has(EnemyType.BOSS))
         .withContext('campaign_15 wave 12 should have a BOSS')
         .toBeTrue();
     });
@@ -161,7 +164,7 @@ describe('CAMPAIGN_WAVE_DEFINITIONS', () => {
       for (const id of midToEndgameIds) {
         const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
         const usesAdvanced = waves.some(w =>
-          w.entries.some(e => ADVANCED_TYPES.has(e.type))
+          [...getWaveEnemyTypes(w)].some(t => ADVANCED_TYPES.has(t))
         );
         expect(usesAdvanced)
           .withContext(`Mid/Late/Endgame map ${id} should use advanced enemy types`)
@@ -187,12 +190,182 @@ describe('CAMPAIGN_WAVE_DEFINITIONS', () => {
     it('total enemy count in the final wave should meet or exceed the first wave for every level', () => {
       for (const level of CAMPAIGN_LEVELS) {
         const waves = CAMPAIGN_WAVE_DEFINITIONS[level.id];
-        const firstCount = waves[0].entries.reduce((s, e) => s + e.count, 0);
-        const lastCount = waves[waves.length - 1].entries.reduce((s, e) => s + e.count, 0);
+        const firstCount = getWaveEnemyCount(waves[0]);
+        const lastCount = getWaveEnemyCount(waves[waves.length - 1]);
         expect(lastCount)
           .withContext(`${level.id} final wave count (${lastCount}) should be >= first wave count (${firstCount})`)
           .toBeGreaterThanOrEqual(firstCount);
       }
+    });
+  });
+
+  // ─── spawnTurns migration: shape + count verification ─────────────────────
+
+  describe('spawnTurns migrated maps', () => {
+
+    /**
+     * Expected total enemy counts per wave for each migrated map.
+     * These guard against accidental difficulty changes during migration.
+     */
+    const CAMPAIGN_02_EXPECTED_COUNTS = [4, 6, 8, 8, 9, 8, 12];
+    const CAMPAIGN_06_EXPECTED_COUNTS = [8, 10, 10, 10, 9, 10, 10, 15, 17];
+    const CAMPAIGN_10_EXPECTED_COUNTS = [10, 10, 10, 13, 11, 17, 16, 17, 21, 21];
+    const CAMPAIGN_15_EXPECTED_COUNTS = [14, 14, 18, 22, 21, 18, 32, 18, 32, 29, 39, 34];
+
+    describe('campaign_02 (intro — The Bend)', () => {
+      const waves = CAMPAIGN_WAVE_DEFINITIONS['campaign_02'];
+
+      it('all waves use spawnTurns format', () => {
+        for (let i = 0; i < waves.length; i++) {
+          expect(waves[i].spawnTurns)
+            .withContext(`campaign_02 wave ${i + 1} should use spawnTurns`)
+            .toBeDefined();
+        }
+      });
+
+      it('total enemy count per wave matches expected (no difficulty drift)', () => {
+        for (let i = 0; i < waves.length; i++) {
+          expect(getWaveEnemyCount(waves[i]))
+            .withContext(`campaign_02 wave ${i + 1}: expected ${CAMPAIGN_02_EXPECTED_COUNTS[i]}`)
+            .toBe(CAMPAIGN_02_EXPECTED_COUNTS[i]);
+        }
+      });
+
+      it('has at least one empty prep turn (wave 6 pause before second burst)', () => {
+        const hasEmptyTurn = waves.some(w => w.spawnTurns?.some(turn => turn.length === 0));
+        expect(hasEmptyTurn).withContext('campaign_02 should have at least one empty prep turn').toBeTrue();
+      });
+
+      it('has at least one burst turn (3+ enemies in a single turn)', () => {
+        const hasBurst = waves.some(w => w.spawnTurns?.some(turn => turn.length >= 3));
+        expect(hasBurst).withContext('campaign_02 should have at least one burst turn (3+ enemies)').toBeTrue();
+      });
+    });
+
+    describe('campaign_06 (early-mid — Open Ground)', () => {
+      const waves = CAMPAIGN_WAVE_DEFINITIONS['campaign_06'];
+
+      it('all waves use spawnTurns format', () => {
+        for (let i = 0; i < waves.length; i++) {
+          expect(waves[i].spawnTurns)
+            .withContext(`campaign_06 wave ${i + 1} should use spawnTurns`)
+            .toBeDefined();
+        }
+      });
+
+      it('total enemy count per wave matches expected (no difficulty drift)', () => {
+        for (let i = 0; i < waves.length; i++) {
+          expect(getWaveEnemyCount(waves[i]))
+            .withContext(`campaign_06 wave ${i + 1}: expected ${CAMPAIGN_06_EXPECTED_COUNTS[i]}`)
+            .toBe(CAMPAIGN_06_EXPECTED_COUNTS[i]);
+        }
+      });
+
+      it('has at least one empty prep turn (telegraphs Heavy tank arrivals)', () => {
+        const hasEmptyTurn = waves.some(w => w.spawnTurns?.some(turn => turn.length === 0));
+        expect(hasEmptyTurn).withContext('campaign_06 should have at least one empty prep turn').toBeTrue();
+      });
+
+      it('has at least one burst turn (3+ enemies: finale 8-enemy climax)', () => {
+        const hasBurst = waves.some(w => w.spawnTurns?.some(turn => turn.length >= 3));
+        expect(hasBurst).withContext('campaign_06 should have at least one burst turn').toBeTrue();
+      });
+    });
+
+    describe('campaign_10 (mid — The Spiral)', () => {
+      const waves = CAMPAIGN_WAVE_DEFINITIONS['campaign_10'];
+
+      it('all waves use spawnTurns format', () => {
+        for (let i = 0; i < waves.length; i++) {
+          expect(waves[i].spawnTurns)
+            .withContext(`campaign_10 wave ${i + 1} should use spawnTurns`)
+            .toBeDefined();
+        }
+      });
+
+      it('total enemy count per wave matches expected (no difficulty drift)', () => {
+        for (let i = 0; i < waves.length; i++) {
+          expect(getWaveEnemyCount(waves[i]))
+            .withContext(`campaign_10 wave ${i + 1}: expected ${CAMPAIGN_10_EXPECTED_COUNTS[i]}`)
+            .toBe(CAMPAIGN_10_EXPECTED_COUNTS[i]);
+        }
+      });
+
+      it('wave 10 (boss finale) starts with an empty prep turn before BOSS spawns', () => {
+        const wave10Turns = waves[9].spawnTurns!;
+        expect(wave10Turns[0].length).withContext('campaign_10 wave 10 turn 0 should be an empty prep turn').toBe(0);
+      });
+
+      it('wave 10 BOSS spawns alone on turn 1 (telegraphed arrival)', () => {
+        const wave10Turns = waves[9].spawnTurns!;
+        expect(wave10Turns[1]).toEqual([EnemyType.BOSS]);
+      });
+
+      it('has at least one burst turn (3+ enemies: swarm bursts throughout)', () => {
+        const hasBurst = waves.some(w => w.spawnTurns?.some(turn => turn.length >= 3));
+        expect(hasBurst).withContext('campaign_10 should have at least one burst turn').toBeTrue();
+      });
+    });
+
+    describe('campaign_15 (endgame — Storm)', () => {
+      const waves = CAMPAIGN_WAVE_DEFINITIONS['campaign_15'];
+
+      it('all waves use spawnTurns format', () => {
+        for (let i = 0; i < waves.length; i++) {
+          expect(waves[i].spawnTurns)
+            .withContext(`campaign_15 wave ${i + 1} should use spawnTurns`)
+            .toBeDefined();
+        }
+      });
+
+      it('total enemy count per wave matches expected (no difficulty drift)', () => {
+        for (let i = 0; i < waves.length; i++) {
+          expect(getWaveEnemyCount(waves[i]))
+            .withContext(`campaign_15 wave ${i + 1}: expected ${CAMPAIGN_15_EXPECTED_COUNTS[i]}`)
+            .toBe(CAMPAIGN_15_EXPECTED_COUNTS[i]);
+        }
+      });
+
+      it('wave 8 (first Boss) has two empty prep turns before BOSS spawns', () => {
+        const wave8Turns = waves[7].spawnTurns!;
+        expect(wave8Turns[0].length).withContext('campaign_15 wave 8 turn 0 should be empty prep').toBe(0);
+        expect(wave8Turns[1].length).withContext('campaign_15 wave 8 turn 1 should be empty prep').toBe(0);
+        expect(getWaveEnemyTypes(waves[7]).has(EnemyType.BOSS)).toBeTrue();
+      });
+
+      it('wave 12 (storm finale) has alternating Boss spawns with empty preps between them', () => {
+        const wave12Turns = waves[11].spawnTurns!;
+        expect(wave12Turns[0].length).withContext('campaign_15 wave 12 turn 0 should be empty prep').toBe(0);
+        expect(getWaveEnemyTypes(waves[11]).has(EnemyType.BOSS)).toBeTrue();
+        // Two bosses total
+        const bossCount = wave12Turns.flat().filter(t => t === EnemyType.BOSS).length;
+        expect(bossCount).withContext('campaign_15 wave 12 should have exactly 2 BOSSes').toBe(2);
+      });
+
+      it('has at least one burst turn (8+ enemies: pre-boss maximum chaos)', () => {
+        const hasBurst = waves.some(w => w.spawnTurns?.some(turn => turn.length >= 8));
+        expect(hasBurst).withContext('campaign_15 should have at least one 8+ enemy burst turn').toBeTrue();
+      });
+    });
+
+    it('at least 2 of the 4 migrated maps have at least one empty prep turn', () => {
+      const mapsWithPrepTurn = ['campaign_02', 'campaign_06', 'campaign_10', 'campaign_15'].filter(id => {
+        const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
+        return waves.some(w => w.spawnTurns?.some(turn => turn.length === 0));
+      });
+      expect(mapsWithPrepTurn.length)
+        .withContext(`Only ${mapsWithPrepTurn.length} of 4 migrated maps have empty prep turns`)
+        .toBeGreaterThanOrEqual(2);
+    });
+
+    it('at least 2 of the 4 migrated maps have at least one burst turn (3+ enemies)', () => {
+      const mapsWithBurst = ['campaign_02', 'campaign_06', 'campaign_10', 'campaign_15'].filter(id => {
+        const waves = CAMPAIGN_WAVE_DEFINITIONS[id];
+        return waves.some(w => w.spawnTurns?.some(turn => turn.length >= 3));
+      });
+      expect(mapsWithBurst.length)
+        .withContext(`Only ${mapsWithBurst.length} of 4 migrated maps have burst turns`)
+        .toBeGreaterThanOrEqual(2);
     });
   });
 

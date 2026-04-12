@@ -312,7 +312,7 @@ describe('Card System — Integration Flow', () => {
     const spellEffect = goldRushDef.effect;
     if (spellEffect.type !== 'spell') { fail('Expected spell effect'); return; }
 
-    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0 });
+    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0, deckService: deck });
 
     expect(gameState.addGold).toHaveBeenCalledWith(40);
   });
@@ -322,7 +322,7 @@ describe('Card System — Integration Flow', () => {
     const spellEffect = repairDef.effect;
     if (spellEffect.type !== 'spell') { fail('Expected spell effect'); return; }
 
-    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0 });
+    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0, deckService: deck });
 
     expect(gameState.addLives).toHaveBeenCalledWith(2);
   });
@@ -332,7 +332,7 @@ describe('Card System — Integration Flow', () => {
     const spellEffect = lightningDef.effect;
     if (spellEffect.type !== 'spell') { fail('Expected spell effect'); return; }
 
-    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0 });
+    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0, deckService: deck });
 
     expect(enemyService.damageStrongestEnemy).toHaveBeenCalledWith(100);
   });
@@ -342,7 +342,7 @@ describe('Card System — Integration Flow', () => {
     const spellEffect = frostDef.effect;
     if (spellEffect.type !== 'spell') { fail('Expected spell effect'); return; }
 
-    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0 });
+    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0, deckService: deck });
 
     // Empty enemy map — no apply calls expected (no enemies present)
     expect(statusEffectService.apply).not.toHaveBeenCalled();
@@ -353,7 +353,7 @@ describe('Card System — Integration Flow', () => {
     const spellEffect = overclockDef.effect;
     if (spellEffect.type !== 'spell') { fail('Expected spell effect'); return; }
 
-    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0 });
+    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0, deckService: deck });
 
     expect(effects.hasActiveModifier(MODIFIER_STAT.FIRE_RATE)).toBeTrue();
     const mods = effects.getActiveModifiers();

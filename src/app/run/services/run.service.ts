@@ -297,9 +297,17 @@ export class RunService {
     const goldPickup = encounter?.goldReward ?? 0;
 
     // Determine relic choice count
-    let choiceCount = REWARD_CONFIG.relicChoicesCombat;
+    let choiceCount: number = REWARD_CONFIG.relicChoicesCombat;
     if (encounter?.isElite) choiceCount = REWARD_CONFIG.relicChoicesElite;
     if (encounter?.isBoss) choiceCount = REWARD_CONFIG.relicChoicesBoss;
+
+    // Apply ascension relic reduction (FEWER_RELIC_CHOICES stacks additively; floor at 1)
+    const state = this.runState;
+    if (state) {
+      const ascEffects = getAscensionEffects(state.ascensionLevel);
+      const relicReduction = ascEffects.get(AscensionEffectType.FEWER_RELIC_CHOICES) ?? 0;
+      choiceCount = Math.max(1, choiceCount - relicReduction);
+    }
 
     // Pick relics from available pool
     const relicChoices = this.pickRelicRewards(choiceCount, rng);

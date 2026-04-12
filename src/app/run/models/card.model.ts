@@ -25,6 +25,14 @@ export enum CardId {
   TOWER_CHAIN = 'TOWER_CHAIN',
   TOWER_MORTAR = 'TOWER_MORTAR',
 
+  // Tower card variants (6 — one per tower type)
+  TOWER_BASIC_REINFORCED = 'TOWER_BASIC_REINFORCED',
+  TOWER_SNIPER_LIGHT = 'TOWER_SNIPER_LIGHT',
+  TOWER_SPLASH_CLUSTER = 'TOWER_SPLASH_CLUSTER',
+  TOWER_SLOW_AURA = 'TOWER_SLOW_AURA',
+  TOWER_CHAIN_TESLA = 'TOWER_CHAIN_TESLA',
+  TOWER_MORTAR_BARRAGE = 'TOWER_MORTAR_BARRAGE',
+
   // Spell cards (8 — instant effects)
   GOLD_RUSH = 'GOLD_RUSH',
   REPAIR_WALLS = 'REPAIR_WALLS',
@@ -34,6 +42,15 @@ export enum CardId {
   SALVAGE = 'SALVAGE',
   FORTIFY = 'FORTIFY',
   OVERCLOCK = 'OVERCLOCK',
+
+  // Status-applying spell cards (3 — archetype enablers for burn/poison/slow builds)
+  INCINERATE = 'INCINERATE',
+  TOXIC_SPRAY = 'TOXIC_SPRAY',
+  CRYO_PULSE = 'CRYO_PULSE',
+
+  // Status payoff spells (2 — consume/amplify existing status for burst)
+  DETONATE = 'DETONATE',
+  EPIDEMIC = 'EPIDEMIC',
 
   // Modifier cards (8 — persist for N waves)
   DAMAGE_BOOST = 'DAMAGE_BOOST',
@@ -125,11 +142,31 @@ export type CardEffect =
   | ModifierCardEffect
   | UtilityCardEffect;
 
+/**
+ * Optional per-card stat modifications applied at tower placement time.
+ * Stored on the resulting `PlacedTower` and composed into the tower's
+ * effective stats at fire time, stacking multiplicatively (or additively for
+ * bonus fields) with relic and card modifiers.
+ *
+ * All fields are optional — a missing field means "no override" (1.0 for
+ * multipliers, 0 for additive bonuses). A tower with no overrides set
+ * (undefined or {}) is treated identically to pre-extension behavior.
+ */
+export interface TowerStatOverrides {
+  readonly damageMultiplier?: number;
+  readonly rangeMultiplier?: number;
+  readonly splashRadiusMultiplier?: number;
+  readonly chainBounceBonus?: number;
+  readonly dotDamageMultiplier?: number;
+}
+
 export interface TowerCardEffect {
   readonly type: 'tower';
   readonly towerType: TowerType;
   /** Initial level for the placed tower (default 1). Upgraded tower cards use 2. */
   readonly startLevel?: number;
+  /** Optional per-card stat overrides (see TowerStatOverrides docs). */
+  readonly statOverrides?: TowerStatOverrides;
 }
 
 export interface SpellCardEffect {

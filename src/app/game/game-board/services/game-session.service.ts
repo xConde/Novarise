@@ -12,7 +12,6 @@ import { StatusEffectService } from './status-effect.service';
 import { MapBridgeService } from '@core/services/map-bridge.service';
 import { TutorialService } from '@core/services/tutorial.service';
 import { PlayerProfileService } from '@core/services/player-profile.service';
-import { CAMPAIGN_WAVE_DEFINITIONS } from '../../../run/data/waves/campaign-waves';
 import { TowerCombatService } from './tower-combat.service';
 import { TowerPreviewService } from './tower-preview.service';
 import { DamagePopupService } from './damage-popup.service';
@@ -32,7 +31,7 @@ export interface CleanupSceneOpts {
 }
 
 /**
- * Orchestrates game-level lifecycle: service resets on restart and campaign wave wiring.
+ * Orchestrates game-level lifecycle: service resets on restart and Three.js scene cleanup.
  * Component-scoped — provided in GameModule alongside the other game services.
  */
 @Injectable()
@@ -76,22 +75,6 @@ export class GameSessionService {
     this.statusEffectService.cleanup();
     this.tutorialService.resetCurrentStep();
     this.playerProfileService.resetSession();
-  }
-
-  /**
-   * Load campaign wave definitions for the current map into WaveService and GameStateService.
-   * No-op for non-campaign maps (standard 10-wave gameplay is unchanged).
-   * Must be called after waveService.reset() — reset clears custom wave definitions.
-   */
-  applyCampaignWaves(): void {
-    const mapId = this.mapBridge.getMapId();
-    if (!mapId?.startsWith('campaign_')) return;
-
-    const waves = CAMPAIGN_WAVE_DEFINITIONS[mapId];
-    if (!waves) return;
-
-    this.waveService.setCustomWaves(waves);
-    this.gameStateService.setMaxWaves(waves.length);
   }
 
   /**
