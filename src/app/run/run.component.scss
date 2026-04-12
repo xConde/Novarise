@@ -351,13 +351,26 @@
     grid-template-columns: 1fr;
   }
 
-  // Stats are in the nav on mobile — hide sidebar
   .run-sidebar {
     display: none;
   }
 
-  .run-map-title {
+  // Stats as fixed bottom-right overlay on mobile
+  .run-nav-stats {
+    position: fixed;
+    bottom: var(--spacing-md);
+    right: var(--spacing-md);
+    z-index: 9;
+    background: var(--glass-bg);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--border-radius-sm);
+    border: 1px solid var(--border-structural);
+    gap: var(--spacing-sm);
     font-size: var(--font-size-xs);
+  }
+
+  .run-map-title {
+    display: none;
   }
 }
 
