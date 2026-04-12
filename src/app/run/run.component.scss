@@ -7,7 +7,6 @@
   grid-template-areas:
     "topbar"
     "content";
-  min-height: 100%;
   height: 100%;
   background: var(--bg-color);
   color: var(--text-color);
@@ -136,7 +135,8 @@
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--spacing-md);
+  overflow-x: hidden;
+  padding: var(--spacing-sm) var(--spacing-md) 0;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
   &::-webkit-scrollbar { width: 6px; }
