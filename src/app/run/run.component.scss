@@ -63,25 +63,22 @@
 // ── Map Layout (map + sidebar) ───────────────────────────────────────────────
 
 .run-map-layout {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--spacing-md);
+  position: relative;
   flex: 1;
   min-height: 0;
-  max-width: 640px;
-  margin: 0 auto;
-  width: 100%;
 }
 
-// ── Sidebar ──────────────────────────────────────────────────────────────────
+// ── Sidebar (absolute — doesn't shift map centering) ─────────────────────────
 
 .run-sidebar {
+  position: absolute;
+  top: 0;
+  right: var(--spacing-md);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
-  padding: var(--spacing-md) var(--spacing-sm);
+  padding: var(--spacing-md) 0;
   user-select: none;
-  min-width: 6rem;
 }
 
 .sidebar-stat {
@@ -356,10 +353,6 @@
 @media (max-width: 768px) {
   .run-title {
     font-size: var(--font-size-large);
-  }
-
-  .run-map-layout {
-    grid-template-columns: 1fr;
   }
 
   .run-sidebar {
