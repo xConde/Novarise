@@ -263,9 +263,8 @@ export class RunComponent implements OnInit, OnDestroy {
     return Math.max(REST_CONFIG.minHeal, heal);
   }
 
-  /** Abandon run and return to landing. */
-  abandonRun(): void {
-    this.runService.abandonRun();
+  /** Save run and return to landing. */
+  exitRun(): void {
     this.router.navigate(['/']);
   }
 

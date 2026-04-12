@@ -1,18 +1,20 @@
 <!-- Run Mode Root Template -->
 <div class="run-container">
 
-  <!-- ── Relic Bar (persistent across views, hidden on start screen) ─────────────── -->
-  <div class="run-relic-bar" *ngIf="runState && viewMode !== 'start'">
-    <span class="run-lives"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg> {{ runState.lives }}/{{ runState.maxLives }}</span>
-    <span class="run-gold"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="7" x2="12" y2="17"/><path d="M9 10 Q9 8 12 8 Q15 8 15 10 Q15 12 12 12 Q9 12 9 14 Q9 16 12 16 Q15 16 15 14"/></svg> {{ runState.gold }}g</span>
-    <span class="run-floor">Act {{ runState.actIndex + 1 }}</span>
-    <span class="run-score">Score: {{ runState.score }}</span>
-    <div class="run-relics">
-      <app-relic-inventory [relics]="activeRelics"></app-relic-inventory>
+  <!-- ── Sticky Nav (persistent across views, hidden on start screen) ─────────── -->
+  <div class="run-nav" *ngIf="runState && viewMode !== 'start'">
+    <button class="run-nav-back" (click)="exitRun()">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12L6 8l4-4"/></svg>
+      Exit
+    </button>
+    <span class="run-nav-title">Act {{ runState.actIndex + 1 }}</span>
+    <div class="run-nav-stats">
+      <span class="run-lives"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg> {{ runState.lives }}/{{ runState.maxLives }}</span>
+      <span class="run-gold"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="7" x2="12" y2="17"/><path d="M9 10 Q9 8 12 8 Q15 8 15 10 Q15 12 12 12 Q9 12 9 14 Q9 16 12 16 Q15 16 15 14"/></svg> {{ runState.gold }}g</span>
     </div>
   </div>
 
-  <!-- ── Content slot (M5 S2: grid-area: content) — only one view renders at a time, but the SLOT is reserved by the parent grid so structure is constant. ────────────── -->
+  <!-- ── Content slot ────────────────────────────────────────────────────────────── -->
   <div class="run-content">
 
   <!-- ── Start Screen ────────────────────────────────────── -->
@@ -89,7 +91,7 @@
 
   <!-- ── Node Map ────────────────────────────────────────── -->
   <div class="run-map" *ngIf="viewMode === 'map' && nodeMap">
-    <h2 class="run-map-title">Act {{ (runState?.actIndex ?? 0) + 1 }} — Choose Your Path</h2>
+    <h2 class="run-map-title">Choose Your Path</h2>
 
     <app-node-map
       [nodeMap]="nodeMap"
@@ -98,10 +100,6 @@
       [availableNodes]="availableNodes"
       (nodeSelected)="selectNode($event)"
     ></app-node-map>
-
-    <button class="run-btn run-btn--danger" (click)="abandonRun()">
-      Abandon Run
-    </button>
   </div>
 
   <!-- ── Reward Screen ───────────────────────────────────── -->
