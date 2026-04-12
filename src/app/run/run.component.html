@@ -106,7 +106,6 @@
     <aside class="run-sidebar" *ngIf="runState">
       <div class="sidebar-stat"><span class="sidebar-label">HP</span><span class="run-lives">{{ runState.lives }}/{{ runState.maxLives }}</span></div>
       <div class="sidebar-stat"><span class="sidebar-label">Gold</span><span class="run-gold">{{ runState.gold }}</span></div>
-      <div class="sidebar-stat sidebar-stat--dim"><span class="sidebar-label">Score</span><span>{{ runState.score }}</span></div>
       <div class="sidebar-relics" *ngIf="activeRelics.length > 0">
         <app-relic-inventory [relics]="activeRelics"></app-relic-inventory>
       </div>
