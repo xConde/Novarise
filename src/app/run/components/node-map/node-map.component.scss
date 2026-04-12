@@ -17,9 +17,6 @@
 .node-map-container {
   grid-area: canvas;
   // Shell custom property — override in media queries without reshuffling areas
-  --node-map-max-height: 70vh;
-  max-height: var(--node-map-max-height);
-  overflow-y: auto;
   overflow-x: auto;
   scroll-behavior: smooth;
   scrollbar-width: thin;
@@ -194,20 +191,12 @@
 // ── Responsive ────────────────────────────────────────────────────────────────
 
 @media (max-width: 768px) {
-  .node-map-container {
-    --node-map-max-height: 60vh;
-  }
 }
 
 @media (max-width: 480px) {
   .node-map-container {
-    --node-map-max-height: 55vh;
     width: 100%;
-    // Hide the right-edge scrollbar without losing scroll functionality
     scrollbar-width: none;
-    overflow-y: auto;
-    overflow-x: auto;
-
     &::-webkit-scrollbar { display: none; }
   }
 

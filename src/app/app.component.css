@@ -44,7 +44,7 @@
 .settings-cog {
   position: fixed;
   top: 38px;
-  right: var(--spacing-xs);
+  right: var(--spacing-md);
   z-index: 1999;
   display: flex;
   align-items: center;
