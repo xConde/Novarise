@@ -86,19 +86,24 @@
 
 .sidebar-stat {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--spacing-sm);
   font-size: var(--font-size-xs);
-}
-
-.sidebar-stat-label {
-  color: var(--text-faint);
-  font-weight: 500;
-}
-
-.sidebar-stat-value {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+
+  &--dim {
+    color: var(--text-faint);
+  }
+}
+
+.sidebar-label {
+  font-weight: 500;
+  color: var(--text-faint);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .sidebar-relics {
@@ -107,20 +112,26 @@
   gap: var(--spacing-xs);
 }
 
+// Nav stats (compact, in nav right column)
+.run-nav-stats {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+}
+
 .run-lives {
   color: var(--game-health);
   font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  font-variant-numeric: tabular-nums;
 }
 
 .run-gold {
   color: var(--game-gold);
   font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  font-variant-numeric: tabular-nums;
 }
 
 // ── Content slot ─────────────────────────────────────────────────────────────
@@ -336,17 +347,17 @@
     font-size: var(--font-size-large);
   }
 
-  // Sidebar flips to horizontal strip above map
   .run-map-layout {
     grid-template-columns: 1fr;
   }
 
+  // Stats are in the nav on mobile — hide sidebar
   .run-sidebar {
-    flex-direction: row;
-    justify-content: center;
-    order: -1;
-    padding: var(--spacing-xs) var(--spacing-md);
-    min-width: unset;
+    display: none;
+  }
+
+  .run-map-title {
+    font-size: var(--font-size-xs);
   }
 }
 
@@ -359,9 +370,8 @@
     padding: var(--spacing-xs) var(--spacing-sm);
   }
 
-  .run-sidebar {
+  .run-nav-stats {
     gap: var(--spacing-sm);
-    font-size: var(--font-size-2xs);
   }
 
   .run-start {
