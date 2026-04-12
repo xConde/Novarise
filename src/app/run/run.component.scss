@@ -109,10 +109,10 @@
   gap: var(--spacing-xs);
 }
 
-// Nav stats (compact, in nav right column)
+// Nav stats (mobile only — hidden on desktop where sidebar shows)
 .run-nav-stats {
   justify-self: end;
-  display: flex;
+  display: none;
   align-items: center;
   gap: var(--spacing-md);
   font-size: var(--font-size-xs);
@@ -139,6 +139,15 @@
   min-height: 0;
   overflow-y: auto;
   padding: var(--spacing-md);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+    &:hover { background: rgba(255, 255, 255, 0.15); }
+  }
 }
 
 // ── Start screen ──────────────────────────────────────────────────────────────
@@ -354,8 +363,9 @@
     display: none;
   }
 
-  // Stats as fixed bottom-right overlay on mobile
+  // Show nav stats on mobile (sidebar hidden)
   .run-nav-stats {
+    display: flex;
     position: fixed;
     bottom: var(--spacing-md);
     right: var(--spacing-md);
