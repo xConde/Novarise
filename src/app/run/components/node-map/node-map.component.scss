@@ -15,28 +15,8 @@
 // ── Scroll container ──────────────────────────────────────────────────────────
 
 .node-map-container {
-  grid-area: canvas;
-  // Shell custom property — override in media queries without reshuffling areas
-  overflow-x: auto;
-  scroll-behavior: smooth;
-  scrollbar-width: thin;
-  scrollbar-color: var(--theme-purple-a50) transparent;
-
-  &::-webkit-scrollbar {
-    width: var(--spacing-xs);
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: var(--theme-purple-a50);
-    border-radius: var(--border-radius-sm);
-  }
-
-  &::-webkit-scrollbar-thumb:hover {
-    background: var(--theme-purple-a70);
+  // fitToContainer() handles responsive width — no internal scrolling needed
+  overflow: hidden;
   }
 }
 
@@ -194,11 +174,6 @@
 }
 
 @media (max-width: 520px) {
-  .node-map-container {
-    width: 100%;
-    overflow-x: hidden;
-  }
-
   .map-node {
     width: 2.75rem;
     height: 2.75rem;
