@@ -1264,8 +1264,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * @deprecated Phase H13: `restartGame` has no live callers after Phase 8
-   * deleted the game-results-overlay template (which had the `(restart)` binding).
+   * @deprecated Phase H13: `restartGame` has no live callers. The game-results-overlay
+   * component was removed (dead UI — zero template renderers since the run-mode pivot).
    * Roguelites do not let players restart encounters — the outcome is committed
    * and the player either progresses (reward node) or abandons the run (quit).
    * The method body is kept intact because ~20 spec tests still exercise its

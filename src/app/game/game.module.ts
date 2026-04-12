@@ -9,7 +9,6 @@ import { TutorialSpotlightComponent } from './game-board/components/tutorial-spo
 import { GameHudComponent } from './game-board/components/game-hud/game-hud.component';
 import { GameSetupPanelComponent } from './game-board/components/game-setup-panel/game-setup-panel.component';
 import { TowerInfoPanelComponent } from './game-board/components/tower-info-panel/tower-info-panel.component';
-import { GameResultsOverlayComponent } from './game-board/components/game-results-overlay/game-results-overlay.component';
 import { GamePauseService } from './game-board/services/game-pause.service';
 import { ChallengeDisplayService } from './game-board/services/challenge-display.service';
 import { CardHandComponent } from './game-board/components/card-hand/card-hand.component';
@@ -21,7 +20,6 @@ import { CardHandComponent } from './game-board/components/card-hand/card-hand.c
     GameHudComponent,
     GameSetupPanelComponent,
     TowerInfoPanelComponent,
-    GameResultsOverlayComponent,
     CardHandComponent,
   ],
   imports: [
