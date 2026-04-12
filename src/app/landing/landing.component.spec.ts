@@ -3,12 +3,14 @@ import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { LandingComponent } from './landing.component';
 import { RunPersistenceService } from '../run/services/run-persistence.service';
+import { RunService } from '../run/services/run.service';
 
 describe('LandingComponent', () => {
   let component: LandingComponent;
   let fixture: ComponentFixture<LandingComponent>;
   let router: jasmine.SpyObj<Router>;
   let runPersistence: jasmine.SpyObj<RunPersistenceService>;
+  let runService: jasmine.SpyObj<RunService>;
 
   beforeEach(async () => {
     router = jasmine.createSpyObj('Router', ['navigate']);
@@ -17,6 +19,7 @@ describe('LandingComponent', () => {
       'clearSavedRun',
     ]);
     runPersistence.hasSavedRun.and.returnValue(false);
+    runService = jasmine.createSpyObj('RunService', ['startNewRun']);
 
     await TestBed.configureTestingModule({
       declarations: [LandingComponent],
@@ -24,6 +27,7 @@ describe('LandingComponent', () => {
       providers: [
         { provide: Router, useValue: router },
         { provide: RunPersistenceService, useValue: runPersistence },
+        { provide: RunService, useValue: runService },
       ],
     }).compileComponents();
 
@@ -97,9 +101,10 @@ describe('LandingComponent', () => {
   });
 
   describe('actions', () => {
-    it('startNewRun clears saved run and navigates to /run', () => {
+    it('startNewRun clears saved run, initializes run, and navigates to /run', () => {
       component.startNewRun();
       expect(runPersistence.clearSavedRun).toHaveBeenCalled();
+      expect(runService.startNewRun).toHaveBeenCalled();
       expect(router.navigate).toHaveBeenCalledWith(['/run']);
     });
 

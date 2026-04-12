@@ -88,6 +88,9 @@ export class RunComponent implements OnInit, OnDestroy {
       this.handleEncounterReturn();
     } else if (this.runService.hasActiveRun()) {
       this.viewMode = 'map';
+    } else {
+      // No active run — redirect to main menu instead of showing start screen
+      this.router.navigate(['/']);
     }
   }
 

@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { RunPersistenceService } from '../run/services/run-persistence.service';
+import { RunService } from '../run/services/run.service';
 
 /**
  * Phase 9: Landing component repurposed as the Run Hub.
@@ -24,6 +25,7 @@ export class LandingComponent implements OnInit {
   constructor(
     private router: Router,
     private runPersistence: RunPersistenceService,
+    private runService: RunService,
   ) {}
 
   ngOnInit(): void {
@@ -36,6 +38,7 @@ export class LandingComponent implements OnInit {
    *  explicit. */
   startNewRun(): void {
     this.runPersistence.clearSavedRun();
+    this.runService.startNewRun();
     this.router.navigate(['/run']);
   }
 
