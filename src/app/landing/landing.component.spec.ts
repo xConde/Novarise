@@ -19,7 +19,7 @@ describe('LandingComponent', () => {
       'clearSavedRun',
     ]);
     runPersistence.hasSavedRun.and.returnValue(false);
-    runService = jasmine.createSpyObj('RunService', ['startNewRun']);
+    runService = jasmine.createSpyObj('RunService', ['startNewRun', 'resumeRun']);
 
     await TestBed.configureTestingModule({
       declarations: [LandingComponent],

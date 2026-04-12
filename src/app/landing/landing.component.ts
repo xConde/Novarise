@@ -45,6 +45,7 @@ export class LandingComponent implements OnInit {
   /** Resume the existing saved run. No-op if nothing is saved. */
   continueRun(): void {
     if (!this.hasSavedRun) return;
+    this.runService.resumeRun();
     this.router.navigate(['/run']);
   }
 
