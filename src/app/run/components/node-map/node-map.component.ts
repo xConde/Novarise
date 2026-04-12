@@ -5,9 +5,11 @@ import {
   EventEmitter,
   OnInit,
   OnChanges,
+  OnDestroy,
   AfterViewInit,
   ViewChild,
   ElementRef,
+  HostListener,
 } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MapNode, NodeMap, NodeType, getNodeEdges } from '../../models/node-map.model';
@@ -44,7 +46,7 @@ export interface ConnectionPath {
   templateUrl: './node-map.component.html',
   styleUrls: ['./node-map.component.scss'],
 })
-export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit {
+export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit, OnDestroy {
   @Input() nodeMap!: NodeMap;
   @Input() currentNodeId: string | null = null;
   @Input() completedNodeIds: string[] = [];
@@ -142,16 +144,28 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    this.fitToContainer();
-    this.scrollToCurrentNode();
+    // Delay to ensure layout is complete before measuring
+    setTimeout(() => {
+      this.fitToContainer();
+      this.scrollToCurrentNode();
+    });
   }
 
-  /** Resize map width to fit container if narrower than the default. */
+  ngOnDestroy(): void {
+    // HostListener handles cleanup automatically
+  }
+
+  @HostListener('window:resize')
+  onResize(): void {
+    this.fitToContainer();
+  }
+
+  /** Resize map width to fit container, capped at the default max. */
   private fitToContainer(): void {
     if (!this.mapContainer) return;
     const containerWidth = this.mapContainer.nativeElement.clientWidth;
-    if (containerWidth > 0 && containerWidth < NODE_MAP_LAYOUT.width) {
-      this.mapWidth = containerWidth;
+    if (containerWidth > 0) {
+      this.mapWidth = Math.min(containerWidth, NODE_MAP_LAYOUT.width);
       this.computeLayout();
     }
   }
