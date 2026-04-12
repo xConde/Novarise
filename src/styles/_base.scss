@@ -26,13 +26,13 @@ html, body {
 }
 
 /* Routed component fills remaining space */
-app-novarise, app-game, app-landing {
+app-novarise, app-game, app-landing, app-run {
   flex: 1;
   overflow: hidden;
   display: block;
 }
 
-app-profile, app-settings, app-run {
+app-profile, app-settings {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
