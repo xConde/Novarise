@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Location } from '@angular/common';
+import { Router } from '@angular/router';
 import { ProfileComponent } from './profile.component';
 import {
   PlayerProfileService,
@@ -11,7 +11,7 @@ import {
 describe('ProfileComponent', () => {
   let component: ProfileComponent;
   let fixture: ComponentFixture<ProfileComponent>;
-  let location: jasmine.SpyObj<Location>;
+  let router: jasmine.SpyObj<Router>;
   let profileService: jasmine.SpyObj<PlayerProfileService>;
 
   const mockProfile: PlayerProfile = {
@@ -38,14 +38,14 @@ describe('ProfileComponent', () => {
   };
 
   beforeEach(async () => {
-    location = jasmine.createSpyObj('Location', ['back']);
+    router = jasmine.createSpyObj('Router', ['navigate']);
     profileService = jasmine.createSpyObj('PlayerProfileService', ['getProfile']);
     profileService.getProfile.and.returnValue({ ...mockProfile, achievements: [...mockProfile.achievements] });
 
     await TestBed.configureTestingModule({
       declarations: [ProfileComponent],
       providers: [
-        { provide: Location, useValue: location },
+        { provide: Router, useValue: router },
         { provide: PlayerProfileService, useValue: profileService },
       ]
     }).compileComponents();
@@ -129,9 +129,9 @@ describe('ProfileComponent', () => {
     expect(lockedCards.length).toBe(ACHIEVEMENTS.length - 2);
   });
 
-  it('should navigate back on goBack()', () => {
+  it('should navigate home on goBack()', () => {
     component.goBack();
-    expect(location.back).toHaveBeenCalled();
+    expect(router.navigate).toHaveBeenCalledWith(['/']);
   });
 
   it('should render back button in nav', () => {

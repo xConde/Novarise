@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { Location } from '@angular/common';
+import { Router } from '@angular/router';
 import {
   PlayerProfileService,
   PlayerProfile,
@@ -79,7 +79,7 @@ export class ProfileComponent implements OnInit {
 
   constructor(
     private profileService: PlayerProfileService,
-    private location: Location
+    private router: Router
   ) {}
 
   ngOnInit(): void {
@@ -159,6 +159,6 @@ export class ProfileComponent implements OnInit {
   }
 
   goBack(): void {
-    this.location.back();
+    this.router.navigate(['/']);
   }
 }
