@@ -62,7 +62,7 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit {
   /** Total pixel height of the SVG canvas (derived from row count). */
   mapHeight = NODE_MAP_LAYOUT.rowSpacing * 12 + NODE_MAP_LAYOUT.paddingY * 2;
 
-  readonly mapWidth = NODE_MAP_LAYOUT.width;
+  mapWidth: number = NODE_MAP_LAYOUT.width;
   readonly nodeSize = NODE_MAP_LAYOUT.nodeSize;
 
   readonly NodeType = NodeType;
@@ -142,7 +142,18 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
+    this.fitToContainer();
     this.scrollToCurrentNode();
+  }
+
+  /** Resize map width to fit container if narrower than the default. */
+  private fitToContainer(): void {
+    if (!this.mapContainer) return;
+    const containerWidth = this.mapContainer.nativeElement.clientWidth;
+    if (containerWidth > 0 && containerWidth < NODE_MAP_LAYOUT.width) {
+      this.mapWidth = containerWidth;
+      this.computeLayout();
+    }
   }
 
   /**

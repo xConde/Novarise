@@ -196,15 +196,9 @@
 @media (max-width: 520px) {
   .node-map-container {
     width: 100%;
-    overflow: hidden;
+    overflow-x: hidden;
   }
 
-  .node-map-scroll {
-    transform-origin: top left;
-    transform: scale(calc(min(100vw - 2rem, 500px) / 500));
-  }
-
-  // Keep WCAG minimum on very small screens (2.75rem = 44px — exactly the minimum)
   .map-node {
     width: 2.75rem;
     height: 2.75rem;
