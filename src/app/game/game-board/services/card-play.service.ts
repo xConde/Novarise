@@ -167,6 +167,12 @@ export class CardPlayService {
     this.pendingTowerCard = null;
   }
 
+  /** Null out callback references to prevent stale component references after destroy. */
+  cleanup(): void {
+    this.callbacks = null;
+    this.pendingTowerCard = null;
+  }
+
   /**
    * Fortify spell — upgrade a random tower one level for free.
    * If no tower can be upgraded (all at max level), this is a no-op.

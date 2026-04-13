@@ -1324,3 +1324,40 @@ All relic effects consumed via pull API in existing game services — zero chang
 - [x] Step 3: ESC key initiates pause when no tower selected
 - [x] Step 4: Red team — fix route guard text inconsistency, extract getter const
 - [x] Step 5: Full test suite — 4917/4917 green, 1 skipped
+
+## Red Team Critique — GameBoardComponent Decomposition (2026-04-12)
+
+Decomposition extracted 8 new services, reducing GameBoardComponent from 2078 → 1264 lines.
+
+### Finding 1: contextmenu callback null-dereference (CRITICAL)
+**Location:** `board-pointer.service.ts:120`
+**Risk:** Used `callbacks!` instead of `callbacks?.` — crash if right-click fires during teardown.
+**Fix:** Changed to optional chaining.
+
+### Finding 2: Missing pause guards on startWave/endTurn/onCardPlayed (HIGH)
+**Location:** `game-board.component.ts` wrapper methods
+**Risk:** Template buttons could fire game actions through the pause overlay.
+**Fix:** Added `if (this.isPaused) return;` to all three component wrappers.
+
+### Finding 3: Touch tap fires without pause check (HIGH)
+**Location:** `touch-interaction.service.ts:99`
+**Risk:** touchEnd had no pause guard (touchStart and touchMove did). Taps could trigger placement while paused.
+**Fix:** Added `isPaused` early return to touchEndHandler.
+
+### Finding 4: Missing cleanup/ngOnDestroy on extracted services (MEDIUM)
+**Locations:** `card-play.service.ts`, `wave-combat-facade.service.ts`, `tutorial-facade.service.ts`
+**Risk:** Stale callback references after component destroy.
+**Fix:** Added `cleanup()` to CardPlayService, null callbacks in WaveCombatFacade cleanup, added `OnDestroy` to TutorialFacade.
+
+### Finding 5: Stale canvas closure in mousemove handler (MEDIUM)
+**Location:** `board-pointer.service.ts:63`
+**Risk:** Closure captured `canvas` param instead of reading `this.canvas`.
+**Fix:** Changed to read `this.canvas` with null guard.
+
+### Deployment Checklist — Decomposition
+- [x] Sprint 1: Delete dead code (-137 lines), extract BoardMeshRegistryService
+- [x] Sprint 2: Extract TouchInteractionService, BoardPointerService, keyboard dispatch (-261 lines)
+- [x] Sprint 3: Extract CardPlayService, TowerMeshLifecycleService (-190 lines)
+- [x] Sprint 4: Extract WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService (-206 lines)
+- [x] Red team: Fix 1 CRITICAL, 3 HIGH, 3 MEDIUM findings
+- [x] Final: 0 FAILED / 4998 SUCCESS / 1 skipped

@@ -59,8 +59,8 @@ export class BoardPointerService implements OnDestroy {
     this.callbacks = callbacks;
 
     this.mousemoveHandler = (event: MouseEvent) => {
-      if (this.gameStateService.getState().isPaused) return;
-      const rect = canvas.getBoundingClientRect();
+      if (!this.canvas || this.gameStateService.getState().isPaused) return;
+      const rect = this.canvas.getBoundingClientRect();
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
@@ -77,7 +77,7 @@ export class BoardPointerService implements OnDestroy {
           this.hoveredTile = mesh;
           const material = mesh.material as THREE.MeshStandardMaterial;
           material.emissiveIntensity = TILE_EMISSIVE.hover;
-          canvas.style.cursor = 'pointer';
+          this.canvas!.style.cursor = 'pointer';
         }
 
         const row = mesh.userData['row'];
@@ -102,7 +102,7 @@ export class BoardPointerService implements OnDestroy {
         }
       } else {
         this.hoveredTile = null;
-        canvas.style.cursor = 'default';
+        this.canvas!.style.cursor = 'default';
         this.lastPreviewKey = '';
         this.towerPreviewService.hidePreview(this.sceneService.getScene());
       }
@@ -117,7 +117,7 @@ export class BoardPointerService implements OnDestroy {
       event.preventDefault();
       // Delegate full context-menu logic to the component, which knows about
       // isDragging (towerPlacementService) and isPlaceMode state.
-      this.callbacks!.onContextMenu();
+      this.callbacks?.onContextMenu();
     };
 
     canvas.addEventListener('mousemove', this.mousemoveHandler);

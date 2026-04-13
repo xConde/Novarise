@@ -93,6 +93,7 @@ export class WaveCombatFacadeService {
       clearTimeout(this.waveStartPulseTimerId);
       this.waveStartPulseTimerId = null;
     }
+    this.callbacks = null;
   }
 
   /** Show a centered "Wave X Clear!" banner for 2 seconds. */

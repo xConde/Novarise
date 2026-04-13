@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, OnDestroy } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { TutorialService, TutorialStep, TutorialTip } from '../../../core/services/tutorial.service';
 
@@ -9,7 +9,7 @@ import { TutorialService, TutorialStep, TutorialTip } from '../../../core/servic
  * @Injectable() (not providedIn: 'root') — component-scoped.
  */
 @Injectable()
-export class TutorialFacadeService {
+export class TutorialFacadeService implements OnDestroy {
   /** The currently active tutorial step (null = tutorial not active). */
   currentTutorialStep: TutorialStep | null = null;
 
@@ -48,6 +48,10 @@ export class TutorialFacadeService {
       this.tutorialSub.unsubscribe();
       this.tutorialSub = null;
     }
+  }
+
+  ngOnDestroy(): void {
+    this.cleanup();
   }
 
   getTutorialTip(): TutorialTip | null {

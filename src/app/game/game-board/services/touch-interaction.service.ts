@@ -98,6 +98,7 @@ export class TouchInteractionService implements OnDestroy {
 
     this.touchEndHandler = (event: TouchEvent) => {
       event.preventDefault();
+      if (this.gameStateService.getState().isPaused) return;
 
       if (event.changedTouches.length === 1 && !this.touchIsDragging) {
         const elapsed = performance.now() - this.touchStartTime;

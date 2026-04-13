@@ -726,6 +726,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    * Delegates to CardPlayService which manages placement limbo and spell effects.
    */
   onCardPlayed(card: CardInstance): void {
+    if (this.isPaused) return;
     this.cardPlayService.onCardPlayed(card);
   }
 
@@ -886,6 +887,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   startWave(): void {
+    if (this.isPaused) return;
     this.waveCombat.startWave();
   }
 
@@ -903,6 +905,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   endTurn(): void {
+    if (this.isPaused) return;
     this.waveCombat.endTurn();
   }
 
@@ -1211,6 +1214,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.waveCombat.cleanup();
     this.tutorialFacade.cleanup();
+    this.cardPlayService.cleanup();
 
     if (this.stateSubscription) {
       this.stateSubscription.unsubscribe();
