@@ -5,6 +5,7 @@ import { WaveDefinition, WAVE_DEFINITIONS, getWaveEnemyCount } from '../models/w
 import { EndlessWaveTemplate, EndlessWaveResult, generateEndlessWave } from '../models/endless-wave.model';
 import { EnemyService } from './enemy.service';
 import { RelicService } from '../../../run/services/relic.service';
+import { SerializableWaveState } from '../models/encounter-checkpoint.model';
 
 @Injectable()
 export class WaveService {
@@ -349,6 +350,33 @@ export class WaveService {
    */
   markSeen(type: EnemyType): void {
     this.seenEnemyTypes.add(type);
+  }
+
+  /** Serialize wave state for checkpoint save. */
+  serializeState(): SerializableWaveState {
+    return {
+      currentWaveIndex: this.currentWaveIndex,
+      turnSchedule: this.turnSchedule.map(turn => [...turn]),
+      turnScheduleIndex: this.turnScheduleIndex,
+      seenEnemyTypes: [...this.seenEnemyTypes],
+      active: this.active,
+      endlessMode: this.endlessMode,
+      currentEndlessResult: this.currentEndlessResult ? { ...this.currentEndlessResult } : null,
+    };
+  }
+
+  /**
+   * Restore wave state from a checkpoint snapshot. Sets all fields directly
+   * without calling startWave() (which would rebuild turnSchedule from scratch).
+   */
+  restoreState(snapshot: SerializableWaveState): void {
+    this.currentWaveIndex = snapshot.currentWaveIndex;
+    this.turnSchedule = snapshot.turnSchedule.map(turn => [...turn] as EnemyType[]);
+    this.turnScheduleIndex = snapshot.turnScheduleIndex;
+    this.seenEnemyTypes = new Set(snapshot.seenEnemyTypes as EnemyType[]);
+    this.active = snapshot.active;
+    this.endlessMode = snapshot.endlessMode;
+    this.currentEndlessResult = snapshot.currentEndlessResult ? { ...snapshot.currentEndlessResult } : null;
   }
 
   /** Resets wave state. Call from `restartGame()` before a new game begins. Clears custom waves — re-apply via `setCustomWaves()` if restarting a campaign level. */

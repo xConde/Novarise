@@ -11,6 +11,7 @@ import {
   ElementRef,
   HostListener,
 } from '@angular/core';
+import { EncounterCheckpointService } from '../../services/encounter-checkpoint.service';
 import { MapNode, NodeMap, NodeType, getNodeEdges } from '../../models/node-map.model';
 import { IconName } from '@shared/components/icon/icon-registry';
 
@@ -91,7 +92,7 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit, OnDes
     [NodeType.UNKNOWN]: 'Unknown',
   };
 
-  constructor() {}
+  constructor(private readonly checkpointService: EncounterCheckpointService) {}
 
   getNodeIcon(type: string): IconName {
     return this.NODE_TYPE_ICONS[type] ?? 'node-unknown';
@@ -246,6 +247,11 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit, OnDes
 
   isCurrent(nodeId: string): boolean {
     return nodeId === this.currentNodeId;
+  }
+
+  /** Returns true if this node has a saved encounter checkpoint. */
+  isCheckpointed(nodeId: string): boolean {
+    return this.checkpointService.getCheckpointNodeId() === nodeId;
   }
 
   onNodeClick(node: MapNode): void {

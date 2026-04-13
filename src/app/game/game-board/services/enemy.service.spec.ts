@@ -15,6 +15,8 @@ import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { EnemyVisualService } from './enemy-visual.service';
 import { EnemyHealthService } from './enemy-health.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
+import { SerializableEnemy } from '../models/encounter-checkpoint.model';
+import { createTestEnemy } from '../testing/test-enemy.factory';
 
 /**
  * Helper: configure modifier effects on the real GameStateService.
@@ -2613,6 +2615,159 @@ describe('EnemyService', () => {
       particles.forEach(p => {
         expect(p.parent).toBe(mockScene);
       });
+    });
+  });
+
+  describe('checkpoint serialization', () => {
+    it('serializeEnemies() strips mesh, statusParticles, and statusParticleEffectType', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // Attach particle-like fields manually to simulate visual state
+      enemy.statusParticles = [new THREE.Mesh()];
+      enemy.statusParticleEffectType = 'burn';
+
+      const { enemies } = service.serializeEnemies();
+      const serialized = enemies.find(e => e.id === enemy.id)!;
+
+      expect(serialized).toBeTruthy();
+      expect((serialized as unknown as Record<string, unknown>)['mesh']).toBeUndefined();
+      expect((serialized as unknown as Record<string, unknown>)['statusParticles']).toBeUndefined();
+      expect((serialized as unknown as Record<string, unknown>)['statusParticleEffectType']).toBeUndefined();
+
+      // Clean up the dummy particle mesh
+      enemy.statusParticles[0].geometry.dispose();
+      enemy.statusParticles = undefined;
+    });
+
+    it('serializeEnemies() strips GridNode.parent circular references', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // Attach a parent ref to a path node to simulate A* output
+      if (enemy.path.length > 0) {
+        enemy.path[0].parent = enemy.path[0]; // self-reference as stand-in
+      }
+
+      const { enemies } = service.serializeEnemies();
+      const serialized = enemies.find(e => e.id === enemy.id)!;
+
+      serialized.path.forEach(node => {
+        expect((node as unknown as Record<string, unknown>)['parent']).toBeUndefined();
+      });
+    });
+
+    it('serializeEnemies() captures all combat-relevant fields', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      // Mutate a few fields to have non-default values
+      enemy.health = 42;
+      enemy.pathIndex = 1;
+      enemy.distanceTraveled = 3;
+      enemy.dying = true;
+      enemy.dyingTimer = 0.5;
+      enemy.hitFlashTimer = 0.1;
+      enemy.needsRepath = true;
+
+      const { enemies } = service.serializeEnemies();
+      const s = enemies.find(e => e.id === enemy.id)!;
+
+      expect(s.id).toBe(enemy.id);
+      expect(s.type).toBe(EnemyType.SHIELDED);
+      expect(s.health).toBe(42);
+      expect(s.maxHealth).toBe(enemy.maxHealth);
+      expect(s.speed).toBe(enemy.speed);
+      expect(s.value).toBe(enemy.value);
+      expect(s.leakDamage).toBe(enemy.leakDamage);
+      expect(s.pathIndex).toBe(1);
+      expect(s.distanceTraveled).toBe(3);
+      expect(s.position).toEqual(enemy.position);
+      expect(s.gridPosition).toEqual(enemy.gridPosition);
+      expect(s.shield).toBe(ENEMY_STATS[EnemyType.SHIELDED].maxShield);
+      expect(s.maxShield).toBe(ENEMY_STATS[EnemyType.SHIELDED].maxShield);
+      expect(s.dying).toBeTrue();
+      expect(s.dyingTimer).toBe(0.5);
+      expect(s.hitFlashTimer).toBe(0.1);
+      expect(s.needsRepath).toBeTrue();
+    });
+
+    it('serializeEnemies() returns the current enemyCounter', () => {
+      // Spawn a couple of enemies to advance the counter
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+
+      const { enemyCounter } = service.serializeEnemies();
+      // Counter increments once per spawn; after 2 spawns it should be 2
+      expect(enemyCounter).toBe(2);
+    });
+
+    it('restoreEnemies() rebuilds the enemies Map from serialized data', () => {
+      const mesh = new THREE.Mesh();
+      const serialized: SerializableEnemy[] = [
+        {
+          id: 'enemy-99',
+          type: EnemyType.BASIC,
+          position: { x: 1, y: 0.3, z: 2 },
+          gridPosition: { row: 2, col: 1 },
+          health: 80,
+          maxHealth: 100,
+          speed: 1,
+          value: 10,
+          path: [{ x: 1, y: 2, f: 0, g: 0, h: 0 }],
+          pathIndex: 0,
+          distanceTraveled: 2,
+          leakDamage: 1,
+        }
+      ];
+      const meshMap = new Map<string, THREE.Mesh>([['enemy-99', mesh]]);
+
+      service.restoreEnemies(serialized, meshMap, 100);
+
+      const restored = service.getEnemies();
+      expect(restored.size).toBe(1);
+
+      const e = restored.get('enemy-99')!;
+      expect(e).toBeTruthy();
+      expect(e.type).toBe(EnemyType.BASIC);
+      expect(e.health).toBe(80);
+      expect(e.position).toEqual({ x: 1, y: 0.3, z: 2 });
+      expect(e.gridPosition).toEqual({ row: 2, col: 1 });
+      expect(e.mesh).toBe(mesh);
+
+      // Clean up
+      mesh.geometry.dispose();
+      service.getEnemies().clear();
+    });
+
+    it('serialize → restore roundtrip preserves all fields for multiple enemies', () => {
+      const e1 = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const e2 = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      e1.health = 55;
+      e2.distanceTraveled = 4;
+
+      const { enemies: serialized, enemyCounter } = service.serializeEnemies();
+
+      // Build a mesh map from the original meshes so restore can attach them
+      const meshMap = new Map<string, THREE.Mesh>();
+      service.getEnemies().forEach((enemy, id) => {
+        if (enemy.mesh) meshMap.set(id, enemy.mesh);
+      });
+
+      // Reset service state before restore (simulate a fresh load)
+      service.getEnemies().clear();
+
+      service.restoreEnemies(serialized, meshMap, enemyCounter);
+
+      const restored = service.getEnemies();
+      expect(restored.size).toBe(2);
+
+      const r1 = restored.get(e1.id)!;
+      expect(r1.health).toBe(55);
+      expect(r1.type).toBe(EnemyType.BASIC);
+      expect(r1.mesh).toBeTruthy();
+
+      const r2 = restored.get(e2.id)!;
+      expect(r2.distanceTraveled).toBe(4);
+      expect(r2.type).toBe(EnemyType.FAST);
+
+      // Verify counter was restored
+      const { enemyCounter: counterAfterRestore } = service.serializeEnemies();
+      expect(counterAfterRestore).toBe(enemyCounter);
     });
   });
 });

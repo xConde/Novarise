@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_TRANSITIONS } from '../models/game-state.model';
 import { GameModifier, ModifierEffects, mergeModifierEffects, calculateModifierScoreMultiplier } from '../models/game-modifier.model';
+import { SerializableGameState } from '../models/encounter-checkpoint.model';
 
 @Injectable()
 export class GameStateService {
@@ -20,6 +21,31 @@ export class GameStateService {
 
   getState(): GameState {
     return this.state;
+  }
+
+  /**
+   * Serialize the current game state to a plain JSON-safe object.
+   * Converts `activeModifiers` from a Set to an array. `isPaused` is omitted
+   * because encounters always resume unpaused.
+   */
+  serializeState(): SerializableGameState {
+    return {
+      phase: this.state.phase,
+      wave: this.state.wave,
+      maxWaves: this.state.maxWaves,
+      lives: this.state.lives,
+      maxLives: this.state.maxLives,
+      initialLives: this.state.initialLives,
+      gold: this.state.gold,
+      initialGold: this.state.initialGold,
+      score: this.state.score,
+      difficulty: this.state.difficulty,
+      isEndless: this.state.isEndless,
+      highestWave: this.state.highestWave,
+      elapsedTime: this.state.elapsedTime,
+      activeModifiers: [...this.state.activeModifiers],
+      consecutiveWavesWithoutLeak: this.state.consecutiveWavesWithoutLeak,
+    };
   }
 
   /** Emits whenever the game phase changes. Each emission carries the previous and next phase. */
@@ -317,6 +343,39 @@ export class GameStateService {
     this.ascensionEffects = {};
     this.setupGoldSpent = 0;
     this.phaseChange$.next({ from, to: GamePhase.SETUP });
+    this.emit();
+  }
+
+  /**
+   * Restore full game state from a checkpoint snapshot, bypassing phase
+   * transition validation. Used by the encounter save/resume system.
+   * Must call setAscensionModifierEffects() before this method.
+   */
+  restoreFromCheckpoint(snapshot: SerializableGameState): void {
+    const from = this.state.phase;
+    this.state = {
+      phase: snapshot.phase,
+      wave: snapshot.wave,
+      maxWaves: snapshot.maxWaves,
+      lives: snapshot.lives,
+      maxLives: snapshot.maxLives,
+      initialLives: snapshot.initialLives,
+      gold: snapshot.gold,
+      initialGold: snapshot.initialGold,
+      score: snapshot.score,
+      difficulty: snapshot.difficulty,
+      isEndless: snapshot.isEndless,
+      highestWave: snapshot.highestWave,
+      isPaused: false,
+      elapsedTime: snapshot.elapsedTime,
+      activeModifiers: new Set(snapshot.activeModifiers),
+      consecutiveWavesWithoutLeak: snapshot.consecutiveWavesWithoutLeak,
+    };
+    this.modifierEffects = mergeModifierEffects(this.state.activeModifiers);
+    this.setupGoldSpent = 0; // Not relevant post-SETUP
+    if (from !== snapshot.phase) {
+      this.phaseChange$.next({ from, to: snapshot.phase });
+    }
     this.emit();
   }
 

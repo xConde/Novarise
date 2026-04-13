@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { RelicService } from './relic.service';
 import { RelicId, RelicRarity, RELIC_DEFINITIONS } from '../models/relic.model';
 import { TowerType } from '../../game/game-board/models/tower.model';
+import { SerializableRelicFlags } from '../../game/game-board/models/encounter-checkpoint.model';
 
 describe('RelicService', () => {
   let service: RelicService;
@@ -281,5 +282,63 @@ describe('RelicService', () => {
     const available = service.getAvailableRelics(RelicRarity.RARE);
     expect(available.every(r => r.rarity === RelicRarity.RARE)).toBeTrue();
     expect(available.find(r => r.id === RelicId.COMMANDERS_BANNER)).toBeUndefined();
+  });
+
+  // ── checkpoint serialization ──────────────────────────────────
+
+  describe('checkpoint serialization', () => {
+    it('serializeEncounterFlags() returns current flag state', () => {
+      service.setActiveRelics([RelicId.ARCHITECTS_BLUEPRINT, RelicId.REINFORCED_WALLS]);
+      service.consumeFreeTower();
+      service.shouldBlockLeak(); // sets firstLeakBlockedThisWave
+
+      const flags = service.serializeEncounterFlags();
+
+      expect(flags.freeTowerUsedThisEncounter).toBeTrue();
+      expect(flags.firstLeakBlockedThisWave).toBeTrue();
+    });
+
+    it('serializeEncounterFlags() returns false for both flags when unset', () => {
+      const flags = service.serializeEncounterFlags();
+
+      expect(flags.freeTowerUsedThisEncounter).toBeFalse();
+      expect(flags.firstLeakBlockedThisWave).toBeFalse();
+    });
+
+    it('restoreEncounterFlags() sets both flags', () => {
+      const flags: SerializableRelicFlags = {
+        firstLeakBlockedThisWave: true,
+        freeTowerUsedThisEncounter: true,
+      };
+
+      service.setActiveRelics([RelicId.ARCHITECTS_BLUEPRINT, RelicId.REINFORCED_WALLS]);
+      service.restoreEncounterFlags(flags);
+
+      expect(service.isNextTowerFree()).toBeFalse();
+      expect(service.shouldBlockLeak()).toBeFalse();
+    });
+
+    it('flags roundtrip: set flags, serialize, reset encounter, restore, verify flags are restored', () => {
+      service.setActiveRelics([RelicId.ARCHITECTS_BLUEPRINT, RelicId.REINFORCED_WALLS]);
+      service.consumeFreeTower();
+      service.shouldBlockLeak();
+
+      const flags = service.serializeEncounterFlags();
+
+      service.resetEncounterState();
+      service.resetWaveState();
+
+      // After reset: free tower is available again, block is available again
+      expect(service.isNextTowerFree()).toBeTrue();
+      expect(service.shouldBlockLeak()).toBeTrue();
+
+      // Reset again to undo the shouldBlockLeak side-effect from the check above
+      service.resetWaveState();
+
+      service.restoreEncounterFlags(flags);
+
+      expect(service.isNextTowerFree()).toBeFalse();
+      expect(service.shouldBlockLeak()).toBeFalse();
+    });
   });
 });

@@ -13,6 +13,14 @@ import { MinimapService } from './minimap.service';
 import { GameNotificationService } from './game-notification.service';
 import { SceneService } from './scene.service';
 import { GamePhase } from '../models/game-state.model';
+import { EnemyService } from './enemy.service';
+import { TowerCombatService } from './tower-combat.service';
+import { StatusEffectService } from './status-effect.service';
+import { GameStatsService } from './game-stats.service';
+import { ChallengeTrackingService } from './challenge-tracking.service';
+import { RunService } from '../../../run/services/run.service';
+import { CardEffectService } from '../../../run/services/card-effect.service';
+import { EncounterCheckpointService } from '../../../run/services/encounter-checkpoint.service';
 
 function makeCallbacks(overrides: Partial<WaveCombatCallbacks> = {}): WaveCombatCallbacks {
   return {
@@ -41,6 +49,14 @@ describe('WaveCombatFacadeService', () => {
   let minimapService: jasmine.SpyObj<MinimapService>;
   let notificationService: jasmine.SpyObj<GameNotificationService>;
   let sceneService: jasmine.SpyObj<SceneService>;
+  let enemyService: jasmine.SpyObj<EnemyService>;
+  let towerCombatService: jasmine.SpyObj<TowerCombatService>;
+  let statusEffectService: jasmine.SpyObj<StatusEffectService>;
+  let gameStatsService: jasmine.SpyObj<GameStatsService>;
+  let challengeTrackingService: jasmine.SpyObj<ChallengeTrackingService>;
+  let runService: jasmine.SpyObj<RunService>;
+  let cardEffectService: jasmine.SpyObj<CardEffectService>;
+  let encounterCheckpointService: jasmine.SpyObj<EncounterCheckpointService>;
 
   const defaultState = {
     phase: GamePhase.INTERMISSION,
@@ -59,15 +75,63 @@ describe('WaveCombatFacadeService', () => {
   } as unknown as ReturnType<GameStateService['getState']>;
 
   beforeEach(() => {
-    gameStateService = jasmine.createSpyObj('GameStateService', ['getState', 'startWave', 'getModifierEffects', 'setAscensionModifierEffects']);
+    gameStateService = jasmine.createSpyObj('GameStateService', ['getState', 'startWave', 'getModifierEffects', 'setAscensionModifierEffects', 'serializeState']);
     gameStateService.getState.and.returnValue({ ...defaultState });
     gameStateService.getModifierEffects.and.returnValue({});
+    (gameStateService.serializeState as jasmine.Spy).and.returnValue({});
 
-    waveService = jasmine.createSpyObj('WaveService', ['startWave', 'hasCustomWaves', 'getWaveDefinitions', 'isNewType', 'markSeen']);
+    waveService = jasmine.createSpyObj('WaveService', ['startWave', 'hasCustomWaves', 'getWaveDefinitions', 'isNewType', 'markSeen', 'serializeState']);
     waveService.hasCustomWaves.and.returnValue(false);
     waveService.isNewType.and.returnValue(false);
+    (waveService.serializeState as jasmine.Spy).and.returnValue({});
 
-    combatLoopService = jasmine.createSpyObj('CombatLoopService', ['resetLeakState', 'resolveTurn', 'getTurnNumber']);
+    gameRenderService = jasmine.createSpyObj('GameRenderService', ['processCombatResult']);
+    gameRenderService.processCombatResult.and.returnValue({});
+
+    combatVFXService = jasmine.createSpyObj('CombatVFXService', ['tickMortarZoneVisualsForTurn']);
+    screenShakeService = jasmine.createSpyObj('ScreenShakeService', ['trigger']);
+    audioService = jasmine.createSpyObj('AudioService', ['playWaveStart']);
+
+    deckService = jasmine.createSpyObj('DeckService', ['discardHand', 'drawForWave', 'serializeState']);
+    (deckService.serializeState as jasmine.Spy).and.returnValue({});
+    relicService = jasmine.createSpyObj('RelicService', ['resetWaveState', 'serializeEncounterFlags']);
+    minimapService = jasmine.createSpyObj('MinimapService', ['show']);
+    notificationService = jasmine.createSpyObj('GameNotificationService', ['show']);
+    sceneService = jasmine.createSpyObj('SceneService', ['getScene']);
+    sceneService.getScene.and.returnValue({} as THREE.Scene);
+
+    enemyService = jasmine.createSpyObj('EnemyService', ['serializeEnemies']);
+    enemyService.serializeEnemies.and.returnValue({ enemies: [], enemyCounter: 0 });
+
+    towerCombatService = jasmine.createSpyObj('TowerCombatService', ['serializeTowers', 'serializeMortarZones']);
+    towerCombatService.serializeTowers.and.returnValue([]);
+    towerCombatService.serializeMortarZones.and.returnValue([]);
+
+    statusEffectService = jasmine.createSpyObj('StatusEffectService', ['serializeEffects']);
+    statusEffectService.serializeEffects.and.returnValue([]);
+
+    gameStatsService = jasmine.createSpyObj('GameStatsService', ['serializeState']);
+    gameStatsService.serializeState.and.returnValue({
+      totalGoldEarned: 0, totalDamageDealt: 0, shotsFired: 0, killsByTowerType: {}, enemiesLeaked: 0,
+      towersPlaced: 0, towersSold: 0,
+    });
+
+    challengeTrackingService = jasmine.createSpyObj('ChallengeTrackingService', ['serializeState']);
+    challengeTrackingService.serializeState.and.returnValue({
+      totalGoldSpent: 0, maxTowersPlaced: 0, towerTypesUsed: [], currentTowerCount: 0, livesLostThisGame: 0,
+    });
+
+    runService = jasmine.createSpyObj('RunService', ['getCurrentEncounter', 'getRngState']);
+    runService.getCurrentEncounter.and.returnValue(null);
+    runService.getRngState.and.returnValue(null);
+
+    cardEffectService = jasmine.createSpyObj('CardEffectService', ['serializeModifiers']);
+    cardEffectService.serializeModifiers.and.returnValue([]);
+
+    encounterCheckpointService = jasmine.createSpyObj('EncounterCheckpointService', ['saveCheckpoint', 'clearCheckpoint']);
+    encounterCheckpointService.saveCheckpoint.and.returnValue(true);
+
+    combatLoopService = jasmine.createSpyObj('CombatLoopService', ['resetLeakState', 'resolveTurn', 'getTurnNumber', 'getLeakedThisWave']);
     combatLoopService.resolveTurn.and.returnValue({
       exitCount: 0,
       kills: [],
@@ -79,20 +143,7 @@ describe('WaveCombatFacadeService', () => {
       gameEnd: null,
     } as unknown as ReturnType<CombatLoopService['resolveTurn']>);
     combatLoopService.getTurnNumber.and.returnValue(0);
-
-    gameRenderService = jasmine.createSpyObj('GameRenderService', ['processCombatResult']);
-    gameRenderService.processCombatResult.and.returnValue({});
-
-    combatVFXService = jasmine.createSpyObj('CombatVFXService', ['tickMortarZoneVisualsForTurn']);
-    screenShakeService = jasmine.createSpyObj('ScreenShakeService', ['trigger']);
-    audioService = jasmine.createSpyObj('AudioService', ['playWaveStart']);
-
-    deckService = jasmine.createSpyObj('DeckService', ['discardHand', 'drawForWave']);
-    relicService = jasmine.createSpyObj('RelicService', ['resetWaveState']);
-    minimapService = jasmine.createSpyObj('MinimapService', ['show']);
-    notificationService = jasmine.createSpyObj('GameNotificationService', ['show']);
-    sceneService = jasmine.createSpyObj('SceneService', ['getScene']);
-    sceneService.getScene.and.returnValue({} as THREE.Scene);
+    combatLoopService.getLeakedThisWave.and.returnValue(false);
 
     service = new WaveCombatFacadeService(
       gameStateService,
@@ -107,6 +158,14 @@ describe('WaveCombatFacadeService', () => {
       minimapService,
       notificationService,
       sceneService,
+      enemyService,
+      towerCombatService,
+      statusEffectService,
+      gameStatsService,
+      challengeTrackingService,
+      runService,
+      cardEffectService,
+      encounterCheckpointService,
     );
   });
 

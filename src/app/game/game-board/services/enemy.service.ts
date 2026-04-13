@@ -11,6 +11,7 @@ import { EnemyVisualService } from './enemy-visual.service';
 import { EnemyHealthService } from './enemy-health.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
+import { SerializableEnemy } from '../models/encounter-checkpoint.model';
 
 export { DamageResult } from '../models/enemy.model';
 
@@ -587,6 +588,58 @@ export class EnemyService {
     // If findPath returns empty (no route — should be unreachable via wouldBlockPath guard),
     // the enemy keeps its old path. This is a defensive no-op, not a silent failure,
     // because wouldBlockPath prevents placements that fully block spawner→exit routes.
+  }
+
+  /**
+   * Serialize enemies for checkpoint save, stripping Three.js objects and circular refs.
+   * `mesh`, `statusParticles`, and `statusParticleEffectType` are omitted.
+   * `GridNode.parent` is omitted from each path node to break circular references.
+   */
+  serializeEnemies(): { enemies: SerializableEnemy[]; enemyCounter: number } {
+    const enemies: SerializableEnemy[] = Array.from(this.enemies.values()).map(e => ({
+      id: e.id,
+      type: e.type,
+      position: { ...e.position },
+      gridPosition: { ...e.gridPosition },
+      health: e.health,
+      maxHealth: e.maxHealth,
+      speed: e.speed,
+      value: e.value,
+      path: e.path.map(n => ({ x: n.x, y: n.y, f: n.f, g: n.g, h: n.h })),
+      pathIndex: e.pathIndex,
+      distanceTraveled: e.distanceTraveled,
+      leakDamage: e.leakDamage,
+      ...(e.shield !== undefined && { shield: e.shield }),
+      ...(e.maxShield !== undefined && { maxShield: e.maxShield }),
+      ...(e.isMiniSwarm !== undefined && { isMiniSwarm: e.isMiniSwarm }),
+      ...(e.isFlying !== undefined && { isFlying: e.isFlying }),
+      ...(e.needsRepath !== undefined && { needsRepath: e.needsRepath }),
+      ...(e.dying !== undefined && { dying: e.dying }),
+      ...(e.dyingTimer !== undefined && { dyingTimer: e.dyingTimer }),
+      ...(e.hitFlashTimer !== undefined && { hitFlashTimer: e.hitFlashTimer }),
+      ...(e.shieldBreaking !== undefined && { shieldBreaking: e.shieldBreaking }),
+      ...(e.shieldBreakTimer !== undefined && { shieldBreakTimer: e.shieldBreakTimer }),
+    }));
+    return { enemies, enemyCounter: this.enemyCounter };
+  }
+
+  /**
+   * Restore enemies from checkpoint. Meshes must be pre-built externally
+   * and provided in the `meshes` map keyed by enemy id.
+   * The internal enemies Map is fully replaced and `enemyCounter` is reset
+   * to `counter` so subsequent spawns continue with unique IDs.
+   */
+  restoreEnemies(enemies: SerializableEnemy[], meshes: Map<string, THREE.Mesh>, counter: number): void {
+    this.enemies.clear();
+    for (const e of enemies) {
+      const enemy: Enemy = {
+        ...e,
+        path: e.path.map(n => ({ ...n })),
+        mesh: meshes.get(e.id),
+      };
+      this.enemies.set(e.id, enemy);
+    }
+    this.enemyCounter = counter;
   }
 
   /**

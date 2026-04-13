@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { GameStateService } from './game-state.service';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_TRANSITIONS } from '../models/game-state.model';
 import { GameModifier } from '../models/game-modifier.model';
+import { SerializableGameState } from '../models/encounter-checkpoint.model';
 
 describe('GameStateService', () => {
   let service: GameStateService;
@@ -1621,6 +1622,145 @@ describe('GameStateService', () => {
       service.addGoldAndScore(0);
       expect(service.getState().gold).toBe(goldBefore);
       expect(service.getState().score).toBe(scoreBefore);
+    });
+  });
+
+  // --- checkpoint serialization ---
+
+  describe('checkpoint serialization', () => {
+    function makeMinimalSnapshot(overrides: Partial<SerializableGameState> = {}): SerializableGameState {
+      return {
+        phase: GamePhase.SETUP,
+        wave: 0,
+        maxWaves: INITIAL_GAME_STATE.maxWaves,
+        lives: INITIAL_GAME_STATE.lives,
+        maxLives: INITIAL_GAME_STATE.maxLives,
+        initialLives: INITIAL_GAME_STATE.initialLives,
+        gold: INITIAL_GAME_STATE.gold,
+        initialGold: INITIAL_GAME_STATE.initialGold,
+        score: 0,
+        difficulty: DifficultyLevel.NORMAL,
+        isEndless: false,
+        highestWave: 0,
+        elapsedTime: 0,
+        activeModifiers: [],
+        consecutiveWavesWithoutLeak: 0,
+        ...overrides,
+      };
+    }
+
+    it('serializeState() returns plain object with activeModifiers as array', () => {
+      service.setModifiers(new Set([GameModifier.ARMORED_ENEMIES, GameModifier.FAST_ENEMIES]));
+      const result = service.serializeState();
+
+      expect(Array.isArray(result.activeModifiers)).toBeTrue();
+      expect(result.activeModifiers).toContain(GameModifier.ARMORED_ENEMIES);
+      expect(result.activeModifiers).toContain(GameModifier.FAST_ENEMIES);
+      expect('isPaused' in result).toBeFalse();
+    });
+
+    it('serializeState() captures current wave, lives, gold, score', () => {
+      service.setInitialLives(10, 10);
+      service.addGoldAndScore(50);
+      service.startWave(); // wave becomes 1, COMBAT
+
+      const result = service.serializeState();
+
+      expect(result.wave).toBe(1);
+      expect(result.phase).toBe(GamePhase.COMBAT);
+      expect(result.lives).toBe(10);
+      expect(result.gold).toBe(INITIAL_GAME_STATE.gold + 50);
+      expect(result.score).toBe(50);
+    });
+
+    it('restoreFromCheckpoint() bypasses phase transition validation', () => {
+      const warnSpy = spyOn(console, 'warn');
+      const snapshot = makeMinimalSnapshot({ phase: GamePhase.INTERMISSION });
+
+      // SETUP → INTERMISSION is invalid via setPhase, but restoreFromCheckpoint must succeed
+      service.restoreFromCheckpoint(snapshot);
+
+      expect(service.getState().phase).toBe(GamePhase.INTERMISSION);
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it('restoreFromCheckpoint() rebuilds modifierEffects from restored modifiers', () => {
+      const snapshot = makeMinimalSnapshot({ activeModifiers: [GameModifier.ARMORED_ENEMIES] });
+
+      service.restoreFromCheckpoint(snapshot);
+
+      expect(service.getModifierEffects().enemyHealthMultiplier).toBe(2.0);
+    });
+
+    it('restoreFromCheckpoint() sets isPaused to false', () => {
+      // Pause service before restoring
+      service.startWave();
+      service.togglePause();
+      expect(service.getState().isPaused).toBeTrue();
+
+      const snapshot = makeMinimalSnapshot({ phase: GamePhase.COMBAT, wave: 1 });
+      service.restoreFromCheckpoint(snapshot);
+
+      expect(service.getState().isPaused).toBeFalse();
+    });
+
+    it('restoreFromCheckpoint() emits phase change', () => {
+      const events: Array<{ from: GamePhase; to: GamePhase }> = [];
+      const sub = service.getPhaseChanges().subscribe(e => events.push(e));
+
+      const snapshot = makeMinimalSnapshot({ phase: GamePhase.COMBAT, wave: 1 });
+      service.restoreFromCheckpoint(snapshot);
+
+      expect(events.length).toBe(1);
+      expect(events[0]).toEqual({ from: GamePhase.SETUP, to: GamePhase.COMBAT });
+
+      sub.unsubscribe();
+    });
+
+    it('serialize → restore roundtrip preserves all fields', () => {
+      // Set up a non-trivial state
+      service.setDifficulty(DifficultyLevel.HARD);
+      service.setModifiers(new Set([GameModifier.ARMORED_ENEMIES]));
+      service.setInitialLives(8, 8);
+      service.addGoldAndScore(100);
+      service.startWave(); // → COMBAT, wave 1
+
+      const preReset = service.getState();
+      const serialized = service.serializeState();
+
+      service.reset();
+      service.restoreFromCheckpoint(serialized);
+
+      const restored = service.getState();
+      expect(restored.phase).toBe(preReset.phase);
+      expect(restored.wave).toBe(preReset.wave);
+      expect(restored.maxWaves).toBe(preReset.maxWaves);
+      expect(restored.lives).toBe(preReset.lives);
+      expect(restored.maxLives).toBe(preReset.maxLives);
+      expect(restored.initialLives).toBe(preReset.initialLives);
+      expect(restored.gold).toBe(preReset.gold);
+      expect(restored.initialGold).toBe(preReset.initialGold);
+      expect(restored.score).toBe(preReset.score);
+      expect(restored.difficulty).toBe(preReset.difficulty);
+      expect(restored.isEndless).toBe(preReset.isEndless);
+      expect(restored.highestWave).toBe(preReset.highestWave);
+      expect(restored.elapsedTime).toBe(preReset.elapsedTime);
+      expect(restored.consecutiveWavesWithoutLeak).toBe(preReset.consecutiveWavesWithoutLeak);
+      expect(restored.activeModifiers.has(GameModifier.ARMORED_ENEMIES)).toBeTrue();
+      // isPaused is always false on restore — not expected to match a paused state
+      expect(restored.isPaused).toBeFalse();
+    });
+
+    it('restoreFromCheckpoint() with empty activeModifiers restores empty set and default effects', () => {
+      // First set some modifiers so there is something to clear
+      service.setModifiers(new Set([GameModifier.ARMORED_ENEMIES]));
+      expect(service.getModifierEffects().enemyHealthMultiplier).toBe(2.0);
+
+      const snapshot = makeMinimalSnapshot({ activeModifiers: [] });
+      service.restoreFromCheckpoint(snapshot);
+
+      expect(service.getState().activeModifiers.size).toBe(0);
+      expect(Object.keys(service.getModifierEffects()).length).toBe(0);
     });
   });
 });

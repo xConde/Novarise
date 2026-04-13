@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 
 import { RunService } from './services/run.service';
+import { EncounterCheckpointService } from './services/encounter-checkpoint.service';
 import { RunState, RunStatus } from './models/run-state.model';
 import { MapNode, NodeMap, NodeType, getSelectableNodes } from './models/node-map.model';
 import { RelicDefinition, RELIC_DEFINITIONS, RelicId } from './models/relic.model';
@@ -63,6 +64,7 @@ export class RunComponent implements OnInit, OnDestroy {
   constructor(
     private runService: RunService,
     private router: Router,
+    private encounterCheckpointService: EncounterCheckpointService,
   ) {}
 
   ngOnInit(): void {
@@ -143,9 +145,16 @@ export class RunComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Navigate to /play to start combat encounter. */
+  /** Navigate to /play to start (or restore) a combat encounter. */
   startEncounter(node: MapNode): void {
-    this.runService.prepareEncounter(node);
+    const checkpointNodeId = this.encounterCheckpointService.getCheckpointNodeId();
+    if (checkpointNodeId === node.id) {
+      // Resume from checkpoint — loads encounter config and sets restore flag
+      this.runService.restoreEncounter();
+    } else {
+      // Fresh encounter — clear any stale checkpoint and prepare normally
+      this.runService.prepareEncounter(node);
+    }
     this.router.navigate(['/play']);
   }
 

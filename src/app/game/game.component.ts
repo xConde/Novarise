@@ -1,4 +1,5 @@
 import { Component, ViewChild } from '@angular/core';
+import { Observable } from 'rxjs';
 import { GameBoardComponent } from './game-board/game-board.component';
 
 @Component({
@@ -9,7 +10,7 @@ import { GameBoardComponent } from './game-board/game-board.component';
 export class GameComponent {
   @ViewChild(GameBoardComponent) gameBoard?: GameBoardComponent;
 
-  canLeaveGame(): boolean {
-    return this.gameBoard?.canLeaveGame() ?? true;
+  requestGuardDecision(): Observable<boolean> | boolean {
+    return this.gameBoard?.requestGuardDecision() ?? true;
   }
 }

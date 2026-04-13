@@ -1361,3 +1361,48 @@ Decomposition extracted 8 new services, reducing GameBoardComponent from 2078 �
 - [x] Sprint 4: Extract WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService (-206 lines)
 - [x] Red team: Fix 1 CRITICAL, 3 HIGH, 3 MEDIUM findings
 - [x] Final: 0 FAILED / 4998 SUCCESS / 1 skipped
+
+## Red Team Critique — 2026-04-13 (Encounter Save/Resume)
+
+### Finding 1: Null-checkpoint fallback starts wave with uninitialized state (CRITICAL)
+**Location:** `game-board.component.ts:restoreFromCheckpoint()`
+**Risk:** If `loadCheckpoint()` returns null during restore, fallback called `startWave()` without initializing lives (0), gold (0), waves (empty), or deck (no cards). Player enters combat with instant defeat.
+**Fix:** Extracted `initFreshEncounter()` helper. Null-checkpoint fallback and catch block both call it.
+
+### Finding 2: No error boundary in 18-step restore coordinator (HIGH)
+**Location:** `game-board.component.ts:restoreFromCheckpoint()`
+**Risk:** Any throw mid-restore (malformed checkpoint, missing mesh factory) leaves game in corrupted half-restored state with `isRestoringCheckpoint` stuck true.
+**Fix:** Wrapped all 18 steps in try/catch. Catch resets services, clears checkpoint, falls back to `initFreshEncounter()`.
+
+### Finding 3: "Save & Exit" from manual pause re-triggers guard (HIGH)
+**Location:** `game-board.component.ts:saveAndExit()` → `router.navigate(['/run'])` → guard fires again
+**Risk:** Player clicks Save & Exit, sees navigation prompt a second time. Confusing UX loop.
+**Fix:** Added `allowNextNavigation()` flag to `GamePauseService`. `saveAndExit()` and `confirmQuit()` set flag before navigating. `requestGuardDecision()` checks flag first, returns immediate-true Observable.
+
+### Finding 4: Tower BFS validation rejects valid restored positions (MEDIUM)
+**Location:** `game-board.component.ts:restoreFromCheckpoint()` tower placement step
+**Risk:** `placeTower()` runs `wouldBlockPath()` BFS after each tower. Two towers forming a corridor fail if placed one-by-one.
+**Fix:** Added `forceSetTower()` to `GameBoardService` that bypasses BFS. Restore uses it instead of `placeTower()`.
+
+### Finding 5: Stale checkpoint lingers after version mismatch (MEDIUM)
+**Location:** `run.service.ts:restoreEncounter()`
+**Risk:** `loadCheckpoint()` returns null on version mismatch but doesn't clear the entry. `getCheckpointNodeId()` keeps matching it, causing repeated failed restores.
+**Fix:** Added `clearCheckpoint()` in the early-return path of `restoreEncounter()`.
+
+### Finding 6: GameStatsService phantom fields + missing serialization (MEDIUM)
+**Location:** `game-stats.service.ts` + `encounter-checkpoint.model.ts`
+**Risk:** `totalGoldSpent` and `towersUpgraded` hardcoded to 0 (service doesn't track them). `totalDamageDealt` and `shotsFired` not serialized — reset to 0 after restore.
+**Fix:** Removed phantom fields from model. Added `totalDamageDealt` and `shotsFired` to `SerializableGameStats`.
+
+### Deployment Checklist — Encounter Save/Resume
+- [x] Phase 1: Foundation — EncounterCheckpoint model, SeededRng refactor, GameStateService restore bypass
+- [x] Phase 2: Core serialization — GameState, Deck, CardEffect, Wave services
+- [x] Phase 3: Complex serialization — TowerCombat, Enemy, StatusEffect, CombatLoop services
+- [x] Phase 4: Auxiliary serialization — Relic flags, GameStats, ChallengeTracking
+- [x] Phase 5: Persistence layer — EncounterCheckpointService, auto-save hook, clear on encounter start/abandon
+- [x] Phase 6: Guard & pause menu — Observable-based guard, Save & Exit button, navigation prompt
+- [x] Phase 7: Restore flow — RunService.restoreEncounter(), 18-step restore coordinator
+- [x] Phase 8: Run hub integration — node map resume indicator, stale checkpoint handling
+- [x] Phase 9: Hardening — version migration, quota handling, structural validation
+- [x] Red team: Fix 1 CRITICAL, 2 HIGH, 3 MEDIUM findings
+- [x] Final: 0 FAILED / 5089 SUCCESS / 1 skipped

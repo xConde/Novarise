@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { TowerType } from '../models/tower.model';
+import { SerializableChallengeState } from '../models/encounter-checkpoint.model';
 
 describe('ChallengeTrackingService', () => {
   let service: ChallengeTrackingService;
@@ -174,6 +175,99 @@ describe('ChallengeTrackingService', () => {
       expect(snap.totalGoldSpent).toBe(0);
       expect(snap.maxTowersPlaced).toBe(0);
       expect(snap.towerTypesUsed.size).toBe(0);
+    });
+  });
+
+  describe('checkpoint serialization', () => {
+    it('serializeState() captures all tracked fields', () => {
+      service.recordTowerPlaced(TowerType.BASIC, 100);
+      service.recordTowerPlaced(TowerType.SNIPER, 200);
+      service.recordTowerUpgraded(50);
+      service.recordTowerSold();
+      service.recordLifeLost();
+      service.recordLifeLost();
+
+      const state = service.serializeState();
+
+      expect(state.totalGoldSpent).toBe(350);
+      expect(state.maxTowersPlaced).toBe(2);
+      expect(state.towerTypesUsed).toEqual(
+        jasmine.arrayContaining([TowerType.BASIC, TowerType.SNIPER])
+      );
+      expect(state.towerTypesUsed.length).toBe(2);
+      expect(state.currentTowerCount).toBe(1);
+      expect(state.livesLostThisGame).toBe(2);
+    });
+
+    it('serializeState() returns a plain array for towerTypesUsed (not a Set)', () => {
+      service.recordTowerPlaced(TowerType.MORTAR, 180);
+
+      const state = service.serializeState();
+
+      expect(Array.isArray(state.towerTypesUsed)).toBeTrue();
+    });
+
+    it('restoreFromCheckpoint() sets all fields', () => {
+      const snapshot: SerializableChallengeState = {
+        totalGoldSpent: 750,
+        maxTowersPlaced: 5,
+        towerTypesUsed: [TowerType.BASIC, TowerType.SLOW, TowerType.CHAIN],
+        currentTowerCount: 3,
+        livesLostThisGame: 1,
+      };
+
+      service.restoreFromCheckpoint(snapshot);
+
+      const state = service.serializeState();
+      expect(state.totalGoldSpent).toBe(750);
+      expect(state.maxTowersPlaced).toBe(5);
+      expect(state.towerTypesUsed).toEqual(
+        jasmine.arrayContaining([TowerType.BASIC, TowerType.SLOW, TowerType.CHAIN])
+      );
+      expect(state.currentTowerCount).toBe(3);
+      expect(state.livesLostThisGame).toBe(1);
+    });
+
+    it('restoreFromCheckpoint() restores towerTypesUsed as a Set (getTowerTypesUsed works)', () => {
+      const snapshot: SerializableChallengeState = {
+        totalGoldSpent: 0,
+        maxTowersPlaced: 0,
+        towerTypesUsed: [TowerType.SPLASH, TowerType.SNIPER],
+        currentTowerCount: 0,
+        livesLostThisGame: 0,
+      };
+
+      service.restoreFromCheckpoint(snapshot);
+
+      const types = service.getTowerTypesUsed();
+      expect(types.has(TowerType.SPLASH)).toBeTrue();
+      expect(types.has(TowerType.SNIPER)).toBeTrue();
+      expect(types.has(TowerType.BASIC)).toBeFalse();
+    });
+
+    it('serialize → restore roundtrip preserves all state exactly', () => {
+      service.recordTowerPlaced(TowerType.BASIC, 100);
+      service.recordTowerPlaced(TowerType.MORTAR, 220);
+      service.recordTowerPlaced(TowerType.SLOW, 130);
+      service.recordTowerUpgraded(400);
+      service.recordTowerSold();
+      service.recordLifeLost();
+
+      const original = service.serializeState();
+
+      // Restore into a fresh service instance
+      const freshService = new ChallengeTrackingService();
+      freshService.restoreFromCheckpoint(original);
+      const restored = freshService.serializeState();
+
+      expect(restored.totalGoldSpent).toBe(original.totalGoldSpent);
+      expect(restored.maxTowersPlaced).toBe(original.maxTowersPlaced);
+      expect(restored.towerTypesUsed).toEqual(
+        jasmine.arrayContaining(original.towerTypesUsed)
+      );
+      expect(restored.towerTypesUsed.length).toBe(original.towerTypesUsed.length);
+      expect(restored.currentTowerCount).toBe(original.currentTowerCount);
+      expect(restored.livesLostThisGame).toBe(original.livesLostThisGame);
     });
   });
 

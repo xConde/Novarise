@@ -4,6 +4,7 @@ import { ElementRef } from '@angular/core';
 import { NodeMapComponent } from './node-map.component';
 import { MapNode, NodeMap, NodeType } from '../../models/node-map.model';
 import { IconComponent } from '@shared/components/icon/icon.component';
+import { EncounterCheckpointService } from '../../services/encounter-checkpoint.service';
 
 // ── Test factory helpers ─────────────────────────────────────────────────────
 
@@ -58,11 +59,24 @@ function makeThreeRowMap(): NodeMap {
 describe('NodeMapComponent', () => {
   let fixture: ComponentFixture<NodeMapComponent>;
   let component: NodeMapComponent;
+  let checkpointService: jasmine.SpyObj<EncounterCheckpointService>;
 
   beforeEach(async () => {
+    checkpointService = jasmine.createSpyObj('EncounterCheckpointService', [
+      'getCheckpointNodeId',
+      'hasCheckpoint',
+      'loadCheckpoint',
+      'saveCheckpoint',
+      'clearCheckpoint',
+    ]);
+    checkpointService.getCheckpointNodeId.and.returnValue(null);
+
     await TestBed.configureTestingModule({
       declarations: [NodeMapComponent],
       imports: [CommonModule, IconComponent],
+      providers: [
+        { provide: EncounterCheckpointService, useValue: checkpointService },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(NodeMapComponent);
@@ -311,6 +325,29 @@ describe('NodeMapComponent', () => {
       component.nodeMap = makeNodeMap([single]);
       expect(() => component.computeLayout()).not.toThrow();
       expect(component.nodePositions.has('solo')).toBeTrue();
+    });
+  });
+
+  describe('isCheckpointed()', () => {
+    it('returns true when the checkpoint service reports a matching node ID', () => {
+      checkpointService.getCheckpointNodeId.and.returnValue('r0c0');
+      expect(component.isCheckpointed('r0c0')).toBeTrue();
+    });
+
+    it('returns false when the checkpoint service reports a different node ID', () => {
+      checkpointService.getCheckpointNodeId.and.returnValue('r1c0');
+      expect(component.isCheckpointed('r0c0')).toBeFalse();
+    });
+
+    it('returns false when there is no checkpoint (null)', () => {
+      checkpointService.getCheckpointNodeId.and.returnValue(null);
+      expect(component.isCheckpointed('r0c0')).toBeFalse();
+    });
+
+    it('delegates to EncounterCheckpointService.getCheckpointNodeId()', () => {
+      checkpointService.getCheckpointNodeId.and.returnValue('r2c0');
+      component.isCheckpointed('r2c0');
+      expect(checkpointService.getCheckpointNodeId).toHaveBeenCalled();
     });
   });
 });

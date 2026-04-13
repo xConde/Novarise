@@ -1,8 +1,11 @@
 import { Injectable, OnDestroy } from '@angular/core';
+import { Observable, Subject } from 'rxjs';
+import { take } from 'rxjs/operators';
 import { GameStateService } from './game-state.service';
 import { MinimapService } from './minimap.service';
 import { GameEndService } from './game-end.service';
 import { GamePhase } from '../models/game-state.model';
+import { EncounterCheckpointService } from '../../../run/services/encounter-checkpoint.service';
 
 /**
  * Manages pause/resume, auto-pause on visibility loss, and quit confirmation.
@@ -21,6 +24,15 @@ export class GamePauseService implements OnDestroy {
   /** Whether the current pause was triggered by auto-pause (tab switch / window blur). */
   autoPaused = false;
 
+  /** Whether the pause was triggered by the navigation guard (external nav attempt). */
+  showNavigationPrompt = false;
+
+  /** Subject for guard navigation decisions. */
+  private guardDecision$ = new Subject<boolean>();
+
+  /** Set to true to allow the next navigation without guard prompt. */
+  private pendingAllowNavigation = false;
+
   /** Callback invoked when auto-pause triggers — component uses this to activate focus trap. */
   onAutoPause: (() => void) | null = null;
 
@@ -28,6 +40,7 @@ export class GamePauseService implements OnDestroy {
     private gameStateService: GameStateService,
     private minimapService: MinimapService,
     private gameEndService: GameEndService,
+    private encounterCheckpointService: EncounterCheckpointService,
   ) {}
 
   get isPaused(): boolean {
@@ -71,42 +84,73 @@ export class GamePauseService implements OnDestroy {
    */
   confirmQuit(): string {
     this.showQuitConfirm = false;
+    this.encounterCheckpointService.clearCheckpoint();
     this.gameEndService.recordEnd(false, null);
     return '/run';
   }
 
+  /** Allow the next navigation attempt to proceed without guard prompt. */
+  allowNextNavigation(): void {
+    this.pendingAllowNavigation = true;
+  }
+
   /**
-   * Guard check for route deactivation. Auto-pauses if in combat, asks confirmation.
-   * @returns true to allow navigation, false to stay.
+   * Called by the CanDeactivate guard when the player tries to navigate away
+   * during COMBAT or INTERMISSION. Auto-pauses the game and shows the
+   * navigation prompt in the pause menu.
+   * Returns an Observable that resolves when the player chooses an action.
    */
-  canLeaveGame(): boolean {
+  requestGuardDecision(): Observable<boolean> {
+    // Check if navigation was pre-approved (e.g., Save & Exit from manual pause)
+    if (this.pendingAllowNavigation) {
+      this.pendingAllowNavigation = false;
+      return new Observable(subscriber => {
+        subscriber.next(true);
+        subscriber.complete();
+      });
+    }
+
     const state = this.gameStateService.getState();
 
+    // Terminal phases — allow navigation immediately
     if (
       state.phase === GamePhase.SETUP ||
       state.phase === GamePhase.VICTORY ||
       state.phase === GamePhase.DEFEAT
     ) {
-      return true;
+      return new Observable(subscriber => {
+        subscriber.next(true);
+        subscriber.complete();
+      });
     }
 
+    // Auto-pause if not already paused
     if (!state.isPaused) {
       this.gameStateService.togglePause();
+      this.minimapService.setDimmed(true);
     }
 
-    const shouldLeave = confirm('Abandon this run? You\'ll return to the map.');
-    if (!shouldLeave) {
-      return false;
-    }
+    this.showNavigationPrompt = true;
+    this.showQuitConfirm = false;
 
-    this.gameEndService.recordEnd(false, null);
-    return true;
+    return this.guardDecision$.pipe(take(1));
+  }
+
+  /**
+   * Resolve the pending guard decision. Called by pause menu actions.
+   * @param allow - true to allow navigation, false to cancel
+   */
+  resolveGuardDecision(allow: boolean): void {
+    this.showNavigationPrompt = false;
+    this.guardDecision$.next(allow);
   }
 
   /** Reset pause-related state (called on game restart). */
   reset(): void {
     this.autoPaused = false;
     this.showQuitConfirm = false;
+    this.showNavigationPrompt = false;
+    this.pendingAllowNavigation = false;
   }
 
   /** Clean up global event listeners and clear the auto-pause callback. */

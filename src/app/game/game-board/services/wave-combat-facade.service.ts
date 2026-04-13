@@ -16,6 +16,15 @@ import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 import { ENEMY_INFO } from '../models/enemy-info.model';
 import { getWavePreview } from '../models/wave-preview.model';
 import { WavePreviewEntry } from '../models/wave-preview.model';
+import { EnemyService } from './enemy.service';
+import { TowerCombatService } from './tower-combat.service';
+import { StatusEffectService } from './status-effect.service';
+import { GameStatsService } from './game-stats.service';
+import { ChallengeTrackingService } from './challenge-tracking.service';
+import { RunService } from '../../../run/services/run.service';
+import { CardEffectService } from '../../../run/services/card-effect.service';
+import { EncounterCheckpointService } from '../../../run/services/encounter-checkpoint.service';
+import { EncounterCheckpoint, CHECKPOINT_VERSION } from '../models/encounter-checkpoint.model';
 
 /** Callbacks that WaveCombatFacadeService calls back into the component for concerns
  *  it cannot own (template-bound state, pending card state). */
@@ -76,6 +85,14 @@ export class WaveCombatFacadeService {
     private minimapService: MinimapService,
     private notificationService: GameNotificationService,
     private sceneService: SceneService,
+    private enemyService: EnemyService,
+    private towerCombatService: TowerCombatService,
+    private statusEffectService: StatusEffectService,
+    private gameStatsService: GameStatsService,
+    private challengeTrackingService: ChallengeTrackingService,
+    private runService: RunService,
+    private cardEffectService: CardEffectService,
+    private encounterCheckpointService: EncounterCheckpointService,
   ) {}
 
   /** Register component callbacks. Call in ngOnInit before any wave interaction. */
@@ -196,6 +213,8 @@ export class WaveCombatFacadeService {
       this.sceneService.getScene(),
     );
 
+    this.autoSaveCheckpoint();
+
     // Expire mortar zone visuals whose turn count has elapsed.
     // Must run after resolveTurn so the turn counter has already advanced.
     this.combatVFXService.tickMortarZoneVisualsForTurn(
@@ -233,6 +252,44 @@ export class WaveCombatFacadeService {
     if (postPhase === GamePhase.COMBAT) {
       this.deckService.discardHand();
       this.deckService.drawForWave();
+    }
+  }
+
+  private autoSaveCheckpoint(): void {
+    try {
+      const state = this.gameStateService.getState();
+      if (state.phase === GamePhase.VICTORY || state.phase === GamePhase.DEFEAT) {
+        this.encounterCheckpointService.clearCheckpoint();
+        return;
+      }
+
+      const { enemies: serializedEnemies, enemyCounter } = this.enemyService.serializeEnemies();
+
+      const checkpoint: EncounterCheckpoint = {
+        version: CHECKPOINT_VERSION,
+        timestamp: Date.now(),
+        nodeId: this.runService.getCurrentEncounter()?.nodeId ?? '',
+        encounterConfig: this.runService.getCurrentEncounter()!,
+        rngState: this.runService.getRngState() ?? 0,
+        gameState: this.gameStateService.serializeState(),
+        turnNumber: this.combatLoopService.getTurnNumber(),
+        leakedThisWave: this.combatLoopService.getLeakedThisWave(),
+        towers: this.towerCombatService.serializeTowers(),
+        mortarZones: this.towerCombatService.serializeMortarZones(),
+        enemies: serializedEnemies,
+        enemyCounter,
+        statusEffects: this.statusEffectService.serializeEffects(),
+        waveState: this.waveService.serializeState(),
+        deckState: this.deckService.serializeState(),
+        cardModifiers: this.cardEffectService.serializeModifiers(),
+        relicFlags: this.relicService.serializeEncounterFlags(),
+        gameStats: this.gameStatsService.serializeState(),
+        challengeState: this.challengeTrackingService.serializeState(),
+      };
+
+      this.encounterCheckpointService.saveCheckpoint(checkpoint);
+    } catch {
+      // Auto-save failures are non-fatal — swallow silently.
     }
   }
 }

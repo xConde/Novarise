@@ -21,6 +21,7 @@ import { RelicService } from '../../../run/services/relic.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 import { TowerStatOverrides } from '../../../run/models/card.model';
+import { SerializablePlacedTower, SerializableMortarZone } from '../models/encounter-checkpoint.model';
 
 /** M3 S4: turn-based mortar DoT zone. Replaces the legacy real-time path for fireTurn. */
 interface TurnMortarZone {
@@ -513,6 +514,54 @@ export class TowerCombatService {
 
   getPlacedTowers(): Map<string, PlacedTower> {
     return this.placedTowers;
+  }
+
+  /** Serialize placed towers for checkpoint save, stripping Three.js mesh data. */
+  serializeTowers(): SerializablePlacedTower[] {
+    return Array.from(this.placedTowers.values()).map(t => ({
+      id: t.id,
+      type: t.type,
+      level: t.level,
+      row: t.row,
+      col: t.col,
+      kills: t.kills,
+      totalInvested: t.totalInvested,
+      targetingMode: t.targetingMode,
+      ...(t.specialization !== undefined && { specialization: t.specialization }),
+      ...(t.placedAtTurn !== undefined && { placedAtTurn: t.placedAtTurn }),
+      ...(t.cardStatOverrides !== undefined && { cardStatOverrides: { ...t.cardStatOverrides } }),
+    }));
+  }
+
+  /** Serialize active mortar zones for checkpoint save. */
+  serializeMortarZones(): SerializableMortarZone[] {
+    return this.turnMortarZones.map(z => ({
+      centerX: z.centerX,
+      centerZ: z.centerZ,
+      blastRadius: z.blastRadius,
+      dotDamage: z.dotDamage,
+      expiresOnTurn: z.expiresOnTurn,
+      ...(z.statusEffect !== undefined && { statusEffect: z.statusEffect }),
+    }));
+  }
+
+  /**
+   * Restore towers from checkpoint. Meshes must be pre-built externally
+   * and provided in the meshes map keyed by tower id (e.g., "2-3").
+   */
+  restoreTowers(towers: SerializablePlacedTower[], meshes: Map<string, THREE.Group>): void {
+    this.placedTowers.clear();
+    for (const t of towers) {
+      this.placedTowers.set(t.id, {
+        ...t,
+        mesh: meshes.get(t.id) ?? null,
+      });
+    }
+  }
+
+  /** Restore mortar zones from checkpoint. */
+  restoreMortarZones(zones: SerializableMortarZone[]): void {
+    this.turnMortarZones = zones.map(z => ({ ...z }));
   }
 
   /** Disposes all Three.js objects (tower meshes), resets status effects, and delegates VFX cleanup. Call from both `restartGame()` and `ngOnDestroy()`. */

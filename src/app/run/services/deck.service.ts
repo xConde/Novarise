@@ -8,7 +8,8 @@ import {
   EnergyState,
 } from '../models/card.model';
 import { getCardDefinition } from '../constants/card-definitions';
-import { createSeededRng } from '../constants/run.constants';
+import { SeededRng, createSeededRng } from '../constants/run.constants';
+import { SerializableDeckState } from '../../game/game-board/models/encounter-checkpoint.model';
 
 /**
  * DeckService — deck management for Ascent Mode encounters.
@@ -26,7 +27,7 @@ export class DeckService {
   private deckState: DeckState = { drawPile: [], hand: [], discardPile: [], exhaustPile: [] };
   private energyState: EnergyState = { current: 0, max: DECK_CONFIG.baseEnergy };
   private instanceCounter = 0;
-  private rng: (() => number) | null = null;
+  private rng: SeededRng | null = null;
 
   // ── Reactive observables ──────────────────────────────────
 
@@ -279,6 +280,10 @@ export class DeckService {
     return this.deckState;
   }
 
+  getRngState(): number | null {
+    return this.rng?.getState() ?? null;
+  }
+
   /** Set max energy (relic bonus). */
   setMaxEnergy(max: number): void {
     this.energyState = { ...this.energyState, max };
@@ -316,6 +321,40 @@ export class DeckService {
     this.emit();
   }
 
+  // ── Checkpoint serialization ──────────────────────────────
+
+  /** Serialize deck state for checkpoint save. Returns a deep copy of all piles, energy, and counter. */
+  serializeState(): SerializableDeckState {
+    return {
+      deckState: {
+        drawPile: [...this.deckState.drawPile],
+        hand: [...this.deckState.hand],
+        discardPile: [...this.deckState.discardPile],
+        exhaustPile: [...this.deckState.exhaustPile],
+      },
+      energyState: { ...this.energyState },
+      instanceCounter: this.instanceCounter,
+    };
+  }
+
+  /**
+   * Restore deck state from a checkpoint snapshot. Sets all piles, energy, and
+   * instance counter directly — no reshuffle, no resetForEncounter(). The RNG
+   * state is handled separately by RunService.
+   */
+  restoreState(snapshot: SerializableDeckState): void {
+    this.deckState = {
+      drawPile: [...snapshot.deckState.drawPile],
+      hand: [...snapshot.deckState.hand],
+      discardPile: [...snapshot.deckState.discardPile],
+      exhaustPile: [...snapshot.deckState.exhaustPile],
+    };
+    this.energyState = { ...snapshot.energyState };
+    this.instanceCounter = snapshot.instanceCounter;
+    this.deckStateSubject.next(this.deckState);
+    this.energySubject.next(this.energyState);
+  }
+
   // ── Private ───────────────────────────────────────────────
 
   private createInstance(cardId: CardId): CardInstance {
@@ -323,7 +362,7 @@ export class DeckService {
   }
 
   private shuffle(cards: CardInstance[]): CardInstance[] {
-    const rng = this.rng ?? Math.random;
+    const rng: () => number = this.rng ? () => this.rng!.next() : Math.random;
     const arr = [...cards];
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));

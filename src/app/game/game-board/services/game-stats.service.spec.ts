@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { GameStatsService } from './game-stats.service';
 import { TowerType } from '../models/tower.model';
+import { SerializableGameStats } from '../models/encounter-checkpoint.model';
 
 describe('GameStatsService', () => {
   let service: GameStatsService;
@@ -246,6 +247,81 @@ describe('GameStatsService', () => {
       service.reset();
       service.recordDamage(10);
       expect(service.getStats().totalDamageDealt).toBe(10);
+    });
+  });
+
+  // --- checkpoint serialization ---
+
+  describe('checkpoint serialization', () => {
+    it('serializeState() captures all stat fields', () => {
+      service.recordGoldEarned(200);
+      service.recordKill(TowerType.BASIC);
+      service.recordKill(TowerType.SNIPER);
+      service.recordEnemyLeaked();
+      service.recordTowerBuilt();
+      service.recordTowerBuilt();
+      service.recordTowerSold();
+
+      const snapshot = service.serializeState();
+
+      expect(snapshot.totalGoldEarned).toBe(200);
+      expect(snapshot.killsByTowerType[TowerType.BASIC]).toBe(1);
+      expect(snapshot.killsByTowerType[TowerType.SNIPER]).toBe(1);
+      expect(snapshot.enemiesLeaked).toBe(1);
+      expect(snapshot.towersPlaced).toBe(2);
+      expect(snapshot.towersSold).toBe(1);
+    });
+
+    it('serializeState() returns a defensive copy of killsByTowerType', () => {
+      service.recordKill(TowerType.CHAIN);
+      const snapshot = service.serializeState();
+      service.recordKill(TowerType.CHAIN);
+      expect(snapshot.killsByTowerType[TowerType.CHAIN]).toBe(1);
+    });
+
+    it('restoreFromCheckpoint() sets all fields', () => {
+      const snapshot: SerializableGameStats = {
+        totalGoldEarned: 500,
+        totalDamageDealt: 1200,
+        shotsFired: 45,
+        killsByTowerType: { [TowerType.MORTAR]: 7 },
+        enemiesLeaked: 3,
+        towersPlaced: 5,
+        towersSold: 1,
+      };
+
+      service.restoreFromCheckpoint(snapshot);
+      const stats = service.getStats();
+
+      expect(stats.totalGoldEarned).toBe(500);
+      expect(stats.totalDamageDealt).toBe(1200);
+      expect(stats.shotsFired).toBe(45);
+      expect(stats.killsByTowerType[TowerType.MORTAR]).toBe(7);
+      expect(stats.enemiesLeaked).toBe(3);
+      expect(stats.towersBuilt).toBe(5);
+      expect(stats.towersSold).toBe(1);
+    });
+
+    it('serialize → restore roundtrip preserves tracked fields', () => {
+      service.recordGoldEarned(150);
+      service.recordKill(TowerType.SPLASH);
+      service.recordKill(TowerType.SPLASH);
+      service.recordEnemyLeaked();
+      service.recordTowerBuilt();
+      service.recordTowerSold();
+
+      const snapshot = service.serializeState();
+
+      service.reset();
+
+      service.restoreFromCheckpoint(snapshot);
+      const stats = service.getStats();
+
+      expect(stats.totalGoldEarned).toBe(150);
+      expect(stats.killsByTowerType[TowerType.SPLASH]).toBe(2);
+      expect(stats.enemiesLeaked).toBe(1);
+      expect(stats.towersBuilt).toBe(1);
+      expect(stats.towersSold).toBe(1);
     });
   });
 });

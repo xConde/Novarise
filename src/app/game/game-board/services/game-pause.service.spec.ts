@@ -88,12 +88,15 @@ describe('GamePauseService', () => {
     });
   });
 
-  describe('canLeaveGame', () => {
-    it('should allow navigation during SETUP phase', () => {
-      expect(service.canLeaveGame()).toBeTrue();
+  describe('requestGuardDecision', () => {
+    it('should emit true immediately during SETUP phase', (done) => {
+      service.requestGuardDecision().subscribe(result => {
+        expect(result).toBeTrue();
+        done();
+      });
     });
 
-    it('should allow navigation during VICTORY phase', () => {
+    it('should emit true immediately during VICTORY phase', (done) => {
       gameStateSpy.getState.and.returnValue({
         ...INITIAL_GAME_STATE,
         phase: GamePhase.VICTORY,
@@ -101,10 +104,13 @@ describe('GamePauseService', () => {
         score: 1000,
         elapsedTime: 120,
       });
-      expect(service.canLeaveGame()).toBeTrue();
+      service.requestGuardDecision().subscribe(result => {
+        expect(result).toBeTrue();
+        done();
+      });
     });
 
-    it('should allow navigation during DEFEAT phase', () => {
+    it('should emit true immediately during DEFEAT phase', (done) => {
       gameStateSpy.getState.and.returnValue({
         ...INITIAL_GAME_STATE,
         phase: GamePhase.DEFEAT,
@@ -113,16 +119,82 @@ describe('GamePauseService', () => {
         score: 500,
         elapsedTime: 60,
       });
-      expect(service.canLeaveGame()).toBeTrue();
+      service.requestGuardDecision().subscribe(result => {
+        expect(result).toBeTrue();
+        done();
+      });
+    });
+
+    it('should pause the game and set showNavigationPrompt during COMBAT phase', () => {
+      gameStateSpy.getState.and.returnValue({
+        ...INITIAL_GAME_STATE,
+        phase: GamePhase.COMBAT,
+        wave: 1,
+        isPaused: false,
+      });
+      service.requestGuardDecision();
+      expect(gameStateSpy.togglePause).toHaveBeenCalled();
+      expect(minimapSpy.setDimmed).toHaveBeenCalledWith(true);
+      expect(service.showNavigationPrompt).toBeTrue();
+      expect(service.showQuitConfirm).toBeFalse();
+      // clean up the pending subject
+      service.resolveGuardDecision(false);
+    });
+
+    it('should not double-pause if already paused during COMBAT phase', () => {
+      gameStateSpy.getState.and.returnValue({
+        ...INITIAL_GAME_STATE,
+        phase: GamePhase.COMBAT,
+        wave: 1,
+        isPaused: true,
+      });
+      service.requestGuardDecision();
+      expect(gameStateSpy.togglePause).not.toHaveBeenCalled();
+      // clean up the pending subject
+      service.resolveGuardDecision(false);
+    });
+  });
+
+  describe('resolveGuardDecision', () => {
+    it('should emit true and clear showNavigationPrompt when allowed', (done) => {
+      gameStateSpy.getState.and.returnValue({
+        ...INITIAL_GAME_STATE,
+        phase: GamePhase.COMBAT,
+        wave: 1,
+        isPaused: true,
+      });
+      service.requestGuardDecision().subscribe(result => {
+        expect(result).toBeTrue();
+        expect(service.showNavigationPrompt).toBeFalse();
+        done();
+      });
+      service.resolveGuardDecision(true);
+    });
+
+    it('should emit false and clear showNavigationPrompt when denied', (done) => {
+      gameStateSpy.getState.and.returnValue({
+        ...INITIAL_GAME_STATE,
+        phase: GamePhase.COMBAT,
+        wave: 1,
+        isPaused: true,
+      });
+      service.requestGuardDecision().subscribe(result => {
+        expect(result).toBeFalse();
+        expect(service.showNavigationPrompt).toBeFalse();
+        done();
+      });
+      service.resolveGuardDecision(false);
     });
   });
 
   describe('reset', () => {
-    it('should clear autoPaused and showQuitConfirm', () => {
+    it('should clear autoPaused, showQuitConfirm, and showNavigationPrompt', () => {
       service.requestQuit();
+      service.showNavigationPrompt = true;
       service.reset();
       expect(service.autoPaused).toBeFalse();
       expect(service.showQuitConfirm).toBeFalse();
+      expect(service.showNavigationPrompt).toBeFalse();
     });
   });
 

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { TowerType } from '../models/tower.model';
 import { GameStats } from '../models/game-stats.model';
+import { SerializableGameStats } from '../models/encounter-checkpoint.model';
 
 export { GameStats } from '../models/game-stats.model';
 
@@ -63,6 +64,30 @@ export class GameStatsService {
       towersSold: this.towersSold,
       shotsFired: this.shotsFired,
     };
+  }
+
+  /** Serialize game stats for checkpoint save. */
+  serializeState(): SerializableGameStats {
+    return {
+      totalGoldEarned: this.totalGoldEarned,
+      totalDamageDealt: this.totalDamageDealt,
+      shotsFired: this.shotsFired,
+      killsByTowerType: { ...this.killsByTowerType },
+      enemiesLeaked: this.enemiesLeaked,
+      towersPlaced: this.towersBuilt,
+      towersSold: this.towersSold,
+    };
+  }
+
+  /** Restore game stats from checkpoint. */
+  restoreFromCheckpoint(snapshot: SerializableGameStats): void {
+    this.totalGoldEarned = snapshot.totalGoldEarned;
+    this.totalDamageDealt = snapshot.totalDamageDealt;
+    this.shotsFired = snapshot.shotsFired;
+    this.killsByTowerType = { ...snapshot.killsByTowerType } as Record<TowerType, number>;
+    this.enemiesLeaked = snapshot.enemiesLeaked;
+    this.towersBuilt = snapshot.towersPlaced;
+    this.towersSold = snapshot.towersSold;
   }
 
   reset(): void {

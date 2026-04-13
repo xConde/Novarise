@@ -217,6 +217,11 @@
         </div>
       </div>
 
+      <!-- Navigation prompt (guard-triggered) -->
+      <p class="pause-menu__nav-prompt" *ngIf="showNavigationPrompt && !showQuitConfirm">
+        Save your progress before leaving?
+      </p>
+
       <!-- Settings -->
       <div class="pause-menu__settings" *ngIf="!showQuitConfirm">
         <button class="pause-audio-toggle" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
@@ -226,9 +231,12 @@
         </button>
       </div>
 
-      <!-- Normal actions -->
+      <!-- Normal actions + navigation prompt actions -->
       <div class="pause-menu__actions" *ngIf="!showQuitConfirm">
         <button class="pause-action pause-action--primary" (click)="togglePause()">Resume</button>
+        <button class="pause-action pause-action--save" (click)="saveAndExit()">
+          Save &amp; Exit
+        </button>
         <button class="pause-action pause-action--quit" (click)="requestQuit()">
           Abandon Run
         </button>
@@ -236,7 +244,7 @@
 
       <!-- Quit confirmation -->
       <div class="pause-menu__quit-confirm" *ngIf="showQuitConfirm">
-        <p class="quit-confirm__text">Abandon this run? You'll return to the map.</p>
+        <p class="quit-confirm__text">Abandon this run? Progress will be lost.</p>
         <div class="quit-confirm__actions">
           <button class="pause-action pause-action--primary" (click)="cancelQuit()">Cancel</button>
           <button class="pause-action pause-action--quit" (click)="confirmQuit()">Quit</button>

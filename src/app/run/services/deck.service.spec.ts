@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { DeckService } from './deck.service';
-import { CardId, DECK_CONFIG } from '../models/card.model';
+import { CardId, CardInstance, DECK_CONFIG } from '../models/card.model';
 import { getStarterDeck } from '../constants/card-definitions';
+import { SerializableDeckState } from '../../game/game-board/models/encounter-checkpoint.model';
 
 describe('DeckService', () => {
   let service: DeckService;
@@ -284,6 +285,133 @@ describe('DeckService', () => {
       }
     });
     service.drawForWave();
+  });
+
+  // ── checkpoint serialization ──────────────────────────────
+
+  describe('checkpoint serialization', () => {
+    it('serializeState() returns current pile contents', () => {
+      service.initializeDeck([CardId.TOWER_BASIC, CardId.GOLD_RUSH, CardId.ENERGY_SURGE], 1);
+      service.drawForWave(); // draws up to handSize (≤3 cards here)
+
+      const snapshot = service.serializeState();
+      const live = service.getDeckState();
+
+      expect(snapshot.deckState.hand.length).toBe(live.hand.length);
+      expect(snapshot.deckState.drawPile.length).toBe(live.drawPile.length);
+      expect(snapshot.deckState.discardPile.length).toBe(live.discardPile.length);
+      expect(snapshot.deckState.exhaustPile.length).toBe(live.exhaustPile.length);
+
+      const liveIds = live.hand.map(c => c.instanceId);
+      const snapIds = snapshot.deckState.hand.map(c => c.instanceId);
+      expect(snapIds).toEqual(liveIds);
+    });
+
+    it('serializeState() captures energy and instanceCounter', () => {
+      service.initializeDeck([CardId.TOWER_BASIC], 1);
+      service.drawForWave();
+      const hand = service.getDeckState().hand;
+      service.playCard(hand[0].instanceId); // spends 1 energy
+
+      const snapshot = service.serializeState();
+
+      expect(snapshot.energyState.max).toBe(DECK_CONFIG.baseEnergy);
+      expect(snapshot.energyState.current).toBe(DECK_CONFIG.baseEnergy - 1);
+      expect(snapshot.instanceCounter).toBe(1); // 1 card created → counter is 1
+    });
+
+    it('restoreState() sets all piles directly', () => {
+      const cardA: CardInstance = { instanceId: 'snap_0', cardId: CardId.TOWER_BASIC, upgraded: false };
+      const cardB: CardInstance = { instanceId: 'snap_1', cardId: CardId.GOLD_RUSH, upgraded: false };
+      const cardC: CardInstance = { instanceId: 'snap_2', cardId: CardId.ENERGY_SURGE, upgraded: false };
+      const cardD: CardInstance = { instanceId: 'snap_3', cardId: CardId.DAMAGE_BOOST, upgraded: true };
+
+      const snapshot: SerializableDeckState = {
+        deckState: {
+          drawPile: [cardA],
+          hand: [cardB],
+          discardPile: [cardC],
+          exhaustPile: [cardD],
+        },
+        energyState: { current: 2, max: 4 },
+        instanceCounter: 10,
+      };
+
+      service.restoreState(snapshot);
+      const state = service.getDeckState();
+
+      expect(state.drawPile[0].instanceId).toBe('snap_0');
+      expect(state.hand[0].instanceId).toBe('snap_1');
+      expect(state.discardPile[0].instanceId).toBe('snap_2');
+      expect(state.exhaustPile[0].instanceId).toBe('snap_3');
+      expect(service.getEnergy().current).toBe(2);
+      expect(service.getEnergy().max).toBe(4);
+    });
+
+    it('restoreState() preserves instanceCounter', () => {
+      const snapshot: SerializableDeckState = {
+        deckState: { drawPile: [], hand: [], discardPile: [], exhaustPile: [] },
+        energyState: { current: 0, max: DECK_CONFIG.baseEnergy },
+        instanceCounter: 42,
+      };
+
+      service.restoreState(snapshot);
+      service.addCard(CardId.TOWER_BASIC); // uses instanceCounter internally
+      const added = service.getDeckState().discardPile[0];
+      // The next instanceId after counter=42 should be card_42
+      expect(added.instanceId).toBe('card_42');
+    });
+
+    it('restoreState() does NOT reshuffle — preserves drawPile order exactly', () => {
+      const cardA: CardInstance = { instanceId: 'ord_0', cardId: CardId.TOWER_BASIC, upgraded: false };
+      const cardB: CardInstance = { instanceId: 'ord_1', cardId: CardId.GOLD_RUSH, upgraded: false };
+      const cardC: CardInstance = { instanceId: 'ord_2', cardId: CardId.ENERGY_SURGE, upgraded: false };
+
+      const snapshot: SerializableDeckState = {
+        deckState: { drawPile: [cardA, cardB, cardC], hand: [], discardPile: [], exhaustPile: [] },
+        energyState: { current: 0, max: DECK_CONFIG.baseEnergy },
+        instanceCounter: 3,
+      };
+
+      service.restoreState(snapshot);
+      const drawPile = service.getDeckState().drawPile;
+
+      expect(drawPile[0].instanceId).toBe('ord_0');
+      expect(drawPile[1].instanceId).toBe('ord_1');
+      expect(drawPile[2].instanceId).toBe('ord_2');
+    });
+
+    it('serialize → restore roundtrip preserves all state', () => {
+      // Init, play some cards, then roundtrip
+      service.initializeDeck(
+        [CardId.TOWER_BASIC, CardId.GOLD_RUSH, CardId.ENERGY_SURGE, CardId.DAMAGE_BOOST],
+        7,
+      );
+      service.drawForWave();
+
+      // Play first card from hand if energy allows
+      const hand = service.getDeckState().hand;
+      if (hand.length > 0) {
+        service.playCard(hand[0].instanceId);
+      }
+
+      const before = service.serializeState();
+
+      // Wipe state
+      service.clear();
+      expect(service.getDeckState().drawPile.length).toBe(0);
+
+      // Restore
+      service.restoreState(before);
+      const after = service.getDeckState();
+
+      expect(after.drawPile.length).toBe(before.deckState.drawPile.length);
+      expect(after.hand.length).toBe(before.deckState.hand.length);
+      expect(after.discardPile.length).toBe(before.deckState.discardPile.length);
+      expect(after.exhaustPile.length).toBe(before.deckState.exhaustPile.length);
+      expect(service.getEnergy().current).toBe(before.energyState.current);
+      expect(service.getEnergy().max).toBe(before.energyState.max);
+    });
   });
 
   // ── Energy helpers ───────────────────────────────────────

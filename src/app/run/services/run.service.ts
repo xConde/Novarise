@@ -32,6 +32,7 @@ import {
   REST_CONFIG,
   RUN_CONFIG,
   SHOP_CONFIG,
+  SeededRng,
   createSeededRng,
 } from '../constants/run.constants';
 
@@ -45,6 +46,7 @@ import { RUN_EVENTS } from '../constants/run-events';
 import { PlayerProfileService } from '../../core/services/player-profile.service';
 import { getStarterDeck, CARD_DEFINITIONS } from '../constants/card-definitions';
 import { CardId, CardInstance, CardRarity } from '../models/card.model';
+import { EncounterCheckpointService } from './encounter-checkpoint.service';
 
 /**
  * Central orchestrator for Ascent Mode runs.
@@ -70,6 +72,12 @@ export class RunService {
    *  nulling currentEncounter so generateRewards() can still read goldReward/isElite/isBoss. */
   private lastCompletedEncounter: EncounterConfig | null = null;
 
+  /**
+   * True while restoring a checkpointed encounter — read by GameBoardComponent.
+   * Set by restoreEncounter(), cleared by GameBoardComponent after restore completes.
+   */
+  isRestoringCheckpoint = false;
+
   /** Pending encounter result set by GameBoardComponent on return from /play. */
   private pendingResult: EncounterResult | null = null;
 
@@ -80,7 +88,7 @@ export class RunService {
   private currentEvent: RunEvent | null = null;
 
   /** RNG seeded per-run, advanced by each random action. */
-  private runRng: (() => number) | null = null;
+  private runRng: SeededRng | null = null;
 
   constructor(
     private nodeMapGenerator: NodeMapGeneratorService,
@@ -90,6 +98,7 @@ export class RunService {
     private persistence: RunPersistenceService,
     private eventBus: RunEventBusService,
     private playerProfile: PlayerProfileService,
+    private encounterCheckpointService: EncounterCheckpointService,
   ) {}
 
   // ── Queries ─────────────────────────────────────────────
@@ -149,12 +158,19 @@ export class RunService {
     return this.currentEvent;
   }
 
+  getRngState(): number | null {
+    return this.runRng?.getState() ?? null;
+  }
+
   // ── Run Lifecycle ───────────────────────────────────────
 
   /** Start a new run with a fresh seed. */
   startNewRun(ascensionLevel = 0): void {
     this.persistence.clearSavedRun();
     this.relicService.clearRelics();
+
+    // Clear any checkpoint leftover from a previous run before starting fresh.
+    this.encounterCheckpointService.clearCheckpoint();
 
     // Ensure all transient run state is cleared before starting fresh
     // (guards against re-using stale state if a previous run ended mid-flight)
@@ -201,6 +217,8 @@ export class RunService {
   /** Abandon the current run. */
   abandonRun(): void {
     if (!this.runState) return;
+    // Clear checkpoint so a re-start does not inherit a stale encounter.
+    this.encounterCheckpointService.clearCheckpoint();
     const abandonedState = { ...this.runState, status: RunStatus.ABANDONED };
     this.updateState(abandonedState);
     this.playerProfile.recordRun(abandonedState);
@@ -235,12 +253,56 @@ export class RunService {
     const state = this.runState;
     if (!state) return;
 
+    // Clear any stale checkpoint from a previous encounter before starting fresh.
+    this.encounterCheckpointService.clearCheckpoint();
+
     this.currentEncounter = this.encounterService.prepareEncounter(node, state);
     this.encounterService.loadEncounterMap(this.currentEncounter);
 
     this.relicService.setActiveRelics(state.relicIds);
     this.relicService.resetEncounterState();
     this.eventBus.emit(RunEventType.ENCOUNTER_START, { nodeId: node.id });
+  }
+
+  /**
+   * Restore a checkpointed encounter instead of preparing from scratch.
+   * Called by RunComponent when the selected node has a saved checkpoint.
+   * Navigation to /play is handled by the caller (same as startEncounter).
+   */
+  restoreEncounter(): void {
+    const checkpoint = this.encounterCheckpointService.loadCheckpoint();
+    if (!checkpoint) {
+      // Clear stale entry — loadCheckpoint() clears on parse/validation failure,
+      // but the catch block returns null without clearing. This ensures any residual
+      // key is removed so getCheckpointNodeId() stops matching on future hub visits.
+      this.encounterCheckpointService.clearCheckpoint();
+      return;
+    }
+
+    const state = this.runState;
+    if (!state) return;
+
+    // Validate: if the node was already completed this checkpoint is stale — clear it.
+    if (state.completedNodeIds?.includes(checkpoint.nodeId)) {
+      this.encounterCheckpointService.clearCheckpoint();
+      return;
+    }
+
+    // Restore encounter config so GameBoardComponent can read it
+    this.currentEncounter = checkpoint.encounterConfig;
+
+    // Load the map into MapBridgeService (same as prepareEncounter)
+    this.encounterService.loadEncounterMap(checkpoint.encounterConfig);
+
+    // Restore RNG state
+    if (this.runRng) {
+      this.runRng.setState(checkpoint.rngState);
+    }
+
+    // Set relics for this encounter
+    this.relicService.setActiveRelics(state.relicIds);
+
+    this.isRestoringCheckpoint = true;
   }
 
   /**
@@ -300,7 +362,7 @@ export class RunService {
     // Use lastCompletedEncounter — consumePendingEncounterResult() nulls currentEncounter
     // before generateRewards() is called (per run.component.ts handleEncounterReturn ordering).
     const encounter = this.lastCompletedEncounter;
-    const rng = this.runRng ?? Math.random;
+    const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
 
     const baseGold = encounter?.goldReward ?? 0;
 
@@ -422,7 +484,7 @@ export class RunService {
 
   /** Shop: generate shop items for the current node. */
   generateShopItems(): void {
-    const rng = this.runRng ?? Math.random;
+    const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
     const state = this.runState;
     if (!state) return;
 
@@ -555,14 +617,14 @@ export class RunService {
     const pool = nonStarters.length > 0 ? nonStarters : allCards;
     if (pool.length === 0) return;
 
-    const rng = this.runRng ?? Math.random;
+    const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
     const index = Math.floor(rng() * pool.length);
     this.deckService.removeCard(pool[index].instanceId);
   }
 
   /** Generate a random event for the current node. */
   generateEvent(): void {
-    const rng = this.runRng ?? Math.random;
+    const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
     const events = RUN_EVENTS;
     const index = Math.floor(rng() * events.length);
     this.currentEvent = events[index];
@@ -573,7 +635,7 @@ export class RunService {
     const map = this.nodeMap;
     if (!map) return NodeType.COMBAT;
 
-    const rng = this.runRng ?? Math.random;
+    const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
     const roll = rng();
 
     // Unknown nodes reveal as: combat (50%), event (25%), shop (15%), rest (10%)

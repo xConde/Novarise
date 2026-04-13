@@ -6,6 +6,7 @@ import { EncounterService } from './encounter.service';
 import { RelicService } from './relic.service';
 import { RunPersistenceService } from './run-persistence.service';
 import { RunEventBusService } from './run-event-bus.service';
+import { EncounterCheckpointService } from './encounter-checkpoint.service';
 import { RunStatus, DEFAULT_RUN_CONFIG, EncounterResult } from '../models/run-state.model';
 import { NodeMap, MapNode, NodeType } from '../models/node-map.model';
 import { EncounterConfig } from '../models/encounter.model';
@@ -835,4 +836,158 @@ describe('RunService', () => {
     const stored = service.runState!.encounterResults[0];
     expect(stored.completedChallenges).toEqual(challenges);
   }));
+
+  // ── stale checkpoint handling ──────────────────────────────────
+
+  describe('stale checkpoint handling', () => {
+    let checkpointService: EncounterCheckpointService;
+
+    beforeEach(() => {
+      checkpointService = TestBed.inject(EncounterCheckpointService);
+      // Ensure localStorage is clean before each checkpoint test.
+      checkpointService.clearCheckpoint();
+    });
+
+    afterEach(() => {
+      checkpointService.clearCheckpoint();
+    });
+
+    it('startNewRun() clears any leftover checkpoint', fakeAsync(() => {
+      // Plant a checkpoint as if a previous run saved it.
+      checkpointService.saveCheckpoint({
+        version: 1,
+        timestamp: Date.now(),
+        nodeId: 'node_0_0',
+        encounterConfig: makeEncounterConfig(),
+        rngState: 0,
+        gameState: {} as any,
+        turnNumber: 3,
+        leakedThisWave: false,
+        towers: [],
+        mortarZones: [],
+        enemies: [],
+        enemyCounter: 0,
+        statusEffects: [],
+        waveState: {} as any,
+        deckState: {} as any,
+        cardModifiers: [],
+        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+        gameStats: {} as any,
+        challengeState: {} as any,
+      });
+
+      expect(checkpointService.hasCheckpoint()).toBeTrue();
+
+      service.startNewRun();
+
+      expect(checkpointService.hasCheckpoint()).toBeFalse();
+    }));
+
+    it('abandonRun() clears any active checkpoint', fakeAsync(() => {
+      service.startNewRun();
+
+      checkpointService.saveCheckpoint({
+        version: 1,
+        timestamp: Date.now(),
+        nodeId: 'node_0_0',
+        encounterConfig: makeEncounterConfig(),
+        rngState: 0,
+        gameState: {} as any,
+        turnNumber: 2,
+        leakedThisWave: false,
+        towers: [],
+        mortarZones: [],
+        enemies: [],
+        enemyCounter: 0,
+        statusEffects: [],
+        waveState: {} as any,
+        deckState: {} as any,
+        cardModifiers: [],
+        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+        gameStats: {} as any,
+        challengeState: {} as any,
+      });
+
+      expect(checkpointService.hasCheckpoint()).toBeTrue();
+
+      service.abandonRun();
+
+      expect(checkpointService.hasCheckpoint()).toBeFalse();
+    }));
+
+    it('restoreEncounter() clears a stale checkpoint (node already completed)', fakeAsync(() => {
+      service.startNewRun();
+
+      // Mark the node as already completed.
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      service.recordEncounterResult(makeEncounterResult({ victory: true, nodeId: 'node_0_0' }));
+      service.consumePendingEncounterResult();
+      expect(service.runState!.completedNodeIds).toContain('node_0_0');
+
+      // Plant a checkpoint for the already-completed node.
+      checkpointService.saveCheckpoint({
+        version: 1,
+        timestamp: Date.now(),
+        nodeId: 'node_0_0',
+        encounterConfig: makeEncounterConfig({ nodeId: 'node_0_0' }),
+        rngState: 0,
+        gameState: {} as any,
+        turnNumber: 1,
+        leakedThisWave: false,
+        towers: [],
+        mortarZones: [],
+        enemies: [],
+        enemyCounter: 0,
+        statusEffects: [],
+        waveState: {} as any,
+        deckState: {} as any,
+        cardModifiers: [],
+        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+        gameStats: {} as any,
+        challengeState: {} as any,
+      });
+
+      expect(checkpointService.hasCheckpoint()).toBeTrue();
+
+      service.restoreEncounter();
+
+      // Stale checkpoint must be cleared — and isRestoringCheckpoint stays false.
+      expect(checkpointService.hasCheckpoint()).toBeFalse();
+      expect(service.isRestoringCheckpoint).toBeFalse();
+    }));
+
+    it('restoreEncounter() accepts a valid (non-stale) checkpoint', fakeAsync(() => {
+      service.startNewRun();
+
+      const config = makeEncounterConfig({ nodeId: 'node_0_0' });
+      checkpointService.saveCheckpoint({
+        version: 1,
+        timestamp: Date.now(),
+        nodeId: 'node_0_0',
+        encounterConfig: config,
+        rngState: 0,
+        gameState: {} as any,
+        turnNumber: 2,
+        leakedThisWave: false,
+        towers: [],
+        mortarZones: [],
+        enemies: [],
+        enemyCounter: 0,
+        statusEffects: [],
+        waveState: {} as any,
+        deckState: {} as any,
+        cardModifiers: [],
+        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+        gameStats: {} as any,
+        challengeState: {} as any,
+      });
+
+      // node_0_0 is NOT in completedNodeIds — valid checkpoint.
+      service.restoreEncounter();
+
+      // Checkpoint must survive and isRestoringCheckpoint must be set.
+      expect(checkpointService.hasCheckpoint()).toBeTrue();
+      expect(service.isRestoringCheckpoint).toBeTrue();
+    }));
+  });
 });

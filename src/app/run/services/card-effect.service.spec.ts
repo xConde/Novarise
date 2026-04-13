@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { CardEffectService, SpellContext } from './card-effect.service';
+import { ActiveModifier, CardEffectService, SpellContext } from './card-effect.service';
 import { GameStateService } from '../../game/game-board/services/game-state.service';
 import { EnemyService } from '../../game/game-board/services/enemy.service';
 import { StatusEffectService } from '../../game/game-board/services/status-effect.service';
@@ -547,6 +547,66 @@ describe('CardEffectService', () => {
     it('works on empty enemy map: no-op, no crash', () => {
       expect(() => service.applySpell(spellEffect('epidemic', 2), makeCtx())).not.toThrow();
       expect(statusEffectSpy.apply).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── checkpoint serialization ──────────────────────────────
+
+  describe('checkpoint serialization', () => {
+    it('serializeModifiers() returns copy of active modifiers', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 2));
+      const result = service.serializeModifiers();
+      expect(result.length).toBe(1);
+      expect(result[0].stat).toBe(MODIFIER_STAT.DAMAGE);
+      expect(result[0].value).toBeCloseTo(0.25);
+      expect(result[0].remainingWaves).toBe(2);
+    });
+
+    it('serializeModifiers() returns empty array when no modifiers active', () => {
+      const result = service.serializeModifiers();
+      expect(result).toEqual([]);
+    });
+
+    it('restoreModifiers() replaces current modifiers', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.FIRE_RATE, 0.5, 1));
+      const replacement: ActiveModifier[] = [
+        { stat: MODIFIER_STAT.RANGE, value: 0.3, remainingWaves: 3 },
+        { stat: MODIFIER_STAT.DAMAGE, value: 0.1, remainingWaves: 2 },
+      ];
+      service.restoreModifiers(replacement);
+      const active = service.getActiveModifiers();
+      expect(active.length).toBe(2);
+      expect(service.hasActiveModifier(MODIFIER_STAT.FIRE_RATE)).toBeFalse();
+      expect(active[0].stat).toBe(MODIFIER_STAT.RANGE);
+      expect(active[1].stat).toBe(MODIFIER_STAT.DAMAGE);
+    });
+
+    it('getModifierValue() works after restore', () => {
+      const snapshot: ActiveModifier[] = [
+        { stat: MODIFIER_STAT.DAMAGE, value: 0.4, remainingWaves: 2 },
+      ];
+      service.restoreModifiers(snapshot);
+      expect(service.getModifierValue(MODIFIER_STAT.DAMAGE)).toBeCloseTo(0.4);
+    });
+
+    it('serialize → restore roundtrip preserves all fields', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.DAMAGE, 0.2, 3));
+      service.applyModifier(modifierEffect(MODIFIER_STAT.RANGE, 0.15, 1));
+      service.applyModifier(modifierEffect(MODIFIER_STAT.FIRE_RATE, 0.5, 2));
+      const snapshot = service.serializeModifiers();
+
+      service.reset();
+      expect(service.getActiveModifiers().length).toBe(0);
+
+      service.restoreModifiers(snapshot);
+      const restored = service.getActiveModifiers();
+      expect(restored.length).toBe(3);
+      expect(service.getModifierValue(MODIFIER_STAT.DAMAGE)).toBeCloseTo(0.2);
+      expect(service.getModifierValue(MODIFIER_STAT.RANGE)).toBeCloseTo(0.15);
+      expect(service.getModifierValue(MODIFIER_STAT.FIRE_RATE)).toBeCloseTo(0.5);
+      expect(restored.find(m => m.stat === MODIFIER_STAT.DAMAGE)?.remainingWaves).toBe(3);
+      expect(restored.find(m => m.stat === MODIFIER_STAT.RANGE)?.remainingWaves).toBe(1);
+      expect(restored.find(m => m.stat === MODIFIER_STAT.FIRE_RATE)?.remainingWaves).toBe(2);
     });
   });
 

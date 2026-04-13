@@ -154,12 +154,46 @@
       var(--shadow-md) var(--game-gold-a40);
     animation: none;
   }
+
+  // Saved checkpoint — pulsing gold border signals resumable encounter
+  &--checkpointed {
+    border-color: rgba(212, 175, 55, 0.7);
+    box-shadow: 0 0 8px rgba(212, 175, 55, 0.3);
+    animation: checkpoint-pulse 2s ease-in-out infinite;
+  }
 }
 
 .map-node-icon {
   pointer-events: none;
   user-select: none;
   line-height: 1;
+}
+
+// ── Checkpoint resume badge ───────────────────────────────────────────────────
+
+.map-node__resume-badge {
+  position: absolute;
+  // Position below the node circle
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(212, 175, 55, 0.85);
+  color: #1a1208;
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  line-height: 1.4;
+}
+
+@keyframes checkpoint-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(212, 175, 55, 0.3); }
+  50%       { box-shadow: 0 0 16px rgba(212, 175, 55, 0.6); }
 }
 
 @keyframes pulse-node {
@@ -188,6 +222,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .map-node--selectable,
+  .map-node--checkpointed,
   .node-connection--active {
     animation: none;
   }

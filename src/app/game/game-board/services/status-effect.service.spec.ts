@@ -5,6 +5,7 @@ import { StatusEffectType, STATUS_EFFECT_CONFIGS } from '../constants/status-eff
 import { Enemy, EnemyType } from '../models/enemy.model';
 import { createTestEnemy, createEnemyServiceSpy, createRelicServiceSpy } from '../testing';
 import { RelicService } from '../../../run/services/relic.service';
+import { SerializableStatusEffect } from '../models/encounter-checkpoint.model';
 
 describe('StatusEffectService', () => {
   let service: StatusEffectService;
@@ -499,6 +500,101 @@ describe('StatusEffectService', () => {
       const result = service.getAllActiveEffects();
 
       expect(result.size).toBe(0);
+    });
+  });
+
+  // --- checkpoint serialization ---
+
+  describe('checkpoint serialization', () => {
+    it('serializeEffects() flattens nested Map to array', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+
+      service.apply('e1', StatusEffectType.SLOW, 0);
+      service.apply('e1', StatusEffectType.BURN, 0);
+
+      const serialized = service.serializeEffects();
+
+      expect(serialized.length).toBe(2);
+      const slowEntry = serialized.find(s => s.effectType === StatusEffectType.SLOW);
+      const burnEntry = serialized.find(s => s.effectType === StatusEffectType.BURN);
+      expect(slowEntry).toBeDefined();
+      expect(burnEntry).toBeDefined();
+      expect(slowEntry!.enemyId).toBe('e1');
+      expect(burnEntry!.enemyId).toBe('e1');
+      expect(slowEntry!.expiresAt).toBe(STATUS_EFFECT_CONFIGS[StatusEffectType.SLOW].duration);
+      expect(burnEntry!.expiresAt).toBe(STATUS_EFFECT_CONFIGS[StatusEffectType.BURN].duration);
+    });
+
+    it('serializeEffects() captures originalSpeed for SLOW', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+
+      service.apply('e1', StatusEffectType.SLOW, 0);
+
+      const serialized = service.serializeEffects();
+      const slowEntry = serialized.find(s => s.effectType === StatusEffectType.SLOW);
+
+      expect(slowEntry).toBeDefined();
+      expect(slowEntry!.originalSpeed).toBe(4);
+    });
+
+    it('serializeEffects() returns empty array when no effects', () => {
+      const serialized = service.serializeEffects();
+      expect(serialized).toEqual([]);
+    });
+
+    it('restoreEffects() rebuilds nested Map', () => {
+      const effects: SerializableStatusEffect[] = [
+        {
+          enemyId: 'e1',
+          effectType: StatusEffectType.BURN,
+          expiresAt: 5,
+          lastTickTime: 1,
+        },
+        {
+          enemyId: 'e1',
+          effectType: StatusEffectType.POISON,
+          expiresAt: 6,
+          lastTickTime: 1,
+        },
+      ];
+
+      service.restoreEffects(effects);
+
+      expect(service.hasEffect('e1', StatusEffectType.BURN)).toBe(true);
+      expect(service.hasEffect('e1', StatusEffectType.POISON)).toBe(true);
+      const activeTypes = service.getEffects('e1');
+      expect(activeTypes).toContain(StatusEffectType.BURN);
+      expect(activeTypes).toContain(StatusEffectType.POISON);
+    });
+
+    it('serialize → restore roundtrip', () => {
+      const e1 = createEnemy('e1', 100, 4);
+      const e2 = createEnemy('e2', 100, 6);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      service.apply('e1', StatusEffectType.SLOW, 0);
+      service.apply('e1', StatusEffectType.BURN, 0);
+      service.apply('e2', StatusEffectType.POISON, 0);
+
+      const serialized = service.serializeEffects();
+
+      // Clear effects
+      service.removeAllEffects('e1');
+      service.removeAllEffects('e2');
+      expect(service.serializeEffects()).toEqual([]);
+
+      // Restore
+      service.restoreEffects(serialized);
+
+      expect(service.hasEffect('e1', StatusEffectType.SLOW)).toBe(true);
+      expect(service.hasEffect('e1', StatusEffectType.BURN)).toBe(true);
+      expect(service.hasEffect('e2', StatusEffectType.POISON)).toBe(true);
+
+      const restoredAll = service.getAllActiveEffects();
+      expect(restoredAll.size).toBe(2);
     });
   });
 

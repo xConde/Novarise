@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { WaveDefinition, WaveEntry } from '../../game/game-board/models/wave.model';
 import { EnemyType } from '../../game/game-board/models/enemy.model';
-import { ENCOUNTER_CONFIG, createSeededRng } from '../constants/run.constants';
+import { ENCOUNTER_CONFIG, SeededRng, createSeededRng } from '../constants/run.constants';
 import { BossPreset, ACT1_BOSS_PRESETS, ACT2_BOSS_PRESETS } from '../constants/boss-presets';
 
 // ── Enemy pool constants ───────────────────────────────────────
@@ -99,7 +99,7 @@ export class WaveGeneratorService {
   getBossPreset(actIndex: number, seed: number): BossPreset {
     const rng = createSeededRng(seed);
     const presets = actIndex === 0 ? ACT1_BOSS_PRESETS : ACT2_BOSS_PRESETS;
-    return presets[Math.floor(rng() * presets.length)];
+    return presets[Math.floor(rng.next() * presets.length)];
   }
 
   // ── Private builders ──────────────────────────────────────
@@ -112,7 +112,7 @@ export class WaveGeneratorService {
    * by row depth and act index.
    */
   private buildWaves(
-    rng: () => number,
+    rng: SeededRng,
     pool: EnemyType[],
     row: number,
     actIndex: number,
@@ -123,7 +123,7 @@ export class WaveGeneratorService {
     const waves: WaveDefinition[] = [];
 
     for (let i = 0; i < count; i++) {
-      const entryTypeCount = MIN_ENTRY_TYPES + Math.floor(rng() * (MAX_ENTRY_TYPES - MIN_ENTRY_TYPES + 1));
+      const entryTypeCount = MIN_ENTRY_TYPES + Math.floor(rng.next() * (MAX_ENTRY_TYPES - MIN_ENTRY_TYPES + 1));
       const chosenTypes = pickRandom(pool, entryTypeCount, rng);
 
       const entries: WaveEntry[] = chosenTypes.map(type => ({
@@ -164,7 +164,7 @@ function getEnemyPool(row: number, actIndex: number): EnemyType[] {
  * Computes the number of enemies for a single WaveEntry.
  * Scales with row depth and act index.
  */
-function computeEnemyCount(row: number, actIndex: number, rng: () => number): number {
+function computeEnemyCount(row: number, actIndex: number, rng: SeededRng): number {
   let count = Math.floor(
     ENCOUNTER_CONFIG.enemyCountBasePerWave + row * ENCOUNTER_CONFIG.enemyCountGrowthPerRow,
   );
@@ -172,7 +172,7 @@ function computeEnemyCount(row: number, actIndex: number, rng: () => number): nu
     count = Math.floor(count * ENCOUNTER_CONFIG.enemyCountActMultiplier);
   }
   // Small random variance (+/- 1) to avoid identical waves
-  count += Math.floor(rng() * 3) - 1;
+  count += Math.floor(rng.next() * 3) - 1;
   return Math.max(1, count);
 }
 
@@ -180,10 +180,10 @@ function computeEnemyCount(row: number, actIndex: number, rng: () => number): nu
  * Computes spawn interval in seconds.
  * Decreases with row depth (faster spawns later), clamped to [MIN, MAX].
  */
-function computeSpawnInterval(row: number, rng: () => number): number {
+function computeSpawnInterval(row: number, rng: SeededRng): number {
   const base = SPAWN_INTERVAL_MAX - row * SPAWN_INTERVAL_ROW_REDUCTION;
   // Small random jitter (+/- 0.05s)
-  const jitter = (rng() - 0.5) * 0.1;
+  const jitter = (rng.next() - 0.5) * 0.1;
   return Math.min(SPAWN_INTERVAL_MAX, Math.max(SPAWN_INTERVAL_MIN, base + jitter));
 }
 
@@ -191,13 +191,13 @@ function computeSpawnInterval(row: number, rng: () => number): number {
  * Selects up to `count` unique random elements from `pool`.
  * Safe when pool.length < count (returns full pool).
  */
-function pickRandom<T>(pool: T[], count: number, rng: () => number): T[] {
+function pickRandom<T>(pool: T[], count: number, rng: SeededRng): T[] {
   if (pool.length === 0) return [];
   const copy = [...pool];
   const picked: T[] = [];
   const limit = Math.min(count, copy.length);
   for (let i = 0; i < limit; i++) {
-    const idx = Math.floor(rng() * copy.length);
+    const idx = Math.floor(rng.next() * copy.length);
     picked.push(copy[idx]);
     copy.splice(idx, 1);
   }
@@ -208,7 +208,7 @@ function pickRandom<T>(pool: T[], count: number, rng: () => number): T[] {
  * Modifies one wave in the set to include a BOSS-type entry.
  * Targets the middle wave by default; falls back to the first wave.
  */
-function injectBossWave(waves: WaveDefinition[], rng: () => number, goldMultiplier: number): WaveDefinition[] {
+function injectBossWave(waves: WaveDefinition[], rng: SeededRng, goldMultiplier: number): WaveDefinition[] {
   if (waves.length === 0) return waves;
 
   const targetIdx = Math.floor(waves.length / 2);

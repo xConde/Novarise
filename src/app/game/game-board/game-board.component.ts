@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Observable, Subscription } from 'rxjs';
 import * as THREE from 'three';
 import { GameBoardService } from './game-board.service';
 import { SceneService } from './services/scene.service';
@@ -68,6 +68,7 @@ import { RunService } from '../../run/services/run.service';
 import { RelicService } from '../../run/services/relic.service';
 import { DeckService } from '../../run/services/deck.service';
 import { CardEffectService } from '../../run/services/card-effect.service';
+import { EncounterCheckpointService } from '../../run/services/encounter-checkpoint.service';
 import { EncounterResult } from '../../run/models/run-state.model';
 import { CardInstance, DeckState, EnergyState } from '../../run/models/card.model';
 import { getActiveTowerEffect } from '../../run/constants/card-definitions';
@@ -329,6 +330,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     public waveCombat: WaveCombatFacadeService,
     public tutorialFacade: TutorialFacadeService,
     private ascensionModifier: AscensionModifierService,
+    private towerMeshFactory: TowerMeshFactoryService,
+    private enemyMeshFactory: EnemyMeshFactoryService,
+    private encounterCheckpointService: EncounterCheckpointService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -410,26 +414,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
 
-    // Apply run encounter config: lives, gold, waves, ascension modifiers
-    this.gameStateService.setInitialLives(runState.lives, runState.maxLives + this.relicService.getMaxLivesBonus());
-    this.gameStateService.addGold(this.relicService.getStartingGoldBonus());
-    this.gameStateService.snapshotInitialGold();
-    this.waveService.setCustomWaves(encounter.waves);
-    this.gameStateService.setMaxWaves(encounter.waves.length);
-    this.ascensionModifier.apply(runState.ascensionLevel, encounter.isElite, encounter.isBoss);
-    this.updateChallengeIndicators();
-
-    // Subscribe to deck/energy state for the card hand UI
+    // Subscribe to deck/energy state for the card hand UI (both restore and fresh paths)
     this.deckSub = this.deckService.deckState$.subscribe(s => { this.deckState = s; });
     this.energySub = this.deckService.energy$.subscribe(e => { this.energyState = e; });
-
-    // Reset card modifier state from any previous encounter (root-scoped service
-    // survives route transitions — must be explicitly cleared between encounters).
-    this.cardEffectService.reset();
-
-    // Initialize deck for this encounter and draw the opening hand
-    this.deckService.resetForEncounter();
-    this.deckService.drawForWave();
 
     this.sceneService.initScene();
     this.sceneService.initCamera();
@@ -444,16 +431,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.updateTileHighlights();
     }
 
-    // Seed initial wave preview for the first wave (after setCustomWaves(encounter.waves) applies hand-authored or procedural waves)
-    const initialState = this.gameStateService.getState();
-    const initialCustomDefs = this.waveService.hasCustomWaves()
-      ? this.waveService.getWaveDefinitions()
-      : undefined;
-    const initialPreview = getWavePreviewFull(initialState.wave + 1, initialState.isEndless, initialCustomDefs);
-    this.wavePreview = initialPreview.entries;
-    this.waveTemplateDescription = initialPreview.templateDescription;
-
-    // Wire wave-combat facade callbacks before any wave interaction
+    // Wire wave-combat facade callbacks before any wave interaction (both paths)
     this.waveCombat.init({
       onWaveComplete: (wave, perfect) => this.waveCombat.onWaveComplete(wave, perfect),
       onCombatResult: (output) => {
@@ -486,9 +464,48 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       error: (error: unknown) => console.error('Notification subscription error:', error)
     });
 
-    // In run mode, auto-start the first wave — skip the SETUP panel (difficulty/modifier
-    // UI is a legacy from standalone mode; in a run, difficulty comes from ascension and
-    // the player should immediately enter COMBAT to play cards). StS-style: enter encounter → play.
+    if (this.runService.isRestoringCheckpoint) {
+      // Restore path: run the 18-step restore coordinator
+      this.restoreFromCheckpoint();
+    } else {
+      // Normal path: apply run encounter config then auto-start first wave
+      this.initFreshEncounter();
+    }
+  }
+
+  /**
+   * Apply run encounter configuration and start the first wave.
+   * Called on the normal (non-restore) path and as the fallback when checkpoint
+   * loading fails or the checkpoint is missing.
+   */
+  private initFreshEncounter(): void {
+    const encounter = this.runService.getCurrentEncounter();
+    const runState = this.runService.runState;
+    if (!encounter || !runState) return;
+
+    this.gameStateService.setInitialLives(runState.lives, runState.maxLives + this.relicService.getMaxLivesBonus());
+    this.gameStateService.addGold(this.relicService.getStartingGoldBonus());
+    this.gameStateService.snapshotInitialGold();
+    this.waveService.setCustomWaves(encounter.waves);
+    this.gameStateService.setMaxWaves(encounter.waves.length);
+    this.ascensionModifier.apply(runState.ascensionLevel, encounter.isElite, encounter.isBoss);
+    this.updateChallengeIndicators();
+
+    // Reset card modifier state from any previous encounter (root-scoped service
+    // survives route transitions — must be explicitly cleared between encounters).
+    this.cardEffectService.reset();
+
+    // Initialize deck for this encounter and draw the opening hand
+    this.deckService.resetForEncounter();
+    this.deckService.drawForWave();
+
+    // Seed initial wave preview (after setCustomWaves applies waves)
+    const state = this.gameStateService.getState();
+    const customDefs = this.waveService.hasCustomWaves() ? this.waveService.getWaveDefinitions() : undefined;
+    const preview = getWavePreviewFull(state.wave + 1, state.isEndless, customDefs);
+    this.wavePreview = preview.entries;
+    this.waveTemplateDescription = preview.templateDescription;
+
     if (this.runService.isInRun()) {
       this.startWave();
     }
@@ -890,6 +907,134 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
+   * 14-step encounter restore from checkpoint.
+   * Called in ngOnInit when isRestoringCheckpoint is true, after scene + board are set up.
+   * Order is critical — see restore plan for dependency rationale.
+   */
+  private restoreFromCheckpoint(): void {
+    const checkpoint = this.encounterCheckpointService.loadCheckpoint();
+    if (!checkpoint) {
+      // Checkpoint not found — fall back to fresh encounter initialization
+      this.runService.isRestoringCheckpoint = false;
+      this.initFreshEncounter();
+      return;
+    }
+
+    try {
+      const scene = this.sceneService.getScene();
+      const encounter = checkpoint.encounterConfig;
+
+      // Step 1: Board tiles already rendered (importBoard + renderGameBoard ran before this call)
+
+      // Step 2: Apply ascension modifiers
+      const runState = this.runService.runState;
+      if (runState) {
+        this.ascensionModifier.apply(runState.ascensionLevel, encounter.isElite, encounter.isBoss);
+      }
+
+      // Step 3: Restore CombatLoopService turn number (before mortar zone expiry checks)
+      this.combatLoopService.setTurnNumber(checkpoint.turnNumber);
+
+      // Step 4: Restore towers — create meshes, register in TowerCombatService
+      const towerMeshes = new Map<string, THREE.Group>();
+      for (const tower of checkpoint.towers) {
+        const mesh = this.towerMeshFactory.createTowerMesh(
+          tower.row, tower.col, tower.type,
+          this.gameBoardService.getBoardWidth(), this.gameBoardService.getBoardHeight()
+        );
+        scene.add(mesh);
+        this.meshRegistry.towerMeshes.set(tower.id, mesh);
+        towerMeshes.set(tower.id, mesh);
+        // Mark board tile as occupied — use forceSetTower to bypass BFS validation.
+        // Placing towers one-by-one from a checkpoint would cause wouldBlockPath() to
+        // reject valid positions before the full saved layout is restored.
+        this.gameBoardService.forceSetTower(tower.row, tower.col, tower.type);
+      }
+      this.towerCombatService.restoreTowers(checkpoint.towers, towerMeshes);
+      this.meshRegistry.rebuildTowerChildrenArray();
+
+      // Step 5: Restore mortar zones
+      this.towerCombatService.restoreMortarZones(checkpoint.mortarZones);
+
+      // Step 6: Restore enemies — create meshes, register in EnemyService
+      const enemyMeshes = new Map<string, THREE.Mesh>();
+      for (const enemy of checkpoint.enemies) {
+        const tempEnemy = {
+          ...enemy,
+          path: enemy.path.map(n => ({ ...n, parent: undefined })),
+          mesh: undefined,
+          statusParticles: [],
+          statusParticleEffectType: undefined,
+        };
+        const mesh = this.enemyMeshFactory.createEnemyMesh(tempEnemy as unknown as Parameters<typeof this.enemyMeshFactory.createEnemyMesh>[0]);
+        scene.add(mesh);
+        enemyMeshes.set(enemy.id, mesh);
+      }
+      this.enemyService.restoreEnemies(checkpoint.enemies, enemyMeshes, checkpoint.enemyCounter);
+
+      // Step 7: Restore status effects
+      this.statusEffectService.restoreEffects(checkpoint.statusEffects);
+
+      // Step 8: Update health bars for restored enemies
+      const camera = this.sceneService.getCamera();
+      if (camera) {
+        this.enemyService.updateHealthBars(camera.quaternion);
+      }
+
+      // Step 9: Restore deck state (piles, energy — NO reshuffle)
+      this.deckService.restoreState(checkpoint.deckState);
+
+      // Step 10: Restore card effect modifiers
+      this.cardEffectService.restoreModifiers(checkpoint.cardModifiers);
+
+      // Step 11: Restore game stats
+      this.gameStatsService.restoreFromCheckpoint(checkpoint.gameStats);
+
+      // Step 12: Restore challenge tracking
+      this.challengeTrackingService.restoreFromCheckpoint(checkpoint.challengeState);
+
+      // Step 13: Restore relic encounter flags
+      this.relicService.restoreEncounterFlags(checkpoint.relicFlags);
+
+      // Step 14: Restore wave state (turnSchedule, index, seenTypes)
+      this.waveService.restoreState(checkpoint.waveState);
+
+      // Step 15: Restore combat loop leaked flag
+      this.combatLoopService.setLeakedThisWave(checkpoint.leakedThisWave);
+
+      // Step 16: Restore game state LAST (sets phase → triggers UI subscription updates)
+      this.gameStateService.restoreFromCheckpoint(checkpoint.gameState);
+
+      // Step 17: Set custom waves for wave preview
+      this.waveService.setCustomWaves(encounter.waves);
+      this.gameStateService.setMaxWaves(encounter.waves.length);
+
+      // Step 18: Seed wave preview for the current restored state
+      const state = this.gameStateService.getState();
+      if (state.phase === GamePhase.INTERMISSION || state.phase === GamePhase.COMBAT) {
+        const customDefs = this.waveService.hasCustomWaves()
+          ? this.waveService.getWaveDefinitions()
+          : undefined;
+        const preview = getWavePreviewFull(state.wave + 1, state.isEndless, customDefs);
+        this.wavePreview = preview.entries;
+        this.waveTemplateDescription = preview.templateDescription;
+      }
+
+      // Clear restore flag and checkpoint storage
+      this.runService.isRestoringCheckpoint = false;
+      this.encounterCheckpointService.clearCheckpoint();
+      this.updateChallengeIndicators();
+    } catch (error) {
+      console.error('Failed to restore checkpoint, falling back to fresh encounter:', error);
+      this.runService.isRestoringCheckpoint = false;
+      this.encounterCheckpointService.clearCheckpoint();
+      // Clean up any partial restore state before starting fresh
+      this.gameSessionService.resetAllServices(this.sceneService.getScene());
+      this.initFreshEncounter();
+    }
+  }
+
+  /**
    * Import the editor map into the game board service, or reset to default if no valid map.
    */
   private importBoard(): void {
@@ -1047,19 +1192,48 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   confirmQuit(): void {
-    const route = this.gamePauseService.confirmQuit();
-    this.router.navigate([route]);
+    this.gamePauseService.confirmQuit();
+    if (this.gamePauseService.showNavigationPrompt) {
+      // Guard-triggered: resolve the pending guard decision
+      this.gamePauseService.resolveGuardDecision(true);
+    } else {
+      // Manual pause: pre-approve navigation to avoid re-triggering the guard
+      this.gamePauseService.allowNextNavigation();
+      this.router.navigate(['/run']);
+    }
+  }
+
+  saveAndExit(): void {
+    // The auto-save from endTurn() already captured the latest post-turn state.
+    if (this.gamePauseService.showNavigationPrompt) {
+      // Guard-triggered: resolve the pending guard decision
+      this.gamePauseService.resolveGuardDecision(true);
+    } else {
+      // Manual pause: pre-approve navigation to avoid re-triggering the guard
+      this.gamePauseService.allowNextNavigation();
+      this.router.navigate(['/run']);
+    }
   }
 
   /**
    * Called by the CanDeactivate guard when the player tries to navigate away mid-game.
-   * Delegates to GamePauseService.
+   * Delegates to GamePauseService — returns Observable for async modal confirmation
+   * or boolean for immediate allow (terminal phases).
    */
-  canLeaveGame(): boolean {
-    return this.gamePauseService.canLeaveGame();
+  requestGuardDecision(): Observable<boolean> | boolean {
+    return this.gamePauseService.requestGuardDecision();
+  }
+
+  get showNavigationPrompt(): boolean {
+    return this.gamePauseService.showNavigationPrompt;
   }
 
   togglePause(): void {
+    // If resuming during a navigation prompt, cancel the pending guard navigation
+    if (this.gamePauseService.showNavigationPrompt && this.isPaused) {
+      this.gamePauseService.resolveGuardDecision(false);
+    }
+
     const willPause = this.gamePauseService.togglePause();
     const controls = this.sceneService.getControls();
     if (controls) { controls.enabled = !willPause; }

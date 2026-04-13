@@ -30,6 +30,7 @@
       [class.map-node--selectable]="isSelectable(node)"
       [class.map-node--visited]="isVisited(node.id)"
       [class.map-node--current]="isCurrent(node.id)"
+      [class.map-node--checkpointed]="isCheckpointed(node.id)"
       [class.map-node--combat]="node.type === NodeType.COMBAT"
       [class.map-node--elite]="node.type === NodeType.ELITE"
       [class.map-node--boss]="node.type === NodeType.BOSS"
@@ -47,6 +48,11 @@
       <span class="map-node-icon" aria-hidden="true">
         <app-icon [name]="getNodeIcon(node.type)" [size]="node.type === 'boss' ? 22 : 18"></app-icon>
       </span>
+      <span
+        *ngIf="isCheckpointed(node.id)"
+        class="map-node__resume-badge"
+        aria-label="Resume saved encounter"
+      >RESUME</span>
     </button>
 
   </div>

@@ -1033,4 +1033,26 @@ describe('CombatLoopService', () => {
       expect(result2.kills[0].value).toBe(5);
     });
   });
+
+  // ─── checkpoint state accessors ─────────────────────────────────────────────
+
+  describe('checkpoint state accessors', () => {
+    it('getTurnNumber()/setTurnNumber() roundtrip', () => {
+      service.resolveTurn(scene);
+      expect(service.getTurnNumber()).toBe(1);
+
+      service.setTurnNumber(42);
+      expect(service.getTurnNumber()).toBe(42);
+    });
+
+    it('getLeakedThisWave()/setLeakedThisWave() roundtrip', () => {
+      expect(service.getLeakedThisWave()).toBe(false);
+
+      service.setLeakedThisWave(true);
+      expect(service.getLeakedThisWave()).toBe(true);
+
+      service.setLeakedThisWave(false);
+      expect(service.getLeakedThisWave()).toBe(false);
+    });
+  });
 });

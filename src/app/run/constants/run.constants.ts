@@ -198,15 +198,33 @@ export const RELIC_EFFECT_CONFIG = {
 // ── Seeded RNG ────────────────────────────────────────────────
 
 /**
- * Simple seeded PRNG (mulberry32).
- * Returns a function that produces [0, 1) floats deterministically.
+ * Stateful seeded PRNG (mulberry32) with inspectable/restorable state.
+ * `next()` produces [0, 1) floats deterministically.
+ * `getState()`/`setState()` enable checkpoint save/restore.
  */
-export function createSeededRng(seed: number): () => number {
+export interface SeededRng {
+  /** Produce the next pseudo-random float in [0, 1). */
+  next(): number;
+  /** Return the current internal state (a single 32-bit integer). */
+  getState(): number;
+  /** Restore a previously captured state. Subsequent next() calls replay from this point. */
+  setState(s: number): void;
+}
+
+export function createSeededRng(seed: number): SeededRng {
   let s = seed | 0;
-  return () => {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  return {
+    next(): number {
+      s = (s + 0x6d2b79f5) | 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    },
+    getState(): number {
+      return s;
+    },
+    setState(newState: number): void {
+      s = newState | 0;
+    },
   };
 }

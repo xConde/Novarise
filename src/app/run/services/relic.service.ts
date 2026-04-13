@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { RelicId, RELIC_DEFINITIONS, RelicRarity, getRelicsByRarity, RelicDefinition } from '../models/relic.model';
 import { TowerType } from '../../game/game-board/models/tower.model';
 import { RELIC_EFFECT_CONFIG } from '../constants/run.constants';
+import { SerializableRelicFlags } from '../../game/game-board/models/encounter-checkpoint.model';
 
 /**
  * Relic effect engine — pull model.
@@ -249,6 +250,22 @@ export class RelicService {
     return Math.random() < RELIC_EFFECT_CONFIG.luckyCoinTriggerChance
       ? RELIC_EFFECT_CONFIG.luckyCoinGoldMultiplier
       : 1;
+  }
+
+  // ── Checkpoint Serialization ────────────────────────────
+
+  /** Serialize per-encounter relic flags for checkpoint save. */
+  serializeEncounterFlags(): SerializableRelicFlags {
+    return {
+      firstLeakBlockedThisWave: this.firstLeakBlockedThisWave,
+      freeTowerUsedThisEncounter: this.freeTowerUsedThisEncounter,
+    };
+  }
+
+  /** Restore per-encounter relic flags from checkpoint. */
+  restoreEncounterFlags(flags: SerializableRelicFlags): void {
+    this.firstLeakBlockedThisWave = flags.firstLeakBlockedThisWave;
+    this.freeTowerUsedThisEncounter = flags.freeTowerUsedThisEncounter;
   }
 
   // ── Relic Pool Management ───────────────────────────────

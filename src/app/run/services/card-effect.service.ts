@@ -234,6 +234,18 @@ export class CardEffectService {
     return true;
   }
 
+  // ── Checkpoint serialization ──────────────────────────────
+
+  /** Serialize active modifiers for checkpoint save. */
+  serializeModifiers(): ActiveModifier[] {
+    return this.activeModifiers.map(m => ({ stat: m.stat, value: m.value, remainingWaves: m.remainingWaves }));
+  }
+
+  /** Restore active modifiers from a checkpoint snapshot. Replaces current modifiers directly. */
+  restoreModifiers(modifiers: ActiveModifier[]): void {
+    this.activeModifiers = modifiers.map(m => ({ stat: m.stat, value: m.value, remainingWaves: m.remainingWaves }));
+  }
+
   // ── Lifecycle ─────────────────────────────────────────────
 
   /** Clear all modifiers (run end or encounter reset). */

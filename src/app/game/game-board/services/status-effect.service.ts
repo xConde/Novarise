@@ -3,6 +3,7 @@ import { StatusEffectType, StatusEffectConfig, STATUS_EFFECT_CONFIGS } from '../
 import { EnemyService, DamageResult } from './enemy.service';
 import { KillInfo } from './tower-combat.service';
 import { RelicService } from '../../../run/services/relic.service';
+import { SerializableStatusEffect } from '../models/encounter-checkpoint.model';
 
 interface ActiveEffect {
   config: StatusEffectConfig;
@@ -247,6 +248,43 @@ export class StatusEffectService {
   /** Returns the total number of new SLOW applications this session (refreshes do not count). */
   getSlowApplicationCount(): number {
     return this.slowApplicationCount;
+  }
+
+  /** Serialize all active status effects for checkpoint save. */
+  serializeEffects(): SerializableStatusEffect[] {
+    const result: SerializableStatusEffect[] = [];
+    for (const [enemyId, effectMap] of this.effects) {
+      for (const [effectType, effect] of effectMap) {
+        result.push({
+          enemyId,
+          effectType,
+          expiresAt: effect.expiresAt,
+          lastTickTime: effect.lastTickTime,
+          ...(effect.originalSpeed !== undefined && { originalSpeed: effect.originalSpeed }),
+        });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Restore status effects from checkpoint. Rebuilds the nested Map structure.
+   * StatusEffectConfig is looked up from STATUS_EFFECT_CONFIGS by effectType.
+   */
+  restoreEffects(effects: SerializableStatusEffect[]): void {
+    this.effects.clear();
+    for (const e of effects) {
+      if (!this.effects.has(e.enemyId)) {
+        this.effects.set(e.enemyId, new Map());
+      }
+      const config = STATUS_EFFECT_CONFIGS[e.effectType];
+      this.effects.get(e.enemyId)!.set(e.effectType, {
+        config,
+        expiresAt: e.expiresAt,
+        lastTickTime: e.lastTickTime,
+        ...(e.originalSpeed !== undefined && { originalSpeed: e.originalSpeed }),
+      });
+    }
   }
 
   /**

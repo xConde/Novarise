@@ -15,14 +15,14 @@ describe('Ascent Constants', () => {
       const rng1 = createSeededRng(100);
       const rng2 = createSeededRng(100);
       for (let i = 0; i < 10; i++) {
-        expect(rng1()).toBeCloseTo(rng2(), 10);
+        expect(rng1.next()).toBeCloseTo(rng2.next(), 10);
       }
     });
 
     it('should produce values in [0, 1)', () => {
       const rng = createSeededRng(42);
       for (let i = 0; i < 20; i++) {
-        const v = rng();
+        const v = rng.next();
         expect(v).toBeGreaterThanOrEqual(0);
         expect(v).toBeLessThan(1);
       }
@@ -34,21 +34,86 @@ describe('Ascent Constants', () => {
       // At least one of the first 5 values should differ
       let differs = false;
       for (let i = 0; i < 5; i++) {
-        if (rng1() !== rng2()) { differs = true; break; }
+        if (rng1.next() !== rng2.next()) { differs = true; break; }
       }
       expect(differs).toBeTrue();
     });
 
     it('should produce a non-uniform sequence (not all values identical)', () => {
       const rng = createSeededRng(1);
-      const values = Array.from({ length: 10 }, () => rng());
+      const values = Array.from({ length: 10 }, () => rng.next());
       const allSame = values.every(v => v === values[0]);
       expect(allSame).toBeFalse();
     });
 
     it('should produce a known first value for seed 100', () => {
       const rng = createSeededRng(100);
-      expect(rng()).toBeCloseTo(0.2043598669115454, 5);
+      expect(rng.next()).toBeCloseTo(0.2043598669115454, 5);
+    });
+
+    it('getState() returns current internal state', () => {
+      const rng = createSeededRng(42);
+      rng.next();
+      rng.next();
+      rng.next();
+      const state = rng.getState();
+      expect(typeof state).toBe('number');
+    });
+
+    it('setState() restores exact sequence', () => {
+      const rng = createSeededRng(77);
+      for (let i = 0; i < 5; i++) {
+        rng.next();
+      }
+      const savedState = rng.getState();
+      const expected: number[] = [];
+      for (let i = 0; i < 3; i++) {
+        expected.push(rng.next());
+      }
+
+      const rng2 = createSeededRng(999);
+      rng2.setState(savedState);
+      const actual: number[] = [];
+      for (let i = 0; i < 3; i++) {
+        actual.push(rng2.next());
+      }
+
+      expect(actual).toEqual(expected);
+    });
+
+    it('roundtrip: save state mid-sequence and resume', () => {
+      const rng = createSeededRng(555);
+      for (let i = 0; i < 10; i++) {
+        rng.next();
+      }
+      const savedState = rng.getState();
+      const expected: number[] = [];
+      for (let i = 0; i < 5; i++) {
+        expected.push(rng.next());
+      }
+
+      const fresh = createSeededRng(1);
+      fresh.setState(savedState);
+      const actual: number[] = [];
+      for (let i = 0; i < 5; i++) {
+        actual.push(fresh.next());
+      }
+
+      expect(actual).toEqual(expected);
+    });
+
+    it('setState(0) produces deterministic sequence from zero state', () => {
+      const rng = createSeededRng(42);
+      rng.setState(0);
+      const v = rng.next();
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThan(1);
+    });
+
+    it('getState() after setState() returns the set value before any next() call', () => {
+      const rng = createSeededRng(42);
+      rng.setState(12345);
+      expect(rng.getState()).toBe(12345);
     });
   });
 

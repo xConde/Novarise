@@ -67,6 +67,21 @@ export class CombatLoopService {
     return this.turnNumber;
   }
 
+  /** Set turn number for checkpoint restore. */
+  setTurnNumber(n: number): void {
+    this.turnNumber = n;
+  }
+
+  /** Get leaked-this-wave flag for checkpoint save. */
+  getLeakedThisWave(): boolean {
+    return this.leakedThisWave;
+  }
+
+  /** Set leaked-this-wave flag for checkpoint restore. */
+  setLeakedThisWave(v: boolean): void {
+    this.leakedThisWave = v;
+  }
+
   /**
    * Reset the per-wave leak flag.
    * Call from the component's startWave() before beginning a new wave.

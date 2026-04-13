@@ -23,7 +23,7 @@ import { StatusEffectService } from './services/status-effect.service';
 import { EnemyService } from './services/enemy.service';
 import { EnemyVisualService } from './services/enemy-visual.service';
 import { TutorialService, TutorialStep } from '../../core/services/tutorial.service';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { CampaignLevel, CampaignTier } from '../../run/data/campaign-levels';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 import { GameNotificationService, NotificationType } from './services/game-notification.service';
@@ -788,18 +788,20 @@ describe('GameBoardComponent', () => {
     });
   });
 
-  describe('canLeaveGame', () => {
-    it('delegates to GamePauseService.canLeaveGame', () => {
+  describe('requestGuardDecision', () => {
+    it('delegates to GamePauseService.requestGuardDecision', (done) => {
       const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
-      spyOn(gamePauseService, 'canLeaveGame').and.returnValue(true);
-      expect(component.canLeaveGame()).toBeTrue();
-      expect(gamePauseService.canLeaveGame).toHaveBeenCalled();
+      spyOn(gamePauseService, 'requestGuardDecision').and.returnValue(of(true));
+      const result = component.requestGuardDecision();
+      expect(gamePauseService.requestGuardDecision).toHaveBeenCalled();
+      (result as import('rxjs').Observable<boolean>).subscribe(v => { expect(v).toBeTrue(); done(); });
     });
 
-    it('returns false when GamePauseService returns false', () => {
+    it('returns Observable<false> when GamePauseService emits false', (done) => {
       const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
-      spyOn(gamePauseService, 'canLeaveGame').and.returnValue(false);
-      expect(component.canLeaveGame()).toBeFalse();
+      spyOn(gamePauseService, 'requestGuardDecision').and.returnValue(of(false));
+      const result = component.requestGuardDecision();
+      (result as import('rxjs').Observable<boolean>).subscribe(v => { expect(v).toBeFalse(); done(); });
     });
   });
 

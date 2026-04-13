@@ -2230,3 +2230,346 @@ describe('Tower Model Functions', () => {
   });
 
 });
+
+// --- Checkpoint serialization ---
+
+describe('TowerCombatService checkpoint serialization', () => {
+  const ROW = 5;
+  const COL = 7;
+  const KEY = `${ROW}-${COL}`;
+
+  let svc: TowerCombatService;
+  let localEnemyMap: Map<string, Enemy>;
+
+  beforeEach(() => {
+    localEnemyMap = new Map<string, Enemy>();
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(localEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+      ]
+    });
+    svc = TestBed.inject(TowerCombatService);
+  });
+
+  describe('serializeTowers', () => {
+    it('strips mesh, muzzleFlashTimer, and originalEmissiveIntensity from serialized output', () => {
+      const mesh = new THREE.Group();
+      svc.registerTower(ROW, COL, TowerType.BASIC, mesh);
+
+      // Manually set Three.js-only fields to confirm they are stripped.
+      const tower = svc.getTower(KEY)!;
+      tower.muzzleFlashTimer = 0.5;
+      tower.originalEmissiveIntensity = new Map([['child', 1.0]]);
+
+      const result = svc.serializeTowers();
+      expect(result.length).toBe(1);
+
+      const serialized = result[0] as unknown as Record<string, unknown>;
+      expect(serialized['mesh']).toBeUndefined();
+      expect(serialized['muzzleFlashTimer']).toBeUndefined();
+      expect(serialized['originalEmissiveIntensity']).toBeUndefined();
+    });
+
+    it('preserves all required non-Three.js fields', () => {
+      svc.registerTower(ROW, COL, TowerType.SNIPER, new THREE.Group(), 125, { placedAtTurn: 3 });
+
+      const result = svc.serializeTowers();
+      expect(result.length).toBe(1);
+
+      const s = result[0];
+      expect(s.id).toBe(KEY);
+      expect(s.type).toBe(TowerType.SNIPER);
+      expect(s.level).toBe(1);
+      expect(s.row).toBe(ROW);
+      expect(s.col).toBe(COL);
+      expect(s.kills).toBe(0);
+      expect(s.totalInvested).toBe(125);
+      expect(s.targetingMode).toBe(DEFAULT_TARGETING_MODE);
+      expect(s.placedAtTurn).toBe(3);
+    });
+
+    it('includes specialization and cardStatOverrides when present', () => {
+      const overrides = { damageMultiplier: 1.5, rangeMultiplier: 1.2 };
+      svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: overrides });
+      svc.upgradeTower(KEY);
+      svc.upgradeTowerWithSpec(KEY, TowerSpecialization.BETA);
+
+      const result = svc.serializeTowers();
+      expect(result.length).toBe(1);
+
+      const s = result[0];
+      expect(s.specialization).toBe(TowerSpecialization.BETA);
+      expect(s.cardStatOverrides).toEqual(overrides);
+    });
+
+    it('omits specialization and cardStatOverrides when not set', () => {
+      svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group());
+
+      const result = svc.serializeTowers();
+      const serialized = result[0] as unknown as Record<string, unknown>;
+      expect(serialized['specialization']).toBeUndefined();
+      expect(serialized['cardStatOverrides']).toBeUndefined();
+    });
+
+    it('serializes multiple towers', () => {
+      svc.registerTower(1, 1, TowerType.BASIC, new THREE.Group());
+      svc.registerTower(2, 3, TowerType.SNIPER, new THREE.Group());
+      svc.registerTower(4, 5, TowerType.SPLASH, new THREE.Group());
+
+      const result = svc.serializeTowers();
+      expect(result.length).toBe(3);
+
+      const ids = result.map(t => t.id);
+      expect(ids).toContain('1-1');
+      expect(ids).toContain('2-3');
+      expect(ids).toContain('4-5');
+    });
+
+    it('returns empty array when no towers are registered', () => {
+      expect(svc.serializeTowers()).toEqual([]);
+    });
+
+    it('cardStatOverrides object is a shallow copy (not a reference to the original)', () => {
+      const overrides = { damageMultiplier: 0.8 };
+      svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: overrides });
+
+      const result = svc.serializeTowers();
+      const serialized = result[0].cardStatOverrides!;
+
+      // Mutating the serialized copy should not affect the original
+      (serialized as { damageMultiplier: number }).damageMultiplier = 999;
+      expect(overrides.damageMultiplier).toBe(0.8);
+    });
+  });
+
+  describe('serializeMortarZones', () => {
+    it('returns empty array when no mortar zones are active', () => {
+      expect(svc.serializeMortarZones()).toEqual([]);
+    });
+
+    it('captures zone data after mortar fires', () => {
+      const scene = new THREE.Scene();
+      svc.registerTower(10, 12, TowerType.MORTAR, new THREE.Group());
+
+      const enemy = createTestEnemy('e1', -0.5, 0, 10000);
+      localEnemyMap.set('e1', enemy);
+
+      svc.fireTurn(scene, 1);
+
+      const zones = svc.serializeMortarZones();
+      expect(zones.length).toBeGreaterThan(0);
+
+      const z = zones[0];
+      expect(typeof z.centerX).toBe('number');
+      expect(typeof z.centerZ).toBe('number');
+      expect(z.blastRadius).toBeGreaterThan(0);
+      expect(z.dotDamage).toBeGreaterThan(0);
+      expect(z.expiresOnTurn).toBeGreaterThan(1);
+
+      scene.clear();
+    });
+  });
+
+  describe('restoreTowers', () => {
+    it('rebuilds placedTowers Map from serialized data with provided meshes', () => {
+      const mesh = new THREE.Group();
+      const meshes = new Map<string, THREE.Group>([[KEY, mesh]]);
+
+      const serialized = [
+        {
+          id: KEY,
+          type: TowerType.SNIPER,
+          level: 2,
+          row: ROW,
+          col: COL,
+          kills: 5,
+          totalInvested: 200,
+          targetingMode: TargetingMode.FIRST,
+          placedAtTurn: 2,
+        },
+      ];
+
+      svc.restoreTowers(serialized, meshes);
+
+      const restored = svc.getTower(KEY)!;
+      expect(restored).toBeTruthy();
+      expect(restored.id).toBe(KEY);
+      expect(restored.type).toBe(TowerType.SNIPER);
+      expect(restored.level).toBe(2);
+      expect(restored.row).toBe(ROW);
+      expect(restored.col).toBe(COL);
+      expect(restored.kills).toBe(5);
+      expect(restored.totalInvested).toBe(200);
+      expect(restored.targetingMode).toBe(TargetingMode.FIRST);
+      expect(restored.placedAtTurn).toBe(2);
+      expect(restored.mesh).toBe(mesh);
+    });
+
+    it('sets mesh to null when tower id is not in the meshes map', () => {
+      const serialized = [
+        {
+          id: KEY,
+          type: TowerType.BASIC,
+          level: 1,
+          row: ROW,
+          col: COL,
+          kills: 0,
+          totalInvested: 50,
+          targetingMode: DEFAULT_TARGETING_MODE,
+        },
+      ];
+
+      svc.restoreTowers(serialized, new Map());
+
+      const restored = svc.getTower(KEY)!;
+      expect(restored).toBeTruthy();
+      expect(restored.mesh).toBeNull();
+    });
+
+    it('clears any previously registered towers before restoring', () => {
+      svc.registerTower(0, 0, TowerType.BASIC, new THREE.Group());
+      svc.registerTower(1, 1, TowerType.SNIPER, new THREE.Group());
+      expect(svc.getPlacedTowers().size).toBe(2);
+
+      const serialized = [
+        {
+          id: KEY,
+          type: TowerType.SPLASH,
+          level: 1,
+          row: ROW,
+          col: COL,
+          kills: 0,
+          totalInvested: 75,
+          targetingMode: DEFAULT_TARGETING_MODE,
+        },
+      ];
+
+      svc.restoreTowers(serialized, new Map());
+
+      expect(svc.getPlacedTowers().size).toBe(1);
+      expect(svc.getTower('0-0')).toBeUndefined();
+      expect(svc.getTower('1-1')).toBeUndefined();
+      expect(svc.getTower(KEY)).toBeTruthy();
+    });
+
+    it('restore → serialize roundtrip preserves all scalar fields', () => {
+      const overrides = { damageMultiplier: 1.3 };
+      const mesh = new THREE.Group();
+      const meshes = new Map<string, THREE.Group>([[KEY, mesh]]);
+
+      const original = [
+        {
+          id: KEY,
+          type: TowerType.SPLASH,
+          level: 3,
+          row: ROW,
+          col: COL,
+          kills: 12,
+          totalInvested: 300,
+          targetingMode: TargetingMode.STRONGEST,
+          specialization: TowerSpecialization.ALPHA,
+          placedAtTurn: 4,
+          cardStatOverrides: overrides,
+        },
+      ];
+
+      svc.restoreTowers(original, meshes);
+
+      const roundtripped = svc.serializeTowers();
+      expect(roundtripped.length).toBe(1);
+
+      const rt = roundtripped[0];
+      expect(rt.id).toBe(KEY);
+      expect(rt.type).toBe(TowerType.SPLASH);
+      expect(rt.level).toBe(3);
+      expect(rt.kills).toBe(12);
+      expect(rt.totalInvested).toBe(300);
+      expect(rt.targetingMode).toBe(TargetingMode.STRONGEST);
+      expect(rt.specialization).toBe(TowerSpecialization.ALPHA);
+      expect(rt.placedAtTurn).toBe(4);
+      expect(rt.cardStatOverrides).toEqual(overrides);
+
+      // mesh must not leak through
+      const serialized = rt as unknown as Record<string, unknown>;
+      expect(serialized['mesh']).toBeUndefined();
+    });
+  });
+
+  describe('restoreMortarZones', () => {
+    it('restores mortar zones from serialized data', () => {
+      const zones = [
+        {
+          centerX: 1.5,
+          centerZ: -2.0,
+          blastRadius: 3.0,
+          dotDamage: 20,
+          expiresOnTurn: 5,
+          statusEffect: StatusEffectType.BURN,
+        },
+        {
+          centerX: 0,
+          centerZ: 0,
+          blastRadius: 2.0,
+          dotDamage: 15,
+          expiresOnTurn: 8,
+        },
+      ];
+
+      svc.restoreMortarZones(zones);
+
+      const serialized = svc.serializeMortarZones();
+      expect(serialized.length).toBe(2);
+
+      expect(serialized[0].centerX).toBe(1.5);
+      expect(serialized[0].centerZ).toBe(-2.0);
+      expect(serialized[0].blastRadius).toBe(3.0);
+      expect(serialized[0].dotDamage).toBe(20);
+      expect(serialized[0].expiresOnTurn).toBe(5);
+      expect(serialized[0].statusEffect).toBe(StatusEffectType.BURN);
+
+      expect(serialized[1].statusEffect).toBeUndefined();
+    });
+
+    it('overwrites previously active zones', () => {
+      const scene = new THREE.Scene();
+      svc.registerTower(10, 12, TowerType.MORTAR, new THREE.Group());
+      const enemy = createTestEnemy('e1', -0.5, 0, 10000);
+      localEnemyMap.set('e1', enemy);
+      svc.fireTurn(scene, 1); // creates a zone
+
+      expect(svc.serializeMortarZones().length).toBeGreaterThan(0);
+
+      svc.restoreMortarZones([]); // clear via restore
+
+      expect(svc.serializeMortarZones().length).toBe(0);
+      scene.clear();
+    });
+
+    it('restored zones are independent copies (not shared references)', () => {
+      const zone = {
+        centerX: 1.0,
+        centerZ: 2.0,
+        blastRadius: 2.5,
+        dotDamage: 10,
+        expiresOnTurn: 6,
+      };
+
+      svc.restoreMortarZones([zone]);
+
+      // Mutate the source — the internal copy should be unaffected
+      zone.centerX = 999;
+
+      const serialized = svc.serializeMortarZones();
+      expect(serialized[0].centerX).toBe(1.0);
+    });
+  });
+});

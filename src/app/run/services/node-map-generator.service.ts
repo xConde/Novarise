@@ -3,6 +3,7 @@ import { MapNode, NodeMap, NodeType } from '../models/node-map.model';
 import {
   CAMPAIGN_MAP_TIERS,
   NODE_MAP_CONFIG,
+  SeededRng,
   createSeededRng,
   getMapTierForNode,
 } from '../constants/run.constants';
@@ -79,7 +80,7 @@ export class NodeMapGeneratorService {
   // ── Private helpers ───────────────────────────────────────
 
   /** Returns an array of node counts per row (index 0..totalRows). */
-  private buildRowNodeCounts(rng: () => number, totalRows: number): number[] {
+  private buildRowNodeCounts(rng: SeededRng, totalRows: number): number[] {
     const counts: number[] = [];
     for (let row = 0; row <= totalRows; row++) {
       if (row === totalRows) {
@@ -87,7 +88,7 @@ export class NodeMapGeneratorService {
         counts.push(1);
       } else {
         const range = NODE_MAP_CONFIG.maxNodesPerRow - NODE_MAP_CONFIG.minNodesPerRow;
-        counts.push(NODE_MAP_CONFIG.minNodesPerRow + Math.floor(rng() * (range + 1)));
+        counts.push(NODE_MAP_CONFIG.minNodesPerRow + Math.floor(rng.next() * (range + 1)));
       }
     }
     return counts;
@@ -95,7 +96,7 @@ export class NodeMapGeneratorService {
 
   /** Assigns NodeType to every cell in the grid. */
   private buildTypeGrid(
-    rng: () => number,
+    rng: SeededRng,
     rowNodeCounts: number[],
     totalRows: number,
     actIndex: number,
@@ -122,13 +123,13 @@ export class NodeMapGeneratorService {
 
         // Guarantee SHOP at row 5
         if (row === NODE_MAP_CONFIG.guaranteedShop && !rowTypes.includes(NodeType.SHOP)) {
-          const shopIdx = Math.floor(rng() * count);
+          const shopIdx = Math.floor(rng.next() * count);
           rowTypes[shopIdx] = NodeType.SHOP;
         }
 
         // Guarantee REST at row 8
         if (row === NODE_MAP_CONFIG.guaranteedRest && !rowTypes.includes(NodeType.REST)) {
-          const restIdx = Math.floor(rng() * count);
+          const restIdx = Math.floor(rng.next() * count);
           rowTypes[restIdx] = NodeType.REST;
         }
       }
@@ -140,7 +141,7 @@ export class NodeMapGeneratorService {
   }
 
   /** Picks a weighted random NodeType for a given row, respecting elite row bounds. */
-  private pickNodeType(rng: () => number, row: number, _actIndex: number, totalRows: number): NodeType {
+  private pickNodeType(rng: SeededRng, row: number, _actIndex: number, totalRows: number): NodeType {
     const w = NODE_MAP_CONFIG.nodeTypeWeights;
 
     // Build weight table — suppress elite outside [eliteMinRow, eliteMaxRow]
@@ -165,7 +166,7 @@ export class NodeMapGeneratorService {
       // Just pick combat/elite/event/unknown in the late stretch
     }
 
-    const roll = rng();
+    const roll = rng.next();
     let cumulative = 0;
     for (const [type, weight] of weights) {
       cumulative += weight;
@@ -176,7 +177,7 @@ export class NodeMapGeneratorService {
 
   /** Assigns a campaign map ID to every cell. */
   private buildMapIdGrid(
-    rng: () => number,
+    rng: SeededRng,
     rowNodeCounts: number[],
     totalRows: number,
     actIndex: number,
@@ -188,7 +189,7 @@ export class NodeMapGeneratorService {
       for (let col = 0; col < count; col++) {
         const tierKey = getMapTierForNode(actIndex, row, totalRows);
         const pool = CAMPAIGN_MAP_TIERS[tierKey] ?? CAMPAIGN_MAP_TIERS['act1_early'];
-        rowMaps.push(pool[Math.floor(rng() * pool.length)]);
+        rowMaps.push(pool[Math.floor(rng.next() * pool.length)]);
       }
       grid.push(rowMaps);
     }
@@ -207,7 +208,7 @@ export class NodeMapGeneratorService {
    *    connection — assign orphans to the nearest node in row R.
    */
   private buildConnections(
-    rng: () => number,
+    rng: SeededRng,
     nodes: MapNode[],
     rowNodeCounts: number[],
     totalRows: number,
@@ -291,7 +292,7 @@ export class NodeMapGeneratorService {
     srcCol: number,
     sourceCount: number,
     targetCount: number,
-    rng: () => number,
+    rng: SeededRng,
   ): number[] {
     // Map src column to corresponding target column (proportional)
     const scaledCol = (srcCol / Math.max(sourceCount - 1, 1)) * (targetCount - 1);
@@ -299,7 +300,7 @@ export class NodeMapGeneratorService {
     const clampedPrimary = Math.min(Math.max(primaryCol, 0), targetCount - 1);
 
     const connectionCount = NODE_MAP_CONFIG.minConnectionsPerNode +
-      Math.floor(rng() * (NODE_MAP_CONFIG.maxConnectionsPerNode - NODE_MAP_CONFIG.minConnectionsPerNode + 1));
+      Math.floor(rng.next() * (NODE_MAP_CONFIG.maxConnectionsPerNode - NODE_MAP_CONFIG.minConnectionsPerNode + 1));
 
     const candidates = new Set<number>([clampedPrimary]);
 
@@ -307,7 +308,7 @@ export class NodeMapGeneratorService {
     const neighbors = [clampedPrimary - 1, clampedPrimary + 1].filter(c => c >= 0 && c < targetCount);
     for (const neighbor of neighbors) {
       if (candidates.size >= connectionCount) break;
-      if (rng() < 0.5) candidates.add(neighbor);
+      if (rng.next() < 0.5) candidates.add(neighbor);
     }
 
     // Ensure at least 1 candidate
