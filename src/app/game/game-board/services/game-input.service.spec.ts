@@ -274,8 +274,6 @@ describe('GameInputService', () => {
         onPause: jasmine.createSpy('onPause'),
         onEscape: jasmine.createSpy('onEscape'),
         onToggleRanges: jasmine.createSpy('onToggleRanges'),
-        onToggleHelp: jasmine.createSpy('onToggleHelp'),
-        onToggleEncyclopedia: jasmine.createSpy('onToggleEncyclopedia'),
         onToggleMinimap: jasmine.createSpy('onToggleMinimap'),
         onTogglePath: jasmine.createSpy('onTogglePath'),
         onUpgrade: jasmine.createSpy('onUpgrade'),

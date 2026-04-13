@@ -1,18 +1,6 @@
 <div class="board-container" [class.dragging]="isDragging" (touchstart)="previewTowerType && clearTowerPreview()">
   <div class="canvas-container" #canvasContainer></div>
 
-  <!-- Top-right controls -->
-  <div class="top-right-controls">
-    <div class="fps-counter" aria-hidden="true" *ngIf="showFps">{{ fps }} FPS</div>
-    <button class="encyclopedia-btn" (click)="toggleEncyclopedia()" [class.active]="showEncyclopedia" aria-label="Toggle enemy encyclopedia" [attr.aria-pressed]="showEncyclopedia">E</button>
-    <button class="help-btn" (click)="showHelpOverlay = !showHelpOverlay" aria-label="Show keyboard shortcuts">
-      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-    </button>
-    <button class="audio-toggle-btn" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
-      <ng-container *ngTemplateOutlet="audioMuted ? iconSoundOff : iconSoundOn"></ng-container>
-    </button>
-  </div>
-
   <!-- Game HUD -->
   <app-game-hud
     *ngIf="gameState.wave > 0"
@@ -232,7 +220,8 @@
       <!-- Settings -->
       <div class="pause-menu__settings" *ngIf="!showQuitConfirm">
         <button class="pause-audio-toggle" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
-          <ng-container *ngTemplateOutlet="audioMuted ? iconSoundOff : iconSoundOn"></ng-container>
+          <svg *ngIf="!audioMuted" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          <svg *ngIf="audioMuted" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
           <span>{{ audioMuted ? 'Unmute' : 'Mute' }}</span>
         </button>
       </div>
@@ -301,99 +290,6 @@
     <span class="mode-hint">Right-click to cancel</span>
   </div>
 
-  <!-- Encyclopedia -->
-  <div class="encyclopedia-panel" *ngIf="showEncyclopedia" role="dialog" aria-label="Encyclopedia">
-    <div class="encyclopedia-header">
-      <h3>Encyclopedia</h3>
-      <button class="encyclopedia-close" (click)="toggleEncyclopedia()" aria-label="Close encyclopedia">&times;</button>
-    </div>
-    <div class="encyclopedia-tabs" role="tablist">
-      <button
-        class="encyclopedia-tab"
-        [class.active]="encyclopediaTab === 'enemies'"
-        (click)="encyclopediaTab = 'enemies'"
-        role="tab"
-        [attr.aria-selected]="encyclopediaTab === 'enemies'">Enemies</button>
-      <button
-        class="encyclopedia-tab"
-        [class.active]="encyclopediaTab === 'towers'"
-        (click)="encyclopediaTab = 'towers'"
-        role="tab"
-        [attr.aria-selected]="encyclopediaTab === 'towers'">Towers</button>
-    </div>
-    <!-- Enemies tab -->
-    <div class="encyclopedia-list" *ngIf="encyclopediaTab === 'enemies'" role="tabpanel">
-      <div class="encyclopedia-entry" *ngFor="let enemy of enemyInfoList">
-        <div
-          class="encyclopedia-entry__color"
-          [style.background-color]="'#' + enemy.color.toString(16).padStart(6, '0')"
-          aria-hidden="true"></div>
-        <div class="encyclopedia-entry__info">
-          <span class="encyclopedia-entry__name">{{ enemy.name }}</span>
-          <span class="encyclopedia-entry__desc">{{ enemy.description }}</span>
-          <div class="encyclopedia-entry__stats">
-            <span>HP: {{ enemy.health }}</span>
-            <span>Spd: {{ enemy.speed }}</span>
-            <span>Gold: {{ enemy.reward }}</span>
-            <span *ngIf="enemy.leakDamage > 1">Leak: {{ enemy.leakDamage }}</span>
-          </div>
-          <span class="encyclopedia-entry__special" *ngIf="enemy.special">{{ enemy.special }}</span>
-          <span class="encyclopedia-entry__immunity" *ngFor="let imm of enemy.immunities">Immune: {{ imm }}</span>
-        </div>
-      </div>
-    </div>
-    <!-- Towers tab -->
-    <div class="encyclopedia-list" *ngIf="encyclopediaTab === 'towers'" role="tabpanel">
-      <div class="encyclopedia-entry" *ngFor="let tower of towerInfoList">
-        <div
-          class="encyclopedia-entry__color"
-          [style.background-color]="'#' + tower.color.toString(16).padStart(6, '0')"
-          aria-hidden="true"></div>
-        <div class="encyclopedia-entry__info">
-          <span class="encyclopedia-entry__name">{{ tower.name }}</span>
-          <span class="encyclopedia-entry__desc">{{ tower.description }}</span>
-          <div class="encyclopedia-entry__stats">
-            <span>DMG: {{ tower.damage }}</span>
-            <span>RNG: {{ tower.range }}</span>
-            <span>Cost: {{ tower.cost }}</span>
-          </div>
-          <div class="encyclopedia-entry__specs">
-            <span class="encyclopedia-entry__spec-label">α {{ tower.alpha.label }}</span>
-            <span class="encyclopedia-entry__spec-desc">{{ tower.alpha.description }}</span>
-            <span class="encyclopedia-entry__spec-label">β {{ tower.beta.label }}</span>
-            <span class="encyclopedia-entry__spec-desc">{{ tower.beta.description }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Help overlay -->
-  <div class="help-overlay" *ngIf="showHelpOverlay" (click)="showHelpOverlay = false">
-    <div class="help-content" (click)="$event.stopPropagation()">
-      <h3>Keyboard Shortcuts</h3>
-      <div class="help-grid">
-        <kbd>1-6</kbd><span>Select tower type</span>
-        <kbd>Space</kbd><span>Start next wave</span>
-        <kbd>P</kbd><span>Pause / Resume</span>
-        <kbd>Escape</kbd><span>Pause / Resume (or deselect tower)</span>
-        <kbd>R</kbd><span>Toggle all range rings</span>
-        <kbd>V</kbd><span>Toggle enemy path</span>
-        <kbd>M</kbd><span>Toggle minimap</span>
-        <kbd>E</kbd><span>Enemy encyclopedia</span>
-        <kbd>U</kbd><span>Upgrade selected tower</span>
-        <kbd>T</kbd><span>Cycle targeting mode</span>
-        <kbd>Del</kbd><span>Sell selected tower</span>
-        <kbd>W/↑</kbd><span>Pan forward</span>
-        <kbd>S/↓</kbd><span>Pan backward</span>
-        <kbd>A/←</kbd><span>Pan left</span>
-        <kbd>D/→</kbd><span>Pan right</span>
-        <kbd>H</kbd><span>Toggle this help</span>
-      </div>
-      <p class="help-dismiss">Click anywhere or press H to close</p>
-    </div>
-  </div>
-
   <!-- Tutorial — non-blocking contextual card -->
   <app-tutorial-spotlight
     [step]="tutorialFacade.currentTutorialStep"
@@ -421,11 +317,4 @@
     </div>
   </div>
 
-  <!-- Shared icon templates — single source for audio icons used in HUD + pause menu -->
-  <ng-template #iconSoundOn>
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-  </ng-template>
-  <ng-template #iconSoundOff>
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
-  </ng-template>
 </div>

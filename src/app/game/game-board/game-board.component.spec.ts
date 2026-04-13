@@ -243,8 +243,6 @@ describe('GameBoardComponent', () => {
           else { component.togglePause(); }
         },
         onToggleRanges: () => component.toggleAllRanges(),
-        onToggleHelp: () => { component.showHelpOverlay = !component.showHelpOverlay; },
-        onToggleEncyclopedia: () => component.toggleEncyclopedia(),
         onToggleMinimap: () => {},
         onTogglePath: () => component.togglePathOverlay(),
         onUpgrade: () => component.upgradeTower(),
@@ -820,8 +818,6 @@ describe('GameBoardComponent', () => {
           else { component.togglePause(); }
         },
         onToggleRanges: () => {},
-        onToggleHelp: () => {},
-        onToggleEncyclopedia: () => {},
         onToggleMinimap: () => {},
         onTogglePath: () => {},
         onUpgrade: () => {},
@@ -937,7 +933,7 @@ describe('GameBoardComponent', () => {
       const event = new KeyboardEvent('keydown', { key: 'v', bubbles: true });
       gameInputSvc.dispatchHotkey(event, gameStateSvc.getState(), {
         onSpace: () => {}, onPause: () => {}, onEscape: () => {},
-        onToggleRanges: () => {}, onToggleHelp: () => {}, onToggleEncyclopedia: () => {},
+        onToggleRanges: () => {},
         onToggleMinimap: () => {}, onTogglePath: () => component.togglePathOverlay(),
         onUpgrade: () => {}, onCycleTargeting: () => {}, onSell: () => {},
         onTowerHotkey: (_type) => {}, isInRun: () => false,
@@ -1342,129 +1338,6 @@ describe('GameBoardComponent', () => {
       // Verifies getTutorialTip() returns null — the child component uses this for its [tip] input
       component.tutorialFacade.currentTutorialStep = null;
       expect(component.getTutorialTip()).toBeNull();
-    });
-  });
-
-  describe('toggleEncyclopedia', () => {
-    it('showEncyclopedia should be false initially', () => {
-      expect(component.showEncyclopedia).toBeFalse();
-    });
-
-    it('toggleEncyclopedia sets showEncyclopedia to true when false', () => {
-      component.showEncyclopedia = false;
-      component.toggleEncyclopedia();
-      expect(component.showEncyclopedia).toBeTrue();
-    });
-
-    it('toggleEncyclopedia sets showEncyclopedia to false when true', () => {
-      component.showEncyclopedia = true;
-      component.toggleEncyclopedia();
-      expect(component.showEncyclopedia).toBeFalse();
-    });
-
-    it('enemyInfoList should have 8 entries', () => {
-      expect(component.enemyInfoList.length).toBe(8);
-    });
-
-    it('enemyInfoList entries each have a name and description', () => {
-      for (const info of component.enemyInfoList) {
-        expect(info.name.length).toBeGreaterThan(0);
-        expect(info.description.length).toBeGreaterThan(0);
-      }
-    });
-  });
-
-  describe('encyclopediaTab', () => {
-    it('default tab is enemies', () => {
-      expect(component.encyclopediaTab).toBe('enemies');
-    });
-
-    it('switching to towers tab sets encyclopediaTab to towers', () => {
-      component.encyclopediaTab = 'towers';
-      expect(component.encyclopediaTab).toBe('towers');
-    });
-
-    it('switching back to enemies tab sets encyclopediaTab to enemies', () => {
-      component.encyclopediaTab = 'towers';
-      component.encyclopediaTab = 'enemies';
-      expect(component.encyclopediaTab).toBe('enemies');
-    });
-  });
-
-  describe('towerInfoList', () => {
-    it('towerInfoList should have 6 entries (one per tower type)', () => {
-      expect(component.towerInfoList.length).toBe(6);
-    });
-
-    it('each tower entry has a non-empty name', () => {
-      for (const info of component.towerInfoList) {
-        expect(info.name.length).toBeGreaterThan(0);
-      }
-    });
-
-    it('each tower entry has a non-empty description', () => {
-      for (const info of component.towerInfoList) {
-        expect(info.description.length).toBeGreaterThan(0);
-      }
-    });
-
-    it('each tower entry has non-empty alpha and beta labels', () => {
-      for (const info of component.towerInfoList) {
-        expect(info.alpha.label.length).toBeGreaterThan(0);
-        expect(info.beta.label.length).toBeGreaterThan(0);
-      }
-    });
-
-    it('all 6 tower types are represented', () => {
-      const types = component.towerInfoList.map(t => t.type);
-      expect(types).toContain(TowerType.BASIC);
-      expect(types).toContain(TowerType.SNIPER);
-      expect(types).toContain(TowerType.SPLASH);
-      expect(types).toContain(TowerType.SLOW);
-      expect(types).toContain(TowerType.CHAIN);
-      expect(types).toContain(TowerType.MORTAR);
-    });
-
-    it('each tower entry has positive cost and damage (except Slow which has 0 damage)', () => {
-      for (const info of component.towerInfoList) {
-        expect(info.cost).toBeGreaterThan(0);
-        expect(info.damage).toBeGreaterThanOrEqual(0);
-      }
-    });
-  });
-
-  describe('E key toggles encyclopedia', () => {
-    function fireKey(key: string): void {
-      const event = new KeyboardEvent('keydown', { key, bubbles: true });
-      const gameInputSvc = fixture.debugElement.injector.get(GameInputService);
-      const gameStateSvc = fixture.debugElement.injector.get(GameStateService);
-      gameInputSvc.dispatchHotkey(event, gameStateSvc.getState(), {
-        onSpace: () => {}, onPause: () => {}, onEscape: () => {},
-        onToggleRanges: () => {}, onToggleHelp: () => {},
-        onToggleEncyclopedia: () => component.toggleEncyclopedia(),
-        onToggleMinimap: () => {}, onTogglePath: () => {},
-        onUpgrade: () => {}, onCycleTargeting: () => {}, onSell: () => {},
-        onTowerHotkey: (_type) => {}, isInRun: () => false,
-        isPlaceMode: () => component.isPlaceMode, getSelectedTowerInfo: () => component.selectedTowerInfo,
-      });
-    }
-
-    it('pressing e opens the encyclopedia', () => {
-      component.showEncyclopedia = false;
-      fireKey('e');
-      expect(component.showEncyclopedia).toBeTrue();
-    });
-
-    it('pressing e again closes the encyclopedia', () => {
-      component.showEncyclopedia = true;
-      fireKey('e');
-      expect(component.showEncyclopedia).toBeFalse();
-    });
-
-    it('pressing E (uppercase) also toggles encyclopedia', () => {
-      component.showEncyclopedia = false;
-      fireKey('E');
-      expect(component.showEncyclopedia).toBeTrue();
     });
   });
 
@@ -1953,7 +1826,7 @@ describe('GameBoardComponent', () => {
           else if (component.selectedTowerInfo) { component.deselectTower(); }
           else { component.togglePause(); }
         },
-        onToggleRanges: () => {}, onToggleHelp: () => {}, onToggleEncyclopedia: () => {},
+        onToggleRanges: () => {},
         onToggleMinimap: () => {}, onTogglePath: () => {}, onUpgrade: () => {},
         onCycleTargeting: () => {}, onSell: () => {}, onTowerHotkey: (_type) => {},
         isInRun: () => false, isPlaceMode: () => component.isPlaceMode,

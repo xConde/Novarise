@@ -27,8 +27,7 @@ import { GameModifier, GAME_MODIFIER_CONFIGS, calculateModifierScoreMultiplier }
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
 import { UI_CONFIG } from './constants/ui.constants';
 import { EnemyType, ENEMY_STATS } from './models/enemy.model';
-import { EnemyInfo, ENEMY_INFO } from './models/enemy-info.model';
-import { TowerInfo, TOWER_INFO } from './models/tower-info.model';
+import { ENEMY_INFO } from './models/enemy-info.model';
 import { WavePreviewEntry, getWavePreviewFull } from './models/wave-preview.model';
 import { PathVisualizationService } from './services/path-visualization.service';
 import { StatusEffectService } from './services/status-effect.service';
@@ -220,11 +219,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Tower type currently being previewed on touch devices (first tap). Null = no preview open. */
   previewTowerType: TowerType | null = null;
   targetingModeLabels = TARGETING_MODE_LABELS;
-  showHelpOverlay = false;
-  showEncyclopedia = false;
-  encyclopediaTab: 'enemies' | 'towers' = 'enemies';
-  enemyInfoList: EnemyInfo[] = Object.values(ENEMY_INFO);
-  towerInfoList: TowerInfo[] = Object.values(TOWER_INFO);
   /**
    * Pre-computed badge map — one array per EnemyType, built once at field initialisation.
    * Enemy stats and immunities are static, so there is no need to recompute per render cycle.
@@ -250,9 +244,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Game initialization failure (WebGL not supported or canvas creation failed)
   initializationFailed = false;
 
-  // FPS counter visibility from settings
-  showFps = false;
-
   // Drag-and-drop tower placement — delegated to TowerPlacementService
   get isDragging(): boolean { return this.towerPlacementService.isDragging; }
 
@@ -276,9 +267,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       .map(id => ACHIEVEMENTS.find(a => a.id === id))
       .filter((a): a is Achievement => a != null);
   }
-
-  // FPS exposed to template
-  get fps(): number { return this.fpsCounterService.getFps(); }
 
   // Game stats exposed to score screen
   get gameStats() { return this.gameStatsService.getStats(); }
@@ -346,8 +334,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.showFps = this.settingsService.get().showFps;
-
     // Subscribe to game state changes
     this.stateSubscription = this.gameStateService.getState$().subscribe({
       error: (error: unknown) => console.error('Game state subscription error:', error),
@@ -579,8 +565,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         else { this.togglePause(); }
       },
       onToggleRanges: () => this.toggleAllRanges(),
-      onToggleHelp: () => { this.showHelpOverlay = !this.showHelpOverlay; },
-      onToggleEncyclopedia: () => this.toggleEncyclopedia(),
       onToggleMinimap: () => this.minimapService.toggleVisibility(),
       onTogglePath: () => this.togglePathOverlay(),
       onUpgrade: () => this.upgradeTower(),
@@ -889,10 +873,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   startWave(): void {
     if (this.isPaused) return;
     this.waveCombat.startWave();
-  }
-
-  toggleEncyclopedia(): void {
-    this.showEncyclopedia = !this.showEncyclopedia;
   }
 
   isNewEnemyType(type: EnemyType): boolean {

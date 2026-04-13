@@ -20,8 +20,6 @@ export interface HotkeyActions {
   onPause: () => void;
   onEscape: () => void;
   onToggleRanges: () => void;
-  onToggleHelp: () => void;
-  onToggleEncyclopedia: () => void;
   onToggleMinimap: () => void;
   onTogglePath: () => void;
   onUpgrade: () => void;
@@ -142,14 +140,6 @@ export class GameInputService implements OnDestroy {
       case 'r': case 'R':
         event.preventDefault();
         actions.onToggleRanges();
-        break;
-      case 'h': case 'H':
-        event.preventDefault();
-        actions.onToggleHelp();
-        break;
-      case 'e': case 'E':
-        event.preventDefault();
-        actions.onToggleEncyclopedia();
         break;
       case 'm': case 'M':
         event.preventDefault();

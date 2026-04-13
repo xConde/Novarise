@@ -262,73 +262,6 @@
     }
   }
 
-  // --- Top-right controls cluster ---
-  .top-right-controls {
-    position: absolute;
-    top: var(--spacing-md);
-    right: var(--spacing-md);
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    z-index: var(--z-index-overlay);
-  }
-
-  .help-btn {
-    @include glass-panel;
-    width: 2.75rem;
-    height: 2.75rem;
-    padding: 0;
-    border: var(--border-width-thin) solid var(--theme-purple-a50);
-    color: var(--theme-purple-mid);
-    line-height: 0;
-    cursor: pointer;
-    transition: all var(--transition-fast) ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-
-    &:hover {
-      background: var(--theme-purple-a30);
-      border-color: var(--theme-purple-a80);
-      color: var(--theme-purple-lighter);
-    }
-  }
-
-  // --- FPS counter ---
-  .fps-counter {
-    color: var(--theme-purple-mid);
-    font-family: "Orbitron", sans-serif;
-    font-size: var(--font-size-xs);
-    opacity: 0.6;
-  }
-
-  .audio-toggle-btn {
-    @include glass-panel;
-    min-width: 2.75rem;
-    min-height: 2.75rem;
-    padding: var(--spacing-xs) var(--spacing-sm);
-    border: var(--border-width-thin) solid var(--theme-purple-a50);
-    color: var(--theme-purple-mid);
-    cursor: pointer;
-    transition: all var(--transition-fast) ease;
-    line-height: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    svg {
-      width: 16px;
-      height: 16px;
-    }
-
-    &:hover {
-      background: var(--theme-purple-a30);
-      border-color: var(--theme-purple-a80);
-      color: var(--theme-purple-lighter);
-    }
-  }
-
   // Game HUD styles moved to src/styles.css (.board-container .game-hud) for ViewEncapsulation.None reach
   // Wave status row now lives inside the HUD component — styles in src/styles/_game-hud.scss
 
@@ -475,7 +408,6 @@
 
 // wave-preview-in keyframe moved to src/styles.css
 
-// help-overlay moved to src/styles.css (.board-container .help-overlay)
 
 // --- Drag cursor override ---
 // !important required: Three.js sets cursor via inline styles on the canvas element

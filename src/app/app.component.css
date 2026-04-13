@@ -43,7 +43,7 @@
 
 .settings-cog {
   position: fixed;
-  top: 38px;
+  top: 50px;
   right: var(--spacing-md);
   z-index: 1999;
   display: flex;
