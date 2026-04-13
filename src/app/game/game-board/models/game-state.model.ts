@@ -64,7 +64,13 @@ export interface GameState {
   wave: number;
   maxWaves: number;
   lives: number;
+  /** Maximum lives cap for this encounter (set by run state + relic bonus). Life-restore effects cap here. */
+  maxLives: number;
+  /** Lives at the very start of this encounter, before any combat. Used to compute livesLost in EncounterResult. */
+  initialLives: number;
   gold: number;
+  /** Gold at encounter start (after relic bonuses). goldEarned = gold - initialGold at encounter end. */
+  initialGold: number;
   score: number;
   difficulty: DifficultyLevel;
   isEndless: boolean;
@@ -92,7 +98,10 @@ export const INITIAL_GAME_STATE: GameState = {
   wave: 0,
   maxWaves: WAVE_DEFINITIONS.length,
   lives: DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].lives,
+  maxLives: DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].lives,
+  initialLives: DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].lives,
   gold: DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].gold,
+  initialGold: DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].gold,
   score: 0,
   difficulty: DifficultyLevel.NORMAL,
   isEndless: false,

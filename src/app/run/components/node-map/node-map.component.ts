@@ -71,7 +71,7 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit, OnDes
 
   readonly NodeType = NodeType;
 
-  /** Inline SVG icon per node type (16×16 display, 24×24 viewBox, stroke-based). Pre-sanitized as SafeHtml. */
+  /** Inline SVG icon per node type (18×18 display, 24×24 viewBox). Pre-sanitized as SafeHtml. */
   readonly nodeIcons: Record<string, SafeHtml>;
 
   readonly nodeLabels: Record<string, string> = {
@@ -86,52 +86,60 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit, OnDes
 
   constructor(private sanitizer: DomSanitizer) {
     const s = (html: string): SafeHtml => this.sanitizer.bypassSecurityTrustHtml(html);
+    const FILLED = 'xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"';
+    const STROKE = 'xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+
     this.nodeIcons = {
+      // Crossed swords — two bold diagonal bars forming an X
       [NodeType.COMBAT]: s(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-        '<line x1="18" y1="6" x2="6" y2="18"/>' +
-        '<line x1="6" y1="6" x2="18" y2="18"/>' +
-        '<line x1="6" y1="2" x2="6" y2="10"/>' +
-        '<line x1="18" y1="14" x2="18" y2="22"/>' +
+        '<svg ' + FILLED + '>' +
+        '<rect x="3" y="10.5" width="18" height="3" rx="1" transform="rotate(45 12 12)"/>' +
+        '<rect x="3" y="10.5" width="18" height="3" rx="1" transform="rotate(-45 12 12)"/>' +
         '</svg>',
       ),
+      // Five-point star — elite/special encounter
       [NodeType.ELITE]: s(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-        '<path d="M12 2 C10 6 7 8 7 12 C7 16 9.5 19 12 20 C14.5 19 17 16 17 12 C17 8 14 6 12 2Z"/>' +
-        '<line x1="12" y1="20" x2="12" y2="22"/>' +
+        '<svg ' + FILLED + '>' +
+        '<polygon points="12,2 14.6,8.4 21.5,8.9 16.3,13.4 17.9,20.1 12,16.5 6.1,20.1 7.7,13.4 2.5,8.9 9.4,8.4"/>' +
         '</svg>',
       ),
+      // OSRS-style skull + crossbones — boss encounter (larger to match 56px boss node)
+      // Skull sits high (y=1-18), crossbones cross low behind jaw (y=17), tips peek at sides
       [NodeType.BOSS]: s(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-        '<circle cx="12" cy="10" r="7"/>' +
-        '<path d="M9 9 L9.5 11 M15 9 L14.5 11"/>' +
-        '<path d="M9 14 Q12 16 15 14"/>' +
+        '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+        '<rect x="1" y="15.5" width="22" height="3" rx="1.5" transform="rotate(45 12 17)"/>' +
+        '<rect x="1" y="15.5" width="22" height="3" rx="1.5" transform="rotate(-45 12 17)"/>' +
+        '<path d="M12 1C17 1 19 4 19 8C19 12 17 14 15 14L15 18L9 18L9 14C7 14 5 12 5 8C5 4 7 1 12 1Z"/>' +
+        '<rect x="6.5" y="4.5" width="4" height="4.5" rx="0.5" fill="#200808"/>' +
+        '<rect x="13.5" y="4.5" width="4" height="4.5" rx="0.5" fill="#200808"/>' +
+        '<polygon points="11,10.5 13,10.5 12,12.5" fill="#200808"/>' +
         '</svg>',
       ),
+      // Campfire flame — rest site
       [NodeType.REST]: s(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-        '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>' +
+        '<svg ' + FILLED + '>' +
+        '<path d="M12 2C9 7 5 11 5 15.5C5 19.1 8.1 22 12 22C15.9 22 19 19.1 19 15.5C19 11 15 7 12 2Z"/>' +
         '</svg>',
       ),
+      // Bold dollar sign — shop (no containing circle)
       [NodeType.SHOP]: s(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-        '<circle cx="12" cy="12" r="8"/>' +
-        '<line x1="12" y1="7" x2="12" y2="17"/>' +
-        '<path d="M9 10 Q9 8 12 8 Q15 8 15 10 Q15 12 12 12 Q9 12 9 14 Q9 16 12 16 Q15 16 15 14"/>' +
+        '<svg ' + STROKE + ' stroke-width="2.5">' +
+        '<line x1="12" y1="2" x2="12" y2="22"/>' +
+        '<path d="M16.5 8C16 5.5 14.5 4.5 12 4.5C9.5 4.5 7.5 6 7.5 8C7.5 10.5 9.5 11 12 12C14.5 13 16.5 13.5 16.5 16C16.5 18.5 14.5 19.5 12 19.5C9.5 19.5 8 18.5 7.5 16"/>' +
         '</svg>',
       ),
+      // Bold exclamation mark — event (no containing circle)
       [NodeType.EVENT]: s(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-        '<circle cx="12" cy="12" r="9"/>' +
-        '<line x1="12" y1="8" x2="12" y2="13"/>' +
-        '<line x1="12" y1="16" x2="12.01" y2="16"/>' +
+        '<svg ' + STROKE + ' stroke-width="3">' +
+        '<line x1="12" y1="4" x2="12" y2="14"/>' +
+        '<line x1="12" y1="19" x2="12.01" y2="19"/>' +
         '</svg>',
       ),
+      // Bold question mark — unknown node (no containing circle)
       [NodeType.UNKNOWN]: s(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-        '<circle cx="12" cy="12" r="9"/>' +
-        '<path d="M9.5 9 C9.5 7 14.5 7 14.5 10 C14.5 12 12 12 12 14"/>' +
-        '<line x1="12" y1="17" x2="12.01" y2="17"/>' +
+        '<svg ' + STROKE + ' stroke-width="3">' +
+        '<path d="M8 8C8 5 9.5 3.5 12 3.5C14.5 3.5 16 5 16 7.5C16 10 14 11 12 13V15.5"/>' +
+        '<line x1="12" y1="20" x2="12.01" y2="20"/>' +
         '</svg>',
       ),
     };

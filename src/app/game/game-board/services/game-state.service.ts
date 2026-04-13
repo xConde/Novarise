@@ -126,10 +126,18 @@ export class GameStateService {
     return this.state.consecutiveWavesWithoutLeak;
   }
 
-  /** Override initial lives and max lives for Ascent Mode encounters. Only works during SETUP before wave 1. */
-  setInitialLives(lives: number, _maxLives: number): void {
+  /** Override initial lives, max lives, and initial-lives snapshot for Ascent Mode encounters. Only works during SETUP before wave 1. */
+  setInitialLives(lives: number, maxLives: number): void {
     if (this.state.phase !== GamePhase.SETUP || this.state.wave !== 0) return;
     this.state.lives = lives;
+    this.state.maxLives = maxLives;
+    this.state.initialLives = lives;
+    this.emit();
+  }
+
+  /** Snapshot current gold as the encounter starting gold. Call after all initial bonuses are applied. */
+  snapshotInitialGold(): void {
+    this.state.initialGold = this.state.gold;
     this.emit();
   }
 
@@ -188,13 +196,13 @@ export class GameStateService {
 
   /**
    * Restore lives from a card effect (e.g. Repair Walls spell).
-   * Caps at the starting-lives ceiling for the current difficulty so healing
-   * cannot exceed the normal max. Amount must be positive; no-ops otherwise.
+   * Caps at the encounter's maxLives ceiling so healing cannot exceed the run's
+   * max (which accounts for relic bonuses and ascension modifiers).
+   * Amount must be positive; no-ops otherwise.
    */
   addLives(amount: number): void {
     if (amount <= 0) return;
-    const maxLives = DIFFICULTY_PRESETS[this.state.difficulty].lives;
-    this.state.lives = Math.min(this.state.lives + amount, maxLives);
+    this.state.lives = Math.min(this.state.lives + amount, this.state.maxLives);
     this.emit();
   }
 
@@ -273,10 +281,13 @@ export class GameStateService {
     const preset = DIFFICULTY_PRESETS[difficulty];
     this.state.difficulty = difficulty;
     this.state.lives = preset.lives;
+    this.state.maxLives = preset.lives;
+    this.state.initialLives = preset.lives;
     const goldMultiplier = this.modifierEffects.startingGoldMultiplier ?? 1;
     const startingGold = Math.floor(preset.gold * goldMultiplier);
     // Deduct cumulative gold already spent on towers to prevent toggle exploits
     this.state.gold = Math.max(0, startingGold - this.setupGoldSpent);
+    this.state.initialGold = this.state.gold;
     this.emit();
   }
 
@@ -298,7 +309,7 @@ export class GameStateService {
     this.emit();
   }
 
-  /** Resets all game state to initial values and clears modifiers and ascension effects. Call from `restartGame()` before a new game begins. */
+  /** Resets all game state to initial values and clears modifiers and ascension effects. Call from `restartGame()` / encounter teardown before a new game begins. */
   reset(): void {
     const from = this.state.phase;
     this.state = { ...INITIAL_GAME_STATE, activeModifiers: new Set<GameModifier>() };

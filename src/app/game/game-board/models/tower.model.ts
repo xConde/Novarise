@@ -16,14 +16,8 @@ export const TARGETING_MODE_LABELS: Record<TargetingMode, string> = {
   [TargetingMode.STRONGEST]: 'Strongest',
 };
 
-export enum TowerType {
-  BASIC = 'basic',
-  SNIPER = 'sniper',
-  SPLASH = 'splash',
-  SLOW = 'slow',
-  CHAIN = 'chain',
-  MORTAR = 'mortar'
-}
+import { TowerType } from '@core/models/tower-type.model';
+export { TowerType };
 
 export enum TowerSpecialization {
   ALPHA = 'alpha',

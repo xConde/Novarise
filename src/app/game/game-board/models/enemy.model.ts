@@ -1,15 +1,7 @@
 import * as THREE from 'three';
 
-export enum EnemyType {
-  BASIC = 'BASIC',
-  FAST = 'FAST',
-  HEAVY = 'HEAVY',
-  SWIFT = 'SWIFT',
-  BOSS = 'BOSS',
-  SHIELDED = 'SHIELDED',
-  SWARM = 'SWARM',
-  FLYING = 'FLYING'
-}
+import { EnemyType } from '@core/models/enemy-type.model';
+export { EnemyType };
 
 export interface GridNode {
   x: number; // column

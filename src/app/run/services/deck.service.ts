@@ -221,11 +221,11 @@ export class DeckService {
 
   /**
    * Remove a card from the deck permanently (event/shop).
-   * Searches draw pile, hand, and discard pile in order.
+   * Searches all piles including exhaustPile.
    * Returns false if the instanceId is not found.
    */
   removeCard(instanceId: string): boolean {
-    for (const pile of ['drawPile', 'hand', 'discardPile'] as const) {
+    for (const pile of ['drawPile', 'hand', 'discardPile', 'exhaustPile'] as const) {
       const index = this.deckState[pile].findIndex(c => c.instanceId === instanceId);
       if (index !== -1) {
         const newPile = [...this.deckState[pile]];
@@ -240,10 +240,11 @@ export class DeckService {
 
   /**
    * Upgrade a card (set upgraded = true).
+   * Searches all piles including exhaustPile.
    * Returns false if card is already upgraded or not found.
    */
   upgradeCard(instanceId: string): boolean {
-    for (const pile of ['drawPile', 'hand', 'discardPile'] as const) {
+    for (const pile of ['drawPile', 'hand', 'discardPile', 'exhaustPile'] as const) {
       const index = this.deckState[pile].findIndex(c => c.instanceId === instanceId);
       if (index !== -1) {
         const card = this.deckState[pile][index];

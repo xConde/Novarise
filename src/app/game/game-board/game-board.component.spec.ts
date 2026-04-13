@@ -64,6 +64,7 @@ import { TowerPlacementService } from './services/tower-placement.service';
 import { TowerSelectionService } from './services/tower-selection.service';
 import { TowerUpgradeVisualService } from './services/tower-upgrade-visual.service';
 import { getAscensionEffects, AscensionEffectType } from '../../run/models/ascension.model';
+import { GameRenderService } from './services/game-render.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -220,6 +221,13 @@ describe('GameBoardComponent', () => {
       const event = new KeyboardEvent('keydown', { key, bubbles: true });
       (component as any).handleKeyboard(event);
     }
+
+    // Tower hotkeys 1-6 are disabled in run mode (towers require cards).
+    // Override isInRun to false so standalone-mode hotkey selection works.
+    beforeEach(() => {
+      const runSpy = TestBed.inject(RunService) as jasmine.SpyObj<RunService>;
+      runSpy.isInRun.and.returnValue(false);
+    });
 
     it('pressing 1 selects BASIC tower when a different type is selected', () => {
       component.selectedTowerType = TowerType.SNIPER;
@@ -2643,6 +2651,7 @@ describe('GameBoardComponent', () => {
     it('runPausedVisuals calls all cosmetic-only animation updates', () => {
       const enemyService = fixture.debugElement.injector.get(EnemyService);
       const statusEffectService = fixture.debugElement.injector.get(StatusEffectService);
+      const gameRenderService = fixture.debugElement.injector.get(GameRenderService);
       const mockScene = new THREE.Scene();
       const mockCamera = new THREE.PerspectiveCamera();
       spyOn((component as any).sceneService, 'getScene').and.returnValue(mockScene);
@@ -2656,9 +2665,9 @@ describe('GameBoardComponent', () => {
       const particleSpy = spyOn(enemyService, 'updateStatusEffectParticles');
       spyOn(enemyService, 'updateStatusVisuals');
       spyOn(enemyService, 'updateEnemyAnimations');
-      spyOn(component as any, 'updateMinimap');
+      spyOn(gameRenderService as any, 'updateMinimap');
 
-      (component as any).runPausedVisuals(0.016, 1000);
+      gameRenderService.runPausedVisuals(0.016, 1000);
 
       expect(dyingSpy).toHaveBeenCalledWith(0.016, mockScene);
       expect(flashSpy).toHaveBeenCalledWith(0.016);
@@ -2669,15 +2678,16 @@ describe('GameBoardComponent', () => {
 
     it('runPausedVisuals is NOT invoked when game is unpaused in COMBAT', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      const gameRenderService = fixture.debugElement.injector.get(GameRenderService);
       gameStateService.setPhase(GamePhase.COMBAT);
       expect(gameStateService.getState().isPaused).toBeFalse();
 
-      const pausedVisualsSpy = spyOn(component as any, 'runPausedVisuals');
+      const pausedVisualsSpy = spyOn(gameRenderService, 'runPausedVisuals');
 
       // Replicate the animate-loop guard logic
       const state = gameStateService.getState();
       if (state.phase === GamePhase.COMBAT && state.isPaused) {
-        (component as any).runPausedVisuals(0.016, 1000);
+        gameRenderService.runPausedVisuals(0.016, 1000);
       }
 
       expect(pausedVisualsSpy).not.toHaveBeenCalled();
@@ -2685,16 +2695,17 @@ describe('GameBoardComponent', () => {
 
     it('runPausedVisuals IS invoked when game is paused in COMBAT', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      const gameRenderService = fixture.debugElement.injector.get(GameRenderService);
       gameStateService.setPhase(GamePhase.COMBAT);
       gameStateService.togglePause();
       expect(gameStateService.getState().isPaused).toBeTrue();
 
-      const pausedVisualsSpy = spyOn(component as any, 'runPausedVisuals');
+      const pausedVisualsSpy = spyOn(gameRenderService, 'runPausedVisuals');
 
       // Replicate the animate-loop guard logic
       const state = gameStateService.getState();
       if (state.phase === GamePhase.COMBAT && state.isPaused) {
-        (component as any).runPausedVisuals(0.016, 1000);
+        gameRenderService.runPausedVisuals(0.016, 1000);
       }
 
       expect(pausedVisualsSpy).toHaveBeenCalledWith(0.016, 1000);
@@ -2832,12 +2843,13 @@ describe('GameBoardComponent', () => {
 
     it('processCombatResult does NOT call updateDyingAnimations (handled in animate)', () => {
       const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const gameRenderService = fixture.debugElement.injector.get(GameRenderService);
       const dyingSpy = spyOn(enemyService, 'updateDyingAnimations');
 
       // Call processCombatResult with an empty result
       const emptyResult = {
         kills: [],
-        firedTypes: new Set(),
+        firedTypes: new Set<TowerType>(),
         hitCount: 0,
         exitCount: 0,
         leaked: false,
@@ -2846,7 +2858,7 @@ describe('GameBoardComponent', () => {
         gameEnd: null,
         combatAudioEvents: [],
       };
-      (component as any).processCombatResult(emptyResult, 0.016, 1000);
+      gameRenderService.processCombatResult(emptyResult, 0.016, 1000);
 
       // updateDyingAnimations should NOT be called from processCombatResult
       expect(dyingSpy).not.toHaveBeenCalled();
@@ -2854,11 +2866,12 @@ describe('GameBoardComponent', () => {
 
     it('processCombatResult does NOT call updateHitFlashes (handled in animate)', () => {
       const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const gameRenderService = fixture.debugElement.injector.get(GameRenderService);
       const flashSpy = spyOn(enemyService, 'updateHitFlashes');
 
       const emptyResult = {
         kills: [],
-        firedTypes: new Set(),
+        firedTypes: new Set<TowerType>(),
         hitCount: 0,
         exitCount: 0,
         leaked: false,
@@ -2867,7 +2880,7 @@ describe('GameBoardComponent', () => {
         gameEnd: null,
         combatAudioEvents: [],
       };
-      (component as any).processCombatResult(emptyResult, 0.016, 1000);
+      gameRenderService.processCombatResult(emptyResult, 0.016, 1000);
 
       expect(flashSpy).not.toHaveBeenCalled();
     });

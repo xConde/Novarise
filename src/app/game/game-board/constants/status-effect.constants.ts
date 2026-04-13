@@ -1,8 +1,5 @@
-export enum StatusEffectType {
-  SLOW = 'SLOW',
-  BURN = 'BURN',
-  POISON = 'POISON',
-}
+import { StatusEffectType } from '@core/models/status-effect-type.model';
+export { StatusEffectType };
 
 export interface StatusEffectConfig {
   /** Effect type identifier */
