@@ -1468,6 +1468,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const canvas = this.sceneService.getRenderer().domElement;
 
     this.mousemoveHandler = (event: MouseEvent) => {
+      if (this.isPaused) return;
       const rect = canvas.getBoundingClientRect();
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -1516,6 +1517,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     };
 
     this.clickHandler = (event: MouseEvent) => {
+      if (this.isPaused) return;
       this.handleInteraction(event.clientX, event.clientY);
     };
 
@@ -1538,6 +1540,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.touchStartHandler = (event: TouchEvent) => {
       event.preventDefault();
+      if (this.isPaused) return;
 
       if (event.touches.length === 1) {
         // Single-finger: record start position and time for tap/drag detection
@@ -1556,6 +1559,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.touchMoveHandler = (event: TouchEvent) => {
       event.preventDefault();
+      if (this.isPaused) return;
       if (!this.sceneService.getCamera() || !this.sceneService.getControls()) return;
 
       if (event.touches.length === 1) {

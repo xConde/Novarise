@@ -122,15 +122,16 @@ export class GameRenderService {
     // FPS tracking
     this.fpsCounterService.tick(time);
 
-    // Camera pan (WASD / arrows)
+    // Camera pan (WASD / arrows) — skip when paused to block all input
+    const isPaused = this.gameStateService.getState().isPaused;
     const camera = this.sceneService.getCamera();
     const controls = this.sceneService.getControls();
-    if (camera && controls) {
+    if (camera && controls && !isPaused) {
       this.gameInput.updateCameraPan(camera, controls);
     }
 
-    if (this.sceneService.getControls()) {
-      this.sceneService.getControls().update();
+    if (controls && !isPaused) {
+      controls.update();
     }
 
     // Ambient visuals (particles, skybox)
