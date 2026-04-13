@@ -1,7 +1,5 @@
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
-import { gameLeaveGuard } from './game/guards/game-leave.guard';
-
 // Phase 8 route collapse + H4 profile re-add. Five routes:
 //   /       — landing / run hub (start / continue / editor)
 //   /edit   — dev map-making
@@ -12,7 +10,7 @@ import { gameLeaveGuard } from './game/guards/game-leave.guard';
 const routes: Routes = [
   { path: '', loadChildren: () => import('./landing/landing.module').then(m => m.LandingModule) },
   { path: 'edit', loadChildren: () => import('./games/novarise/editor.module').then(m => m.EditorModule) },
-  { path: 'play', loadChildren: () => import('./game/game.module').then(m => m.GameModule), canDeactivate: [gameLeaveGuard] },
+  { path: 'play', loadChildren: () => import('./game/game.module').then(m => m.GameModule) },
   { path: 'run', loadChildren: () => import('./run/run.module').then(m => m.RunModule) },
   { path: 'profile', loadChildren: () => import('./profile/profile.module').then(m => m.ProfileModule) },
   { path: 'settings', loadChildren: () => import('./settings/settings.module').then(m => m.SettingsModule) },

@@ -1,10 +1,10 @@
 import { gameLeaveGuard } from './game-leave.guard';
-import { GameBoardComponent } from '../game-board/game-board.component';
+import { GameComponent } from '../game.component';
 import { GamePhase } from '../game-board/models/game-state.model';
 import { ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
 
 /** Minimal stub matching the surface the guard cares about. */
-function makeComponent(phase: GamePhase, canLeaveResult: boolean): Partial<GameBoardComponent> {
+function makeComponent(canLeaveResult: boolean): Partial<GameComponent> {
   return {
     canLeaveGame: jasmine.createSpy('canLeaveGame').and.returnValue(canLeaveResult),
   };
@@ -15,10 +15,10 @@ describe('gameLeaveGuard', () => {
   const stubState = {} as RouterStateSnapshot;
   const stubCurrentState = {} as RouterStateSnapshot;
 
-  it('delegates entirely to component.canLeaveGame() and returns its result (true)', () => {
-    const component = makeComponent(GamePhase.SETUP, true);
+  it('delegates to component.canLeaveGame() and returns true', () => {
+    const component = makeComponent(true);
     const result = gameLeaveGuard(
-      component as GameBoardComponent,
+      component as GameComponent,
       stubRoute,
       stubState,
       stubCurrentState
@@ -27,10 +27,10 @@ describe('gameLeaveGuard', () => {
     expect(result).toBeTrue();
   });
 
-  it('delegates entirely to component.canLeaveGame() and returns its result (false)', () => {
-    const component = makeComponent(GamePhase.COMBAT, false);
+  it('delegates to component.canLeaveGame() and returns false', () => {
+    const component = makeComponent(false);
     const result = gameLeaveGuard(
-      component as GameBoardComponent,
+      component as GameComponent,
       stubRoute,
       stubState,
       stubCurrentState

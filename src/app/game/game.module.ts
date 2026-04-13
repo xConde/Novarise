@@ -1,6 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
+import { gameLeaveGuard } from './guards/game-leave.guard';
 import { GameComponent } from './game.component';
 import { GameBoardComponent } from './game-board/game-board.component';
 import { GameBoardService } from './game-board/game-board.service';
@@ -25,7 +26,7 @@ import { IconComponent } from '@shared/components/icon/icon.component';
   ],
   imports: [
     CommonModule,
-    RouterModule.forChild([{ path: '', component: GameComponent }]),
+    RouterModule.forChild([{ path: '', component: GameComponent, canDeactivate: [gameLeaveGuard] }]),
     IconComponent,
   ],
   providers: [GameBoardService, CombatVFXService, GamePauseService, ChallengeDisplayService]
