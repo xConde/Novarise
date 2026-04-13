@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 
-import { GameSessionService, CleanupSceneOpts } from './game-session.service';
+import { GameSessionService } from './game-session.service';
+import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { GameStateService } from './game-state.service';
 import { WaveService } from './wave.service';
 import { EnemyService } from './enemy.service';
@@ -134,6 +135,7 @@ describe('GameSessionService', () => {
     TestBed.configureTestingModule({
       providers: [
         GameSessionService,
+        BoardMeshRegistryService,
         { provide: GameStateService, useValue: gameStateSpy },
         { provide: WaveService, useValue: waveSpy },
         { provide: EnemyService, useValue: enemySpy },
@@ -199,113 +201,112 @@ describe('GameSessionService', () => {
   });
 
   describe('cleanupScene', () => {
-    function makeOpts(): CleanupSceneOpts {
-      return {
-        tileMeshes: new Map(),
-        towerMeshes: new Map(),
-        gridLines: null,
-      };
-    }
+    let meshRegistry: BoardMeshRegistryService;
 
-    it('should return null (for gridLines reset)', () => {
-      const opts = makeOpts();
-      expect(service.cleanupScene(opts)).toBeNull();
+    beforeEach(() => {
+      meshRegistry = TestBed.inject(BoardMeshRegistryService);
+    });
+
+    it('should complete without error', () => {
+      expect(() => service.cleanupScene()).not.toThrow();
     });
 
     it('should call towerCombatService.cleanup', () => {
-      service.cleanupScene(makeOpts());
+      service.cleanupScene();
       expect(towerCombatSpy.cleanup).toHaveBeenCalledWith(scene);
     });
 
     it('should call towerPreviewService.cleanup', () => {
-      service.cleanupScene(makeOpts());
+      service.cleanupScene();
       expect(towerPreviewSpy.cleanup).toHaveBeenCalledWith(scene);
     });
 
     it('should call damagePopupService.cleanup', () => {
-      service.cleanupScene(makeOpts());
+      service.cleanupScene();
       expect(damagePopupSpy.cleanup).toHaveBeenCalledWith(scene);
     });
 
     it('should call minimapService.cleanup', () => {
-      service.cleanupScene(makeOpts());
+      service.cleanupScene();
       expect(minimapSpy.cleanup).toHaveBeenCalled();
     });
 
     it('should call pathVisualizationService.hidePath and cleanup', () => {
-      service.cleanupScene(makeOpts());
+      service.cleanupScene();
       expect(pathVisSpy.hidePath).toHaveBeenCalledWith(scene);
       expect(pathVisSpy.cleanup).toHaveBeenCalled();
     });
 
-    it('should call tileHighlightService.clearHighlights with the tileMeshes map', () => {
-      const opts = makeOpts();
-      service.cleanupScene(opts);
-      expect(tileHighlightSpy.clearHighlights).toHaveBeenCalledWith(opts.tileMeshes, scene);
+    it('should call tileHighlightService.clearHighlights with the registry tileMeshes map', () => {
+      service.cleanupScene();
+      expect(tileHighlightSpy.clearHighlights).toHaveBeenCalledWith(meshRegistry.tileMeshes, scene);
     });
 
     it('should call rangeVisualizationService.cleanup', () => {
-      service.cleanupScene(makeOpts());
+      service.cleanupScene();
       expect(rangeVisSpy.cleanup).toHaveBeenCalledWith(scene);
     });
 
     it('should call towerUpgradeVisualService.cleanup', () => {
-      service.cleanupScene(makeOpts());
+      service.cleanupScene();
       expect(towerUpgradeVisualSpy.cleanup).toHaveBeenCalledWith(scene);
     });
 
-    it('should clear towerMeshes and tileMeshes in-place', () => {
-      const tileMeshes = new Map([['0-0', new THREE.Mesh()]]);
-      const towerMeshes = new Map([['0-0', new THREE.Group()]]);
-      const opts: CleanupSceneOpts = { tileMeshes, towerMeshes, gridLines: null };
+    it('should clear towerMeshes and tileMeshes in the registry', () => {
+      meshRegistry.tileMeshes.set('0-0', new THREE.Mesh());
+      meshRegistry.towerMeshes.set('0-0', new THREE.Group());
 
-      service.cleanupScene(opts);
+      service.cleanupScene();
 
-      expect(tileMeshes.size).toBe(0);
-      expect(towerMeshes.size).toBe(0);
+      expect(meshRegistry.tileMeshes.size).toBe(0);
+      expect(meshRegistry.towerMeshes.size).toBe(0);
     });
 
-    it('should dispose tile mesh geometry and material', () => {
+    it('should dispose tile mesh geometry and material from the registry', () => {
       const geo = new THREE.BoxGeometry(1, 1, 1);
       const mat = new THREE.MeshStandardMaterial();
       const mesh = new THREE.Mesh(geo, mat);
       scene.add(mesh);
-
-      const tileMeshes = new Map([['0-0', mesh]]);
-      const opts: CleanupSceneOpts = { tileMeshes, towerMeshes: new Map(), gridLines: null };
+      meshRegistry.tileMeshes.set('0-0', mesh);
 
       const geoSpy = spyOn(geo, 'dispose').and.callThrough();
       const matSpy = spyOn(mat, 'dispose').and.callThrough();
 
-      service.cleanupScene(opts);
+      service.cleanupScene();
 
       expect(geoSpy).toHaveBeenCalled();
       expect(matSpy).toHaveBeenCalled();
     });
 
     it('should handle null gridLines without throwing', () => {
-      const opts: CleanupSceneOpts = { tileMeshes: new Map(), towerMeshes: new Map(), gridLines: null };
-      expect(() => service.cleanupScene(opts)).not.toThrow();
+      meshRegistry.gridLines = null;
+      expect(() => service.cleanupScene()).not.toThrow();
     });
 
-    it('should dispose gridLines group geometry', () => {
+    it('should set gridLines to null in registry after disposal', () => {
+      meshRegistry.gridLines = new THREE.Group();
+      service.cleanupScene();
+      expect(meshRegistry.gridLines).toBeNull();
+    });
+
+    it('should dispose gridLines group geometry from the registry', () => {
       const gridLines = new THREE.Group();
       const lineGeo = new THREE.BufferGeometry();
       const lineMat = new THREE.LineBasicMaterial();
       const line = new THREE.Line(lineGeo, lineMat);
       gridLines.add(line);
       scene.add(gridLines);
+      meshRegistry.gridLines = gridLines;
 
       const geoSpy = spyOn(lineGeo, 'dispose').and.callThrough();
 
-      const opts: CleanupSceneOpts = { tileMeshes: new Map(), towerMeshes: new Map(), gridLines };
-      service.cleanupScene(opts);
+      service.cleanupScene();
 
       expect(geoSpy).toHaveBeenCalled();
     });
 
     it('should call sceneService.disposeParticles, disposeSkybox, disposeLights', () => {
-      service.cleanupScene(makeOpts());
+      service.cleanupScene();
       expect(sceneSpy.disposeParticles).toHaveBeenCalled();
       expect(sceneSpy.disposeSkybox).toHaveBeenCalled();
       expect(sceneSpy.disposeLights).toHaveBeenCalled();

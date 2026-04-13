@@ -18,6 +18,7 @@ import { MinimapService, MinimapTerrainData, MinimapBoardSnapshot } from './mini
 import { GameNotificationService, NotificationType } from './game-notification.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { GameBoardService } from '../game-board.service';
+import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { GamePhase } from '../models/game-state.model';
 import { PHYSICS_CONFIG } from '../constants/physics.constants';
 import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
@@ -51,10 +52,6 @@ export class GameRenderService {
   /** Reusable enemy position list for updateMinimap() — avoids per-frame array allocation. */
   private readonly minimapEnemyPositions: { row: number; col: number }[] = [];
 
-  // References to component-owned mesh maps (set during init)
-  private tileMeshes!: Map<string, THREE.Mesh>;
-  private towerMeshes!: Map<string, THREE.Group>;
-
   constructor(
     private audioService: AudioService,
     private fpsCounterService: FpsCounterService,
@@ -74,15 +71,12 @@ export class GameRenderService {
     private notificationService: GameNotificationService,
     private cardEffectService: CardEffectService,
     private gameBoardService: GameBoardService,
+    private meshRegistry: BoardMeshRegistryService,
   ) {}
 
-  /**
-   * Initialize with component-owned mesh maps. Call in ngAfterViewInit.
-   * Maps are passed by reference — the service always sees the latest state.
-   */
-  init(tileMeshes: Map<string, THREE.Mesh>, towerMeshes: Map<string, THREE.Group>): void {
-    this.tileMeshes = tileMeshes;
-    this.towerMeshes = towerMeshes;
+  /** Initialize the render service. Call in ngAfterViewInit. */
+  init(): void {
+    // No-op: mesh maps are now owned by BoardMeshRegistryService and accessed via injection.
   }
 
   startLoop(): void { this.animate(); }
@@ -149,8 +143,8 @@ export class GameRenderService {
     }
 
     // Animate tower idle effects and tile pulses
-    this.towerAnimationService.updateTowerAnimations(this.towerMeshes, time);
-    this.towerAnimationService.updateTilePulse(this.tileMeshes, time);
+    this.towerAnimationService.updateTowerAnimations(this.meshRegistry.towerMeshes, time);
+    this.towerAnimationService.updateTilePulse(this.meshRegistry.tileMeshes, time);
     this.towerAnimationService.updateMuzzleFlashes(this.towerCombatService.getPlacedTowers(), deltaTime);
 
     // Dying/hit/shield animations must run in ALL phases (not just COMBAT)

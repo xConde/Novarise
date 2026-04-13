@@ -1,22 +1,4 @@
 <div class="setup-panel">
-  <div class="campaign-level-info" *ngIf="isCampaignGame && currentCampaignLevel">
-    <span class="campaign-level-info__number">Level {{ currentCampaignLevel.number }}</span>
-    <span class="campaign-level-info__name">{{ currentCampaignLevel.name }}</span>
-    <span class="campaign-level-info__tier">{{ currentCampaignLevel.tier | uppercase }}</span>
-    <span class="campaign-level-info__waves">{{ currentCampaignLevel.waveCount }} waves</span>
-  </div>
-  <div class="campaign-challenges-preview" *ngIf="isCampaignGame && campaignChallenges.length > 0">
-    <h4 class="campaign-challenges-preview__title">Challenges</h4>
-    <div class="campaign-challenges-preview__list">
-      <div *ngFor="let challenge of campaignChallenges"
-           class="challenge-preview-item"
-           [class.challenge-preview-item--completed]="isChallengeAlreadyCompletedFn(challenge.id)">
-        <span class="challenge-preview-item__name">{{ challenge.name }}</span>
-        <span class="challenge-preview-item__desc">{{ challenge.description }}</span>
-        <span class="challenge-preview-item__bonus">+{{ challenge.scoreBonus }}</span>
-      </div>
-    </div>
-  </div>
   <span class="setup-section-label">Difficulty</span>
   <div class="setup-difficulty-grid">
     <button
@@ -31,7 +13,7 @@
   </div>
   <div class="setup-difficulty-info" aria-live="polite">{{ getDifficultyInfo(difficulty) }}</div>
 
-  <label class="setup-endless" *ngIf="!isCampaignGame">
+  <label class="setup-endless">
     <input type="checkbox" [checked]="isEndless" (change)="toggleEndless.emit()">
     <span>Endless Mode</span>
   </label>

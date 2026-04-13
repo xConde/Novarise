@@ -21,14 +21,8 @@ import { TileHighlightService } from './tile-highlight.service';
 import { RangeVisualizationService } from './range-visualization.service';
 import { TowerUpgradeVisualService } from './tower-upgrade-visual.service';
 import { SceneService } from './scene.service';
+import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { disposeMaterial } from '../utils/three-utils';
-
-/** Options bag passed to cleanupScene — holds component-owned mesh maps. */
-export interface CleanupSceneOpts {
-  tileMeshes: Map<string, THREE.Mesh>;
-  towerMeshes: Map<string, THREE.Group>;
-  gridLines: THREE.Group | null;
-}
 
 /**
  * Orchestrates game-level lifecycle: service resets on restart and Three.js scene cleanup.
@@ -57,6 +51,7 @@ export class GameSessionService {
     private rangeVisualizationService: RangeVisualizationService,
     private towerUpgradeVisualService: TowerUpgradeVisualService,
     private sceneService: SceneService,
+    private meshRegistry: BoardMeshRegistryService,
   ) {}
 
   /**
@@ -81,20 +76,18 @@ export class GameSessionService {
    * Dispose all Three.js scene objects (tile meshes, tower meshes, grid lines) and
    * clean up all associated services. Call before resetAllServices() on restart.
    *
-   * The opts maps are mutated in place: they are cleared after disposal so the
-   * component's cached arrays become empty without requiring separate calls.
-   *
-   * @returns The gridLines reference set to null (caller should assign to its field).
+   * Mesh maps in BoardMeshRegistryService are cleared in place after disposal so
+   * the registry's cached arrays become empty without requiring separate calls.
    */
-  cleanupScene(opts: CleanupSceneOpts): null {
+  cleanupScene(): void {
     const scene = this.sceneService.getScene();
 
     // Guard: scene may be null during WebGL context-loss recovery or mid-disposal.
-    // Clear the component's mesh maps so its cached arrays rebuild empty, then bail.
+    // Clear the registry's mesh maps so cached arrays rebuild empty, then bail.
     if (!scene) {
-      opts.tileMeshes.clear();
-      opts.towerMeshes.clear();
-      return null;
+      this.meshRegistry.tileMeshes.clear();
+      this.meshRegistry.towerMeshes.clear();
+      return;
     }
 
     // Clean up tower combat state (projectiles)
@@ -114,7 +107,7 @@ export class GameSessionService {
     this.pathVisualizationService.cleanup();
 
     // Clean up tile highlights (needs tile meshes before they are cleared)
-    this.tileHighlightService.clearHighlights(opts.tileMeshes, scene);
+    this.tileHighlightService.clearHighlights(this.meshRegistry.tileMeshes, scene);
 
     // Clean up range preview and range toggle rings
     this.rangeVisualizationService.cleanup(scene);
@@ -123,7 +116,7 @@ export class GameSessionService {
     this.towerUpgradeVisualService.cleanup(scene);
 
     // Dispose tower meshes
-    opts.towerMeshes.forEach(group => {
+    this.meshRegistry.towerMeshes.forEach(group => {
       scene.remove(group);
       group.traverse(child => {
         if (child instanceof THREE.Mesh) {
@@ -132,32 +125,31 @@ export class GameSessionService {
         }
       });
     });
-    opts.towerMeshes.clear();
+    this.meshRegistry.towerMeshes.clear();
 
     // Dispose tile meshes
-    opts.tileMeshes.forEach(mesh => {
+    this.meshRegistry.tileMeshes.forEach(mesh => {
       scene.remove(mesh);
       mesh.geometry.dispose();
       disposeMaterial(mesh.material);
     });
-    opts.tileMeshes.clear();
+    this.meshRegistry.tileMeshes.clear();
 
     // Dispose grid lines
-    if (opts.gridLines) {
-      scene.remove(opts.gridLines);
-      opts.gridLines.traverse(child => {
+    if (this.meshRegistry.gridLines) {
+      scene.remove(this.meshRegistry.gridLines);
+      this.meshRegistry.gridLines.traverse(child => {
         if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
           child.geometry.dispose();
           disposeMaterial(child.material);
         }
       });
     }
+    this.meshRegistry.gridLines = null;
 
     // Delegate particles, skybox, and lights cleanup to SceneService
     this.sceneService.disposeParticles();
     this.sceneService.disposeSkybox();
     this.sceneService.disposeLights();
-
-    return null;
   }
 }

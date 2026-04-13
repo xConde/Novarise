@@ -4,36 +4,6 @@ import { GameSetupPanelComponent } from './game-setup-panel.component';
 import { DifficultyLevel, DIFFICULTY_PRESETS } from '../../models/game-state.model';
 import { DIFFICULTY_SCORE_MULTIPLIER } from '../../models/score.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../../models/game-modifier.model';
-import { CampaignLevel, CampaignTier } from '../../../../run/data/campaign-levels';
-import { ChallengeDefinition, ChallengeType } from '../../../../run/data/challenges';
-
-function makeCampaignLevel(overrides: Partial<CampaignLevel> = {}): CampaignLevel {
-  return {
-    id: 'campaign_01',
-    number: 1,
-    name: 'Test Level',
-    description: 'A test level',
-    tier: CampaignTier.INTRO,
-    gridSize: 10,
-    spawnerCount: 1,
-    exitCount: 1,
-    waveCount: 10,
-    parScore: 1000,
-    unlockRequirement: { type: 'none' },
-    ...overrides,
-  };
-}
-
-function makeChallenge(overrides: Partial<ChallengeDefinition> = {}): ChallengeDefinition {
-  return {
-    id: 'c01_test',
-    type: ChallengeType.UNTOUCHABLE,
-    name: 'Test Challenge',
-    description: 'Do not lose lives',
-    scoreBonus: 200,
-    ...overrides,
-  };
-}
 
 describe('GameSetupPanelComponent', () => {
   let component: GameSetupPanelComponent;
@@ -98,63 +68,6 @@ describe('GameSetupPanelComponent', () => {
       btn.click();
 
       expect(emitted).toBeTrue();
-    });
-  });
-
-  describe('campaign info', () => {
-    it('should show campaign level info when isCampaignGame is true and level is set', () => {
-      component.isCampaignGame = true;
-      component.currentCampaignLevel = makeCampaignLevel({ number: 3, name: 'Desert Storm' });
-      fixture.detectChanges();
-
-      const levelInfo = fixture.nativeElement.querySelector('.campaign-level-info');
-      expect(levelInfo).toBeTruthy();
-      expect(levelInfo.textContent).toContain('Level 3');
-      expect(levelInfo.textContent).toContain('Desert Storm');
-    });
-
-    it('should not show campaign level info when isCampaignGame is false', () => {
-      component.isCampaignGame = false;
-      component.currentCampaignLevel = makeCampaignLevel();
-      fixture.detectChanges();
-
-      const levelInfo = fixture.nativeElement.querySelector('.campaign-level-info');
-      expect(levelInfo).toBeNull();
-    });
-
-    it('should show challenges when isCampaignGame is true and challenges are provided', () => {
-      component.isCampaignGame = true;
-      component.currentCampaignLevel = makeCampaignLevel();
-      component.campaignChallenges = [
-        makeChallenge({ id: 'c01_a', name: 'Challenge A' }),
-        makeChallenge({ id: 'c01_b', name: 'Challenge B' }),
-      ];
-      fixture.detectChanges();
-
-      const items: NodeListOf<Element> = fixture.nativeElement.querySelectorAll('.challenge-preview-item');
-      expect(items.length).toBe(2);
-      expect(items[0].textContent).toContain('Challenge A');
-      expect(items[1].textContent).toContain('Challenge B');
-    });
-
-    it('should mark a challenge as completed using isChallengeAlreadyCompletedFn', () => {
-      component.isCampaignGame = true;
-      component.currentCampaignLevel = makeCampaignLevel();
-      const challenge = makeChallenge({ id: 'c01_done' });
-      component.campaignChallenges = [challenge];
-      component.isChallengeAlreadyCompletedFn = (id: string) => id === 'c01_done';
-      fixture.detectChanges();
-
-      const item: HTMLElement = fixture.nativeElement.querySelector('.challenge-preview-item');
-      expect(item.classList.contains('challenge-preview-item--completed')).toBeTrue();
-    });
-
-    it('should hide endless mode checkbox when isCampaignGame is true', () => {
-      component.isCampaignGame = true;
-      fixture.detectChanges();
-
-      const endless = fixture.nativeElement.querySelector('.setup-endless');
-      expect(endless).toBeNull();
     });
   });
 
@@ -287,7 +200,6 @@ describe('GameSetupPanelComponent', () => {
 
   describe('endless mode toggle', () => {
     it('should emit toggleEndless when the checkbox changes', () => {
-      component.isCampaignGame = false;
       fixture.detectChanges();
 
       let emitted = false;
@@ -300,7 +212,6 @@ describe('GameSetupPanelComponent', () => {
     });
 
     it('should reflect the isEndless input on the checkbox', () => {
-      component.isCampaignGame = false;
       component.isEndless = true;
       fixture.detectChanges();
 

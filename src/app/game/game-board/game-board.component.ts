@@ -42,16 +42,10 @@ import { ChallengeTrackingService } from './services/challenge-tracking.service'
 import { GameEndService } from './services/game-end.service';
 import { TowerInteractionService } from './services/tower-interaction.service';
 import { PathfindingService } from './services/pathfinding.service';
-// Phase H5: CampaignService + CampaignMapService constructor injections deleted.
-// game-board no longer depends on the campaign runtime. CampaignLevel and
-// ChallengeDefinition types are still imported ONLY for the game-setup-panel
-// template binding contract — the values passed are always null/empty in the
-// unified run-only architecture. These imports go away in H10/H14 when the
-// setup panel is refactored for the run context.
-import type { CampaignLevel } from '../../run/data/campaign-levels';
-import type { ChallengeDefinition } from '../../run/data/challenges';
 import { ChallengeIndicator } from './components/game-hud/game-hud.component';
-import { GameSessionService, CleanupSceneOpts } from './services/game-session.service';
+import type { ChallengeDefinition } from '../../run/data/challenges';
+import { GameSessionService } from './services/game-session.service';
+import { BoardMeshRegistryService } from './services/board-mesh-registry.service';
 import { CombatLoopService } from './services/combat-loop.service';
 import { TileHighlightService } from './services/tile-highlight.service';
 import { TowerAnimationService } from './services/tower-animation.service';
@@ -159,7 +153,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -172,17 +166,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Interaction
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
-  private tileMeshes: Map<string, THREE.Mesh> = new Map();
   private hoveredTile: THREE.Mesh | null = null;
   private selectedTile: { row: number, col: number } | null = null;
 
-  // Tower management
-  private towerMeshes: Map<string, THREE.Group> = new Map();
-  /** Cached flat array of tile meshes for raycasting — rebuilt on board changes. */
-  private tileMeshArray: THREE.Mesh[] = [];
-  /** Cached flat array of tower mesh children for raycasting — rebuilt on tower changes. */
-  private towerChildrenArray: THREE.Object3D[] = [];
-  private gridLines: THREE.Group | null = null;
   selectedTowerType: TowerType | null = TowerType.BASIC;
   private lastPreviewKey = ''; // "row-col-towerType-gold" — skip preview rebuild when unchanged
 
@@ -394,6 +380,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private cardEffectService: CardEffectService,
     private combatVFXService: CombatVFXService,
     private gameRenderService: GameRenderService,
+    private meshRegistry: BoardMeshRegistryService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -576,7 +563,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     window.addEventListener('resize', this.resizeHandler);
     this.setupMouseInteraction();
     this.setupTouchInteraction();
-    this.towerPlacementService.init(this.raycaster, this.mouse, () => this.tileMeshArray, {
+    this.towerPlacementService.init(this.raycaster, this.mouse, () => this.meshRegistry.getTileMeshArray() as THREE.Mesh[], {
       onEnterPlaceMode: (type) => { this.selectedTowerType = type; this.updateTileHighlights(); },
       onPlaceAttempt: (row, col) => this.tryPlaceTower(row, col),
       onDeselectTower: () => this.deselectTower(),
@@ -584,7 +571,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gameInput.init();
     this.hotkeySubscription = this.gameInput.hotkey$.subscribe(e => this.handleKeyboard(e));
     this.minimapService.init(this.canvasContainer.nativeElement);
-    this.gameRenderService.init(this.tileMeshes, this.towerMeshes);
+    this.gameRenderService.init();
     this.setupAutoPause();
     this.gameRenderService.startLoop();
   }
@@ -804,7 +791,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.audioService.playTowerUpgrade();
 
-    const towerMesh = this.towerMeshes.get(key);
+    const towerMesh = this.meshRegistry.towerMeshes.get(key);
     if (towerMesh) {
       this.towerUpgradeVisualService.applyUpgradeVisuals(towerMesh, target.level + 1, undefined);
     }
@@ -840,7 +827,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gameStatsService.recordTowerSold();
 
     // Dispose and remove mesh
-    const towerMesh = this.towerMeshes.get(key);
+    const towerMesh = this.meshRegistry.towerMeshes.get(key);
     if (towerMesh) {
       this.sceneService.getScene().remove(towerMesh);
       towerMesh.traverse(child => {
@@ -849,8 +836,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           disposeMaterial(child.material);
         }
       });
-      this.towerMeshes.delete(key);
-      this.rebuildTowerChildrenArray();
+      this.meshRegistry.towerMeshes.delete(key);
+      this.meshRegistry.rebuildTowerChildrenArray();
     }
 
     // Repath ground enemies — freed tile may open shorter paths
@@ -905,13 +892,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   updateTileHighlights(): void {
     if (!this.isPlaceMode) {
-      this.tileHighlightService.clearHighlights(this.tileMeshes, this.sceneService.getScene());
+      this.tileHighlightService.clearHighlights(this.meshRegistry.tileMeshes, this.sceneService.getScene());
       return;
     }
     const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
     this.tileHighlightService.updateHighlights(
       this.selectedTowerType!,
-      this.tileMeshes,
+      this.meshRegistry.tileMeshes,
       this.selectedTile,
       this.sceneService.getScene(),
       costMult
@@ -920,7 +907,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Remove placement highlights from all tiles, restoring their original emissive. */
   private clearTileHighlights(): void {
-    this.tileHighlightService.clearHighlights(this.tileMeshes, this.sceneService.getScene());
+    this.tileHighlightService.clearHighlights(this.meshRegistry.tileMeshes, this.sceneService.getScene());
   }
 
   upgradeTower(spec?: TowerSpecialization): void {
@@ -942,7 +929,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.audioService.playTowerUpgrade();
 
     // Scale/emissive/specialization tint delegated to TowerUpgradeVisualService
-    const towerMesh = this.towerMeshes.get(this.selectedTowerInfo.id);
+    const towerMesh = this.meshRegistry.towerMeshes.get(this.selectedTowerInfo.id);
     if (towerMesh) {
       this.towerUpgradeVisualService.applyUpgradeVisuals(towerMesh, result.newLevel, result.specialization);
     }
@@ -992,7 +979,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gameStatsService.recordTowerSold();
 
     // Remove mesh from scene (visual concern — stays here)
-    const towerMesh = this.towerMeshes.get(this.selectedTowerInfo.id);
+    const towerMesh = this.meshRegistry.towerMeshes.get(this.selectedTowerInfo.id);
     if (towerMesh) {
       this.sceneService.getScene().remove(towerMesh);
       towerMesh.traverse(child => {
@@ -1001,8 +988,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
           disposeMaterial(child.material);
         }
       });
-      this.towerMeshes.delete(this.selectedTowerInfo.id);
-      this.rebuildTowerChildrenArray();
+      this.meshRegistry.towerMeshes.delete(this.selectedTowerInfo.id);
+      this.meshRegistry.rebuildTowerChildrenArray();
     }
 
     this.lastPreviewKey = '';
@@ -1043,39 +1030,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.router.navigate(['/edit']);
   }
 
-  // ── Phase H5: campaign getters neutered ─────────────────────────────────
-  // These getters are stubs returning safe defaults. They exist solely so the
-  // game-setup-panel template binding contract remains satisfied. Every value
-  // is effectively dead in the run-only architecture.
-
-  /** @deprecated Phase H5 — always false in run-only architecture. */
-  get isCampaignGame(): boolean { return false; }
-
   /** True when the game was launched from the editor (map state loaded but no saved mapId). */
   get isEditorOrigin(): boolean {
     return this.mapBridge.hasEditorMap() && this.mapBridge.getMapId() === null;
   }
-
-  /** @deprecated Phase H5 — always null. */
-  get currentCampaignLevel(): CampaignLevel | null { return null; }
-
-  /** @deprecated Phase H5 — always null. */
-  get nextCampaignLevel(): CampaignLevel | null { return null; }
-
-  /** @deprecated Phase H5 — always 0. */
-  get activeSpeedRunTimeLimit(): number { return 0; }
-
-  /** @deprecated Phase H5 — always false. */
-  get isNextLevelUnlocked(): boolean { return false; }
-
-  /** @deprecated Phase H5 — always empty. */
-  get campaignChallenges(): ChallengeDefinition[] { return []; }
-
-  /** @deprecated Phase H5 — always false. */
-  isChallengeAlreadyCompleted(_challengeId: string): boolean { return false; }
-
-  /** @deprecated Phase H5 — always false. */
-  isChallengeCompleted(_challenge: ChallengeDefinition): boolean { return false; }
 
   /**
    * Recomputes challenge progress badges for the HUD via ChallengeDisplayService.
@@ -1085,14 +1043,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   updateChallengeIndicators(): void {
     const encounter = this.runService.getCurrentEncounter();
     this.challengeDisplayService.updateIndicators(encounter?.campaignMapId ?? null);
-  }
-
-  /** @deprecated Phase H5 — no-op. playNextLevel was the campaign auto-advance. */
-  playNextLevel(): void { /* no-op */ }
-
-  /** @deprecated Phase H5 — navigates to /run instead of /campaign. */
-  backToCampaign(): void {
-    this.router.navigate(['/run']);
   }
 
   /** Show a centered "Wave X Clear!" banner for 2 seconds. Call when transitioning to INTERMISSION. */
@@ -1256,96 +1206,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * @deprecated Phase H13: `restartGame` has no live callers. The game-results-overlay
-   * component was removed (dead UI — zero template renderers since the run-mode pivot).
-   * Roguelites do not let players restart encounters — the outcome is committed
-   * and the player either progresses (reward node) or abandons the run (quit).
-   * The method body is kept intact because ~20 spec tests still exercise its
-   * reset paths (valuable coverage for the cleanup sequence), but no
-   * production code path calls it. H2 test rewrite can decide whether to
-   * retarget those tests against ngOnDestroy → re-init instead of delete.
-   */
-  restartGame(): void {
-    // Reset interaction state — old references point to disposed meshes
-    this.hoveredTile = null;
-    this.selectedTile = null;
-    this.selectedTowerType = TowerType.BASIC;
-    // Cancel any active drag — remove global listeners before cleanup
-    this.towerPlacementService.cancelDrag();
-
-    this.cleanupGameObjects();
-
-    // Reset all services (enemies, combat, status effects, audio, pricing, minimap, etc.)
-    this.gameSessionService.resetAllServices(this.sceneService.getScene());
-    this.combatLoopService.reset();
-
-    // Reset component-only UI state (scoreBreakdown + starArray fields removed in H11)
-    this.newlyUnlockedAchievements = [];
-    this.achievementDetails = [];
-    this.lastCompletedChallenges = [];
-    // Refresh challenge indicators for the current encounter on restart.
-    // The encounter is still live (same node re-entered), so pass the mapId directly.
-    this.updateChallengeIndicators();
-    this.lastWaveReward = 0;
-    this.lastInterestEarned = 0;
-    this.activeModifiers = new Set<GameModifier>();
-    this.modifierScoreMultiplier = 1.0;
-    this.wavePreview = [];
-    this.waveTemplateDescription = null;
-    this.showHelpOverlay = false;
-    this.showEncyclopedia = false;
-    this.showPathOverlay = false;
-    this.gamePauseService.reset();
-    this.sellConfirmPending = false;
-    this.contextLost = false;
-    this.pathBlocked = false;
-    if (this.pathBlockedTimerId !== null) {
-      clearTimeout(this.pathBlockedTimerId);
-      this.pathBlockedTimerId = null;
-    }
-    if (this.waveClearTimerId !== null) {
-      clearTimeout(this.waveClearTimerId);
-      this.waveClearTimerId = null;
-    }
-    if (this.waveStartPulseTimerId !== null) {
-      clearTimeout(this.waveStartPulseTimerId);
-      this.waveStartPulseTimerId = null;
-    }
-    this.showWaveClear = false;
-    this.waveClearMessage = '';
-    this.waveStartPulse = false;
-    this.previewTowerType = null;
-    this.encyclopediaTab = 'enemies';
-
-    this.importBoard();
-
-    // Re-apply run encounter config on restart. If the run was cleared between
-    // the original load and the restart click, route back to the run hub.
-    const encounter = this.runService.getCurrentEncounter();
-    const runState = this.runService.runState;
-    if (!runState || !encounter) {
-      this.router.navigate(['/run']);
-      return;
-    }
-    this.gameStateService.setInitialLives(runState.lives, runState.maxLives + this.relicService.getMaxLivesBonus());
-    this.gameStateService.addGold(this.relicService.getStartingGoldBonus());
-    this.waveService.setCustomWaves(encounter.waves);
-    this.gameStateService.setMaxWaves(encounter.waves.length);
-    this.applyAscensionModifiers(runState.ascensionLevel, encounter.isElite, encounter.isBoss);
-
-    this.renderGameBoard();
-    this.addGridLines();
-    this.sceneService.initLights();
-    this.sceneService.initSkybox();
-    this.sceneService.initParticles();
-    this.minimapService.init(this.canvasContainer.nativeElement);
-    this.gameRenderService.resetState();
-    this.lastPreviewKey = '';
-    this.updateTileHighlights();
-  }
-
-
-  /**
    * Translate run ascension effects into ModifierEffects and inject them
    * into GameStateService so EnemyService picks them up at spawn time.
    * Must be called during SETUP phase (wave 0) — before the first wave starts.
@@ -1369,7 +1229,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /**
    * Import the editor map into the game board service, or reset to default if no valid map.
-   * Shared between ngOnInit() and restartGame().
    */
   private importBoard(): void {
     if (this.mapBridge.hasEditorMap() && this.mapBridge.hasValidSpawnAndExit()) {
@@ -1388,7 +1247,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     );
   }
 
-  /** Shared cleanup for game objects — used by both restartGame() and ngOnDestroy(). */
+  /** Shared cleanup for game objects — called from ngOnDestroy(). */
   private cleanupGameObjects(): void {
     // Clean up enemies — snapshot keys to avoid mutating Map during iteration
     for (const id of Array.from(this.enemyService.getEnemies().keys())) {
@@ -1396,15 +1255,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     // Delegate Three.js disposal + service cleanup to GameSessionService
-    const opts: CleanupSceneOpts = {
-      tileMeshes: this.tileMeshes,
-      towerMeshes: this.towerMeshes,
-      gridLines: this.gridLines,
-    };
-    this.gridLines = this.gameSessionService.cleanupScene(opts);
-    // Maps are cleared in-place by cleanupScene; reset the derived arrays
-    this.towerChildrenArray = [];
-    this.tileMeshArray = [];
+    this.gameSessionService.cleanupScene();
+    // cleanupScene clears maps and gridLines in the registry; rebuild derives empty arrays
+    this.meshRegistry.rebuildTileMeshArray();
+    this.meshRegistry.rebuildTowerChildrenArray();
 
     // Reset component-owned UI state that references disposed objects
     this.showPathOverlay = false;
@@ -1419,20 +1273,20 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       row.forEach((tile, colIndex) => {
         const mesh = this.gameBoardService.createTileMesh(rowIndex, colIndex, tile.type);
         mesh.userData = { row: rowIndex, col: colIndex, tile: tile };
-        this.tileMeshes.set(`${rowIndex}-${colIndex}`, mesh);
+        this.meshRegistry.tileMeshes.set(`${rowIndex}-${colIndex}`, mesh);
         this.sceneService.getScene().add(mesh);
       });
     });
 
     this.gameRenderService.rebuildMinimapTerrainCache();
-    this.rebuildTileMeshArray();
-    this.rebuildTowerChildrenArray();
+    this.meshRegistry.rebuildTileMeshArray();
+    this.meshRegistry.rebuildTowerChildrenArray();
   }
 
   private addGridLines(): void {
-    if (this.gridLines) {
-      this.sceneService.getScene().remove(this.gridLines);
-      this.gridLines.traverse(child => {
+    if (this.meshRegistry.gridLines) {
+      this.sceneService.getScene().remove(this.meshRegistry.gridLines);
+      this.meshRegistry.gridLines.traverse(child => {
         if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
           child.geometry.dispose();
           if (child.material instanceof THREE.Material) {
@@ -1441,25 +1295,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       });
     }
-    this.gridLines = this.gameBoardService.createGridLines();
-    this.sceneService.getScene().add(this.gridLines);
-  }
-
-  /** Rebuild the cached tile mesh array. Call after any board mutation. */
-  private rebuildTileMeshArray(): void {
-    this.tileMeshArray = Array.from(this.tileMeshes.values());
-  }
-
-  /** Rebuild the cached tower children array. Call after tower placement or removal. */
-  private rebuildTowerChildrenArray(): void {
-    this.towerChildrenArray = [];
-    for (const group of this.towerMeshes.values()) {
-      group.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          this.towerChildrenArray.push(child);
-        }
-      });
-    }
+    this.meshRegistry.gridLines = this.gameBoardService.createGridLines();
+    this.sceneService.getScene().add(this.meshRegistry.gridLines);
   }
 
   // --- Interaction ---
@@ -1474,7 +1311,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
       this.raycaster.setFromCamera(this.mouse, this.sceneService.getCamera());
-      const intersects = this.raycaster.intersectObjects(this.tileMeshArray);
+      const intersects = this.raycaster.intersectObjects(this.meshRegistry.getTileMeshArray() as THREE.Mesh[]);
 
       if (this.hoveredTile && this.hoveredTile !== this.getSelectedTileMesh()) {
         this.tileHighlightService.restoreAfterHover(this.hoveredTile);
@@ -1639,13 +1476,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.raycaster.setFromCamera(this.mouse, this.sceneService.getCamera());
 
     // Check for tower mesh hits first (works in both PLACE and INSPECT modes)
-    const towerHits = this.raycaster.intersectObjects(this.towerChildrenArray);
+    const towerHits = this.raycaster.intersectObjects(this.meshRegistry.getTowerChildrenArray() as THREE.Object3D[]);
 
     if (towerHits.length > 0) {
       let hitObj: THREE.Object3D | null = towerHits[0].object;
       let foundKey: string | null = null;
       while (hitObj) {
-        for (const [key, group] of this.towerMeshes) {
+        for (const [key, group] of this.meshRegistry.towerMeshes) {
           if (group === hitObj) { foundKey = key; break; }
         }
         if (foundKey) break;
@@ -1658,7 +1495,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     // Check tile hits — only place towers in PLACE mode
-    const intersects = this.raycaster.intersectObjects(this.tileMeshArray);
+    const intersects = this.raycaster.intersectObjects(this.meshRegistry.getTileMeshArray() as THREE.Mesh[]);
 
     const prevSelected = this.getSelectedTileMesh();
     if (prevSelected) {
@@ -1726,9 +1563,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Create tower mesh and add to scene (visual concern — stays here)
     const towerMesh = this.towerMeshFactory.createTowerMesh(row, col, placedTowerType, this.gameBoardService.getBoardWidth(), this.gameBoardService.getBoardHeight());
-    this.towerMeshes.set(result.towerKey, towerMesh);
+    this.meshRegistry.towerMeshes.set(result.towerKey, towerMesh);
     this.sceneService.getScene().add(towerMesh);
-    this.rebuildTowerChildrenArray();
+    this.meshRegistry.rebuildTowerChildrenArray();
 
     // Resolve the active card effect BEFORE registerTower so we have statOverrides available.
     const activeTowerEffect = placedCard ? getActiveTowerEffect(placedCard) : undefined;
@@ -1763,7 +1600,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private getSelectedTileMesh(): THREE.Mesh | null {
     if (!this.selectedTile) return null;
-    return this.tileMeshes.get(`${this.selectedTile.row}-${this.selectedTile.col}`) || null;
+    return this.meshRegistry.tileMeshes.get(`${this.selectedTile.row}-${this.selectedTile.col}`) || null;
   }
 
   // --- Pause menu ---

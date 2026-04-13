@@ -2,8 +2,6 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation } from '@angu
 import { DifficultyLevel, DIFFICULTY_PRESETS } from '../../models/game-state.model';
 import { DIFFICULTY_SCORE_MULTIPLIER } from '../../models/score.model';
 import { GameModifier, GameModifierConfig } from '../../models/game-modifier.model';
-import { CampaignLevel } from '../../../../run/data/campaign-levels';
-import { ChallengeDefinition } from '../../../../run/data/challenges';
 
 @Component({
   selector: 'app-game-setup-panel',
@@ -18,11 +16,7 @@ export class GameSetupPanelComponent {
   @Input() allModifiers: GameModifier[] = [];
   @Input() activeModifiers = new Set<GameModifier>();
   @Input() modifierScoreMultiplier = 1.0;
-  @Input() isCampaignGame = false;
-  @Input() currentCampaignLevel: CampaignLevel | null = null;
-  @Input() campaignChallenges: ChallengeDefinition[] = [];
   @Input() isEndless = false;
-  @Input() isChallengeAlreadyCompletedFn: (id: string) => boolean = () => false;
 
   modifiersExpanded = false;
 

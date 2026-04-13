@@ -65,6 +65,7 @@ import { TowerSelectionService } from './services/tower-selection.service';
 import { TowerUpgradeVisualService } from './services/tower-upgrade-visual.service';
 import { getAscensionEffects, AscensionEffectType } from '../../run/models/ascension.model';
 import { GameRenderService } from './services/game-render.service';
+import { BoardMeshRegistryService } from './services/board-mesh-registry.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -110,7 +111,6 @@ describe('GameBoardComponent', () => {
     tutorialSpy.getCurrentStep.and.returnValue(tutorialStep$.asObservable());
 
     gameSessionSpy = jasmine.createSpyObj('GameSessionService', ['resetAllServices', 'cleanupScene']);
-    gameSessionSpy.cleanupScene.and.returnValue(null);
 
     combatLoopSpy = createCombatLoopServiceSpy();
 
@@ -118,6 +118,7 @@ describe('GameBoardComponent', () => {
       declarations: [ GameBoardComponent ],
       imports: [ RouterTestingModule ],
       providers: [
+        BoardMeshRegistryService,
         GameBoardService,
         MapBridgeService,
         GameStateService,
@@ -653,9 +654,6 @@ describe('GameBoardComponent', () => {
       expect(gameStateService.getState().isEndless).toBeFalse();
     });
 
-    // 'toggleEndless should be a no-op for campaign games' was deleted:
-    // isCampaignGame is a stub always returning false post-pivot;
-    // toggleEndless now only guards on phase !== SETUP, not campaign mode.
   });
 
   describe('pause overlay state', () => {
@@ -1116,21 +1114,6 @@ describe('GameBoardComponent', () => {
       expect(component.isDragging).toBeFalse();
     });
 
-    it('restartGame should reset drag state (isDragging becomes false)', () => {
-      // Stub methods that restartGame calls to avoid Three.js crashes
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const minimapService = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapService, 'init');
-
-      component.restartGame();
-
-      expect(component.isDragging).toBeFalse();
-    });
 
     it('onDragMove (internal) is handled by TowerPlacementService — isDragging stays false', () => {
       expect(component.isDragging).toBeFalse();
@@ -1513,60 +1496,6 @@ describe('GameBoardComponent', () => {
     });
   });
 
-  // ── Campaign integration ─────────────────────────────────────────────────────
-
-  describe('isCampaignGame', () => {
-    it('returns false when mapId is null', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue(null);
-      expect(component.isCampaignGame).toBeFalse();
-    });
-
-    it('returns false for a user/quickplay map', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('user_custom_map');
-      expect(component.isCampaignGame).toBeFalse();
-    });
-
-    // isCampaignGame is a stub that always returns false post-pivot.
-    // Tests for campaign-prefixed map IDs returning true were deleted in the run-mode pivot.
-  });
-
-  describe('currentCampaignLevel', () => {
-    it('returns null always (stub in run mode)', () => {
-      expect(component.currentCampaignLevel).toBeNull();
-    });
-  });
-
-  describe('nextCampaignLevel', () => {
-    it('returns null always (stub in run mode)', () => {
-      expect(component.nextCampaignLevel).toBeNull();
-    });
-  });
-
-  describe('isNextLevelUnlocked', () => {
-    it('returns false always (stub in run mode)', () => {
-      expect(component.isNextLevelUnlocked).toBeFalse();
-    });
-  });
-
-  describe('campaignChallenges getter', () => {
-    it('returns empty array always (stub in run mode)', () => {
-      expect(component.campaignChallenges).toEqual([]);
-    });
-
-    it('returns empty array for a non-campaign map', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('custom_map_id');
-
-      expect(component.campaignChallenges).toEqual([]);
-    });
-
-    // Test for per-level challenge differences was deleted: campaignChallenges
-    // is a stub returning [] in run mode — distinct campaign levels no longer exist.
-  });
-
-
   describe('GameEndService — buildGameEndStats wiring (via recordEnd)', () => {
     let gameEndService: GameEndService;
 
@@ -1691,14 +1620,11 @@ describe('GameBoardComponent', () => {
 
   describe('recordChallengeCompleted wiring', () => {
     it('GameEndService.isRecorded() resets to false after GameSessionService.resetAllServices', () => {
-      // Verify the reset contract is fulfilled by GameSessionService (tested in its own spec)
-      // and that restartGame calls GameSessionService.resetAllServices
       const gameEndService = fixture.debugElement.injector.get(GameEndService);
       gameEndService.recordSpecialization();
       gameEndService.recordEnd(false, null);
       expect(gameEndService.isRecorded()).toBeTrue();
 
-      // Directly verify the service reset works (independent of restartGame wiring)
       gameEndService.reset();
       expect(gameEndService.isRecorded()).toBeFalse();
     });
@@ -1785,24 +1711,6 @@ describe('GameBoardComponent', () => {
         'Challenge Complete!',
         'Speed Run (+100 pts)'
       );
-    });
-
-    it('restartGame delegates service resets to GameSessionService', () => {
-      // Override the component-scoped GameSessionService with our spy
-      (component as any).gameSessionService = gameSessionSpy;
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapSvc, 'init');
-
-      component.restartGame();
-
-      // Service resets (including notification clear) are now delegated to GameSessionService
-      expect(gameSessionSpy.resetAllServices).toHaveBeenCalled();
     });
 
     it('dismissNotification delegates to notificationService.dismiss', () => {
@@ -1895,25 +1803,6 @@ describe('GameBoardComponent', () => {
       gamePauseService.autoPaused = true;
 
       component.togglePause();
-
-      expect(component.autoPaused).toBeFalse();
-    });
-
-    it('autoPaused flag is reset in restartGame', () => {
-      const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
-      gamePauseService.autoPaused = true;
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const enemyService = fixture.debugElement.injector.get(EnemyService);
-      spyOn(enemyService, 'reset');
-      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapSvc, 'init');
-
-      component.restartGame();
 
       expect(component.autoPaused).toBeFalse();
     });
@@ -2031,27 +1920,6 @@ describe('GameBoardComponent', () => {
     });
   });
 
-  describe('restartGame — showQuitConfirm reset', () => {
-    it('showQuitConfirm is reset to false on restartGame', () => {
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const enemyService = fixture.debugElement.injector.get(EnemyService);
-      spyOn(enemyService, 'reset');
-      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapSvc, 'init');
-
-      const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
-      spyOn(gamePauseService, 'reset');
-      component.restartGame();
-
-      expect(gamePauseService.reset).toHaveBeenCalled();
-    });
-  });
-
   describe('ChallengeTrackingService delegation', () => {
     let challengeTrackingSpy: jasmine.SpyObj<ChallengeTrackingService>;
 
@@ -2068,23 +1936,6 @@ describe('GameBoardComponent', () => {
       // Override on both the component (for direct calls) and the service (for delegated calls)
       (component as any).challengeTrackingService = challengeTrackingSpy;
       (component as any).towerInteractionService.challengeTrackingService = challengeTrackingSpy;
-    });
-
-    it('restartGame delegates service resets to GameSessionService.resetAllServices', () => {
-      // Override the component-scoped GameSessionService with our spy
-      (component as any).gameSessionService = gameSessionSpy;
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapSvc, 'init');
-
-      component.restartGame();
-
-      expect(gameSessionSpy.resetAllServices).toHaveBeenCalled();
     });
 
     it('upgradeTower delegates recordTowerUpgraded to ChallengeTrackingService', () => {
@@ -2227,97 +2078,72 @@ describe('GameBoardComponent', () => {
     });
   });
 
-  describe('restartGame — sellConfirmPending and contextLost reset', () => {
-    function stubRestartGame(): void {
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapSvc, 'init');
-    }
-
-    it('sellConfirmPending is reset to false on restartGame', () => {
-      stubRestartGame();
-      component.sellConfirmPending = true;
-
-      component.restartGame();
-
-      expect(component.sellConfirmPending).toBeFalse();
-    });
-
-    it('contextLost is reset to false on restartGame', () => {
-      stubRestartGame();
-      (component as any).contextLost = true;
-
-      component.restartGame();
-
-      expect(component.contextLost).toBeFalse();
-    });
-  });
-
   describe('raycasting array caching', () => {
+    let meshRegistry: BoardMeshRegistryService;
+
+    beforeEach(() => {
+      meshRegistry = fixture.debugElement.injector.get(BoardMeshRegistryService);
+    });
+
     it('tileMeshArray starts empty', () => {
-      expect((component as any).tileMeshArray.length).toBe(0);
+      expect(meshRegistry.getTileMeshArray().length).toBe(0);
     });
 
     it('rebuildTileMeshArray reflects the current tileMeshes map', () => {
       const mesh1 = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
       const mesh2 = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
-      (component as any).tileMeshes.set('0-0', mesh1);
-      (component as any).tileMeshes.set('0-1', mesh2);
+      meshRegistry.tileMeshes.set('0-0', mesh1);
+      meshRegistry.tileMeshes.set('0-1', mesh2);
 
-      (component as any).rebuildTileMeshArray();
+      meshRegistry.rebuildTileMeshArray();
 
-      expect((component as any).tileMeshArray.length).toBe(2);
-      expect((component as any).tileMeshArray).toContain(mesh1);
-      expect((component as any).tileMeshArray).toContain(mesh2);
+      expect(meshRegistry.getTileMeshArray().length).toBe(2);
+      expect(meshRegistry.getTileMeshArray()).toContain(mesh1);
+      expect(meshRegistry.getTileMeshArray()).toContain(mesh2);
 
       mesh1.geometry.dispose(); (mesh1.material as THREE.Material).dispose();
       mesh2.geometry.dispose(); (mesh2.material as THREE.Material).dispose();
     });
 
     it('towerChildrenArray starts empty', () => {
-      expect((component as any).towerChildrenArray.length).toBe(0);
+      expect(meshRegistry.getTowerChildrenArray().length).toBe(0);
     });
 
-    it('rebuildTowerChildrenArray collects Mesh children from all tower groups', () => {
+    it('rebuildTowerChildrenArray collects children from all tower groups', () => {
       const group = new THREE.Group();
       const childMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
       group.add(childMesh);
-      (component as any).towerMeshes.set('r1-c2', group);
+      meshRegistry.towerMeshes.set('r1-c2', group);
 
-      (component as any).rebuildTowerChildrenArray();
+      meshRegistry.rebuildTowerChildrenArray();
 
-      expect((component as any).towerChildrenArray.length).toBe(1);
-      expect((component as any).towerChildrenArray[0]).toBe(childMesh);
+      expect(meshRegistry.getTowerChildrenArray().length).toBe(1);
+      expect(meshRegistry.getTowerChildrenArray()[0]).toBe(childMesh);
 
       childMesh.geometry.dispose();
       (childMesh.material as THREE.Material).dispose();
     });
 
-    it('tileMeshArray is cleared when cleanupGameObjects clears tileMeshes', () => {
+    it('tileMeshArray is cleared when cleanupGameObjects runs the rebuild after cleanup', () => {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
-      (component as any).tileMeshes.set('0-0', mesh);
-      (component as any).tileMeshArray = [mesh];
-
-      // Stub out Three.js scene calls so cleanupGameObjects doesn't crash without a scene
-      const sceneService = (component as any).sceneService;
-      const mockScene = { remove: () => {} } as unknown as THREE.Scene;
-      spyOn(sceneService, 'getScene').and.returnValue(mockScene);
-      spyOn(sceneService, 'disposeParticles');
-      spyOn(sceneService, 'disposeSkybox');
-      spyOn(sceneService, 'disposeLights');
+      meshRegistry.tileMeshes.set('0-0', mesh);
+      meshRegistry.rebuildTileMeshArray();
+      expect(meshRegistry.getTileMeshArray().length).toBe(1);
 
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
 
+      // Simulate cleanupScene clearing the registry (the real service does this;
+      // the spy is a no-op so we replicate that side-effect manually).
+      gameSessionSpy.cleanupScene.and.callFake(() => {
+        meshRegistry.tileMeshes.clear();
+        meshRegistry.towerMeshes.clear();
+      });
+
       (component as any).cleanupGameObjects();
 
-      expect((component as any).tileMeshArray.length).toBe(0);
-      expect((component as any).towerChildrenArray.length).toBe(0);
+      expect(meshRegistry.getTileMeshArray().length).toBe(0);
+      expect(meshRegistry.getTowerChildrenArray().length).toBe(0);
     });
   });
 
@@ -2544,24 +2370,6 @@ describe('GameBoardComponent', () => {
       expect(component.challengeIndicators).toEqual([]);
     });
 
-    it('challengeIndicators is reset to [] on restartGame', () => {
-      // Set indicators via service (challengeIndicators is now a read-only getter)
-      fixture.debugElement.injector.get(ChallengeDisplayService).indicators =
-        [{ label: 'No Slow', value: '✓', passing: true }];
-
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapSvc, 'init');
-
-      component.restartGame();
-
-      expect(component.challengeIndicators).toEqual([]);
-    });
   });
 
   // ── Sprint R2: challenge HUD indicator wiring ────────────────────────────
@@ -2594,26 +2402,6 @@ describe('GameBoardComponent', () => {
       component.updateChallengeIndicators();
 
       expect(updateSpy).toHaveBeenCalledWith(null);
-    });
-
-    it('restartGame refreshes indicators with current encounter campaignMapId', () => {
-      const updateSpy = spyOn(challengeSvc, 'updateIndicators');
-      runSpy.getCurrentEncounter.and.returnValue({
-        nodeId: 'node-1', nodeType: 'combat' as any,
-        campaignMapId: 'campaign_02',
-        waves: [], goldReward: 0, isElite: false, isBoss: false,
-      } as any);
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      spyOn(fixture.debugElement.injector.get(MinimapService), 'init');
-
-      component.restartGame();
-
-      expect(updateSpy).toHaveBeenCalledWith('campaign_02');
     });
 
     it('ngOnInit calls updateChallengeIndicators with non-null campaignMapId when encounter is loaded', () => {
@@ -2713,47 +2501,6 @@ describe('GameBoardComponent', () => {
 
       expect(pausedVisualsSpy).toHaveBeenCalledWith(0.016, 1000);
     });
-  });
-
-  // ── Red team gate: restartGame() timer cleanup ──────────────────
-  describe('red team gate: restartGame clears wave transition timers', () => {
-    beforeEach(() => {
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapSvc, 'init');
-    });
-
-    it('clears waveClearTimerId on restart', fakeAsync(() => {
-      component.onWaveComplete(3, true);
-      expect(component.showWaveClear).toBeTrue();
-
-      component.restartGame();
-
-      expect(component.showWaveClear).toBeFalse();
-      expect(component.waveClearMessage).toBe('');
-
-      // Timer should NOT fire after restart
-      tick(3000);
-      expect(component.showWaveClear).toBeFalse();
-    }));
-
-    it('clears waveStartPulseTimerId on restart', fakeAsync(() => {
-      (component as any).triggerWaveStartPulse();
-      expect(component.waveStartPulse).toBeTrue();
-
-      component.restartGame();
-
-      expect(component.waveStartPulse).toBeFalse();
-
-      // Timer should NOT fire after restart
-      tick(500);
-      expect(component.waveStartPulse).toBeFalse();
-    }));
   });
 
   // ── Run mode: card play mechanics ─────────────────────────────────────

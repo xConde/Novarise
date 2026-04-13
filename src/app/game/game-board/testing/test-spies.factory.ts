@@ -874,7 +874,7 @@ export function createGameSessionServiceSpy(): jasmine.SpyObj<GameSessionService
     'resetAllServices',
     'cleanupScene',
   ]);
-  spy.cleanupScene.and.returnValue(null);
+  spy.cleanupScene.and.stub();
   return spy;
 }
 
