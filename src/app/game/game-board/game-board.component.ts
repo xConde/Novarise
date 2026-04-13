@@ -1193,26 +1193,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   confirmQuit(): void {
     this.gamePauseService.confirmQuit();
-    if (this.gamePauseService.showNavigationPrompt) {
-      // Guard-triggered: resolve the pending guard decision
-      this.gamePauseService.resolveGuardDecision(true);
-    } else {
-      // Manual pause: pre-approve navigation to avoid re-triggering the guard
-      this.gamePauseService.allowNextNavigation();
-      this.router.navigate(['/run']);
-    }
+    this.router.navigate(['/run']);
   }
 
   saveAndExit(): void {
-    // The auto-save from endTurn() already captured the latest post-turn state.
-    if (this.gamePauseService.showNavigationPrompt) {
-      // Guard-triggered: resolve the pending guard decision
-      this.gamePauseService.resolveGuardDecision(true);
-    } else {
-      // Manual pause: pre-approve navigation to avoid re-triggering the guard
-      this.gamePauseService.allowNextNavigation();
-      this.router.navigate(['/run']);
-    }
+    // Checkpoint already exists from the last auto-save after endTurn().
+    this.router.navigate(['/run']);
   }
 
   /**
@@ -1224,16 +1210,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.gamePauseService.requestGuardDecision();
   }
 
-  get showNavigationPrompt(): boolean {
-    return this.gamePauseService.showNavigationPrompt;
-  }
-
   togglePause(): void {
-    // If resuming during a navigation prompt, cancel the pending guard navigation
-    if (this.gamePauseService.showNavigationPrompt && this.isPaused) {
-      this.gamePauseService.resolveGuardDecision(false);
-    }
-
     const willPause = this.gamePauseService.togglePause();
     const controls = this.sceneService.getControls();
     if (controls) { controls.enabled = !willPause; }

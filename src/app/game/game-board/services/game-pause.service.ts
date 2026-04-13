@@ -1,6 +1,5 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { Observable, Subject } from 'rxjs';
-import { take } from 'rxjs/operators';
+import { Observable } from 'rxjs';
 import { GameStateService } from './game-state.service';
 import { MinimapService } from './minimap.service';
 import { GameEndService } from './game-end.service';
@@ -23,15 +22,6 @@ export class GamePauseService implements OnDestroy {
 
   /** Whether the current pause was triggered by auto-pause (tab switch / window blur). */
   autoPaused = false;
-
-  /** Whether the pause was triggered by the navigation guard (external nav attempt). */
-  showNavigationPrompt = false;
-
-  /** Subject for guard navigation decisions. */
-  private guardDecision$ = new Subject<boolean>();
-
-  /** Set to true to allow the next navigation without guard prompt. */
-  private pendingAllowNavigation = false;
 
   /** Callback invoked when auto-pause triggers — component uses this to activate focus trap. */
   onAutoPause: (() => void) | null = null;
@@ -77,9 +67,7 @@ export class GamePauseService implements OnDestroy {
   }
 
   /**
-   * Confirm quit: record defeat and return the navigation target route.
-   * Phase H12: post-pivot there is no campaign/standalone distinction —
-   * all quits abandon the current run and return to the run hub.
+   * Confirm quit: clear checkpoint, record defeat, return navigation target.
    * @returns The route to navigate to (always '/run').
    */
   confirmQuit(): string {
@@ -89,68 +77,21 @@ export class GamePauseService implements OnDestroy {
     return '/run';
   }
 
-  /** Allow the next navigation attempt to proceed without guard prompt. */
-  allowNextNavigation(): void {
-    this.pendingAllowNavigation = true;
-  }
-
   /**
-   * Called by the CanDeactivate guard when the player tries to navigate away
-   * during COMBAT or INTERMISSION. Auto-pauses the game and shows the
-   * navigation prompt in the pause menu.
-   * Returns an Observable that resolves when the player chooses an action.
+   * Called by the CanDeactivate guard when the player tries to navigate away.
+   * Checkpoint already exists from the last auto-save — allow immediately.
    */
   requestGuardDecision(): Observable<boolean> {
-    // Check if navigation was pre-approved (e.g., Save & Exit from manual pause)
-    if (this.pendingAllowNavigation) {
-      this.pendingAllowNavigation = false;
-      return new Observable(subscriber => {
-        subscriber.next(true);
-        subscriber.complete();
-      });
-    }
-
-    const state = this.gameStateService.getState();
-
-    // Terminal phases — allow navigation immediately
-    if (
-      state.phase === GamePhase.SETUP ||
-      state.phase === GamePhase.VICTORY ||
-      state.phase === GamePhase.DEFEAT
-    ) {
-      return new Observable(subscriber => {
-        subscriber.next(true);
-        subscriber.complete();
-      });
-    }
-
-    // Auto-pause if not already paused
-    if (!state.isPaused) {
-      this.gameStateService.togglePause();
-      this.minimapService.setDimmed(true);
-    }
-
-    this.showNavigationPrompt = true;
-    this.showQuitConfirm = false;
-
-    return this.guardDecision$.pipe(take(1));
-  }
-
-  /**
-   * Resolve the pending guard decision. Called by pause menu actions.
-   * @param allow - true to allow navigation, false to cancel
-   */
-  resolveGuardDecision(allow: boolean): void {
-    this.showNavigationPrompt = false;
-    this.guardDecision$.next(allow);
+    return new Observable(subscriber => {
+      subscriber.next(true);
+      subscriber.complete();
+    });
   }
 
   /** Reset pause-related state (called on game restart). */
   reset(): void {
     this.autoPaused = false;
     this.showQuitConfirm = false;
-    this.showNavigationPrompt = false;
-    this.pendingAllowNavigation = false;
   }
 
   /** Clean up global event listeners and clear the auto-pause callback. */

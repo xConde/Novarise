@@ -217,11 +217,6 @@
         </div>
       </div>
 
-      <!-- Navigation prompt (guard-triggered) -->
-      <p class="pause-menu__nav-prompt" *ngIf="showNavigationPrompt && !showQuitConfirm">
-        Save your progress before leaving?
-      </p>
-
       <!-- Settings -->
       <div class="pause-menu__settings" *ngIf="!showQuitConfirm">
         <button class="pause-audio-toggle" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">

@@ -743,12 +743,11 @@ export function createChallengeTrackingServiceSpy(): jasmine.SpyObj<ChallengeTra
 export function createGamePauseServiceSpy(): jasmine.SpyObj<GamePauseService> {
   const spy = jasmine.createSpyObj<GamePauseService>(
     'GamePauseService',
-    ['togglePause', 'setupAutoPause', 'requestQuit', 'cancelQuit', 'confirmQuit', 'requestGuardDecision', 'resolveGuardDecision', 'reset', 'cleanup', 'ngOnDestroy']
+    ['togglePause', 'setupAutoPause', 'requestQuit', 'cancelQuit', 'confirmQuit', 'requestGuardDecision', 'reset', 'cleanup', 'ngOnDestroy']
   );
   // Writable public fields — allow tests to read/write them directly
   (spy as unknown as { showQuitConfirm: boolean }).showQuitConfirm = false;
   (spy as unknown as { autoPaused: boolean }).autoPaused = false;
-  (spy as unknown as { showNavigationPrompt: boolean }).showNavigationPrompt = false;
   (spy as unknown as { isPaused: boolean }).isPaused = false;
   spy.togglePause.and.returnValue(false);
   spy.requestGuardDecision.and.returnValue(of(true));

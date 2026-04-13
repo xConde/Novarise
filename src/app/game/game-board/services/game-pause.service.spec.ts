@@ -3,7 +3,7 @@ import { GamePauseService } from './game-pause.service';
 import { GameStateService } from './game-state.service';
 import { MinimapService } from './minimap.service';
 import { GameEndService } from './game-end.service';
-import { GamePhase, DifficultyLevel, INITIAL_GAME_STATE } from '../models/game-state.model';
+import { GamePhase, INITIAL_GAME_STATE } from '../models/game-state.model';
 
 describe('GamePauseService', () => {
   let service: GamePauseService;
@@ -89,112 +89,47 @@ describe('GamePauseService', () => {
   });
 
   describe('requestGuardDecision', () => {
-    it('should emit true immediately during SETUP phase', (done) => {
+    it('should always emit true immediately (checkpoint auto-saves)', (done) => {
       service.requestGuardDecision().subscribe(result => {
         expect(result).toBeTrue();
         done();
       });
     });
 
-    it('should emit true immediately during VICTORY phase', (done) => {
-      gameStateSpy.getState.and.returnValue({
-        ...INITIAL_GAME_STATE,
-        phase: GamePhase.VICTORY,
-        wave: 10,
-        score: 1000,
-        elapsedTime: 120,
-      });
-      service.requestGuardDecision().subscribe(result => {
-        expect(result).toBeTrue();
-        done();
-      });
-    });
-
-    it('should emit true immediately during DEFEAT phase', (done) => {
-      gameStateSpy.getState.and.returnValue({
-        ...INITIAL_GAME_STATE,
-        phase: GamePhase.DEFEAT,
-        wave: 5,
-        lives: 0,
-        score: 500,
-        elapsedTime: 60,
-      });
-      service.requestGuardDecision().subscribe(result => {
-        expect(result).toBeTrue();
-        done();
-      });
-    });
-
-    it('should pause the game and set showNavigationPrompt during COMBAT phase', () => {
+    it('should emit true during COMBAT phase without pausing', (done) => {
       gameStateSpy.getState.and.returnValue({
         ...INITIAL_GAME_STATE,
         phase: GamePhase.COMBAT,
         wave: 1,
         isPaused: false,
       });
-      service.requestGuardDecision();
-      expect(gameStateSpy.togglePause).toHaveBeenCalled();
-      expect(minimapSpy.setDimmed).toHaveBeenCalledWith(true);
-      expect(service.showNavigationPrompt).toBeTrue();
-      expect(service.showQuitConfirm).toBeFalse();
-      // clean up the pending subject
-      service.resolveGuardDecision(false);
-    });
-
-    it('should not double-pause if already paused during COMBAT phase', () => {
-      gameStateSpy.getState.and.returnValue({
-        ...INITIAL_GAME_STATE,
-        phase: GamePhase.COMBAT,
-        wave: 1,
-        isPaused: true,
+      service.requestGuardDecision().subscribe(result => {
+        expect(result).toBeTrue();
+        expect(gameStateSpy.togglePause).not.toHaveBeenCalled();
+        done();
       });
-      service.requestGuardDecision();
-      expect(gameStateSpy.togglePause).not.toHaveBeenCalled();
-      // clean up the pending subject
-      service.resolveGuardDecision(false);
     });
-  });
 
-  describe('resolveGuardDecision', () => {
-    it('should emit true and clear showNavigationPrompt when allowed', (done) => {
+    it('should emit true during INTERMISSION phase', (done) => {
       gameStateSpy.getState.and.returnValue({
         ...INITIAL_GAME_STATE,
-        phase: GamePhase.COMBAT,
+        phase: GamePhase.INTERMISSION,
         wave: 1,
-        isPaused: true,
       });
       service.requestGuardDecision().subscribe(result => {
         expect(result).toBeTrue();
-        expect(service.showNavigationPrompt).toBeFalse();
         done();
       });
-      service.resolveGuardDecision(true);
-    });
-
-    it('should emit false and clear showNavigationPrompt when denied', (done) => {
-      gameStateSpy.getState.and.returnValue({
-        ...INITIAL_GAME_STATE,
-        phase: GamePhase.COMBAT,
-        wave: 1,
-        isPaused: true,
-      });
-      service.requestGuardDecision().subscribe(result => {
-        expect(result).toBeFalse();
-        expect(service.showNavigationPrompt).toBeFalse();
-        done();
-      });
-      service.resolveGuardDecision(false);
     });
   });
 
   describe('reset', () => {
-    it('should clear autoPaused, showQuitConfirm, and showNavigationPrompt', () => {
+    it('should clear autoPaused and showQuitConfirm', () => {
       service.requestQuit();
-      service.showNavigationPrompt = true;
+      service.autoPaused = true;
       service.reset();
       expect(service.autoPaused).toBeFalse();
       expect(service.showQuitConfirm).toBeFalse();
-      expect(service.showNavigationPrompt).toBeFalse();
     });
   });
 
