@@ -1792,14 +1792,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   togglePause(): void {
     const willPause = this.gamePauseService.togglePause();
+    const controls = this.sceneService.getControls();
+    if (controls) { controls.enabled = !willPause; }
     if (!willPause) {
       this.pauseFocusTrap.deactivate();
     } else {
-      setTimeout(() => {
-        if (this.pauseOverlayRef) {
-          this.pauseFocusTrap.activate(this.pauseOverlayRef.nativeElement);
-        }
-      }, 0);
+      this.activatePauseFocus();
     }
   }
 
@@ -1809,13 +1807,22 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   private setupAutoPause(): void {
     this.gamePauseService.onAutoPause = () => {
-      setTimeout(() => {
-        if (this.pauseOverlayRef) {
-          this.pauseFocusTrap.activate(this.pauseOverlayRef.nativeElement);
-        }
-      }, 0);
+      const controls = this.sceneService.getControls();
+      if (controls) { controls.enabled = false; }
+      this.activatePauseFocus();
     };
     this.gamePauseService.setupAutoPause();
+  }
+
+  /** Activate focus trap and focus the Resume button inside the pause overlay. */
+  private activatePauseFocus(): void {
+    setTimeout(() => {
+      if (this.pauseOverlayRef) {
+        this.pauseFocusTrap.activate(this.pauseOverlayRef.nativeElement);
+        const resumeBtn = this.pauseOverlayRef.nativeElement.querySelector('.pause-action--primary') as HTMLElement;
+        resumeBtn?.focus();
+      }
+    }, 0);
   }
 
   get isPaused(): boolean {
@@ -1947,6 +1954,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private handleKeyboard(event: KeyboardEvent): void {
     const phase = this.gameStateService.getState().phase;
     if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
+
+    // Block all inputs except pause/resume keys when the game is paused
+    if (this.isPaused && event.key !== 'Escape' && event.key !== 'p' && event.key !== 'P') return;
 
     // Tower hotkeys 1-6 only work in standalone mode. In run mode, tower placement
     // is card-gated — selectTowerType without a pending card creates a half-state.

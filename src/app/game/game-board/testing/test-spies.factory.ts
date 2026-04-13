@@ -340,6 +340,7 @@ export function createSceneServiceSpy(): jasmine.SpyObj<SceneService> {
     'disposeSkybox',
     'dispose',
   ]);
+  spy.getControls.and.returnValue({ enabled: true } as any);
   spy.getParticles.and.returnValue(null);
   spy.getSkybox.and.returnValue(undefined);
   return spy;
