@@ -69,6 +69,7 @@ import { BoardMeshRegistryService } from './services/board-mesh-registry.service
 import { GameInputService, TOWER_HOTKEYS } from './services/game-input.service';
 import { TouchInteractionService } from './services/touch-interaction.service';
 import { BoardPointerService } from './services/board-pointer.service';
+import { CardPlayService } from './services/card-play.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -297,14 +298,14 @@ describe('GameBoardComponent', () => {
     });
 
     it('pressing Escape with pending tower card (real PLACE mode) cancels placement', () => {
-      // isPlaceMode requires pendingTowerCard to be set. Directly inject a pending card
-      // so the Escape handler hits the cancelPlacement() branch.
-      (component as any).pendingTowerCard = { instanceId: 'test_inst', cardId: 'TOWER_SNIPER', upgraded: false };
+      // isPlaceMode requires a pending tower card to be set. Inject via CardPlayService.
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
+      cardPlaySvc['pendingTowerCard'] = { instanceId: 'test_inst', cardId: CardId.TOWER_SNIPER, upgraded: false } as CardInstance;
       component.selectedTowerType = TowerType.SNIPER;
       expect(component.isPlaceMode).toBeTrue();
       fireKey('Escape');
       expect(component.selectedTowerType).toBeNull();
-      expect((component as any).pendingTowerCard).toBeNull();
+      expect(cardPlaySvc.hasPendingCard()).toBeFalse();
     });
 
     it('pressing Escape in INSPECT mode deselects placed tower info', () => {
@@ -1247,26 +1248,26 @@ describe('GameBoardComponent', () => {
   describe('tutorial integration', () => {
     beforeEach(() => {
       // ngOnInit does not run in this suite (no detectChanges), so manually wire
-      // the tutorialSub as it would be wired during ngOnInit.
-      (component as any).tutorialSub = tutorialSpy.getCurrentStep().subscribe((step: TutorialStep | null) => {
-        component.currentTutorialStep = step;
+      // the tutorialFacade subscription as it would be wired during ngOnInit.
+      (component as any).tutorialFacade['tutorialSub'] = tutorialSpy.getCurrentStep().subscribe((step: TutorialStep | null) => {
+        component.tutorialFacade.currentTutorialStep = step;
       });
     });
 
     afterEach(() => {
-      if ((component as any).tutorialSub) {
-        (component as any).tutorialSub.unsubscribe();
+      if ((component as any).tutorialFacade['tutorialSub']) {
+        (component as any).tutorialFacade['tutorialSub'].unsubscribe();
       }
     });
 
     it('subscribes to getCurrentStep on init and sets currentTutorialStep', () => {
       tutorialStep$.next(TutorialStep.WELCOME);
-      expect(component.currentTutorialStep).toBe(TutorialStep.WELCOME);
+      expect(component.tutorialFacade.currentTutorialStep).toBe(TutorialStep.WELCOME);
     });
 
     it('currentTutorialStep is null initially when tutorial step$ emits null', () => {
       tutorialStep$.next(null);
-      expect(component.currentTutorialStep).toBeNull();
+      expect(component.tutorialFacade.currentTutorialStep).toBeNull();
     });
 
     it('advanceTutorial() delegates to tutorialService.advanceStep()', () => {
@@ -1280,29 +1281,29 @@ describe('GameBoardComponent', () => {
     });
 
     it('getTutorialTip() returns null when currentTutorialStep is null', () => {
-      component.currentTutorialStep = null;
+      component.tutorialFacade.currentTutorialStep = null;
       expect(component.getTutorialTip()).toBeNull();
     });
 
     it('getTutorialTip() calls tutorialService.getTip with current step', () => {
-      component.currentTutorialStep = TutorialStep.PLACE_TOWER;
+      component.tutorialFacade.currentTutorialStep = TutorialStep.PLACE_TOWER;
       const result = component.getTutorialTip();
       expect(tutorialSpy.getTip).toHaveBeenCalledWith(TutorialStep.PLACE_TOWER);
       expect(result).toBeTruthy();
     });
 
     it('getTutorialStepNumber() returns 1 for WELCOME step', () => {
-      component.currentTutorialStep = TutorialStep.WELCOME;
+      component.tutorialFacade.currentTutorialStep = TutorialStep.WELCOME;
       expect(component.getTutorialStepNumber()).toBe(1);
     });
 
     it('getTutorialStepNumber() returns 2 for SELECT_TOWER step', () => {
-      component.currentTutorialStep = TutorialStep.SELECT_TOWER;
+      component.tutorialFacade.currentTutorialStep = TutorialStep.SELECT_TOWER;
       expect(component.getTutorialStepNumber()).toBe(2);
     });
 
     it('getTutorialStepNumber() returns 0 when currentTutorialStep is null', () => {
-      component.currentTutorialStep = null;
+      component.tutorialFacade.currentTutorialStep = null;
       expect(component.getTutorialStepNumber()).toBe(0);
     });
 
@@ -1323,23 +1324,23 @@ describe('GameBoardComponent', () => {
 
     it('currentTutorialStep updates when observable emits new step', () => {
       tutorialStep$.next(TutorialStep.START_WAVE);
-      expect(component.currentTutorialStep).toBe(TutorialStep.START_WAVE);
+      expect(component.tutorialFacade.currentTutorialStep).toBe(TutorialStep.START_WAVE);
 
       tutorialStep$.next(TutorialStep.UPGRADE_TOWER);
-      expect(component.currentTutorialStep).toBe(TutorialStep.UPGRADE_TOWER);
+      expect(component.tutorialFacade.currentTutorialStep).toBe(TutorialStep.UPGRADE_TOWER);
     });
 
     it('currentTutorialStep becomes null when observable emits null', () => {
       tutorialStep$.next(TutorialStep.PLACE_TOWER);
-      expect(component.currentTutorialStep).toBe(TutorialStep.PLACE_TOWER);
+      expect(component.tutorialFacade.currentTutorialStep).toBe(TutorialStep.PLACE_TOWER);
 
       tutorialStep$.next(null);
-      expect(component.currentTutorialStep).toBeNull();
+      expect(component.tutorialFacade.currentTutorialStep).toBeNull();
     });
 
     it('child component receives null tip when currentTutorialStep is null', () => {
       // Verifies getTutorialTip() returns null — the child component uses this for its [tip] input
-      component.currentTutorialStep = null;
+      component.tutorialFacade.currentTutorialStep = null;
       expect(component.getTutorialTip()).toBeNull();
     });
   });
@@ -2353,82 +2354,82 @@ describe('GameBoardComponent', () => {
 
   describe('onWaveComplete — wave clear banner', () => {
     it('sets showWaveClear to true and waveClearMessage immediately', () => {
-      component.onWaveComplete(3, false);
+      component.waveCombat.onWaveComplete(3, false);
 
-      expect(component.showWaveClear).toBeTrue();
-      expect(component.waveClearMessage).toBe('Wave 3 Clear!');
+      expect(component.waveCombat.showWaveClear).toBeTrue();
+      expect(component.waveCombat.waveClearMessage).toBe('Wave 3 Clear!');
     });
 
     it('includes "Perfect!" suffix when perfectWave is true', () => {
-      component.onWaveComplete(5, true);
+      component.waveCombat.onWaveComplete(5, true);
 
-      expect(component.waveClearMessage).toBe('Wave 5 Clear! Perfect!');
+      expect(component.waveCombat.waveClearMessage).toBe('Wave 5 Clear! Perfect!');
     });
 
     it('does NOT include "Perfect!" when perfectWave is false', () => {
-      component.onWaveComplete(2, false);
+      component.waveCombat.onWaveComplete(2, false);
 
-      expect(component.waveClearMessage).not.toContain('Perfect');
+      expect(component.waveCombat.waveClearMessage).not.toContain('Perfect');
     });
 
     it('sets showWaveClear to false after 2 seconds', fakeAsync(() => {
-      component.onWaveComplete(1, false);
-      expect(component.showWaveClear).toBeTrue();
+      component.waveCombat.onWaveComplete(1, false);
+      expect(component.waveCombat.showWaveClear).toBeTrue();
 
       tick(2000);
 
-      expect(component.showWaveClear).toBeFalse();
+      expect(component.waveCombat.showWaveClear).toBeFalse();
     }));
 
     it('resets the timer if called again before the first expires', fakeAsync(() => {
-      component.onWaveComplete(1, false);
+      component.waveCombat.onWaveComplete(1, false);
       tick(1000);
-      component.onWaveComplete(2, false);
+      component.waveCombat.onWaveComplete(2, false);
 
       // Should still be showing because the timer was reset
       tick(1500);
-      expect(component.showWaveClear).toBeTrue();
+      expect(component.waveCombat.showWaveClear).toBeTrue();
 
       tick(500);
-      expect(component.showWaveClear).toBeFalse();
+      expect(component.waveCombat.showWaveClear).toBeFalse();
     }));
   });
 
   describe('waveStartPulse — wave counter pulse', () => {
     it('starts as false', () => {
-      expect(component.waveStartPulse).toBeFalse();
+      expect(component.waveCombat.waveStartPulse).toBeFalse();
     });
 
     it('becomes true when triggerWaveStartPulse is called', fakeAsync(() => {
-      (component as any).triggerWaveStartPulse();
+      component.waveCombat.triggerWaveStartPulse();
 
-      expect(component.waveStartPulse).toBeTrue();
+      expect(component.waveCombat.waveStartPulse).toBeTrue();
 
       tick(300);
 
-      expect(component.waveStartPulse).toBeFalse();
+      expect(component.waveCombat.waveStartPulse).toBeFalse();
     }));
 
     it('resets to false after 300ms', fakeAsync(() => {
-      (component as any).triggerWaveStartPulse();
+      component.waveCombat.triggerWaveStartPulse();
       tick(299);
-      expect(component.waveStartPulse).toBeTrue();
+      expect(component.waveCombat.waveStartPulse).toBeTrue();
 
       tick(1);
-      expect(component.waveStartPulse).toBeFalse();
+      expect(component.waveCombat.waveStartPulse).toBeFalse();
     }));
 
     it('resets timer if called again before prior pulse expires', fakeAsync(() => {
-      (component as any).triggerWaveStartPulse();
+      component.waveCombat.triggerWaveStartPulse();
       tick(200);
-      (component as any).triggerWaveStartPulse();
+      component.waveCombat.triggerWaveStartPulse();
 
       // 200ms into the reset timer — should still be true
       tick(200);
-      expect(component.waveStartPulse).toBeTrue();
+      expect(component.waveCombat.waveStartPulse).toBeTrue();
 
       tick(100);
-      expect(component.waveStartPulse).toBeFalse();
+      expect(component.waveCombat.waveStartPulse).toBeFalse();
     }));
   });
 
@@ -2616,9 +2617,10 @@ describe('GameBoardComponent', () => {
       deckSpy.getEnergy.and.returnValue(energy);
 
       const card = makeTowerCard(CardId.TOWER_BASIC);
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
       component.onCardPlayed(card);
 
-      expect((component as any).pendingTowerCard).toBe(card);
+      expect(cardPlaySvc.getPendingCard()).toBe(card);
       expect(component.selectedTowerType).toBe(TowerType.BASIC);
       // Energy not consumed yet — playCard should not have been called
       expect(deckSpy.playCard).not.toHaveBeenCalled();
@@ -2629,15 +2631,16 @@ describe('GameBoardComponent', () => {
       const energy: EnergyState = { current: 3, max: 3 };
       deckSpy.getEnergy.and.returnValue(energy);
 
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
       const first = makeTowerCard(CardId.TOWER_BASIC);
       component.onCardPlayed(first);
-      expect((component as any).pendingTowerCard).toBe(first);
+      expect(cardPlaySvc.getPendingCard()).toBe(first);
 
       const second = makeTowerCard(CardId.TOWER_SNIPER);
       component.onCardPlayed(second);
 
       // Second card should be blocked — pendingTowerCard stays as first
-      expect((component as any).pendingTowerCard).toBe(first);
+      expect(cardPlaySvc.getPendingCard()).toBe(first);
     });
 
     it('cancelPlacement clears pendingTowerCard', () => {
@@ -2645,12 +2648,13 @@ describe('GameBoardComponent', () => {
       const energy: EnergyState = { current: 3, max: 3 };
       deckSpy.getEnergy.and.returnValue(energy);
 
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
       const card = makeTowerCard(CardId.TOWER_BASIC);
       component.onCardPlayed(card);
-      expect((component as any).pendingTowerCard).not.toBeNull();
+      expect(cardPlaySvc.hasPendingCard()).toBeTrue();
 
       component.cancelPlacement();
-      expect((component as any).pendingTowerCard).toBeNull();
+      expect(cardPlaySvc.hasPendingCard()).toBeFalse();
       expect(component.selectedTowerType).toBeNull();
     });
 
@@ -2736,7 +2740,7 @@ describe('GameBoardComponent', () => {
     });
 
     function callApply(level: number, isElite: boolean, isBoss: boolean): void {
-      (component as any).applyAscensionModifiers(level, isElite, isBoss);
+      (component as any).ascensionModifier.apply(level, isElite, isBoss);
     }
 
     it('ascension 0: no call made (early-return guard)', () => {

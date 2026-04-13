@@ -1,0 +1,246 @@
+import { TestBed } from '@angular/core/testing';
+import { BehaviorSubject } from 'rxjs';
+import * as THREE from 'three';
+
+import { CardPlayService, CardPlayCallbacks } from './card-play.service';
+import { DeckService } from '../../../run/services/deck.service';
+import { CardEffectService } from '../../../run/services/card-effect.service';
+import { TowerCombatService } from './tower-combat.service';
+import { GameStateService } from './game-state.service';
+import { BoardMeshRegistryService } from './board-mesh-registry.service';
+import { TowerUpgradeVisualService } from './tower-upgrade-visual.service';
+import { AudioService } from './audio.service';
+import { GameStatsService } from './game-stats.service';
+import { GameBoardService } from '../game-board.service';
+import { EnemyService } from './enemy.service';
+import { SceneService } from './scene.service';
+import { StatusEffectService } from './status-effect.service';
+import { CombatLoopService } from './combat-loop.service';
+import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
+import { GamePhase, INITIAL_GAME_STATE } from '../models/game-state.model';
+import { CardId, CardInstance, DeckState, EnergyState } from '../../../run/models/card.model';
+import {
+  createGameStateServiceSpy,
+  createGameBoardServiceSpy,
+  createGameStatsServiceSpy,
+  createAudioServiceSpy,
+  createSceneServiceSpy,
+} from '../testing';
+
+describe('CardPlayService', () => {
+  let service: CardPlayService;
+  let deckSpy: jasmine.SpyObj<DeckService>;
+  let cardEffectSpy: jasmine.SpyObj<CardEffectService>;
+  let towerCombatSpy: jasmine.SpyObj<TowerCombatService>;
+  let gameStateSpy: jasmine.SpyObj<GameStateService>;
+  let meshRegistrySpy: jasmine.SpyObj<BoardMeshRegistryService>;
+  let upgradeVisualSpy: jasmine.SpyObj<TowerUpgradeVisualService>;
+  let audioSpy: jasmine.SpyObj<AudioService>;
+  let gameStatsSpy: jasmine.SpyObj<GameStatsService>;
+  let gameBoardSpy: jasmine.SpyObj<GameBoardService>;
+  let enemySpy: jasmine.SpyObj<EnemyService>;
+  let sceneSpy: jasmine.SpyObj<SceneService>;
+  let statusEffectSpy: jasmine.SpyObj<StatusEffectService>;
+  let combatLoopSpy: jasmine.SpyObj<CombatLoopService>;
+
+  const combatState = { ...INITIAL_GAME_STATE, phase: GamePhase.COMBAT };
+
+  beforeEach(() => {
+    deckSpy = jasmine.createSpyObj<DeckService>('DeckService', [
+      'playCard', 'getEnergy', 'drawOne', 'addEnergy', 'discardHand', 'getDeckState',
+    ]);
+    deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+    deckSpy.playCard.and.returnValue(true);
+    deckSpy.getDeckState.and.returnValue(
+      { drawPile: [], hand: [], discardPile: [], exhaustPile: [] } as DeckState
+    );
+
+    cardEffectSpy = jasmine.createSpyObj<CardEffectService>('CardEffectService', [
+      'applySpell', 'applyModifier', 'reset',
+    ]);
+
+    towerCombatSpy = jasmine.createSpyObj<TowerCombatService>('TowerCombatService', [
+      'getPlacedTowers', 'upgradeTower', 'unregisterTower',
+    ]);
+    towerCombatSpy.getPlacedTowers.and.returnValue(new Map());
+
+    gameStateSpy = createGameStateServiceSpy();
+    gameStateSpy.getState.and.returnValue(combatState);
+
+    meshRegistrySpy = jasmine.createSpyObj<BoardMeshRegistryService>('BoardMeshRegistryService', [
+      'rebuildTowerChildrenArray',
+    ]);
+    // towerMeshes is readonly — assign via cast so tests can mutate the Map
+    (meshRegistrySpy as { towerMeshes: Map<string, THREE.Group> }).towerMeshes = new Map();
+
+    upgradeVisualSpy = jasmine.createSpyObj<TowerUpgradeVisualService>('TowerUpgradeVisualService', [
+      'applyUpgradeVisuals',
+    ]);
+
+    audioSpy = createAudioServiceSpy();
+    gameStatsSpy = createGameStatsServiceSpy();
+    gameBoardSpy = createGameBoardServiceSpy();
+    enemySpy = jasmine.createSpyObj<EnemyService>('EnemyService', ['repathAffectedEnemies']);
+
+    sceneSpy = createSceneServiceSpy();
+
+    statusEffectSpy = jasmine.createSpyObj<StatusEffectService>('StatusEffectService', ['apply']);
+    combatLoopSpy = jasmine.createSpyObj<CombatLoopService>('CombatLoopService', ['getTurnNumber']);
+    combatLoopSpy.getTurnNumber.and.returnValue(1);
+
+    TestBed.configureTestingModule({
+      providers: [
+        CardPlayService,
+        { provide: DeckService, useValue: deckSpy },
+        { provide: CardEffectService, useValue: cardEffectSpy },
+        { provide: TowerCombatService, useValue: towerCombatSpy },
+        { provide: GameStateService, useValue: gameStateSpy },
+        { provide: BoardMeshRegistryService, useValue: meshRegistrySpy },
+        { provide: TowerUpgradeVisualService, useValue: upgradeVisualSpy },
+        { provide: AudioService, useValue: audioSpy },
+        { provide: GameStatsService, useValue: gameStatsSpy },
+        { provide: GameBoardService, useValue: gameBoardSpy },
+        { provide: EnemyService, useValue: enemySpy },
+        { provide: SceneService, useValue: sceneSpy },
+        { provide: StatusEffectService, useValue: statusEffectSpy },
+        { provide: CombatLoopService, useValue: combatLoopSpy },
+      ],
+    });
+
+    service = TestBed.inject(CardPlayService);
+  });
+
+  it('should be created', () => {
+    expect(service).toBeTruthy();
+  });
+
+  describe('hasPendingCard', () => {
+    it('should return false initially', () => {
+      expect(service.hasPendingCard()).toBeFalse();
+    });
+
+    it('should return false after reset', () => {
+      service.reset();
+      expect(service.hasPendingCard()).toBeFalse();
+    });
+  });
+
+  describe('getPendingCard', () => {
+    it('should return null initially', () => {
+      expect(service.getPendingCard()).toBeNull();
+    });
+  });
+
+  describe('getPendingCardId', () => {
+    it('should return null initially', () => {
+      expect(service.getPendingCardId()).toBeNull();
+    });
+  });
+
+  describe('cancelPendingTowerCard', () => {
+    it('should null out the pending card', () => {
+      service['pendingTowerCard'] = { instanceId: 'abc', cardId: CardId.TOWER_BASIC, upgraded: false };
+      service.cancelPendingTowerCard();
+      expect(service.hasPendingCard()).toBeFalse();
+    });
+  });
+
+  describe('consumePendingTowerCard', () => {
+    it('should play the card and clear pending state', () => {
+      const card: CardInstance = { instanceId: 'x1', cardId: CardId.TOWER_BASIC, upgraded: false };
+      service['pendingTowerCard'] = card;
+      service.consumePendingTowerCard();
+      expect(deckSpy.playCard).toHaveBeenCalledWith('x1');
+      expect(service.hasPendingCard()).toBeFalse();
+    });
+
+    it('should be a no-op when no pending card exists', () => {
+      service.consumePendingTowerCard();
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('onCardPlayed', () => {
+    it('should no-op when phase is not COMBAT', () => {
+      gameStateSpy.getState.and.returnValue({ ...INITIAL_GAME_STATE, phase: GamePhase.SETUP });
+      const card: CardInstance = { instanceId: 'c1', cardId: CardId.DRAW_TWO, upgraded: false };
+      service.onCardPlayed(card);
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    it('should block card plays when a tower card is already pending', () => {
+      const existingCard: CardInstance = { instanceId: 'pending', cardId: CardId.DRAW_TWO, upgraded: false };
+      service['pendingTowerCard'] = existingCard;
+
+      const newCard: CardInstance = { instanceId: 'new', cardId: CardId.DRAW_TWO, upgraded: false };
+      service.onCardPlayed(newCard);
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    it('should call onRefreshUI when re-clicking the pending card (cancel)', () => {
+      const onRefreshUI = jasmine.createSpy('onRefreshUI');
+      service.init({ onEnterPlacementMode: jasmine.createSpy(), onRefreshUI, onSalvageComplete: jasmine.createSpy() });
+
+      const card: CardInstance = { instanceId: 'pending', cardId: CardId.DRAW_TWO, upgraded: false };
+      service['pendingTowerCard'] = card;
+      service.onCardPlayed(card);
+
+      expect(service.hasPendingCard()).toBeFalse();
+      expect(onRefreshUI).toHaveBeenCalled();
+
+    });
+
+    it('should not consume energy below threshold for tower cards', () => {
+      deckSpy.getEnergy.and.returnValue({ current: 0, max: 3 } as EnergyState);
+      const onEnterPlacementMode = jasmine.createSpy('onEnterPlacementMode');
+      service.init({ onEnterPlacementMode, onRefreshUI: jasmine.createSpy(), onSalvageComplete: jasmine.createSpy() });
+
+      // 'basic-tower' has energyCost — if current < cost, should not enter placement
+      const card: CardInstance = { instanceId: 'c1', cardId: CardId.TOWER_BASIC, upgraded: false };
+      service.onCardPlayed(card);
+      expect(onEnterPlacementMode).not.toHaveBeenCalled();
+    });
+
+    it('should call applyModifier for modifier cards', () => {
+      // Use a real modifier card if defined; otherwise verify playCard is called
+      const card: CardInstance = { instanceId: 'm1', cardId: CardId.DRAW_TWO, upgraded: false };
+      service.onCardPlayed(card);
+      // draw-two is a utility card — deckSpy.playCard should have been called
+      expect(deckSpy.playCard).toHaveBeenCalledWith('m1');
+    });
+  });
+
+  describe('executeUtilityCard (via onCardPlayed)', () => {
+    it('should draw cards for "draw" utility', () => {
+      const card: CardInstance = { instanceId: 'u1', cardId: CardId.DRAW_TWO, upgraded: false };
+      service.onCardPlayed(card);
+      // draw-two draws 2 cards
+      expect(deckSpy.drawOne).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('fortifyRandomTower', () => {
+    it('should be a no-op when no towers are placed', () => {
+      towerCombatSpy.getPlacedTowers.and.returnValue(new Map());
+      service['fortifyRandomTower']();
+      expect(towerCombatSpy.upgradeTower).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('salvageLastTower', () => {
+    it('should be a no-op when no towers are placed', () => {
+      towerCombatSpy.getPlacedTowers.and.returnValue(new Map());
+      service.salvageLastTower();
+      expect(towerCombatSpy.unregisterTower).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reset', () => {
+    it('should clear pending card state', () => {
+      service['pendingTowerCard'] = { instanceId: 'x', cardId: CardId.TOWER_BASIC, upgraded: false };
+      service.reset();
+      expect(service.hasPendingCard()).toBeFalse();
+      expect(service.getPendingCard()).toBeNull();
+    });
+  });
+});

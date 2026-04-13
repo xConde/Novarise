@@ -24,7 +24,7 @@
     [formattedTime]="formattedTime"
     [isEndless]="gameState.isEndless"
     [elapsedTime]="gameState.elapsedTime"
-    [waveStartPulse]="waveStartPulse"
+    [waveStartPulse]="waveCombat.waveStartPulse"
     [challengeIndicators]="challengeIndicators"
     [isCombat]="gameState.phase === GamePhase.COMBAT"
     [enemiesRemaining]="enemiesAlive + enemiesToSpawn"
@@ -34,11 +34,11 @@
   <!-- Wave clear banner -->
   <div
     class="wave-clear-banner"
-    *ngIf="showWaveClear"
-    [class.perfect]="waveClearMessage.includes('Perfect')"
+    *ngIf="waveCombat.showWaveClear"
+    [class.perfect]="waveCombat.waveClearMessage.includes('Perfect')"
     aria-live="assertive"
     aria-atomic="true">
-    {{ waveClearMessage }}
+    {{ waveCombat.waveClearMessage }}
   </div>
 
   <!-- Path blocked warning -->
@@ -102,9 +102,9 @@
       </li>
     </ul>
     <!-- Secondary: income earned (only shown between waves, not setup) -->
-    <div class="wave-income" *ngIf="lastWaveReward > 0 || lastInterestEarned > 0" aria-live="polite">
-      <span class="income-item reward" *ngIf="lastWaveReward > 0">+{{ lastWaveReward }}g</span>
-      <span class="income-item interest" *ngIf="lastInterestEarned > 0">+{{ lastInterestEarned }}g interest</span>
+    <div class="wave-income" *ngIf="waveCombat.lastWaveReward > 0 || waveCombat.lastInterestEarned > 0" aria-live="polite">
+      <span class="income-item reward" *ngIf="waveCombat.lastWaveReward > 0">+{{ waveCombat.lastWaveReward }}g</span>
+      <span class="income-item interest" *ngIf="waveCombat.lastInterestEarned > 0">+{{ waveCombat.lastInterestEarned }}g interest</span>
     </div>
     <!-- Action -->
     <button
@@ -396,7 +396,7 @@
 
   <!-- Tutorial — non-blocking contextual card -->
   <app-tutorial-spotlight
-    [step]="currentTutorialStep"
+    [step]="tutorialFacade.currentTutorialStep"
     [tip]="getTutorialTip()"
     [stepNumber]="getTutorialStepNumber()"
     [totalSteps]="getTutorialTotalSteps()"
