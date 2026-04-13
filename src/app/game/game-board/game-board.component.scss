@@ -317,6 +317,11 @@
     align-items: center;
     justify-content: center;
 
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+
     &:hover {
       background: var(--theme-purple-a30);
       border-color: var(--theme-purple-a80);

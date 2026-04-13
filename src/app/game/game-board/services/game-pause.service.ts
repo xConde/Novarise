@@ -94,7 +94,7 @@ export class GamePauseService implements OnDestroy {
       this.gameStateService.togglePause();
     }
 
-    const shouldLeave = confirm('Leave game? Progress will be lost.');
+    const shouldLeave = confirm('Abandon this run? You\'ll return to the map.');
     if (!shouldLeave) {
       return false;
     }

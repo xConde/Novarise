@@ -1300,3 +1300,27 @@ All relic effects consumed via pull API in existing game services — zero chang
 - [x] Step 7: Update STRATEGIC_AUDIT.md (this entry)
 - [x] Step 8: Run full test suite — 4907/4907 green (up from 4162 with ascent specs)
 - [x] Step 9: `npx tsc --noEmit` clean — zero errors
+
+## Red Team Critique — Pause Menu Overhaul (2026-04-12)
+
+### Finding 1: Route guard quit text inconsistent (MEDIUM)
+**Location:** `game-pause.service.ts:97`
+**Risk:** `canLeaveGame()` showed "Leave game? Progress will be lost." while the in-menu quit confirmation said "Abandon this run? You'll return to the map." Same action, different messaging.
+**Fix:** Updated route guard confirm text to match pause menu copy.
+
+### Finding 2: `pauseEncounterLabel` getter allocated Record per CD cycle (LOW)
+**Location:** `game-board.component.ts:1818-1828`
+**Risk:** Created a new `Record<string, string>` on every getter invocation. Angular change detection calls getters frequently.
+**Fix:** Extracted to file-level `PAUSE_ENCOUNTER_LABELS` const.
+
+### Finding 3: ESC fallthrough fires from SETUP phase (LOW — no-op)
+**Location:** `game-board.component.ts:1968`
+**Risk:** ESC now falls through to `togglePause()` from any non-terminal phase, but `GameStateService.togglePause()` has a COMBAT/INTERMISSION phase guard. SETUP hits a silent no-op.
+**Status:** Accepted — harmless, run mode never enters SETUP anyway.
+
+### Deployment Checklist — Pause Menu Overhaul
+- [x] Step 1: Remove score stat, add encounter context subtitle, redesign audio toggle, fix quit copy
+- [x] Step 2: Extract shared audio SVG icons to `ng-template` refs (deduplicate HUD + pause)
+- [x] Step 3: ESC key initiates pause when no tower selected
+- [x] Step 4: Red team — fix route guard text inconsistency, extract getter const
+- [x] Step 5: Full test suite — 4917/4917 green, 1 skipped

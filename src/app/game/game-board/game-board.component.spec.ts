@@ -792,20 +792,23 @@ describe('GameBoardComponent', () => {
       expect(component.isPaused).toBeFalse();
     });
 
-    it('ESC deselects tower when not paused and not in PLACE mode', () => {
+    it('ESC deselects tower when not paused, not in PLACE mode, and a tower is selected', () => {
       // ESC works in SETUP phase too — only VICTORY/DEFEAT blocks keyboard handling
       // Do not enter COMBAT phase here to avoid auto-pause side effects
       component.selectedTowerType = null;
+      spyOnProperty(component, 'selectedTowerInfo', 'get').and.returnValue(
+        { id: 'fake', type: TowerType.SNIPER, level: 1, row: 0, col: 0, kills: 0, totalInvested: 50, mesh: null, targetingMode: TargetingMode.NEAREST } as any,
+      );
 
       spyOn(component, 'deselectTower');
       fireKey('Escape');
       expect(component.deselectTower).toHaveBeenCalled();
     });
 
-    it('ESC does not toggle pause when not paused', () => {
+    it('ESC toggles pause when not paused and no tower selected', () => {
       spyOn(component, 'togglePause');
       fireKey('Escape');
-      expect(component.togglePause).not.toHaveBeenCalled();
+      expect(component.togglePause).toHaveBeenCalled();
     });
   });
 

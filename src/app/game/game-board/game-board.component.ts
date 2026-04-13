@@ -106,6 +106,12 @@ const TOWER_HOTKEYS: Record<string, TowerType> = {
   '6': TowerType.MORTAR,
 };
 
+const PAUSE_ENCOUNTER_LABELS: Record<string, string> = {
+  combat: 'Combat',
+  elite: 'Elite Combat',
+  boss: 'Boss Fight',
+};
+
 /**
  * Builds a map of tactical badges for every EnemyType, computed once at module load.
  * Reads directly from ENEMY_STATS and ENEMY_INFO so values never diverge from game data.
@@ -1816,6 +1822,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.gameState.isPaused;
   }
 
+  get pauseEncounterLabel(): string {
+    const encounter = this.runService.getCurrentEncounter();
+    if (!encounter) return '';
+    return PAUSE_ENCOUNTER_LABELS[encounter.nodeType] ?? '';
+  }
+
   toggleEndless(): void {
     if (this.gameState.phase !== GamePhase.SETUP) return;
     const newValue = !this.gameState.isEndless;
@@ -1955,7 +1967,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         event.preventDefault();
         if (this.isPaused) { this.togglePause(); }
         else if (this.isPlaceMode) { this.cancelPlacement(); }
-        else { this.deselectTower(); }
+        else if (this.selectedTowerInfo) { this.deselectTower(); }
+        else { this.togglePause(); }
         break;
       case 'r': case 'R': event.preventDefault(); this.toggleAllRanges(); break;
       case 'h': case 'H': event.preventDefault(); this.showHelpOverlay = !this.showHelpOverlay; break;

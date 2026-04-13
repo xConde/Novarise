@@ -9,8 +9,7 @@
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
     </button>
     <button class="audio-toggle-btn" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
-      <svg *ngIf="!audioMuted" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-      <svg *ngIf="audioMuted" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+      <ng-container *ngTemplateOutlet="audioMuted ? iconSoundOff : iconSoundOn"></ng-container>
     </button>
   </div>
 
@@ -219,17 +218,13 @@
   <div class="pause-overlay" *ngIf="isPaused && (gameState.phase === GamePhase.COMBAT || gameState.phase === GamePhase.INTERMISSION)" #pauseOverlay (click)="onPauseOverlayClick($event)" role="dialog" aria-modal="true" aria-labelledby="pause-menu-title">
     <div class="pause-menu" (click)="$event.stopPropagation()">
       <h2 class="pause-menu__title" id="pause-menu-title">PAUSED</h2>
+      <p class="pause-menu__subtitle" *ngIf="pauseEncounterLabel">{{ pauseEncounterLabel }}</p>
 
       <!-- Game stats summary -->
       <div class="pause-menu__stats">
         <div class="pause-stat">
           <span class="pause-stat__label">Wave</span>
-          <span class="pause-stat__value" *ngIf="!gameState.isEndless">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
-          <span class="pause-stat__value" *ngIf="gameState.isEndless">{{ gameState.wave }}</span>
-        </div>
-        <div class="pause-stat">
-          <span class="pause-stat__label">Score</span>
-          <span class="pause-stat__value">{{ gameState.score }}</span>
+          <span class="pause-stat__value">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
         </div>
         <div class="pause-stat">
           <span class="pause-stat__label">Lives</span>
@@ -243,12 +238,10 @@
 
       <!-- Settings -->
       <div class="pause-menu__settings" *ngIf="!showQuitConfirm">
-        <div class="pause-setting">
-          <span class="pause-setting__label">Audio</span>
-          <button class="pause-setting__btn" (click)="toggleAudio()">
-            {{ audioMuted ? 'Unmute' : 'Mute' }}
-          </button>
-        </div>
+        <button class="pause-audio-toggle" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
+          <ng-container *ngTemplateOutlet="audioMuted ? iconSoundOff : iconSoundOn"></ng-container>
+          <span>{{ audioMuted ? 'Unmute' : 'Mute' }}</span>
+        </button>
       </div>
 
       <!-- Normal actions -->
@@ -261,7 +254,7 @@
 
       <!-- Quit confirmation -->
       <div class="pause-menu__quit-confirm" *ngIf="showQuitConfirm">
-        <p class="quit-confirm__text">Quit this game? Progress will be lost.</p>
+        <p class="quit-confirm__text">Abandon this run? You'll return to the map.</p>
         <div class="quit-confirm__actions">
           <button class="pause-action pause-action--primary" (click)="cancelQuit()">Cancel</button>
           <button class="pause-action pause-action--quit" (click)="confirmQuit()">Quit</button>
@@ -269,7 +262,7 @@
       </div>
 
       <p class="pause-menu__auto-hint" *ngIf="autoPaused">Game auto-paused — tab was inactive</p>
-      <p class="pause-menu__hint">P or ESC to resume</p>
+      <p class="pause-menu__hint" aria-hidden="true">P or ESC to resume</p>
     </div>
   </div>
 
@@ -434,4 +427,12 @@
       <span class="toast__message">{{ notification.message }}</span>
     </div>
   </div>
+
+  <!-- Shared icon templates — single source for audio icons used in HUD + pause menu -->
+  <ng-template #iconSoundOn>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+  </ng-template>
+  <ng-template #iconSoundOff>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+  </ng-template>
 </div>
