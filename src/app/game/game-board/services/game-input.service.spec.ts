@@ -1,6 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
-import { GameInputService } from './game-input.service';
+import { GameInputService, HotkeyActions, TOWER_HOTKEYS } from './game-input.service';
+import { TowerType } from '../models/tower.model';
+import { GamePhase, INITIAL_GAME_STATE } from '../models/game-state.model';
+import { GameModifier } from '../models/game-modifier.model';
 
 /** Minimal OrbitControls stub — only the fields updateCameraPan touches. */
 class StubOrbitControls {
@@ -249,6 +252,130 @@ describe('GameInputService', () => {
       spyOn(service, 'cleanup');
       service.ngOnDestroy();
       expect(service.cleanup).toHaveBeenCalled();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // dispatchHotkey()
+  // -----------------------------------------------------------------------
+
+  describe('dispatchHotkey()', () => {
+    function makeState(overrides: Partial<typeof INITIAL_GAME_STATE> = {}) {
+      return {
+        ...INITIAL_GAME_STATE,
+        activeModifiers: new Set<GameModifier>(),
+        ...overrides,
+      };
+    }
+
+    function makeActions(overrides: Partial<HotkeyActions> = {}): HotkeyActions {
+      return {
+        onSpace: jasmine.createSpy('onSpace'),
+        onPause: jasmine.createSpy('onPause'),
+        onEscape: jasmine.createSpy('onEscape'),
+        onToggleRanges: jasmine.createSpy('onToggleRanges'),
+        onToggleHelp: jasmine.createSpy('onToggleHelp'),
+        onToggleEncyclopedia: jasmine.createSpy('onToggleEncyclopedia'),
+        onToggleMinimap: jasmine.createSpy('onToggleMinimap'),
+        onTogglePath: jasmine.createSpy('onTogglePath'),
+        onUpgrade: jasmine.createSpy('onUpgrade'),
+        onCycleTargeting: jasmine.createSpy('onCycleTargeting'),
+        onSell: jasmine.createSpy('onSell'),
+        onTowerHotkey: jasmine.createSpy('onTowerHotkey'),
+        isInRun: jasmine.createSpy('isInRun').and.returnValue(false),
+        isPlaceMode: jasmine.createSpy('isPlaceMode').and.returnValue(false),
+        getSelectedTowerInfo: jasmine.createSpy('getSelectedTowerInfo').and.returnValue(null),
+        ...overrides,
+      };
+    }
+
+    it('does nothing in VICTORY phase', () => {
+      const state = makeState({ phase: GamePhase.VICTORY });
+      const actions = makeActions();
+      const event = new KeyboardEvent('keydown', { key: 'u' });
+      service.dispatchHotkey(event, state, actions);
+      expect(actions.onUpgrade).not.toHaveBeenCalled();
+    });
+
+    it('does nothing in DEFEAT phase', () => {
+      const state = makeState({ phase: GamePhase.DEFEAT });
+      const actions = makeActions();
+      const event = new KeyboardEvent('keydown', { key: 'u' });
+      service.dispatchHotkey(event, state, actions);
+      expect(actions.onUpgrade).not.toHaveBeenCalled();
+    });
+
+    it('blocks non-pause keys when paused', () => {
+      const state = makeState({ phase: GamePhase.COMBAT, isPaused: true });
+      const actions = makeActions();
+      const event = new KeyboardEvent('keydown', { key: 'u' });
+      service.dispatchHotkey(event, state, actions);
+      expect(actions.onUpgrade).not.toHaveBeenCalled();
+    });
+
+    it('allows Escape when paused', () => {
+      const state = makeState({ phase: GamePhase.COMBAT, isPaused: true });
+      const actions = makeActions();
+      const event = new KeyboardEvent('keydown', { key: 'Escape' });
+      service.dispatchHotkey(event, state, actions);
+      expect(actions.onEscape).toHaveBeenCalled();
+    });
+
+    it('Space calls onSpace', () => {
+      const state = makeState({ phase: GamePhase.COMBAT });
+      const actions = makeActions();
+      const event = new KeyboardEvent('keydown', { key: ' ' });
+      service.dispatchHotkey(event, state, actions);
+      expect(actions.onSpace).toHaveBeenCalled();
+    });
+
+    it('p calls onPause', () => {
+      const state = makeState({ phase: GamePhase.COMBAT });
+      const actions = makeActions();
+      const event = new KeyboardEvent('keydown', { key: 'p' });
+      service.dispatchHotkey(event, state, actions);
+      expect(actions.onPause).toHaveBeenCalled();
+    });
+
+    it('u calls onUpgrade', () => {
+      const state = makeState({ phase: GamePhase.COMBAT });
+      const actions = makeActions();
+      const event = new KeyboardEvent('keydown', { key: 'u' });
+      service.dispatchHotkey(event, state, actions);
+      expect(actions.onUpgrade).toHaveBeenCalled();
+    });
+
+    it('Delete calls onSell', () => {
+      const state = makeState({ phase: GamePhase.COMBAT });
+      const actions = makeActions();
+      const event = new KeyboardEvent('keydown', { key: 'Delete' });
+      service.dispatchHotkey(event, state, actions);
+      expect(actions.onSell).toHaveBeenCalled();
+    });
+
+    it('tower hotkey 1 calls onTowerHotkey with BASIC when not in run', () => {
+      const state = makeState({ phase: GamePhase.SETUP });
+      const actions = makeActions({ isInRun: jasmine.createSpy().and.returnValue(false) });
+      const event = new KeyboardEvent('keydown', { key: '1' });
+      service.dispatchHotkey(event, state, actions);
+      expect(actions.onTowerHotkey).toHaveBeenCalledWith(TowerType.BASIC);
+    });
+
+    it('tower hotkey 1 is blocked in run mode', () => {
+      const state = makeState({ phase: GamePhase.SETUP });
+      const actions = makeActions({ isInRun: jasmine.createSpy().and.returnValue(true) });
+      const event = new KeyboardEvent('keydown', { key: '1' });
+      service.dispatchHotkey(event, state, actions);
+      expect(actions.onTowerHotkey).not.toHaveBeenCalled();
+    });
+
+    it('TOWER_HOTKEYS maps 1-6 to correct TowerTypes', () => {
+      expect(TOWER_HOTKEYS['1']).toBe(TowerType.BASIC);
+      expect(TOWER_HOTKEYS['2']).toBe(TowerType.SNIPER);
+      expect(TOWER_HOTKEYS['3']).toBe(TowerType.SPLASH);
+      expect(TOWER_HOTKEYS['4']).toBe(TowerType.SLOW);
+      expect(TOWER_HOTKEYS['5']).toBe(TowerType.CHAIN);
+      expect(TOWER_HOTKEYS['6']).toBe(TowerType.MORTAR);
     });
   });
 });

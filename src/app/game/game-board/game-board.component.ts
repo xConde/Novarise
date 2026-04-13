@@ -22,13 +22,11 @@ import { SettingsService } from '../../core/services/settings.service';
 import { TowerPreviewService } from './services/tower-preview.service';
 import { disposeMaterial } from './utils/three-utils';
 import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_DESCRIPTIONS, PlacedTower, MAX_TOWER_LEVEL, TARGETING_MODE_LABELS } from './models/tower.model';
-import { BlockType } from './models/game-board-tile';
 import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState } from './models/game-state.model';
 import { GameModifier, GAME_MODIFIER_CONFIGS, calculateModifierScoreMultiplier } from './models/game-modifier.model';
 import { calculateScoreBreakdown, ScoreBreakdown } from './models/score.model';
-import { TILE_EMISSIVE, UI_CONFIG } from './constants/ui.constants';
+import { UI_CONFIG } from './constants/ui.constants';
 import { SCREEN_SHAKE_CONFIG } from './constants/effects.constants';
-import { TOUCH_CONFIG } from './constants/touch.constants';
 import { EnemyType, ENEMY_STATS } from './models/enemy.model';
 import { EnemyInfo, ENEMY_INFO } from './models/enemy-info.model';
 import { TowerInfo, TOWER_INFO } from './models/tower-info.model';
@@ -52,7 +50,9 @@ import { TowerAnimationService } from './services/tower-animation.service';
 import { RangeVisualizationService } from './services/range-visualization.service';
 import { TowerMeshFactoryService } from './services/tower-mesh-factory.service';
 import { EnemyMeshFactoryService } from './services/enemy-mesh-factory.service';
-import { GameInputService } from './services/game-input.service';
+import { GameInputService, TOWER_HOTKEYS, HotkeyActions } from './services/game-input.service';
+import { TouchInteractionService } from './services/touch-interaction.service';
+import { BoardPointerService } from './services/board-pointer.service';
 import { EnemyVisualService } from './services/enemy-visual.service';
 import { EnemyHealthService } from './services/enemy-health.service';
 import { ChainLightningService } from './services/chain-lightning.service';
@@ -91,14 +91,6 @@ export interface EnemyBadge {
 /** Phase 4: how many upcoming turns to show in the combat shell spawn preview. */
 const SPAWN_PREVIEW_TURNS = 4;
 
-const TOWER_HOTKEYS: Record<string, TowerType> = {
-  '1': TowerType.BASIC,
-  '2': TowerType.SNIPER,
-  '3': TowerType.SPLASH,
-  '4': TowerType.SLOW,
-  '5': TowerType.CHAIN,
-  '6': TowerType.MORTAR,
-};
 
 const PAUSE_ENCOUNTER_LABELS: Record<string, string> = {
   combat: 'Combat',
@@ -153,7 +145,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -163,14 +155,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Scene — delegated to SceneService
 
-  // Interaction
-  private raycaster = new THREE.Raycaster();
-  private mouse = new THREE.Vector2();
-  private hoveredTile: THREE.Mesh | null = null;
-  private selectedTile: { row: number, col: number } | null = null;
-
   selectedTowerType: TowerType | null = TowerType.BASIC;
-  private lastPreviewKey = ''; // "row-col-towerType-gold" — skip preview rebuild when unchanged
 
   // Tower info panel state — delegated to TowerSelectionService (get/set for template + test compat)
   get selectedTowerInfo(): PlacedTower | null { return this.towerSelectionService.selectedTowerInfo; }
@@ -264,9 +249,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   private pathBlockedTimerId: ReturnType<typeof setTimeout> | null = null;
 
   // Animation
-  private mousemoveHandler: (event: MouseEvent) => void = () => {};
-  private clickHandler: (event: MouseEvent) => void = () => {};
-  private contextmenuHandler: (event: MouseEvent) => void = () => {};
   private resizeHandler: () => void = () => {};
   private stateSubscription: Subscription | null = null;
   private hotkeySubscription: Subscription | null = null;
@@ -285,16 +267,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // FPS counter visibility from settings
   showFps = false;
-
-  // Touch interaction
-  private touchStartHandler: (event: TouchEvent) => void = () => {};
-  private touchMoveHandler: (event: TouchEvent) => void = () => {};
-  private touchEndHandler: (event: TouchEvent) => void = () => {};
-  private touchStartX = 0;
-  private touchStartY = 0;
-  private touchStartTime = 0;
-  private touchIsDragging = false;
-  private pinchStartDistance = 0;
 
   // Drag-and-drop tower placement — delegated to TowerPlacementService
   get isDragging(): boolean { return this.towerPlacementService.isDragging; }
@@ -381,6 +353,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private combatVFXService: CombatVFXService,
     private gameRenderService: GameRenderService,
     private meshRegistry: BoardMeshRegistryService,
+    private touchInteraction: TouchInteractionService,
+    private boardPointer: BoardPointerService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -561,15 +535,64 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.sceneService.resize(width, height);
     };
     window.addEventListener('resize', this.resizeHandler);
-    this.setupMouseInteraction();
-    this.setupTouchInteraction();
-    this.towerPlacementService.init(this.raycaster, this.mouse, () => this.meshRegistry.getTileMeshArray() as THREE.Mesh[], {
+
+    const canvas = this.sceneService.getRenderer().domElement;
+    this.boardPointer.init(canvas, {
+      onTowerClick: (key) => this.selectPlacedTower(key),
+      onTilePlace: (row, col) => this.tryPlaceTower(row, col),
+      onDeselect: () => this.deselectTower(),
+      onCancelPlacement: () => this.cancelPlacement(),
+      onContextMenu: () => {
+        if (this.isDragging) {
+          this.towerPlacementService.cancelDrag();
+        } else if (this.isPlaceMode) {
+          this.cancelPlacement();
+        }
+      },
+      getPlacementState: () => ({
+        isPlaceMode: this.isPlaceMode,
+        towerType: this.selectedTowerType,
+        gold: this.gameState.gold,
+        selectedTowerInfo: this.selectedTowerInfo,
+      }),
+    });
+    this.touchInteraction.init(canvas, (x, y) => this.boardPointer.handleInteraction(x, y));
+
+    this.towerPlacementService.init(this.boardPointer.raycaster, this.boardPointer.mouse, () => this.meshRegistry.getTileMeshArray() as THREE.Mesh[], {
       onEnterPlaceMode: (type) => { this.selectedTowerType = type; this.updateTileHighlights(); },
       onPlaceAttempt: (row, col) => this.tryPlaceTower(row, col),
       onDeselectTower: () => this.deselectTower(),
     });
+
     this.gameInput.init();
-    this.hotkeySubscription = this.gameInput.hotkey$.subscribe(e => this.handleKeyboard(e));
+    const hotkeyActions: HotkeyActions = {
+      onSpace: () => {
+        const phase = this.gameStateService.getState().phase;
+        if (phase === GamePhase.COMBAT) { this.endTurn(); } else { this.startWave(); }
+      },
+      onPause: () => this.togglePause(),
+      onEscape: () => {
+        if (this.isPaused) { this.togglePause(); }
+        else if (this.isPlaceMode) { this.cancelPlacement(); }
+        else if (this.selectedTowerInfo) { this.deselectTower(); }
+        else { this.togglePause(); }
+      },
+      onToggleRanges: () => this.toggleAllRanges(),
+      onToggleHelp: () => { this.showHelpOverlay = !this.showHelpOverlay; },
+      onToggleEncyclopedia: () => this.toggleEncyclopedia(),
+      onToggleMinimap: () => this.minimapService.toggleVisibility(),
+      onTogglePath: () => this.togglePathOverlay(),
+      onUpgrade: () => this.upgradeTower(),
+      onCycleTargeting: () => this.cycleTargeting(),
+      onSell: () => this.sellTower(),
+      onTowerHotkey: (type) => this.selectTowerType(type),
+      isInRun: () => this.runService.isInRun(),
+      isPlaceMode: () => this.isPlaceMode,
+      getSelectedTowerInfo: () => this.selectedTowerInfo,
+    };
+    this.hotkeySubscription = this.gameInput.hotkey$.subscribe(
+      e => this.gameInput.dispatchHotkey(e, this.gameStateService.getState(), hotkeyActions)
+    );
     this.minimapService.init(this.canvasContainer.nativeElement);
     this.gameRenderService.init();
     this.setupAutoPause();
@@ -658,7 +681,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   cancelPlacement(): void {
     this.cancelPendingTowerCard();
     this.selectedTowerType = null;
-    this.lastPreviewKey = '';
+    this.boardPointer.clearSelectedTile();
     this.clearTileHighlights();
     if (this.sceneService.getScene()) {
       this.towerPreviewService.hidePreview(this.sceneService.getScene());
@@ -843,7 +866,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Repath ground enemies — freed tile may open shorter paths
     this.enemyService.repathAffectedEnemies(-1, -1);
 
-    this.lastPreviewKey = '';
+    this.boardPointer.clearSelectedTile();
     this.refreshPathOverlay();
 
     // If this was the selected tower, deselect it
@@ -899,7 +922,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.tileHighlightService.updateHighlights(
       this.selectedTowerType!,
       this.meshRegistry.tileMeshes,
-      this.selectedTile,
+      this.boardPointer.getSelectedTile(),
       this.sceneService.getScene(),
       costMult
     );
@@ -992,7 +1015,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.meshRegistry.rebuildTowerChildrenArray();
     }
 
-    this.lastPreviewKey = '';
+    this.boardPointer.clearSelectedTile();
     this.refreshPathOverlay();
 
     this.deselectTower();
@@ -1299,232 +1322,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sceneService.getScene().add(this.meshRegistry.gridLines);
   }
 
-  // --- Interaction ---
-
-  private setupMouseInteraction(): void {
-    const canvas = this.sceneService.getRenderer().domElement;
-
-    this.mousemoveHandler = (event: MouseEvent) => {
-      if (this.isPaused) return;
-      const rect = canvas.getBoundingClientRect();
-      this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-      this.raycaster.setFromCamera(this.mouse, this.sceneService.getCamera());
-      const intersects = this.raycaster.intersectObjects(this.meshRegistry.getTileMeshArray() as THREE.Mesh[]);
-
-      if (this.hoveredTile && this.hoveredTile !== this.getSelectedTileMesh()) {
-        this.tileHighlightService.restoreAfterHover(this.hoveredTile);
-      }
-
-      if (intersects.length > 0) {
-        const mesh = intersects[0].object as THREE.Mesh;
-        if (mesh !== this.getSelectedTileMesh()) {
-          this.hoveredTile = mesh;
-          const material = mesh.material as THREE.MeshStandardMaterial;
-          material.emissiveIntensity = TILE_EMISSIVE.hover;
-          canvas.style.cursor = 'pointer';
-        }
-
-        // Tower placement preview — only show ghost tower in PLACE mode
-        const row = mesh.userData['row'];
-        const col = mesh.userData['col'];
-        const phase = this.gameStateService.getState().phase;
-        const isTerminal = phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT;
-        if (!isTerminal && !this.selectedTowerInfo && this.isPlaceMode) {
-          const previewKey = `${row}-${col}-${this.selectedTowerType}-${this.gameState.gold}`;
-          if (previewKey !== this.lastPreviewKey) {
-            this.lastPreviewKey = previewKey;
-            const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-            const tileCost = Math.round(TOWER_CONFIGS[this.selectedTowerType!].cost * costMult);
-            const canPlace = this.gameBoardService.canPlaceTower(row, col)
-              && this.gameStateService.canAfford(tileCost);
-            this.towerPreviewService.showPreview(this.selectedTowerType!, row, col, canPlace, this.sceneService.getScene());
-          }
-        } else {
-          this.lastPreviewKey = '';
-          this.towerPreviewService.hidePreview(this.sceneService.getScene());
-        }
-      } else {
-        this.hoveredTile = null;
-        canvas.style.cursor = 'default';
-        this.lastPreviewKey = '';
-        this.towerPreviewService.hidePreview(this.sceneService.getScene());
-      }
-    };
-
-    this.clickHandler = (event: MouseEvent) => {
-      if (this.isPaused) return;
-      this.handleInteraction(event.clientX, event.clientY);
-    };
-
-    this.contextmenuHandler = (event: MouseEvent) => {
-      event.preventDefault();
-      if (this.isDragging) {
-        this.towerPlacementService.cancelDrag();
-      } else if (this.isPlaceMode) {
-        this.cancelPlacement();
-      }
-    };
-
-    canvas.addEventListener('mousemove', this.mousemoveHandler);
-    canvas.addEventListener('click', this.clickHandler);
-    canvas.addEventListener('contextmenu', this.contextmenuHandler);
-  }
-
-  private setupTouchInteraction(): void {
-    const canvas = this.sceneService.getRenderer().domElement;
-
-    this.touchStartHandler = (event: TouchEvent) => {
-      event.preventDefault();
-      if (this.isPaused) return;
-
-      if (event.touches.length === 1) {
-        // Single-finger: record start position and time for tap/drag detection
-        const touch = event.touches[0];
-        this.touchStartX = touch.clientX;
-        this.touchStartY = touch.clientY;
-        this.touchStartTime = performance.now();
-        this.touchIsDragging = false;
-      } else if (event.touches.length === 2) {
-        // Two-finger: record initial pinch distance for zoom
-        const dx = event.touches[0].clientX - event.touches[1].clientX;
-        const dy = event.touches[0].clientY - event.touches[1].clientY;
-        this.pinchStartDistance = Math.sqrt(dx * dx + dy * dy);
-      }
-    };
-
-    this.touchMoveHandler = (event: TouchEvent) => {
-      event.preventDefault();
-      if (this.isPaused) return;
-      if (!this.sceneService.getCamera() || !this.sceneService.getControls()) return;
-
-      if (event.touches.length === 1) {
-        const touch = event.touches[0];
-        const dx = touch.clientX - this.touchStartX;
-        const dy = touch.clientY - this.touchStartY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist > TOUCH_CONFIG.tapThresholdPx) {
-          this.touchIsDragging = true;
-        }
-
-        if (this.touchIsDragging) {
-          // Pan camera: map drag delta to world-space pan
-          const panX = -dx * TOUCH_CONFIG.dragSensitivity;
-          const panZ = -dy * TOUCH_CONFIG.dragSensitivity;
-          this.sceneService.getCamera().position.x += panX;
-          this.sceneService.getCamera().position.z += panZ;
-          this.sceneService.getControls().target.x += panX;
-          this.sceneService.getControls().target.z += panZ;
-
-          // Update start for incremental panning each move event
-          this.touchStartX = touch.clientX;
-          this.touchStartY = touch.clientY;
-        }
-      } else if (event.touches.length === 2) {
-        // Pinch zoom: compare current distance to start distance
-        const dx = event.touches[0].clientX - event.touches[1].clientX;
-        const dy = event.touches[0].clientY - event.touches[1].clientY;
-        const currentDistance = Math.sqrt(dx * dx + dy * dy);
-
-        if (this.pinchStartDistance > 0) {
-          const delta = this.pinchStartDistance - currentDistance;
-          const zoomDelta = delta * TOUCH_CONFIG.pinchZoomSpeed;
-          const dir = new THREE.Vector3()
-            .subVectors(this.sceneService.getCamera().position, this.sceneService.getControls().target)
-            .normalize();
-          const newPos = this.sceneService.getCamera().position.clone().addScaledVector(dir, zoomDelta);
-          const newDist = newPos.distanceTo(this.sceneService.getControls().target);
-
-          if (newDist >= TOUCH_CONFIG.minZoom && newDist <= TOUCH_CONFIG.maxZoom) {
-            this.sceneService.getCamera().position.copy(newPos);
-          }
-        }
-
-        this.pinchStartDistance = currentDistance;
-      }
-    };
-
-    this.touchEndHandler = (event: TouchEvent) => {
-      event.preventDefault();
-
-      if (event.changedTouches.length === 1 && !this.touchIsDragging) {
-        const elapsed = performance.now() - this.touchStartTime;
-        if (elapsed < TOUCH_CONFIG.tapThresholdMs) {
-          // Short tap with no drag — treat as a click at the original touch position
-          this.handleInteraction(this.touchStartX, this.touchStartY);
-        }
-      }
-
-      this.touchIsDragging = false;
-      this.pinchStartDistance = 0;
-    };
-
-    canvas.addEventListener('touchstart', this.touchStartHandler, { passive: false });
-    canvas.addEventListener('touchmove', this.touchMoveHandler, { passive: false });
-    canvas.addEventListener('touchend', this.touchEndHandler, { passive: false });
-  }
-
-  /** Unified click/tap handler — raycasts to towers then tiles at (clientX, clientY). */
-  private handleInteraction(clientX: number, clientY: number): void {
-    const canvas = this.sceneService.getRenderer().domElement;
-    const rect = canvas.getBoundingClientRect();
-    this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-    this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-
-    this.raycaster.setFromCamera(this.mouse, this.sceneService.getCamera());
-
-    // Check for tower mesh hits first (works in both PLACE and INSPECT modes)
-    const towerHits = this.raycaster.intersectObjects(this.meshRegistry.getTowerChildrenArray() as THREE.Object3D[]);
-
-    if (towerHits.length > 0) {
-      let hitObj: THREE.Object3D | null = towerHits[0].object;
-      let foundKey: string | null = null;
-      while (hitObj) {
-        for (const [key, group] of this.meshRegistry.towerMeshes) {
-          if (group === hitObj) { foundKey = key; break; }
-        }
-        if (foundKey) break;
-        hitObj = hitObj.parent;
-      }
-      if (foundKey) {
-        this.selectPlacedTower(foundKey);
-        return;
-      }
-    }
-
-    // Check tile hits — only place towers in PLACE mode
-    const intersects = this.raycaster.intersectObjects(this.meshRegistry.getTileMeshArray() as THREE.Mesh[]);
-
-    const prevSelected = this.getSelectedTileMesh();
-    if (prevSelected) {
-      const material = prevSelected.material as THREE.MeshStandardMaterial;
-      const tileType = prevSelected.userData['tile'].type;
-      material.emissiveIntensity = tileType === BlockType.BASE ? TILE_EMISSIVE.base : tileType === BlockType.WALL ? TILE_EMISSIVE.wall : TILE_EMISSIVE.special;
-    }
-
-    if (intersects.length > 0) {
-      const mesh = intersects[0].object as THREE.Mesh;
-      const row = mesh.userData['row'];
-      const col = mesh.userData['col'];
-
-      this.selectedTile = { row, col };
-
-      const material = mesh.material as THREE.MeshStandardMaterial;
-      material.emissiveIntensity = TILE_EMISSIVE.selected;
-
-      this.deselectTower();
-
-      if (this.isPlaceMode) {
-        this.tryPlaceTower(row, col);
-      }
-    } else {
-      this.selectedTile = null;
-      this.deselectTower();
-    }
-  }
-
   private showPathBlockedWarning(): void {
     this.pathBlocked = true;
     if (this.pathBlockedTimerId !== null) {
@@ -1588,7 +1385,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gameStatsService.recordTowerBuilt();
 
     // Hide preview and invalidate preview cache — board layout changed
-    this.lastPreviewKey = '';
+    this.boardPointer.clearSelectedTile();
     this.towerPreviewService.hidePreview(this.sceneService.getScene());
 
     this.refreshPathOverlay();
@@ -1596,11 +1393,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Recompute valid tile highlights — board changed
     this.updateTileHighlights();
     this.updateChallengeIndicators();
-  }
-
-  private getSelectedTileMesh(): THREE.Mesh | null {
-    if (!this.selectedTile) return null;
-    return this.meshRegistry.tileMeshes.get(`${this.selectedTile.row}-${this.selectedTile.col}`) || null;
   }
 
   // --- Pause menu ---
@@ -1792,50 +1584,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  private handleKeyboard(event: KeyboardEvent): void {
-    const phase = this.gameStateService.getState().phase;
-    if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
-
-    // Block all inputs except pause/resume keys when the game is paused
-    if (this.isPaused && event.key !== 'Escape' && event.key !== 'p' && event.key !== 'P') return;
-
-    // Tower hotkeys 1-6 only work in standalone mode. In run mode, tower placement
-    // is card-gated — selectTowerType without a pending card creates a half-state.
-    if (TOWER_HOTKEYS[event.key] && !this.runService.isInRun()) { event.preventDefault(); this.selectTowerType(TOWER_HOTKEYS[event.key]); return; }
-
-    switch (event.key) {
-      case ' ':
-        event.preventDefault();
-        // Phase 4 context-aware Space: END TURN during combat, otherwise START WAVE.
-        if (phase === GamePhase.COMBAT) {
-          this.endTurn();
-        } else {
-          this.startWave();
-        }
-        break;
-      case 'p': case 'P': event.preventDefault(); this.togglePause(); break;
-      case 'Escape':
-        event.preventDefault();
-        if (this.isPaused) { this.togglePause(); }
-        else if (this.isPlaceMode) { this.cancelPlacement(); }
-        else if (this.selectedTowerInfo) { this.deselectTower(); }
-        else { this.togglePause(); }
-        break;
-      case 'r': case 'R': event.preventDefault(); this.toggleAllRanges(); break;
-      case 'h': case 'H': event.preventDefault(); this.showHelpOverlay = !this.showHelpOverlay; break;
-      case 'e': case 'E': event.preventDefault(); this.toggleEncyclopedia(); break;
-      case 'm': case 'M': event.preventDefault(); this.minimapService.toggleVisibility(); break;
-      case 'v': case 'V': event.preventDefault(); this.togglePathOverlay(); break;
-      case 'u': case 'U': event.preventDefault(); this.upgradeTower(); break;
-      case 't': case 'T': event.preventDefault(); this.cycleTargeting(); break;
-      case 'Delete':
-      case 'Backspace':
-        event.preventDefault();
-        this.sellTower();
-        break;
-    }
-  }
-
   // --- Cleanup ---
 
   ngOnDestroy(): void {
@@ -1887,17 +1635,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gamePauseService.cleanup();
     window.removeEventListener('resize', this.resizeHandler);
     this.towerPlacementService.cleanup();
-
-    // Remove canvas event listeners (stored as named references)
-    if (this.sceneService.getRenderer()) {
-      const canvas = this.sceneService.getRenderer().domElement;
-      canvas.removeEventListener('mousemove', this.mousemoveHandler);
-      canvas.removeEventListener('click', this.clickHandler);
-      canvas.removeEventListener('contextmenu', this.contextmenuHandler);
-      canvas.removeEventListener('touchstart', this.touchStartHandler);
-      canvas.removeEventListener('touchmove', this.touchMoveHandler);
-      canvas.removeEventListener('touchend', this.touchEndHandler);
-    }
+    this.boardPointer.cleanup();
+    this.touchInteraction.cleanup();
 
     if (this.sceneService.getControls()) {
       this.sceneService.getControls().dispose();

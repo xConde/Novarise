@@ -66,6 +66,9 @@ import { TowerUpgradeVisualService } from './services/tower-upgrade-visual.servi
 import { getAscensionEffects, AscensionEffectType } from '../../run/models/ascension.model';
 import { GameRenderService } from './services/game-render.service';
 import { BoardMeshRegistryService } from './services/board-mesh-registry.service';
+import { GameInputService, TOWER_HOTKEYS } from './services/game-input.service';
+import { TouchInteractionService } from './services/touch-interaction.service';
+import { BoardPointerService } from './services/board-pointer.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -144,6 +147,8 @@ describe('GameBoardComponent', () => {
         { provide: DeckService, useValue: createDeckServiceSpy() },
         ChallengeDisplayService,
         ChainLightningService,
+        TouchInteractionService,
+        BoardPointerService,
       ]
     })
     .compileComponents();
@@ -218,14 +223,44 @@ describe('GameBoardComponent', () => {
   });
 
   describe('keyboard hotkeys', () => {
+    let gameInputService: GameInputService;
+    let gameStateService: GameStateService;
+
     function fireKey(key: string): void {
       const event = new KeyboardEvent('keydown', { key, bubbles: true });
-      (component as any).handleKeyboard(event);
+      const state = gameStateService.getState();
+      gameInputService.dispatchHotkey(event, state, {
+        onSpace: () => {
+          const phase = gameStateService.getState().phase;
+          if (phase === GamePhase.COMBAT) { component.endTurn(); } else { component.startWave(); }
+        },
+        onPause: () => component.togglePause(),
+        onEscape: () => {
+          if (component.isPaused) { component.togglePause(); }
+          else if (component.isPlaceMode) { component.cancelPlacement(); }
+          else if (component.selectedTowerInfo) { component.deselectTower(); }
+          else { component.togglePause(); }
+        },
+        onToggleRanges: () => component.toggleAllRanges(),
+        onToggleHelp: () => { component.showHelpOverlay = !component.showHelpOverlay; },
+        onToggleEncyclopedia: () => component.toggleEncyclopedia(),
+        onToggleMinimap: () => {},
+        onTogglePath: () => component.togglePathOverlay(),
+        onUpgrade: () => component.upgradeTower(),
+        onCycleTargeting: () => component.cycleTargeting(),
+        onSell: () => component.sellTower(),
+        onTowerHotkey: (type) => component.selectTowerType(type),
+        isInRun: () => (TestBed.inject(RunService) as jasmine.SpyObj<RunService>).isInRun(),
+        isPlaceMode: () => component.isPlaceMode,
+        getSelectedTowerInfo: () => component.selectedTowerInfo,
+      });
     }
 
-    // Tower hotkeys 1-6 are disabled in run mode (towers require cards).
-    // Override isInRun to false so standalone-mode hotkey selection works.
     beforeEach(() => {
+      gameInputService = fixture.debugElement.injector.get(GameInputService);
+      gameStateService = fixture.debugElement.injector.get(GameStateService);
+      // Tower hotkeys 1-6 are disabled in run mode (towers require cards).
+      // Override isInRun to false so standalone-mode hotkey selection works.
       const runSpy = TestBed.inject(RunService) as jasmine.SpyObj<RunService>;
       runSpy.isInRun.and.returnValue(false);
     });
@@ -399,22 +434,30 @@ describe('GameBoardComponent', () => {
   // computation moves to game-end.service.spec.ts in H2.
 
   describe('touch handler lifecycle', () => {
-    let mockCanvas: HTMLElement;
+    let mockCanvas: HTMLCanvasElement;
     let addEventSpy: jasmine.Spy;
     let removeEventSpy: jasmine.Spy;
+    let touchService: TouchInteractionService;
 
     beforeEach(() => {
       mockCanvas = document.createElement('canvas');
       addEventSpy = spyOn(mockCanvas, 'addEventListener').and.callThrough();
       removeEventSpy = spyOn(mockCanvas, 'removeEventListener').and.callThrough();
+      touchService = fixture.debugElement.injector.get(TouchInteractionService);
 
-      // Stub SceneService.getRenderer() to return a mock renderer with the canvas
-      const mockRenderer = { domElement: mockCanvas, dispose: () => {} };
-      spyOn((component as any).sceneService, 'getRenderer').and.returnValue(mockRenderer);
+      // Stub sceneService camera/controls for move handler
+      const mockCamera = { position: new THREE.Vector3(0, 10, 0) } as any;
+      const mockControls = { target: new THREE.Vector3(0, 0, 0), dispose: () => {} } as any;
+      spyOn((touchService as any).sceneService, 'getCamera').and.returnValue(mockCamera);
+      spyOn((touchService as any).sceneService, 'getControls').and.returnValue(mockControls);
     });
 
-    it('setupTouchInteraction registers touchstart, touchmove, and touchend handlers', () => {
-      (component as any).setupTouchInteraction();
+    afterEach(() => {
+      touchService.cleanup();
+    });
+
+    it('init registers touchstart, touchmove, and touchend handlers', () => {
+      touchService.init(mockCanvas, () => {});
 
       const registeredEvents = addEventSpy.calls.allArgs().map((args: unknown[]) => args[0]);
       expect(registeredEvents).toContain('touchstart');
@@ -423,35 +466,29 @@ describe('GameBoardComponent', () => {
     });
 
     it('touch handlers are registered as named references, not anonymous functions', () => {
-      (component as any).setupTouchInteraction();
+      touchService.init(mockCanvas, () => {});
 
-      const touchStartRef = (component as any).touchStartHandler;
-      const touchMoveRef = (component as any).touchMoveHandler;
-      const touchEndRef = (component as any).touchEndHandler;
+      const startRef = (touchService as any).touchStartHandler;
+      const moveRef = (touchService as any).touchMoveHandler;
+      const endRef = (touchService as any).touchEndHandler;
 
-      expect(typeof touchStartRef).toBe('function');
-      expect(typeof touchMoveRef).toBe('function');
-      expect(typeof touchEndRef).toBe('function');
-      // They must not be the default no-op stubs (which are empty arrow functions sharing the same ref pattern)
-      // Confirm setup overwrote the placeholders
+      expect(typeof startRef).toBe('function');
+      expect(typeof moveRef).toBe('function');
+      expect(typeof endRef).toBe('function');
+
       const calls = addEventSpy.calls.allArgs();
       const startCall = calls.find((args: unknown[]) => args[0] === 'touchstart');
       const moveCall = calls.find((args: unknown[]) => args[0] === 'touchmove');
       const endCall = calls.find((args: unknown[]) => args[0] === 'touchend');
 
-      expect(startCall?.[1]).toBe(touchStartRef);
-      expect(moveCall?.[1]).toBe(touchMoveRef);
-      expect(endCall?.[1]).toBe(touchEndRef);
+      expect(startCall?.[1]).toBe(startRef);
+      expect(moveCall?.[1]).toBe(moveRef);
+      expect(endCall?.[1]).toBe(endRef);
     });
 
-    it('ngOnDestroy removes touchstart, touchmove, and touchend handlers', () => {
-      (component as any).setupTouchInteraction();
-
-      // Simulate ngOnDestroy canvas listener removal path
-      const canvas = (component as any).sceneService.getRenderer().domElement as HTMLElement;
-      canvas.removeEventListener('touchstart', (component as any).touchStartHandler);
-      canvas.removeEventListener('touchmove', (component as any).touchMoveHandler);
-      canvas.removeEventListener('touchend', (component as any).touchEndHandler);
+    it('cleanup removes touchstart, touchmove, and touchend handlers', () => {
+      touchService.init(mockCanvas, () => {});
+      touchService.cleanup();
 
       const removedEvents = removeEventSpy.calls.allArgs().map((args: unknown[]) => args[0]);
       expect(removedEvents).toContain('touchstart');
@@ -460,128 +497,123 @@ describe('GameBoardComponent', () => {
     });
 
     it('touchStartHandler records start position and resets drag flag', () => {
-      (component as any).setupTouchInteraction();
-      (component as any).touchIsDragging = true;
+      touchService.init(mockCanvas, () => {});
+      (touchService as any).touchIsDragging = true;
 
       const touch = { clientX: 150, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, touches: [touch] } as unknown as TouchEvent;
 
-      (component as any).touchStartHandler(event);
+      (touchService as any).touchStartHandler(event);
 
-      expect((component as any).touchStartX).toBe(150);
-      expect((component as any).touchStartY).toBe(200);
-      expect((component as any).touchIsDragging).toBeFalse();
+      expect((touchService as any).touchStartX).toBe(150);
+      expect((touchService as any).touchStartY).toBe(200);
+      expect((touchService as any).touchIsDragging).toBeFalse();
     });
 
     it('touchStartHandler records pinch start distance for two-finger touch', () => {
-      (component as any).setupTouchInteraction();
+      touchService.init(mockCanvas, () => {});
 
       const t0 = { clientX: 0, clientY: 0 } as Touch;
       const t1 = { clientX: 30, clientY: 40 } as Touch;
       const event = { preventDefault: () => {}, touches: [t0, t1] } as unknown as TouchEvent;
 
-      (component as any).touchStartHandler(event);
+      (touchService as any).touchStartHandler(event);
 
       // distance = sqrt(30^2 + 40^2) = sqrt(900+1600) = 50
-      expect((component as any).pinchStartDistance).toBe(50);
+      expect((touchService as any).pinchStartDistance).toBe(50);
     });
 
     it('touchMoveHandler sets touchIsDragging to true when movement exceeds threshold', () => {
-      (component as any).setupTouchInteraction();
-      (component as any).touchStartX = 0;
-      (component as any).touchStartY = 0;
-
-      // Stub sceneService camera/controls since the real Three.js objects are not initialized in tests
-      const mockCamera = { position: new THREE.Vector3(0, 10, 0) } as any;
-      const mockControls = { target: new THREE.Vector3(0, 0, 0), dispose: () => {} } as any;
-      spyOn((component as any).sceneService, 'getCamera').and.returnValue(mockCamera);
-      spyOn((component as any).sceneService, 'getControls').and.returnValue(mockControls);
+      touchService.init(mockCanvas, () => {});
+      (touchService as any).touchStartX = 0;
+      (touchService as any).touchStartY = 0;
 
       const touch = { clientX: 20, clientY: 20 } as Touch;
       const event = { preventDefault: () => {}, touches: [touch] } as unknown as TouchEvent;
 
-      (component as any).touchMoveHandler(event);
+      (touchService as any).touchMoveHandler(event);
 
-      expect((component as any).touchIsDragging).toBeTrue();
+      expect((touchService as any).touchIsDragging).toBeTrue();
     });
 
     it('touchMoveHandler does not set touchIsDragging when movement is within threshold', () => {
-      (component as any).setupTouchInteraction();
-      (component as any).touchStartX = 0;
-      (component as any).touchStartY = 0;
-      (component as any).touchIsDragging = false;
+      touchService.init(mockCanvas, () => {});
+      (touchService as any).touchStartX = 0;
+      (touchService as any).touchStartY = 0;
+      (touchService as any).touchIsDragging = false;
 
       // Move only 5px total — below 10px threshold
       const touch = { clientX: 3, clientY: 4 } as Touch;
       const event = { preventDefault: () => {}, touches: [touch] } as unknown as TouchEvent;
 
-      (component as any).touchMoveHandler(event);
+      (touchService as any).touchMoveHandler(event);
 
-      expect((component as any).touchIsDragging).toBeFalse();
+      expect((touchService as any).touchIsDragging).toBeFalse();
     });
 
-    it('touchEndHandler calls handleInteraction for a short tap with no drag', () => {
-      (component as any).setupTouchInteraction();
-      (component as any).touchStartX = 100;
-      (component as any).touchStartY = 200;
-      (component as any).touchStartTime = performance.now() - 50; // 50ms ago — within 300ms threshold
-      (component as any).touchIsDragging = false;
-
-      spyOn(component as any, 'handleInteraction');
+    it('touchEndHandler calls onTap for a short tap with no drag', () => {
+      let tapX = 0;
+      let tapY = 0;
+      let tapCalled = false;
+      touchService.init(mockCanvas, (x, y) => { tapCalled = true; tapX = x; tapY = y; });
+      (touchService as any).touchStartX = 100;
+      (touchService as any).touchStartY = 200;
+      (touchService as any).touchStartTime = performance.now() - 50; // 50ms ago — within 300ms threshold
+      (touchService as any).touchIsDragging = false;
 
       const touch = { clientX: 100, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
 
-      (component as any).touchEndHandler(event);
+      (touchService as any).touchEndHandler(event);
 
-      expect((component as any).handleInteraction).toHaveBeenCalledWith(100, 200);
+      expect(tapCalled).toBeTrue();
+      expect(tapX).toBe(100);
+      expect(tapY).toBe(200);
     });
 
-    it('touchEndHandler does not call handleInteraction when drag occurred', () => {
-      (component as any).setupTouchInteraction();
-      (component as any).touchStartTime = performance.now() - 50;
-      (component as any).touchIsDragging = true;
-
-      spyOn(component as any, 'handleInteraction');
+    it('touchEndHandler does not call onTap when drag occurred', () => {
+      let tapCalled = false;
+      touchService.init(mockCanvas, () => { tapCalled = true; });
+      (touchService as any).touchStartTime = performance.now() - 50;
+      (touchService as any).touchIsDragging = true;
 
       const touch = { clientX: 100, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
 
-      (component as any).touchEndHandler(event);
+      (touchService as any).touchEndHandler(event);
 
-      expect((component as any).handleInteraction).not.toHaveBeenCalled();
+      expect(tapCalled).toBeFalse();
     });
 
-    it('touchEndHandler does not call handleInteraction when tap duration exceeds threshold', () => {
-      (component as any).setupTouchInteraction();
-      (component as any).touchStartTime = performance.now() - 500; // 500ms — exceeds 300ms threshold
-      (component as any).touchIsDragging = false;
-
-      spyOn(component as any, 'handleInteraction');
+    it('touchEndHandler does not call onTap when tap duration exceeds threshold', () => {
+      let tapCalled = false;
+      touchService.init(mockCanvas, () => { tapCalled = true; });
+      (touchService as any).touchStartTime = performance.now() - 500; // 500ms — exceeds 300ms threshold
+      (touchService as any).touchIsDragging = false;
 
       const touch = { clientX: 100, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
 
-      (component as any).touchEndHandler(event);
+      (touchService as any).touchEndHandler(event);
 
-      expect((component as any).handleInteraction).not.toHaveBeenCalled();
+      expect(tapCalled).toBeFalse();
     });
 
     it('touchEndHandler resets touchIsDragging and pinchStartDistance', () => {
-      (component as any).setupTouchInteraction();
-      (component as any).touchIsDragging = true;
-      (component as any).pinchStartDistance = 50;
+      touchService.init(mockCanvas, () => {});
+      (touchService as any).touchIsDragging = true;
+      (touchService as any).pinchStartDistance = 50;
 
       // Long press — no tap
-      (component as any).touchStartTime = performance.now() - 500;
+      (touchService as any).touchStartTime = performance.now() - 500;
 
       const touch = { clientX: 0, clientY: 0 } as Touch;
       const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
 
-      (component as any).touchEndHandler(event);
+      (touchService as any).touchEndHandler(event);
 
-      expect((component as any).touchIsDragging).toBeFalse();
-      expect((component as any).pinchStartDistance).toBe(0);
+      expect((touchService as any).touchIsDragging).toBeFalse();
+      expect((touchService as any).pinchStartDistance).toBe(0);
     });
   });
 
@@ -775,7 +807,30 @@ describe('GameBoardComponent', () => {
   describe('keyboard Escape key — pause integration', () => {
     function fireKey(key: string): void {
       const event = new KeyboardEvent('keydown', { key, bubbles: true });
-      (component as any).handleKeyboard(event);
+      const gameInputSvc = fixture.debugElement.injector.get(GameInputService);
+      const gameStateSvc = fixture.debugElement.injector.get(GameStateService);
+      gameInputSvc.dispatchHotkey(event, gameStateSvc.getState(), {
+        onSpace: () => {},
+        onPause: () => component.togglePause(),
+        onEscape: () => {
+          if (component.isPaused) { component.togglePause(); }
+          else if (component.isPlaceMode) { component.cancelPlacement(); }
+          else if (component.selectedTowerInfo) { component.deselectTower(); }
+          else { component.togglePause(); }
+        },
+        onToggleRanges: () => {},
+        onToggleHelp: () => {},
+        onToggleEncyclopedia: () => {},
+        onToggleMinimap: () => {},
+        onTogglePath: () => {},
+        onUpgrade: () => {},
+        onCycleTargeting: () => {},
+        onSell: () => {},
+        onTowerHotkey: (_type) => {},
+        isInRun: () => false,
+        isPlaceMode: () => component.isPlaceMode,
+        getSelectedTowerInfo: () => component.selectedTowerInfo,
+      });
     }
 
     it('ESC resumes when paused', () => {
@@ -876,8 +931,17 @@ describe('GameBoardComponent', () => {
       spyOn(pvs, 'hidePath');
       spyOn((component as any).enemyService, 'getPathToExit').and.returnValue([]);
 
+      const gameInputSvc = fixture.debugElement.injector.get(GameInputService);
+      const gameStateSvc = fixture.debugElement.injector.get(GameStateService);
       const event = new KeyboardEvent('keydown', { key: 'v', bubbles: true });
-      (component as any).handleKeyboard(event);
+      gameInputSvc.dispatchHotkey(event, gameStateSvc.getState(), {
+        onSpace: () => {}, onPause: () => {}, onEscape: () => {},
+        onToggleRanges: () => {}, onToggleHelp: () => {}, onToggleEncyclopedia: () => {},
+        onToggleMinimap: () => {}, onTogglePath: () => component.togglePathOverlay(),
+        onUpgrade: () => {}, onCycleTargeting: () => {}, onSell: () => {},
+        onTowerHotkey: (_type) => {}, isInRun: () => false,
+        isPlaceMode: () => component.isPlaceMode, getSelectedTowerInfo: () => component.selectedTowerInfo,
+      });
 
       expect(component.showPathOverlay).toBeTrue();
     });
@@ -1371,7 +1435,17 @@ describe('GameBoardComponent', () => {
   describe('E key toggles encyclopedia', () => {
     function fireKey(key: string): void {
       const event = new KeyboardEvent('keydown', { key, bubbles: true });
-      (component as any).handleKeyboard(event);
+      const gameInputSvc = fixture.debugElement.injector.get(GameInputService);
+      const gameStateSvc = fixture.debugElement.injector.get(GameStateService);
+      gameInputSvc.dispatchHotkey(event, gameStateSvc.getState(), {
+        onSpace: () => {}, onPause: () => {}, onEscape: () => {},
+        onToggleRanges: () => {}, onToggleHelp: () => {},
+        onToggleEncyclopedia: () => component.toggleEncyclopedia(),
+        onToggleMinimap: () => {}, onTogglePath: () => {},
+        onUpgrade: () => {}, onCycleTargeting: () => {}, onSell: () => {},
+        onTowerHotkey: (_type) => {}, isInRun: () => false,
+        isPlaceMode: () => component.isPlaceMode, getSelectedTowerInfo: () => component.selectedTowerInfo,
+      });
     }
 
     it('pressing e opens the encyclopedia', () => {
@@ -1868,7 +1942,22 @@ describe('GameBoardComponent', () => {
 
     function fireKey(key: string): void {
       const event = new KeyboardEvent('keydown', { key, bubbles: true });
-      (component as any).handleKeyboard(event);
+      const gameInputSvc = fixture.debugElement.injector.get(GameInputService);
+      const gsvc = fixture.debugElement.injector.get(GameStateService);
+      gameInputSvc.dispatchHotkey(event, gsvc.getState(), {
+        onSpace: () => {}, onPause: () => component.togglePause(),
+        onEscape: () => {
+          if (component.isPaused) { component.togglePause(); }
+          else if (component.isPlaceMode) { component.cancelPlacement(); }
+          else if (component.selectedTowerInfo) { component.deselectTower(); }
+          else { component.togglePause(); }
+        },
+        onToggleRanges: () => {}, onToggleHelp: () => {}, onToggleEncyclopedia: () => {},
+        onToggleMinimap: () => {}, onTogglePath: () => {}, onUpgrade: () => {},
+        onCycleTargeting: () => {}, onSell: () => {}, onTowerHotkey: (_type) => {},
+        isInRun: () => false, isPlaceMode: () => component.isPlaceMode,
+        getSelectedTowerInfo: () => component.selectedTowerInfo,
+      });
     }
 
     beforeEach(() => {

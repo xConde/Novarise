@@ -3,6 +3,35 @@ import { Subject } from 'rxjs';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { CAMERA_CONFIG } from '../constants/camera.constants';
+import { TowerType, PlacedTower } from '../models/tower.model';
+import { GamePhase, GameState } from '../models/game-state.model';
+
+export const TOWER_HOTKEYS: Record<string, TowerType> = {
+  '1': TowerType.BASIC,
+  '2': TowerType.SNIPER,
+  '3': TowerType.SPLASH,
+  '4': TowerType.SLOW,
+  '5': TowerType.CHAIN,
+  '6': TowerType.MORTAR,
+};
+
+export interface HotkeyActions {
+  onSpace: () => void;
+  onPause: () => void;
+  onEscape: () => void;
+  onToggleRanges: () => void;
+  onToggleHelp: () => void;
+  onToggleEncyclopedia: () => void;
+  onToggleMinimap: () => void;
+  onTogglePath: () => void;
+  onUpgrade: () => void;
+  onCycleTargeting: () => void;
+  onSell: () => void;
+  onTowerHotkey: (type: TowerType) => void;
+  isInRun: () => boolean;
+  isPlaceMode: () => boolean;
+  getSelectedTowerInfo: () => PlacedTower | null;
+}
 
 @Injectable()
 export class GameInputService implements OnDestroy {
@@ -77,6 +106,73 @@ export class GameInputService implements OnDestroy {
     camera.position.z += moveZ;
     controls.target.x += moveX;
     controls.target.z += moveZ;
+  }
+
+  /**
+   * Dispatches a keyboard event to the appropriate action callback.
+   * Terminal-phase guard and pause guard are applied here.
+   */
+  dispatchHotkey(event: KeyboardEvent, state: GameState, actions: HotkeyActions): void {
+    const phase = state.phase;
+    if (phase === GamePhase.VICTORY || phase === GamePhase.DEFEAT) return;
+
+    // Block all inputs except pause/resume keys when the game is paused
+    if (state.isPaused && event.key !== 'Escape' && event.key !== 'p' && event.key !== 'P') return;
+
+    // Tower hotkeys 1-6 only work in standalone mode
+    if (TOWER_HOTKEYS[event.key] && !actions.isInRun()) {
+      event.preventDefault();
+      actions.onTowerHotkey(TOWER_HOTKEYS[event.key]);
+      return;
+    }
+
+    switch (event.key) {
+      case ' ':
+        event.preventDefault();
+        actions.onSpace();
+        break;
+      case 'p': case 'P':
+        event.preventDefault();
+        actions.onPause();
+        break;
+      case 'Escape':
+        event.preventDefault();
+        actions.onEscape();
+        break;
+      case 'r': case 'R':
+        event.preventDefault();
+        actions.onToggleRanges();
+        break;
+      case 'h': case 'H':
+        event.preventDefault();
+        actions.onToggleHelp();
+        break;
+      case 'e': case 'E':
+        event.preventDefault();
+        actions.onToggleEncyclopedia();
+        break;
+      case 'm': case 'M':
+        event.preventDefault();
+        actions.onToggleMinimap();
+        break;
+      case 'v': case 'V':
+        event.preventDefault();
+        actions.onTogglePath();
+        break;
+      case 'u': case 'U':
+        event.preventDefault();
+        actions.onUpgrade();
+        break;
+      case 't': case 'T':
+        event.preventDefault();
+        actions.onCycleTargeting();
+        break;
+      case 'Delete':
+      case 'Backspace':
+        event.preventDefault();
+        actions.onSell();
+        break;
+    }
   }
 
   cleanup(): void {
