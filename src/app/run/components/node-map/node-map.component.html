@@ -44,7 +44,9 @@
       [title]="getNodeTooltip(node)"
       [attr.aria-label]="getNodeTooltip(node)"
     >
-      <span class="map-node-icon" aria-hidden="true" [innerHTML]="nodeIcons[node.type]"></span>
+      <span class="map-node-icon" aria-hidden="true">
+        <app-icon [name]="getNodeIcon(node.type)" [size]="node.type === 'boss' ? 22 : 18"></app-icon>
+      </span>
     </button>
 
   </div>

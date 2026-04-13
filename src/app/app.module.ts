@@ -4,6 +4,7 @@ import { BrowserModule } from '@angular/platform-browser';
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { GlobalErrorHandler } from './core/services/error-handler.service';
+import { IconComponent } from '@shared/components/icon/icon.component';
 
 @NgModule({
   declarations: [
@@ -11,7 +12,8 @@ import { GlobalErrorHandler } from './core/services/error-handler.service';
   ],
   imports: [
     BrowserModule,
-    AppRoutingModule
+    AppRoutingModule,
+    IconComponent,
   ],
   providers: [{ provide: ErrorHandler, useClass: GlobalErrorHandler }],
   bootstrap: [AppComponent]

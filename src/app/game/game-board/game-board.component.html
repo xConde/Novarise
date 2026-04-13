@@ -150,15 +150,15 @@
       [class.active]="isPaused"
       [attr.aria-label]="isPaused ? 'Resume game' : 'Pause game'"
       [attr.aria-pressed]="isPaused">
-      <svg *ngIf="isPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-      <svg *ngIf="!isPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+      <app-icon *ngIf="isPaused" name="play" [size]="16"></app-icon>
+      <app-icon *ngIf="!isPaused" name="pause" [size]="16"></app-icon>
     </button>
     <button
       class="control-btn range-btn"
       (click)="toggleAllRanges()"
       [class.active]="showAllRanges"
       aria-label="Toggle all tower ranges [R]">
-      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+      <app-icon name="range" [size]="14"></app-icon>
       <span class="wave-hint">R</span>
     </button>
     <button
@@ -166,7 +166,7 @@
       (click)="togglePathOverlay()"
       [class.active]="showPathOverlay"
       aria-label="Toggle enemy path overlay [V]">
-      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <app-icon name="activity" [size]="14"></app-icon>
       <span class="wave-hint">V</span>
     </button>
   </div>
@@ -220,8 +220,8 @@
       <!-- Settings -->
       <div class="pause-menu__settings" *ngIf="!showQuitConfirm">
         <button class="pause-audio-toggle" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
-          <svg *ngIf="!audioMuted" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-          <svg *ngIf="audioMuted" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+          <app-icon *ngIf="!audioMuted" name="sound-on"></app-icon>
+          <app-icon *ngIf="audioMuted" name="sound-off"></app-icon>
           <span>{{ audioMuted ? 'Unmute' : 'Mute' }}</span>
         </button>
       </div>

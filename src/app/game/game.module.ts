@@ -12,6 +12,7 @@ import { TowerInfoPanelComponent } from './game-board/components/tower-info-pane
 import { GamePauseService } from './game-board/services/game-pause.service';
 import { ChallengeDisplayService } from './game-board/services/challenge-display.service';
 import { CardHandComponent } from './game-board/components/card-hand/card-hand.component';
+import { IconComponent } from '@shared/components/icon/icon.component';
 @NgModule({
   declarations: [
     GameComponent,
@@ -24,7 +25,8 @@ import { CardHandComponent } from './game-board/components/card-hand/card-hand.c
   ],
   imports: [
     CommonModule,
-    RouterModule.forChild([{ path: '', component: GameComponent }])
+    RouterModule.forChild([{ path: '', component: GameComponent }]),
+    IconComponent,
   ],
   providers: [GameBoardService, CombatVFXService, GamePauseService, ChallengeDisplayService]
 })

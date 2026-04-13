@@ -11,8 +11,8 @@ import {
   ElementRef,
   HostListener,
 } from '@angular/core';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MapNode, NodeMap, NodeType, getNodeEdges } from '../../models/node-map.model';
+import { IconName } from '@shared/components/icon/icon-registry';
 
 /** Pixel dimensions for the SVG map canvas. */
 const NODE_MAP_LAYOUT = {
@@ -71,8 +71,15 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit, OnDes
 
   readonly NodeType = NodeType;
 
-  /** Inline SVG icon per node type (18×18 display, 24×24 viewBox). Pre-sanitized as SafeHtml. */
-  readonly nodeIcons: Record<string, SafeHtml>;
+  private readonly NODE_TYPE_ICONS: Record<string, IconName> = {
+    [NodeType.COMBAT]: 'node-combat',
+    [NodeType.ELITE]: 'node-elite',
+    [NodeType.BOSS]: 'node-boss',
+    [NodeType.REST]: 'node-rest',
+    [NodeType.SHOP]: 'node-shop',
+    [NodeType.EVENT]: 'node-event',
+    [NodeType.UNKNOWN]: 'node-unknown',
+  };
 
   readonly nodeLabels: Record<string, string> = {
     [NodeType.COMBAT]: 'Combat',
@@ -84,65 +91,10 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit, OnDes
     [NodeType.UNKNOWN]: 'Unknown',
   };
 
-  constructor(private sanitizer: DomSanitizer) {
-    const s = (html: string): SafeHtml => this.sanitizer.bypassSecurityTrustHtml(html);
-    const FILLED = 'xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"';
-    const STROKE = 'xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+  constructor() {}
 
-    this.nodeIcons = {
-      // Crossed swords — two bold diagonal bars forming an X
-      [NodeType.COMBAT]: s(
-        '<svg ' + FILLED + '>' +
-        '<rect x="3" y="10.5" width="18" height="3" rx="1" transform="rotate(45 12 12)"/>' +
-        '<rect x="3" y="10.5" width="18" height="3" rx="1" transform="rotate(-45 12 12)"/>' +
-        '</svg>',
-      ),
-      // Five-point star — elite/special encounter
-      [NodeType.ELITE]: s(
-        '<svg ' + FILLED + '>' +
-        '<polygon points="12,2 14.6,8.4 21.5,8.9 16.3,13.4 17.9,20.1 12,16.5 6.1,20.1 7.7,13.4 2.5,8.9 9.4,8.4"/>' +
-        '</svg>',
-      ),
-      // OSRS-style skull + crossbones — boss encounter (larger to match 56px boss node)
-      // Skull sits high (y=1-18), crossbones cross low behind jaw (y=17), tips peek at sides
-      [NodeType.BOSS]: s(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
-        '<rect x="1" y="15.5" width="22" height="3" rx="1.5" transform="rotate(45 12 17)"/>' +
-        '<rect x="1" y="15.5" width="22" height="3" rx="1.5" transform="rotate(-45 12 17)"/>' +
-        '<path d="M12 1C17 1 19 4 19 8C19 12 17 14 15 14L15 18L9 18L9 14C7 14 5 12 5 8C5 4 7 1 12 1Z"/>' +
-        '<rect x="6.5" y="4.5" width="4" height="4.5" rx="0.5" fill="#200808"/>' +
-        '<rect x="13.5" y="4.5" width="4" height="4.5" rx="0.5" fill="#200808"/>' +
-        '<polygon points="11,10.5 13,10.5 12,12.5" fill="#200808"/>' +
-        '</svg>',
-      ),
-      // Campfire flame — rest site
-      [NodeType.REST]: s(
-        '<svg ' + FILLED + '>' +
-        '<path d="M12 2C9 7 5 11 5 15.5C5 19.1 8.1 22 12 22C15.9 22 19 19.1 19 15.5C19 11 15 7 12 2Z"/>' +
-        '</svg>',
-      ),
-      // Bold dollar sign — shop (no containing circle)
-      [NodeType.SHOP]: s(
-        '<svg ' + STROKE + ' stroke-width="2.5">' +
-        '<line x1="12" y1="2" x2="12" y2="22"/>' +
-        '<path d="M16.5 8C16 5.5 14.5 4.5 12 4.5C9.5 4.5 7.5 6 7.5 8C7.5 10.5 9.5 11 12 12C14.5 13 16.5 13.5 16.5 16C16.5 18.5 14.5 19.5 12 19.5C9.5 19.5 8 18.5 7.5 16"/>' +
-        '</svg>',
-      ),
-      // Bold exclamation mark — event (no containing circle)
-      [NodeType.EVENT]: s(
-        '<svg ' + STROKE + ' stroke-width="3">' +
-        '<line x1="12" y1="4" x2="12" y2="14"/>' +
-        '<line x1="12" y1="19" x2="12.01" y2="19"/>' +
-        '</svg>',
-      ),
-      // Bold question mark — unknown node (no containing circle)
-      [NodeType.UNKNOWN]: s(
-        '<svg ' + STROKE + ' stroke-width="3">' +
-        '<path d="M8 8C8 5 9.5 3.5 12 3.5C14.5 3.5 16 5 16 7.5C16 10 14 11 12 13V15.5"/>' +
-        '<line x1="12" y1="20" x2="12.01" y2="20"/>' +
-        '</svg>',
-      ),
-    };
+  getNodeIcon(type: string): IconName {
+    return this.NODE_TYPE_ICONS[type] ?? 'node-unknown';
   }
 
   ngOnInit(): void {

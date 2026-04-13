@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ElementRef } from '@angular/core';
 import { NodeMapComponent } from './node-map.component';
 import { MapNode, NodeMap, NodeType } from '../../models/node-map.model';
+import { IconComponent } from '@shared/components/icon/icon.component';
 
 // ── Test factory helpers ─────────────────────────────────────────────────────
 
@@ -61,7 +62,7 @@ describe('NodeMapComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       declarations: [NodeMapComponent],
-      imports: [CommonModule],
+      imports: [CommonModule, IconComponent],
     }).compileComponents();
 
     fixture = TestBed.createComponent(NodeMapComponent);

@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { CardHandComponent, HandCard } from './card-hand.component';
+import { IconComponent } from '@shared/components/icon/icon.component';
 import {
   CardId,
   CardRarity,
@@ -36,7 +37,7 @@ describe('CardHandComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       declarations: [CardHandComponent],
-      imports: [CommonModule],
+      imports: [CommonModule, IconComponent],
     }).compileComponents();
   });
 

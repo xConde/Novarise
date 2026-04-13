@@ -12,6 +12,7 @@ import { RelicInventoryComponent } from './components/relic-inventory/relic-inve
 import { ActTransitionComponent } from './components/act-transition/act-transition.component';
 import { RunSummaryComponent } from './components/run-summary/run-summary.component';
 import { CardDraftComponent } from './components/card-draft/card-draft.component';
+import { IconComponent } from '@shared/components/icon/icon.component';
 
 @NgModule({
   declarations: [
@@ -30,6 +31,7 @@ import { CardDraftComponent } from './components/card-draft/card-draft.component
     CommonModule,
     FormsModule,
     RouterModule.forChild([{ path: '', component: RunComponent }]),
+    IconComponent,
   ],
 })
 export class RunModule {}
