@@ -212,6 +212,7 @@ $card-rarity-glows: (
 
 .card {
   position: relative;
+  overflow: hidden; // Sprint 9: contain pseudo-element art zone
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -262,6 +263,54 @@ $card-rarity-glows: (
   }
 }
 
+// ─── Card layer stack (z-index) ───
+//   0: .card::before         → art zone radial gradient
+//   0: .card::after          → scan-line texture (+ rare shimmer override)
+//   1: .card > *             → all children (name, type-icon, gold-cost)
+//   2: .card__cost, .card__upgraded-badge, .card__instance-dot → always on top
+
+// Sprint 9 — Art zone foundation
+// Top ~48% of the card is a pseudo-element layer with a radial gradient
+// per card type. Creates a colored "art splash" that IS the visual identity.
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48%;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(ellipse at 50% 60%, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
+  transition: opacity var(--transition-fast) ease;
+}
+
+// Ensure all card content layers above the art-zone pseudo
+.card > * {
+  position: relative;
+  z-index: 1;
+}
+
+// Sprint 13 — Scan-line CRT texture
+// Subtle 1px horizontal lines give a holographic feel without image assets.
+// mix-blend-mode: overlay blends with the art zone below.
+.card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 1px,
+    rgba(255, 255, 255, 0.025) 1px,
+    rgba(255, 255, 255, 0.025) 2px
+  );
+  opacity: 0.6;
+  mix-blend-mode: overlay;
+}
+
 // ── Card type accent borders (top + left edge) ───────────────
 
 @each $type, $color in $card-type-colors {
@@ -275,11 +324,111 @@ $card-rarity-glows: (
   }
 }
 
+// Sprint 10 — Per-type art-zone gradients
+// Each card type gets a distinct radial glow in the art zone pseudo-element.
+
+.card--tower::before {
+  // Uses per-tower-type accent (--card-tower-accent bound per card in HTML),
+  // falling back to the generic tower color if not set.
+  background: radial-gradient(
+    ellipse at 50% 60%,
+    color-mix(in srgb, var(--card-tower-accent, var(--tower-color-basic)) 50%, transparent) 0%,
+    color-mix(in srgb, var(--card-tower-accent, var(--tower-color-basic)) 10%, transparent) 65%,
+    transparent 100%
+  );
+}
+
+.card--spell::before {
+  background: radial-gradient(
+    ellipse at 50% 60%,
+    rgba(0, 255, 255, 0.22) 0%,
+    rgba(0, 255, 255, 0.04) 65%,
+    transparent 100%
+  );
+}
+
+.card--modifier::before {
+  background: radial-gradient(
+    ellipse at 50% 60%,
+    rgba(140, 90, 200, 0.28) 0%,
+    rgba(140, 90, 200, 0.05) 65%,
+    transparent 100%
+  );
+}
+
+.card--utility::before {
+  background: radial-gradient(
+    ellipse at 50% 60%,
+    rgba(80, 255, 136, 0.22) 0%,
+    rgba(80, 255, 136, 0.04) 65%,
+    transparent 100%
+  );
+}
+
+// Expose per-type accent as a CSS custom property for hover glow + Sprint 15 upgraded blend.
+// Tower cards use the per-tower-type accent when available (Sprint 12).
+.card--tower    { --card-type-color: var(--card-tower-accent, #{map-get($card-type-colors, tower)}); }
+.card--spell    { --card-type-color: #{map-get($card-type-colors, spell)}; }
+.card--modifier { --card-type-color: #{map-get($card-type-colors, modifier)}; }
+.card--utility  { --card-type-color: #{map-get($card-type-colors, utility)}; }
+
 // ── Card rarity glow ─────────────────────────────────────────
 
-@each $rarity, $glow in $card-rarity-glows {
-  .card--#{$rarity} {
-    box-shadow: 0 0 var(--spacing-xs) #{$glow};
+// Sprint 14 — Rarity frame treatment (replaces @each glow loop)
+
+.card--starter,
+.card--common {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.card--uncommon {
+  border-color: rgba(100, 200, 255, 0.5);
+  box-shadow:
+    0 0 0.5rem rgba(100, 200, 255, 0.25),
+    inset 0 0 0.25rem rgba(100, 200, 255, 0.08);
+}
+
+.card--rare {
+  border-color: rgba(255, 215, 0, 0.6);
+  box-shadow:
+    0 0 0.6rem rgba(255, 215, 0, 0.35),
+    inset 0 0 0.3rem rgba(255, 215, 0, 0.12);
+}
+
+// Rare-card foil shimmer — diagonal gold band sweeps across every 3s.
+// Overrides Sprint 13's scan-line ::after with a layered background
+// (scan-lines + shimmer combined so we stay within the single ::after slot).
+.card--rare::after {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 1px,
+      rgba(255, 255, 255, 0.025) 1px,
+      rgba(255, 255, 255, 0.025) 2px
+    ),
+    linear-gradient(
+      115deg,
+      transparent 40%,
+      rgba(255, 215, 0, 0.18) 48%,
+      rgba(255, 255, 255, 0.35) 50%,
+      rgba(255, 215, 0, 0.18) 52%,
+      transparent 60%
+    );
+  background-size: 100% 2px, 300% 100%;
+  background-position: 0 0, -150% 0;
+  animation: rare-shimmer 3s ease-in-out infinite;
+}
+
+@keyframes rare-shimmer {
+  0%, 100% { background-position: 0 0, -150% 0; }
+  50%       { background-position: 0 0,  150% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card--rare::after {
+    animation: none;
+    background-position: 0 0, 0 0;
   }
 }
 
@@ -289,7 +438,9 @@ $card-rarity-glows: (
   &:hover {
     transform: translateY(-0.25rem) scale(1.03);
     filter: brightness(1.18);
-    box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.4);
+    box-shadow:
+      0 0.25rem 0.75rem rgba(0, 0, 0, 0.4),
+      0 0 0.75rem var(--card-type-color, rgba(255, 255, 255, 0.2));
     z-index: 1;
   }
 
@@ -320,8 +471,28 @@ $card-rarity-glows: (
   }
 }
 
+// Sprint 15 — Upgraded state polish
 .card--upgraded {
   border-top-width: 0.25rem; // slightly thicker top accent
+  box-shadow:
+    inset 0 0 0.4rem rgba(255, 215, 0, 0.15),
+    0 0 0.4rem rgba(255, 215, 0, 0.2);
+
+  // Blend art zone toward gold to signal power-up while preserving type identity
+  &::before {
+    background:
+      radial-gradient(
+        ellipse at 50% 30%,
+        rgba(255, 215, 0, 0.2) 0%,
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse at 50% 60%,
+        color-mix(in srgb, var(--card-type-color, rgba(255, 255, 255, 0.2)) 50%, transparent) 0%,
+        color-mix(in srgb, var(--card-type-color, rgba(255, 255, 255, 0.2)) 10%, transparent) 65%,
+        transparent 100%
+      );
+  }
 }
 
 // Pending card (active placement mode) — glowing border, no lift (avoids clipping)
@@ -371,6 +542,7 @@ $card-rarity-glows: (
   font-weight: 700;
   color: var(--text-dim);
   line-height: 1;
+  z-index: 2; // Sprint 9: above art zone + scan lines
 
   @media (max-width: 480px) {
     width: 1.1rem;
@@ -401,6 +573,7 @@ $card-rarity-glows: (
   opacity: 0.55;
   box-shadow: 0 0 0.2rem currentColor;
   pointer-events: none;
+  z-index: 2; // Sprint 16: above scan-line texture
 
   @media (max-width: 480px) {
     width: 0.28rem;
@@ -411,6 +584,7 @@ $card-rarity-glows: (
 }
 
 // Upgraded "+" badge — top-right corner
+// Sprint 15: bumped text-shadow + letter-spacing, z-index 2
 .card__upgraded-badge {
   position: absolute;
   top: 0.2rem;
@@ -419,15 +593,18 @@ $card-rarity-glows: (
   font-weight: 900;
   color: var(--game-gold);
   line-height: 1;
-  text-shadow: 0 0 0.4rem rgba(255, 215, 0, 0.8);
+  text-shadow: 0 0 0.6rem rgba(255, 215, 0, 0.9);
+  letter-spacing: 0.06em;
+  z-index: 2; // above art zone + scan lines
 
   @media (max-width: 480px) {
     font-size: var(--font-size-3xs);
   }
 }
 
+// Sprint 11 — Card name pushed below the art zone (top 48%)
 .card__name {
-  margin-top: 1.35rem; // clear the cost badge
+  margin-top: 48%; // push name below art zone
   font-size: var(--font-size-xs); // bumped up from 2xs
   font-weight: 700;
   color: var(--text-color);
@@ -443,11 +620,12 @@ $card-rarity-glows: (
 
   @media (max-width: 480px) {
     font-size: var(--font-size-3xs);
-    margin-top: 1.1rem;
+    margin-top: 46%;
   }
 }
 
 // Gold cost — shown below card name on tower cards
+// Sprint 16: ensure z-index 1 above scan lines (already inherits from .card > *)
 .card__gold-cost {
   font-size: var(--font-size-2xs);
   font-weight: 600;
@@ -455,31 +633,45 @@ $card-rarity-glows: (
   text-align: center;
   letter-spacing: 0.02em;
   line-height: 1;
+  position: relative;
+  z-index: 1; // above scan-line texture
 
   @media (max-width: 480px) {
     font-size: var(--font-size-3xs);
   }
 }
 
-// Type icon — bottom of card
+// Sprint 11 — Type icon: dominant "art" of the card.
+// Centered in the top art zone (48% height) at 40px on desktop.
+// The @each type-color rule above keeps per-type color tinting.
 .card__type-icon {
-  margin-top: auto;
+  position: absolute;
+  top: 6%;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0.75;
+  pointer-events: none;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.75;
-  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
 
   svg {
-    width: 0.75rem;
-    height: 0.75rem;
+    width: 100%;
+    height: 100%;
+  }
+
+  @media (max-width: 768px) {
+    width: 30px;
+    height: 30px;
   }
 
   @media (max-width: 480px) {
-    svg {
-      width: 0.625rem;
-      height: 0.625rem;
-    }
+    width: 22px;
+    height: 22px;
+    top: 8%;
   }
 }
 

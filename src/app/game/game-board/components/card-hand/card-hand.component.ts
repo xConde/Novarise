@@ -17,7 +17,7 @@ import {
   EnergyState,
 } from '../../../../run/models/card.model';
 import { getCardDefinition } from '../../../../run/constants/card-definitions';
-import { TOWER_CONFIGS } from '../../models/tower.model';
+import { TOWER_CONFIGS, TowerType } from '../../models/tower.model';
 
 /** Pre-computed view model for a single card in hand. */
 export interface HandCard {
@@ -85,6 +85,27 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
     }
     // Prime-mix to spread similar instance ids across the hue wheel
     return (hash * 137) % 360;
+  }
+
+  /**
+   * Sprint 12 — Per-tower-type accent color.
+   * Returns a CSS variable string referencing the tower-type accent color
+   * (e.g., 'var(--tower-color-sniper)'). Bound to --card-tower-accent on the
+   * card element so the art-zone gradient reads the correct per-type color.
+   * Returns null for non-tower cards (they use their card-type color).
+   */
+  getTowerAccentColor(card: HandCard): string | null {
+    if (!('towerType' in card.definition.effect)) return null;
+    const towerType = (card.definition.effect as { type: 'tower'; towerType: TowerType }).towerType;
+    switch (towerType) {
+      case TowerType.BASIC:   return 'var(--tower-color-basic)';
+      case TowerType.SNIPER:  return 'var(--tower-color-sniper)';
+      case TowerType.SPLASH:  return 'var(--tower-color-splash)';
+      case TowerType.SLOW:    return 'var(--tower-color-slow)';
+      case TowerType.CHAIN:   return 'var(--tower-color-chain)';
+      case TowerType.MORTAR:  return 'var(--tower-color-mortar)';
+      default: return null;
+    }
   }
 
   /**

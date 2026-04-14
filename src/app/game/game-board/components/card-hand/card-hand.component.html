@@ -33,7 +33,8 @@
       (click)="playCard(card)"
       [attr.aria-label]="card.definition.name + ' — ' + card.definition.description + ' — Energy cost: ' + card.definition.energyCost + (card.instance.upgraded ? ' (upgraded)' : '')"
       [attr.aria-pressed]="card.instance.instanceId === pendingCardId"
-      [attr.aria-disabled]="!card.canPlay">
+      [attr.aria-disabled]="!card.canPlay"
+      [style.--card-tower-accent]="getTowerAccentColor(card)">
 
       <!-- Energy cost badge -->
       <span class="card__cost" [class.card__cost--affordable]="card.canPlay"
@@ -50,12 +51,12 @@
         {{ card.goldCost }}g
       </span>
 
-      <!-- Type icon (SVG, no text) -->
+      <!-- Type icon (SVG, no text) — Sprint 11: 40px dominant art icon -->
       <span class="card__type-icon" aria-hidden="true">
-        <app-icon *ngIf="card.definition.type === CardType.TOWER" name="crosshair" [size]="12"></app-icon>
-        <app-icon *ngIf="card.definition.type === CardType.SPELL" name="bolt" [size]="12"></app-icon>
-        <app-icon *ngIf="card.definition.type === CardType.MODIFIER" name="shield" [size]="12"></app-icon>
-        <app-icon *ngIf="card.definition.type === CardType.UTILITY" name="gear" [size]="12"></app-icon>
+        <app-icon *ngIf="card.definition.type === CardType.TOWER" name="crosshair" [size]="40"></app-icon>
+        <app-icon *ngIf="card.definition.type === CardType.SPELL" name="bolt" [size]="40"></app-icon>
+        <app-icon *ngIf="card.definition.type === CardType.MODIFIER" name="shield" [size]="40"></app-icon>
+        <app-icon *ngIf="card.definition.type === CardType.UTILITY" name="gear" [size]="40"></app-icon>
       </span>
 
       <!-- Instance dot — tints per-instance so identical cards are distinguishable -->
