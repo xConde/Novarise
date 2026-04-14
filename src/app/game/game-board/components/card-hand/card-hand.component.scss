@@ -163,9 +163,9 @@ $card-rarity-glows: (
   &::-webkit-scrollbar { display: none; }
 
   @media (max-width: 480px) {
-    gap: 0.15rem;
-    flex: 1 1 auto;
-    max-width: calc(100% - 3.5rem - 3.5rem); // leave room for energy + piles
+    gap: 0;
+    flex: 1 1 0;
+    min-width: 0; // allow flex shrink so piles column stays visible
   }
 }
 
@@ -183,6 +183,29 @@ $card-rarity-glows: (
 .card-hand__cards--fan .card:focus-visible {
   z-index: 2;
   position: relative;
+}
+
+// Mobile: always overlap cards (viewport too narrow for full-width gaps).
+// 5 cards @ 4rem w/ -0.75rem overlap = 16.75rem (~268px), fits after energy + piles.
+@media (max-width: 480px) {
+  .card-hand__cards .card {
+    margin-left: -0.75rem;
+  }
+  .card-hand__cards .card:first-child {
+    margin-left: 0;
+  }
+  .card-hand__cards .card--playable:hover,
+  .card-hand__cards .card:focus-visible {
+    z-index: 2;
+    position: relative;
+  }
+  // Ensure component-level fan override doesn't stack on top
+  .card-hand__cards--fan .card {
+    margin-left: -0.9rem; // tighter fan when 6+ cards on mobile
+  }
+  .card-hand__cards--fan .card:first-child {
+    margin-left: 0;
+  }
 }
 
 // ── Individual card ──────────────────────────────────────────

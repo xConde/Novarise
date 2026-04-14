@@ -177,81 +177,6 @@
          module's run-summary and reward screens handle post-combat flow. -->
 
 
-    <!-- Game Initialization Failure Overlay -->
-    <div class="context-lost-overlay" *ngIf="initializationFailed" role="alert" aria-live="assertive">
-      <div class="context-lost-content">
-        <h2 class="context-lost-title">Game Failed to Load</h2>
-        <p class="context-lost-message">Game failed to initialize. Your browser may not support WebGL.</p>
-        <button class="context-lost-back-btn" (click)="goBackToRunHub()">Go Back</button>
-      </div>
-    </div>
-
-    <!-- WebGL Context Lost Overlay -->
-    <div class="context-lost-overlay" *ngIf="contextLost" role="alert" aria-live="assertive">
-      <div class="context-lost-content">
-        <h2 class="context-lost-title">Display Lost</h2>
-        <p class="context-lost-message">The graphics engine lost its connection. This can happen when your device runs low on memory.</p>
-        <p class="context-lost-hint">Waiting for recovery...</p>
-        <button class="context-lost-refresh-btn" (click)="reloadPage()">Try Refreshing</button>
-      </div>
-    </div>
-
-    <!-- Pause overlay -->
-    <div class="pause-overlay" *ngIf="isPaused && (gameState.phase === GamePhase.COMBAT || gameState.phase === GamePhase.INTERMISSION)" #pauseOverlay (click)="onPauseOverlayClick($event)" role="dialog" aria-modal="true" aria-labelledby="pause-menu-title">
-      <div class="pause-menu" (click)="$event.stopPropagation()">
-        <h2 class="pause-menu__title" id="pause-menu-title">PAUSED</h2>
-        <p class="pause-menu__subtitle" *ngIf="pauseEncounterLabel">{{ pauseEncounterLabel }}</p>
-
-        <!-- Game stats summary -->
-        <div class="pause-menu__stats">
-          <div class="pause-stat">
-            <span class="pause-stat__label">Wave</span>
-            <span class="pause-stat__value">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
-          </div>
-          <div class="pause-stat">
-            <span class="pause-stat__label">Lives</span>
-            <span class="pause-stat__value">{{ gameState.lives }}</span>
-          </div>
-          <div class="pause-stat">
-            <span class="pause-stat__label">Gold</span>
-            <span class="pause-stat__value">{{ gameState.gold }}</span>
-          </div>
-        </div>
-
-        <!-- Settings -->
-        <div class="pause-menu__settings" *ngIf="!showQuitConfirm">
-          <button class="pause-audio-toggle" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
-            <app-icon *ngIf="!audioMuted" name="sound-on"></app-icon>
-            <app-icon *ngIf="audioMuted" name="sound-off"></app-icon>
-            <span>{{ audioMuted ? 'Unmute' : 'Mute' }}</span>
-          </button>
-        </div>
-
-        <!-- Normal actions + navigation prompt actions -->
-        <div class="pause-menu__actions" *ngIf="!showQuitConfirm">
-          <button class="pause-action pause-action--primary" (click)="togglePause()">Resume</button>
-          <button class="pause-action pause-action--save" (click)="saveAndExit()">
-            Save &amp; Exit
-          </button>
-          <button class="pause-action pause-action--quit" (click)="requestQuit()">
-            Abandon Run
-          </button>
-        </div>
-
-        <!-- Quit confirmation -->
-        <div class="pause-menu__quit-confirm" *ngIf="showQuitConfirm">
-          <p class="quit-confirm__text">Abandon this run? Progress will be lost.</p>
-          <div class="quit-confirm__actions">
-            <button class="pause-action pause-action--primary" (click)="cancelQuit()">Cancel</button>
-            <button class="pause-action pause-action--quit" (click)="confirmQuit()">Quit</button>
-          </div>
-        </div>
-
-        <p class="pause-menu__auto-hint" *ngIf="autoPaused">Game auto-paused — tab was inactive</p>
-        <p class="pause-menu__hint" aria-hidden="true">P or ESC to resume</p>
-      </div>
-    </div>
-
     <!-- Tower info panel -->
     <app-tower-info-panel
       *ngIf="selectedTowerInfo && selectedTowerStats"
@@ -322,5 +247,84 @@
     [pendingCardId]="pendingTowerCardId"
     (cardPlayed)="onCardPlayed($event)">
   </app-card-hand>
+
+  <!-- Full-board overlays — positioned outside canvas-overlays so they cover both
+       the canvas row AND the card hand row. Absolute with inset: 0 covers the
+       entire .board-container, blocking interaction with underlying UI. -->
+
+  <!-- Game Initialization Failure Overlay -->
+  <div class="context-lost-overlay" *ngIf="initializationFailed" role="alert" aria-live="assertive">
+    <div class="context-lost-content">
+      <h2 class="context-lost-title">Game Failed to Load</h2>
+      <p class="context-lost-message">Game failed to initialize. Your browser may not support WebGL.</p>
+      <button class="context-lost-back-btn" (click)="goBackToRunHub()">Go Back</button>
+    </div>
+  </div>
+
+  <!-- WebGL Context Lost Overlay -->
+  <div class="context-lost-overlay" *ngIf="contextLost" role="alert" aria-live="assertive">
+    <div class="context-lost-content">
+      <h2 class="context-lost-title">Display Lost</h2>
+      <p class="context-lost-message">The graphics engine lost its connection. This can happen when your device runs low on memory.</p>
+      <p class="context-lost-hint">Waiting for recovery...</p>
+      <button class="context-lost-refresh-btn" (click)="reloadPage()">Try Refreshing</button>
+    </div>
+  </div>
+
+  <!-- Pause overlay -->
+  <div class="pause-overlay" *ngIf="isPaused && (gameState.phase === GamePhase.COMBAT || gameState.phase === GamePhase.INTERMISSION)" #pauseOverlay (click)="onPauseOverlayClick($event)" role="dialog" aria-modal="true" aria-labelledby="pause-menu-title">
+    <div class="pause-menu" (click)="$event.stopPropagation()">
+      <h2 class="pause-menu__title" id="pause-menu-title">PAUSED</h2>
+      <p class="pause-menu__subtitle" *ngIf="pauseEncounterLabel">{{ pauseEncounterLabel }}</p>
+
+      <!-- Game stats summary -->
+      <div class="pause-menu__stats">
+        <div class="pause-stat">
+          <span class="pause-stat__label">Wave</span>
+          <span class="pause-stat__value">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
+        </div>
+        <div class="pause-stat">
+          <span class="pause-stat__label">Lives</span>
+          <span class="pause-stat__value">{{ gameState.lives }}</span>
+        </div>
+        <div class="pause-stat">
+          <span class="pause-stat__label">Gold</span>
+          <span class="pause-stat__value">{{ gameState.gold }}</span>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div class="pause-menu__settings" *ngIf="!showQuitConfirm">
+        <button class="pause-audio-toggle" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
+          <app-icon *ngIf="!audioMuted" name="sound-on"></app-icon>
+          <app-icon *ngIf="audioMuted" name="sound-off"></app-icon>
+          <span>{{ audioMuted ? 'Unmute' : 'Mute' }}</span>
+        </button>
+      </div>
+
+      <!-- Normal actions + navigation prompt actions -->
+      <div class="pause-menu__actions" *ngIf="!showQuitConfirm">
+        <button class="pause-action pause-action--primary" (click)="togglePause()">Resume</button>
+        <button class="pause-action pause-action--save" (click)="saveAndExit()">
+          Save &amp; Exit
+        </button>
+        <button class="pause-action pause-action--quit" (click)="requestQuit()">
+          Abandon Run
+        </button>
+      </div>
+
+      <!-- Quit confirmation -->
+      <div class="pause-menu__quit-confirm" *ngIf="showQuitConfirm">
+        <p class="quit-confirm__text">Abandon this run? Progress will be lost.</p>
+        <div class="quit-confirm__actions">
+          <button class="pause-action pause-action--primary" (click)="cancelQuit()">Cancel</button>
+          <button class="pause-action pause-action--quit" (click)="confirmQuit()">Quit</button>
+        </div>
+      </div>
+
+      <p class="pause-menu__auto-hint" *ngIf="autoPaused">Game auto-paused — tab was inactive</p>
+      <p class="pause-menu__hint" aria-hidden="true">P or ESC to resume</p>
+    </div>
+  </div>
 
 </div>
