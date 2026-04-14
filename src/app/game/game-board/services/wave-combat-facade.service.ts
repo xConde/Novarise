@@ -9,13 +9,10 @@ import { AudioService } from './audio.service';
 import { DeckService } from '../../../run/services/deck.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { MinimapService } from './minimap.service';
-import { GameNotificationService, NotificationType } from './game-notification.service';
+import { GameNotificationService } from './game-notification.service';
 import { SceneService } from './scene.service';
 import { GamePhase } from '../models/game-state.model';
 import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
-import { ENEMY_INFO } from '../models/enemy-info.model';
-import { getWavePreview } from '../models/wave-preview.model';
-import { WavePreviewEntry } from '../models/wave-preview.model';
 import { EnemyService } from './enemy.service';
 import { TowerCombatService } from './tower-combat.service';
 import { StatusEffectService } from './status-effect.service';
@@ -160,31 +157,6 @@ export class WaveCombatFacadeService {
     const modEffects = this.gameStateService.getModifierEffects();
     const waveCountMult = modEffects.waveCountMultiplier ?? 1;
     this.waveService.startWave(this.gameStateService.getState().wave, this.sceneService.getScene(), waveCountMult);
-
-    // Track which enemy types have been seen so the wave preview can show "NEW" badges
-    const currentWave = this.gameStateService.getState().wave;
-    const seenCustomDefs = this.waveService.hasCustomWaves()
-      ? this.waveService.getWaveDefinitions()
-      : undefined;
-    const previewEntries: WavePreviewEntry[] = getWavePreview(
-      currentWave,
-      this.gameStateService.getState().isEndless,
-      seenCustomDefs
-    );
-    for (const entry of previewEntries) {
-      // Notify about new enemy types before marking them seen
-      if (this.waveService.isNewType(entry.type)) {
-        const info = ENEMY_INFO[entry.type];
-        if (info) {
-          this.notificationService.show(
-            NotificationType.INFO,
-            `New Enemy: ${info.name}`,
-            info.special ?? info.description
-          );
-        }
-      }
-      this.waveService.markSeen(entry.type);
-    }
 
     this.audioService.playWaveStart();
     this.triggerWaveStartPulse();

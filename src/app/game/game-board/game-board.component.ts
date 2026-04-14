@@ -892,10 +892,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.waveCombat.startWave();
   }
 
-  isNewEnemyType(type: EnemyType): boolean {
-    return this.waveService.isNewType(type);
-  }
-
   /** Returns the pre-computed tactical badges for a given enemy type. Always returns an array (never null). */
   getEnemyBadges(type: EnemyType): EnemyBadge[] {
     return this.enemyBadgeMap.get(type) ?? [];

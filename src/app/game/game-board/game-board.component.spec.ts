@@ -1343,27 +1343,6 @@ describe('GameBoardComponent', () => {
     });
   });
 
-  describe('isNewEnemyType (delegates to WaveService)', () => {
-    it('isNewEnemyType returns true for a type not yet seen', () => {
-      const waveService = fixture.debugElement.injector.get(WaveService);
-      expect(component.isNewEnemyType(EnemyType.BOSS)).toBeTrue();
-      expect(waveService.isNewType(EnemyType.BOSS)).toBeTrue();
-    });
-
-    it('isNewEnemyType returns false for a type that has been marked seen', () => {
-      const waveService = fixture.debugElement.injector.get(WaveService);
-      waveService.markSeen(EnemyType.BASIC);
-      expect(component.isNewEnemyType(EnemyType.BASIC)).toBeFalse();
-    });
-
-    it('isNewEnemyType returns true for unseen type even when some types are seen', () => {
-      const waveService = fixture.debugElement.injector.get(WaveService);
-      waveService.markSeen(EnemyType.BASIC);
-      waveService.markSeen(EnemyType.FAST);
-      expect(component.isNewEnemyType(EnemyType.BOSS)).toBeTrue();
-    });
-  });
-
   // ── getEnemyBadges ───────────────────────────────────────────────────────────
 
   describe('getEnemyBadges', () => {
