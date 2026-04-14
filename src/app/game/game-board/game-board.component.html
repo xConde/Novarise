@@ -29,11 +29,13 @@
     <div class="hud-relic-peek"
          *ngIf="activeRelics.length > 0"
          aria-label="Active relics">
-      <span *ngFor="let relic of activeRelics"
-            class="hud-relic-peek__item"
-            [attr.title]="relic.name + ' — ' + relic.description">
+      <button *ngFor="let relic of activeRelics"
+              type="button"
+              class="hud-relic-peek__item"
+              [attr.title]="relic.name + ' — ' + relic.description"
+              [attr.aria-label]="relic.name + ': ' + relic.description">
         {{ relic.name.charAt(0) }}
-      </span>
+      </button>
     </div>
 
     <!-- Wave clear banner -->
@@ -137,10 +139,10 @@
     </button>
 
     <!-- Turn start banner — fades in/out when a new turn begins -->
-    <!-- aria-live: polite region — announces new turn number to screen readers -->
+    <!-- aria-live: assertive — 1.2s lifespan too short for polite queue to catch -->
     <div class="turn-start-banner"
          *ngIf="showTurnBanner"
-         aria-live="polite">
+         aria-live="assertive">
       Turn {{ currentTurnNumber }}
     </div>
 

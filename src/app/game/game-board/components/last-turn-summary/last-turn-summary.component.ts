@@ -1,12 +1,8 @@
 import { Component, Input } from '@angular/core';
+import { TurnEventRecord } from '../../services/turn-history.service';
 
-export interface TurnSummary {
-  turnNumber: number;
-  cardsPlayed: number;
-  kills: number;
-  goldEarned: number;
-  livesLost: number;
-}
+// TurnSummary kept as a re-export alias so existing imports compile without change.
+export type TurnSummary = TurnEventRecord;
 
 @Component({
   selector: 'app-last-turn-summary',
@@ -14,6 +10,6 @@ export interface TurnSummary {
   styleUrls: ['./last-turn-summary.component.scss'],
 })
 export class LastTurnSummaryComponent {
-  @Input() summary: TurnSummary | null = null;
+  @Input() summary: TurnEventRecord | null = null;
   @Input() visible = false;
 }

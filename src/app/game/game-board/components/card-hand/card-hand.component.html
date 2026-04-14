@@ -32,7 +32,8 @@
       [class.card--playing]="card.instance.instanceId === playingCardId"
       [disabled]="!card.canPlay || (pendingCardId !== null && card.instance.instanceId !== pendingCardId)"
       (click)="playCard(card)"
-      [attr.aria-label]="card.definition.name + ' — ' + card.definition.description + ' — Energy cost: ' + card.definition.energyCost + (card.instance.upgraded ? ' (upgraded)' : '')"
+      [attr.aria-label]="card.definition.name + ' — Energy cost: ' + card.definition.energyCost + (card.instance.upgraded ? ' (upgraded)' : '')"
+      [attr.aria-describedby]="'tooltip-' + card.instance.instanceId"
       [attr.aria-pressed]="card.instance.instanceId === pendingCardId"
       [attr.aria-disabled]="!card.canPlay"
       [style.--card-tower-accent]="getTowerAccentColor(card)">
@@ -70,8 +71,11 @@
             *ngIf="getCardIndex(card) !== null && (getCardIndex(card)!) < 9"
             aria-hidden="true">{{ (getCardIndex(card)!) + 1 }}</span>
 
-      <!-- Sprint 35: card description tooltip — visible on hover/focus (desktop only) -->
-      <span class="card__tooltip" role="tooltip" aria-hidden="true">
+      <!-- Sprint 35: card description tooltip — visible on hover/focus (desktop only).
+           id matches aria-describedby on the button so AT reads description on focus. -->
+      <span class="card__tooltip"
+            role="tooltip"
+            [id]="'tooltip-' + card.instance.instanceId">
         {{ card.definition.description }}
       </span>
 

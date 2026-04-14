@@ -26,7 +26,6 @@
 </div>
 <div class="hud-challenge-strip"
      *ngIf="challengeIndicators.length > 0"
-     [class.hud-challenge-strip--collapsed]="!challengeStripExpanded"
      aria-label="Challenge progress">
   <button class="hud-challenge-toggle"
           (click)="toggleChallengeStrip()"

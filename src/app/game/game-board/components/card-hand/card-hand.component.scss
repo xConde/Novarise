@@ -121,13 +121,17 @@ $card-rarity-glows: (
   border-radius: 50%;
   background: rgba(255, 215, 0, 0.15);
   border: var(--border-width-thin) solid rgba(255, 215, 0, 0.4);
+  // Sprint 38: added transform transition for pip-fill animation
   transition: background var(--transition-fast) ease,
-              box-shadow var(--transition-fast) ease;
+              box-shadow var(--transition-fast) ease,
+              transform 0.2s ease;
 
   &--filled {
     background: var(--game-gold);
     box-shadow: 0 0 0.3rem rgba(255, 215, 0, 0.7);
     border-color: var(--game-gold);
+    // Sprint 38: pop-in keyframe on fill
+    animation: energy-pip-fill 0.3s ease-out;
   }
 
   @media (max-width: 480px) {
@@ -212,7 +216,9 @@ $card-rarity-glows: (
 
 .card {
   position: relative;
-  overflow: hidden; // Sprint 9: contain pseudo-element art zone
+  // overflow: hidden removed — Sprint 35: the tooltip sits above the card and was
+  // clipped. The ::before (height:48%) and ::after (inset:0) pseudos are already
+  // bounded by their own dimensions/inset, so no clipping is needed to contain them.
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -327,6 +333,21 @@ $card-rarity-glows: (
 // Sprint 10 — Per-type art-zone gradients
 // Each card type gets a distinct radial glow in the art zone pseudo-element.
 
+// Fallback for browsers that don't support color-mix() (Safari < 16.2, Firefox < 113)
+@supports not (background: color-mix(in srgb, red 50%, transparent)) {
+  .card--tower::before {
+    background: radial-gradient(
+      ellipse at 50% 60%,
+      rgba(255, 102, 0, 0.28) 0%,
+      rgba(255, 102, 0, 0.05) 65%,
+      transparent 100%
+    );
+  }
+  .card--upgraded::before {
+    background: radial-gradient(ellipse at 50% 30%, rgba(255, 215, 0, 0.2) 0%, transparent 60%);
+  }
+}
+
 .card--tower::before {
   // Uses per-tower-type accent (--card-tower-accent bound per card in HTML),
   // falling back to the generic tower color if not set.
@@ -432,6 +453,8 @@ $card-rarity-glows: (
   }
 }
 
+body.reduce-motion .card--rare::after { animation: none; background-position: 0 0, 0 0; }
+
 // ── Card states ──────────────────────────────────────────────
 
 .card--playable {
@@ -522,7 +545,13 @@ $card-rarity-glows: (
 @media (prefers-reduced-motion: reduce) {
   .card--pending { animation: none; }
   .card--playable { transition: none; }
+  .card-hand { animation: none; }
+  .card-hand__placement-hint { animation: none; }
 }
+
+body.reduce-motion .card--pending { animation: none; }
+body.reduce-motion .card-hand { animation: none; }
+body.reduce-motion .card-hand__placement-hint { animation: none; }
 
 // ── Card internals ───────────────────────────────────────────
 
@@ -886,6 +915,8 @@ $card-rarity-glows: (
   }
 }
 
+body.reduce-motion .card.card--playing { animation: none; opacity: 0; }
+
 // ── Sprint 37 — Pile count pulse ─────────────────────────────
 
 @keyframes pile-count-pulse {
@@ -902,33 +933,11 @@ $card-rarity-glows: (
   .pile-count--pulse .pile-value { animation: none; }
 }
 
+body.reduce-motion .pile-count--pulse .pile-value { animation: none; }
+
 // ── Sprint 38 — Energy pip fill animation ────────────────────
-
-// Override existing .energy-pip and .energy-pip--filled with enhanced transitions + keyframe
-
-.energy-pip {
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 50%;
-  background: rgba(255, 215, 0, 0.15);
-  border: var(--border-width-thin) solid rgba(255, 215, 0, 0.4);
-  transition:
-    background var(--transition-fast) ease,
-    box-shadow var(--transition-fast) ease,
-    transform 0.2s ease;
-
-  &--filled {
-    background: var(--game-gold);
-    box-shadow: 0 0 0.3rem rgba(255, 215, 0, 0.7);
-    border-color: var(--game-gold);
-    animation: energy-pip-fill 0.3s ease-out;
-  }
-
-  @media (max-width: 480px) {
-    width: 0.45rem;
-    height: 0.45rem;
-  }
-}
+// (Duplicate .energy-pip block removed — transitions + animation merged into the
+// canonical definition above near .energy-pips)
 
 @keyframes energy-pip-fill {
   0%   { transform: scale(0.6); filter: brightness(1.8); }
@@ -941,3 +950,5 @@ $card-rarity-glows: (
     animation: none;
   }
 }
+
+body.reduce-motion .energy-pip--filled { animation: none; }

@@ -286,11 +286,12 @@
       letter-spacing: 0.1em;
     }
 
-    // Sprint 39: hand-stuck pulse — gentle cyan nudge when no cards are playable
+    // Sprint 39: hand-stuck pulse — gentle cyan nudge when no cards are playable.
+    // No !important — the keyframe drives box-shadow entirely; specificity of
+    // .end-turn-btn.end-turn-btn--stuck already beats the :hover rule.
     &--stuck {
       animation: end-turn-stuck-pulse 2s ease-in-out infinite;
-      border-color: var(--theme-cyan) !important;
-      box-shadow: 0 0 1.25rem rgba(0, 255, 255, 0.4) !important;
+      border-color: var(--theme-cyan);
     }
   }
 
@@ -309,7 +310,14 @@
     .end-turn-btn--stuck {
       animation: none;
     }
+    .path-blocked-warning {
+      animation: none;
+    }
+    .context-lost-hint {
+      animation: none;
+    }
   }
+
 
   // Game HUD styles moved to src/styles.css (.board-container .game-hud) for ViewEncapsulation.None reach
   // Wave status row now lives inside the HUD component — styles in src/styles/_game-hud.scss
@@ -433,26 +441,8 @@
 // Tablet (max-width: 768px) — HUD and overlay responsive rules moved to src/styles.css
 
 // --- Animations ---
-@keyframes pulse-critical {
-  from { opacity: 1; }
-  to { opacity: 0.5; }
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.8);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
+// pulse-critical, fade-in, scale-in keyframes are canonical in src/styles/_animations.scss.
+// Removed duplicates here to avoid divergence. pulse-critical canonical: opacity 1→0.4.
 
 // hud-value-pulse, gold-change-float keyframes moved to src/styles.css
 // prefers-reduced-motion and body.reduce-motion HUD animation blocks moved to src/styles.css
@@ -505,3 +495,6 @@
     opacity: 1;
   }
 }
+
+body.reduce-motion .board-container .path-blocked-warning { animation: none; }
+body.reduce-motion .board-container .context-lost-hint { animation: none; }

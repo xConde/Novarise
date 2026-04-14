@@ -33,11 +33,8 @@
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
 }
 
-@keyframes wave-start-pulse {
-  0%   { transform: scale(1); }
-  50%  { transform: scale(1.2); }
-  100% { transform: scale(1); }
-}
+// wave-start-pulse keyframe lives in _game-hud.scss (richer 4-stop version with
+// filter:brightness) to stay colocated with the wave HUD styling that consumes it.
 
 @keyframes wave-preview-in {
   from { opacity: 0; transform: translateX(-50%) translateY(-4px); }

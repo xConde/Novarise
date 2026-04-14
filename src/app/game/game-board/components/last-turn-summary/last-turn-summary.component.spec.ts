@@ -8,6 +8,7 @@ const makeSummary = (overrides: Partial<TurnSummary> = {}): TurnSummary => ({
   kills: 4,
   goldEarned: 20,
   livesLost: 1,
+  timestamp: 0,
   ...overrides,
 });
 
