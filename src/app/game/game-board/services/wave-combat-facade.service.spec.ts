@@ -80,9 +80,8 @@ describe('WaveCombatFacadeService', () => {
     gameStateService.getModifierEffects.and.returnValue({});
     (gameStateService.serializeState as jasmine.Spy).and.returnValue({});
 
-    waveService = jasmine.createSpyObj('WaveService', ['startWave', 'hasCustomWaves', 'getWaveDefinitions', 'isNewType', 'markSeen', 'serializeState']);
+    waveService = jasmine.createSpyObj('WaveService', ['startWave', 'hasCustomWaves', 'getWaveDefinitions', 'serializeState']);
     waveService.hasCustomWaves.and.returnValue(false);
-    waveService.isNewType.and.returnValue(false);
     (waveService.serializeState as jasmine.Spy).and.returnValue({});
 
     gameRenderService = jasmine.createSpyObj('GameRenderService', ['processCombatResult']);

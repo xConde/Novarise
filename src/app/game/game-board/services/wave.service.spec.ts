@@ -297,48 +297,6 @@ describe('WaveService', () => {
       expect(service.isSpawning()).toBeFalse();
     });
 
-    it('should clear seen enemy types so isNewType returns true after reset', () => {
-      service.markSeen(EnemyType.BASIC);
-      service.markSeen(EnemyType.FAST);
-      expect(service.isNewType(EnemyType.BASIC)).toBeFalse();
-
-      service.reset();
-
-      expect(service.isNewType(EnemyType.BASIC)).toBeTrue();
-      expect(service.isNewType(EnemyType.FAST)).toBeTrue();
-    });
-  });
-
-  // --- isNewType / markSeen ---
-
-  describe('isNewType / markSeen', () => {
-    it('isNewType returns true for all types initially', () => {
-      expect(service.isNewType(EnemyType.BASIC)).toBeTrue();
-      expect(service.isNewType(EnemyType.BOSS)).toBeTrue();
-    });
-
-    it('isNewType returns false after markSeen', () => {
-      service.markSeen(EnemyType.BASIC);
-      expect(service.isNewType(EnemyType.BASIC)).toBeFalse();
-    });
-
-    it('isNewType returns true for types not yet marked seen', () => {
-      service.markSeen(EnemyType.BASIC);
-      expect(service.isNewType(EnemyType.FAST)).toBeTrue();
-    });
-
-    it('marking same type twice does not cause errors', () => {
-      service.markSeen(EnemyType.BASIC);
-      service.markSeen(EnemyType.BASIC);
-      expect(service.isNewType(EnemyType.BASIC)).toBeFalse();
-    });
-
-    it('markSeen for one type does not affect other types', () => {
-      service.markSeen(EnemyType.HEAVY);
-      expect(service.isNewType(EnemyType.BASIC)).toBeTrue();
-      expect(service.isNewType(EnemyType.FAST)).toBeTrue();
-      expect(service.isNewType(EnemyType.HEAVY)).toBeFalse();
-    });
   });
 
   // --- generateEndlessWave (model function) ---
@@ -967,17 +925,6 @@ describe('WaveService', () => {
       expect(snapshot.active).toBeTrue();
     });
 
-    it('serializeState() captures seenEnemyTypes as an array', () => {
-      service.markSeen(EnemyType.BASIC);
-      service.markSeen(EnemyType.FAST);
-
-      const snapshot = service.serializeState();
-
-      expect(Array.isArray(snapshot.seenEnemyTypes)).toBeTrue();
-      expect(snapshot.seenEnemyTypes).toContain(EnemyType.BASIC);
-      expect(snapshot.seenEnemyTypes).toContain(EnemyType.FAST);
-    });
-
     it('restoreState() sets all fields directly without startWave()', () => {
       const snapshot = {
         currentWaveIndex: 1,
@@ -989,7 +936,6 @@ describe('WaveService', () => {
           [EnemyType.HEAVY],
         ],
         turnScheduleIndex: 3,
-        seenEnemyTypes: [EnemyType.BASIC],
         active: true,
         endlessMode: false,
         currentEndlessResult: null,
@@ -1013,7 +959,6 @@ describe('WaveService', () => {
         currentWaveIndex: 0,
         turnSchedule: customSchedule,
         turnScheduleIndex: 0,
-        seenEnemyTypes: [] as string[],
         active: true,
         endlessMode: false,
         currentEndlessResult: null,
@@ -1039,8 +984,6 @@ describe('WaveService', () => {
       service.startWave(2, mockScene);
       // Advance the schedule
       service.spawnForTurn(mockScene);
-      service.markSeen(EnemyType.BASIC);
-      service.markSeen(EnemyType.FAST);
 
       const snapshot = service.serializeState();
 
@@ -1055,8 +998,6 @@ describe('WaveService', () => {
       expect(restored.active).toBe(snapshot.active);
       expect(restored.endlessMode).toBe(snapshot.endlessMode);
       expect(restored.turnSchedule).toEqual(snapshot.turnSchedule);
-      expect(restored.seenEnemyTypes).toEqual(jasmine.arrayContaining(snapshot.seenEnemyTypes));
-      expect(restored.seenEnemyTypes.length).toBe(snapshot.seenEnemyTypes.length);
     });
   });
 });

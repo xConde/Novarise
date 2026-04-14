@@ -597,7 +597,7 @@ export function createGameEndServiceSpy(): jasmine.SpyObj<GameEndService> {
  * Create a pre-configured WaveService spy.
  *
  * Default return values:
- *   - hasCustomWaves() / isEndlessMode() / isSpawning() / isNewType() — false
+ *   - hasCustomWaves() / isEndlessMode() / isSpawning() — false
  *   - getWaveDefinitions() — empty array
  *   - getTotalEnemiesInWave() / getWaveReward() / getMaxWaves() / getRemainingToSpawn() — 0
  *   - getCurrentEndlessTemplate() / getCurrentEndlessResult() — null
@@ -623,8 +623,6 @@ export function createWaveServiceSpy(): jasmine.SpyObj<WaveService> {
     'getTotalEnemiesInWave',
     'getWaveReward',
     'getMaxWaves',
-    'isNewType',
-    'markSeen',
     'reset',
   ]);
   spy.spawnForTurn.and.returnValue(0);
@@ -633,7 +631,6 @@ export function createWaveServiceSpy(): jasmine.SpyObj<WaveService> {
   spy.hasCustomWaves.and.returnValue(false);
   spy.isEndlessMode.and.returnValue(false);
   spy.isSpawning.and.returnValue(false);
-  spy.isNewType.and.returnValue(false);
   spy.getWaveDefinitions.and.returnValue([]);
   spy.getTotalEnemiesInWave.and.returnValue(0);
   spy.getWaveReward.and.returnValue(0);

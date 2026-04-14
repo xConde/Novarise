@@ -52,7 +52,6 @@ function createTestCheckpoint(overrides: Partial<EncounterCheckpoint> = {}): Enc
       currentWaveIndex: 1,
       turnSchedule: [],
       turnScheduleIndex: 3,
-      seenEnemyTypes: [],
       active: true,
       endlessMode: false,
       currentEndlessResult: null,

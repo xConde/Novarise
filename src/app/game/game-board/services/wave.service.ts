@@ -16,8 +16,6 @@ export class WaveService {
   private currentWaveIndex = -1;
   private endlessMode = false;
   private currentEndlessResult: EndlessWaveResult | null = null;
-  /** Tracks which enemy types have been introduced to the player (for "NEW" badge notifications). */
-  private seenEnemyTypes = new Set<EnemyType>();
 
   /**
    * Phase 4: per-turn spawn schedule for the active wave. Index = turns since
@@ -337,28 +335,12 @@ export class WaveService {
   }
 
   /**
-   * Returns true if this enemy type has NOT yet been shown to the player.
-   * Used to determine whether to display the "NEW" badge in the wave preview.
-   */
-  isNewType(type: EnemyType): boolean {
-    return !this.seenEnemyTypes.has(type);
-  }
-
-  /**
-   * Mark an enemy type as seen (introduced to the player).
-   * Call after showing the "NEW" notification so subsequent waves don't re-alert.
-   */
-  markSeen(type: EnemyType): void {
-    this.seenEnemyTypes.add(type);
-  }
-
-  /** Serialize wave state for checkpoint save. */
+   * Serialize wave state for checkpoint save. */
   serializeState(): SerializableWaveState {
     return {
       currentWaveIndex: this.currentWaveIndex,
       turnSchedule: this.turnSchedule.map(turn => [...turn]),
       turnScheduleIndex: this.turnScheduleIndex,
-      seenEnemyTypes: [...this.seenEnemyTypes],
       active: this.active,
       endlessMode: this.endlessMode,
       currentEndlessResult: this.currentEndlessResult ? { ...this.currentEndlessResult } : null,
@@ -373,7 +355,6 @@ export class WaveService {
     this.currentWaveIndex = snapshot.currentWaveIndex;
     this.turnSchedule = snapshot.turnSchedule.map(turn => [...turn] as EnemyType[]);
     this.turnScheduleIndex = snapshot.turnScheduleIndex;
-    this.seenEnemyTypes = new Set(snapshot.seenEnemyTypes as EnemyType[]);
     this.active = snapshot.active;
     this.endlessMode = snapshot.endlessMode;
     this.currentEndlessResult = snapshot.currentEndlessResult ? { ...snapshot.currentEndlessResult } : null;
@@ -385,7 +366,6 @@ export class WaveService {
     this.currentWaveIndex = -1;
     this.endlessMode = false;
     this.currentEndlessResult = null;
-    this.seenEnemyTypes.clear();
     this.turnSchedule = [];
     this.turnScheduleIndex = 0;
     this.clearCustomWaves();
