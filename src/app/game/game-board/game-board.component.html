@@ -20,11 +20,6 @@
       [currentEndlessTemplate]="currentEndlessTemplate">
     </app-game-hud>
 
-    <!-- Sprint 26: FPS counter — shown only when settings.showFps is true -->
-    <div class="fps-counter" *ngIf="showFps" aria-hidden="true">
-      {{ currentFps }} FPS
-    </div>
-
     <!-- Desktop-only: active relic letter-chips beneath the HUD -->
     <div class="hud-relic-peek"
          *ngIf="activeRelics.length > 0"
@@ -124,6 +119,16 @@
         <span>Next Wave</span>
         <span class="wave-hint">Space</span>
       </button>
+    </div>
+
+    <!-- Placement mode indicator — floats in canvas area, bottom-center, while a tower card is pending -->
+    <div class="placement-indicator"
+         *ngIf="pendingTowerCardId !== null"
+         role="status"
+         aria-live="polite">
+      <app-icon name="crosshair" [size]="16" aria-hidden="true"></app-icon>
+      <span class="placement-indicator__text">Place tower on the board</span>
+      <span class="placement-indicator__hint">Right-click to cancel</span>
     </div>
 
     <!-- Phase 4: End Turn button — only during combat (turn-based). -->
@@ -363,25 +368,6 @@
           <span>{{ audioMuted ? 'Unmute' : 'Mute' }}</span>
         </button>
 
-        <!-- Sprint 26: FPS counter toggle -->
-        <label class="pause-settings-toggle">
-          <input type="checkbox"
-                 [checked]="showFps"
-                 (change)="toggleShowFps()"
-                 aria-label="Toggle FPS counter visibility">
-          <span class="pause-settings-toggle__track" aria-hidden="true"></span>
-          <span class="pause-settings-toggle__label">Show FPS</span>
-        </label>
-
-        <!-- Sprint 26: Reduce Motion toggle -->
-        <label class="pause-settings-toggle">
-          <input type="checkbox"
-                 [checked]="reduceMotion"
-                 (change)="toggleReduceMotion()"
-                 aria-label="Toggle reduced motion">
-          <span class="pause-settings-toggle__track" aria-hidden="true"></span>
-          <span class="pause-settings-toggle__label">Reduce Motion</span>
-        </label>
       </div>
 
       <!-- Sprint 28: Collapsible controls reference -->

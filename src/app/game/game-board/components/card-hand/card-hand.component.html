@@ -82,11 +82,6 @@
     </button>
   </div>
 
-  <!-- Placement mode hint -->
-  <div class="card-hand__placement-hint" *ngIf="pendingCardId !== null" aria-live="polite">
-    <span class="placement-hint-text">Place tower on the board...</span>
-  </div>
-
   <!-- Draw / discard pile counts — clickable to inspect -->
   <div class="card-hand__piles" [attr.aria-label]="'Deck piles'">
     <button class="pile-count pile-count--draw"

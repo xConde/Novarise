@@ -498,3 +498,71 @@
 
 body.reduce-motion .board-container .path-blocked-warning { animation: none; }
 body.reduce-motion .board-container .context-lost-hint { animation: none; }
+
+
+// ── Placement mode indicator — floats in canvas area during tower placement ──
+
+.board-container .placement-indicator {
+  position: absolute;
+  bottom: calc(var(--spacing-lg) + 1rem);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 0.5rem 1rem;
+  background: rgba(255, 215, 0, 0.12);
+  border: var(--border-width-thin) solid rgba(255, 215, 0, 0.5);
+  border-radius: var(--border-radius-md);
+  backdrop-filter: blur(6px);
+  color: var(--game-gold);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: var(--z-index-overlay);
+  box-shadow: 0 0 1rem rgba(255, 215, 0, 0.2);
+  animation: placement-indicator-pulse 1.6s ease-in-out infinite;
+}
+
+.board-container .placement-indicator__text {
+  color: var(--game-gold);
+}
+
+.board-container .placement-indicator__hint {
+  opacity: 0.6;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: var(--font-size-2xs);
+
+  &::before {
+    content: '·';
+    margin: 0 0.4rem;
+    opacity: 0.5;
+  }
+}
+
+@keyframes placement-indicator-pulse {
+  0%, 100% { box-shadow: 0 0 1rem rgba(255, 215, 0, 0.2); border-color: rgba(255, 215, 0, 0.5); }
+  50%       { box-shadow: 0 0 1.5rem rgba(255, 215, 0, 0.45); border-color: rgba(255, 215, 0, 0.8); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .placement-indicator { animation: none; }
+}
+
+body.reduce-motion .board-container .placement-indicator { animation: none; }
+
+@media (max-width: 480px) {
+  .board-container .placement-indicator {
+    bottom: calc(var(--spacing-sm) + 0.5rem);
+    padding: 0.35rem 0.7rem;
+    font-size: var(--font-size-2xs);
+
+    .placement-indicator__hint { display: none; }
+  }
+}

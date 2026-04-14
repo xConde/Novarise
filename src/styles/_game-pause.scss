@@ -308,89 +308,12 @@
 }
 
 
-// --- Sprint 27: pause-menu settings toggle rows ---
+// --- Sprint 27: pause-menu settings section (audio only) ---
 
 .board-container .pause-menu__settings {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-}
-
-.board-container .pause-settings-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: 0.35rem 0.5rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--border-radius-sm);
-  font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-xs);
-  color: var(--text-color);
-  cursor: pointer;
-  user-select: none;
-  transition: border-color 0.15s ease, background 0.15s ease;
-
-  &:hover {
-    border-color: rgba(255, 255, 255, 0.25);
-    background: rgba(255, 255, 255, 0.06);
-  }
-
-  input[type="checkbox"] {
-    position: absolute;
-    opacity: 0;
-    width: 0;
-    height: 0;
-    pointer-events: none;
-
-    &:focus-visible + .pause-settings-toggle__track {
-      outline: var(--border-width-medium) solid var(--theme-cyan);
-      outline-offset: 2px;
-    }
-  }
-}
-
-.board-container .pause-settings-toggle__track {
-  position: relative;
-  display: inline-block;
-  flex-shrink: 0;
-  width: 2rem;
-  height: 1rem;
-  background: rgba(255, 255, 255, 0.1);
-  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.3);
-  border-radius: 1rem;
-  transition: background 0.15s ease, border-color 0.15s ease;
-
-  &::after {
-    content: '';
-    position: absolute;
-    top: 0.125rem;
-    left: 0.125rem;
-    width: 0.625rem;
-    height: 0.625rem;
-    background: rgba(255, 255, 255, 0.6);
-    border-radius: 50%;
-    transition: transform 0.15s ease, background 0.15s ease;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-    &::after { transition: none; }
-  }
-}
-
-.board-container .pause-settings-toggle input[type="checkbox"]:checked + .pause-settings-toggle__track {
-  background: var(--theme-purple);
-  border-color: var(--theme-purple-lighter);
-
-  &::after {
-    transform: translateX(1rem);
-    background: #fff;
-  }
-}
-
-.board-container .pause-settings-toggle__label {
-  flex: 1;
 }
 
 
@@ -477,20 +400,3 @@
 }
 
 
-// --- Sprint 26: FPS counter overlay ---
-
-.board-container .fps-counter {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-3xs);
-  font-variant-numeric: tabular-nums;
-  color: rgba(255, 255, 255, 0.45);
-  background: rgba(0, 0, 0, 0.4);
-  padding: 0.1rem 0.35rem;
-  border-radius: var(--border-radius-sm);
-  pointer-events: none;
-  z-index: var(--z-index-overlay);
-  letter-spacing: 0.04em;
-}

@@ -35,6 +35,10 @@ $card-rarity-glows: (
   gap: var(--spacing-sm);
   padding: var(--spacing-xs) var(--spacing-sm);
 
+  // overflow-y: visible so card tooltips (bottom: calc(100% + 0.5rem)) can
+  // escape upward into the canvas grid area without clipping.
+  overflow: visible;
+
   background: var(--glass-bg);
   backdrop-filter: blur(0.75rem);
   border-top: var(--border-width-thin) solid var(--border-color);
@@ -224,7 +228,7 @@ $card-rarity-glows: (
   flex-direction: column;
   align-items: center;
   gap: 0.15rem;
-  padding: 0.4rem var(--spacing-xs) 0.3rem;
+  padding: 0.3rem var(--spacing-xs) 0.2rem;
 
   width: 5.25rem;
   min-height: 5.75rem;
@@ -546,12 +550,10 @@ body.reduce-motion .card--rare::after { animation: none; background-position: 0 
   .card--pending { animation: none; }
   .card--playable { transition: none; }
   .card-hand { animation: none; }
-  .card-hand__placement-hint { animation: none; }
 }
 
 body.reduce-motion .card--pending { animation: none; }
 body.reduce-motion .card-hand { animation: none; }
-body.reduce-motion .card-hand__placement-hint { animation: none; }
 
 // ── Card internals ───────────────────────────────────────────
 
@@ -633,7 +635,7 @@ body.reduce-motion .card-hand__placement-hint { animation: none; }
 
 // Sprint 11 — Card name pushed below the art zone (top 48%)
 .card__name {
-  margin-top: 48%; // push name below art zone
+  margin-top: 42%; // push name below art zone — was 48%, reduced to give more content room
   font-size: var(--font-size-xs); // bumped up from 2xs
   font-weight: 700;
   color: var(--text-color);
@@ -675,7 +677,7 @@ body.reduce-motion .card-hand__placement-hint { animation: none; }
 // The @each type-color rule above keeps per-type color tinting.
 .card__type-icon {
   position: absolute;
-  top: 6%;
+  top: 4%;
   left: 50%;
   transform: translateX(-50%);
   opacity: 0.75;
@@ -702,38 +704,6 @@ body.reduce-motion .card-hand__placement-hint { animation: none; }
     height: 22px;
     top: 8%;
   }
-}
-
-// ── Placement mode hint ───────────────────────────────────────
-
-.card-hand__placement-hint {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  padding: 0.25rem var(--spacing-sm);
-  background: rgba(255, 215, 0, 0.1);
-  border: var(--border-width-thin) solid rgba(255, 215, 0, 0.3);
-  border-radius: var(--border-radius-sm);
-  animation: hint-fade-in var(--transition-fast) ease;
-
-  @media (max-width: 480px) {
-    display: none; // too cramped on mobile — the raised card is enough feedback
-  }
-}
-
-.placement-hint-text {
-  font-size: var(--font-size-2xs);
-  font-weight: 600;
-  color: var(--game-gold);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-
-@keyframes hint-fade-in {
-  from { opacity: 0; transform: translateY(0.25rem); }
-  to   { opacity: 1; transform: translateY(0); }
 }
 
 // ── Pile counts ──────────────────────────────────────────────
