@@ -14,6 +14,7 @@ import { GamePauseService } from './game-board/services/game-pause.service';
 import { ChallengeDisplayService } from './game-board/services/challenge-display.service';
 import { CardHandComponent } from './game-board/components/card-hand/card-hand.component';
 import { PileInspectorComponent } from './game-board/components/pile-inspector/pile-inspector.component';
+import { LastTurnSummaryComponent } from './game-board/components/last-turn-summary/last-turn-summary.component';
 import { IconComponent } from '@shared/components/icon/icon.component';
 @NgModule({
   declarations: [
@@ -25,6 +26,7 @@ import { IconComponent } from '@shared/components/icon/icon.component';
     TowerInfoPanelComponent,
     CardHandComponent,
     PileInspectorComponent,
+    LastTurnSummaryComponent,
   ],
   imports: [
     CommonModule,

@@ -6,6 +6,7 @@ import {
   OnDestroy,
   OnInit,
   Output,
+  SimpleChanges,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
 import {
@@ -53,6 +54,8 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   @Input() pendingCardId: string | null = null;
   @Output() cardPlayed = new EventEmitter<CardInstance>();
   @Output() pileInspected = new EventEmitter<'draw' | 'discard'>();
+  /** Emits true when the player has 0 energy and no playable cards; false when resolved. */
+  @Output() handStuckChanged = new EventEmitter<boolean>();
 
   /** Pre-computed view models — avoids per-template-check allocation. */
   handCards: HandCard[] = [];
@@ -119,6 +122,19 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   // Expose enum to template
   readonly CardType = CardType;
 
+  // Sprint 36 — card-play lift animation
+  /** instanceId of the card currently animating out (lift + fade). Null when no animation is running. */
+  playingCardId: string | null = null;
+
+  // Sprint 37 — pile count pulse
+  private prevDrawCount = 0;
+  private prevDiscardCount = 0;
+  drawPulse = false;
+  discardPulse = false;
+
+  // Sprint 39 — hand-stuck tracking
+  private prevHandStuck = false;
+
   private readonly subscriptions = new Subscription();
 
   ngOnInit(): void {
@@ -126,9 +142,33 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
     this.resolvePips();
   }
 
-  ngOnChanges(): void {
+  ngOnChanges(_changes?: SimpleChanges): void {
     this.resolveHand();
     this.resolvePips();
+
+    // Sprint 36: clear playing animation if the card has left the hand
+    if (this.playingCardId && !this.handCards.some(c => c.instance.instanceId === this.playingCardId)) {
+      this.playingCardId = null;
+    }
+
+    // Sprint 37: pulse pile counters when they change (skip the very first render)
+    const drawLen = this.deckState?.drawPile.length ?? 0;
+    const discardLen = this.deckState?.discardPile.length ?? 0;
+    if (this.prevDrawCount !== 0 && drawLen !== this.prevDrawCount) {
+      this.flashPileCount('draw');
+    }
+    if (this.prevDiscardCount !== 0 && discardLen !== this.prevDiscardCount) {
+      this.flashPileCount('discard');
+    }
+    this.prevDrawCount = drawLen;
+    this.prevDiscardCount = discardLen;
+
+    // Sprint 39: emit hand-stuck state change
+    const stuck = this.isHandStuck;
+    if (stuck !== this.prevHandStuck) {
+      this.handStuckChanged.emit(stuck);
+      this.prevHandStuck = stuck;
+    }
   }
 
   ngOnDestroy(): void {
@@ -169,7 +209,41 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
 
   playCard(card: HandCard): void {
     if (!card.canPlay) return;
-    this.cardPlayed.emit(card.instance);
+    // When another card is pending (tower placement), only allow cancelling that card
+    if (this.pendingCardId !== null && this.pendingCardId !== card.instance.instanceId) return;
+
+    // Sprint 36: tower cards enter pending/placement mode instead of playing immediately.
+    // Skip the lift animation for them — they don't leave the hand until placed.
+    if (card.definition.type === CardType.TOWER) {
+      this.cardPlayed.emit(card.instance);
+      return;
+    }
+
+    // Non-tower cards: animate lift then emit so the parent dispatches the effect
+    const id = card.instance.instanceId;
+    this.playingCardId = id;
+    setTimeout(() => {
+      this.cardPlayed.emit(card.instance);
+      // playingCardId is cleared in ngOnChanges when the card leaves handCards
+    }, 80);
+  }
+
+  // Sprint 37
+  private flashPileCount(pile: 'draw' | 'discard'): void {
+    if (pile === 'draw') {
+      this.drawPulse = true;
+      setTimeout(() => (this.drawPulse = false), 350);
+    } else {
+      this.discardPulse = true;
+      setTimeout(() => (this.discardPulse = false), 350);
+    }
+  }
+
+  // Sprint 39 — true when the player has no energy and no playable cards
+  get isHandStuck(): boolean {
+    if (!this.energy || !this.handCards.length) return false;
+    const anyPlayable = this.handCards.some(c => c.canPlay);
+    return !anyPlayable && this.energy.current === 0;
   }
 
   /**

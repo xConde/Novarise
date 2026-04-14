@@ -29,6 +29,7 @@
       [class.card--upgraded]="card.instance.upgraded"
       [class.card--pending]="card.instance.instanceId === pendingCardId"
       [class.card--dimmed]="pendingCardId !== null && card.instance.instanceId !== pendingCardId"
+      [class.card--playing]="card.instance.instanceId === playingCardId"
       [disabled]="!card.canPlay || (pendingCardId !== null && card.instance.instanceId !== pendingCardId)"
       (click)="playCard(card)"
       [attr.aria-label]="card.definition.name + ' — ' + card.definition.description + ' — Energy cost: ' + card.definition.energyCost + (card.instance.upgraded ? ' (upgraded)' : '')"
@@ -69,6 +70,11 @@
             *ngIf="getCardIndex(card) !== null && (getCardIndex(card)!) < 9"
             aria-hidden="true">{{ (getCardIndex(card)!) + 1 }}</span>
 
+      <!-- Sprint 35: card description tooltip — visible on hover/focus (desktop only) -->
+      <span class="card__tooltip" role="tooltip" aria-hidden="true">
+        {{ card.definition.description }}
+      </span>
+
     </button>
   </div>
 
@@ -81,6 +87,7 @@
   <div class="card-hand__piles" [attr.aria-label]="'Deck piles'">
     <button class="pile-count pile-count--draw"
             type="button"
+            [class.pile-count--pulse]="drawPulse"
             [attr.aria-label]="'Inspect draw pile: ' + deckState.drawPile.length + ' cards'"
             (click)="inspectPile('draw')">
       <app-icon name="draw-pile" [size]="12"></app-icon>
@@ -89,6 +96,7 @@
     </button>
     <button class="pile-count pile-count--discard"
             type="button"
+            [class.pile-count--pulse]="discardPulse"
             [attr.aria-label]="'Inspect discard pile: ' + deckState.discardPile.length + ' cards'"
             (click)="inspectPile('discard')">
       <app-icon name="discard" [size]="12"></app-icon>

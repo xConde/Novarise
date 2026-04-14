@@ -128,6 +128,7 @@
     <button
       class="end-turn-btn"
       *ngIf="gameState.phase === GamePhase.COMBAT"
+      [class.end-turn-btn--stuck]="handStuck && !pendingTowerCardId"
       (click)="endTurn()"
       [disabled]="!!pendingTowerCardId"
       [attr.aria-label]="pendingTowerCardId ? 'Place or cancel pending tower card first' : 'End turn and resolve combat'">
@@ -142,6 +143,12 @@
          aria-live="polite">
       Turn {{ currentTurnNumber }}
     </div>
+
+    <!-- Sprint 33: Last-turn summary overlay — brief strip showing prior turn events -->
+    <app-last-turn-summary
+      [summary]="lastTurnSummary"
+      [visible]="showLastTurnSummary">
+    </app-last-turn-summary>
 
     <!-- Phase 4: Spawn preview — shows what's coming in the next few turns. -->
     <aside
@@ -275,7 +282,8 @@
     [energy]="energyState"
     [pendingCardId]="pendingTowerCardId"
     (pileInspected)="inspectedPile = $event"
-    (cardPlayed)="onCardPlayed($event)">
+    (cardPlayed)="onCardPlayed($event)"
+    (handStuckChanged)="handStuck = $event">
   </app-card-hand>
 
   <!-- Pile inspector overlay — full-board modal showing draw or discard pile contents -->

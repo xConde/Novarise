@@ -76,6 +76,7 @@ import { getActiveTowerEffect } from '../../run/constants/card-definitions';
 import { WaveCombatFacadeService } from './services/wave-combat-facade.service';
 import { TutorialFacadeService } from './services/tutorial-facade.service';
 import { AscensionModifierService } from './services/ascension-modifier.service';
+import { TurnHistoryService, TurnEventRecord } from './services/turn-history.service';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
 export interface EnemyBadge {
@@ -140,7 +141,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -253,6 +254,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   showTurnBanner = false;
   private turnBannerTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // Last-turn summary overlay — flashed for 2500ms after each endTurn()
+  showLastTurnSummary = false;
+  lastTurnSummary: TurnEventRecord | null = null;
+  private lastTurnSummaryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Whether the End Turn button should pulse (hand stuck: 0 energy + no playable cards). */
+  handStuck = false;
+
   // Drag-and-drop tower placement — delegated to TowerPlacementService
   get isDragging(): boolean { return this.towerPlacementService.isDragging; }
 
@@ -341,6 +350,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private towerMeshFactory: TowerMeshFactoryService,
     private enemyMeshFactory: EnemyMeshFactoryService,
     private encounterCheckpointService: EncounterCheckpointService,
+    private turnHistoryService: TurnHistoryService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -761,6 +771,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   onCardPlayed(card: CardInstance): void {
     if (this.isPaused) return;
+    this.turnHistoryService.recordCardPlayed();
     this.cardPlayService.onCardPlayed(card);
   }
 
@@ -975,13 +986,54 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }, 1200);
   }
 
+  /**
+   * Briefly shows the last-turn summary overlay for 2500 ms after endTurn().
+   * Cleared early if the player plays a card (not yet wired — summary hides on timer only).
+   */
+  private flashTurnSummary(record: TurnEventRecord): void {
+    if (this.lastTurnSummaryTimer) {
+      clearTimeout(this.lastTurnSummaryTimer);
+    }
+    this.lastTurnSummary = record;
+    this.showLastTurnSummary = true;
+    this.lastTurnSummaryTimer = setTimeout(() => {
+      this.showLastTurnSummary = false;
+      this.lastTurnSummaryTimer = null;
+    }, 2500);
+  }
+
   endTurn(): void {
     if (this.isPaused) return;
+
+    // Capture kill count before the turn resolves so we can record it.
+    const killsBefore = Object.values(this.gameStatsService.getStats().killsByTowerType)
+      .reduce((a, b) => a + b, 0);
+    const livesBefore = this.gameStateService.getState().lives;
+    const goldBefore = this.gameStateService.getState().gold;
+
+    // Begin tracking turn in history service BEFORE resolution
+    this.turnHistoryService.beginTurn(this.currentTurnNumber);
+
     this.waveCombat.endTurn();
-    // Flash turn banner only if combat is still ongoing after resolution
-    const postPhase = this.gameStateService.getState().phase;
-    if (postPhase === GamePhase.COMBAT) {
+
+    // Record outcomes after resolution
+    const postState = this.gameStateService.getState();
+    const killsAfter = Object.values(this.gameStatsService.getStats().killsByTowerType)
+      .reduce((a, b) => a + b, 0);
+    this.turnHistoryService.recordKills(killsAfter - killsBefore);
+    const livesLost = Math.max(0, livesBefore - postState.lives);
+    if (livesLost > 0) this.turnHistoryService.recordLifeLost(livesLost);
+    const goldEarned = Math.max(0, postState.gold - goldBefore);
+    if (goldEarned > 0) this.turnHistoryService.recordGoldEarned(goldEarned);
+
+    const record = this.turnHistoryService.endTurn();
+
+    // Flash turn banner + summary only if combat is still ongoing after resolution
+    if (postState.phase === GamePhase.COMBAT) {
       this.flashTurnBanner();
+      if (record) {
+        this.flashTurnSummary(record);
+      }
     }
   }
 
@@ -1425,6 +1477,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.turnBannerTimer !== null) {
       clearTimeout(this.turnBannerTimer);
       this.turnBannerTimer = null;
+    }
+
+    if (this.lastTurnSummaryTimer !== null) {
+      clearTimeout(this.lastTurnSummaryTimer);
+      this.lastTurnSummaryTimer = null;
     }
 
     this.waveCombat.cleanup();

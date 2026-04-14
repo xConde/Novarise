@@ -285,6 +285,30 @@
       font-weight: 400;
       letter-spacing: 0.1em;
     }
+
+    // Sprint 39: hand-stuck pulse — gentle cyan nudge when no cards are playable
+    &--stuck {
+      animation: end-turn-stuck-pulse 2s ease-in-out infinite;
+      border-color: var(--theme-cyan) !important;
+      box-shadow: 0 0 1.25rem rgba(0, 255, 255, 0.4) !important;
+    }
+  }
+
+  @keyframes end-turn-stuck-pulse {
+    0%, 100% {
+      box-shadow: 0 0 1.25rem rgba(0, 255, 255, 0.4);
+      border-color: var(--theme-cyan);
+    }
+    50% {
+      box-shadow: 0 0 1.75rem rgba(0, 255, 255, 0.7);
+      border-color: #88ffff;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .end-turn-btn--stuck {
+      animation: none;
+    }
   }
 
   // Game HUD styles moved to src/styles.css (.board-container .game-hud) for ViewEncapsulation.None reach
