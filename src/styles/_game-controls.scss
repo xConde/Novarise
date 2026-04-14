@@ -136,6 +136,7 @@
     flex-direction: column;
     gap: 0.2rem;
     padding: 0.2rem;
+    max-width: 2.5rem;
   }
 
   .board-container .game-controls .control-btn {
@@ -148,7 +149,10 @@
     justify-content: center;
   }
 
-  .board-container .game-controls .pause-btn { line-height: 0; }
+  .board-container .game-controls .pause-btn {
+    line-height: 0;
+    min-width: 2rem;
+  }
 
   // Hide the [R]/[V] hotkey hints on mobile — no keyboard
   .board-container .game-controls .wave-hint { display: none; }

@@ -31,6 +31,19 @@ export class GameHudComponent implements OnChanges, OnDestroy {
   goldPulse = false;
   scorePulse = false;
   goldChange = 0;
+  challengeStripExpanded = false;
+
+  toggleChallengeStrip(): void {
+    this.challengeStripExpanded = !this.challengeStripExpanded;
+  }
+
+  get passingCount(): number {
+    return this.challengeIndicators.filter(c => c.passing).length;
+  }
+
+  get failingCount(): number {
+    return this.challengeIndicators.filter(c => !c.passing).length;
+  }
 
   private previousGold = 0;
   private previousScore = 0;

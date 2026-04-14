@@ -897,6 +897,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.enemyBadgeMap.get(type) ?? [];
   }
 
+  /** Returns the display name for a given enemy type, sourced from ENEMY_INFO. */
+  getEnemyLabel(type: EnemyType): string {
+    return ENEMY_INFO[type].name;
+  }
+
   endTurn(): void {
     if (this.isPaused) return;
     this.waveCombat.endTurn();

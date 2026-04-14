@@ -56,7 +56,7 @@
 /* Wave status row (enemies remaining) — extracted from HUD, centered below End Turn (Sprint 11-12) */
 .board-container .hud-wave-status {
   position: absolute;
-  top: calc(var(--shell-end-turn-top) + 3.5rem);
+  top: calc(var(--shell-end-turn-top) + 4.25rem);
   left: 50%;
   transform: translateX(-50%);
   pointer-events: none;
@@ -132,23 +132,64 @@
 
 .board-container .hud-challenge-strip .challenge-indicator {
   font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-2xs);
+  font-size: var(--font-size-3xs);
   font-weight: 600;
   letter-spacing: 0.03rem;
-  padding: 0.125rem 0.5rem;
+  padding: 0.1rem 0.4rem;
   border-radius: 1rem;
-  border: var(--border-width-thin) solid currentColor;
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.18);
   white-space: nowrap;
 }
 
 .board-container .hud-challenge-strip .challenge-indicator.passing {
-  color: var(--action-success);
-  background: rgba(0, 180, 80, 0.1);
+  color: rgba(120, 220, 140, 0.8);
+  background: rgba(60, 180, 120, 0.06);
 }
 
 .board-container .hud-challenge-strip .challenge-indicator.failing {
   color: var(--action-danger);
   background: var(--action-danger-bg);
+}
+
+.board-container .hud-challenge-toggle {
+  background: transparent;
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.15);
+  border-radius: 1rem;
+  padding: 0.1rem 0.45rem;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-3xs);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  pointer-events: auto;
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.3);
+    color: var(--text-color);
+  }
+
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--theme-cyan);
+    outline-offset: 2px;
+  }
+}
+
+.board-container .hud-challenge-summary {
+  display: inline-flex;
+  gap: 0.15rem;
+}
+
+.board-container .challenge-dot {
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  line-height: 1;
+  display: inline-block;
+
+  &--passing { color: rgba(120, 220, 140, 0.9); }
+  &--failing { color: rgba(255, 120, 120, 0.95); }
 }
 
 @media (max-width: 480px) {
@@ -395,6 +436,26 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
 
 @media (prefers-reduced-motion: reduce) {
   .toast {
+    animation: none;
+  }
+}
+
+// Wave-start pulse animation — class binding exists in game-hud.component.html
+// line 14, but the keyframes were missing. Brief scale + color flash on the
+// wave number when a new wave begins.
+@keyframes wave-start-pulse {
+  0%   { transform: scale(1);    filter: brightness(1); }
+  30%  { transform: scale(1.2);  filter: brightness(1.5); }
+  60%  { transform: scale(1.05); filter: brightness(1.2); }
+  100% { transform: scale(1);    filter: brightness(1); }
+}
+
+.board-container .game-hud .hud-value.wave-start-pulse {
+  animation: wave-start-pulse 600ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .game-hud .hud-value.wave-start-pulse {
     animation: none;
   }
 }

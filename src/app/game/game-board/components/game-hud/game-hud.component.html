@@ -24,15 +24,30 @@
     </div>
   </div>
 </div>
-<div class="hud-challenge-strip" *ngIf="challengeIndicators.length > 0" aria-label="Challenge progress">
-  <span
-    class="challenge-indicator"
-    *ngFor="let ci of challengeIndicators"
-    [class.passing]="ci.passing"
-    [class.failing]="!ci.passing"
-    [attr.aria-label]="ci.label + ': ' + ci.value">
-    {{ ci.label }}: {{ ci.value }}
-  </span>
+<div class="hud-challenge-strip"
+     *ngIf="challengeIndicators.length > 0"
+     [class.hud-challenge-strip--collapsed]="!challengeStripExpanded"
+     aria-label="Challenge progress">
+  <button class="hud-challenge-toggle"
+          (click)="toggleChallengeStrip()"
+          [attr.aria-expanded]="challengeStripExpanded"
+          [attr.aria-label]="challengeStripExpanded ? 'Collapse challenge indicators' : 'Expand challenge indicators'">
+    <span *ngIf="!challengeStripExpanded" class="hud-challenge-summary">
+      <span class="challenge-dot challenge-dot--passing" *ngFor="let _ of [].constructor(passingCount)">✓</span>
+      <span class="challenge-dot challenge-dot--failing" *ngFor="let _ of [].constructor(failingCount)">✗</span>
+    </span>
+    <span *ngIf="challengeStripExpanded" aria-hidden="true">×</span>
+  </button>
+  <ng-container *ngIf="challengeStripExpanded">
+    <span
+      class="challenge-indicator"
+      *ngFor="let ci of challengeIndicators"
+      [class.passing]="ci.passing"
+      [class.failing]="!ci.passing"
+      [attr.aria-label]="ci.label + ': ' + ci.value">
+      {{ ci.label }}: {{ ci.value }}
+    </span>
+  </ng-container>
 </div>
 <div class="hud-wave-status"
      *ngIf="isCombat"

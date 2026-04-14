@@ -153,21 +153,57 @@ describe('GameHudComponent', () => {
       expect(el).toBeTruthy();
     });
 
-    it('should render one badge per indicator', () => {
+    it('should default to collapsed state (no .challenge-indicator elements visible)', () => {
+      const indicators: ChallengeIndicator[] = [
+        { label: 'No Slow', value: '✓', passing: true },
+      ];
+      component.challengeIndicators = indicators;
+      fixture.detectChanges();
+
+      const badges = fixture.nativeElement.querySelectorAll('.challenge-indicator');
+      expect(badges.length).toBe(0);
+    });
+
+    it('should render toggle button when indicators are provided', () => {
+      component.challengeIndicators = [{ label: 'No Slow', value: '✓', passing: true }];
+      fixture.detectChanges();
+
+      const toggle = fixture.nativeElement.querySelector('.hud-challenge-toggle');
+      expect(toggle).toBeTruthy();
+    });
+
+    it('should expand indicators when toggle button is clicked', () => {
+      const indicators: ChallengeIndicator[] = [
+        { label: 'No Slow', value: '✓', passing: true },
+        { label: 'Towers', value: '3/4', passing: false },
+      ];
+      component.challengeIndicators = indicators;
+      fixture.detectChanges();
+
+      component.toggleChallengeStrip();
+      fixture.detectChanges();
+
+      const badges = fixture.nativeElement.querySelectorAll('.challenge-indicator');
+      expect(badges.length).toBe(2);
+    });
+
+    it('should render one badge per indicator when expanded', () => {
       const indicators: ChallengeIndicator[] = [
         { label: 'No Slow', value: '✓', passing: true },
         { label: 'Towers', value: '3/4', passing: false },
         { label: 'Spent', value: '400g/600g', passing: true },
       ];
       component.challengeIndicators = indicators;
+      component.challengeStripExpanded = true;
       fixture.detectChanges();
 
       const badges = fixture.nativeElement.querySelectorAll('.challenge-indicator');
       expect(badges.length).toBe(3);
     });
 
-    it('should apply passing class when indicator.passing is true', () => {
+    it('should apply passing class when indicator.passing is true (expanded)', () => {
       component.challengeIndicators = [{ label: 'No Slow', value: '✓', passing: true }];
+      component.challengeStripExpanded = true;
       fixture.detectChanges();
 
       const badge = fixture.nativeElement.querySelector('.challenge-indicator');
@@ -175,8 +211,9 @@ describe('GameHudComponent', () => {
       expect(badge.classList.contains('failing')).toBeFalse();
     });
 
-    it('should apply failing class when indicator.passing is false', () => {
+    it('should apply failing class when indicator.passing is false (expanded)', () => {
       component.challengeIndicators = [{ label: 'No Slow', value: '✗', passing: false }];
+      component.challengeStripExpanded = true;
       fixture.detectChanges();
 
       const badge = fixture.nativeElement.querySelector('.challenge-indicator');
@@ -184,8 +221,9 @@ describe('GameHudComponent', () => {
       expect(badge.classList.contains('passing')).toBeFalse();
     });
 
-    it('should display label and value in badge text', () => {
+    it('should display label and value in badge text (expanded)', () => {
       component.challengeIndicators = [{ label: 'Towers', value: '2/4', passing: true }];
+      component.challengeStripExpanded = true;
       fixture.detectChanges();
 
       const badge = fixture.nativeElement.querySelector('.challenge-indicator');
@@ -193,16 +231,18 @@ describe('GameHudComponent', () => {
       expect(badge.textContent.trim()).toContain('2/4');
     });
 
-    it('should set aria-label combining label and value on each badge', () => {
+    it('should set aria-label combining label and value on each badge (expanded)', () => {
       component.challengeIndicators = [{ label: 'Spent', value: '300g/600g', passing: true }];
+      component.challengeStripExpanded = true;
       fixture.detectChanges();
 
       const badge = fixture.nativeElement.querySelector('.challenge-indicator');
       expect(badge.getAttribute('aria-label')).toBe('Spent: 300g/600g');
     });
 
-    it('should update rendered badges when input changes', () => {
+    it('should update rendered badges when input changes (expanded)', () => {
       component.challengeIndicators = [{ label: 'No Damage', value: '✓', passing: true }];
+      component.challengeStripExpanded = true;
       fixture.detectChanges();
 
       component.challengeIndicators = [
@@ -218,6 +258,36 @@ describe('GameHudComponent', () => {
 
     it('should default challengeIndicators to empty array', () => {
       expect(component.challengeIndicators).toEqual([]);
+    });
+
+    it('should default challengeStripExpanded to false', () => {
+      expect(component.challengeStripExpanded).toBeFalse();
+    });
+
+    it('should toggle challengeStripExpanded when toggleChallengeStrip() is called', () => {
+      expect(component.challengeStripExpanded).toBeFalse();
+      component.toggleChallengeStrip();
+      expect(component.challengeStripExpanded).toBeTrue();
+      component.toggleChallengeStrip();
+      expect(component.challengeStripExpanded).toBeFalse();
+    });
+
+    it('should return correct passingCount', () => {
+      component.challengeIndicators = [
+        { label: 'A', value: '✓', passing: true },
+        { label: 'B', value: '✗', passing: false },
+        { label: 'C', value: '✓', passing: true },
+      ];
+      expect(component.passingCount).toBe(2);
+    });
+
+    it('should return correct failingCount', () => {
+      component.challengeIndicators = [
+        { label: 'A', value: '✓', passing: true },
+        { label: 'B', value: '✗', passing: false },
+        { label: 'C', value: '✗', passing: false },
+      ];
+      expect(component.failingCount).toBe(2);
     });
   });
 

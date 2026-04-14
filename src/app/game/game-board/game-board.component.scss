@@ -25,7 +25,16 @@
 .board-container {
   --shell-hud-height: 4rem;
   --shell-hand-height: 9rem;
-  // Sprint 1: Shell positioning custom properties
+  // Shell positioning tokens — used throughout _game-*.scss partials.
+  // Desktop defaults; mobile overrides in @media (max-width:480px) block below.
+  // Rationale:
+  //   --shell-hud-top/left:          HUD bar position (top-left corner)
+  //   --shell-end-turn-top:          End Turn button position (top-center)
+  //   --shell-minimap-bottom/left:   Minimap position (bottom-left above hand)
+  //   --shell-controls-bottom/right: Game controls position (bottom-right)
+  //   --shell-spawn-top/left:        INCOMING spawn preview (below HUD+challenges)
+  //   --shell-wave-top/right:        Wave/Next Wave panel (top-right)
+  //   --shell-tower-info-bottom:     Tower info panel (bottom-center above hand)
   --shell-hud-top: var(--spacing-sm);
   --shell-hud-left: var(--spacing-sm);
   --shell-end-turn-top: var(--spacing-sm);
@@ -74,7 +83,7 @@
     --shell-minimap-bottom: var(--spacing-sm);
     --shell-minimap-left: var(--spacing-xs);
     --shell-controls-bottom: var(--spacing-xs);
-    --shell-controls-right: var(--spacing-xs);
+    --shell-controls-right: var(--spacing-sm);
   }
 
   .canvas-container {
@@ -198,10 +207,29 @@
       font-variant-numeric: tabular-nums;
     }
 
+    .spawn-preview__label {
+      font-size: var(--font-size-3xs);
+      color: var(--text-muted, rgba(255, 255, 255, 0.5));
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-left: 0.15rem;
+    }
+
     .spawn-preview__empty {
       font-style: italic;
       opacity: 0.5;
     }
+
+    // Enemy-type dot colors — mirrors _game-wave.scss wave-preview dot rules
+    // scoped to .spawn-preview so they apply to the INCOMING panel as well.
+    .enemy-dot[data-type='basic']    { background: var(--enemy-color-basic);   box-shadow: 0 0 4px var(--enemy-glow-basic); }
+    .enemy-dot[data-type='fast']     { background: var(--enemy-color-fast);    box-shadow: 0 0 4px var(--enemy-glow-fast); }
+    .enemy-dot[data-type='heavy']    { background: var(--enemy-color-heavy);   box-shadow: 0 0 4px var(--enemy-glow-heavy); }
+    .enemy-dot[data-type='swift']    { background: var(--enemy-color-flying);  box-shadow: 0 0 4px var(--enemy-glow-flying); }
+    .enemy-dot[data-type='boss']     { background: var(--enemy-color-boss);    box-shadow: 0 0 4px var(--enemy-glow-boss); }
+    .enemy-dot[data-type='shielded'] { background: var(--enemy-color-shield);  box-shadow: 0 0 4px var(--enemy-glow-shielded); }
+    .enemy-dot[data-type='swarm']    { background: var(--enemy-color-swarm);   box-shadow: 0 0 4px var(--enemy-glow-swarm); }
+    .enemy-dot[data-type='flying']   { background: var(--enemy-color-flying);  box-shadow: 0 0 4px var(--enemy-glow-flying); }
   }
 
   // --- Phase 4: End Turn button (turn-based combat) ---
@@ -264,7 +292,7 @@
 
   .path-blocked-warning {
     position: absolute;
-    top: calc(var(--shell-end-turn-top) + 3.5rem);
+    top: calc(var(--shell-end-turn-top) + 4.25rem);
     left: 50%;
     transform: translateX(-50%);
     padding: 0.4rem var(--spacing-lg);

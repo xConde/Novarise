@@ -136,6 +136,7 @@
               [attr.data-type]="s.type.toLowerCase()">
               <span class="enemy-dot spawn-preview__dot" [attr.data-type]="s.type.toLowerCase()"></span>
               <span class="spawn-preview__count">{{ s.count }}×</span>
+              <span class="spawn-preview__label">{{ getEnemyLabel(s.type) }}</span>
             </span>
           </span>
           <span class="spawn-preview__empty" *ngIf="entry.spawns.length === 0">—</span>
