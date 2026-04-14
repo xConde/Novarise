@@ -227,11 +227,11 @@ $card-rarity-glows: (
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.15rem;
+  gap: 0.2rem;
   padding: 0.3rem var(--spacing-xs) 0.2rem;
 
-  width: 5.25rem;
-  min-height: 5.75rem;
+  width: 6.25rem;
+  min-height: 7.75rem;
 
   background: rgba(10, 5, 20, 0.88);
   border: var(--border-width-thin) solid var(--border-color);
@@ -258,15 +258,15 @@ $card-rarity-glows: (
   }
 
   @media (max-width: 768px) {
-    width: 4.5rem;
-    min-height: 5rem;
+    width: 5.25rem;
+    min-height: 6.5rem;
     padding: 0.3rem var(--spacing-xs) 0.25rem;
   }
 
   @media (max-width: 480px) {
-    width: 3.5rem;
-    min-width: 3.5rem;
-    min-height: 4.25rem;
+    width: 3.75rem;
+    min-width: 3.75rem;
+    min-height: 5.25rem;
     padding: 0.2rem 0.25rem 0.2rem;
     gap: 0.1rem;
     font-size: var(--font-size-3xs);
@@ -280,7 +280,7 @@ $card-rarity-glows: (
 //   2: .card__cost, .card__upgraded-badge, .card__instance-dot → always on top
 
 // Sprint 9 — Art zone foundation
-// Top ~48% of the card is a pseudo-element layer with a radial gradient
+// Top ~55% of the card is a pseudo-element layer with a radial gradient
 // per card type. Creates a colored "art splash" that IS the visual identity.
 .card::before {
   content: '';
@@ -288,7 +288,7 @@ $card-rarity-glows: (
   top: 0;
   left: 0;
   right: 0;
-  height: 48%;
+  height: 55%;
   pointer-events: none;
   z-index: 0;
   background: radial-gradient(ellipse at 50% 60%, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
@@ -598,8 +598,8 @@ body.reduce-motion .card-hand { animation: none; }
   position: absolute;
   bottom: 0.25rem;
   right: 0.25rem;
-  width: 0.35rem;
-  height: 0.35rem;
+  width: 0.45rem;
+  height: 0.45rem;
   border-radius: 50%;
   opacity: 0.55;
   box-shadow: 0 0 0.2rem currentColor;
@@ -607,8 +607,8 @@ body.reduce-motion .card-hand { animation: none; }
   z-index: 2; // Sprint 16: above scan-line texture
 
   @media (max-width: 480px) {
-    width: 0.28rem;
-    height: 0.28rem;
+    width: 0.35rem;
+    height: 0.35rem;
     bottom: 0.15rem;
     right: 0.15rem;
   }
@@ -633,9 +633,9 @@ body.reduce-motion .card-hand { animation: none; }
   }
 }
 
-// Sprint 11 — Card name pushed below the art zone (top 48%)
+// Sprint 11 — Card name pushed below the art zone (top 55%)
 .card__name {
-  margin-top: 42%; // push name below art zone — was 48%, reduced to give more content room
+  margin-top: 55%; // push name below art zone — grown to match new 55% art zone height
   font-size: var(--font-size-xs); // bumped up from 2xs
   font-weight: 700;
   color: var(--text-color);
@@ -651,7 +651,7 @@ body.reduce-motion .card-hand { animation: none; }
 
   @media (max-width: 480px) {
     font-size: var(--font-size-3xs);
-    margin-top: 46%;
+    margin-top: 55%;
   }
 }
 
@@ -673,11 +673,11 @@ body.reduce-motion .card-hand { animation: none; }
 }
 
 // Sprint 11 — Type icon: dominant "art" of the card.
-// Centered in the top art zone (48% height) at 40px on desktop.
+// Centered in the top art zone (55% height) at 48px on desktop.
 // The @each type-color rule above keeps per-type color tinting.
 .card__type-icon {
   position: absolute;
-  top: 4%;
+  top: 8%;
   left: 50%;
   transform: translateX(-50%);
   opacity: 0.75;
@@ -686,8 +686,8 @@ body.reduce-motion .card-hand { animation: none; }
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
 
   svg {
     width: 100%;
@@ -695,13 +695,13 @@ body.reduce-motion .card-hand { animation: none; }
   }
 
   @media (max-width: 768px) {
-    width: 30px;
-    height: 30px;
+    width: 38px;
+    height: 38px;
   }
 
   @media (max-width: 480px) {
-    width: 22px;
-    height: 22px;
+    width: 26px;
+    height: 26px;
     top: 8%;
   }
 }
@@ -792,7 +792,7 @@ body.reduce-motion .card-hand { animation: none; }
   bottom: 0.2rem;
   left: 0.25rem;
   font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-3xs);
+  font-size: var(--font-size-2xs);
   font-weight: 700;
   color: rgba(255, 255, 255, 0.4);
   letter-spacing: 0.03em;
@@ -818,10 +818,12 @@ body.reduce-motion .card-hand { animation: none; }
 
 .card__tooltip {
   position: absolute;
-  bottom: calc(100% + 0.5rem);
+  top: auto;
+  bottom: 100%;
+  margin-bottom: 0.5rem;
   left: 50%;
   transform: translateX(-50%) translateY(0.25rem);
-  max-width: 14rem;
+  max-width: 16rem;
   padding: 0.4rem 0.6rem;
   background: rgba(10, 15, 30, 0.95);
   border: var(--border-width-thin) solid rgba(100, 200, 255, 0.4);

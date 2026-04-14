@@ -24,7 +24,7 @@
 // rearranging the order.
 .board-container {
   --shell-hud-height: 4rem;
-  --shell-hand-height: 9rem;
+  --shell-hand-height: 10rem;
   // Shell positioning tokens — used throughout _game-*.scss partials.
   // Desktop defaults; mobile overrides in @media (max-width:480px) block below.
   // Rationale:
@@ -67,11 +67,11 @@
   }
 
   @media (max-width:768px) {
-    --shell-hand-height: 8rem;
+    --shell-hand-height: 8.75rem;
   }
 
   @media (max-width:480px) {
-    --shell-hand-height: 7rem;
+    --shell-hand-height: 7.5rem;
     --shell-hud-height: 3rem;
     // End Turn sits cleanly below HUD with a visible gap (not flush)
     --shell-end-turn-top: calc(var(--shell-hud-top) + var(--shell-hud-height) + var(--spacing-sm));
