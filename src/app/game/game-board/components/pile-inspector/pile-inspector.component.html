@@ -1,0 +1,27 @@
+<div class="pile-inspector-backdrop"
+     (click)="onBackdropClick($event)"
+     role="dialog"
+     aria-modal="true"
+     [attr.aria-label]="label">
+  <div class="pile-inspector">
+    <header class="pile-inspector__header">
+      <h2 class="pile-inspector__title">{{ label }}</h2>
+      <span class="pile-inspector__count">{{ pile.length }} cards</span>
+      <button class="pile-inspector__close"
+              type="button"
+              (click)="close()"
+              aria-label="Close inspector">×</button>
+    </header>
+    <div class="pile-inspector__grid" *ngIf="groupedCards.length > 0">
+      <div *ngFor="let c of groupedCards"
+           class="pile-inspector__card"
+           [class.pile-inspector__card--upgraded]="c.upgraded">
+        <span class="pile-inspector__card-name">{{ c.name }}</span>
+        <span class="pile-inspector__card-count">×{{ c.count }}</span>
+      </div>
+    </div>
+    <p class="pile-inspector__empty" *ngIf="groupedCards.length === 0">
+      This pile is empty.
+    </p>
+  </div>
+</div>

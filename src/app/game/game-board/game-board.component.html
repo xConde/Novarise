@@ -20,6 +20,17 @@
       [currentEndlessTemplate]="currentEndlessTemplate">
     </app-game-hud>
 
+    <!-- Desktop-only: active relic letter-chips beneath the HUD -->
+    <div class="hud-relic-peek"
+         *ngIf="activeRelics.length > 0"
+         aria-label="Active relics">
+      <span *ngFor="let relic of activeRelics"
+            class="hud-relic-peek__item"
+            [attr.title]="relic.name + ' — ' + relic.description">
+        {{ relic.name.charAt(0) }}
+      </span>
+    </div>
+
     <!-- Wave clear banner -->
     <div
       class="wave-clear-banner"
@@ -117,6 +128,13 @@
       <span class="end-turn-hint">Turn {{ currentTurnNumber }} · Space</span>
     </button>
 
+    <!-- Turn start banner — fades in/out when a new turn begins -->
+    <div class="turn-start-banner"
+         *ngIf="showTurnBanner"
+         aria-live="polite">
+      Turn {{ currentTurnNumber }}
+    </div>
+
     <!-- Phase 4: Spawn preview — shows what's coming in the next few turns. -->
     <aside
       class="spawn-preview"
@@ -133,7 +151,8 @@
             <span
               *ngFor="let s of entry.spawns"
               class="spawn-preview__enemy"
-              [attr.data-type]="s.type.toLowerCase()">
+              [attr.data-type]="s.type.toLowerCase()"
+              [attr.title]="getEnemyTooltip(s.type)">
               <span class="enemy-dot spawn-preview__dot" [attr.data-type]="s.type.toLowerCase()"></span>
               <span class="spawn-preview__count">{{ s.count }}×</span>
               <span class="spawn-preview__label">{{ getEnemyLabel(s.type) }}</span>
@@ -246,8 +265,17 @@
     [deckState]="deckState"
     [energy]="energyState"
     [pendingCardId]="pendingTowerCardId"
+    (pileInspected)="inspectedPile = $event"
     (cardPlayed)="onCardPlayed($event)">
   </app-card-hand>
+
+  <!-- Pile inspector overlay — full-board modal showing draw or discard pile contents -->
+  <app-pile-inspector
+    *ngIf="inspectedPile && deckState"
+    [pile]="inspectedPile === 'draw' ? deckState.drawPile : deckState.discardPile"
+    [label]="inspectedPile === 'draw' ? 'Draw Pile' : 'Discard Pile'"
+    (closed)="inspectedPile = null">
+  </app-pile-inspector>
 
   <!-- Full-board overlays — positioned outside canvas-overlays so they cover both
        the canvas row AND the card hand row. Absolute with inset: 0 covers the
@@ -291,6 +319,18 @@
         <div class="pause-stat">
           <span class="pause-stat__label">Gold</span>
           <span class="pause-stat__value">{{ gameState.gold }}</span>
+        </div>
+      </div>
+
+      <!-- Active relics — show what's shaping this run -->
+      <div class="pause-menu__relics" *ngIf="activeRelics.length > 0 && !showQuitConfirm">
+        <h3 class="pause-menu__section-title">Active Relics</h3>
+        <div class="pause-menu__relic-grid">
+          <div *ngFor="let relic of activeRelics"
+               class="pause-menu__relic"
+               [attr.title]="relic.description">
+            <span class="pause-menu__relic-name">{{ relic.name }}</span>
+          </div>
         </div>
       </div>
 

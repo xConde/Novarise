@@ -443,3 +443,41 @@
 }
 
 // mode-indicator moved to src/styles.css (.board-container .mode-indicator)
+
+// --- Turn-start banner (Sprint 21) ---
+
+.board-container .turn-start-banner {
+  position: absolute;
+  top: calc(var(--shell-end-turn-top) + 6rem);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--spacing-sm) var(--spacing-xl);
+  background: rgba(10, 20, 40, 0.9);
+  border: var(--border-width-thin) solid var(--theme-cyan);
+  border-radius: var(--border-radius-md);
+  color: var(--theme-cyan);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: calc(var(--z-index-overlay) + 1);
+  box-shadow: 0 0 1rem rgba(0, 255, 255, 0.3);
+  white-space: nowrap;
+  animation: turn-banner-flash 1.2s ease-out forwards;
+}
+
+@keyframes turn-banner-flash {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(-0.5rem) scale(0.9); }
+  20%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  80%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .turn-start-banner {
+    animation: none;
+    opacity: 1;
+  }
+}

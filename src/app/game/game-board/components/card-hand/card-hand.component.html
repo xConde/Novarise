@@ -72,22 +72,24 @@
     <span class="placement-hint-text">Place tower on the board...</span>
   </div>
 
-  <!-- Draw / discard pile counts -->
+  <!-- Draw / discard pile counts — clickable to inspect -->
   <div class="card-hand__piles" [attr.aria-label]="'Deck piles'">
-    <span class="pile-count pile-count--draw"
-          [attr.aria-label]="deckState.drawPile.length + ' cards in draw pile'"
-          title="Draw pile">
+    <button class="pile-count pile-count--draw"
+            type="button"
+            [attr.aria-label]="'Inspect draw pile: ' + deckState.drawPile.length + ' cards'"
+            (click)="inspectPile('draw')">
       <app-icon name="draw-pile" [size]="12"></app-icon>
       <span class="pile-label">Draw</span>
       <span class="pile-value">{{ deckState.drawPile.length }}</span>
-    </span>
-    <span class="pile-count pile-count--discard"
-          [attr.aria-label]="deckState.discardPile.length + ' cards in discard pile'"
-          title="Discard pile">
+    </button>
+    <button class="pile-count pile-count--discard"
+            type="button"
+            [attr.aria-label]="'Inspect discard pile: ' + deckState.discardPile.length + ' cards'"
+            (click)="inspectPile('discard')">
       <app-icon name="discard" [size]="12"></app-icon>
       <span class="pile-label">Disc</span>
       <span class="pile-value">{{ deckState.discardPile.length }}</span>
-    </span>
+    </button>
   </div>
 
 </div>

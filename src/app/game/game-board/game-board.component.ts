@@ -66,6 +66,7 @@ import { TowerMeshLifecycleService } from './services/tower-mesh-lifecycle.servi
 import { FocusTrap } from '../../shared/utils/focus-trap.util';
 import { RunService } from '../../run/services/run.service';
 import { RelicService } from '../../run/services/relic.service';
+import { RELIC_DEFINITIONS } from '../../run/models/relic.model';
 import { DeckService } from '../../run/services/deck.service';
 import { CardEffectService } from '../../run/services/card-effect.service';
 import { EncounterCheckpointService } from '../../run/services/encounter-checkpoint.service';
@@ -244,6 +245,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Game initialization failure (WebGL not supported or canvas creation failed)
   initializationFailed = false;
+
+  // Pile inspector — which pile is currently being inspected (null = closed)
+  inspectedPile: 'draw' | 'discard' | null = null;
+
+  // Turn-start banner — briefly shown after each endTurn()
+  showTurnBanner = false;
+  private turnBannerTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Drag-and-drop tower placement — delegated to TowerPlacementService
   get isDragging(): boolean { return this.towerPlacementService.isDragging; }
@@ -902,9 +910,54 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     return ENEMY_INFO[type].name;
   }
 
+  /** Returns a hover tooltip string for a spawn-preview enemy entry. */
+  getEnemyTooltip(type: EnemyType): string {
+    const info = ENEMY_INFO[type];
+    if (!info) return type;
+    const parts: string[] = [info.name, info.description];
+    if (info.special) parts.push(info.special);
+    if (info.immunities?.length) parts.push(`Immune: ${info.immunities.join(', ')}`);
+    return parts.join(' — ');
+  }
+
+  /**
+   * Returns all active relics from the run, mapped to { id, name, description }
+   * for display in the pause menu and HUD relic peek.
+   */
+  get activeRelics(): { id: string; name: string; description: string }[] {
+    const runState = this.runService.runState;
+    if (!runState) return [];
+    return runState.relicIds
+      .map(id => {
+        const def = (RELIC_DEFINITIONS as Record<string, { name: string; description: string } | undefined>)[id];
+        return def ? { id, name: def.name, description: def.description } : null;
+      })
+      .filter((r): r is { id: string; name: string; description: string } => r !== null);
+  }
+
+  /**
+   * Briefly shows the turn-start banner for 1.2 s after endTurn().
+   * Only flashes when phase remains COMBAT (not VICTORY/DEFEAT/INTERMISSION).
+   */
+  private flashTurnBanner(): void {
+    if (this.turnBannerTimer) {
+      clearTimeout(this.turnBannerTimer);
+    }
+    this.showTurnBanner = true;
+    this.turnBannerTimer = setTimeout(() => {
+      this.showTurnBanner = false;
+      this.turnBannerTimer = null;
+    }, 1200);
+  }
+
   endTurn(): void {
     if (this.isPaused) return;
     this.waveCombat.endTurn();
+    // Flash turn banner only if combat is still ongoing after resolution
+    const postPhase = this.gameStateService.getState().phase;
+    if (postPhase === GamePhase.COMBAT) {
+      this.flashTurnBanner();
+    }
   }
 
   /**
@@ -1342,6 +1395,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.pathBlockedTimerId !== null) {
       clearTimeout(this.pathBlockedTimerId);
       this.pathBlockedTimerId = null;
+    }
+
+    if (this.turnBannerTimer !== null) {
+      clearTimeout(this.turnBannerTimer);
+      this.turnBannerTimer = null;
     }
 
     this.waveCombat.cleanup();

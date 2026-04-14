@@ -479,3 +479,53 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
     bottom: calc(var(--shell-hand-height, 7rem) + var(--spacing-xs));
   }
 }
+
+// --- HUD relic quick-peek (Sprint 24) ---
+// Desktop-only horizontal row of active relic letter-chips beneath the HUD strip.
+// Gives players an at-a-glance view of what relics are shaping their run.
+
+.board-container .hud-relic-peek {
+  position: absolute;
+  top: calc(var(--shell-hud-top) + var(--shell-hud-height) + 1.75rem);
+  left: var(--shell-hud-left);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-width: min(40vw, 20rem);
+  pointer-events: none;
+  z-index: var(--z-index-overlay);
+
+  @media (max-width: 768px) {
+    display: none; // too cramped on mobile — pause menu has the full list
+  }
+}
+
+.board-container .hud-relic-peek__item {
+  pointer-events: auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-2xs);
+  font-weight: 800;
+  color: var(--theme-purple-lighter);
+  background: rgba(140, 90, 200, 0.1);
+  border: var(--border-width-thin) solid rgba(140, 90, 200, 0.4);
+  border-radius: 50%;
+  cursor: help;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(140, 90, 200, 0.25);
+    color: #fff;
+    transform: scale(1.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .hud-relic-peek__item {
+    transition: none;
+  }
+}

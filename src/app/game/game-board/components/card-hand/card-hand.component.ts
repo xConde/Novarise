@@ -52,6 +52,7 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
    */
   @Input() pendingCardId: string | null = null;
   @Output() cardPlayed = new EventEmitter<CardInstance>();
+  @Output() pileInspected = new EventEmitter<'draw' | 'discard'>();
 
   /** Pre-computed view models — avoids per-template-check allocation. */
   handCards: HandCard[] = [];
@@ -160,6 +161,10 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
     }
     const count = Math.min(this.energy.max, MAX_ENERGY_PIPS);
     this.energyPips = Array.from({ length: count }, (_, i) => i);
+  }
+
+  inspectPile(pile: 'draw' | 'discard'): void {
+    this.pileInspected.emit(pile);
   }
 
   playCard(card: HandCard): void {

@@ -1,0 +1,141 @@
+.pile-inspector-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: calc(var(--z-index-modal) + 10);
+  cursor: pointer;
+  animation: pile-inspector-fade 0.15s ease-out;
+}
+
+.pile-inspector {
+  cursor: default;
+  width: min(32rem, 92vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-blue-bg, rgba(10, 20, 40, 0.95));
+  border: var(--border-width-thin) solid var(--theme-purple);
+  border-radius: var(--border-radius-md);
+  box-shadow: 0 0 2rem var(--theme-purple-a50, rgba(140, 90, 200, 0.3));
+  font-family: "Orbitron", sans-serif;
+}
+
+.pile-inspector__header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: var(--border-width-thin) solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.pile-inspector__title {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-color);
+  flex: 1;
+}
+
+.pile-inspector__count {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.pile-inspector__close {
+  width: 2rem;
+  height: 2rem;
+  background: transparent;
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  color: var(--text-color);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--theme-cyan);
+    outline-offset: 2px;
+  }
+}
+
+.pile-inspector__grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md);
+  overflow-y: auto;
+}
+
+.pile-inspector__card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: rgba(255, 255, 255, 0.04);
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-xs);
+  color: var(--text-color);
+  gap: var(--spacing-xs);
+
+  &--upgraded {
+    border-color: rgba(255, 215, 0, 0.4);
+    background: rgba(255, 215, 0, 0.06);
+
+    .pile-inspector__card-name {
+      color: var(--game-gold);
+    }
+  }
+}
+
+.pile-inspector__card-name {
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.pile-inspector__card-count {
+  font-weight: 700;
+  color: var(--game-gold);
+  flex-shrink: 0;
+}
+
+.pile-inspector__empty {
+  padding: var(--spacing-lg);
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+@keyframes pile-inspector-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pile-inspector-backdrop {
+    animation: none;
+  }
+}
