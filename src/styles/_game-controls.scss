@@ -128,12 +128,14 @@
 }
 
 @media (max-width: 480px) {
+  // Mobile: stack vertically — narrower column uses less horizontal real estate
+  // next to the card-hand piles counter.
   .board-container .game-controls {
     bottom: var(--shell-controls-bottom);
     right: var(--shell-controls-right);
-    flex-direction: row;
-    gap: 0.15rem;
-    padding: 0.15rem;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.2rem;
   }
 
   .board-container .game-controls .control-btn {
@@ -148,9 +150,12 @@
 
   .board-container .game-controls .pause-btn { line-height: 0; }
 
+  // Hide the [R]/[V] hotkey hints on mobile — no keyboard
+  .board-container .game-controls .wave-hint { display: none; }
+
   .board-container .game-controls .speed-controls {
-    flex-direction: row;
-    gap: 0.15rem;
+    flex-direction: column;
+    gap: 0.2rem;
   }
 }
 

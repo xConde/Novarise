@@ -185,11 +185,11 @@ $card-rarity-glows: (
   position: relative;
 }
 
-// Mobile: always overlap cards (viewport too narrow for full-width gaps).
-// 5 cards @ 4rem w/ -0.75rem overlap = 16.75rem (~268px), fits after energy + piles.
+// Mobile: gentler overlap — readable cards. Shrink card size instead of
+// crushing them together. 5 cards @ 3.5rem w/ -0.3rem overlap = 16.3rem (~261px).
 @media (max-width: 480px) {
   .card-hand__cards .card {
-    margin-left: -0.75rem;
+    margin-left: -0.3rem;
   }
   .card-hand__cards .card:first-child {
     margin-left: 0;
@@ -199,9 +199,9 @@ $card-rarity-glows: (
     z-index: 2;
     position: relative;
   }
-  // Ensure component-level fan override doesn't stack on top
+  // Tighter fan only when hand exceeds 5 cards
   .card-hand__cards--fan .card {
-    margin-left: -0.9rem; // tighter fan when 6+ cards on mobile
+    margin-left: -0.6rem;
   }
   .card-hand__cards--fan .card:first-child {
     margin-left: 0;
@@ -253,8 +253,8 @@ $card-rarity-glows: (
   }
 
   @media (max-width: 480px) {
-    width: 4rem;
-    min-width: 4rem;
+    width: 3.5rem;
+    min-width: 3.5rem;
     min-height: 4.25rem;
     padding: 0.2rem 0.25rem 0.2rem;
     gap: 0.1rem;

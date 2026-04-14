@@ -82,7 +82,9 @@
 }
 
 @media (max-width: 480px) {
+  // Mobile: stack below the challenge strip (which is pushed below End Turn)
   .board-container .hud-wave-status {
+    top: calc(var(--shell-end-turn-top) + 5rem);
     font-size: var(--font-size-2xs);
     gap: 0.25rem;
   }
@@ -114,9 +116,15 @@
 }
 
 @media (max-width: 480px) {
+  // Mobile: push challenge strip below the End Turn button so pills don't hide
+  // under it. End Turn bottom ≈ shell-end-turn-top + 3rem.
   .board-container .hud-challenge-strip {
+    top: calc(var(--shell-end-turn-top) + 3.25rem);
+    left: var(--spacing-xs);
+    right: var(--spacing-xs);
+    max-width: calc(100vw - var(--spacing-xs) * 2);
+    justify-content: center;
     font-size: var(--font-size-3xs);
-    max-width: calc(100vw - var(--shell-hud-left) * 2);
   }
 
   .board-container .hud-challenge-strip .challenge-indicator {

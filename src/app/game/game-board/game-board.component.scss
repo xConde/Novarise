@@ -33,8 +33,8 @@
   --shell-minimap-left: var(--spacing-sm);
   --shell-controls-bottom: var(--spacing-sm);
   --shell-controls-right: var(--spacing-sm);
-  // Leave room for HUD bar + challenge indicator strip below it (~2.5rem) before stacking spawn preview
-  --shell-spawn-top: calc(var(--shell-hud-top) + var(--shell-hud-height) + 2.5rem);
+  // Leave room for HUD bar + challenge indicator strip below it (~3rem) before stacking spawn preview
+  --shell-spawn-top: calc(var(--shell-hud-top) + var(--shell-hud-height) + 3rem);
   --shell-spawn-left: var(--spacing-sm);
   --shell-wave-top: var(--spacing-sm);
   --shell-wave-right: var(--spacing-sm);
@@ -65,7 +65,9 @@
     --shell-hand-height: 7rem;
     --shell-hud-height: 3rem;
     --shell-end-turn-top: calc(var(--shell-hud-height) + var(--spacing-xs) * 2);
-    --shell-spawn-top: calc(var(--shell-hud-top) + var(--shell-hud-height) + 2rem);
+    // Mobile: challenge strip is repositioned below End Turn (~5rem from top).
+    // Spawn preview sits below both the HUD and the wave-status line.
+    --shell-spawn-top: calc(var(--shell-end-turn-top) + 6.5rem);
     --shell-hud-top: var(--spacing-xs);
     --shell-hud-left: var(--spacing-xs);
     --shell-minimap-bottom: var(--spacing-sm); // a bit more clearance from card hand strip
