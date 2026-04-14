@@ -4,6 +4,7 @@ import { SceneService } from './scene.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { TileHighlightService } from './tile-highlight.service';
 import { TowerPreviewService } from './tower-preview.service';
+import { RangeVisualizationService } from './range-visualization.service';
 import { GameStateService } from './game-state.service';
 import { GameBoardService } from '../game-board.service';
 import { TILE_EMISSIVE } from '../constants/ui.constants';
@@ -50,6 +51,7 @@ export class BoardPointerService implements OnDestroy {
     private meshRegistry: BoardMeshRegistryService,
     private tileHighlightService: TileHighlightService,
     private towerPreviewService: TowerPreviewService,
+    private rangeVisualizationService: RangeVisualizationService,
     private gameStateService: GameStateService,
     private gameBoardService: GameBoardService,
   ) {}
@@ -95,16 +97,33 @@ export class BoardPointerService implements OnDestroy {
             const canPlace = this.gameBoardService.canPlaceTower(row, col)
               && this.gameStateService.canAfford(tileCost);
             this.towerPreviewService.showPreview(placement.towerType!, row, col, canPlace, this.sceneService.getScene());
+            // Show range ring at the hovered tile so players can see coverage
+            // before committing — only when placement is actually valid.
+            if (canPlace) {
+              this.rangeVisualizationService.showForPosition(
+                placement.towerType!,
+                row,
+                col,
+                this.gameBoardService.getBoardWidth(),
+                this.gameBoardService.getBoardHeight(),
+                this.gameBoardService.getTileSize(),
+                this.sceneService.getScene()
+              );
+            } else {
+              this.rangeVisualizationService.hideHoverRange(this.sceneService.getScene());
+            }
           }
         } else {
           this.lastPreviewKey = '';
           this.towerPreviewService.hidePreview(this.sceneService.getScene());
+          this.rangeVisualizationService.hideHoverRange(this.sceneService.getScene());
         }
       } else {
         this.hoveredTile = null;
         this.canvas!.style.cursor = 'default';
         this.lastPreviewKey = '';
         this.towerPreviewService.hidePreview(this.sceneService.getScene());
+        this.rangeVisualizationService.hideHoverRange(this.sceneService.getScene());
       }
     };
 

@@ -296,11 +296,28 @@ $card-rarity-glows: (
   &:active { transform: translateY(-0.1rem) scale(1.01); }
 }
 
+// Unplayable cards — can't afford energy or gold cost.
+// Use a strong but readable visual: darker body, desaturated colors,
+// a subtle red tint on the top border, and a distinct "blocked" cost badge.
 .card--unplayable {
-  opacity: 0.4;
-  filter: grayscale(65%);
+  opacity: 0.55;
+  filter: grayscale(40%) brightness(0.75);
   cursor: not-allowed;
   pointer-events: none;
+  border-top-color: rgba(255, 60, 60, 0.55) !important;
+  box-shadow: inset 0 0.125rem 0 rgba(255, 60, 60, 0.2);
+
+  // Keep the card name readable even when card is dimmed
+  .card__name, .card__gold-cost {
+    filter: brightness(1.4);
+  }
+
+  // Red cost badge — signals "can't afford"
+  .card__cost:not(.card__cost--affordable) {
+    background: rgba(255, 60, 60, 0.15);
+    border-color: rgba(255, 60, 60, 0.55);
+    color: rgba(255, 140, 140, 0.95);
+  }
 }
 
 .card--upgraded {
@@ -369,6 +386,28 @@ $card-rarity-glows: (
   border-color: rgba(255, 215, 0, 0.65);
   color: var(--game-gold);
   box-shadow: 0 0 0.5rem rgba(255, 215, 0, 0.45);
+}
+
+// Instance identifier dot — tinted per-instance so duplicate cards are
+// visually distinguishable. Bottom-right corner, small, quiet — NOT a
+// gameplay signal, just instance identity at a glance.
+.card__instance-dot {
+  position: absolute;
+  bottom: 0.25rem;
+  right: 0.25rem;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  opacity: 0.55;
+  box-shadow: 0 0 0.2rem currentColor;
+  pointer-events: none;
+
+  @media (max-width: 480px) {
+    width: 0.28rem;
+    height: 0.28rem;
+    bottom: 0.15rem;
+    right: 0.15rem;
+  }
 }
 
 // Upgraded "+" badge — top-right corner

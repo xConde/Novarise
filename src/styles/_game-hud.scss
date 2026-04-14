@@ -73,6 +73,42 @@
   color: var(--game-wave-text);
 }
 
+// Critical state — ≤2 enemies remaining. Grab the player's attention so they
+// can decide whether to push for the wave clear or save energy for next turn.
+.board-container .hud-wave-status--critical {
+  color: rgba(255, 180, 80, 0.95);
+  font-weight: 700;
+  animation: wave-status-critical-pulse 1.4s ease-in-out infinite;
+
+  .wave-enemy-count {
+    color: rgba(255, 120, 60, 1);
+    text-shadow: 0 0 0.5rem rgba(255, 120, 60, 0.7);
+    font-size: 1.15em;
+  }
+}
+
+// Wave swept — positive celebration colour (green), no pulse.
+.board-container .hud-wave-status--cleared {
+  color: rgba(120, 220, 140, 0.9);
+  font-weight: 700;
+
+  .wave-enemy-count {
+    color: rgba(120, 220, 140, 1);
+    text-shadow: 0 0 0.4rem rgba(120, 220, 140, 0.6);
+  }
+}
+
+@keyframes wave-status-critical-pulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .hud-wave-status--critical {
+    animation: none;
+  }
+}
+
 .board-container .hud-wave-status .wave-template-badge {
   font-size: 0.6rem;
   color: var(--theme-purple);
@@ -84,7 +120,7 @@
 @media (max-width: 480px) {
   // Mobile: stack below the challenge strip (which is pushed below End Turn)
   .board-container .hud-wave-status {
-    top: calc(var(--shell-end-turn-top) + 5rem);
+    top: calc(var(--shell-end-turn-top) + 5.75rem);
     font-size: var(--font-size-2xs);
     gap: 0.25rem;
   }
@@ -116,10 +152,10 @@
 }
 
 @media (max-width: 480px) {
-  // Mobile: push challenge strip below the End Turn button so pills don't hide
-  // under it. End Turn bottom ≈ shell-end-turn-top + 3rem.
+  // Mobile: push challenge strip well below End Turn button.
+  // End Turn box bottom ≈ shell-end-turn-top + 3rem; add 0.75rem gap.
   .board-container .hud-challenge-strip {
-    top: calc(var(--shell-end-turn-top) + 3.25rem);
+    top: calc(var(--shell-end-turn-top) + 3.75rem);
     left: var(--spacing-xs);
     right: var(--spacing-xs);
     max-width: calc(100vw - var(--spacing-xs) * 2);

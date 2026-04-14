@@ -74,6 +74,20 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
+   * Deterministic hue (0-359) derived from the card instance id.
+   * Used to tint the instance-identifier dot so duplicate cards in the
+   * hand (e.g., 5× Basic Tower) are still visually distinguishable.
+   */
+  instanceHue(instanceId: string): number {
+    let hash = 0;
+    for (let i = 0; i < instanceId.length; i++) {
+      hash = (hash * 31 + instanceId.charCodeAt(i)) >>> 0;
+    }
+    // Prime-mix to spread similar instance ids across the hue wheel
+    return (hash * 137) % 360;
+  }
+
+  /**
    * Array used to render energy pips in the template.
    * Length = energy.max (capped at MAX_ENERGY_PIPS); filled vs empty
    * determined by index vs energy.current in the template.

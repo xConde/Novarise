@@ -58,6 +58,11 @@
         <app-icon *ngIf="card.definition.type === CardType.UTILITY" name="gear" [size]="12"></app-icon>
       </span>
 
+      <!-- Instance dot — tints per-instance so identical cards are distinguishable -->
+      <span class="card__instance-dot"
+            [style.background]="'hsl(' + instanceHue(card.instance.instanceId) + ', 70%, 55%)'"
+            aria-hidden="true"></span>
+
     </button>
   </div>
 

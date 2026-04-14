@@ -7,6 +7,7 @@ import { GameBoardService } from '../game-board.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { TileHighlightService } from './tile-highlight.service';
 import { TowerPreviewService } from './tower-preview.service';
+import { RangeVisualizationService } from './range-visualization.service';
 import { PathfindingService } from './pathfinding.service';
 import { GamePhase } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
@@ -54,6 +55,7 @@ describe('BoardPointerService', () => {
         BoardMeshRegistryService,
         TileHighlightService,
         TowerPreviewService,
+        RangeVisualizationService,
         GameBoardService,
         PathfindingService,
         { provide: GameStateService, useValue: gameStateStub },
