@@ -20,6 +20,11 @@
       [currentEndlessTemplate]="currentEndlessTemplate">
     </app-game-hud>
 
+    <!-- Sprint 26: FPS counter — shown only when settings.showFps is true -->
+    <div class="fps-counter" *ngIf="showFps" aria-hidden="true">
+      {{ currentFps }} FPS
+    </div>
+
     <!-- Desktop-only: active relic letter-chips beneath the HUD -->
     <div class="hud-relic-peek"
          *ngIf="activeRelics.length > 0"
@@ -32,6 +37,7 @@
     </div>
 
     <!-- Wave clear banner -->
+    <!-- aria-live: assertive region — immediately announces wave completion to screen readers -->
     <div
       class="wave-clear-banner"
       *ngIf="waveCombat.showWaveClear"
@@ -42,7 +48,8 @@
     </div>
 
     <!-- Path blocked warning -->
-    <div class="path-blocked-warning" *ngIf="pathBlocked">
+    <!-- aria-live: alert region — screen reader announces when path is blocked -->
+    <div class="path-blocked-warning" *ngIf="pathBlocked" role="alert">
       Placement blocked — enemies need a path to the exit
     </div>
 
@@ -129,6 +136,7 @@
     </button>
 
     <!-- Turn start banner — fades in/out when a new turn begins -->
+    <!-- aria-live: polite region — announces new turn number to screen readers -->
     <div class="turn-start-banner"
          *ngIf="showTurnBanner"
          aria-live="polite">
@@ -241,6 +249,7 @@
     </app-tutorial-spotlight>
 
     <!-- Toast notifications -->
+    <!-- aria-live: polite region — announces achievement/challenge/info toasts to screen readers -->
     <div class="toast-stack" *ngIf="notifications.length > 0" aria-live="polite">
       <div
         *ngFor="let notification of notifications"
@@ -336,12 +345,65 @@
 
       <!-- Settings -->
       <div class="pause-menu__settings" *ngIf="!showQuitConfirm">
-        <button class="pause-audio-toggle" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
+        <button class="pause-audio-toggle"
+                (click)="toggleAudio()"
+                [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
           <app-icon *ngIf="!audioMuted" name="sound-on"></app-icon>
           <app-icon *ngIf="audioMuted" name="sound-off"></app-icon>
           <span>{{ audioMuted ? 'Unmute' : 'Mute' }}</span>
         </button>
+
+        <!-- Sprint 26: FPS counter toggle -->
+        <label class="pause-settings-toggle">
+          <input type="checkbox"
+                 [checked]="showFps"
+                 (change)="toggleShowFps()"
+                 aria-label="Toggle FPS counter visibility">
+          <span class="pause-settings-toggle__track" aria-hidden="true"></span>
+          <span class="pause-settings-toggle__label">Show FPS</span>
+        </label>
+
+        <!-- Sprint 26: Reduce Motion toggle -->
+        <label class="pause-settings-toggle">
+          <input type="checkbox"
+                 [checked]="reduceMotion"
+                 (change)="toggleReduceMotion()"
+                 aria-label="Toggle reduced motion">
+          <span class="pause-settings-toggle__track" aria-hidden="true"></span>
+          <span class="pause-settings-toggle__label">Reduce Motion</span>
+        </label>
       </div>
+
+      <!-- Sprint 28: Collapsible controls reference -->
+      <details class="pause-menu__controls" *ngIf="!showQuitConfirm">
+        <summary class="pause-menu__controls-summary">Controls</summary>
+        <div class="pause-menu__controls-list">
+          <div class="pause-menu__control-row">
+            <kbd class="pause-menu__key">Space</kbd>
+            <span>End Turn</span>
+          </div>
+          <div class="pause-menu__control-row">
+            <kbd class="pause-menu__key">P</kbd>
+            <span class="pause-menu__sep">/</span>
+            <kbd class="pause-menu__key">Esc</kbd>
+            <span>Pause</span>
+          </div>
+          <div class="pause-menu__control-row">
+            <kbd class="pause-menu__key">R</kbd>
+            <span>Toggle range overlay</span>
+          </div>
+          <div class="pause-menu__control-row">
+            <kbd class="pause-menu__key">V</kbd>
+            <span>Toggle path overlay</span>
+          </div>
+          <div class="pause-menu__control-row">
+            <kbd class="pause-menu__key">1</kbd>
+            <span class="pause-menu__sep">–</span>
+            <kbd class="pause-menu__key">9</kbd>
+            <span>Play card</span>
+          </div>
+        </div>
+      </details>
 
       <!-- Normal actions + navigation prompt actions -->
       <div class="pause-menu__actions" *ngIf="!showQuitConfirm">

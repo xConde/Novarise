@@ -638,6 +638,31 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.audioService.toggleMute();
   }
 
+  // Sprint 26: FPS counter + Reduce Motion toggles exposed to pause menu
+
+  /** Current smoothed FPS — read by the FPS counter overlay when showFps is true. */
+  get currentFps(): number {
+    return this.fpsCounterService.getFps();
+  }
+
+  get showFps(): boolean {
+    return this.settingsService.get().showFps;
+  }
+
+  get reduceMotion(): boolean {
+    return this.settingsService.get().reduceMotion;
+  }
+
+  toggleShowFps(): void {
+    this.settingsService.update({ showFps: !this.showFps });
+  }
+
+  toggleReduceMotion(): void {
+    this.settingsService.update({ reduceMotion: !this.reduceMotion });
+    // Mirror to body class so CSS animations and JS can both read it
+    document.body.classList.toggle('reduce-motion', !this.reduceMotion);
+  }
+
   /** Reload the page — used by the WebGL context-lost refresh button. */
   reloadPage(): void {
     window.location.reload();

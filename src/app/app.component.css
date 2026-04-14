@@ -71,3 +71,14 @@
     font-size: var(--font-size-xs);
   }
 }
+
+/* Sprint 30: ensure settings cog meets 44×44px touch target on mobile */
+@media (max-width: 480px) {
+  .settings-cog {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

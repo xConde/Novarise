@@ -172,6 +172,15 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
     this.cardPlayed.emit(card.instance);
   }
 
+  /**
+   * Sprint 31: Returns the 0-based index of the card in the current hand,
+   * or null if not found. Used to show keyboard shortcut badges (1-9).
+   */
+  getCardIndex(card: HandCard): number | null {
+    const idx = this.handCards.findIndex(c => c.instance.instanceId === card.instance.instanceId);
+    return idx >= 0 ? idx : null;
+  }
+
   getCardTypeClass(type: CardType): string {
     return `card--${type}`;
   }

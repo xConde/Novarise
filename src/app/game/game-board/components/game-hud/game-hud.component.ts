@@ -37,6 +37,12 @@ export class GameHudComponent implements OnChanges, OnDestroy {
     this.challengeStripExpanded = !this.challengeStripExpanded;
   }
 
+  /** Sprint 29: hover tooltip for challenge indicators — includes current pass/fail status. */
+  getChallengeHelp(ci: ChallengeIndicator): string {
+    const status = ci.passing ? 'passing' : 'failing';
+    return `${ci.label} — ${ci.value} (currently ${status})`;
+  }
+
   get passingCount(): number {
     return this.challengeIndicators.filter(c => c.passing).length;
   }

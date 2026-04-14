@@ -64,6 +64,11 @@
             [style.background]="'hsl(' + instanceHue(card.instance.instanceId) + ', 70%, 55%)'"
             aria-hidden="true"></span>
 
+      <!-- Sprint 31: keyboard hotkey badge — shows slot number (1-9) on desktop only -->
+      <span class="card__hotkey"
+            *ngIf="getCardIndex(card) !== null && (getCardIndex(card)!) < 9"
+            aria-hidden="true">{{ (getCardIndex(card)!) + 1 }}</span>
+
     </button>
   </div>
 

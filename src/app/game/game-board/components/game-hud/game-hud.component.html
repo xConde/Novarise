@@ -44,7 +44,8 @@
       *ngFor="let ci of challengeIndicators"
       [class.passing]="ci.passing"
       [class.failing]="!ci.passing"
-      [attr.aria-label]="ci.label + ': ' + ci.value">
+      [attr.aria-label]="ci.label + ': ' + ci.value"
+      [attr.title]="getChallengeHelp(ci)">
       {{ ci.label }}: {{ ci.value }}
     </span>
   </ng-container>
