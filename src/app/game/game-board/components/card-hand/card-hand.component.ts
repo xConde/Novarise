@@ -56,6 +56,23 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   /** Pre-computed view models — avoids per-template-check allocation. */
   handCards: HandCard[] = [];
 
+  /** Whether the hand should render with fan overlap (> 5 cards). */
+  get isFan(): boolean {
+    return this.handCards.length > 5;
+  }
+
+  /**
+   * CSS negative margin for card overlap in fan mode.
+   * Scales with hand size: -0.5rem at 6 cards, -1.5rem at 10+.
+   * Returns '0' when not in fan mode.
+   */
+  get cardFanMargin(): string {
+    if (!this.isFan) return '0';
+    const extra = Math.max(0, this.handCards.length - 5);
+    const overlap = Math.min(1.5, 0.5 + extra * 0.2);
+    return `-${overlap}rem`;
+  }
+
   /**
    * Array used to render energy pips in the template.
    * Length = energy.max (capped at MAX_ENERGY_PIPS); filled vs empty

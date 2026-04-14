@@ -5,11 +5,11 @@
   background: rgba(0, 0, 0, 0.85);
   border-radius: var(--border-radius-md);
   backdrop-filter: blur(0.625rem);
-  z-index: var(--z-index-overlay);
+  z-index: calc(var(--z-index-overlay) + 3);
   font-family: "Orbitron", sans-serif;
   position: absolute;
-  top: var(--spacing-md);
-  right: var(--spacing-md);
+  top: var(--shell-hud-top);
+  right: var(--spacing-sm);
   width: min(18rem, 35vw);
   max-height: calc(100vh - var(--spacing-xl));
   overflow-y: auto;
@@ -213,12 +213,12 @@
 @media (max-width: 768px) {
   .board-container .setup-panel {
     position: absolute;
-    top: auto;
-    bottom: calc(var(--spacing-md) + var(--tower-bar-height));
+    top: var(--shell-hud-top);
+    bottom: auto;
     left: auto;
     right: var(--spacing-sm);
     width: min(16rem, 55vw);
-    max-height: calc(100vh - var(--tower-bar-height) - 4rem);
+    max-height: 70vh;
     overflow-y: auto;
     padding: var(--spacing-sm);
     gap: var(--spacing-xs);
@@ -248,13 +248,13 @@
 
 @media (max-width: 480px) {
   .board-container .setup-panel {
-    position: fixed;
+    position: absolute;
     top: auto;
     right: 0;
-    bottom: var(--tower-bar-height);
+    bottom: 0;
     left: 0;
     width: 100%;
-    max-height: calc(100vh - var(--tower-bar-height) - 4rem);
+    max-height: 60vh;
     border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
     border-bottom: none;
     padding: 0.25rem 0.5rem 0.5rem;

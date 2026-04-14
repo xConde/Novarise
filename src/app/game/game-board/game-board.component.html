@@ -1,279 +1,320 @@
 <div class="board-container" [class.dragging]="isDragging" (touchstart)="previewTowerType && clearTowerPreview()">
   <div class="canvas-container" #canvasContainer></div>
 
-  <!-- Game HUD -->
-  <app-game-hud
-    *ngIf="gameState.wave > 0"
-    [lives]="gameState.lives"
-    [gold]="gameState.gold"
-    [wave]="gameState.wave"
-    [maxWaves]="gameState.maxWaves"
-    [score]="gameState.score"
-    [formattedTime]="formattedTime"
-    [isEndless]="gameState.isEndless"
-    [elapsedTime]="gameState.elapsedTime"
-    [waveStartPulse]="waveCombat.waveStartPulse"
-    [challengeIndicators]="challengeIndicators"
-    [isCombat]="gameState.phase === GamePhase.COMBAT"
-    [enemiesRemaining]="enemiesAlive + enemiesToSpawn"
-    [currentEndlessTemplate]="currentEndlessTemplate">
-  </app-game-hud>
+  <div class="canvas-overlays">
+    <!-- Game HUD -->
+    <app-game-hud
+      *ngIf="gameState.wave > 0"
+      [lives]="gameState.lives"
+      [gold]="gameState.gold"
+      [wave]="gameState.wave"
+      [maxWaves]="gameState.maxWaves"
+      [score]="gameState.score"
+      [formattedTime]="formattedTime"
+      [isEndless]="gameState.isEndless"
+      [elapsedTime]="gameState.elapsedTime"
+      [waveStartPulse]="waveCombat.waveStartPulse"
+      [challengeIndicators]="challengeIndicators"
+      [isCombat]="gameState.phase === GamePhase.COMBAT"
+      [enemiesRemaining]="enemiesAlive + enemiesToSpawn"
+      [currentEndlessTemplate]="currentEndlessTemplate">
+    </app-game-hud>
 
-  <!-- Wave clear banner -->
-  <div
-    class="wave-clear-banner"
-    *ngIf="waveCombat.showWaveClear"
-    [class.perfect]="waveCombat.waveClearMessage.includes('Perfect')"
-    aria-live="assertive"
-    aria-atomic="true">
-    {{ waveCombat.waveClearMessage }}
-  </div>
-
-  <!-- Path blocked warning -->
-  <div class="path-blocked-warning" *ngIf="pathBlocked">
-    Placement blocked — enemies need a path to the exit
-  </div>
-
-  <!-- Setup panel — right side on desktop, bottom sheet on mobile -->
-  <app-game-setup-panel
-    *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0"
-    [difficulty]="gameState.difficulty"
-    [difficultyLevels]="difficultyLevels"
-    [difficultyPresets]="difficultyPresets"
-    [modifierConfigs]="modifierConfigs"
-    [allModifiers]="allModifiers"
-    [activeModifiers]="activeModifiers"
-    [modifierScoreMultiplier]="modifierScoreMultiplier"
-    [isEndless]="gameState.isEndless"
-    (selectDifficulty)="selectDifficulty($event)"
-    (toggleModifier)="toggleModifier($event)"
-    (toggleEndless)="toggleEndless()"
-    (startGame)="startWave()">
-  </app-game-setup-panel>
-
-  <!-- Wave preview + control panel — shown during SETUP and INTERMISSION -->
-  <div class="wave-preview"
-       *ngIf="gameState.phase === GamePhase.INTERMISSION || (gameState.phase === GamePhase.SETUP && gameState.wave === 0 && wavePreview.length > 0)"
-       aria-label="Upcoming wave preview">
-    <!-- Hero: wave number is the primary context -->
-    <div class="wave-preview-header">
-      <span class="wave-number">Wave {{ gameState.wave + 1 }}</span>
-      <span
-        *ngIf="waveTemplateDescription"
-        class="wave-template-description"
-        aria-label="Wave type">
-        {{ waveTemplateDescription }}
-      </span>
+    <!-- Wave clear banner -->
+    <div
+      class="wave-clear-banner"
+      *ngIf="waveCombat.showWaveClear"
+      [class.perfect]="waveCombat.waveClearMessage.includes('Perfect')"
+      aria-live="assertive"
+      aria-atomic="true">
+      {{ waveCombat.waveClearMessage }}
     </div>
-    <!-- Tactical: what's coming -->
-    <ul class="wave-preview-list" *ngIf="wavePreview.length > 0">
-      <li
-        *ngFor="let entry of wavePreview"
-        class="wave-preview-entry"
-        [attr.data-type]="entry.type.toLowerCase()">
+
+    <!-- Path blocked warning -->
+    <div class="path-blocked-warning" *ngIf="pathBlocked">
+      Placement blocked — enemies need a path to the exit
+    </div>
+
+    <!-- Setup panel — right side on desktop, bottom sheet on mobile -->
+    <app-game-setup-panel
+      *ngIf="gameState.phase === GamePhase.SETUP && gameState.wave === 0"
+      [difficulty]="gameState.difficulty"
+      [difficultyLevels]="difficultyLevels"
+      [difficultyPresets]="difficultyPresets"
+      [modifierConfigs]="modifierConfigs"
+      [allModifiers]="allModifiers"
+      [activeModifiers]="activeModifiers"
+      [modifierScoreMultiplier]="modifierScoreMultiplier"
+      [isEndless]="gameState.isEndless"
+      (selectDifficulty)="selectDifficulty($event)"
+      (toggleModifier)="toggleModifier($event)"
+      (toggleEndless)="toggleEndless()"
+      (startGame)="startWave()">
+    </app-game-setup-panel>
+
+    <!-- Wave preview + control panel — shown during SETUP and INTERMISSION -->
+    <div class="wave-preview"
+         *ngIf="gameState.phase === GamePhase.INTERMISSION || (gameState.phase === GamePhase.SETUP && gameState.wave === 0 && wavePreview.length > 0)"
+         aria-label="Upcoming wave preview">
+      <!-- Hero: wave number is the primary context -->
+      <div class="wave-preview-header">
+        <span class="wave-number">Wave {{ gameState.wave + 1 }}</span>
         <span
-          class="enemy-dot wave-preview-dot"
-          [attr.data-type]="entry.type.toLowerCase()"></span>
-        <span class="enemy-count">{{ entry.count }}x</span>
-        <span class="enemy-label">{{ entry.label }}</span>
-        <!-- NEW badge removed — adds visual noise without actionable value -->
-        <div class="wave-enemy-badges" *ngIf="getEnemyBadges(entry.type).length > 0">
-          <span
-            *ngFor="let badge of getEnemyBadges(entry.type)"
-            class="wave-enemy-badge"
-            [class.badge-info]="badge.severity === 'info'"
-            [class.badge-warning]="badge.severity === 'warning'"
-            [class.badge-danger]="badge.severity === 'danger'">
-            {{ badge.text }}
-          </span>
-        </div>
-      </li>
-    </ul>
-    <!-- Secondary: income earned (only shown between waves, not setup) -->
-    <div class="wave-income" *ngIf="waveCombat.lastWaveReward > 0 || waveCombat.lastInterestEarned > 0" aria-live="polite">
-      <span class="income-item reward" *ngIf="waveCombat.lastWaveReward > 0">+{{ waveCombat.lastWaveReward }}g</span>
-      <span class="income-item interest" *ngIf="waveCombat.lastInterestEarned > 0">+{{ waveCombat.lastInterestEarned }}g interest</span>
-    </div>
-    <!-- Action -->
-    <button
-      class="wave-btn"
-      *ngIf="gameState.phase === GamePhase.INTERMISSION"
-      (click)="startWave()"
-      aria-label="Start next wave">
-      <span>Next Wave</span>
-      <span class="wave-hint">Space</span>
-    </button>
-  </div>
-
-  <!-- Phase 4: End Turn button — only during combat (turn-based). -->
-  <button
-    class="end-turn-btn"
-    *ngIf="gameState.phase === GamePhase.COMBAT"
-    (click)="endTurn()"
-    [disabled]="!!pendingTowerCardId"
-    [attr.aria-label]="pendingTowerCardId ? 'Place or cancel pending tower card first' : 'End turn and resolve combat'">
-    <span class="end-turn-label">End Turn</span>
-    <span class="end-turn-hint">Turn {{ currentTurnNumber }} · Space</span>
-  </button>
-
-  <!-- Phase 4: Spawn preview — shows what's coming in the next few turns. -->
-  <aside
-    class="spawn-preview"
-    *ngIf="gameState.phase === GamePhase.COMBAT"
-    aria-label="Upcoming enemy spawns">
-    <h4 class="spawn-preview__title">Incoming</h4>
-    <ol class="spawn-preview__list">
-      <li
-        *ngFor="let entry of upcomingSpawns"
-        class="spawn-preview__turn"
-        [class.spawn-preview__turn--empty]="entry.spawns.length === 0">
-        <span class="spawn-preview__label">T+{{ entry.turnOffset }}</span>
-        <span class="spawn-preview__spawns" *ngIf="entry.spawns.length > 0">
-          <span
-            *ngFor="let s of entry.spawns"
-            class="spawn-preview__enemy"
-            [attr.data-type]="s.type.toLowerCase()">
-            <span class="enemy-dot spawn-preview__dot" [attr.data-type]="s.type.toLowerCase()"></span>
-            <span class="spawn-preview__count">{{ s.count }}×</span>
-          </span>
+          *ngIf="waveTemplateDescription"
+          class="wave-template-description"
+          aria-label="Wave type">
+          {{ waveTemplateDescription }}
         </span>
-        <span class="spawn-preview__empty" *ngIf="entry.spawns.length === 0">—</span>
-      </li>
-    </ol>
-  </aside>
+      </div>
+      <!-- Tactical: what's coming -->
+      <ul class="wave-preview-list" *ngIf="wavePreview.length > 0">
+        <li
+          *ngFor="let entry of wavePreview"
+          class="wave-preview-entry"
+          [attr.data-type]="entry.type.toLowerCase()">
+          <span
+            class="enemy-dot wave-preview-dot"
+            [attr.data-type]="entry.type.toLowerCase()"></span>
+          <span class="enemy-count">{{ entry.count }}x</span>
+          <span class="enemy-label">{{ entry.label }}</span>
+          <!-- NEW badge removed — adds visual noise without actionable value -->
+          <div class="wave-enemy-badges" *ngIf="getEnemyBadges(entry.type).length > 0">
+            <span
+              *ngFor="let badge of getEnemyBadges(entry.type)"
+              class="wave-enemy-badge"
+              [class.badge-info]="badge.severity === 'info'"
+              [class.badge-warning]="badge.severity === 'warning'"
+              [class.badge-danger]="badge.severity === 'danger'">
+              {{ badge.text }}
+            </span>
+          </div>
+        </li>
+      </ul>
+      <!-- Secondary: income earned (only shown between waves, not setup) -->
+      <div class="wave-income" *ngIf="waveCombat.lastWaveReward > 0 || waveCombat.lastInterestEarned > 0" aria-live="polite">
+        <span class="income-item reward" *ngIf="waveCombat.lastWaveReward > 0">+{{ waveCombat.lastWaveReward }}g</span>
+        <span class="income-item interest" *ngIf="waveCombat.lastInterestEarned > 0">+{{ waveCombat.lastInterestEarned }}g interest</span>
+      </div>
+      <!-- Action -->
+      <button
+        class="wave-btn"
+        *ngIf="gameState.phase === GamePhase.INTERMISSION"
+        (click)="startWave()"
+        aria-label="Start next wave">
+        <span>Next Wave</span>
+        <span class="wave-hint">Space</span>
+      </button>
+    </div>
 
-  <!-- Pause/Speed controls -->
-  <div class="game-controls" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT && gameState.wave > 0">
+    <!-- Phase 4: End Turn button — only during combat (turn-based). -->
     <button
-      class="control-btn pause-btn"
-      (click)="togglePause()"
-      [class.active]="isPaused"
-      [attr.aria-label]="isPaused ? 'Resume game' : 'Pause game'"
-      [attr.aria-pressed]="isPaused">
-      <app-icon *ngIf="isPaused" name="play" [size]="16"></app-icon>
-      <app-icon *ngIf="!isPaused" name="pause" [size]="16"></app-icon>
+      class="end-turn-btn"
+      *ngIf="gameState.phase === GamePhase.COMBAT"
+      (click)="endTurn()"
+      [disabled]="!!pendingTowerCardId"
+      [attr.aria-label]="pendingTowerCardId ? 'Place or cancel pending tower card first' : 'End turn and resolve combat'">
+      <span class="end-turn-label">End Turn</span>
+      <span class="end-turn-hint">Turn {{ currentTurnNumber }} · Space</span>
     </button>
-    <button
-      class="control-btn range-btn"
-      (click)="toggleAllRanges()"
-      [class.active]="showAllRanges"
-      aria-label="Toggle all tower ranges [R]">
-      <app-icon name="range" [size]="14"></app-icon>
-      <span class="wave-hint">R</span>
-    </button>
-    <button
-      class="control-btn path-btn"
-      (click)="togglePathOverlay()"
-      [class.active]="showPathOverlay"
-      aria-label="Toggle enemy path overlay [V]">
-      <app-icon name="activity" [size]="14"></app-icon>
-      <span class="wave-hint">V</span>
-    </button>
-  </div>
 
-  <!-- Phase 8: Victory/Defeat overlay removed — the game-board navigates away
-       to /run on terminal phases (see component state subscription). The run
-       module's run-summary and reward screens handle post-combat flow. -->
+    <!-- Phase 4: Spawn preview — shows what's coming in the next few turns. -->
+    <aside
+      class="spawn-preview"
+      *ngIf="gameState.phase === GamePhase.COMBAT"
+      aria-label="Upcoming enemy spawns">
+      <h4 class="spawn-preview__title">Incoming</h4>
+      <ol class="spawn-preview__list">
+        <li
+          *ngFor="let entry of upcomingSpawns"
+          class="spawn-preview__turn"
+          [class.spawn-preview__turn--empty]="entry.spawns.length === 0">
+          <span class="spawn-preview__label">T+{{ entry.turnOffset }}</span>
+          <span class="spawn-preview__spawns" *ngIf="entry.spawns.length > 0">
+            <span
+              *ngFor="let s of entry.spawns"
+              class="spawn-preview__enemy"
+              [attr.data-type]="s.type.toLowerCase()">
+              <span class="enemy-dot spawn-preview__dot" [attr.data-type]="s.type.toLowerCase()"></span>
+              <span class="spawn-preview__count">{{ s.count }}×</span>
+            </span>
+          </span>
+          <span class="spawn-preview__empty" *ngIf="entry.spawns.length === 0">—</span>
+        </li>
+      </ol>
+    </aside>
+
+    <!-- Pause/Speed controls -->
+    <div class="game-controls" *ngIf="gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT && gameState.wave > 0">
+      <button
+        class="control-btn pause-btn"
+        (click)="togglePause()"
+        [class.active]="isPaused"
+        [attr.aria-label]="isPaused ? 'Resume game' : 'Pause game'"
+        [attr.aria-pressed]="isPaused">
+        <app-icon *ngIf="isPaused" name="play" [size]="16"></app-icon>
+        <app-icon *ngIf="!isPaused" name="pause" [size]="16"></app-icon>
+      </button>
+      <button
+        class="control-btn range-btn"
+        (click)="toggleAllRanges()"
+        [class.active]="showAllRanges"
+        aria-label="Toggle all tower ranges [R]">
+        <app-icon name="range" [size]="14"></app-icon>
+        <span class="wave-hint">R</span>
+      </button>
+      <button
+        class="control-btn path-btn"
+        (click)="togglePathOverlay()"
+        [class.active]="showPathOverlay"
+        aria-label="Toggle enemy path overlay [V]">
+        <app-icon name="activity" [size]="14"></app-icon>
+        <span class="wave-hint">V</span>
+      </button>
+    </div>
+
+    <!-- Phase 8: Victory/Defeat overlay removed — the game-board navigates away
+         to /run on terminal phases (see component state subscription). The run
+         module's run-summary and reward screens handle post-combat flow. -->
 
 
-  <!-- Game Initialization Failure Overlay -->
-  <div class="context-lost-overlay" *ngIf="initializationFailed" role="alert" aria-live="assertive">
-    <div class="context-lost-content">
-      <h2 class="context-lost-title">Game Failed to Load</h2>
-      <p class="context-lost-message">Game failed to initialize. Your browser may not support WebGL.</p>
-      <button class="context-lost-back-btn" (click)="goBackToRunHub()">Go Back</button>
+    <!-- Game Initialization Failure Overlay -->
+    <div class="context-lost-overlay" *ngIf="initializationFailed" role="alert" aria-live="assertive">
+      <div class="context-lost-content">
+        <h2 class="context-lost-title">Game Failed to Load</h2>
+        <p class="context-lost-message">Game failed to initialize. Your browser may not support WebGL.</p>
+        <button class="context-lost-back-btn" (click)="goBackToRunHub()">Go Back</button>
+      </div>
+    </div>
+
+    <!-- WebGL Context Lost Overlay -->
+    <div class="context-lost-overlay" *ngIf="contextLost" role="alert" aria-live="assertive">
+      <div class="context-lost-content">
+        <h2 class="context-lost-title">Display Lost</h2>
+        <p class="context-lost-message">The graphics engine lost its connection. This can happen when your device runs low on memory.</p>
+        <p class="context-lost-hint">Waiting for recovery...</p>
+        <button class="context-lost-refresh-btn" (click)="reloadPage()">Try Refreshing</button>
+      </div>
+    </div>
+
+    <!-- Pause overlay -->
+    <div class="pause-overlay" *ngIf="isPaused && (gameState.phase === GamePhase.COMBAT || gameState.phase === GamePhase.INTERMISSION)" #pauseOverlay (click)="onPauseOverlayClick($event)" role="dialog" aria-modal="true" aria-labelledby="pause-menu-title">
+      <div class="pause-menu" (click)="$event.stopPropagation()">
+        <h2 class="pause-menu__title" id="pause-menu-title">PAUSED</h2>
+        <p class="pause-menu__subtitle" *ngIf="pauseEncounterLabel">{{ pauseEncounterLabel }}</p>
+
+        <!-- Game stats summary -->
+        <div class="pause-menu__stats">
+          <div class="pause-stat">
+            <span class="pause-stat__label">Wave</span>
+            <span class="pause-stat__value">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
+          </div>
+          <div class="pause-stat">
+            <span class="pause-stat__label">Lives</span>
+            <span class="pause-stat__value">{{ gameState.lives }}</span>
+          </div>
+          <div class="pause-stat">
+            <span class="pause-stat__label">Gold</span>
+            <span class="pause-stat__value">{{ gameState.gold }}</span>
+          </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="pause-menu__settings" *ngIf="!showQuitConfirm">
+          <button class="pause-audio-toggle" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
+            <app-icon *ngIf="!audioMuted" name="sound-on"></app-icon>
+            <app-icon *ngIf="audioMuted" name="sound-off"></app-icon>
+            <span>{{ audioMuted ? 'Unmute' : 'Mute' }}</span>
+          </button>
+        </div>
+
+        <!-- Normal actions + navigation prompt actions -->
+        <div class="pause-menu__actions" *ngIf="!showQuitConfirm">
+          <button class="pause-action pause-action--primary" (click)="togglePause()">Resume</button>
+          <button class="pause-action pause-action--save" (click)="saveAndExit()">
+            Save &amp; Exit
+          </button>
+          <button class="pause-action pause-action--quit" (click)="requestQuit()">
+            Abandon Run
+          </button>
+        </div>
+
+        <!-- Quit confirmation -->
+        <div class="pause-menu__quit-confirm" *ngIf="showQuitConfirm">
+          <p class="quit-confirm__text">Abandon this run? Progress will be lost.</p>
+          <div class="quit-confirm__actions">
+            <button class="pause-action pause-action--primary" (click)="cancelQuit()">Cancel</button>
+            <button class="pause-action pause-action--quit" (click)="confirmQuit()">Quit</button>
+          </div>
+        </div>
+
+        <p class="pause-menu__auto-hint" *ngIf="autoPaused">Game auto-paused — tab was inactive</p>
+        <p class="pause-menu__hint" aria-hidden="true">P or ESC to resume</p>
+      </div>
+    </div>
+
+    <!-- Tower info panel -->
+    <app-tower-info-panel
+      *ngIf="selectedTowerInfo && selectedTowerStats"
+      [towerInfo]="selectedTowerInfo"
+      [towerStats]="selectedTowerStats"
+      [upgradeCost]="selectedTowerUpgradeCost"
+      [upgradePercent]="selectedTowerUpgradePercent"
+      [sellValue]="selectedTowerSellValue"
+      [upgradePreview]="upgradePreview"
+      [showSpecializationChoice]="showSpecializationChoice"
+      [specOptions]="specOptions"
+      [gold]="gameState.gold"
+      [sellConfirmPending]="sellConfirmPending"
+      [targetingModeLabels]="targetingModeLabels"
+      (close)="deselectTower()"
+      (upgrade)="upgradeTower()"
+      (sell)="sellTower()"
+      (cycleTargeting)="cycleTargeting()"
+      (selectSpecialization)="selectSpecialization($event)"
+      (cancelSpecialization)="showSpecializationChoice = false">
+    </app-tower-info-panel>
+
+    <!-- Interaction mode indicator -->
+    <div class="mode-indicator"
+         *ngIf="isPlaceMode && gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT"
+         aria-live="polite"
+         [attr.aria-label]="'Placing ' + (selectedTowerType | titlecase) + ' tower'">
+      <span class="mode-label place-mode">
+        {{ selectedTowerType | titlecase }}
+      </span>
+      <span class="mode-hint">Right-click to cancel</span>
+    </div>
+
+    <!-- Tutorial — non-blocking contextual card -->
+    <app-tutorial-spotlight
+      [step]="tutorialFacade.currentTutorialStep"
+      [tip]="getTutorialTip()"
+      [stepNumber]="getTutorialStepNumber()"
+      [totalSteps]="getTutorialTotalSteps()"
+      (advance)="advanceTutorial()"
+      (skip)="skipTutorial()">
+    </app-tutorial-spotlight>
+
+    <!-- Toast notifications -->
+    <div class="toast-stack" *ngIf="notifications.length > 0" aria-live="polite">
+      <div
+        *ngFor="let notification of notifications"
+        class="toast"
+        [class.toast--achievement]="notification.type === 'achievement'"
+        [class.toast--challenge]="notification.type === 'challenge'"
+        [class.toast--streak]="notification.type === 'streak'"
+        [class.toast--info]="notification.type === 'info'"
+        (click)="dismissNotification(notification.id)"
+        role="alert"
+      >
+        <span class="toast__title">{{ notification.title }}</span>
+        <span class="toast__message">{{ notification.message }}</span>
+      </div>
     </div>
   </div>
-
-  <!-- WebGL Context Lost Overlay -->
-  <div class="context-lost-overlay" *ngIf="contextLost" role="alert" aria-live="assertive">
-    <div class="context-lost-content">
-      <h2 class="context-lost-title">Display Lost</h2>
-      <p class="context-lost-message">The graphics engine lost its connection. This can happen when your device runs low on memory.</p>
-      <p class="context-lost-hint">Waiting for recovery...</p>
-      <button class="context-lost-refresh-btn" (click)="reloadPage()">Try Refreshing</button>
-    </div>
-  </div>
-
-  <!-- Pause overlay -->
-  <div class="pause-overlay" *ngIf="isPaused && (gameState.phase === GamePhase.COMBAT || gameState.phase === GamePhase.INTERMISSION)" #pauseOverlay (click)="onPauseOverlayClick($event)" role="dialog" aria-modal="true" aria-labelledby="pause-menu-title">
-    <div class="pause-menu" (click)="$event.stopPropagation()">
-      <h2 class="pause-menu__title" id="pause-menu-title">PAUSED</h2>
-      <p class="pause-menu__subtitle" *ngIf="pauseEncounterLabel">{{ pauseEncounterLabel }}</p>
-
-      <!-- Game stats summary -->
-      <div class="pause-menu__stats">
-        <div class="pause-stat">
-          <span class="pause-stat__label">Wave</span>
-          <span class="pause-stat__value">{{ gameState.wave }} / {{ gameState.maxWaves }}</span>
-        </div>
-        <div class="pause-stat">
-          <span class="pause-stat__label">Lives</span>
-          <span class="pause-stat__value">{{ gameState.lives }}</span>
-        </div>
-        <div class="pause-stat">
-          <span class="pause-stat__label">Gold</span>
-          <span class="pause-stat__value">{{ gameState.gold }}</span>
-        </div>
-      </div>
-
-      <!-- Settings -->
-      <div class="pause-menu__settings" *ngIf="!showQuitConfirm">
-        <button class="pause-audio-toggle" (click)="toggleAudio()" [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
-          <app-icon *ngIf="!audioMuted" name="sound-on"></app-icon>
-          <app-icon *ngIf="audioMuted" name="sound-off"></app-icon>
-          <span>{{ audioMuted ? 'Unmute' : 'Mute' }}</span>
-        </button>
-      </div>
-
-      <!-- Normal actions + navigation prompt actions -->
-      <div class="pause-menu__actions" *ngIf="!showQuitConfirm">
-        <button class="pause-action pause-action--primary" (click)="togglePause()">Resume</button>
-        <button class="pause-action pause-action--save" (click)="saveAndExit()">
-          Save &amp; Exit
-        </button>
-        <button class="pause-action pause-action--quit" (click)="requestQuit()">
-          Abandon Run
-        </button>
-      </div>
-
-      <!-- Quit confirmation -->
-      <div class="pause-menu__quit-confirm" *ngIf="showQuitConfirm">
-        <p class="quit-confirm__text">Abandon this run? Progress will be lost.</p>
-        <div class="quit-confirm__actions">
-          <button class="pause-action pause-action--primary" (click)="cancelQuit()">Cancel</button>
-          <button class="pause-action pause-action--quit" (click)="confirmQuit()">Quit</button>
-        </div>
-      </div>
-
-      <p class="pause-menu__auto-hint" *ngIf="autoPaused">Game auto-paused — tab was inactive</p>
-      <p class="pause-menu__hint" aria-hidden="true">P or ESC to resume</p>
-    </div>
-  </div>
-
-  <!-- Tower info panel -->
-  <app-tower-info-panel
-    *ngIf="selectedTowerInfo && selectedTowerStats"
-    [towerInfo]="selectedTowerInfo"
-    [towerStats]="selectedTowerStats"
-    [upgradeCost]="selectedTowerUpgradeCost"
-    [upgradePercent]="selectedTowerUpgradePercent"
-    [sellValue]="selectedTowerSellValue"
-    [upgradePreview]="upgradePreview"
-    [showSpecializationChoice]="showSpecializationChoice"
-    [specOptions]="specOptions"
-    [gold]="gameState.gold"
-    [sellConfirmPending]="sellConfirmPending"
-    [targetingModeLabels]="targetingModeLabels"
-    (close)="deselectTower()"
-    (upgrade)="upgradeTower()"
-    (sell)="sellTower()"
-    (cycleTargeting)="cycleTargeting()"
-    (selectSpecialization)="selectSpecialization($event)"
-    (cancelSpecialization)="showSpecializationChoice = false">
-  </app-tower-info-panel>
 
   <!-- Card hand — the only way to place towers, cast spells, or apply modifiers -->
+  <!-- Stays outside canvas-overlays: it occupies the hand grid row, not the canvas row -->
   <app-card-hand
     *ngIf="deckState && energyState"
     [deckState]="deckState"
@@ -281,43 +322,5 @@
     [pendingCardId]="pendingTowerCardId"
     (cardPlayed)="onCardPlayed($event)">
   </app-card-hand>
-
-  <!-- Interaction mode indicator -->
-  <div class="mode-indicator"
-       *ngIf="isPlaceMode && gameState.phase !== GamePhase.VICTORY && gameState.phase !== GamePhase.DEFEAT"
-       aria-live="polite"
-       [attr.aria-label]="'Placing ' + (selectedTowerType | titlecase) + ' tower'">
-    <span class="mode-label place-mode">
-      {{ selectedTowerType | titlecase }}
-    </span>
-    <span class="mode-hint">Right-click to cancel</span>
-  </div>
-
-  <!-- Tutorial — non-blocking contextual card -->
-  <app-tutorial-spotlight
-    [step]="tutorialFacade.currentTutorialStep"
-    [tip]="getTutorialTip()"
-    [stepNumber]="getTutorialStepNumber()"
-    [totalSteps]="getTutorialTotalSteps()"
-    (advance)="advanceTutorial()"
-    (skip)="skipTutorial()">
-  </app-tutorial-spotlight>
-
-  <!-- Toast notifications -->
-  <div class="toast-stack" *ngIf="notifications.length > 0" aria-live="polite">
-    <div
-      *ngFor="let notification of notifications"
-      class="toast"
-      [class.toast--achievement]="notification.type === 'achievement'"
-      [class.toast--challenge]="notification.type === 'challenge'"
-      [class.toast--streak]="notification.type === 'streak'"
-      [class.toast--info]="notification.type === 'info'"
-      (click)="dismissNotification(notification.id)"
-      role="alert"
-    >
-      <span class="toast__title">{{ notification.title }}</span>
-      <span class="toast__message">{{ notification.message }}</span>
-    </div>
-  </div>
 
 </div>

@@ -24,26 +24,28 @@
 // rearranging the order.
 .board-container {
   --shell-hud-height: 4rem;
-  --shell-preview-width: 14rem;
-  --shell-sidepanel-width: 18rem;
   --shell-hand-height: 9rem;
-  --tower-bar-height: var(--shell-hand-height); // legacy alias
+  // Sprint 1: Shell positioning custom properties
+  --shell-hud-top: var(--spacing-sm);
+  --shell-hud-left: var(--spacing-sm);
+  --shell-end-turn-top: var(--spacing-sm);
+  --shell-minimap-bottom: var(--spacing-sm);
+  --shell-minimap-left: var(--spacing-sm);
+  --shell-controls-bottom: var(--spacing-sm);
+  --shell-controls-right: var(--spacing-sm);
+  --shell-spawn-top: calc(var(--shell-hud-height) + var(--spacing-md) + var(--shell-hud-top));
+  --shell-spawn-left: var(--spacing-sm);
+  --shell-wave-top: var(--spacing-sm);
+  --shell-wave-right: var(--spacing-sm);
+  --shell-tower-info-bottom: var(--spacing-sm);
 
+  // Sprint 2: 1-column grid (canvas fills available space, hand row below)
   display: grid;
-  grid-template-columns:
-    [preview-start] var(--shell-preview-width)
-    [preview-end canvas-start] 1fr
-    [canvas-end sidepanel-start] var(--shell-sidepanel-width)
-    [sidepanel-end];
-  grid-template-rows:
-    [hud-start] var(--shell-hud-height)
-    [hud-end canvas-start] 1fr
-    [canvas-end hand-start] var(--shell-hand-height)
-    [hand-end];
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr var(--shell-hand-height);
   grid-template-areas:
-    "hud      hud    hud"
-    "preview  canvas sidepanel"
-    "hand     hand   hand";
+    "canvas"
+    "hand";
   border: var(--border-width-thin) solid var(--game-primary);
   height: 100%;
   width: 100%;
@@ -52,14 +54,23 @@
   @media (max-width:1023px) {
     border: 0;
     border-top: var(--border-width-thin) solid var(--game-primary);
-    --shell-preview-width: 10rem;
-    --shell-sidepanel-width: 0;
   }
 
   @media (max-width:768px) {
-    --shell-preview-width: 0;
-    --shell-sidepanel-width: 0;
     --shell-hand-height: 8rem;
+  }
+
+  @media (max-width:480px) {
+    --shell-hand-height: 7rem;
+    --shell-hud-height: 3rem;
+    --shell-end-turn-top: calc(var(--shell-hud-height) + var(--spacing-xs) * 2);
+    --shell-spawn-top: calc(var(--shell-hud-height) + var(--spacing-md) + var(--spacing-xs) * 2);
+    --shell-hud-top: var(--spacing-xs);
+    --shell-hud-left: var(--spacing-xs);
+    --shell-minimap-bottom: var(--spacing-xs);
+    --shell-minimap-left: var(--spacing-xs);
+    --shell-controls-bottom: var(--spacing-xs);
+    --shell-controls-right: var(--spacing-xs);
   }
 
   .canvas-container {
@@ -68,6 +79,21 @@
     height: 100%;
     position: relative;
     overflow: hidden;
+  }
+
+  // Sprint 5: canvas-overlays — sits in the canvas grid cell, stacks on top of
+  // .canvas-container via DOM order. All HUD overlay elements live inside here.
+  // pointer-events: none so the overlay div itself doesn't block canvas input;
+  // children opt back in via pointer-events: auto.
+  .canvas-overlays {
+    grid-area: canvas;
+    position: relative;
+    pointer-events: none;
+    z-index: var(--z-index-base);
+
+    > * {
+      pointer-events: auto;
+    }
   }
 
   // M1 S4: card-hand host gets the `hand` grid area (bottom row).
@@ -81,66 +107,33 @@
     z-index: calc(var(--z-index-overlay) + 5);
   }
 
-  // M1 S5: game-hud host gets the `hud` grid area (top row).
-  app-game-hud {
-    grid-area: hud;
-    display: block;
-    width: 100%;
-    z-index: var(--z-index-overlay);
-  }
-
-  // M1 S5: game-setup-panel host shares the sidepanel grid area during SETUP.
-  app-game-setup-panel {
-    grid-area: sidepanel;
-    display: block;
-    align-self: start;
-    justify-self: end;
-    margin: var(--spacing-md);
-  }
-
-  // M1 S5: tower-info-panel host shares the sidepanel grid area during
-  // inspect mode. Stacks with setup-panel (only one renders at a time via *ngIf).
-  app-tower-info-panel {
-    grid-area: sidepanel;
-    display: block;
-    align-self: start;
-    justify-self: end;
-    margin: var(--spacing-md);
-  }
-
-  // --- Phase H9: Wave preview — reserved `sidepanel` grid area ---
+  // --- Phase H9: Wave preview ---
   // Shown during SETUP (first-time wave preview) and INTERMISSION (next-wave
-  // summary). Grid-anchored to the right so it never reflows when toggled.
+  // summary). Will be repositioned in Phase 3 using shell positioning variables.
   .wave-preview {
-    grid-area: sidepanel;
-    align-self: start;
-    justify-self: end;
-    margin: var(--spacing-md);
     min-width: 14rem;
     max-width: 18rem;
 
     @media (max-width:1023px) {
-      display: none; // mobile collapses sidepanel to 0 width
+      display: none;
     }
   }
 
-  // --- Phase 7: Spawn preview — reserved `preview` grid area ---
-  // Always occupies the left shell slot during COMBAT. Hidden (visibility, not
-  // display) when not in COMBAT so the slot stays reserved — the canvas never
-  // reclaims the width.
+  // --- Phase 7: Spawn preview ---
+  // Always visible during COMBAT. Repositioned in Phase 3 as absolute overlay.
   .spawn-preview {
     @include glass-panel(rgba(10, 15, 30, 0.82));
-    grid-area: preview;
-    align-self: start;
-    justify-self: start;
-    margin: var(--spacing-md);
+    position: absolute;
+    top: var(--shell-spawn-top);
+    left: var(--shell-spawn-left);
     padding: var(--spacing-sm) var(--spacing-md);
     border: var(--border-width-thin) solid var(--panel-blue-border);
     color: var(--text-color);
     pointer-events: none;
+    z-index: var(--z-index-overlay);
 
     @media (max-width:768px) {
-      display: none; // mobile collapses the slot entirely
+      display: none;
     }
 
     .spawn-preview__title {
@@ -213,7 +206,7 @@
   .end-turn-btn {
     @include glass-panel(rgba(30, 10, 50, 0.88));
     position: absolute;
-    top: var(--spacing-md);
+    top: var(--shell-end-turn-top);
     left: 50%;
     transform: translateX(-50%);
     padding: var(--spacing-sm) var(--spacing-xl);
@@ -230,7 +223,7 @@
     gap: 0.125rem;
     min-width: 8rem;
     min-height: 3rem;
-    z-index: var(--z-index-overlay);
+    z-index: calc(var(--z-index-overlay) + 1);
     box-shadow: 0 0 1.25rem rgba(160, 100, 220, 0.4);
 
     &:hover:not(:disabled) {
@@ -267,7 +260,7 @@
 
   .path-blocked-warning {
     position: absolute;
-    top: calc(var(--spacing-md) + 5rem);
+    top: calc(var(--shell-end-turn-top) + 3.5rem);
     left: 50%;
     transform: translateX(-50%);
     padding: 0.4rem var(--spacing-lg);
@@ -287,6 +280,17 @@
   @keyframes path-blocked-fade-in {
     from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
     to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
+  @media (max-width: 480px) {
+    .path-blocked-warning {
+      top: calc(var(--shell-end-turn-top) + 3rem);
+      font-size: var(--font-size-2xs);
+      padding: 0.3rem var(--spacing-md);
+      max-width: 80vw;
+      white-space: normal;
+      text-align: center;
+    }
   }
 
   // Wave preview panel — styles moved to src/styles.css (.board-container .wave-preview)
@@ -371,15 +375,6 @@
 
 // --- Responsive breakpoints ---
 // Tablet (max-width: 768px) — HUD and overlay responsive rules moved to src/styles.css
-
-// Mobile (max-width: 480px) — HUD responsive rules moved to src/styles.css; only non-HUD rules remain
-@media (max-width:480px) {
-  .board-container {
-    --tower-bar-height: 7.75rem; // 2-row grid: 10px pad + 44px row + 5px gap + 44px row + 10px pad + border + radius = 124px
-
-    // Victory/defeat overlay — responsive rules moved to src/styles.css (child component can't be reached by scoped CSS)
-  }
-}
 
 // --- Animations ---
 @keyframes pulse-critical {

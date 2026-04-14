@@ -5,10 +5,10 @@
   background: rgba(0, 0, 0, 0.85);
   border-radius: var(--border-radius-md);
   backdrop-filter: blur(0.75rem);
-  z-index: var(--z-index-overlay);
+  z-index: calc(var(--z-index-overlay) + 2);
   font-family: "Orbitron", sans-serif;
   position: absolute;
-  bottom: calc(var(--spacing-lg) + var(--tower-bar-height));
+  bottom: var(--shell-tower-info-bottom);
   left: 50%;
   transform: translateX(-50%);
   min-width: 14rem;
@@ -20,17 +20,20 @@
 @media (max-width: 768px) {
   .board-container .tower-info-panel {
     min-width: 12rem;
-    bottom: calc(var(--spacing-md) + var(--tower-bar-height));
+    bottom: var(--shell-tower-info-bottom);
   }
 }
 
 @media (max-width: 480px) {
   .board-container .tower-info-panel {
+    left: var(--spacing-xs);
+    right: var(--spacing-xs);
+    width: auto;
     min-width: auto;
-    width: calc(100vw - 1rem);
-    left: 0.5rem;
     transform: none;
-    bottom: calc(var(--spacing-xs) + var(--tower-bar-height));
+    bottom: var(--shell-tower-info-bottom);
+    max-height: 50vh;
+    overflow-y: auto;
     padding: var(--spacing-sm);
     font-size: var(--font-size-3xs);
   }

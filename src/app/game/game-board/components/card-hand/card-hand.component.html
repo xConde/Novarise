@@ -15,7 +15,10 @@
   </div>
 
   <!-- Cards -->
-  <div class="card-hand__cards" role="list">
+  <div class="card-hand__cards"
+       [class.card-hand__cards--fan]="isFan"
+       [style.--card-fan-margin]="cardFanMargin"
+       role="list">
     <button
       *ngFor="let card of handCards"
       class="card"

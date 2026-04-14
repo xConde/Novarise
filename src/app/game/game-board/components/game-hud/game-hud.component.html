@@ -23,23 +23,23 @@
       <span class="hud-value">{{ formattedTime }}</span>
     </div>
   </div>
-  <div class="challenge-indicators" *ngIf="challengeIndicators.length > 0" aria-label="Challenge progress">
-    <span
-      class="challenge-indicator"
-      *ngFor="let ci of challengeIndicators"
-      [class.passing]="ci.passing"
-      [class.failing]="!ci.passing"
-      [attr.aria-label]="ci.label + ': ' + ci.value">
-      {{ ci.label }}: {{ ci.value }}
-    </span>
-  </div>
-  <div class="hud-wave-status" *ngIf="isCombat">
-    <span class="wave-enemy-count">{{ enemiesRemaining }}</span> enemies remaining
-    <span
-      *ngIf="isEndless && currentEndlessTemplate"
-      class="wave-template-badge"
-      aria-label="Current wave type">
-      {{ currentEndlessTemplate }}
-    </span>
-  </div>
+</div>
+<div class="hud-challenge-strip" *ngIf="challengeIndicators.length > 0" aria-label="Challenge progress">
+  <span
+    class="challenge-indicator"
+    *ngFor="let ci of challengeIndicators"
+    [class.passing]="ci.passing"
+    [class.failing]="!ci.passing"
+    [attr.aria-label]="ci.label + ': ' + ci.value">
+    {{ ci.label }}: {{ ci.value }}
+  </span>
+</div>
+<div class="hud-wave-status" *ngIf="isCombat">
+  <span class="wave-enemy-count">{{ enemiesRemaining }}</span> enemies remaining
+  <span
+    *ngIf="isEndless && currentEndlessTemplate"
+    class="wave-template-badge"
+    aria-label="Current wave type">
+    {{ currentEndlessTemplate }}
+  </span>
 </div>

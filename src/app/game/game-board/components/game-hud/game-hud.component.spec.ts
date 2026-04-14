@@ -133,15 +133,15 @@ describe('GameHudComponent', () => {
   });
 
   describe('challenge indicators', () => {
-    it('should not render .challenge-indicators when challengeIndicators is empty', () => {
+    it('should not render .hud-challenge-strip when challengeIndicators is empty', () => {
       component.challengeIndicators = [];
       fixture.detectChanges();
 
-      const el = fixture.nativeElement.querySelector('.challenge-indicators');
+      const el = fixture.nativeElement.querySelector('.hud-challenge-strip');
       expect(el).toBeNull();
     });
 
-    it('should render .challenge-indicators when indicators are provided', () => {
+    it('should render .hud-challenge-strip when indicators are provided', () => {
       const indicators: ChallengeIndicator[] = [
         { label: 'No Slow', value: '✓', passing: true },
         { label: 'Towers', value: '2/4', passing: true },
@@ -149,7 +149,7 @@ describe('GameHudComponent', () => {
       component.challengeIndicators = indicators;
       fixture.detectChanges();
 
-      const el = fixture.nativeElement.querySelector('.challenge-indicators');
+      const el = fixture.nativeElement.querySelector('.hud-challenge-strip');
       expect(el).toBeTruthy();
     });
 

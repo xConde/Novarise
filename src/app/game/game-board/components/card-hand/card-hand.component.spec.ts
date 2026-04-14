@@ -10,6 +10,7 @@ import {
   DeckState,
   EnergyState,
 } from '../../../../run/models/card.model';
+import { getCardDefinition } from '../../../../run/constants/card-definitions';
 
 // Minimal deck state helpers ────────────────────────────────────────────────
 
@@ -276,6 +277,77 @@ describe('CardHandComponent', () => {
   describe('ngOnDestroy', () => {
     it('cleans up subscriptions without error', () => {
       expect(() => component.ngOnDestroy()).not.toThrow();
+    });
+  });
+
+  describe('fan overlap', () => {
+    const stubHandCard = (id: string, cardId: CardId): HandCard => ({
+      instance: { instanceId: id, cardId, upgraded: false },
+      definition: getCardDefinition(cardId),
+      canPlay: true,
+      goldCost: null,
+    });
+
+    const makeCards = (count: number): HandCard[] => {
+      const ids: CardId[] = [
+        CardId.TOWER_BASIC,
+        CardId.GOLD_RUSH,
+        CardId.DAMAGE_BOOST,
+        CardId.REPAIR_WALLS,
+        CardId.SCOUT_AHEAD,
+        CardId.FORTIFY,
+        CardId.OVERCLOCK,
+        CardId.DRAW_TWO,
+        CardId.RANGE_EXTEND,
+        CardId.RAPID_FIRE,
+      ];
+      return Array.from({ length: count }, (_, i) =>
+        stubHandCard(`inst_${i}`, ids[i % ids.length])
+      );
+    };
+
+    it('isFan returns false when handCards has 5 or fewer', () => {
+      component.handCards = makeCards(5);
+      expect(component.isFan).toBe(false);
+    });
+
+    it('isFan returns false with 0 cards', () => {
+      component.handCards = [];
+      expect(component.isFan).toBe(false);
+    });
+
+    it('isFan returns true when handCards has 6+', () => {
+      component.handCards = makeCards(6);
+      expect(component.isFan).toBe(true);
+    });
+
+    it('cardFanMargin returns "0" when not in fan mode', () => {
+      component.handCards = makeCards(3);
+      expect(component.cardFanMargin).toBe('0');
+    });
+
+    it('cardFanMargin returns "0" for empty hand', () => {
+      component.handCards = [];
+      expect(component.cardFanMargin).toBe('0');
+    });
+
+    it('cardFanMargin returns negative rem value in fan mode', () => {
+      component.handCards = makeCards(6);
+      expect(component.cardFanMargin).toMatch(/^-\d+(\.\d+)?rem$/);
+    });
+
+    it('cardFanMargin increases overlap with more cards', () => {
+      component.handCards = makeCards(6);
+      const margin6 = parseFloat(component.cardFanMargin);
+      component.handCards = makeCards(10);
+      const margin10 = parseFloat(component.cardFanMargin);
+      // More negative = larger overlap
+      expect(margin10).toBeLessThan(margin6);
+    });
+
+    it('cardFanMargin caps at -1.5rem with very large hands', () => {
+      component.handCards = makeCards(20);
+      expect(parseFloat(component.cardFanMargin)).toBeGreaterThanOrEqual(-1.5);
     });
   });
 });
