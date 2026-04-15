@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { CardHandComponent, HandCard } from './card-hand.component';
 import { IconComponent } from '@shared/components/icon/icon.component';
@@ -144,6 +144,130 @@ describe('CardHandComponent', () => {
       component.playCard(unplayable);
 
       expect(emitted.length).toBe(0);
+    });
+  });
+
+  describe('cardInspected (right-click / long-press)', () => {
+    function primeHand(): HandCard {
+      const instance = makeInstance(CardId.TOWER_BASIC);
+      component.deckState = makeDeckState([instance]);
+      component.energy = makeEnergy(3, 3);
+      component.resolveHand();
+      return component.handCards[0];
+    }
+
+    it('onCardContextMenu emits cardInspected and prevents default', () => {
+      const card = primeHand();
+      const emitted: HandCard[] = [];
+      component.cardInspected.subscribe(c => emitted.push(c));
+
+      const event = { preventDefault: jasmine.createSpy('preventDefault') } as unknown as MouseEvent;
+      component.onCardContextMenu(event, card);
+
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(emitted.length).toBe(1);
+      expect(emitted[0]).toBe(card);
+    });
+
+    it('long-press (touch) emits cardInspected after 500ms', fakeAsync(() => {
+      const card = primeHand();
+      const emitted: HandCard[] = [];
+      component.cardInspected.subscribe(c => emitted.push(c));
+
+      const down = { pointerType: 'touch', clientX: 10, clientY: 20 } as PointerEvent;
+      component.onCardPointerDown(down, card);
+
+      // 499ms — timer hasn't fired
+      tick(499);
+      expect(emitted.length).toBe(0);
+
+      // Cross the 500ms threshold
+      tick(1);
+      expect(emitted.length).toBe(1);
+      expect(emitted[0]).toBe(card);
+    }));
+
+    it('long-press is cancelled if pointerup fires before the threshold', fakeAsync(() => {
+      const card = primeHand();
+      const emitted: HandCard[] = [];
+      component.cardInspected.subscribe(c => emitted.push(c));
+
+      component.onCardPointerDown({ pointerType: 'touch', clientX: 10, clientY: 20 } as PointerEvent, card);
+      tick(300);
+      component.onCardPointerUp();
+      tick(500); // past the would-be-fire window
+      expect(emitted.length).toBe(0);
+    }));
+
+    it('long-press is cancelled when finger moves past the slop threshold', fakeAsync(() => {
+      const card = primeHand();
+      const emitted: HandCard[] = [];
+      component.cardInspected.subscribe(c => emitted.push(c));
+
+      component.onCardPointerDown({ pointerType: 'touch', clientX: 10, clientY: 20 } as PointerEvent, card);
+      // 10px move is past the 8px slop
+      component.onCardPointerMove({ clientX: 25, clientY: 20 } as PointerEvent);
+      tick(600);
+      expect(emitted.length).toBe(0);
+    }));
+
+    it('mouse pointer events do NOT start a long-press timer (contextmenu handles right-click)', fakeAsync(() => {
+      const card = primeHand();
+      const emitted: HandCard[] = [];
+      component.cardInspected.subscribe(c => emitted.push(c));
+
+      component.onCardPointerDown({ pointerType: 'mouse', clientX: 10, clientY: 20 } as PointerEvent, card);
+      tick(600);
+      expect(emitted.length).toBe(0);
+    }));
+
+    it('onCardClick swallows the click when a long-press just fired (same gesture)', fakeAsync(() => {
+      const card = primeHand();
+      const played: CardInstance[] = [];
+      const inspected: HandCard[] = [];
+      component.cardPlayed.subscribe(c => played.push(c));
+      component.cardInspected.subscribe(c => inspected.push(c));
+
+      component.onCardPointerDown({ pointerType: 'touch', clientX: 0, clientY: 0 } as PointerEvent, card);
+      tick(500);
+      // Touch-up after the long-press fires typically synthesises a click.
+      component.onCardClick(card);
+
+      expect(inspected.length).toBe(1);
+      expect(played.length).toBe(0); // click suppressed
+    }));
+
+    it('ngOnDestroy cancels a pending long-press timer', fakeAsync(() => {
+      const card = primeHand();
+      const emitted: HandCard[] = [];
+      component.cardInspected.subscribe(c => emitted.push(c));
+
+      component.onCardPointerDown({ pointerType: 'touch', clientX: 0, clientY: 0 } as PointerEvent, card);
+      component.ngOnDestroy();
+      tick(600);
+      expect(emitted.length).toBe(0);
+    }));
+  });
+
+  describe('keywordAriaLabel', () => {
+    it('returns empty string when no keywords are set', () => {
+      const card: HandCard = {
+        instance: { cardId: CardId.TOWER_BASIC, instanceId: 'x', upgraded: false },
+        definition: { ...getCardDefinition(CardId.TOWER_BASIC), innate: undefined, retain: undefined, ethereal: undefined, exhaust: undefined } as any,
+        canPlay: true,
+        goldCost: 50,
+      };
+      expect(component.keywordAriaLabel(card)).toBe('');
+    });
+
+    it('lists active keywords in stable order', () => {
+      const card: HandCard = {
+        instance: { cardId: CardId.TOWER_BASIC, instanceId: 'x', upgraded: false },
+        definition: { ...getCardDefinition(CardId.TOWER_BASIC), innate: true, retain: true, ethereal: false, exhaust: true } as any,
+        canPlay: true,
+        goldCost: 50,
+      };
+      expect(component.keywordAriaLabel(card)).toBe('Keywords: Innate, Retain, Exhaust');
     });
   });
 

@@ -24,9 +24,10 @@
 // rearranging the order.
 .board-container {
   --shell-hud-height: 4rem;
-  // Grew from 10rem → 12.5rem to fit 11rem cards (with description body text)
-  // plus headroom for the hover lift.
-  --shell-hand-height: 12.5rem;
+  // 10rem fits the 8.5rem cards (description moved to right-click modal)
+  // plus ~1.5rem of hover-lift headroom. Shrunk from 12.5rem after
+  // Phase 13 card-face simplification.
+  --shell-hand-height: 10rem;
   // Shell positioning tokens — used throughout _game-*.scss partials.
   // Desktop defaults; mobile overrides in @media (max-width:480px) block below.
   // Rationale:
@@ -69,7 +70,7 @@
   }
 
   @media (max-width:768px) {
-    --shell-hand-height: 10.5rem;
+    --shell-hand-height: 8.5rem;
   }
 
   @media (max-width:480px) {

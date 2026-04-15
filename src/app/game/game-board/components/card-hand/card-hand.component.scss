@@ -236,12 +236,14 @@ $card-rarity-glows: (
   align-items: center;
   // padding-top reserves space for the absolute-positioned cost pill + corner icon;
   // padding-bottom leaves the instance dot its corner.
-  padding: 2.1rem var(--spacing-xs) 0.8rem;
+  padding: 2.1rem var(--spacing-xs) 0.9rem;
   gap: 0.25rem;
 
   width: 6.25rem;
-  // Min-height grew from 7.75rem to 11rem to fit the description body text.
-  min-height: 11rem;
+  // Min-height shrunk from 11rem to 8.5rem after description moved to the
+  // right-click detail modal. Leaves room for: cost pill, name (2 lines),
+  // gold cost, keyword badges, instance dot.
+  min-height: 8.5rem;
 
   background: rgba(10, 5, 20, 0.88);
   border: var(--border-width-thin) solid var(--border-color);
@@ -269,14 +271,14 @@ $card-rarity-glows: (
 
   @media (max-width: 768px) {
     width: 5.25rem;
-    min-height: 9rem;
-    padding: 1.9rem var(--spacing-xs) 0.7rem;
+    min-height: 7rem;
+    padding: 1.9rem var(--spacing-xs) 0.8rem;
   }
 
   @media (max-width: 480px) {
     width: 3.75rem;
     min-width: 3.75rem;
-    min-height: 6.5rem;
+    min-height: 5.5rem;
     padding: 1.5rem 0.25rem 0.5rem;
     gap: 0.1rem;
     font-size: var(--font-size-3xs);
@@ -848,16 +850,24 @@ body.reduce-motion .card-hand { animation: none; }
 
 .card__keyword {
   font-family: "Orbitron", sans-serif;
-  font-size: 0.55rem; // between 3xs and tiny — fits 4-8 chars tightly
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  // Compact 1–2 letter badges (I / R / Et / Ex). Full words in the
+  // right-click detail modal so the card face stays scannable.
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   line-height: 1;
-  padding: 0.15rem 0.35rem;
-  border-radius: 999px;
+  width: 1rem;
+  height: 1rem;
+  min-width: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.1rem;
+  border-radius: 50%;
   border: var(--border-width-thin) solid;
-  background: rgba(10, 5, 20, 0.6);
-  white-space: nowrap;
+  background: rgba(10, 5, 20, 0.7);
+  cursor: help;
 }
 
 .card__keyword--innate {
@@ -880,31 +890,12 @@ body.reduce-motion .card-hand { animation: none; }
   border-color: rgba(255, 90, 90, 0.6);
 }
 
-// ── Description body text ────────────────────────────────────
-// Replaces the hover tooltip — description lives on the card face now.
-// Pushed to the bottom of the flex column via margin-top:auto so it
-// occupies the lower zone of the card regardless of name length.
-.card__description {
-  margin-top: auto; // anchor to bottom of flex column
-  padding: 0.4rem 0.15rem 0.25rem;
-  border-top: var(--border-width-thin) solid rgba(255, 255, 255, 0.08);
-  font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-3xs);
-  font-weight: 500;
-  line-height: 1.3;
-  letter-spacing: 0.01em;
-  color: rgba(255, 255, 255, 0.82);
-  text-align: center;
-  word-break: normal;
-  overflow-wrap: break-word;
-  position: relative;
-  z-index: 1;
-
-  @media (max-width: 480px) {
-    // Cards too narrow for readable body text at <480px — suppress.
-    display: none;
-  }
-}
+// Description body text block was removed from the card face — players
+// now reach full rules via right-click (desktop) / long-press (touch), which
+// opens the CardDetailComponent modal. The card face is kept terse
+// (cost pill, name, gold cost, keyword badges) for at-a-glance scanning.
+// aria-label on the card button still carries the full description for
+// screen-reader users.
 
 // ── Sprint 36 — Card-play lift animation ─────────────────────
 

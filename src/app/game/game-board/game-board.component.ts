@@ -78,6 +78,7 @@ import { TutorialFacadeService } from './services/tutorial-facade.service';
 import { AscensionModifierService } from './services/ascension-modifier.service';
 import { TurnHistoryService, TurnEventRecord } from './services/turn-history.service';
 import { WavePreviewService, FutureWaveSummary } from './services/wave-preview.service';
+import { HandCard } from './components/card-hand/card-hand.component';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
 export interface EnemyBadge {
@@ -250,6 +251,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Pile inspector — which pile is currently being inspected (null = closed)
   inspectedPile: 'draw' | 'discard' | null = null;
+
+  /**
+   * Card-detail modal — non-null when the player right-clicked or long-pressed
+   * a card in hand. Populated by the cardInspected output from CardHandComponent.
+   */
+  inspectedCard: HandCard | null = null;
 
   // Turn-start banner — briefly shown after each endTurn()
   showTurnBanner = false;

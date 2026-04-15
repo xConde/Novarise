@@ -312,6 +312,7 @@
     [pendingCardId]="pendingTowerCardId"
     (pileInspected)="inspectedPile = $event"
     (cardPlayed)="onCardPlayed($event)"
+    (cardInspected)="inspectedCard = $event"
     (handStuckChanged)="handStuck = $event">
   </app-card-hand>
 
@@ -322,6 +323,13 @@
     [label]="inspectedPile === 'draw' ? 'Draw Pile' : 'Discard Pile'"
     (closed)="inspectedPile = null">
   </app-pile-inspector>
+
+  <!-- Card detail overlay — right-click / long-press on a card in hand opens this. -->
+  <app-card-detail
+    *ngIf="inspectedCard"
+    [card]="inspectedCard"
+    (closed)="inspectedCard = null">
+  </app-card-detail>
 
   <!-- Full-board overlays — positioned outside canvas-overlays so they cover both
        the canvas row AND the card hand row. Absolute with inset: 0 covers the

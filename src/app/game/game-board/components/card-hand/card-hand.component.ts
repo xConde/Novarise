@@ -56,6 +56,17 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   @Output() pileInspected = new EventEmitter<'draw' | 'discard'>();
   /** Emits true when the player has 0 energy and no playable cards; false when resolved. */
   @Output() handStuckChanged = new EventEmitter<boolean>();
+  /** Emits the HandCard when the player right-clicks or long-presses a card in hand. */
+  @Output() cardInspected = new EventEmitter<HandCard>();
+
+  /** Long-press detection for touch — cancelled on pointerup/move. Component-scoped. */
+  private longPressTimer: ReturnType<typeof setTimeout> | null = null;
+  private longPressFired = false;
+  /** Touch slop threshold (px). Past this move distance the press is treated as a scroll, not a long-press. */
+  private static readonly LONG_PRESS_MOVE_SLOP = 8;
+  private static readonly LONG_PRESS_DURATION_MS = 500;
+  private longPressStartX = 0;
+  private longPressStartY = 0;
 
   /** Pre-computed view models — avoids per-template-check allocation. */
   handCards: HandCard[] = [];
@@ -173,6 +184,9 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
+    // Cancel any in-flight long-press timer so a destroyed component can't
+    // emit cardInspected to a torn-down EventEmitter.
+    this.cancelLongPress();
   }
 
   resolveHand(): void {
@@ -205,6 +219,71 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
 
   inspectPile(pile: 'draw' | 'discard'): void {
     this.pileInspected.emit(pile);
+  }
+
+  /**
+   * Right-click on a card. Prevents the browser context menu and emits the
+   * card up to the parent so it can open the card-detail modal. The normal
+   * click-to-play path still fires on left-click; these are separate events.
+   */
+  onCardContextMenu(event: MouseEvent, card: HandCard): void {
+    event.preventDefault();
+    this.cardInspected.emit(card);
+  }
+
+  /**
+   * Pointer-down on a card. Starts a 500ms timer; if the timer fires before
+   * a pointerup/cancel/move-past-threshold, we treat it as a long-press and
+   * emit cardInspected. `longPressFired` is used by onCardClick to suppress
+   * the click-to-play that pointerup would otherwise produce.
+   */
+  onCardPointerDown(event: PointerEvent, card: HandCard): void {
+    // Only handle touch / pen. Mouse uses contextmenu for the inspect path.
+    if (event.pointerType === 'mouse') return;
+    this.cancelLongPress();
+    this.longPressFired = false;
+    this.longPressStartX = event.clientX;
+    this.longPressStartY = event.clientY;
+    this.longPressTimer = setTimeout(() => {
+      this.longPressFired = true;
+      this.longPressTimer = null;
+      this.cardInspected.emit(card);
+    }, CardHandComponent.LONG_PRESS_DURATION_MS);
+  }
+
+  /** Cancel a pending long-press if the finger moves beyond the slop threshold. */
+  onCardPointerMove(event: PointerEvent): void {
+    if (this.longPressTimer === null) return;
+    const dx = event.clientX - this.longPressStartX;
+    const dy = event.clientY - this.longPressStartY;
+    if (dx * dx + dy * dy > CardHandComponent.LONG_PRESS_MOVE_SLOP ** 2) {
+      this.cancelLongPress();
+    }
+  }
+
+  /** Cancel any pending long-press (pointer released, cancelled, or left the card). */
+  onCardPointerUp(): void {
+    this.cancelLongPress();
+  }
+
+  /**
+   * Card click handler. If a long-press just fired, we swallow the click so
+   * the same gesture doesn't ALSO play the card. Otherwise delegates to the
+   * existing playCard path.
+   */
+  onCardClick(card: HandCard): void {
+    if (this.longPressFired) {
+      this.longPressFired = false;
+      return;
+    }
+    this.playCard(card);
+  }
+
+  private cancelLongPress(): void {
+    if (this.longPressTimer !== null) {
+      clearTimeout(this.longPressTimer);
+      this.longPressTimer = null;
+    }
   }
 
   playCard(card: HandCard): void {
@@ -244,6 +323,20 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
     if (!this.energy || !this.handCards.length) return false;
     const anyPlayable = this.handCards.some(c => c.canPlay);
     return !anyPlayable && this.energy.current === 0;
+  }
+
+  /**
+   * Screen-reader label for the keyword-badge row. Expands the compact
+   * I/R/Et/Ex letters into full words so assistive tech announces e.g.
+   * "Keywords: Innate, Exhaust" instead of reading the letters individually.
+   */
+  keywordAriaLabel(card: HandCard): string {
+    const words: string[] = [];
+    if (card.definition.innate) words.push('Innate');
+    if (card.definition.retain) words.push('Retain');
+    if (card.definition.ethereal) words.push('Ethereal');
+    if (card.definition.exhaust) words.push('Exhaust');
+    return words.length > 0 ? `Keywords: ${words.join(', ')}` : '';
   }
 
   getCardTypeClass(type: CardType): string {

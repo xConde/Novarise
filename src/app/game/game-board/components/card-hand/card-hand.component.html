@@ -31,8 +31,14 @@
       [class.card--dimmed]="pendingCardId !== null && card.instance.instanceId !== pendingCardId"
       [class.card--playing]="card.instance.instanceId === playingCardId"
       [disabled]="!card.canPlay || (pendingCardId !== null && card.instance.instanceId !== pendingCardId)"
-      (click)="playCard(card)"
-      [attr.aria-label]="card.definition.name + ' — Energy cost: ' + card.definition.energyCost + (card.instance.upgraded ? ' (upgraded)' : '') + '. ' + card.definition.description"
+      (click)="onCardClick(card)"
+      (contextmenu)="onCardContextMenu($event, card)"
+      (pointerdown)="onCardPointerDown($event, card)"
+      (pointermove)="onCardPointerMove($event)"
+      (pointerup)="onCardPointerUp()"
+      (pointercancel)="onCardPointerUp()"
+      (pointerleave)="onCardPointerUp()"
+      [attr.aria-label]="card.definition.name + ' — Energy cost: ' + card.definition.energyCost + (card.instance.upgraded ? ' (upgraded)' : '') + '. ' + card.definition.description + '. Right-click or long-press for details.'"
       [attr.aria-pressed]="card.instance.instanceId === pendingCardId"
       [attr.aria-disabled]="!card.canPlay"
       [style.--card-tower-accent]="getTowerAccentColor(card)">
@@ -62,20 +68,18 @@
         {{ card.goldCost }}g
       </span>
 
-      <!-- H3 keyword chips — small per-keyword labels so players can spot
-           exhaust / retain / innate / ethereal cards at a glance. Hidden on
-           <480px via CSS (too narrow to fit). -->
+      <!-- H3 keyword chips — compact one-letter badges so players can spot
+           exhaust / retain / innate / ethereal cards at a glance without
+           dominating the card face. Full keyword names live in the card
+           detail modal (right-click / long-press). -->
       <span class="card__keywords"
             *ngIf="card.definition.exhaust || card.definition.retain || card.definition.innate || card.definition.ethereal"
-            aria-hidden="true">
-        <span *ngIf="card.definition.innate"   class="card__keyword card__keyword--innate">Innate</span>
-        <span *ngIf="card.definition.retain"   class="card__keyword card__keyword--retain">Retain</span>
-        <span *ngIf="card.definition.ethereal" class="card__keyword card__keyword--ethereal">Ethereal</span>
-        <span *ngIf="card.definition.exhaust"  class="card__keyword card__keyword--exhaust">Exhaust</span>
+            [attr.aria-label]="keywordAriaLabel(card)">
+        <span *ngIf="card.definition.innate"   class="card__keyword card__keyword--innate"   title="Innate">I</span>
+        <span *ngIf="card.definition.retain"   class="card__keyword card__keyword--retain"   title="Retain">R</span>
+        <span *ngIf="card.definition.ethereal" class="card__keyword card__keyword--ethereal" title="Ethereal">Et</span>
+        <span *ngIf="card.definition.exhaust"  class="card__keyword card__keyword--exhaust"  title="Exhaust">Ex</span>
       </span>
-
-      <!-- Description body text — replaces the hover tooltip so rules live on the card face. -->
-      <span class="card__description">{{ card.definition.description }}</span>
 
       <!-- Instance dot — tints per-instance so identical cards are distinguishable -->
       <span class="card__instance-dot"
