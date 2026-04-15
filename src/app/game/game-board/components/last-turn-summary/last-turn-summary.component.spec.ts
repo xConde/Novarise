@@ -355,12 +355,32 @@ describe('LastTurnSummaryComponent', () => {
       const detail = (fixture.nativeElement as HTMLElement).querySelector('.last-turn-summary__detail');
       expect(detail).not.toBeNull();
       // Attribution row now uses the compact token "B" (chess-style); the
-      // full "Basic" name lives in the title attribute for hover-reveal.
+      // full "Basic" name lives in the data-tooltip attribute, rendered via
+      // a CSS pseudo-element tooltip on hover (more reliable than native
+      // `title` inside the glass-panel backdrop-filter stacking context).
       const tokenEl = detail!.querySelector('.last-turn-summary__attrib-token');
       expect(tokenEl?.textContent?.trim()).toBe('B');
       const attribChip = detail!.querySelector<HTMLElement>('.last-turn-summary__attrib');
-      expect(attribChip?.getAttribute('title')).toBe('Basic ×2');
-      expect(detail!.textContent).toContain('×2');
+      expect(attribChip?.getAttribute('data-tooltip')).toBe('Basic ×2');
+      // aria-label for SR users — the token alone ("B") is opaque without it
+      expect(attribChip?.getAttribute('aria-label')).toBe('Basic, 2 kills');
+    });
+
+    it('single-kill chip omits the ×N count from both label and tooltip', () => {
+      component.records = [makeRecord({
+        turnNumber: 10,
+        kills: 1,
+        killsByTower: [{ type: TowerType.SNIPER, level: 2, count: 1 }],
+      })];
+      component.toggleExpanded(component.records[0]);
+      fixture.detectChanges();
+
+      const chip = (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLElement>('.last-turn-summary__attrib');
+      // No ×1 trailing the token for single kills — keeps the line tight.
+      expect(chip?.querySelector('.last-turn-summary__attrib-count')).toBeNull();
+      expect(chip?.getAttribute('data-tooltip')).toBe('Sniper Tier 2');
+      expect(chip?.getAttribute('aria-label')).toBe('Sniper Tier 2, 1 kill');
     });
 
     it('expandable rows get the --expandable class + aria-expanded attr', () => {

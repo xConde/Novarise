@@ -173,9 +173,15 @@
   font-weight: 600;
 }
 
-// Per-tower attribution chip coloring — light tint by tower type so the
-// player's eye learns the palette.
-.last-turn-summary__attrib   { cursor: help; }
+// Per-tower attribution chip — relative positioning so the CSS tooltip
+// pseudo-element can anchor to the chip. `cursor: help` signals "hover for
+// more info" (full name + tier from the data-tooltip attr).
+.last-turn-summary__attrib {
+  position: relative;
+  cursor: help;
+}
+
+// Color tints by tower type so the player's eye learns the palette.
 .last-turn-summary__attrib--basic   { color: var(--tower-color-basic, #ffaa50); }
 .last-turn-summary__attrib--sniper  { color: var(--theme-cyan); }
 .last-turn-summary__attrib--splash  { color: #ff8855; }
@@ -185,7 +191,7 @@
 .last-turn-summary__attrib--dot     { color: var(--theme-purple-light, #c4b8d8); }
 
 // Compact token (the "B" / "Sn2" / "M3" part) keeps the tower's tint at
-// full weight; the ×N count rides along at 60% opacity so the token reads
+// full weight; the ×N count rides along at ~70% opacity so the token reads
 // first — like chess-move pieces vs. disambiguators.
 .last-turn-summary__attrib-token {
   font-weight: 700;
@@ -196,6 +202,66 @@
   margin-left: 0.1rem;
   font-weight: 600;
   opacity: 0.7;
+}
+
+// ── CSS tooltip (replaces native `title`, which was unreliable inside
+// the glass-panel + backdrop-filter stacking context) ────────────────────
+// Fires on chip hover/focus. Reads content from the [data-tooltip] attr
+// so each chip can carry its own "Basic Tier 2 ×3" string. Arrow glyph
+// via a second pseudo-element on ::before.
+.last-turn-summary__attrib::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 0.35rem);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.3rem 0.55rem;
+  background: rgba(10, 15, 30, 0.96);
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--border-radius-sm);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-3xs);
+  font-weight: 500;
+  color: var(--text-color);
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  text-transform: none; // override any parent uppercase rules
+  opacity: 0;
+  pointer-events: none;
+  // 400ms delay on show (matches native title feel), instant hide
+  transition: opacity 0.12s ease 0.4s;
+  z-index: 1000;
+}
+
+// Downward-pointing arrow glyph — small border-based triangle.
+.last-turn-summary__attrib::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 0.1rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border: 0.3rem solid transparent;
+  border-top-color: rgba(255, 255, 255, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease 0.4s;
+  z-index: 1000;
+}
+
+.last-turn-summary__attrib:hover::after,
+.last-turn-summary__attrib:focus-visible::after,
+.last-turn-summary__attrib:hover::before,
+.last-turn-summary__attrib:focus-visible::before {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .last-turn-summary__attrib::after,
+  .last-turn-summary__attrib::before {
+    transition: none;
+  }
 }
 
 @keyframes last-turn-summary-detail-enter {
