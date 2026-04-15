@@ -104,15 +104,19 @@
 // drawer as a chunky labeled button, which was an odd emphasis spot for
 // a secondary control. Corner placement matches the "modal-level toggle"
 // convention (X buttons, settings gears, etc.).
+//
+// Size kept small (1.75rem) so the "PAUSED" title — which is hero-size
+// with 0.4rem letter-spacing — has breathing room on the right. Pushed
+// to the extreme corner (0.5rem inset) for the same reason.
 .board-container .pause-audio-toggle {
   position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
+  top: 0.5rem;
+  right: 0.5rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  width: 1.75rem;
+  height: 1.75rem;
   padding: 0;
   background: transparent;
   color: var(--text-faint);
@@ -326,7 +330,11 @@
 .board-container .pause-menu__controls {
   margin-top: var(--spacing-sm);
   padding-top: var(--spacing-sm);
-  border-top: var(--border-width-thin) solid rgba(255, 255, 255, 0.1);
+  // No border-top: .pause-menu__stats already has a border-bottom that
+  // closes the capsule above it. Before settings was removed from the
+  // flow, the two borders were spaced apart by the audio button +
+  // wrapper padding; now they'd sit a flex-gap apart, reading as a
+  // double rule.
 }
 
 .board-container .pause-menu__controls-summary {
