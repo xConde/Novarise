@@ -108,7 +108,19 @@ export class WavePreviewService {
     return { oneShotBonus: this.oneShotBonus };
   }
 
-  restore(snapshot: { oneShotBonus: number }): void {
-    this.oneShotBonus = snapshot.oneShotBonus;
+  /**
+   * Restore one-shot bonus from a checkpoint snapshot.
+   *
+   * Defensive: a malformed snapshot (missing field, wrong type) would otherwise
+   * let `undefined`/`NaN` poison `getPreviewDepth()` arithmetic and silently
+   * zero out scout reveals for the rest of the encounter. Any input that isn't
+   * a finite non-negative integer coerces to 0 — the safest default (no bonus).
+   *
+   * See STRATEGIC_AUDIT.md Finding 1 (Phase 9–12 red team).
+   */
+  restore(snapshot: { oneShotBonus: number } | null | undefined): void {
+    const raw = snapshot?.oneShotBonus;
+    const valid = typeof raw === 'number' && Number.isFinite(raw) && raw >= 0;
+    this.oneShotBonus = valid ? Math.floor(raw) : 0;
   }
 }

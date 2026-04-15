@@ -1406,3 +1406,73 @@ Decomposition extracted 8 new services, reducing GameBoardComponent from 2078 �
 - [x] Phase 9: Hardening — version migration, quota handling, structural validation
 - [x] Red team: Fix 1 CRITICAL, 2 HIGH, 3 MEDIUM findings
 - [x] Final: 0 FAILED / 5089 SUCCESS / 1 skipped
+
+---
+
+## Red Team Critique — 2026-04-14 (Phase 9–12)
+
+Scope: commits `09759a8` through `bca26bb` on `feat/ascent-mode`. Four phases of
+gameplay work: card-face overhaul, Tier 2 dead-content revival (wave-preview
+API + SPEED_RUN + rest upgrade + stale docs), four correctness fixes
+(CombatLoopService.reset, BOUNTY_HUNTER, STURDY_BOOTS, checkpoint wiring),
+four latent-bug fixes (GamePauseService.reset, completedChallenges render,
+H3 keyword badges, 6 RunEventType emitters). Interrogation in the role of
+Lead Security & Reliability Engineer with targeted-scope skepticism.
+
+### Finding 1: `WavePreviewService.restore(undefined)` silently poisons preview depth (HIGH)
+**Location:** `encounter-checkpoint.service.ts:109–119` (`isValidCheckpoint`) + `game-board.component.ts:1119–1121` (restore step 13a)
+**Risk:** `isValidCheckpoint` validates only `version`, `timestamp`, `nodeId`,
+`encounterConfig`, `gameState` — it does NOT verify `wavePreview` exists on
+the parsed object. A manually-edited or truncated v2 checkpoint missing that
+field would pass validation, then the restore coordinator would call
+`wavePreviewService.restore(undefined)`. The service sets `oneShotBonus = undefined`,
+and subsequent `getPreviewDepth()` returns `undefined + permBonus = NaN`. The
+template then evaluates `getFutureWavesSummary(currentWaveIndex - 1)` where
+`depth = NaN` — the `for (let i = 1; i <= depth; i++)` loop never enters, so
+no crash, but scout bonuses silently vanish for the rest of the encounter,
+including any permanent SCOUTING_LENS bonus.
+**Fix:** Defensive guard in `WavePreviewService.restore()` — accept the
+snapshot but coerce missing/invalid `oneShotBonus` to 0. Pair with a spec that
+asserts a malformed snapshot is handled gracefully.
+
+### Finding 2: Migration table mutates the input object in place (LOW)
+**Location:** `encounter-checkpoint.service.ts:19–27` (migrations table)
+**Risk:** My 1→2 migration mutates `data` and returns the same reference. Low
+risk today (single migration, no aliasing concern), but future chains like
+v0→v1→v2→v3 will compound: if a later migration sets `data['x']` when an
+earlier one also set `data['x']`, the later write silently overwrites. Also
+makes the code harder to test: you can't compare `before` vs. `after` by
+identity.
+**Fix:** Not critical now. Flag for a future hardening pass — migrations
+should return a new `{...data, …diff}` object.
+
+### Finding 3: `RunEventBusService.on()` subscriber leak on component-scoped subscribers (LOW)
+**Location:** `run-event-bus.service.ts:47–56`
+**Risk:** RunEventBusService is root-scoped. Its `events$` Subject retains
+every subscription until unsubscribed. Current subscribers (RelicService) are
+also root-scoped, so their lifetimes match. But the Phase 12 emit wiring now
+opens the door to push-model relic/card code subscribing from
+component-scoped services. If such a subscriber forgets to unsubscribe on
+`ngOnDestroy`, it leaks for the duration of the run.
+**Fix:** Not an active bug — zero component-scoped subscribers exist today.
+Flag for the future: when subscribing from component scope, route through a
+`takeUntil(this.destroy$)` pattern.
+
+---
+
+### Hardening Applied
+
+Finding 1 is the only one with a live exploitation path — a defensive `restore()`
+costs nothing and closes the silent-NaN failure mode. See follow-up commit.
+
+### Deployment Checklist — Phase 9–12
+
+- [x] Phase 9: Card face overhaul (commit `09759a8`)
+- [x] Phase 10: Tier 2 gameplay fixes (commit `0cd2dff` + spec `40d01b7`)
+- [x] Phase 11: Four correctness bugs (commit `1b6cbd0`)
+- [x] Phase 12a: GamePauseService reset (commit `e367de8`)
+- [x] Phase 12b: completedChallenges breakdown (commit `3fd7680`)
+- [x] Phase 12c: H3 keyword badges (commit `01a1bbb`)
+- [x] Phase 12d: RunEventType emitters (commit `bca26bb`)
+- [x] Red-team gate: Finding 1 hardening + spec
+- [ ] Commit red-team hardening + verify full suite green

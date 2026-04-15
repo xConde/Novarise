@@ -273,5 +273,41 @@ describe('WavePreviewService', () => {
       service.restore({ oneShotBonus: 2 });
       expect(service.getPreviewDepth()).toBe(2);
     });
+
+    // ── Defensive restore (red-team Finding 1) ──────────────────────────
+
+    it('restore coerces null snapshot to zero bonus', () => {
+      service.addOneShotBonus(5);
+      service.restore(null);
+      expect(service.getPreviewDepth()).toBe(0);
+    });
+
+    it('restore coerces undefined snapshot to zero bonus', () => {
+      service.addOneShotBonus(5);
+      service.restore(undefined);
+      expect(service.getPreviewDepth()).toBe(0);
+    });
+
+    it('restore coerces non-number oneShotBonus to zero (malformed checkpoint)', () => {
+      service.addOneShotBonus(5);
+      // Simulate a hand-edited checkpoint where the field is a string.
+      service.restore({ oneShotBonus: 'lol' as unknown as number });
+      expect(service.getPreviewDepth()).toBe(0);
+    });
+
+    it('restore coerces negative oneShotBonus to zero', () => {
+      service.restore({ oneShotBonus: -3 });
+      expect(service.getPreviewDepth()).toBe(0);
+    });
+
+    it('restore coerces NaN oneShotBonus to zero', () => {
+      service.restore({ oneShotBonus: NaN });
+      expect(service.getPreviewDepth()).toBe(0);
+    });
+
+    it('restore coerces fractional oneShotBonus via Math.floor', () => {
+      service.restore({ oneShotBonus: 3.8 });
+      expect(service.getPreviewDepth()).toBe(3);
+    });
   });
 });
