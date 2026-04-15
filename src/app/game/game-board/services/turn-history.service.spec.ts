@@ -35,21 +35,6 @@ describe('TurnHistoryService', () => {
     expect(r.cardsPlayed).toBe(2);
   });
 
-  it('recordKills ignores zero', () => {
-    service.beginTurn(1);
-    service.recordKills(0);
-    const r = service.endTurn()!;
-    expect(r.kills).toBe(0);
-  });
-
-  it('recordKills accumulates multiple calls', () => {
-    service.beginTurn(1);
-    service.recordKills(3);
-    service.recordKills(2);
-    const r = service.endTurn()!;
-    expect(r.kills).toBe(5);
-  });
-
   it('recordGoldEarned accumulates positive amounts', () => {
     service.beginTurn(1);
     service.recordGoldEarned(10);
@@ -109,7 +94,6 @@ describe('TurnHistoryService', () => {
 
   it('does nothing when recording without an active turn', () => {
     service.recordCardPlayed();
-    service.recordKills(5);
     service.recordGoldEarned(50);
     service.recordLifeLost(2);
     service.recordDamage(100);
@@ -197,6 +181,87 @@ describe('TurnHistoryService', () => {
       service.beginTurn(2);
       const r = service.endTurn()!;
       expect(r.killsByTower).toEqual([]);
+    });
+  });
+
+  describe('kills aggregation', () => {
+    it('derives kills from killsByTower sum in endTurn()', () => {
+      service.beginTurn(1);
+      service.recordKillByTower(TowerType.BASIC, 1);
+      service.recordKillByTower(TowerType.BASIC, 1);
+      service.recordKillByTower(TowerType.SNIPER, 2);
+      service.recordKillByTower(null); // DoT
+      const r = service.endTurn()!;
+      expect(r.kills).toBe(4);
+    });
+
+    it('kills stays 0 when no per-tower attributions recorded', () => {
+      service.beginTurn(1);
+      service.recordDamage(50); // damage but no kills
+      const r = service.endTurn()!;
+      expect(r.kills).toBe(0);
+    });
+  });
+
+  describe('serialize / restore', () => {
+    it('serialize() returns a deep copy of the rolling buffer', () => {
+      service.beginTurn(1);
+      service.recordKillByTower(TowerType.BASIC, 1);
+      service.endTurn();
+      const snapshot = service.serialize();
+      expect(snapshot.length).toBe(1);
+      // Mutating the snapshot must not affect live state
+      snapshot[0].killsByTower[0].count = 999;
+      expect(service.getRecords()[0].killsByTower[0].count).toBe(1);
+    });
+
+    it('restore() replaces the buffer and emits on records$', (done) => {
+      const records: TurnEventRecord[] = [{
+        turnNumber: 7,
+        cardsPlayed: 3,
+        kills: 2,
+        damageDealt: 40,
+        killsByTower: [{ type: TowerType.BASIC, level: 1, count: 2 }],
+        goldEarned: 15,
+        livesLost: 0,
+        timestamp: 1234,
+      }];
+      let emitCount = 0;
+      service.records$.subscribe(rs => {
+        emitCount++;
+        if (emitCount === 2) {
+          expect(rs.length).toBe(1);
+          expect(rs[0].turnNumber).toBe(7);
+          done();
+        }
+      });
+      service.restore(records);
+    });
+
+    it('restore() deep-copies input records (mutation isolation)', () => {
+      const records: TurnEventRecord[] = [{
+        turnNumber: 1,
+        cardsPlayed: 0,
+        kills: 1,
+        damageDealt: 10,
+        killsByTower: [{ type: TowerType.BASIC, level: 1, count: 1 }],
+        goldEarned: 0,
+        livesLost: 0,
+        timestamp: 1,
+      }];
+      service.restore(records);
+      // Mutate the source array entry
+      records[0].killsByTower[0].count = 999;
+      // Live service state must be unaffected
+      expect(service.getRecords()[0].killsByTower[0].count).toBe(1);
+    });
+
+    it('restore() clears any in-flight current turn', () => {
+      service.beginTurn(5);
+      service.recordKillByTower(TowerType.BASIC, 1);
+      service.restore([]);
+      // endTurn() should now return null (current was cleared)
+      expect(service.endTurn()).toBeNull();
     });
   });
 });

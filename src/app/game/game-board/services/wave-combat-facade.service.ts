@@ -276,6 +276,7 @@ export class WaveCombatFacadeService {
         gameStats: this.gameStatsService.serializeState(),
         challengeState: this.challengeTrackingService.serializeState(),
         wavePreview: this.wavePreviewService.serialize(),
+        turnHistory: this.turnHistoryService.serialize(),
       };
 
       this.encounterCheckpointService.saveCheckpoint(checkpoint);

@@ -66,19 +66,14 @@ export class TurnHistoryService {
     if (this.current) this.current.cardsPlayed++;
   }
 
-  recordKills(count: number): void {
-    if (this.current && count > 0) this.current.kills += count;
-  }
-
   /**
    * Attribute a kill to a (tower type, level) pair. Tier-1 (level 1) kills
    * render without a suffix in the UI; tier 2+ get a number suffix. Status-
    * effect DoT kills pass `towerType: null` and land in the `dot` bucket
    * with level 0.
    *
-   * Does NOT increment `kills` — callers must still invoke recordKills to
-   * keep the two fields in sync. Caller has both pieces of data at the same
-   * time (combat-loop.processKill), so the split avoids double-mutation.
+   * Caller does not need to separately track totals — `kills` is derived in
+   * endTurn() from the sum of killsByTower counts.
    */
   recordKillByTower(towerType: TowerType | null, towerLevel = 0): void {
     if (!this.current) return;
@@ -110,6 +105,8 @@ export class TurnHistoryService {
   endTurn(): TurnEventRecord | null {
     if (!this.current) return null;
     const completed = this.current;
+    // Derive kills from per-tower attributions — killsByTower is the single source of truth.
+    completed.kills = completed.killsByTower.reduce((sum, e) => sum + e.count, 0);
     const updated = [...this.recordsSubject.value, completed].slice(-BUFFER_SIZE);
     this.recordsSubject.next(updated);
     this.current = null;
@@ -128,6 +125,26 @@ export class TurnHistoryService {
 
   reset(): void {
     this.recordsSubject.next([]);
+    this.current = null;
+  }
+
+  /** Serialize the rolling buffer for checkpoint persistence. Deep-clones
+   * killsByTower arrays to decouple from the live service state. */
+  serialize(): TurnEventRecord[] {
+    return this.recordsSubject.value.map(r => ({
+      ...r,
+      killsByTower: r.killsByTower.map(e => ({ ...e })),
+    }));
+  }
+
+  /** Restore the rolling buffer from checkpoint data. Clears any in-flight
+   * current turn and expanded-row tracking is the component's concern. */
+  restore(records: readonly TurnEventRecord[]): void {
+    const copied = records.map(r => ({
+      ...r,
+      killsByTower: r.killsByTower.map(e => ({ ...e })),
+    }));
+    this.recordsSubject.next(copied);
     this.current = null;
   }
 }

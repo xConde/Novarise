@@ -24,6 +24,14 @@ export class EncounterCheckpointService {
       data['version'] = 2;
       return data;
     },
+    // 2 → 3: add `turnHistory` field (empty array default). Phase 17 added
+    // serialized RECAP panel data; pre-v3 checkpoints show an empty RECAP
+    // on restore, which is acceptable — RECAP is a convenience display.
+    2: (data) => {
+      data['turnHistory'] = [];
+      data['version'] = 3;
+      return data;
+    },
   };
 
   /**

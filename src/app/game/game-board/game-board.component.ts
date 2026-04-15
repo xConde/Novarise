@@ -1012,9 +1012,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // "player is driving" progress; the helper copy can step aside.
     this.tutorialService.dismissOnPlayerAction();
 
-    // Capture kill count before the turn resolves so we can record it.
-    const killsBefore = Object.values(this.gameStatsService.getStats().killsByTowerType)
-      .reduce((a, b) => a + b, 0);
     const livesBefore = this.gameStateService.getState().lives;
     const goldBefore = this.gameStateService.getState().gold;
 
@@ -1023,11 +1020,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.waveCombat.endTurn();
 
-    // Record outcomes after resolution
+    // Record outcomes after resolution. `kills` is derived automatically in
+    // endTurn() from the per-tower attributions recorded by WaveCombatFacadeService.
     const postState = this.gameStateService.getState();
-    const killsAfter = Object.values(this.gameStatsService.getStats().killsByTowerType)
-      .reduce((a, b) => a + b, 0);
-    this.turnHistoryService.recordKills(killsAfter - killsBefore);
     const livesLost = Math.max(0, livesBefore - postState.lives);
     if (livesLost > 0) this.turnHistoryService.recordLifeLost(livesLost);
     const goldEarned = Math.max(0, postState.gold - goldBefore);
@@ -1044,7 +1039,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * 14-step encounter restore from checkpoint.
+   * 15-step encounter restore from checkpoint.
    * Called in ngOnInit when isRestoringCheckpoint is true, after scene + board are set up.
    * Order is critical — see restore plan for dependency rationale.
    */
@@ -1137,6 +1132,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // plays survive a save/resume. Pre-v2 checkpoints are migrated to a
       // zero-bonus default by EncounterCheckpointService before we get here.
       this.wavePreviewService.restore(checkpoint.wavePreview);
+
+      // Step 13b: Restore RECAP buffer so the player sees their pre-quit
+      // turn history. v2 checkpoints migrate to an empty array — silent, not
+      // fatal.
+      this.turnHistoryService.restore(checkpoint.turnHistory);
 
       // Step 14: Restore wave state (turnSchedule, index, seenTypes)
       this.waveService.restoreState(checkpoint.waveState);

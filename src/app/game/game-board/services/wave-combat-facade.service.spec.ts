@@ -135,9 +135,11 @@ describe('WaveCombatFacadeService', () => {
     encounterCheckpointService.saveCheckpoint.and.returnValue(true);
 
     turnHistoryService = jasmine.createSpyObj<TurnHistoryService>('TurnHistoryService', [
-      'beginTurn', 'endTurn', 'recordCardPlayed', 'recordKills', 'recordKillByTower',
+      'beginTurn', 'endTurn', 'recordCardPlayed', 'recordKillByTower',
       'recordDamage', 'recordGoldEarned', 'recordLifeLost', 'getLastCompletedTurn', 'getRecords', 'reset',
+      'serialize', 'restore',
     ]);
+    turnHistoryService.serialize.and.returnValue([]);
 
     wavePreviewService = jasmine.createSpyObj('WavePreviewService', [
       'serialize', 'restore', 'addOneShotBonus', 'getPreviewDepth', 'getFutureWavesSummary', 'resetForEncounter',

@@ -80,6 +80,7 @@ function createTestCheckpoint(overrides: Partial<EncounterCheckpoint> = {}): Enc
       livesLostThisGame: 0,
     },
     wavePreview: { oneShotBonus: 0 },
+    turnHistory: [],
     ...overrides,
   };
 }
@@ -238,6 +239,21 @@ describe('EncounterCheckpointService', () => {
 
       expect(loaded).toBeNull();
       expect(service.hasCheckpoint()).toBeFalse();
+    });
+
+    it('migrates v2 to v3 by adding turnHistory as empty array', () => {
+      // Store a v2 checkpoint (no turnHistory field) directly in localStorage.
+      const v2Checkpoint = createTestCheckpoint({ version: 2 });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v2Data = { ...(v2Checkpoint as any) };
+      delete v2Data['turnHistory'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v2Data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.version).toBe(CHECKPOINT_VERSION);
+      expect(loaded!.turnHistory).toEqual([]);
     });
   });
 

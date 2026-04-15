@@ -8,9 +8,10 @@ import { StatusEffectType } from '@core/models/status-effect-type.model';
 import { EndlessWaveResult } from './endless-wave.model';
 import { ActiveModifier } from '../../../run/services/card-effect.service';
 import { EncounterConfig } from '../../../run/models/encounter.model';
+import { TurnEventRecord } from '../services/turn-history.service';
 
 /** Schema version — bump when the shape changes to enable migrations. */
-export const CHECKPOINT_VERSION = 2;
+export const CHECKPOINT_VERSION = 3;
 
 /** Plain-object snapshot of GameState (isPaused omitted — always false on restore). */
 export interface SerializableGameState {
@@ -216,6 +217,12 @@ export interface EncounterCheckpoint {
    * from the active-relics list which round-trips through the run state itself.
    */
   readonly wavePreview: SerializableWavePreviewState;
+  /**
+   * Last N completed turn records (rolling buffer) — drives the RECAP panel.
+   * Included in v3 checkpoints; v2 checkpoints are migrated with an empty array
+   * (acceptable — RECAP is a convenience display, no gameplay impact).
+   */
+  readonly turnHistory: readonly TurnEventRecord[];
 }
 
 /** Serializable WavePreviewService state. */
