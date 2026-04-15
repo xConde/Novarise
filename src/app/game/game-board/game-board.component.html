@@ -358,6 +358,19 @@
   <!-- Pause overlay -->
   <div class="pause-overlay" *ngIf="isPaused && (gameState.phase === GamePhase.COMBAT || gameState.phase === GamePhase.INTERMISSION)" #pauseOverlay (click)="onPauseOverlayClick($event)" role="dialog" aria-modal="true" aria-labelledby="pause-menu-title">
     <div class="pause-menu" (click)="$event.stopPropagation()">
+      <!--
+        Corner mute toggle — pinned to the modal's top-right so it stays
+        out of the main menu body. Icon-only; full label lives in
+        aria-label + title for hover + screen readers.
+      -->
+      <button class="pause-audio-toggle"
+              (click)="toggleAudio()"
+              [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'"
+              [attr.title]="audioMuted ? 'Unmute audio' : 'Mute audio'">
+        <app-icon *ngIf="!audioMuted" name="sound-on"></app-icon>
+        <app-icon *ngIf="audioMuted" name="sound-off"></app-icon>
+      </button>
+
       <h2 class="pause-menu__title" id="pause-menu-title">PAUSED</h2>
       <p class="pause-menu__subtitle" *ngIf="pauseEncounterLabel">{{ pauseEncounterLabel }}</p>
 
@@ -389,22 +402,16 @@
         </div>
       </div>
 
-      <!-- Settings -->
-      <div class="pause-menu__settings" *ngIf="!showQuitConfirm">
-        <button class="pause-audio-toggle"
-                (click)="toggleAudio()"
-                [attr.aria-label]="audioMuted ? 'Unmute audio' : 'Mute audio'">
-          <app-icon *ngIf="!audioMuted" name="sound-on"></app-icon>
-          <app-icon *ngIf="audioMuted" name="sound-off"></app-icon>
-          <span>{{ audioMuted ? 'Unmute' : 'Mute' }}</span>
-        </button>
-
-      </div>
-
-      <!-- Sprint 28: Collapsible controls reference -->
-      <details class="pause-menu__controls" *ngIf="!showQuitConfirm">
+      <!--
+        Sprint 28: Collapsible controls reference.
+        Template-ref #controlsDetails lets the entire expanded area act as
+        a click-to-close target — previously only the <summary> row could
+        toggle, which was a UX gotcha when the reader was done scanning.
+      -->
+      <details #controlsDetails class="pause-menu__controls" *ngIf="!showQuitConfirm">
         <summary class="pause-menu__controls-summary">Controls</summary>
-        <div class="pause-menu__controls-list">
+        <div class="pause-menu__controls-list"
+             (click)="controlsDetails.open = false">
           <div class="pause-menu__control-row">
             <kbd class="pause-menu__key">Space</kbd>
             <span>End Turn</span>
