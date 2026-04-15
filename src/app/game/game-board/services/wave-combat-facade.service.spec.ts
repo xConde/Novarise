@@ -21,6 +21,7 @@ import { ChallengeTrackingService } from './challenge-tracking.service';
 import { RunService } from '../../../run/services/run.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { EncounterCheckpointService } from '../../../run/services/encounter-checkpoint.service';
+import { WavePreviewService } from './wave-preview.service';
 
 function makeCallbacks(overrides: Partial<WaveCombatCallbacks> = {}): WaveCombatCallbacks {
   return {
@@ -57,6 +58,7 @@ describe('WaveCombatFacadeService', () => {
   let runService: jasmine.SpyObj<RunService>;
   let cardEffectService: jasmine.SpyObj<CardEffectService>;
   let encounterCheckpointService: jasmine.SpyObj<EncounterCheckpointService>;
+  let wavePreviewService: jasmine.SpyObj<WavePreviewService>;
 
   const defaultState = {
     phase: GamePhase.INTERMISSION,
@@ -130,6 +132,11 @@ describe('WaveCombatFacadeService', () => {
     encounterCheckpointService = jasmine.createSpyObj('EncounterCheckpointService', ['saveCheckpoint', 'clearCheckpoint']);
     encounterCheckpointService.saveCheckpoint.and.returnValue(true);
 
+    wavePreviewService = jasmine.createSpyObj('WavePreviewService', [
+      'serialize', 'restore', 'addOneShotBonus', 'getPreviewDepth', 'getFutureWavesSummary', 'resetForEncounter',
+    ]);
+    wavePreviewService.serialize.and.returnValue({ oneShotBonus: 0 });
+
     combatLoopService = jasmine.createSpyObj('CombatLoopService', ['resetLeakState', 'resolveTurn', 'getTurnNumber', 'getLeakedThisWave']);
     combatLoopService.resolveTurn.and.returnValue({
       exitCount: 0,
@@ -165,6 +172,7 @@ describe('WaveCombatFacadeService', () => {
       runService,
       cardEffectService,
       encounterCheckpointService,
+      wavePreviewService,
     );
   });
 

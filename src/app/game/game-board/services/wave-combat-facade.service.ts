@@ -22,6 +22,7 @@ import { RunService } from '../../../run/services/run.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { EncounterCheckpointService } from '../../../run/services/encounter-checkpoint.service';
 import { EncounterCheckpoint, CHECKPOINT_VERSION } from '../models/encounter-checkpoint.model';
+import { WavePreviewService } from './wave-preview.service';
 
 /** Callbacks that WaveCombatFacadeService calls back into the component for concerns
  *  it cannot own (template-bound state, pending card state). */
@@ -90,6 +91,7 @@ export class WaveCombatFacadeService {
     private runService: RunService,
     private cardEffectService: CardEffectService,
     private encounterCheckpointService: EncounterCheckpointService,
+    private wavePreviewService: WavePreviewService,
   ) {}
 
   /** Register component callbacks. Call in ngOnInit before any wave interaction. */
@@ -257,6 +259,7 @@ export class WaveCombatFacadeService {
         relicFlags: this.relicService.serializeEncounterFlags(),
         gameStats: this.gameStatsService.serializeState(),
         challengeState: this.challengeTrackingService.serializeState(),
+        wavePreview: this.wavePreviewService.serialize(),
       };
 
       this.encounterCheckpointService.saveCheckpoint(checkpoint);

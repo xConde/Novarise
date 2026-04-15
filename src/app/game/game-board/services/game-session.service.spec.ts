@@ -23,6 +23,8 @@ import { RangeVisualizationService } from './range-visualization.service';
 import { TowerUpgradeVisualService } from './tower-upgrade-visual.service';
 import { SceneService } from './scene.service';
 import { PlayerProfileService } from '@core/services/player-profile.service';
+import { CombatLoopService } from './combat-loop.service';
+import { WavePreviewService } from './wave-preview.service';
 
 describe('GameSessionService', () => {
   let service: GameSessionService;
@@ -46,6 +48,8 @@ describe('GameSessionService', () => {
   let towerUpgradeVisualSpy: jasmine.SpyObj<TowerUpgradeVisualService>;
   let sceneSpy: jasmine.SpyObj<SceneService>;
   let playerProfileSpy: jasmine.SpyObj<PlayerProfileService>;
+  let combatLoopSpy: jasmine.SpyObj<CombatLoopService>;
+  let wavePreviewSpy: jasmine.SpyObj<WavePreviewService>;
   let scene: THREE.Scene;
 
   beforeEach(() => {
@@ -131,6 +135,10 @@ describe('GameSessionService', () => {
     sceneSpy.getSkybox.and.returnValue(undefined);
 
     playerProfileSpy = jasmine.createSpyObj('PlayerProfileService', ['resetSession']);
+    combatLoopSpy = jasmine.createSpyObj('CombatLoopService', ['reset']);
+    wavePreviewSpy = jasmine.createSpyObj('WavePreviewService', [
+      'resetForEncounter', 'addOneShotBonus', 'getPreviewDepth', 'getFutureWavesSummary', 'serialize', 'restore',
+    ]);
 
     TestBed.configureTestingModule({
       providers: [
@@ -156,6 +164,8 @@ describe('GameSessionService', () => {
         { provide: TowerUpgradeVisualService, useValue: towerUpgradeVisualSpy },
         { provide: SceneService, useValue: sceneSpy },
         { provide: PlayerProfileService, useValue: playerProfileSpy },
+        { provide: CombatLoopService, useValue: combatLoopSpy },
+        { provide: WavePreviewService, useValue: wavePreviewSpy },
       ],
     });
 
@@ -185,6 +195,10 @@ describe('GameSessionService', () => {
       expect(challengeSpy.reset).toHaveBeenCalled();
       expect(statusEffectSpy.cleanup).toHaveBeenCalled();
       expect(tutorialSpy.resetCurrentStep).toHaveBeenCalled();
+      // Phase 11: turn counter + scout bonus must be reset between encounters
+      // (regression guard for the SPEED_RUN fix that landed in Phase 10).
+      expect(combatLoopSpy.reset).toHaveBeenCalled();
+      expect(wavePreviewSpy.resetForEncounter).toHaveBeenCalled();
 
       scene.clear();
     });

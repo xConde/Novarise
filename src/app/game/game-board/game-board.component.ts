@@ -515,6 +515,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // survives route transitions — must be explicitly cleared between encounters).
     this.cardEffectService.reset();
 
+    // Reset turn counter + leak flag + frame buffers. Without this the
+    // turnNumber persists from the prior encounter (the audit that caught
+    // this noted: SPEED_RUN challenges would instantly fail from encounter 2
+    // onward because turnsUsed was cumulative).
+    this.combatLoopService.reset();
+
     // Reset one-shot scout bonuses so a previous encounter's SCOUT_AHEAD does
     // not leak preview depth into this one. (Permanent SCOUTING_LENS bonus
     // stays because it reads live from RelicService.)
@@ -1108,6 +1114,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Step 13: Restore relic encounter flags
       this.relicService.restoreEncounterFlags(checkpoint.relicFlags);
+
+      // Step 13a: Restore wave-preview one-shot bonus so mid-encounter scout
+      // plays survive a save/resume. Pre-v2 checkpoints are migrated to a
+      // zero-bonus default by EncounterCheckpointService before we get here.
+      this.wavePreviewService.restore(checkpoint.wavePreview);
 
       // Step 14: Restore wave state (turnSchedule, index, seenTypes)
       this.waveService.restoreState(checkpoint.waveState);

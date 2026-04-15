@@ -10,7 +10,7 @@ import { ActiveModifier } from '../../../run/services/card-effect.service';
 import { EncounterConfig } from '../../../run/models/encounter.model';
 
 /** Schema version — bump when the shape changes to enable migrations. */
-export const CHECKPOINT_VERSION = 1;
+export const CHECKPOINT_VERSION = 2;
 
 /** Plain-object snapshot of GameState (isPaused omitted — always false on restore). */
 export interface SerializableGameState {
@@ -203,4 +203,15 @@ export interface EncounterCheckpoint {
   readonly relicFlags: SerializableRelicFlags;
   readonly gameStats: SerializableGameStats;
   readonly challengeState: SerializableChallengeState;
+  /**
+   * One-shot scout bonuses granted by SCOUT_AHEAD / SCOUT_ELITE spells during
+   * the encounter. Permanent SCOUTING_LENS bonus is NOT serialized — it derives
+   * from the active-relics list which round-trips through the run state itself.
+   */
+  readonly wavePreview: SerializableWavePreviewState;
+}
+
+/** Serializable WavePreviewService state. */
+export interface SerializableWavePreviewState {
+  readonly oneShotBonus: number;
 }

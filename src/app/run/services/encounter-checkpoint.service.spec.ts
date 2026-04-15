@@ -79,6 +79,7 @@ function createTestCheckpoint(overrides: Partial<EncounterCheckpoint> = {}): Enc
       currentTowerCount: 3,
       livesLostThisGame: 0,
     },
+    wavePreview: { oneShotBonus: 0 },
     ...overrides,
   };
 }

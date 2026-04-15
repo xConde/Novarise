@@ -873,7 +873,7 @@ describe('RunService', () => {
         cardModifiers: [],
         relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
         gameStats: {} as any,
-        challengeState: {} as any,
+        challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -905,7 +905,7 @@ describe('RunService', () => {
         cardModifiers: [],
         relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
         gameStats: {} as any,
-        challengeState: {} as any,
+        challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -944,7 +944,7 @@ describe('RunService', () => {
         cardModifiers: [],
         relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
         gameStats: {} as any,
-        challengeState: {} as any,
+        challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -979,7 +979,7 @@ describe('RunService', () => {
         cardModifiers: [],
         relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
         gameStats: {} as any,
-        challengeState: {} as any,
+        challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
       });
 
       // node_0_0 is NOT in completedNodeIds — valid checkpoint.

@@ -10,10 +10,11 @@ import { GameEndService } from './game-end.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { RunEventBusService, RunEventType } from '../../../run/services/run-event-bus.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
+import { RunService } from '../../../run/services/run.service';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 
 import { GamePhase } from '../models/game-state.model';
-import { ENEMY_STATS } from '../models/enemy.model';
+import { ENEMY_STATS, EnemyType } from '../models/enemy.model';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { ScoreBreakdown } from '../models/score.model';
 import { CombatFrameResult, FrameKillEvent, KillInfo, WaveCompletionEvent, GameEndEvent } from '../models/combat-frame.model';
@@ -60,6 +61,7 @@ export class CombatLoopService {
     private runEventBus: RunEventBusService,
     private statusEffectService: StatusEffectService,
     private cardEffectService: CardEffectService,
+    private runService: RunService,
   ) {}
 
   /** Phase 4: current turn number, exposed for UI bindings. */
@@ -266,7 +268,16 @@ export class CombatLoopService {
     const enemy = this.enemyService.getEnemies().get(killInfo.id);
     if (!enemy || enemy.dying) return;
 
-    const goldMult = this.relicService.getGoldMultiplier() * this.relicService.rollLuckyCoin();
+    // BOUNTY_HUNTER: "Elite enemies drop double gold." An enemy qualifies as
+    // elite if it's a BOSS-type OR it appeared in an elite/boss encounter.
+    // The encounter flag catches non-BOSS enemies in elite rooms; the type
+    // check ensures a BOSS in a non-elite context (e.g. endless boss waves)
+    // still gets the bonus.
+    const encounter = this.runService.getCurrentEncounter();
+    const isElite = enemy.type === EnemyType.BOSS
+      || (encounter?.isElite ?? false)
+      || (encounter?.isBoss ?? false);
+    const goldMult = this.relicService.getGoldMultiplier(isElite) * this.relicService.rollLuckyCoin();
     const adjustedGold = Math.round(enemy.value * goldMult * cardGoldMult);
     this.gameStateService.addGoldAndScore(adjustedGold);
     this.gameStatsService.recordGoldEarned(adjustedGold);

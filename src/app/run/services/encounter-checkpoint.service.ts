@@ -14,8 +14,16 @@ export class EncounterCheckpointService {
 
   /** Migration functions from version N to N+1. */
   private readonly migrations: Record<number, (data: Record<string, unknown>) => Record<string, unknown>> = {
-    // Example for future: 1 → 2 migration
-    // 1: (data) => { data['newField'] = 'default'; data['version'] = 2; return data; },
+    // 1 → 2: add `wavePreview` field. Phase 11 added WavePreviewService with
+    // one-shot scout bonuses serialized on the checkpoint. Pre-v2 checkpoints
+    // predate the field; default to a zero bonus so SCOUT_AHEAD plays made
+    // before the upgrade simply don't survive (acceptable UX — no correctness
+    // loss, just cosmetic reveal loss).
+    1: (data) => {
+      data['wavePreview'] = { oneShotBonus: 0 };
+      data['version'] = 2;
+      return data;
+    },
   };
 
   /**

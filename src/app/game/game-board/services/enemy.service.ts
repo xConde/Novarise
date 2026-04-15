@@ -8,6 +8,7 @@ import { PathfindingService } from './pathfinding.service';
 import { GameStateService } from './game-state.service';
 import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { EnemyVisualService } from './enemy-visual.service';
+import { RelicService } from '../../../run/services/relic.service';
 import { EnemyHealthService } from './enemy-health.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
@@ -33,6 +34,7 @@ export class EnemyService {
     private enemyVisual: EnemyVisualService,
     private enemyHealth: EnemyHealthService,
     private cardEffectService: CardEffectService,
+    private relicService: RelicService,
   ) {}
 
   /**
@@ -146,6 +148,14 @@ export class EnemyService {
     }
     if (waveSpeedMultiplier !== 1) {
       enemy.speed *= waveSpeedMultiplier;
+    }
+
+    // Apply relic speed multiplier (STURDY_BOOTS — 0.92x). Stacks multiplicatively
+    // with ascension and game-modifier scaling. Flying enemies are NOT exempt —
+    // the relic description is "Enemies move X% slower" with no type carve-out.
+    const relicSpeedMult = this.relicService.getEnemySpeedMultiplier();
+    if (relicSpeedMult !== 1) {
+      enemy.speed *= relicSpeedMult;
     }
 
     // Floor speed to prevent zero/negative from extreme modifier stacking

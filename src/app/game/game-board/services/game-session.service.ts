@@ -22,6 +22,8 @@ import { RangeVisualizationService } from './range-visualization.service';
 import { TowerUpgradeVisualService } from './tower-upgrade-visual.service';
 import { SceneService } from './scene.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
+import { CombatLoopService } from './combat-loop.service';
+import { WavePreviewService } from './wave-preview.service';
 import { disposeMaterial } from '../utils/three-utils';
 
 /**
@@ -52,6 +54,8 @@ export class GameSessionService {
     private towerUpgradeVisualService: TowerUpgradeVisualService,
     private sceneService: SceneService,
     private meshRegistry: BoardMeshRegistryService,
+    private combatLoopService: CombatLoopService,
+    private wavePreviewService: WavePreviewService,
   ) {}
 
   /**
@@ -70,6 +74,13 @@ export class GameSessionService {
     this.statusEffectService.cleanup();
     this.tutorialService.resetCurrentStep();
     this.playerProfileService.resetSession();
+    // Clear per-encounter turn counter / leak flag / frame buffers. Without this,
+    // turnNumber carries over from the prior encounter and SPEED_RUN challenges
+    // start wildly over budget on encounter 2+. (Regression discovered after
+    // Phase 10 retargeted SPEED_RUN to turn count.)
+    this.combatLoopService.reset();
+    // Clear one-shot scout bonuses from scout spells played in a prior encounter.
+    this.wavePreviewService.resetForEncounter();
   }
 
   /**
