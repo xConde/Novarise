@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult } from '../models/enemy.model';
+import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult, GridNode } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
@@ -71,17 +71,19 @@ export class EnemyService {
       return null;
     }
 
-    // Use first exit tile as target (they're grouped in center)
-    const exitTile = exitTiles[0];
-
-    // FLYING enemies bypass terrain — use a 2-node straight-line path
+    // FLYING enemies bypass terrain — use a 2-node straight-line path to the
+    // geometrically nearest exit. Ground enemies try every exit via A* and
+    // take the shortest valid path. This matches the multi-exit semantics
+    // of GameBoardService.wouldBlockPath (any exit reachable = placement OK);
+    // before this, enemies unconditionally aimed for exitTiles[0] and got
+    // stranded whenever a tower cut off exit[0] but left exit[1] reachable.
     const isFlying = type === EnemyType.FLYING;
     const path = isFlying
-      ? this.pathfindingService.buildStraightPath({ x: col, y: row }, { x: exitTile.col, y: exitTile.row })
-      : this.pathfindingService.findPath({ x: col, y: row }, { x: exitTile.col, y: exitTile.row });
+      ? this.buildStraightPathToNearestExit(col, row, exitTiles)
+      : this.findShortestPathToAnyExit(col, row, exitTiles);
 
     if (path.length === 0) {
-      console.warn('No valid path found from spawner to exit');
+      console.warn('No valid path found from spawner to any exit');
       return null;
     }
 
@@ -583,21 +585,75 @@ export class EnemyService {
 
     const exitTiles = this.pathfindingService.getExitTiles();
     if (exitTiles.length === 0) return;
-    const exitTile = exitTiles[0];
 
-    // Repath from the node the enemy just arrived at (gridPosition is now current)
-    const newPath = this.pathfindingService.findPath(
-      { x: enemy.gridPosition.col, y: enemy.gridPosition.row },
-      { x: exitTile.col, y: exitTile.row }
+    // Repath from the node the enemy just arrived at — try every exit and
+    // take the shortest valid path (multi-exit aware; see spawn comment).
+    const newPath = this.findShortestPathToAnyExit(
+      enemy.gridPosition.col,
+      enemy.gridPosition.row,
+      exitTiles,
     );
 
     if (newPath.length > 0) {
       enemy.path = newPath;
       enemy.pathIndex = 0;
     }
-    // If findPath returns empty (no route — should be unreachable via wouldBlockPath guard),
-    // the enemy keeps its old path. This is a defensive no-op, not a silent failure,
-    // because wouldBlockPath prevents placements that fully block spawner→exit routes.
+    // If every exit is unreachable, the enemy keeps its old path. This is a
+    // defensive no-op: wouldBlockPath prevents placements that fully cut off
+    // every spawner→exit route, so we should never actually reach this branch.
+  }
+
+  /**
+   * Find the shortest A* path from (startCol, startRow) to the nearest
+   * reachable exit. Returns an empty array when NO exit is reachable.
+   *
+   * Cheap iteration: A* is fast and exit counts per map are small (1–4).
+   * Runs in tight budget on spawn + repath hot paths.
+   */
+  private findShortestPathToAnyExit(
+    startCol: number,
+    startRow: number,
+    exitTiles: ReadonlyArray<{ row: number; col: number }>,
+  ): GridNode[] {
+    let best: GridNode[] = [];
+    for (const exit of exitTiles) {
+      const candidate = this.pathfindingService.findPath(
+        { x: startCol, y: startRow },
+        { x: exit.col, y: exit.row },
+      );
+      if (candidate.length === 0) continue;
+      if (best.length === 0 || candidate.length < best.length) {
+        best = candidate;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Build a straight-line path to the geometrically nearest exit (Manhattan
+   * distance). FLYING enemies bypass terrain so "reachability" always holds;
+   * we just pick the closest target.
+   */
+  private buildStraightPathToNearestExit(
+    startCol: number,
+    startRow: number,
+    exitTiles: ReadonlyArray<{ row: number; col: number }>,
+  ): GridNode[] {
+    if (exitTiles.length === 0) return [];
+    let nearest = exitTiles[0];
+    let nearestDist = Math.abs(startCol - nearest.col) + Math.abs(startRow - nearest.row);
+    for (let i = 1; i < exitTiles.length; i++) {
+      const e = exitTiles[i];
+      const d = Math.abs(startCol - e.col) + Math.abs(startRow - e.row);
+      if (d < nearestDist) {
+        nearest = e;
+        nearestDist = d;
+      }
+    }
+    return this.pathfindingService.buildStraightPath(
+      { x: startCol, y: startRow },
+      { x: nearest.col, y: nearest.row },
+    );
   }
 
   /**

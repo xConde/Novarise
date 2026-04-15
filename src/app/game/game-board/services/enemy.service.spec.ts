@@ -263,6 +263,80 @@ describe('EnemyService', () => {
     });
   });
 
+  // ── Multi-exit routing (Phase 15) ──────────────────────────────────────
+  // wouldBlockPath considers ANY exit reachable as a valid placement; before
+  // this pass, enemies only targeted exitTiles[0], so a tower that cut off
+  // exit[0] but left exit[1] reachable would strand every enemy mid-path.
+  // These tests lock in "enemy always takes the shortest path to any
+  // reachable exit" to keep the two sides aligned.
+
+  describe('multi-exit pathfinding', () => {
+    it('routes to the nearer exit when both are reachable', () => {
+      // Default exit at (9,9); add a second exit at (0,9). From (0,0) the
+      // Manhattan distance is 9 to (0,9) and 18 to (9,9) — the shorter route
+      // should win.
+      gameBoardService.getGameBoard.and.returnValue(
+        createTestBoard(10, [], [{ row: 0, col: 9 }]),
+      );
+      service.clearPathCache();
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const lastNode = enemy.path[enemy.path.length - 1];
+
+      expect(lastNode.x).toBe(9);
+      expect(lastNode.y).toBe(0);
+      expect(enemy.path.length).toBe(10); // 9 steps + start node
+    });
+
+    it('falls through to the secondary exit when the primary is blocked', () => {
+      // Wall off the entire col=9 route to the corner exit; leave a corridor
+      // to the secondary exit at (0,9).
+      const blocked: { row: number; col: number }[] = [];
+      for (let row = 0; row <= 8; row++) blocked.push({ row, col: 8 });
+      gameBoardService.getGameBoard.and.returnValue(
+        createTestBoard(10, blocked, [{ row: 9, col: 0 }]),
+      );
+      service.clearPathCache();
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const lastNode = enemy.path[enemy.path.length - 1];
+
+      // With the right-side wall sealing off (9,9), the enemy should route
+      // to the bottom-left exit instead.
+      expect(lastNode.x).toBe(0);
+      expect(lastNode.y).toBe(9);
+    });
+
+    it('returns null only when EVERY exit is unreachable', () => {
+      // Both exits blocked off from the spawner.
+      const blocked = [
+        { row: 0, col: 1 },
+        { row: 1, col: 0 },
+      ];
+      gameBoardService.getGameBoard.and.returnValue(
+        createTestBoard(10, blocked, [{ row: 0, col: 9 }]),
+      );
+      service.clearPathCache();
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeNull();
+    });
+
+    it('FLYING enemies pick the geometrically nearest exit via straight line', () => {
+      // Two exits: (9,9) and (0,9). Spawner at (0,0). (0,9) is closer.
+      gameBoardService.getGameBoard.and.returnValue(
+        createTestBoard(10, [], [{ row: 0, col: 9 }]),
+      );
+      service.clearPathCache();
+
+      const enemy = service.spawnEnemy(EnemyType.FLYING, mockScene)!;
+      const lastNode = enemy.path[enemy.path.length - 1];
+
+      expect(lastNode.x).toBe(9);
+      expect(lastNode.y).toBe(0);
+    });
+  });
+
   describe('Path Caching', () => {
     it('should cache paths for reuse', () => {
       const enemy1 = service.spawnEnemy(EnemyType.BASIC, mockScene);
