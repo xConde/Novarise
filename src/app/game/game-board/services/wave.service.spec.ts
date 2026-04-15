@@ -7,12 +7,14 @@ import { WAVE_DEFINITIONS } from '../models/wave.model';
 import { generateEndlessWave, ENDLESS_BOSS_INTERVAL, ENDLESS_MIN_SPAWN_INTERVAL_S } from '../models/endless-wave.model';
 import { createRelicServiceSpy } from '../testing';
 import { RelicService } from '../../../run/services/relic.service';
+import { RunEventBusService, RunEventType } from '../../../run/services/run-event-bus.service';
 import * as THREE from 'three';
 
 describe('WaveService', () => {
   let service: WaveService;
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
   let relicServiceSpy: jasmine.SpyObj<RelicService>;
+  let eventBusSpy: jasmine.SpyObj<RunEventBusService>;
   let mockScene: THREE.Scene;
 
   beforeEach(() => {
@@ -24,11 +26,14 @@ describe('WaveService', () => {
     // Default: no TEMPORAL_RIFT
     relicServiceSpy.getTurnDelayPerWave.and.returnValue(0);
 
+    eventBusSpy = jasmine.createSpyObj<RunEventBusService>('RunEventBusService', ['emit']);
+
     TestBed.configureTestingModule({
       providers: [
         WaveService,
         { provide: EnemyService, useValue: enemyServiceSpy },
         { provide: RelicService, useValue: relicServiceSpy },
+        { provide: RunEventBusService, useValue: eventBusSpy },
         GameBoardService
       ]
     });
@@ -58,6 +63,23 @@ describe('WaveService', () => {
     it('should set spawning to active', () => {
       service.startWave(1, mockScene);
       expect(service.isSpawning()).toBeTrue();
+    });
+
+    it('emits WAVE_START with waveNumber + scheduled turn count', () => {
+      service.startWave(1, mockScene);
+
+      expect(eventBusSpy.emit).toHaveBeenCalledWith(
+        RunEventType.WAVE_START,
+        jasmine.objectContaining({ waveNumber: 1, scheduledTurnCount: jasmine.any(Number) }),
+      );
+    });
+
+    it('does NOT emit WAVE_START for out-of-range wave numbers (no-op path)', () => {
+      service.startWave(999, mockScene);
+
+      const waveStartCalls = eventBusSpy.emit.calls.allArgs()
+        .filter(args => args[0] === RunEventType.WAVE_START);
+      expect(waveStartCalls.length).toBe(0);
     });
 
     it('should not activate for out-of-range wave number', () => {

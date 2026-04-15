@@ -10,7 +10,7 @@ import { GameStatsService } from './game-stats.service';
 import { GameEndService } from './game-end.service';
 import { StatusEffectService } from './status-effect.service';
 import { RelicService } from '../../../run/services/relic.service';
-import { RunEventBusService } from '../../../run/services/run-event-bus.service';
+import { RunEventBusService, RunEventType } from '../../../run/services/run-event-bus.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { createRelicServiceSpy, createCardEffectServiceSpy } from '../testing';
 
@@ -43,6 +43,7 @@ describe('CombatLoopService', () => {
   let enemySpy: jasmine.SpyObj<EnemyService>;
   let gameStatsSpy: jasmine.SpyObj<GameStatsService>;
   let gameEndSpy: jasmine.SpyObj<GameEndService>;
+  let eventBusSpy: jasmine.SpyObj<RunEventBusService>;
   let scene: THREE.Scene;
 
   /**
@@ -126,6 +127,8 @@ describe('CombatLoopService', () => {
     gameEndSpy.isRecorded.and.returnValue(false);
     gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [], completedChallenges: [] });
 
+    eventBusSpy = jasmine.createSpyObj<RunEventBusService>('RunEventBusService', ['emit']);
+
     scene = new THREE.Scene();
 
     const statusEffectSpy = jasmine.createSpyObj<StatusEffectService>('StatusEffectService', [
@@ -154,7 +157,7 @@ describe('CombatLoopService', () => {
         { provide: GameEndService, useValue: gameEndSpy },
         { provide: StatusEffectService, useValue: statusEffectSpy },
         { provide: RelicService, useValue: createRelicServiceSpy() },
-        { provide: RunEventBusService, useValue: jasmine.createSpyObj('RunEventBusService', ['emit']) },
+        { provide: RunEventBusService, useValue: eventBusSpy },
         { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
       ],
     });
@@ -615,6 +618,60 @@ describe('CombatLoopService', () => {
       expect(result.waveCompletion!.streakCount).toBe(2);
     });
 
+    // ── Phase 12: RunEventBus emits for wave completion sources ──────────
+
+    it('emits GOLD_EARNED with source=wave when the wave reward is positive', () => {
+      waveSpy.getWaveReward.and.returnValue(75);
+      setupWaveClear(GamePhase.INTERMISSION);
+
+      service.resolveTurn(scene);
+
+      expect(eventBusSpy.emit).toHaveBeenCalledWith(
+        RunEventType.GOLD_EARNED,
+        jasmine.objectContaining({ amount: 75, source: 'wave' }),
+      );
+    });
+
+    it('emits GOLD_EARNED with source=streak when a streak bonus lands', () => {
+      waveSpy.getWaveReward.and.returnValue(0);
+      setupWaveClear(GamePhase.INTERMISSION);
+      gameStateSpy.addStreakBonus.and.returnValue(50);
+      gameStateSpy.getStreak.and.returnValue(2);
+
+      service.resolveTurn(scene);
+
+      expect(eventBusSpy.emit).toHaveBeenCalledWith(
+        RunEventType.GOLD_EARNED,
+        jasmine.objectContaining({ amount: 50, source: 'streak' }),
+      );
+    });
+
+    it('emits GOLD_EARNED with source=interest when interest is awarded', () => {
+      waveSpy.getWaveReward.and.returnValue(0);
+      setupWaveClear(GamePhase.INTERMISSION);
+      gameStateSpy.awardInterest.and.returnValue(15);
+
+      service.resolveTurn(scene);
+
+      expect(eventBusSpy.emit).toHaveBeenCalledWith(
+        RunEventType.GOLD_EARNED,
+        jasmine.objectContaining({ amount: 15, source: 'interest' }),
+      );
+    });
+
+    it('does NOT emit GOLD_EARNED when all sources are zero (leak-interrupted wave)', () => {
+      waveSpy.getWaveReward.and.returnValue(0);
+      setupWaveClear(GamePhase.INTERMISSION);
+      gameStateSpy.awardInterest.and.returnValue(0);
+      // addStreakBonus returns 0 too (the default) — no streak fires.
+
+      service.resolveTurn(scene);
+
+      const goldCalls = eventBusSpy.emit.calls.allArgs()
+        .filter(args => args[0] === RunEventType.GOLD_EARNED);
+      expect(goldCalls.length).toBe(0);
+    });
+
     it('should NOT award streak bonus when an enemy leaked in a prior turn this wave', () => {
       // Turn 1: cause a leak to set leakedThisWave
       const enemy = makeEnemy({ id: 'e_leak' });
@@ -911,6 +968,19 @@ describe('CombatLoopService', () => {
 
       expect(gameStateSpy.loseLife).toHaveBeenCalledWith(3);
       expect(result.leaked).toBeTrue();
+    });
+
+    it('emits ENEMY_LEAKED with enemyType + leakCost for each leak', () => {
+      const enemy = makeEnemy({ id: 'leaked1', leakDamage: 3 });
+      enemySpy.getEnemies.and.returnValue(new Map([['leaked1', enemy]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['leaked1']);
+
+      service.resolveTurn(scene);
+
+      expect(eventBusSpy.emit).toHaveBeenCalledWith(
+        RunEventType.ENEMY_LEAKED,
+        jasmine.objectContaining({ leakCost: 3 }),
+      );
     });
 
     it('wave completion with no leaks awards streak bonus', () => {

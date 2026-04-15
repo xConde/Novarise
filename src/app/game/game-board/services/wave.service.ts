@@ -5,6 +5,7 @@ import { WaveDefinition, WAVE_DEFINITIONS, getWaveEnemyCount } from '../models/w
 import { EndlessWaveTemplate, EndlessWaveResult, generateEndlessWave } from '../models/endless-wave.model';
 import { EnemyService } from './enemy.service';
 import { RelicService } from '../../../run/services/relic.service';
+import { RunEventBusService, RunEventType } from '../../../run/services/run-event-bus.service';
 import { SerializableWaveState } from '../models/encounter-checkpoint.model';
 
 @Injectable()
@@ -30,6 +31,7 @@ export class WaveService {
   constructor(
     private enemyService: EnemyService,
     private relicService: RelicService,
+    private runEventBus: RunEventBusService,
   ) {}
 
   /**
@@ -141,6 +143,15 @@ export class WaveService {
 
     this.turnScheduleIndex = 0;
     this.active = true;
+
+    // Broadcast wave-start — relic / card push-model subscribers can react
+    // (e.g., grant a bonus at the start of each wave). Emitted after the
+    // schedule is built so subscribers that introspect the wave plan get
+    // a consistent snapshot.
+    this.runEventBus.emit(RunEventType.WAVE_START, {
+      waveNumber,
+      scheduledTurnCount: this.turnSchedule.length,
+    });
   }
 
   /**

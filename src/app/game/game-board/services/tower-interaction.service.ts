@@ -17,6 +17,7 @@ import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameEndService } from './game-end.service';
 import { EnemyService } from './enemy.service';
 import { RelicService } from '../../../run/services/relic.service';
+import { RunEventBusService, RunEventType } from '../../../run/services/run-event-bus.service';
 
 export interface PlaceTowerResult {
   success: boolean;
@@ -63,6 +64,7 @@ export class TowerInteractionService {
     private gameEndService: GameEndService,
     private enemyService: EnemyService,
     private relicService: RelicService,
+    private runEventBus: RunEventBusService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -109,6 +111,8 @@ export class TowerInteractionService {
 
     // Repath enemies whose path crosses the newly placed tile
     this.enemyService.repathAffectedEnemies(row, col);
+
+    this.runEventBus.emit(RunEventType.TOWER_PLACED, { towerKey, type, row, col, cost: effectiveCost });
 
     return { success: true, cost: effectiveCost, towerKey };
   }
@@ -161,6 +165,10 @@ export class TowerInteractionService {
 
     // Repath ALL ground enemies — freed tile may open shorter paths
     this.enemyService.repathAffectedEnemies(-1, -1);
+
+    this.runEventBus.emit(RunEventType.TOWER_SOLD, {
+      towerKey, type: soldTower.type, refundAmount: refund,
+    });
 
     return { success: true, refundAmount: refund };
   }
@@ -227,6 +235,10 @@ export class TowerInteractionService {
       this.challengeTrackingService.recordTowerUpgraded(cost);
       this.gameEndService.recordSpecialization();
 
+      this.runEventBus.emit(RunEventType.TOWER_UPGRADED, {
+        towerKey, type: tower.type, newLevel: tower.level + 1, cost, specialization,
+      });
+
       return { success: true, cost, newLevel: tower.level + 1, specialization };
 
     } else {
@@ -234,6 +246,10 @@ export class TowerInteractionService {
       if (!this.towerCombatService.upgradeTower(towerKey, cost)) return FAIL;
       this.gameStateService.spendGold(cost);
       this.challengeTrackingService.recordTowerUpgraded(cost);
+
+      this.runEventBus.emit(RunEventType.TOWER_UPGRADED, {
+        towerKey, type: tower.type, newLevel: tower.level + 1, cost,
+      });
 
       return { success: true, cost, newLevel: tower.level + 1 };
     }

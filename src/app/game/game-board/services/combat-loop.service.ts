@@ -189,6 +189,10 @@ export class CombatLoopService {
       this.leakedThisWave = true;
       this.gameStatsService.recordEnemyLeaked();
       frameExitCount++;
+      this.runEventBus.emit(RunEventType.ENEMY_LEAKED, {
+        enemyType: leakedEnemy?.type,
+        leakCost,
+      });
       this.enemyService.removeEnemy(enemyId, scene);
     }
 
@@ -231,6 +235,18 @@ export class CombatLoopService {
 
       waveCompletion = { reward, streakBonus, streakCount, interestEarned, resultPhase: postWavePhase };
       this.runEventBus.emit(RunEventType.WAVE_COMPLETE, { wave: waveAtTurnStart });
+      // Emit per-source GOLD_EARNED for push-model relics that react to
+      // non-kill income streams. Skip zero amounts so subscribers don't
+      // register spurious triggers on leak-interrupted waves.
+      if (reward > 0) {
+        this.runEventBus.emit(RunEventType.GOLD_EARNED, { amount: reward, source: 'wave' });
+      }
+      if (streakBonus > 0) {
+        this.runEventBus.emit(RunEventType.GOLD_EARNED, { amount: streakBonus, source: 'streak' });
+      }
+      if (interestEarned > 0) {
+        this.runEventBus.emit(RunEventType.GOLD_EARNED, { amount: interestEarned, source: 'interest' });
+      }
 
       if (postWavePhase === GamePhase.VICTORY || postWavePhase === GamePhase.DEFEAT) {
         if (!this.gameEndService.isRecorded()) {
