@@ -72,7 +72,7 @@
           *ngIf="isExpanded(row) && hasExpandableDetail(row)"
           [attr.aria-label]="'Turn ' + row.turnNumber + ' detail'">
         <div class="last-turn-summary__detail-section" *ngIf="killAttribution(row).length > 0">
-          <span class="last-turn-summary__detail-label">Killed by:</span>
+          <span class="last-turn-summary__detail-label">Kills:</span>
           <span class="last-turn-summary__detail-entries">
             <!--
               Compact chess-style tokens: "B×2" / "Sn2" / "M3×3". Tier-1
@@ -82,17 +82,17 @@
             -->
             <!--
               Tooltip rendered as an explicit `<span>` child (NOT a CSS
-              pseudo-element or native `title`): both of those proved
-              unreliable inside the glass panel's backdrop-filter stacking
-              context. Real element = predictable position, real hover
-              state, easy to inspect. aria-label still carries the SR
-              version; title is kept as a "something always renders"
-              fallback for assistive hover on touch devices.
+              pseudo-element or native `title`): both proved unreliable
+              inside the glass panel's backdrop-filter stacking context.
+              Real element = predictable position, real hover state, easy
+              to inspect. Native `title` was dropped because it double-
+              renders (browser tooltip at cursor + our custom one above),
+              and that confused the visual language. aria-label alone
+              carries the SR-friendly version.
             -->
             <span *ngFor="let entry of killAttribution(row); let last = last"
                   class="last-turn-summary__attrib"
                   [ngClass]="'last-turn-summary__attrib--' + entry.key"
-                  [attr.title]="entry.fullLabel + (entry.count > 1 ? ' ×' + entry.count : '')"
                   [attr.aria-label]="entry.fullLabel + (entry.count > 1 ? ', ' + entry.count + ' kills' : ', 1 kill')">
               <span class="last-turn-summary__attrib-token">{{ entry.shortLabel }}</span><span
                     class="last-turn-summary__attrib-count"

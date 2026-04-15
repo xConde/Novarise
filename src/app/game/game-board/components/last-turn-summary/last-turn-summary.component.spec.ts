@@ -364,8 +364,9 @@ describe('LastTurnSummaryComponent', () => {
       const attribChip = detail!.querySelector<HTMLElement>('.last-turn-summary__attrib');
       const tooltipEl = attribChip?.querySelector('.last-turn-summary__attrib-tooltip');
       expect(tooltipEl?.textContent?.trim()).toBe('Basic ×2');
-      // title attr preserved as a secondary fallback for touch / AT
-      expect(attribChip?.getAttribute('title')).toBe('Basic ×2');
+      // Native `title` intentionally omitted — browser renders it at the mouse
+      // cursor, which collides visually with our designed-position tooltip.
+      expect(attribChip?.hasAttribute('title')).toBeFalse();
       // aria-label for SR users — the token alone ("B") is opaque without it
       expect(attribChip?.getAttribute('aria-label')).toBe('Basic, 2 kills');
     });
@@ -385,7 +386,7 @@ describe('LastTurnSummaryComponent', () => {
       expect(chip?.querySelector('.last-turn-summary__attrib-count')).toBeNull();
       const tooltipEl = chip?.querySelector('.last-turn-summary__attrib-tooltip');
       expect(tooltipEl?.textContent?.trim()).toBe('Sniper Tier 2');
-      expect(chip?.getAttribute('title')).toBe('Sniper Tier 2');
+      expect(chip?.hasAttribute('title')).toBeFalse();
       expect(chip?.getAttribute('aria-label')).toBe('Sniper Tier 2, 1 kill');
     });
 
