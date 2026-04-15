@@ -192,14 +192,14 @@ export class WaveCombatFacadeService {
 
     // Forward combat telemetry into the RECAP panel's turn-history buffer.
     // damageDealt covers tower fire + mortar-zone DoT; killsByTower carries
-    // the per-tower attribution. Lives / gold / cards-played deltas are
-    // recorded by the component (it owns the external-state deltas).
+    // the per-(tower type, level) attribution. Lives / gold / cards-played
+    // deltas are recorded by the component (it owns the external-state deltas).
     this.turnHistoryService.recordDamage(result.damageDealt);
-    for (const [towerType, count] of Object.entries(result.killsByTower)) {
-      if (count === undefined || count <= 0) continue;
-      const key = towerType === 'dot' ? null : (towerType as TowerType);
-      for (let i = 0; i < count; i++) {
-        this.turnHistoryService.recordKillByTower(key);
+    for (const entry of result.killsByTower) {
+      if (entry.count <= 0) continue;
+      const towerType = entry.type === 'dot' ? null : (entry.type as TowerType);
+      for (let i = 0; i < entry.count; i++) {
+        this.turnHistoryService.recordKillByTower(towerType, entry.level);
       }
     }
 

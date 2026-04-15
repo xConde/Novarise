@@ -175,6 +175,7 @@
 
 // Per-tower attribution chip coloring — light tint by tower type so the
 // player's eye learns the palette.
+.last-turn-summary__attrib   { cursor: help; }
 .last-turn-summary__attrib--basic   { color: var(--tower-color-basic, #ffaa50); }
 .last-turn-summary__attrib--sniper  { color: var(--theme-cyan); }
 .last-turn-summary__attrib--splash  { color: #ff8855; }
@@ -182,6 +183,20 @@
 .last-turn-summary__attrib--chain   { color: #ffee66; }
 .last-turn-summary__attrib--mortar  { color: #ff7766; }
 .last-turn-summary__attrib--dot     { color: var(--theme-purple-light, #c4b8d8); }
+
+// Compact token (the "B" / "Sn2" / "M3" part) keeps the tower's tint at
+// full weight; the ×N count rides along at 60% opacity so the token reads
+// first — like chess-move pieces vs. disambiguators.
+.last-turn-summary__attrib-token {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.last-turn-summary__attrib-count {
+  margin-left: 0.1rem;
+  font-weight: 600;
+  opacity: 0.7;
+}
 
 @keyframes last-turn-summary-detail-enter {
   from { opacity: 0; transform: translateY(-0.2rem); }

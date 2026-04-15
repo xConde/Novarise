@@ -2,6 +2,14 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { TowerType } from '../models/tower.model';
 
+/** One entry in the per-(type, level) kill attribution list. */
+export interface TurnKillAttribution {
+  type: TowerType | 'dot';
+  /** Tower level at time of kill. 0 for DoT / status-effect kills. */
+  level: number;
+  count: number;
+}
+
 export interface TurnEventRecord {
   turnNumber: number;
   cardsPlayed: number;
@@ -9,13 +17,12 @@ export interface TurnEventRecord {
   /** Total damage dealt to enemies this turn across all towers + status ticks. */
   damageDealt: number;
   /**
-   * Kill attribution by tower type. Keys are the tower types that landed
-   * killing blows; values are counts. `dot` is the bucket for non-tower kills
-   * (status-effect DoT ticks that aren't owned by any single tower — e.g.
-   * POISON stack applied by TOXIC_SPRAY spell). The sum of values equals
-   * `kills` above.
+   * Kill attribution grouped by (tower type, tower level). Tier-1 entries
+   * (level 1) render without a suffix in the UI; tier 2+ get a number.
+   * Status-effect DoT kills land in `{ type: 'dot', level: 0 }`.
+   * Sum of `count` equals `kills`.
    */
-  killsByTower: Partial<Record<TowerType | 'dot', number>>;
+  killsByTower: TurnKillAttribution[];
   goldEarned: number;
   livesLost: number;
   timestamp: number;
@@ -48,7 +55,7 @@ export class TurnHistoryService {
       cardsPlayed: 0,
       kills: 0,
       damageDealt: 0,
-      killsByTower: {},
+      killsByTower: [],
       goldEarned: 0,
       livesLost: 0,
       timestamp: Date.now(),
@@ -64,16 +71,26 @@ export class TurnHistoryService {
   }
 
   /**
-   * Attribute a kill to the tower type that landed the killing blow, or to
-   * the 'dot' bucket when it was a status-effect tick (no tower owner).
+   * Attribute a kill to a (tower type, level) pair. Tier-1 (level 1) kills
+   * render without a suffix in the UI; tier 2+ get a number suffix. Status-
+   * effect DoT kills pass `towerType: null` and land in the `dot` bucket
+   * with level 0.
+   *
    * Does NOT increment `kills` — callers must still invoke recordKills to
    * keep the two fields in sync. Caller has both pieces of data at the same
    * time (combat-loop.processKill), so the split avoids double-mutation.
    */
-  recordKillByTower(towerType: TowerType | null): void {
+  recordKillByTower(towerType: TowerType | null, towerLevel = 0): void {
     if (!this.current) return;
     const key: TowerType | 'dot' = towerType ?? 'dot';
-    this.current.killsByTower[key] = (this.current.killsByTower[key] ?? 0) + 1;
+    // Clamp DoT to level 0 — there's no "tier 2 DoT" concept.
+    const level = towerType === null ? 0 : Math.max(1, towerLevel);
+    const existing = this.current.killsByTower.find(e => e.type === key && e.level === level);
+    if (existing) {
+      existing.count++;
+    } else {
+      this.current.killsByTower.push({ type: key, level, count: 1 });
+    }
   }
 
   /** Total damage dealt this turn. Sums every hit (lethal and non-lethal). */

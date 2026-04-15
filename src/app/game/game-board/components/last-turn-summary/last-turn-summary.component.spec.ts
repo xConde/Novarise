@@ -10,7 +10,7 @@ function makeRecord(overrides: Partial<TurnEventRecord> = {}): TurnEventRecord {
     cardsPlayed: 0,
     kills: 0,
     damageDealt: 0,
-    killsByTower: {},
+    killsByTower: [],
     goldEarned: 0,
     livesLost: 0,
     timestamp: Date.now(),
@@ -206,7 +206,7 @@ describe('LastTurnSummaryComponent', () => {
         damageDealt: 75,
         kills: 2,
         livesLost: 1,
-        killsByTower: { [TowerType.BASIC]: 2 },
+        killsByTower: [{ type: TowerType.BASIC, level: 1, count: 2 }],
       })];
       fixture.detectChanges();
 
@@ -239,11 +239,11 @@ describe('LastTurnSummaryComponent', () => {
       const row = makeRecord({
         turnNumber: 6,
         kills: 4,
-        killsByTower: {
-          [TowerType.BASIC]: 1,
-          [TowerType.MORTAR]: 2,
-          [TowerType.CHAIN]: 1,
-        },
+        killsByTower: [
+          { type: TowerType.BASIC, level: 1, count: 1 },
+          { type: TowerType.MORTAR, level: 1, count: 2 },
+          { type: TowerType.CHAIN, level: 1, count: 1 },
+        ],
       });
       const entries = component.killAttribution(row);
       expect(entries[0].key).toBe(TowerType.MORTAR);
@@ -251,14 +251,67 @@ describe('LastTurnSummaryComponent', () => {
       expect(entries.map(e => e.count)).toEqual([2, 1, 1]);
     });
 
-    it('labels the dot bucket as "DoT"', () => {
+    it('omits the tier suffix for tier-1 kills (design: T1 gets nothing special)', () => {
+      const row = makeRecord({
+        turnNumber: 3,
+        kills: 1,
+        killsByTower: [{ type: TowerType.BASIC, level: 1, count: 1 }],
+      });
+      const entry = component.killAttribution(row)[0];
+      expect(entry.shortLabel).toBe('B');
+      expect(entry.fullLabel).toBe('Basic');
+    });
+
+    it('appends the tier number for tier-2 kills', () => {
+      const row = makeRecord({
+        turnNumber: 3,
+        kills: 1,
+        killsByTower: [{ type: TowerType.SNIPER, level: 2, count: 1 }],
+      });
+      const entry = component.killAttribution(row)[0];
+      expect(entry.shortLabel).toBe('Sn2');
+      expect(entry.fullLabel).toBe('Sniper Tier 2');
+    });
+
+    it('appends the tier number for tier-3 kills', () => {
+      const row = makeRecord({
+        turnNumber: 3,
+        kills: 1,
+        killsByTower: [{ type: TowerType.MORTAR, level: 3, count: 1 }],
+      });
+      const entry = component.killAttribution(row)[0];
+      expect(entry.shortLabel).toBe('M3');
+    });
+
+    it('buckets the same tower at different levels separately', () => {
+      const row = makeRecord({
+        turnNumber: 5,
+        kills: 3,
+        killsByTower: [
+          { type: TowerType.BASIC, level: 1, count: 1 },
+          { type: TowerType.BASIC, level: 2, count: 2 },
+        ],
+      });
+      const entries = component.killAttribution(row);
+      expect(entries.length).toBe(2);
+      // Sort is by count desc — tier-2 with 2 kills leads tier-1 with 1.
+      expect(entries[0]).toEqual(jasmine.objectContaining({
+        shortLabel: 'B2', count: 2,
+      }));
+      expect(entries[1]).toEqual(jasmine.objectContaining({
+        shortLabel: 'B', count: 1,
+      }));
+    });
+
+    it('labels the dot bucket as "DoT" with no tier suffix', () => {
       const row = makeRecord({
         turnNumber: 1,
         kills: 1,
-        killsByTower: { dot: 1 },
+        killsByTower: [{ type: 'dot', level: 0, count: 1 }],
       });
-      const entries = component.killAttribution(row);
-      expect(entries[0].label).toBe('DoT');
+      const entry = component.killAttribution(row)[0];
+      expect(entry.shortLabel).toBe('DoT');
+      expect(entry.fullLabel).toBe('DoT');
     });
 
     it('returns empty array when no kills attributed', () => {
@@ -272,7 +325,7 @@ describe('LastTurnSummaryComponent', () => {
         turnNumber: 9,
         kills: 2,
         damageDealt: 50,
-        killsByTower: { [TowerType.BASIC]: 2 },
+        killsByTower: [{ type: TowerType.BASIC, level: 1, count: 2 }],
       });
       component.records = [r];
       fixture.detectChanges();
@@ -301,7 +354,12 @@ describe('LastTurnSummaryComponent', () => {
 
       const detail = (fixture.nativeElement as HTMLElement).querySelector('.last-turn-summary__detail');
       expect(detail).not.toBeNull();
-      expect(detail!.textContent).toContain('Basic');
+      // Attribution row now uses the compact token "B" (chess-style); the
+      // full "Basic" name lives in the title attribute for hover-reveal.
+      const tokenEl = detail!.querySelector('.last-turn-summary__attrib-token');
+      expect(tokenEl?.textContent?.trim()).toBe('B');
+      const attribChip = detail!.querySelector<HTMLElement>('.last-turn-summary__attrib');
+      expect(attribChip?.getAttribute('title')).toBe('Basic ×2');
       expect(detail!.textContent).toContain('×2');
     });
 

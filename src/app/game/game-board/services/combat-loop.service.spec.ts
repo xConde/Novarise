@@ -191,7 +191,7 @@ describe('CombatLoopService', () => {
       const enemies = new Map([['e1', enemy]]);
       enemySpy.getEnemies.and.returnValue(enemies);
       combatSpy.fireTurn.and.returnValue({
-        killed: [{ id: 'e1', damage: 5, towerType: null }],
+        killed: [{ id: 'e1', damage: 5, towerType: null, towerLevel: 0 }],
         fired: [TowerType.BASIC],
         hitCount: 1, damageDealt: 0,
       });
@@ -334,7 +334,7 @@ describe('CombatLoopService', () => {
     it('should award gold and record stat for each kill', () => {
       const enemy = makeEnemy({ id: 'e1', value: 25 });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
-      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 10, towerType: null }], fired: [], hitCount: 0, damageDealt: 0 });
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 10, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
 
       service.resolveTurn(scene);
 
@@ -345,7 +345,7 @@ describe('CombatLoopService', () => {
     it('should snapshot kill position and damage in result.kills', () => {
       const enemy = makeEnemy({ id: 'e1', value: 10, position: { x: 1, y: 2, z: 3 } });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
-      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 7, towerType: null }], fired: [], hitCount: 0, damageDealt: 0 });
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 7, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
 
       const result = service.resolveTurn(scene);
 
@@ -358,7 +358,7 @@ describe('CombatLoopService', () => {
     it('should call startDyingAnimation for each kill instead of removeEnemy', () => {
       const enemy = makeEnemy({ id: 'e1' });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
-      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 5, towerType: null }], fired: [], hitCount: 0, damageDealt: 0 });
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 5, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
 
       service.resolveTurn(scene);
 
@@ -369,7 +369,7 @@ describe('CombatLoopService', () => {
     it('should skip kill processing for enemies already marked dying', () => {
       const enemy = makeEnemy({ id: 'e1', dying: true, value: 20 });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
-      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 5, towerType: null }], fired: [], hitCount: 0, damageDealt: 0 });
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 5, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
 
       const result = service.resolveTurn(scene);
 
@@ -385,8 +385,8 @@ describe('CombatLoopService', () => {
         const map = new Map([['e1', e1], ['e2', e2]]);
         return map;
       });
-      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 5, towerType: null }], fired: [], hitCount: 1, damageDealt: 0 });
-      combatSpy.tickMortarZonesForTurn.and.returnValue({ kills: [{ id: 'e2', damage: 8, towerType: null }], damageDealt: 0 });
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 5, towerType: null, towerLevel: 0 }], fired: [], hitCount: 1, damageDealt: 0 });
+      combatSpy.tickMortarZonesForTurn.and.returnValue({ kills: [{ id: 'e2', damage: 8, towerType: null, towerLevel: 0 }], damageDealt: 0 });
 
       const result = service.resolveTurn(scene);
 
@@ -826,7 +826,7 @@ describe('CombatLoopService', () => {
     it('mutating the returned kills array does not affect the next turn result', () => {
       const enemy = makeEnemy({ id: 'e1', value: 10 });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
-      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 5, towerType: null }], fired: [], hitCount: 0, damageDealt: 0 });
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 5, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
 
       const result = service.resolveTurn(scene);
       // Poison the returned array after consumption
@@ -859,7 +859,7 @@ describe('CombatLoopService', () => {
     it('returned kills array is a snapshot — contains events from current turn only', () => {
       const enemy = makeEnemy({ id: 'e1', value: 5 });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
-      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 3, towerType: null }], fired: [], hitCount: 0, damageDealt: 0 });
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 3, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
 
       const first = service.resolveTurn(scene);
 
@@ -888,7 +888,7 @@ describe('CombatLoopService', () => {
 
       const enemy = makeEnemy({ id: 'e1', value: 20 });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
-      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 20, towerType: null }], fired: [], hitCount: 0, damageDealt: 0 });
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 20, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
 
       service.resolveTurn(scene);
 
@@ -1089,12 +1089,12 @@ describe('CombatLoopService', () => {
 
       // Turn 1: kill e1
       enemySpy.getEnemies.and.returnValue(new Map([['e1', e1]]));
-      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 5, towerType: null }], fired: [], hitCount: 0, damageDealt: 0 });
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 5, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
       const result1 = service.resolveTurn(scene);
 
       // Turn 2: kill e2
       enemySpy.getEnemies.and.returnValue(new Map([['e2', e2]]));
-      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e2', damage: 5, towerType: null }], fired: [], hitCount: 0, damageDealt: 0 });
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e2', damage: 5, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
       const result2 = service.resolveTurn(scene);
 
       expect(result1.kills.length).toBe(1);

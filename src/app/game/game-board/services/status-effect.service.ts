@@ -118,7 +118,7 @@ export class StatusEffectService {
             // Status-effect kills have no tower attribution (BURN/POISON/SLOW
             // can be applied by towers OR spells; the tick itself isn't owned
             // by any single tower). The recap surfaces these as generic DoT.
-            kills.push({ id: enemyId, damage: damagePerTick, towerType: null });
+            kills.push({ id: enemyId, damage: damagePerTick, towerType: null, towerLevel: 0 });
             toRemoveEnemies.push(enemyId);
             break;
           }

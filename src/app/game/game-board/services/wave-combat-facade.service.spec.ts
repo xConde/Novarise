@@ -151,7 +151,7 @@ describe('WaveCombatFacadeService', () => {
       firedTypes: [],
       hitCount: 0,
       damageDealt: 0,
-      killsByTower: {},
+      killsByTower: [],
       combatAudioEvents: [],
       defeatTriggered: false,
       waveCompletion: null,

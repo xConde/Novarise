@@ -2553,7 +2553,7 @@ describe('GameBoardComponent', () => {
         defeatTriggered: false,
         waveCompletion: null,
         gameEnd: null,
-        combatAudioEvents: [], damageDealt: 0, killsByTower: {},
+        combatAudioEvents: [], damageDealt: 0, killsByTower: [],
       };
       gameRenderService.processCombatResult(emptyResult, 0.016, 1000);
 
@@ -2575,7 +2575,7 @@ describe('GameBoardComponent', () => {
         defeatTriggered: false,
         waveCompletion: null,
         gameEnd: null,
-        combatAudioEvents: [], damageDealt: 0, killsByTower: {},
+        combatAudioEvents: [], damageDealt: 0, killsByTower: [],
       };
       gameRenderService.processCombatResult(emptyResult, 0.016, 1000);
 

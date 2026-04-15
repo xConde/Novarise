@@ -212,7 +212,7 @@ export function createCombatLoopServiceSpy(): jasmine.SpyObj<CombatLoopService> 
     gameEnd: null,
     combatAudioEvents: [],
     damageDealt: 0,
-    killsByTower: {},
+    killsByTower: [],
   };
   spy.resolveTurn.and.returnValue(emptyFrame);
   spy.getTurnNumber.and.returnValue(0);

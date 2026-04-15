@@ -32,6 +32,12 @@ interface TurnMortarZone {
   /** Turn number AFTER which the zone expires (zone is active on turns < expiresOnTurn). */
   expiresOnTurn: number;
   statusEffect?: StatusEffectType;
+  /**
+   * Level of the mortar tower at the time of placement, frozen for the life
+   * of this zone. Kill attribution reads this so upgrades to the placer
+   * after placement don't retroactively change the recap's tier label.
+   */
+  placerLevel: number;
 }
 
 export { KillInfo, CombatAudioEvent } from '../models/combat-frame.model';
@@ -266,7 +272,7 @@ export class TowerCombatService {
               hitCount++;
               damageDealt += blastDamage;
               if (result.killed) {
-                killed.push({ id: enemy.id, damage: blastDamage, towerType: tower.type });
+                killed.push({ id: enemy.id, damage: blastDamage, towerType: tower.type, towerLevel: tower.level });
                 tower.kills++;
               } else {
                 this.enemyService.startHitFlash(enemy.id);
@@ -288,6 +294,7 @@ export class TowerCombatService {
             dotDamage: blastDamage,
             expiresOnTurn: turnNumber + dotDuration,
             statusEffect: stats.statusEffect,
+            placerLevel: tower.level,
           });
 
           // Visual zone — uses the existing VFX service. gameTime arg passed
@@ -311,7 +318,7 @@ export class TowerCombatService {
                 hitCount++;
                 damageDealt += stats.damage;
                 if (result.killed) {
-                  killed.push({ id: enemy.id, damage: stats.damage, towerType: tower.type });
+                  killed.push({ id: enemy.id, damage: stats.damage, towerType: tower.type, towerLevel: tower.level });
                   tower.kills++;
                 } else {
                   this.enemyService.startHitFlash(enemy.id);
@@ -329,7 +336,7 @@ export class TowerCombatService {
             hitCount++;
             damageDealt += stats.damage;
             if (result.killed) {
-              killed.push({ id: target.id, damage: stats.damage, towerType: tower.type });
+              killed.push({ id: target.id, damage: stats.damage, towerType: tower.type, towerLevel: tower.level });
               tower.kills++;
             } else {
               this.enemyService.startHitFlash(target.id);
@@ -375,7 +382,7 @@ export class TowerCombatService {
           const result = this.enemyService.damageEnemy(enemy.id, zone.dotDamage);
           damageDealt += zone.dotDamage;
           if (result.killed) {
-            kills.push({ id: enemy.id, damage: zone.dotDamage, towerType: TowerType.MORTAR });
+            kills.push({ id: enemy.id, damage: zone.dotDamage, towerType: TowerType.MORTAR, towerLevel: zone.placerLevel });
           } else {
             this.enemyService.startHitFlash(enemy.id);
             if (zone.statusEffect) {
@@ -568,7 +575,13 @@ export class TowerCombatService {
 
   /** Restore mortar zones from checkpoint. */
   restoreMortarZones(zones: SerializableMortarZone[]): void {
-    this.turnMortarZones = zones.map(z => ({ ...z }));
+    // `placerLevel` is optional on SerializableMortarZone — pre-v3 checkpoints
+    // predate the field. Default to level 1 so restored zones get safe
+    // tier-1 attribution labels instead of NaN-suffixed chips.
+    this.turnMortarZones = zones.map(z => ({
+      ...z,
+      placerLevel: z.placerLevel ?? 1,
+    }));
   }
 
   /** Disposes all Three.js objects (tower meshes), resets status effects, and delegates VFX cleanup. Call from both `restartGame()` and `ngOnDestroy()`. */

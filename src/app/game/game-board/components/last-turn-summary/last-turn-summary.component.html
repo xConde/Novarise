@@ -74,15 +74,31 @@
         <div class="last-turn-summary__detail-section" *ngIf="killAttribution(row).length > 0">
           <span class="last-turn-summary__detail-label">Killed by:</span>
           <span class="last-turn-summary__detail-entries">
+            <!--
+              Compact chess-style tokens: "B×2" / "Sn2" / "M3×3". Tier-1
+              tier gets no suffix. Full name + tier live in the title
+              attribute so hover reveals the long form — keeps the line
+              dense without requiring players to memorise the shorthand.
+            -->
             <span *ngFor="let entry of killAttribution(row); let last = last"
                   class="last-turn-summary__attrib"
-                  [class]="'last-turn-summary__attrib last-turn-summary__attrib--' + entry.key">
-              {{ entry.label }} ×{{ entry.count }}<ng-container *ngIf="!last">,</ng-container>
+                  [class]="'last-turn-summary__attrib last-turn-summary__attrib--' + entry.key"
+                  [attr.title]="entry.fullLabel + ' ×' + entry.count">
+              <span class="last-turn-summary__attrib-token">{{ entry.shortLabel }}</span><span
+                    class="last-turn-summary__attrib-count"
+                    *ngIf="entry.count > 1">×{{ entry.count }}</span><ng-container
+                    *ngIf="!last">,</ng-container>
             </span>
           </span>
         </div>
+        <!--
+          "Pressure" (damage-only turn) is mutually exclusive with
+          "Killed by" — if the killAttribution list is non-empty, this block
+          stays hidden. Guards on killAttribution.length specifically so a
+          gameStats/killsByTower desync can't render both at once.
+        -->
         <div class="last-turn-summary__detail-section"
-             *ngIf="row.damageDealt > 0 && row.kills === 0">
+             *ngIf="row.damageDealt > 0 && killAttribution(row).length === 0">
           <span class="last-turn-summary__detail-label">Pressure:</span>
           <span class="last-turn-summary__detail-entries">
             {{ row.damageDealt }} damage dealt, no kills yet

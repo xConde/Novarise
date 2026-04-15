@@ -105,6 +105,13 @@ export interface SerializableMortarZone {
   readonly dotDamage: number;
   readonly expiresOnTurn: number;
   readonly statusEffect?: StatusEffectType;
+  /**
+   * Level of the mortar tower at the time of placement. Frozen for attribution
+   * so upgrades after placement don't retroactively relabel RECAP rows.
+   * Optional for pre-v3 checkpoints; restore path defaults to level 1 when
+   * the field is absent.
+   */
+  readonly placerLevel?: number;
 }
 
 /**

@@ -139,32 +139,64 @@ describe('TurnHistoryService', () => {
   });
 
   describe('recordKillByTower', () => {
-    it('counts per-tower-type kills into killsByTower', () => {
+    it('counts per-(type, level) kills into killsByTower entries', () => {
       service.beginTurn(1);
-      service.recordKillByTower(TowerType.BASIC);
-      service.recordKillByTower(TowerType.BASIC);
-      service.recordKillByTower(TowerType.SNIPER);
+      service.recordKillByTower(TowerType.BASIC, 1);
+      service.recordKillByTower(TowerType.BASIC, 1);
+      service.recordKillByTower(TowerType.SNIPER, 1);
       const r = service.endTurn()!;
-      expect(r.killsByTower[TowerType.BASIC]).toBe(2);
-      expect(r.killsByTower[TowerType.SNIPER]).toBe(1);
+      const basic = r.killsByTower.find(e => e.type === TowerType.BASIC && e.level === 1);
+      const sniper = r.killsByTower.find(e => e.type === TowerType.SNIPER && e.level === 1);
+      expect(basic?.count).toBe(2);
+      expect(sniper?.count).toBe(1);
     });
 
-    it('routes null towerType into the dot bucket', () => {
+    it('buckets the same tower type at different levels separately', () => {
+      service.beginTurn(1);
+      service.recordKillByTower(TowerType.BASIC, 1);
+      service.recordKillByTower(TowerType.BASIC, 2);
+      service.recordKillByTower(TowerType.BASIC, 2);
+      const r = service.endTurn()!;
+      expect(r.killsByTower.length).toBe(2);
+      expect(r.killsByTower.find(e => e.level === 1)?.count).toBe(1);
+      expect(r.killsByTower.find(e => e.level === 2)?.count).toBe(2);
+    });
+
+    it('clamps missing / zero level to 1 for tower kills (safe default)', () => {
+      service.beginTurn(1);
+      service.recordKillByTower(TowerType.BASIC, 0);
+      service.recordKillByTower(TowerType.BASIC); // level defaults to 0, clamped to 1
+      const r = service.endTurn()!;
+      expect(r.killsByTower.length).toBe(1);
+      expect(r.killsByTower[0].level).toBe(1);
+      expect(r.killsByTower[0].count).toBe(2);
+    });
+
+    it('routes null towerType into the dot bucket at level 0', () => {
       service.beginTurn(1);
       service.recordKillByTower(null);
       service.recordKillByTower(null);
       const r = service.endTurn()!;
-      expect(r.killsByTower.dot).toBe(2);
+      const dot = r.killsByTower.find(e => e.type === 'dot');
+      expect(dot?.count).toBe(2);
+      expect(dot?.level).toBe(0);
     });
 
-    it('starts a fresh killsByTower map on each beginTurn', () => {
+    it('ignores the towerLevel param when towerType is null (DoT has no tier)', () => {
+      service.beginTurn(1);
+      service.recordKillByTower(null, 3); // level 3 passed but null means DoT
+      const r = service.endTurn()!;
+      expect(r.killsByTower[0]).toEqual({ type: 'dot', level: 0, count: 1 });
+    });
+
+    it('starts a fresh killsByTower array on each beginTurn', () => {
       service.beginTurn(1);
       service.recordKillByTower(TowerType.BASIC);
       service.endTurn();
 
       service.beginTurn(2);
       const r = service.endTurn()!;
-      expect(r.killsByTower).toEqual({});
+      expect(r.killsByTower).toEqual([]);
     });
   });
 });
