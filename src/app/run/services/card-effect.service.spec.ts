@@ -129,13 +129,24 @@ describe('CardEffectService', () => {
     });
   });
 
-  // ── Spell: scout_ahead (no-op) ────────────────────────────────
+  // ── Spell: scout_ahead (grants wave-preview bonus) ────────────
 
   describe('applySpell — scout_ahead', () => {
-    it('does not throw and calls no game-state methods', () => {
-      expect(() => service.applySpell(spellEffect('scout_ahead', 3), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy, wavePreviewService: wavePreviewSpy })).not.toThrow();
+    it('does not touch game state (not a gold/life effect)', () => {
+      service.applySpell(spellEffect('scout_ahead', 3), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy, wavePreviewService: wavePreviewSpy });
       expect(gameStateSpy.addGold).not.toHaveBeenCalled();
       expect(gameStateSpy.addLives).not.toHaveBeenCalled();
+    });
+
+    it('forwards the effect value to wavePreviewService.addOneShotBonus', () => {
+      service.applySpell(spellEffect('scout_ahead', 3), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy, wavePreviewService: wavePreviewSpy });
+      expect(wavePreviewSpy.addOneShotBonus).toHaveBeenCalledOnceWith(3);
+    });
+
+    it('forwards the upgraded value (SCOUT_ELITE path) via the same spellId', () => {
+      // SCOUT_ELITE routes through the same 'scout_ahead' handler with a larger value.
+      service.applySpell(spellEffect('scout_ahead', 5), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy, wavePreviewService: wavePreviewSpy });
+      expect(wavePreviewSpy.addOneShotBonus).toHaveBeenCalledOnceWith(5);
     });
   });
 
