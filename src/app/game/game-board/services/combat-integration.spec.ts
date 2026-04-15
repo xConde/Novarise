@@ -268,10 +268,10 @@ describe('combat integration', () => {
 
       // Rebuild the spatial grid state — enemy still alive
       // Turn 2: zone DoT should tick
-      const dotKills = service.tickMortarZonesForTurn(scene, TURN_1 + 1);
+      const dotResult = service.tickMortarZonesForTurn(scene, TURN_1 + 1);
 
       // Enemy should take additional DoT damage (or be killed)
-      const zoneDidDamage = enemy.health < healthAfterBlast || dotKills.some(k => k.id === 'e1');
+      const zoneDidDamage = enemy.health < healthAfterBlast || dotResult.kills.some(k => k.id === 'e1');
       expect(zoneDidDamage).toBeTrue();
     });
   });

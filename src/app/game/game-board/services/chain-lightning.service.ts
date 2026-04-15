@@ -56,10 +56,11 @@ export class ChainLightningService {
     spatialGrid: SpatialGrid,
     turnNumber: number,
     extraBounces: number = 0,
-  ): KillInfo[] {
+  ): { kills: KillInfo[]; damageDealt: number } {
     const chainCount = (stats.chainCount ?? 3) + extraBounces;
     const chainRange = stats.chainRange ?? 2;
     const kills: KillInfo[] = [];
+    let damageDealt = 0;
     const hitIds = new Set<string>();
 
     this.pendingAudioEvents.push({ type: 'sfx', sfxKey: 'chainZap' });
@@ -84,8 +85,10 @@ export class ChainLightningService {
 
       // Deal damage
       const chainResult = this.enemyService.damageEnemy(currentTarget.id, currentDamage);
+      damageDealt += currentDamage;
       if (chainResult.killed) {
-        kills.push({ id: currentTarget.id, damage: currentDamage });
+        // Chain kills attribute to the CHAIN tower that fired the first arc.
+        kills.push({ id: currentTarget.id, damage: currentDamage, towerType: tower.type });
       } else {
         this.enemyService.startHitFlash(currentTarget.id);
         if (stats.statusEffect) {
@@ -112,7 +115,7 @@ export class ChainLightningService {
       currentTarget = nextTarget;
     }
 
-    return kills;
+    return { kills, damageDealt };
   }
 
   /**

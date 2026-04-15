@@ -979,8 +979,8 @@ describe('TowerCombatService', () => {
       service.cleanup(mockScene); // should dispose zone mesh without throwing
 
       // After cleanup, no more DoT on next tick
-      const kills = service.tickMortarZonesForTurn(mockScene, TURN_2);
-      expect(kills.length).toBe(0);
+      const result = service.tickMortarZonesForTurn(mockScene, TURN_2);
+      expect(result.kills.length).toBe(0);
     });
   });
 

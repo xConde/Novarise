@@ -2,12 +2,15 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { LastTurnSummaryComponent } from './last-turn-summary.component';
 import { TurnEventRecord } from '../../services/turn-history.service';
+import { TowerType } from '../../models/tower.model';
 
 function makeRecord(overrides: Partial<TurnEventRecord> = {}): TurnEventRecord {
   return {
     turnNumber: 1,
     cardsPlayed: 0,
     kills: 0,
+    damageDealt: 0,
+    killsByTower: {},
     goldEarned: 0,
     livesLost: 0,
     timestamp: Date.now(),
@@ -180,6 +183,141 @@ describe('LastTurnSummaryComponent', () => {
       const stats = (fixture.nativeElement as HTMLElement).querySelector('.last-turn-summary__stats')!;
       expect(stats.textContent).toMatch(/2/);
       expect(stats.textContent).toMatch(/5/);
+    });
+  });
+
+  // ── Phase 16: damage + kill attribution + expand ────────────────────
+
+  describe('damage rendering', () => {
+    it('shows damage-only turns (hits but no kill) as non-quiet', () => {
+      component.records = [makeRecord({ turnNumber: 4, damageDealt: 45 })];
+      fixture.detectChanges();
+
+      const row = (fixture.nativeElement as HTMLElement).querySelector('.last-turn-summary__row')!;
+      expect(row.classList.contains('last-turn-summary__row--quiet')).toBeFalse();
+      const stats = row.querySelector('.last-turn-summary__stats')!;
+      expect(stats.textContent).toContain('45');
+    });
+
+    it('renders all stats in the required order: gold, damage, kills, lives', () => {
+      component.records = [makeRecord({
+        turnNumber: 5,
+        goldEarned: 30,
+        damageDealt: 75,
+        kills: 2,
+        livesLost: 1,
+        killsByTower: { [TowerType.BASIC]: 2 },
+      })];
+      fixture.detectChanges();
+
+      const text = (fixture.nativeElement as HTMLElement)
+        .querySelector('.last-turn-summary__stats')!
+        .textContent!
+        .replace(/\s+/g, ' ');
+      const goldIdx = text.indexOf('+30g');
+      const dmgIdx = text.indexOf('75');
+      const killIdx = text.indexOf('2k');
+      const lifeIdx = text.indexOf('−1');
+      expect(goldIdx).toBeGreaterThanOrEqual(0);
+      expect(dmgIdx).toBeGreaterThan(goldIdx);
+      expect(killIdx).toBeGreaterThan(dmgIdx);
+      expect(lifeIdx).toBeGreaterThan(killIdx);
+    });
+
+    it('skips zero stats and their separators', () => {
+      component.records = [makeRecord({ turnNumber: 3, damageDealt: 20 })]; // damage only
+      fixture.detectChanges();
+      const seps = (fixture.nativeElement as HTMLElement)
+        .querySelectorAll('.last-turn-summary__sep');
+      // No separator pipes when there's only one stat
+      expect(seps.length).toBe(0);
+    });
+  });
+
+  describe('kill attribution', () => {
+    it('returns entries sorted by count desc', () => {
+      const row = makeRecord({
+        turnNumber: 6,
+        kills: 4,
+        killsByTower: {
+          [TowerType.BASIC]: 1,
+          [TowerType.MORTAR]: 2,
+          [TowerType.CHAIN]: 1,
+        },
+      });
+      const entries = component.killAttribution(row);
+      expect(entries[0].key).toBe(TowerType.MORTAR);
+      expect(entries[0].count).toBe(2);
+      expect(entries.map(e => e.count)).toEqual([2, 1, 1]);
+    });
+
+    it('labels the dot bucket as "DoT"', () => {
+      const row = makeRecord({
+        turnNumber: 1,
+        kills: 1,
+        killsByTower: { dot: 1 },
+      });
+      const entries = component.killAttribution(row);
+      expect(entries[0].label).toBe('DoT');
+    });
+
+    it('returns empty array when no kills attributed', () => {
+      expect(component.killAttribution(makeRecord({ turnNumber: 2 }))).toEqual([]);
+    });
+  });
+
+  describe('expand / collapse', () => {
+    function primeExpandable(): TurnEventRecord {
+      const r = makeRecord({
+        turnNumber: 9,
+        kills: 2,
+        damageDealt: 50,
+        killsByTower: { [TowerType.BASIC]: 2 },
+      });
+      component.records = [r];
+      fixture.detectChanges();
+      return r;
+    }
+
+    it('hasExpandableDetail is true when there are kills or damage', () => {
+      expect(component.hasExpandableDetail(makeRecord({ kills: 1 }))).toBeTrue();
+      expect(component.hasExpandableDetail(makeRecord({ damageDealt: 5 }))).toBeTrue();
+      expect(component.hasExpandableDetail(makeRecord())).toBeFalse();
+    });
+
+    it('isExpanded toggles on click', () => {
+      const row = primeExpandable();
+      expect(component.isExpanded(row)).toBeFalse();
+      component.toggleExpanded(row);
+      expect(component.isExpanded(row)).toBeTrue();
+      component.toggleExpanded(row);
+      expect(component.isExpanded(row)).toBeFalse();
+    });
+
+    it('expanded row renders the attribution block', () => {
+      const row = primeExpandable();
+      component.toggleExpanded(row);
+      fixture.detectChanges();
+
+      const detail = (fixture.nativeElement as HTMLElement).querySelector('.last-turn-summary__detail');
+      expect(detail).not.toBeNull();
+      expect(detail!.textContent).toContain('Basic');
+      expect(detail!.textContent).toContain('×2');
+    });
+
+    it('expandable rows get the --expandable class + aria-expanded attr', () => {
+      primeExpandable();
+      const rowEl = (fixture.nativeElement as HTMLElement).querySelector('.last-turn-summary__row')!;
+      expect(rowEl.classList.contains('last-turn-summary__row--expandable')).toBeTrue();
+      expect(rowEl.getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('rows without kills OR damage are not expandable', () => {
+      component.records = [makeRecord({ turnNumber: 3, cardsPlayed: 2 })];
+      fixture.detectChanges();
+      const rowEl = (fixture.nativeElement as HTMLElement).querySelector('.last-turn-summary__row')!;
+      expect(rowEl.classList.contains('last-turn-summary__row--expandable')).toBeFalse();
+      expect(rowEl.hasAttribute('aria-expanded')).toBeFalse();
     });
   });
 });

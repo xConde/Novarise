@@ -207,7 +207,7 @@ describe('StatusEffectService', () => {
       const kills = service.tickTurn(2);
 
       expect(kills.length).toBe(1);
-      expect(kills[0]).toEqual({ id: 'e1', damage: burnCfg.damagePerTick! });
+      expect(kills[0]).toEqual({ id: 'e1', damage: burnCfg.damagePerTick!, towerType: null });
     });
   });
 

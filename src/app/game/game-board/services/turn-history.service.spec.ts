@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { TurnHistoryService, TurnEventRecord } from './turn-history.service';
+import { TowerType } from '../models/tower.model';
 
 describe('TurnHistoryService', () => {
   let service: TurnHistoryService;
@@ -111,7 +112,59 @@ describe('TurnHistoryService', () => {
     service.recordKills(5);
     service.recordGoldEarned(50);
     service.recordLifeLost(2);
+    service.recordDamage(100);
+    service.recordKillByTower(TowerType.BASIC);
     // No crash, records stay empty
     expect(service.getRecords().length).toBe(0);
+  });
+
+  // ── Phase 16: damage + per-tower kill attribution ──────────────────────
+
+  describe('recordDamage', () => {
+    it('accumulates positive amounts', () => {
+      service.beginTurn(1);
+      service.recordDamage(10);
+      service.recordDamage(25);
+      const r = service.endTurn()!;
+      expect(r.damageDealt).toBe(35);
+    });
+
+    it('ignores zero and negative amounts', () => {
+      service.beginTurn(1);
+      service.recordDamage(0);
+      service.recordDamage(-5);
+      const r = service.endTurn()!;
+      expect(r.damageDealt).toBe(0);
+    });
+  });
+
+  describe('recordKillByTower', () => {
+    it('counts per-tower-type kills into killsByTower', () => {
+      service.beginTurn(1);
+      service.recordKillByTower(TowerType.BASIC);
+      service.recordKillByTower(TowerType.BASIC);
+      service.recordKillByTower(TowerType.SNIPER);
+      const r = service.endTurn()!;
+      expect(r.killsByTower[TowerType.BASIC]).toBe(2);
+      expect(r.killsByTower[TowerType.SNIPER]).toBe(1);
+    });
+
+    it('routes null towerType into the dot bucket', () => {
+      service.beginTurn(1);
+      service.recordKillByTower(null);
+      service.recordKillByTower(null);
+      const r = service.endTurn()!;
+      expect(r.killsByTower.dot).toBe(2);
+    });
+
+    it('starts a fresh killsByTower map on each beginTurn', () => {
+      service.beginTurn(1);
+      service.recordKillByTower(TowerType.BASIC);
+      service.endTurn();
+
+      service.beginTurn(2);
+      const r = service.endTurn()!;
+      expect(r.killsByTower).toEqual({});
+    });
   });
 });

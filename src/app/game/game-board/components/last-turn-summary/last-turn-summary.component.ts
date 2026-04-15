@@ -1,21 +1,40 @@
 import { Component, HostBinding, Input } from '@angular/core';
 import { TurnEventRecord } from '../../services/turn-history.service';
+import { TowerType } from '../../models/tower.model';
 
 // Back-compat alias for call sites that still import TurnSummary.
 export type TurnSummary = TurnEventRecord;
 
+/** One row of per-tower kill attribution in the expanded view. */
+export interface KillAttributionEntry {
+  /** Tower type, or 'dot' for non-tower status-effect kills. */
+  readonly key: TowerType | 'dot';
+  /** Player-facing label ("Basic", "Mortar", "DoT", …). */
+  readonly label: string;
+  /** Number of kills this tower type landed this turn. */
+  readonly count: number;
+}
+
+/** Human-readable tower labels for the expanded breakdown. */
+const TOWER_LABELS: Record<TowerType | 'dot', string> = {
+  [TowerType.BASIC]: 'Basic',
+  [TowerType.SNIPER]: 'Sniper',
+  [TowerType.SPLASH]: 'Splash',
+  [TowerType.SLOW]: 'Slow',
+  [TowerType.CHAIN]: 'Chain',
+  [TowerType.MORTAR]: 'Mortar',
+  dot: 'DoT',
+};
+
 /**
- * LastTurnSummaryComponent — right-side "RECAP" panel mirroring the left-side
- * INCOMING spawn preview. Renders the most recent completed turns (most
- * recent highlighted, older dimmed) so the player can scan what just
- * happened without having to recall from memory.
+ * LastTurnSummaryComponent — right-side "RECAP" panel mirroring INCOMING.
+ * Shows the most recent 3 completed turns at a glance; clicking a row
+ * expands it inline to reveal per-tower kill attribution.
  *
- * Replaces the earlier 2.5s bottom-center flash; the panel is persistent for
- * the duration of combat and updates live via `records` input (driven by
- * TurnHistoryService.records$ on the parent).
- *
- * The panel hides itself entirely when there are no records to show (fresh
- * encounter, turn 0) so it doesn't clutter the setup moment.
+ * Data model (per TurnEventRecord): turn number, gold earned, damage dealt,
+ * kills + per-tower breakdown, cards played, lives lost. Rendered in the
+ * order gold → damage → kills → cards → lives (user requirement: gold
+ * exchange first, `|` separators).
  */
 @Component({
   selector: 'app-last-turn-summary',
@@ -23,45 +42,71 @@ export type TurnSummary = TurnEventRecord;
   styleUrls: ['./last-turn-summary.component.scss'],
 })
 export class LastTurnSummaryComponent {
-  /**
-   * Turn records to display. Sorted oldest → newest by TurnHistoryService's
-   * rolling buffer; the component reverses for display (newest first).
-   */
   @Input() records: readonly TurnEventRecord[] = [];
 
-  /** Maximum number of turn rows to render at once (high-level consolidation). */
   private static readonly MAX_ROWS = 3;
 
-  /** Most recent N records, newest first. The first row is the current highlight. */
+  /** Turn numbers currently expanded (inline breakdown visible). */
+  private readonly expandedTurns = new Set<number>();
+
+  /** Most recent N records, newest first. First element is the top row. */
   get displayRows(): TurnEventRecord[] {
     if (this.records.length === 0) return [];
     return [...this.records].reverse().slice(0, LastTurnSummaryComponent.MAX_ROWS);
   }
 
-  /** True when there's at least one completed turn to show. */
   get hasRecords(): boolean {
     return this.records.length > 0;
   }
 
-  /**
-   * Hide the host element entirely when there are no records — avoids an
-   * empty glass panel sitting at the right edge on a fresh encounter (before
-   * the player has resolved any turns).
-   */
   @HostBinding('class.last-turn-summary--empty')
   get isEmpty(): boolean {
     return !this.hasRecords;
   }
 
   /**
-   * True when a row has nothing noteworthy (no cards played, no kills, no
-   * gold, no lives lost). Shown as a muted "— quiet turn —" placeholder so
-   * the row stays present (players see turn pacing) without being noisy.
+   * Quiet turn = literally nothing happened. With damage tracking added,
+   * a turn with hits-but-no-kills no longer reads as quiet — which is good,
+   * that's the "towers fired but didn't finish anyone off" case the player
+   * definitely wants to see.
    */
   isQuietTurn(row: TurnEventRecord): boolean {
     return row.cardsPlayed === 0
       && row.kills === 0
+      && row.damageDealt === 0
       && row.goldEarned === 0
       && row.livesLost === 0;
+  }
+
+  isExpanded(row: TurnEventRecord): boolean {
+    return this.expandedTurns.has(row.turnNumber);
+  }
+
+  toggleExpanded(row: TurnEventRecord): void {
+    if (this.expandedTurns.has(row.turnNumber)) {
+      this.expandedTurns.delete(row.turnNumber);
+    } else {
+      this.expandedTurns.add(row.turnNumber);
+    }
+  }
+
+  /**
+   * Per-tower kill attribution, sorted by count desc so the most-impactful
+   * tower surfaces first. Empty when the turn had no kills.
+   */
+  killAttribution(row: TurnEventRecord): KillAttributionEntry[] {
+    const out: KillAttributionEntry[] = [];
+    for (const [key, count] of Object.entries(row.killsByTower)) {
+      if (count === undefined || count <= 0) continue;
+      const k = key as TowerType | 'dot';
+      out.push({ key: k, label: TOWER_LABELS[k] ?? key, count });
+    }
+    out.sort((a, b) => b.count - a.count);
+    return out;
+  }
+
+  /** True when there's enough detail in a row to justify expanding it. */
+  hasExpandableDetail(row: TurnEventRecord): boolean {
+    return row.kills > 0 || row.damageDealt > 0;
   }
 }

@@ -263,7 +263,7 @@ describe('ChainLightningService', () => {
       enemyMap.set('e2', e2);
       populateGrid(e1, e2);
 
-      const kills = service.fire(makeTower(), e1, stats, mockScene, TOWER_X, TOWER_Z, spatialGrid, GAME_TIME);
+      const { kills } = service.fire(makeTower(), e1, stats, mockScene, TOWER_X, TOWER_Z, spatialGrid, GAME_TIME);
 
       expect(kills.length).toBeGreaterThanOrEqual(1);
       expect(kills.some(k => k.id === 'e1')).toBeTrue();
@@ -275,7 +275,7 @@ describe('ChainLightningService', () => {
       enemyMap.set('e1', e1);
       populateGrid(e1);
 
-      const kills = service.fire(makeTower(), e1, stats, mockScene, TOWER_X, TOWER_Z, spatialGrid, GAME_TIME);
+      const { kills } = service.fire(makeTower(), e1, stats, mockScene, TOWER_X, TOWER_Z, spatialGrid, GAME_TIME);
 
       expect(kills.length).toBe(0);
     });

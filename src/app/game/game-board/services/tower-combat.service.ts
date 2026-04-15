@@ -157,10 +157,11 @@ export class TowerCombatService {
    * @param turnNumber  Current turn counter, used as the time clock for status
    *                    effect expiry (passed through to StatusEffectService.apply).
    */
-  fireTurn(scene: THREE.Scene, turnNumber: number): { killed: KillInfo[]; fired: TowerType[]; hitCount: number } {
+  fireTurn(scene: THREE.Scene, turnNumber: number): { killed: KillInfo[]; fired: TowerType[]; hitCount: number; damageDealt: number } {
     const killed: KillInfo[] = [];
     const fired: TowerType[] = [];
     let hitCount = 0;
+    let damageDealt = 0;
 
     this.rebuildSpatialGrid();
 
@@ -236,15 +237,16 @@ export class TowerCombatService {
 
         if (tower.type === TowerType.CHAIN) {
           const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
-          const chainKills = this.chainLightningService.fire(
+          const chainResult = this.chainLightningService.fire(
             tower, target, stats, scene,
             towerWorldX, towerWorldZ,
             this.spatialGrid, turnNumber,
             chainBouncesBonus,
           );
-          killed.push(...chainKills);
+          killed.push(...chainResult.kills);
+          damageDealt += chainResult.damageDealt;
           hitCount += 1 + (stats.chainCount ?? 0) + chainBouncesBonus;
-          if (chainKills.length > 0) tower.kills += chainKills.length;
+          if (chainResult.kills.length > 0) tower.kills += chainResult.kills.length;
         } else if (tower.type === TowerType.MORTAR) {
           // M3 S4: mortar drops a turn-ticked DoT zone instead of one-shot.
           // Initial blast applies on placement turn; the zone then deals
@@ -262,8 +264,9 @@ export class TowerCombatService {
             if (Math.sqrt(dx * dx + dz * dz) <= blastRadius) {
               const result = this.enemyService.damageEnemy(enemy.id, blastDamage);
               hitCount++;
+              damageDealt += blastDamage;
               if (result.killed) {
-                killed.push({ id: enemy.id, damage: blastDamage });
+                killed.push({ id: enemy.id, damage: blastDamage, towerType: tower.type });
                 tower.kills++;
               } else {
                 this.enemyService.startHitFlash(enemy.id);
@@ -306,8 +309,9 @@ export class TowerCombatService {
               if (Math.sqrt(dx * dx + dz * dz) <= splashRadius) {
                 const result = this.enemyService.damageEnemy(enemy.id, stats.damage);
                 hitCount++;
+                damageDealt += stats.damage;
                 if (result.killed) {
-                  killed.push({ id: enemy.id, damage: stats.damage });
+                  killed.push({ id: enemy.id, damage: stats.damage, towerType: tower.type });
                   tower.kills++;
                 } else {
                   this.enemyService.startHitFlash(enemy.id);
@@ -323,8 +327,9 @@ export class TowerCombatService {
           } else {
             const result = this.enemyService.damageEnemy(target.id, stats.damage);
             hitCount++;
+            damageDealt += stats.damage;
             if (result.killed) {
-              killed.push({ id: target.id, damage: stats.damage });
+              killed.push({ id: target.id, damage: stats.damage, towerType: tower.type });
               tower.kills++;
             } else {
               this.enemyService.startHitFlash(target.id);
@@ -340,7 +345,7 @@ export class TowerCombatService {
       }
     }
 
-    return { killed, fired, hitCount };
+    return { killed, fired, hitCount, damageDealt };
   }
 
   /**
@@ -351,8 +356,9 @@ export class TowerCombatService {
    *
    * @returns Kills produced by zone DoT this turn.
    */
-  tickMortarZonesForTurn(scene: THREE.Scene, turnNumber: number): KillInfo[] {
+  tickMortarZonesForTurn(scene: THREE.Scene, turnNumber: number): { kills: KillInfo[]; damageDealt: number } {
     const kills: KillInfo[] = [];
+    let damageDealt = 0;
     const surviving: TurnMortarZone[] = [];
 
     for (const zone of this.turnMortarZones) {
@@ -367,8 +373,9 @@ export class TowerCombatService {
         const dz = enemy.position.z - zone.centerZ;
         if (Math.sqrt(dx * dx + dz * dz) <= zone.blastRadius) {
           const result = this.enemyService.damageEnemy(enemy.id, zone.dotDamage);
+          damageDealt += zone.dotDamage;
           if (result.killed) {
-            kills.push({ id: enemy.id, damage: zone.dotDamage });
+            kills.push({ id: enemy.id, damage: zone.dotDamage, towerType: TowerType.MORTAR });
           } else {
             this.enemyService.startHitFlash(enemy.id);
             if (zone.statusEffect) {
@@ -385,7 +392,7 @@ export class TowerCombatService {
     }
 
     this.turnMortarZones = surviving;
-    return kills;
+    return { kills, damageDealt };
   }
 
   /** Removes a tower from combat tracking. Returns the removed PlacedTower (caller uses it to calculate sell refund), or undefined if not found. */

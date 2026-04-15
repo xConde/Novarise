@@ -211,6 +211,8 @@ export function createCombatLoopServiceSpy(): jasmine.SpyObj<CombatLoopService> 
     waveCompletion: null,
     gameEnd: null,
     combatAudioEvents: [],
+    damageDealt: 0,
+    killsByTower: {},
   };
   spy.resolveTurn.and.returnValue(emptyFrame);
   spy.getTurnNumber.and.returnValue(0);
@@ -667,8 +669,8 @@ export function createTowerCombatServiceSpy(): jasmine.SpyObj<TowerCombatService
     'getTower',
     'getPlacedTowers',
   ]);
-  spy.fireTurn.and.returnValue({ killed: [], fired: [], hitCount: 0 });
-  spy.tickMortarZonesForTurn.and.returnValue([]);
+  spy.fireTurn.and.returnValue({ killed: [], fired: [], hitCount: 0, damageDealt: 0 });
+  spy.tickMortarZonesForTurn.and.returnValue({ kills: [], damageDealt: 0 });
   spy.upgradeTower.and.returnValue(false);
   spy.upgradeTowerWithSpec.and.returnValue(false);
   spy.setTargetingMode.and.returnValue(false);

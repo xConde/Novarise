@@ -115,7 +115,10 @@ export class StatusEffectService {
         if (damagePerTick !== undefined && damagePerTick > 0) {
           const result: DamageResult = this.enemyService.damageEnemy(enemyId, damagePerTick);
           if (result.killed) {
-            kills.push({ id: enemyId, damage: damagePerTick });
+            // Status-effect kills have no tower attribution (BURN/POISON/SLOW
+            // can be applied by towers OR spells; the tick itself isn't owned
+            // by any single tower). The recap surfaces these as generic DoT.
+            kills.push({ id: enemyId, damage: damagePerTick, towerType: null });
             toRemoveEnemies.push(enemyId);
             break;
           }

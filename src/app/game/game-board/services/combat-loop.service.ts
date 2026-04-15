@@ -132,6 +132,8 @@ export class CombatLoopService {
     this.frameKills.length = 0;
     this.frameFiredTypes.clear();
     let frameHitCount = 0;
+    let frameDamageDealt = 0;
+    const frameKillsByTower: Partial<Record<TowerType | 'dot', number>> = {};
     let frameExitCount = 0;
     let frameLeaked = false;
     let defeatTriggered = false;
@@ -149,10 +151,12 @@ export class CombatLoopService {
       this.frameFiredTypes.add(towerType);
     }
     frameHitCount += fireResult.hitCount;
+    frameDamageDealt += fireResult.damageDealt;
 
     // 3. Process tower kills — gold award, stat recording, run events
     for (const killInfo of fireResult.killed) {
       this.processKill(killInfo, cardGoldMult);
+      this.accumulateKillByTower(killInfo.towerType, frameKillsByTower);
     }
 
     // 4. Enemy movement — each enemy advances its tiles-per-turn count
@@ -161,15 +165,20 @@ export class CombatLoopService {
     );
 
     // 5a. Mortar zone tick — turn-ticked DoT from M3 S4 mortar zones
-    const mortarKills = this.towerCombatService.tickMortarZonesForTurn(scene, this.turnNumber);
-    for (const killInfo of mortarKills) {
+    const mortarResult = this.towerCombatService.tickMortarZonesForTurn(scene, this.turnNumber);
+    frameDamageDealt += mortarResult.damageDealt;
+    for (const killInfo of mortarResult.kills) {
       this.processKill(killInfo, cardGoldMult);
+      this.accumulateKillByTower(killInfo.towerType, frameKillsByTower);
     }
 
-    // 5b. Status effect tick — DoT damage, duration expiry
+    // 5b. Status effect tick — DoT damage, duration expiry. DoT kills are
+    // attributed to the 'dot' bucket (no tower owner) and don't count toward
+    // frameDamageDealt (which reflects "offensive pressure from towers").
     const dotKills = this.statusEffectService.tickTurn(this.turnNumber);
     for (const killInfo of dotKills) {
       this.processKill(killInfo, cardGoldMult);
+      this.accumulateKillByTower(killInfo.towerType, frameKillsByTower);
     }
 
     // 6. Process leaks — enemies that reached the exit cost lives
@@ -273,7 +282,22 @@ export class CombatLoopService {
       waveCompletion,
       gameEnd,
       combatAudioEvents,
+      damageDealt: frameDamageDealt,
+      killsByTower: frameKillsByTower,
     };
+  }
+
+  /**
+   * Attribute a single kill to the tower that landed the killing blow, or
+   * to the 'dot' bucket when no tower owner exists (status-effect tick).
+   * Mutates `byTower` in place — avoids allocating a fresh map per kill.
+   */
+  private accumulateKillByTower(
+    towerType: TowerType | null,
+    byTower: Partial<Record<TowerType | 'dot', number>>,
+  ): void {
+    const key: TowerType | 'dot' = towerType ?? 'dot';
+    byTower[key] = (byTower[key] ?? 0) + 1;
   }
 
   /**

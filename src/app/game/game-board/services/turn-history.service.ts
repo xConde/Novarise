@@ -1,10 +1,21 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { TowerType } from '../models/tower.model';
 
 export interface TurnEventRecord {
   turnNumber: number;
   cardsPlayed: number;
   kills: number;
+  /** Total damage dealt to enemies this turn across all towers + status ticks. */
+  damageDealt: number;
+  /**
+   * Kill attribution by tower type. Keys are the tower types that landed
+   * killing blows; values are counts. `dot` is the bucket for non-tower kills
+   * (status-effect DoT ticks that aren't owned by any single tower — e.g.
+   * POISON stack applied by TOXIC_SPRAY spell). The sum of values equals
+   * `kills` above.
+   */
+  killsByTower: Partial<Record<TowerType | 'dot', number>>;
   goldEarned: number;
   livesLost: number;
   timestamp: number;
@@ -36,6 +47,8 @@ export class TurnHistoryService {
       turnNumber,
       cardsPlayed: 0,
       kills: 0,
+      damageDealt: 0,
+      killsByTower: {},
       goldEarned: 0,
       livesLost: 0,
       timestamp: Date.now(),
@@ -48,6 +61,24 @@ export class TurnHistoryService {
 
   recordKills(count: number): void {
     if (this.current && count > 0) this.current.kills += count;
+  }
+
+  /**
+   * Attribute a kill to the tower type that landed the killing blow, or to
+   * the 'dot' bucket when it was a status-effect tick (no tower owner).
+   * Does NOT increment `kills` — callers must still invoke recordKills to
+   * keep the two fields in sync. Caller has both pieces of data at the same
+   * time (combat-loop.processKill), so the split avoids double-mutation.
+   */
+  recordKillByTower(towerType: TowerType | null): void {
+    if (!this.current) return;
+    const key: TowerType | 'dot' = towerType ?? 'dot';
+    this.current.killsByTower[key] = (this.current.killsByTower[key] ?? 0) + 1;
+  }
+
+  /** Total damage dealt this turn. Sums every hit (lethal and non-lethal). */
+  recordDamage(amount: number): void {
+    if (this.current && amount > 0) this.current.damageDealt += amount;
   }
 
   recordGoldEarned(amount: number): void {

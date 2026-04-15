@@ -1,12 +1,5 @@
 // Recap panel — mirrors the left-side INCOMING spawn preview. Persistent
 // during combat + intermission phases, positioned at the top-right.
-//
-// :host owns the glass-panel shell + absolute positioning so Angular view
-// encapsulation doesn't fight the parent's attempt to style a child
-// component's elements. Shell custom properties cascade in from
-// .board-container just fine (inheritance is NOT blocked by encapsulation).
-// Visual language is intentionally twinned with .spawn-preview — same
-// background, border, typography, row cadence.
 
 :host {
   position: absolute;
@@ -18,15 +11,9 @@
   border-radius: var(--border-radius-md);
   backdrop-filter: blur(0.625rem);
   z-index: var(--z-index-overlay);
-  pointer-events: none;
   color: var(--text-color);
 }
 
-// Hide the host entirely when the component has no records to render —
-// prevents an empty glass-panel from sitting at the right edge on a fresh
-// encounter (turn 0, before any endTurn resolution). Driven by the
-// @HostBinding on the component class; kept in CSS rather than in TS
-// so the display toggle cost is zero at runtime (no re-layout churn).
 :host.last-turn-summary--empty {
   display: none;
 }
@@ -34,9 +21,8 @@
 .last-turn-summary {
   font-family: "Orbitron", sans-serif;
   color: var(--text-color);
-  pointer-events: none;
-  min-width: 9rem;
-  max-width: 11rem;
+  min-width: 11rem;
+  max-width: 14rem;
 }
 
 .last-turn-summary__title {
@@ -54,28 +40,50 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.25rem;
 }
 
+// ── Summary row (one per recorded turn) ──────────────────────────────
 .last-turn-summary__row {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
   font-size: var(--font-size-xs);
-  opacity: 0.55; // older turns fade back
-  transition: opacity 0.15s ease;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, background 0.15s ease;
+  border-radius: var(--border-radius-sm);
+  padding: 0.1rem 0.25rem;
+  margin: 0 -0.25rem; // align inner padding with the panel edge
 }
 
-// Most recent turn is the high-contrast "just happened" row.
 .last-turn-summary__row--recent {
   opacity: 1;
 }
 
-// A no-op turn gets the dim dash placeholder treatment instead of empty space.
 .last-turn-summary__row--quiet {
   opacity: 0.35;
 }
 
+// Clickable rows (ones with kills or damage) get a hover affordance.
+.last-turn-summary__row--expandable {
+  cursor: pointer;
+  pointer-events: auto;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--theme-cyan);
+    outline-offset: 1px;
+  }
+}
+
+.last-turn-summary__row--expanded {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+// ── Stats line (gold | damage | kills | lives) ───────────────────────
 .last-turn-summary__turn {
   min-width: 2rem;
   font-weight: 700;
@@ -86,9 +94,9 @@
 .last-turn-summary__stats {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
   flex-wrap: wrap;
-  line-height: 1.1;
+  line-height: 1.15;
 }
 
 .last-turn-summary__stat {
@@ -96,7 +104,12 @@
   font-variant-numeric: tabular-nums;
 }
 
-// Per-stat unit suffix (p / k / ❤). Small + dim so the number dominates.
+.last-turn-summary__sep {
+  opacity: 0.35;
+  font-weight: 400;
+  padding: 0 0.05rem;
+}
+
 .last-turn-summary__unit {
   margin-left: 0.1rem;
   font-size: var(--font-size-3xs);
@@ -113,14 +126,75 @@
   color: rgba(255, 120, 120, 0.95);
 }
 
+.last-turn-summary__cards {
+  font-weight: 500;
+  opacity: 0.7;
+  font-size: var(--font-size-3xs);
+}
+
 .last-turn-summary__quiet {
   color: var(--text-dim);
   font-size: var(--font-size-xs);
   opacity: 0.7;
 }
 
+// ── Expanded breakdown ───────────────────────────────────────────────
+.last-turn-summary__detail {
+  list-style: none;
+  padding: 0.25rem 0.5rem 0.4rem 2.25rem; // indent under the turn label
+  font-size: var(--font-size-3xs);
+  color: var(--text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  animation: last-turn-summary-detail-enter 0.15s ease-out;
+}
+
+.last-turn-summary__detail-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: baseline;
+}
+
+.last-turn-summary__detail-label {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-size: 0.55rem;
+}
+
+.last-turn-summary__detail-entries {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+// Per-tower attribution chip coloring — light tint by tower type so the
+// player's eye learns the palette.
+.last-turn-summary__attrib--basic   { color: var(--tower-color-basic, #ffaa50); }
+.last-turn-summary__attrib--sniper  { color: var(--theme-cyan); }
+.last-turn-summary__attrib--splash  { color: #ff8855; }
+.last-turn-summary__attrib--slow    { color: #88c5ff; }
+.last-turn-summary__attrib--chain   { color: #ffee66; }
+.last-turn-summary__attrib--mortar  { color: #ff7766; }
+.last-turn-summary__attrib--dot     { color: var(--theme-purple-light, #c4b8d8); }
+
+@keyframes last-turn-summary-detail-enter {
+  from { opacity: 0; transform: translateY(-0.2rem); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .last-turn-summary__detail { animation: none; }
+  .last-turn-summary__row { transition: none; }
+}
+
 @media (max-width: 768px) {
   .last-turn-summary {
-    display: none; // sits behind card hand at this size — priority is the board + cards
+    display: none;
   }
 }

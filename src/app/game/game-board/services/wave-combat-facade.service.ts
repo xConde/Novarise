@@ -23,6 +23,8 @@ import { CardEffectService } from '../../../run/services/card-effect.service';
 import { EncounterCheckpointService } from '../../../run/services/encounter-checkpoint.service';
 import { EncounterCheckpoint, CHECKPOINT_VERSION } from '../models/encounter-checkpoint.model';
 import { WavePreviewService } from './wave-preview.service';
+import { TurnHistoryService } from './turn-history.service';
+import { TowerType } from '../models/tower.model';
 
 /** Callbacks that WaveCombatFacadeService calls back into the component for concerns
  *  it cannot own (template-bound state, pending card state). */
@@ -92,6 +94,7 @@ export class WaveCombatFacadeService {
     private cardEffectService: CardEffectService,
     private encounterCheckpointService: EncounterCheckpointService,
     private wavePreviewService: WavePreviewService,
+    private turnHistoryService: TurnHistoryService,
   ) {}
 
   /** Register component callbacks. Call in ngOnInit before any wave interaction. */
@@ -186,6 +189,19 @@ export class WaveCombatFacadeService {
     const result = this.combatLoopService.resolveTurn(
       this.sceneService.getScene(),
     );
+
+    // Forward combat telemetry into the RECAP panel's turn-history buffer.
+    // damageDealt covers tower fire + mortar-zone DoT; killsByTower carries
+    // the per-tower attribution. Lives / gold / cards-played deltas are
+    // recorded by the component (it owns the external-state deltas).
+    this.turnHistoryService.recordDamage(result.damageDealt);
+    for (const [towerType, count] of Object.entries(result.killsByTower)) {
+      if (count === undefined || count <= 0) continue;
+      const key = towerType === 'dot' ? null : (towerType as TowerType);
+      for (let i = 0; i < count; i++) {
+        this.turnHistoryService.recordKillByTower(key);
+      }
+    }
 
     this.autoSaveCheckpoint();
 

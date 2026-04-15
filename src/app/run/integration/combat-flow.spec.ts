@@ -462,8 +462,8 @@ describe('combat-flow integration smoke', () => {
 
     it('should return an empty kills array from tickMortarZonesForTurn when no zones exist', () => {
       // Fresh session — no zones.
-      const kills = towerCombatService.tickMortarZonesForTurn(scene, 1);
-      expect(kills).toEqual([]);
+      const result = towerCombatService.tickMortarZonesForTurn(scene, 1);
+      expect(result.kills).toEqual([]);
     });
   });
 

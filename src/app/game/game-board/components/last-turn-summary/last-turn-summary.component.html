@@ -4,36 +4,91 @@
        aria-label="Recap of recent turns">
   <h4 class="last-turn-summary__title">Recap</h4>
   <ol class="last-turn-summary__list">
-    <li *ngFor="let row of displayRows; let i = index"
-        class="last-turn-summary__row"
-        [class.last-turn-summary__row--recent]="i === 0"
-        [class.last-turn-summary__row--quiet]="isQuietTurn(row)">
-      <span class="last-turn-summary__turn">T{{ row.turnNumber }}</span>
-      <ng-container *ngIf="!isQuietTurn(row); else quietTpl">
-        <span class="last-turn-summary__stats">
-          <span class="last-turn-summary__stat" *ngIf="row.cardsPlayed > 0"
-                [attr.title]="row.cardsPlayed + ' card' + (row.cardsPlayed === 1 ? '' : 's') + ' played'">
-            {{ row.cardsPlayed }}<span class="last-turn-summary__unit">p</span>
+    <ng-container *ngFor="let row of displayRows; let i = index">
+      <li class="last-turn-summary__row"
+          [class.last-turn-summary__row--recent]="i === 0"
+          [class.last-turn-summary__row--quiet]="isQuietTurn(row)"
+          [class.last-turn-summary__row--expandable]="hasExpandableDetail(row)"
+          [class.last-turn-summary__row--expanded]="isExpanded(row)"
+          (click)="hasExpandableDetail(row) && toggleExpanded(row)"
+          [attr.role]="hasExpandableDetail(row) ? 'button' : null"
+          [attr.tabindex]="hasExpandableDetail(row) ? 0 : null"
+          [attr.aria-expanded]="hasExpandableDetail(row) ? isExpanded(row) : null"
+          (keydown.enter)="hasExpandableDetail(row) && toggleExpanded(row)"
+          (keydown.space)="hasExpandableDetail(row) && toggleExpanded(row); $event.preventDefault()">
+        <span class="last-turn-summary__turn">T{{ row.turnNumber }}</span>
+        <ng-container *ngIf="!isQuietTurn(row); else quietTpl">
+          <!--
+            Display order per request: gold first, then damage, then kills,
+            then lives lost. Cards-played trails in muted text when > 0.
+            `|` separators between groups; zero values are skipped rather
+            than shown as "0" so the line stays visually tight.
+          -->
+          <span class="last-turn-summary__stats">
+            <span class="last-turn-summary__stat last-turn-summary__stat--gold"
+                  *ngIf="row.goldEarned > 0"
+                  [attr.title]="'+' + row.goldEarned + ' gold earned'">
+              +{{ row.goldEarned }}g
+            </span>
+            <span class="last-turn-summary__sep"
+                  *ngIf="row.goldEarned > 0 && row.damageDealt > 0"
+                  aria-hidden="true">|</span>
+            <span class="last-turn-summary__stat"
+                  *ngIf="row.damageDealt > 0"
+                  [attr.title]="row.damageDealt + ' damage dealt'">
+              {{ row.damageDealt }}<span class="last-turn-summary__unit">d</span>
+            </span>
+            <span class="last-turn-summary__sep"
+                  *ngIf="row.damageDealt > 0 && row.kills > 0"
+                  aria-hidden="true">|</span>
+            <span class="last-turn-summary__stat"
+                  *ngIf="row.kills > 0"
+                  [attr.title]="row.kills + ' enem' + (row.kills === 1 ? 'y killed' : 'ies killed')">
+              {{ row.kills }}<span class="last-turn-summary__unit">k</span>
+            </span>
+            <span class="last-turn-summary__sep"
+                  *ngIf="row.livesLost > 0 && (row.goldEarned > 0 || row.damageDealt > 0 || row.kills > 0)"
+                  aria-hidden="true">|</span>
+            <span class="last-turn-summary__stat last-turn-summary__stat--danger"
+                  *ngIf="row.livesLost > 0"
+                  [attr.title]="row.livesLost + ' life' + (row.livesLost === 1 ? '' : 's') + ' lost'">
+              &minus;{{ row.livesLost }}<span class="last-turn-summary__unit">&hearts;</span>
+            </span>
+            <span class="last-turn-summary__cards"
+                  *ngIf="row.cardsPlayed > 0"
+                  [attr.title]="row.cardsPlayed + ' card' + (row.cardsPlayed === 1 ? '' : 's') + ' played'">
+              &nbsp;·&nbsp;{{ row.cardsPlayed }}<span class="last-turn-summary__unit">p</span>
+            </span>
           </span>
-          <span class="last-turn-summary__stat" *ngIf="row.kills > 0"
-                [attr.title]="row.kills + ' enem' + (row.kills === 1 ? 'y' : 'ies') + ' killed'">
-            {{ row.kills }}<span class="last-turn-summary__unit">k</span>
+        </ng-container>
+        <ng-template #quietTpl>
+          <span class="last-turn-summary__quiet">—</span>
+        </ng-template>
+      </li>
+
+      <!-- Expanded kill-attribution block — only present when the row is
+           toggled open AND there's a meaningful breakdown. -->
+      <li class="last-turn-summary__detail"
+          *ngIf="isExpanded(row) && hasExpandableDetail(row)"
+          [attr.aria-label]="'Turn ' + row.turnNumber + ' detail'">
+        <div class="last-turn-summary__detail-section" *ngIf="killAttribution(row).length > 0">
+          <span class="last-turn-summary__detail-label">Killed by:</span>
+          <span class="last-turn-summary__detail-entries">
+            <span *ngFor="let entry of killAttribution(row); let last = last"
+                  class="last-turn-summary__attrib"
+                  [class]="'last-turn-summary__attrib last-turn-summary__attrib--' + entry.key">
+              {{ entry.label }} ×{{ entry.count }}<ng-container *ngIf="!last">,</ng-container>
+            </span>
           </span>
-          <span class="last-turn-summary__stat last-turn-summary__stat--gold"
-                *ngIf="row.goldEarned > 0"
-                [attr.title]="'+' + row.goldEarned + ' gold earned'">
-            +{{ row.goldEarned }}g
+        </div>
+        <div class="last-turn-summary__detail-section"
+             *ngIf="row.damageDealt > 0 && row.kills === 0">
+          <span class="last-turn-summary__detail-label">Pressure:</span>
+          <span class="last-turn-summary__detail-entries">
+            {{ row.damageDealt }} damage dealt, no kills yet
           </span>
-          <span class="last-turn-summary__stat last-turn-summary__stat--danger"
-                *ngIf="row.livesLost > 0"
-                [attr.title]="row.livesLost + ' life' + (row.livesLost === 1 ? '' : 's') + ' lost'">
-            &minus;{{ row.livesLost }}<span class="last-turn-summary__unit">&hearts;</span>
-          </span>
-        </span>
-      </ng-container>
-      <ng-template #quietTpl>
-        <span class="last-turn-summary__quiet">—</span>
-      </ng-template>
-    </li>
+        </div>
+      </li>
+    </ng-container>
   </ol>
 </aside>

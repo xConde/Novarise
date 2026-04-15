@@ -22,6 +22,7 @@ import { RunService } from '../../../run/services/run.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { EncounterCheckpointService } from '../../../run/services/encounter-checkpoint.service';
 import { WavePreviewService } from './wave-preview.service';
+import { TurnHistoryService } from './turn-history.service';
 
 function makeCallbacks(overrides: Partial<WaveCombatCallbacks> = {}): WaveCombatCallbacks {
   return {
@@ -59,6 +60,7 @@ describe('WaveCombatFacadeService', () => {
   let cardEffectService: jasmine.SpyObj<CardEffectService>;
   let encounterCheckpointService: jasmine.SpyObj<EncounterCheckpointService>;
   let wavePreviewService: jasmine.SpyObj<WavePreviewService>;
+  let turnHistoryService: jasmine.SpyObj<TurnHistoryService>;
 
   const defaultState = {
     phase: GamePhase.INTERMISSION,
@@ -132,6 +134,11 @@ describe('WaveCombatFacadeService', () => {
     encounterCheckpointService = jasmine.createSpyObj('EncounterCheckpointService', ['saveCheckpoint', 'clearCheckpoint']);
     encounterCheckpointService.saveCheckpoint.and.returnValue(true);
 
+    turnHistoryService = jasmine.createSpyObj<TurnHistoryService>('TurnHistoryService', [
+      'beginTurn', 'endTurn', 'recordCardPlayed', 'recordKills', 'recordKillByTower',
+      'recordDamage', 'recordGoldEarned', 'recordLifeLost', 'getLastCompletedTurn', 'getRecords', 'reset',
+    ]);
+
     wavePreviewService = jasmine.createSpyObj('WavePreviewService', [
       'serialize', 'restore', 'addOneShotBonus', 'getPreviewDepth', 'getFutureWavesSummary', 'resetForEncounter',
     ]);
@@ -143,6 +150,8 @@ describe('WaveCombatFacadeService', () => {
       kills: [],
       firedTypes: [],
       hitCount: 0,
+      damageDealt: 0,
+      killsByTower: {},
       combatAudioEvents: [],
       defeatTriggered: false,
       waveCompletion: null,
@@ -173,6 +182,7 @@ describe('WaveCombatFacadeService', () => {
       cardEffectService,
       encounterCheckpointService,
       wavePreviewService,
+      turnHistoryService,
     );
   });
 
