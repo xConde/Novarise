@@ -31,7 +31,10 @@ $card-rarity-glows: (
   z-index: calc(var(--z-index-overlay) + 5);
 
   display: flex;
-  align-items: center;
+  // stretch so .card-hand__cards can claim the full bar height and anchor its
+  // cards to the bottom — gives the hover lift real headroom above the card.
+  // Energy panel + piles opt back to centered via align-self.
+  align-items: stretch;
   gap: var(--spacing-sm);
   padding: var(--spacing-xs) var(--spacing-sm);
 
@@ -80,6 +83,7 @@ $card-rarity-glows: (
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  align-self: center; // parent is align-items:stretch; keep energy vertically centered
   gap: 0.2rem;
   min-width: 3.5rem;
   flex-shrink: 0;
@@ -160,15 +164,21 @@ $card-rarity-glows: (
 
 .card-hand__cards {
   flex: 1;
+  align-self: stretch; // claim full hand-bar height → headroom above cards for hover lift
   display: flex;
   align-items: flex-end; // anchor cards to bottom so hover lifts upward within bar
   justify-content: center;
   gap: var(--spacing-xs);
-  overflow-x: auto;
-  overflow-y: visible; // allow hover lift to show above the scrollable row
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar { display: none; }
+  // overflow-x: clip (not auto). `auto` on one axis forces the other to compute
+  // as `auto`, which would clip the hover-lift translateY AND the tooltip at
+  // the top of the cards row. `clip` is a pure paint clip — it clips horizontal
+  // overflow without forcing vertical clipping. Fan layout handles >5 card
+  // horizontal overlap so scroll is not needed.
+  overflow-x: clip;
+  overflow-y: visible;
+  // Give the tooltip + hover lift a 4rem breathing zone above the clip edge so
+  // they render cleanly above the card rather than being shaved at the top.
+  overflow-clip-margin: 4rem;
 
   @media (max-width: 480px) {
     gap: 0;
@@ -220,18 +230,18 @@ $card-rarity-glows: (
 
 .card {
   position: relative;
-  // overflow: hidden removed — Sprint 35: the tooltip sits above the card and was
-  // clipped. The ::before (height:48%) and ::after (inset:0) pseudos are already
-  // bounded by their own dimensions/inset, so no clipping is needed to contain them.
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
-  padding: 0.3rem var(--spacing-xs) 0.2rem;
+  // padding-top reserves space for the absolute-positioned cost pill + corner icon;
+  // padding-bottom leaves the instance dot its corner.
+  padding: 2.1rem var(--spacing-xs) 0.8rem;
+  gap: 0.25rem;
 
   width: 6.25rem;
-  min-height: 7.75rem;
+  // Min-height grew from 7.75rem to 11rem to fit the description body text.
+  min-height: 11rem;
 
   background: rgba(10, 5, 20, 0.88);
   border: var(--border-width-thin) solid var(--border-color);
@@ -259,15 +269,15 @@ $card-rarity-glows: (
 
   @media (max-width: 768px) {
     width: 5.25rem;
-    min-height: 6.5rem;
-    padding: 0.3rem var(--spacing-xs) 0.25rem;
+    min-height: 9rem;
+    padding: 1.9rem var(--spacing-xs) 0.7rem;
   }
 
   @media (max-width: 480px) {
     width: 3.75rem;
     min-width: 3.75rem;
-    min-height: 5.25rem;
-    padding: 0.2rem 0.25rem 0.2rem;
+    min-height: 6.5rem;
+    padding: 1.5rem 0.25rem 0.5rem;
     gap: 0.1rem;
     font-size: var(--font-size-3xs);
   }
@@ -463,15 +473,18 @@ body.reduce-motion .card--rare::after { animation: none; background-position: 0 
 
 .card--playable {
   &:hover {
-    transform: translateY(-0.25rem) scale(1.03);
-    filter: brightness(1.18);
+    // Subtle lift — no scale. Scale was jarring (neighboring cards looked
+    // displaced on mouseover). Pure translateY + elevated shadow reads as
+    // "selected" without the pop-out distortion.
+    transform: translateY(-0.5rem);
+    filter: brightness(1.08);
     box-shadow:
-      0 0.25rem 0.75rem rgba(0, 0, 0, 0.4),
-      0 0 0.75rem var(--card-type-color, rgba(255, 255, 255, 0.2));
+      0 0.5rem 1rem rgba(0, 0, 0, 0.5),
+      0 0 0.6rem var(--card-type-color, rgba(255, 255, 255, 0.2));
     z-index: 1;
   }
 
-  &:active { transform: translateY(-0.1rem) scale(1.01); }
+  &:active { transform: translateY(-0.2rem); }
 }
 
 // Unplayable cards — can't afford energy or gold cost.
@@ -557,37 +570,64 @@ body.reduce-motion .card-hand { animation: none; }
 
 // ── Card internals ───────────────────────────────────────────
 
+// Cost pill — value + "Energy" label as ONE inline-flex chip at top-left.
+// Previous design (circle badge + floating absolute label) read as two
+// disconnected elements floating over the art zone. The pill unifies them
+// so the cost indicator is a single coherent UI element.
 .card__cost {
   position: absolute;
-  top: 0.25rem;
-  left: 0.25rem;
-  width: 1.4rem;
-  height: 1.4rem;
-  display: flex;
+  top: 0.3rem;
+  left: 0.3rem;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  border: var(--border-width-thin) solid var(--border-interactive-hover);
-  font-size: var(--font-size-xs);
-  font-weight: 700;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem 0.15rem 0.4rem;
+  background: rgba(10, 5, 20, 0.82);
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
   color: var(--text-dim);
+  font-family: "Orbitron", sans-serif;
   line-height: 1;
-  z-index: 2; // Sprint 9: above art zone + scan lines
+  z-index: 2; // above art zone + scan lines
+  pointer-events: none;
 
   @media (max-width: 480px) {
-    width: 1.1rem;
-    height: 1.1rem;
-    font-size: var(--font-size-2xs);
     top: 0.2rem;
     left: 0.2rem;
+    padding: 0.1rem 0.35rem 0.1rem 0.3rem;
+    gap: 0.2rem;
+  }
+}
+
+// Number inside the pill — bold, slightly larger than the label so the value dominates.
+.card__cost-value {
+  font-size: var(--font-size-small);
+  font-weight: 800;
+  color: inherit; // follows .card__cost color (drives affordable/unplayable tint)
+
+  @media (max-width: 480px) {
+    font-size: var(--font-size-xs);
+  }
+}
+
+// "Energy" label — disambiguates the number. Hidden on very narrow cards.
+.card__cost-label {
+  font-size: var(--font-size-3xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: inherit; // follows .card__cost color
+  opacity: 0.85; // label sits slightly quieter than the numeric value
+
+  @media (max-width: 480px) {
+    display: none; // card too narrow for the word
   }
 }
 
 .card__cost--affordable {
   background: rgba(255, 215, 0, 0.18);
   border-color: rgba(255, 215, 0, 0.65);
-  color: var(--game-gold);
+  color: var(--game-gold); // propagates to .card__cost-value / .card__cost-label via inherit
   box-shadow: 0 0 0.5rem rgba(255, 215, 0, 0.45);
 }
 
@@ -633,16 +673,17 @@ body.reduce-motion .card-hand { animation: none; }
   }
 }
 
-// Sprint 11 — Card name pushed below the art zone (top 55%)
+// Card name — first flow item after the top padding reserved for cost pill.
+// The old `margin-top: 55%` (push name below old art zone) was removed now
+// that the card is a normal flex-column: pill is absolute, name is flow.
 .card__name {
-  margin-top: 55%; // push name below art zone — grown to match new 55% art zone height
-  font-size: var(--font-size-xs); // bumped up from 2xs
+  font-size: var(--font-size-xs);
   font-weight: 700;
   color: var(--text-color);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   text-align: center;
-  line-height: 1.2;
+  line-height: 1.15;
   word-break: break-word;
 
   @media (max-width: 768px) {
@@ -651,7 +692,6 @@ body.reduce-motion .card-hand { animation: none; }
 
   @media (max-width: 480px) {
     font-size: var(--font-size-3xs);
-    margin-top: 55%;
   }
 }
 
@@ -675,34 +715,32 @@ body.reduce-motion .card-hand { animation: none; }
 // Sprint 11 — Type icon: dominant "art" of the card.
 // Centered in the top art zone (55% height) at 48px on desktop.
 // The @each type-color rule above keeps per-type color tinting.
+// Type icon — demoted from a 48px dominant "art" element to a small top-right
+// corner chip. Description text now carries the card's meaning; the icon just
+// signals type at a glance (tower/spell/modifier/utility).
 .card__type-icon {
   position: absolute;
-  top: 8%;
-  left: 50%;
-  transform: translateX(-50%);
-  opacity: 0.75;
+  top: 0.45rem;
+  right: 0.4rem;
+  opacity: 0.85;
   pointer-events: none;
-  z-index: 1;
+  z-index: 2; // sits beside the cost pill in the top strip
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: 1.25rem;
+  height: 1.25rem;
 
   svg {
     width: 100%;
     height: 100%;
   }
 
-  @media (max-width: 768px) {
-    width: 38px;
-    height: 38px;
-  }
-
   @media (max-width: 480px) {
-    width: 26px;
-    height: 26px;
-    top: 8%;
+    top: 0.3rem;
+    right: 0.3rem;
+    width: 1rem;
+    height: 1rem;
   }
 }
 
@@ -712,6 +750,7 @@ body.reduce-motion .card-hand { animation: none; }
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  align-self: center; // parent is align-items:stretch; keep piles vertically centered
   gap: 0.3rem;
   flex-shrink: 0;
   min-width: 3.5rem;
@@ -785,89 +824,30 @@ body.reduce-motion .card-hand { animation: none; }
   .pile-value { color: var(--text-dim); }
 }
 
-// ── Sprint 31: keyboard shortcut hotkey badge ─────────────────
-
-.card__hotkey {
-  position: absolute;
-  bottom: 0.2rem;
-  left: 0.25rem;
-  font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-2xs);
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.4);
-  letter-spacing: 0.03em;
-  padding: 0.05rem 0.3rem;
-  background: rgba(0, 0, 0, 0.35);
-  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.15);
-  border-radius: 0.3rem;
-  z-index: 2;
-  line-height: 1;
-  pointer-events: none;
-
-  // Hide on touch-only devices (no hover capability) and small screens
-  @media (hover: none) {
-    display: none;
-  }
-
-  @media (max-width: 480px) {
-    display: none;
-  }
-}
-
-// ── Sprint 35 — Card hover description tooltip ───────────────
-
-.card__tooltip {
-  // Transform-based positioning: tooltip sits above card with 0.5rem gap.
-  // top: 0 anchors the tooltip's top edge at the card's top edge.
-  // translateY(-100%) moves tooltip up by its own height (bottom edge at card top).
-  // Additional -0.5rem offset adds the visual gap.
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%) translateY(calc(-100% - 0.25rem)); // hidden: slightly lower for fade-up
-  max-width: 16rem;
-  min-width: 8rem;
-  padding: 0.4rem 0.6rem;
-  background: rgba(10, 15, 30, 0.95);
-  border: var(--border-width-thin) solid rgba(100, 200, 255, 0.4);
-  border-radius: var(--border-radius-sm);
-  backdrop-filter: blur(6px);
+// ── Description body text ────────────────────────────────────
+// Replaces the hover tooltip — description lives on the card face now.
+// Pushed to the bottom of the flex column via margin-top:auto so it
+// occupies the lower zone of the card regardless of name length.
+.card__description {
+  margin-top: auto; // anchor to bottom of flex column
+  padding: 0.4rem 0.15rem 0.25rem;
+  border-top: var(--border-width-thin) solid rgba(255, 255, 255, 0.08);
   font-family: "Orbitron", sans-serif;
   font-size: var(--font-size-3xs);
   font-weight: 500;
-  color: var(--text-color);
-  line-height: 1.35;
-  text-align: left;
-  white-space: normal;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.12s ease, transform 0.12s ease;
-  z-index: 100; // above card-hand stacking context
+  line-height: 1.3;
   letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.82);
+  text-align: center;
+  word-break: normal;
+  overflow-wrap: break-word;
+  position: relative;
+  z-index: 1;
 
-  &::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 0.3rem solid transparent;
-    border-top-color: rgba(100, 200, 255, 0.4);
+  @media (max-width: 480px) {
+    // Cards too narrow for readable body text at <480px — suppress.
+    display: none;
   }
-}
-
-.card--playable:hover .card__tooltip,
-.card:focus-visible .card__tooltip {
-  opacity: 1;
-  transform: translateX(-50%) translateY(calc(-100% - 0.5rem)); // revealed: 0.5rem above card
-}
-
-@media (hover: none) {
-  .card__tooltip { display: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .card__tooltip { transition: none; }
 }
 
 // ── Sprint 36 — Card-play lift animation ─────────────────────

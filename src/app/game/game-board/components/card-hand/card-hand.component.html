@@ -32,18 +32,27 @@
       [class.card--playing]="card.instance.instanceId === playingCardId"
       [disabled]="!card.canPlay || (pendingCardId !== null && card.instance.instanceId !== pendingCardId)"
       (click)="playCard(card)"
-      [attr.aria-label]="card.definition.name + ' — Energy cost: ' + card.definition.energyCost + (card.instance.upgraded ? ' (upgraded)' : '')"
-      [attr.aria-describedby]="'tooltip-' + card.instance.instanceId"
+      [attr.aria-label]="card.definition.name + ' — Energy cost: ' + card.definition.energyCost + (card.instance.upgraded ? ' (upgraded)' : '') + '. ' + card.definition.description"
       [attr.aria-pressed]="card.instance.instanceId === pendingCardId"
       [attr.aria-disabled]="!card.canPlay"
       [style.--card-tower-accent]="getTowerAccentColor(card)">
 
-      <!-- Energy cost badge -->
-      <span class="card__cost" [class.card__cost--affordable]="card.canPlay"
-            aria-hidden="true">{{ card.definition.energyCost }}</span>
+      <!-- Cost pill — value + "Energy" as one inline-flex chip so it reads as a single element. -->
+      <span class="card__cost" [class.card__cost--affordable]="card.canPlay" aria-hidden="true">
+        <strong class="card__cost-value">{{ card.definition.energyCost }}</strong>
+        <span class="card__cost-label">Energy</span>
+      </span>
 
       <!-- Upgraded indicator -->
       <span class="card__upgraded-badge" *ngIf="card.instance.upgraded" aria-hidden="true">+</span>
+
+      <!-- Type icon — small corner chip (top-right) signalling card type. -->
+      <span class="card__type-icon" aria-hidden="true">
+        <app-icon *ngIf="card.definition.type === CardType.TOWER" name="crosshair" [size]="20"></app-icon>
+        <app-icon *ngIf="card.definition.type === CardType.SPELL" name="bolt" [size]="20"></app-icon>
+        <app-icon *ngIf="card.definition.type === CardType.MODIFIER" name="shield" [size]="20"></app-icon>
+        <app-icon *ngIf="card.definition.type === CardType.UTILITY" name="gear" [size]="20"></app-icon>
+      </span>
 
       <!-- Card name -->
       <span class="card__name">{{ card.definition.name }}</span>
@@ -53,31 +62,13 @@
         {{ card.goldCost }}g
       </span>
 
-      <!-- Type icon (SVG, no text) — Sprint 11: 40px dominant art icon -->
-      <span class="card__type-icon" aria-hidden="true">
-        <app-icon *ngIf="card.definition.type === CardType.TOWER" name="crosshair" [size]="48"></app-icon>
-        <app-icon *ngIf="card.definition.type === CardType.SPELL" name="bolt" [size]="48"></app-icon>
-        <app-icon *ngIf="card.definition.type === CardType.MODIFIER" name="shield" [size]="48"></app-icon>
-        <app-icon *ngIf="card.definition.type === CardType.UTILITY" name="gear" [size]="48"></app-icon>
-      </span>
+      <!-- Description body text — replaces the hover tooltip so rules live on the card face. -->
+      <span class="card__description">{{ card.definition.description }}</span>
 
       <!-- Instance dot — tints per-instance so identical cards are distinguishable -->
       <span class="card__instance-dot"
             [style.background]="'hsl(' + instanceHue(card.instance.instanceId) + ', 70%, 55%)'"
             aria-hidden="true"></span>
-
-      <!-- Sprint 31: keyboard hotkey badge — shows slot number (1-9) on desktop only -->
-      <span class="card__hotkey"
-            *ngIf="getCardIndex(card) !== null && (getCardIndex(card)!) < 9"
-            aria-hidden="true">{{ (getCardIndex(card)!) + 1 }}</span>
-
-      <!-- Sprint 35: card description tooltip — visible on hover/focus (desktop only).
-           id matches aria-describedby on the button so AT reads description on focus. -->
-      <span class="card__tooltip"
-            role="tooltip"
-            [id]="'tooltip-' + card.instance.instanceId">
-        {{ card.definition.description }}
-      </span>
 
     </button>
   </div>
