@@ -80,14 +80,25 @@
               attribute so hover reveals the long form — keeps the line
               dense without requiring players to memorise the shorthand.
             -->
+            <!--
+              Tooltip rendered as an explicit `<span>` child (NOT a CSS
+              pseudo-element or native `title`): both of those proved
+              unreliable inside the glass panel's backdrop-filter stacking
+              context. Real element = predictable position, real hover
+              state, easy to inspect. aria-label still carries the SR
+              version; title is kept as a "something always renders"
+              fallback for assistive hover on touch devices.
+            -->
             <span *ngFor="let entry of killAttribution(row); let last = last"
                   class="last-turn-summary__attrib"
                   [ngClass]="'last-turn-summary__attrib--' + entry.key"
-                  [attr.data-tooltip]="entry.fullLabel + (entry.count > 1 ? ' ×' + entry.count : '')"
+                  [attr.title]="entry.fullLabel + (entry.count > 1 ? ' ×' + entry.count : '')"
                   [attr.aria-label]="entry.fullLabel + (entry.count > 1 ? ', ' + entry.count + ' kills' : ', 1 kill')">
               <span class="last-turn-summary__attrib-token">{{ entry.shortLabel }}</span><span
                     class="last-turn-summary__attrib-count"
-                    *ngIf="entry.count > 1">×{{ entry.count }}</span><ng-container
+                    *ngIf="entry.count > 1">×{{ entry.count }}</span><span
+                    class="last-turn-summary__attrib-tooltip"
+                    aria-hidden="true">{{ entry.fullLabel }}{{ entry.count > 1 ? ' ×' + entry.count : '' }}</span><ng-container
                     *ngIf="!last">,</ng-container>
             </span>
           </span>

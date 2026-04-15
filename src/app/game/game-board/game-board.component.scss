@@ -52,9 +52,19 @@
   --shell-wave-top: var(--spacing-sm);
   --shell-wave-right: var(--spacing-sm);
   // Recap panel sits at the same vertical offset as INCOMING but on the right edge.
+  // During INTERMISSION/SETUP, `.wave-preview` occupies top-right — push RECAP
+  // below it (the :has() rule further down overrides --shell-recap-top then).
   --shell-recap-top: var(--shell-spawn-top);
   --shell-recap-right: var(--spacing-sm);
   --shell-tower-info-bottom: var(--spacing-sm);
+
+  // When the wave-preview panel is mounted (INTERMISSION / SETUP phases), it
+  // owns the top-right corner. The RECAP sits right under it — max-height of
+  // wave-preview is min(45vh, 350px), so ~24rem top clears it on all screens
+  // tall enough to matter.
+  &:has(.canvas-overlays > .wave-preview) {
+    --shell-recap-top: calc(var(--shell-wave-top) + 24rem);
+  }
 
   // Sprint 2: 1-column grid (canvas fills available space, hand row below)
   display: grid;

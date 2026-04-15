@@ -354,14 +354,18 @@ describe('LastTurnSummaryComponent', () => {
 
       const detail = (fixture.nativeElement as HTMLElement).querySelector('.last-turn-summary__detail');
       expect(detail).not.toBeNull();
-      // Attribution row now uses the compact token "B" (chess-style); the
-      // full "Basic" name lives in the data-tooltip attribute, rendered via
-      // a CSS pseudo-element tooltip on hover (more reliable than native
-      // `title` inside the glass-panel backdrop-filter stacking context).
+      // Attribution row uses the compact token "B" (chess-style); the full
+      // "Basic" name lives in a child .last-turn-summary__attrib-tooltip
+      // <span> that's absolute-positioned and revealed on hover. This is
+      // more reliable than native `title` or a CSS ::after pseudo-element
+      // inside the glass-panel backdrop-filter stacking context.
       const tokenEl = detail!.querySelector('.last-turn-summary__attrib-token');
       expect(tokenEl?.textContent?.trim()).toBe('B');
       const attribChip = detail!.querySelector<HTMLElement>('.last-turn-summary__attrib');
-      expect(attribChip?.getAttribute('data-tooltip')).toBe('Basic ×2');
+      const tooltipEl = attribChip?.querySelector('.last-turn-summary__attrib-tooltip');
+      expect(tooltipEl?.textContent?.trim()).toBe('Basic ×2');
+      // title attr preserved as a secondary fallback for touch / AT
+      expect(attribChip?.getAttribute('title')).toBe('Basic ×2');
       // aria-label for SR users — the token alone ("B") is opaque without it
       expect(attribChip?.getAttribute('aria-label')).toBe('Basic, 2 kills');
     });
@@ -379,7 +383,9 @@ describe('LastTurnSummaryComponent', () => {
         .querySelector<HTMLElement>('.last-turn-summary__attrib');
       // No ×1 trailing the token for single kills — keeps the line tight.
       expect(chip?.querySelector('.last-turn-summary__attrib-count')).toBeNull();
-      expect(chip?.getAttribute('data-tooltip')).toBe('Sniper Tier 2');
+      const tooltipEl = chip?.querySelector('.last-turn-summary__attrib-tooltip');
+      expect(tooltipEl?.textContent?.trim()).toBe('Sniper Tier 2');
+      expect(chip?.getAttribute('title')).toBe('Sniper Tier 2');
       expect(chip?.getAttribute('aria-label')).toBe('Sniper Tier 2, 1 kill');
     });
 

@@ -204,15 +204,14 @@
   opacity: 0.7;
 }
 
-// ── CSS tooltip (replaces native `title`, which was unreliable inside
-// the glass-panel + backdrop-filter stacking context) ────────────────────
-// Fires on chip hover/focus. Reads content from the [data-tooltip] attr
-// so each chip can carry its own "Basic Tier 2 ×3" string. Arrow glyph
-// via a second pseudo-element on ::before.
-.last-turn-summary__attrib::after {
-  content: attr(data-tooltip);
+// ── Hover tooltip (explicit element, not ::after) ─────────────────────
+// Rendered as a real <span> inside each chip so it has predictable
+// position + hover state even inside the glass-panel backdrop-filter
+// stacking context, where native `title` and CSS ::after were both
+// unreliable in testing. Hidden by default, shown on chip hover/focus.
+.last-turn-summary__attrib-tooltip {
   position: absolute;
-  bottom: calc(100% + 0.35rem);
+  bottom: calc(100% + 0.3rem);
   left: 50%;
   transform: translateX(-50%);
   padding: 0.3rem 0.55rem;
@@ -225,41 +224,23 @@
   color: var(--text-color);
   white-space: nowrap;
   letter-spacing: 0.02em;
-  text-transform: none; // override any parent uppercase rules
+  text-transform: none;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  // 400ms delay on show (matches native title feel), instant hide
-  transition: opacity 0.12s ease 0.4s;
+  transition: opacity 0.12s ease 0.15s, visibility 0s linear 0.27s;
   z-index: 1000;
 }
 
-// Downward-pointing arrow glyph — small border-based triangle.
-.last-turn-summary__attrib::before {
-  content: '';
-  position: absolute;
-  bottom: calc(100% + 0.1rem);
-  left: 50%;
-  transform: translateX(-50%);
-  width: 0;
-  height: 0;
-  border: 0.3rem solid transparent;
-  border-top-color: rgba(255, 255, 255, 0.22);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.12s ease 0.4s;
-  z-index: 1000;
-}
-
-.last-turn-summary__attrib:hover::after,
-.last-turn-summary__attrib:focus-visible::after,
-.last-turn-summary__attrib:hover::before,
-.last-turn-summary__attrib:focus-visible::before {
+.last-turn-summary__attrib:hover .last-turn-summary__attrib-tooltip,
+.last-turn-summary__attrib:focus-visible .last-turn-summary__attrib-tooltip {
   opacity: 1;
+  visibility: visible;
+  transition: opacity 0.12s ease 0.15s, visibility 0s linear;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .last-turn-summary__attrib::after,
-  .last-turn-summary__attrib::before {
+  .last-turn-summary__attrib-tooltip {
     transition: none;
   }
 }
