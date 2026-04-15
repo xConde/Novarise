@@ -10,36 +10,7 @@ import { AudioService } from './audio.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { TowerType } from '../models/tower.model';
 import { DifficultyLevel } from '../models/game-state.model';
-import { ScoreBreakdown } from '../models/score.model';
 import { ChallengeType } from '../../../run/data/challenges';
-
-const FAKE_SCORE_BREAKDOWN: ScoreBreakdown = {
-  baseScore: 1000,
-  livesRemaining: 5,
-  livesTotal: 7,
-  livesPercent: 0.71,
-  difficultyMultiplier: 1.0,
-  modifierMultiplier: 1.0,
-  finalScore: 1200,
-  stars: 3,
-  difficulty: DifficultyLevel.NORMAL,
-  wavesCompleted: 10,
-  isVictory: true,
-};
-
-const FAKE_DEFEAT_BREAKDOWN: ScoreBreakdown = {
-  baseScore: 500,
-  livesRemaining: 0,
-  livesTotal: 7,
-  livesPercent: 0,
-  difficultyMultiplier: 1.0,
-  modifierMultiplier: 1.0,
-  finalScore: 500,
-  stars: 0,
-  difficulty: DifficultyLevel.NORMAL,
-  wavesCompleted: 5,
-  isVictory: false,
-};
 
 describe('GameEndService', () => {
   let service: GameEndService;
@@ -111,26 +82,26 @@ describe('GameEndService', () => {
     });
 
     it('isRecorded() returns true after first recordEnd()', () => {
-      service.recordEnd(false, null);
+      service.recordEnd(false);
       expect(service.isRecorded()).toBeTrue();
     });
 
     it('second recordEnd() returns empty result without re-recording', () => {
-      service.recordEnd(false, null);
+      service.recordEnd(false);
       playerProfileSpy.recordGameEnd.calls.reset();
 
-      const result = service.recordEnd(false, null);
+      const result = service.recordEnd(false);
 
       expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
       expect(result.newlyUnlockedAchievements).toEqual([]);
     });
 
     it('reset() clears recorded state so next recordEnd() fires again', () => {
-      service.recordEnd(false, null);
+      service.recordEnd(false);
       playerProfileSpy.recordGameEnd.calls.reset();
       service.reset();
 
-      service.recordEnd(false, null);
+      service.recordEnd(false);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledTimes(1);
     });
@@ -139,7 +110,7 @@ describe('GameEndService', () => {
       service.recordSpecialization();
       service.reset();
 
-      service.recordEnd(true, null);
+      service.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ usedSpecialization: false })
@@ -153,14 +124,14 @@ describe('GameEndService', () => {
 
   describe('buildGameEndStats wiring', () => {
     it('passes isVictory=true correctly', () => {
-      service.recordEnd(true, null);
+      service.recordEnd(true);
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ isVictory: true })
       );
     });
 
     it('passes isVictory=false correctly', () => {
-      service.recordEnd(false, null);
+      service.recordEnd(false);
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ isVictory: false })
       );
@@ -170,7 +141,7 @@ describe('GameEndService', () => {
       gameStatsService.recordKill(TowerType.SNIPER);
       gameStatsService.recordKill(TowerType.SNIPER);
 
-      service.recordEnd(true, null);
+      service.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ towerKills: jasmine.objectContaining({ sniper: 2 }) })
@@ -178,7 +149,7 @@ describe('GameEndService', () => {
     });
 
     it('usedSpecialization is false before recordSpecialization()', () => {
-      service.recordEnd(true, null);
+      service.recordEnd(true);
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ usedSpecialization: false })
       );
@@ -186,7 +157,7 @@ describe('GameEndService', () => {
 
     it('usedSpecialization is true after recordSpecialization()', () => {
       service.recordSpecialization();
-      service.recordEnd(true, null);
+      service.recordEnd(true);
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ usedSpecialization: true })
       );
@@ -196,7 +167,7 @@ describe('GameEndService', () => {
       challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
       challengeTrackingService.recordTowerPlaced(TowerType.SNIPER, 150);
 
-      service.recordEnd(true, null);
+      service.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ placedAllTowerTypes: false })
@@ -211,7 +182,7 @@ describe('GameEndService', () => {
       challengeTrackingService.recordTowerPlaced(TowerType.CHAIN, 175);
       challengeTrackingService.recordTowerPlaced(TowerType.MORTAR, 225);
 
-      service.recordEnd(true, null);
+      service.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ placedAllTowerTypes: true })
@@ -221,7 +192,7 @@ describe('GameEndService', () => {
     it('slowEffectsApplied comes from StatusEffectService.getSlowApplicationCount()', () => {
       statusEffectSpy.getSlowApplicationCount.and.returnValue(7);
 
-      service.recordEnd(true, null);
+      service.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ slowEffectsApplied: 7 })
@@ -235,13 +206,12 @@ describe('GameEndService', () => {
 
   describe('map score recording', () => {
     it('records map score when mapId is present (always computed from GameStateService)', () => {
-      // H7: recordEnd always computes scoreBreakdown from GameStateService — the second
-      // parameter is a legacy ignored arg. With a fresh GameStateService (score=0,
-      // lives=20, difficulty=NORMAL, wave=0, victory=true) the computed breakdown is:
-      // finalScore=0, stars=3 (full lives), difficulty=NORMAL.
+      // H7: recordEnd always computes scoreBreakdown from GameStateService. With a fresh
+      // GameStateService (score=0, lives=20, difficulty=NORMAL, wave=0, victory=true) the
+      // computed breakdown is: finalScore=0, stars=3 (full lives), difficulty=NORMAL.
       mapBridgeSpy.getMapId.and.returnValue('map_01');
 
-      service.recordEnd(true, FAKE_SCORE_BREAKDOWN);
+      service.recordEnd(true);
 
       expect(playerProfileSpy.recordMapScore).toHaveBeenCalledOnceWith(
         'map_01',
@@ -257,7 +227,7 @@ describe('GameEndService', () => {
       // A pre-wave quit produces score=0, stars=0 (isVictory=false).
       mapBridgeSpy.getMapId.and.returnValue('map_01');
 
-      service.recordEnd(false, null);
+      service.recordEnd(false);
 
       expect(playerProfileSpy.recordMapScore).toHaveBeenCalledOnceWith(
         'map_01',
@@ -270,7 +240,7 @@ describe('GameEndService', () => {
     it('skips recordMapScore when mapId is null', () => {
       mapBridgeSpy.getMapId.and.returnValue(null);
 
-      service.recordEnd(false, FAKE_DEFEAT_BREAKDOWN);
+      service.recordEnd(false);
 
       expect(playerProfileSpy.recordMapScore).not.toHaveBeenCalled();
     });
@@ -281,7 +251,7 @@ describe('GameEndService', () => {
       // finalScore=0, stars=0.
       mapBridgeSpy.getMapId.and.returnValue('map_01');
 
-      service.recordEnd(false, FAKE_DEFEAT_BREAKDOWN);
+      service.recordEnd(false);
 
       expect(playerProfileSpy.recordMapScore).toHaveBeenCalledOnceWith(
         'map_01',
@@ -301,7 +271,7 @@ describe('GameEndService', () => {
       const achId = ACHIEVEMENTS[0]?.id ?? 'first_blood';
       playerProfileSpy.recordGameEnd.and.returnValue([achId]);
 
-      service.recordEnd(true, null);
+      service.recordEnd(true);
 
       expect(audioSpy.playAchievementSound).toHaveBeenCalled();
       expect(notificationSpy.show).toHaveBeenCalledWith(
@@ -314,7 +284,7 @@ describe('GameEndService', () => {
     it('does not fire achievement toast when no achievements unlocked', () => {
       playerProfileSpy.recordGameEnd.and.returnValue([]);
 
-      service.recordEnd(true, null);
+      service.recordEnd(true);
 
       expect(audioSpy.playAchievementSound).not.toHaveBeenCalled();
       expect(notificationSpy.show).not.toHaveBeenCalled();
@@ -324,7 +294,7 @@ describe('GameEndService', () => {
       const achIds = ['first_blood', 'speed_run'];
       playerProfileSpy.recordGameEnd.and.returnValue(achIds);
 
-      const result = service.recordEnd(true, null);
+      const result = service.recordEnd(true);
 
       expect(result.newlyUnlockedAchievements).toEqual(achIds);
     });
@@ -346,7 +316,7 @@ describe('GameEndService', () => {
       challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
       challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
 
-      const result = service.recordEnd(true, null);
+      const result = service.recordEnd(true);
 
       expect(result.completedChallenges.length).toBe(2);
       expect(audioSpy.playChallengeSound).toHaveBeenCalledTimes(2);
@@ -368,7 +338,7 @@ describe('GameEndService', () => {
       // Simulate a life lost by mutating game state directly via service
       gameStateService.loseLife();
 
-      const result = service.recordEnd(true, null);
+      const result = service.recordEnd(true);
 
       expect(result.completedChallenges).toEqual([]);
       expect(audioSpy.playChallengeSound).not.toHaveBeenCalled();
@@ -378,7 +348,7 @@ describe('GameEndService', () => {
     it('victory on non-campaign map returns empty completedChallenges with no side effects', () => {
       mapBridgeSpy.getMapId.and.returnValue('custom_user_map');
 
-      const result = service.recordEnd(true, null);
+      const result = service.recordEnd(true);
 
       expect(result.completedChallenges).toEqual([]);
       expect(audioSpy.playChallengeSound).not.toHaveBeenCalled();
@@ -388,7 +358,7 @@ describe('GameEndService', () => {
     it('victory with no mapId returns empty completedChallenges', () => {
       mapBridgeSpy.getMapId.and.returnValue(undefined as any);
 
-      const result = service.recordEnd(true, null);
+      const result = service.recordEnd(true);
 
       expect(result.completedChallenges).toEqual([]);
       expect(audioSpy.playChallengeSound).not.toHaveBeenCalled();
@@ -396,7 +366,7 @@ describe('GameEndService', () => {
 
     it('defeat returns empty completedChallenges regardless of state', () => {
       // All challenges would pass on victory — but this is a defeat
-      const result = service.recordEnd(false, null);
+      const result = service.recordEnd(false);
 
       expect(result.completedChallenges).toEqual([]);
       expect(audioSpy.playChallengeSound).not.toHaveBeenCalled();
@@ -405,13 +375,13 @@ describe('GameEndService', () => {
 
     it('idempotency: second recordEnd() returns empty completedChallenges without firing side effects again', () => {
       // First call completes challenges
-      const first = service.recordEnd(true, null);
+      const first = service.recordEnd(true);
       expect(first.completedChallenges.length).toBeGreaterThan(0);
 
       audioSpy.playChallengeSound.calls.reset();
       notificationSpy.show.calls.reset();
 
-      const second = service.recordEnd(true, null);
+      const second = service.recordEnd(true);
 
       expect(second.completedChallenges).toEqual([]);
       expect(audioSpy.playChallengeSound).not.toHaveBeenCalled();
@@ -424,19 +394,32 @@ describe('GameEndService', () => {
       }
       // lives intact — UNTOUCHABLE should pass
 
-      const result = service.recordEnd(true, null);
+      const result = service.recordEnd(true);
 
       expect(result.completedChallenges.length).toBe(1);
       expect(result.completedChallenges[0].type).toBe(ChallengeType.UNTOUCHABLE);
     });
 
-    it('campaign_02: only NO_SLOW completes — SPEED_RUN is always excluded from evaluation', () => {
-      // campaign_02 has NO_SLOW + SPEED_RUN
+    it('campaign_02: NO_SLOW and SPEED_RUN both complete when within turn budget', () => {
+      // campaign_02 has NO_SLOW + SPEED_RUN (turnLimit: 10).
       mapBridgeSpy.getMapId.and.returnValue('campaign_02');
       // towerTypesUsed has no 'slow' — NO_SLOW should pass
       challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
 
-      const result = service.recordEnd(true, null);
+      // Pass turnsUsed = 8 → SPEED_RUN passes too.
+      const result = service.recordEnd(true, 8);
+
+      expect(result.completedChallenges.length).toBe(2);
+      const types = result.completedChallenges.map(c => c.type).sort();
+      expect(types).toEqual([ChallengeType.NO_SLOW, ChallengeType.SPEED_RUN].sort());
+    });
+
+    it('campaign_02: SPEED_RUN fails when turn budget exceeded', () => {
+      mapBridgeSpy.getMapId.and.returnValue('campaign_02');
+      challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
+
+      // 11 turns > campaign_02's turnLimit of 10 → only NO_SLOW passes.
+      const result = service.recordEnd(true, 11);
 
       expect(result.completedChallenges.length).toBe(1);
       expect(result.completedChallenges[0].type).toBe(ChallengeType.NO_SLOW);

@@ -95,7 +95,7 @@ const TUTORIAL_TIPS: Record<TutorialStep, TutorialTip> = {
     step: TutorialStep.COMPLETE,
     type: 'tutorial',
     title: 'You\'re Ready!',
-    message: 'You know the basics. Good luck defending Novarise! Press H anytime for keyboard shortcuts.',
+    message: 'You know the basics. Good luck defending Novarise! Press P anytime to pause and review keyboard shortcuts.',
     position: 'center',
   },
   [TutorialStep.TIP_PLACEMENT]: {

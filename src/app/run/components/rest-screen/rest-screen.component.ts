@@ -47,10 +47,20 @@ export class RestScreenComponent {
     return getCardDefinition(card.cardId).name;
   }
 
-  /** Human-readable description for a card instance (uses upgradedEffect when upgraded). */
+  /** Current (pre-upgrade) description for a card instance. */
   getCardDescription(card: CardInstance): string {
     const def = getCardDefinition(card.cardId);
     return def.description;
+  }
+
+  /**
+   * Preview of the description AFTER upgrading. Falls back to the base
+   * description with a "+ " prefix when the card hasn't authored an
+   * upgradedDescription yet, so the player always gets *something*.
+   */
+  getCardUpgradedDescription(card: CardInstance): string {
+    const def = getCardDefinition(card.cardId);
+    return def.upgradedDescription ?? `+ ${def.description}`;
   }
 
   rest(): void {

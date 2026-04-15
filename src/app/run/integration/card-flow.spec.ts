@@ -28,6 +28,7 @@ import {
   createEnemyServiceSpy,
   createStatusEffectServiceSpy,
 } from '../../game/game-board/testing';
+import { WavePreviewService } from '../../game/game-board/services/wave-preview.service';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -41,12 +42,16 @@ describe('Card System — Integration Flow', () => {
   let gameState: jasmine.SpyObj<GameStateService>;
   let enemyService: jasmine.SpyObj<EnemyService>;
   let statusEffectService: jasmine.SpyObj<StatusEffectService>;
+  let wavePreviewService: jasmine.SpyObj<WavePreviewService>;
 
   beforeEach(() => {
     gameState = createGameStateServiceSpy();
     enemyService = createEnemyServiceSpy(new Map());
     statusEffectService = createStatusEffectServiceSpy();
     statusEffectService.apply.and.returnValue(true);
+    wavePreviewService = jasmine.createSpyObj<WavePreviewService>('WavePreviewService', [
+      'addOneShotBonus', 'getPreviewDepth', 'getFutureWavesSummary', 'resetForEncounter',
+    ]);
 
     TestBed.configureTestingModule({
       providers: [
@@ -312,7 +317,7 @@ describe('Card System — Integration Flow', () => {
     const spellEffect = goldRushDef.effect;
     if (spellEffect.type !== 'spell') { fail('Expected spell effect'); return; }
 
-    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0, deckService: deck });
+    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0, deckService: deck, wavePreviewService });
 
     expect(gameState.addGold).toHaveBeenCalledWith(40);
   });
@@ -322,7 +327,7 @@ describe('Card System — Integration Flow', () => {
     const spellEffect = repairDef.effect;
     if (spellEffect.type !== 'spell') { fail('Expected spell effect'); return; }
 
-    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0, deckService: deck });
+    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0, deckService: deck, wavePreviewService });
 
     expect(gameState.addLives).toHaveBeenCalledWith(2);
   });
@@ -332,7 +337,7 @@ describe('Card System — Integration Flow', () => {
     const spellEffect = lightningDef.effect;
     if (spellEffect.type !== 'spell') { fail('Expected spell effect'); return; }
 
-    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0, deckService: deck });
+    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0, deckService: deck, wavePreviewService });
 
     expect(enemyService.damageStrongestEnemy).toHaveBeenCalledWith(100);
   });
@@ -342,7 +347,7 @@ describe('Card System — Integration Flow', () => {
     const spellEffect = frostDef.effect;
     if (spellEffect.type !== 'spell') { fail('Expected spell effect'); return; }
 
-    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0, deckService: deck });
+    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0, deckService: deck, wavePreviewService });
 
     // Empty enemy map — no apply calls expected (no enemies present)
     expect(statusEffectService.apply).not.toHaveBeenCalled();
@@ -353,7 +358,7 @@ describe('Card System — Integration Flow', () => {
     const spellEffect = overclockDef.effect;
     if (spellEffect.type !== 'spell') { fail('Expected spell effect'); return; }
 
-    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0, deckService: deck });
+    effects.applySpell(spellEffect, { gameState, enemyService, statusEffectService, currentTurn: 0, deckService: deck, wavePreviewService });
 
     expect(effects.hasActiveModifier(MODIFIER_STAT.FIRE_RATE)).toBeTrue();
     const mods = effects.getActiveModifiers();

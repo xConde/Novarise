@@ -16,6 +16,7 @@ import { StatusEffectService } from './status-effect.service';
 import { CombatLoopService } from './combat-loop.service';
 import { CardEffectService, SpellContext } from '../../../run/services/card-effect.service';
 import { DeckService } from '../../../run/services/deck.service';
+import { WavePreviewService } from './wave-preview.service';
 import { CardInstance, SpellCardEffect, ModifierCardEffect, UtilityCardEffect } from '../../../run/models/card.model';
 import { getCardDefinition, getActiveTowerEffect } from '../../../run/constants/card-definitions';
 import { disposeMaterial } from '../utils/three-utils';
@@ -53,6 +54,7 @@ export class CardPlayService {
     private sceneService: SceneService,
     private statusEffectService: StatusEffectService,
     private combatLoopService: CombatLoopService,
+    private wavePreviewService: WavePreviewService,
   ) {}
 
   /**
@@ -134,6 +136,7 @@ export class CardPlayService {
             statusEffectService: this.statusEffectService,
             currentTurn: this.combatLoopService.getTurnNumber(),
             deckService: this.deckService,
+            wavePreviewService: this.wavePreviewService,
           } satisfies SpellContext);
         }
         break;

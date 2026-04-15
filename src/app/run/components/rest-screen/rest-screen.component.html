@@ -42,10 +42,12 @@
           class="rest-card-btn run-btn run-btn--secondary"
           type="button"
           (click)="selectCardToUpgrade(card)"
-          [attr.aria-label]="'Upgrade ' + getCardName(card)"
+          [attr.aria-label]="'Upgrade ' + getCardName(card) + '. Current: ' + getCardDescription(card) + '. After upgrade: ' + getCardUpgradedDescription(card)"
         >
           <span class="rest-card-btn__name">{{ getCardName(card) }}</span>
-          <span class="rest-card-btn__desc">{{ getCardDescription(card) }}</span>
+          <span class="rest-card-btn__desc rest-card-btn__desc--current">{{ getCardDescription(card) }}</span>
+          <span class="rest-card-btn__arrow" aria-hidden="true">&#8595;</span>
+          <span class="rest-card-btn__desc rest-card-btn__desc--upgraded">{{ getCardUpgradedDescription(card) }}</span>
         </button>
       </li>
     </ul>

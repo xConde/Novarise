@@ -195,7 +195,7 @@ export class CombatLoopService {
     if (currentPhase === GamePhase.DEFEAT) {
       defeatTriggered = true;
       if (!this.gameEndService.isRecorded()) {
-        const result = this.gameEndService.recordEnd(false);
+        const result = this.gameEndService.recordEnd(false, this.turnNumber);
         gameEnd = {
           isVictory: false,
           newlyUnlockedAchievements: result.newlyUnlockedAchievements,
@@ -233,7 +233,7 @@ export class CombatLoopService {
       if (postWavePhase === GamePhase.VICTORY || postWavePhase === GamePhase.DEFEAT) {
         if (!this.gameEndService.isRecorded()) {
           const isVictory = postWavePhase === GamePhase.VICTORY;
-          const result = this.gameEndService.recordEnd(isVictory);
+          const result = this.gameEndService.recordEnd(isVictory, this.turnNumber);
           gameEnd = {
             isVictory,
             newlyUnlockedAchievements: result.newlyUnlockedAchievements,

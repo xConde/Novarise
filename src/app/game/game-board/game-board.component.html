@@ -183,6 +183,28 @@
           <span class="spawn-preview__empty" *ngIf="entry.spawns.length === 0">—</span>
         </li>
       </ol>
+
+      <!-- Future-wave preview — only populated when a scout card / relic is active. -->
+      <div class="spawn-preview__future" *ngIf="futureWavesPreview.length > 0"
+           aria-label="Future waves revealed by scout effects">
+        <h5 class="spawn-preview__subtitle">Scouted</h5>
+        <ol class="spawn-preview__future-list">
+          <li *ngFor="let wave of futureWavesPreview" class="spawn-preview__future-wave">
+            <span class="spawn-preview__label">W{{ wave.waveNumber }}</span>
+            <span class="spawn-preview__spawns">
+              <span
+                *ngFor="let e of wave.enemies"
+                class="spawn-preview__enemy"
+                [attr.data-type]="e.type.toLowerCase()"
+                [attr.title]="getEnemyTooltip(e.type)">
+                <span class="enemy-dot spawn-preview__dot" [attr.data-type]="e.type.toLowerCase()"></span>
+                <span class="spawn-preview__count">{{ e.count }}×</span>
+                <span class="spawn-preview__label">{{ getEnemyLabel(e.type) }}</span>
+              </span>
+            </span>
+          </li>
+        </ol>
+      </div>
     </aside>
 
     <!-- Pause/Speed controls -->
@@ -393,10 +415,16 @@
             <span>Toggle path overlay</span>
           </div>
           <div class="pause-menu__control-row">
-            <kbd class="pause-menu__key">1</kbd>
-            <span class="pause-menu__sep">–</span>
-            <kbd class="pause-menu__key">9</kbd>
-            <span>Play card</span>
+            <kbd class="pause-menu__key">M</kbd>
+            <span>Toggle minimap</span>
+          </div>
+          <div class="pause-menu__control-row">
+            <kbd class="pause-menu__key">U</kbd>
+            <span>Upgrade selected tower</span>
+          </div>
+          <div class="pause-menu__control-row">
+            <kbd class="pause-menu__key">T</kbd>
+            <span>Cycle targeting mode</span>
           </div>
         </div>
       </details>

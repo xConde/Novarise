@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameStateService } from './game-state.service';
+import { CombatLoopService } from './combat-loop.service';
 import { DIFFICULTY_PRESETS } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
 import { ChallengeDefinition, ChallengeType, getChallengesForLevel } from '../../../run/data/challenges';
@@ -10,7 +11,8 @@ import { ChallengeIndicator } from '../components/game-hud/game-hud.component';
  * Builds and maintains the live challenge progress badges shown in the HUD
  * during campaign games. Extracted from GameBoardComponent (Hardening VIII S14).
  *
- * SPEED_RUN challenges are excluded — they are tracked by the countdown timer.
+ * SPEED_RUN now shows a live turns-used/turn-limit badge (retargeted from
+ * wall-clock to turn-based after the pivot).
  */
 @Injectable()
 export class ChallengeDisplayService {
@@ -20,6 +22,7 @@ export class ChallengeDisplayService {
   constructor(
     private challengeTrackingService: ChallengeTrackingService,
     private gameStateService: GameStateService,
+    private combatLoopService: CombatLoopService,
   ) {}
 
   /**
@@ -35,9 +38,7 @@ export class ChallengeDisplayService {
     }
 
     const challenges = getChallengesForLevel(campaignLevelId);
-    const nonSpeedRun = challenges.filter(c => c.type !== ChallengeType.SPEED_RUN);
-
-    if (nonSpeedRun.length === 0) {
+    if (challenges.length === 0) {
       this.indicators = [];
       return this.indicators;
     }
@@ -46,7 +47,7 @@ export class ChallengeDisplayService {
     const state = this.gameStateService.getState();
     const initialLives = DIFFICULTY_PRESETS[state.difficulty].lives;
 
-    this.indicators = nonSpeedRun.map(c => this.buildIndicator(c, snapshot, initialLives));
+    this.indicators = challenges.map(c => this.buildIndicator(c, snapshot, initialLives));
     return this.indicators;
   }
 
@@ -88,7 +89,14 @@ export class ChallengeDisplayService {
         const passing = !snapshot.towerTypesUsed.has(TowerType.SLOW);
         return { label: 'No Slow', value: passing ? '✓' : '✗', passing };
       }
-      // SPEED_RUN excluded by caller — should never reach here
+      case ChallengeType.SPEED_RUN: {
+        const limit = challenge.turnLimit ?? 0;
+        const used = this.combatLoopService.getTurnNumber();
+        // Still passing if the player is within budget — once used > limit the
+        // badge flips to failed and will never recover.
+        const passing = used <= limit;
+        return { label: 'Turns', value: `${used}/${limit}`, passing };
+      }
       default:
         return { label: 'Challenge', value: '?', passing: true };
     }

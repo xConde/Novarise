@@ -500,7 +500,7 @@ describe('CombatLoopService', () => {
 
       service.resolveTurn(scene);
 
-      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false);
+      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false, jasmine.any(Number));
     });
 
     it('should not call recordEnd if already recorded', () => {
@@ -668,7 +668,7 @@ describe('CombatLoopService', () => {
 
       const result = service.resolveTurn(scene);
 
-      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(true);
+      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(true, jasmine.any(Number));
       expect(result.gameEnd).not.toBeNull();
       expect(result.gameEnd!.isVictory).toBeTrue();
       expect(result.gameEnd!.newlyUnlockedAchievements).toEqual(['ach1']);
@@ -976,7 +976,7 @@ describe('CombatLoopService', () => {
       const result = service.resolveTurn(scene);
 
       expect(result.defeatTriggered).toBeTrue();
-      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false);
+      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false, jasmine.any(Number));
     });
 
     it('VICTORY: waveCompletion resultPhase is VICTORY, recordEnd called with isVictory=true', () => {
@@ -1000,7 +1000,7 @@ describe('CombatLoopService', () => {
       const result = service.resolveTurn(scene);
 
       expect(result.waveCompletion!.resultPhase).toBe(GamePhase.VICTORY);
-      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(true);
+      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(true, jasmine.any(Number));
       expect(result.gameEnd).not.toBeNull();
       expect(result.gameEnd!.isVictory).toBeTrue();
     });

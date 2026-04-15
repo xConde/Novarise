@@ -83,7 +83,7 @@ describe('GamePauseService', () => {
     it('should record defeat and return /run route (run hub)', () => {
       const route = service.confirmQuit();
       expect(route).toBe('/run');
-      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false, null);
+      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false);
       expect(service.showQuitConfirm).toBeFalse();
     });
   });

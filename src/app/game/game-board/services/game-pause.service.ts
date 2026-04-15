@@ -73,7 +73,8 @@ export class GamePauseService implements OnDestroy {
   confirmQuit(): string {
     this.showQuitConfirm = false;
     this.encounterCheckpointService.clearCheckpoint();
-    this.gameEndService.recordEnd(false, null);
+    // Quit path — defeat, no challenges evaluated, turnsUsed is irrelevant.
+    this.gameEndService.recordEnd(false);
     return '/run';
   }
 

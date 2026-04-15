@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ChallengeDisplayService } from './challenge-display.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
+import { CombatLoopService } from './combat-loop.service';
 import { GameStateService } from './game-state.service';
 import { DifficultyLevel, INITIAL_GAME_STATE } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
@@ -10,6 +11,7 @@ describe('ChallengeDisplayService', () => {
   let service: ChallengeDisplayService;
   let challengeTrackingSpy: jasmine.SpyObj<ChallengeTrackingService>;
   let gameStateSpy: jasmine.SpyObj<GameStateService>;
+  let combatLoopSpy: jasmine.SpyObj<CombatLoopService>;
 
   const baseSnapshot = { totalGoldSpent: 0, maxTowersPlaced: 0, towerTypesUsed: new Set<string>() };
 
@@ -18,15 +20,18 @@ describe('ChallengeDisplayService', () => {
       'getSnapshot',
     ]);
     gameStateSpy = jasmine.createSpyObj<GameStateService>('GameStateService', ['getState']);
+    combatLoopSpy = jasmine.createSpyObj<CombatLoopService>('CombatLoopService', ['getTurnNumber']);
 
     challengeTrackingSpy.getSnapshot.and.returnValue({ ...baseSnapshot, towerTypesUsed: new Set() });
     gameStateSpy.getState.and.returnValue({ ...INITIAL_GAME_STATE });
+    combatLoopSpy.getTurnNumber.and.returnValue(0);
 
     TestBed.configureTestingModule({
       providers: [
         ChallengeDisplayService,
         { provide: ChallengeTrackingService, useValue: challengeTrackingSpy },
         { provide: GameStateService, useValue: gameStateSpy },
+        { provide: CombatLoopService, useValue: combatLoopSpy },
       ],
     });
 
@@ -50,15 +55,16 @@ describe('ChallengeDisplayService', () => {
       expect(service.indicators).toEqual([]);
     });
 
-    it('should return empty array for level with only SPEED_RUN challenges', () => {
-      // campaign_02 has a SPEED_RUN challenge plus a NO_SLOW challenge
-      // We only want to test filtering — use campaign_02 which has both types
-      // To isolate: levels with pure speed run are less common; test via campaign_02
-      // which has NO_SLOW + SPEED_RUN. The speed run entry must be filtered.
+    it('should include SPEED_RUN indicator alongside other types', () => {
+      // campaign_02 has NO_SLOW + SPEED_RUN (turnLimit: 10).
+      // Both should surface as live indicators.
+      combatLoopSpy.getTurnNumber.and.returnValue(3);
       const result = service.updateIndicators('campaign_02');
-      // campaign_02: NO_SLOW (passes) + SPEED_RUN (excluded)
-      expect(result.length).toBe(1);
-      expect(result[0].label).toBe('No Slow');
+      expect(result.length).toBe(2);
+      const speedRun = result.find(i => i.label === 'Turns');
+      expect(speedRun).toBeDefined();
+      expect(speedRun!.value).toBe('3/10');
+      expect(speedRun!.passing).toBeTrue();
     });
   });
 
@@ -187,11 +193,23 @@ describe('ChallengeDisplayService', () => {
     });
   });
 
-  describe('SPEED_RUN filtering', () => {
-    it('should not include SPEED_RUN in indicators', () => {
+  describe('SPEED_RUN indicator', () => {
+    it('should show passing when turns used <= turnLimit', () => {
+      combatLoopSpy.getTurnNumber.and.returnValue(5);
       const result = service.updateIndicators('campaign_02');
-      const speedRun = result.find(i => i.label === 'Speed Run' || i.label.toLowerCase().includes('speed'));
-      expect(speedRun).toBeUndefined();
+      const speedRun = result.find(i => i.label === 'Turns');
+      expect(speedRun).toBeDefined();
+      expect(speedRun!.passing).toBeTrue();
+      expect(speedRun!.value).toBe('5/10');
+    });
+
+    it('should flip to failing when turns used > turnLimit', () => {
+      combatLoopSpy.getTurnNumber.and.returnValue(11);
+      const result = service.updateIndicators('campaign_02');
+      const speedRun = result.find(i => i.label === 'Turns');
+      expect(speedRun).toBeDefined();
+      expect(speedRun!.passing).toBeFalse();
+      expect(speedRun!.value).toBe('11/10');
     });
   });
 });

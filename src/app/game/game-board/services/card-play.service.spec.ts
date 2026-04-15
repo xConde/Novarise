@@ -16,6 +16,7 @@ import { EnemyService } from './enemy.service';
 import { SceneService } from './scene.service';
 import { StatusEffectService } from './status-effect.service';
 import { CombatLoopService } from './combat-loop.service';
+import { WavePreviewService } from './wave-preview.service';
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
 import { GamePhase, INITIAL_GAME_STATE } from '../models/game-state.model';
 import { CardId, CardInstance, DeckState, EnergyState } from '../../../run/models/card.model';
@@ -42,6 +43,7 @@ describe('CardPlayService', () => {
   let sceneSpy: jasmine.SpyObj<SceneService>;
   let statusEffectSpy: jasmine.SpyObj<StatusEffectService>;
   let combatLoopSpy: jasmine.SpyObj<CombatLoopService>;
+  let wavePreviewSpy: jasmine.SpyObj<WavePreviewService>;
 
   const combatState = { ...INITIAL_GAME_STATE, phase: GamePhase.COMBAT };
 
@@ -87,6 +89,9 @@ describe('CardPlayService', () => {
     statusEffectSpy = jasmine.createSpyObj<StatusEffectService>('StatusEffectService', ['apply']);
     combatLoopSpy = jasmine.createSpyObj<CombatLoopService>('CombatLoopService', ['getTurnNumber']);
     combatLoopSpy.getTurnNumber.and.returnValue(1);
+    wavePreviewSpy = jasmine.createSpyObj<WavePreviewService>('WavePreviewService', [
+      'addOneShotBonus', 'getPreviewDepth', 'getFutureWavesSummary', 'resetForEncounter',
+    ]);
 
     TestBed.configureTestingModule({
       providers: [
@@ -104,6 +109,7 @@ describe('CardPlayService', () => {
         { provide: SceneService, useValue: sceneSpy },
         { provide: StatusEffectService, useValue: statusEffectSpy },
         { provide: CombatLoopService, useValue: combatLoopSpy },
+        { provide: WavePreviewService, useValue: wavePreviewSpy },
       ],
     });
 

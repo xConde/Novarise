@@ -20,6 +20,7 @@ import { Enemy } from '../../game/game-board/models/enemy.model';
 import { StatusEffectService } from '../../game/game-board/services/status-effect.service';
 import { StatusEffectType } from '../../game/game-board/constants/status-effect.constants';
 import { DeckService } from './deck.service';
+import { WavePreviewService } from '../../game/game-board/services/wave-preview.service';
 
 /** A single active modifier with a wave-based countdown. */
 export interface ActiveModifier {
@@ -35,6 +36,7 @@ export interface SpellContext {
   statusEffectService: StatusEffectService;
   currentTurn: number;
   deckService: DeckService;
+  wavePreviewService: WavePreviewService;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -62,8 +64,10 @@ export class CardEffectService {
         break;
 
       case 'scout_ahead':
-        // Reveal next N waves — informational only; no-op until wave-preview
-        // API supports it. Placeholder so the card can be played without error.
+        // Reveal next N waves — grants temporary preview depth to the HUD.
+        // Stacks with permanent SCOUTING_LENS relic bonus; both consumed by
+        // WavePreviewService.getFutureWavesSummary at render time.
+        ctx.wavePreviewService.addOneShotBonus(effect.value);
         break;
 
       case 'lightning_strike':

@@ -12,6 +12,7 @@ import {
   createTestEnemy,
 } from '../../game/game-board/testing';
 import { DeckService } from './deck.service';
+import { WavePreviewService } from '../../game/game-board/services/wave-preview.service';
 import { SpellCardEffect, ModifierCardEffect } from '../models/card.model';
 import { MODIFIER_STAT, ModifierStat } from '../constants/modifier-stat.constants';
 import { Enemy, EnemyType } from '../../game/game-board/models/enemy.model';
@@ -34,6 +35,7 @@ describe('CardEffectService', () => {
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
   let statusEffectSpy: jasmine.SpyObj<StatusEffectService>;
   let deckServiceSpy: jasmine.SpyObj<DeckService>;
+  let wavePreviewSpy: jasmine.SpyObj<WavePreviewService>;
   let enemyMap: Map<string, Enemy>;
 
   beforeEach(() => {
@@ -43,6 +45,9 @@ describe('CardEffectService', () => {
     statusEffectSpy = createStatusEffectServiceSpy();
     statusEffectSpy.apply.and.returnValue(true);
     deckServiceSpy = createDeckServiceSpy();
+    wavePreviewSpy = jasmine.createSpyObj<WavePreviewService>('WavePreviewService', [
+      'addOneShotBonus', 'getPreviewDepth', 'getFutureWavesSummary', 'resetForEncounter',
+    ]);
 
     TestBed.configureTestingModule({
       providers: [
@@ -62,12 +67,12 @@ describe('CardEffectService', () => {
 
   describe('applySpell — gold_rush', () => {
     it('calls addGold with the effect value', () => {
-      service.applySpell(spellEffect('gold_rush', 40), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy });
+      service.applySpell(spellEffect('gold_rush', 40), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy, wavePreviewService: wavePreviewSpy });
       expect(gameStateSpy.addGold).toHaveBeenCalledWith(40);
     });
 
     it('calls addGold with upgraded value (60)', () => {
-      service.applySpell(spellEffect('gold_rush', 60), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy });
+      service.applySpell(spellEffect('gold_rush', 60), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy, wavePreviewService: wavePreviewSpy });
       expect(gameStateSpy.addGold).toHaveBeenCalledWith(60);
     });
   });
@@ -76,7 +81,7 @@ describe('CardEffectService', () => {
 
   describe('applySpell — repair_walls', () => {
     it('calls addLives with the effect value', () => {
-      service.applySpell(spellEffect('repair_walls', 2), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy });
+      service.applySpell(spellEffect('repair_walls', 2), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy, wavePreviewService: wavePreviewSpy });
       expect(gameStateSpy.addLives).toHaveBeenCalledWith(2);
     });
   });
@@ -85,7 +90,7 @@ describe('CardEffectService', () => {
 
   describe('applySpell — lightning_strike', () => {
     it('calls damageStrongestEnemy with the effect value', () => {
-      service.applySpell(spellEffect('lightning_strike', 100), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy });
+      service.applySpell(spellEffect('lightning_strike', 100), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy, wavePreviewService: wavePreviewSpy });
       expect(enemyServiceSpy.damageStrongestEnemy).toHaveBeenCalledWith(100);
     });
   });
@@ -104,7 +109,7 @@ describe('CardEffectService', () => {
       enemyMap.set(fastEnemy.id, fastEnemy);
       enemyMap.set(flyingEnemy.id, flyingEnemy);
 
-      service.applySpell(spellEffect('frost_wave', 5), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 3, deckService: deckServiceSpy });
+      service.applySpell(spellEffect('frost_wave', 5), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 3, deckService: deckServiceSpy, wavePreviewService: wavePreviewSpy });
 
       // All 3 non-dying enemies trigger an apply call; flying filter is inside StatusEffectService
       expect(statusEffectSpy.apply.calls.count()).toBe(3);
@@ -118,7 +123,7 @@ describe('CardEffectService', () => {
       dyingEnemy.dying = true;
       enemyMap.set(dyingEnemy.id, dyingEnemy);
 
-      service.applySpell(spellEffect('frost_wave', 5), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy });
+      service.applySpell(spellEffect('frost_wave', 5), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy, wavePreviewService: wavePreviewSpy });
 
       expect(statusEffectSpy.apply).not.toHaveBeenCalled();
     });
@@ -128,7 +133,7 @@ describe('CardEffectService', () => {
 
   describe('applySpell — scout_ahead', () => {
     it('does not throw and calls no game-state methods', () => {
-      expect(() => service.applySpell(spellEffect('scout_ahead', 3), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy })).not.toThrow();
+      expect(() => service.applySpell(spellEffect('scout_ahead', 3), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy, wavePreviewService: wavePreviewSpy })).not.toThrow();
       expect(gameStateSpy.addGold).not.toHaveBeenCalled();
       expect(gameStateSpy.addLives).not.toHaveBeenCalled();
     });
@@ -138,7 +143,7 @@ describe('CardEffectService', () => {
 
   describe('applySpell — overclock', () => {
     it('registers a fireRate modifier for 1 wave', () => {
-      service.applySpell(spellEffect('overclock', 0.5), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy });
+      service.applySpell(spellEffect('overclock', 0.5), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 0, deckService: deckServiceSpy, wavePreviewService: wavePreviewSpy });
       expect(service.hasActiveModifier(MODIFIER_STAT.FIRE_RATE)).toBeTrue();
       expect(service.getModifierValue(MODIFIER_STAT.FIRE_RATE)).toBeCloseTo(0.5);
     });
@@ -239,6 +244,7 @@ describe('CardEffectService', () => {
       statusEffectService: statusEffectSpy,
       currentTurn: 1,
       deckService: deckServiceSpy,
+      wavePreviewService: wavePreviewSpy,
       ...overrides,
     };
   }

@@ -67,12 +67,12 @@ describe('challenge.model', () => {
 
   // ── Type-specific param validation ────────────────────────────────────────
 
-  it('should require timeLimit for SPEED_RUN challenges', () => {
+  it('should require turnLimit for SPEED_RUN challenges', () => {
     for (const challenges of Object.values(CAMPAIGN_CHALLENGES)) {
       for (const c of challenges) {
         if (c.type === ChallengeType.SPEED_RUN) {
-          expect(c.timeLimit).toBeDefined(`SPEED_RUN challenge ${c.id} missing timeLimit`);
-          expect(c.timeLimit).toBeGreaterThan(0);
+          expect(c.turnLimit).toBeDefined(`SPEED_RUN challenge ${c.id} missing turnLimit`);
+          expect(c.turnLimit).toBeGreaterThan(0);
         }
       }
     }
@@ -127,7 +127,7 @@ describe('challenge.model', () => {
     expect(challengeHasRequiredParam({ ...base, type: ChallengeType.SINGLE_TYPE })).toBeTrue();
   });
 
-  it('should return false for SPEED_RUN missing timeLimit', () => {
+  it('should return false for SPEED_RUN missing turnLimit', () => {
     const c: ChallengeDefinition = {
       id: 'test',
       type: ChallengeType.SPEED_RUN,
@@ -138,14 +138,14 @@ describe('challenge.model', () => {
     expect(challengeHasRequiredParam(c)).toBeFalse();
   });
 
-  it('should return true for SPEED_RUN with timeLimit', () => {
+  it('should return true for SPEED_RUN with turnLimit', () => {
     const c: ChallengeDefinition = {
       id: 'test',
       type: ChallengeType.SPEED_RUN,
       name: 'Speed',
       description: 'Fast',
       scoreBonus: 100,
-      timeLimit: 120,
+      turnLimit: 12,
     };
     expect(challengeHasRequiredParam(c)).toBeTrue();
   });
@@ -187,7 +187,7 @@ describe('evaluateChallenges', () => {
   function makeState(overrides: Partial<GameEndState> = {}): GameEndState {
     return {
       livesLost: 0,
-      elapsedTime: 60,
+      turnsUsed: 8,
       totalGoldSpent: 500,
       maxTowersPlaced: 5,
       towerTypesUsed: new Set<string>(['basic']),
@@ -380,19 +380,31 @@ describe('evaluateChallenges', () => {
 
   // ── Per-type: SPEED_RUN ──────────────────────────────────────────────────
 
-  it('SPEED_RUN: always returns false regardless of elapsedTime (turn-based exclusion)', () => {
+  it('SPEED_RUN: passes when turnsUsed <= turnLimit', () => {
     const challenge: ChallengeDefinition = {
       id: 'test_speed_run',
       type: ChallengeType.SPEED_RUN,
       name: 'Speed Run',
       description: 'Test',
       scoreBonus: 100,
-      timeLimit: 120,
+      turnLimit: 12,
     };
-    // Well under time limit — still false
-    expect(isChallengeSatisfied(challenge, makeState({ elapsedTime: 1 }))).toBeFalse();
-    // Over time limit — also false
-    expect(isChallengeSatisfied(challenge, makeState({ elapsedTime: 9999 }))).toBeFalse();
+    expect(isChallengeSatisfied(challenge, makeState({ turnsUsed: 1 }))).toBeTrue();
+    expect(isChallengeSatisfied(challenge, makeState({ turnsUsed: 12 }))).toBeTrue();  // inclusive boundary
+    expect(isChallengeSatisfied(challenge, makeState({ turnsUsed: 13 }))).toBeFalse();
+  });
+
+  it('SPEED_RUN: with undefined turnLimit returns false as a data-error guard', () => {
+    const challenge: ChallengeDefinition = {
+      id: 'test_speed_run_bad',
+      type: ChallengeType.SPEED_RUN,
+      name: 'Speed Run',
+      description: 'Test',
+      scoreBonus: 100,
+      // turnLimit intentionally omitted
+    };
+    // ?? 0 means any turnsUsed > 0 fails; challengeHasRequiredParam would flag this.
+    expect(isChallengeSatisfied(challenge, makeState({ turnsUsed: 1 }))).toBeFalse();
   });
 
   // ── Edge cases: missing optional params ──────────────────────────────────
@@ -429,13 +441,19 @@ describe('evaluateChallenges', () => {
 
   // ── Integration: evaluateChallenges against real campaign data ───────────
 
-  it('campaign_02: evaluateChallenges skips SPEED_RUN but still evaluates NO_SLOW', () => {
-    // campaign_02 has NO_SLOW + SPEED_RUN
-    // State: no slow tower used → NO_SLOW passes; SPEED_RUN is excluded (always false)
-    const state = makeState({ towerTypesUsed: new Set<string>(['basic']) });
+  it('campaign_02: evaluateChallenges passes NO_SLOW and SPEED_RUN when within turn budget', () => {
+    // campaign_02 has NO_SLOW + SPEED_RUN (turnLimit: 10).
+    // State: no slow tower used + 8 turns → both pass.
+    const state = makeState({ towerTypesUsed: new Set<string>(['basic']), turnsUsed: 8 });
     const result = evaluateChallenges('campaign_02', state);
-    expect(result.length).toBe(1);
-    expect(result[0].id).toBe('c02_no_slow');
+    expect(result.map(c => c.id).sort()).toEqual(['c02_no_slow', 'c02_speed_run']);
+  });
+
+  it('campaign_02: SPEED_RUN fails when turn budget exceeded', () => {
+    // 11 turns exceeds campaign_02's 10-turn budget → only NO_SLOW passes.
+    const state = makeState({ towerTypesUsed: new Set<string>(['basic']), turnsUsed: 11 });
+    const result = evaluateChallenges('campaign_02', state);
+    expect(result.map(c => c.id)).toEqual(['c02_no_slow']);
   });
 
   it('campaign_01: evaluateChallenges correctly evaluates UNTOUCHABLE + TOWER_LIMIT together', () => {

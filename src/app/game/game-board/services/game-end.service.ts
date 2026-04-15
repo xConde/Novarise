@@ -61,16 +61,17 @@ export class GameEndService {
    * Idempotent — subsequent calls within the same session return an empty result without
    * re-recording anything.
    *
-   * Phase H7: scoreBreakdown is COMPUTED here from current GameState. All
-   * legacy callers that passed a null/pre-computed scoreBreakdown are now
-   * tolerated via a legacy second parameter that is IGNORED — the service
-   * always computes. A pre-wave quit (wave=0, score=0) still produces a
-   * valid (zeroed) scoreBreakdown that recordMapScore handles correctly.
+   * Phase H7: scoreBreakdown is COMPUTED here from current GameState. A
+   * pre-wave quit (wave=0, score=0) still produces a valid (zeroed)
+   * scoreBreakdown that recordMapScore handles correctly.
    *
-   * @param isVictory True for VICTORY, false for DEFEAT or quit.
-   * @param _legacyScoreBreakdown Ignored — kept for call-site compatibility.
+   * @param isVictory  True for VICTORY, false for DEFEAT or quit.
+   * @param turnsUsed  Turn number at encounter end (read from CombatLoopService
+   *                   by the caller). Used only for SPEED_RUN challenge
+   *                   evaluation on victory. Defaults to 0 for quit/defeat
+   *                   paths that don't evaluate challenges anyway.
    */
-  recordEnd(isVictory: boolean, _legacyScoreBreakdown?: ScoreBreakdown | null): GameEndResult {
+  recordEnd(isVictory: boolean, turnsUsed = 0): GameEndResult {
     if (this.gameEndRecorded) {
       return { newlyUnlockedAchievements: [], completedChallenges: [] };
     }
@@ -126,10 +127,9 @@ export class GameEndService {
     let completedChallenges: ChallengeDefinition[] = [];
     if (isVictory && mapId) {
       const snapshot = this.challengeTrackingService.getSnapshot();
-      const endState = this.gameStateService.getState();
       const gameEndState: GameEndState = {
         livesLost: gameEndStats.livesLost,
-        elapsedTime: endState.elapsedTime ?? 0,   // unused by non-SPEED_RUN challenges
+        turnsUsed,   // passed by caller (CombatLoopService has the turn counter)
         totalGoldSpent: snapshot.totalGoldSpent,
         maxTowersPlaced: snapshot.maxTowersPlaced,
         towerTypesUsed: snapshot.towerTypesUsed,

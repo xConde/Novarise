@@ -2,7 +2,7 @@ import { assertNever } from '../../game/game-board/utils/assert-never';
 
 export enum ChallengeType {
   NO_SLOW = 'no_slow',           // Win without using Slow towers
-  SPEED_RUN = 'speed_run',       // Win in under N seconds
+  SPEED_RUN = 'speed_run',       // Win within N turns (turn-based mode)
   FRUGAL = 'frugal',             // Win spending under N total gold
   UNTOUCHABLE = 'untouchable',   // Win without losing any lives
   TOWER_LIMIT = 'tower_limit',   // Win with max N towers placed at peak
@@ -16,7 +16,7 @@ export interface ChallengeDefinition {
   description: string;
   scoreBonus: number;            // flat score bonus for completing
   // Type-specific params
-  timeLimit?: number;            // seconds for SPEED_RUN
+  turnLimit?: number;            // max turns taken to win, for SPEED_RUN
   goldLimit?: number;            // max gold spent for FRUGAL
   towerLimit?: number;           // max peak tower count for TOWER_LIMIT
 }
@@ -25,12 +25,13 @@ export interface ChallengeDefinition {
  * Input state for evaluating per-encounter challenges.
  *
  * Used by `evaluateChallenges()` below and `ChallengeDisplayService` for live HUD
- * badge computation. In the turn-based run mode, `elapsedTime` is used only by
- * SPEED_RUN challenges which are excluded from evaluation (see `evaluateChallenges`).
+ * badge computation. In turn-based run mode, `turnsUsed` is the authoritative
+ * pacing metric — wall-clock `elapsedTime` has no consistent meaning when
+ * players control turn cadence.
  */
 export interface GameEndState {
   livesLost: number;
-  elapsedTime: number;           // total seconds in COMBAT phase
+  turnsUsed: number;             // total turns resolved during the encounter
   totalGoldSpent: number;
   maxTowersPlaced: number;       // peak tower count during the game
   towerTypesUsed: Set<string>;   // TowerType values placed at any point
@@ -76,9 +77,9 @@ export const CAMPAIGN_CHALLENGES: Record<string, ChallengeDefinition[]> = {
       id: 'c02_speed_run',
       type: ChallengeType.SPEED_RUN,
       name: 'Speed Run',
-      description: 'Win in under 120 seconds',
+      description: 'Win within 10 turns',
       scoreBonus: SPEED_RUN_BONUS,
-      timeLimit: 120,
+      turnLimit: 10,
     },
   ],
   'campaign_03': [
@@ -129,9 +130,9 @@ export const CAMPAIGN_CHALLENGES: Record<string, ChallengeDefinition[]> = {
       id: 'c05_speed_run',
       type: ChallengeType.SPEED_RUN,
       name: 'Speed Run',
-      description: 'Win in under 150 seconds',
+      description: 'Win within 13 turns',
       scoreBonus: SPEED_RUN_BONUS,
-      timeLimit: 150,
+      turnLimit: 13,
     },
     {
       id: 'c05_no_slow',
@@ -178,9 +179,9 @@ export const CAMPAIGN_CHALLENGES: Record<string, ChallengeDefinition[]> = {
       id: 'c07_speed_run',
       type: ChallengeType.SPEED_RUN,
       name: 'Speed Run',
-      description: 'Win in under 160 seconds',
+      description: 'Win within 14 turns',
       scoreBonus: SPEED_RUN_BONUS,
-      timeLimit: 160,
+      turnLimit: 14,
     },
   ],
   'campaign_08': [
@@ -214,9 +215,9 @@ export const CAMPAIGN_CHALLENGES: Record<string, ChallengeDefinition[]> = {
       id: 'c09_speed_run',
       type: ChallengeType.SPEED_RUN,
       name: 'Speed Run',
-      description: 'Win in under 200 seconds',
+      description: 'Win within 17 turns',
       scoreBonus: SPEED_RUN_BONUS,
-      timeLimit: 200,
+      turnLimit: 17,
     },
     {
       id: 'c09_tower_limit',
@@ -263,9 +264,9 @@ export const CAMPAIGN_CHALLENGES: Record<string, ChallengeDefinition[]> = {
       id: 'c11_speed_run',
       type: ChallengeType.SPEED_RUN,
       name: 'Speed Run',
-      description: 'Win in under 180 seconds',
+      description: 'Win within 15 turns',
       scoreBonus: SPEED_RUN_BONUS,
-      timeLimit: 180,
+      turnLimit: 15,
     },
     {
       id: 'c11_tower_limit',
@@ -308,9 +309,9 @@ export const CAMPAIGN_CHALLENGES: Record<string, ChallengeDefinition[]> = {
       id: 'c13_speed_run',
       type: ChallengeType.SPEED_RUN,
       name: 'Speed Run',
-      description: 'Win in under 200 seconds',
+      description: 'Win within 17 turns',
       scoreBonus: SPEED_RUN_BONUS,
-      timeLimit: 200,
+      turnLimit: 17,
     },
     {
       id: 'c13_single_type',
@@ -351,9 +352,9 @@ export const CAMPAIGN_CHALLENGES: Record<string, ChallengeDefinition[]> = {
       id: 'c15_speed_run',
       type: ChallengeType.SPEED_RUN,
       name: 'Speed Run',
-      description: 'Win in under 240 seconds',
+      description: 'Win within 20 turns',
       scoreBonus: SPEED_RUN_BONUS,
-      timeLimit: 240,
+      turnLimit: 20,
     },
     {
       id: 'c15_tower_limit',
@@ -383,9 +384,9 @@ export const CAMPAIGN_CHALLENGES: Record<string, ChallengeDefinition[]> = {
       id: 'c16_speed_run',
       type: ChallengeType.SPEED_RUN,
       name: 'Speed Run',
-      description: 'Win in under 270 seconds',
+      description: 'Win within 23 turns',
       scoreBonus: SPEED_RUN_BONUS,
-      timeLimit: 270,
+      turnLimit: 23,
     },
     {
       id: 'c16_frugal',
@@ -410,10 +411,9 @@ export function getChallengesForLevel(levelId: string): ChallengeDefinition[] {
  * `GameEndService.recordEnd` on encounter victory. Returns the subset of
  * `getChallengesForLevel(mapId)` that the player's end state satisfies.
  *
- * SPEED_RUN challenges are excluded from turn-based run-mode evaluation —
- * `elapsedTime` doesn't have consistent meaning when players end turns
- * manually. Future work may re-add them as a `TURN_LIMIT` type with
- * rebalanced targets.
+ * SPEED_RUN now evaluates against `state.turnsUsed` vs. `challenge.turnLimit`
+ * (retargeted from wall-clock seconds when the pivot moved to turn-based play).
+ * Per-map turn budgets live in the CAMPAIGN_CHALLENGES table.
  *
  * @param mapId Campaign map ID (e.g., 'campaign_01').
  * @param state End-state snapshot computed at encounter-end.
@@ -439,8 +439,6 @@ export function evaluateChallenges(
 /**
  * Check whether a single challenge is satisfied by the given end state.
  * Exported for unit testing; production callers should use `evaluateChallenges`.
- *
- * SPEED_RUN always returns false in the current implementation (excluded).
  */
 export function isChallengeSatisfied(
   challenge: ChallengeDefinition,
@@ -473,10 +471,10 @@ export function isChallengeSatisfied(
       return state.towerTypesUsed.size === 1;
 
     case ChallengeType.SPEED_RUN:
-      // Turn-based run mode excludes SPEED_RUN evaluation. `elapsedTime` has no
-      // consistent meaning when players control turn pacing. Future work: rebalance
-      // as a TURN_LIMIT type with explicit turn budgets per level.
-      return false;
+      // Turn-based evaluation: must finish in ≤ turnLimit turns. A challenge
+      // with no turnLimit is a data error; default to 0 fails safely (never
+      // passes) and `challengeHasRequiredParam` catches it in tests.
+      return state.turnsUsed <= (challenge.turnLimit ?? 0);
 
     default:
       assertNever(challenge.type);
@@ -512,7 +510,7 @@ export function computeChallengeGoldBonus(
 export function challengeHasRequiredParam(challenge: ChallengeDefinition): boolean {
   switch (challenge.type) {
     case ChallengeType.SPEED_RUN:
-      return challenge.timeLimit !== undefined;
+      return challenge.turnLimit !== undefined;
     case ChallengeType.FRUGAL:
       return challenge.goldLimit !== undefined;
     case ChallengeType.TOWER_LIMIT:

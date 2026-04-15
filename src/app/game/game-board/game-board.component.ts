@@ -77,6 +77,7 @@ import { WaveCombatFacadeService } from './services/wave-combat-facade.service';
 import { TutorialFacadeService } from './services/tutorial-facade.service';
 import { AscensionModifierService } from './services/ascension-modifier.service';
 import { TurnHistoryService, TurnEventRecord } from './services/turn-history.service';
+import { WavePreviewService, FutureWaveSummary } from './services/wave-preview.service';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
 export interface EnemyBadge {
@@ -141,7 +142,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, WavePreviewService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -351,6 +352,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private enemyMeshFactory: EnemyMeshFactoryService,
     private encounterCheckpointService: EncounterCheckpointService,
     private turnHistoryService: TurnHistoryService,
+    private wavePreviewService: WavePreviewService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -512,6 +514,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // Reset card modifier state from any previous encounter (root-scoped service
     // survives route transitions — must be explicitly cleared between encounters).
     this.cardEffectService.reset();
+
+    // Reset one-shot scout bonuses so a previous encounter's SCOUT_AHEAD does
+    // not leak preview depth into this one. (Permanent SCOUTING_LENS bonus
+    // stays because it reads live from RelicService.)
+    this.wavePreviewService.resetForEncounter();
 
     // Initialize deck for this encounter and draw the opening hand
     this.deckService.resetForEncounter();
@@ -1400,6 +1407,18 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   get upcomingSpawns(): Array<{ turnOffset: number; spawns: { type: EnemyType; count: number }[] }> {
     if (this.gameState.phase !== GamePhase.COMBAT) return [];
     return this.waveService.getUpcomingSpawnsPreview(SPAWN_PREVIEW_TURNS);
+  }
+
+  /**
+   * Future-wave composition summary for the HUD — populated only when the
+   * player has a wave-preview bonus (SCOUTING_LENS relic or SCOUT_AHEAD /
+   * SCOUT_ELITE scout spells). Empty array when no bonus is active, so the
+   * UI section can `*ngIf` itself out of the render tree.
+   */
+  get futureWavesPreview(): FutureWaveSummary[] {
+    if (this.gameState.phase !== GamePhase.COMBAT && this.gameState.phase !== GamePhase.INTERMISSION) return [];
+    // `this.gameState.wave` is 1-indexed; convert to the 0-indexed wave array index.
+    return this.wavePreviewService.getFutureWavesSummary(this.gameState.wave - 1);
   }
 
   /** Phase 4: current turn number (1-indexed for display). */

@@ -1437,7 +1437,7 @@ describe('GameBoardComponent', () => {
       gameStatsService.recordKill(TowerType.SNIPER);
       gameStatsService.recordKill(TowerType.SNIPER);
 
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ towerKills: jasmine.objectContaining({ sniper: 2 }) })
@@ -1448,7 +1448,7 @@ describe('GameBoardComponent', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
       const expected = gameStateService.getState().activeModifiers.size;
 
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ modifierCount: expected })
@@ -1456,7 +1456,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('usedSpecialization is false before any spec upgrade', () => {
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ usedSpecialization: false })
@@ -1466,7 +1466,7 @@ describe('GameBoardComponent', () => {
     it('usedSpecialization is true after recordSpecialization() is called', () => {
       gameEndService.recordSpecialization();
 
-      gameEndService.recordEnd(false, null);
+      gameEndService.recordEnd(false);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ usedSpecialization: true })
@@ -1478,7 +1478,7 @@ describe('GameBoardComponent', () => {
       challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
       challengeTrackingService.recordTowerPlaced(TowerType.SNIPER, 150);
 
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ placedAllTowerTypes: false })
@@ -1494,7 +1494,7 @@ describe('GameBoardComponent', () => {
       challengeTrackingService.recordTowerPlaced(TowerType.CHAIN, 175);
       challengeTrackingService.recordTowerPlaced(TowerType.MORTAR, 225);
 
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ placedAllTowerTypes: true })
@@ -1505,7 +1505,7 @@ describe('GameBoardComponent', () => {
       const statusEffectService = fixture.debugElement.injector.get(StatusEffectService);
       spyOn(statusEffectService, 'getSlowApplicationCount').and.returnValue(42);
 
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ slowEffectsApplied: 42 })
@@ -1513,35 +1513,35 @@ describe('GameBoardComponent', () => {
     });
 
     it('populates isVictory correctly for victory and defeat paths', () => {
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ isVictory: true })
       );
 
       playerProfileSpy.recordGameEnd.calls.reset();
       gameEndService.reset();
-      gameEndService.recordEnd(false, null);
+      gameEndService.recordEnd(false);
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ isVictory: false })
       );
     });
 
     it('recordEnd is idempotent — second call returns empty and does not re-record', () => {
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
       playerProfileSpy.recordGameEnd.calls.reset();
 
-      const result = gameEndService.recordEnd(true, null);
+      const result = gameEndService.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
       expect(result.newlyUnlockedAchievements).toEqual([]);
     });
 
     it('reset() allows re-recording in the next session', () => {
-      gameEndService.recordEnd(false, null);
+      gameEndService.recordEnd(false);
       playerProfileSpy.recordGameEnd.calls.reset();
       gameEndService.reset();
 
-      gameEndService.recordEnd(false, null);
+      gameEndService.recordEnd(false);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledTimes(1);
     });
@@ -1551,7 +1551,7 @@ describe('GameBoardComponent', () => {
     it('GameEndService.isRecorded() resets to false after GameSessionService.resetAllServices', () => {
       const gameEndService = fixture.debugElement.injector.get(GameEndService);
       gameEndService.recordSpecialization();
-      gameEndService.recordEnd(false, null);
+      gameEndService.recordEnd(false);
       expect(gameEndService.isRecorded()).toBeTrue();
 
       gameEndService.reset();

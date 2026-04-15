@@ -160,6 +160,40 @@
       font-weight: 600;
     }
 
+    // Future-wave block — only rendered when scout card / relic is active.
+    // Sits below the Incoming turn list with a top divider to signal the
+    // different scope (future waves, not current-wave turns).
+    .spawn-preview__future {
+      margin-top: var(--spacing-sm);
+      padding-top: var(--spacing-xs);
+      border-top: var(--border-width-thin) solid rgba(255, 215, 0, 0.25);
+
+      .spawn-preview__subtitle {
+        margin: 0 0 var(--spacing-xs) 0;
+        font-size: var(--font-size-2xs);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--game-gold);
+        font-weight: 700;
+      }
+
+      .spawn-preview__future-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+      }
+
+      .spawn-preview__future-wave {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        font-size: var(--font-size-xs);
+      }
+    }
+
     .spawn-preview__list {
       list-style: none;
       margin: 0;

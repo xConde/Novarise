@@ -109,6 +109,13 @@ export interface CardDefinition {
   readonly id: CardId;
   readonly name: string;
   readonly description: string;
+  /**
+   * Description shown when the card is (or is being previewed as) upgraded.
+   * Falls back to `description` at render time when not specified.
+   * Required for any card defining `upgradedEffect` so the rest-site upgrade
+   * picker can preview what the upgrade actually does.
+   */
+  readonly upgradedDescription?: string;
   readonly type: CardType;
   readonly rarity: CardRarity;
   readonly energyCost: number;
