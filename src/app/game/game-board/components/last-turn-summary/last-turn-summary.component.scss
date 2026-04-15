@@ -139,14 +139,15 @@
 }
 
 // ── Expanded breakdown ───────────────────────────────────────────────
-// 2xs (not 3xs): opening the drawer is a "give me more info" signal —
-// the content should be at least as legible as the collapsed stats row,
-// not smaller. 3xs was below comfortable reading contrast for the
-// inline tower names.
+// xs (same as the collapsed stats row above): opening the drawer is a
+// "more info please" signal from the player — the content should be
+// *at least* as legible as the row that led them to click. 2xs/3xs also
+// pushed Orbitron below the size it's designed to render at; xs lets
+// the geometric strokes resolve cleanly.
 .last-turn-summary__detail {
   list-style: none;
   padding: 0.25rem 0.5rem 0.4rem 2.25rem; // indent under the turn label
-  font-size: var(--font-size-2xs);
+  font-size: var(--font-size-xs);
   color: var(--text-dim);
   display: flex;
   flex-direction: column;
@@ -166,7 +167,9 @@
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-muted);
-  font-size: 0.55rem;
+  // 2xs (was 0.55rem / ~8.8px — smaller than the content it labels,
+  // which was the wrong weight hierarchy).
+  font-size: var(--font-size-2xs);
 }
 
 .last-turn-summary__detail-entries {
@@ -201,16 +204,17 @@
   font-variant-numeric: tabular-nums;
 }
 
-// Full base name rides alongside the token ("B Basic", "Sn2 Sniper").
-// Bright enough to read comfortably on dark panel background — weight
-// hierarchy (400 vs. 700 on the token) handles the "this is the
-// supporting name, not the headline" cue without fighting contrast.
-// Prior attempt stacked color: text-dim + opacity 0.8 which dropped the
-// text below comfortable reading contrast.
+// Full base name rides alongside the token ("B BASIC", "Sn2 SNIPER").
+// UPPERCASE to match the game's UI language — card labels, tower-info
+// panel, HUD stats are all uppercase. Mixed-case was an odd island.
+// Weight hierarchy (500 vs. 700 on the token) + letter-spacing keeps
+// the token leading while giving the name crisp legibility.
 .last-turn-summary__attrib-name {
-  margin-left: 0.2rem;
-  color: rgba(255, 255, 255, 0.82);
-  font-weight: 400;
+  margin-left: 0.35rem;
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .last-turn-summary__attrib-count {
