@@ -221,6 +221,17 @@ export class EnemyService {
 
       let stepsRemaining = tilesToMove;
       while (stepsRemaining > 0 && enemy.pathIndex < enemy.path.length - 1) {
+        // Consume a deferred repath BEFORE committing to the next node.
+        // If we check after the pathIndex++/position update, the enemy
+        // first walks onto the tower tile (their path's next waypoint)
+        // and only then repaths — visually passing through the tower.
+        // In a turn-based loop, the enemy is always snapped to a grid
+        // node at the top of each iteration, so repathing here is
+        // equivalent to "on waypoint arrival" without the off-by-one.
+        if (enemy.needsRepath) {
+          this.executeRepath(enemy);
+        }
+
         enemy.pathIndex++;
         const node = enemy.path[enemy.pathIndex];
         enemy.gridPosition.row = node.y;
@@ -231,11 +242,6 @@ export class EnemyService {
         enemy.position.x = this.scratchCurrentWorld.x;
         enemy.position.z = this.scratchCurrentWorld.z;
         enemy.distanceTraveled += 1; // one tile worth, abstract units
-
-        // Execute deferred repath now that we're snapped to a grid node.
-        if (enemy.needsRepath) {
-          this.executeRepath(enemy);
-        }
 
         stepsRemaining--;
       }
@@ -548,8 +554,10 @@ export class EnemyService {
   /**
    * Flag enemies for deferred repath on their next waypoint arrival.
    * Only flags enemies whose remaining path passes through the changed tile.
-   * The actual repath happens in updateEnemies() when the enemy reaches its
-   * next waypoint — this avoids direction-vector bugs from repathing mid-stride.
+   * The actual repath happens in stepEnemiesOneTurn() at the top of the next
+   * movement iteration — BEFORE the enemy commits to the next path node —
+   * so they re-plan from their current waypoint instead of stepping onto
+   * the newly-occupied tile first.
    *
    * @param changedRow Row of the placed/sold tower (or -1 to flag ALL ground enemies)
    * @param changedCol Column of the placed/sold tower (or -1 to flag ALL ground enemies)

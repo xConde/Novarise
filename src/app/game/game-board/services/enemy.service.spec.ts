@@ -1746,6 +1746,35 @@ describe('EnemyService', () => {
         expect(enemy.path[i].y).toBe(originalPath[i].y);
       }
     });
+
+    it('consumes needsRepath BEFORE advancing pathIndex (regression for tower-passthrough)', () => {
+      // Regression: prior implementation did `pathIndex++` + position update
+      // FIRST and then checked needsRepath, which caused enemies to walk ONTO
+      // a newly-placed tower tile before repathing from it. The repath must
+      // fire at the top of the movement iteration — when the enemy is still
+      // snapped to its current waypoint — so it re-plans from there.
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(9, 9)];
+      enemy.pathIndex = 0;
+      enemy.needsRepath = true;
+
+      let pathIndexWhenRepathFired = -1;
+      // Spy on the private executeRepath to record when it was invoked.
+      // Short-circuit the actual repath so we don't depend on the real A*
+      // returning a specific shape here — we're asserting ordering, not
+      // pathfinding correctness (covered separately).
+      spyOn<any>(service, 'executeRepath').and.callFake((e: any) => {
+        pathIndexWhenRepathFired = e.pathIndex;
+        e.needsRepath = false;
+      });
+
+      // `() => 0` is the SLOW reduction callback — no SLOW, so the enemy
+      // takes its full 1-tile step this turn, exercising the while loop.
+      service.stepEnemiesOneTurn(() => 0);
+
+      // If the bug regresses (increment-before-repath), this would be 1.
+      expect(pathIndexWhenRepathFired).toBe(0);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -2199,19 +2228,24 @@ describe('EnemyService', () => {
       }
     });
 
-    it('should repath from the snapped grid position, not the original start', () => {
+    it('should repath from the CURRENT waypoint before stepping, not after', () => {
+      // Regression: previous implementation repathed AFTER advancing pathIndex
+      // and snapping world position, which meant an enemy whose next waypoint
+      // was a newly-placed tower would first walk ONTO the tower, then repath
+      // from that tile. The fix moves the repath to the top of the movement
+      // iteration — so path[0] of the new path is the enemy's ORIGINAL
+      // position this turn (col=0, row=0), not col=1.
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
-      // Path: row=0, col 0→1→2 then onwards
       enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(3, 0), node(9, 9)];
       enemy.pathIndex = 0;
       enemy.gridPosition = { row: 0, col: 0 };
       enemy.needsRepath = true;
 
-      // One turn snaps to col=1, row=0 → executeRepath fires from that position
       service.stepEnemiesOneTurn(() => 0);
 
-      // After repath, path[0] must be the arrived-at node (col=1, row=0)
-      expect(enemy.path[0].x).toBe(1);
+      // Repath ran FROM the original grid position (col=0, row=0) — the
+      // new path[0] must be that tile, not the post-step tile (col=1).
+      expect(enemy.path[0].x).toBe(0);
       expect(enemy.path[0].y).toBe(0);
     });
 
