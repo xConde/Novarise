@@ -824,6 +824,62 @@ body.reduce-motion .card-hand { animation: none; }
   .pile-value { color: var(--text-dim); }
 }
 
+// ── H3 keyword chips ─────────────────────────────────────────
+// Small labels for exhaust / retain / innate / ethereal. Sit just above
+// the description so players can scan mechanics without reading rules text.
+// Color-coded for recognizability:
+//   - innate (green): enters hand on encounter start
+//   - retain (cyan): survives end-of-turn discard
+//   - ethereal (purple): exhausts if unplayed at end of turn
+//   - exhaust (red): single-use, removed on play
+.card__keywords {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.1rem 0;
+  position: relative;
+  z-index: 1;
+
+  @media (max-width: 480px) {
+    display: none; // cards too narrow for keyword chips on mobile
+  }
+}
+
+.card__keyword {
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.55rem; // between 3xs and tiny — fits 4-8 chars tightly
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+  padding: 0.15rem 0.35rem;
+  border-radius: 999px;
+  border: var(--border-width-thin) solid;
+  background: rgba(10, 5, 20, 0.6);
+  white-space: nowrap;
+}
+
+.card__keyword--innate {
+  color: var(--action-success);
+  border-color: rgba(80, 255, 136, 0.55);
+}
+
+.card__keyword--retain {
+  color: var(--theme-cyan);
+  border-color: rgba(100, 220, 255, 0.55);
+}
+
+.card__keyword--ethereal {
+  color: var(--theme-purple-light);
+  border-color: rgba(180, 130, 240, 0.55);
+}
+
+.card__keyword--exhaust {
+  color: rgb(255, 120, 120);
+  border-color: rgba(255, 90, 90, 0.6);
+}
+
 // ── Description body text ────────────────────────────────────
 // Replaces the hover tooltip — description lives on the card face now.
 // Pushed to the bottom of the flex column via margin-top:auto so it

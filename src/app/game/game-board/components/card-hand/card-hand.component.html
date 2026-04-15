@@ -62,6 +62,18 @@
         {{ card.goldCost }}g
       </span>
 
+      <!-- H3 keyword chips — small per-keyword labels so players can spot
+           exhaust / retain / innate / ethereal cards at a glance. Hidden on
+           <480px via CSS (too narrow to fit). -->
+      <span class="card__keywords"
+            *ngIf="card.definition.exhaust || card.definition.retain || card.definition.innate || card.definition.ethereal"
+            aria-hidden="true">
+        <span *ngIf="card.definition.innate"   class="card__keyword card__keyword--innate">Innate</span>
+        <span *ngIf="card.definition.retain"   class="card__keyword card__keyword--retain">Retain</span>
+        <span *ngIf="card.definition.ethereal" class="card__keyword card__keyword--ethereal">Ethereal</span>
+        <span *ngIf="card.definition.exhaust"  class="card__keyword card__keyword--exhaust">Exhaust</span>
+      </span>
+
       <!-- Description body text — replaces the hover tooltip so rules live on the card face. -->
       <span class="card__description">{{ card.definition.description }}</span>
 
