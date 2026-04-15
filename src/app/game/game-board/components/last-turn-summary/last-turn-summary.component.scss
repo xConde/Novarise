@@ -139,10 +139,14 @@
 }
 
 // ── Expanded breakdown ───────────────────────────────────────────────
+// 2xs (not 3xs): opening the drawer is a "give me more info" signal —
+// the content should be at least as legible as the collapsed stats row,
+// not smaller. 3xs was below comfortable reading contrast for the
+// inline tower names.
 .last-turn-summary__detail {
   list-style: none;
   padding: 0.25rem 0.5rem 0.4rem 2.25rem; // indent under the turn label
-  font-size: var(--font-size-3xs);
+  font-size: var(--font-size-2xs);
   color: var(--text-dim);
   display: flex;
   flex-direction: column;
@@ -198,13 +202,15 @@
 }
 
 // Full base name rides alongside the token ("B Basic", "Sn2 Sniper").
-// Muted + regular weight so the colored token reads first; the name is
-// the decoder ring for players unfamiliar with the chess notation.
+// Bright enough to read comfortably on dark panel background — weight
+// hierarchy (400 vs. 700 on the token) handles the "this is the
+// supporting name, not the headline" cue without fighting contrast.
+// Prior attempt stacked color: text-dim + opacity 0.8 which dropped the
+// text below comfortable reading contrast.
 .last-turn-summary__attrib-name {
   margin-left: 0.2rem;
-  color: var(--text-dim);
-  font-weight: 500;
-  opacity: 0.8;
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 400;
 }
 
 .last-turn-summary__attrib-count {
