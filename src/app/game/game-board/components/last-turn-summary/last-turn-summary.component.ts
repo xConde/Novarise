@@ -12,18 +12,25 @@ export interface KillAttributionEntry {
   /** Tower level (1–3) or 0 for DoT. Drives the tier suffix. */
   readonly level: number;
   /**
-   * Compact display label — "B" / "Sn" / "M3" / "DoT". Tier-1 towers omit
-   * the number suffix (user intent: "tier 1 doesn't get anything special").
-   * Tier 2+ append the level.
+   * Compact chess-style token — "B" / "Sn2" / "M3" / "DoT". Tier-1 towers
+   * omit the number suffix (user intent: "tier 1 doesn't get anything
+   * special"); tier 2+ append the level.
    */
   readonly shortLabel: string;
-  /** Full human-readable label with tier — used in the tooltip. */
+  /**
+   * Base tower name ("Basic" / "Sniper" / "DoT") rendered in muted text
+   * alongside the token so the chess shorthand is self-explaining. Skipped
+   * in the template when equal to `shortLabel` (DoT edge case) to avoid
+   * "DoT DoT" duplication.
+   */
+  readonly baseName: string;
+  /** Full human-readable label with tier — used for aria-label. */
   readonly fullLabel: string;
   /** Number of kills this (type, level) pair landed this turn. */
   readonly count: number;
 }
 
-/** Long-form tower names for tooltips + screen readers. */
+/** Long-form tower names — base (no tier) for inline display + aria-label roots. */
 const TOWER_FULL_NAMES: Record<TowerType | 'dot', string> = {
   [TowerType.BASIC]: 'Basic',
   [TowerType.SNIPER]: 'Sniper',
@@ -35,9 +42,9 @@ const TOWER_FULL_NAMES: Record<TowerType | 'dot', string> = {
 };
 
 /**
- * Compact 1–2 letter tokens per tower type. Chess-style abbreviation so
- * multiple attributions fit on a single line. Players unfamiliar with the
- * shorthand get the long form via a `title` tooltip on hover.
+ * Compact 1–2 letter tokens per tower type. Chess-style abbreviation that
+ * rides alongside the full base name in the expanded drawer — self-
+ * explaining, no hover tooltip required.
  */
 const TOWER_SHORT_TOKENS: Record<TowerType | 'dot', string> = {
   [TowerType.BASIC]: 'B',
@@ -116,9 +123,10 @@ export class LastTurnSummaryComponent {
   /**
    * Per-(tower type, level) kill attribution, sorted by count desc so the
    * highest-contributing entry surfaces first. Compact chess-style label
-   * in `shortLabel` ("B" / "Sn2" / "M3"), full expanded label in
-   * `fullLabel` for tooltips. Tier-1 towers omit the number suffix per
-   * user spec. Empty when the turn had no kills.
+   * in `shortLabel` ("B" / "Sn2" / "M3"), muted full name in `baseName`
+   * shown inline alongside the token, `fullLabel` for aria-label.
+   * Tier-1 towers omit the number suffix per user spec. Empty when the
+   * turn had no kills.
    */
   killAttribution(row: TurnEventRecord): KillAttributionEntry[] {
     const out: KillAttributionEntry[] = [];
@@ -137,6 +145,7 @@ export class LastTurnSummaryComponent {
         key: entry.type,
         level: entry.level,
         shortLabel,
+        baseName: name,
         fullLabel,
         count: entry.count,
       });

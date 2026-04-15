@@ -270,6 +270,8 @@ describe('LastTurnSummaryComponent', () => {
       });
       const entry = component.killAttribution(row)[0];
       expect(entry.shortLabel).toBe('Sn2');
+      // baseName is the tier-agnostic form rendered inline next to the token
+      expect(entry.baseName).toBe('Sniper');
       expect(entry.fullLabel).toBe('Sniper Tier 2');
     });
 
@@ -347,31 +349,29 @@ describe('LastTurnSummaryComponent', () => {
       expect(component.isExpanded(row)).toBeFalse();
     });
 
-    it('expanded row renders the attribution block', () => {
+    it('expanded row renders the attribution block with token + inline name', () => {
       const row = primeExpandable();
       component.toggleExpanded(row);
       fixture.detectChanges();
 
       const detail = (fixture.nativeElement as HTMLElement).querySelector('.last-turn-summary__detail');
       expect(detail).not.toBeNull();
-      // Attribution row uses the compact token "B" (chess-style); the full
-      // "Basic" name lives in a child .last-turn-summary__attrib-tooltip
-      // <span> that's absolute-positioned and revealed on hover. This is
-      // more reliable than native `title` or a CSS ::after pseudo-element
-      // inside the glass-panel backdrop-filter stacking context.
+      // Chess-style token leads, muted full name rides alongside. No
+      // tooltip — hover-based tooltips proved unreliable in this panel's
+      // nested stacking context; always-visible name is the decoder ring.
       const tokenEl = detail!.querySelector('.last-turn-summary__attrib-token');
       expect(tokenEl?.textContent?.trim()).toBe('B');
       const attribChip = detail!.querySelector<HTMLElement>('.last-turn-summary__attrib');
-      const tooltipEl = attribChip?.querySelector('.last-turn-summary__attrib-tooltip');
-      expect(tooltipEl?.textContent?.trim()).toBe('Basic ×2');
-      // Native `title` intentionally omitted — browser renders it at the mouse
-      // cursor, which collides visually with our designed-position tooltip.
+      const nameEl = attribChip?.querySelector('.last-turn-summary__attrib-name');
+      expect(nameEl?.textContent?.trim()).toBe('Basic');
+      // No tooltip element, no title attribute — interaction model changed
+      expect(attribChip?.querySelector('.last-turn-summary__attrib-tooltip')).toBeNull();
       expect(attribChip?.hasAttribute('title')).toBeFalse();
-      // aria-label for SR users — the token alone ("B") is opaque without it
+      // aria-label kept for SR users — tier-qualified form
       expect(attribChip?.getAttribute('aria-label')).toBe('Basic, 2 kills');
     });
 
-    it('single-kill chip omits the ×N count from both label and tooltip', () => {
+    it('single-kill chip omits the ×N count; name still renders', () => {
       component.records = [makeRecord({
         turnNumber: 10,
         kills: 1,
@@ -384,10 +384,29 @@ describe('LastTurnSummaryComponent', () => {
         .querySelector<HTMLElement>('.last-turn-summary__attrib');
       // No ×1 trailing the token for single kills — keeps the line tight.
       expect(chip?.querySelector('.last-turn-summary__attrib-count')).toBeNull();
-      const tooltipEl = chip?.querySelector('.last-turn-summary__attrib-tooltip');
-      expect(tooltipEl?.textContent?.trim()).toBe('Sniper Tier 2');
+      const nameEl = chip?.querySelector('.last-turn-summary__attrib-name');
+      // Inline name is the BASE ("Sniper") — tier is already encoded in "Sn2"
+      expect(nameEl?.textContent?.trim()).toBe('Sniper');
       expect(chip?.hasAttribute('title')).toBeFalse();
+      // aria-label still carries the tier-qualified form
       expect(chip?.getAttribute('aria-label')).toBe('Sniper Tier 2, 1 kill');
+    });
+
+    it('DoT chip does NOT duplicate the name (shortLabel === baseName)', () => {
+      component.records = [makeRecord({
+        turnNumber: 11,
+        kills: 1,
+        killsByTower: [{ type: 'dot', level: 0, count: 1 }],
+      })];
+      component.toggleExpanded(component.records[0]);
+      fixture.detectChanges();
+
+      const chip = (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLElement>('.last-turn-summary__attrib');
+      const tokenEl = chip?.querySelector('.last-turn-summary__attrib-token');
+      expect(tokenEl?.textContent?.trim()).toBe('DoT');
+      // The inline-name span is suppressed when it would repeat the token
+      expect(chip?.querySelector('.last-turn-summary__attrib-name')).toBeNull();
     });
 
     it('expandable rows get the --expandable class + aria-expanded attr', () => {
