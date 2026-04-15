@@ -11,6 +11,11 @@ const HIGHLIGHT_R = 0x00 / 255;
 const HIGHLIGHT_G = 0xcc / 255;
 const HIGHLIGHT_B = 0xaa / 255;
 
+/** Pre-computed RGB components of TILE_EMISSIVE.blockedPlacementColor (0xcc3322). */
+const BLOCKED_R = 0xcc / 255;
+const BLOCKED_G = 0x33 / 255;
+const BLOCKED_B = 0x22 / 255;
+
 @Injectable()
 export class TileHighlightService {
   private highlightedTiles = new Set<string>();
@@ -54,16 +59,31 @@ export class TileHighlightService {
         mesh.userData['origEmissive'] = TILE_EMISSIVE.defaultColor;
         mesh.userData['origEmissiveIntensity'] = TILE_EMISSIVE.base;
 
-        const intensity = canAfford
-          ? TILE_EMISSIVE.validPlacement
-          : TILE_EMISSIVE.validPlacement * TILE_EMISSIVE.unaffordableDimming;
+        // Path-blocking check: structurally-valid tiles that would cut off
+        // all spawner→exit paths get a distinct "blocked" tint instead of
+        // the valid-placement cyan. Without this, players click a tile that
+        // *looks* valid and only learn it's blocked via the header
+        // notification after the fact.
+        const wouldBlock = this.gameBoardService.wouldBlockPath(row, col);
 
-        material.emissive.setHex(TILE_EMISSIVE.validPlacementColor);
-        material.emissiveIntensity = intensity;
-        mesh.userData['heatmapR'] = HIGHLIGHT_R;
-        mesh.userData['heatmapG'] = HIGHLIGHT_G;
-        mesh.userData['heatmapB'] = HIGHLIGHT_B;
-        mesh.userData['heatmapIntensity'] = intensity;
+        if (wouldBlock) {
+          material.emissive.setHex(TILE_EMISSIVE.blockedPlacementColor);
+          material.emissiveIntensity = TILE_EMISSIVE.blockedPlacement;
+          mesh.userData['heatmapR'] = BLOCKED_R;
+          mesh.userData['heatmapG'] = BLOCKED_G;
+          mesh.userData['heatmapB'] = BLOCKED_B;
+          mesh.userData['heatmapIntensity'] = TILE_EMISSIVE.blockedPlacement;
+        } else {
+          const intensity = canAfford
+            ? TILE_EMISSIVE.validPlacement
+            : TILE_EMISSIVE.validPlacement * TILE_EMISSIVE.unaffordableDimming;
+          material.emissive.setHex(TILE_EMISSIVE.validPlacementColor);
+          material.emissiveIntensity = intensity;
+          mesh.userData['heatmapR'] = HIGHLIGHT_R;
+          mesh.userData['heatmapG'] = HIGHLIGHT_G;
+          mesh.userData['heatmapB'] = HIGHLIGHT_B;
+          mesh.userData['heatmapIntensity'] = intensity;
+        }
         this.highlightedTiles.add(key);
       }
     }

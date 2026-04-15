@@ -165,6 +165,7 @@ export function createTutorialServiceSpy(): jasmine.SpyObj<TutorialService> {
     'resetCurrentStep',
     'resetTutorial',
     'getTip',
+    'dismissOnPlayerAction',
   ]);
   spy.isTutorialComplete.and.returnValue(true);
   spy.isTipsComplete.and.returnValue(true);

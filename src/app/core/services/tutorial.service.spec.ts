@@ -619,4 +619,57 @@ describe('TutorialService', () => {
       expect(fresh.isTipsComplete()).toBeFalse();
     });
   });
+
+  // ── dismissOnPlayerAction (Phase 14) ───────────────────────────────────
+
+  describe('dismissOnPlayerAction', () => {
+    it('is a no-op when no step is active', () => {
+      service.dismissOnPlayerAction();
+      service.getCurrentStep().subscribe(step => {
+        expect(step).toBeNull();
+      });
+    });
+
+    it('advances past WELCOME when the player takes any action', () => {
+      service.startTutorial();
+      service.dismissOnPlayerAction();
+
+      service.getCurrentStep().subscribe(step => {
+        expect(step).toBe(TutorialStep.SELECT_TOWER);
+      });
+    });
+
+    it('completes the tutorial when dismissed on the COMPLETE step', () => {
+      service.startTutorial();
+      service.advanceStep(); // WELCOME → SELECT_TOWER
+      service.advanceStep(); // SELECT_TOWER → PLACE_TOWER
+      service.advanceStep(); // PLACE_TOWER → START_WAVE
+      service.advanceStep(); // START_WAVE → UPGRADE_TOWER
+      service.advanceStep(); // UPGRADE_TOWER → COMPLETE
+
+      service.dismissOnPlayerAction(); // COMPLETE → null + marks done
+
+      service.getCurrentStep().subscribe(step => {
+        expect(step).toBeNull();
+      });
+      expect(service.isTutorialComplete()).toBeTrue();
+    });
+
+    it('advances tip steps the same way as tutorial steps', () => {
+      const data = {
+        seenSteps: [TutorialStep.COMPLETE],
+        tipsComplete: false,
+        gamesPlayed: 3,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      const fresh = new TutorialService(new StorageService());
+      fresh.startTips();
+
+      fresh.dismissOnPlayerAction(); // TIP_PLACEMENT → TIP_WAVE_PREVIEW
+
+      fresh.getCurrentStep().subscribe(step => {
+        expect(step).toBe(TutorialStep.TIP_WAVE_PREVIEW);
+      });
+    });
+  });
 });

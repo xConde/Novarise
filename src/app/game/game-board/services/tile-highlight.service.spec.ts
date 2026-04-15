@@ -61,7 +61,7 @@ describe('TileHighlightService', () => {
   beforeEach(() => {
     boardSpy = jasmine.createSpyObj<GameBoardService>(
       'GameBoardService',
-      ['getGameBoard', 'getBoardWidth', 'getBoardHeight', 'getTileSize']
+      ['getGameBoard', 'getBoardWidth', 'getBoardHeight', 'getTileSize', 'wouldBlockPath']
     );
     stateSpy = jasmine.createSpyObj<GameStateService>(
       'GameStateService',
@@ -71,6 +71,8 @@ describe('TileHighlightService', () => {
     boardSpy.getBoardWidth.and.returnValue(5);
     boardSpy.getBoardHeight.and.returnValue(5);
     boardSpy.getTileSize.and.returnValue(1);
+    // Default: no tile blocks the path. Per-test overrides re-target specific tiles.
+    boardSpy.wouldBlockPath.and.returnValue(false);
 
     TestBed.configureTestingModule({
       providers: [
@@ -188,6 +190,71 @@ describe('TileHighlightService', () => {
       const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
       service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
 
+      expect(service.isHighlighted('0-0')).toBeFalse();
+
+      disposeMeshMap(tileMeshes);
+    });
+
+    // ── Path-blocking tile branch (Phase 14) ────────────────────────────────
+
+    it('renders path-blocking tiles in the blocked color, not the valid one', () => {
+      const board = [[makeTile(0, 0), makeTile(0, 1)]];
+      boardSpy.getGameBoard.and.returnValue(board);
+      stateSpy.canAfford.and.returnValue(true);
+      // Tile (0,1) would cut off the only path. (0,0) is fine.
+      boardSpy.wouldBlockPath.and.callFake((r: number, c: number) => r === 0 && c === 1);
+
+      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }, { row: 0, col: 1 }]);
+      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
+
+      const validMesh = tileMeshes.get('0-0')!;
+      const blockedMesh = tileMeshes.get('0-1')!;
+      const validMat = validMesh.material as THREE.MeshStandardMaterial;
+      const blockedMat = blockedMesh.material as THREE.MeshStandardMaterial;
+
+      expect(validMat.emissive.getHex()).toBe(TILE_EMISSIVE.validPlacementColor);
+      expect(blockedMat.emissive.getHex()).toBe(TILE_EMISSIVE.blockedPlacementColor);
+
+      // Both are still "highlighted" (tracked for cleanup) — the blocked
+      // tile is just painted differently so the player sees it's not an option.
+      expect(service.isHighlighted('0-0')).toBeTrue();
+      expect(service.isHighlighted('0-1')).toBeTrue();
+
+      disposeMeshMap(tileMeshes);
+    });
+
+    it('blocked tiles use the dedicated blocked intensity (not the affordability dim)', () => {
+      const board = [[makeTile(0, 0)]];
+      boardSpy.getGameBoard.and.returnValue(board);
+      stateSpy.canAfford.and.returnValue(false); // would dim a valid tile
+      boardSpy.wouldBlockPath.and.returnValue(true);
+
+      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
+      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
+
+      const mesh = tileMeshes.get('0-0')!;
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      // Blocked intensity is a standalone constant — NOT the dimmed
+      // validPlacement intensity. This lets the red read at full strength
+      // even when the player can't afford the tower.
+      expect(mat.emissiveIntensity).toBeCloseTo(TILE_EMISSIVE.blockedPlacement, 5);
+
+      disposeMeshMap(tileMeshes);
+    });
+
+    it('clearHighlights restores blocked tiles to the default emissive too', () => {
+      const board = [[makeTile(0, 0)]];
+      boardSpy.getGameBoard.and.returnValue(board);
+      stateSpy.canAfford.and.returnValue(true);
+      boardSpy.wouldBlockPath.and.returnValue(true);
+
+      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
+      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
+      service.clearHighlights(tileMeshes, scene);
+
+      const mesh = tileMeshes.get('0-0')!;
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      expect(mat.emissiveIntensity).toBe(TILE_EMISSIVE.base);
       expect(service.isHighlighted('0-0')).toBeFalse();
 
       disposeMeshMap(tileMeshes);

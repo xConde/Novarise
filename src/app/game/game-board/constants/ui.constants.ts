@@ -80,6 +80,14 @@ export const TILE_EMISSIVE = {
   validPlacementColor: 0x00ccaa,
   /** Dimming factor for unaffordable-but-valid tiles in PLACE mode (0-1, lower = dimmer). */
   unaffordableDimming: 0.35,
+  /**
+   * Intensity for tiles that *would* block the enemy path if a tower were
+   * placed there. Same magnitude as validPlacement so the eye picks them up
+   * at a glance — the color (red) does the disambiguation.
+   */
+  blockedPlacement: 0.45,
+  /** Emissive color override for path-blocking tiles (warm red). */
+  blockedPlacementColor: 0xcc3322,
 } as const;
 
 /**

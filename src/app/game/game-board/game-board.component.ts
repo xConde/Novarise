@@ -770,6 +770,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   onCardPlayed(card: CardInstance): void {
     if (this.isPaused) return;
+    // Any card play is "real progress" — dismiss any active tutorial tip so
+    // it stops blocking the attention band the player has already moved on from.
+    this.tutorialService.dismissOnPlayerAction();
     this.turnHistoryService.recordCardPlayed();
     this.cardPlayService.onCardPlayed(card);
   }
@@ -819,6 +822,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     if (!result.success) return;
+
+    // Successful upgrade is the canonical UPGRADE_TOWER / TIP_UPGRADE dismissal signal.
+    this.tutorialService.dismissOnPlayerAction();
 
     this.showSpecializationChoice = false;
     this.specOptions = [];
@@ -932,6 +938,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   startWave(): void {
     if (this.isPaused) return;
+    // Starting a wave counts as the START_WAVE tutorial step by definition.
+    this.tutorialService.dismissOnPlayerAction();
     this.waveCombat.startWave();
   }
 
@@ -1003,6 +1011,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   endTurn(): void {
     if (this.isPaused) return;
+
+    // Dismiss any active tutorial tip — advancing to a new turn is definitive
+    // "player is driving" progress; the helper copy can step aside.
+    this.tutorialService.dismissOnPlayerAction();
 
     // Capture kill count before the turn resolves so we can record it.
     const killsBefore = Object.values(this.gameStatsService.getStats().killsByTowerType)
