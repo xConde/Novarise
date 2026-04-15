@@ -328,13 +328,12 @@
 // --- Sprint 28: collapsible controls reference ---
 
 .board-container .pause-menu__controls {
-  margin-top: var(--spacing-sm);
-  padding-top: var(--spacing-sm);
-  // No border-top: .pause-menu__stats already has a border-bottom that
-  // closes the capsule above it. Before settings was removed from the
-  // flow, the two borders were spaced apart by the audio button +
-  // wrapper padding; now they'd sit a flex-gap apart, reading as a
-  // double rule.
+  // No border-top, no margin/padding-top: .pause-menu__stats already has
+  // a border-bottom that closes the capsule above, and the parent's
+  // flex `gap: 1rem` handles spacing uniformly. The old margin-top +
+  // padding-top pairing existed to breathe around the border we dropped
+  // — left in place, they stacked on the flex gap and made the space
+  // above "Controls" visibly bigger than every other row gap.
 }
 
 .board-container .pause-menu__controls-summary {
