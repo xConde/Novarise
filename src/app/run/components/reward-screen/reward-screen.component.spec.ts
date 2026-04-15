@@ -5,6 +5,7 @@ import { RewardScreenComponent } from './reward-screen.component';
 import { RewardScreenConfig, RewardItem, CardReward } from '../../models/encounter.model';
 import { RelicId, RelicRarity } from '../../models/relic.model';
 import { CardId } from '../../models/card.model';
+import { ChallengeType } from '../../data/challenges';
 
 // Stub for CardDraftComponent so we don't pull in its full dependency tree
 @Component({
@@ -195,5 +196,60 @@ describe('RewardScreenComponent', () => {
     fixture.detectChanges();
     component.skipRelics();
     expect(component.canContinue).toBeTrue();
+  });
+
+  // ── Completed-challenges render ───────────────────────────────────────
+
+  describe('completedChallenges display', () => {
+    it('hides the challenges block entirely when none were completed', () => {
+      const section = (fixture.nativeElement as HTMLElement).querySelector('.reward-challenges');
+      expect(section).toBeNull();
+    });
+
+    it('renders one row per completed challenge with name, description, and gold bonus', () => {
+      component.config = {
+        ...MOCK_CONFIG,
+        completedChallenges: [
+          { id: 'c01_untouchable', type: ChallengeType.UNTOUCHABLE, name: 'Untouchable',
+            description: 'Win without losing any lives', scoreBonus: 200 },
+          { id: 'c01_tower_limit', type: ChallengeType.TOWER_LIMIT, name: 'Minimalist',
+            description: 'Win with 4 or fewer towers at once', scoreBonus: 300, towerLimit: 4 },
+        ],
+      };
+      fixture.detectChanges();
+
+      const rows = (fixture.nativeElement as HTMLElement).querySelectorAll('.reward-challenge-item');
+      expect(rows.length).toBe(2);
+
+      // Row content
+      expect(rows[0].textContent).toContain('Untouchable');
+      expect(rows[0].textContent).toContain('Win without losing any lives');
+      // 200 scoreBonus / 5 ratio = 40 gold
+      expect(rows[0].textContent).toContain('+40g');
+
+      // 300 scoreBonus / 5 ratio = 60 gold
+      expect(rows[1].textContent).toContain('+60g');
+    });
+
+    it('totalChallengeGold sums per-challenge bonuses via shared ratio', () => {
+      component.config = {
+        ...MOCK_CONFIG,
+        completedChallenges: [
+          { id: 'a', type: ChallengeType.UNTOUCHABLE, name: 'A', description: 'd', scoreBonus: 200 },
+          { id: 'b', type: ChallengeType.NO_SLOW, name: 'B', description: 'd', scoreBonus: 200 },
+          { id: 'c', type: ChallengeType.FRUGAL, name: 'C', description: 'd', scoreBonus: 250, goldLimit: 100 },
+        ],
+      };
+      fixture.detectChanges();
+
+      // 200/5 + 200/5 + 250/5 = 40 + 40 + 50 = 130
+      expect(component.totalChallengeGold).toBe(130);
+    });
+
+    it('challengeGoldBonus uses Math.round on non-divisible bonuses', () => {
+      const odd = { id: 'x', type: ChallengeType.UNTOUCHABLE, name: 'X', description: 'd', scoreBonus: 201 };
+      // 201 / 5 = 40.2 → rounds to 40
+      expect(component.challengeGoldBonus(odd)).toBe(40);
+    });
   });
 });

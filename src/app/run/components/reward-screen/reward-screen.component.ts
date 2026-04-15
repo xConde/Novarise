@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { RelicDefinition, RELIC_DEFINITIONS, RelicId, RelicRarity } from '../../models/relic.model';
 import { RewardScreenConfig, RewardItem, CardReward } from '../../models/encounter.model';
+import { ChallengeDefinition, CHALLENGE_SCORE_TO_GOLD_RATIO, computeChallengeGoldBonus } from '../../data/challenges';
 
 /** CSS class suffix returned per rarity. */
 const RARITY_CLASS: Record<RelicRarity, string> = {
@@ -32,6 +33,16 @@ export class RewardScreenComponent {
 
   getRarityClass(rarity: RelicRarity): string {
     return RARITY_CLASS[rarity] ?? 'common';
+  }
+
+  /** Per-challenge gold bonus shown next to each completed challenge. */
+  challengeGoldBonus(challenge: ChallengeDefinition): number {
+    return Math.round(challenge.scoreBonus / CHALLENGE_SCORE_TO_GOLD_RATIO);
+  }
+
+  /** Total gold from all completed challenges — shown in the section header. */
+  get totalChallengeGold(): number {
+    return computeChallengeGoldBonus(this.config.completedChallenges);
   }
 
   pickRelic(relic: RelicDefinition): void {

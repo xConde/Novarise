@@ -23,14 +23,16 @@
 
   display: grid;
   grid-template-rows:
-    [header-start]  var(--reward-header-size)  [header-end]
-    [choices-start] auto                        [choices-end]
-    [picked-start]  auto                        [picked-end]
-    [draft-start]   1fr                         [draft-end]
-    [footer-start]  var(--reward-footer-size)   [footer-end];
+    [header-start]     var(--reward-header-size)  [header-end]
+    [challenges-start] auto                        [challenges-end]
+    [choices-start]    auto                        [choices-end]
+    [picked-start]     auto                        [picked-end]
+    [draft-start]      1fr                         [draft-end]
+    [footer-start]     var(--reward-footer-size)   [footer-end];
   grid-template-columns: 1fr;
   grid-template-areas:
     "header"
+    "challenges"
     "choices"
     "picked"
     "draft"
@@ -44,10 +46,11 @@
 
 // ── Grid-area assignments for direct children ─────────────────────────────────
 
-.reward-header   { grid-area: header; }
-.reward-choices  { grid-area: choices; }
-.reward-picked   { grid-area: picked; }
-app-card-draft   { grid-area: draft; }
+.reward-header     { grid-area: header; }
+.reward-challenges { grid-area: challenges; }
+.reward-choices    { grid-area: choices; }
+.reward-picked     { grid-area: picked; }
+app-card-draft     { grid-area: draft; }
 
 // Continue button is the footer child — assign via adjacent sibling targeting
 // (the button carries class reward-continue-btn)
@@ -79,6 +82,119 @@ app-card-draft   { grid-area: draft; }
   font-weight: 700;
   color: var(--game-gold);
   margin: 0;
+}
+
+// ── Challenges completed section ──────────────────────────────────────────────
+// Shown only on campaign maps with challenge objectives satisfied. The gold
+// bonus is already folded into config.goldPickup; this surfaces the breakdown.
+
+.reward-challenges {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  max-width: 40rem;
+  padding: var(--spacing-md);
+  border: var(--border-width-thin) solid rgba(255, 215, 0, 0.35);
+  border-radius: var(--border-radius-md);
+  background: rgba(255, 215, 0, 0.05);
+}
+
+.reward-challenges-title {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--game-gold);
+  text-transform: uppercase;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.reward-challenges-total {
+  font-size: var(--font-size-small);
+  color: var(--game-gold);
+  opacity: 0.9;
+  font-weight: 700;
+}
+
+.reward-challenge-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.reward-challenge-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "check name gold"
+    "check desc gold";
+  align-items: center;
+  gap: 0.15rem var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  text-align: left;
+  border-radius: var(--border-radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.reward-challenge-check {
+  grid-area: check;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--action-success);
+}
+
+.reward-challenge-name {
+  grid-area: name;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  color: var(--text-color);
+  letter-spacing: 0.03em;
+}
+
+.reward-challenge-desc {
+  grid-area: desc;
+  font-size: var(--font-size-2xs);
+  color: var(--text-dim);
+  line-height: 1.3;
+}
+
+.reward-challenge-gold {
+  grid-area: gold;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  color: var(--game-gold);
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .reward-challenges {
+    padding: var(--spacing-sm);
+  }
+
+  .reward-challenge-item {
+    // Stack on narrow screens — gold moves below the description
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "check name"
+      "check desc"
+      "check gold";
+  }
+
+  .reward-challenge-gold {
+    justify-self: start;
+  }
 }
 
 // ── Choices section ───────────────────────────────────────────────────────────

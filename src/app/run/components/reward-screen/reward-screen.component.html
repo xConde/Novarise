@@ -8,6 +8,30 @@
     </p>
   </div>
 
+  <!-- Challenges completed — shown only when the encounter is a campaign
+       map with challenge objectives and at least one was satisfied. The
+       per-challenge gold bonus is already included in config.goldPickup;
+       this block surfaces the breakdown so the player sees what earned it. -->
+  <section class="reward-challenges"
+           *ngIf="config.completedChallenges.length > 0"
+           [attr.aria-label]="'Completed ' + config.completedChallenges.length + ' challenges for ' + totalChallengeGold + ' bonus gold'">
+    <h3 class="reward-challenges-title">
+      Challenges Completed
+      <span class="reward-challenges-total">+{{ totalChallengeGold }}g</span>
+    </h3>
+    <ul class="reward-challenge-list" role="list">
+      <li *ngFor="let challenge of config.completedChallenges"
+          class="reward-challenge-item" role="listitem">
+        <span class="reward-challenge-check" aria-hidden="true">
+          <app-icon name="check" [size]="14"></app-icon>
+        </span>
+        <span class="reward-challenge-name">{{ challenge.name }}</span>
+        <span class="reward-challenge-desc">{{ challenge.description }}</span>
+        <span class="reward-challenge-gold">+{{ challengeGoldBonus(challenge) }}g</span>
+      </li>
+    </ul>
+  </section>
+
   <!-- Relic choices -->
   <section class="reward-choices" *ngIf="relicCards.length > 0 && !relicPicked">
     <h3 class="reward-choices-title">Choose a Relic</h3>
