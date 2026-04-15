@@ -151,10 +151,11 @@
       Turn {{ currentTurnNumber }}
     </div>
 
-    <!-- Sprint 33: Last-turn summary overlay — brief strip showing prior turn events -->
+    <!-- Phase 15: RECAP panel — persistent top-right mirror of INCOMING.
+         Fed from TurnHistoryService.records$ (5-turn rolling buffer);
+         the component self-hides when the buffer is empty. -->
     <app-last-turn-summary
-      [summary]="lastTurnSummary"
-      [visible]="showLastTurnSummary">
+      [records]="recentTurnRecords">
     </app-last-turn-summary>
 
     <!-- Phase 4: Spawn preview — shows what's coming in the next few turns. -->

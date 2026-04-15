@@ -1,18 +1,39 @@
-<div class="last-turn-summary"
-     *ngIf="visible && summary"
-     aria-live="polite"
-     [attr.aria-label]="'Last turn summary'">
-  <span class="last-turn-summary__label">Turn {{ summary.turnNumber }}</span>
-  <span class="last-turn-summary__stat" *ngIf="summary.cardsPlayed > 0">
-    <span class="last-turn-summary__value">{{ summary.cardsPlayed }}</span> played
-  </span>
-  <span class="last-turn-summary__stat" *ngIf="summary.kills > 0">
-    <span class="last-turn-summary__value">{{ summary.kills }}</span> killed
-  </span>
-  <span class="last-turn-summary__stat last-turn-summary__stat--gold" *ngIf="summary.goldEarned > 0">
-    +{{ summary.goldEarned }}g
-  </span>
-  <span class="last-turn-summary__stat last-turn-summary__stat--danger" *ngIf="summary.livesLost > 0">
-    &minus;{{ summary.livesLost }} lives
-  </span>
-</div>
+<aside class="last-turn-summary"
+       *ngIf="hasRecords"
+       aria-live="polite"
+       aria-label="Recap of recent turns">
+  <h4 class="last-turn-summary__title">Recap</h4>
+  <ol class="last-turn-summary__list">
+    <li *ngFor="let row of displayRows; let i = index"
+        class="last-turn-summary__row"
+        [class.last-turn-summary__row--recent]="i === 0"
+        [class.last-turn-summary__row--quiet]="isQuietTurn(row)">
+      <span class="last-turn-summary__turn">T{{ row.turnNumber }}</span>
+      <ng-container *ngIf="!isQuietTurn(row); else quietTpl">
+        <span class="last-turn-summary__stats">
+          <span class="last-turn-summary__stat" *ngIf="row.cardsPlayed > 0"
+                [attr.title]="row.cardsPlayed + ' card' + (row.cardsPlayed === 1 ? '' : 's') + ' played'">
+            {{ row.cardsPlayed }}<span class="last-turn-summary__unit">p</span>
+          </span>
+          <span class="last-turn-summary__stat" *ngIf="row.kills > 0"
+                [attr.title]="row.kills + ' enem' + (row.kills === 1 ? 'y' : 'ies') + ' killed'">
+            {{ row.kills }}<span class="last-turn-summary__unit">k</span>
+          </span>
+          <span class="last-turn-summary__stat last-turn-summary__stat--gold"
+                *ngIf="row.goldEarned > 0"
+                [attr.title]="'+' + row.goldEarned + ' gold earned'">
+            +{{ row.goldEarned }}g
+          </span>
+          <span class="last-turn-summary__stat last-turn-summary__stat--danger"
+                *ngIf="row.livesLost > 0"
+                [attr.title]="row.livesLost + ' life' + (row.livesLost === 1 ? '' : 's') + ' lost'">
+            &minus;{{ row.livesLost }}<span class="last-turn-summary__unit">&hearts;</span>
+          </span>
+        </span>
+      </ng-container>
+      <ng-template #quietTpl>
+        <span class="last-turn-summary__quiet">—</span>
+      </ng-template>
+    </li>
+  </ol>
+</aside>

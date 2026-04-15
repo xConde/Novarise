@@ -37,6 +37,7 @@
   //   --shell-controls-bottom/right: Game controls position (bottom-right)
   //   --shell-spawn-top/left:        INCOMING spawn preview (below HUD+challenges)
   //   --shell-wave-top/right:        Wave/Next Wave panel (top-right)
+  //   --shell-recap-top/right:       RECAP turn-history panel (mirrors spawn preview on the right)
   //   --shell-tower-info-bottom:     Tower info panel (bottom-center above hand)
   --shell-hud-top: var(--spacing-sm);
   --shell-hud-left: var(--spacing-sm);
@@ -50,6 +51,9 @@
   --shell-spawn-left: var(--spacing-sm);
   --shell-wave-top: var(--spacing-sm);
   --shell-wave-right: var(--spacing-sm);
+  // Recap panel sits at the same vertical offset as INCOMING but on the right edge.
+  --shell-recap-top: var(--shell-spawn-top);
+  --shell-recap-right: var(--spacing-sm);
   --shell-tower-info-bottom: var(--spacing-sm);
 
   // Sprint 2: 1-column grid (canvas fills available space, hand row below)
@@ -134,6 +138,12 @@
       display: none;
     }
   }
+
+  // --- Phase 15: RECAP turn-history panel ---
+  // The component owns its own glass-panel shell + positioning (see
+  // last-turn-summary.component.scss :host rule). Placed here as an
+  // orientation comment only so future readers searching the ancestor SCSS
+  // can find the sibling of .spawn-preview.
 
   // --- Phase 7: Spawn preview ---
   // Always visible during COMBAT. Repositioned in Phase 3 as absolute overlay.

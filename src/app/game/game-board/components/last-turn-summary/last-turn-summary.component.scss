@@ -1,70 +1,126 @@
-.last-turn-summary {
+// Recap panel — mirrors the left-side INCOMING spawn preview. Persistent
+// during combat + intermission phases, positioned at the top-right.
+//
+// :host owns the glass-panel shell + absolute positioning so Angular view
+// encapsulation doesn't fight the parent's attempt to style a child
+// component's elements. Shell custom properties cascade in from
+// .board-container just fine (inheritance is NOT blocked by encapsulation).
+// Visual language is intentionally twinned with .spawn-preview — same
+// background, border, typography, row cadence.
+
+:host {
   position: absolute;
-  bottom: calc(var(--spacing-md) + var(--shell-tower-info-bottom, 0.625rem));
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: var(--spacing-md);
-  align-items: center;
-  padding: 0.4rem 1rem;
-  background: rgba(10, 15, 30, 0.85);
-  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.15);
+  top: var(--shell-recap-top, 8rem);
+  right: var(--shell-recap-right, 0.625rem);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: rgba(10, 15, 30, 0.82);
+  border: var(--border-width-thin) solid var(--panel-blue-border);
   border-radius: var(--border-radius-md);
-  backdrop-filter: blur(4px);
-  font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-2xs);
-  color: var(--text-color);
-  pointer-events: none;
+  backdrop-filter: blur(0.625rem);
   z-index: var(--z-index-overlay);
-  animation: last-turn-summary-enter 0.25s ease-out;
-  white-space: nowrap;
+  pointer-events: none;
+  color: var(--text-color);
 }
 
-.last-turn-summary__label {
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--theme-cyan);
+// Hide the host entirely when the component has no records to render —
+// prevents an empty glass-panel from sitting at the right edge on a fresh
+// encounter (turn 0, before any endTurn resolution). Driven by the
+// @HostBinding on the component class; kept in CSS rather than in TS
+// so the display toggle cost is zero at runtime (no re-layout churn).
+:host.last-turn-summary--empty {
+  display: none;
+}
+
+.last-turn-summary {
+  font-family: "Orbitron", sans-serif;
+  color: var(--text-color);
+  pointer-events: none;
+  min-width: 9rem;
+  max-width: 11rem;
+}
+
+.last-turn-summary__title {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
+  letter-spacing: 0.12em;
+  opacity: 0.7;
+  font-weight: 600;
+}
+
+.last-turn-summary__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.last-turn-summary__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  opacity: 0.55; // older turns fade back
+  transition: opacity 0.15s ease;
+}
+
+// Most recent turn is the high-contrast "just happened" row.
+.last-turn-summary__row--recent {
+  opacity: 1;
+}
+
+// A no-op turn gets the dim dash placeholder treatment instead of empty space.
+.last-turn-summary__row--quiet {
+  opacity: 0.35;
+}
+
+.last-turn-summary__turn {
+  min-width: 2rem;
+  font-weight: 700;
+  color: var(--panel-blue-accent);
+  letter-spacing: 0.04em;
+}
+
+.last-turn-summary__stats {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  line-height: 1.1;
 }
 
 .last-turn-summary__stat {
-  opacity: 0.9;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
-.last-turn-summary__value {
-  font-weight: 700;
-  color: var(--text-color);
+// Per-stat unit suffix (p / k / ❤). Small + dim so the number dominates.
+.last-turn-summary__unit {
+  margin-left: 0.1rem;
+  font-size: var(--font-size-3xs);
+  font-weight: 600;
+  opacity: 0.75;
+  text-transform: lowercase;
 }
 
 .last-turn-summary__stat--gold {
   color: var(--game-gold);
-  font-weight: 700;
 }
 
 .last-turn-summary__stat--danger {
   color: rgba(255, 120, 120, 0.95);
-  font-weight: 700;
 }
 
-@keyframes last-turn-summary-enter {
-  from { opacity: 0; transform: translateX(-50%) translateY(0.4rem); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+.last-turn-summary__quiet {
+  color: var(--text-dim);
+  font-size: var(--font-size-xs);
+  opacity: 0.7;
 }
 
-@media (prefers-reduced-motion: reduce) {
+@media (max-width: 768px) {
   .last-turn-summary {
-    animation: none;
-  }
-}
-
-@media (max-width: 480px) {
-  .last-turn-summary {
-    bottom: calc(var(--spacing-xs) + 0.5rem);
-    gap: var(--spacing-sm);
-    padding: 0.3rem 0.7rem;
-    font-size: var(--font-size-3xs);
-    max-width: calc(100vw - 1rem);
-    overflow: hidden;
-    text-overflow: ellipsis;
+    display: none; // sits behind card hand at this size — priority is the board + cards
   }
 }

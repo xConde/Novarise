@@ -262,10 +262,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   showTurnBanner = false;
   private turnBannerTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Last-turn summary overlay — flashed for 2500ms after each endTurn()
-  showLastTurnSummary = false;
-  lastTurnSummary: TurnEventRecord | null = null;
-  private lastTurnSummaryTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Persistent RECAP panel — last N completed turn records from
+   * TurnHistoryService.records$. Bound directly by the template; live updates
+   * via the subscription wired in ngOnInit. Replaces the earlier 2.5s flash
+   * overlay (lastTurnSummary / showLastTurnSummary / lastTurnSummaryTimer).
+   */
+  recentTurnRecords: readonly TurnEventRecord[] = [];
+  private turnRecordsSubscription: Subscription | null = null;
 
   /** Whether the End Turn button should pulse (hand stuck: 0 energy + no playable cards). */
   handStuck = false;
@@ -365,6 +369,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // Feed the RECAP panel off the turn-history buffer so every endTurn()
+    // resolves into a fresh row without any call-site flashing logic.
+    this.turnRecordsSubscription = this.turnHistoryService.records$.subscribe({
+      next: records => { this.recentTurnRecords = records; },
+      error: (error: unknown) => console.error('Turn records subscription error:', error),
+    });
+
     // Subscribe to game state changes
     this.stateSubscription = this.gameStateService.getState$().subscribe({
       error: (error: unknown) => console.error('Game state subscription error:', error),
@@ -993,21 +1004,6 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }, 1200);
   }
 
-  /**
-   * Briefly shows the last-turn summary overlay for 2500 ms after endTurn().
-   * Cleared early if the player plays a card (not yet wired — summary hides on timer only).
-   */
-  private flashTurnSummary(record: TurnEventRecord): void {
-    if (this.lastTurnSummaryTimer) {
-      clearTimeout(this.lastTurnSummaryTimer);
-    }
-    this.lastTurnSummary = record;
-    this.showLastTurnSummary = true;
-    this.lastTurnSummaryTimer = setTimeout(() => {
-      this.showLastTurnSummary = false;
-      this.lastTurnSummaryTimer = null;
-    }, 2500);
-  }
 
   endTurn(): void {
     if (this.isPaused) return;
@@ -1037,14 +1033,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const goldEarned = Math.max(0, postState.gold - goldBefore);
     if (goldEarned > 0) this.turnHistoryService.recordGoldEarned(goldEarned);
 
-    const record = this.turnHistoryService.endTurn();
+    this.turnHistoryService.endTurn();
 
-    // Flash turn banner + summary only if combat is still ongoing after resolution
+    // The persistent right-side RECAP panel is already bound to
+    // turnHistoryService.records$; endTurn() pushed the new record and the
+    // subscription will surface it automatically. No flash call needed.
     if (postState.phase === GamePhase.COMBAT) {
       this.flashTurnBanner();
-      if (record) {
-        this.flashTurnSummary(record);
-      }
     }
   }
 
@@ -1507,17 +1502,17 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.turnBannerTimer = null;
     }
 
-    if (this.lastTurnSummaryTimer !== null) {
-      clearTimeout(this.lastTurnSummaryTimer);
-      this.lastTurnSummaryTimer = null;
-    }
-
     this.waveCombat.cleanup();
     this.tutorialFacade.cleanup();
     this.cardPlayService.cleanup();
 
     if (this.stateSubscription) {
       this.stateSubscription.unsubscribe();
+    }
+
+    if (this.turnRecordsSubscription) {
+      this.turnRecordsSubscription.unsubscribe();
+      this.turnRecordsSubscription = null;
     }
 
     if (this.notificationSub) {

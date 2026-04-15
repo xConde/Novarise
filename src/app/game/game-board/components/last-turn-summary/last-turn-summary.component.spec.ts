@@ -1,108 +1,185 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
-import { LastTurnSummaryComponent, TurnSummary } from './last-turn-summary.component';
+import { LastTurnSummaryComponent } from './last-turn-summary.component';
+import { TurnEventRecord } from '../../services/turn-history.service';
 
-const makeSummary = (overrides: Partial<TurnSummary> = {}): TurnSummary => ({
-  turnNumber: 2,
-  cardsPlayed: 3,
-  kills: 4,
-  goldEarned: 20,
-  livesLost: 1,
-  timestamp: 0,
-  ...overrides,
-});
+function makeRecord(overrides: Partial<TurnEventRecord> = {}): TurnEventRecord {
+  return {
+    turnNumber: 1,
+    cardsPlayed: 0,
+    kills: 0,
+    goldEarned: 0,
+    livesLost: 0,
+    timestamp: Date.now(),
+    ...overrides,
+  };
+}
 
 describe('LastTurnSummaryComponent', () => {
-  let component: LastTurnSummaryComponent;
   let fixture: ComponentFixture<LastTurnSummaryComponent>;
-
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      declarations: [LastTurnSummaryComponent],
-      imports: [CommonModule],
-    }).compileComponents();
-  });
+  let component: LastTurnSummaryComponent;
 
   beforeEach(() => {
+    TestBed.configureTestingModule({
+      declarations: [LastTurnSummaryComponent],
+      imports: [CommonModule],
+    });
     fixture = TestBed.createComponent(LastTurnSummaryComponent);
     component = fixture.componentInstance;
   });
 
-  it('should create', () => {
+  it('creates', () => {
+    fixture.detectChanges();
     expect(component).toBeTruthy();
   });
 
-  it('renders nothing when visible is false', () => {
-    component.visible = false;
-    component.summary = makeSummary();
-    fixture.detectChanges();
-    const el = fixture.nativeElement.querySelector('.last-turn-summary');
-    expect(el).toBeNull();
+  // ── Empty / visibility ────────────────────────────────────────────────
+
+  describe('empty state', () => {
+    it('hasRecords is false and isEmpty is true when records is empty', () => {
+      component.records = [];
+      fixture.detectChanges();
+      expect(component.hasRecords).toBeFalse();
+      expect(component.isEmpty).toBeTrue();
+    });
+
+    it('host receives the last-turn-summary--empty class when no records', () => {
+      component.records = [];
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.classList.contains('last-turn-summary--empty')).toBeTrue();
+    });
+
+    it('host does NOT receive the empty class once a record is present', () => {
+      component.records = [makeRecord({ turnNumber: 1, kills: 2 })];
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.classList.contains('last-turn-summary--empty')).toBeFalse();
+    });
+
+    it('renders no <aside> when records is empty', () => {
+      component.records = [];
+      fixture.detectChanges();
+      const aside = (fixture.nativeElement as HTMLElement).querySelector('aside.last-turn-summary');
+      expect(aside).toBeNull();
+    });
   });
 
-  it('renders nothing when summary is null', () => {
-    component.visible = true;
-    component.summary = null;
-    fixture.detectChanges();
-    const el = fixture.nativeElement.querySelector('.last-turn-summary');
-    expect(el).toBeNull();
+  // ── displayRows ordering + cap ────────────────────────────────────────
+
+  describe('displayRows', () => {
+    it('returns records newest-first', () => {
+      component.records = [
+        makeRecord({ turnNumber: 1 }),
+        makeRecord({ turnNumber: 2 }),
+        makeRecord({ turnNumber: 3 }),
+      ];
+      const rows = component.displayRows;
+      expect(rows.map(r => r.turnNumber)).toEqual([3, 2, 1]);
+    });
+
+    it('caps at 3 rows regardless of how many records are in the buffer', () => {
+      component.records = [
+        makeRecord({ turnNumber: 1 }),
+        makeRecord({ turnNumber: 2 }),
+        makeRecord({ turnNumber: 3 }),
+        makeRecord({ turnNumber: 4 }),
+        makeRecord({ turnNumber: 5 }),
+      ];
+      const rows = component.displayRows;
+      expect(rows.length).toBe(3);
+      expect(rows.map(r => r.turnNumber)).toEqual([5, 4, 3]);
+    });
+
+    it('returns fewer than 3 rows when the buffer has fewer records', () => {
+      component.records = [makeRecord({ turnNumber: 7 })];
+      expect(component.displayRows.length).toBe(1);
+      expect(component.displayRows[0].turnNumber).toBe(7);
+    });
+
+    it('does not mutate the input records array', () => {
+      const input: TurnEventRecord[] = [
+        makeRecord({ turnNumber: 1 }),
+        makeRecord({ turnNumber: 2 }),
+      ];
+      component.records = input;
+      component.displayRows;
+      // Original array order preserved — component reverses via a copy.
+      expect(input.map(r => r.turnNumber)).toEqual([1, 2]);
+    });
   });
 
-  it('renders the summary strip when visible and summary are set', () => {
-    component.visible = true;
-    component.summary = makeSummary();
-    fixture.detectChanges();
-    const el = fixture.nativeElement.querySelector('.last-turn-summary');
-    expect(el).toBeTruthy();
+  // ── isQuietTurn ───────────────────────────────────────────────────────
+
+  describe('isQuietTurn', () => {
+    it('returns true when all stats are zero', () => {
+      expect(component.isQuietTurn(makeRecord({ turnNumber: 3 }))).toBeTrue();
+    });
+
+    it('returns false when any stat is non-zero', () => {
+      expect(component.isQuietTurn(makeRecord({ kills: 1 }))).toBeFalse();
+      expect(component.isQuietTurn(makeRecord({ cardsPlayed: 2 }))).toBeFalse();
+      expect(component.isQuietTurn(makeRecord({ goldEarned: 10 }))).toBeFalse();
+      expect(component.isQuietTurn(makeRecord({ livesLost: 1 }))).toBeFalse();
+    });
   });
 
-  it('displays the turn number', () => {
-    component.visible = true;
-    component.summary = makeSummary({ turnNumber: 5 });
-    fixture.detectChanges();
-    const label = fixture.nativeElement.querySelector('.last-turn-summary__label');
-    expect(label.textContent).toContain('5');
-  });
+  // ── Row rendering ─────────────────────────────────────────────────────
 
-  it('hides cardsPlayed stat when 0', () => {
-    component.visible = true;
-    component.summary = makeSummary({ cardsPlayed: 0 });
-    fixture.detectChanges();
-    const stats = fixture.nativeElement.querySelectorAll('.last-turn-summary__stat');
-    const texts = Array.from<HTMLElement>(stats).map(s => s.textContent ?? '');
-    expect(texts.some(t => t.includes('played'))).toBeFalse();
-  });
+  describe('row rendering', () => {
+    it('renders one <li> per display row', () => {
+      component.records = [
+        makeRecord({ turnNumber: 1, kills: 1 }),
+        makeRecord({ turnNumber: 2, kills: 2 }),
+      ];
+      fixture.detectChanges();
+      const rows = (fixture.nativeElement as HTMLElement).querySelectorAll('li.last-turn-summary__row');
+      expect(rows.length).toBe(2);
+    });
 
-  it('hides kills stat when 0', () => {
-    component.visible = true;
-    component.summary = makeSummary({ kills: 0 });
-    fixture.detectChanges();
-    const stats = fixture.nativeElement.querySelectorAll('.last-turn-summary__stat');
-    const texts = Array.from<HTMLElement>(stats).map(s => s.textContent ?? '');
-    expect(texts.some(t => t.includes('killed'))).toBeFalse();
-  });
+    it('tags the most-recent row with the --recent class', () => {
+      component.records = [
+        makeRecord({ turnNumber: 1, kills: 1 }),
+        makeRecord({ turnNumber: 2, kills: 2 }),
+      ];
+      fixture.detectChanges();
+      const rows = (fixture.nativeElement as HTMLElement).querySelectorAll('li.last-turn-summary__row');
+      expect(rows[0].classList.contains('last-turn-summary__row--recent')).toBeTrue();
+      expect(rows[1].classList.contains('last-turn-summary__row--recent')).toBeFalse();
+    });
 
-  it('hides goldEarned stat when 0', () => {
-    component.visible = true;
-    component.summary = makeSummary({ goldEarned: 0 });
-    fixture.detectChanges();
-    const gold = fixture.nativeElement.querySelector('.last-turn-summary__stat--gold');
-    expect(gold).toBeNull();
-  });
+    it('renders a quiet turn with the — placeholder, no stats', () => {
+      component.records = [makeRecord({ turnNumber: 4 })];
+      fixture.detectChanges();
 
-  it('hides livesLost stat when 0', () => {
-    component.visible = true;
-    component.summary = makeSummary({ livesLost: 0 });
-    fixture.detectChanges();
-    const danger = fixture.nativeElement.querySelector('.last-turn-summary__stat--danger');
-    expect(danger).toBeNull();
-  });
+      const row = (fixture.nativeElement as HTMLElement).querySelector('.last-turn-summary__row')!;
+      expect(row.classList.contains('last-turn-summary__row--quiet')).toBeTrue();
+      expect(row.querySelector('.last-turn-summary__quiet')).not.toBeNull();
+      expect(row.querySelector('.last-turn-summary__stats')).toBeNull();
+    });
 
-  it('shows goldEarned with + prefix', () => {
-    component.visible = true;
-    component.summary = makeSummary({ goldEarned: 30 });
-    fixture.detectChanges();
-    const gold = fixture.nativeElement.querySelector('.last-turn-summary__stat--gold');
-    expect(gold.textContent).toContain('+30g');
+    it('renders gold earned with the --gold variant', () => {
+      component.records = [makeRecord({ turnNumber: 2, goldEarned: 30 })];
+      fixture.detectChanges();
+      const gold = (fixture.nativeElement as HTMLElement).querySelector('.last-turn-summary__stat--gold');
+      expect(gold).not.toBeNull();
+      expect(gold!.textContent).toContain('+30g');
+    });
+
+    it('renders lives lost with the --danger variant', () => {
+      component.records = [makeRecord({ turnNumber: 2, livesLost: 2 })];
+      fixture.detectChanges();
+      const danger = (fixture.nativeElement as HTMLElement).querySelector('.last-turn-summary__stat--danger');
+      expect(danger).not.toBeNull();
+      expect(danger!.textContent).toContain('2');
+    });
+
+    it('renders cardsPlayed + kills on a non-quiet row', () => {
+      component.records = [makeRecord({ turnNumber: 3, cardsPlayed: 2, kills: 5 })];
+      fixture.detectChanges();
+      const stats = (fixture.nativeElement as HTMLElement).querySelector('.last-turn-summary__stats')!;
+      expect(stats.textContent).toMatch(/2/);
+      expect(stats.textContent).toMatch(/5/);
+    });
   });
 });
