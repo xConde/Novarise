@@ -24,6 +24,7 @@ import { SceneService } from './scene.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { CombatLoopService } from './combat-loop.service';
 import { WavePreviewService } from './wave-preview.service';
+import { GamePauseService } from './game-pause.service';
 import { disposeMaterial } from '../utils/three-utils';
 
 /**
@@ -56,6 +57,7 @@ export class GameSessionService {
     private meshRegistry: BoardMeshRegistryService,
     private combatLoopService: CombatLoopService,
     private wavePreviewService: WavePreviewService,
+    private gamePauseService: GamePauseService,
   ) {}
 
   /**
@@ -81,6 +83,9 @@ export class GameSessionService {
     this.combatLoopService.reset();
     // Clear one-shot scout bonuses from scout spells played in a prior encounter.
     this.wavePreviewService.resetForEncounter();
+    // Clear stale autoPaused / showQuitConfirm state from a prior encounter so
+    // the pause menu doesn't open mid-new-encounter stuck on the quit dialog.
+    this.gamePauseService.reset();
   }
 
   /**

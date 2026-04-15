@@ -25,6 +25,7 @@ import { SceneService } from './scene.service';
 import { PlayerProfileService } from '@core/services/player-profile.service';
 import { CombatLoopService } from './combat-loop.service';
 import { WavePreviewService } from './wave-preview.service';
+import { GamePauseService } from './game-pause.service';
 
 describe('GameSessionService', () => {
   let service: GameSessionService;
@@ -50,6 +51,7 @@ describe('GameSessionService', () => {
   let playerProfileSpy: jasmine.SpyObj<PlayerProfileService>;
   let combatLoopSpy: jasmine.SpyObj<CombatLoopService>;
   let wavePreviewSpy: jasmine.SpyObj<WavePreviewService>;
+  let gamePauseSpy: jasmine.SpyObj<GamePauseService>;
   let scene: THREE.Scene;
 
   beforeEach(() => {
@@ -139,6 +141,7 @@ describe('GameSessionService', () => {
     wavePreviewSpy = jasmine.createSpyObj('WavePreviewService', [
       'resetForEncounter', 'addOneShotBonus', 'getPreviewDepth', 'getFutureWavesSummary', 'serialize', 'restore',
     ]);
+    gamePauseSpy = jasmine.createSpyObj('GamePauseService', ['reset']);
 
     TestBed.configureTestingModule({
       providers: [
@@ -166,6 +169,7 @@ describe('GameSessionService', () => {
         { provide: PlayerProfileService, useValue: playerProfileSpy },
         { provide: CombatLoopService, useValue: combatLoopSpy },
         { provide: WavePreviewService, useValue: wavePreviewSpy },
+        { provide: GamePauseService, useValue: gamePauseSpy },
       ],
     });
 
@@ -199,6 +203,9 @@ describe('GameSessionService', () => {
       // (regression guard for the SPEED_RUN fix that landed in Phase 10).
       expect(combatLoopSpy.reset).toHaveBeenCalled();
       expect(wavePreviewSpy.resetForEncounter).toHaveBeenCalled();
+      // Phase 12: pause-state flags reset so a stale quit-confirm from a prior
+      // encounter doesn't leak into the next.
+      expect(gamePauseSpy.reset).toHaveBeenCalled();
 
       scene.clear();
     });

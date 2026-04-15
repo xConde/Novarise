@@ -526,6 +526,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // stays because it reads live from RelicService.)
     this.wavePreviewService.resetForEncounter();
 
+    // Reset pause-state flags so a prior encounter's autoPaused /
+    // showQuitConfirm doesn't bleed through into this encounter's pause UI.
+    this.gamePauseService.reset();
+
     // Initialize deck for this encounter and draw the opening hand
     this.deckService.resetForEncounter();
     this.deckService.drawForWave();
