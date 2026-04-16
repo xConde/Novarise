@@ -320,11 +320,11 @@
     (handStuckChanged)="handStuck = $event">
   </app-card-hand>
 
-  <!-- Pile inspector overlay — full-board modal showing draw or discard pile contents -->
+  <!-- Pile inspector overlay — full-board modal showing draw, discard, or exhaust pile contents -->
   <app-pile-inspector
     *ngIf="inspectedPile && deckState"
-    [pile]="inspectedPile === 'draw' ? deckState.drawPile : deckState.discardPile"
-    [label]="inspectedPile === 'draw' ? 'Draw Pile' : 'Discard Pile'"
+    [pile]="inspectedPile === 'draw' ? deckState.drawPile : inspectedPile === 'discard' ? deckState.discardPile : deckState.exhaustPile"
+    [label]="inspectedPile === 'draw' ? 'Draw Pile' : inspectedPile === 'discard' ? 'Discard Pile' : 'Exhaust Pile'"
     (closed)="inspectedPile = null">
   </app-pile-inspector>
 

@@ -315,6 +315,41 @@ describe('CardHandComponent', () => {
     });
   });
 
+  describe('exhaust pile counter', () => {
+    it('inspectPile("exhaust") emits pileInspected with "exhaust"', () => {
+      const emitted: Array<'draw' | 'discard' | 'exhaust'> = [];
+      component.pileInspected.subscribe(p => emitted.push(p));
+      component.inspectPile('exhaust');
+      expect(emitted).toEqual(['exhaust']);
+    });
+
+    it('exhaustPulse fires and clears when exhaustPile grows', fakeAsync(() => {
+      component.deckState = {
+        drawPile: [],
+        hand: [],
+        discardPile: [],
+        exhaustPile: [makeInstance(CardId.TOWER_BASIC)],
+      };
+      component.energy = makeEnergy();
+      // prime prevExhaustCount to 1 so the next change triggers a pulse
+      component.ngOnChanges();
+
+      // Grow the exhaust pile
+      component.deckState = {
+        drawPile: [],
+        hand: [],
+        discardPile: [],
+        exhaustPile: [makeInstance(CardId.TOWER_BASIC), makeInstance(CardId.GOLD_RUSH)],
+      };
+      component.ngOnChanges();
+
+      expect(component.exhaustPulse).toBeTrue();
+
+      tick(350);
+      expect(component.exhaustPulse).toBeFalse();
+    }));
+  });
+
   describe('energy display', () => {
     it('exposes current and max from the energy input', () => {
       component.energy = makeEnergy(2, 5);

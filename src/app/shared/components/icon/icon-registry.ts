@@ -3,7 +3,7 @@ export type IconName =
   | 'play' | 'pause' | 'range' | 'activity'
   | 'sound-on' | 'sound-off' | 'chevron-left'
   | 'cart' | 'check' | 'card' | 'moon' | 'kills'
-  | 'draw-pile' | 'discard' | 'crosshair' | 'bolt' | 'shield'
+  | 'draw-pile' | 'discard' | 'exhaust' | 'crosshair' | 'bolt' | 'shield'
   | 'node-combat' | 'node-elite' | 'node-boss'
   | 'node-rest' | 'node-shop' | 'node-event' | 'node-unknown';
 
@@ -33,6 +33,7 @@ export const ICON_REGISTRY: Record<IconName, IconDef> = {
   'kills':         { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '2' },
   'draw-pile':     { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '2' },
   'discard':       { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '2' },
+  'exhaust':       { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '2' },
   'crosshair':     { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '2' },
   'bolt':          { viewBox: '0 0 24 24', fill: 'currentColor', stroke: 'none',         strokeWidth: '0' },
   'shield':        { viewBox: '0 0 24 24', fill: 'none',         stroke: 'currentColor', strokeWidth: '2' },

@@ -53,7 +53,7 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
    */
   @Input() pendingCardId: string | null = null;
   @Output() cardPlayed = new EventEmitter<CardInstance>();
-  @Output() pileInspected = new EventEmitter<'draw' | 'discard'>();
+  @Output() pileInspected = new EventEmitter<'draw' | 'discard' | 'exhaust'>();
   /** Emits true when the player has 0 energy and no playable cards; false when resolved. */
   @Output() handStuckChanged = new EventEmitter<boolean>();
   /** Emits the HandCard when the player right-clicks or long-presses a card in hand. */
@@ -140,8 +140,10 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   // Sprint 37 — pile count pulse
   private prevDrawCount = 0;
   private prevDiscardCount = 0;
+  private prevExhaustCount = 0;
   drawPulse = false;
   discardPulse = false;
+  exhaustPulse = false;
 
   // Sprint 39 — hand-stuck tracking
   private prevHandStuck = false;
@@ -165,14 +167,19 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
     // Sprint 37: pulse pile counters when they change (skip the very first render)
     const drawLen = this.deckState?.drawPile.length ?? 0;
     const discardLen = this.deckState?.discardPile.length ?? 0;
+    const exhaustLen = this.deckState?.exhaustPile.length ?? 0;
     if (this.prevDrawCount !== 0 && drawLen !== this.prevDrawCount) {
       this.flashPileCount('draw');
     }
     if (this.prevDiscardCount !== 0 && discardLen !== this.prevDiscardCount) {
       this.flashPileCount('discard');
     }
+    if (this.prevExhaustCount !== 0 && exhaustLen !== this.prevExhaustCount) {
+      this.flashPileCount('exhaust');
+    }
     this.prevDrawCount = drawLen;
     this.prevDiscardCount = discardLen;
+    this.prevExhaustCount = exhaustLen;
 
     // Sprint 39: emit hand-stuck state change
     const stuck = this.isHandStuck;
@@ -217,7 +224,7 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
     this.energyPips = Array.from({ length: count }, (_, i) => i);
   }
 
-  inspectPile(pile: 'draw' | 'discard'): void {
+  inspectPile(pile: 'draw' | 'discard' | 'exhaust'): void {
     this.pileInspected.emit(pile);
   }
 
@@ -308,13 +315,16 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   // Sprint 37
-  private flashPileCount(pile: 'draw' | 'discard'): void {
+  private flashPileCount(pile: 'draw' | 'discard' | 'exhaust'): void {
     if (pile === 'draw') {
       this.drawPulse = true;
       setTimeout(() => (this.drawPulse = false), 350);
-    } else {
+    } else if (pile === 'discard') {
       this.discardPulse = true;
       setTimeout(() => (this.discardPulse = false), 350);
+    } else {
+      this.exhaustPulse = true;
+      setTimeout(() => (this.exhaustPulse = false), 350);
     }
   }
 

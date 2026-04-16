@@ -89,7 +89,7 @@
     </button>
   </div>
 
-  <!-- Draw / discard pile counts — clickable to inspect -->
+  <!-- Draw / discard / exhaust pile counts — clickable to inspect -->
   <div class="card-hand__piles" [attr.aria-label]="'Deck piles'">
     <button class="pile-count pile-count--draw"
             type="button"
@@ -108,6 +108,15 @@
       <app-icon name="discard" [size]="12"></app-icon>
       <span class="pile-label">Disc</span>
       <span class="pile-value">{{ deckState.discardPile.length }}</span>
+    </button>
+    <button class="pile-count pile-count--exhaust"
+            type="button"
+            [class.pile-count--pulse]="exhaustPulse"
+            [attr.aria-label]="'Inspect exhaust pile: ' + deckState.exhaustPile.length + ' cards'"
+            (click)="inspectPile('exhaust')">
+      <app-icon name="exhaust" [size]="12"></app-icon>
+      <span class="pile-label">Exh</span>
+      <span class="pile-value">{{ deckState.exhaustPile.length }}</span>
     </button>
   </div>
 

@@ -826,6 +826,12 @@ body.reduce-motion .card-hand { animation: none; }
   .pile-value { color: var(--text-dim); }
 }
 
+.pile-count--exhaust {
+  color: rgb(255, 120, 120);
+
+  .pile-value { color: rgb(255, 120, 120); }
+}
+
 // ── H3 keyword chips ─────────────────────────────────────────
 // Small labels for exhaust / retain / innate / ethereal. Sit just above
 // the description so players can scan mechanics without reading rules text.

@@ -101,6 +101,11 @@
       <svg:path d="M10 11v6M14 11v6"/>
     </ng-container>
 
+    <ng-container *ngSwitchCase="'exhaust'">
+      <svg:path d="M12 2C10 6 7 9 7 13a5 5 0 0 0 10 0c0-4-3-7-5-11Z"/>
+      <svg:path d="M12 14c0 1.1-.9 2-2 2"/>
+    </ng-container>
+
     <ng-container *ngSwitchCase="'crosshair'">
       <svg:line x1="12" y1="2" x2="12" y2="10"/>
       <svg:line x1="12" y1="14" x2="12" y2="22"/>
