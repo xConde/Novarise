@@ -169,6 +169,22 @@ export const RUN_CONFIG = {
   minStartingLives: 5,
 } as const;
 
+// ── Reward Rarity Weights ─────────────────────────────────────
+
+/**
+ * Weighted probabilities for rarity-tier selection during reward draws.
+ * Values are raw weights (not percentages); the draw algorithm normalises them.
+ *
+ * Distribution: COMMON 60 / UNCOMMON 30 / RARE 10 ≈ 60%/30%/10%.
+ * Matches the Slay-the-Spire-style distribution used for card and relic pools.
+ */
+export const REWARD_RARITY_WEIGHTS = {
+  /** Base card/relic reward rarity draw weights. */
+  common: 60,
+  uncommon: 30,
+  rare: 10,
+} as const;
+
 // ── Relic Effect Constants ────────────────────────────────────
 
 /**

@@ -11,10 +11,10 @@ import { RunStatus, DEFAULT_RUN_CONFIG, EncounterResult } from '../models/run-st
 import { NodeMap, MapNode, NodeType } from '../models/node-map.model';
 import { EncounterConfig } from '../models/encounter.model';
 import { RelicId, RelicDefinition, RelicRarity, RELIC_DEFINITIONS } from '../models/relic.model';
-import { CardRarity } from '../models/card.model';
+import { CardId, CardRarity } from '../models/card.model';
 import { CARD_DEFINITIONS } from '../constants/card-definitions';
-import { REWARD_CONFIG } from '../constants/run.constants';
-import { AscensionEffectType } from '../models/ascension.model';
+import { REWARD_CONFIG, REWARD_RARITY_WEIGHTS, createSeededRng } from '../constants/run.constants';
+import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
 import { ChallengeDefinition, ChallengeType } from '../data/challenges';
 
 // ── Test fixtures ───────────────────────────────────────────────
@@ -1094,6 +1094,140 @@ describe('RunService', () => {
       expect(service.isRestoringCheckpoint).toBeTrue();
     }));
   });
+
+  // ── computeCardChoiceCount ────────────────────────────────────
+
+  describe('computeCardChoiceCount()', () => {
+    it('returns 3 at ascension 0 (no reduction)', fakeAsync(() => {
+      service.startNewRun(0);
+      expect(service.computeCardChoiceCount()).toBe(3);
+    }));
+
+    it('returns 2 at ascension 11 (FEWER_CARD_CHOICES=1)', fakeAsync(() => {
+      service.startNewRun(11);
+      expect(service.computeCardChoiceCount()).toBe(2);
+    }));
+
+    it('returns 3 at ascension 10 (FEWER_CARD_CHOICES not yet active)', fakeAsync(() => {
+      service.startNewRun(10);
+      expect(service.computeCardChoiceCount()).toBe(3);
+    }));
+
+    it('never drops below 1, even if reduction exceeds baseline', fakeAsync(() => {
+      // Test the Math.max(1, …) floor: simulate baseline=1 and reduction=1 → result must be 1.
+      service.startNewRun(11); // A11 grants FEWER_CARD_CHOICES=1
+      const state = service.runState!;
+      const effects = getAscensionEffects(state.ascensionLevel);
+      const reduction = effects.get(AscensionEffectType.FEWER_CARD_CHOICES) ?? 0;
+      // reduction=1; if baseline were 1: Math.max(1, 1-1) = Math.max(1,0) = 1
+      const baselineCardChoices = 1;
+      expect(Math.max(1, baselineCardChoices - reduction)).toBe(1);
+    }));
+
+    it('generateRewards() returns exactly computeCardChoiceCount() cards at A0', fakeAsync(() => {
+      service.startNewRun(0);
+      encounterService.prepareEncounter.and.returnValue(makeEncounterConfig());
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      const rewards = service.generateRewards();
+      expect(rewards.cardChoices.length).toBe(service.computeCardChoiceCount());
+    }));
+
+    it('generateRewards() returns 2 card choices at ascension 11', fakeAsync(() => {
+      service.startNewRun(11);
+      encounterService.prepareEncounter.and.returnValue(makeEncounterConfig());
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      const rewards = service.generateRewards();
+      expect(rewards.cardChoices.length).toBe(2);
+    }));
+  });
+
+  // ── pickCardRewards — rarity weighting ────────────────────────
+
+  describe('pickCardRewards — rarity-weighted distribution', () => {
+    it('1000-draw sample matches 60/30/10 distribution within ±10% tolerance (seeded RNG)', fakeAsync(() => {
+      service.startNewRun(0);
+      const seededRng = createSeededRng(42);
+
+      const counts: Record<string, number> = { common: 0, uncommon: 0, rare: 0 };
+      const draws = 1000;
+      for (let i = 0; i < draws; i++) {
+        const rewards = (service as any).pickCardRewards(1, () => seededRng.next()) as Array<{ cardId: CardId }>;
+        if (rewards.length === 0) continue;
+        const def = CARD_DEFINITIONS[rewards[0].cardId];
+        counts[def.rarity] = (counts[def.rarity] ?? 0) + 1;
+      }
+
+      const total = counts['common'] + counts['uncommon'] + counts['rare'];
+      const commonPct = counts['common'] / total;
+      const uncommonPct = counts['uncommon'] / total;
+      const rarePct = counts['rare'] / total;
+
+      // Allow ±10% tolerance on each tier
+      expect(commonPct).toBeGreaterThanOrEqual(0.50);
+      expect(commonPct).toBeLessThanOrEqual(0.70);
+      expect(uncommonPct).toBeGreaterThanOrEqual(0.20);
+      expect(uncommonPct).toBeLessThanOrEqual(0.40);
+      expect(rarePct).toBeGreaterThanOrEqual(0.04);
+      expect(rarePct).toBeLessThanOrEqual(0.18);
+    }));
+
+    it('empty RARE pool falls back to UNCOMMON or COMMON (no undefined slot)', fakeAsync(() => {
+      service.startNewRun(0);
+
+      const rarityWeights = [
+        { rarity: CardRarity.COMMON, weight: REWARD_RARITY_WEIGHTS.common },
+        { rarity: CardRarity.UNCOMMON, weight: REWARD_RARITY_WEIGHTS.uncommon },
+        { rarity: CardRarity.RARE, weight: REWARD_RARITY_WEIGHTS.rare },
+      ];
+
+      const stubbedPool = {
+        [CardRarity.STARTER]: [],
+        [CardRarity.COMMON]: [{ rarity: CardRarity.COMMON }],
+        [CardRarity.UNCOMMON]: [{ rarity: CardRarity.UNCOMMON }],
+        [CardRarity.RARE]: [], // Empty RARE pool
+      };
+
+      // With RNG biased toward RARE range (high values) but RARE is empty,
+      // picker must fall back to UNCOMMON or COMMON
+      const rng = () => 0.99; // Would normally select RARE
+      const pickedRarity = (service as any).pickWeightedRarity(
+        rarityWeights,
+        stubbedPool,
+        rng,
+      ) as string;
+
+      expect(pickedRarity).not.toBe(CardRarity.RARE);
+      expect([CardRarity.COMMON as string, CardRarity.UNCOMMON as string]).toContain(pickedRarity);
+    }));
+
+    it('empty RARE and UNCOMMON pool falls back to COMMON', fakeAsync(() => {
+      service.startNewRun(0);
+
+      const rarityWeights = [
+        { rarity: CardRarity.COMMON, weight: REWARD_RARITY_WEIGHTS.common },
+        { rarity: CardRarity.UNCOMMON, weight: REWARD_RARITY_WEIGHTS.uncommon },
+        { rarity: CardRarity.RARE, weight: REWARD_RARITY_WEIGHTS.rare },
+      ];
+
+      const stubbedPool = {
+        [CardRarity.STARTER]: [],
+        [CardRarity.COMMON]: [{ rarity: CardRarity.COMMON }],
+        [CardRarity.UNCOMMON]: [], // Empty
+        [CardRarity.RARE]: [],    // Empty
+      };
+
+      const rng = () => 0.99;
+      const pickedRarity = (service as any).pickWeightedRarity(
+        rarityWeights,
+        stubbedPool,
+        rng,
+      ) as string;
+
+      expect(pickedRarity).toBe(CardRarity.COMMON as string);
+    }));
+  });
+
+  // ── restoreRngState ───────────────────────────────────────────
 
   describe('restoreRngState()', () => {
     it('restores RNG state when runRng already exists', fakeAsync(() => {

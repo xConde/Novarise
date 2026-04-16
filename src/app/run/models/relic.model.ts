@@ -169,7 +169,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
   [RelicId.BOUNTY_HUNTER]: {
     id: RelicId.BOUNTY_HUNTER,
     name: 'Bounty Hunter',
-    description: 'Elite enemies drop double gold',
+    description: 'Double gold from elite and boss kills',
     flavorText: 'The bigger they are, the richer they fall.',
     rarity: RelicRarity.UNCOMMON,
   },
