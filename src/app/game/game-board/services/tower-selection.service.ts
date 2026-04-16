@@ -5,7 +5,6 @@ import {
   PlacedTower,
   MAX_TOWER_LEVEL,
   getUpgradeCost,
-  getSellValue,
   getEffectiveStats,
 } from '../models/tower.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
@@ -14,6 +13,7 @@ import { GameStateService } from './game-state.service';
 import { RangeVisualizationService } from './range-visualization.service';
 import { GameBoardService } from '../game-board.service';
 import { SceneService } from './scene.service';
+import { RelicService } from '../../../run/services/relic.service';
 
 /**
  * Manages tower inspection / selection panel state.
@@ -46,6 +46,7 @@ export class TowerSelectionService {
     private rangeVisualizationService: RangeVisualizationService,
     private gameBoardService: GameBoardService,
     private sceneService: SceneService,
+    private relicService: RelicService,
   ) {}
 
   /**
@@ -85,7 +86,8 @@ export class TowerSelectionService {
     const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
     this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level, costMult);
     this.selectedTowerUpgradePercent = 0;
-    this.selectedTowerSellValue = getSellValue(tower.totalInvested);
+    // Use relic-aware rate so the preview matches what TowerInteractionService.sellTower() pays out.
+    this.selectedTowerSellValue = Math.round(tower.totalInvested * this.relicService.getSellRefundRate());
 
     // Compute upgrade preview (L1→L2 only; L2→L3 requires spec choice so preview is per-spec)
     if (tower.level < MAX_TOWER_LEVEL - 1) {

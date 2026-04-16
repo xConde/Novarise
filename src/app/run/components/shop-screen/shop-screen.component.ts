@@ -44,6 +44,8 @@ export class ShopScreenComponent implements OnChanges {
   resolvedItems: ResolvedShopItem[] = [];
 
   ngOnChanges(): void {
+    // Reset heal counter on every new shop visit (new shopItems input binding).
+    this.healCount = 0;
     this.resolvedItems = this.shopItems.map((item, index) => {
       const relic = this.resolveRelicDef(item);
       const card = this.resolveCardDef(item);

@@ -7,11 +7,13 @@ import { GameStateService } from './game-state.service';
 import { RangeVisualizationService } from './range-visualization.service';
 import { GameBoardService } from '../game-board.service';
 import { SceneService } from './scene.service';
+import { RelicService } from '../../../run/services/relic.service';
 import { TowerType, PlacedTower, TargetingMode } from '../models/tower.model';
 import { INITIAL_GAME_STATE } from '../models/game-state.model';
 import {
   createGameBoardServiceSpy,
   createGameStateServiceSpy,
+  createRelicServiceSpy,
   createSceneServiceSpy,
   createTowerCombatServiceSpy,
 } from '../testing';
@@ -39,6 +41,7 @@ describe('TowerSelectionService', () => {
   let rangeVisSpy: jasmine.SpyObj<RangeVisualizationService>;
   let gameBoardSpy: jasmine.SpyObj<GameBoardService>;
   let sceneSpy: jasmine.SpyObj<SceneService>;
+  let relicSpy: jasmine.SpyObj<RelicService>;
 
   beforeEach(() => {
     towerCombatSpy = createTowerCombatServiceSpy();
@@ -48,6 +51,7 @@ describe('TowerSelectionService', () => {
     ]);
     gameBoardSpy = createGameBoardServiceSpy();
     sceneSpy = createSceneServiceSpy();
+    relicSpy = createRelicServiceSpy();
 
     TestBed.configureTestingModule({
       providers: [
@@ -57,6 +61,7 @@ describe('TowerSelectionService', () => {
         { provide: RangeVisualizationService, useValue: rangeVisSpy },
         { provide: GameBoardService, useValue: gameBoardSpy },
         { provide: SceneService, useValue: sceneSpy },
+        { provide: RelicService, useValue: relicSpy },
       ],
     });
 
@@ -181,6 +186,26 @@ describe('TowerSelectionService', () => {
       service.refreshTowerInfoPanel();
 
       expect(service.upgradePreview).not.toBeNull();
+    });
+
+    it('sell preview uses base 0.5 rate without SALVAGE_KIT', () => {
+      relicSpy.getSellRefundRate.and.returnValue(0.5);
+      const tower = createMockTower({ totalInvested: 200 });
+      service.selectedTowerInfo = tower;
+
+      service.refreshTowerInfoPanel();
+
+      expect(service.selectedTowerSellValue).toBe(100);
+    });
+
+    it('sell preview uses relic-adjusted 0.75 rate with SALVAGE_KIT active', () => {
+      relicSpy.getSellRefundRate.and.returnValue(0.75);
+      const tower = createMockTower({ totalInvested: 200 });
+      service.selectedTowerInfo = tower;
+
+      service.refreshTowerInfoPanel();
+
+      expect(service.selectedTowerSellValue).toBe(150);
     });
   });
 

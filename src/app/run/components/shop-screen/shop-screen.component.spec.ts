@@ -213,6 +213,28 @@ describe('ShopScreenComponent', () => {
     });
   });
 
+  describe('healCount reset on new shop visit', () => {
+    it('resets healCount to 0 when shopItems input changes (simulates new shop visit)', () => {
+      component.shopItems = [COMMON_ITEM];
+      component.currentLives = 3;
+      component.maxLives = 7;
+      component.currentGold = 1000;
+      component.ngOnChanges();
+
+      // Simulate three heals at shop A
+      component.buyHeal();
+      component.buyHeal();
+      component.buyHeal();
+      expect(component.healCount).toBe(3);
+
+      // Simulate arriving at shop B — new shopItems binding triggers ngOnChanges
+      component.shopItems = [UNCOMMON_ITEM, RARE_ITEM];
+      component.ngOnChanges();
+
+      expect(component.healCount).toBe(0);
+    });
+  });
+
   describe('SHOP_CONFIG integration', () => {
     it('healCost matches SHOP_CONFIG.healCostPerLife', () => {
       expect(component.healCost).toBe(SHOP_CONFIG.healCostPerLife);
