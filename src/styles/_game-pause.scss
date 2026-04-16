@@ -23,6 +23,8 @@
 
 .board-container .pause-menu {
   cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
   background: var(--panel-blue-bg);
   border: var(--border-width-thin) solid var(--theme-purple);
   border-radius: var(--border-radius-md);
@@ -342,7 +344,6 @@
   color: var(--text-muted);
   padding: 0.5rem 0.25rem;
   list-style: none;
-  user-select: none;
 
   &::-webkit-details-marker { display: none; }
 
