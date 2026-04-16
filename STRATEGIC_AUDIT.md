@@ -1514,3 +1514,41 @@ Finding 1 is the only one with a reachable failure mode in production code paths
 - [x] C6: Balance one-liners (SNIPER 3→2, MORTAR COMMON)
 - [x] Red-team gate: Finding 1 hardening + spec
 - [x] Commit Phase 1 + red-team hardening
+
+---
+
+## Red Team Critique — Mechanics Audit Phase 2 (2026-04-16)
+
+**Scope:** Phase 2 clusters P2-C1 through P2-C6: save/restore correctness, combat remainders, shop/sell fixes, feedback easy wins, targeting modes, content truthfulness. 36 files / +968 / −40 before hardening.
+
+### Finding 1: Lucky Coin notification flood on multi-kill turns (HIGH)
+**Location:** `combat-loop.service.ts:350` (as originally wired by P2-C4)
+**Risk:** `rollLuckyCoin()` fires per kill. On a wave turn that kills 10 enemies with a 20% proc rate, ~2 notifications stack. On bigger turns (tower crit combos) expect 3-5. Each shows a blocking toast that pushes earlier notifications up the stack. Players cannot read individual messages, and important signals (Reinforced Walls blocks, wave-complete events) get crowded out. Audit intent was "make procs visible," not "firehose."
+**Fix:** Aggregate per-turn. Track `luckyCoinProcsThisTurn` and `luckyCoinBonusGoldThisTurn` counters on `CombatLoopService`, reset at the top of `resolveTurn()`, accumulate in the per-kill branch instead of firing immediately. After the turn resolves, emit ONE notification with the rolled-up count: `"+45 bonus gold (Lucky Coin)"` for 1 proc or `"Lucky Coin ×3 (+130 bonus gold)"` for multiple. New spec covers both cases.
+
+### Finding 2: Shop `healCount` reset coupled to array reference identity (MEDIUM)
+**Location:** `shop-screen.component.ts:ngOnChanges`
+**Risk:** Reset fires on `shopItems` reference change. Today `run.component.ts` constructs a new array per shop visit, so reset works. If a future refactor mutates the array in place (e.g., for a "refresh shop" mechanic), the reset silently skips and per-visit heal cap carries between visits. Fragile contract.
+**Mitigation:** Leave as-is — current call sites behave correctly. Flag for a follow-up: add a `@Input() shopNodeId: string` so visit identity is explicit and reference-independent. Low probability of regression today; worth the cleanup when a shop refactor touches this surface.
+**Not fixing in Phase 2** — current invariant holds; explicit input is a follow-up cleanup, not a correctness bug.
+
+### Finding 3: Life-loss audio can stack on multi-leak turn (LOW)
+**Location:** `combat-loop.service.ts:209` — `audioService.playLifeLoss()` inside the leak loop
+**Risk:** Multiple enemies leak the same turn → `playLifeLoss()` fires 3+ times in sequence. `AudioService` documents per-frame polyphony throttling (`maxTowerFiresPerFrame`, `maxDeathSoundsPerFrame`) but life-loss doesn't have a dedicated throttle. Audible stutter is possible on boss waves where 2-3 enemies breach together.
+**Mitigation:** The existing throttle architecture exists specifically for this pattern. Adding `maxLifeLossSoundsPerFrame: 1` to `audio.constants.ts` is a one-line addition but requires AudioService internals knowledge. Skipping in Phase 2 — sensory impact is low and a player who loses 3 lives at once has bigger problems than overlapping audio. Revisit if QA reports the stacking.
+**Not fixing in Phase 2** — minor feel issue, not a correctness bug.
+
+### Hardening Applied
+
+Finding 1 is the only one with a live UX degradation at typical player play — fixed inline via per-turn aggregation. Findings 2 and 3 are documented mitigations for future cleanup.
+
+### Deployment Checklist — Phase 2 (Mechanics Audit Remaining CRITICALs)
+
+- [x] P2-C1: Save/restore correctness (restore order, RunService RNG, Deck RNG serialize, v3→v4 migration)
+- [x] P2-C2: Combat remainders (CHAIN halt, getLivingEnemyCount hp check, mortar zone wave-clear, CHAIN hitCount)
+- [x] P2-C3: Shop/tower fixes (shop heal reset, sell preview with relic rate)
+- [x] P2-C4: Feedback easy wins (proc notifications, bossHit shake, life-loss SFX)
+- [x] P2-C5: Targeting modes (WEAKEST, LAST, FARTHEST added; 6-mode cycle)
+- [x] P2-C6: Content truthfulness (TEMPORAL_RIFT, gambling_den RNG, tower spec descs, FLYING docstring)
+- [x] Red-team gate: Finding 1 hardening + aggregated spec
+- [x] Commit Phase 2 + red-team hardening
