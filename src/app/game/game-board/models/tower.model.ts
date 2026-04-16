@@ -6,14 +6,27 @@ export enum TargetingMode {
   NEAREST = 'nearest',
   FIRST = 'first',
   STRONGEST = 'strongest',
+  WEAKEST = 'weakest',
+  LAST = 'last',
+  FARTHEST = 'farthest',
 }
-export const TARGETING_MODES: TargetingMode[] = [TargetingMode.NEAREST, TargetingMode.FIRST, TargetingMode.STRONGEST];
+export const TARGETING_MODES: TargetingMode[] = [
+  TargetingMode.NEAREST,
+  TargetingMode.FARTHEST,
+  TargetingMode.FIRST,
+  TargetingMode.LAST,
+  TargetingMode.STRONGEST,
+  TargetingMode.WEAKEST,
+];
 export const DEFAULT_TARGETING_MODE: TargetingMode = TargetingMode.NEAREST;
 
 export const TARGETING_MODE_LABELS: Record<TargetingMode, string> = {
   [TargetingMode.NEAREST]: 'Nearest',
   [TargetingMode.FIRST]: 'First',
   [TargetingMode.STRONGEST]: 'Strongest',
+  [TargetingMode.WEAKEST]: 'Weakest',
+  [TargetingMode.LAST]: 'Last',
+  [TargetingMode.FARTHEST]: 'Farthest',
 };
 
 import { TowerType } from '@core/models/tower-type.model';
@@ -157,7 +170,7 @@ export const TOWER_SPECIALIZATIONS: Record<TowerType, Record<TowerSpecialization
     },
     [TowerSpecialization.BETA]: {
       label: 'Rapid',
-      description: 'Much faster fire rate, wider range',
+      description: 'Tight-beam salvo: +80% damage, +50% range',
       damage: 1.8, range: 1.5,
     },
   },
@@ -169,7 +182,7 @@ export const TOWER_SPECIALIZATIONS: Record<TowerType, Record<TowerSpecialization
     },
     [TowerSpecialization.BETA]: {
       label: 'Sharpshooter',
-      description: 'Fast semi-auto, moderate range',
+      description: 'Focused shot: +100% damage, +20% range',
       damage: 2.0, range: 1.2,
     },
   },
@@ -183,7 +196,7 @@ export const TOWER_SPECIALIZATIONS: Record<TowerType, Record<TowerSpecialization
     },
     [TowerSpecialization.BETA]: {
       label: 'Suppressor',
-      description: 'Rapid small explosions, wider range',
+      description: 'Sustained barrage: +80% damage, +50% range',
       damage: 1.8, range: 1.5,
     },
   },

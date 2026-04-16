@@ -193,4 +193,46 @@ describe('Tower Model', () => {
       expect(reducedCost).toBeLessThan(baseCost);
     });
   });
+
+  describe('BETA specialization descriptions — no fire-rate lies', () => {
+    const FIRE_RATE_PHRASES = ['fire rate', 'semi-auto', 'rapid explosion', 'faster arc', 'pulse rate'];
+
+    function containsFireRateClaim(desc: string): boolean {
+      const lower = desc.toLowerCase();
+      return FIRE_RATE_PHRASES.some(phrase => lower.includes(phrase));
+    }
+
+    it('BASIC BETA description does not claim a fire rate change', () => {
+      const desc = TOWER_SPECIALIZATIONS[TowerType.BASIC][TowerSpecialization.BETA].description;
+      expect(containsFireRateClaim(desc)).toBeFalse();
+    });
+
+    it('SNIPER BETA description does not claim a fire rate change', () => {
+      const desc = TOWER_SPECIALIZATIONS[TowerType.SNIPER][TowerSpecialization.BETA].description;
+      expect(containsFireRateClaim(desc)).toBeFalse();
+    });
+
+    it('SPLASH BETA description does not claim a fire rate change', () => {
+      const desc = TOWER_SPECIALIZATIONS[TowerType.SPLASH][TowerSpecialization.BETA].description;
+      expect(containsFireRateClaim(desc)).toBeFalse();
+    });
+
+    it('BASIC BETA description reflects actual damage (+80%) and range (+50%) multipliers', () => {
+      const spec = TOWER_SPECIALIZATIONS[TowerType.BASIC][TowerSpecialization.BETA];
+      expect(spec.description).toContain('+80% damage');
+      expect(spec.description).toContain('+50% range');
+    });
+
+    it('SNIPER BETA description reflects actual damage (+100%) and range (+20%) multipliers', () => {
+      const spec = TOWER_SPECIALIZATIONS[TowerType.SNIPER][TowerSpecialization.BETA];
+      expect(spec.description).toContain('+100% damage');
+      expect(spec.description).toContain('+20% range');
+    });
+
+    it('SPLASH BETA description reflects actual damage (+80%) and range (+50%) multipliers', () => {
+      const spec = TOWER_SPECIALIZATIONS[TowerType.SPLASH][TowerSpecialization.BETA];
+      expect(spec.description).toContain('+80% damage');
+      expect(spec.description).toContain('+50% range');
+    });
+  });
 });
