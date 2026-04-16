@@ -1475,4 +1475,42 @@ costs nothing and closes the silent-NaN failure mode. See follow-up commit.
 - [x] Phase 12c: H3 keyword badges (commit `01a1bbb`)
 - [x] Phase 12d: RunEventType emitters (commit `bca26bb`)
 - [x] Red-team gate: Finding 1 hardening + spec
-- [ ] Commit red-team hardening + verify full suite green
+- [x] Commit red-team hardening + verify full suite green
+
+---
+
+## Red Team Critique — Mechanics Audit Phase 1 (2026-04-16)
+
+**Scope:** 80-sprint mechanics audit CRITICAL fixes grouped into 6 clusters (C1–C6): combat order, enemy speed, card/turn safety, ascension UX, settings plumbing, balance one-liners. 27 files / +608 / −94 before hardening.
+
+### Finding 1: `undoPlay` silently violates `maxHandSize` invariant (HIGH)
+**Location:** `deck.service.ts:315-342`
+**Risk:** When an effect throws while hand is at `maxHandSize` (10), `DeckService.undoPlay()` unconditionally appends the played card to `hand` via `[...this.deckState.hand, card]`. Hand overflows to 11. Downstream `drawOne()` assumes `hand.length <= maxHandSize` (guard at `:202`). UI pip count and card-play layout break. A player who drew to cap, played a card, and hit an effect bug ends up in an impossible state.
+**Fix:** When hand is at cap, route the card to the top of `drawPile` instead of `hand`. The next `drawOne()` picks it up naturally. Energy refund path unchanged. Spec added: `'undoPlay routes to drawPile top when hand is at maxHandSize'` (5273 tests pass).
+
+### Finding 2: Try/catch wraps multi-step side-effect handlers — partial rollback asymmetry (MEDIUM)
+**Location:** `card-play.service.ts:125-154`
+**Risk:** `fortifyRandomTower()` and `salvageLastTower()` perform tower mutations (upgrade / remove) AND resource mutations (gold add). If either half succeeds and then throws before the other completes, `undoPlay` restores the card + energy — but the tower mutation remains. Player gets a free upgrade or free gold. `applySpell` with multi-enemy damage + BURN application has the same shape: some enemies hit, effect throws, rollback doesn't undo damage.
+**Mitigation:** The practical exposure is small — these handlers are straight-line synchronous code with no I/O or async, so the only throw vectors are bugs we want to surface. The rollback is net-positive vs. leaving the card+energy consumed on error. Document the contract in a code comment rather than engineer a full transaction log.
+**Not fixing in Phase 1** — low real-world probability, adding a full effect journal is a sprint-sized change for a theoretical risk.
+
+### Finding 3: SWARM speed buff shipped without playtest coverage (MEDIUM)
+**Location:** `enemy.service.ts:216` + `enemy.model.ts` ENEMY_STATS
+**Risk:** Cluster C2 moved SWARM from hardcoded 1 tile/turn to `tilesPerTurn: 2` per its spec intent. 149 authored waves were balanced against the 1-tile assumption. No integration test simulates full-wave completion under new SWARM speed — it's possible wave N with a SWARM burst becomes unwinnable at the authored reward budget.
+**Mitigation:** Flag this for user browser-verify. If mid-game SWARM-heavy encounters feel too tight, revert SWARM to `tilesPerTurn: 1` in `enemy.model.ts` — a one-line hotfix with no downstream impact.
+**Not fixing in Phase 1** — requires playtest data, not code judgment. User will validate.
+
+### Hardening Applied
+
+Finding 1 is the only one with a reachable failure mode in production code paths and no playtest dependency — fixed inline with new spec. Findings 2 and 3 are documented for the playtest pass.
+
+### Deployment Checklist — Phase 1 (Mechanics Audit CRITICALs)
+
+- [x] C1: Combat correctness (move/fire swap, boss position, double-gold)
+- [x] C2: Enemy speed system (tilesPerTurn field + mini-swarm HP scaling)
+- [x] C3: Card/turn safety (energy clamp, endTurn guard, discardHand order, effect rollback)
+- [x] C4: Ascension selector + rest heal preview + A20 cap
+- [x] C5: Settings plumbing (showFps, reduce-motion shake guard, mute persist)
+- [x] C6: Balance one-liners (SNIPER 3→2, MORTAR COMMON)
+- [x] Red-team gate: Finding 1 hardening + spec
+- [x] Commit Phase 1 + red-team hardening
