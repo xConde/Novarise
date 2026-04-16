@@ -136,9 +136,14 @@ export const RUN_EVENTS: ReadonlyArray<RunEvent> = [
     description: 'A makeshift table. A grinning figure shuffles cards. "Double or nothing?"',
     choices: [
       {
-        label: 'Gamble 40 gold',
-        description: 'Win: gain 80 gold. Lose: gain nothing.',
-        outcome: { goldDelta: 40, livesDelta: 0, description: 'Fortune smiles today.' },
+        label: 'Gamble (50/50)',
+        description: '50% chance to gain 80 gold. Lose: gain nothing.',
+        outcome: {
+          goldDelta: 0,
+          livesDelta: 0,
+          description: 'The cards are dealt.',
+          gamble: { winGoldDelta: 80, loseGoldDelta: 0, winChance: 0.5 },
+        },
       },
       {
         label: 'Keep walking',

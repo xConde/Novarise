@@ -185,7 +185,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
   [RelicId.TEMPORAL_RIFT]: {
     id: RelicId.TEMPORAL_RIFT,
     name: 'Temporal Rift',
-    description: 'Enemy spawn intervals +25%',
+    description: 'First enemy of each wave spawns 1 turn later',
     flavorText: 'Time bends for those who know its seams.',
     rarity: RelicRarity.RARE,
   },

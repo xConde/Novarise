@@ -96,4 +96,14 @@ export interface EventOutcome {
   /** When true, resolveEvent removes a random non-starter card from the deck. */
   readonly removeCard?: boolean;
   readonly description: string;
+  /**
+   * Optional gamble: if present, resolveEvent rolls rng against winChance.
+   * On win, goldDelta is replaced by winGoldDelta; on loss, by loseGoldDelta.
+   * The base goldDelta field is ignored when gamble is present.
+   */
+  readonly gamble?: {
+    readonly winGoldDelta: number;
+    readonly loseGoldDelta: number;
+    readonly winChance: number;
+  };
 }

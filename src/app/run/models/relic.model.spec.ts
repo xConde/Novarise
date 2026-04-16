@@ -105,5 +105,12 @@ describe('Relic Model', () => {
         expect(relic).toBeDefined(`missing definition for ${id}`);
       });
     });
+
+    it('TEMPORAL_RIFT description matches actual implementation (1-turn delay, not spawn interval %)', () => {
+      const relic = getRelicDefinition(RelicId.TEMPORAL_RIFT);
+      expect(relic.description).toBe('First enemy of each wave spawns 1 turn later');
+      // Guard: description must NOT claim a percentage interval change
+      expect(relic.description).not.toContain('%');
+    });
   });
 });
