@@ -42,13 +42,15 @@
         class="reward-card"
         [class]="'reward-card reward-card--' + getRarityClass(relic.rarity)"
         [class.reward-card--selected]="selectedRelic === relic.id"
-        *ngFor="let relic of relicCards"
+        *ngFor="let relic of relicCards; let i = index"
         (click)="pickRelic(relic)"
-        [attr.aria-label]="relic.name + ': ' + relic.description + '. Rarity: ' + relic.rarity"
+        [attr.aria-label]="'Option ' + (i + 1) + '. ' + relic.name + ': ' + relic.description + '. Rarity: ' + relic.rarity + '. Press ' + (i + 1) + ' to pick.'"
         [attr.aria-pressed]="selectedRelic === relic.id"
+        [attr.aria-keyshortcuts]="(i + 1).toString()"
         role="listitem"
         type="button"
       >
+        <span class="reward-card__hotkey" aria-hidden="true">{{ i + 1 }}</span>
         <span class="reward-card__icon" aria-hidden="true"><app-icon name="diamond" [size]="16"></app-icon></span>
         <span class="reward-card__rarity">{{ relic.rarity }}</span>
         <span class="reward-card__name">{{ relic.name }}</span>
@@ -62,9 +64,10 @@
       class="run-btn run-btn--secondary reward-skip-btn"
       type="button"
       (click)="skipRelics()"
-      aria-label="Skip relics and continue without picking one"
+      aria-label="Skip relics and continue without picking one. Press Escape to skip."
+      aria-keyshortcuts="Escape"
     >
-      Skip Relics
+      Skip Relics <span class="reward-skip-btn__hint" aria-hidden="true">(Esc)</span>
     </button>
   </section>
 

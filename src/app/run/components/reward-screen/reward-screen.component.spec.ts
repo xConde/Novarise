@@ -198,6 +198,109 @@ describe('RewardScreenComponent', () => {
     expect(component.canContinue).toBeTrue();
   });
 
+  // ── Keyboard shortcuts ────────────────────────────────────────────────
+
+  describe('keyboard shortcuts', () => {
+    function fire(key: string): KeyboardEvent {
+      const ev = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      component.handleKeydown(ev);
+      return ev;
+    }
+
+    it('pressing 1 picks the first relic', () => {
+      component.config = MOCK_CONFIG;
+      fixture.detectChanges();
+      const picked: RewardItem[] = [];
+      component.rewardCollected.subscribe(r => picked.push(r));
+
+      fire('1');
+
+      expect(component.relicPicked).toBeTrue();
+      expect(picked[0]).toEqual({ type: 'relic', relicId: RelicId.IRON_HEART });
+    });
+
+    it('pressing 3 picks the third relic', () => {
+      component.config = MOCK_CONFIG;
+      fixture.detectChanges();
+      const picked: RewardItem[] = [];
+      component.rewardCollected.subscribe(r => picked.push(r));
+
+      fire('3');
+
+      expect(picked[0]).toEqual({ type: 'relic', relicId: RelicId.COMMANDERS_BANNER });
+    });
+
+    it('pressing 1 after relic is resolved picks the first card', () => {
+      component.config = MOCK_CONFIG;
+      component.skipRelics();
+      fixture.detectChanges();
+      const picked: RewardItem[] = [];
+      component.rewardCollected.subscribe(r => picked.push(r));
+
+      fire('1');
+
+      expect(component.cardPicked).toBeTrue();
+      expect(picked[0]).toEqual({ type: 'card', cardId: CardId.GOLD_RUSH });
+    });
+
+    it('pressing Escape skips the active relic section', () => {
+      component.config = MOCK_CONFIG;
+      fixture.detectChanges();
+
+      fire('Escape');
+
+      expect(component.relicPicked).toBeTrue();
+      expect(component.selectedRelic).toBeNull();
+    });
+
+    it('pressing Escape after relic is resolved skips the card section', () => {
+      component.config = MOCK_CONFIG;
+      component.skipRelics();
+      fixture.detectChanges();
+
+      fire('Escape');
+
+      expect(component.cardPicked).toBeTrue();
+    });
+
+    it('pressing a number beyond the choice count is a no-op', () => {
+      component.config = MOCK_CONFIG;
+      fixture.detectChanges();
+
+      fire('9');
+
+      expect(component.relicPicked).toBeFalse();
+    });
+
+    it('pressing Space when target is body suppresses default (no scroll)', () => {
+      component.config = MOCK_CONFIG;
+      fixture.detectChanges();
+
+      const ev = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+      Object.defineProperty(ev, 'target', { value: document.body });
+      component.handleKeydown(ev);
+
+      expect(ev.defaultPrevented).toBeTrue();
+      // no side effects
+      expect(component.relicPicked).toBeFalse();
+      expect(component.cardPicked).toBeFalse();
+    });
+
+    it('ignores keystrokes from input fields', () => {
+      component.config = MOCK_CONFIG;
+      fixture.detectChanges();
+
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      const ev = new KeyboardEvent('keydown', { key: '1', bubbles: true, cancelable: true });
+      Object.defineProperty(ev, 'target', { value: input });
+      component.handleKeydown(ev);
+      document.body.removeChild(input);
+
+      expect(component.relicPicked).toBeFalse();
+    });
+  });
+
   // ── Empty-section rendering (node-type differentiation) ──────────────
 
   describe('empty section rendering', () => {

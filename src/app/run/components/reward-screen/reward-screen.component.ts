@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, HostListener, Input, Output, EventEmitter } from '@angular/core';
 import { RelicDefinition, RELIC_DEFINITIONS, RelicId, RelicRarity } from '../../models/relic.model';
 import { RewardScreenConfig, RewardItem, CardReward } from '../../models/encounter.model';
 import { ChallengeDefinition, CHALLENGE_SCORE_TO_GOLD_RATIO, computeChallengeGoldBonus } from '../../data/challenges';
@@ -72,5 +72,63 @@ export class RewardScreenComponent {
 
   continue(): void {
     this.screenClosed.emit();
+  }
+
+  /**
+   * Keyboard shortcuts for the reward screen.
+   *  - 1 / 2 / 3 (and numpad) pick the Nth visible option — relic first, then card
+   *  - Esc skips the currently-active section (relic if pending, else card)
+   *  - Space is intercepted when focus is on the document body to suppress page
+   *    scroll, since there's nothing to "activate" with it. If a button is
+   *    focused, the browser default (activate) still fires.
+   */
+  @HostListener('document:keydown', ['$event'])
+  handleKeydown(event: KeyboardEvent): void {
+    // Ignore keystrokes from text inputs/textareas (no fields today, but future-proof).
+    const target = event.target as HTMLElement | null;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      if (this.relicCards.length > 0 && !this.relicPicked) {
+        event.preventDefault();
+        this.skipRelics();
+      } else if (this.config.cardChoices.length > 0 && !this.cardPicked && (this.relicPicked || this.config.relicChoices.length === 0)) {
+        event.preventDefault();
+        this.onCardSkipped();
+      }
+      return;
+    }
+
+    // Number keys — pick the Nth visible option.
+    const n = this.parseNumberKey(event.key);
+    if (n !== null) {
+      if (this.relicCards.length > 0 && !this.relicPicked) {
+        const relic = this.relicCards[n - 1];
+        if (relic) {
+          event.preventDefault();
+          this.pickRelic(relic);
+        }
+      } else if (this.config.cardChoices.length > 0 && !this.cardPicked) {
+        const card = this.config.cardChoices[n - 1];
+        if (card) {
+          event.preventDefault();
+          this.onCardPicked(card);
+        }
+      }
+      return;
+    }
+
+    if (event.key === ' ' && (target === null || target === document.body)) {
+      // Swallow space when nothing useful is focused — avoids page-scroll and
+      // avoids accidental activation bubbling from unrelated focus state.
+      event.preventDefault();
+    }
+  }
+
+  private parseNumberKey(key: string): number | null {
+    if (key >= '1' && key <= '9') return Number(key);
+    return null;
   }
 }

@@ -149,6 +149,33 @@
 
 // ── Card inner elements ───────────────────────────────────────────────────────
 
+.card-draft__hotkey {
+  position: absolute;
+  top: var(--spacing-xs);
+  right: var(--spacing-sm);
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 var(--spacing-2xs);
+  border-radius: var(--radius-sm);
+  background: var(--game-gold-a25);
+  border: 1px solid var(--game-gold);
+  color: var(--game-gold);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.card-draft__skip-btn__hint {
+  margin-left: var(--spacing-2xs);
+  opacity: 0.7;
+  font-size: var(--font-size-2xs);
+  letter-spacing: 0.04em;
+}
+
 .card-draft__cost {
   position: absolute;
   top: var(--spacing-xs);

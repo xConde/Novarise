@@ -10,11 +10,15 @@
       [class]="'card-draft__card ' + getTypeClass(item.definition.type) + ' ' + getRarityClass(item.definition.rarity)"
       [class.card-draft__card--selected]="selectedCard === item.reward.cardId"
       (click)="pickCard(item.reward)"
-      [attr.aria-label]="item.definition.name + ': ' + item.definition.description + '. Type: ' + item.definition.type + '. Cost: ' + item.definition.energyCost + ' energy.'"
+      [attr.aria-label]="'Option ' + (i + 1) + '. ' + item.definition.name + ': ' + item.definition.description + '. Type: ' + item.definition.type + '. Cost: ' + item.definition.energyCost + ' energy. Press ' + (i + 1) + ' to pick.'"
       [attr.aria-pressed]="selectedCard === item.reward.cardId"
+      [attr.aria-keyshortcuts]="(i + 1).toString()"
       role="listitem"
       type="button"
     >
+      <!-- Hotkey badge -->
+      <span class="card-draft__hotkey" aria-hidden="true">{{ i + 1 }}</span>
+
       <!-- Energy cost bubble -->
       <span class="card-draft__cost" aria-hidden="true">{{ item.definition.energyCost }}</span>
 
@@ -41,9 +45,10 @@
     class="run-btn run-btn--secondary card-draft__skip-btn"
     type="button"
     (click)="skip()"
-    aria-label="Skip card reward and continue without adding a card"
+    aria-label="Skip card reward and continue without adding a card. Press Escape to skip."
+    aria-keyshortcuts="Escape"
   >
-    Skip Card
+    Skip Card <span class="card-draft__skip-btn__hint" aria-hidden="true">(Esc)</span>
   </button>
 
 </section>
