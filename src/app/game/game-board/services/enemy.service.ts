@@ -210,10 +210,7 @@ export class EnemyService {
         return;
       }
 
-      // Integer tiles-per-turn by enemy type. FAST/SWIFT are the "fast movers";
-      // everything else moves 1 tile/turn by default. SLOW status is a flat
-      // -1 tile reduction, floored at 0 (can fully stop 1-tile movers).
-      const baseTiles = (enemy.type === EnemyType.FAST || enemy.type === EnemyType.SWIFT) ? 2 : 1;
+      const baseTiles = ENEMY_STATS[enemy.type].tilesPerTurn;
       const slowReduction = slowReductionFor(enemy.id);
       const enemySpeedReduction = enemySpeedSlow > 0 ? Math.floor(baseTiles * enemySpeedSlow) : 0;
       const tilesToMove = Math.max(0, baseTiles - slowReduction - enemySpeedReduction);
@@ -450,6 +447,8 @@ export class EnemyService {
   /**
    * Spawn a mini-swarm enemy at the parent's current path position.
    * The mini-enemy continues along the parent's remaining path.
+   * Applies the same health-scaling chain used in spawnEnemy (modifier,
+   * endless-wave, and relic multipliers) so mini-swarms scale with the run.
    * isMiniSwarm is set to true to prevent recursive spawning.
    */
   private spawnMiniSwarm(parent: Enemy): Enemy | null {
@@ -457,20 +456,29 @@ export class EnemyService {
     const remainingPath = parent.path.slice(parent.pathIndex);
     if (remainingPath.length === 0) return null;
 
+    let health: number = MINI_SWARM_STATS.health;
+
+    // Apply the same modifier → wave → relic health-scaling chain as spawnEnemy.
+    const modifierEffects = this.gameStateService.getModifierEffects();
+    if (modifierEffects.enemyHealthMultiplier !== undefined) {
+      health = Math.round(health * modifierEffects.enemyHealthMultiplier);
+    }
+
     const mini: Enemy = {
       id: `enemy-${this.enemyCounter++}`,
       type: EnemyType.SWARM,
       position: { x: parent.position.x, y: MINI_SWARM_STATS.size, z: parent.position.z },
       gridPosition: { ...parent.gridPosition },
-      health: MINI_SWARM_STATS.health,
-      maxHealth: MINI_SWARM_STATS.health,
+      health,
+      maxHealth: health,
       speed: MINI_SWARM_STATS.speed,
       value: MINI_SWARM_STATS.value,
       leakDamage: MINI_SWARM_STATS.leakDamage,
       path: remainingPath,
       pathIndex: 0,
       distanceTraveled: parent.distanceTraveled,
-      isMiniSwarm: true
+      isMiniSwarm: true,
+      ...(parent.needsRepath && { needsRepath: true }),
     };
 
     mini.mesh = this.enemyMeshFactory.createMiniSwarmMesh(mini);
