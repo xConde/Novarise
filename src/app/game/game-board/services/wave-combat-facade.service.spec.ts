@@ -425,6 +425,41 @@ describe('WaveCombatFacadeService', () => {
     });
   });
 
+  describe('autoSaveCheckpoint call order', () => {
+    it('calls autoSaveCheckpoint AFTER discardHand and drawForWave when combat continues', () => {
+      const callOrder: string[] = [];
+      (deckService.discardHand as jasmine.Spy).and.callFake(() => callOrder.push('discardHand'));
+      (deckService.drawForWave as jasmine.Spy).and.callFake(() => callOrder.push('drawForWave'));
+      (encounterCheckpointService.saveCheckpoint as jasmine.Spy).and.callFake(() => callOrder.push('saveCheckpoint'));
+
+      gameStateService.getState.and.returnValue({ ...defaultState, phase: GamePhase.COMBAT });
+      service.init(makeCallbacks());
+      service.endTurn();
+
+      const discardIdx = callOrder.indexOf('discardHand');
+      const drawIdx = callOrder.indexOf('drawForWave');
+      const saveIdx = callOrder.indexOf('saveCheckpoint');
+
+      expect(discardIdx).toBeGreaterThanOrEqual(0);
+      expect(drawIdx).toBeGreaterThanOrEqual(0);
+      expect(saveIdx).toBeGreaterThan(discardIdx);
+      expect(saveIdx).toBeGreaterThan(drawIdx);
+    });
+
+    it('still calls autoSaveCheckpoint when combat ends after the turn (no discard/draw)', () => {
+      let callCount = 0;
+      gameStateService.getState.and.callFake(() => {
+        callCount++;
+        return { ...defaultState, phase: callCount === 1 ? GamePhase.COMBAT : GamePhase.INTERMISSION };
+      });
+      service.init(makeCallbacks());
+      service.endTurn();
+      // Phase transitions to INTERMISSION so no discard/draw, but checkpoint save still fires
+      expect(encounterCheckpointService.saveCheckpoint).toHaveBeenCalled();
+      expect(deckService.discardHand).not.toHaveBeenCalled();
+    });
+  });
+
   describe('autoSaveCheckpoint — deckRngState', () => {
     it('includes deckRngState in saved checkpoint when getDeckRngState returns a value', fakeAsync(() => {
       (deckService.getRngState as jasmine.Spy).and.returnValue(55555);

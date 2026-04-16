@@ -56,7 +56,7 @@ export class WaveGeneratorService {
   generateCombatWaves(row: number, actIndex: number, seed: number): WaveDefinition[] {
     const rng = createSeededRng(seed + row * 1000 + actIndex * 10000);
     const pool = getEnemyPool(row, actIndex);
-    return this.buildWaves(rng, pool, row, actIndex, ENCOUNTER_CONFIG.wavesPerCombat, 1, 1);
+    return this.buildWaves(rng, pool, row, actIndex, ENCOUNTER_CONFIG.wavesPerCombat, 1);
   }
 
   /**
@@ -73,7 +73,6 @@ export class WaveGeneratorService {
       row,
       actIndex,
       ENCOUNTER_CONFIG.wavesPerElite,
-      ENCOUNTER_CONFIG.eliteHealthMultiplier,
       ENCOUNTER_CONFIG.eliteGoldMultiplier,
     );
 
@@ -117,7 +116,6 @@ export class WaveGeneratorService {
     row: number,
     actIndex: number,
     count: number,
-    _healthMultiplier: number,
     goldMultiplier: number,
   ): WaveDefinition[] {
     const waves: WaveDefinition[] = [];

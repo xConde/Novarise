@@ -204,8 +204,6 @@ export class WaveCombatFacadeService {
       }
     }
 
-    this.autoSaveCheckpoint();
-
     // Expire mortar zone visuals whose turn count has elapsed.
     // Must run after resolveTurn so the turn counter has already advanced.
     this.combatVFXService.tickMortarZoneVisualsForTurn(
@@ -245,6 +243,10 @@ export class WaveCombatFacadeService {
       this.deckService.discardHand();
       this.deckService.drawForWave();
     }
+
+    // Auto-save AFTER discard+draw so the checkpoint reflects the hand the player
+    // will see on resume. On VICTORY/DEFEAT the save is skipped (checkpoint cleared).
+    this.autoSaveCheckpoint();
   }
 
   private autoSaveCheckpoint(): void {

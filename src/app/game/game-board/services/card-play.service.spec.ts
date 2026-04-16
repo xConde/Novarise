@@ -241,6 +241,64 @@ describe('CardPlayService', () => {
     });
   });
 
+  describe('salvage pre-validation', () => {
+    it('should NOT consume card or energy when no towers are placed', () => {
+      towerCombatSpy.getPlacedTowers.and.returnValue(new Map());
+      const card: CardInstance = { instanceId: 'sal-1', cardId: CardId.SALVAGE, upgraded: false };
+      service.onCardPlayed(card);
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    it('should consume card and salvage when towers exist', () => {
+      const tower = { row: 0, col: 0, level: 1, type: TowerType.BASIC, totalInvested: 50 };
+      const placedMap = new Map<string, typeof tower>();
+      placedMap.set('0-0', tower as never);
+      towerCombatSpy.getPlacedTowers.and.returnValue(placedMap as never);
+      towerCombatSpy.unregisterTower.and.returnValue(tower as never);
+      const mockScene = { remove: jasmine.createSpy('remove') };
+      (sceneSpy.getScene as jasmine.Spy).and.returnValue(mockScene);
+
+      const card: CardInstance = { instanceId: 'sal-2', cardId: CardId.SALVAGE, upgraded: false };
+      service.onCardPlayed(card);
+      expect(deckSpy.playCard).toHaveBeenCalledWith('sal-2');
+      expect(towerCombatSpy.unregisterTower).toHaveBeenCalledWith('0-0');
+    });
+  });
+
+  describe('fortify pre-validation', () => {
+    it('should NOT consume card or energy when no towers are upgradeable (empty map)', () => {
+      towerCombatSpy.getPlacedTowers.and.returnValue(new Map());
+      const card: CardInstance = { instanceId: 'fort-1', cardId: CardId.FORTIFY, upgraded: false };
+      service.onCardPlayed(card);
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    it('should NOT consume card when all towers are at max-1 level (L2 — cannot auto-upgrade)', () => {
+      // MAX_TOWER_LEVEL = 3, so level < MAX_TOWER_LEVEL - 1 means level < 2 — L2 towers are excluded
+      const tower = { row: 0, col: 0, level: 2, type: TowerType.BASIC, totalInvested: 100 };
+      const placedMap = new Map<string, typeof tower>();
+      placedMap.set('0-0', tower as never);
+      towerCombatSpy.getPlacedTowers.and.returnValue(placedMap as never);
+
+      const card: CardInstance = { instanceId: 'fort-2', cardId: CardId.FORTIFY, upgraded: false };
+      service.onCardPlayed(card);
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    it('should consume card and upgrade when an L1 tower exists', () => {
+      const tower = { row: 0, col: 0, level: 1, type: TowerType.BASIC, totalInvested: 50 };
+      const placedMap = new Map<string, typeof tower>();
+      placedMap.set('0-0', tower as never);
+      towerCombatSpy.getPlacedTowers.and.returnValue(placedMap as never);
+      towerCombatSpy.upgradeTower.and.returnValue(tower as never);
+
+      const card: CardInstance = { instanceId: 'fort-3', cardId: CardId.FORTIFY, upgraded: false };
+      service.onCardPlayed(card);
+      expect(deckSpy.playCard).toHaveBeenCalledWith('fort-3');
+      expect(towerCombatSpy.upgradeTower).toHaveBeenCalledWith('0-0', 0);
+    });
+  });
+
   describe('reset', () => {
     it('should clear pending card state', () => {
       service['pendingTowerCard'] = { instanceId: 'x', cardId: CardId.TOWER_BASIC, upgraded: false };

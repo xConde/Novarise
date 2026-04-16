@@ -119,7 +119,18 @@ export class CardPlayService {
       return;
     }
 
-    // Non-tower cards: consume immediately
+    // Non-tower cards: consume immediately.
+    // Pre-validate spells that require a live target before consuming energy.
+    if (effect.type === 'spell') {
+      const spellEffect = effect as SpellCardEffect;
+      if (spellEffect.spellId === 'salvage') {
+        if (this.towerCombatService.getPlacedTowers().size === 0) return;
+      } else if (spellEffect.spellId === 'fortify') {
+        const towers = Array.from(this.towerCombatService.getPlacedTowers().values());
+        if (!towers.some(t => t.level < MAX_TOWER_LEVEL - 1)) return;
+      }
+    }
+
     const cardInstanceId = card.instanceId;
     const energyCost = def.energyCost;
     if (!this.deckService.playCard(cardInstanceId)) return;
