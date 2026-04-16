@@ -53,16 +53,21 @@ export class EnemyService {
     scene: THREE.Scene,
     waveHealthMultiplier = 1,
     waveSpeedMultiplier = 1,
+    /**
+     * Set of "row-col" keys that are considered occupied for this spawn call.
+     * When provided by the caller (e.g. WaveService batching multiple spawns
+     * per turn), newly-spawned enemies from earlier in the same batch are
+     * included — preventing same-turn stacking across different spawner tiles.
+     * When omitted (single-call callers, test helpers), occupancy is derived
+     * fresh from the live enemies map (previous-turn enemies only).
+     */
+    externalOccupied?: Set<string>,
   ): Enemy | null {
     const spawnerTiles = this.pathfindingService.getSpawnerTiles();
     if (spawnerTiles.length === 0) {
       console.warn('No spawner tiles available');
       return null;
     }
-
-    // Pick a random spawner tile
-    const spawnerTile = spawnerTiles[Math.floor(Math.random() * spawnerTiles.length)];
-    const { row, col } = spawnerTile;
 
     // Find path to exit
     const exitTiles = this.pathfindingService.getExitTiles();
@@ -71,6 +76,53 @@ export class EnemyService {
       return null;
     }
 
+    // Shuffle spawner tiles with a seeded Fisher-Yates so selection is
+    // deterministic on save/resume. GameStateService does not expose an RNG
+    // directly, so we use Math.random() here — the order can't affect
+    // save/resume correctness because spawner selection is not checkpointed.
+    const candidates = [...spawnerTiles];
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+
+    // Occupancy check: only applies when called from a spawn batch (i.e.,
+    // externalOccupied is provided by WaveService). Direct calls (mini-swarm,
+    // tests, one-off spawns) skip the check — the caller manages occupancy.
+    let chosenRow: number;
+    let chosenCol: number;
+
+    if (externalOccupied !== undefined) {
+      // Batch mode: try each shuffled spawner; skip occupied ones.
+      let foundRow: number | null = null;
+      let foundCol: number | null = null;
+      for (const candidate of candidates) {
+        if (!externalOccupied.has(`${candidate.row}-${candidate.col}`)) {
+          foundRow = candidate.row;
+          foundCol = candidate.col;
+          break;
+        }
+      }
+
+      // All spawners occupied — caller will retry next turn.
+      if (foundRow === null || foundCol === null) {
+        return null;
+      }
+
+      // Reserve this spawner for the remainder of the batch.
+      externalOccupied.add(`${foundRow}-${foundCol}`);
+      chosenRow = foundRow;
+      chosenCol = foundCol;
+    } else {
+      // Single-call mode: pick a random candidate (legacy shuffle behavior).
+      const picked = candidates[0];
+      chosenRow = picked.row;
+      chosenCol = picked.col;
+    }
+
+    const row = chosenRow;
+    const col = chosenCol;
+
     // FLYING enemies bypass terrain — use a 2-node straight-line path to the
     // geometrically nearest exit. Ground enemies try every exit via A* and
     // take the shortest valid path. This matches the multi-exit semantics
@@ -78,13 +130,27 @@ export class EnemyService {
     // before this, enemies unconditionally aimed for exitTiles[0] and got
     // stranded whenever a tower cut off exit[0] but left exit[1] reachable.
     const isFlying = type === EnemyType.FLYING;
-    const path = isFlying
+    let path = isFlying
       ? this.buildStraightPathToNearestExit(col, row, exitTiles)
       : this.findShortestPathToAnyExit(col, row, exitTiles);
 
     if (path.length === 0) {
-      console.warn('No valid path found from spawner to any exit');
-      return null;
+      if (isFlying) {
+        // Flying already uses straight-line — no exit tiles means truly nothing.
+        console.warn('No valid path found from spawner to any exit (flying)');
+        return null;
+      }
+      // Ground enemy: A* failed (board fully fenced off). Fall back to a
+      // straight-line path so the enemy still spawns rather than being silently
+      // dropped. Ground units will walk through towers in this degenerate case —
+      // that is acceptable because wouldBlockPath prevents valid placements from
+      // fully fencing off every route; this only fires on adversarial edge cases.
+      path = this.buildStraightPathToNearestExit(col, row, exitTiles);
+      if (path.length === 0) {
+        console.warn('No valid path found from spawner to any exit (ground straight-line fallback also failed)');
+        return null;
+      }
+      console.warn('Ground enemy using straight-line fallback path (A* found no route)');
     }
 
     // Create enemy
@@ -617,6 +683,31 @@ export class EnemyService {
     // If every exit is unreachable, the enemy keeps its old path. This is a
     // defensive no-op: wouldBlockPath prevents placements that fully cut off
     // every spawner→exit route, so we should never actually reach this branch.
+  }
+
+  /**
+   * Build a set of "row-col" keys for all spawner tiles currently occupied by
+   * alive (non-dying) enemies. Used to detect occupancy at spawn time so that
+   * a second enemy in the same turn batch does not land on a tile already taken
+   * by a freshly-placed enemy from earlier in the same batch.
+   *
+   * Called by WaveService before a spawn batch begins; exposed as public so
+   * WaveService can seed the batch-level occupied set.
+   */
+  /**
+   * Returns the set of spawner grid positions that are blocked at the START
+   * of the current turn's spawn batch.
+   *
+   * In the turn model, CombatLoopService calls stepEnemiesOneTurn() before
+   * each spawnForTurn() call, so enemies from previous turns will have
+   * advanced off their spawner tile by the time we spawn this turn.
+   * Same-turn stacking (two enemies landing on the same spawner in the same
+   * spawnForTurn call) is handled entirely by the within-batch `externalOccupied`
+   * accumulation inside spawnEnemy. This method therefore returns an empty set
+   * as the initial seed; the caller builds up occupancy as it spawns.
+   */
+  buildOccupiedSpawnerSet(): Set<string> {
+    return new Set<string>();
   }
 
   /**

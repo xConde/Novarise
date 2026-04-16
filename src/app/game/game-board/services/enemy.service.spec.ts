@@ -184,8 +184,9 @@ describe('EnemyService', () => {
       expect(enemy).toBeNull();
     });
 
-    it('should return null when path is completely blocked', () => {
-      // Create a board with blocked path
+    it('should use straight-line fallback when A* path is blocked (not return null)', () => {
+      // When the A* path from spawner is blocked, ground enemies fall back to a
+      // straight-line path (Fix #43). Verify the enemy still spawns.
       const blockedCells = [
         { row: 0, col: 1 },
         { row: 1, col: 0 }
@@ -193,7 +194,9 @@ describe('EnemyService', () => {
       gameBoardService.getGameBoard.and.returnValue(createTestBoard(10, blockedCells));
 
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      expect(enemy).toBeNull();
+      // Ground enemy uses straight-line fallback — still spawns
+      expect(enemy).toBeTruthy();
+      expect(enemy!.path.length).toBeGreaterThan(0);
     });
   });
 
@@ -307,8 +310,10 @@ describe('EnemyService', () => {
       expect(lastNode.y).toBe(9);
     });
 
-    it('returns null only when EVERY exit is unreachable', () => {
-      // Both exits blocked off from the spawner.
+    it('uses straight-line fallback for both ground and flying when A* path is blocked', () => {
+      // A* from (0,0) is blocked by walls at its two neighbours. Both ground and
+      // flying enemies still spawn: ground via the straight-line fallback (Fix #43),
+      // flying via its normal straight-line path (unchanged).
       const blocked = [
         { row: 0, col: 1 },
         { row: 1, col: 0 },
@@ -318,8 +323,14 @@ describe('EnemyService', () => {
       );
       service.clearPathCache();
 
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      expect(enemy).toBeNull();
+      const ground = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(ground).toBeTruthy();
+      expect(ground!.path.length).toBeGreaterThan(0);
+
+      service.clearPathCache();
+      const flying = service.spawnEnemy(EnemyType.FLYING, mockScene);
+      expect(flying).toBeTruthy();
+      expect(flying!.path.length).toBe(2);
     });
 
     it('FLYING enemies pick the geometrically nearest exit via straight line', () => {
@@ -2927,6 +2938,118 @@ describe('EnemyService', () => {
 
       expect(strong.health).toBe(75); // strongest ground enemy damaged
       expect(weak.health).toBe(10);   // weaker ground enemy untouched
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Spawner occupancy — Fix #42: alternate-spawner retry (batch mode)
+  //
+  // Occupancy checking is only active in BATCH mode (externalOccupied set
+  // passed by WaveService.spawnForTurn). Direct single calls bypass the check
+  // to preserve backwards compatibility with tests and mini-swarm spawning.
+  // ---------------------------------------------------------------------------
+
+  describe('spawner occupancy — alternate-spawner retry (batch mode)', () => {
+    it('returns null when the single spawner is pre-occupied in batch mode', () => {
+      // Pre-occupy the only spawner (0,0) via the batch-occupied set
+      const occupied = new Set<string>(['0-0']);
+      const result = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1, occupied);
+      expect(result).toBeNull();
+    });
+
+    it('spawns at alternate spawner when primary is pre-occupied in batch mode', () => {
+      // Board with two spawners: default at (0,0) and extra at (1,0)
+      const boardWith2Spawners = createTestBoard(10, [], [], [{ row: 1, col: 0 }]);
+      gameBoardService.getGameBoard.and.returnValue(boardWith2Spawners);
+
+      // Pre-occupy one spawner via batch set
+      const occupied = new Set<string>(['0-0']);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1, occupied);
+      // Must land at the OTHER spawner (1,0)
+      expect(enemy).not.toBeNull();
+      expect(enemy!.gridPosition).toEqual({ row: 1, col: 0 });
+    });
+
+    it('buildOccupiedSpawnerSet() returns empty set (dying enemies not included)', () => {
+      // buildOccupiedSpawnerSet() always returns an empty set. Dying enemies
+      // are not included — this test verifies the invariant still holds.
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+      expect(enemy.dying).toBeTrue();
+
+      const occupied = service.buildOccupiedSpawnerSet();
+      expect(occupied.has('0-0')).toBeFalse();
+    });
+
+    it('buildOccupiedSpawnerSet() always returns empty set (same-turn stacking handled by externalOccupied)', () => {
+      // buildOccupiedSpawnerSet() returns an empty seed set. Within-batch
+      // accumulation of externalOccupied in spawnEnemy handles same-turn stacking.
+      // Pre-existing enemies from prior turns have moved off the spawner via
+      // stepEnemiesOneTurn() before the next spawnForTurn() call.
+      service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const occupied = service.buildOccupiedSpawnerSet();
+      expect(occupied.size).toBe(0);
+    });
+
+    it('returns null only after all spawners are checked and occupied (batch mode)', () => {
+      // Board with two spawners: default (0,0) and extra (1,0)
+      const boardWith2Spawners = createTestBoard(10, [], [], [{ row: 1, col: 0 }]);
+      gameBoardService.getGameBoard.and.returnValue(boardWith2Spawners);
+
+      // Pre-occupy BOTH spawners
+      const occupied = new Set<string>(['0-0', '1-0']);
+      const result = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1, occupied);
+      expect(result).toBeNull();
+    });
+
+    it('batch set is updated with chosen spawner after successful spawn', () => {
+      const boardWith2Spawners = createTestBoard(10, [], [], [{ row: 1, col: 0 }]);
+      gameBoardService.getGameBoard.and.returnValue(boardWith2Spawners);
+
+      // Start with empty occupied set
+      const occupied = new Set<string>();
+      const first = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1, occupied)!;
+      expect(first).not.toBeNull();
+
+      // Set must now contain the chosen spawner
+      const firstKey = `${first.gridPosition.row}-${first.gridPosition.col}`;
+      expect(occupied.has(firstKey)).toBeTrue();
+
+      // Second spawn in same batch must go to the other spawner
+      const second = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1, occupied)!;
+      expect(second).not.toBeNull();
+      const secondKey = `${second.gridPosition.row}-${second.gridPosition.col}`;
+      expect(secondKey).not.toBe(firstKey);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Ground straight-line fallback — Fix #43: no-path case
+  // ---------------------------------------------------------------------------
+
+  describe('ground enemy straight-line fallback — no A* path', () => {
+    it('spawns a ground enemy with a straight-line path when A* is blocked', () => {
+      // Block every tile except spawner column 0 and exit column 9, forcing
+      // the entire interior to be walls. The exit (9,9) is still reachable in
+      // a straight line but A* may not find a path through the walls.
+      // We simulate "no path" by blocking the entire row 0 cols 1-8:
+      const blockedCells: { row: number; col: number }[] = [];
+      for (let col = 1; col <= 8; col++) blockedCells.push({ row: 0, col });
+      // Also block col 1-8 for rows 1-8 (leave path only on col 0 and col 9)
+      for (let row = 1; row <= 8; row++) {
+        for (let col = 1; col <= 8; col++) {
+          blockedCells.push({ row, col });
+        }
+      }
+      gameBoardService.getGameBoard.and.returnValue(createTestBoard(10, blockedCells));
+
+      // The only traversable tiles are col 0 (rows 0-9) and col 9 (rows 0-9).
+      // A* can't cross — it would return empty. Fallback should produce a path.
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      // Should still spawn (straight-line fallback) rather than return null
+      expect(enemy).not.toBeNull();
+      expect(enemy!.path.length).toBeGreaterThan(0);
     });
   });
 });

@@ -18,9 +18,11 @@ describe('WaveService', () => {
   let mockScene: THREE.Scene;
 
   beforeEach(() => {
-    enemyServiceSpy = jasmine.createSpyObj('EnemyService', ['spawnEnemy']);
+    enemyServiceSpy = jasmine.createSpyObj('EnemyService', ['spawnEnemy', 'buildOccupiedSpawnerSet']);
     // Default: spawnEnemy succeeds
     enemyServiceSpy.spawnEnemy.and.returnValue({ id: 'enemy-0' } as any);
+    // Default: no pre-occupied spawners
+    enemyServiceSpy.buildOccupiedSpawnerSet.and.returnValue(new Set<string>());
 
     relicServiceSpy = createRelicServiceSpy();
     // Default: no TEMPORAL_RIFT
@@ -158,7 +160,7 @@ describe('WaveService', () => {
       service.startWave(1, mockScene);
       service.spawnForTurn(mockScene); // turn 1
 
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1, jasmine.any(Set));
     });
 
     it('should spawn one enemy per turn (Wave 1: 5 BASIC across 5 turns)', () => {
@@ -621,7 +623,7 @@ describe('WaveService', () => {
       service.setCustomWaves(CUSTOM_WAVES);
       service.startWave(2, mockScene);
       service.spawnForTurn(mockScene);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1, jasmine.any(Set));
     });
 
     it('startWave() rejects waves beyond custom count when endless mode is off', () => {
@@ -764,7 +766,7 @@ describe('WaveService', () => {
       const count = service.spawnForTurn(mockScene);
       expect(count).toBe(2);
       expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(2);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1, jasmine.any(Set));
     });
 
     it('turn 1 is an empty prep turn — 0 enemies spawned and schedule still active', () => {
@@ -783,7 +785,7 @@ describe('WaveService', () => {
       service.spawnForTurn(mockScene); // turn 1
       const count = service.spawnForTurn(mockScene); // turn 2
       expect(count).toBe(1);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1, jasmine.any(Set));
     });
 
     it('becomes inactive after turn 2 (schedule exhausted)', () => {
@@ -809,7 +811,7 @@ describe('WaveService', () => {
       service.startWave(1, mockScene);
       expect(service.getRemainingToSpawn()).toBe(5);
       service.spawnForTurn(mockScene);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1, jasmine.any(Set));
     });
   });
 
@@ -824,8 +826,8 @@ describe('WaveService', () => {
       service.startWave(1, mockScene);
       service.spawnForTurn(mockScene);
       // Should spawn FAST (from spawnTurns), not HEAVY (from entries)
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1);
-      expect(enemyServiceSpy.spawnEnemy).not.toHaveBeenCalledWith(EnemyType.HEAVY, mockScene, 1, 1);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1, jasmine.any(Set));
+      expect(enemyServiceSpy.spawnEnemy).not.toHaveBeenCalledWith(EnemyType.HEAVY, mockScene, 1, 1, jasmine.any(Set));
     });
   });
 
@@ -882,7 +884,7 @@ describe('WaveService', () => {
 
       service.spawnForTurn(mockScene); // delay turn
       service.spawnForTurn(mockScene); // authored turn 0: BASIC
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1, jasmine.any(Set));
     });
   });
 
@@ -909,7 +911,7 @@ describe('WaveService', () => {
 
       service.spawnForTurn(mockScene); // turn 2: FAST
       expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(2);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1, jasmine.any(Set));
 
       expect(service.isSpawning()).toBeFalse();
     });
@@ -991,13 +993,13 @@ describe('WaveService', () => {
       // First turn: 1 BASIC
       const count0 = service.spawnForTurn(mockScene);
       expect(count0).toBe(1);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.BASIC, mockScene, 1, 1, jasmine.any(Set));
 
       // Second turn: 2 FAST
       enemyServiceSpy.spawnEnemy.calls.reset();
       const count1 = service.spawnForTurn(mockScene);
       expect(count1).toBe(2);
-      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1);
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(EnemyType.FAST, mockScene, 1, 1, jasmine.any(Set));
     });
 
     it('serialize → restore roundtrip preserves all state', () => {
@@ -1020,6 +1022,151 @@ describe('WaveService', () => {
       expect(restored.active).toBe(snapshot.active);
       expect(restored.endlessMode).toBe(snapshot.endlessMode);
       expect(restored.turnSchedule).toEqual(snapshot.turnSchedule);
+    });
+
+    it('serializeState() includes turnScheduleRetries', () => {
+      service.startWave(1, mockScene);
+      const snapshot = service.serializeState();
+      expect(snapshot.turnScheduleRetries).toBeDefined();
+      expect(Array.isArray(snapshot.turnScheduleRetries)).toBeTrue();
+      expect(snapshot.turnScheduleRetries!.length).toBe(snapshot.turnSchedule.length);
+    });
+
+    it('restoreState() restores turnScheduleRetries from snapshot', () => {
+      const snapshot = {
+        currentWaveIndex: 0,
+        turnSchedule: [[EnemyType.BASIC], [EnemyType.FAST]],
+        turnScheduleIndex: 0,
+        turnScheduleRetries: [2, 0],
+        active: true,
+        endlessMode: false,
+        currentEndlessResult: null,
+      };
+      service.restoreState(snapshot);
+      const reserialized = service.serializeState();
+      expect(reserialized.turnScheduleRetries).toEqual([2, 0]);
+    });
+
+    it('restoreState() defaults turnScheduleRetries to zeros when absent (backwards compat)', () => {
+      const snapshot = {
+        currentWaveIndex: 0,
+        turnSchedule: [[EnemyType.BASIC], [EnemyType.FAST]],
+        turnScheduleIndex: 0,
+        // No turnScheduleRetries field
+        active: true,
+        endlessMode: false,
+        currentEndlessResult: null,
+      };
+      service.restoreState(snapshot);
+      const reserialized = service.serializeState();
+      expect(reserialized.turnScheduleRetries).toEqual([0, 0]);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Spawn retry logic — Fix #43: null return handling
+  // ---------------------------------------------------------------------------
+
+  describe('spawnForTurn — null return retry logic', () => {
+    it('does NOT advance turnScheduleIndex when spawnEnemy returns null', () => {
+      enemyServiceSpy.spawnEnemy.and.returnValue(null);
+      service.startWave(1, mockScene);
+
+      const indexBefore = service.serializeState().turnScheduleIndex;
+      service.spawnForTurn(mockScene); // null return — should not advance
+      const indexAfter = service.serializeState().turnScheduleIndex;
+
+      expect(indexAfter).toBe(indexBefore);
+    });
+
+    it('retries the same slot on subsequent spawnForTurn calls when null returned', () => {
+      enemyServiceSpy.spawnEnemy.and.returnValue(null);
+      service.startWave(1, mockScene);
+
+      service.spawnForTurn(mockScene); // attempt 1 — null
+      service.spawnForTurn(mockScene); // attempt 2 — null
+
+      // spawnEnemy should have been called twice (both attempts used the same slot)
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledTimes(2);
+      // Index still at 0 — retries pending
+      expect(service.serializeState().turnScheduleIndex).toBe(0);
+    });
+
+    it('drops slot and advances after MAX_SPAWN_RETRIES consecutive failures', () => {
+      // Wave 1: 5 turns of 1 BASIC each — use the first slot
+      enemyServiceSpy.spawnEnemy.and.returnValue(null);
+      service.startWave(1, mockScene);
+
+      // The retry limit is 3 (MAX_SPAWN_RETRIES). After 3 failures the slot is dropped.
+      service.spawnForTurn(mockScene); // fail 1
+      service.spawnForTurn(mockScene); // fail 2
+      service.spawnForTurn(mockScene); // fail 3 — slot dropped, index advances
+
+      const indexAfter3 = service.serializeState().turnScheduleIndex;
+      expect(indexAfter3).toBe(1); // advanced past the dropped slot
+    });
+
+    it('logs a console.warn when a slot is dropped after max retries', () => {
+      const warnSpy = spyOn(console, 'warn');
+      enemyServiceSpy.spawnEnemy.and.returnValue(null);
+      service.startWave(1, mockScene);
+
+      service.spawnForTurn(mockScene);
+      service.spawnForTurn(mockScene);
+      service.spawnForTurn(mockScene); // triggers drop
+
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it('retries only failed types on partial success — does not drop, does not advance', () => {
+      // Wave 3: turn 0 has [BASIC, FAST] — BASIC succeeds, FAST fails.
+      // Correct behavior: return spawned count, rewrite slot to [FAST], keep index.
+      let callCount = 0;
+      enemyServiceSpy.spawnEnemy.and.callFake(() => {
+        callCount++;
+        return callCount % 2 === 1 ? ({ id: `enemy-${callCount}` } as any) : null;
+      });
+      service.startWave(3, mockScene);
+      const indexBefore = service.serializeState().turnScheduleIndex;
+
+      service.spawnForTurn(mockScene);
+
+      expect(service.serializeState().turnScheduleIndex).toBe(indexBefore);
+    });
+
+    it('re-attempts only the failed types on the next spawnForTurn', () => {
+      // Turn 1: two calls (BASIC succeeds, FAST fails). Turn 2: one call for FAST retry.
+      let callCount = 0;
+      enemyServiceSpy.spawnEnemy.and.callFake(() => {
+        callCount++;
+        if (callCount === 1) return { id: 'enemy-basic' } as any; // BASIC succeeds
+        if (callCount === 2) return null;                         // FAST fails
+        return { id: 'enemy-fast' } as any;                       // retry succeeds
+      });
+      service.startWave(3, mockScene);
+
+      service.spawnForTurn(mockScene); // partial success, retry pending
+      const callsAfterFirst = enemyServiceSpy.spawnEnemy.calls.count();
+
+      service.spawnForTurn(mockScene); // should retry only the failed FAST
+
+      const callsAfterSecond = enemyServiceSpy.spawnEnemy.calls.count();
+      expect(callsAfterSecond - callsAfterFirst).toBe(1);
+    });
+
+    it('resets retry count after startWave() so previous retries do not carry over', () => {
+      enemyServiceSpy.spawnEnemy.and.returnValue(null);
+      service.startWave(1, mockScene);
+
+      service.spawnForTurn(mockScene); // accumulate 1 retry
+      service.spawnForTurn(mockScene); // accumulate 2 retries
+
+      // Re-start the wave — retries should reset
+      enemyServiceSpy.spawnEnemy.and.returnValue({ id: 'enemy-0' } as any);
+      service.startWave(1, mockScene);
+
+      const spawned = service.spawnForTurn(mockScene);
+      expect(spawned).toBe(1); // fresh start, no leftover retry count
     });
   });
 });

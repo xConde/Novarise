@@ -101,19 +101,22 @@ describe('Flying Enemy', () => {
       expect(enemy.position.y).not.toBe(ENEMY_STATS[EnemyType.FLYING].size);
     });
 
-    it('should spawn even when ground path is fully blocked', () => {
-      // Block both neighbours of spawner (0,0) so A* would fail
+    it('should spawn even when ground A* path is fully blocked (both use fallback)', () => {
+      // Block both neighbours of spawner (0,0) so A* would fail for ground enemies.
+      // Fix #43: ground enemy falls back to straight-line path, so it still spawns.
+      // Flying enemy is unchanged — always uses straight-line path.
       const wallCells = [
         { row: 0, col: 1 },
         { row: 1, col: 0 }
       ];
       gameBoardService.getGameBoard.and.returnValue(createTestBoard(10, wallCells));
 
-      // Ground enemy should fail
+      // Ground enemy now uses straight-line fallback — spawns successfully
       const ground = enemyService.spawnEnemy(EnemyType.BASIC, mockScene);
-      expect(ground).toBeNull();
+      expect(ground).toBeTruthy();
+      expect(ground!.path.length).toBeGreaterThan(0);
 
-      // Flying enemy should succeed
+      // Flying enemy also succeeds with its straight-line path
       const flyer = enemyService.spawnEnemy(EnemyType.FLYING, mockScene);
       expect(flyer).toBeTruthy();
       expect(flyer!.path.length).toBe(2);

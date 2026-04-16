@@ -22,6 +22,8 @@ import { createTestEnemy, createTestBoard, createGameBoardServiceSpy, createEnem
 import { TowerAnimationService } from './tower-animation.service';
 import { EnemyVisualService } from './enemy-visual.service';
 import { EnemyHealthService } from './enemy-health.service';
+import { RelicService } from '../../../run/services/relic.service';
+import { RunEventBusService } from '../../../run/services/run-event-bus.service';
 
 // ============================================================================
 // 1. EnemyService lifecycle
@@ -354,13 +356,21 @@ describe('WaveService lifecycle', () => {
   let scene: THREE.Scene;
 
   beforeEach(() => {
-    enemyServiceSpy = jasmine.createSpyObj('EnemyService', ['spawnEnemy']);
+    enemyServiceSpy = jasmine.createSpyObj('EnemyService', ['spawnEnemy', 'buildOccupiedSpawnerSet']);
     enemyServiceSpy.spawnEnemy.and.returnValue({ id: 'enemy-0' } as unknown as Enemy);
+    enemyServiceSpy.buildOccupiedSpawnerSet.and.returnValue(new Set<string>());
+
+    const relicServiceSpy = jasmine.createSpyObj('RelicService', ['getTurnDelayPerWave']);
+    relicServiceSpy.getTurnDelayPerWave.and.returnValue(0);
+
+    const eventBusSpy = jasmine.createSpyObj('RunEventBusService', ['emit']);
 
     TestBed.configureTestingModule({
       providers: [
         WaveService,
-        { provide: EnemyService, useValue: enemyServiceSpy }
+        { provide: EnemyService, useValue: enemyServiceSpy },
+        { provide: RelicService, useValue: relicServiceSpy },
+        { provide: RunEventBusService, useValue: eventBusSpy },
       ]
     });
 

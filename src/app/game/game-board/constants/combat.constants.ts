@@ -19,3 +19,12 @@ export const MORTAR_VISUAL_CONFIG = {
 } as const;
 
 export const GROUND_EFFECT_Y = 0.05;
+
+/**
+ * Maximum number of times a scheduled enemy spawn slot will retry before being
+ * silently dropped. Retries accumulate when spawnEnemy returns null (all
+ * spawners occupied or path impossible). 3 retries = one extra wave turn before
+ * the enemy is discarded, keeping wave density mostly intact while avoiding
+ * infinite loops on permanently broken boards.
+ */
+export const MAX_SPAWN_RETRIES = 3;

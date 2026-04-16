@@ -7,6 +7,7 @@ import { EnemyService } from './enemy.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { RunEventBusService, RunEventType } from '../../../run/services/run-event-bus.service';
 import { SerializableWaveState } from '../models/encounter-checkpoint.model';
+import { MAX_SPAWN_RETRIES } from '../constants/combat.constants';
 
 @Injectable()
 export class WaveService {
@@ -27,6 +28,13 @@ export class WaveService {
   private turnSchedule: EnemyType[][] = [];
   /** Next turn index into turnSchedule. Resets to 0 on each startWave(). */
   private turnScheduleIndex = 0;
+  /**
+   * Retry counts per turn-schedule slot. When spawnEnemy returns null (all
+   * spawners occupied), the slot is not advanced and its retry count is
+   * incremented. After MAX_SPAWN_RETRIES the slot is dropped with a warning.
+   * Parallel to turnSchedule; reset with it in startWave() / reset().
+   */
+  private turnScheduleRetries: number[] = [];
 
   constructor(
     private enemyService: EnemyService,
@@ -142,6 +150,7 @@ export class WaveService {
     }
 
     this.turnScheduleIndex = 0;
+    this.turnScheduleRetries = new Array(this.turnSchedule.length).fill(0);
     this.active = true;
 
     // Broadcast wave-start — relic / card push-model subscribers can react
@@ -227,10 +236,10 @@ export class WaveService {
     }
 
     const turnSpawns = this.turnSchedule[this.turnScheduleIndex];
-    this.turnScheduleIndex++;
 
     if (turnSpawns.length === 0) {
-      // Intentional empty prep turn (boss buildup etc.). Still consume the turn.
+      // Intentional empty prep turn (boss buildup etc.). Consume the turn.
+      this.turnScheduleIndex++;
       if (this.turnScheduleIndex >= this.turnSchedule.length) this.active = false;
       return 0;
     }
@@ -238,12 +247,44 @@ export class WaveService {
     const waveHealthMult = this.currentEndlessResult?.healthMultiplier ?? 1;
     const waveSpeedMult = this.currentEndlessResult?.speedMultiplier ?? 1;
 
+    // Build the occupied-spawner set ONCE before the batch so that multiple
+    // enemies scheduled for the same turn don't double-book different spawners.
+    // Each successful spawnEnemy call adds its chosen spawner to this set so
+    // subsequent calls in the batch route to the next free spawner.
+    const occupiedThisBatch = this.enemyService.buildOccupiedSpawnerSet();
+
     let spawned = 0;
+    const failedTypes: EnemyType[] = [];
     for (const type of turnSpawns) {
-      const enemy = this.enemyService.spawnEnemy(type, scene, waveHealthMult, waveSpeedMult);
-      if (enemy) spawned++;
+      const enemy = this.enemyService.spawnEnemy(type, scene, waveHealthMult, waveSpeedMult, occupiedThisBatch);
+      if (enemy) {
+        spawned++;
+      } else {
+        failedTypes.push(type);
+      }
     }
 
+    if (failedTypes.length > 0) {
+      // One or more enemies in this slot failed to spawn (all spawners occupied
+      // or path impossible). Rewrite the current slot to contain ONLY the
+      // failed types and retry next turn — preserves enemies that did spawn
+      // this turn without silently dropping the rest.
+      const retries = ++this.turnScheduleRetries[this.turnScheduleIndex];
+      if (retries >= MAX_SPAWN_RETRIES) {
+        console.warn(
+          `WaveService: spawn slot ${this.turnScheduleIndex} failed ${retries} times — dropping ${failedTypes.length} enemy slot(s).`,
+          failedTypes,
+        );
+        this.turnScheduleIndex++;
+        if (this.turnScheduleIndex >= this.turnSchedule.length) this.active = false;
+      } else {
+        this.turnSchedule[this.turnScheduleIndex] = failedTypes;
+      }
+      return spawned;
+    }
+
+    // Full success — advance the slot.
+    this.turnScheduleIndex++;
     if (this.turnScheduleIndex >= this.turnSchedule.length) {
       this.active = false;
     }
@@ -352,6 +393,7 @@ export class WaveService {
       currentWaveIndex: this.currentWaveIndex,
       turnSchedule: this.turnSchedule.map(turn => [...turn]),
       turnScheduleIndex: this.turnScheduleIndex,
+      turnScheduleRetries: [...this.turnScheduleRetries],
       active: this.active,
       endlessMode: this.endlessMode,
       currentEndlessResult: this.currentEndlessResult ? { ...this.currentEndlessResult } : null,
@@ -366,6 +408,10 @@ export class WaveService {
     this.currentWaveIndex = snapshot.currentWaveIndex;
     this.turnSchedule = snapshot.turnSchedule.map(turn => [...turn] as EnemyType[]);
     this.turnScheduleIndex = snapshot.turnScheduleIndex;
+    // Backwards compat: old checkpoints may not have retries; default to all-zero.
+    this.turnScheduleRetries = snapshot.turnScheduleRetries
+      ? [...snapshot.turnScheduleRetries]
+      : new Array(this.turnSchedule.length).fill(0);
     this.active = snapshot.active;
     this.endlessMode = snapshot.endlessMode;
     this.currentEndlessResult = snapshot.currentEndlessResult ? { ...snapshot.currentEndlessResult } : null;
@@ -379,6 +425,7 @@ export class WaveService {
     this.currentEndlessResult = null;
     this.turnSchedule = [];
     this.turnScheduleIndex = 0;
+    this.turnScheduleRetries = [];
     this.clearCustomWaves();
   }
 }

@@ -91,6 +91,7 @@ export function createEnemyServiceSpy(
   const methods: (keyof EnemyService)[] = [
     'getEnemies', 'damageEnemy', 'damageStrongestEnemy',
     'spawnEnemy', 'removeEnemy', 'startHitFlash', 'stepEnemiesOneTurn',
+    'buildOccupiedSpawnerSet',
   ];
   const spy = jasmine.createSpyObj<EnemyService>('EnemyService', methods);
   spy.getEnemies.and.returnValue(enemyMap);
@@ -101,6 +102,7 @@ export function createEnemyServiceSpy(
     return { killed: enemy.health <= 0, spawnedEnemies: [] };
   });
   spy.stepEnemiesOneTurn.and.returnValue([]);
+  spy.buildOccupiedSpawnerSet.and.returnValue(new Set<string>());
   return spy;
 }
 
