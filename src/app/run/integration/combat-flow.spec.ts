@@ -34,11 +34,13 @@ import { AudioService } from '../../game/game-board/services/audio.service';
 import { TowerAnimationService } from '../../game/game-board/services/tower-animation.service';
 import { GameNotificationService } from '../../game/game-board/services/game-notification.service';
 import { ChallengeTrackingService } from '../../game/game-board/services/challenge-tracking.service';
+import { ScreenShakeService } from '../../game/game-board/services/screen-shake.service';
 import {
   createTowerAnimationServiceSpy,
   createAudioServiceSpy,
   createGameNotificationServiceSpy,
   createChallengeTrackingServiceSpy,
+  createScreenShakeServiceSpy,
   createTestBoard,
 } from '../../game/game-board/testing';
 import { STUB_MAP_STATE } from './integration-fixtures';
@@ -152,6 +154,7 @@ describe('combat-flow integration smoke', () => {
         { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
         { provide: GameNotificationService, useValue: createGameNotificationServiceSpy() },
         { provide: ChallengeTrackingService, useValue: createChallengeTrackingServiceSpy() },
+        { provide: ScreenShakeService, useValue: createScreenShakeServiceSpy() },
       ],
     });
 

@@ -159,6 +159,8 @@ export interface AudioConfig {
   towerSell: ArpeggioConfig;
   defeat: ToneConfig;
   victory: ArpeggioConfig;
+  /** Descending dissonant tone signalling a life lost (~200Hz → 80Hz, square wave). */
+  lifeLoss: ToneConfig;
 }
 
 export const AUDIO_CONFIG: AudioConfig = {
@@ -255,6 +257,15 @@ export const AUDIO_CONFIG: AudioConfig = {
     noteDuration: 0.12,
     noteGap: 0.08,
     oscillatorType: 'sine',
+    gain: 0.35,
+  },
+
+  // Descending dissonant tone: ~200Hz → 80Hz over 300ms, square wave (harsh register)
+  lifeLoss: {
+    frequency: 200,
+    endFrequency: 80,
+    duration: 0.3,
+    oscillatorType: 'square',
     gain: 0.35,
   },
 };

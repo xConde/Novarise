@@ -20,6 +20,10 @@ import { ScoreBreakdown } from '../models/score.model';
 import { CombatFrameResult, FrameKillEvent, KillInfo, WaveCompletionEvent, GameEndEvent } from '../models/combat-frame.model';
 import { TowerType } from '../models/tower.model';
 import { StatusEffectService } from './status-effect.service';
+import { GameNotificationService, NotificationType } from './game-notification.service';
+import { AudioService } from './audio.service';
+import { ScreenShakeService } from './screen-shake.service';
+import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 
 /**
  * Owns the turn-based combat resolution for the COMBAT phase.
@@ -50,6 +54,10 @@ export class CombatLoopService {
   /** Reused per-turn fired-tower-type set — cleared at the start of each resolveTurn(). */
   private frameFiredTypes = new Set<TowerType>();
 
+  /** Aggregated per-turn Lucky Coin procs — one notification per turn, not per proc. */
+  private luckyCoinProcsThisTurn = 0;
+  private luckyCoinBonusGoldThisTurn = 0;
+
   constructor(
     private gameStateService: GameStateService,
     private waveService: WaveService,
@@ -62,6 +70,9 @@ export class CombatLoopService {
     private statusEffectService: StatusEffectService,
     private cardEffectService: CardEffectService,
     private runService: RunService,
+    private notificationService: GameNotificationService,
+    private audioService: AudioService,
+    private screenShakeService: ScreenShakeService,
   ) {}
 
   /** Phase 4: current turn number, exposed for UI bindings. */
@@ -139,6 +150,8 @@ export class CombatLoopService {
     let defeatTriggered = false;
     let waveCompletion: WaveCompletionEvent | null = null;
     let gameEnd: GameEndEvent | null = null;
+    this.luckyCoinProcsThisTurn = 0;
+    this.luckyCoinBonusGoldThisTurn = 0;
 
     const waveAtTurnStart = this.gameStateService.getState().wave;
 
@@ -184,6 +197,11 @@ export class CombatLoopService {
     // 6. Process leaks — enemies that reached the exit cost lives
     for (const enemyId of reachedExit) {
       if (this.relicService.shouldBlockLeak()) {
+        this.notificationService.show(
+          NotificationType.INFO,
+          'Reinforced Walls',
+          'Reinforced Walls blocked a leak',
+        );
         this.enemyService.removeEnemy(enemyId, scene);
         continue;
       }
@@ -194,6 +212,7 @@ export class CombatLoopService {
       const leakedEnemy = this.enemyService.getEnemies().get(enemyId);
       const leakCost = leakedEnemy?.leakDamage ?? 1;
       this.gameStateService.loseLife(leakCost);
+      this.audioService.playLifeLoss();
       frameLeaked = true;
       this.leakedThisWave = true;
       this.gameStatsService.recordEnemyLeaked();
@@ -272,6 +291,15 @@ export class CombatLoopService {
 
     const combatAudioEvents = this.towerCombatService.drainAudioEvents();
 
+    if (this.luckyCoinProcsThisTurn > 0) {
+      const procs = this.luckyCoinProcsThisTurn;
+      const bonus = this.luckyCoinBonusGoldThisTurn;
+      const message = procs === 1
+        ? `+${bonus} bonus gold (Lucky Coin)`
+        : `Lucky Coin ×${procs} (+${bonus} bonus gold)`;
+      this.notificationService.show(NotificationType.INFO, 'Lucky Coin', message);
+    }
+
     return {
       kills: [...this.frameKills],
       firedTypes: new Set(this.frameFiredTypes),
@@ -325,10 +353,25 @@ export class CombatLoopService {
     const isElite = enemy.type === EnemyType.BOSS
       || (encounter?.isElite ?? false)
       || (encounter?.isBoss ?? false);
-    const goldMult = this.relicService.getGoldMultiplier(isElite) * this.relicService.rollLuckyCoin();
+    const luckyCoinMult = this.relicService.rollLuckyCoin();
+    const goldMult = this.relicService.getGoldMultiplier(isElite) * luckyCoinMult;
     const adjustedGold = Math.round(enemy.value * goldMult * cardGoldMult);
     this.gameStateService.addGoldAndScore(adjustedGold);
     this.gameStatsService.recordGoldEarned(adjustedGold);
+
+    if (luckyCoinMult > 1) {
+      this.luckyCoinProcsThisTurn++;
+      this.luckyCoinBonusGoldThisTurn += Math.round(adjustedGold - adjustedGold / luckyCoinMult);
+    }
+
+    if (enemy.type === EnemyType.BOSS) {
+      // Boss-kill shake: fires on the kill event since CombatLoopService has no
+      // per-hit granularity (damage is applied instantaneously per turn).
+      this.screenShakeService.trigger(
+        SCREEN_SHAKE_CONFIG.bossHitIntensity,
+        SCREEN_SHAKE_CONFIG.bossHitDuration,
+      );
+    }
 
     this.frameKills.push({
       damage: killInfo.damage,

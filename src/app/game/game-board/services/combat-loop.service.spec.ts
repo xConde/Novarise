@@ -12,7 +12,11 @@ import { StatusEffectService } from './status-effect.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { RunEventBusService, RunEventType } from '../../../run/services/run-event-bus.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
+import { GameNotificationService, NotificationType } from './game-notification.service';
+import { AudioService } from './audio.service';
+import { ScreenShakeService } from './screen-shake.service';
 import { createRelicServiceSpy, createCardEffectServiceSpy } from '../testing';
+import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 
 import { GamePhase } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
@@ -44,6 +48,9 @@ describe('CombatLoopService', () => {
   let gameStatsSpy: jasmine.SpyObj<GameStatsService>;
   let gameEndSpy: jasmine.SpyObj<GameEndService>;
   let eventBusSpy: jasmine.SpyObj<RunEventBusService>;
+  let notificationSpy: jasmine.SpyObj<GameNotificationService>;
+  let audioSpy: jasmine.SpyObj<AudioService>;
+  let screenShakeSpy: jasmine.SpyObj<ScreenShakeService>;
   let scene: THREE.Scene;
 
   /**
@@ -146,6 +153,17 @@ describe('CombatLoopService', () => {
     statusEffectSpy.getAllActiveEffects.and.returnValue(new Map());
     statusEffectSpy.getEffects.and.returnValue([]);
 
+    notificationSpy = jasmine.createSpyObj<GameNotificationService>('GameNotificationService', ['show', 'dismiss', 'clear', 'getNotifications']);
+    audioSpy = jasmine.createSpyObj<AudioService>('AudioService', [
+      'playTowerFire', 'playEnemyHit', 'playEnemyDeath', 'playWaveStart',
+      'playWaveClear', 'playGoldEarned', 'playTowerPlace', 'playTowerUpgrade',
+      'playTowerSell', 'playDefeat', 'playVictory', 'playLifeLoss',
+      'playAchievementSound', 'playStreakSound', 'playChallengeSound',
+      'playSfx', 'playSequence', 'setVolume', 'toggleMute', 'cleanup',
+      'resetFrameCounters',
+    ]);
+    screenShakeSpy = jasmine.createSpyObj<ScreenShakeService>('ScreenShakeService', ['trigger', 'update', 'cleanup']);
+
     TestBed.configureTestingModule({
       providers: [
         CombatLoopService,
@@ -159,6 +177,9 @@ describe('CombatLoopService', () => {
         { provide: RelicService, useValue: createRelicServiceSpy() },
         { provide: RunEventBusService, useValue: eventBusSpy },
         { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+        { provide: GameNotificationService, useValue: notificationSpy },
+        { provide: AudioService, useValue: audioSpy },
+        { provide: ScreenShakeService, useValue: screenShakeSpy },
       ],
     });
 
@@ -1123,6 +1144,166 @@ describe('CombatLoopService', () => {
 
       service.setLeakedThisWave(false);
       expect(service.getLeakedThisWave()).toBe(false);
+    });
+  });
+
+  // ─── feedback signals — Fix 1: REINFORCED_WALLS notification ────────────────
+
+  describe('feedback signals — Reinforced Walls notification', () => {
+    let relicSpy: jasmine.SpyObj<RelicService>;
+
+    beforeEach(() => {
+      relicSpy = TestBed.inject(RelicService) as jasmine.SpyObj<RelicService>;
+    });
+
+    it('shows INFO notification when shouldBlockLeak() returns true', () => {
+      relicSpy.shouldBlockLeak.and.returnValue(true);
+      const enemy = makeEnemy({ id: 'e1' });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
+
+      service.resolveTurn(scene);
+
+      expect(notificationSpy.show).toHaveBeenCalledWith(
+        NotificationType.INFO,
+        'Reinforced Walls',
+        'Reinforced Walls blocked a leak',
+      );
+    });
+
+    it('does NOT show Reinforced Walls notification when shouldBlockLeak() returns false', () => {
+      relicSpy.shouldBlockLeak.and.returnValue(false);
+      const enemy = makeEnemy({ id: 'e1' });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
+
+      service.resolveTurn(scene);
+
+      const reinforcedCalls = notificationSpy.show.calls.allArgs()
+        .filter(args => args[1] === 'Reinforced Walls');
+      expect(reinforcedCalls.length).toBe(0);
+    });
+  });
+
+  // ─── feedback signals — Fix 1: LUCKY_COIN notification ─────────────────────
+
+  describe('feedback signals — Lucky Coin notification', () => {
+    let relicSpy: jasmine.SpyObj<RelicService>;
+
+    beforeEach(() => {
+      relicSpy = TestBed.inject(RelicService) as jasmine.SpyObj<RelicService>;
+    });
+
+    it('shows ONE aggregated INFO notification when rollLuckyCoin() procs on a single kill', () => {
+      relicSpy.rollLuckyCoin.and.returnValue(1.5);
+      const enemy = makeEnemy({ id: 'e1', value: 10 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'e1', damage: 10, towerType: null, towerLevel: 0 }],
+        fired: [], hitCount: 0, damageDealt: 0,
+      });
+
+      service.resolveTurn(scene);
+
+      const luckyCalls = notificationSpy.show.calls.allArgs()
+        .filter(args => args[1] === 'Lucky Coin');
+      expect(luckyCalls.length).toBe(1);
+      expect(luckyCalls[0][0]).toBe(NotificationType.INFO);
+      expect(luckyCalls[0][2]).toMatch(/^\+\d+ bonus gold \(Lucky Coin\)$/);
+    });
+
+    it('aggregates multiple procs per turn into ONE notification with count', () => {
+      relicSpy.rollLuckyCoin.and.returnValue(1.5);
+      const e1 = makeEnemy({ id: 'e1', value: 10 });
+      const e2 = makeEnemy({ id: 'e2', value: 10 });
+      const e3 = makeEnemy({ id: 'e3', value: 10 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', e1], ['e2', e2], ['e3', e3]]));
+      combatSpy.fireTurn.and.returnValue({
+        killed: [
+          { id: 'e1', damage: 10, towerType: null, towerLevel: 0 },
+          { id: 'e2', damage: 10, towerType: null, towerLevel: 0 },
+          { id: 'e3', damage: 10, towerType: null, towerLevel: 0 },
+        ],
+        fired: [], hitCount: 0, damageDealt: 0,
+      });
+
+      service.resolveTurn(scene);
+
+      const luckyCalls = notificationSpy.show.calls.allArgs()
+        .filter(args => args[1] === 'Lucky Coin');
+      expect(luckyCalls.length).toBe(1);
+      expect(luckyCalls[0][2]).toMatch(/^Lucky Coin ×3 \(\+\d+ bonus gold\)$/);
+    });
+
+    it('does NOT show Lucky Coin notification when rollLuckyCoin() returns 1', () => {
+      relicSpy.rollLuckyCoin.and.returnValue(1);
+      const enemy = makeEnemy({ id: 'e1', value: 10 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'e1', damage: 10, towerType: null, towerLevel: 0 }],
+        fired: [], hitCount: 0, damageDealt: 0,
+      });
+
+      service.resolveTurn(scene);
+
+      const luckyCalls = notificationSpy.show.calls.allArgs()
+        .filter(args => args[1] === 'Lucky Coin');
+      expect(luckyCalls.length).toBe(0);
+    });
+  });
+
+  // ─── feedback signals — Fix 2: boss-kill screen shake ───────────────────────
+
+  describe('feedback signals — boss-kill screen shake', () => {
+    it('triggers screen shake with bossHitIntensity when a BOSS enemy is killed', () => {
+      const boss = makeEnemy({ id: 'boss1', type: EnemyType.BOSS, value: 50 });
+      enemySpy.getEnemies.and.returnValue(new Map([['boss1', boss]]));
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'boss1', damage: 50, towerType: TowerType.BASIC, towerLevel: 1 }],
+        fired: [], hitCount: 1, damageDealt: 50,
+      });
+
+      service.resolveTurn(scene);
+
+      expect(screenShakeSpy.trigger).toHaveBeenCalledWith(
+        SCREEN_SHAKE_CONFIG.bossHitIntensity,
+        SCREEN_SHAKE_CONFIG.bossHitDuration,
+      );
+    });
+
+    it('does NOT trigger boss screen shake when a non-BOSS enemy is killed', () => {
+      const basic = makeEnemy({ id: 'e1', type: EnemyType.BASIC, value: 10 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', basic]]));
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'e1', damage: 10, towerType: TowerType.BASIC, towerLevel: 1 }],
+        fired: [], hitCount: 1, damageDealt: 10,
+      });
+
+      service.resolveTurn(scene);
+
+      expect(screenShakeSpy.trigger).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── feedback signals — Fix 3: life-loss audio ──────────────────────────────
+
+  describe('feedback signals — life-loss audio', () => {
+    it('calls audioService.playLifeLoss() when loseLife() is invoked on a leak', () => {
+      const enemy = makeEnemy({ id: 'e1', leakDamage: 1 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
+
+      service.resolveTurn(scene);
+
+      expect(audioSpy.playLifeLoss).toHaveBeenCalled();
+    });
+
+    it('does NOT call audioService.playLifeLoss() when no enemy leaks', () => {
+      enemySpy.stepEnemiesOneTurn.and.returnValue([]);
+
+      service.resolveTurn(scene);
+
+      expect(audioSpy.playLifeLoss).not.toHaveBeenCalled();
     });
   });
 });
