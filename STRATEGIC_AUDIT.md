@@ -1590,3 +1590,43 @@ Finding 1 is the only reachable bug under normal play — fixed inline, 2 new sp
 - [x] P3-C6: ALPHA/BETA specialization descriptions + dark_nexus twin-boss JSDoc
 - [x] Red-team gate: Finding 1 hardening + partial-batch retry spec
 - [x] Commit Phase 3 + red-team hardening
+
+---
+
+## Red Team Critique — QA Balance Pass Phase 4 (2026-04-16)
+
+**Scope:** Phase 4 clusters P4-C1 through P4-C3 addressing QA feedback: pause-menu `user-select`, economy rebalance (upgrade cost + enemy gold), reward differentiation per node type. 11 files / +231 / −91 before hardening.
+
+### Finding 1: Reward differentiation made elite/boss relic "1-of-1" — not a choice (MEDIUM)
+**Location:** `run.constants.ts` REWARD_CONFIG.relicChoicesElite/Boss
+**Risk:** Original brief asked for "less of both rewards at boss" — the implementation set `relicChoicesElite: 3 → 1` and `relicChoicesBoss: 3 → 1`. But the reward-screen renders each relic choice as a selectable option and the player picks 1 regardless of how many are offered. A single option means "here's your relic with a pointless skip button" — not a deck-shaping choice. StS bosses show 3 rare relic options; the player picks 1. The fix for "too strong = card AND relic" is to drop card choices at boss (already done: `cardChoicesBoss: 0`), NOT to reduce the relic option count. Combat correctly went to 0 relic options (that's the "no relic at combat" structural change); elite and boss should keep 3 options.
+**Fix:** Restore `relicChoicesElite: 3` and `relicChoicesBoss: 3`. Structural differentiation stays:
+- Combat: 3 cards + 0 relics
+- Elite: 3 cards + 3 relic options (pick 1)
+- Boss: 0 cards + 3 relic options (pick 1)
+
+Specs updated to reflect the StS-aligned semantic (baseline 3, ascension FEWER_RELIC_CHOICES reduces 3→2 at A11).
+
+### Finding 2: Combined economy aggression may be too tight (MEDIUM — playtest-dependent)
+**Location:** `tower.model.ts` UPGRADE_COST_CONFIG.baseMultiplier 0.5 → 1.0 + `enemy.model.ts` ENEMY_STATS.value ×0.5
+**Risk:** Both levers move against the player simultaneously. Pre-change economy: BASIC upgrade L1→L2 costs 38g, a BASIC kill yields 10g → ~4 kills to afford upgrade. Post-change: 63g cost, 5g/kill → ~13 kills to afford. A 3.25× harder upgrade pace on top of halved per-kill income. Strategic-ok in theory (makes wave-completion gold the dominant income source, aligns with design intent), but may undershoot on maps with low enemy counts or early-act difficulty spikes.
+**Mitigation:** Left as-shipped for playtest. User explicitly asked for "significantly" reduced enemy gold AND raised upgrade cost — direction is correct, magnitude is the tunable. Planned revert path: `baseMultiplier: 0.75` (L1→L2 drops to 100% of cost) and/or `value × 0.65` (35% cut vs 50%) if playtest shows upgrade pacing is too slow.
+**Not fixing in Phase 4** — QA data shapes this, not code judgment.
+
+### Finding 3: `computeCardChoiceCount` floor at 1 is a latent trap (LOW)
+**Location:** `run.service.ts:computeCardChoiceCount`
+**Risk:** Helper now takes `baseline` param. `Math.max(1, baseline - reduction)` returns 1 even when caller passed `baseline=0`. Currently gated externally by `cardCount > 0 ? ... : []` so no live bug. But the helper is now callable with 0 (baseline parameter signature accepts any number) and would silently ignore the 0.
+**Mitigation:** Low probability; the only production caller gates on `> 0`. Future cleanup: change floor to `Math.max(0, baseline - reduction)` so the helper itself respects a 0 baseline. Documented; not fixing.
+**Not fixing in Phase 4** — latent, not live.
+
+### Hardening Applied
+
+Finding 1 is the only live UX regression — fixed inline by restoring `relicChoicesElite: 3` and `relicChoicesBoss: 3` and updating specs. Findings 2 and 3 documented as playtest/hygiene follow-ups.
+
+### Deployment Checklist — Phase 4 (QA Balance Pass)
+
+- [x] P4-C1: Pause menu `user-select: none` (root cascade, removed legacy duplicate)
+- [x] P4-C2: Economy rebalance — UPGRADE_COST_CONFIG baseMultiplier 1.0, all enemy.value × 0.5
+- [x] P4-C3: Reward differentiation — combat cards-only, elite cards+3 relics, boss 3 relics no cards
+- [x] Red-team gate: Finding 1 hardening (restore 3-option relic picks at elite/boss)
+- [x] Commit Phase 4 + red-team hardening
