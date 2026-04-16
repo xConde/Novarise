@@ -313,11 +313,30 @@ describe('WaveCombatFacadeService', () => {
       expect(deckService.discardHand).not.toHaveBeenCalled();
     });
 
-    it('discards and redraws hand when wave > 0', () => {
-      gameStateService.getState.and.returnValue({ ...defaultState, wave: 1 });
+    it('discards and redraws hand when wave > 0 and startWave transitions to COMBAT', () => {
+      // getState() is called three times: phase guard, post-startWave phase check, waveService.startWave arg.
+      const combatState = { ...defaultState, wave: 1, phase: GamePhase.COMBAT };
+      gameStateService.getState.and.returnValues(
+        { ...defaultState, wave: 1, phase: GamePhase.INTERMISSION },
+        combatState,
+        combatState,
+      );
       service.startWave();
       expect(deckService.discardHand).toHaveBeenCalled();
       expect(deckService.drawForWave).toHaveBeenCalled();
+    });
+
+    it('does NOT discard hand when startWave no-ops (phase stays non-COMBAT)', () => {
+      // getState() three times: phase guard, post-startWave check, waveService.startWave arg.
+      const intermissionState = { ...defaultState, wave: 1, phase: GamePhase.INTERMISSION };
+      gameStateService.getState.and.returnValues(
+        intermissionState,
+        intermissionState,
+        intermissionState,
+      );
+      service.startWave();
+      expect(deckService.discardHand).not.toHaveBeenCalled();
+      expect(deckService.drawForWave).not.toHaveBeenCalled();
     });
   });
 

@@ -126,6 +126,23 @@
     }
   }
 
+  // FPS counter — top-right corner, monospace, semi-transparent debug overlay.
+  // pointer-events:none so it never blocks canvas input.
+  .fps-counter {
+    position: absolute;
+    top: var(--spacing-xs, 0.25rem);
+    right: var(--spacing-xs, 0.25rem);
+    font-family: monospace;
+    font-size: var(--font-size-2xs);
+    color: rgba(255, 255, 255, 0.6);
+    background: rgba(0, 0, 0, 0.45);
+    padding: 0.125rem 0.35rem;
+    border-radius: 0.2rem;
+    pointer-events: none;
+    z-index: var(--z-index-overlay);
+    user-select: none;
+  }
+
   // M1 S4: card-hand host gets the `hand` grid area (bottom row).
   // The component's inner `.card-hand` class handles visual layout inside
   // the slot via flex. Position:fixed was replaced with grid placement.

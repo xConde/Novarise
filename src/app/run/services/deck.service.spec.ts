@@ -416,12 +416,87 @@ describe('DeckService', () => {
 
   // ── Energy helpers ───────────────────────────────────────
 
-  it('addEnergy increases current energy', () => {
+  it('addEnergy increases current energy when below max', () => {
     service.initializeDeck(getStarterDeck(), 1);
     service.drawForWave();
-    const before = service.getEnergy().current;
-    service.addEnergy(2);
-    expect(service.getEnergy().current).toBe(before + 2);
+    // Spend 2 energy so there is room to add without hitting the clamp.
+    const max = service.getEnergy().max;
+    service['energyState'] = { current: max - 2, max };
+    service.addEnergy(1);
+    expect(service.getEnergy().current).toBe(max - 1);
+  });
+
+  it('addEnergy clamps at max — does not exceed energyState.max', () => {
+    service.initializeDeck(getStarterDeck(), 1);
+    service.drawForWave();
+    const max = service.getEnergy().max;
+    service.addEnergy(9999);
+    expect(service.getEnergy().current).toBe(max);
+  });
+
+  // ── undoPlay ─────────────────────────────────────────────
+
+  it('undoPlay returns card from discardPile to hand and refunds energy', () => {
+    service.initializeDeck(getStarterDeck(), 1);
+    service.drawForWave();
+    const hand = service.getDeckState().hand;
+    const card = hand[0];
+    const costBefore = service.getEnergy().current;
+    service.playCard(card.instanceId);
+    expect(service.getDeckState().discardPile.some(c => c.instanceId === card.instanceId)).toBeTrue();
+    const costAfter = service.getEnergy().current;
+    const result = service.undoPlay(card.instanceId, costBefore - costAfter);
+    expect(result).toBeTrue();
+    expect(service.getDeckState().hand.some(c => c.instanceId === card.instanceId)).toBeTrue();
+    expect(service.getDeckState().discardPile.some(c => c.instanceId === card.instanceId)).toBeFalse();
+    expect(service.getEnergy().current).toBe(costBefore);
+  });
+
+  it('undoPlay refund is clamped to max energy', () => {
+    service.initializeDeck(getStarterDeck(), 1);
+    service.drawForWave();
+    const max = service.getEnergy().max;
+    const hand = service.getDeckState().hand;
+    const card = hand[0];
+    service.playCard(card.instanceId);
+    service.undoPlay(card.instanceId, 9999);
+    expect(service.getEnergy().current).toBe(max);
+  });
+
+  it('undoPlay returns false and logs warning when card not found', () => {
+    spyOn(console, 'warn');
+    service.initializeDeck(getStarterDeck(), 1);
+    const result = service.undoPlay('nonexistent-id', 1);
+    expect(result).toBeFalse();
+    expect(console.warn).toHaveBeenCalled();
+  });
+
+  it('undoPlay routes to drawPile top when hand is at maxHandSize', () => {
+    service.initializeDeck(getStarterDeck(), 1);
+    service.drawForWave();
+
+    // Fill hand to maxHandSize. drawForWave drew to handSize (5); draw to cap (10).
+    while (service.getDeckState().hand.length < DECK_CONFIG.maxHandSize) {
+      const sizeBefore = service.getDeckState().hand.length;
+      service.drawCards(1);
+      if (service.getDeckState().hand.length === sizeBefore) break;
+    }
+    expect(service.getDeckState().hand.length).toBe(DECK_CONFIG.maxHandSize);
+
+    const card = service.getDeckState().hand[0];
+    service.playCard(card.instanceId);
+    // After playing, hand is at max - 1 (9). Draw it back up to max so undoPlay sees a full hand.
+    service.drawCards(1);
+    expect(service.getDeckState().hand.length).toBe(DECK_CONFIG.maxHandSize);
+
+    const drawPileBefore = service.getDeckState().drawPile.length;
+    const result = service.undoPlay(card.instanceId, 0);
+
+    expect(result).toBeTrue();
+    expect(service.getDeckState().hand.length).toBe(DECK_CONFIG.maxHandSize);
+    expect(service.getDeckState().hand.some(c => c.instanceId === card.instanceId)).toBeFalse();
+    expect(service.getDeckState().drawPile[0].instanceId).toBe(card.instanceId);
+    expect(service.getDeckState().drawPile.length).toBe(drawPileBefore + 1);
   });
 
   it('setMaxEnergy updates max without changing current', () => {

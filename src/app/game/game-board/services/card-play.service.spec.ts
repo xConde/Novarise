@@ -49,7 +49,7 @@ describe('CardPlayService', () => {
 
   beforeEach(() => {
     deckSpy = jasmine.createSpyObj<DeckService>('DeckService', [
-      'playCard', 'getEnergy', 'drawOne', 'addEnergy', 'discardHand', 'getDeckState',
+      'playCard', 'getEnergy', 'drawOne', 'addEnergy', 'discardHand', 'getDeckState', 'undoPlay',
     ]);
     deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
     deckSpy.playCard.and.returnValue(true);
@@ -247,6 +247,27 @@ describe('CardPlayService', () => {
       service.reset();
       expect(service.hasPendingCard()).toBeFalse();
       expect(service.getPendingCard()).toBeNull();
+    });
+  });
+
+  describe('effect rollback on error', () => {
+    it('calls undoPlay with card instanceId and energy cost when applySpell throws', () => {
+      const error = new Error('effect exploded');
+      cardEffectSpy.applySpell.and.throwError(error);
+      spyOn(console, 'error');
+
+      const card: CardInstance = { instanceId: 'spell-1', cardId: CardId.GOLD_RUSH, upgraded: false };
+      service.onCardPlayed(card);
+
+      expect(deckSpy.playCard).toHaveBeenCalledWith('spell-1');
+      expect(deckSpy.undoPlay).toHaveBeenCalledWith('spell-1', jasmine.any(Number));
+      expect(console.error).toHaveBeenCalled();
+    });
+
+    it('does NOT call undoPlay when applySpell succeeds', () => {
+      const card: CardInstance = { instanceId: 'spell-2', cardId: CardId.GOLD_RUSH, upgraded: false };
+      service.onCardPlayed(card);
+      expect(deckSpy.undoPlay).not.toHaveBeenCalled();
     });
   });
 });

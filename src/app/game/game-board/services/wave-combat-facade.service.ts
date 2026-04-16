@@ -151,14 +151,15 @@ export class WaveCombatFacadeService {
     this.relicService.resetWaveState();
     this.minimapService.show();
 
-    // Discard previous hand and draw new wave hand (skip on the very first wave —
-    // ngOnInit already drew the opening hand during encounter setup).
-    if (state.wave > 0) {
+    this.gameStateService.startWave();
+
+    // Discard previous hand and draw new wave hand only when startWave() successfully
+    // transitioned to COMBAT. Skip on the very first wave (ngOnInit already drew the
+    // opening hand) and when startWave() was a no-op.
+    if (state.wave > 0 && this.gameStateService.getState().phase === GamePhase.COMBAT) {
       this.deckService.discardHand();
       this.deckService.drawForWave();
     }
-
-    this.gameStateService.startWave();
     const modEffects = this.gameStateService.getModifierEffects();
     const waveCountMult = modEffects.waveCountMultiplier ?? 1;
     this.waveService.startWave(this.gameStateService.getState().wave, this.sceneService.getScene(), waveCountMult);

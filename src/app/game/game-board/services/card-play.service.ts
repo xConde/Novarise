@@ -120,33 +120,40 @@ export class CardPlayService {
     }
 
     // Non-tower cards: consume immediately
-    if (!this.deckService.playCard(card.instanceId)) return;
+    const cardInstanceId = card.instanceId;
+    const energyCost = def.energyCost;
+    if (!this.deckService.playCard(cardInstanceId)) return;
 
-    switch (effect.type) {
-      case 'spell': {
-        const spellEffect = effect as SpellCardEffect;
-        if (spellEffect.spellId === 'fortify') {
-          this.fortifyRandomTower();
-        } else if (spellEffect.spellId === 'salvage') {
-          this.salvageLastTower();
-        } else {
-          this.cardEffectService.applySpell(spellEffect, {
-            gameState: this.gameStateService,
-            enemyService: this.enemyService,
-            statusEffectService: this.statusEffectService,
-            currentTurn: this.combatLoopService.getTurnNumber(),
-            deckService: this.deckService,
-            wavePreviewService: this.wavePreviewService,
-          } satisfies SpellContext);
+    try {
+      switch (effect.type) {
+        case 'spell': {
+          const spellEffect = effect as SpellCardEffect;
+          if (spellEffect.spellId === 'fortify') {
+            this.fortifyRandomTower();
+          } else if (spellEffect.spellId === 'salvage') {
+            this.salvageLastTower();
+          } else {
+            this.cardEffectService.applySpell(spellEffect, {
+              gameState: this.gameStateService,
+              enemyService: this.enemyService,
+              statusEffectService: this.statusEffectService,
+              currentTurn: this.combatLoopService.getTurnNumber(),
+              deckService: this.deckService,
+              wavePreviewService: this.wavePreviewService,
+            } satisfies SpellContext);
+          }
+          break;
         }
-        break;
+        case 'modifier':
+          this.cardEffectService.applyModifier(effect as ModifierCardEffect);
+          break;
+        case 'utility':
+          this.executeUtilityCard(effect as UtilityCardEffect);
+          break;
       }
-      case 'modifier':
-        this.cardEffectService.applyModifier(effect as ModifierCardEffect);
-        break;
-      case 'utility':
-        this.executeUtilityCard(effect as UtilityCardEffect);
-        break;
+    } catch (err) {
+      console.error('Card effect threw — rolling back play:', err);
+      this.deckService.undoPlay(cardInstanceId, energyCost);
     }
   }
 

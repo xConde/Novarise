@@ -9,6 +9,10 @@ describe('ScreenShakeService', () => {
     service = new ScreenShakeService();
     camera = new THREE.PerspectiveCamera();
     camera.position.set(0, 10, 20);
+
+    // Disable reduce-motion guards so tests assert normal shake behaviour
+    spyOn(window, 'matchMedia').and.returnValue({ matches: false } as MediaQueryList);
+    spyOn(document.body.classList, 'contains').and.returnValue(false);
   });
 
   afterEach(() => {
@@ -110,5 +114,26 @@ describe('ScreenShakeService', () => {
     service.trigger(0.3, 0.4);
     service.cleanup();
     expect(service.isShaking).toBeFalse();
+  });
+
+  describe('reduce-motion guards', () => {
+    it('trigger() is no-op when prefers-reduced-motion media query matches', () => {
+      (window.matchMedia as jasmine.Spy).and.returnValue({ matches: true } as MediaQueryList);
+      service.trigger(0.5, 0.5);
+      expect(service.isShaking).toBeFalse();
+    });
+
+    it('trigger() is no-op when body has reduce-motion class', () => {
+      (document.body.classList.contains as jasmine.Spy).and.returnValue(true);
+      service.trigger(0.5, 0.5);
+      expect(service.isShaking).toBeFalse();
+    });
+
+    it('trigger() proceeds when neither guard is active', () => {
+      (window.matchMedia as jasmine.Spy).and.returnValue({ matches: false } as MediaQueryList);
+      (document.body.classList.contains as jasmine.Spy).and.returnValue(false);
+      service.trigger(0.5, 0.5);
+      expect(service.isShaking).toBeTrue();
+    });
   });
 });

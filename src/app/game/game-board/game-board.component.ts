@@ -261,6 +261,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   // Turn-start banner — briefly shown after each endTurn()
   showTurnBanner = false;
   private turnBannerTimer: ReturnType<typeof setTimeout> | null = null;
+  private isEndingTurn = false;
 
   /**
    * Persistent RECAP panel — last N completed turn records from
@@ -290,6 +291,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Audio state exposed to template
   get audioMuted(): boolean { return this.audioService.isMuted; }
+
+  // FPS overlay — non-null only when showFps setting is enabled
+  get showFps(): boolean { return this.settingsService.get().showFps; }
+  get currentFps(): number | null { return this.showFps ? this.fpsCounterService.getFps() : null; }
 
   /** Resolves newly unlocked achievement IDs to their name/description for display. */
   private updateAchievementDetails(): void {
@@ -681,6 +686,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   toggleAudio(): void {
     this.audioService.toggleMute();
+    this.settingsService.update({ audioMuted: this.audioService.isMuted });
   }
 
   /** Reload the page — used by the WebGL context-lost refresh button. */
@@ -1007,34 +1013,40 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   endTurn(): void {
     if (this.isPaused) return;
+    if (this.isEndingTurn) return;
+    this.isEndingTurn = true;
 
-    // Dismiss any active tutorial tip — advancing to a new turn is definitive
-    // "player is driving" progress; the helper copy can step aside.
-    this.tutorialService.dismissOnPlayerAction();
+    try {
+      // Dismiss any active tutorial tip — advancing to a new turn is definitive
+      // "player is driving" progress; the helper copy can step aside.
+      this.tutorialService.dismissOnPlayerAction();
 
-    const livesBefore = this.gameStateService.getState().lives;
-    const goldBefore = this.gameStateService.getState().gold;
+      const livesBefore = this.gameStateService.getState().lives;
+      const goldBefore = this.gameStateService.getState().gold;
 
-    // Begin tracking turn in history service BEFORE resolution
-    this.turnHistoryService.beginTurn(this.currentTurnNumber);
+      // Begin tracking turn in history service BEFORE resolution
+      this.turnHistoryService.beginTurn(this.currentTurnNumber);
 
-    this.waveCombat.endTurn();
+      this.waveCombat.endTurn();
 
-    // Record outcomes after resolution. `kills` is derived automatically in
-    // endTurn() from the per-tower attributions recorded by WaveCombatFacadeService.
-    const postState = this.gameStateService.getState();
-    const livesLost = Math.max(0, livesBefore - postState.lives);
-    if (livesLost > 0) this.turnHistoryService.recordLifeLost(livesLost);
-    const goldEarned = Math.max(0, postState.gold - goldBefore);
-    if (goldEarned > 0) this.turnHistoryService.recordGoldEarned(goldEarned);
+      // Record outcomes after resolution. `kills` is derived automatically in
+      // endTurn() from the per-tower attributions recorded by WaveCombatFacadeService.
+      const postState = this.gameStateService.getState();
+      const livesLost = Math.max(0, livesBefore - postState.lives);
+      if (livesLost > 0) this.turnHistoryService.recordLifeLost(livesLost);
+      const goldEarned = Math.max(0, postState.gold - goldBefore);
+      if (goldEarned > 0) this.turnHistoryService.recordGoldEarned(goldEarned);
 
-    this.turnHistoryService.endTurn();
+      this.turnHistoryService.endTurn();
 
-    // The persistent right-side RECAP panel is already bound to
-    // turnHistoryService.records$; endTurn() pushed the new record and the
-    // subscription will surface it automatically. No flash call needed.
-    if (postState.phase === GamePhase.COMBAT) {
-      this.flashTurnBanner();
+      // The persistent right-side RECAP panel is already bound to
+      // turnHistoryService.records$; endTurn() pushed the new record and the
+      // subscription will surface it automatically. No flash call needed.
+      if (postState.phase === GamePhase.COMBAT) {
+        this.flashTurnBanner();
+      }
+    } finally {
+      this.isEndingTurn = false;
     }
   }
 

@@ -306,10 +306,42 @@ export class DeckService {
     this.emit();
   }
 
-  /** Add energy this wave (utility card effect). */
+  /** Add energy this wave (utility card effect). Clamped to max. */
   addEnergy(amount: number): void {
-    this.energyState = { ...this.energyState, current: this.energyState.current + amount };
+    this.energyState = { ...this.energyState, current: Math.min(this.energyState.current + amount, this.energyState.max) };
     this.emit();
+  }
+
+  /**
+   * Undo a played card after an effect error.
+   * Returns the card to hand when under maxHandSize, otherwise to the top of drawPile
+   * so the next draw picks it up. Refunds energy up to max.
+   * Returns false if the card was not found in discardPile or exhaustPile.
+   */
+  undoPlay(cardInstanceId: string, energyRefund: number): boolean {
+    for (const pile of ['discardPile', 'exhaustPile'] as const) {
+      const index = this.deckState[pile].findIndex(c => c.instanceId === cardInstanceId);
+      if (index !== -1) {
+        const card = this.deckState[pile][index];
+        const newPile = [...this.deckState[pile]];
+        newPile.splice(index, 1);
+        const canFitInHand = this.deckState.hand.length < DECK_CONFIG.maxHandSize;
+        this.deckState = {
+          ...this.deckState,
+          [pile]: newPile,
+          hand: canFitInHand ? [...this.deckState.hand, card] : this.deckState.hand,
+          drawPile: canFitInHand ? this.deckState.drawPile : [card, ...this.deckState.drawPile],
+        };
+        this.energyState = {
+          ...this.energyState,
+          current: Math.min(this.energyState.current + energyRefund, this.energyState.max),
+        };
+        this.emit();
+        return true;
+      }
+    }
+    console.warn(`undoPlay: card ${cardInstanceId} not found in discard or exhaust pile`);
+    return false;
   }
 
   /** Clear all state (run end). */

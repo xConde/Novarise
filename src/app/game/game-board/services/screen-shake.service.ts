@@ -21,6 +21,13 @@ export class ScreenShakeService {
    * drift on repeated triggers).
    */
   trigger(intensity: number, duration: number): void {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+    if (document.body.classList.contains('reduce-motion')) {
+      return;
+    }
+
     if (this.shake !== null && this.shake.intensity >= intensity) {
       return;
     }

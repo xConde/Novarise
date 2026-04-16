@@ -2528,6 +2528,24 @@ describe('GameBoardComponent', () => {
     });
   });
 
+  describe('endTurn re-entrant guard', () => {
+    it('second call while first is in-flight is a no-op', () => {
+      const gameStateSvc = fixture.debugElement.injector.get(GameStateService);
+      gameStateSvc.setPhase(GamePhase.COMBAT);
+      component.gameState = gameStateSvc.getState();
+
+      const waveCombatSpy = spyOn(component.waveCombat, 'endTurn').and.callFake(() => {
+        // Simulate re-entrant call from within endTurn (e.g. keyboard repeat)
+        component.endTurn();
+      });
+
+      component.endTurn();
+
+      // waveCombat.endTurn should have been called exactly once despite re-entrant attempt
+      expect(waveCombatSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // ── Red team gate 2: no double-tick of visual animations ──────────────
   describe('red team gate 2: animation calls not duplicated', () => {
     beforeEach(() => {

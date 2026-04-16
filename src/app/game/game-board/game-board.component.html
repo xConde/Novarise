@@ -2,6 +2,9 @@
   <div class="canvas-container" #canvasContainer></div>
 
   <div class="canvas-overlays">
+    <!-- FPS counter — visible only when showFps setting is enabled -->
+    <div class="fps-counter" *ngIf="showFps" aria-hidden="true">{{ currentFps }} FPS</div>
+
     <!-- Game HUD -->
     <app-game-hud
       *ngIf="gameState.wave > 0"
