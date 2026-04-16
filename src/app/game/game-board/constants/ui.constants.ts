@@ -30,6 +30,19 @@ export const HEALTH_BAR_CONFIG = {
   thresholdLow: 0.3
 };
 
+/**
+ * Shield bar — a second bar rendered above the health bar for SHIELDED enemies.
+ * Makes absorbed damage visible so players understand why the HP bar isn't
+ * moving while towers are hitting the target.
+ */
+export const SHIELD_BAR_CONFIG = {
+  width: 0.5,
+  height: 0.05,
+  yOffsetAboveHealth: 0.07, // stacked above the health bar
+  bgColor: 0x1a1a33,
+  color: 0x66ccff, // cyan — distinct from HP green
+};
+
 export const PROJECTILE_CONFIG = {
   radius: 0.08,
   segments: 6,

@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy, EnemyType } from '../models/enemy.model';
-import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG } from '../constants/ui.constants';
+import { HEALTH_BAR_CONFIG, SHIELD_BAR_CONFIG, SHIELD_VISUAL_CONFIG } from '../constants/ui.constants';
 import { DEATH_ANIM_CONFIG, HIT_FLASH_CONFIG, SHIELD_BREAK_CONFIG } from '../constants/effects.constants';
 
 /**
@@ -46,7 +46,7 @@ export class EnemyHealthService {
       if (healthBarBg && healthBarFg) {
         const healthPct = Math.max(0, enemy.health / enemy.maxHealth);
         healthBarFg.scale.x = healthPct;
-        healthBarFg.position.x = -(1 - healthPct) * 0.25;
+        healthBarFg.position.x = -(1 - healthPct) * (HEALTH_BAR_CONFIG.width / 2);
 
         // Color transitions: green -> yellow -> red
         const mat = healthBarFg.material as THREE.MeshBasicMaterial;
@@ -64,6 +64,26 @@ export class EnemyHealthService {
           this.billboardScratchQuat.invert().premultiply(cameraQuaternion);
           healthBarBg.quaternion.copy(this.billboardScratchQuat);
           healthBarFg.quaternion.copy(this.billboardScratchQuat);
+        }
+      }
+
+      // Shield bar — SHIELDED enemies only, hidden once shield breaks.
+      const shieldBarBg = enemy.mesh.userData?.['shieldBarBg'] as THREE.Mesh | undefined;
+      const shieldBarFg = enemy.mesh.userData?.['shieldBarFg'] as THREE.Mesh | undefined;
+      if (shieldBarBg && shieldBarFg) {
+        const hasShield = enemy.shield !== undefined && enemy.maxShield !== undefined && enemy.shield > 0;
+        shieldBarBg.visible = hasShield;
+        shieldBarFg.visible = hasShield;
+
+        if (hasShield) {
+          const shieldPct = Math.max(0, enemy.shield! / enemy.maxShield!);
+          shieldBarFg.scale.x = shieldPct;
+          shieldBarFg.position.x = -(1 - shieldPct) * (SHIELD_BAR_CONFIG.width / 2);
+
+          if (cameraQuaternion) {
+            shieldBarBg.quaternion.copy(this.billboardScratchQuat);
+            shieldBarFg.quaternion.copy(this.billboardScratchQuat);
+          }
         }
       }
     });

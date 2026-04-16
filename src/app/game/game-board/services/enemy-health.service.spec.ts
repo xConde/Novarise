@@ -210,6 +210,40 @@ describe('EnemyHealthService', () => {
       const enemies = new Map([[enemy.id, enemy]]);
       expect(() => service.updateHealthBars(enemies)).not.toThrow();
     });
+
+    it('should scale SHIELDED shield bar by shield/maxShield ratio', () => {
+      const mesh = makeEnemyMesh();
+      attachHealthBar(mesh);
+      const shieldBg = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.05), new THREE.MeshBasicMaterial());
+      const shieldFg = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.05), new THREE.MeshBasicMaterial());
+      mesh.userData['shieldBarBg'] = shieldBg;
+      mesh.userData['shieldBarFg'] = shieldFg;
+      mesh.add(shieldBg);
+      mesh.add(shieldFg);
+
+      const enemy: Enemy = { ...makeEnemy(EnemyType.SHIELDED), mesh, shield: 30, maxShield: 60 };
+      service.updateHealthBars(new Map([[enemy.id, enemy]]));
+
+      expect(shieldFg.visible).toBe(true);
+      expect(shieldFg.scale.x).toBeCloseTo(0.5);
+    });
+
+    it('should hide shield bar once shield is depleted', () => {
+      const mesh = makeEnemyMesh();
+      attachHealthBar(mesh);
+      const shieldBg = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.05), new THREE.MeshBasicMaterial());
+      const shieldFg = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.05), new THREE.MeshBasicMaterial());
+      mesh.userData['shieldBarBg'] = shieldBg;
+      mesh.userData['shieldBarFg'] = shieldFg;
+      mesh.add(shieldBg);
+      mesh.add(shieldFg);
+
+      const enemy: Enemy = { ...makeEnemy(EnemyType.SHIELDED), mesh, shield: 0, maxShield: 60 };
+      service.updateHealthBars(new Map([[enemy.id, enemy]]));
+
+      expect(shieldFg.visible).toBe(false);
+      expect(shieldBg.visible).toBe(false);
+    });
   });
 
   // ─── Hit flash ──────────────────────────────────────────────────────────────
