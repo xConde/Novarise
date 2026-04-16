@@ -124,6 +124,8 @@ export interface SerializableWaveState {
   /** Serialized EnemyType[][] — each inner array is one turn's spawn list. */
   readonly turnSchedule: string[][];
   readonly turnScheduleIndex: number;
+  /** Per-slot retry counts; parallel array to turnSchedule. Optional for backwards compat. */
+  readonly turnScheduleRetries?: number[];
   readonly active: boolean;
   readonly endlessMode: boolean;
   readonly currentEndlessResult: EndlessWaveResult | null;

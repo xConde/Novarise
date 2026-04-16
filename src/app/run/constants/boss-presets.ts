@@ -178,6 +178,27 @@ export const ACT1_BOSS_PRESETS: BossPreset[] = [
 // ── Act 2 Boss Presets (7 waves each) ────────────────────────────
 
 export const ACT2_BOSS_PRESETS: BossPreset[] = [
+  /**
+   * Dark Nexus — Act 2 finale.
+   *
+   * **Twin-BOSS design (Wave 7): intentional difficulty spike.**
+   * `count: 2, spawnInterval: 3.0` — the two bosses spawn on separate turns,
+   * 3 turns apart. The occupancy check in EnemyService only blocks stacking
+   * within a single spawn batch, so each boss picks its spawner independently:
+   * - Multi-spawner maps: each boss may emerge from a different spawner.
+   * - Single-spawner maps: second boss uses the same tile 3 turns later.
+   *
+   * **Leak damage:** Each BOSS deals 3 lives on escape. Both escaping = 6
+   * lives lost — instant defeat on most run configurations. This is deliberate
+   * act-2 pressure; players are expected to be well-built by this point.
+   *
+   * **Reward:** 180 gold (vs 100 for act-1 solo BOSS) reflects the elevated
+   * risk. Players who survive receive a meaningful gold injection.
+   *
+   * **Counterplay:** Preview cards (SCOUT_ELITE, SCOUTING_LENS) reveal the
+   * twin threat before Wave 7 so players can position SLOW/CHAIN to ensure
+   * neither boss reaches the exit.
+   */
   {
     id: 'dark_nexus',
     name: 'Dark Nexus',

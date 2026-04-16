@@ -184,6 +184,23 @@ describe('Boss Presets', () => {
       expect(allTypes.has(EnemyType.FLYING)).toBeTrue();
       expect(allTypes.has(EnemyType.SWARM)).toBeTrue();
     });
+
+    it('dark_nexus final wave spawns exactly 2 BOSSes with a 3-turn gap', () => {
+      const preset = ACT2_BOSS_PRESETS.find(p => p.id === 'dark_nexus')!;
+      const finalWave = preset.waves[preset.waves.length - 1];
+      const bossEntry = finalWave.entries!.find(e => e.type === EnemyType.BOSS);
+      expect(bossEntry).toBeDefined();
+      expect(bossEntry!.count).toBe(2);
+      expect(bossEntry!.spawnInterval).toBe(3.0);
+    });
+
+    it('dark_nexus twin-BOSS reward (180) is higher than act-1 solo-BOSS reward (100)', () => {
+      const darkNexus = ACT2_BOSS_PRESETS.find(p => p.id === 'dark_nexus')!;
+      const act1SoloBossReward = 100; // All act-1 boss wave rewards
+      const twinBossReward = darkNexus.waves[darkNexus.waves.length - 1].reward;
+      expect(twinBossReward).toBeGreaterThan(act1SoloBossReward);
+      expect(twinBossReward).toBe(180);
+    });
   });
 
   // ── Cross-array uniqueness ─────────────────────────────────────────

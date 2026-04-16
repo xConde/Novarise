@@ -165,7 +165,7 @@ export const TOWER_SPECIALIZATIONS: Record<TowerType, Record<TowerSpecialization
   [TowerType.BASIC]: {
     [TowerSpecialization.ALPHA]: {
       label: 'Marksman',
-      description: 'High damage, slight range boost',
+      description: 'Marksman: +200% damage, +20% range',
       damage: 3.0, range: 1.2,
     },
     [TowerSpecialization.BETA]: {
@@ -177,7 +177,7 @@ export const TOWER_SPECIALIZATIONS: Record<TowerType, Record<TowerSpecialization
   [TowerType.SNIPER]: {
     [TowerSpecialization.ALPHA]: {
       label: 'Assassin',
-      description: 'Extreme damage, very long range',
+      description: 'Assassin: +250% damage, +50% range',
       damage: 3.5, range: 1.5,
     },
     [TowerSpecialization.BETA]: {
@@ -189,7 +189,7 @@ export const TOWER_SPECIALIZATIONS: Record<TowerType, Record<TowerSpecialization
   [TowerType.SPLASH]: {
     [TowerSpecialization.ALPHA]: {
       label: 'Bombardier',
-      description: 'Larger blast, more damage, poisons targets',
+      description: 'Bombardier: +180% damage, +20% range, +0.5 blast radius, applies POISON',
       damage: 2.8, range: 1.2,
       splashRadiusBonus: 0.5,
       statusEffect: StatusEffectType.POISON,
@@ -203,40 +203,40 @@ export const TOWER_SPECIALIZATIONS: Record<TowerType, Record<TowerSpecialization
   [TowerType.SLOW]: {
     [TowerSpecialization.ALPHA]: {
       label: 'Glacier',
-      description: 'Stronger slow effect, wider range',
+      description: 'Glacier: slows to 30% speed (vs 50% base), +50% range',
       damage: 1.0, range: 1.5,
       slowFactorOverride: 0.3,
     },
     [TowerSpecialization.BETA]: {
       label: 'Frostbite',
-      description: 'Faster pulse rate, extended range',
+      description: 'Frostbite: +30% range, wider chill coverage',
       damage: 1.0, range: 1.3,
     },
   },
   [TowerType.CHAIN]: {
     [TowerSpecialization.ALPHA]: {
       label: 'Tesla',
-      description: 'More bounces, longer chain range, burns targets',
+      description: 'Tesla: +100% damage, +2 chain bounces, +20% range, applies BURN',
       damage: 2.0, range: 1.2,
       chainCountBonus: 2,
       statusEffect: StatusEffectType.BURN,
     },
     [TowerSpecialization.BETA]: {
       label: 'Arc',
-      description: 'Faster arcs, higher damage per hit',
+      description: 'Arc: +180% damage, +30% range',
       damage: 2.8, range: 1.3,
     },
   },
   [TowerType.MORTAR]: {
     [TowerSpecialization.ALPHA]: {
       label: 'Siege',
-      description: 'Larger zones, stronger DoT',
+      description: 'Siege: +150% damage, 2× DoT per zone, +20% range',
       damage: 2.5, range: 1.2,
       dotDamageMultiplier: 2.0,
     },
     [TowerSpecialization.BETA]: {
       label: 'Barrage',
-      description: 'Faster firing, more zones active',
+      description: 'Barrage: +80% damage, +30% range',
       damage: 1.8, range: 1.3,
     },
   },
