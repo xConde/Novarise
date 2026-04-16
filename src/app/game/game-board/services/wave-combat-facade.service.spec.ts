@@ -95,8 +95,9 @@ describe('WaveCombatFacadeService', () => {
     screenShakeService = jasmine.createSpyObj('ScreenShakeService', ['trigger']);
     audioService = jasmine.createSpyObj('AudioService', ['playWaveStart']);
 
-    deckService = jasmine.createSpyObj('DeckService', ['discardHand', 'drawForWave', 'serializeState']);
+    deckService = jasmine.createSpyObj('DeckService', ['discardHand', 'drawForWave', 'serializeState', 'getRngState']);
     (deckService.serializeState as jasmine.Spy).and.returnValue({});
+    (deckService.getRngState as jasmine.Spy).and.returnValue(null);
     relicService = jasmine.createSpyObj('RelicService', ['resetWaveState', 'serializeEncounterFlags']);
     minimapService = jasmine.createSpyObj('MinimapService', ['show']);
     notificationService = jasmine.createSpyObj('GameNotificationService', ['show']);
@@ -106,7 +107,7 @@ describe('WaveCombatFacadeService', () => {
     enemyService = jasmine.createSpyObj('EnemyService', ['serializeEnemies']);
     enemyService.serializeEnemies.and.returnValue({ enemies: [], enemyCounter: 0 });
 
-    towerCombatService = jasmine.createSpyObj('TowerCombatService', ['serializeTowers', 'serializeMortarZones']);
+    towerCombatService = jasmine.createSpyObj('TowerCombatService', ['serializeTowers', 'serializeMortarZones', 'clearMortarZonesForWaveEnd']);
     towerCombatService.serializeTowers.and.returnValue([]);
     towerCombatService.serializeMortarZones.and.returnValue([]);
 
@@ -422,6 +423,32 @@ describe('WaveCombatFacadeService', () => {
       expect(deckService.discardHand).not.toHaveBeenCalled();
       expect(deckService.drawForWave).not.toHaveBeenCalled();
     });
+  });
+
+  describe('autoSaveCheckpoint — deckRngState', () => {
+    it('includes deckRngState in saved checkpoint when getDeckRngState returns a value', fakeAsync(() => {
+      (deckService.getRngState as jasmine.Spy).and.returnValue(55555);
+      // endTurn() has a phase guard (COMBAT only) — use COMBAT so the save path runs
+      gameStateService.getState.and.returnValue({ ...defaultState, phase: GamePhase.COMBAT });
+      service.init(makeCallbacks());
+      service.endTurn();
+
+      expect(encounterCheckpointService.saveCheckpoint).toHaveBeenCalled();
+      const saved = (encounterCheckpointService.saveCheckpoint as jasmine.Spy).calls.mostRecent().args[0];
+      expect(saved.deckRngState).toBe(55555);
+    }));
+
+    it('includes deckRngState as undefined in saved checkpoint when getDeckRngState returns null', fakeAsync(() => {
+      (deckService.getRngState as jasmine.Spy).and.returnValue(null);
+      // endTurn() has a phase guard (COMBAT only) — use COMBAT so the save path runs
+      gameStateService.getState.and.returnValue({ ...defaultState, phase: GamePhase.COMBAT });
+      service.init(makeCallbacks());
+      service.endTurn();
+
+      expect(encounterCheckpointService.saveCheckpoint).toHaveBeenCalled();
+      const saved = (encounterCheckpointService.saveCheckpoint as jasmine.Spy).calls.mostRecent().args[0];
+      expect(saved.deckRngState).toBeUndefined();
+    }));
   });
 
   describe('cleanup()', () => {

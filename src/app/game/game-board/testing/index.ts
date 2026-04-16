@@ -32,4 +32,5 @@ export {
   createRunServiceSpy,
   createDeckServiceSpy,
   createCardEffectServiceSpy,
+  createScreenShakeServiceSpy,
 } from './test-spies.factory';

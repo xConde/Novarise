@@ -1076,6 +1076,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.ascensionModifier.apply(runState.ascensionLevel, encounter.isElite, encounter.isBoss);
       }
 
+      // Step 2a: Restore run-level RNG (safety net — RunService.restoreEncounter() already
+      // calls setState when runRng is non-null, but after a page reload runRng may be null
+      // until this call re-creates the instance from the saved state).
+      this.runService.restoreRngState(checkpoint.rngState);
+
       // Step 3: Restore CombatLoopService turn number (before mortar zone expiry checks)
       this.combatLoopService.setTurnNumber(checkpoint.turnNumber);
 
@@ -1127,6 +1132,11 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Step 9: Restore deck state (piles, energy — NO reshuffle)
       this.deckService.restoreState(checkpoint.deckState);
+      // Step 9a: Restore deck-level RNG so in-encounter reshuffles are deterministic.
+      // Field is absent on pre-v4 checkpoints (migration sets it to undefined) — skip in that case.
+      if (checkpoint.deckRngState !== undefined) {
+        this.deckService.setRngState(checkpoint.deckRngState);
+      }
 
       // Step 10: Restore card effect modifiers
       this.cardEffectService.restoreModifiers(checkpoint.cardModifiers);
@@ -1153,15 +1163,19 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // Step 14: Restore wave state (turnSchedule, index, seenTypes)
       this.waveService.restoreState(checkpoint.waveState);
 
-      // Step 15: Restore combat loop leaked flag
-      this.combatLoopService.setLeakedThisWave(checkpoint.leakedThisWave);
-
-      // Step 16: Restore game state LAST (sets phase → triggers UI subscription updates)
-      this.gameStateService.restoreFromCheckpoint(checkpoint.gameState);
-
-      // Step 17: Set custom waves for wave preview
+      // Step 15: Set custom wave definitions and max-wave count BEFORE restoreFromCheckpoint.
+      // GameStateService.setMaxWaves() has a phase guard (phase===SETUP && wave===0) — it must
+      // run while phase is still SETUP (i.e., before the checkpoint's COMBAT/INTERMISSION
+      // phase is applied). WaveService.setCustomWaves() must precede this for parity with the
+      // fresh-encounter path, and also before phaseChange$ fires so subscribers see wave defs.
       this.waveService.setCustomWaves(encounter.waves);
       this.gameStateService.setMaxWaves(encounter.waves.length);
+
+      // Step 16: Restore combat loop leaked flag
+      this.combatLoopService.setLeakedThisWave(checkpoint.leakedThisWave);
+
+      // Step 17: Restore game state LAST (sets phase → triggers UI subscription updates)
+      this.gameStateService.restoreFromCheckpoint(checkpoint.gameState);
 
       // Step 18: Seed wave preview for the current restored state
       const state = this.gameStateService.getState();

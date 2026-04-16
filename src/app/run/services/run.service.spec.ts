@@ -600,6 +600,86 @@ describe('RunService', () => {
     expect(deckService.getAllCards().length).toBe(cardsBefore);
   }));
 
+  // ── gambling_den gamble mechanic ─────────────────────────────────
+
+  describe('gambling_den — gamble outcome', () => {
+    function makeGambleEvent(winChance: number) {
+      return {
+        id: 'gambling_den',
+        title: 'Gambling Den',
+        description: 'Test',
+        choices: [
+          {
+            label: 'Gamble (50/50)',
+            description: '50% chance to gain 80 gold. Lose: gain nothing.',
+            outcome: {
+              goldDelta: 0,
+              livesDelta: 0,
+              description: 'The cards are dealt.',
+              gamble: { winGoldDelta: 80, loseGoldDelta: 0, winChance },
+            },
+          },
+        ],
+      };
+    }
+
+    it('gambling_den win path: gold increases by 80 when rng < winChance', fakeAsync(() => {
+      service.startNewRun();
+      service.selectNode('node_1_0');
+
+      // Force rng to always return 0.1 (well below 0.5 winChance — guaranteed win)
+      (service as any).runRng = { next: () => 0.1, getState: () => 0, setState: () => {} };
+      (service as any).currentEvent = makeGambleEvent(0.5);
+
+      const goldBefore = (service as any).runState.gold as number;
+      service.resolveEvent(0);
+      expect((service as any).runState.gold).toBe(goldBefore + 80);
+    }));
+
+    it('gambling_den loss path: gold unchanged when rng >= winChance', fakeAsync(() => {
+      service.startNewRun();
+      service.selectNode('node_1_0');
+
+      // Force rng to always return 0.9 (above 0.5 winChance — guaranteed loss)
+      (service as any).runRng = { next: () => 0.9, getState: () => 0, setState: () => {} };
+      (service as any).currentEvent = makeGambleEvent(0.5);
+
+      const goldBefore = (service as any).runState.gold as number;
+      service.resolveEvent(0);
+      expect((service as any).runState.gold).toBe(goldBefore);
+    }));
+
+    it('gambling_den deterministic: alternating rng values produce expected win/loss sequence', fakeAsync(() => {
+      service.startNewRun();
+      service.selectNode('node_1_0');
+
+      // Provide a counter-based rng: 0.1, 0.9, 0.1, 0.9 ...
+      let callCount = 0;
+      (service as any).runRng = {
+        next: () => (callCount++ % 2 === 0 ? 0.1 : 0.9),
+        getState: () => 0,
+        setState: () => {},
+      };
+
+      const goldStart = (service as any).runState.gold as number;
+
+      // Roll 1: 0.1 < 0.5 → win (+80)
+      (service as any).currentEvent = makeGambleEvent(0.5);
+      service.resolveEvent(0);
+      expect((service as any).runState.gold).toBe(goldStart + 80);
+
+      // Roll 2: 0.9 >= 0.5 → loss (+0)
+      (service as any).currentEvent = makeGambleEvent(0.5);
+      service.resolveEvent(0);
+      expect((service as any).runState.gold).toBe(goldStart + 80); // unchanged from previous
+
+      // Roll 3: 0.1 < 0.5 → win again
+      (service as any).currentEvent = makeGambleEvent(0.5);
+      service.resolveEvent(0);
+      expect((service as any).runState.gold).toBe(goldStart + 160);
+    }));
+  });
+
   // ── generateRewards — FEWER_RELIC_CHOICES ascension effect ───────
 
   describe('generateRewards — FEWER_RELIC_CHOICES ascension reduction', () => {
@@ -1012,6 +1092,39 @@ describe('RunService', () => {
       // Checkpoint must survive and isRestoringCheckpoint must be set.
       expect(checkpointService.hasCheckpoint()).toBeTrue();
       expect(service.isRestoringCheckpoint).toBeTrue();
+    }));
+  });
+
+  describe('restoreRngState()', () => {
+    it('restores RNG state when runRng already exists', fakeAsync(() => {
+      service.startNewRun();
+      const captured = service.getRngState()!;
+      expect(typeof captured).toBe('number');
+
+      // Restore to a known sentinel value
+      service.restoreRngState(77777);
+      expect(service.getRngState()).toBe(77777);
+    }));
+
+    it('creates a fresh RNG instance when runRng is null', fakeAsync(() => {
+      // Fresh service has no runRng — getRngState returns null
+      expect(service.getRngState()).toBeNull();
+
+      service.restoreRngState(99999);
+      expect(service.getRngState()).toBe(99999);
+    }));
+
+    it('getRngState + restoreRngState round-trip preserves value', fakeAsync(() => {
+      service.startNewRun();
+      const captured = service.getRngState()!;
+
+      // Overwrite with a different value
+      service.restoreRngState(12345);
+      expect(service.getRngState()).toBe(12345);
+
+      // Restore back to original
+      service.restoreRngState(captured);
+      expect(service.getRngState()).toBe(captured);
     }));
   });
 });

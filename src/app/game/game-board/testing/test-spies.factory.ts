@@ -38,6 +38,7 @@ import { DifficultyLevel, GamePhase, INITIAL_GAME_STATE, GameState } from '../mo
 import { PlayerProfile } from '../models/achievement.model';
 import { TowerUpgradeVisualService } from '../services/tower-upgrade-visual.service';
 import { GameSessionService } from '../services/game-session.service';
+import { ScreenShakeService } from '../services/screen-shake.service';
 
 /**
  * Create a pre-configured GameBoardService spy with standard return values.
@@ -919,6 +920,7 @@ export function createRunServiceSpy(): jasmine.SpyObj<RunService> {
   const spy = jasmine.createSpyObj('RunService', [
     'isInRun', 'hasActiveRun', 'getCurrentEncounter', 'recordEncounterResult',
     'startNewRun', 'resumeRun', 'abandonRun', 'selectNode', 'prepareEncounter',
+    'getRngState', 'restoreRngState',
   ], ['runState']);
 
   // Post-pivot default: there is ALWAYS an active run. Combat cannot happen
@@ -989,6 +991,13 @@ export function createCardEffectServiceSpy(): jasmine.SpyObj<CardEffectService> 
   return spy;
 }
 
+export function createScreenShakeServiceSpy(): jasmine.SpyObj<ScreenShakeService> {
+  const spy = jasmine.createSpyObj<ScreenShakeService>('ScreenShakeService', [
+    'trigger', 'update', 'cleanup',
+  ]);
+  return spy;
+}
+
 export function createDeckServiceSpy(): jasmine.SpyObj<DeckService> {
   const emptyDeckState: DeckState = {
     drawPile: [],
@@ -1018,6 +1027,10 @@ export function createDeckServiceSpy(): jasmine.SpyObj<DeckService> {
     'setMaxEnergy',
     'addEnergy',
     'clear',
+    'getRngState',
+    'setRngState',
+    'restoreState',
+    'serializeState',
   ]);
 
   // DeckService exposes deckState$ and energy$ as readonly Observables.

@@ -233,6 +233,7 @@ export class WaveCombatFacadeService {
       this.lastInterestEarned = renderOutput.interestEarned!;
     }
     if (renderOutput.waveCompleted) {
+      this.towerCombatService.clearMortarZonesForWaveEnd(this.sceneService.getScene());
       this.onWaveComplete(renderOutput.waveCompleted.wave, renderOutput.waveCompleted.perfect);
     }
 
@@ -262,6 +263,7 @@ export class WaveCombatFacadeService {
         nodeId: this.runService.getCurrentEncounter()?.nodeId ?? '',
         encounterConfig: this.runService.getCurrentEncounter()!,
         rngState: this.runService.getRngState() ?? 0,
+        deckRngState: this.deckService.getRngState() ?? undefined,
         gameState: this.gameStateService.serializeState(),
         turnNumber: this.combatLoopService.getTurnNumber(),
         leakedThisWave: this.combatLoopService.getLeakedThisWave(),

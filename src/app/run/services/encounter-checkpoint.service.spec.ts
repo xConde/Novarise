@@ -255,6 +255,32 @@ describe('EncounterCheckpointService', () => {
       expect(loaded!.version).toBe(CHECKPOINT_VERSION);
       expect(loaded!.turnHistory).toEqual([]);
     });
+
+    it('migrates v3 to v4 by backfilling deckRngState as undefined', () => {
+      // Store a v3 checkpoint (no deckRngState field) directly in localStorage.
+      const v3Checkpoint = createTestCheckpoint({ version: 3 });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v3Data = { ...(v3Checkpoint as any) };
+      delete v3Data['deckRngState'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v3Data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.version).toBe(CHECKPOINT_VERSION);
+      // deckRngState may be absent (undefined) after JSON round-trip — restore path must handle this
+      expect(loaded!.deckRngState).toBeUndefined();
+    });
+
+    it('deckRngState round-trips correctly when present in a v4 checkpoint', () => {
+      const checkpoint = createTestCheckpoint({ deckRngState: 42000 });
+
+      service.saveCheckpoint(checkpoint);
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.deckRngState).toBe(42000);
+    });
   });
 
   describe('loadCheckpoint() structural validation', () => {

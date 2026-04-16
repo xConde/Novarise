@@ -1493,6 +1493,48 @@ describe('GameStateService', () => {
       expect(service.getState().maxWaves).toBe(INITIAL_GAME_STATE.maxWaves);
     });
 
+    it('setMaxWaves is a no-op when phase is COMBAT (phase guard)', () => {
+      // Coordinator fix 1 — setMaxWaves must run BEFORE restoreFromCheckpoint transitions to COMBAT.
+      // This test documents the phase guard behaviour so the ordering constraint is explicit.
+      service.setMaxWaves(7); // works in SETUP (wave===0)
+      expect(service.getState().maxWaves).toBe(7);
+
+      service.startWave(); // → COMBAT phase
+      service.setMaxWaves(3); // must be a no-op
+      expect(service.getState().maxWaves).toBe(7); // unchanged
+    });
+
+    it('setMaxWaves applied before restoreFromCheckpoint survives the phase transition', () => {
+      // Simulate the coordinator ordering: setMaxWaves first, then restoreFromCheckpoint.
+      // After restore, maxWaves in the checkpoint snapshot overwrites the value set above,
+      // but the checkpoint itself was saved with the correct maxWaves — so the final value
+      // must equal what the checkpoint stored, NOT what setMaxWaves would set post-restore.
+      service.setMaxWaves(5);
+      expect(service.getState().maxWaves).toBe(5);
+
+      // restoreFromCheckpoint bypasses phase guard — verify maxWaves from checkpoint is applied
+      const snap: SerializableGameState = {
+        phase: GamePhase.COMBAT,
+        wave: 2,
+        maxWaves: 8, // stored in checkpoint
+        lives: 15,
+        maxLives: 20,
+        initialLives: 20,
+        gold: 100,
+        initialGold: 100,
+        score: 0,
+        difficulty: DifficultyLevel.NORMAL,
+        isEndless: false,
+        highestWave: 2,
+        elapsedTime: 10,
+        activeModifiers: [],
+        consecutiveWavesWithoutLeak: 0,
+      };
+      service.restoreFromCheckpoint(snap);
+      expect(service.getState().maxWaves).toBe(8);
+      expect(service.getState().phase).toBe(GamePhase.COMBAT);
+    });
+
     it('loseLife with amount greater than remaining lives clamps to 0 and triggers DEFEAT', () => {
       // Start with whatever initial lives, then overkill
       const lives = service.getState().lives;

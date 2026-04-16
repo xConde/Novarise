@@ -284,6 +284,15 @@ export class DeckService {
     return this.rng?.getState() ?? null;
   }
 
+  /** Restore the internal PRNG to a previously captured state. Creates a fresh RNG instance if null (page-reload scenario). */
+  setRngState(state: number): void {
+    if (this.rng) {
+      this.rng.setState(state);
+    } else {
+      this.rng = createSeededRng(state);
+    }
+  }
+
   /** Set max energy (relic bonus). */
   setMaxEnergy(max: number): void {
     this.energyState = { ...this.energyState, max };

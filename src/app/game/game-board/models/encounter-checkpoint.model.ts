@@ -11,7 +11,7 @@ import { EncounterConfig } from '../../../run/models/encounter.model';
 import { TurnEventRecord } from '../services/turn-history.service';
 
 /** Schema version — bump when the shape changes to enable migrations. */
-export const CHECKPOINT_VERSION = 3;
+export const CHECKPOINT_VERSION = 4;
 
 /** Plain-object snapshot of GameState (isPaused omitted — always false on restore). */
 export interface SerializableGameState {
@@ -183,6 +183,12 @@ export interface EncounterCheckpoint {
 
   /** Mulberry32 internal state integer — restores deterministic RNG sequences. */
   readonly rngState: number;
+  /**
+   * DeckService internal Mulberry32 state — restores deterministic reshuffle
+   * sequences within the encounter. Absent on pre-v4 checkpoints; v3→v4
+   * migration backfills `undefined` and the restore path skips the call.
+   */
+  readonly deckRngState?: number;
 
   // --- Game loop ---
   readonly gameState: SerializableGameState;

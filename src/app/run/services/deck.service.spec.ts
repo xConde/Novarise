@@ -507,4 +507,74 @@ describe('DeckService', () => {
     expect(service.getEnergy().max).toBe(5);
     expect(service.getEnergy().current).toBe(currentBefore);
   });
+
+  // ── RNG state round-trip ─────────────────────────────────
+
+  describe('getRngState / setRngState round-trip', () => {
+    it('getRngState returns null before deck is initialized', () => {
+      expect(service.getRngState()).toBeNull();
+    });
+
+    it('getRngState returns a number after initializeDeck', () => {
+      service.initializeDeck(getStarterDeck(), 42);
+      const state = service.getRngState();
+      expect(state).not.toBeNull();
+      expect(typeof state).toBe('number');
+    });
+
+    it('setRngState restores exact RNG sequence', () => {
+      service.initializeDeck(getStarterDeck(), 99);
+      // Advance the RNG a few times via reshuffle-triggering draw cycles
+      service.drawForWave();
+      const captured = service.getRngState()!;
+
+      // Advance further
+      service.drawForWave();
+
+      // Restore to captured state
+      service.setRngState(captured);
+      const afterRestore = service.getRngState();
+      expect(afterRestore).toBe(captured);
+    });
+
+    it('setRngState creates a fresh RNG instance when rng is null', () => {
+      // After clear(), rng is null
+      service.clear();
+      expect(service.getRngState()).toBeNull();
+
+      service.setRngState(12345);
+      expect(service.getRngState()).toBe(12345);
+    });
+
+    it('getRngState + setRngState produces deterministic reshuffle after restore', () => {
+      service.initializeDeck(
+        [CardId.TOWER_BASIC, CardId.GOLD_RUSH, CardId.ENERGY_SURGE, CardId.DAMAGE_BOOST],
+        7,
+      );
+      service.drawForWave();
+      // Discard entire hand to trigger a reshuffle on next draw
+      const hand = [...service.getDeckState().hand];
+      for (const card of hand) {
+        service.playCard(card.instanceId);
+      }
+
+      const capturedRng = service.getRngState()!;
+
+      // Discard hand again to set up reshuffle point, then capture pile order
+      service.drawForWave();
+      const handBeforeRestore = service.getDeckState().hand.map(c => c.instanceId);
+
+      // Restore RNG state and replay the same draw from same pile
+      // (restoreState puts discard pile back, then setRngState restores RNG)
+      const snap = service.serializeState();
+      // Simulate going back to post-play state by restoring and overriding piles
+      service.restoreState(snap);
+      service.setRngState(capturedRng);
+
+      service.drawForWave();
+      const handAfterRestore = service.getDeckState().hand.map(c => c.instanceId);
+
+      expect(handAfterRestore).toEqual(handBeforeRestore);
+    });
+  });
 });

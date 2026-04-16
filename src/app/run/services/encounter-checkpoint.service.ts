@@ -32,6 +32,15 @@ export class EncounterCheckpointService {
       data['version'] = 3;
       return data;
     },
+    // 3 → 4: add `deckRngState` field. DeckService internal RNG state was not
+    // serialized before v4; restore path skips the call when the field is
+    // undefined — reshuffles are slightly non-deterministic for one encounter
+    // but no correctness loss.
+    3: (data) => {
+      data['deckRngState'] = undefined;
+      data['version'] = 4;
+      return data;
+    },
   };
 
   /**

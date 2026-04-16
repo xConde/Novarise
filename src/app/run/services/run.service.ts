@@ -177,6 +177,15 @@ export class RunService {
     return this.runRng?.getState() ?? null;
   }
 
+  /** Restore the run-level PRNG to a previously captured state. Creates a fresh RNG instance if null (page-reload scenario). */
+  restoreRngState(state: number): void {
+    if (this.runRng) {
+      this.runRng.setState(state);
+    } else {
+      this.runRng = createSeededRng(state);
+    }
+  }
+
   // ── Run Lifecycle ───────────────────────────────────────
 
   /** Start a new run with a fresh seed. */
@@ -583,8 +592,18 @@ export class RunService {
 
     const outcome = event.choices[choiceIndex].outcome;
 
+    // Gamble: if the outcome has a gamble field, roll rng to determine gold delta.
+    let resolvedGoldDelta: number;
+    if (outcome.gamble) {
+      const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
+      const won = rng() < outcome.gamble.winChance;
+      resolvedGoldDelta = won ? outcome.gamble.winGoldDelta : outcome.gamble.loseGoldDelta;
+    } else {
+      resolvedGoldDelta = outcome.goldDelta;
+    }
+
     let newLives = Math.min(state.maxLives, Math.max(0, state.lives + outcome.livesDelta));
-    const newGold = Math.max(0, state.gold + outcome.goldDelta);
+    const newGold = Math.max(0, state.gold + resolvedGoldDelta);
     const newRelicIds = [...state.relicIds];
 
     if (outcome.relicId) {
