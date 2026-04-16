@@ -1552,3 +1552,41 @@ Finding 1 is the only one with a live UX degradation at typical player play — 
 - [x] P2-C6: Content truthfulness (TEMPORAL_RIFT, gambling_den RNG, tower spec descs, FLYING docstring)
 - [x] Red-team gate: Finding 1 hardening + aggregated spec
 - [x] Commit Phase 2 + red-team hardening
+
+---
+
+## Red Team Critique — Mechanics Audit Phase 3 (2026-04-16)
+
+**Scope:** Phase 3 clusters P3-C1 through P3-C6: consumption order, placement/upgrade visuals, exhaust pile UI, spawner pile-up + null-drop, reward pool weighting, ALPHA specs + dark_nexus docs. 35 files / +1310 / −130 before hardening.
+
+### Finding 1: Partial spawn-batch failures silently drop enemies (HIGH)
+**Location:** `wave.service.ts:spawnForTurn` (P3-C4 retry block)
+**Risk:** When a turn schedules multiple enemies (e.g. `[BASIC, FAST]`) and only some spawn successfully — say BASIC succeeds but FAST fails because the only free spawner was taken by BASIC — the retry mechanism only engages when `spawned === 0`. Under partial success the index advances and the failed enemies are silently dropped. Audit sprint 36 / sprint 9 concern is reintroduced by the P3-C4 fix that was meant to close it. Content loss is per-turn, silent, and invisible to the player until a wave feels lighter than the authored count suggests.
+**Fix:** Track failed types explicitly. On partial success, rewrite the current slot to contain ONLY the types that failed to spawn, do NOT advance the index, and let the retry counter tick. Full success advances as before; all-failure path is unchanged. New spec asserts (a) partial success keeps index steady and (b) next `spawnForTurn` attempts exactly the failed types, not the whole slot. 5381 passing post-fix.
+
+### Finding 2: `buildOccupiedSpawnerSet` returns empty, missing prior-turn SLOW'd enemies (MEDIUM)
+**Location:** `enemy.service.ts:709` — `buildOccupiedSpawnerSet()` returns `new Set<string>()`
+**Risk:** Per-batch occupancy is tracked correctly, but pre-existing enemies that are still standing on a spawner tile from a prior turn (e.g., a SLOW aura set their movement to 0 at spawn) are invisible to the occupancy check. Next turn's spawn batch at that spawner will stack a new enemy on top of them. Narrow case: requires SLOW tower with aura reaching the spawner AND a newly-spawned enemy slowed on the same turn it spawned.
+**Mitigation:** Could be fixed by iterating `this.enemies` and including any enemy whose grid position matches a spawner coordinate. Low probability of player encountering; leave for a follow-up.
+**Not fixing in Phase 3** — narrow edge case, low player exposure.
+
+### Finding 3: Ground-enemy straight-line fallback walks through towers (LOW)
+**Location:** `enemy.service.ts:spawnEnemy` — fallback when A* fails for ground types
+**Risk:** When the board has no A* path to any exit, ground enemies now spawn with a straight-line path like flying. This means enemies walk THROUGH towers. Gameplay regression if it fires — players expect a walled path to block ground advance. Today it can't fire via normal placement (`canPlaceTower` gates on BFS path reachability) but could trip on checkpoint-restore edge cases where `forceSetTower` bypasses the guard, or if the editor produces a degenerate map.
+**Mitigation:** Document as intentional degenerate-case fallback in a code comment. The alternative (silent despawn, as before) is strictly worse — at least the enemy reaches the player now rather than vanishing into nothing. Future cleanup could emit a `console.warn` the first time it fires.
+**Not fixing in Phase 3** — chosen trade-off, worth documenting rather than reverting.
+
+### Hardening Applied
+
+Finding 1 is the only reachable bug under normal play — fixed inline, 2 new specs cover the partial-success + retry-only-failed-types contract. Findings 2 and 3 are documented for future follow-up.
+
+### Deployment Checklist — Phase 3 (Mechanics Audit CRITICALs, tier 3)
+
+- [x] P3-C1: Consumption order + autoSave timing + `_healthMultiplier` cleanup
+- [x] P3-C2: Placement validation (wouldBlockPath delegation) + startLevel:2 upgrade visuals
+- [x] P3-C3: Exhaust pile UI (counter, pulse, inspector integration)
+- [x] P3-C4: Spawner pile-up + null-drop (occupancy check, retry counter, straight-line fallback)
+- [x] P3-C5: Reward pool weighting (60/30/10) + FEWER_CARD_CHOICES + BOUNTY_HUNTER truth
+- [x] P3-C6: ALPHA/BETA specialization descriptions + dark_nexus twin-boss JSDoc
+- [x] Red-team gate: Finding 1 hardening + partial-batch retry spec
+- [x] Commit Phase 3 + red-team hardening
