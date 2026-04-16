@@ -91,7 +91,7 @@ describe('Enemy Model', () => {
         const basic = ENEMY_STATS[EnemyType.BASIC];
         expect(basic.health).toBe(100);
         expect(basic.speed).toBe(2.0);
-        expect(basic.value).toBe(10);
+        expect(basic.value).toBe(5);
         expect(basic.color).toBe(0xff0000); // Red
         expect(basic.size).toBe(0.3);
       });
@@ -111,7 +111,7 @@ describe('Enemy Model', () => {
         const fast = ENEMY_STATS[EnemyType.FAST];
         expect(fast.health).toBe(50);
         expect(fast.speed).toBe(4.0);
-        expect(fast.value).toBe(15);
+        expect(fast.value).toBe(8);
         expect(fast.color).toBe(0xffff00); // Yellow
       });
     });
@@ -130,7 +130,7 @@ describe('Enemy Model', () => {
         const heavy = ENEMY_STATS[EnemyType.HEAVY];
         expect(heavy.health).toBe(300);
         expect(heavy.speed).toBe(1.0);
-        expect(heavy.value).toBe(30);
+        expect(heavy.value).toBe(15);
         expect(heavy.color).toBe(0x0000ff); // Blue
         expect(heavy.size).toBe(0.4); // Larger
       });
@@ -149,7 +149,7 @@ describe('Enemy Model', () => {
         const swift = ENEMY_STATS[EnemyType.SWIFT];
         expect(swift.health).toBe(80);
         expect(swift.speed).toBe(3.0);
-        expect(swift.value).toBe(20);
+        expect(swift.value).toBe(10);
         expect(swift.color).toBe(0x00ffff); // Cyan
       });
     });
@@ -171,7 +171,7 @@ describe('Enemy Model', () => {
         const boss = ENEMY_STATS[EnemyType.BOSS];
         expect(boss.health).toBe(1000);
         expect(boss.speed).toBe(0.5);
-        expect(boss.value).toBe(100);
+        expect(boss.value).toBe(50);
         expect(boss.color).toBe(0xff00ff); // Magenta
         expect(boss.size).toBe(0.6); // Largest
       });
@@ -292,7 +292,7 @@ describe('Enemy Model', () => {
       const shielded = ENEMY_STATS[EnemyType.SHIELDED];
       expect(shielded.health).toBe(120);
       expect(shielded.speed).toBe(1.2);
-      expect(shielded.value).toBe(25);
+      expect(shielded.value).toBe(13);
       expect(shielded.color).toBe(0x4444ff);
       expect(shielded.size).toBe(0.35);
     });
@@ -322,7 +322,7 @@ describe('Enemy Model', () => {
       const swarm = ENEMY_STATS[EnemyType.SWARM];
       expect(swarm.health).toBe(40);
       expect(swarm.speed).toBe(2.5);
-      expect(swarm.value).toBe(8);
+      expect(swarm.value).toBe(4);
       expect(swarm.color).toBe(0xaaaa00);
       expect(swarm.size).toBe(0.25);
     });
@@ -396,7 +396,7 @@ describe('Enemy Model', () => {
       const flying = ENEMY_STATS[EnemyType.FLYING];
       expect(flying.health).toBe(60);
       expect(flying.speed).toBe(2.5);
-      expect(flying.value).toBe(20);
+      expect(flying.value).toBe(10);
       expect(flying.color).toBe(0x88ccff); // Light blue
       expect(flying.size).toBe(0.3);
     });

@@ -67,11 +67,12 @@ const INCOME_SUFFICIENCY_GRID_FACTOR = 3;
  * be at least this many times the cheapest tower cost, times the tower count
  * estimate for the level's grid size.
  *
- * Set to 3 so that the test fails if all wave rewards were zeroed out.
- * For level 1 (gridSize 10): required = 50 * ceil(10/3) * 3 = 600g.
- * Normal starting gold is 200g, so wave rewards + kills must cover ≥ 400g.
+ * Set to 2 after intentional kill-gold halving (balance pass, 2026-04-16).
+ * For level 1 (gridSize 10): required = 50 * ceil(10/3) * 2 = 400g.
+ * Normal starting gold is 200g, so wave rewards + kills must cover ≥ 200g.
+ * Still catches degenerate configurations (all rewards zeroed).
  */
-const INCOME_SUFFICIENCY_MULTIPLIER = 3;
+const INCOME_SUFFICIENCY_MULTIPLIER = 2;
 
 /**
  * Minimum spawn interval (seconds) allowed in any campaign wave entry.

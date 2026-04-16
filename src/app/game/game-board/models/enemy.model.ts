@@ -60,7 +60,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     health: 100,
     speed: 2.0,
     tilesPerTurn: 1,
-    value: 10,
+    value: 5,
     color: 0xff0000, // Red
     size: 0.3,
     leakDamage: 1
@@ -69,7 +69,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     health: 50,
     speed: 4.0,
     tilesPerTurn: 2,
-    value: 15,
+    value: 8,
     color: 0xffff00, // Yellow
     size: 0.25,
     leakDamage: 1
@@ -78,7 +78,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     health: 300,
     speed: 1.0,
     tilesPerTurn: 1,
-    value: 30,
+    value: 15,
     color: 0x0000ff, // Blue
     size: 0.4,
     leakDamage: 2
@@ -87,7 +87,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     health: 80,
     speed: 3.0,
     tilesPerTurn: 2,
-    value: 20,
+    value: 10,
     color: 0x00ffff, // Cyan
     size: 0.3,
     leakDamage: 1
@@ -96,7 +96,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     health: 1000,
     speed: 0.5,
     tilesPerTurn: 1,
-    value: 100,
+    value: 50,
     color: 0xff00ff, // Magenta
     size: 0.6,
     leakDamage: 3
@@ -105,7 +105,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     health: 120,
     speed: 1.2,
     tilesPerTurn: 1,
-    value: 25,
+    value: 13,
     color: 0x4444ff, // Blue
     size: 0.35,
     leakDamage: 2,
@@ -115,7 +115,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     health: 40,
     speed: 2.5,
     tilesPerTurn: 2,
-    value: 8,
+    value: 4,
     color: 0xaaaa00, // Yellow-green
     size: 0.25,
     leakDamage: 1,
@@ -125,7 +125,7 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     health: 60,
     speed: 2.5,
     tilesPerTurn: 1,
-    value: 20,
+    value: 10,
     color: 0x88ccff, // Light blue
     size: 0.3,
     leakDamage: 1
@@ -147,7 +147,7 @@ export const MINI_SWARM_STATS = {
   health: 15,
   speed: 3,
   tilesPerTurn: 1,
-  value: 3,
+  value: 2,
   color: 0xaaaa00, // Same yellow-green as parent
   size: 0.15,
   leakDamage: 1
