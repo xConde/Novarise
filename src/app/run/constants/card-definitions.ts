@@ -22,7 +22,7 @@ import { MODIFIER_STAT } from './modifier-stat.constants';
 const CARD_VALUES = {
   // Tower card energy costs (tower cost / 50, rounded)
   energyBasic: 1,    // Basic: 50 / 50 = 1
-  energySniper: 3,   // Sniper: 125 / 50 = 2.5 → 3... spec says 2; using spec
+  energySniper: 2,   // Sniper: 125 / 50 = 2.5 → floor = 2
   energySplash: 2,   // Splash: 75 / 50 = 1.5 → 2
   energySlow: 2,     // Slow: 75 / 50 = 1.5 → 2
   energyChain: 2,    // Chain: 120 / 50 = 2.4 → 2
@@ -251,7 +251,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     description: 'Deploy a Mortar tower.',
     upgradedDescription: 'Deploy a Mortar tower at level 2.',
     type: CardType.TOWER,
-    rarity: CardRarity.STARTER,
+    rarity: CardRarity.COMMON,
     energyCost: CARD_VALUES.energyMortar,
     upgraded: false,
     effect: { type: 'tower', towerType: TowerType.MORTAR },

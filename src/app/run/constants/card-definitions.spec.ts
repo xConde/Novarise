@@ -84,7 +84,7 @@ describe('CARD_DEFINITIONS', () => {
     it('the 6 base tower cards have STARTER rarity', () => {
       const starterTowerIds = [
         CardId.TOWER_BASIC, CardId.TOWER_SNIPER, CardId.TOWER_SPLASH,
-        CardId.TOWER_SLOW, CardId.TOWER_CHAIN, CardId.TOWER_MORTAR,
+        CardId.TOWER_SLOW, CardId.TOWER_CHAIN,
       ];
       for (const id of starterTowerIds) {
         expect(CARD_DEFINITIONS[id].rarity).toBe(CardRarity.STARTER, `${id} is not STARTER`);
@@ -109,9 +109,9 @@ describe('CARD_DEFINITIONS', () => {
       expect(commons.every(c => c.rarity === CardRarity.COMMON)).toBe(true);
     });
 
-    it('returns 6 starter cards when queried by STARTER', () => {
+    it('returns 5 starter cards when queried by STARTER', () => {
       const starters = getCardsByRarity(CardRarity.STARTER);
-      expect(starters.length).toBe(6);
+      expect(starters.length).toBe(5);
     });
   });
 
