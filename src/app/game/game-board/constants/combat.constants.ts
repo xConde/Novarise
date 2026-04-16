@@ -7,6 +7,8 @@ export const CHAIN_LIGHTNING_CONFIG = {
   /** Maximum perpendicular offset for zigzag jitter */
   zigzagJitter: 0.25,
   arcOpacity: 0.85,
+  /** Chain does not bounce if the next hit's rounded damage would be below this threshold. */
+  minDamageToBounce: 2,
 } as const;
 
 export const MORTAR_VISUAL_CONFIG = {

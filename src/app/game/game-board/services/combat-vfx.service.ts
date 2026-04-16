@@ -144,6 +144,19 @@ export class CombatVFXService {
   }
 
   /**
+   * Disposes all mortar zone meshes without touching chain arcs.
+   * Call from TowerCombatService.clearMortarZonesForWaveEnd() so zones from
+   * wave N do not bleed into wave N+1.
+   */
+  clearMortarZoneMeshes(scene: THREE.Scene): void {
+    for (const zone of this.mortarZoneMeshes) {
+      scene.remove(zone.mesh);
+      disposeMesh(zone.mesh);
+    }
+    this.mortarZoneMeshes = [];
+  }
+
+  /**
    * Disposes all tracked visual objects.
    * Call from TowerCombatService.cleanup() on restart and ngOnDestroy.
    */

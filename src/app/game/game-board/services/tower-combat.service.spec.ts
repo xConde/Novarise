@@ -224,9 +224,12 @@ describe('TowerCombatService', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
       const key = `${TOWER_ROW}-${TOWER_COL}`;
 
-      // Default is NEAREST (index 0) → cycles to FIRST (index 1)
+      // Default is NEAREST (index 0) → cycles: FARTHEST, FIRST, LAST, STRONGEST, WEAKEST, wraps to NEAREST
+      expect(service.cycleTargetingMode(key)).toBe(TargetingMode.FARTHEST);
       expect(service.cycleTargetingMode(key)).toBe(TargetingMode.FIRST);
+      expect(service.cycleTargetingMode(key)).toBe(TargetingMode.LAST);
       expect(service.cycleTargetingMode(key)).toBe(TargetingMode.STRONGEST);
+      expect(service.cycleTargetingMode(key)).toBe(TargetingMode.WEAKEST);
       expect(service.cycleTargetingMode(key)).toBe(TargetingMode.NEAREST); // wraps around
     });
 
@@ -296,6 +299,69 @@ describe('TowerCombatService', () => {
       // strong (500hp) should be targeted, weak (50hp) should not
       expect(strong.health).toBeLessThan(500);
       expect(weak.health).toBe(50);
+    });
+
+    it('findTarget with last returns enemy least far along path', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.setTargetingMode(key, TargetingMode.LAST);
+
+      // Enemy that just entered (low distanceTraveled)
+      const newEnemy = createEnemy('new', TOWER_WORLD_X + 0.5, TOWER_WORLD_Z, 1000);
+      newEnemy.distanceTraveled = 1;
+      // Enemy further along path
+      const oldEnemy = createEnemy('old', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 1000);
+      oldEnemy.distanceTraveled = 15;
+      enemyMap.set('new', newEnemy);
+      enemyMap.set('old', oldEnemy);
+
+      service.fireTurn(mockScene, TURN_1);
+
+      // 'last' mode targets the enemy with lowest distanceTraveled (just entered)
+      expect(newEnemy.health).toBeLessThan(1000);
+      expect(oldEnemy.health).toBe(1000);
+    });
+
+    it('findTarget with farthest returns spatially farthest enemy from tower', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.setTargetingMode(key, TargetingMode.FARTHEST);
+
+      // Close enemy (within range=3)
+      const close = createEnemy('close', TOWER_WORLD_X + 0.5, TOWER_WORLD_Z, 1000);
+      close.distanceTraveled = 5;
+      // Far enemy (farther away but still within range=3)
+      const far = createEnemy('far', TOWER_WORLD_X + 2.5, TOWER_WORLD_Z, 1000);
+      far.distanceTraveled = 1;
+      enemyMap.set('close', close);
+      enemyMap.set('far', far);
+
+      service.fireTurn(mockScene, TURN_1);
+
+      // 'farthest' mode targets the enemy with greatest Euclidean distance from tower
+      expect(far.health).toBeLessThan(1000);
+      expect(close.health).toBe(1000);
+    });
+
+    it('findTarget with weakest returns enemy with lowest health', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.setTargetingMode(key, TargetingMode.WEAKEST);
+
+      // Low-health enemy
+      const weak = createEnemy('weak', TOWER_WORLD_X + 0.5, TOWER_WORLD_Z, 50);
+      weak.distanceTraveled = 1;
+      // High-health enemy
+      const strong = createEnemy('strong', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 500);
+      strong.distanceTraveled = 5;
+      enemyMap.set('weak', weak);
+      enemyMap.set('strong', strong);
+
+      service.fireTurn(mockScene, TURN_1);
+
+      // 'weakest' mode targets the enemy with lowest current health
+      expect(weak.health).toBeLessThan(50);
+      expect(strong.health).toBe(500);
     });
 
     it('should preserve targeting mode across upgrade', () => {
@@ -982,6 +1048,21 @@ describe('TowerCombatService', () => {
       const result = service.tickMortarZonesForTurn(mockScene, TURN_2);
       expect(result.kills.length).toBe(0);
     });
+
+    it('clearMortarZonesForWaveEnd should zero turnMortarZones so wave-N zones do not bleed into wave N+1', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.fireTurn(mockScene, TURN_1); // creates zone with remaining turns
+
+      service.clearMortarZonesForWaveEnd(mockScene);
+
+      // Zone is cleared — DoT tick on next wave's turn 1 should produce no damage
+      const result = service.tickMortarZonesForTurn(mockScene, TURN_1);
+      expect(result.kills.length).toBe(0);
+      expect(result.damageDealt).toBe(0);
+    });
   });
 
   // --- Full Lifecycle ---
@@ -1628,8 +1709,8 @@ describe('TowerCombatService', () => {
     it('chainBounces: extra bounces increase hitCount beyond chainCount', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
 
-      // 5 enemies at tower position so chain has targets for extra bounces
-      for (let i = 0; i < 5; i++) {
+      // 6 enemies so chain has targets for all chainCount(3) + extraBounces(2) + primary = 6 hits
+      for (let i = 0; i < 6; i++) {
         const e = createEnemy(`e${i}`, TOWER_WORLD_X + i * 0.2, TOWER_WORLD_Z, 10000);
         enemyMap.set(`e${i}`, e);
       }
@@ -1639,8 +1720,9 @@ describe('TowerCombatService', () => {
 
       const result = service.fireTurn(mockScene, TURN_1);
 
-      // hitCount = 1 (primary) + chainCount(3) + extraBounces(2) = 6
-      expect(result.hitCount).toBeGreaterThanOrEqual(1 + 3 + 2);
+      // hitCount reflects actual enemies struck: primary + up to chainCount+extraBounces bounces
+      // With 6 enemies in range and high damage (15 base) all 6 slots fire → hitCount >= 6
+      expect(result.hitCount).toBeGreaterThanOrEqual(6);
     });
   });
 

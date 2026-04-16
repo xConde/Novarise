@@ -315,7 +315,7 @@ export class EnemyService {
     let strongestId: string | null = null;
     let highestHealth = -Infinity;
     for (const [id, enemy] of this.enemies) {
-      if (!enemy.dying && enemy.health > highestHealth) {
+      if (!enemy.dying && !enemy.isFlying && enemy.health > highestHealth) {
         highestHealth = enemy.health;
         strongestId = id;
       }
@@ -538,7 +538,7 @@ export class EnemyService {
   getLivingEnemyCount(): number {
     let count = 0;
     this.enemies.forEach(enemy => {
-      if (!enemy.dying) count++;
+      if (!enemy.dying && enemy.health > 0) count++;
     });
     return count;
   }

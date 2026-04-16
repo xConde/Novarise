@@ -56,11 +56,12 @@ export class ChainLightningService {
     spatialGrid: SpatialGrid,
     turnNumber: number,
     extraBounces: number = 0,
-  ): { kills: KillInfo[]; damageDealt: number } {
+  ): { kills: KillInfo[]; damageDealt: number; hitCount: number } {
     const chainCount = (stats.chainCount ?? 3) + extraBounces;
     const chainRange = stats.chainRange ?? 2;
     const kills: KillInfo[] = [];
     let damageDealt = 0;
+    let hitCount = 0;
     const hitIds = new Set<string>();
 
     this.pendingAudioEvents.push({ type: 'sfx', sfxKey: 'chainZap' });
@@ -75,6 +76,7 @@ export class ChainLightningService {
 
     for (let bounce = 0; bounce <= chainCount; bounce++) {
       hitIds.add(currentTarget.id);
+      hitCount++;
 
       // Delegate arc creation to CombatVFXService
       this.combatVFXService.createChainArc(
@@ -106,16 +108,20 @@ export class ChainLightningService {
       const nextTarget = this.findChainTarget(currentTarget, chainRange, hitIds, spatialGrid);
       if (!nextTarget) break;
 
+      // Compute damage for the next bounce before committing to it.
+      // If it would round below the minimum threshold, the arc dissipates.
+      const nextDamage = Math.round(currentDamage * CHAIN_LIGHTNING_CONFIG.damageFalloff);
+      if (nextDamage < CHAIN_LIGHTNING_CONFIG.minDamageToBounce) break;
+
       // Advance "from" position to the current hit before moving to next target
       previousX = currentTarget.position.x;
       previousZ = currentTarget.position.z;
 
-      currentDamage = Math.round(currentDamage * CHAIN_LIGHTNING_CONFIG.damageFalloff);
-      if (currentDamage <= 0) break;
+      currentDamage = nextDamage;
       currentTarget = nextTarget;
     }
 
-    return { kills, damageDealt };
+    return { kills, damageDealt, hitCount };
   }
 
   /**

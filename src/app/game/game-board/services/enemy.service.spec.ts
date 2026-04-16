@@ -2045,6 +2045,20 @@ describe('EnemyService', () => {
 
       expect(service.getLivingEnemyCount()).toBe(0);
     });
+
+    it('should not count an enemy with hp=0 that has not yet started dying animation', () => {
+      const e1 = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+
+      // Damage e1 to 0 without calling startDyingAnimation — pre-animation dead state
+      service.damageEnemy(e1.id, e1.maxHealth);
+
+      // e1.dying is undefined/falsy before startDyingAnimation, but health === 0
+      // must not count as living
+      expect(e1.dying).toBeFalsy();
+      expect(e1.health).toBeLessThanOrEqual(0);
+      expect(service.getLivingEnemyCount()).toBe(1);
+    });
   });
 
   describe('dying enemies — movement and targeting exclusions', () => {
@@ -2876,6 +2890,43 @@ describe('EnemyService', () => {
       // Verify counter was restored
       const { enemyCounter: counterAfterRestore } = service.serializeEnemies();
       expect(counterAfterRestore).toBe(enemyCounter);
+    });
+  });
+
+  describe('damageStrongestEnemy — flying exclusion', () => {
+    it('skips a flying enemy and damages the strongest non-flying enemy instead', () => {
+      const flyingEnemy = service.spawnEnemy(EnemyType.FLYING, mockScene)!;
+      flyingEnemy.health = 9999; // highest health — should NOT be targeted
+
+      const groundEnemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const groundHealthBefore = groundEnemy.health;
+
+      service.damageStrongestEnemy(10);
+
+      expect(flyingEnemy.health).toBe(9999); // flying enemy untouched
+      expect(groundEnemy.health).toBe(groundHealthBefore - 10); // ground enemy damaged
+    });
+
+    it('is a no-op when only flying enemies are present', () => {
+      const flyingEnemy = service.spawnEnemy(EnemyType.FLYING, mockScene)!;
+      const healthBefore = flyingEnemy.health;
+
+      service.damageStrongestEnemy(50);
+
+      expect(flyingEnemy.health).toBe(healthBefore); // no damage applied
+    });
+
+    it('damages the ground enemy with highest health when multiple ground enemies exist', () => {
+      const weak = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      weak.health = 10;
+
+      const strong = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      strong.health = 100;
+
+      service.damageStrongestEnemy(25);
+
+      expect(strong.health).toBe(75); // strongest ground enemy damaged
+      expect(weak.health).toBe(10);   // weaker ground enemy untouched
     });
   });
 });

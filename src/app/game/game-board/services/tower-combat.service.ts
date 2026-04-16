@@ -251,7 +251,7 @@ export class TowerCombatService {
           );
           killed.push(...chainResult.kills);
           damageDealt += chainResult.damageDealt;
-          hitCount += 1 + (stats.chainCount ?? 0) + chainBouncesBonus;
+          hitCount += chainResult.hitCount;
           if (chainResult.kills.length > 0) tower.kills += chainResult.kills.length;
         } else if (tower.type === TowerType.MORTAR) {
           // M3 S4: mortar drops a turn-ticked DoT zone instead of one-shot.
@@ -402,6 +402,16 @@ export class TowerCombatService {
     return { kills, damageDealt };
   }
 
+  /**
+   * Clears all active mortar DoT zones at wave end so they do not bleed into
+   * the next wave. VFX meshes are cleaned up by CombatVFXService.
+   * Call from WaveCombatFacadeService.onWaveComplete alongside relicService.resetWaveState().
+   */
+  clearMortarZonesForWaveEnd(scene: THREE.Scene): void {
+    this.turnMortarZones = [];
+    this.combatVFXService.clearMortarZoneMeshes(scene);
+  }
+
   /** Removes a tower from combat tracking. Returns the removed PlacedTower (caller uses it to calculate sell refund), or undefined if not found. */
   unregisterTower(key: string): PlacedTower | undefined {
     const tower = this.placedTowers.get(key);
@@ -484,6 +494,18 @@ export class TowerCombatService {
         case TargetingMode.NEAREST:
           // Closest by distance (invert so closer = higher score)
           score = -dist;
+          break;
+        case TargetingMode.FARTHEST:
+          // Farthest by Euclidean distance from tower
+          score = dist;
+          break;
+        case TargetingMode.LAST:
+          // Enemy least far along path (lowest distanceTraveled) — just entered
+          score = -enemy.distanceTraveled;
+          break;
+        case TargetingMode.WEAKEST:
+          // Enemy with lowest current health (invert so lower hp = higher score)
+          score = -enemy.health;
           break;
         default:
           assertNever(tower.targetingMode);
