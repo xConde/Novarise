@@ -114,8 +114,8 @@ export class CombatLoopService {
    * Order of operations (matches project_turn_model_spec.md):
    *   1. Increment turn counter
    *   2. Spawn this turn's scheduled enemies
-   *   3. Tower fire (each tower fires shotsPerTurn times, damage instant)
-   *   4. Enemy movement (each enemy advances by tiles-per-turn)
+   *   3. Enemy movement (each enemy advances by tiles-per-turn)
+   *   4. Tower fire (each tower fires shotsPerTurn times, damage instant)
    *   5. Status effect tick (DoT damage, duration decrement)
    *   6. Process kills (gold, stats, run events)
    *   7. Process leaks (lives, defeat check)
@@ -145,7 +145,12 @@ export class CombatLoopService {
     // 1. Spawn this turn's scheduled enemies
     this.waveService.spawnForTurn(scene);
 
-    // 2. Tower fire — picks targets and applies damage instantly
+    // 2. Enemy movement — each enemy advances its tiles-per-turn count
+    const reachedExit = this.enemyService.stepEnemiesOneTurn(
+      (enemyId) => this.statusEffectService.getSlowTileReduction(enemyId),
+    );
+
+    // 3. Tower fire — picks targets and applies damage instantly
     const fireResult = this.towerCombatService.fireTurn(scene, this.turnNumber);
     for (const towerType of fireResult.fired) {
       this.frameFiredTypes.add(towerType);
@@ -153,16 +158,11 @@ export class CombatLoopService {
     frameHitCount += fireResult.hitCount;
     frameDamageDealt += fireResult.damageDealt;
 
-    // 3. Process tower kills — gold award, stat recording, run events
+    // 4. Process tower kills — gold award, stat recording, run events
     for (const killInfo of fireResult.killed) {
       this.processKill(killInfo, cardGoldMult);
       this.accumulateKillByTower(killInfo.towerType, killInfo.towerLevel, frameKillsByTower);
     }
-
-    // 4. Enemy movement — each enemy advances its tiles-per-turn count
-    const reachedExit = this.enemyService.stepEnemiesOneTurn(
-      (enemyId) => this.statusEffectService.getSlowTileReduction(enemyId),
-    );
 
     // 5a. Mortar zone tick — turn-ticked DoT from M3 S4 mortar zones
     const mortarResult = this.towerCombatService.tickMortarZonesForTurn(scene, this.turnNumber);

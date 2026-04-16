@@ -205,14 +205,15 @@ function pickRandom<T>(pool: T[], count: number, rng: SeededRng): T[] {
 }
 
 /**
- * Modifies one wave in the set to include a BOSS-type entry.
- * Targets the middle wave by default; falls back to the first wave.
+ * Modifies the final wave in the set to include a BOSS-type entry.
+ * The target wave's reward is already scaled by eliteGoldMultiplier — no
+ * second multiplication is applied.
  */
-function injectBossWave(waves: WaveDefinition[], rng: SeededRng, goldMultiplier: number): WaveDefinition[] {
+function injectBossWave(waves: WaveDefinition[], rng: SeededRng, _goldMultiplier: number): WaveDefinition[] {
   if (waves.length === 0) return waves;
 
-  const targetIdx = Math.floor(waves.length / 2);
-  const bossGold = Math.round(waves[targetIdx].reward * goldMultiplier);
+  const targetIdx = waves.length - 1;
+  const bossGold = waves[targetIdx].reward;
   const bossEntry: WaveEntry = {
     type: EnemyType.BOSS,
     count: 1,
