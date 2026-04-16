@@ -250,7 +250,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   initializationFailed = false;
 
   // Pile inspector — which pile is currently being inspected (null = closed)
-  inspectedPile: 'draw' | 'discard' | null = null;
+  inspectedPile: 'draw' | 'discard' | 'exhaust' | null = null;
 
   /**
    * Card-detail modal — non-null when the player right-clicked or long-pressed
@@ -1328,6 +1328,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // Upgrade to L2 at zero additional cost — the card's upgrade already
       // accounts for the value. actualCost: 0 keeps totalInvested accurate.
       this.towerCombatService.upgradeTower(`${row}-${col}`, 0);
+      // Apply L2 visuals so the mesh matches the combat stats.
+      this.towerUpgradeVisualService.applyUpgradeVisuals(towerMesh, 2, undefined);
+      this.towerUpgradeVisualService.spawnUpgradeFlash(towerMesh.position, this.sceneService.getScene());
     }
 
     this.audioService.playTowerPlace();

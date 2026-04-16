@@ -118,10 +118,20 @@ export class TowerInteractionService {
   }
 
   /**
-   * Whether placing at (row, col) would fail only due to path blocking.
-   * Useful so the component can show the path-blocked warning.
+   * Whether placing at (row, col) would block all spawner→exit paths.
+   * Delegates to the BFS-based check in GameBoardService.
+   * Use this to decide whether to show the path-blocked warning banner.
    */
   wouldBlockPath(row: number, col: number): boolean {
+    return this.gameBoardService.wouldBlockPath(row, col);
+  }
+
+  /**
+   * Whether (row, col) is a tile on which a tower could theoretically be placed,
+   * ignoring path-blocking and gold. Returns true when the tile is an unoccupied,
+   * purchasable BASE tile within bounds.
+   */
+  isPlaceableTile(row: number, col: number): boolean {
     const board = this.gameBoardService.getGameBoard();
     const tile = board[row]?.[col];
     return (

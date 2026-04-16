@@ -51,7 +51,7 @@ describe('TowerInteractionService', () => {
       'getState', 'canAfford', 'spendGold', 'addGold', 'getModifierEffects',
     ]);
     gameBoardSpy = jasmine.createSpyObj('GameBoardService', [
-      'canPlaceTower', 'placeTower', 'removeTower', 'getGameBoard',
+      'canPlaceTower', 'placeTower', 'removeTower', 'getGameBoard', 'wouldBlockPath',
     ]);
     towerCombatSpy = jasmine.createSpyObj('TowerCombatService', [
       'registerTower', 'unregisterTower', 'upgradeTower', 'upgradeTowerWithSpec', 'getTower',
@@ -188,22 +188,43 @@ describe('TowerInteractionService', () => {
   // ─── wouldBlockPath ────────────────────────────────────────────────────────
 
   describe('wouldBlockPath', () => {
-    it('returns true when tile is purchasable BASE with no tower', () => {
+    it('delegates to gameBoardService.wouldBlockPath and returns true when BFS confirms blocking', () => {
+      gameBoardSpy.wouldBlockPath.and.returnValue(true);
+      expect(service.wouldBlockPath(0, 2)).toBeTrue();
+      expect(gameBoardSpy.wouldBlockPath).toHaveBeenCalledWith(0, 2);
+    });
+
+    it('delegates to gameBoardService.wouldBlockPath and returns false for a non-blocking tile', () => {
+      gameBoardSpy.wouldBlockPath.and.returnValue(false);
+      expect(service.wouldBlockPath(1, 1)).toBeFalse();
+      expect(gameBoardSpy.wouldBlockPath).toHaveBeenCalledWith(1, 1);
+    });
+  });
+
+  // ─── isPlaceableTile ───────────────────────────────────────────────────────
+
+  describe('isPlaceableTile', () => {
+    it('returns true when tile is an unoccupied purchasable BASE tile', () => {
       const tile = { type: BlockType.BASE, isPurchasable: true, towerType: null } as any;
       gameBoardSpy.getGameBoard.and.returnValue([[tile]]);
-      expect(service.wouldBlockPath(0, 0)).toBeTrue();
+      expect(service.isPlaceableTile(0, 0)).toBeTrue();
     });
 
-    it('returns false when tile has a tower placed', () => {
+    it('returns false when tile already has a tower', () => {
       const tile = { type: BlockType.BASE, isPurchasable: true, towerType: TowerType.BASIC } as any;
       gameBoardSpy.getGameBoard.and.returnValue([[tile]]);
-      expect(service.wouldBlockPath(0, 0)).toBeFalse();
+      expect(service.isPlaceableTile(0, 0)).toBeFalse();
     });
 
-    it('returns false when tile is not BASE', () => {
+    it('returns false when tile is not BASE type', () => {
       const tile = { type: BlockType.WALL, isPurchasable: false, towerType: null } as any;
       gameBoardSpy.getGameBoard.and.returnValue([[tile]]);
-      expect(service.wouldBlockPath(0, 0)).toBeFalse();
+      expect(service.isPlaceableTile(0, 0)).toBeFalse();
+    });
+
+    it('returns false for out-of-bounds row', () => {
+      gameBoardSpy.getGameBoard.and.returnValue([]);
+      expect(service.isPlaceableTile(5, 0)).toBeFalse();
     });
   });
 

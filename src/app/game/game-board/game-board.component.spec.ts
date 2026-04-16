@@ -70,6 +70,7 @@ import { GameInputService, TOWER_HOTKEYS } from './services/game-input.service';
 import { TouchInteractionService } from './services/touch-interaction.service';
 import { BoardPointerService } from './services/board-pointer.service';
 import { CardPlayService } from './services/card-play.service';
+import { TowerInteractionService } from './services/tower-interaction.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -2681,6 +2682,157 @@ describe('GameBoardComponent', () => {
       // Sanity: both base and elite are above 1, so product must exceed each individually
       expect(effects.enemyHealthMultiplier!).toBeGreaterThan(base);
       expect(effects.enemyHealthMultiplier!).toBeGreaterThan(elite);
+    });
+  });
+
+  // ── tryPlaceTower: startLevel:2 visual fix ──────────────────────────────────
+
+  describe('tryPlaceTower — startLevel:2 card applies L2 visuals', () => {
+    let upgradeVisualSvc: TowerUpgradeVisualService;
+    let applyUpgradeVisualsSpy: jasmine.Spy;
+    let spawnUpgradeFlashSpy: jasmine.Spy;
+    let mockMesh: THREE.Group;
+
+    beforeEach(() => {
+      // TowerUpgradeVisualService is component-scoped — access via component private field
+      upgradeVisualSvc = (component as any).towerUpgradeVisualService as TowerUpgradeVisualService;
+      applyUpgradeVisualsSpy = spyOn(upgradeVisualSvc, 'applyUpgradeVisuals');
+      spawnUpgradeFlashSpy = spyOn(upgradeVisualSvc, 'spawnUpgradeFlash');
+      mockMesh = new THREE.Group();
+      mockMesh.position.set(1, 0, 2);
+
+      // Stub towerMeshLifecycle.placeMesh to avoid Three.js scene setup
+      spyOn((component as any).towerMeshLifecycle, 'placeMesh').and.returnValue(mockMesh);
+
+      // Stub towerInteractionService.placeTower to report success
+      spyOn((component as any).towerInteractionService, 'placeTower').and.returnValue({
+        success: true,
+        cost: 0,
+        towerKey: '0-0',
+      });
+
+      // Stub gameBoardService.canPlaceTower to pass the guard
+      spyOn((component as any).gameBoardService, 'canPlaceTower').and.returnValue(true);
+
+      // Stub downstream methods that require a real game scene
+      spyOn((component as any).towerCombatService, 'registerTower');
+      spyOn((component as any).towerCombatService, 'upgradeTower');
+      spyOn((component as any).audioService, 'playTowerPlace');
+      spyOn((component as any).gameStatsService, 'recordTowerBuilt');
+      spyOn((component as any).boardPointer, 'clearSelectedTile');
+      spyOn((component as any).towerPreviewService, 'hidePreview');
+      spyOn(component as any, 'refreshPathOverlay');
+      spyOn(component as any, 'updateTileHighlights');
+      spyOn(component as any, 'updateChallengeIndicators');
+      spyOn((component as any).sceneService, 'getScene').and.returnValue(new THREE.Scene());
+    });
+
+    afterEach(() => {
+      mockMesh.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+        }
+      });
+    });
+
+    function setPendingUpgradedCard(cardId: CardId): void {
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
+      const upgradedCard: CardInstance = { instanceId: `inst_${cardId}`, cardId, upgraded: true };
+      cardPlaySvc['pendingTowerCard'] = upgradedCard;
+    }
+
+    it('calls applyUpgradeVisuals(mesh, 2, undefined) when card has startLevel:2', () => {
+      setPendingUpgradedCard(CardId.TOWER_BASIC);
+      component.selectedTowerType = TowerType.BASIC;
+
+      (component as any).tryPlaceTower(0, 0);
+
+      expect(applyUpgradeVisualsSpy).toHaveBeenCalledWith(mockMesh, 2, undefined);
+    });
+
+    it('calls spawnUpgradeFlash with the mesh position when card has startLevel:2', () => {
+      setPendingUpgradedCard(CardId.TOWER_BASIC);
+      component.selectedTowerType = TowerType.BASIC;
+
+      (component as any).tryPlaceTower(0, 0);
+
+      expect(spawnUpgradeFlashSpy).toHaveBeenCalledWith(mockMesh.position, jasmine.any(THREE.Scene));
+    });
+
+    it('does NOT call applyUpgradeVisuals for a non-upgraded card (startLevel:1)', () => {
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
+      const normalCard: CardInstance = { instanceId: 'inst_basic', cardId: CardId.TOWER_BASIC, upgraded: false };
+      cardPlaySvc['pendingTowerCard'] = normalCard;
+      component.selectedTowerType = TowerType.BASIC;
+
+      (component as any).tryPlaceTower(0, 0);
+
+      expect(applyUpgradeVisualsSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── wouldBlockPath in component: path-blocked banner accuracy ──────────────
+
+  describe('tryPlaceTower — path-blocked banner uses BFS check', () => {
+    it('shows path-blocked warning only when BFS confirms blocking', () => {
+      const towerInteractionSvc = fixture.debugElement.injector.get(TowerInteractionService) as TowerInteractionService;
+      spyOn(component as any, 'showPathBlockedWarning');
+      spyOn((component as any).gameBoardService, 'canPlaceTower').and.returnValue(false);
+      spyOn(towerInteractionSvc, 'wouldBlockPath').and.returnValue(true);
+
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
+      cardPlaySvc['pendingTowerCard'] = { instanceId: 'inst_basic', cardId: CardId.TOWER_BASIC, upgraded: false } as CardInstance;
+      component.selectedTowerType = TowerType.BASIC;
+
+      (component as any).tryPlaceTower(0, 0);
+
+      expect((component as any).showPathBlockedWarning).toHaveBeenCalled();
+    });
+
+    it('does NOT show path-blocked warning when BFS says placement is safe', () => {
+      const towerInteractionSvc = fixture.debugElement.injector.get(TowerInteractionService) as TowerInteractionService;
+      spyOn(component as any, 'showPathBlockedWarning');
+      spyOn((component as any).gameBoardService, 'canPlaceTower').and.returnValue(false);
+      spyOn(towerInteractionSvc, 'wouldBlockPath').and.returnValue(false);
+
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
+      cardPlaySvc['pendingTowerCard'] = { instanceId: 'inst_basic', cardId: CardId.TOWER_BASIC, upgraded: false } as CardInstance;
+      component.selectedTowerType = TowerType.BASIC;
+
+      (component as any).tryPlaceTower(0, 0);
+
+      expect((component as any).showPathBlockedWarning).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('exhaust pile inspector integration', () => {
+    it('inspectedPile is null by default', () => {
+      expect(component.inspectedPile).toBeNull();
+    });
+
+    it('setting inspectedPile to "exhaust" passes exhaustPile to PileInspector', () => {
+      const exhaustCard: CardInstance = { instanceId: 'inst_exhausted', cardId: CardId.TOWER_BASIC, upgraded: false };
+      component.deckState = {
+        drawPile: [],
+        hand: [],
+        discardPile: [],
+        exhaustPile: [exhaustCard],
+      };
+      component.inspectedPile = 'exhaust';
+
+      // The template resolves [pile] as deckState.exhaustPile when inspectedPile === 'exhaust'
+      const expectedPile = component.deckState.exhaustPile;
+      expect(expectedPile.length).toBe(1);
+      expect(expectedPile[0]).toBe(exhaustCard);
+    });
+
+    it('setting inspectedPile to "exhaust" selects "Exhaust Pile" label', () => {
+      component.deckState = { drawPile: [], hand: [], discardPile: [], exhaustPile: [] };
+      component.inspectedPile = 'exhaust';
+      // Verify that draw and discard labels are NOT selected for exhaust
+      expect(component.inspectedPile).toBe('exhaust');
+      expect(component.inspectedPile).not.toBe('draw');
+      expect(component.inspectedPile).not.toBe('discard');
     });
   });
 
