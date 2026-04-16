@@ -9,7 +9,6 @@ import { MapNode, NodeMap, NodeType, getSelectableNodes } from './models/node-ma
 import { RelicDefinition, RELIC_DEFINITIONS, RelicId } from './models/relic.model';
 import { RewardScreenConfig, RewardItem, ShopItem, RunEvent } from './models/encounter.model';
 import { AscensionLevel, ASCENSION_LEVELS } from './models/ascension.model';
-import { REST_CONFIG } from './constants/run.constants';
 import { CardInstance } from './models/card.model';
 
 /**
@@ -265,11 +264,10 @@ export class RunComponent implements OnInit, OnDestroy {
     this.viewMode = 'map';
   }
 
-  /** Calculate heal amount for rest site (REST_CONFIG.healPercentage of maxLives, minimum REST_CONFIG.minHeal). */
+  /** Calculate heal amount for rest site — includes ascension REST_HEAL_REDUCTION. */
   getHealAmount(): number {
     if (!this.runState) return 0;
-    const heal = Math.floor(this.runState.maxLives * REST_CONFIG.healPercentage);
-    return Math.max(REST_CONFIG.minHeal, heal);
+    return this.runService.computeHealAmount(this.runState);
   }
 
   /** Save run and return to landing. */

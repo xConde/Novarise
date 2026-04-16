@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { RunState, RunStatus } from '../models/run-state.model';
 import { NodeMap } from '../models/node-map.model';
+import { MAX_ASCENSION_LEVEL } from '../models/ascension.model';
 
 /**
  * Persists and restores run state to/from localStorage.
@@ -77,10 +78,17 @@ export class RunPersistenceService {
     return raw ? parseInt(raw, 10) || 0 : 0;
   }
 
+  /** Record a new ascension high-water mark. Caps at MAX_ASCENSION_LEVEL. */
   setMaxAscension(level: number): void {
+    const clamped = Math.min(level, MAX_ASCENSION_LEVEL);
     const current = this.getMaxAscension();
-    if (level > current) {
-      localStorage.setItem(MAX_ASCENSION_KEY, String(level));
+    if (clamped > current) {
+      localStorage.setItem(MAX_ASCENSION_KEY, String(clamped));
     }
+  }
+
+  /** Returns true when the player has beaten A20 (full mastery). */
+  isAscensionMastered(): boolean {
+    return this.getMaxAscension() >= MAX_ASCENSION_LEVEL;
   }
 }

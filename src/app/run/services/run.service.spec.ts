@@ -311,6 +311,26 @@ describe('RunService', () => {
     expect(service.runState!.lives).toBeLessThanOrEqual(service.runState!.maxLives);
   }));
 
+  // ── computeHealAmount ─────────────────────────────────────────
+
+  it('computeHealAmount() returns floor(maxLives * 0.3) at A0 (no reduction)', fakeAsync(() => {
+    service.startNewRun(0);
+    const state = service.runState!;
+    // Default maxLives = 20; floor(20 * 0.3) = 6, which is above minHeal(2)
+    expect(service.computeHealAmount(state)).toBe(6);
+  }));
+
+  it('computeHealAmount() at A8 returns 75% of base heal (REST_HEAL_REDUCTION = 0.75)', fakeAsync(() => {
+    service.startNewRun(8);
+    const state = service.runState!;
+    // maxLives after A4 -2 lives reduction: default 20 - 2 = 18
+    // base heal = floor(18 * 0.3) = 5, then * 0.75 = floor(3.75) = 3
+    const healAmount = service.computeHealAmount(state);
+    const expectedBase = Math.floor(state.maxLives * 0.3);
+    const expectedReduced = Math.floor(Math.max(2, expectedBase) * 0.75);
+    expect(healAmount).toBe(Math.max(1, expectedReduced));
+  }));
+
   // ── collectReward ─────────────────────────────────────────────
 
   it('collectReward() with gold reward increases gold', fakeAsync(() => {

@@ -185,4 +185,30 @@ describe('RunPersistenceService', () => {
     service.setMaxAscension(5);
     expect(service.getMaxAscension()).toBe(5);
   });
+
+  it('setMaxAscension(25) clamps to 20 (MAX_ASCENSION_LEVEL)', () => {
+    service.setMaxAscension(25);
+    expect(service.getMaxAscension()).toBe(20);
+  });
+
+  it('setMaxAscension(21) clamps to 20', () => {
+    service.setMaxAscension(21);
+    expect(service.getMaxAscension()).toBe(20);
+  });
+
+  // ── isAscensionMastered ───────────────────────────────────────
+
+  it('isAscensionMastered() returns false when maxAscension is 0', () => {
+    expect(service.isAscensionMastered()).toBeFalse();
+  });
+
+  it('isAscensionMastered() returns false at A19', () => {
+    service.setMaxAscension(19);
+    expect(service.isAscensionMastered()).toBeFalse();
+  });
+
+  it('isAscensionMastered() returns true at A20', () => {
+    service.setMaxAscension(20);
+    expect(service.isAscensionMastered()).toBeTrue();
+  });
 });

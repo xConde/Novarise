@@ -126,6 +126,21 @@ export class RunService {
     return this.persistence.getMaxAscension();
   }
 
+  /**
+   * Pure heal computation — mirrors restHeal() arithmetic without mutating state.
+   * Used by run.component.ts to display the accurate heal preview at rest sites.
+   */
+  computeHealAmount(state: RunState): number {
+    let healAmount = Math.floor(state.maxLives * REST_CONFIG.healPercentage);
+    healAmount = Math.max(REST_CONFIG.minHeal, healAmount);
+
+    const ascEffects = getAscensionEffects(state.ascensionLevel);
+    const healReduction = ascEffects.get(AscensionEffectType.REST_HEAL_REDUCTION) ?? 1;
+    healAmount = Math.max(1, Math.floor(healAmount * healReduction));
+
+    return healAmount;
+  }
+
   /** Load saved run state for preview (start screen resume info). */
   loadSavedRunPreview(): RunState | null {
     return this.persistence.loadSavedRunPreview();

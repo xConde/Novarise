@@ -17,8 +17,12 @@ describe('LandingComponent', () => {
     runPersistence = jasmine.createSpyObj('RunPersistenceService', [
       'hasSavedRun',
       'clearSavedRun',
+      'getMaxAscension',
+      'isAscensionMastered',
     ]);
     runPersistence.hasSavedRun.and.returnValue(false);
+    runPersistence.getMaxAscension.and.returnValue(0);
+    runPersistence.isAscensionMastered.and.returnValue(false);
     runService = jasmine.createSpyObj('RunService', ['startNewRun', 'resumeRun']);
 
     await TestBed.configureTestingModule({
@@ -108,6 +112,13 @@ describe('LandingComponent', () => {
       expect(router.navigate).toHaveBeenCalledWith(['/run']);
     });
 
+    it('startNewRun passes selectedAscension to runService.startNewRun', () => {
+      component.maxAscension = 5;
+      component.selectedAscension = 3;
+      component.startNewRun();
+      expect(runService.startNewRun).toHaveBeenCalledWith(3);
+    });
+
     it('continueRun navigates to /run when a saved run exists', () => {
       component.hasSavedRun = true;
       component.continueRun();
@@ -123,6 +134,72 @@ describe('LandingComponent', () => {
     it('goToEditor navigates to /edit', () => {
       component.goToEditor();
       expect(router.navigate).toHaveBeenCalledWith(['/edit']);
+    });
+  });
+
+  describe('ascension stepper', () => {
+    beforeEach(() => {
+      runPersistence.getMaxAscension.and.returnValue(10);
+      component.ngOnInit();
+    });
+
+    it('defaults selectedAscension to maxAscension on init', () => {
+      expect(component.selectedAscension).toBe(10);
+    });
+
+    it('stepAscension(1) increments when below maxAscension', () => {
+      component.selectedAscension = 5;
+      component.stepAscension(1);
+      expect(component.selectedAscension).toBe(6);
+    });
+
+    it('stepAscension(1) clamps at maxAscension', () => {
+      component.selectedAscension = 10;
+      component.stepAscension(1);
+      expect(component.selectedAscension).toBe(10);
+    });
+
+    it('stepAscension(-1) decrements when above 0', () => {
+      component.selectedAscension = 5;
+      component.stepAscension(-1);
+      expect(component.selectedAscension).toBe(4);
+    });
+
+    it('stepAscension(-1) clamps at 0', () => {
+      component.selectedAscension = 0;
+      component.stepAscension(-1);
+      expect(component.selectedAscension).toBe(0);
+    });
+  });
+
+  describe('getAscensionPreview()', () => {
+    it('returns null at A0', () => {
+      component.selectedAscension = 0;
+      expect(component.getAscensionPreview()).toBeNull();
+    });
+
+    it('returns a string containing A3 description at A3', () => {
+      component.selectedAscension = 3;
+      const preview = component.getAscensionPreview();
+      expect(preview).toBe('A3: Start with 20 less gold');
+    });
+
+    it('returns a string containing A18 description at A18', () => {
+      component.selectedAscension = 18;
+      const preview = component.getAscensionPreview();
+      expect(preview).toBe('A18: Elite enemies have 50% more health');
+    });
+  });
+
+  describe('isAscensionMastered', () => {
+    it('delegates to runPersistence.isAscensionMastered()', () => {
+      runPersistence.isAscensionMastered.and.returnValue(true);
+      expect(component.isAscensionMastered).toBeTrue();
+    });
+
+    it('returns false when not mastered', () => {
+      runPersistence.isAscensionMastered.and.returnValue(false);
+      expect(component.isAscensionMastered).toBeFalse();
     });
   });
 });

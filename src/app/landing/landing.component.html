@@ -20,6 +20,28 @@
         Profile
       </button>
     </div>
+
+    <div class="ascension-selector" *ngIf="maxAscension > 0">
+      <div class="ascension-selector__row">
+        <button
+          class="ascension-selector__step"
+          (click)="stepAscension(-1)"
+          [disabled]="selectedAscension === 0"
+          aria-label="Decrease ascension">−</button>
+        <span class="ascension-selector__label">
+          Ascension: A{{ selectedAscension }}
+        </span>
+        <button
+          class="ascension-selector__step"
+          (click)="stepAscension(1)"
+          [disabled]="selectedAscension === maxAscension"
+          aria-label="Increase ascension">+</button>
+      </div>
+      <p class="ascension-selector__preview" *ngIf="getAscensionPreview() as preview">
+        {{ preview }}
+      </p>
+      <span class="ascension-selector__mastered" *ngIf="isAscensionMastered">A20 ✓</span>
+    </div>
   </div>
 
   <span class="landing-version">v0.2.0 · turn-based pivot</span>
