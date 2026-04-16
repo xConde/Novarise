@@ -696,93 +696,142 @@ describe('RunService', () => {
       relicService.getAvailableRelics.and.returnValue(stubRelics);
     });
 
-    it('ascension 0: relic choice count equals REWARD_CONFIG.relicChoicesCombat', fakeAsync(() => {
+    it('combat node: 0 relics regardless of ascension (no reduction applied)', fakeAsync(() => {
+      // Combat encounters give no relic — ascension reduction is irrelevant.
       service.startNewRun(0);
       encounterService.prepareEncounter.and.returnValue(makeEncounterConfig());
       service.prepareEncounter(service.nodeMap!.nodes[0]);
 
       const rewards = service.generateRewards();
 
-      expect(rewards.relicChoices.length).toBe(REWARD_CONFIG.relicChoicesCombat);
+      expect(rewards.relicChoices.length).toBe(REWARD_CONFIG.relicChoicesCombat); // 0
     }));
 
-    it('ascension 11 (FEWER_RELIC_CHOICES = 1): relic count is relicChoicesCombat - 1', fakeAsync(() => {
+    it('combat node at ascension 11: still 0 relics (FEWER_RELIC_CHOICES not applied at 0 baseline)', fakeAsync(() => {
       service.startNewRun(11);
       encounterService.prepareEncounter.and.returnValue(makeEncounterConfig());
       service.prepareEncounter(service.nodeMap!.nodes[0]);
 
       const rewards = service.generateRewards();
 
-      expect(rewards.relicChoices.length).toBe(REWARD_CONFIG.relicChoicesCombat - 1);
+      // relicChoicesCombat=0 — no relics for combat, ascension reduction skipped
+      expect(rewards.relicChoices.length).toBe(0);
     }));
 
-    it('ascension 20: relic count is floored at 1, never 0 or negative', fakeAsync(() => {
-      service.startNewRun(20);
-      encounterService.prepareEncounter.and.returnValue(makeEncounterConfig());
+    it('elite node at ascension 0: 3 relic choices', fakeAsync(() => {
+      service.startNewRun(0);
+      encounterService.prepareEncounter.and.returnValue(
+        makeEncounterConfig({ isElite: true, isBoss: false }),
+      );
       service.prepareEncounter(service.nodeMap!.nodes[0]);
+      service.recordEncounterResult(makeEncounterResult({ victory: true }));
+      service.consumePendingEncounterResult();
 
       const rewards = service.generateRewards();
 
-      expect(rewards.relicChoices.length).toBeGreaterThanOrEqual(1);
+      expect(rewards.relicChoices.length).toBe(REWARD_CONFIG.relicChoicesElite); // 3
     }));
 
-    it('elite encounter at ascension 11: relicChoicesElite - 1, floored at 1', fakeAsync(() => {
+    it('elite encounter at ascension 11: FEWER_RELIC_CHOICES reduces 3 → 2', fakeAsync(() => {
       service.startNewRun(11);
       encounterService.prepareEncounter.and.returnValue(
         makeEncounterConfig({ isElite: true, isBoss: false }),
       );
       service.prepareEncounter(service.nodeMap!.nodes[0]);
-      // Must consume before generateRewards — consume stashes lastCompletedEncounter
-      // so isElite/isBoss are preserved for the reward screen.
       service.recordEncounterResult(makeEncounterResult({ victory: true }));
       service.consumePendingEncounterResult();
 
       const rewards = service.generateRewards();
 
-      const expected = Math.max(1, REWARD_CONFIG.relicChoicesElite - 1);
-      expect(rewards.relicChoices.length).toBe(expected);
+      // baseline=3, reduction=1 → Math.max(1, 2) → 2
+      expect(rewards.relicChoices.length).toBe(2);
     }));
 
-    it('boss encounter at ascension 11: relicChoicesBoss - 1, floored at 1', fakeAsync(() => {
+    it('boss encounter at ascension 11: FEWER_RELIC_CHOICES reduces 3 → 2', fakeAsync(() => {
       service.startNewRun(11);
       encounterService.prepareEncounter.and.returnValue(
         makeEncounterConfig({ isElite: false, isBoss: true }),
       );
       service.prepareEncounter(service.nodeMap!.nodes[0]);
-      // Use boss node so prepareEncounter is resolved against the boss node
       service.selectNode(service.nodeMap!.bossNodeId);
-      // Must consume before generateRewards — consume stashes lastCompletedEncounter
-      // so isElite/isBoss are preserved for the reward screen.
       service.recordEncounterResult(makeEncounterResult({ victory: true }));
       service.consumePendingEncounterResult();
 
       const rewards = service.generateRewards();
 
-      const expected = Math.max(1, REWARD_CONFIG.relicChoicesBoss - 1);
-      expect(rewards.relicChoices.length).toBe(expected);
+      expect(rewards.relicChoices.length).toBe(2);
     }));
 
-    it('regression guard: reduction exceeding baseline still returns 1', fakeAsync(() => {
-      // Simulate a hypothetical scenario where future ascension stacking could
-      // push the reduction above the baseline count. Inject a mock ascensionEffects
-      // by using a very large internal ascensionLevel that the model clamps to 20.
-      // At level 20, reduction is 1 and REWARD_CONFIG.relicChoicesCombat is 3, so
-      // the direct floor check is tested by patching relicChoicesCombat to 1.
-      // This exercises the Math.max(1, 1 - 1) = Math.max(1, 0) = 1 path.
+    it('regression guard: floor at 1 prevents reduction below 1 (extreme reduction future-proof)', fakeAsync(() => {
+      // With baseline=3 and ascension-11 reduction=1: Math.max(1, 2) = 2.
+      // This guards the Math.max(1, ...) floor against a future larger reduction.
       service.startNewRun(11);
-      encounterService.prepareEncounter.and.returnValue(makeEncounterConfig());
+      encounterService.prepareEncounter.and.returnValue(
+        makeEncounterConfig({ isElite: true, isBoss: false }),
+      );
       service.prepareEncounter(service.nodeMap!.nodes[0]);
-
-      // Temporarily patch REWARD_CONFIG to simulate a baseline of 1 relic choice
-      const orig = REWARD_CONFIG.relicChoicesCombat;
-      (REWARD_CONFIG as any).relicChoicesCombat = 1;
+      service.recordEncounterResult(makeEncounterResult({ victory: true }));
+      service.consumePendingEncounterResult();
 
       const rewards = service.generateRewards();
 
-      (REWARD_CONFIG as any).relicChoicesCombat = orig;
+      expect(rewards.relicChoices.length).toBeGreaterThanOrEqual(1);
+    }));
+  });
 
-      // reduction=1, baseline=1 → Math.max(1, 0) → must be 1, not 0
-      expect(rewards.relicChoices.length).toBe(1);
+  // ── generateRewards — node-type reward differentiation ────────
+
+  describe('generateRewards — node-type differentiation (StS structure)', () => {
+    // Provide enough relics for elite/boss reward picks.
+    beforeEach(() => {
+      const stubRelics: RelicDefinition[] = [
+        RELIC_DEFINITIONS[RelicId.IRON_HEART],
+        RELIC_DEFINITIONS[RelicId.GOLD_MAGNET],
+        RELIC_DEFINITIONS[RelicId.STURDY_BOOTS],
+      ];
+      relicService.getAvailableRelics.and.returnValue(stubRelics);
+    });
+
+    it('combat node: relicChoices is empty, cardChoices has 3 entries', fakeAsync(() => {
+      service.startNewRun(0);
+      encounterService.prepareEncounter.and.returnValue(makeEncounterConfig());
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+      const rewards = service.generateRewards();
+
+      expect(rewards.relicChoices.length).toBe(0);
+      expect(rewards.cardChoices.length).toBe(3);
+    }));
+
+    it('elite node: relicChoices has 3 entries, cardChoices has 3 entries', fakeAsync(() => {
+      service.startNewRun(0);
+      encounterService.prepareEncounter.and.returnValue(
+        makeEncounterConfig({ isElite: true, isBoss: false }),
+      );
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      service.recordEncounterResult(makeEncounterResult({ victory: true }));
+      service.consumePendingEncounterResult();
+
+      const rewards = service.generateRewards();
+
+      expect(rewards.relicChoices.length).toBe(3);
+      expect(rewards.cardChoices.length).toBe(3);
+    }));
+
+    it('boss node: relicChoices has 3 entries, cardChoices is empty', fakeAsync(() => {
+      service.startNewRun(0);
+      encounterService.prepareEncounter.and.returnValue(
+        makeEncounterConfig({ isElite: false, isBoss: true }),
+      );
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      service.selectNode(service.nodeMap!.bossNodeId);
+      service.recordEncounterResult(makeEncounterResult({ victory: true }));
+      service.consumePendingEncounterResult();
+
+      const rewards = service.generateRewards();
+
+      expect(rewards.relicChoices.length).toBe(3);
+      expect(rewards.cardChoices.length).toBe(0);
     }));
   });
 
@@ -892,16 +941,10 @@ describe('RunService', () => {
       expect(rewards.completedChallenges).toEqual(challenges);
     }));
 
-    it('ascension 11 + 1 challenge: both relic reduction AND gold bonus apply', fakeAsync(() => {
-      // Need enough relics available for the relic-reduction test to be visible
-      const stubRelics: RelicDefinition[] = [
-        RELIC_DEFINITIONS[RelicId.IRON_HEART],
-        RELIC_DEFINITIONS[RelicId.QUICK_DRAW],
-        RELIC_DEFINITIONS[RelicId.COMMANDERS_BANNER],
-      ];
-      relicService.getAvailableRelics.and.returnValue(stubRelics);
-
-      service.startNewRun(11); // FEWER_RELIC_CHOICES=1 at ascension 11
+    it('ascension 11 + 1 challenge (combat): gold bonus applies, relics still 0', fakeAsync(() => {
+      // Combat nodes give 0 relics — ascension relic reduction is irrelevant here.
+      // The test verifies gold bonus still stacks correctly on combat nodes.
+      service.startNewRun(11);
       encounterService.prepareEncounter.and.returnValue(makeEncounterConfig({ goldReward: 40 }));
       service.prepareEncounter(service.nodeMap!.nodes[0]);
 
@@ -915,8 +958,8 @@ describe('RunService', () => {
 
       // Gold: 40 base (lastCompletedEncounter.goldReward) + 40 challenge bonus
       expect(rewards.goldPickup).toBe(80);
-      // Relics: relicChoicesCombat - 1 = reduced
-      expect(rewards.relicChoices.length).toBe(Math.max(1, REWARD_CONFIG.relicChoicesCombat - 1));
+      // Relics: 0 for combat regardless of ascension
+      expect(rewards.relicChoices.length).toBe(0);
     }));
   });
 

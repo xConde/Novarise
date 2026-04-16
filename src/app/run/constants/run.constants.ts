@@ -100,8 +100,22 @@ export const REWARD_CONFIG = {
   /** Gold multiplier applied to base reward for boss encounters. */
   bossGoldRewardMultiplier: 2.0,
 
-  /** Number of relic choices offered after combat. */
-  relicChoicesCombat: 3,
+  /**
+   * Number of card choices offered per encounter type.
+   * Boss encounters grant no card pick — only a relic.
+   */
+  cardChoicesCombat: 3,
+  cardChoicesElite: 3,
+  cardChoicesBoss: 0,
+
+  /**
+   * Number of relic CHOICES offered per encounter type (player picks 1 of N).
+   * Combat encounters grant no relic — only a card pick.
+   * Elite and Boss encounters offer 3 options so the pick is a meaningful
+   * deck-shaping decision (StS-aligned); a single forced option with a skip
+   * button is not a choice.
+   */
+  relicChoicesCombat: 0,
   relicChoicesElite: 3,
   relicChoicesBoss: 3,
 

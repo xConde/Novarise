@@ -205,7 +205,8 @@ describe('Ascent Mode — Integration Flow', () => {
     expect(runService.runState!.lives).toBe(0);
   }));
 
-  it('should generate rewards with 3 relic choices after victory', fakeAsync(() => {
+  it('should generate rewards with 0 relic choices and 3 card choices after combat victory', fakeAsync(() => {
+    // Combat nodes give card pick only — no relic (StS-aligned structure).
     runService.startNewRun();
     const map = runService.nodeMap!;
     const combatNode = map.nodes.find(n => n.type === NodeType.COMBAT)!;
@@ -214,11 +215,11 @@ describe('Ascent Mode — Integration Flow', () => {
     runService.consumePendingEncounterResult();
 
     const rewards = runService.generateRewards();
-    expect(rewards.relicChoices.length).toBe(REWARD_CONFIG.relicChoicesCombat);
-    rewards.relicChoices.forEach(choice => {
-      expect(choice.type).toBe('relic');
-      expect(choice.relicId).toBeTruthy();
-      expect(RELIC_DEFINITIONS[choice.relicId]).toBeDefined();
+    expect(rewards.relicChoices.length).toBe(REWARD_CONFIG.relicChoicesCombat); // 0
+    expect(rewards.cardChoices.length).toBe(REWARD_CONFIG.cardChoicesCombat); // 3
+    rewards.cardChoices.forEach(choice => {
+      expect(choice.type).toBe('card');
+      expect(choice.cardId).toBeTruthy();
     });
   }));
 

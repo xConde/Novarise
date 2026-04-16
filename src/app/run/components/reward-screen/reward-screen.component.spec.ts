@@ -198,6 +198,70 @@ describe('RewardScreenComponent', () => {
     expect(component.canContinue).toBeTrue();
   });
 
+  // ── Empty-section rendering (node-type differentiation) ──────────────
+
+  describe('empty section rendering', () => {
+    it('relic section is NOT rendered when relicChoices is empty (combat node)', () => {
+      component.config = {
+        goldPickup: 30,
+        relicChoices: [],
+        cardChoices: [{ type: 'card', cardId: CardId.GOLD_RUSH }],
+        bonusRewards: [],
+        completedChallenges: [],
+      };
+      fixture.detectChanges();
+
+      const relicSection = (fixture.nativeElement as HTMLElement).querySelector('.reward-choices');
+      expect(relicSection).toBeNull();
+    });
+
+    it('card-draft section is NOT rendered when cardChoices is empty (boss node)', () => {
+      component.config = {
+        goldPickup: 80,
+        relicChoices: [{ type: 'relic', relicId: RelicId.IRON_HEART }],
+        cardChoices: [],
+        bonusRewards: [],
+        completedChallenges: [],
+      };
+      fixture.detectChanges();
+
+      const cardDraft = (fixture.nativeElement as HTMLElement).querySelector('app-card-draft');
+      expect(cardDraft).toBeNull();
+    });
+
+    it('canContinue is true immediately for boss node (1 relic, 0 cards) after relic is picked', () => {
+      component.config = {
+        goldPickup: 80,
+        relicChoices: [{ type: 'relic', relicId: RelicId.IRON_HEART }],
+        cardChoices: [],
+        bonusRewards: [],
+        completedChallenges: [],
+      };
+      fixture.detectChanges();
+      component.pickRelic(component.relicCards[0]);
+
+      expect(component.canContinue).toBeTrue();
+    });
+
+    it('canContinue is true immediately for combat node (0 relics, 3 cards) after card is picked', () => {
+      component.config = {
+        goldPickup: 30,
+        relicChoices: [],
+        cardChoices: [
+          { type: 'card', cardId: CardId.GOLD_RUSH },
+          { type: 'card', cardId: CardId.DAMAGE_BOOST },
+          { type: 'card', cardId: CardId.FORTIFY },
+        ],
+        bonusRewards: [],
+        completedChallenges: [],
+      };
+      fixture.detectChanges();
+      component.onCardPicked({ type: 'card', cardId: CardId.GOLD_RUSH });
+
+      expect(component.canContinue).toBeTrue();
+    });
+  });
+
   // ── Completed-challenges render ───────────────────────────────────────
 
   describe('completedChallenges display', () => {

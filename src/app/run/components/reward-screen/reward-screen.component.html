@@ -78,9 +78,9 @@
     </ng-template>
   </section>
 
-  <!-- Card choices (shown after relic section is resolved) -->
+  <!-- Card choices (shown after relic section is resolved, or immediately when no relics) -->
   <app-card-draft
-    *ngIf="config.cardChoices.length > 0 && !cardPicked && relicPicked"
+    *ngIf="config.cardChoices.length > 0 && !cardPicked && (relicPicked || config.relicChoices.length === 0)"
     [cardChoices]="config.cardChoices"
     (cardPicked)="onCardPicked($event)"
     (skipped)="onCardSkipped()">

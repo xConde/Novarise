@@ -401,23 +401,33 @@ export class RunService {
 
     const goldPickup = baseGold + challengeGold;
 
-    // Determine relic choice count
-    let choiceCount: number = REWARD_CONFIG.relicChoicesCombat;
-    if (encounter?.isElite) choiceCount = REWARD_CONFIG.relicChoicesElite;
-    if (encounter?.isBoss) choiceCount = REWARD_CONFIG.relicChoicesBoss;
+    // Determine relic choice count based on encounter type.
+    // Combat: no relic. Elite/Boss: exactly 1 relic.
+    // FEWER_RELIC_CHOICES ascension only reduces when baseline >= 2 — with a
+    // baseline of 1 the floor at 1 is a no-op (by design; elite/boss always
+    // grant at least 1 relic regardless of ascension).
+    let relicCount: number = REWARD_CONFIG.relicChoicesCombat;
+    if (encounter?.isElite) relicCount = REWARD_CONFIG.relicChoicesElite;
+    if (encounter?.isBoss) relicCount = REWARD_CONFIG.relicChoicesBoss;
 
-    // Apply ascension relic reduction (FEWER_RELIC_CHOICES stacks additively; floor at 1)
-    if (state) {
+    if (relicCount > 0 && state) {
       const ascEffects = getAscensionEffects(state.ascensionLevel);
       const relicReduction = ascEffects.get(AscensionEffectType.FEWER_RELIC_CHOICES) ?? 0;
-      choiceCount = Math.max(1, choiceCount - relicReduction);
+      relicCount = Math.max(1, relicCount - relicReduction);
     }
 
-    // Pick relics from available pool
-    const relicChoices = this.pickRelicRewards(choiceCount, rng);
+    // Pick relics from available pool (skip call entirely when 0 relics due).
+    const relicChoices = relicCount > 0 ? this.pickRelicRewards(relicCount, rng) : [];
 
-    // Pick cards weighted by rarity; count respects FEWER_CARD_CHOICES ascension effect
-    const cardChoices = this.pickCardRewards(this.computeCardChoiceCount(), rng);
+    // Determine card choice count based on encounter type.
+    // Boss: no card pick. Combat/Elite: use computeCardChoiceCount() which
+    // respects the FEWER_CARD_CHOICES ascension effect.
+    let cardCount: number = REWARD_CONFIG.cardChoicesCombat;
+    if (encounter?.isElite) cardCount = REWARD_CONFIG.cardChoicesElite;
+    if (encounter?.isBoss) cardCount = REWARD_CONFIG.cardChoicesBoss;
+
+    // Pick cards weighted by rarity (skip call entirely when 0 cards due).
+    const cardChoices = cardCount > 0 ? this.pickCardRewards(this.computeCardChoiceCount(cardCount), rng) : [];
 
     return {
       goldPickup,
@@ -430,15 +440,15 @@ export class RunService {
 
   /**
    * Compute the number of card choices to offer.
-   * Baseline 3; reduced by FEWER_CARD_CHOICES at A11+; floored at 1.
+   * Baseline defaults to REWARD_CONFIG.cardChoicesCombat (3).
+   * Reduced by FEWER_CARD_CHOICES at A11+; floored at 1.
    */
-  computeCardChoiceCount(): number {
+  computeCardChoiceCount(baseline: number = REWARD_CONFIG.cardChoicesCombat): number {
     const state = this.runState;
-    const baselineCardChoices = 3;
-    if (!state) return baselineCardChoices;
+    if (!state) return baseline;
     const ascEffects = getAscensionEffects(state.ascensionLevel);
     const cardReduction = ascEffects.get(AscensionEffectType.FEWER_CARD_CHOICES) ?? 0;
-    return Math.max(1, baselineCardChoices - cardReduction);
+    return Math.max(1, baseline - cardReduction);
   }
 
   private pickCardRewards(count: number, rng: () => number): CardReward[] {
