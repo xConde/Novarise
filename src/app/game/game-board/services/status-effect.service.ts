@@ -143,7 +143,8 @@ export class StatusEffectService {
   /**
    * Flat tile reduction to apply to an enemy's movement this turn based on
    * active SLOW status. Returns 1 if SLOW is active, 0 otherwise. EnemyService
-   * subtracts this from the base tiles-per-turn, floored at 0.
+   * subtracts this from the base tiles-per-turn, floored at 1 — a 0-floor
+   * would permaparalyze 1-tile movers since SLOW aura re-applies each turn.
    */
   getSlowTileReduction(enemyId: string): number {
     const effects = this.effects.get(enemyId);

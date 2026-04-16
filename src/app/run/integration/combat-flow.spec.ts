@@ -485,7 +485,7 @@ describe('combat-flow integration smoke', () => {
       expect(reduction).toBe(1);
     });
 
-    it('should fully paralyze a BASIC enemy (1 tile/turn - 1 SLOW = 0 tiles)', () => {
+    it('should NOT paralyze a BASIC enemy — floor-at-1 keeps movement alive', () => {
       const enemy = enemyService.spawnEnemy(EnemyType.BASIC, scene);
       if (!enemy) {
         pending('Spawner unavailable');
@@ -499,8 +499,9 @@ describe('combat-flow integration smoke', () => {
         (enemyId) => statusEffectService.getSlowTileReduction(enemyId),
       );
 
-      // BASIC moves 1 tile/turn but SLOW reduces by 1 → 0 tiles moved.
-      expect(enemy.pathIndex).toBe(initialPathIndex);
+      // BASIC baseTiles=1, SLOW reduction=1 → Math.max(1, 0) = 1. Without the
+      // floor the SLOW aura would re-apply each turn and permaparalyze.
+      expect(enemy.pathIndex).toBe(initialPathIndex + 1);
     });
 
     it('should not paralyze a FAST enemy (2 tiles/turn - 1 SLOW = 1 tile)', () => {

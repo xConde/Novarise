@@ -279,8 +279,11 @@ export class EnemyService {
       const baseTiles = ENEMY_STATS[enemy.type].tilesPerTurn;
       const slowReduction = slowReductionFor(enemy.id);
       const enemySpeedReduction = enemySpeedSlow > 0 ? Math.floor(baseTiles * enemySpeedSlow) : 0;
-      const tilesToMove = Math.max(0, baseTiles - slowReduction - enemySpeedReduction);
-      if (tilesToMove === 0) return;
+      // Floor at 1 tile/turn — SLOW aura re-applies each turn while enemy is in
+      // range, so a 0-floor would permanently freeze any 1-tile mover (BASIC,
+      // HEAVY, BOSS, SHIELDED, FLYING). SLOW tower is still effective against
+      // 2-tile movers (FAST, SWIFT, SWARM) which drop from 2→1.
+      const tilesToMove = Math.max(1, baseTiles - slowReduction - enemySpeedReduction);
 
       let stepsRemaining = tilesToMove;
       while (stepsRemaining > 0 && enemy.pathIndex < enemy.path.length - 1) {

@@ -8,7 +8,7 @@ import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model'
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { GameBoardTile } from '../models/game-board-tile';
 import { StatusEffectType } from '../constants/status-effect.constants';
-import { HIT_FLASH_CONFIG } from '../constants/effects.constants';
+import { HIT_FLASH_CONFIG, STATUS_EFFECT_VISUAL_CONFIG } from '../constants/effects.constants';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { createTestBoard, createGameBoardServiceSpy, createCardEffectServiceSpy } from '../testing';
 import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
@@ -492,16 +492,15 @@ describe('EnemyService', () => {
       expect(enemy.distanceTraveled).toBe(2);
     });
 
-    it('BASIC enemy fully slowed (slowReduction=1) does NOT move', () => {
+    it('BASIC enemy slowed (slowReduction=1) still moves 1 tile (floor-at-1 prevents paralysis)', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       const startIndex = enemy.pathIndex;
-      const startDistanceTraveled = enemy.distanceTraveled;
 
-      // slowReduction=1 reduces BASIC (baseTiles=1) to 0 → no movement
+      // slowReduction=1 would take BASIC (baseTiles=1) to 0, but the floor-at-1
+      // prevents paralysis since SLOW aura re-applies each turn while in range.
       service.stepEnemiesOneTurn(() => 1);
 
-      expect(enemy.pathIndex).toBe(startIndex);
-      expect(enemy.distanceTraveled).toBe(startDistanceTraveled);
+      expect(enemy.pathIndex).toBe(startIndex + 1);
     });
 
     it('FAST enemy slowed (slowReduction=1) moves only 1 tile per turn', () => {
@@ -2606,7 +2605,7 @@ describe('EnemyService', () => {
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
 
       expect(enemy.statusParticles).toBeTruthy();
-      expect(enemy.statusParticles!.length).toBe(3); // maxParticlesPerEnemy
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
     });
 
     it('creates POISON particles when enemy has POISON effect', () => {
@@ -2616,7 +2615,7 @@ describe('EnemyService', () => {
 
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
 
-      expect(enemy.statusParticles!.length).toBe(3);
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
       // Poison particles use green color
       const mat = enemy.statusParticles![0].material as THREE.MeshBasicMaterial;
       expect(mat.color.getHex()).toBe(0x44ff44);
@@ -2629,7 +2628,7 @@ describe('EnemyService', () => {
 
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
 
-      expect(enemy.statusParticles!.length).toBe(3);
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
       // Slow particles use ice-blue color
       const mat = enemy.statusParticles![0].material as THREE.MeshBasicMaterial;
       expect(mat.color.getHex()).toBe(0x88ccff);
@@ -2641,7 +2640,7 @@ describe('EnemyService', () => {
       activeEffects.set(enemy.id, [StatusEffectType.BURN]);
 
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
-      expect(enemy.statusParticles!.length).toBe(3);
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
 
       // Effect ended — no entry for this enemy
       const noEffects = new Map<string, StatusEffectType[]>();
@@ -2657,7 +2656,7 @@ describe('EnemyService', () => {
 
       // Create particles first
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
-      expect(enemy.statusParticles!.length).toBe(3);
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
 
       // Mark as dying
       service.damageEnemy(enemy.id, enemy.maxHealth);
@@ -2675,8 +2674,8 @@ describe('EnemyService', () => {
 
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
       const initialSceneCount = mockScene.children.length;
-      // 3 particles added to scene = enemy mesh + 3 particles
-      expect(mockScene.children.length).toBeGreaterThanOrEqual(4);
+      // particles added to scene = enemy mesh + maxParticlesPerEnemy particles
+      expect(mockScene.children.length).toBeGreaterThanOrEqual(1 + STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
 
       service.removeEnemy(enemy.id, mockScene);
 
@@ -2691,7 +2690,7 @@ describe('EnemyService', () => {
       activeEffects.set(enemy.id, [StatusEffectType.BURN]);
 
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
-      expect(enemy.statusParticles!.length).toBe(3);
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
 
       service.cleanup(mockScene);
 
@@ -2712,7 +2711,7 @@ describe('EnemyService', () => {
       expect(!enemy.statusParticles || enemy.statusParticles.length === 0).toBe(true);
     });
 
-    it('respects max particle limit of 3 per enemy per effect', () => {
+    it('respects maxParticlesPerEnemy limit per enemy per effect', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       const activeEffects = new Map<string, StatusEffectType[]>();
       activeEffects.set(enemy.id, [StatusEffectType.POISON]);
@@ -2722,7 +2721,7 @@ describe('EnemyService', () => {
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
 
-      expect(enemy.statusParticles!.length).toBe(3);
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
     });
 
     it('does not throw for zero deltaTime', () => {

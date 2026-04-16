@@ -2,8 +2,8 @@ import { StatusEffectType } from './status-effect.constants';
 import { TowerType } from '../models/tower.model';
 
 export const STATUS_EFFECT_VISUAL_CONFIG = {
-  maxParticlesPerEnemy: 3,
-  particleSize: 0.08,
+  maxParticlesPerEnemy: 5,
+  particleSize: 0.14,
   burn: {
     color: 0xff6600,
     emissive: 0xff4400,
@@ -28,9 +28,9 @@ export const STATUS_EFFECT_VISUAL_CONFIG = {
 } as const;
 
 export const STATUS_EFFECT_VISUALS: Record<StatusEffectType, { emissiveColor: number; emissiveIntensity: number }> = {
-  [StatusEffectType.SLOW]: { emissiveColor: 0x4488ff, emissiveIntensity: 0.7 },
-  [StatusEffectType.BURN]: { emissiveColor: 0xff6622, emissiveIntensity: 0.7 },
-  [StatusEffectType.POISON]: { emissiveColor: 0x44ff22, emissiveIntensity: 0.7 },
+  [StatusEffectType.SLOW]: { emissiveColor: 0x4488ff, emissiveIntensity: 1.6 },
+  [StatusEffectType.BURN]: { emissiveColor: 0xff6622, emissiveIntensity: 1.6 },
+  [StatusEffectType.POISON]: { emissiveColor: 0x44ff22, emissiveIntensity: 1.6 },
 };
 
 /** Priority order for resolving which visual takes precedence when multiple effects active */

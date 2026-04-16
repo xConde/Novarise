@@ -248,7 +248,7 @@ describe('EnemyVisualService', () => {
       const enemies = new Map([['e1', enemy]]);
 
       service.updateStatusEffectParticles(enemies, 0.016, mockScene, new Map([['e1', [StatusEffectType.BURN]]]));
-      expect(enemy.statusParticles!.length).toBe(3);
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
 
       service.updateStatusEffectParticles(enemies, 0.016, mockScene, new Map());
       expect(enemy.statusParticles!.length).toBe(0);
@@ -261,7 +261,7 @@ describe('EnemyVisualService', () => {
       const effects = new Map([['e1', [StatusEffectType.BURN]]]);
 
       service.updateStatusEffectParticles(enemies, 0.016, mockScene, effects);
-      expect(enemy.statusParticles!.length).toBe(3);
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
 
       enemy.dying = true;
       service.updateStatusEffectParticles(enemies, 0.016, mockScene, effects);
