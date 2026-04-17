@@ -1699,3 +1699,11 @@ Scope: 57 files changed on `feat/engine-depth-pass` vs main. This review covers 
 
 **Fix:** No change proposed for this gate — the animations are visually important and `prefers-reduced-motion` covers the accessibility need. A `content-visibility: auto` on `.rest-hearth` could let the browser skip painting when off-screen but the rest-screen doesn't scroll, so the benefit is marginal. Leaving as-is.
 
+
+## Deployment Checklist — engine-depth-pass PR #30 final push
+
+- [ ] Step 1: Apply Finding 2 (MEDIUM) — wrap `resumeRun`'s `itemService.restore` and `runStateFlagService.restore` in try/catch with graceful fallback to empty state. Add a spec verifying resume-with-corrupt-state doesn't throw.
+- [ ] Step 2: Run the full quality gate (`tsc --noEmit` × 2 configs, `ng lint`, `ng test`, `ng build --configuration=production`) and confirm all green.
+- [ ] Step 3: Update PR #30 description with a consolidated summary of what landed since the original PR body: mobile polish (M1–M19), rest-screen bonfire, red-team hardening (Findings 1 & 2). Include the mobile smoke checklist for the user to verify visually before merge.
+- [ ] Step 4: Add a mobile-smoke section to the PR manual test checklist — iPhone SE (320/375) + iPhone 12 Pro (390) verification that the end-turn button clears the gear on all three.
+
