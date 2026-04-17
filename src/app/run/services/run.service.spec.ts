@@ -1393,118 +1393,97 @@ describe('RunService', () => {
       expect(service.getCurrentEvent()).not.toBeNull();
     }));
 
+    /**
+     * Helper: calls the real generateEvent() across every possible RNG index by
+     * forcing Math.random to return (i + 0.5) / poolSize for i in [0, poolSize).
+     * Returns the set of distinct event IDs produced.
+     *
+     * Uses service['runRng'] = null to bypass SeededRng and use Math.random.
+     */
+    function collectAllGeneratedEventIds(svc: RunService, poolSize: number): Set<string> {
+      const svcAny = svc as any;
+      const savedRng = svcAny.runRng;
+      svcAny.runRng = null;
+
+      const ids = new Set<string>();
+      const spy = spyOn(Math, 'random');
+      for (let i = 0; i < poolSize; i++) {
+        spy.and.returnValue((i + 0.5) / poolSize);
+        svc.generateEvent();
+        const evt = svc.getCurrentEvent();
+        if (evt) ids.add(evt.id);
+      }
+      spy.and.callThrough();
+      svcAny.runRng = savedRng;
+      return ids;
+    }
+
     it('excludes events where requiresFlag is set but flag is missing', fakeAsync(() => {
+      // Spec exercises the real generateEvent() filter.
+      // Without IDOL_BARGAIN_TAKEN/MERCHANT_AIDED/SCOUT_SAVED set, the three Part-2
+      // chain events (requiresFlag gated) must never appear in any pool slot.
+      // Pool size without any flags = 22 total - 3 Part-2 gated = 19.
       service.startNewRun();
-      // The cursed_idol_reckoning requires FLAG_KEYS.IDOL_BARGAIN_TAKEN.
-      // With no flag set, it should never be picked when pool only contains that event.
-      // Simulate by patching the internal events array used by generateEvent.
-      const gatedEvent: RunEvent = {
-        id: 'gated',
-        title: 'Gated',
-        description: 'Requires flag',
-        requiresFlag: FLAG_KEYS.IDOL_BARGAIN_TAKEN,
-        choices: [{ label: 'A', description: '', outcome: { goldDelta: 0, livesDelta: 0, description: '' } }],
-      };
-      const openEvent: RunEvent = {
-        id: 'open',
-        title: 'Open',
-        description: 'No constraint',
-        choices: [{ label: 'A', description: '', outcome: { goldDelta: 0, livesDelta: 0, description: '' } }],
-      };
+      // No flags set.
+      const POOL_SIZE_NO_FLAGS = 19;
+      const ids = collectAllGeneratedEventIds(service, POOL_SIZE_NO_FLAGS);
 
-      // Patch generateEvent to use a controlled pool
-      const svc = service as any;
-      spyOn(svc, 'generateEvent').and.callFake(() => {
-        const pool = [gatedEvent, openEvent];
-        const eligible = pool.filter((e: RunEvent) => {
-          if (e.requiresFlag && !flagService.hasFlag(e.requiresFlag)) return false;
-          if (e.requiresFlagAbsent && flagService.hasFlag(e.requiresFlagAbsent)) return false;
-          return true;
-        });
-        svc.currentEvent = eligible[0];
-      });
-
-      service.generateEvent();
-      expect(service.getCurrentEvent()?.id).toBe('open');
+      expect(ids.has('wandering_merchant_return')).toBeFalse();
+      expect(ids.has('cursed_idol_reckoning')).toBeFalse();
+      expect(ids.has('scout_returns_grateful')).toBeFalse();
+      // At least one non-gated event was returned
+      expect(ids.size).toBeGreaterThan(0);
     }));
 
     it('includes an event when requiresFlag is set AND the flag is present', fakeAsync(() => {
+      // With IDOL_BARGAIN_TAKEN set, cursed_idol_reckoning enters the eligible pool.
+      // Pool: 22 - 2 (other Part-2 events) - 1 (cursed_idol_offer excluded via requiresFlagAbsent) = 19.
       service.startNewRun();
       flagService.setFlag(FLAG_KEYS.IDOL_BARGAIN_TAKEN);
+      const POOL_SIZE_WITH_IDOL_FLAG = 19;
+      const ids = collectAllGeneratedEventIds(service, POOL_SIZE_WITH_IDOL_FLAG);
 
-      const svc = service as any;
-      const gatedEvent: RunEvent = {
-        id: 'gated',
-        title: 'Gated',
-        description: 'Requires flag',
-        requiresFlag: FLAG_KEYS.IDOL_BARGAIN_TAKEN,
-        choices: [{ label: 'A', description: '', outcome: { goldDelta: 0, livesDelta: 0, description: '' } }],
-      };
-      spyOn(svc, 'generateEvent').and.callFake(() => {
-        const pool = [gatedEvent];
-        const eligible = pool.filter((e: RunEvent) => {
-          if (e.requiresFlag && !flagService.hasFlag(e.requiresFlag)) return false;
-          return true;
-        });
-        svc.currentEvent = eligible.length > 0 ? eligible[0] : null;
-      });
-
-      service.generateEvent();
-      expect(service.getCurrentEvent()?.id).toBe('gated');
+      expect(ids.has('cursed_idol_reckoning')).toBeTrue();
     }));
 
     it('excludes events where requiresFlagAbsent is set and flag IS present', fakeAsync(() => {
+      // With MERCHANT_AIDED set, wandering_merchant_intro is excluded.
+      // wandering_merchant_return enters the pool (requiresFlag satisfied).
+      // wandering_merchant_intro exits (requiresFlagAbsent fails).
+      // Net pool size: 22 - 2 (other Part-2 gated) = 20, same size since one swaps.
       service.startNewRun();
       flagService.setFlag(FLAG_KEYS.MERCHANT_AIDED);
+      const POOL_SIZE_WITH_MERCHANT_FLAG = 20;
+      const ids = collectAllGeneratedEventIds(service, POOL_SIZE_WITH_MERCHANT_FLAG);
 
-      const svc = service as any;
-      const introEvent: RunEvent = {
-        id: 'intro',
-        title: 'Intro',
-        description: 'One-shot',
-        requiresFlagAbsent: FLAG_KEYS.MERCHANT_AIDED,
-        choices: [{ label: 'A', description: '', outcome: { goldDelta: 0, livesDelta: 0, description: '' } }],
-      };
-      const fallback: RunEvent = {
-        id: 'fallback',
-        title: 'Fallback',
-        description: '',
-        choices: [{ label: 'A', description: '', outcome: { goldDelta: 0, livesDelta: 0, description: '' } }],
-      };
-      spyOn(svc, 'generateEvent').and.callFake(() => {
-        const pool = [introEvent, fallback];
-        const eligible = pool.filter((e: RunEvent) => {
-          if (e.requiresFlagAbsent && flagService.hasFlag(e.requiresFlagAbsent)) return false;
-          return true;
-        });
-        svc.currentEvent = eligible[0];
-      });
-
-      service.generateEvent();
-      expect(service.getCurrentEvent()?.id).toBe('fallback');
+      // wandering_merchant_intro is excluded because requiresFlagAbsent: MERCHANT_AIDED is set
+      expect(ids.has('wandering_merchant_intro')).toBeFalse();
+      // wandering_merchant_return enters because requiresFlag: MERCHANT_AIDED is satisfied
+      expect(ids.has('wandering_merchant_return')).toBeTrue();
     }));
 
     it('includes a requiresFlagAbsent event when the flag is NOT set', fakeAsync(() => {
+      // Without MERCHANT_AIDED set, wandering_merchant_intro is in the eligible pool.
+      // Pool size without any flags = 19.
       service.startNewRun();
-      // merchant_aided NOT set
-      const svc = service as any;
-      const introEvent: RunEvent = {
-        id: 'intro',
-        title: 'Intro',
-        description: 'One-shot',
-        requiresFlagAbsent: FLAG_KEYS.MERCHANT_AIDED,
-        choices: [{ label: 'A', description: '', outcome: { goldDelta: 0, livesDelta: 0, description: '' } }],
-      };
-      spyOn(svc, 'generateEvent').and.callFake(() => {
-        const eligible = [introEvent].filter((e: RunEvent) => {
-          if (e.requiresFlagAbsent && flagService.hasFlag(e.requiresFlagAbsent)) return false;
-          return true;
-        });
-        svc.currentEvent = eligible.length > 0 ? eligible[0] : null;
-      });
+      // No flags set — merchant_aided absent.
+      const POOL_SIZE_NO_FLAGS = 19;
+      const ids = collectAllGeneratedEventIds(service, POOL_SIZE_NO_FLAGS);
 
-      service.generateEvent();
-      expect(service.getCurrentEvent()?.id).toBe('intro');
+      expect(ids.has('wandering_merchant_intro')).toBeTrue();
+    }));
+
+    it('never returns a firesOncePerRun event after it has been consumed (H4)', fakeAsync(() => {
+      // With IDOL_BARGAIN_TAKEN set and cursed_idol_reckoning consumed,
+      // that event must be excluded from every pool slot.
+      service.startNewRun();
+      flagService.setFlag(FLAG_KEYS.IDOL_BARGAIN_TAKEN);
+      flagService.markEventConsumed('cursed_idol_reckoning');
+      // Pool: same as IDOL_BARGAIN_TAKEN case (19) minus the consumed event = 18.
+      const POOL_SIZE_IDOL_FLAG_CONSUMED = 18;
+      const ids = collectAllGeneratedEventIds(service, POOL_SIZE_IDOL_FLAG_CONSUMED);
+
+      expect(ids.has('cursed_idol_reckoning')).toBeFalse();
     }));
   });
 
@@ -1835,15 +1814,16 @@ describe('RunService', () => {
 
   describe('S7 — STARTING_RELIC_DOWNGRADE (A18)', () => {
     it('at A17 (no downgrade), startNewRun() does NOT grant a starting relic', fakeAsync(() => {
-      const stubRelics: RelicDefinition[] = [RELIC_DEFINITIONS[RelicId.IRON_HEART]];
+      // H2d: stub returns relics only for COMMON so a pre-hotfix regression calling
+      // getAvailableRelics() without a rarity filter would still get an empty array.
       relicService.getAvailableRelics.and.callFake((rarity?: RelicRarity) => {
-        return rarity === RelicRarity.COMMON ? stubRelics : stubRelics;
+        return rarity === RelicRarity.COMMON ? [RELIC_DEFINITIONS[RelicId.IRON_HEART]] : [];
       });
 
       service.startNewRun(17);
 
-      // A17 does not trigger the A18+ starter-relic penalty. The run starts
-      // with an empty relic list — grantStartingRelic early-returns.
+      // A17 does not trigger the A18+ starter-relic penalty — grantStartingRelic must not be called.
+      expect(relicService.getAvailableRelics).not.toHaveBeenCalled();
       expect(service.runState!.relicIds).toEqual([]);
     }));
 
@@ -1859,6 +1839,12 @@ describe('RunService', () => {
       const callsWithCommon = relicService.getAvailableRelics.calls.all()
         .filter(c => c.args[0] === RelicRarity.COMMON);
       expect(callsWithCommon.length).toBeGreaterThan(0);
+
+      // H2c: the granted relic must be COMMON rarity and must appear in relicIds
+      expect(service.runState!.relicIds.length).toBe(1);
+      const grantedRelicId = service.runState!.relicIds[0] as RelicId;
+      const grantedDef = RELIC_DEFINITIONS[grantedRelicId];
+      expect(grantedDef.rarity).toBe(RelicRarity.COMMON);
     }));
   });
 });
