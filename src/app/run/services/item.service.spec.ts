@@ -42,6 +42,8 @@ function wireCombat(
 
   const phase = opts.phase ?? GamePhase.COMBAT;
   const enemyCount = opts.enemyCount ?? 1;
+  const currentLives = opts.lives ?? 15;
+  const maxLives = opts.maxLives ?? 20;
 
   svc.registerCombatCallbacks(
     () => phase,
@@ -51,6 +53,7 @@ function wireCombat(
       return true;
     },
     (delta: number) => { ctx.livesDelta += delta; },
+    () => ({ current: currentLives, max: maxLives }),
     (amount: number) => { ctx.energyDelta += amount; },
     () => { ctx.emptyTurnInserted = true; },
     (m: number) => { ctx.caltropsMultiplier = m; },
@@ -204,18 +207,41 @@ describe('ItemService', () => {
   // ── HEAL_POTION effect ────────────────────────────────────────────────────
 
   describe('HEAL_POTION', () => {
-    it('heals +5 lives and returns success', () => {
+    it('heals +5 lives and returns success when current < max', () => {
       service.addItem(ItemType.HEAL_POTION);
-      const ctx = wireCombat(service);
-      service.useItem(ItemType.HEAL_POTION);
+      const ctx = wireCombat(service, { lives: 15, maxLives: 20 });
+      const result = service.useItem(ItemType.HEAL_POTION);
+      expect(result.success).toBeTrue();
       expect(ctx.livesDelta).toBe(5);
     });
 
     it('decrements inventory on success', () => {
       service.addItem(ItemType.HEAL_POTION);
-      wireCombat(service);
+      wireCombat(service, { lives: 15, maxLives: 20 });
       service.useItem(ItemType.HEAL_POTION);
       expect(service.getInventory().get(ItemType.HEAL_POTION)).toBeUndefined();
+    });
+
+    it('returns {success:false, reason:at_max} when current === max', () => {
+      service.addItem(ItemType.HEAL_POTION);
+      wireCombat(service, { lives: 20, maxLives: 20 });
+      const result = service.useItem(ItemType.HEAL_POTION);
+      expect(result.success).toBeFalse();
+      expect(result.reason).toBe('at_max');
+    });
+
+    it('does not decrement inventory when at_max', () => {
+      service.addItem(ItemType.HEAL_POTION);
+      wireCombat(service, { lives: 20, maxLives: 20 });
+      service.useItem(ItemType.HEAL_POTION);
+      expect(service.getInventory().get(ItemType.HEAL_POTION)).toBe(1);
+    });
+
+    it('does not call doAdjustLives when at_max', () => {
+      service.addItem(ItemType.HEAL_POTION);
+      const ctx = wireCombat(service, { lives: 20, maxLives: 20 });
+      service.useItem(ItemType.HEAL_POTION);
+      expect(ctx.livesDelta).toBe(0);
     });
 
     it('returns {success:false, reason:wrong_phase} without combat callbacks', () => {
@@ -256,11 +282,48 @@ describe('ItemService', () => {
   // ── GREATER_HEAL effect ───────────────────────────────────────────────────
 
   describe('GREATER_HEAL', () => {
-    it('heals +10 lives and returns success', () => {
+    it('heals +10 lives and returns success when current < max', () => {
       service.addItem(ItemType.GREATER_HEAL);
-      const ctx = wireCombat(service);
-      service.useItem(ItemType.GREATER_HEAL);
+      const ctx = wireCombat(service, { lives: 10, maxLives: 20 });
+      const result = service.useItem(ItemType.GREATER_HEAL);
+      expect(result.success).toBeTrue();
       expect(ctx.livesDelta).toBe(10);
+    });
+
+    it('decrements inventory on success', () => {
+      service.addItem(ItemType.GREATER_HEAL);
+      wireCombat(service, { lives: 10, maxLives: 20 });
+      service.useItem(ItemType.GREATER_HEAL);
+      expect(service.getInventory().get(ItemType.GREATER_HEAL)).toBeUndefined();
+    });
+
+    it('returns {success:false, reason:at_max} when current === max', () => {
+      service.addItem(ItemType.GREATER_HEAL);
+      wireCombat(service, { lives: 20, maxLives: 20 });
+      const result = service.useItem(ItemType.GREATER_HEAL);
+      expect(result.success).toBeFalse();
+      expect(result.reason).toBe('at_max');
+    });
+
+    it('does not decrement inventory when at_max', () => {
+      service.addItem(ItemType.GREATER_HEAL);
+      wireCombat(service, { lives: 20, maxLives: 20 });
+      service.useItem(ItemType.GREATER_HEAL);
+      expect(service.getInventory().get(ItemType.GREATER_HEAL)).toBe(1);
+    });
+
+    it('does not call doAdjustLives when at_max', () => {
+      service.addItem(ItemType.GREATER_HEAL);
+      const ctx = wireCombat(service, { lives: 20, maxLives: 20 });
+      service.useItem(ItemType.GREATER_HEAL);
+      expect(ctx.livesDelta).toBe(0);
+    });
+
+    it('returns {success:false, reason:wrong_phase} without combat callbacks', () => {
+      service.addItem(ItemType.GREATER_HEAL);
+      const result = service.useItem(ItemType.GREATER_HEAL);
+      expect(result.success).toBeFalse();
+      expect(result.reason).toBe('wrong_phase');
     });
   });
 

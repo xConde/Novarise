@@ -36,6 +36,8 @@ export class ItemService {
   private getGamePhase: (() => GamePhase) | null = null;
   private doDamageAllEnemies: ((damage: number) => boolean) | null = null;
   private doAdjustLives: ((delta: number) => void) | null = null;
+  /** Returns current and max lives so heal items can pre-check before consuming. */
+  private getCurrentLives: (() => { current: number; max: number }) | null = null;
   private doAddEnergy: ((amount: number) => void) | null = null;
   private doAddGold: ((amount: number) => void) | null = null;
   private doInsertEmptyTurn: (() => void) | null = null;
@@ -53,6 +55,7 @@ export class ItemService {
     getGamePhase: () => GamePhase,
     doDamageAllEnemies: (damage: number) => boolean,
     doAdjustLives: (delta: number) => void,
+    getCurrentLives: () => { current: number; max: number },
     doAddEnergy: (amount: number) => void,
     doInsertEmptyTurn: () => void,
     doApplyCaltrops: (multiplier: number) => void,
@@ -60,6 +63,7 @@ export class ItemService {
     this.getGamePhase = getGamePhase;
     this.doDamageAllEnemies = doDamageAllEnemies;
     this.doAdjustLives = doAdjustLives;
+    this.getCurrentLives = getCurrentLives;
     this.doAddEnergy = doAddEnergy;
     this.doInsertEmptyTurn = doInsertEmptyTurn;
     this.doApplyCaltrops = doApplyCaltrops;
@@ -81,6 +85,7 @@ export class ItemService {
     this.getGamePhase = null;
     this.doDamageAllEnemies = null;
     this.doAdjustLives = null;
+    this.getCurrentLives = null;
     this.doAddEnergy = null;
     this.doInsertEmptyTurn = null;
     this.doApplyCaltrops = null;
@@ -207,13 +212,20 @@ export class ItemService {
   }
 
   /**
-   * Try to add lives via the registered callback.
-   * Returns false if doAdjustLives is null or reports no-op (at max).
-   * A sentinel: doAdjustLives is expected to be a no-op when at max,
-   * so we pre-check via the supplied maxLives getter.
+   * Try to add lives via the registered callbacks.
+   * Returns false if callbacks are unregistered (outside encounter) or if the
+   * player is already at max lives — preventing silent consumption of heal items.
+   *
+   * NOTE: ENERGY_ELIXIR guards via `getGamePhase()` (wrong_phase). Heal items
+   * intentionally do NOT have a phase guard — they can be used during INTERMISSION.
+   * The asymmetry is pre-existing; do not collapse it here.
+   * TODO: consider unifying heal-item phase rules with ENERGY_ELIXIR if design
+   * decides heals should also be COMBAT-only.
    */
   private tryAdjustLives(amount: number): boolean {
-    if (!this.doAdjustLives) return false;
+    if (!this.doAdjustLives || !this.getCurrentLives) return false;
+    const { current, max } = this.getCurrentLives();
+    if (current >= max) return false;
     this.doAdjustLives(amount);
     return true;
   }

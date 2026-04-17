@@ -531,6 +531,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         return true;
       },
       (delta: number) => { this.gameStateService.addLives(delta); },
+      () => {
+        const state = this.gameStateService.getState();
+        return { current: state.lives, max: state.maxLives };
+      },
       (amount: number) => { this.deckService.addEnergy(amount); },
       () => { this.waveService.insertEmptyTurn(); },
       (multiplier: number) => { this.waveService.setNextWaveEnemySpeedMultiplier(multiplier); },
