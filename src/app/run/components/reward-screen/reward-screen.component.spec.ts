@@ -90,6 +90,49 @@ describe('RewardScreenComponent', () => {
     expect(component.relicPicked).toBeTrue();
   });
 
+  it('after relic pick, confirmation line includes the relic name', () => {
+    const cards = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('.reward-card');
+    cards[0].click();
+    fixture.detectChanges();
+
+    const confirmation = (fixture.nativeElement as HTMLElement).querySelector('.reward-picked__message--selected');
+    expect(confirmation?.textContent).toContain('Relic acquired');
+    expect(confirmation?.textContent).toContain('Iron Heart');
+  });
+
+  it('after card pick, confirmation line includes the card name', () => {
+    component.skipRelics();
+    fixture.detectChanges();
+
+    component.onCardPicked({ type: 'card', cardId: CardId.GOLD_RUSH });
+    fixture.detectChanges();
+
+    const confirmation = (fixture.nativeElement as HTMLElement).querySelectorAll('.reward-picked__message--selected');
+    const lastConfirmation = confirmation[confirmation.length - 1];
+    expect(lastConfirmation?.textContent).toContain('Added to deck');
+    expect(lastConfirmation?.textContent).toContain('Gold Rush');
+  });
+
+  it('skipping relic shows "No relic taken"', () => {
+    fixture.detectChanges();
+    component.skipRelics();
+    fixture.detectChanges();
+
+    const skipped = (fixture.nativeElement as HTMLElement).querySelector('.reward-picked__message--skipped');
+    expect(skipped?.textContent).toContain('No relic taken');
+  });
+
+  it('skipping card shows "No card taken"', () => {
+    component.skipRelics();
+    fixture.detectChanges();
+    component.onCardSkipped();
+    fixture.detectChanges();
+
+    const skipped = (fixture.nativeElement as HTMLElement).querySelectorAll('.reward-picked__message--skipped');
+    const lastSkipped = skipped[skipped.length - 1];
+    expect(lastSkipped?.textContent).toContain('No card taken');
+  });
+
   it('skip button sets relicPicked without emitting rewardCollected', () => {
     const emitted: RewardItem[] = [];
     component.rewardCollected.subscribe(r => emitted.push(r));

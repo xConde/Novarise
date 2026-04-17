@@ -2,6 +2,7 @@ import { Component, HostListener, Input, Output, EventEmitter } from '@angular/c
 import { RelicDefinition, RELIC_DEFINITIONS, RelicId, RelicRarity } from '../../models/relic.model';
 import { RewardScreenConfig, RewardItem, CardReward } from '../../models/encounter.model';
 import { ChallengeDefinition, CHALLENGE_SCORE_TO_GOLD_RATIO, computeChallengeGoldBonus } from '../../data/challenges';
+import { getCardDefinition } from '../../constants/card-definitions';
 
 /** CSS class suffix returned per rarity. */
 const RARITY_CLASS: Record<RelicRarity, string> = {
@@ -23,6 +24,8 @@ export class RewardScreenComponent {
   selectedRelic: RelicId | null = null;
   relicPicked = false;
   cardPicked = false;
+  /** Name of the card the player added to their deck — shown in the confirmation line. */
+  pickedCardName: string | null = null;
 
   /** Resolve relic definitions from reward IDs for display. */
   get relicCards(): RelicDefinition[] {
@@ -57,7 +60,15 @@ export class RewardScreenComponent {
 
   onCardPicked(reward: CardReward): void {
     this.cardPicked = true;
+    const def = getCardDefinition(reward.cardId);
+    this.pickedCardName = def?.name ?? null;
     this.rewardCollected.emit(reward);
+  }
+
+  /** Display name for the currently-selected relic — null when skipped. */
+  get selectedRelicName(): string | null {
+    if (!this.selectedRelic) return null;
+    return RELIC_DEFINITIONS[this.selectedRelic]?.name ?? null;
   }
 
   onCardSkipped(): void {

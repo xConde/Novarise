@@ -71,12 +71,12 @@
     </button>
   </section>
 
-  <!-- Confirmation after pick / skip -->
+  <!-- Confirmation after relic pick / skip -->
   <section class="reward-picked" *ngIf="relicPicked" aria-live="polite">
-    <p *ngIf="selectedRelic; else skippedTpl" class="reward-picked__message reward-picked__message--selected">
-      Relic acquired!
+    <p *ngIf="selectedRelicName; else skippedRelicTpl" class="reward-picked__message reward-picked__message--selected">
+      Relic acquired: <strong>{{ selectedRelicName }}</strong>
     </p>
-    <ng-template #skippedTpl>
+    <ng-template #skippedRelicTpl>
       <p class="reward-picked__message reward-picked__message--skipped">No relic taken.</p>
     </ng-template>
   </section>
@@ -88,6 +88,16 @@
     (cardPicked)="onCardPicked($event)"
     (skipped)="onCardSkipped()">
   </app-card-draft>
+
+  <!-- Confirmation after card pick / skip -->
+  <section class="reward-picked" *ngIf="cardPicked && config.cardChoices.length > 0" aria-live="polite">
+    <p *ngIf="pickedCardName; else skippedCardTpl" class="reward-picked__message reward-picked__message--selected">
+      Added to deck: <strong>{{ pickedCardName }}</strong>
+    </p>
+    <ng-template #skippedCardTpl>
+      <p class="reward-picked__message reward-picked__message--skipped">No card taken.</p>
+    </ng-template>
+  </section>
 
   <!-- Continue -->
   <button
