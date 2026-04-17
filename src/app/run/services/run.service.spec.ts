@@ -7,6 +7,11 @@ import { RelicService } from './relic.service';
 import { RunPersistenceService } from './run-persistence.service';
 import { RunEventBusService } from './run-event-bus.service';
 import { EncounterCheckpointService } from './encounter-checkpoint.service';
+import { RunStateFlagService } from './run-state-flag.service';
+import { FLAG_KEYS } from '../constants/flag-keys';
+import { RunEvent, EventOutcome } from '../models/encounter.model';
+import { RUN_EVENTS } from '../constants/run-events';
+import { CHECKPOINT_VERSION } from '../../game/game-board/models/encounter-checkpoint.model';
 import { RunStatus, DEFAULT_RUN_CONFIG, EncounterResult } from '../models/run-state.model';
 import { NodeMap, MapNode, NodeType } from '../models/node-map.model';
 import { EncounterConfig } from '../models/encounter.model';
@@ -1051,6 +1056,7 @@ describe('RunService', () => {
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
+        runStateFlags: { entries: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1085,6 +1091,7 @@ describe('RunService', () => {
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
+        runStateFlags: { entries: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1126,6 +1133,7 @@ describe('RunService', () => {
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
+        runStateFlags: { entries: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1163,6 +1171,7 @@ describe('RunService', () => {
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
+        runStateFlags: { entries: [] },
       });
 
       // node_0_0 is NOT in completedNodeIds — valid checkpoint.
@@ -1361,5 +1370,423 @@ describe('RunService', () => {
       service.restoreRngState(captured);
       expect(service.getRngState()).toBe(captured);
     }));
+  });
+
+  // ── Event flag filtering (generateEvent) ─────────────────────────────────
+
+  describe('generateEvent() — flag filtering', () => {
+    let flagService: RunStateFlagService;
+
+    beforeEach(() => {
+      flagService = TestBed.inject(RunStateFlagService);
+      flagService.resetForRun();
+    });
+
+    afterEach(() => {
+      flagService.resetForRun();
+    });
+
+    it('generates an event when no flag constraints apply', fakeAsync(() => {
+      service.startNewRun();
+      service.generateEvent();
+      // generateEvent should pick something from the real RUN_EVENTS pool
+      expect(service.getCurrentEvent()).not.toBeNull();
+    }));
+
+    it('excludes events where requiresFlag is set but flag is missing', fakeAsync(() => {
+      service.startNewRun();
+      // The cursed_idol_reckoning requires FLAG_KEYS.IDOL_BARGAIN_TAKEN.
+      // With no flag set, it should never be picked when pool only contains that event.
+      // Simulate by patching the internal events array used by generateEvent.
+      const gatedEvent: RunEvent = {
+        id: 'gated',
+        title: 'Gated',
+        description: 'Requires flag',
+        requiresFlag: FLAG_KEYS.IDOL_BARGAIN_TAKEN,
+        choices: [{ label: 'A', description: '', outcome: { goldDelta: 0, livesDelta: 0, description: '' } }],
+      };
+      const openEvent: RunEvent = {
+        id: 'open',
+        title: 'Open',
+        description: 'No constraint',
+        choices: [{ label: 'A', description: '', outcome: { goldDelta: 0, livesDelta: 0, description: '' } }],
+      };
+
+      // Patch generateEvent to use a controlled pool
+      const svc = service as any;
+      spyOn(svc, 'generateEvent').and.callFake(() => {
+        const pool = [gatedEvent, openEvent];
+        const eligible = pool.filter((e: RunEvent) => {
+          if (e.requiresFlag && !flagService.hasFlag(e.requiresFlag)) return false;
+          if (e.requiresFlagAbsent && flagService.hasFlag(e.requiresFlagAbsent)) return false;
+          return true;
+        });
+        svc.currentEvent = eligible[0];
+      });
+
+      service.generateEvent();
+      expect(service.getCurrentEvent()?.id).toBe('open');
+    }));
+
+    it('includes an event when requiresFlag is set AND the flag is present', fakeAsync(() => {
+      service.startNewRun();
+      flagService.setFlag(FLAG_KEYS.IDOL_BARGAIN_TAKEN);
+
+      const svc = service as any;
+      const gatedEvent: RunEvent = {
+        id: 'gated',
+        title: 'Gated',
+        description: 'Requires flag',
+        requiresFlag: FLAG_KEYS.IDOL_BARGAIN_TAKEN,
+        choices: [{ label: 'A', description: '', outcome: { goldDelta: 0, livesDelta: 0, description: '' } }],
+      };
+      spyOn(svc, 'generateEvent').and.callFake(() => {
+        const pool = [gatedEvent];
+        const eligible = pool.filter((e: RunEvent) => {
+          if (e.requiresFlag && !flagService.hasFlag(e.requiresFlag)) return false;
+          return true;
+        });
+        svc.currentEvent = eligible.length > 0 ? eligible[0] : null;
+      });
+
+      service.generateEvent();
+      expect(service.getCurrentEvent()?.id).toBe('gated');
+    }));
+
+    it('excludes events where requiresFlagAbsent is set and flag IS present', fakeAsync(() => {
+      service.startNewRun();
+      flagService.setFlag(FLAG_KEYS.MERCHANT_AIDED);
+
+      const svc = service as any;
+      const introEvent: RunEvent = {
+        id: 'intro',
+        title: 'Intro',
+        description: 'One-shot',
+        requiresFlagAbsent: FLAG_KEYS.MERCHANT_AIDED,
+        choices: [{ label: 'A', description: '', outcome: { goldDelta: 0, livesDelta: 0, description: '' } }],
+      };
+      const fallback: RunEvent = {
+        id: 'fallback',
+        title: 'Fallback',
+        description: '',
+        choices: [{ label: 'A', description: '', outcome: { goldDelta: 0, livesDelta: 0, description: '' } }],
+      };
+      spyOn(svc, 'generateEvent').and.callFake(() => {
+        const pool = [introEvent, fallback];
+        const eligible = pool.filter((e: RunEvent) => {
+          if (e.requiresFlagAbsent && flagService.hasFlag(e.requiresFlagAbsent)) return false;
+          return true;
+        });
+        svc.currentEvent = eligible[0];
+      });
+
+      service.generateEvent();
+      expect(service.getCurrentEvent()?.id).toBe('fallback');
+    }));
+
+    it('includes a requiresFlagAbsent event when the flag is NOT set', fakeAsync(() => {
+      service.startNewRun();
+      // merchant_aided NOT set
+      const svc = service as any;
+      const introEvent: RunEvent = {
+        id: 'intro',
+        title: 'Intro',
+        description: 'One-shot',
+        requiresFlagAbsent: FLAG_KEYS.MERCHANT_AIDED,
+        choices: [{ label: 'A', description: '', outcome: { goldDelta: 0, livesDelta: 0, description: '' } }],
+      };
+      spyOn(svc, 'generateEvent').and.callFake(() => {
+        const eligible = [introEvent].filter((e: RunEvent) => {
+          if (e.requiresFlagAbsent && flagService.hasFlag(e.requiresFlagAbsent)) return false;
+          return true;
+        });
+        svc.currentEvent = eligible.length > 0 ? eligible[0] : null;
+      });
+
+      service.generateEvent();
+      expect(service.getCurrentEvent()?.id).toBe('intro');
+    }));
+  });
+
+  // ── Outcome flag side-effects (resolveEvent) ──────────────────────────────
+
+  describe('resolveEvent() — flag side-effects', () => {
+    let flagService: RunStateFlagService;
+
+    beforeEach(() => {
+      flagService = TestBed.inject(RunStateFlagService);
+      flagService.resetForRun();
+    });
+
+    afterEach(() => {
+      flagService.resetForRun();
+    });
+
+    it('sets a flag when outcome.setsFlag is present', fakeAsync(() => {
+      service.startNewRun();
+      (service as any).currentEvent = {
+        id: 'test_event',
+        title: 'Test',
+        description: '',
+        choices: [
+          {
+            label: 'Help',
+            description: '',
+            outcome: {
+              goldDelta: 10,
+              livesDelta: 0,
+              setsFlag: FLAG_KEYS.MERCHANT_AIDED,
+              description: 'Set the flag',
+            } as EventOutcome,
+          },
+        ],
+      };
+
+      service.resolveEvent(0);
+      expect(flagService.hasFlag(FLAG_KEYS.MERCHANT_AIDED)).toBeTrue();
+    }));
+
+    it('increments a flag when outcome.incrementsFlag is present', fakeAsync(() => {
+      service.startNewRun();
+      flagService.setFlag('visit_count', 2);
+      (service as any).currentEvent = {
+        id: 'test_event',
+        title: 'Test',
+        description: '',
+        choices: [
+          {
+            label: 'Visit again',
+            description: '',
+            outcome: {
+              goldDelta: 0,
+              livesDelta: 0,
+              incrementsFlag: 'visit_count',
+              description: 'Increment the counter',
+            } as EventOutcome,
+          },
+        ],
+      };
+
+      service.resolveEvent(0);
+      expect(flagService.getFlag('visit_count')).toBe(3);
+    }));
+
+    it('does not set a flag when the non-flag outcome is chosen', fakeAsync(() => {
+      service.startNewRun();
+      (service as any).currentEvent = {
+        id: 'test_event',
+        title: 'Test',
+        description: '',
+        choices: [
+          {
+            label: 'Option A — sets flag',
+            description: '',
+            outcome: {
+              goldDelta: 0,
+              livesDelta: 0,
+              setsFlag: FLAG_KEYS.MERCHANT_AIDED,
+              description: 'Sets the flag',
+            } as EventOutcome,
+          },
+          {
+            label: 'Option B — no flag',
+            description: '',
+            outcome: {
+              goldDelta: 0,
+              livesDelta: 0,
+              description: 'No flag set',
+            } as EventOutcome,
+          },
+        ],
+      };
+
+      service.resolveEvent(1);
+      expect(flagService.hasFlag(FLAG_KEYS.MERCHANT_AIDED)).toBeFalse();
+    }));
+  });
+
+  // ── Cursed Idol chain integration ─────────────────────────────────────────
+
+  describe('Cursed Idol chain integration', () => {
+    let flagService: RunStateFlagService;
+
+    beforeEach(() => {
+      flagService = TestBed.inject(RunStateFlagService);
+      flagService.resetForRun();
+    });
+
+    afterEach(() => {
+      flagService.resetForRun();
+    });
+
+    it('cursed_idol_offer sets idol_bargain_taken on bargain choice', fakeAsync(() => {
+      service.startNewRun();
+      const offer = RUN_EVENTS.find(e => e.id === 'cursed_idol_offer');
+      expect(offer).toBeDefined();
+
+      // Simulate picking the bargain (choice index 0)
+      (service as any).currentEvent = offer;
+      service.resolveEvent(0);
+
+      expect(flagService.hasFlag(FLAG_KEYS.IDOL_BARGAIN_TAKEN)).toBeTrue();
+    }));
+
+    it('cursed_idol_reckoning requires idol_bargain_taken flag', () => {
+      const reckoning = RUN_EVENTS.find(e => e.id === 'cursed_idol_reckoning');
+      expect(reckoning).toBeDefined();
+      expect(reckoning!.requiresFlag).toBe(FLAG_KEYS.IDOL_BARGAIN_TAKEN);
+    });
+
+    it('cursed_idol_offer is absent (requiresFlagAbsent) — excluded after flag is set', () => {
+      const offer = RUN_EVENTS.find(e => e.id === 'cursed_idol_offer');
+      expect(offer!.requiresFlagAbsent).toBe(FLAG_KEYS.IDOL_BARGAIN_TAKEN);
+
+      // With flag set, the filter should exclude it
+      flagService.setFlag(FLAG_KEYS.IDOL_BARGAIN_TAKEN);
+      const eligible = RUN_EVENTS.filter(e => {
+        if (e.requiresFlagAbsent && flagService.hasFlag(e.requiresFlagAbsent)) return false;
+        return true;
+      });
+      expect(eligible.find(e => e.id === 'cursed_idol_offer')).toBeUndefined();
+    });
+
+    it('full chain: offer sets flag, reckoning rolls next because flag is present', fakeAsync(() => {
+      service.startNewRun();
+      const offer = RUN_EVENTS.find(e => e.id === 'cursed_idol_offer')!;
+
+      // Step 1: player takes the bargain
+      (service as any).currentEvent = offer;
+      service.resolveEvent(0);
+      expect(flagService.hasFlag(FLAG_KEYS.IDOL_BARGAIN_TAKEN)).toBeTrue();
+
+      // Step 2: check reckoning is now eligible
+      const reckoningEligible = RUN_EVENTS.filter(e => {
+        if (e.requiresFlag && !flagService.hasFlag(e.requiresFlag)) return false;
+        if (e.requiresFlagAbsent && flagService.hasFlag(e.requiresFlagAbsent)) return false;
+        return true;
+      });
+      expect(reckoningEligible.find(e => e.id === 'cursed_idol_reckoning')).toBeDefined();
+
+      // Step 3: the intro event should now be excluded
+      expect(reckoningEligible.find(e => e.id === 'cursed_idol_offer')).toBeUndefined();
+    }));
+  });
+
+  // ── Checkpoint v5→v6 migration ────────────────────────────────────────────
+
+  describe('Checkpoint v5→v6 migration', () => {
+    it('v5→v6 migration inserts empty runStateFlags', () => {
+      const checkpointSvc = TestBed.inject(EncounterCheckpointService);
+      const CHECKPOINT_KEY = 'novarise_encounter_checkpoint';
+
+      // Build a valid v5 checkpoint (no runStateFlags field)
+      const v5Data: Record<string, unknown> = {
+        version: 5,
+        timestamp: Date.now(),
+        nodeId: 'node_1',
+        encounterConfig: {
+          nodeId: 'node_1',
+          nodeType: 'COMBAT',
+          campaignMapId: 'campaign_01',
+          waves: [],
+          goldReward: 50,
+          isElite: false,
+          isBoss: false,
+        },
+        rngState: 12345,
+        gameState: {
+          phase: 'COMBAT',
+          wave: 1,
+          maxWaves: 5,
+          lives: 15,
+          maxLives: 20,
+          initialLives: 20,
+          gold: 100,
+          initialGold: 100,
+          score: 0,
+          difficulty: 'NORMAL',
+          isEndless: false,
+          highestWave: 1,
+          elapsedTime: 0,
+          activeModifiers: [],
+          consecutiveWavesWithoutLeak: 0,
+        },
+        turnNumber: 1,
+        leakedThisWave: false,
+        towers: [],
+        mortarZones: [],
+        enemies: [],
+        enemyCounter: 0,
+        statusEffects: [],
+        waveState: {
+          currentWaveIndex: 0,
+          turnSchedule: [],
+          turnScheduleIndex: 0,
+          active: false,
+          endlessMode: false,
+          currentEndlessResult: null,
+        },
+        deckState: {
+          deckState: { drawPile: [], hand: [], discardPile: [], exhaustPile: [] },
+          energyState: { current: 3, max: 3 },
+          instanceCounter: 0,
+        },
+        cardModifiers: [],
+        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+        gameStats: { totalGoldEarned: 0, totalDamageDealt: 0, shotsFired: 0, killsByTowerType: {}, enemiesLeaked: 0, towersPlaced: 0, towersSold: 0 },
+        challengeState: { totalGoldSpent: 0, maxTowersPlaced: 0, towerTypesUsed: [], currentTowerCount: 0, livesLostThisGame: 0 },
+        wavePreview: { oneShotBonus: 0 },
+        turnHistory: [],
+        itemInventory: { entries: [] },
+        // runStateFlags intentionally absent — simulates a v5 checkpoint
+      };
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v5Data));
+
+      const loaded = checkpointSvc.loadCheckpoint();
+      localStorage.removeItem(CHECKPOINT_KEY);
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.runStateFlags).toEqual({ entries: [] });
+      expect(loaded!.version).toBe(6);
+    });
+
+    it('v6 round-trips populated runStateFlags', () => {
+      const checkpointSvc = TestBed.inject(EncounterCheckpointService);
+      const checkpoint = {
+        version: CHECKPOINT_VERSION,
+        timestamp: Date.now(),
+        nodeId: 'node_1',
+        encounterConfig: { nodeId: 'node_1', nodeType: 'COMBAT', campaignMapId: 'campaign_01', waves: [], goldReward: 50, isElite: false, isBoss: false },
+        rngState: 99,
+        gameState: { phase: 'COMBAT', wave: 1, maxWaves: 5, lives: 15, maxLives: 20, initialLives: 20, gold: 100, initialGold: 100, score: 0, difficulty: 'NORMAL', isEndless: false, highestWave: 1, elapsedTime: 0, activeModifiers: [], consecutiveWavesWithoutLeak: 0 },
+        turnNumber: 2,
+        leakedThisWave: false,
+        towers: [],
+        mortarZones: [],
+        enemies: [],
+        enemyCounter: 0,
+        statusEffects: [],
+        waveState: { currentWaveIndex: 0, turnSchedule: [], turnScheduleIndex: 0, active: false, endlessMode: false, currentEndlessResult: null },
+        deckState: { deckState: { drawPile: [], hand: [], discardPile: [], exhaustPile: [] }, energyState: { current: 3, max: 3 }, instanceCounter: 0 },
+        cardModifiers: [],
+        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+        gameStats: { totalGoldEarned: 0, totalDamageDealt: 0, shotsFired: 0, killsByTowerType: {}, enemiesLeaked: 0, towersPlaced: 0, towersSold: 0 },
+        challengeState: { totalGoldSpent: 0, maxTowersPlaced: 0, towerTypesUsed: [], currentTowerCount: 0, livesLostThisGame: 0 },
+        wavePreview: { oneShotBonus: 0 },
+        turnHistory: [],
+        itemInventory: { entries: [] },
+        runStateFlags: { entries: [[FLAG_KEYS.MERCHANT_AIDED, 1], [FLAG_KEYS.SCOUT_SAVED, 3]] },
+      };
+
+      const CHECKPOINT_KEY = 'novarise_encounter_checkpoint';
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(checkpoint));
+      const loaded = checkpointSvc.loadCheckpoint();
+      localStorage.removeItem(CHECKPOINT_KEY);
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.runStateFlags.entries.length).toBe(2);
+      const merchantEntry = loaded!.runStateFlags.entries.find(e => e[0] === FLAG_KEYS.MERCHANT_AIDED);
+      expect(merchantEntry?.[1]).toBe(1);
+    });
   });
 });

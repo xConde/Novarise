@@ -6,11 +6,20 @@
  *
  * Events with `outcome.removeCard: true` trigger a random card removal in RunService.resolveEvent.
  * Events with `outcome.itemReward` grant a consumable item to the player's inventory.
+ * Events with `requiresFlag`/`requiresFlagAbsent` participate in chained event sequences.
+ * Events with `outcome.setsFlag`/`outcome.incrementsFlag` write state for future events.
+ *
+ * Three chains shipped (S6):
+ *   A — Wandering Merchant: wandering_merchant_intro → wandering_merchant_return
+ *   B — Cursed Idol:        cursed_idol_offer        → cursed_idol_reckoning
+ *   C — Injured Scout:      injured_scout_encounter  → scout_returns_grateful
  */
 
 import { RunEvent } from '../models/encounter.model';
 import { RelicId } from '../models/relic.model';
 import { ItemType } from '../models/item.model';
+import { FLAG_KEYS } from './flag-keys';
+import { EVENT_REWARD_CONFIG } from './event-reward.constants';
 
 export const RUN_EVENTS: ReadonlyArray<RunEvent> = [
   {
@@ -30,20 +39,51 @@ export const RUN_EVENTS: ReadonlyArray<RunEvent> = [
       },
     ],
   },
+  // Chain A — Part 1: fires only if merchant_aided flag is absent (one-shot intro)
   {
-    id: 'wandering_merchant',
+    id: 'wandering_merchant_intro',
     title: 'Wandering Merchant',
-    description: 'A hooded figure offers a trade: power for a price.',
+    description: 'A hooded traveller sits by the roadside, cart overturned. They look up hopefully — a small favour and they could be back on their way.',
+    requiresFlagAbsent: FLAG_KEYS.MERCHANT_AIDED,
     choices: [
       {
-        label: 'Pay 50 gold',
-        description: 'The merchant offers a sturdy trinket.',
-        outcome: { goldDelta: -50, livesDelta: 0, relicId: RelicId.FIELD_RATIONS, description: 'You receive Field Rations.' },
+        label: 'Help them right the cart',
+        description: `Spend a moment helping. Gain ${EVENT_REWARD_CONFIG.merchantAidGold} gold for your trouble.`,
+        outcome: {
+          goldDelta: EVENT_REWARD_CONFIG.merchantAidGold,
+          livesDelta: 0,
+          setsFlag: FLAG_KEYS.MERCHANT_AIDED,
+          description: 'The merchant thanks you warmly and presses coin into your hand.',
+        },
       },
       {
-        label: 'Decline politely',
-        description: 'Keep your gold. The merchant vanishes.',
-        outcome: { goldDelta: 0, livesDelta: 0, description: 'The figure dissolves into mist.' },
+        label: 'Walk on by',
+        description: 'You have bigger concerns.',
+        outcome: { goldDelta: 0, livesDelta: 0, description: 'The merchant watches you go in silence.' },
+      },
+    ],
+  },
+  // Chain A — Part 2: fires only if merchant_aided flag is set
+  {
+    id: 'wandering_merchant_return',
+    title: 'Merchant Returns the Favour',
+    description: 'The merchant you helped earlier appears again — stall fully stocked this time. They insist on giving you a deal you cannot refuse.',
+    requiresFlag: FLAG_KEYS.MERCHANT_AIDED,
+    choices: [
+      {
+        label: 'Accept the gift',
+        description: `The merchant hands over a free relic and ${EVENT_REWARD_CONFIG.merchantReturnGold} gold for being a good soul.`,
+        outcome: {
+          goldDelta: EVENT_REWARD_CONFIG.merchantReturnGold,
+          livesDelta: 0,
+          relicId: RelicId.FIELD_RATIONS,
+          description: 'Field Rations and a pouch of coin — a fair return on a small kindness.',
+        },
+      },
+      {
+        label: 'Decline graciously',
+        description: 'Helping was its own reward.',
+        outcome: { goldDelta: 0, livesDelta: 0, description: 'The merchant bows and wishes you luck.' },
       },
     ],
   },
@@ -64,20 +104,54 @@ export const RUN_EVENTS: ReadonlyArray<RunEvent> = [
       },
     ],
   },
+  // Chain B — Part 1: fires only if idol_bargain_taken flag is absent
   {
-    id: 'cursed_idol',
+    id: 'cursed_idol_offer',
     title: 'Cursed Idol',
-    description: 'A dark statue pulses with energy. Its power is undeniable — and clearly dangerous.',
+    description: 'A dark statue pulses with energy. A whisper promises gold — lots of it — but you sense strings attached.',
+    requiresFlagAbsent: FLAG_KEYS.IDOL_BARGAIN_TAKEN,
     choices: [
       {
-        label: 'Touch the idol',
-        description: 'Gain 100 gold but lose 3 lives.',
-        outcome: { goldDelta: 100, livesDelta: -3, description: 'Power surges through you. It burns.' },
+        label: 'Take the bargain',
+        description: `Gain ${EVENT_REWARD_CONFIG.idolBargainGold} gold. The idol remembers.`,
+        outcome: {
+          goldDelta: EVENT_REWARD_CONFIG.idolBargainGold,
+          livesDelta: 0,
+          setsFlag: FLAG_KEYS.IDOL_BARGAIN_TAKEN,
+          description: 'Gold floods your purse. The idol\'s eyes seem to follow you as you leave.',
+        },
       },
       {
-        label: 'Walk away',
-        description: 'Some things are better left alone.',
-        outcome: { goldDelta: 0, livesDelta: 0, description: 'Wisdom is its own reward.' },
+        label: 'Refuse',
+        description: 'Some debts are not worth taking on.',
+        outcome: { goldDelta: 0, livesDelta: 0, description: 'The whisper fades. Wisdom, perhaps.' },
+      },
+    ],
+  },
+  // Chain B — Part 2: fires only if idol_bargain_taken flag is set
+  {
+    id: 'cursed_idol_reckoning',
+    title: 'The Idol\'s Reckoning',
+    description: 'The same dark statue blocks the path — except now it seems angry. The debt from your earlier bargain is due.',
+    requiresFlag: FLAG_KEYS.IDOL_BARGAIN_TAKEN,
+    choices: [
+      {
+        label: 'Pay in blood',
+        description: `Lose ${EVENT_REWARD_CONFIG.idolReckoningLivesCost} lives to satisfy the idol.`,
+        outcome: {
+          goldDelta: 0,
+          livesDelta: -EVENT_REWARD_CONFIG.idolReckoningLivesCost,
+          description: 'The idol drinks deep. You stagger onward, lighter in spirit and body.',
+        },
+      },
+      {
+        label: 'Pay in gold',
+        description: `Lose ${EVENT_REWARD_CONFIG.idolReckoningGoldCost} gold to buy your way out.`,
+        outcome: {
+          goldDelta: -EVENT_REWARD_CONFIG.idolReckoningGoldCost,
+          livesDelta: 0,
+          description: 'The idol accepts the coin. A debt settled — barely.',
+        },
       },
     ],
   },
@@ -321,6 +395,56 @@ export const RUN_EVENTS: ReadonlyArray<RunEvent> = [
         label: 'Preserve everything',
         description: 'Take nothing. Leave everything unchanged.',
         outcome: { goldDelta: 0, livesDelta: 0, description: 'Knowledge — even useless knowledge — has its place.' },
+      },
+    ],
+  },
+
+  // ── Chain C — Injured Scout ────────────────────────────────────────────────
+
+  // Chain C — Part 1: fires only if scout_saved flag is absent (one-shot encounter)
+  {
+    id: 'injured_scout_encounter',
+    title: 'Injured Scout',
+    description: 'A scout from a forward unit slumps against a tree, arrow wound in their shoulder. They can\'t travel alone — help costs you time and gold.',
+    requiresFlagAbsent: FLAG_KEYS.SCOUT_SAVED,
+    choices: [
+      {
+        label: 'Help the scout',
+        description: `Spend ${EVENT_REWARD_CONFIG.scoutHelpGoldCost} gold on field dressings. They promise to repay the debt.`,
+        outcome: {
+          goldDelta: -EVENT_REWARD_CONFIG.scoutHelpGoldCost,
+          livesDelta: 0,
+          setsFlag: FLAG_KEYS.SCOUT_SAVED,
+          description: 'The scout grips your arm gratefully. "I won\'t forget this."',
+        },
+      },
+      {
+        label: 'Leave them',
+        description: 'Every resource counts. The scout will have to manage.',
+        outcome: { goldDelta: 0, livesDelta: 0, description: 'You press on. The scout\'s eyes follow you down the road.' },
+      },
+    ],
+  },
+  // Chain C — Part 2: fires only if scout_saved flag is set
+  {
+    id: 'scout_returns_grateful',
+    title: 'Scout\'s Intel',
+    description: 'The scout you patched up intercepts you on the road, fully recovered. They have been watching enemy movements and have something valuable to share.',
+    requiresFlag: FLAG_KEYS.SCOUT_SAVED,
+    choices: [
+      {
+        label: 'Hear them out',
+        description: `Receive a full enemy wave briefing and ${EVENT_REWARD_CONFIG.scoutGratefulGold} gold for your earlier kindness.`,
+        outcome: {
+          goldDelta: EVENT_REWARD_CONFIG.scoutGratefulGold,
+          livesDelta: 0,
+          description: 'The scout details the next wave\'s composition in full. Knowledge is the sharpest weapon.',
+        },
+      },
+      {
+        label: 'Wave them off',
+        description: 'You are in a hurry.',
+        outcome: { goldDelta: 0, livesDelta: 0, description: 'The scout nods and melts back into the tree line.' },
       },
     ],
   },

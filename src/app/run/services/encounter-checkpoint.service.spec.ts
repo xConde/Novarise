@@ -83,6 +83,7 @@ function createTestCheckpoint(overrides: Partial<EncounterCheckpoint> = {}): Enc
     wavePreview: { oneShotBonus: 0 },
     turnHistory: [],
     itemInventory: { entries: [] } as SerializedItemInventory,
+    runStateFlags: { entries: [] },
     ...overrides,
   };
 }

@@ -46,6 +46,7 @@ import { EncounterService } from './encounter.service';
 import { RelicService } from './relic.service';
 import { DeckService } from './deck.service';
 import { ItemService } from './item.service';
+import { RunStateFlagService } from './run-state-flag.service';
 import { RunPersistenceService } from './run-persistence.service';
 import { RunEventBusService, RunEventType } from './run-event-bus.service';
 import { RUN_EVENTS } from '../constants/run-events';
@@ -102,6 +103,7 @@ export class RunService {
     private relicService: RelicService,
     private deckService: DeckService,
     private itemService: ItemService,
+    private runStateFlagService: RunStateFlagService,
     private persistence: RunPersistenceService,
     private eventBus: RunEventBusService,
     private playerProfile: PlayerProfileService,
@@ -200,6 +202,7 @@ export class RunService {
     this.persistence.clearSavedRun();
     this.relicService.clearRelics();
     this.itemService.resetForRun();
+    this.runStateFlagService.resetForRun();
 
     // Clear any checkpoint leftover from a previous run before starting fresh.
     this.encounterCheckpointService.clearCheckpoint();
@@ -734,6 +737,14 @@ export class RunService {
       this.itemService.addItem(outcome.itemReward);
     }
 
+    // Run state flags: persist cross-event memory within the run.
+    if (outcome.setsFlag) {
+      this.runStateFlagService.setFlag(outcome.setsFlag);
+    }
+    if (outcome.incrementsFlag) {
+      this.runStateFlagService.incrementFlag(outcome.incrementsFlag);
+    }
+
     // Check for death by event
     const newStatus = newLives <= 0 ? RunStatus.DEFEAT : state.status;
     if (newLives <= 0) newLives = 0;
@@ -774,9 +785,22 @@ export class RunService {
   /** Generate a random event for the current node. */
   generateEvent(): void {
     const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
-    const events = RUN_EVENTS;
-    const index = Math.floor(rng() * events.length);
-    this.currentEvent = events[index];
+
+    // Filter eligible events by run-state flag requirements.
+    const eligibleEvents = RUN_EVENTS.filter(e => {
+      if (e.requiresFlag !== undefined && !this.runStateFlagService.hasFlag(e.requiresFlag)) {
+        return false;
+      }
+      if (e.requiresFlagAbsent !== undefined && this.runStateFlagService.hasFlag(e.requiresFlagAbsent)) {
+        return false;
+      }
+      return true;
+    });
+
+    // Fall back to all events if every event is gated (shouldn't happen with current data).
+    const pool = eligibleEvents.length > 0 ? eligibleEvents : [...RUN_EVENTS];
+    const index = Math.floor(rng() * pool.length);
+    this.currentEvent = pool[index];
   }
 
   /** Reveal an unknown node type (used for UNKNOWN nodes). */
@@ -985,5 +1009,6 @@ export class RunService {
     this.relicService.clearRelics();
     this.deckService.clear();
     this.itemService.resetForRun();
+    this.runStateFlagService.resetForRun();
   }
 }

@@ -66,6 +66,7 @@ import { RunService } from '../../run/services/run.service';
 import { RelicService } from '../../run/services/relic.service';
 import { RELIC_DEFINITIONS } from '../../run/models/relic.model';
 import { ItemService } from '../../run/services/item.service';
+import { RunStateFlagService } from '../../run/services/run-state-flag.service';
 import { ItemType, ITEM_DEFINITIONS } from '../../run/models/item.model';
 import { DeckService } from '../../run/services/deck.service';
 import { CardEffectService } from '../../run/services/card-effect.service';
@@ -370,6 +371,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private turnHistoryService: TurnHistoryService,
     private wavePreviewService: WavePreviewService,
     private itemService: ItemService,
+    private runStateFlagService: RunStateFlagService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -1210,6 +1212,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // Step 13c: Restore item (consumable) inventory. v4 checkpoints are
       // migrated to an empty inventory by EncounterCheckpointService.
       this.itemService.restore(checkpoint.itemInventory);
+
+      // Step 13d: Restore run-state flags (cross-event memory). v5 checkpoints
+      // are migrated to empty entries by EncounterCheckpointService.
+      this.runStateFlagService.restore(checkpoint.runStateFlags);
 
       // Step 13a: Restore wave-preview one-shot bonus so mid-encounter scout
       // plays survive a save/resume. Pre-v2 checkpoints are migrated to a

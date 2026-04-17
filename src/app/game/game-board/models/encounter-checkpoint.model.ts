@@ -10,9 +10,10 @@ import { ActiveModifier } from '../../../run/services/card-effect.service';
 import { EncounterConfig } from '../../../run/models/encounter.model';
 import { TurnEventRecord } from '../services/turn-history.service';
 import { SerializedItemInventory } from '../../../run/models/item.model';
+import { SerializedRunStateFlags } from '../../../run/services/run-state-flag.service';
 
 /** Schema version — bump when the shape changes to enable migrations. */
-export const CHECKPOINT_VERSION = 5;
+export const CHECKPOINT_VERSION = 6;
 
 /** Plain-object snapshot of GameState (isPaused omitted — always false on restore). */
 export interface SerializableGameState {
@@ -238,6 +239,12 @@ export interface EncounterCheckpoint {
    * v4 checkpoints are migrated with an empty inventory.
    */
   readonly itemInventory: SerializedItemInventory;
+
+  /**
+   * Serialized run-state flags (cross-event memory). Added in v6.
+   * v5 checkpoints are migrated with empty flag entries.
+   */
+  readonly runStateFlags: SerializedRunStateFlags;
 }
 
 /** Serializable WavePreviewService state. */

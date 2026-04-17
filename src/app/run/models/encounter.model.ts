@@ -88,6 +88,17 @@ export interface RunEvent {
   readonly title: string;
   readonly description: string;
   readonly choices: EventChoice[];
+  /**
+   * If set, this event is only eligible to roll when RunStateFlagService
+   * has the named flag set (value > 0).
+   */
+  readonly requiresFlag?: string;
+  /**
+   * If set, this event is only eligible to roll when RunStateFlagService
+   * does NOT have the named flag set. Useful for one-shot intro events
+   * that must never repeat once their flag is set.
+   */
+  readonly requiresFlagAbsent?: string;
 }
 
 export interface EventChoice {
@@ -106,6 +117,16 @@ export interface EventOutcome {
   /** When set, resolveEvent grants this item to the player's inventory. */
   readonly itemReward?: ItemType;
   readonly description: string;
+  /**
+   * When set, picking this outcome calls RunStateFlagService.setFlag(setsFlag).
+   * Use FLAG_KEYS constants for the value.
+   */
+  readonly setsFlag?: string;
+  /**
+   * When set, picking this outcome calls RunStateFlagService.incrementFlag(incrementsFlag).
+   * Use FLAG_KEYS constants for the value.
+   */
+  readonly incrementsFlag?: string;
   /**
    * Optional gamble: if present, resolveEvent rolls rng against winChance.
    * On win, goldDelta is replaced by winGoldDelta; on loss, by loseGoldDelta.

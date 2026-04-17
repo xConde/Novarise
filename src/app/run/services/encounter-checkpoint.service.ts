@@ -49,6 +49,14 @@ export class EncounterCheckpointService {
       data['version'] = 5;
       return data;
     },
+    // 5 → 6: add `runStateFlags` field. Cross-event memory flags introduced in
+    // Sprint 6 (RunStateFlagService). Pre-v6 checkpoints had no flag state;
+    // default to empty entries — existing runs continue without chain events.
+    5: (data) => {
+      data['runStateFlags'] = { entries: [] };
+      data['version'] = 6;
+      return data;
+    },
   };
 
   /**
