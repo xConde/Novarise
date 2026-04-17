@@ -91,6 +91,10 @@ describe('CARD_DEFINITIONS', () => {
       }
     });
 
+    it('TOWER_MORTAR has UNCOMMON rarity (powerful AoE — must be obtainable via reward pool)', () => {
+      expect(CARD_DEFINITIONS[CardId.TOWER_MORTAR].rarity).toBe(CardRarity.UNCOMMON);
+    });
+
     it('the 6 tower variant cards have COMMON rarity', () => {
       const variantTowerIds = [
         CardId.TOWER_BASIC_REINFORCED, CardId.TOWER_SNIPER_LIGHT,
@@ -100,6 +104,19 @@ describe('CARD_DEFINITIONS', () => {
       for (const id of variantTowerIds) {
         expect(CARD_DEFINITIONS[id].rarity).toBe(CardRarity.COMMON, `${id} is not COMMON`);
       }
+    });
+  });
+
+  describe('TOWER_MORTAR reward-pool and starter-deck guardrails (S8)', () => {
+    it('TOWER_MORTAR is not in the starter deck (excluded by explicit card list)', () => {
+      const deck = getStarterDeck();
+      expect(deck.includes(CardId.TOWER_MORTAR)).toBe(false);
+    });
+
+    it('TOWER_MORTAR is in the non-starter reward pool (rarity !== STARTER)', () => {
+      const rewardPool = Object.values(CARD_DEFINITIONS).filter(c => c.rarity !== CardRarity.STARTER);
+      const hasMortar = rewardPool.some(c => c.id === CardId.TOWER_MORTAR);
+      expect(hasMortar).toBe(true);
     });
   });
 

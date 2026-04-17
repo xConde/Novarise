@@ -1268,6 +1268,28 @@ describe('RunService', () => {
 
       expect(pickedRarity).toBe(CardRarity.COMMON as string);
     }));
+
+    // ── S8 regression: TOWER_MORTAR reachable via reward pool ─────
+
+    it('TOWER_MORTAR can be drawn from pickCardRewards over many iterations (S8)', fakeAsync(() => {
+      service.startNewRun(0);
+      const seededRng = createSeededRng(7);
+      let mortarSeen = false;
+      for (let i = 0; i < 500 && !mortarSeen; i++) {
+        const rewards = (service as any).pickCardRewards(3, () => seededRng.next()) as Array<{ cardId: CardId }>;
+        if (rewards.some(r => r.cardId === CardId.TOWER_MORTAR)) {
+          mortarSeen = true;
+        }
+      }
+      expect(mortarSeen).toBe(true, 'TOWER_MORTAR was never drawn in 500×3 reward rolls');
+    }));
+
+    it('starter deck does not contain TOWER_MORTAR (S8 regression guard)', fakeAsync(() => {
+      service.startNewRun(0);
+      const deck = service['deckService'].getAllCards();
+      const hasMortar = deck.some(c => c.cardId === CardId.TOWER_MORTAR);
+      expect(hasMortar).toBe(false);
+    }));
   });
 
   // ── restoreRngState ───────────────────────────────────────────
