@@ -940,19 +940,17 @@ export class RunService {
   }
 
   /**
-   * Grant one starting relic at run start.
-   * Normal: pick from the full pool (all rarities).
-   * At A18+ (STARTING_RELIC_DOWNGRADE > 0): restrict to COMMON pool only.
+   * A18+ forces the player to accept a random COMMON-rarity starting relic as
+   * a penalty (the "downgrade" — you lose the option of a clean empty slate).
+   * Pre-A18 runs start with zero relics, preserving historical behavior.
    */
   private grantStartingRelic(ascensionLevel: number): void {
-    const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
     const ascEffects = getAscensionEffects(ascensionLevel);
     const downgrade = ascEffects.get(AscensionEffectType.STARTING_RELIC_DOWNGRADE) ?? 0;
+    if (downgrade <= 0) return;
 
-    const pool = downgrade > 0
-      ? this.relicService.getAvailableRelics(RelicRarity.COMMON)
-      : this.relicService.getAvailableRelics();
-
+    const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
+    const pool = this.relicService.getAvailableRelics(RelicRarity.COMMON);
     if (pool.length === 0) return;
 
     const relic = pool[Math.floor(rng() * pool.length)];

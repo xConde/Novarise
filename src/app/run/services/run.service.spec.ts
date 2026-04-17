@@ -1833,18 +1833,17 @@ describe('RunService', () => {
   });
 
   describe('S7 — STARTING_RELIC_DOWNGRADE (A18)', () => {
-    it('at A17 (no downgrade), startNewRun() calls getAvailableRelics() without rarity filter', fakeAsync(() => {
+    it('at A17 (no downgrade), startNewRun() does NOT grant a starting relic', fakeAsync(() => {
       const stubRelics: RelicDefinition[] = [RELIC_DEFINITIONS[RelicId.IRON_HEART]];
       relicService.getAvailableRelics.and.callFake((rarity?: RelicRarity) => {
-        return rarity ? [] : stubRelics;
+        return rarity === RelicRarity.COMMON ? stubRelics : stubRelics;
       });
 
       service.startNewRun(17);
 
-      // getAvailableRelics called without arg for the starter relic at A17
-      const callsWithoutRarity = relicService.getAvailableRelics.calls.all()
-        .filter(c => c.args.length === 0 || c.args[0] === undefined);
-      expect(callsWithoutRarity.length).toBeGreaterThan(0);
+      // A17 does not trigger the A18+ starter-relic penalty. The run starts
+      // with an empty relic list — grantStartingRelic early-returns.
+      expect(service.runState!.relicIds).toEqual([]);
     }));
 
     it('at A18 (STARTING_RELIC_DOWNGRADE=1), startNewRun() calls getAvailableRelics(COMMON)', fakeAsync(() => {

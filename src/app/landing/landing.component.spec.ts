@@ -187,7 +187,7 @@ describe('LandingComponent', () => {
     it('returns a string containing A18 description at A18', () => {
       component.selectedAscension = 18;
       const preview = component.getAscensionPreview();
-      expect(preview).toBe('A18: Elite enemies have 50% more health');
+      expect(preview).toBe('A18: Your starting relic is drawn from common stock only');
     });
   });
 
