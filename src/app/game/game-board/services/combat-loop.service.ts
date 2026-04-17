@@ -16,7 +16,6 @@ import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 import { GamePhase } from '../models/game-state.model';
 import { ENEMY_STATS, EnemyType } from '../models/enemy.model';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
-import { ScoreBreakdown } from '../models/score.model';
 import { CombatFrameResult, FrameKillEvent, KillInfo, WaveCompletionEvent, GameEndEvent } from '../models/combat-frame.model';
 import { TowerType } from '../models/tower.model';
 import { StatusEffectService } from './status-effect.service';

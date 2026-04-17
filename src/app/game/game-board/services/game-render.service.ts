@@ -1,5 +1,4 @@
 import { Injectable } from '@angular/core';
-import * as THREE from 'three';
 import { AudioService } from './audio.service';
 import { FpsCounterService } from './fps-counter.service';
 import { GameInputService } from './game-input.service';

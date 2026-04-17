@@ -18,7 +18,7 @@ import { CardEffectService, SpellContext } from '../../../run/services/card-effe
 import { DeckService } from '../../../run/services/deck.service';
 import { WavePreviewService } from './wave-preview.service';
 import { CardInstance, SpellCardEffect, ModifierCardEffect, UtilityCardEffect } from '../../../run/models/card.model';
-import { getCardDefinition, getActiveTowerEffect } from '../../../run/constants/card-definitions';
+import { getCardDefinition } from '../../../run/constants/card-definitions';
 import { disposeMaterial } from '../utils/three-utils';
 
 export interface CardPlayCallbacks {

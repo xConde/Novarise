@@ -5,7 +5,6 @@ import {
   EventEmitter,
   OnInit,
   OnChanges,
-  OnDestroy,
   AfterViewInit,
   ViewChild,
   ElementRef,
@@ -49,7 +48,7 @@ export interface ConnectionPath {
   templateUrl: './node-map.component.html',
   styleUrls: ['./node-map.component.scss'],
 })
-export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit, OnDestroy {
+export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit {
   @Input() nodeMap!: NodeMap;
   @Input() currentNodeId: string | null = null;
   @Input() completedNodeIds: string[] = [];
@@ -114,9 +113,6 @@ export class NodeMapComponent implements OnInit, OnChanges, AfterViewInit, OnDes
     });
   }
 
-  ngOnDestroy(): void {
-    // HostListener handles cleanup automatically
-  }
 
   @HostListener('window:resize')
   onResize(): void {

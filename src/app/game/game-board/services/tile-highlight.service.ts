@@ -90,7 +90,7 @@ export class TileHighlightService {
   }
 
   /** Remove all placement highlights, restoring original emissive values. */
-  clearHighlights(tileMeshes: Map<string, THREE.Mesh>, scene: THREE.Scene): void {
+  clearHighlights(tileMeshes: Map<string, THREE.Mesh>, _scene: THREE.Scene): void {
     for (const key of this.highlightedTiles) {
       const mesh = tileMeshes.get(key);
       if (!mesh) continue;

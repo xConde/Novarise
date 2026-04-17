@@ -6,7 +6,6 @@ import { assertNever } from '../utils/assert-never';
 import { KillInfo, CombatAudioEvent } from '../models/combat-frame.model';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
-import { MORTAR_VISUAL_CONFIG } from '../constants/combat.constants';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { StatusEffectService } from './status-effect.service';
 import { SpatialGrid } from '../utils/spatial-grid';
