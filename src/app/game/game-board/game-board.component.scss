@@ -417,32 +417,12 @@
   // target. Clear its left edge with a small gap.
   //
   // All hover/active transforms killed to prevent positional jump on tap.
-  // M9 — Use !important to bulldoze any cascade surprises. Earlier
-  // attempts (M5–M8) produced visual results that didn't match the
-  // written CSS, suggesting something was overriding the intended
-  // rules. Force the positioning properties directly; cleanup can
-  // happen later once we confirm this actually ships the right layout.
-  @media (max-width: 480px) {
-    .end-turn-btn {
-      left: calc(55vw + var(--spacing-sm)) !important;
-      right: calc(var(--spacing-md) + 2.75rem + var(--spacing-sm)) !important;
-      transform: none !important;
-      padding: var(--spacing-xs) var(--spacing-sm);
-      min-width: 0;
-      max-width: unset;
-      min-height: 2.75rem;
-      gap: 0;
-
-      &:hover:not(:disabled),
-      &:active:not(:disabled) {
-        transform: none !important;
-      }
-
-      .end-turn-label {
-        font-size: var(--font-size-xs);
-      }
-    }
-  }
+  // M10 — End-turn mobile override MOVED to _game-hud.scss global file.
+  // The pause-menu mobile fix worked because it lives in a global SCSS
+  // partial (_game-pause.scss) that reliably hot-reloads. Component-
+  // scoped SCSS in this file appears to not hot-reload consistently,
+  // so the end-turn mobile rule is now alongside the other HUD
+  // overrides in _game-hud.scss. See the M10 block there.
 
 
   // Game HUD styles moved to src/styles.css (.board-container .game-hud) for ViewEncapsulation.None reach

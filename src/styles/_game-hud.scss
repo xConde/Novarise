@@ -624,3 +624,34 @@ body.reduce-motion .board-container .game-hud .hud-value.wave-start-pulse {
     transition: none;
   }
 }
+
+// ============================================================================
+// M10 — End-turn mobile override moved here from component-scoped SCSS.
+// Component-scoped rules weren't reliably hot-reloading, so the earlier
+// mobile overrides appeared applied in source but not in the browser.
+// This global rule with !important bulldozes the base `left: 50%` +
+// `transform: translateX(-50%)` from game-board.component.scss.
+//
+// Layout: button occupies a bounded box between the stats row's right
+// edge (`55vw + spacing-sm`) and the gear's left edge (`spacing-md +
+// 2.75rem touch target + spacing-sm gap` = 70px from viewport right).
+// ============================================================================
+@media (max-width: 480px) {
+  .board-container .end-turn-btn {
+    left: calc(55vw + var(--spacing-sm)) !important;
+    right: calc(var(--spacing-md) + 2.75rem + var(--spacing-sm)) !important;
+    transform: none !important;
+    padding: var(--spacing-xs) var(--spacing-sm) !important;
+    min-width: 0 !important;
+    max-width: unset !important;
+    min-height: 2.75rem !important;
+    gap: 0 !important;
+  }
+  .board-container .end-turn-btn:hover:not(:disabled),
+  .board-container .end-turn-btn:active:not(:disabled) {
+    transform: none !important;
+  }
+  .board-container .end-turn-btn .end-turn-label {
+    font-size: var(--font-size-xs);
+  }
+}
