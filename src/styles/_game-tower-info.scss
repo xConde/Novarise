@@ -283,17 +283,25 @@
 // the @media (max-width: 480px) was matching.
 // ============================================================================
 @media (max-width: 480px) {
+  // M13: add !important on layout properties. Source order alone wasn't
+  // winning — the desktop `min-width: 14rem` + `left: 50% / transform:
+  // translateX(-50%)` were producing a 224px-wide panel that overflowed
+  // the viewport on the right. Cyan-marker test on end-turn proved
+  // !important does get through here.
   .board-container .tower-info-panel {
-    left: var(--spacing-xs);
-    right: var(--spacing-xs);
-    width: auto;
-    min-width: auto;
-    transform: none;
+    left: var(--spacing-xs) !important;
+    right: var(--spacing-xs) !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: calc(100vw - (var(--spacing-xs) * 2)) !important;
+    transform: none !important;
     bottom: var(--shell-tower-info-bottom);
     max-height: 40vh;
+    overflow-x: hidden;
     overflow-y: auto;
     padding: var(--spacing-sm);
     font-size: var(--font-size-3xs);
+    box-sizing: border-box;
   }
   .board-container .tower-info-panel .tower-info-header {
     margin-bottom: var(--spacing-xs);
