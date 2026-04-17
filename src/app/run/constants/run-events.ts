@@ -63,12 +63,13 @@ export const RUN_EVENTS: ReadonlyArray<RunEvent> = [
       },
     ],
   },
-  // Chain A — Part 2: fires only if merchant_aided flag is set
+  // Chain A — Part 2: fires only if merchant_aided flag is set; once resolved, never repeats
   {
     id: 'wandering_merchant_return',
     title: 'Merchant Returns the Favour',
     description: 'The merchant you helped earlier appears again — stall fully stocked this time. They insist on giving you a deal you cannot refuse.',
     requiresFlag: FLAG_KEYS.MERCHANT_AIDED,
+    firesOncePerRun: true,
     choices: [
       {
         label: 'Accept the gift',
@@ -128,12 +129,13 @@ export const RUN_EVENTS: ReadonlyArray<RunEvent> = [
       },
     ],
   },
-  // Chain B — Part 2: fires only if idol_bargain_taken flag is set
+  // Chain B — Part 2: fires only if idol_bargain_taken flag is set; once resolved, never repeats
   {
     id: 'cursed_idol_reckoning',
     title: 'The Idol\'s Reckoning',
     description: 'The same dark statue blocks the path — except now it seems angry. The debt from your earlier bargain is due.',
     requiresFlag: FLAG_KEYS.IDOL_BARGAIN_TAKEN,
+    firesOncePerRun: true,
     choices: [
       {
         label: 'Pay in blood',
@@ -425,12 +427,13 @@ export const RUN_EVENTS: ReadonlyArray<RunEvent> = [
       },
     ],
   },
-  // Chain C — Part 2: fires only if scout_saved flag is set
+  // Chain C — Part 2: fires only if scout_saved flag is set; once resolved, never repeats
   {
     id: 'scout_returns_grateful',
     title: 'Scout\'s Intel',
     description: 'The scout you patched up intercepts you on the road, fully recovered. They have been watching enemy movements and have something valuable to share.',
     requiresFlag: FLAG_KEYS.SCOUT_SAVED,
+    firesOncePerRun: true,
     choices: [
       {
         label: 'Hear them out',

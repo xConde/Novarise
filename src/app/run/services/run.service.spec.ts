@@ -1056,7 +1056,7 @@ describe('RunService', () => {
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
-        runStateFlags: { entries: [] },
+        runStateFlags: { entries: [], consumedEventIds: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1091,7 +1091,7 @@ describe('RunService', () => {
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
-        runStateFlags: { entries: [] },
+        runStateFlags: { entries: [], consumedEventIds: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1133,7 +1133,7 @@ describe('RunService', () => {
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
-        runStateFlags: { entries: [] },
+        runStateFlags: { entries: [], consumedEventIds: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1171,7 +1171,7 @@ describe('RunService', () => {
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
-        runStateFlags: { entries: [] },
+        runStateFlags: { entries: [], consumedEventIds: [] },
       });
 
       // node_0_0 is NOT in completedNodeIds — valid checkpoint.
@@ -1746,8 +1746,9 @@ describe('RunService', () => {
       localStorage.removeItem(CHECKPOINT_KEY);
 
       expect(loaded).not.toBeNull();
-      expect(loaded!.runStateFlags).toEqual({ entries: [] });
-      expect(loaded!.version).toBe(6);
+      // Migration chain 5→6→7 back-fills both runStateFlags.entries and consumedEventIds.
+      expect(loaded!.runStateFlags).toEqual({ entries: [], consumedEventIds: [] });
+      expect(loaded!.version).toBe(7);
     });
 
     it('v6 round-trips populated runStateFlags', () => {
@@ -1775,7 +1776,7 @@ describe('RunService', () => {
         wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
         itemInventory: { entries: [] },
-        runStateFlags: { entries: [[FLAG_KEYS.MERCHANT_AIDED, 1], [FLAG_KEYS.SCOUT_SAVED, 3]] },
+        runStateFlags: { entries: [[FLAG_KEYS.MERCHANT_AIDED, 1], [FLAG_KEYS.SCOUT_SAVED, 3]], consumedEventIds: [] },
       };
 
       const CHECKPOINT_KEY = 'novarise_encounter_checkpoint';

@@ -85,7 +85,7 @@ function createTestCheckpoint(overrides: Partial<EncounterCheckpoint> = {}): Enc
     wavePreview: { oneShotBonus: 0 },
     turnHistory: [],
     itemInventory: { entries: [] } as SerializedItemInventory,
-    runStateFlags: { entries: [] },
+    runStateFlags: { entries: [], consumedEventIds: [] },
     ...overrides,
   };
 }
@@ -420,7 +420,31 @@ describe('EncounterCheckpointService', () => {
     it('returns null when runStateFlags.entries is not an array', () => {
       const data = {
         ...createTestCheckpoint(),
-        runStateFlags: { entries: 42 },
+        runStateFlags: { entries: 42, consumedEventIds: [] },
+      };
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when runStateFlags.consumedEventIds is missing', () => {
+      const data = {
+        ...createTestCheckpoint(),
+        runStateFlags: { entries: [] },
+      };
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when runStateFlags.consumedEventIds is not an array', () => {
+      const data = {
+        ...createTestCheckpoint(),
+        runStateFlags: { entries: [], consumedEventIds: 'bad' },
       };
       localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
 

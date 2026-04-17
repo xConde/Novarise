@@ -752,6 +752,11 @@ export class RunService {
       this.runStateFlagService.incrementFlag(outcome.incrementsFlag);
     }
 
+    // Once-per-run events: mark consumed regardless of which outcome was picked.
+    if (event.firesOncePerRun) {
+      this.runStateFlagService.markEventConsumed(event.id);
+    }
+
     // Check for death by event
     const newStatus = newLives <= 0 ? RunStatus.DEFEAT : state.status;
     if (newLives <= 0) newLives = 0;
@@ -793,12 +798,15 @@ export class RunService {
   generateEvent(): void {
     const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
 
-    // Filter eligible events by run-state flag requirements.
+    // Filter eligible events by run-state flag requirements and once-per-run consumption.
     const eligibleEvents = RUN_EVENTS.filter(e => {
       if (e.requiresFlag !== undefined && !this.runStateFlagService.hasFlag(e.requiresFlag)) {
         return false;
       }
       if (e.requiresFlagAbsent !== undefined && this.runStateFlagService.hasFlag(e.requiresFlagAbsent)) {
+        return false;
+      }
+      if (e.firesOncePerRun && this.runStateFlagService.isEventConsumed(e.id)) {
         return false;
       }
       return true;

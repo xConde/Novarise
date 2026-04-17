@@ -99,6 +99,12 @@ export interface RunEvent {
    * that must never repeat once their flag is set.
    */
   readonly requiresFlagAbsent?: string;
+  /**
+   * If true, this event fires at most once per run. After the player
+   * resolves it (any outcome), RunStateFlagService.markEventConsumed(id)
+   * is called and the event is excluded from future rolls.
+   */
+  readonly firesOncePerRun?: boolean;
 }
 
 export interface EventChoice {

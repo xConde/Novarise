@@ -61,11 +61,17 @@ export class EncounterCheckpointService {
     // CALTROPS item could be consumed mid-encounter in a v6 checkpoint without
     // these fields, causing both multipliers to silently reset to 1 on restore.
     // Default both to 1 (no pending CALTROPS effect) — safe for all pre-v7 saves.
+    // Also back-fills consumedEventIds on runStateFlags (H4 — firesOncePerRun).
+    // Pre-v7 saves had no consumed event tracking; default to empty array.
     6: (data) => {
       const waveState = data['waveState'] as Record<string, unknown> | undefined;
       if (waveState) {
         waveState['nextWaveEnemySpeedMultiplier'] = 1;
         waveState['activeWaveCaltropsMultiplier'] = 1;
+      }
+      const runStateFlags = data['runStateFlags'] as Record<string, unknown> | undefined;
+      if (runStateFlags && !Array.isArray(runStateFlags['consumedEventIds'])) {
+        runStateFlags['consumedEventIds'] = [];
       }
       data['version'] = 7;
       return data;
@@ -169,7 +175,8 @@ export class EncounterCheckpointService {
       Array.isArray(itemInventory['entries']) &&
       runStateFlags !== null &&
       runStateFlags !== undefined &&
-      Array.isArray(runStateFlags['entries'])
+      Array.isArray(runStateFlags['entries']) &&
+      Array.isArray(runStateFlags['consumedEventIds'])
     );
   }
 }

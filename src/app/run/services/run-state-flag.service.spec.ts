@@ -210,6 +210,7 @@ describe('RunStateFlagService', () => {
           [FLAG_KEYS.MERCHANT_AIDED, 1],
           [FLAG_KEYS.SCOUT_SAVED, 3],
         ],
+        consumedEventIds: [],
       };
       service.restore(serialized);
       expect(service.hasFlag(FLAG_KEYS.MERCHANT_AIDED)).toBeTrue();
@@ -218,24 +219,24 @@ describe('RunStateFlagService', () => {
 
     it('clears existing flags before restoring', () => {
       service.setFlag('old_flag', 5);
-      service.restore({ entries: [[FLAG_KEYS.MERCHANT_AIDED, 1]] });
+      service.restore({ entries: [[FLAG_KEYS.MERCHANT_AIDED, 1]], consumedEventIds: [] });
       expect(service.hasFlag('old_flag')).toBeFalse();
     });
 
     it('skips entries with non-positive values', () => {
-      service.restore({ entries: [['bad_flag', 0]] });
+      service.restore({ entries: [['bad_flag', 0]], consumedEventIds: [] });
       expect(service.hasFlag('bad_flag')).toBeFalse();
     });
 
     it('skips entries with non-string keys or non-number values', () => {
       const badEntries = [[null, 1], ['ok', 'string']] as unknown as Array<[string, number]>;
-      expect(() => service.restore({ entries: badEntries })).not.toThrow();
+      expect(() => service.restore({ entries: badEntries, consumedEventIds: [] })).not.toThrow();
     });
 
     it('emits via flags$ after restore', () => {
       const sizes: number[] = [];
       const sub = service.flags$.subscribe(m => sizes.push(m.size));
-      service.restore({ entries: [[FLAG_KEYS.MERCHANT_AIDED, 1]] });
+      service.restore({ entries: [[FLAG_KEYS.MERCHANT_AIDED, 1]], consumedEventIds: [] });
       sub.unsubscribe();
       expect(sizes[sizes.length - 1]).toBe(1);
     });
@@ -254,6 +255,59 @@ describe('RunStateFlagService', () => {
 
       expect(freshService.hasFlag(FLAG_KEYS.MERCHANT_AIDED)).toBeTrue();
       expect(freshService.getFlag('visit_count')).toBe(3);
+    });
+  });
+
+  // ── consumedEventIds (H4 — firesOncePerRun) ───────────────────────────────
+
+  describe('markEventConsumed() / isEventConsumed()', () => {
+    it('returns false for an unknown event ID', () => {
+      expect(service.isEventConsumed('unknown_event')).toBeFalse();
+    });
+
+    it('round-trips: markEventConsumed then isEventConsumed returns true', () => {
+      service.markEventConsumed('wandering_merchant_return');
+      expect(service.isEventConsumed('wandering_merchant_return')).toBeTrue();
+    });
+
+    it('is independent per event ID', () => {
+      service.markEventConsumed('event_a');
+      expect(service.isEventConsumed('event_a')).toBeTrue();
+      expect(service.isEventConsumed('event_b')).toBeFalse();
+    });
+  });
+
+  describe('resetForRun() clears consumed event IDs', () => {
+    it('cleared set returns false after reset', () => {
+      service.markEventConsumed('cursed_idol_reckoning');
+      service.resetForRun();
+      expect(service.isEventConsumed('cursed_idol_reckoning')).toBeFalse();
+    });
+  });
+
+  describe('serialize/restore round-trips consumedEventIds', () => {
+    it('includes consumed event IDs in serialized output', () => {
+      service.markEventConsumed('scout_returns_grateful');
+      const serialized = service.serialize();
+      expect(serialized.consumedEventIds).toContain('scout_returns_grateful');
+    });
+
+    it('restores consumed event IDs from serialized state', () => {
+      service.markEventConsumed('wandering_merchant_return');
+      service.markEventConsumed('cursed_idol_reckoning');
+      const serialized = service.serialize();
+
+      const freshService = new RunStateFlagService();
+      freshService.restore(serialized);
+
+      expect(freshService.isEventConsumed('wandering_merchant_return')).toBeTrue();
+      expect(freshService.isEventConsumed('cursed_idol_reckoning')).toBeTrue();
+    });
+
+    it('restore with no consumedEventIds field defaults to empty (legacy shape)', () => {
+      const legacyShape = { entries: [] } as unknown as SerializedRunStateFlags;
+      expect(() => service.restore(legacyShape)).not.toThrow();
+      expect(service.isEventConsumed('any_event')).toBeFalse();
     });
   });
 });

@@ -3,6 +3,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
 
 export interface SerializedRunStateFlags {
   readonly entries: ReadonlyArray<readonly [string, number]>;
+  readonly consumedEventIds: readonly string[];
 }
 
 /**
@@ -15,6 +16,7 @@ export interface SerializedRunStateFlags {
 @Injectable({ providedIn: 'root' })
 export class RunStateFlagService {
   private readonly flagMap = new Map<string, number>();
+  private readonly consumedEventIds = new Set<string>();
   private readonly flagsSubject = new BehaviorSubject<ReadonlyMap<string, number>>(
     new Map(this.flagMap),
   );
@@ -55,7 +57,20 @@ export class RunStateFlagService {
   /** Clear all flags. Call at run start and run end. */
   resetForRun(): void {
     this.flagMap.clear();
+    this.consumedEventIds.clear();
     this.emit();
+  }
+
+  // ── Consumed Event IDs ─────────────────────────────────────────
+
+  /** Mark an event as consumed for this run (firesOncePerRun). */
+  markEventConsumed(id: string): void {
+    this.consumedEventIds.add(id);
+  }
+
+  /** Returns true if the event has been consumed this run. */
+  isEventConsumed(id: string): boolean {
+    return this.consumedEventIds.has(id);
   }
 
   /** Returns a read-only snapshot of all current flags. */
@@ -68,6 +83,7 @@ export class RunStateFlagService {
   serialize(): SerializedRunStateFlags {
     return {
       entries: [...this.flagMap.entries()].map(([k, v]) => [k, v] as const),
+      consumedEventIds: [...this.consumedEventIds],
     };
   }
 
@@ -76,6 +92,14 @@ export class RunStateFlagService {
     for (const [k, v] of s.entries) {
       if (typeof k === 'string' && typeof v === 'number' && v > 0) {
         this.flagMap.set(k, v);
+      }
+    }
+    this.consumedEventIds.clear();
+    if (Array.isArray(s.consumedEventIds)) {
+      for (const id of s.consumedEventIds) {
+        if (typeof id === 'string') {
+          this.consumedEventIds.add(id);
+        }
       }
     }
     this.emit();
