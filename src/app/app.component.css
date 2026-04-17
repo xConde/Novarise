@@ -73,8 +73,13 @@
 }
 
 /* Sprint 30: ensure settings cog meets 44×44px touch target on mobile */
+/* M3: pull gear up so it aligns vertically with the HUD stats row (~y=130).
+   The board-container starts just below the nav; on narrow viewports the gear's
+   fixed top:50px position lands below the stats row.  var(--spacing-sm) (~10px)
+   keeps the gear clear of the nav bottom without a magic number. */
 @media (max-width: 480px) {
   .settings-cog {
+    top: var(--spacing-sm);
     min-width: 44px;
     min-height: 44px;
     display: inline-flex;

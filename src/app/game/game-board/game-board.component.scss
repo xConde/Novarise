@@ -90,8 +90,8 @@
   @media (max-width:480px) {
     --shell-hand-height: 7.5rem;
     --shell-hud-height: 3rem;
-    // End Turn sits cleanly below HUD with a visible gap (not flush)
-    --shell-end-turn-top: calc(var(--shell-hud-top) + var(--shell-hud-height) + var(--spacing-sm));
+    // M3: tighten vertical gap — flush below HUD with only xs gap (saves ~5px vs sm).
+    --shell-end-turn-top: calc(var(--shell-hud-top) + var(--shell-hud-height) + var(--spacing-xs));
     // M1.3: Challenge strip moved to top-right corner (M2.1), so spawn preview no
     // longer needs to clear a stacked column. Trimmed from 7.5rem → 4.5rem (~40%),
     // reclaiming ~48px of dead vertical space below the End Turn button.
