@@ -626,96 +626,88 @@ body.reduce-motion .board-container .game-hud .hud-value.wave-start-pulse {
 }
 
 // ============================================================================
-// Mobile end-turn override. Historical note: earlier attempts (M5–M10)
-// failed because we were guessing at the cascade. The M11 debug commit
-// with a cyan border marker proved that *global* SCSS with !important
-// does win against the component-scoped base rule — what wasn't winning
-// was our pixel math. Hardcoded px values used here rather than calc(vars)
-// because we need the layout to be visually exact and verified.
+// Mobile top-row layout (≤480px)
 //
-// Layout:
-// - left: 220px   — clears the stats row (capped at min(55vw, 26rem) =
-//                   214px on 390px mobile, plus ~6px breathing room)
-// - right: 72px   — clears the gear (44px touch target at right: 16px,
-//                   plus 12px breathing room)
-// - top: 10px     — aligns the button vertically with the stats row
-//                   (whose position is --shell-hud-top on mobile ≈ 5px
-//                   inside .board-container)
+// The top band holds three elements that must share one visual row:
+//   stats block (left)  |  end-turn button (center-right)  |  gear (right)
+//
+// The gear is global (position: fixed, right: --spacing-md) and its mobile
+// position is owned by app.component.css. The stats and end-turn live
+// inside .board-container — positions / widths / heights are tuned here
+// so all three align at a shared top baseline with symmetric gaps.
+//
+// Target layout on 390px viewport:
+//   stats 5-220  |  12px gap  |  button 232-320  |  10px gap  |  gear 330+
+//
+// Pixel values below override the component-scoped base rule in
+// game-board.component.scss which uses `left: 50%; transform: translateX(-50%)`.
+// The base rule lives in the component file (Emulated view encapsulation
+// adds [_ngcontent-*] attribute selectors that raise its specificity); the
+// handful of !important declarations on the `transform` and positioning
+// are the minimum needed to beat the compound base+:hover+:active states
+// without adding equally-specific attribute-selector overrides here.
 // ============================================================================
 @media (max-width: 480px) {
-  // M15: widen the button so "END TURN" fits on a single line and the
-  // gap between stats and gear is properly filled.
+  // Top-row custom properties — single source of truth for the mobile
+  // layout tuning. Adjust these to shift the whole row.
+  :root {
+    --mobile-hud-top: var(--spacing-xs);
+    --mobile-hud-band-height: 44px;
+    --mobile-end-turn-left: 232px;
+    --mobile-end-turn-width: 88px;
+    --mobile-stats-max-width: min(55vw, 14rem);
+  }
+
+  // Stats block — matched height to the end-turn button so the two read
+  // as a single horizontal row. Widened from the 768px default so the
+  // four stat columns can breathe.
+  .board-container .game-hud {
+    min-height: var(--mobile-hud-band-height);
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-xs) var(--spacing-md);
+    box-sizing: border-box;
+    max-width: var(--mobile-stats-max-width);
+  }
+  .board-container .game-hud .hud-stats-row {
+    gap: var(--spacing-md);
+  }
+  .board-container .game-hud .hud-stat .hud-label {
+    letter-spacing: 0.08em;
+  }
+  .board-container .game-hud .hud-stat .hud-value {
+    font-size: 15px;
+  }
+
+  // End-turn button — explicit width and left anchor beats the base
+  // rule's 50% centering. transform killed across all states so hover/
+  // active don't reintroduce a horizontal shift.
   //
-  // Available band: stats end ~x=215, gear left edge at x=330 → ~115px
-  // of usable width. Target 100px button with ~7px symmetric gaps on
-  // either side. Content width at 100px - 16px padding = 84px, which
-  // comfortably holds "END TURN" in uppercase at 13px letterspaced 0.02em.
-  //
-  // flex-direction column from the base rule would still wrap text if
-  // content is too wide — force flex-direction: row + white-space: nowrap
-  // so label locks to one line regardless of internal sizing quirks.
+  // flex-direction: row counteracts the base rule's `flex-direction: column`
+  // which, combined with this narrower button, would wrap "END TURN" onto
+  // two lines.
   .board-container .end-turn-btn {
-    left: 223px !important;
+    left: var(--mobile-end-turn-left) !important;
     right: auto !important;
-    top: 10px !important;
-    width: 100px !important;
+    top: var(--mobile-hud-top) !important;
+    width: var(--mobile-end-turn-width) !important;
     min-width: 0 !important;
-    max-width: 100px !important;
+    max-width: var(--mobile-end-turn-width) !important;
     transform: none !important;
-    padding: 6px 8px !important;
-    min-height: 44px !important;
-    flex-direction: row !important;
-    gap: 0 !important;
-    box-sizing: border-box !important;
-    white-space: nowrap !important;
+    padding: 6px 8px;
+    min-height: var(--mobile-hud-band-height);
+    flex-direction: row;
+    gap: 0;
+    box-sizing: border-box;
+    white-space: nowrap;
   }
   .board-container .end-turn-btn:hover:not(:disabled),
   .board-container .end-turn-btn:active:not(:disabled) {
     transform: none !important;
   }
   .board-container .end-turn-btn .end-turn-label {
-    font-size: 13px !important;
-    letter-spacing: 0.02em !important;
-    white-space: nowrap !important;
-  }
-}
-
-// M16 — Match the HUD stats block height to the end-turn button (44px)
-// so the two elements form a visually aligned row on mobile.
-// M17 — Widen the stats block, bump stat values a touch, and rebalance
-// the end-turn position so gaps are roughly symmetric:
-//   stats 5-220  →  gap 12  →  button 232-320  →  gap 10  →  gear 330
-@media (max-width: 480px) {
-  .board-container .game-hud {
-    min-height: 44px !important;
-    display: flex !important;
-    align-items: center !important;
-    padding: var(--spacing-xs) var(--spacing-md) !important;
-    box-sizing: border-box !important;
-    // Widen from the 50vw 768px default to 55vw on small phones so the
-    // stats columns can breathe.
-    max-width: min(55vw, 14rem) !important;
-  }
-  .board-container .game-hud .hud-stats-row {
-    gap: var(--spacing-md) !important;
-  }
-  // Bump label letter-spacing for crisper uppercase rendering at the
-  // small size; bump values a touch for readability.
-  .board-container .game-hud .hud-stat .hud-label {
-    letter-spacing: 0.08em !important;
-  }
-  .board-container .game-hud .hud-stat .hud-value {
-    font-size: 15px !important;
-  }
-}
-
-// M17 — rebalance end-turn position and width given the wider stats.
-// Override the M15 values above.
-@media (max-width: 480px) {
-  .board-container .end-turn-btn {
-    left: 232px !important;
-    width: 88px !important;
-    max-width: 88px !important;
-    top: 5px !important;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
   }
 }

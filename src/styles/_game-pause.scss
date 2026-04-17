@@ -51,8 +51,8 @@
 
 // Mobile overrides must come AFTER the desktop default. Equal specificity
 // between `.board-container .pause-menu__title` rules means source order
-// decides the winner — previously the mobile rule was defined first and
-// was always losing. M9: restored correct order.
+// decides the winner; an earlier pass had the mobile rule above and it
+// was silently losing the cascade.
 @media (max-width: 480px) {
   .board-container .pause-menu {
     padding: 1rem 1.25rem;

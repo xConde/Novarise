@@ -277,24 +277,22 @@
 }
 
 // ============================================================================
-// M9 — Mobile overrides, placed at the END of the file so they win on source
-// order against the equal-specificity desktop rules above. Moving this block
-// fixes an issue where mobile styles silently lost the cascade even though
-// the @media (max-width: 480px) was matching.
+// Mobile overrides (≤480px).
+//
+// Placed at the END of this file so mobile rules win on source order
+// against the equal-specificity desktop rules above — no !important
+// needed now that ordering is correct. The close-button override is
+// the most important shrink: its desktop size inherits --font-size-large
+// (32px), which dominates a 390px-wide header.
 // ============================================================================
 @media (max-width: 480px) {
-  // M13: add !important on layout properties. Source order alone wasn't
-  // winning — the desktop `min-width: 14rem` + `left: 50% / transform:
-  // translateX(-50%)` were producing a 224px-wide panel that overflowed
-  // the viewport on the right. Cyan-marker test on end-turn proved
-  // !important does get through here.
   .board-container .tower-info-panel {
-    left: var(--spacing-xs) !important;
-    right: var(--spacing-xs) !important;
-    width: auto !important;
-    min-width: 0 !important;
-    max-width: calc(100vw - (var(--spacing-xs) * 2)) !important;
-    transform: none !important;
+    left: var(--spacing-xs);
+    right: var(--spacing-xs);
+    width: auto;
+    min-width: 0;
+    max-width: calc(100vw - (var(--spacing-xs) * 2));
+    transform: none;
     bottom: var(--shell-tower-info-bottom);
     max-height: 40vh;
     overflow-x: hidden;
@@ -311,9 +309,6 @@
   .board-container .tower-info-panel .tower-info-name {
     font-size: var(--font-size-small);
   }
-  // Close button was the worst offender — inherited 32px (--font-size-large),
-  // which dominated the header on a 390px viewport. Drop to --font-size-title
-  // (24px) with tight line-height so it's compact but still tappable.
   .board-container .tower-info-panel .tower-info-close {
     font-size: var(--font-size-title);
     padding: 0 var(--spacing-xs);
@@ -340,8 +335,9 @@
   .board-container .tower-info-panel .tower-info-actions {
     gap: var(--spacing-xs);
   }
-  // flex:1 was hitting min-content floor from the upgrade text + percent;
-  // min-width: 0 allows the flex cell to actually shrink.
+  // min-width: 0 lets `flex: 1` divide width evenly — without it, the
+  // base min-content width from the button copy pushes both cells wider
+  // than the panel can hold.
   .board-container .tower-info-panel .upgrade-btn,
   .board-container .tower-info-panel .sell-btn {
     min-width: 0;
