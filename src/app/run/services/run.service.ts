@@ -51,7 +51,7 @@ import { RunEventBusService, RunEventType } from './run-event-bus.service';
 import { RUN_EVENTS } from '../constants/run-events';
 import { PlayerProfileService } from '../../core/services/player-profile.service';
 import { getStarterDeck, CARD_DEFINITIONS } from '../constants/card-definitions';
-import { CardId, CardInstance, CardRarity } from '../models/card.model';
+import { CardArchetype, CardId, CardInstance, CardRarity } from '../models/card.model';
 import { EncounterCheckpointService } from './encounter-checkpoint.service';
 
 /**
@@ -492,16 +492,54 @@ export class RunService {
       { rarity: CardRarity.RARE, weight: REWARD_RARITY_WEIGHTS.rare },
     ];
 
+    // Phase 1 Sprint 8 — archetype-aware pool. When the deck has a dominant
+    // spatial archetype, weight the candidate pool toward that archetype
+    // (60% archetype-aligned / 40% neutral). Neutral dominant → no biasing.
+    const dominant = this.deckService.getDominantArchetype();
+
     const picked: CardReward[] = [];
     for (let i = 0; i < count; i++) {
       const rarity = this.pickWeightedRarity(rarityWeights, byRarity, rng);
       const pool = byRarity[rarity];
       if (pool.length === 0) continue;
-      const card = pool[Math.floor(rng() * pool.length)];
+      const card = this.pickArchetypeAwareCard(pool, dominant, rng);
       picked.push({ type: 'card', cardId: card.id });
     }
 
     return picked;
+  }
+
+  /**
+   * Phase 1 Sprint 8 — pick a single card from `pool` biased toward the
+   * dominant archetype when one is set. Implementation:
+   *   - Dominant === 'neutral' → uniform pick across pool.
+   *   - Otherwise: 60% chance pick from archetype-tagged subset, 40% neutral
+   *     subset. Falls back to uniform when the chosen subset is empty
+   *     (e.g. no rare archetype cards exist yet).
+   *
+   * Re-used from `pickCardRewards` and the card section of `generateShopItems`
+   * so both reward surfaces feel coherent during a run.
+   */
+  private pickArchetypeAwareCard<T extends { archetype?: CardArchetype }>(
+    pool: T[],
+    dominant: CardArchetype,
+    rng: () => number,
+  ): T {
+    if (dominant === 'neutral' || pool.length === 0) {
+      return pool[Math.floor(rng() * pool.length)];
+    }
+
+    const archetypeMatches = pool.filter(c => c.archetype === dominant);
+    const neutralMatches = pool.filter(c => (c.archetype ?? 'neutral') === 'neutral');
+    const wantArchetype = rng() < 0.6;
+    const preferred = wantArchetype ? archetypeMatches : neutralMatches;
+    if (preferred.length > 0) {
+      return preferred[Math.floor(rng() * preferred.length)];
+    }
+    // Preferred subset empty → fall back to the other subset, or full pool.
+    const fallback = wantArchetype ? neutralMatches : archetypeMatches;
+    if (fallback.length > 0) return fallback[Math.floor(rng() * fallback.length)];
+    return pool[Math.floor(rng() * pool.length)];
   }
 
   /** Collect a reward (relic, gold, card, or item). */
@@ -626,6 +664,8 @@ export class RunService {
       { rarity: CardRarity.RARE, weight: REWARD_RARITY_WEIGHTS.rare },
     ];
     const pickedCardIds = new Set<CardId>();
+    // Phase 1 Sprint 8 — same archetype-aware selection used by combat rewards.
+    const dominant = this.deckService.getDominantArchetype();
     for (let i = 0; i < cardsInShop; i++) {
       const remaining: Record<CardRarity, typeof allCards> = {
         [CardRarity.STARTER]: [],
@@ -636,7 +676,7 @@ export class RunService {
       const rarity = this.pickWeightedRarity(cardRarityWeights, remaining, rng);
       const pool = remaining[rarity];
       if (pool.length === 0) continue;
-      const card = pool[Math.floor(rng() * pool.length)];
+      const card = this.pickArchetypeAwareCard(pool, dominant, rng);
       pickedCardIds.add(card.id);
       const rarityKey = card.rarity as keyof typeof SHOP_CONFIG.priceByRarity;
       const basePrice = SHOP_CONFIG.priceByRarity[rarityKey] ?? SHOP_CONFIG.priceByRarity.common;

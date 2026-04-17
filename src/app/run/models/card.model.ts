@@ -103,6 +103,29 @@ export enum CardRarity {
   RARE = 'rare',
 }
 
+// ── Spatial Archetypes (Phase 1 Sprint 8) ─────────────────────
+
+/**
+ * Card archetype tag — drives reward-pool weighting and meta-progression.
+ * Each archetype is a TD-native spatial identity (NOT damage type).
+ *
+ * - `cartographer`: reshape the path itself (build/destroy/reroute tiles).
+ * - `highground`: elevation as power (Y-axis range/damage scaling).
+ * - `conduit`: adjacency networks (towers amplify neighbors via Link).
+ * - `siegeworks`: engineered kill corridors (persistent zone chains).
+ * - `neutral`: no archetype identity (default for all pre-archetype cards).
+ *
+ * `DeckService.getDominantArchetype()` returns the archetype with the most
+ * cards in the current deck, falling back to `neutral` on ties or when no
+ * archetype-tagged cards exist.
+ */
+export type CardArchetype =
+  | 'cartographer'
+  | 'highground'
+  | 'conduit'
+  | 'siegeworks'
+  | 'neutral';
+
 // ── Card Definition ───────────────────────────────────────────
 
 export interface CardDefinition {
@@ -136,11 +159,31 @@ export interface CardDefinition {
    *   the starting hand.
    * - `ethereal`: if still in hand at end of turn, card is exhausted instead
    *   of discarded. Forces "use it or lose it" pressure on powerful cards.
+   *
+   * Phase 1 Sprints 6/7 — archetype primitives. No cards use these flags
+   * yet; they are infrastructure for Cartographer (Terraform) and Conduit
+   * (Link) archetypes shipped in later phases. The hover tooltip and detail
+   * modal pick them up automatically via the same render path as the H3
+   * keywords above.
+   *
+   * - `terraform`: card modifies tile state (add/remove/raise/lower path
+   *   tiles, change elevation). Carto + Highground archetypes.
+   * - `link`: card creates an effect that propagates between adjacent
+   *   towers. Conduit archetype.
    */
   readonly exhaust?: boolean;
   readonly retain?: boolean;
   readonly innate?: boolean;
   readonly ethereal?: boolean;
+  readonly terraform?: boolean;
+  readonly link?: boolean;
+
+  /**
+   * Phase 1 Sprint 8 — spatial archetype tag.
+   * Defaults to `'neutral'` when undefined. Drives reward-pool weighting via
+   * DeckService.getDominantArchetype().
+   */
+  readonly archetype?: CardArchetype;
 }
 
 export type CardEffect =

@@ -376,13 +376,15 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
     return card.definition.description;
   }
 
-  /** Full keyword names for the tooltip (Innate, Retain, Ethereal, Exhaust). */
+  /** Full keyword names for the tooltip (Innate, Retain, Ethereal, Exhaust, Terraform, Link). */
   hoverTooltipKeywords(card: HandCard): string[] {
     const out: string[] = [];
     if (card.definition.innate) out.push('Innate');
     if (card.definition.retain) out.push('Retain');
     if (card.definition.ethereal) out.push('Ethereal');
     if (card.definition.exhaust) out.push('Exhaust');
+    if (card.definition.terraform) out.push('Terraform');
+    if (card.definition.link) out.push('Link');
     return out;
   }
 

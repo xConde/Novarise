@@ -2032,6 +2032,73 @@ describe('RunService', () => {
     }));
   });
 
+  // ── Phase 1 Sprint 8 — pickArchetypeAwareCard ──────────────────────────
+  describe('pickArchetypeAwareCard()', () => {
+    function makePool(): Array<{ id: string; archetype?: string }> {
+      return [
+        { id: 'cart_a', archetype: 'cartographer' },
+        { id: 'cart_b', archetype: 'cartographer' },
+        { id: 'neut_a', archetype: 'neutral' },
+        { id: 'neut_b' }, // archetype undefined — treated as neutral
+      ];
+    }
+
+    it('uniform pick when dominant is "neutral"', () => {
+      const pool = makePool();
+      const rng = () => 0.0; // forces first index every call
+      const picked = (service as any).pickArchetypeAwareCard(pool, 'neutral', rng);
+      expect(picked.id).toBe('cart_a');
+    });
+
+    it('with rng < 0.6, picks from archetype-aligned subset', () => {
+      const pool = makePool();
+      // First rng call (0.5) → wantArchetype branch (true).
+      // Second call selects from [cart_a, cart_b]; index = floor(0 * 2) = 0.
+      const calls = [0.5, 0.0];
+      let i = 0;
+      const rng = () => calls[i++];
+      const picked = (service as any).pickArchetypeAwareCard(pool, 'cartographer', rng);
+      expect(['cart_a', 'cart_b']).toContain(picked.id);
+    });
+
+    it('with rng >= 0.6, picks from neutral subset', () => {
+      const pool = makePool();
+      // First rng call (0.7) → wantArchetype branch (false).
+      // Second call selects from [neut_a, neut_b]; index = floor(0 * 2) = 0.
+      const calls = [0.7, 0.0];
+      let i = 0;
+      const rng = () => calls[i++];
+      const picked = (service as any).pickArchetypeAwareCard(pool, 'cartographer', rng);
+      expect(['neut_a', 'neut_b']).toContain(picked.id);
+    });
+
+    it('falls back to neutral subset when archetype subset empty', () => {
+      const pool = [
+        { id: 'neut_a', archetype: 'neutral' },
+        { id: 'neut_b' },
+      ];
+      // wantArchetype branch (rng < 0.6) but no archetype matches → falls back.
+      const calls = [0.5, 0.0];
+      let i = 0;
+      const rng = () => calls[i++];
+      const picked = (service as any).pickArchetypeAwareCard(pool, 'cartographer', rng);
+      expect(['neut_a', 'neut_b']).toContain(picked.id);
+    });
+
+    it('falls back to archetype subset when neutral subset empty', () => {
+      const pool = [
+        { id: 'cart_a', archetype: 'cartographer' },
+        { id: 'cart_b', archetype: 'cartographer' },
+      ];
+      // !wantArchetype branch (rng >= 0.6) but no neutral matches → falls back.
+      const calls = [0.7, 0.0];
+      let i = 0;
+      const rng = () => calls[i++];
+      const picked = (service as any).pickArchetypeAwareCard(pool, 'cartographer', rng);
+      expect(['cart_a', 'cart_b']).toContain(picked.id);
+    });
+  });
+
   // ── Phase 1 Sprint 4 — removeCardFromShop ──────────────────────────────
   describe('removeCardFromShop()', () => {
     it('returns false when no run state exists', () => {
