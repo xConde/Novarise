@@ -183,6 +183,27 @@ export const RUN_CONFIG = {
   minStartingLives: 5,
 } as const;
 
+// ── Card-Skip Gold ────────────────────────────────────────────
+
+import { NodeType } from '../models/node-map.model';
+
+/**
+ * Gold awarded when the player skips the card reward, keyed by node type.
+ * StS convention: skipping a reward still pays a consolation amount.
+ * Boss nodes surface no card reward so the value is 0 (unreachable path).
+ * UNKNOWN is resolved to COMBAT or EVENT before rewards are generated,
+ * so its value is 0 as a safe default.
+ */
+export const SKIP_GOLD_BY_NODE_TYPE: Record<NodeType, number> = {
+  [NodeType.COMBAT]: 25,
+  [NodeType.ELITE]: 50,
+  [NodeType.BOSS]: 75,
+  [NodeType.SHOP]: 0,
+  [NodeType.REST]: 0,
+  [NodeType.EVENT]: 0,
+  [NodeType.UNKNOWN]: 0,
+};
+
 // ── Reward Rarity Weights ─────────────────────────────────────
 
 /**

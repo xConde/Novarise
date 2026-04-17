@@ -3,6 +3,8 @@ import { RelicDefinition, RELIC_DEFINITIONS, RelicId, RelicRarity } from '../../
 import { RewardScreenConfig, RewardItem, CardReward } from '../../models/encounter.model';
 import { ChallengeDefinition, CHALLENGE_SCORE_TO_GOLD_RATIO, computeChallengeGoldBonus } from '../../data/challenges';
 import { getCardDefinition } from '../../constants/card-definitions';
+import { NodeType } from '../../models/node-map.model';
+import { SKIP_GOLD_BY_NODE_TYPE } from '../../constants/run.constants';
 
 /** CSS class suffix returned per rarity. */
 const RARITY_CLASS: Record<RelicRarity, string> = {
@@ -18,6 +20,8 @@ const RARITY_CLASS: Record<RelicRarity, string> = {
 })
 export class RewardScreenComponent {
   @Input() config!: RewardScreenConfig;
+  /** Node type drives the skip-gold amount shown on the card-draft skip button. */
+  @Input() nodeType: NodeType = NodeType.COMBAT;
   @Output() rewardCollected = new EventEmitter<RewardItem>();
   @Output() screenClosed = new EventEmitter<void>();
 
@@ -26,6 +30,11 @@ export class RewardScreenComponent {
   cardPicked = false;
   /** Name of the card the player added to their deck — shown in the confirmation line. */
   pickedCardName: string | null = null;
+
+  /** Gold awarded when the player skips the card reward — 0 if none for this node type. */
+  get skipGoldAmount(): number {
+    return SKIP_GOLD_BY_NODE_TYPE[this.nodeType] ?? 0;
+  }
 
   /** Resolve relic definitions from reward IDs for display. */
   get relicCards(): RelicDefinition[] {
@@ -73,6 +82,10 @@ export class RewardScreenComponent {
 
   onCardSkipped(): void {
     this.cardPicked = true;
+    const bonus = this.skipGoldAmount;
+    if (bonus > 0) {
+      this.rewardCollected.emit({ type: 'gold', amount: bonus });
+    }
   }
 
   get canContinue(): boolean {

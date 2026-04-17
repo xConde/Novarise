@@ -33,6 +33,7 @@ import {
   REST_CONFIG,
   RUN_CONFIG,
   SHOP_CONFIG,
+  SKIP_GOLD_BY_NODE_TYPE,
   SeededRng,
   createSeededRng,
 } from '../constants/run.constants';
@@ -435,6 +436,7 @@ export class RunService {
       cardChoices,
       bonusRewards: [],
       completedChallenges,
+      nodeType: encounter?.nodeType ?? NodeType.COMBAT,
     };
   }
 
@@ -501,6 +503,21 @@ export class RunService {
         break;
     }
     this.persist();
+  }
+
+  /**
+   * Skip the card reward for the current node.
+   * Awards consolation gold based on the node type (StS convention).
+   * Call this instead of collectReward() when the player presses Skip.
+   */
+  skipCardReward(nodeType: NodeType): void {
+    const state = this.runState;
+    if (!state) return;
+    const bonus = SKIP_GOLD_BY_NODE_TYPE[nodeType] ?? 0;
+    if (bonus > 0) {
+      this.updateState({ ...state, gold: state.gold + bonus });
+      this.persist();
+    }
   }
 
   // ── Non-Combat Nodes ────────────────────────────────────

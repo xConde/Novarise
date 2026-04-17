@@ -116,6 +116,7 @@
   <app-reward-screen
     *ngIf="viewMode === 'reward' && rewardConfig"
     [config]="rewardConfig"
+    [nodeType]="rewardConfig.nodeType"
     (rewardCollected)="collectReward($event)"
     (screenClosed)="closeRewardScreen()"
   ></app-reward-screen>

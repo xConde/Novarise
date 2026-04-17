@@ -28,3 +28,15 @@ export const GROUND_EFFECT_Y = 0.05;
  * infinite loops on permanently broken boards.
  */
 export const MAX_SPAWN_RETRIES = 3;
+
+/**
+ * Wave-level leak damage rules.
+ *
+ * twinBossLeakDivisor: When a wave contains more than one BOSS entry (twin-boss
+ * wave), per-BOSS leak damage is divided by this value. Math.ceil ensures the
+ * damage is at least 1 and rounds up for odd base values (e.g. 3 → ceil(3/2) = 2).
+ * Non-BOSS leaks and single-BOSS waves are unaffected.
+ */
+export const WAVE_CONFIG = {
+  twinBossLeakDivisor: 2,
+} as const;

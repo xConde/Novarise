@@ -45,10 +45,14 @@
     class="run-btn run-btn--secondary card-draft__skip-btn"
     type="button"
     (click)="skip()"
-    aria-label="Skip card reward and continue without adding a card. Press Escape to skip."
+    [attr.aria-label]="skipGoldAmount > 0 ? 'Skip reward, gain ' + skipGoldAmount + ' gold. Press Escape to skip.' : 'Skip reward. Press Escape to skip.'"
     aria-keyshortcuts="Escape"
   >
-    Skip Card <span class="card-draft__skip-btn__hint" aria-hidden="true">(Esc)</span>
+    <ng-container *ngIf="skipGoldAmount > 0; else plainSkip">
+      Skip <span class="card-draft__skip-gold" aria-hidden="true">(+{{ skipGoldAmount }}g)</span>
+    </ng-container>
+    <ng-template #plainSkip>Skip Card</ng-template>
+    <span class="card-draft__skip-btn__hint" aria-hidden="true"> (Esc)</span>
   </button>
 
 </section>

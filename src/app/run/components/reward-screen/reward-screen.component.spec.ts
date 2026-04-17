@@ -6,6 +6,7 @@ import { RewardScreenConfig, RewardItem, CardReward } from '../../models/encount
 import { RelicId, RelicRarity } from '../../models/relic.model';
 import { CardId } from '../../models/card.model';
 import { ChallengeType } from '../../data/challenges';
+import { NodeType } from '../../models/node-map.model';
 
 // Stub for CardDraftComponent so we don't pull in its full dependency tree
 @Component({
@@ -14,6 +15,7 @@ import { ChallengeType } from '../../data/challenges';
 })
 class CardDraftStubComponent {
   @Input() cardChoices: CardReward[] = [];
+  @Input() skipGoldAmount = 0;
   @Output() cardPicked = new EventEmitter<CardReward>();
   @Output() skipped = new EventEmitter<void>();
 }
@@ -32,6 +34,7 @@ const MOCK_CONFIG: RewardScreenConfig = {
   ],
   bonusRewards: [],
   completedChallenges: [],
+  nodeType: NodeType.COMBAT,
 };
 
 const MOCK_CONFIG_NO_CARDS: RewardScreenConfig = {
@@ -42,6 +45,7 @@ const MOCK_CONFIG_NO_CARDS: RewardScreenConfig = {
   cardChoices: [],
   bonusRewards: [],
   completedChallenges: [],
+  nodeType: NodeType.COMBAT,
 };
 
 describe('RewardScreenComponent', () => {
@@ -230,7 +234,7 @@ describe('RewardScreenComponent', () => {
   });
 
   it('canContinue is true immediately when both relicChoices and cardChoices are empty', () => {
-    component.config = { goldPickup: 10, relicChoices: [], cardChoices: [], bonusRewards: [], completedChallenges: [] };
+    component.config = { goldPickup: 10, relicChoices: [], cardChoices: [], bonusRewards: [], completedChallenges: [], nodeType: NodeType.COMBAT };
     expect(component.canContinue).toBeTrue();
   });
 
@@ -354,6 +358,7 @@ describe('RewardScreenComponent', () => {
         cardChoices: [{ type: 'card', cardId: CardId.GOLD_RUSH }],
         bonusRewards: [],
         completedChallenges: [],
+        nodeType: NodeType.COMBAT,
       };
       fixture.detectChanges();
 
@@ -368,6 +373,7 @@ describe('RewardScreenComponent', () => {
         cardChoices: [],
         bonusRewards: [],
         completedChallenges: [],
+        nodeType: NodeType.BOSS,
       };
       fixture.detectChanges();
 
@@ -382,6 +388,7 @@ describe('RewardScreenComponent', () => {
         cardChoices: [],
         bonusRewards: [],
         completedChallenges: [],
+        nodeType: NodeType.BOSS,
       };
       fixture.detectChanges();
       component.pickRelic(component.relicCards[0]);
@@ -400,6 +407,7 @@ describe('RewardScreenComponent', () => {
         ],
         bonusRewards: [],
         completedChallenges: [],
+        nodeType: NodeType.COMBAT,
       };
       fixture.detectChanges();
       component.onCardPicked({ type: 'card', cardId: CardId.GOLD_RUSH });
@@ -460,6 +468,53 @@ describe('RewardScreenComponent', () => {
       const odd = { id: 'x', type: ChallengeType.UNTOUCHABLE, name: 'X', description: 'd', scoreBonus: 201 };
       // 201 / 5 = 40.2 → rounds to 40
       expect(component.challengeGoldBonus(odd)).toBe(40);
+    });
+  });
+
+  // ── S9: card-skip gold ────────────────────────────────────────────────
+
+  describe('skipGoldAmount (S9)', () => {
+    it('skipGoldAmount is 25 when nodeType is COMBAT', () => {
+      component.nodeType = NodeType.COMBAT;
+      expect(component.skipGoldAmount).toBe(25);
+    });
+
+    it('skipGoldAmount is 50 when nodeType is ELITE', () => {
+      component.nodeType = NodeType.ELITE;
+      expect(component.skipGoldAmount).toBe(50);
+    });
+
+    it('skipGoldAmount is 75 when nodeType is BOSS', () => {
+      component.nodeType = NodeType.BOSS;
+      expect(component.skipGoldAmount).toBe(75);
+    });
+
+    it('skipGoldAmount is 0 when nodeType is REST', () => {
+      component.nodeType = NodeType.REST;
+      expect(component.skipGoldAmount).toBe(0);
+    });
+
+    it('onCardSkipped() emits gold reward when skipGoldAmount > 0 (COMBAT)', () => {
+      component.nodeType = NodeType.COMBAT;
+      const emitted: RewardItem[] = [];
+      component.rewardCollected.subscribe(r => emitted.push(r));
+
+      component.onCardSkipped();
+
+      expect(component.cardPicked).toBeTrue();
+      expect(emitted.length).toBe(1);
+      expect(emitted[0]).toEqual({ type: 'gold', amount: 25 });
+    });
+
+    it('onCardSkipped() does NOT emit when skipGoldAmount is 0 (REST)', () => {
+      component.nodeType = NodeType.REST;
+      const emitted: RewardItem[] = [];
+      component.rewardCollected.subscribe(r => emitted.push(r));
+
+      component.onCardSkipped();
+
+      expect(component.cardPicked).toBeTrue();
+      expect(emitted.length).toBe(0);
     });
   });
 });

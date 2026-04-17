@@ -71,6 +71,21 @@ export class WaveService {
     return this.waveDefinitions;
   }
 
+  /**
+   * Returns the WaveDefinition for the currently active wave, or null if no
+   * wave has been started yet or the current index is out of range (e.g. endless
+   * waves that aren't backed by waveDefinitions). Callers must null-guard.
+   */
+  getCurrentWaveDefinition(): WaveDefinition | null {
+    if (this.currentWaveIndex < 0) return null;
+    // Endless waves store their generated definition via currentEndlessResult;
+    // reconstruct a WaveDefinition so callers get a uniform interface.
+    if (this.currentEndlessResult) {
+      return { entries: this.currentEndlessResult.entries, reward: this.currentEndlessResult.reward };
+    }
+    return this.waveDefinitions[this.currentWaveIndex] ?? null;
+  }
+
   /** Enables or disables endless mode. Must be set before `startWave()` is called for waves beyond WAVE_DEFINITIONS length. */
   setEndlessMode(enabled: boolean): void {
     this.endlessMode = enabled;

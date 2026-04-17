@@ -963,6 +963,38 @@ describe('RunService', () => {
     }));
   });
 
+  // ── skipCardReward — gold by node type (S9) ───────────────────
+
+  describe('skipCardReward (S9)', () => {
+    it('skipping a COMBAT node reward yields 25g', fakeAsync(() => {
+      service.startNewRun(0);
+      const before = service.runState!.gold;
+      service.skipCardReward(NodeType.COMBAT);
+      expect(service.runState!.gold).toBe(before + 25);
+    }));
+
+    it('skipping an ELITE node reward yields 50g', fakeAsync(() => {
+      service.startNewRun(0);
+      const before = service.runState!.gold;
+      service.skipCardReward(NodeType.ELITE);
+      expect(service.runState!.gold).toBe(before + 50);
+    }));
+
+    it('skipping a BOSS node reward yields 75g', fakeAsync(() => {
+      service.startNewRun(0);
+      const before = service.runState!.gold;
+      service.skipCardReward(NodeType.BOSS);
+      expect(service.runState!.gold).toBe(before + 75);
+    }));
+
+    it('skipping a SHOP node reward yields 0g (no change)', fakeAsync(() => {
+      service.startNewRun(0);
+      const before = service.runState!.gold;
+      service.skipCardReward(NodeType.SHOP);
+      expect(service.runState!.gold).toBe(before);
+    }));
+  });
+
   // ── consumePendingEncounterResult — challenge round-trip ──────
 
   it('consumePendingEncounterResult preserves completedChallenges in encounterResults', fakeAsync(() => {

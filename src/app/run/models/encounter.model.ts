@@ -55,6 +55,8 @@ export interface RewardScreenConfig {
    * sprint will render a "Challenges completed" breakdown section.
    */
   readonly completedChallenges: readonly ChallengeDefinition[];
+  /** Node type of the completed encounter — drives the card-skip gold amount. */
+  readonly nodeType: NodeType;
 }
 
 /** Shop item in a shop node. */
