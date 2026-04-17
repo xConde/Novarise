@@ -469,6 +469,12 @@ export class RunService {
       bonusRewards: [],
       completedChallenges,
       nodeType: encounter?.nodeType ?? NodeType.COMBAT,
+      // Phase 2 Sprint 10.5 — snapshot the dominant archetype at reward-
+      // generation time so the chip reflects the state that shaped the pool.
+      // Reading from DeckService live at render time would desync after a
+      // card pick (new card shifts the dominant archetype while the screen
+      // is still showing the pre-pick rewards).
+      dominantArchetype: this.deckService.getDominantArchetype(),
     };
   }
 
@@ -506,6 +512,11 @@ export class RunService {
     // Phase 1 Sprint 8 — archetype-aware pool. When the deck has a dominant
     // spatial archetype, weight the candidate pool toward that archetype
     // (60% archetype-aligned / 40% neutral). Neutral dominant → no biasing.
+    //
+    // NOTE: pickCardRewards re-queries getDominantArchetype() so it stays
+    // consistent with the rarely-used code paths that call it directly.
+    // generateRewards() queries it once separately for the RewardScreenConfig
+    // snapshot — both reads hit the same deck state so they agree.
     const dominant = this.deckService.getDominantArchetype();
 
     const picked: CardReward[] = [];

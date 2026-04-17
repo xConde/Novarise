@@ -11,7 +11,7 @@
 import { WaveDefinition } from '../../game/game-board/models/wave.model';
 import { NodeType } from './node-map.model';
 import { RelicId } from './relic.model';
-import { CardId } from './card.model';
+import { CardId, CardArchetype } from './card.model';
 import { ItemType } from './item.model';
 import { ChallengeDefinition } from '../data/challenges';
 
@@ -63,6 +63,15 @@ export interface RewardScreenConfig {
   readonly completedChallenges: readonly ChallengeDefinition[];
   /** Node type of the completed encounter — drives the card-skip gold amount. */
   readonly nodeType: NodeType;
+  /**
+   * Snapshot of the player's dominant deck archetype at reward generation
+   * time (Phase 2 Sprint 10.5). Surfaces the silent 60/40 archetype-aware
+   * weighting applied by RunService.pickCardRewards. Read from
+   * DeckService.getDominantArchetype() once in generateRewards(); passed
+   * through so the chip reflects the state that shaped the pool, not the
+   * live deck after a card pick (which would desync with the rewards shown).
+   */
+  readonly dominantArchetype: CardArchetype;
 }
 
 /** Shop item in a shop node. */

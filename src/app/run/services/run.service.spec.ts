@@ -470,6 +470,17 @@ describe('RunService', () => {
     expect(Array.isArray(rewards.cardChoices)).toBeTrue();
   }));
 
+  // Phase 2 Sprint 10.5 — dominant archetype snapshot on reward screen config.
+  it('generateRewards() includes dominantArchetype snapshot for the chip', fakeAsync(() => {
+    service.startNewRun();
+    service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+    const rewards = service.generateRewards();
+
+    // Starter deck has no archetype-tagged cards, so dominant must be neutral.
+    expect(rewards.dominantArchetype).toBe('neutral');
+  }));
+
   it('generateRewards() returns exactly 3 card choices', fakeAsync(() => {
     service.startNewRun();
     service.prepareEncounter(service.nodeMap!.nodes[0]);

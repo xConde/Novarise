@@ -4,6 +4,7 @@ import { RewardScreenConfig, RewardItem, CardReward } from '../../models/encount
 import { ChallengeDefinition, CHALLENGE_SCORE_TO_GOLD_RATIO, computeChallengeGoldBonus } from '../../data/challenges';
 import { getCardDefinition } from '../../constants/card-definitions';
 import { SKIP_GOLD_BY_NODE_TYPE } from '../../constants/run.constants';
+import { ARCHETYPE_DISPLAY, ArchetypeDisplay } from '../../constants/archetype.constants';
 
 /** CSS class suffix returned per rarity. */
 const RARITY_CLASS: Record<RelicRarity, string> = {
@@ -75,6 +76,16 @@ export class RewardScreenComponent {
   get selectedRelicName(): string | null {
     if (!this.selectedRelic) return null;
     return RELIC_DEFINITIONS[this.selectedRelic]?.name ?? null;
+  }
+
+  /**
+   * Phase 2 Sprint 10.5 — display table for the "Deck leaning:" chip.
+   * Reads from the snapshotted `config.dominantArchetype`; never queries
+   * DeckService at render time so the chip stays consistent with the
+   * rewards shown (see generateRewards() in run.service.ts).
+   */
+  get archetypeDisplay(): ArchetypeDisplay {
+    return ARCHETYPE_DISPLAY[this.config.dominantArchetype];
   }
 
   onCardSkipped(): void {

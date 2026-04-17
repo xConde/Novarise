@@ -35,6 +35,7 @@ const MOCK_CONFIG: RewardScreenConfig = {
   bonusRewards: [],
   completedChallenges: [],
   nodeType: NodeType.COMBAT,
+  dominantArchetype: 'neutral',
 };
 
 const MOCK_CONFIG_NO_CARDS: RewardScreenConfig = {
@@ -46,6 +47,7 @@ const MOCK_CONFIG_NO_CARDS: RewardScreenConfig = {
   bonusRewards: [],
   completedChallenges: [],
   nodeType: NodeType.COMBAT,
+  dominantArchetype: 'neutral',
 };
 
 describe('RewardScreenComponent', () => {
@@ -236,7 +238,7 @@ describe('RewardScreenComponent', () => {
   });
 
   it('canContinue is true immediately when both relicChoices and cardChoices are empty', () => {
-    component.config = { goldPickup: 10, relicChoices: [], cardChoices: [], bonusRewards: [], completedChallenges: [], nodeType: NodeType.COMBAT };
+    component.config = { goldPickup: 10, relicChoices: [], cardChoices: [], bonusRewards: [], completedChallenges: [], nodeType: NodeType.COMBAT, dominantArchetype: 'neutral' };
     expect(component.canContinue).toBeTrue();
   });
 
@@ -361,6 +363,7 @@ describe('RewardScreenComponent', () => {
         bonusRewards: [],
         completedChallenges: [],
         nodeType: NodeType.COMBAT,
+        dominantArchetype: 'neutral',
       };
       fixture.detectChanges();
 
@@ -376,6 +379,7 @@ describe('RewardScreenComponent', () => {
         bonusRewards: [],
         completedChallenges: [],
         nodeType: NodeType.BOSS,
+        dominantArchetype: 'neutral',
       };
       fixture.detectChanges();
 
@@ -391,6 +395,7 @@ describe('RewardScreenComponent', () => {
         bonusRewards: [],
         completedChallenges: [],
         nodeType: NodeType.BOSS,
+        dominantArchetype: 'neutral',
       };
       fixture.detectChanges();
       component.pickRelic(component.relicCards[0]);
@@ -410,6 +415,7 @@ describe('RewardScreenComponent', () => {
         bonusRewards: [],
         completedChallenges: [],
         nodeType: NodeType.COMBAT,
+        dominantArchetype: 'neutral',
       };
       fixture.detectChanges();
       component.onCardPicked({ type: 'card', cardId: CardId.GOLD_RUSH });
@@ -517,6 +523,94 @@ describe('RewardScreenComponent', () => {
 
       expect(component.cardPicked).toBeTrue();
       expect(emitted.length).toBe(0);
+    });
+  });
+
+  // ── Phase 2 Sprint 10.5: Deck-leaning archetype chip ─────────────────
+
+  describe('deck-leaning archetype chip', () => {
+    it('renders the chip on every reward screen regardless of archetype', () => {
+      component.config = { ...MOCK_CONFIG, dominantArchetype: 'neutral' };
+      fixture.detectChanges();
+
+      const chip = (fixture.nativeElement as HTMLElement).querySelector('.reward-archetype');
+      expect(chip).not.toBeNull();
+    });
+
+    it('shows "Neutral" when the deck has no dominant archetype', () => {
+      component.config = { ...MOCK_CONFIG, dominantArchetype: 'neutral' };
+      fixture.detectChanges();
+
+      const chip = (fixture.nativeElement as HTMLElement).querySelector('.reward-archetype__chip');
+      expect(chip?.textContent?.trim()).toBe('Neutral');
+    });
+
+    it('shows "Cartographer" when the dominant archetype is cartographer', () => {
+      component.config = { ...MOCK_CONFIG, dominantArchetype: 'cartographer' };
+      fixture.detectChanges();
+
+      const chip = (fixture.nativeElement as HTMLElement).querySelector('.reward-archetype__chip');
+      expect(chip?.textContent?.trim()).toBe('Cartographer');
+    });
+
+    it('shows the correct label for every archetype', () => {
+      const cases: Array<[RewardScreenConfig['dominantArchetype'], string]> = [
+        ['cartographer', 'Cartographer'],
+        ['highground',   'Highground'],
+        ['conduit',      'Conduit'],
+        ['siegeworks',   'Siegeworks'],
+        ['neutral',      'Neutral'],
+      ];
+
+      for (const [arch, label] of cases) {
+        component.config = { ...MOCK_CONFIG, dominantArchetype: arch };
+        fixture.detectChanges();
+
+        const chip = (fixture.nativeElement as HTMLElement).querySelector('.reward-archetype__chip');
+        expect(chip?.textContent?.trim()).toBe(label);
+      }
+    });
+
+    it('tags the wrapper with data-archetype for scoped styling / QA selectors', () => {
+      component.config = { ...MOCK_CONFIG, dominantArchetype: 'siegeworks' };
+      fixture.detectChanges();
+
+      const wrapper = (fixture.nativeElement as HTMLElement).querySelector('.reward-archetype');
+      expect(wrapper?.getAttribute('data-archetype')).toBe('siegeworks');
+    });
+
+    it('exposes a screen-reader label so assistive tech announces the archetype', () => {
+      component.config = { ...MOCK_CONFIG, dominantArchetype: 'highground' };
+      fixture.detectChanges();
+
+      const wrapper = (fixture.nativeElement as HTMLElement).querySelector('.reward-archetype');
+      expect(wrapper?.getAttribute('aria-label')).toContain('Highground');
+    });
+
+    it('applies the archetype-specific color via CSS custom property', () => {
+      component.config = { ...MOCK_CONFIG, dominantArchetype: 'cartographer' };
+      fixture.detectChanges();
+
+      const chip = (fixture.nativeElement as HTMLElement).querySelector('.reward-archetype__chip') as HTMLElement;
+      expect(chip.style.getPropertyValue('--archetype-color')).toBe('#e8c06b');
+    });
+
+    it('archetypeDisplay getter proxies ARCHETYPE_DISPLAY for the current config value', () => {
+      component.config = { ...MOCK_CONFIG, dominantArchetype: 'conduit' };
+      expect(component.archetypeDisplay.label).toBe('Conduit');
+      expect(component.archetypeDisplay.color).toBe('#c98cf0');
+    });
+
+    it('does not mutate between card pick and continue (snapshot semantics)', () => {
+      component.config = { ...MOCK_CONFIG, dominantArchetype: 'cartographer' };
+      fixture.detectChanges();
+
+      // Simulate a card pick — chip must still reflect the pre-pick snapshot
+      component.onCardPicked({ type: 'card', cardId: CardId.GOLD_RUSH });
+      fixture.detectChanges();
+
+      const chip = (fixture.nativeElement as HTMLElement).querySelector('.reward-archetype__chip');
+      expect(chip?.textContent?.trim()).toBe('Cartographer');
     });
   });
 });
