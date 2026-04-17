@@ -177,11 +177,20 @@ export interface CardDefinition {
   readonly ethereal?: boolean;
   readonly terraform?: boolean;
   readonly link?: boolean;
+  // Anchor keyword (Siegeworks archetype, sprint 57) is intentionally NOT
+  // declared here yet — add when that phase opens.
 
   /**
    * Phase 1 Sprint 8 — spatial archetype tag.
    * Defaults to `'neutral'` when undefined. Drives reward-pool weighting via
    * DeckService.getDominantArchetype().
+   *
+   * **Checkpoint migration note:** archetype/terraform/link live on
+   * CardDefinition (a static lookup), NOT on CardInstance. Save/restore
+   * serializes only `cardId`; archetype is re-derived from CARD_DEFINITIONS
+   * at load time. No CHECKPOINT_VERSION bump is required for this field
+   * UNLESS a future feature serializes a CardDefinition snapshot directly
+   * (telemetry payload, card-crafting state, etc.) — in that case bump.
    */
   readonly archetype?: CardArchetype;
 }

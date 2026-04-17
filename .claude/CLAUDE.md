@@ -12,6 +12,32 @@
 - `ARCHITECTURE.md` — directory map, module boundaries, service graph, key file sizes
 - `STRATEGIC_AUDIT.md` — sprint history, red team findings, deferred work
 
+## Card Archetype System (Phase 1, 2026-04-17)
+
+Spatial card archetypes are the depth angle for the next 80 sprints. See
+`STRATEGIC_AUDIT.md` Phase 1 section + the project memory plan doc.
+
+- `CardArchetype` lives on `CardDefinition` (static lookup), NOT on
+  `CardInstance`. Save/restore serializes only `cardId`; archetype is
+  re-derived from `CARD_DEFINITIONS` at load. **Do not** add `archetype`
+  to `CardInstance` without bumping `CHECKPOINT_VERSION`.
+- `DeckService.getDominantArchetype()` returns the archetype with the most
+  cards in the deck across all 4 piles. Returns `'neutral'` on ties (anti-
+  flapping rule — a single card pickup must not flip the dominant tag back
+  and forth).
+- Reward pools weight 60% archetype-aligned / 40% neutral via
+  `RunService.pickArchetypeAwareCard`. Both `pickCardRewards` (combat
+  rewards) and the card section of `generateShopItems` use it.
+- New keyword primitives shipped: `terraform` (Cartographer + Highground)
+  and `link` (Conduit). `anchor` (Siegeworks) is deferred to sprint 57.
+- Archetype-locking rares, archetype-counter bosses, and the player-facing
+  dominant-archetype indicator are all deferred to later phases. Do not
+  invent earlier surfaces for them without revisiting the plan doc first.
+
+When adding new cards, **always set `archetype`** — do not let it default
+to `'neutral'` for content cards. Neutral is reserved for universal cards
+(starter, draw, scout, etc.).
+
 ## Code Conventions
 
 ### No Magic Numbers
