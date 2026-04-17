@@ -679,3 +679,18 @@ body.reduce-motion .board-container .game-hud .hud-value.wave-start-pulse {
     white-space: nowrap !important;
   }
 }
+
+// M16 — Match the HUD stats block height to the end-turn button (44px)
+// so the two elements form a visually aligned row on mobile. Prior
+// mobile HUD only had padding, letting the natural content height of
+// ~34px show — shorter than the 44px end-turn touch target, which
+// made the row look off-balance.
+@media (max-width: 480px) {
+  .board-container .game-hud {
+    min-height: 44px !important;
+    display: flex !important;
+    align-items: center !important;
+    padding: var(--spacing-xs) var(--spacing-md) !important;
+    box-sizing: border-box !important;
+  }
+}
