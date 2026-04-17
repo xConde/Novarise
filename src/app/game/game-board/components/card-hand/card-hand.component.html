@@ -37,8 +37,10 @@
       (pointermove)="onCardPointerMove($event)"
       (pointerup)="onCardPointerUp()"
       (pointercancel)="onCardPointerUp()"
-      (pointerleave)="onCardPointerUp()"
+      (pointerleave)="onCardPointerLeave($event); onCardPointerUp()"
+      (pointerenter)="onCardPointerEnter($event, card)"
       [attr.aria-label]="card.definition.name + ' — Energy cost: ' + card.definition.energyCost + (card.instance.upgraded ? ' (upgraded)' : '') + '. ' + card.definition.description + '. Right-click or long-press for details.'"
+      [attr.aria-describedby]="hoveredCard?.instance?.instanceId === card.instance.instanceId ? hoverTooltipId : null"
       [attr.aria-pressed]="card.instance.instanceId === pendingCardId"
       [attr.aria-disabled]="!card.canPlay"
       [style.--card-tower-accent]="getTowerAccentColor(card)">
@@ -118,6 +120,32 @@
       <span class="pile-label">Exh</span>
       <span class="pile-value">{{ deckState.exhaustPile.length }}</span>
     </button>
+  </div>
+
+  <!-- Hover tooltip — desktop hover only. Fixed-positioned to escape any
+       overflow:hidden ancestor; touch users get the full detail modal via
+       long-press instead. -->
+  <div *ngIf="hoveredCard"
+       class="card-tooltip"
+       role="tooltip"
+       [id]="hoverTooltipId"
+       [style.top.px]="hoverTooltipTop"
+       [style.left.px]="hoverTooltipLeft">
+    <div class="card-tooltip__header">
+      <span class="card-tooltip__name">{{ hoveredCard.definition.name }}</span>
+      <span class="card-tooltip__cost">{{ hoveredCard.definition.energyCost }}E</span>
+    </div>
+    <div class="card-tooltip__meta">
+      <span class="card-tooltip__type">{{ hoveredCard.definition.type }}</span>
+      <span class="card-tooltip__rarity card-tooltip__rarity--{{ hoveredCard.definition.rarity }}">
+        {{ hoveredCard.definition.rarity }}
+      </span>
+      <span *ngIf="hoveredCard.instance.upgraded" class="card-tooltip__upgraded">+upgraded</span>
+    </div>
+    <p class="card-tooltip__description">{{ hoverTooltipDescription(hoveredCard) }}</p>
+    <div *ngIf="hoverTooltipKeywords(hoveredCard).length > 0" class="card-tooltip__keywords">
+      <span *ngFor="let kw of hoverTooltipKeywords(hoveredCard)" class="card-tooltip__keyword">{{ kw }}</span>
+    </div>
   </div>
 
 </div>

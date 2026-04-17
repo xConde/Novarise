@@ -148,6 +148,13 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
   // Sprint 39 — hand-stuck tracking
   private prevHandStuck = false;
 
+  /** Hover tooltip — desktop only. Null when no card hovered. */
+  hoveredCard: HandCard | null = null;
+  /** Viewport-coords rect of the hovered card, used to anchor the fixed-position tooltip. */
+  hoveredCardRect: DOMRect | null = null;
+  private hoverDelayTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly HOVER_DELAY_MS = 200;
+
   private readonly subscriptions = new Subscription();
 
   ngOnInit(): void {
@@ -191,9 +198,10 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
-    // Cancel any in-flight long-press timer so a destroyed component can't
-    // emit cardInspected to a torn-down EventEmitter.
     this.cancelLongPress();
+    this.cancelHoverDelay();
+    this.hoveredCard = null;
+    this.hoveredCardRect = null;
   }
 
   resolveHand(): void {
@@ -291,6 +299,91 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
       clearTimeout(this.longPressTimer);
       this.longPressTimer = null;
     }
+  }
+
+  /**
+   * Mouse entered a card — desktop only. Schedules a delayed tooltip show so
+   * brief mouse passes don't flicker the tooltip. Touch devices skip this
+   * path; long-press still opens the full detail modal.
+   */
+  onCardPointerEnter(event: PointerEvent, card: HandCard): void {
+    if (event.pointerType !== 'mouse') return;
+    if (this.pendingCardId !== null) return; // suppress during placement mode
+    this.cancelHoverDelay();
+    const target = event.currentTarget as HTMLElement;
+    this.hoverDelayTimer = setTimeout(() => {
+      this.hoverDelayTimer = null;
+      this.hoveredCard = card;
+      this.hoveredCardRect = target.getBoundingClientRect();
+    }, CardHandComponent.HOVER_DELAY_MS);
+  }
+
+  /** Mouse left a card — clears tooltip and any pending delay. */
+  onCardPointerLeave(event: PointerEvent): void {
+    if (event.pointerType !== 'mouse') return;
+    this.cancelHoverDelay();
+    this.hoveredCard = null;
+    this.hoveredCardRect = null;
+  }
+
+  private cancelHoverDelay(): void {
+    if (this.hoverDelayTimer !== null) {
+      clearTimeout(this.hoverDelayTimer);
+      this.hoverDelayTimer = null;
+    }
+  }
+
+  /** Stable id used to wire aria-describedby on the hovered card to the tooltip element. */
+  get hoverTooltipId(): string {
+    return this.hoveredCard ? `card-tooltip-${this.hoveredCard.instance.instanceId}` : '';
+  }
+
+  /**
+   * Tooltip top position (viewport px). Anchors above the card by default;
+   * falls back below if the card sits in the top quarter of the viewport.
+   */
+  get hoverTooltipTop(): number {
+    if (!this.hoveredCardRect) return 0;
+    const TOOLTIP_HEIGHT_ESTIMATE = 180;
+    const GAP = 8;
+    const aboveTop = this.hoveredCardRect.top - TOOLTIP_HEIGHT_ESTIMATE - GAP;
+    if (aboveTop > GAP) return aboveTop;
+    return this.hoveredCardRect.bottom + GAP;
+  }
+
+  /**
+   * Tooltip left position (viewport px). Centers on the card; clamps so it
+   * doesn't overflow the viewport horizontally.
+   */
+  get hoverTooltipLeft(): number {
+    if (!this.hoveredCardRect) return 0;
+    const TOOLTIP_WIDTH_ESTIMATE = 240;
+    const GAP = 8;
+    const cardCenter = this.hoveredCardRect.left + this.hoveredCardRect.width / 2;
+    const idealLeft = cardCenter - TOOLTIP_WIDTH_ESTIMATE / 2;
+    const maxLeft = window.innerWidth - TOOLTIP_WIDTH_ESTIMATE - GAP;
+    return Math.max(GAP, Math.min(idealLeft, maxLeft));
+  }
+
+  /**
+   * Effective description shown in the tooltip — uses upgradedDescription
+   * when the card instance is upgraded, otherwise the base description.
+   */
+  hoverTooltipDescription(card: HandCard): string {
+    if (card.instance.upgraded && card.definition.upgradedDescription) {
+      return card.definition.upgradedDescription;
+    }
+    return card.definition.description;
+  }
+
+  /** Full keyword names for the tooltip (Innate, Retain, Ethereal, Exhaust). */
+  hoverTooltipKeywords(card: HandCard): string[] {
+    const out: string[] = [];
+    if (card.definition.innate) out.push('Innate');
+    if (card.definition.retain) out.push('Retain');
+    if (card.definition.ethereal) out.push('Ethereal');
+    if (card.definition.exhaust) out.push('Exhaust');
+    return out;
   }
 
   playCard(card: HandCard): void {
