@@ -139,8 +139,10 @@
     [currentGold]="runState.gold"
     [currentLives]="runState.lives"
     [maxLives]="runState.maxLives"
+    [deckCards]="getDeckCards()"
     (itemBought)="onShopBuy($event)"
     (shopLeft)="leaveShop()"
+    (cardRemoved)="onShopCardRemoved($event)"
   ></app-shop-screen>
 
   <!-- ── Event Screen ────────────────────────────────────── -->

@@ -154,6 +154,10 @@ export const SHOP_CONFIG = {
 
   /** Max lives healable per shop visit. */
   maxHealPerVisit: 5,
+
+  /** Phase 1 Sprint 4 — gold cost to permanently remove a card from the deck.
+   *  One use per shop visit (StS convention). */
+  cardRemoveCost: 75,
 } as const;
 
 // ── Rest ──────────────────────────────────────────────────────

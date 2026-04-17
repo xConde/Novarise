@@ -27,6 +27,7 @@
     [relics-start]  auto                       [relics-end]
     [cards-start]   auto                       [cards-end]
     [heal-start]    auto                       [heal-end]
+    [remove-start]  auto                       [remove-end]
     [footer-start]  var(--shop-footer-size)    [footer-end];
   grid-template-columns: 1fr;
   grid-template-areas:
@@ -34,6 +35,7 @@
     "relics"
     "cards"
     "heal"
+    "remove"
     "footer";
   justify-items: center;
   gap: var(--spacing-xl);
@@ -52,6 +54,7 @@
 .shop-items--relics { grid-area: relics; }
 .shop-items--cards  { grid-area: cards; }
 .shop-heal          { grid-area: heal; }
+.shop-card-remove   { grid-area: remove; }
 .shop-leave-btn     { grid-area: footer; }
 
 // ── Header ────────────────────────────────────────────────────────────────────
@@ -397,6 +400,107 @@
   }
 }
 
+// ── Card removal — Phase 1 Sprint 4 ───────────────────────────────────────────
+
+.shop-card-remove {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  width: 100%;
+  max-width: 32rem;
+
+  &__blurb,
+  &__instruction,
+  &__hint {
+    font-family: "Orbitron", sans-serif;
+    font-size: var(--font-size-small);
+    color: var(--text-dim);
+    margin: 0;
+    text-align: center;
+  }
+
+  &__hint {
+    color: var(--text-faint);
+    font-style: italic;
+  }
+
+  &__open-btn {
+    font-family: "Orbitron", sans-serif;
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border: var(--border-width-thin) solid var(--game-gold);
+    background: rgba(255, 215, 0, 0.08);
+    color: var(--game-gold);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    transition: background-color 0.15s ease-out, transform 0.15s ease-out;
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 215, 0, 0.16);
+      transform: translateY(-1px);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &__cost {
+    color: var(--game-gold);
+    &--unaffordable { color: var(--action-danger); }
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    width: 100%;
+    max-height: 18rem;
+    overflow-y: auto;
+  }
+
+  &__card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xxs);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--glass-bg);
+    border: var(--border-width-thin) solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s ease-out, background-color 0.15s ease-out;
+
+    &:hover {
+      border-color: var(--game-gold);
+      background: rgba(255, 215, 0, 0.06);
+    }
+  }
+
+  &__card-name {
+    font-family: "Orbitron", sans-serif;
+    font-weight: 700;
+    font-size: var(--font-size-small);
+  }
+
+  &__card-desc {
+    font-size: var(--font-size-2xs);
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+
+  &__cancel-btn {
+    margin-top: var(--spacing-xs);
+  }
+}
+
 // ── Reduced motion ────────────────────────────────────────────────────────────
 
 @media (prefers-reduced-motion: reduce) {
@@ -406,7 +510,9 @@
   }
 
   .shop-card__buy-btn,
-  .shop-heal-btn {
+  .shop-heal-btn,
+  .shop-card-remove__open-btn,
+  .shop-card-remove__card {
     transition: none;
   }
 }

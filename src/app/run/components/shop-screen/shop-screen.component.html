@@ -135,6 +135,66 @@
     </p>
   </section>
 
+  <!-- Card Removal — Phase 1 Sprint 4 (one-use-per-visit, StS convention) -->
+  <section class="shop-card-remove" aria-label="Card removal service">
+    <h3 class="shop-section-title">Card Removal</h3>
+
+    <ng-container *ngIf="activeAction === 'none'">
+      <p class="shop-card-remove__blurb">
+        Permanently remove a card from your deck. One use per shop visit.
+      </p>
+      <button
+        class="shop-card-remove__open-btn"
+        type="button"
+        [disabled]="!canRemoveCard()"
+        (click)="showRemovePanel()"
+        [attr.aria-label]="cardRemoveUsed
+          ? 'Card removal already used this visit'
+          : 'Remove a card for ' + cardRemoveCost + ' gold'"
+      >
+        <app-icon name="card" [size]="14"></app-icon>
+        Remove a Card —
+        <span
+          class="shop-card-remove__cost"
+          [class.shop-card-remove__cost--unaffordable]="!canAfford(cardRemoveCost)"
+        >{{ cardRemoveCost }}g</span>
+      </button>
+      <p class="shop-card-remove__hint" *ngIf="cardRemoveUsed" aria-live="polite">
+        Removal already used this visit.
+      </p>
+      <p class="shop-card-remove__hint" *ngIf="!cardRemoveUsed && removableCards.length === 0" aria-live="polite">
+        No removable cards in your deck.
+      </p>
+    </ng-container>
+
+    <ng-container *ngIf="activeAction === 'remove'">
+      <p class="shop-card-remove__instruction" aria-live="polite">
+        Choose a card to remove permanently — costs {{ cardRemoveCost }}g.
+      </p>
+      <div class="shop-card-remove__list" role="list">
+        <button
+          *ngFor="let card of removableCards"
+          class="shop-card-remove__card"
+          type="button"
+          role="listitem"
+          (click)="selectCardToRemove(card)"
+          [attr.aria-label]="'Remove ' + getCardName(card) + ' from deck'"
+        >
+          <span class="shop-card-remove__card-name">{{ getCardName(card) }}</span>
+          <span class="shop-card-remove__card-desc">{{ getCardDescription(card) }}</span>
+        </button>
+      </div>
+      <button
+        class="shop-card-remove__cancel-btn run-btn run-btn--secondary"
+        type="button"
+        (click)="cancelRemove()"
+        aria-label="Cancel card removal"
+      >
+        Cancel
+      </button>
+    </ng-container>
+  </section>
+
   <!-- Leave -->
   <button
     class="shop-leave-btn run-btn run-btn--secondary"

@@ -4,6 +4,8 @@ import { ShopScreenComponent } from './shop-screen.component';
 import { ShopItem } from '../../models/encounter.model';
 import { RelicId, RelicRarity, RELIC_DEFINITIONS } from '../../models/relic.model';
 import { SHOP_CONFIG } from '../../constants/run.constants';
+import { CardId, CardInstance } from '../../models/card.model';
+import { IconComponent } from '@shared/components/icon/icon.component';
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
 
@@ -24,7 +26,7 @@ describe('ShopScreenComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       declarations: [ShopScreenComponent],
-      imports: [CommonModule],
+      imports: [CommonModule, IconComponent],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ShopScreenComponent);
@@ -242,6 +244,101 @@ describe('ShopScreenComponent', () => {
 
     it('maxHealPerVisit matches SHOP_CONFIG.maxHealPerVisit', () => {
       expect(component.maxHealPerVisit).toBe(SHOP_CONFIG.maxHealPerVisit);
+    });
+
+    it('cardRemoveCost matches SHOP_CONFIG.cardRemoveCost', () => {
+      expect(component.cardRemoveCost).toBe(SHOP_CONFIG.cardRemoveCost);
+    });
+  });
+
+  // ── Phase 1 Sprint 4 — Card removal slot ──────────────────────────────
+  describe('card removal', () => {
+    function makeInstance(cardId: CardId, instanceId = `inst_${cardId}`): CardInstance {
+      return { instanceId, cardId, upgraded: false };
+    }
+
+    beforeEach(() => {
+      component.deckCards = [
+        makeInstance(CardId.TOWER_BASIC, 'starter1'), // STARTER rarity, not removable
+        makeInstance(CardId.GOLD_RUSH, 'common1'),    // non-starter, removable
+        makeInstance(CardId.DAMAGE_BOOST, 'common2'),
+      ];
+      component.currentGold = SHOP_CONFIG.cardRemoveCost + 50;
+      component.cardRemoveUsed = false;
+      component.activeAction = 'none';
+    });
+
+    it('removableCards filters out STARTER rarity cards', () => {
+      const removable = component.removableCards;
+      expect(removable.every(c => c.cardId !== CardId.TOWER_BASIC)).toBeTrue();
+      expect(removable.length).toBe(2);
+    });
+
+    it('canRemoveCard true when slot fresh, gold sufficient, and removables exist', () => {
+      expect(component.canRemoveCard()).toBeTrue();
+    });
+
+    it('canRemoveCard false after slot used', () => {
+      component.cardRemoveUsed = true;
+      expect(component.canRemoveCard()).toBeFalse();
+    });
+
+    it('canRemoveCard false when gold insufficient', () => {
+      component.currentGold = SHOP_CONFIG.cardRemoveCost - 1;
+      expect(component.canRemoveCard()).toBeFalse();
+    });
+
+    it('canRemoveCard false when no removable cards (only starters)', () => {
+      component.deckCards = [makeInstance(CardId.TOWER_BASIC, 's1')];
+      expect(component.canRemoveCard()).toBeFalse();
+    });
+
+    it('showRemovePanel switches activeAction when allowed', () => {
+      component.showRemovePanel();
+      expect(component.activeAction).toBe('remove');
+    });
+
+    it('showRemovePanel no-ops when not allowed', () => {
+      component.cardRemoveUsed = true;
+      component.showRemovePanel();
+      expect(component.activeAction).toBe('none');
+    });
+
+    it('selectCardToRemove emits, marks slot used, and closes picker', () => {
+      const spy = jasmine.createSpy('cardRemoved');
+      component.cardRemoved.subscribe(spy);
+
+      const card = component.removableCards[0];
+      component.selectCardToRemove(card);
+
+      expect(spy).toHaveBeenCalledWith(card.instanceId);
+      expect(component.cardRemoveUsed).toBeTrue();
+      expect(component.activeAction).toBe('none');
+    });
+
+    it('selectCardToRemove ignored when slot already used', () => {
+      component.cardRemoveUsed = true;
+      const spy = jasmine.createSpy('cardRemoved');
+      component.cardRemoved.subscribe(spy);
+
+      component.selectCardToRemove(component.deckCards[1]);
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('cancelRemove closes picker without using slot', () => {
+      component.showRemovePanel();
+      component.cancelRemove();
+      expect(component.activeAction).toBe('none');
+      expect(component.cardRemoveUsed).toBeFalse();
+    });
+
+    it('ngOnChanges resets cardRemoveUsed and activeAction on new shop visit', () => {
+      component.cardRemoveUsed = true;
+      component.activeAction = 'remove';
+      component.shopItems = [UNCOMMON_ITEM];
+      component.ngOnChanges();
+      expect(component.cardRemoveUsed).toBeFalse();
+      expect(component.activeAction).toBe('none');
     });
   });
 });

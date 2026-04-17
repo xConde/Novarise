@@ -264,6 +264,15 @@ export class RunComponent implements OnInit, OnDestroy {
     this.viewMode = 'map';
   }
 
+  /**
+   * Phase 1 Sprint 4 — handle the shop card-remove action. The ShopScreen
+   * component is the source of truth for "one use per visit"; this just
+   * delegates to the service and stays on the shop screen.
+   */
+  onShopCardRemoved(instanceId: string): void {
+    this.runService.removeCardFromShop(instanceId);
+  }
+
   /** Calculate heal amount for rest site — includes ascension REST_HEAL_REDUCTION. */
   getHealAmount(): number {
     if (!this.runState) return 0;

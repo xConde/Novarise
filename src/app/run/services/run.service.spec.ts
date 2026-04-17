@@ -2031,4 +2031,61 @@ describe('RunService', () => {
       expect(grantedDef.rarity).toBe(RelicRarity.COMMON);
     }));
   });
+
+  // ── Phase 1 Sprint 4 — removeCardFromShop ──────────────────────────────
+  describe('removeCardFromShop()', () => {
+    it('returns false when no run state exists', () => {
+      expect(service.removeCardFromShop('any')).toBeFalse();
+    });
+
+    it('returns false when player gold is below cardRemoveCost', fakeAsync(() => {
+      service.startNewRun();
+      const cards = service.getDeckCards();
+      const target = cards.find(c => CARD_DEFINITIONS[c.cardId as CardId].rarity !== CardRarity.STARTER);
+
+      // Force gold below cost
+      service['updateState']({ ...service.runState!, gold: 0 });
+
+      const result = service.removeCardFromShop(target?.instanceId ?? 'whatever');
+      expect(result).toBeFalse();
+    }));
+
+    it('returns false for unknown instanceId', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 1000 });
+      expect(service.removeCardFromShop('does_not_exist')).toBeFalse();
+    }));
+
+    it('returns false when target is a STARTER card', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 1000 });
+      const cards = service.getDeckCards();
+      const starter = cards.find(c => CARD_DEFINITIONS[c.cardId as CardId].rarity === CardRarity.STARTER);
+      expect(starter).toBeTruthy();
+
+      expect(service.removeCardFromShop(starter!.instanceId)).toBeFalse();
+    }));
+
+    it('successfully removes a non-starter card and deducts gold', fakeAsync(() => {
+      service.startNewRun();
+      // Add a non-starter card to the deck via collectReward
+      service['updateState']({ ...service.runState!, gold: 1000 });
+      service.collectReward({ type: 'card', cardId: CardId.GOLD_RUSH });
+
+      const cards = service.getDeckCards();
+      const target = cards.find(c => c.cardId === CardId.GOLD_RUSH);
+      expect(target).toBeTruthy();
+
+      const goldBefore = service.runState!.gold;
+      const totalBefore = service.getDeckCards().length;
+      const ids = service.runState!.deckCardIds.length;
+
+      const result = service.removeCardFromShop(target!.instanceId);
+
+      expect(result).toBeTrue();
+      expect(service.runState!.gold).toBe(goldBefore - 75);
+      expect(service.getDeckCards().length).toBe(totalBefore - 1);
+      expect(service.runState!.deckCardIds.length).toBe(ids - 1);
+    }));
+  });
 });

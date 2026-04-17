@@ -696,6 +696,47 @@ export class RunService {
     this.markCurrentNodeCompleted();
   }
 
+  /**
+   * Phase 1 Sprint 4 — pay {@link SHOP_CONFIG.cardRemoveCost} gold to permanently
+   * remove the named card instance from the deck. Returns true on success.
+   *
+   * Validation:
+   *   - run state must exist
+   *   - card must currently exist in any deck pile
+   *   - card must NOT be a starter card (StS convention)
+   *   - player must have enough gold
+   *
+   * The shop component enforces one-use-per-visit locally; this method does
+   * not, so balance changes can cap usage elsewhere if ever needed.
+   */
+  removeCardFromShop(instanceId: string): boolean {
+    const state = this.runState;
+    if (!state) return false;
+    if (state.gold < SHOP_CONFIG.cardRemoveCost) return false;
+
+    const allCards = this.deckService.getAllCards();
+    const target = allCards.find(c => c.instanceId === instanceId);
+    if (!target) return false;
+
+    const def = CARD_DEFINITIONS[target.cardId as CardId];
+    if (!def || def.rarity === CardRarity.STARTER) return false;
+
+    const removed = this.deckService.removeCard(instanceId);
+    if (!removed) return false;
+
+    const newDeckCardIds = state.deckCardIds.slice();
+    const idx = newDeckCardIds.indexOf(target.cardId);
+    if (idx >= 0) newDeckCardIds.splice(idx, 1);
+
+    this.updateState({
+      ...state,
+      gold: state.gold - SHOP_CONFIG.cardRemoveCost,
+      deckCardIds: newDeckCardIds,
+    });
+    this.persist();
+    return true;
+  }
+
   /** Resolve an event choice by index. */
   resolveEvent(choiceIndex: number): void {
     const state = this.runState;
