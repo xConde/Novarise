@@ -626,32 +626,33 @@ body.reduce-motion .board-container .game-hud .hud-value.wave-start-pulse {
 }
 
 // ============================================================================
-// M10 — End-turn mobile override moved here from component-scoped SCSS.
-// Component-scoped rules weren't reliably hot-reloading, so the earlier
-// mobile overrides appeared applied in source but not in the browser.
-// This global rule with !important bulldozes the base `left: 50%` +
-// `transform: translateX(-50%)` from game-board.component.scss.
-//
-// Layout: button occupies a bounded box between the stats row's right
-// edge (`55vw + spacing-sm`) and the gear's left edge (`spacing-md +
-// 2.75rem touch target + spacing-sm gap` = 70px from viewport right).
+// M11 — Debug-style mobile end-turn override. Earlier attempts using
+// calc() with CSS vars didn't produce the expected visual result. Using
+// hardcoded pixel values to rule out var resolution / calc cascading
+// issues. Border color forced to CYAN as a visual verification marker —
+// if the border is cyan on mobile, this rule IS applying and any
+// remaining layout issue is an actual pixel math problem. If the
+// border is NOT cyan, the CSS isn't loading for some reason.
 // ============================================================================
 @media (max-width: 480px) {
   .board-container .end-turn-btn {
-    left: calc(55vw + var(--spacing-sm)) !important;
-    right: calc(var(--spacing-md) + 2.75rem + var(--spacing-sm)) !important;
+    left: 220px !important;
+    right: 72px !important;
+    top: 10px !important;
     transform: none !important;
-    padding: var(--spacing-xs) var(--spacing-sm) !important;
+    padding: 6px 10px !important;
     min-width: 0 !important;
     max-width: unset !important;
-    min-height: 2.75rem !important;
+    width: auto !important;
+    min-height: 44px !important;
     gap: 0 !important;
+    border-color: cyan !important;
   }
   .board-container .end-turn-btn:hover:not(:disabled),
   .board-container .end-turn-btn:active:not(:disabled) {
     transform: none !important;
   }
   .board-container .end-turn-btn .end-turn-label {
-    font-size: var(--font-size-xs);
+    font-size: 13px !important;
   }
 }
