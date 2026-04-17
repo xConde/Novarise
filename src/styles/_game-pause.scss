@@ -46,9 +46,12 @@
     gap: 0.75rem;
   }
 
+  // M7: PAUSED title was too dominant at --font-size-large (1.875rem) with
+  // 0.2rem letter-spacing — overwhelmed the small pause modal. Dropped to
+  // --font-size-title (likely 1.25rem) with tighter letter-spacing.
   .board-container .pause-menu__title {
-    font-size: var(--font-size-large);
-    letter-spacing: 0.2rem;
+    font-size: var(--font-size-title);
+    letter-spacing: 0.15rem;
   }
 }
 

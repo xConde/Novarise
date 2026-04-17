@@ -404,37 +404,22 @@
     }
   }
 
-  // M2.2 + M5 + M6: Compact End Turn button on mobile, anchored from the
-  // right side so it sits in the gap between the stats block (left) and
-  // the settings gear (right-anchored at --spacing-md) without either
-  // percentage math (which was unreliable) or overlap.
-  //
-  // Layout: gear right edge at --spacing-md (16px). Gear is ~44px wide
-  // touch target. Button right edge = gear left edge + ~0.75rem gap.
-  // Button's left side floats freely, bounded by min-width: 6rem so it
-  // stays readable but doesn't crowd the stats column.
+  // M7: Mobile End Turn — shrunk and repositioned closer to viewport center.
+  // Previous right-anchor (M6) stuck the button too far right and cut off
+  // against the viewport edge. Now: 5rem min-width, tight padding, centered
+  // at left: 58% so button sits in the right third of viewport between
+  // stats (ends ~48%) and gear (starts ~87%), touching neither.
   //
   // min-height: 2.75rem keeps the WCAG 44px touch target.
   @media (max-width: 480px) {
     .end-turn-btn {
-      left: auto;
-      right: calc(var(--spacing-md) + 44px + 0.75rem);
-      transform: none;
-      padding: var(--spacing-xs) var(--spacing-md);
-      min-width: 6rem;
+      left: 58%;
+      right: auto;
+      padding: var(--spacing-xs) var(--spacing-sm);
+      min-width: 5rem;
       min-height: 2.75rem;
       gap: 0;
-
-      // Base rule's :hover/:active use `translateX(-50%) translateY(...)`.
-      // Since we killed the baseline translateX, reset the translate here
-      // too so the hover/active press animations don't jerk the button
-      // horizontally on mobile. translateY alone is fine for press feedback.
-      &:hover:not(:disabled) {
-        transform: translateY(-1px);
-      }
-      &:active:not(:disabled) {
-        transform: translateY(1px);
-      }
+      letter-spacing: 0.02em;
 
       .end-turn-label {
         font-size: var(--font-size-xs);

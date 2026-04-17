@@ -25,6 +25,9 @@
 }
 
 @media (max-width: 480px) {
+  // M7: tighten mobile tower-info panel — was eating ~40% of viewport
+  // height on smaller devices. Smaller padding, font, and row gaps bring
+  // it down to ~25-30% while still hitting WCAG touch targets on buttons.
   .board-container .tower-info-panel {
     left: var(--spacing-xs);
     right: var(--spacing-xs);
@@ -32,10 +35,33 @@
     min-width: auto;
     transform: none;
     bottom: var(--shell-tower-info-bottom);
-    max-height: 50vh;
+    max-height: 40vh;
     overflow-y: auto;
-    padding: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-3xs);
+
+    .tower-info-header {
+      margin-bottom: var(--spacing-xs);
+      padding-bottom: 2px;
+    }
+    .tower-info-name {
+      font-size: var(--font-size-small);
+    }
+    .tower-info-stats {
+      gap: 2px;
+    }
+    .stat-row {
+      padding: 1px 0;
+    }
+    .tower-info-actions {
+      gap: var(--spacing-xs);
+    }
+    .upgrade-btn,
+    .sell-btn {
+      min-width: 0;
+      padding: var(--spacing-xs);
+      font-size: var(--font-size-3xs);
+    }
   }
 }
 
