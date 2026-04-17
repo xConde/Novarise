@@ -24,75 +24,9 @@
   }
 }
 
-@media (max-width: 480px) {
-  // M8: mobile tower-info panel — the root problem was the close button
-  // (× glyph) inheriting --font-size-large (32px), which on a narrow
-  // viewport dominated the header and pushed stars offscreen. Combined
-  // with oversized stat rows and wide padding, the whole panel read as
-  // "broken". Fix: shrink the close button first (font-size-title → 24px
-  // is still tappable), tighten the header + stat layout, and give the
-  // action buttons explicit small font + min-width:0 so flex:1 actually
-  // divides space instead of hitting content-based min-content floors.
-  .board-container .tower-info-panel {
-    left: var(--spacing-xs);
-    right: var(--spacing-xs);
-    width: auto;
-    min-width: auto;
-    transform: none;
-    bottom: var(--shell-tower-info-bottom);
-    max-height: 40vh;
-    overflow-y: auto;
-    padding: var(--spacing-sm);
-    font-size: var(--font-size-3xs);
-
-    .tower-info-header {
-      margin-bottom: var(--spacing-xs);
-      padding-bottom: var(--spacing-xs);
-      gap: var(--spacing-xs);
-    }
-    .tower-info-name {
-      font-size: var(--font-size-small);
-    }
-    .tower-info-close {
-      font-size: var(--font-size-title);
-      padding: 0 var(--spacing-xs);
-      line-height: 0.8;
-    }
-    .level-star {
-      font-size: var(--font-size-2xs);
-    }
-    .tower-info-stats {
-      gap: 2px;
-      margin-bottom: var(--spacing-xs);
-    }
-    .stat-row {
-      font-size: var(--font-size-2xs);
-      padding: 1px 0;
-    }
-    .tower-info-targeting {
-      margin-bottom: var(--spacing-xs);
-    }
-    .targeting-btn {
-      font-size: var(--font-size-2xs);
-      padding: var(--spacing-xs) var(--spacing-sm);
-    }
-    .tower-info-actions {
-      gap: var(--spacing-xs);
-    }
-    .upgrade-btn,
-    .sell-btn {
-      min-width: 0;
-      padding: var(--spacing-xs) var(--spacing-sm);
-      font-size: var(--font-size-2xs);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .upgrade-tile-percent {
-      display: none;
-    }
-  }
-}
+// (Mobile overrides for this panel are at the bottom of the file — M9
+// moved them there because the desktop child selectors below were beating
+// them on source order.)
 
 .board-container .tower-info-panel .tower-info-header {
   display: flex;
@@ -340,4 +274,76 @@
 .board-container .tower-info-panel .spec-cancel-btn:hover {
   background: var(--panel-neutral-hover);
   color: var(--text-color);
+}
+
+// ============================================================================
+// M9 — Mobile overrides, placed at the END of the file so they win on source
+// order against the equal-specificity desktop rules above. Moving this block
+// fixes an issue where mobile styles silently lost the cascade even though
+// the @media (max-width: 480px) was matching.
+// ============================================================================
+@media (max-width: 480px) {
+  .board-container .tower-info-panel {
+    left: var(--spacing-xs);
+    right: var(--spacing-xs);
+    width: auto;
+    min-width: auto;
+    transform: none;
+    bottom: var(--shell-tower-info-bottom);
+    max-height: 40vh;
+    overflow-y: auto;
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-3xs);
+  }
+  .board-container .tower-info-panel .tower-info-header {
+    margin-bottom: var(--spacing-xs);
+    padding-bottom: var(--spacing-xs);
+    gap: var(--spacing-xs);
+  }
+  .board-container .tower-info-panel .tower-info-name {
+    font-size: var(--font-size-small);
+  }
+  // Close button was the worst offender — inherited 32px (--font-size-large),
+  // which dominated the header on a 390px viewport. Drop to --font-size-title
+  // (24px) with tight line-height so it's compact but still tappable.
+  .board-container .tower-info-panel .tower-info-close {
+    font-size: var(--font-size-title);
+    padding: 0 var(--spacing-xs);
+    line-height: 0.8;
+  }
+  .board-container .tower-info-panel .level-star {
+    font-size: var(--font-size-2xs);
+  }
+  .board-container .tower-info-panel .tower-info-stats {
+    gap: 2px;
+    margin-bottom: var(--spacing-xs);
+  }
+  .board-container .tower-info-panel .stat-row {
+    font-size: var(--font-size-2xs);
+    padding: 1px 0;
+  }
+  .board-container .tower-info-panel .tower-info-targeting {
+    margin-bottom: var(--spacing-xs);
+  }
+  .board-container .tower-info-panel .targeting-btn {
+    font-size: var(--font-size-2xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+  .board-container .tower-info-panel .tower-info-actions {
+    gap: var(--spacing-xs);
+  }
+  // flex:1 was hitting min-content floor from the upgrade text + percent;
+  // min-width: 0 allows the flex cell to actually shrink.
+  .board-container .tower-info-panel .upgrade-btn,
+  .board-container .tower-info-panel .sell-btn {
+    min-width: 0;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-2xs);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .board-container .tower-info-panel .upgrade-tile-percent {
+    display: none;
+  }
 }

@@ -417,11 +417,16 @@
   // target. Clear its left edge with a small gap.
   //
   // All hover/active transforms killed to prevent positional jump on tap.
+  // M9 — Use !important to bulldoze any cascade surprises. Earlier
+  // attempts (M5–M8) produced visual results that didn't match the
+  // written CSS, suggesting something was overriding the intended
+  // rules. Force the positioning properties directly; cleanup can
+  // happen later once we confirm this actually ships the right layout.
   @media (max-width: 480px) {
     .end-turn-btn {
-      left: calc(55vw + var(--spacing-sm));
-      right: calc(var(--spacing-md) + 2.75rem + var(--spacing-sm));
-      transform: none;
+      left: calc(55vw + var(--spacing-sm)) !important;
+      right: calc(var(--spacing-md) + 2.75rem + var(--spacing-sm)) !important;
+      transform: none !important;
       padding: var(--spacing-xs) var(--spacing-sm);
       min-width: 0;
       max-width: unset;
@@ -430,7 +435,7 @@
 
       &:hover:not(:disabled),
       &:active:not(:disabled) {
-        transform: none;
+        transform: none !important;
       }
 
       .end-turn-label {

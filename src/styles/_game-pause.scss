@@ -39,23 +39,6 @@
   position: relative;
 }
 
-@media (max-width: 480px) {
-  .board-container .pause-menu {
-    padding: 1rem 1.25rem;
-    width: min(20rem, 95vw);
-    gap: 0.75rem;
-  }
-
-  // M8: PAUSED title — explicit 1.25rem (20px). Previous --font-size-title
-  // (24px) was still overwhelming the compact mobile pause modal.
-  // Letter-spacing dropped further to 0.08rem since tight 20px letters
-  // don't need as much tracking as the 48px desktop hero treatment.
-  .board-container .pause-menu__title {
-    font-size: 1.25rem;
-    letter-spacing: 0.08rem;
-  }
-}
-
 .board-container .pause-menu__title {
   font-size: var(--font-size-hero);
   color: var(--text-color);
@@ -64,6 +47,23 @@
   text-shadow: 0 0 1.5rem var(--theme-purple-a50);
   margin: 0;
   text-align: center;
+}
+
+// Mobile overrides must come AFTER the desktop default. Equal specificity
+// between `.board-container .pause-menu__title` rules means source order
+// decides the winner — previously the mobile rule was defined first and
+// was always losing. M9: restored correct order.
+@media (max-width: 480px) {
+  .board-container .pause-menu {
+    padding: 1rem 1.25rem;
+    width: min(20rem, 95vw);
+    gap: 0.75rem;
+  }
+
+  .board-container .pause-menu__title {
+    font-size: 1.25rem;
+    letter-spacing: 0.08rem;
+  }
 }
 
 .board-container .pause-menu__subtitle {
