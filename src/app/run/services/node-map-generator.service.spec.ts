@@ -168,5 +168,21 @@ describe('NodeMapGeneratorService', () => {
       // A14 must produce at most as many events as A13 (reduction is applied)
       expect(eventCountA14).toBeLessThanOrEqual(eventCountA13);
     });
+
+    it('A14 EVENT_NODE_REDUCTION reduces event count by exactly eventNodeReduction (deterministic)', () => {
+      // Seed 203 deterministically produces 10 EVENT nodes at A0 (no reduction)
+      // and 9 EVENT nodes at A14 (eventNodeReduction = 1), verified via the
+      // mulberry32 RNG used by NodeMapGeneratorService.
+      const DETERMINISTIC_SEED = 203;
+      const BASELINE_EVENT_COUNT = 10; // events at A0 for seed 203
+      const mapBaseline = service.generateActMap(0, DETERMINISTIC_SEED, 0);
+      const mapA14 = service.generateActMap(0, DETERMINISTIC_SEED, 14);
+      const baselineEvents = mapBaseline.nodes.filter(n => n.type === NodeType.EVENT).length;
+      const a14Events = mapA14.nodes.filter(n => n.type === NodeType.EVENT).length;
+      // Confirm seed still produces the known baseline — if this fails, the RNG changed
+      expect(baselineEvents).toBe(BASELINE_EVENT_COUNT);
+      // A14 must be exactly baseline minus the reduction constant
+      expect(a14Events).toBe(BASELINE_EVENT_COUNT - QUALITATIVE_ASCENSION_VALUES.eventNodeReduction);
+    });
   });
 });
