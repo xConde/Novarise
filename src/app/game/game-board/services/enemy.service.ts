@@ -701,16 +701,30 @@ export class EnemyService {
    * Returns the set of spawner grid positions that are blocked at the START
    * of the current turn's spawn batch.
    *
-   * In the turn model, CombatLoopService calls stepEnemiesOneTurn() before
-   * each spawnForTurn() call, so enemies from previous turns will have
-   * advanced off their spawner tile by the time we spawn this turn.
+   * Enemies that did NOT advance off their spawner tile (e.g. SLOW-paralyzed
+   * enemies) must be included so the batch spawner does not stack a new enemy
+   * on an occupied spawner. Dying enemies are excluded — their tile is
+   * effectively vacated.
+   *
    * Same-turn stacking (two enemies landing on the same spawner in the same
-   * spawnForTurn call) is handled entirely by the within-batch `externalOccupied`
-   * accumulation inside spawnEnemy. This method therefore returns an empty set
-   * as the initial seed; the caller builds up occupancy as it spawns.
+   * spawnForTurn call) is handled by the within-batch `externalOccupied`
+   * accumulation inside spawnEnemy on top of this seed.
    */
   buildOccupiedSpawnerSet(): Set<string> {
-    return new Set<string>();
+    const spawnerTiles = this.pathfindingService.getSpawnerTiles();
+    if (spawnerTiles.length === 0) {
+      return new Set<string>();
+    }
+    const spawnerKeys = new Set(spawnerTiles.map(t => `${t.row}-${t.col}`));
+    const occupied = new Set<string>();
+    for (const enemy of this.enemies.values()) {
+      if (enemy.dying) continue;
+      const key = `${enemy.gridPosition.row}-${enemy.gridPosition.col}`;
+      if (spawnerKeys.has(key)) {
+        occupied.add(key);
+      }
+    }
+    return occupied;
   }
 
   /**
