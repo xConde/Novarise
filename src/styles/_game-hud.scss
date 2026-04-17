@@ -183,15 +183,18 @@
 }
 
 @media (max-width: 480px) {
-  // Mobile: push challenge strip well below End Turn button.
-  // End Turn box bottom ≈ shell-end-turn-top + 3rem; add 0.75rem gap.
+  // M2.1: Challenge strip moves to top-right corner next to the settings gear.
+  // Gear is fixed at top: 50px; right: var(--spacing-md) (1rem), width 44px on mobile.
+  // right: calc(--spacing-md + 2.75rem) clears the gear's left edge by ~8px.
   .board-container .hud-challenge-strip {
-    top: calc(var(--shell-end-turn-top) + 3.75rem);
-    left: var(--spacing-xs);
-    right: var(--spacing-xs);
-    max-width: calc(100vw - var(--spacing-xs) * 2);
-    justify-content: center;
+    top: var(--spacing-sm);
+    left: auto;
+    right: calc(var(--spacing-md) + 2.75rem);
+    max-width: min(45vw, 12rem);
+    justify-content: flex-end;
     font-size: var(--font-size-3xs);
+    // Override desktop left-anchor so right-anchoring takes effect.
+    transform: none;
   }
 
   .board-container .hud-challenge-strip .challenge-indicator {
