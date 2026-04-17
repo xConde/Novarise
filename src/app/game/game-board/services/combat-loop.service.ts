@@ -23,6 +23,8 @@ import { GameNotificationService, NotificationType } from './game-notification.s
 import { AudioService } from './audio.service';
 import { ScreenShakeService } from './screen-shake.service';
 import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
+import { WAVE_CONFIG } from '../constants/combat.constants';
+import { isTwinBossWave } from '@core/models/wave-definition.model';
 
 /**
  * Owns the turn-based combat resolution for the COMBAT phase.
@@ -209,7 +211,15 @@ export class CombatLoopService {
         continue;
       }
       const leakedEnemy = this.enemyService.getEnemies().get(enemyId);
-      const leakCost = leakedEnemy?.leakDamage ?? 1;
+      const baseLeakCost = leakedEnemy?.leakDamage ?? 1;
+      const currentWaveDef = this.waveService.getCurrentWaveDefinition();
+      const isTwinBoss =
+        leakedEnemy?.type === EnemyType.BOSS &&
+        currentWaveDef !== null &&
+        isTwinBossWave(currentWaveDef);
+      const leakCost = isTwinBoss
+        ? Math.ceil(baseLeakCost / WAVE_CONFIG.twinBossLeakDivisor)
+        : baseLeakCost;
       this.gameStateService.loseLife(leakCost);
       this.audioService.playLifeLoss();
       frameLeaked = true;

@@ -251,7 +251,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     description: 'Deploy a Mortar tower.',
     upgradedDescription: 'Deploy a Mortar tower at level 2.',
     type: CardType.TOWER,
-    rarity: CardRarity.COMMON,
+    rarity: CardRarity.UNCOMMON,
     energyCost: CARD_VALUES.energyMortar,
     upgraded: false,
     effect: { type: 'tower', towerType: TowerType.MORTAR },

@@ -7,6 +7,15 @@ import { RelicService } from './relic.service';
 import { RunPersistenceService } from './run-persistence.service';
 import { RunEventBusService } from './run-event-bus.service';
 import { EncounterCheckpointService } from './encounter-checkpoint.service';
+import { RunStateFlagService } from './run-state-flag.service';
+import { ItemService } from './item.service';
+import { ItemType, SerializedItemInventory } from '../models/item.model';
+import { SerializedRunStateFlags } from './run-state-flag.service';
+import { RunState } from '../models/run-state.model';
+import { FLAG_KEYS } from '../constants/flag-keys';
+import { RunEvent, EventOutcome } from '../models/encounter.model';
+import { RUN_EVENTS } from '../constants/run-events';
+import { CHECKPOINT_VERSION } from '../../game/game-board/models/encounter-checkpoint.model';
 import { RunStatus, DEFAULT_RUN_CONFIG, EncounterResult } from '../models/run-state.model';
 import { NodeMap, MapNode, NodeType } from '../models/node-map.model';
 import { EncounterConfig } from '../models/encounter.model';
@@ -157,7 +166,7 @@ describe('RunService', () => {
 
   it('startNewRun() generates act 0 node map', fakeAsync(() => {
     service.startNewRun();
-    expect(nodeMapGenerator.generateActMap).toHaveBeenCalledWith(0, jasmine.any(Number));
+    expect(nodeMapGenerator.generateActMap).toHaveBeenCalledWith(0, jasmine.any(Number), jasmine.any(Number));
     expect(service.nodeMap).not.toBeNull();
   }));
 
@@ -371,7 +380,7 @@ describe('RunService', () => {
 
     service.advanceAct();
 
-    expect(nodeMapGenerator.generateActMap).toHaveBeenCalledWith(1, jasmine.any(Number));
+    expect(nodeMapGenerator.generateActMap).toHaveBeenCalledWith(1, jasmine.any(Number), jasmine.any(Number));
     expect(service.runState!.actIndex).toBe(1);
   }));
 
@@ -1018,6 +1027,8 @@ describe('RunService', () => {
         gameStats: {} as any,
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
+        itemInventory: { entries: [] },
+        runStateFlags: { entries: [], consumedEventIds: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1051,6 +1062,8 @@ describe('RunService', () => {
         gameStats: {} as any,
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
+        itemInventory: { entries: [] },
+        runStateFlags: { entries: [], consumedEventIds: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1091,6 +1104,8 @@ describe('RunService', () => {
         gameStats: {} as any,
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
+        itemInventory: { entries: [] },
+        runStateFlags: { entries: [], consumedEventIds: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1127,6 +1142,8 @@ describe('RunService', () => {
         gameStats: {} as any,
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
+        itemInventory: { entries: [] },
+        runStateFlags: { entries: [], consumedEventIds: [] },
       });
 
       // node_0_0 is NOT in completedNodeIds — valid checkpoint.
@@ -1268,6 +1285,28 @@ describe('RunService', () => {
 
       expect(pickedRarity).toBe(CardRarity.COMMON as string);
     }));
+
+    // ── S8 regression: TOWER_MORTAR reachable via reward pool ─────
+
+    it('TOWER_MORTAR can be drawn from pickCardRewards over many iterations (S8)', fakeAsync(() => {
+      service.startNewRun(0);
+      const seededRng = createSeededRng(7);
+      let mortarSeen = false;
+      for (let i = 0; i < 500 && !mortarSeen; i++) {
+        const rewards = (service as any).pickCardRewards(3, () => seededRng.next()) as Array<{ cardId: CardId }>;
+        if (rewards.some(r => r.cardId === CardId.TOWER_MORTAR)) {
+          mortarSeen = true;
+        }
+      }
+      expect(mortarSeen).toBe(true, 'TOWER_MORTAR was never drawn in 500×3 reward rolls');
+    }));
+
+    it('starter deck does not contain TOWER_MORTAR (S8 regression guard)', fakeAsync(() => {
+      service.startNewRun(0);
+      const deck = service['deckService'].getAllCards();
+      const hasMortar = deck.some(c => c.cardId === CardId.TOWER_MORTAR);
+      expect(hasMortar).toBe(false);
+    }));
   });
 
   // ── restoreRngState ───────────────────────────────────────────
@@ -1302,6 +1341,694 @@ describe('RunService', () => {
       // Restore back to original
       service.restoreRngState(captured);
       expect(service.getRngState()).toBe(captured);
+    }));
+  });
+
+  // ── Event flag filtering (generateEvent) ─────────────────────────────────
+
+  describe('generateEvent() — flag filtering', () => {
+    let flagService: RunStateFlagService;
+
+    beforeEach(() => {
+      flagService = TestBed.inject(RunStateFlagService);
+      flagService.resetForRun();
+    });
+
+    afterEach(() => {
+      flagService.resetForRun();
+    });
+
+    it('generates an event when no flag constraints apply', fakeAsync(() => {
+      service.startNewRun();
+      service.generateEvent();
+      // generateEvent should pick something from the real RUN_EVENTS pool
+      expect(service.getCurrentEvent()).not.toBeNull();
+    }));
+
+    /**
+     * Helper: calls the real generateEvent() across every possible RNG index by
+     * forcing Math.random to return (i + 0.5) / poolSize for i in [0, poolSize).
+     * Returns the set of distinct event IDs produced.
+     *
+     * Uses service['runRng'] = null to bypass SeededRng and use Math.random.
+     */
+    function collectAllGeneratedEventIds(svc: RunService, poolSize: number): Set<string> {
+      const svcAny = svc as any;
+      const savedRng = svcAny.runRng;
+      svcAny.runRng = null;
+
+      const ids = new Set<string>();
+      const spy = spyOn(Math, 'random');
+      for (let i = 0; i < poolSize; i++) {
+        spy.and.returnValue((i + 0.5) / poolSize);
+        svc.generateEvent();
+        const evt = svc.getCurrentEvent();
+        if (evt) ids.add(evt.id);
+      }
+      spy.and.callThrough();
+      svcAny.runRng = savedRng;
+      return ids;
+    }
+
+    it('excludes events where requiresFlag is set but flag is missing', fakeAsync(() => {
+      // Spec exercises the real generateEvent() filter.
+      // Without IDOL_BARGAIN_TAKEN/MERCHANT_AIDED/SCOUT_SAVED set, the three Part-2
+      // chain events (requiresFlag gated) must never appear in any pool slot.
+      // Pool size without any flags = 22 total - 3 Part-2 gated = 19.
+      service.startNewRun();
+      // No flags set.
+      const POOL_SIZE_NO_FLAGS = 19;
+      const ids = collectAllGeneratedEventIds(service, POOL_SIZE_NO_FLAGS);
+
+      expect(ids.has('wandering_merchant_return')).toBeFalse();
+      expect(ids.has('cursed_idol_reckoning')).toBeFalse();
+      expect(ids.has('scout_returns_grateful')).toBeFalse();
+      // At least one non-gated event was returned
+      expect(ids.size).toBeGreaterThan(0);
+    }));
+
+    it('includes an event when requiresFlag is set AND the flag is present', fakeAsync(() => {
+      // With IDOL_BARGAIN_TAKEN set, cursed_idol_reckoning enters the eligible pool.
+      // Pool: 22 - 2 (other Part-2 events) - 1 (cursed_idol_offer excluded via requiresFlagAbsent) = 19.
+      service.startNewRun();
+      flagService.setFlag(FLAG_KEYS.IDOL_BARGAIN_TAKEN);
+      const POOL_SIZE_WITH_IDOL_FLAG = 19;
+      const ids = collectAllGeneratedEventIds(service, POOL_SIZE_WITH_IDOL_FLAG);
+
+      expect(ids.has('cursed_idol_reckoning')).toBeTrue();
+    }));
+
+    it('excludes events where requiresFlagAbsent is set and flag IS present', fakeAsync(() => {
+      // With MERCHANT_AIDED set, wandering_merchant_intro is excluded.
+      // wandering_merchant_return enters the pool (requiresFlag satisfied).
+      // wandering_merchant_intro exits (requiresFlagAbsent fails).
+      // Net pool size: 22 - 2 (other Part-2 gated) = 20, same size since one swaps.
+      service.startNewRun();
+      flagService.setFlag(FLAG_KEYS.MERCHANT_AIDED);
+      const POOL_SIZE_WITH_MERCHANT_FLAG = 20;
+      const ids = collectAllGeneratedEventIds(service, POOL_SIZE_WITH_MERCHANT_FLAG);
+
+      // wandering_merchant_intro is excluded because requiresFlagAbsent: MERCHANT_AIDED is set
+      expect(ids.has('wandering_merchant_intro')).toBeFalse();
+      // wandering_merchant_return enters because requiresFlag: MERCHANT_AIDED is satisfied
+      expect(ids.has('wandering_merchant_return')).toBeTrue();
+    }));
+
+    it('includes a requiresFlagAbsent event when the flag is NOT set', fakeAsync(() => {
+      // Without MERCHANT_AIDED set, wandering_merchant_intro is in the eligible pool.
+      // Pool size without any flags = 19.
+      service.startNewRun();
+      // No flags set — merchant_aided absent.
+      const POOL_SIZE_NO_FLAGS = 19;
+      const ids = collectAllGeneratedEventIds(service, POOL_SIZE_NO_FLAGS);
+
+      expect(ids.has('wandering_merchant_intro')).toBeTrue();
+    }));
+
+    it('never returns a firesOncePerRun event after it has been consumed (H4)', fakeAsync(() => {
+      // With IDOL_BARGAIN_TAKEN set and cursed_idol_reckoning consumed,
+      // that event must be excluded from every pool slot.
+      service.startNewRun();
+      flagService.setFlag(FLAG_KEYS.IDOL_BARGAIN_TAKEN);
+      flagService.markEventConsumed('cursed_idol_reckoning');
+      // Pool: same as IDOL_BARGAIN_TAKEN case (19) minus the consumed event = 18.
+      const POOL_SIZE_IDOL_FLAG_CONSUMED = 18;
+      const ids = collectAllGeneratedEventIds(service, POOL_SIZE_IDOL_FLAG_CONSUMED);
+
+      expect(ids.has('cursed_idol_reckoning')).toBeFalse();
+    }));
+  });
+
+  // ── Outcome flag side-effects (resolveEvent) ──────────────────────────────
+
+  describe('resolveEvent() — flag side-effects', () => {
+    let flagService: RunStateFlagService;
+
+    beforeEach(() => {
+      flagService = TestBed.inject(RunStateFlagService);
+      flagService.resetForRun();
+    });
+
+    afterEach(() => {
+      flagService.resetForRun();
+    });
+
+    it('sets a flag when outcome.setsFlag is present', fakeAsync(() => {
+      service.startNewRun();
+      (service as any).currentEvent = {
+        id: 'test_event',
+        title: 'Test',
+        description: '',
+        choices: [
+          {
+            label: 'Help',
+            description: '',
+            outcome: {
+              goldDelta: 10,
+              livesDelta: 0,
+              setsFlag: FLAG_KEYS.MERCHANT_AIDED,
+              description: 'Set the flag',
+            } as EventOutcome,
+          },
+        ],
+      };
+
+      service.resolveEvent(0);
+      expect(flagService.hasFlag(FLAG_KEYS.MERCHANT_AIDED)).toBeTrue();
+    }));
+
+    it('increments a flag when outcome.incrementsFlag is present', fakeAsync(() => {
+      service.startNewRun();
+      flagService.setFlag('visit_count', 2);
+      (service as any).currentEvent = {
+        id: 'test_event',
+        title: 'Test',
+        description: '',
+        choices: [
+          {
+            label: 'Visit again',
+            description: '',
+            outcome: {
+              goldDelta: 0,
+              livesDelta: 0,
+              incrementsFlag: 'visit_count',
+              description: 'Increment the counter',
+            } as EventOutcome,
+          },
+        ],
+      };
+
+      service.resolveEvent(0);
+      expect(flagService.getFlag('visit_count')).toBe(3);
+    }));
+
+    it('does not set a flag when the non-flag outcome is chosen', fakeAsync(() => {
+      service.startNewRun();
+      (service as any).currentEvent = {
+        id: 'test_event',
+        title: 'Test',
+        description: '',
+        choices: [
+          {
+            label: 'Option A — sets flag',
+            description: '',
+            outcome: {
+              goldDelta: 0,
+              livesDelta: 0,
+              setsFlag: FLAG_KEYS.MERCHANT_AIDED,
+              description: 'Sets the flag',
+            } as EventOutcome,
+          },
+          {
+            label: 'Option B — no flag',
+            description: '',
+            outcome: {
+              goldDelta: 0,
+              livesDelta: 0,
+              description: 'No flag set',
+            } as EventOutcome,
+          },
+        ],
+      };
+
+      service.resolveEvent(1);
+      expect(flagService.hasFlag(FLAG_KEYS.MERCHANT_AIDED)).toBeFalse();
+    }));
+  });
+
+  // ── Cursed Idol chain integration ─────────────────────────────────────────
+
+  describe('Cursed Idol chain integration', () => {
+    let flagService: RunStateFlagService;
+
+    beforeEach(() => {
+      flagService = TestBed.inject(RunStateFlagService);
+      flagService.resetForRun();
+    });
+
+    afterEach(() => {
+      flagService.resetForRun();
+    });
+
+    it('cursed_idol_offer sets idol_bargain_taken on bargain choice', fakeAsync(() => {
+      service.startNewRun();
+      const offer = RUN_EVENTS.find(e => e.id === 'cursed_idol_offer');
+      expect(offer).toBeDefined();
+
+      // Simulate picking the bargain (choice index 0)
+      (service as any).currentEvent = offer;
+      service.resolveEvent(0);
+
+      expect(flagService.hasFlag(FLAG_KEYS.IDOL_BARGAIN_TAKEN)).toBeTrue();
+    }));
+
+    it('cursed_idol_reckoning requires idol_bargain_taken flag', () => {
+      const reckoning = RUN_EVENTS.find(e => e.id === 'cursed_idol_reckoning');
+      expect(reckoning).toBeDefined();
+      expect(reckoning!.requiresFlag).toBe(FLAG_KEYS.IDOL_BARGAIN_TAKEN);
+    });
+
+    it('cursed_idol_offer is absent (requiresFlagAbsent) — excluded after flag is set', () => {
+      const offer = RUN_EVENTS.find(e => e.id === 'cursed_idol_offer');
+      expect(offer!.requiresFlagAbsent).toBe(FLAG_KEYS.IDOL_BARGAIN_TAKEN);
+
+      // With flag set, the filter should exclude it
+      flagService.setFlag(FLAG_KEYS.IDOL_BARGAIN_TAKEN);
+      const eligible = RUN_EVENTS.filter(e => {
+        if (e.requiresFlagAbsent && flagService.hasFlag(e.requiresFlagAbsent)) return false;
+        return true;
+      });
+      expect(eligible.find(e => e.id === 'cursed_idol_offer')).toBeUndefined();
+    });
+
+    it('full chain: offer sets flag, reckoning rolls next because flag is present', fakeAsync(() => {
+      service.startNewRun();
+      const offer = RUN_EVENTS.find(e => e.id === 'cursed_idol_offer')!;
+
+      // Step 1: player takes the bargain
+      (service as any).currentEvent = offer;
+      service.resolveEvent(0);
+      expect(flagService.hasFlag(FLAG_KEYS.IDOL_BARGAIN_TAKEN)).toBeTrue();
+
+      // Step 2: check reckoning is now eligible
+      const reckoningEligible = RUN_EVENTS.filter(e => {
+        if (e.requiresFlag && !flagService.hasFlag(e.requiresFlag)) return false;
+        if (e.requiresFlagAbsent && flagService.hasFlag(e.requiresFlagAbsent)) return false;
+        return true;
+      });
+      expect(reckoningEligible.find(e => e.id === 'cursed_idol_reckoning')).toBeDefined();
+
+      // Step 3: the intro event should now be excluded
+      expect(reckoningEligible.find(e => e.id === 'cursed_idol_offer')).toBeUndefined();
+    }));
+  });
+
+  // ── Checkpoint v5→v6 migration ────────────────────────────────────────────
+
+  describe('Checkpoint v5→v6 migration', () => {
+    it('v5→v6 migration inserts empty runStateFlags', () => {
+      const checkpointSvc = TestBed.inject(EncounterCheckpointService);
+      const CHECKPOINT_KEY = 'novarise_encounter_checkpoint';
+
+      // Build a valid v5 checkpoint (no runStateFlags field)
+      const v5Data: Record<string, unknown> = {
+        version: 5,
+        timestamp: Date.now(),
+        nodeId: 'node_1',
+        encounterConfig: {
+          nodeId: 'node_1',
+          nodeType: 'COMBAT',
+          campaignMapId: 'campaign_01',
+          waves: [],
+          goldReward: 50,
+          isElite: false,
+          isBoss: false,
+        },
+        rngState: 12345,
+        gameState: {
+          phase: 'COMBAT',
+          wave: 1,
+          maxWaves: 5,
+          lives: 15,
+          maxLives: 20,
+          initialLives: 20,
+          gold: 100,
+          initialGold: 100,
+          score: 0,
+          difficulty: 'NORMAL',
+          isEndless: false,
+          highestWave: 1,
+          elapsedTime: 0,
+          activeModifiers: [],
+          consecutiveWavesWithoutLeak: 0,
+        },
+        turnNumber: 1,
+        leakedThisWave: false,
+        towers: [],
+        mortarZones: [],
+        enemies: [],
+        enemyCounter: 0,
+        statusEffects: [],
+        waveState: {
+          currentWaveIndex: 0,
+          turnSchedule: [],
+          turnScheduleIndex: 0,
+          active: false,
+          endlessMode: false,
+          currentEndlessResult: null,
+        },
+        deckState: {
+          deckState: { drawPile: [], hand: [], discardPile: [], exhaustPile: [] },
+          energyState: { current: 3, max: 3 },
+          instanceCounter: 0,
+        },
+        cardModifiers: [],
+        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+        gameStats: { totalGoldEarned: 0, totalDamageDealt: 0, shotsFired: 0, killsByTowerType: {}, enemiesLeaked: 0, towersPlaced: 0, towersSold: 0 },
+        challengeState: { totalGoldSpent: 0, maxTowersPlaced: 0, towerTypesUsed: [], currentTowerCount: 0, livesLostThisGame: 0 },
+        wavePreview: { oneShotBonus: 0 },
+        turnHistory: [],
+        itemInventory: { entries: [] },
+        // runStateFlags intentionally absent — simulates a v5 checkpoint
+      };
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v5Data));
+
+      const loaded = checkpointSvc.loadCheckpoint();
+      localStorage.removeItem(CHECKPOINT_KEY);
+
+      expect(loaded).not.toBeNull();
+      // Migration chain 5→6→7 back-fills both runStateFlags.entries and consumedEventIds.
+      expect(loaded!.runStateFlags).toEqual({ entries: [], consumedEventIds: [] });
+      expect(loaded!.version).toBe(7);
+    });
+
+    it('v6 round-trips populated runStateFlags', () => {
+      const checkpointSvc = TestBed.inject(EncounterCheckpointService);
+      const checkpoint = {
+        version: CHECKPOINT_VERSION,
+        timestamp: Date.now(),
+        nodeId: 'node_1',
+        encounterConfig: { nodeId: 'node_1', nodeType: 'COMBAT', campaignMapId: 'campaign_01', waves: [], goldReward: 50, isElite: false, isBoss: false },
+        rngState: 99,
+        gameState: { phase: 'COMBAT', wave: 1, maxWaves: 5, lives: 15, maxLives: 20, initialLives: 20, gold: 100, initialGold: 100, score: 0, difficulty: 'NORMAL', isEndless: false, highestWave: 1, elapsedTime: 0, activeModifiers: [], consecutiveWavesWithoutLeak: 0 },
+        turnNumber: 2,
+        leakedThisWave: false,
+        towers: [],
+        mortarZones: [],
+        enemies: [],
+        enemyCounter: 0,
+        statusEffects: [],
+        waveState: { currentWaveIndex: 0, turnSchedule: [], turnScheduleIndex: 0, active: false, endlessMode: false, currentEndlessResult: null },
+        deckState: { deckState: { drawPile: [], hand: [], discardPile: [], exhaustPile: [] }, energyState: { current: 3, max: 3 }, instanceCounter: 0 },
+        cardModifiers: [],
+        relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+        gameStats: { totalGoldEarned: 0, totalDamageDealt: 0, shotsFired: 0, killsByTowerType: {}, enemiesLeaked: 0, towersPlaced: 0, towersSold: 0 },
+        challengeState: { totalGoldSpent: 0, maxTowersPlaced: 0, towerTypesUsed: [], currentTowerCount: 0, livesLostThisGame: 0 },
+        wavePreview: { oneShotBonus: 0 },
+        turnHistory: [],
+        itemInventory: { entries: [] },
+        runStateFlags: { entries: [[FLAG_KEYS.MERCHANT_AIDED, 1], [FLAG_KEYS.SCOUT_SAVED, 3]], consumedEventIds: [] },
+      };
+
+      const CHECKPOINT_KEY = 'novarise_encounter_checkpoint';
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(checkpoint));
+      const loaded = checkpointSvc.loadCheckpoint();
+      localStorage.removeItem(CHECKPOINT_KEY);
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.runStateFlags.entries.length).toBe(2);
+      const merchantEntry = loaded!.runStateFlags.entries.find(e => e[0] === FLAG_KEYS.MERCHANT_AIDED);
+      expect(merchantEntry?.[1]).toBe(1);
+    });
+  });
+
+  // ── H5: run-level items + flags persistence ───────────────────
+
+  describe('H5: run-level items + flags persistence', () => {
+    let itemService: ItemService;
+    let flagService: RunStateFlagService;
+
+    beforeEach(() => {
+      itemService = TestBed.inject(ItemService);
+      flagService = TestBed.inject(RunStateFlagService);
+      itemService.resetForRun();
+      flagService.resetForRun();
+    });
+
+    afterEach(() => {
+      itemService.resetForRun();
+      flagService.resetForRun();
+    });
+
+    it('persist() includes itemService inventory in the saved state', fakeAsync(() => {
+      service.startNewRun();
+      itemService.addItem(ItemType.HEAL_POTION);
+      itemService.addItem(ItemType.HEAL_POTION);
+      itemService.addItem(ItemType.BOMB);
+
+      // Trigger persist() via selectNode
+      service.selectNode('node_0_0');
+
+      const savedState = persistence.saveRunState.calls.mostRecent().args[0] as RunState;
+      expect(savedState.itemInventory).toBeDefined();
+      const healEntry = savedState.itemInventory!.entries.find(e => e[0] === ItemType.HEAL_POTION);
+      const bombEntry = savedState.itemInventory!.entries.find(e => e[0] === ItemType.BOMB);
+      expect(healEntry?.[1]).toBe(2);
+      expect(bombEntry?.[1]).toBe(1);
+    }));
+
+    it('persist() includes runStateFlagService state', fakeAsync(() => {
+      service.startNewRun();
+      flagService.setFlag('test_flag', 3);
+
+      service.selectNode('node_0_0');
+
+      const savedState = persistence.saveRunState.calls.mostRecent().args[0] as RunState;
+      expect(savedState.runStateFlags).toBeDefined();
+      const flagEntry = savedState.runStateFlags!.entries.find(e => e[0] === 'test_flag');
+      expect(flagEntry?.[1]).toBe(3);
+    }));
+
+    it('persist() includes runStateFlagService consumedEventIds', fakeAsync(() => {
+      service.startNewRun();
+      flagService.markEventConsumed('foo_event');
+
+      service.selectNode('node_0_0');
+
+      const savedState = persistence.saveRunState.calls.mostRecent().args[0] as RunState;
+      expect(savedState.runStateFlags).toBeDefined();
+      expect(savedState.runStateFlags!.consumedEventIds).toContain('foo_event');
+    }));
+
+    it('resumeRun() restores item inventory from saved state', fakeAsync(() => {
+      const itemInventory: SerializedItemInventory = {
+        entries: [[ItemType.ENERGY_ELIXIR, 2], [ItemType.BOMB, 1]],
+      };
+      const fakeState: RunState = {
+        id: 'run_resume',
+        seed: 100,
+        ascensionLevel: 0,
+        config: { startingLives: 20, startingGold: 150, actsCount: 2, nodesPerAct: 12 },
+        actIndex: 0,
+        currentNodeId: null,
+        completedNodeIds: [],
+        lives: 20,
+        maxLives: 20,
+        gold: 150,
+        relicIds: [],
+        deckCardIds: [],
+        encounterResults: [],
+        status: RunStatus.IN_PROGRESS,
+        startedAt: Date.now(),
+        score: 0,
+        itemInventory,
+      };
+      persistence.loadRunState.and.returnValue(fakeState);
+      persistence.loadNodeMap.and.returnValue(makeNodeMap());
+
+      service.resumeRun();
+
+      const inventory = itemService.getInventory();
+      expect(inventory.get(ItemType.ENERGY_ELIXIR)).toBe(2);
+      expect(inventory.get(ItemType.BOMB)).toBe(1);
+    }));
+
+    it('resumeRun() restores flags from saved state', fakeAsync(() => {
+      const runStateFlags: SerializedRunStateFlags = {
+        entries: [['merchant_aided', 1], ['scout_saved', 2]],
+        consumedEventIds: [],
+      };
+      const fakeState: RunState = {
+        id: 'run_flags',
+        seed: 200,
+        ascensionLevel: 0,
+        config: { startingLives: 20, startingGold: 150, actsCount: 2, nodesPerAct: 12 },
+        actIndex: 0,
+        currentNodeId: null,
+        completedNodeIds: [],
+        lives: 20,
+        maxLives: 20,
+        gold: 150,
+        relicIds: [],
+        deckCardIds: [],
+        encounterResults: [],
+        status: RunStatus.IN_PROGRESS,
+        startedAt: Date.now(),
+        score: 0,
+        runStateFlags,
+      };
+      persistence.loadRunState.and.returnValue(fakeState);
+      persistence.loadNodeMap.and.returnValue(makeNodeMap());
+
+      service.resumeRun();
+
+      expect(flagService.getFlag('merchant_aided')).toBe(1);
+      expect(flagService.getFlag('scout_saved')).toBe(2);
+    }));
+
+    it('resumeRun() restores consumedEventIds from saved state', fakeAsync(() => {
+      const runStateFlags: SerializedRunStateFlags = {
+        entries: [],
+        consumedEventIds: ['wandering_merchant_intro', 'cursed_idol_offer'],
+      };
+      const fakeState: RunState = {
+        id: 'run_consumed',
+        seed: 300,
+        ascensionLevel: 0,
+        config: { startingLives: 20, startingGold: 150, actsCount: 2, nodesPerAct: 12 },
+        actIndex: 0,
+        currentNodeId: null,
+        completedNodeIds: [],
+        lives: 20,
+        maxLives: 20,
+        gold: 150,
+        relicIds: [],
+        deckCardIds: [],
+        encounterResults: [],
+        status: RunStatus.IN_PROGRESS,
+        startedAt: Date.now(),
+        score: 0,
+        runStateFlags,
+      };
+      persistence.loadRunState.and.returnValue(fakeState);
+      persistence.loadNodeMap.and.returnValue(makeNodeMap());
+
+      service.resumeRun();
+
+      expect(flagService.isEventConsumed('wandering_merchant_intro')).toBeTrue();
+      expect(flagService.isEventConsumed('cursed_idol_offer')).toBeTrue();
+    }));
+
+    it('resumeRun() backward-compat: RunState without itemInventory restores to empty inventory', fakeAsync(() => {
+      const fakeState: RunState = {
+        id: 'run_compat_items',
+        seed: 400,
+        ascensionLevel: 0,
+        config: { startingLives: 20, startingGold: 150, actsCount: 2, nodesPerAct: 12 },
+        actIndex: 0,
+        currentNodeId: null,
+        completedNodeIds: [],
+        lives: 20,
+        maxLives: 20,
+        gold: 150,
+        relicIds: [],
+        deckCardIds: [],
+        encounterResults: [],
+        status: RunStatus.IN_PROGRESS,
+        startedAt: Date.now(),
+        score: 0,
+        // intentionally no itemInventory field
+      };
+      persistence.loadRunState.and.returnValue(fakeState);
+      persistence.loadNodeMap.and.returnValue(makeNodeMap());
+
+      expect(() => service.resumeRun()).not.toThrow();
+      expect(itemService.getInventory().size).toBe(0);
+    }));
+
+    it('resumeRun() backward-compat: RunState without runStateFlags restores to empty flags', fakeAsync(() => {
+      const fakeState: RunState = {
+        id: 'run_compat_flags',
+        seed: 500,
+        ascensionLevel: 0,
+        config: { startingLives: 20, startingGold: 150, actsCount: 2, nodesPerAct: 12 },
+        actIndex: 0,
+        currentNodeId: null,
+        completedNodeIds: [],
+        lives: 20,
+        maxLives: 20,
+        gold: 150,
+        relicIds: [],
+        deckCardIds: [],
+        encounterResults: [],
+        status: RunStatus.IN_PROGRESS,
+        startedAt: Date.now(),
+        score: 0,
+        // intentionally no runStateFlags field
+      };
+      persistence.loadRunState.and.returnValue(fakeState);
+      persistence.loadNodeMap.and.returnValue(makeNodeMap());
+
+      expect(() => service.resumeRun()).not.toThrow();
+      expect(flagService.getAllFlags().size).toBe(0);
+    }));
+  });
+
+  // ── S7: qualitative ascension effects ────────────────────────
+
+  describe('S7 — SHOP_SLOT_REDUCTION (A13)', () => {
+    beforeEach(() => {
+      const stubRelics: RelicDefinition[] = [
+        RELIC_DEFINITIONS[RelicId.IRON_HEART],
+        RELIC_DEFINITIONS[RelicId.GOLD_MAGNET],
+        RELIC_DEFINITIONS[RelicId.STURDY_BOOTS],
+        RELIC_DEFINITIONS[RelicId.QUICK_DRAW],
+        RELIC_DEFINITIONS[RelicId.LUCKY_COIN],
+      ];
+      // A18 grants a starting relic — getAvailableRelics is called on startNewRun now.
+      // Provide stubs for all rarity variants.
+      relicService.getAvailableRelics.and.callFake((rarity?: RelicRarity) => {
+        if (rarity === RelicRarity.COMMON) {
+          return stubRelics.filter(r => r.rarity === RelicRarity.COMMON);
+        }
+        return stubRelics;
+      });
+    });
+
+    it('at A12 (no SHOP_SLOT_REDUCTION), shop has 3 relics and 3 cards', fakeAsync(() => {
+      service.startNewRun(12);
+      service.generateShopItems();
+      const items = service.getShopItems();
+      const relicItems = items.filter(i => i.item.type === 'relic');
+      const cardItems = items.filter(i => i.item.type === 'card');
+      expect(relicItems.length).toBe(3); // SHOP_CONFIG.relicsInShop baseline
+      expect(cardItems.length).toBe(3); // SHOP_CONFIG.cardsInShop baseline
+    }));
+
+    it('at A13 (SHOP_SLOT_REDUCTION=1), shop has 2 relics and 2 cards', fakeAsync(() => {
+      service.startNewRun(13);
+      service.generateShopItems();
+      const items = service.getShopItems();
+      const relicItems = items.filter(i => i.item.type === 'relic');
+      const cardItems = items.filter(i => i.item.type === 'card');
+      expect(relicItems.length).toBe(2); // 3 - 1
+      expect(cardItems.length).toBe(2); // 3 - 1
+    }));
+  });
+
+  describe('S7 — STARTING_RELIC_DOWNGRADE (A18)', () => {
+    it('at A17 (no downgrade), startNewRun() does NOT grant a starting relic', fakeAsync(() => {
+      // H2d: stub returns relics only for COMMON so a pre-hotfix regression calling
+      // getAvailableRelics() without a rarity filter would still get an empty array.
+      relicService.getAvailableRelics.and.callFake((rarity?: RelicRarity) => {
+        return rarity === RelicRarity.COMMON ? [RELIC_DEFINITIONS[RelicId.IRON_HEART]] : [];
+      });
+
+      service.startNewRun(17);
+
+      // A17 does not trigger the A18+ starter-relic penalty — grantStartingRelic must not be called.
+      expect(relicService.getAvailableRelics).not.toHaveBeenCalled();
+      expect(service.runState!.relicIds).toEqual([]);
+    }));
+
+    it('at A18 (STARTING_RELIC_DOWNGRADE=1), startNewRun() calls getAvailableRelics(COMMON)', fakeAsync(() => {
+      const stubRelics: RelicDefinition[] = [RELIC_DEFINITIONS[RelicId.IRON_HEART]];
+      relicService.getAvailableRelics.and.callFake((rarity?: RelicRarity) => {
+        return rarity === RelicRarity.COMMON ? stubRelics : [];
+      });
+
+      service.startNewRun(18);
+
+      // getAvailableRelics must be called with RelicRarity.COMMON for the starter relic at A18
+      const callsWithCommon = relicService.getAvailableRelics.calls.all()
+        .filter(c => c.args[0] === RelicRarity.COMMON);
+      expect(callsWithCommon.length).toBeGreaterThan(0);
+
+      // H2c: the granted relic must be COMMON rarity and must appear in relicIds
+      expect(service.runState!.relicIds.length).toBe(1);
+      const grantedRelicId = service.runState!.relicIds[0] as RelicId;
+      const grantedDef = RELIC_DEFINITIONS[grantedRelicId];
+      expect(grantedDef.rarity).toBe(RelicRarity.COMMON);
     }));
   });
 });

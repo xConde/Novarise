@@ -20,6 +20,8 @@ import { GameStatsService } from './game-stats.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { RunService } from '../../../run/services/run.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
+import { ItemService } from '../../../run/services/item.service';
+import { RunStateFlagService } from '../../../run/services/run-state-flag.service';
 import { EncounterCheckpointService } from '../../../run/services/encounter-checkpoint.service';
 import { WavePreviewService } from './wave-preview.service';
 import { TurnHistoryService } from './turn-history.service';
@@ -58,6 +60,8 @@ describe('WaveCombatFacadeService', () => {
   let challengeTrackingService: jasmine.SpyObj<ChallengeTrackingService>;
   let runService: jasmine.SpyObj<RunService>;
   let cardEffectService: jasmine.SpyObj<CardEffectService>;
+  let itemService: jasmine.SpyObj<ItemService>;
+  let runStateFlagService: jasmine.SpyObj<RunStateFlagService>;
   let encounterCheckpointService: jasmine.SpyObj<EncounterCheckpointService>;
   let wavePreviewService: jasmine.SpyObj<WavePreviewService>;
   let turnHistoryService: jasmine.SpyObj<TurnHistoryService>;
@@ -132,6 +136,12 @@ describe('WaveCombatFacadeService', () => {
     cardEffectService = jasmine.createSpyObj('CardEffectService', ['serializeModifiers']);
     cardEffectService.serializeModifiers.and.returnValue([]);
 
+    itemService = jasmine.createSpyObj('ItemService', ['serialize']);
+    (itemService.serialize as jasmine.Spy).and.returnValue({ entries: [] });
+
+    runStateFlagService = jasmine.createSpyObj('RunStateFlagService', ['serialize']);
+    (runStateFlagService.serialize as jasmine.Spy).and.returnValue({ entries: [] });
+
     encounterCheckpointService = jasmine.createSpyObj('EncounterCheckpointService', ['saveCheckpoint', 'clearCheckpoint']);
     encounterCheckpointService.saveCheckpoint.and.returnValue(true);
 
@@ -183,6 +193,8 @@ describe('WaveCombatFacadeService', () => {
       challengeTrackingService,
       runService,
       cardEffectService,
+      itemService,
+      runStateFlagService,
       encounterCheckpointService,
       wavePreviewService,
       turnHistoryService,

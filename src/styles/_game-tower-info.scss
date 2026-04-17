@@ -24,20 +24,9 @@
   }
 }
 
-@media (max-width: 480px) {
-  .board-container .tower-info-panel {
-    left: var(--spacing-xs);
-    right: var(--spacing-xs);
-    width: auto;
-    min-width: auto;
-    transform: none;
-    bottom: var(--shell-tower-info-bottom);
-    max-height: 50vh;
-    overflow-y: auto;
-    padding: var(--spacing-sm);
-    font-size: var(--font-size-3xs);
-  }
-}
+// (Mobile overrides for this panel are at the bottom of the file — M9
+// moved them there because the desktop child selectors below were beating
+// them on source order.)
 
 .board-container .tower-info-panel .tower-info-header {
   display: flex;
@@ -285,4 +274,80 @@
 .board-container .tower-info-panel .spec-cancel-btn:hover {
   background: var(--panel-neutral-hover);
   color: var(--text-color);
+}
+
+// ============================================================================
+// Mobile overrides (≤480px).
+//
+// Placed at the END of this file so mobile rules win on source order
+// against the equal-specificity desktop rules above — no !important
+// needed now that ordering is correct. The close-button override is
+// the most important shrink: its desktop size inherits --font-size-large
+// (32px), which dominates a 390px-wide header.
+// ============================================================================
+@media (max-width: 480px) {
+  .board-container .tower-info-panel {
+    left: var(--spacing-xs);
+    right: var(--spacing-xs);
+    width: auto;
+    min-width: 0;
+    max-width: calc(100vw - (var(--spacing-xs) * 2));
+    transform: none;
+    bottom: var(--shell-tower-info-bottom);
+    max-height: 40vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-3xs);
+    box-sizing: border-box;
+  }
+  .board-container .tower-info-panel .tower-info-header {
+    margin-bottom: var(--spacing-xs);
+    padding-bottom: var(--spacing-xs);
+    gap: var(--spacing-xs);
+  }
+  .board-container .tower-info-panel .tower-info-name {
+    font-size: var(--font-size-small);
+  }
+  .board-container .tower-info-panel .tower-info-close {
+    font-size: var(--font-size-title);
+    padding: 0 var(--spacing-xs);
+    line-height: 0.8;
+  }
+  .board-container .tower-info-panel .level-star {
+    font-size: var(--font-size-2xs);
+  }
+  .board-container .tower-info-panel .tower-info-stats {
+    gap: 2px;
+    margin-bottom: var(--spacing-xs);
+  }
+  .board-container .tower-info-panel .stat-row {
+    font-size: var(--font-size-2xs);
+    padding: 1px 0;
+  }
+  .board-container .tower-info-panel .tower-info-targeting {
+    margin-bottom: var(--spacing-xs);
+  }
+  .board-container .tower-info-panel .targeting-btn {
+    font-size: var(--font-size-2xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+  .board-container .tower-info-panel .tower-info-actions {
+    gap: var(--spacing-xs);
+  }
+  // min-width: 0 lets `flex: 1` divide width evenly — without it, the
+  // base min-content width from the button copy pushes both cells wider
+  // than the panel can hold.
+  .board-container .tower-info-panel .upgrade-btn,
+  .board-container .tower-info-panel .sell-btn {
+    min-width: 0;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-2xs);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .board-container .tower-info-panel .upgrade-tile-percent {
+    display: none;
+  }
 }

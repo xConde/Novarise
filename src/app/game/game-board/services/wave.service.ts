@@ -36,6 +36,20 @@ export class WaveService {
    */
   private turnScheduleRetries: number[] = [];
 
+  /**
+   * One-shot speed multiplier applied to all enemies spawned in the next wave.
+   * Set by CALTROPS item via setNextWaveEnemySpeedMultiplier(); consumed and
+   * reset to 1.0 by consumeNextWaveEnemySpeedMultiplier() at wave-start.
+   */
+  private nextWaveEnemySpeedMultiplier = 1;
+
+  /**
+   * CALTROPS multiplier consumed from nextWaveEnemySpeedMultiplier at startWave().
+   * Applied in spawnForTurn() so every enemy spawned this wave is affected.
+   * Resets to 1 on the next startWave() call (consumed once, not re-used).
+   */
+  private activeWaveCaltropsMultiplier = 1;
+
   constructor(
     private enemyService: EnemyService,
     private relicService: RelicService,
@@ -69,6 +83,21 @@ export class WaveService {
   /** Returns the active wave definitions (custom if set, otherwise default). */
   getWaveDefinitions(): WaveDefinition[] {
     return this.waveDefinitions;
+  }
+
+  /**
+   * Returns the WaveDefinition for the currently active wave, or null if no
+   * wave has been started yet or the current index is out of range (e.g. endless
+   * waves that aren't backed by waveDefinitions). Callers must null-guard.
+   */
+  getCurrentWaveDefinition(): WaveDefinition | null {
+    if (this.currentWaveIndex < 0) return null;
+    // Endless waves store their generated definition via currentEndlessResult;
+    // reconstruct a WaveDefinition so callers get a uniform interface.
+    if (this.currentEndlessResult) {
+      return { entries: this.currentEndlessResult.entries, reward: this.currentEndlessResult.reward };
+    }
+    return this.waveDefinitions[this.currentWaveIndex] ?? null;
   }
 
   /** Enables or disables endless mode. Must be set before `startWave()` is called for waves beyond WAVE_DEFINITIONS length. */
@@ -132,6 +161,9 @@ export class WaveService {
     } else {
       return;
     }
+
+    // Consume the CALTROPS one-shot multiplier exactly once per wave.
+    this.activeWaveCaltropsMultiplier = this.consumeNextWaveEnemySpeedMultiplier();
 
     const countMultiplier = Math.max(1, waveCountMultiplier);
 
@@ -245,7 +277,7 @@ export class WaveService {
     }
 
     const waveHealthMult = this.currentEndlessResult?.healthMultiplier ?? 1;
-    const waveSpeedMult = this.currentEndlessResult?.speedMultiplier ?? 1;
+    const waveSpeedMult = (this.currentEndlessResult?.speedMultiplier ?? 1) * this.activeWaveCaltropsMultiplier;
 
     // Build the occupied-spawner set ONCE before the batch so that multiple
     // enemies scheduled for the same turn don't double-book different spawners.
@@ -397,6 +429,8 @@ export class WaveService {
       active: this.active,
       endlessMode: this.endlessMode,
       currentEndlessResult: this.currentEndlessResult ? { ...this.currentEndlessResult } : null,
+      nextWaveEnemySpeedMultiplier: this.nextWaveEnemySpeedMultiplier,
+      activeWaveCaltropsMultiplier: this.activeWaveCaltropsMultiplier,
     };
   }
 
@@ -415,6 +449,38 @@ export class WaveService {
     this.active = snapshot.active;
     this.endlessMode = snapshot.endlessMode;
     this.currentEndlessResult = snapshot.currentEndlessResult ? { ...snapshot.currentEndlessResult } : null;
+    // Backwards compat: v6 checkpoints lack these fields; default to 1 (no pending CALTROPS effect).
+    this.nextWaveEnemySpeedMultiplier = snapshot.nextWaveEnemySpeedMultiplier ?? 1;
+    this.activeWaveCaltropsMultiplier = snapshot.activeWaveCaltropsMultiplier ?? 1;
+  }
+
+  /**
+   * SMOKE_BOMB item effect: insert one empty spawn turn at the current
+   * schedule position. Only useful during COMBAT when a wave is active.
+   * Mirrors the TEMPORAL_RIFT relic mechanism — prepends an empty turn
+   * at turnScheduleIndex so the next real spawn is delayed by 1 turn.
+   * No-op when the wave is not active.
+   */
+  insertEmptyTurn(): void {
+    if (!this.active) return;
+    this.turnSchedule.splice(this.turnScheduleIndex, 0, []);
+    this.turnScheduleRetries.splice(this.turnScheduleIndex, 0, 0);
+  }
+
+  /**
+   * CALTROPS item effect: set a one-shot speed multiplier applied to all
+   * enemies spawned in the next wave. Call before startWave().
+   * Resets to 1.0 after startWave() reads and applies it.
+   */
+  setNextWaveEnemySpeedMultiplier(multiplier: number): void {
+    this.nextWaveEnemySpeedMultiplier = multiplier;
+  }
+
+  /** Read and reset the one-shot speed multiplier for the next wave. */
+  consumeNextWaveEnemySpeedMultiplier(): number {
+    const m = this.nextWaveEnemySpeedMultiplier;
+    this.nextWaveEnemySpeedMultiplier = 1;
+    return m;
   }
 
   /** Resets wave state. Call from `restartGame()` before a new game begins. Clears custom waves — re-apply via `setCustomWaves()` if restarting a campaign level. */
@@ -426,6 +492,8 @@ export class WaveService {
     this.turnSchedule = [];
     this.turnScheduleIndex = 0;
     this.turnScheduleRetries = [];
+    this.nextWaveEnemySpeedMultiplier = 1;
+    this.activeWaveCaltropsMultiplier = 1;
     this.clearCustomWaves();
   }
 }

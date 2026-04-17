@@ -2969,10 +2969,12 @@ describe('EnemyService', () => {
       expect(enemy!.gridPosition).toEqual({ row: 1, col: 0 });
     });
 
-    it('buildOccupiedSpawnerSet() returns empty set (dying enemies not included)', () => {
-      // buildOccupiedSpawnerSet() always returns an empty set. Dying enemies
-      // are not included — this test verifies the invariant still holds.
+    it('buildOccupiedSpawnerSet() excludes dying enemies standing on a spawner tile', () => {
+      // A dying enemy (e.g. one whose death animation is playing) should NOT
+      // block the spawner — it is effectively vacated.
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // Enemy spawns at the default spawner (0,0).
+      expect(enemy.gridPosition).toEqual({ row: 0, col: 0 });
       service.damageEnemy(enemy.id, enemy.maxHealth);
       service.startDyingAnimation(enemy.id);
       expect(enemy.dying).toBeTrue();
@@ -2981,13 +2983,29 @@ describe('EnemyService', () => {
       expect(occupied.has('0-0')).toBeFalse();
     });
 
-    it('buildOccupiedSpawnerSet() always returns empty set (same-turn stacking handled by externalOccupied)', () => {
-      // buildOccupiedSpawnerSet() returns an empty seed set. Within-batch
-      // accumulation of externalOccupied in spawnEnemy handles same-turn stacking.
-      // Pre-existing enemies from prior turns have moved off the spawner via
-      // stepEnemiesOneTurn() before the next spawnForTurn() call.
-      service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+    it('buildOccupiedSpawnerSet() includes living enemy still standing on a spawner tile', () => {
+      // A living non-dying enemy that has not yet advanced off its spawner tile
+      // (e.g. SLOW-paralyzed) must block that spawner so a new enemy is not
+      // stacked on the same tile.
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // Enemy spawns at the default spawner (0,0) and has not moved.
+      expect(enemy.gridPosition).toEqual({ row: 0, col: 0 });
+      expect(enemy.dying).toBeFalsy();
+
       const occupied = service.buildOccupiedSpawnerSet();
+      expect(occupied.has('0-0')).toBeTrue();
+      expect(occupied.size).toBe(1);
+    });
+
+    it('buildOccupiedSpawnerSet() does not include enemy on a non-spawner tile', () => {
+      // An enemy that has already advanced onto a regular path tile must NOT
+      // appear in the occupied-spawner set.
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // Manually move the enemy off the spawner to a path tile (row=1, col=0).
+      enemy.gridPosition = { row: 1, col: 0 };
+
+      const occupied = service.buildOccupiedSpawnerSet();
+      expect(occupied.has('1-0')).toBeFalse();
       expect(occupied.size).toBe(0);
     });
 

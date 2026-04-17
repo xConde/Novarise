@@ -3,6 +3,7 @@ import {
   AscensionEffectType,
   getAscensionEffects,
   MAX_ASCENSION_LEVEL,
+  QUALITATIVE_ASCENSION_VALUES,
 } from './ascension.model';
 
 describe('Ascension Model', () => {
@@ -69,16 +70,16 @@ describe('Ascension Model', () => {
       expect(effects.get(AscensionEffectType.ENEMY_SPEED_MULTIPLIER)).toBeCloseTo(expected, 5);
     });
 
-    it('should sum gold reductions additively across levels 3 and 13', () => {
+    it('should have gold reduction only from level 3 (A13 no longer duplicates it)', () => {
       const effects = getAscensionEffects(20);
-      // Level 3: 20, Level 13: 30 → 50
-      expect(effects.get(AscensionEffectType.STARTING_GOLD_REDUCTION)).toBe(50);
+      // Level 3: 20 only — A13 now uses SHOP_SLOT_REDUCTION instead
+      expect(effects.get(AscensionEffectType.STARTING_GOLD_REDUCTION)).toBe(20);
     });
 
-    it('should sum lives reductions additively across levels 4 and 14', () => {
+    it('should have lives reduction only from level 4 (A14 no longer duplicates it)', () => {
       const effects = getAscensionEffects(20);
-      // Level 4: 2, Level 14: 3 → 5
-      expect(effects.get(AscensionEffectType.STARTING_LIVES_REDUCTION)).toBe(5);
+      // Level 4: 2 only — A14 now uses EVENT_NODE_REDUCTION instead
+      expect(effects.get(AscensionEffectType.STARTING_LIVES_REDUCTION)).toBe(2);
     });
 
     it('should stack boss health multiplier at level 10 only (for getAscensionEffects(10))', () => {
@@ -118,6 +119,64 @@ describe('Ascension Model', () => {
     it('should have fewer_relic_choices of 1 at level 20 (only level 11 contributes)', () => {
       const effects = getAscensionEffects(20);
       expect(effects.get(AscensionEffectType.FEWER_RELIC_CHOICES)).toBe(1);
+    });
+
+    // ── S7 qualitative effect values ─────────────────────────────────────────
+
+    it('A13 should have SHOP_SLOT_REDUCTION effect with value from QUALITATIVE_ASCENSION_VALUES', () => {
+      const a13 = ASCENSION_LEVELS[12]; // 0-indexed
+      expect(a13.level).toBe(13);
+      expect(a13.effect.type).toBe(AscensionEffectType.SHOP_SLOT_REDUCTION);
+      expect(a13.effect.value).toBe(QUALITATIVE_ASCENSION_VALUES.shopSlotReduction);
+    });
+
+    it('A14 should have EVENT_NODE_REDUCTION effect with value from QUALITATIVE_ASCENSION_VALUES', () => {
+      const a14 = ASCENSION_LEVELS[13];
+      expect(a14.level).toBe(14);
+      expect(a14.effect.type).toBe(AscensionEffectType.EVENT_NODE_REDUCTION);
+      expect(a14.effect.value).toBe(QUALITATIVE_ASCENSION_VALUES.eventNodeReduction);
+    });
+
+    it('A16 should have ELITE_SPAWN_RATE_BONUS effect with value from QUALITATIVE_ASCENSION_VALUES', () => {
+      const a16 = ASCENSION_LEVELS[15];
+      expect(a16.level).toBe(16);
+      expect(a16.effect.type).toBe(AscensionEffectType.ELITE_SPAWN_RATE_BONUS);
+      expect(a16.effect.value).toBe(QUALITATIVE_ASCENSION_VALUES.eliteSpawnBonus);
+    });
+
+    it('A18 should have STARTING_RELIC_DOWNGRADE effect with value from QUALITATIVE_ASCENSION_VALUES', () => {
+      const a18 = ASCENSION_LEVELS[17];
+      expect(a18.level).toBe(18);
+      expect(a18.effect.type).toBe(AscensionEffectType.STARTING_RELIC_DOWNGRADE);
+      expect(a18.effect.value).toBe(QUALITATIVE_ASCENSION_VALUES.startingRelicDowngrade);
+    });
+
+    it('getAscensionEffects(13) should include SHOP_SLOT_REDUCTION of 1', () => {
+      const effects = getAscensionEffects(13);
+      expect(effects.get(AscensionEffectType.SHOP_SLOT_REDUCTION)).toBe(QUALITATIVE_ASCENSION_VALUES.shopSlotReduction);
+    });
+
+    it('getAscensionEffects(14) should include EVENT_NODE_REDUCTION of 1', () => {
+      const effects = getAscensionEffects(14);
+      expect(effects.get(AscensionEffectType.EVENT_NODE_REDUCTION)).toBe(QUALITATIVE_ASCENSION_VALUES.eventNodeReduction);
+    });
+
+    it('getAscensionEffects(16) should include ELITE_SPAWN_RATE_BONUS of 15', () => {
+      const effects = getAscensionEffects(16);
+      expect(effects.get(AscensionEffectType.ELITE_SPAWN_RATE_BONUS)).toBe(QUALITATIVE_ASCENSION_VALUES.eliteSpawnBonus);
+    });
+
+    it('getAscensionEffects(18) should include STARTING_RELIC_DOWNGRADE of 1', () => {
+      const effects = getAscensionEffects(18);
+      expect(effects.get(AscensionEffectType.STARTING_RELIC_DOWNGRADE)).toBe(QUALITATIVE_ASCENSION_VALUES.startingRelicDowngrade);
+    });
+
+    it('getAscensionEffects(20) aggregates all qualitative effects correctly', () => {
+      const effects = getAscensionEffects(20);
+      expect(effects.get(AscensionEffectType.SHOP_SLOT_REDUCTION)).toBe(QUALITATIVE_ASCENSION_VALUES.shopSlotReduction);
+      expect(effects.get(AscensionEffectType.EVENT_NODE_REDUCTION)).toBe(QUALITATIVE_ASCENSION_VALUES.eventNodeReduction);
+      expect(effects.get(AscensionEffectType.ELITE_SPAWN_RATE_BONUS)).toBe(QUALITATIVE_ASCENSION_VALUES.eliteSpawnBonus);
+      expect(effects.get(AscensionEffectType.STARTING_RELIC_DOWNGRADE)).toBe(QUALITATIVE_ASCENSION_VALUES.startingRelicDowngrade);
     });
   });
 });

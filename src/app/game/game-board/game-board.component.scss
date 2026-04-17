@@ -90,11 +90,14 @@
   @media (max-width:480px) {
     --shell-hand-height: 7.5rem;
     --shell-hud-height: 3rem;
-    // End Turn sits cleanly below HUD with a visible gap (not flush)
-    --shell-end-turn-top: calc(var(--shell-hud-top) + var(--shell-hud-height) + var(--spacing-sm));
-    // Mobile stacking: HUD → End Turn → challenge pills → wave status → spawn preview.
-    // Spawn preview sits well below to avoid the stacked overlay cluster.
-    --shell-spawn-top: calc(var(--shell-end-turn-top) + 7.5rem);
+    // End Turn button shares the stats-row band instead of stacking
+    // below it. Aligned to --shell-hud-top so both elements sit on the
+    // same visual row — stats on the left, End Turn centered, gear right.
+    --shell-end-turn-top: var(--shell-hud-top);
+    // M1.3: Challenge strip moved to top-right corner (M2.1), so spawn preview no
+    // longer needs to clear a stacked column. Trimmed from 7.5rem → 4.5rem (~40%),
+    // reclaiming ~48px of dead vertical space below the End Turn button.
+    --shell-spawn-top: calc(var(--shell-end-turn-top) + 4.5rem);
     --shell-hud-top: var(--spacing-xs);
     --shell-hud-left: var(--spacing-xs);
     --shell-minimap-bottom: var(--spacing-sm);
@@ -391,6 +394,20 @@
       animation: none;
     }
   }
+
+  // M1.1: hide keyboard shortcut hint on mobile — "Space" is irrelevant on touch.
+  // Turn number moves to the wave stat in the HUD, so hiding the whole hint span
+  // is the cleanest option. Desktop (≥481px) is unaffected.
+  @media (max-width: 480px) {
+    .end-turn-btn .end-turn-hint {
+      display: none;
+    }
+  }
+
+  // End-turn mobile override lives in the global _game-hud.scss file
+  // (see "Mobile top-row layout" block). It was moved out of this
+  // component-scoped SCSS to sit alongside the other HUD mobile
+  // overrides so the whole top-row layout can be tuned in one place.
 
 
   // Game HUD styles moved to src/styles.css (.board-container .game-hud) for ViewEncapsulation.None reach

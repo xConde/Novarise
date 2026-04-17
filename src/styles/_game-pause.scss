@@ -39,19 +39,6 @@
   position: relative;
 }
 
-@media (max-width: 480px) {
-  .board-container .pause-menu {
-    padding: 1rem 1.25rem;
-    width: min(20rem, 95vw);
-    gap: 0.75rem;
-  }
-
-  .board-container .pause-menu__title {
-    font-size: var(--font-size-large);
-    letter-spacing: 0.2rem;
-  }
-}
-
 .board-container .pause-menu__title {
   font-size: var(--font-size-hero);
   color: var(--text-color);
@@ -60,6 +47,23 @@
   text-shadow: 0 0 1.5rem var(--theme-purple-a50);
   margin: 0;
   text-align: center;
+}
+
+// Mobile overrides must come AFTER the desktop default. Equal specificity
+// between `.board-container .pause-menu__title` rules means source order
+// decides the winner; an earlier pass had the mobile rule above and it
+// was silently losing the cascade.
+@media (max-width: 480px) {
+  .board-container .pause-menu {
+    padding: 1rem 1.25rem;
+    width: min(20rem, 95vw);
+    gap: 0.75rem;
+  }
+
+  .board-container .pause-menu__title {
+    font-size: 1.25rem;
+    letter-spacing: 0.08rem;
+  }
 }
 
 .board-container .pause-menu__subtitle {
@@ -319,6 +323,64 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+// --- Sprint 5 (engine-depth): consumable items in pause menu ---
+
+.board-container .pause-menu__items {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: var(--border-width-thin) solid rgba(255, 255, 255, 0.1);
+}
+
+.board-container .pause-menu__item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.board-container .pause-menu__item-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.5rem;
+  background: rgba(255, 200, 50, 0.06);
+  border: var(--border-width-thin) solid rgba(255, 200, 50, 0.2);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  width: 100%;
+  color: var(--text-color);
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 200, 50, 0.14);
+    border-color: rgba(255, 200, 50, 0.5);
+  }
+
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--theme-cyan);
+    outline-offset: 2px;
+  }
+}
+
+.board-container .pause-menu__item-name {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-2xs);
+  letter-spacing: 0.03em;
+}
+
+.board-container .pause-menu__item-count {
+  font-size: var(--font-size-2xs);
+  color: rgba(255, 200, 50, 0.75);
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .pause-menu__item-btn {
+    transition: none;
+  }
 }
 
 

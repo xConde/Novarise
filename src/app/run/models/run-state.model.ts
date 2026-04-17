@@ -46,6 +46,8 @@ export interface EncounterResult {
 }
 
 import { CardId } from './card.model';
+import { SerializedItemInventory } from './item.model';
+import { SerializedRunStateFlags } from '../services/run-state-flag.service';
 
 export interface RunState {
   readonly id: string;
@@ -65,6 +67,10 @@ export interface RunState {
   readonly status: RunStatus;
   readonly startedAt: number;
   readonly score: number;
+  /** Item inventory persisted at run level. Absent in saves made before H5. */
+  readonly itemInventory?: SerializedItemInventory;
+  /** Run-state flags persisted at run level. Absent in saves made before H5. */
+  readonly runStateFlags?: SerializedRunStateFlags;
 }
 
 export function createInitialRunState(

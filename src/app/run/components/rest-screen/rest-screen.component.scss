@@ -5,12 +5,32 @@
 // band — they stack naturally and share the top of the shell.
 // Media queries tune custom properties — areas never reshuffle.
 
+// Host fills the remaining flex cell in .run-content so min-height: 100% on
+// .rest-screen resolves to the actual viewport minus header, not to content.
+:host {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
 .rest-screen {
   // Shell custom properties
   --rest-status-size: auto;
   --rest-preview-size: auto;
   --rest-panel-size: auto;
   --rest-actions-size: auto;
+
+  // Dark-Souls-bonfire palette. Warm amber core, deep ember coals,
+  // dim golden ambient. Each channel drives a different hearth layer.
+  --rest-ember-core: 255, 222, 148;
+  --rest-ember-warm: 255, 150, 58;
+  --rest-ember-deep: 190, 60, 20;
+  --rest-ember-ash:  120, 30, 10;
+
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
 
   display: grid;
   grid-template-rows:
@@ -31,10 +51,166 @@
     "panel"
     "actions";
   justify-items: center;
+  align-content: start;
+  min-height: 100%;
   gap: var(--spacing-lg);
   padding: var(--spacing-2xl) var(--spacing-md) var(--spacing-xl);
   text-align: center;
   color: var(--text-color);
+}
+
+// ── Bonfire hearth ────────────────────────────────────────────────────────────
+// Three layers, three independent animations:
+//   .glow    — ambient firelight breathing across the lower band
+//   .flame   — swaying pillar with a nested lick keyframe scaling the body
+//   .embers  — tiled radial dots drifting upward, masked to the hearth column
+
+.rest-hearth {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+// Every hearth layer is absolute-positioned and non-interactive.
+// Scoped per-child (not a blanket span {} rule) so individual layers
+// can set their own insets without being clobbered by selector specificity.
+
+// Ambient firelight — broad warm wash covering the content area.
+// Centered on the upper third of the shell so the light "lives" where
+// the text does, not where the buttons end.
+.rest-hearth__glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: block;
+  background:
+    radial-gradient(ellipse 65% 45% at 50% 38%,
+      rgba(var(--rest-ember-warm), 0.22) 0%,
+      rgba(var(--rest-ember-deep), 0.11) 32%,
+      rgba(var(--rest-ember-ash),  0.05) 58%,
+      transparent 82%),
+    radial-gradient(ellipse 140% 25% at 50% 36%,
+      rgba(var(--rest-ember-warm), 0.04) 0%,
+      transparent 62%);
+  animation: rest-hearth-breathe 6.3s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+
+// Flame body — anchored BEHIND the content, base near the buttons row
+// and tip reaching up toward the subtitle. Narrower tongue than before;
+// the wider silhouette read as a spotlight instead of a flame.
+.rest-hearth__flame {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  // clamp() replaces the old fixed 20rem + max-width: 42vw combo.
+  // 70vw lets mobile viewports breathe; the 22rem upper cap keeps the
+  // flame from ballooning on ultra-wide desktops.
+  width: clamp(16rem, 70vw, 22rem);
+  height: 28rem;
+  pointer-events: none;
+  display: block;
+  transform: translateX(-50%);
+  transform-origin: 50% 100%;
+  animation: rest-hearth-sway 3.9s cubic-bezier(0.45, 0.1, 0.55, 0.9) infinite;
+  will-change: transform;
+  mix-blend-mode: screen;
+  filter: blur(6px);
+}
+
+.rest-hearth__flame-inner {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: block;
+  background:
+    // Narrower, taller tongue with a hot core that fades through amber
+    // to deep ember at the edges. Widens toward the base, tapers at top.
+    radial-gradient(ellipse 42% 85% at 50% 92%,
+      rgba(var(--rest-ember-core), 0.95) 0%,
+      rgba(var(--rest-ember-warm), 0.65) 22%,
+      rgba(var(--rest-ember-deep), 0.32) 50%,
+      rgba(var(--rest-ember-ash),  0.14) 72%,
+      transparent 92%);
+  transform-origin: 50% 100%;
+  animation: rest-hearth-lick 1.9s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  will-change: transform, opacity;
+}
+
+// Rising embers — tiled pinpricks drifting upward. Mask column is now
+// vertically centered on the flame so the ember trail rises through
+// and above the visible flame instead of floating off-axis.
+.rest-hearth__embers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: block;
+  background-image:
+    // Original 8 sparks
+    radial-gradient(circle 1.5px at 20% 80%,  rgba(var(--rest-ember-core), 0.95), transparent 70%),
+    radial-gradient(circle 1.2px at 48% 55%,  rgba(var(--rest-ember-warm), 0.90), transparent 70%),
+    radial-gradient(circle 2px   at 72% 88%,  rgba(var(--rest-ember-core), 0.85), transparent 65%),
+    radial-gradient(circle 1px   at 34% 38%,  rgba(var(--rest-ember-warm), 0.80), transparent 72%),
+    radial-gradient(circle 1.5px at 82% 22%,  rgba(var(--rest-ember-core), 0.75), transparent 68%),
+    radial-gradient(circle 1px   at 12% 12%,  rgba(var(--rest-ember-warm), 0.70), transparent 70%),
+    radial-gradient(circle 1.8px at 58% 74%,  rgba(var(--rest-ember-core), 0.90), transparent 68%),
+    radial-gradient(circle 1.2px at 90% 65%,  rgba(var(--rest-ember-warm), 0.80), transparent 70%),
+    // +3 sparks for ~37% more density per tile
+    radial-gradient(circle 1.4px at 28% 28%,  rgba(var(--rest-ember-core), 0.85), transparent 68%),
+    radial-gradient(circle 1px   at 64% 45%,  rgba(var(--rest-ember-warm), 0.75), transparent 72%),
+    radial-gradient(circle 1.6px at 4%  50%,  rgba(var(--rest-ember-core), 0.80), transparent 66%);
+  background-size: 22rem 32rem;
+  background-repeat: repeat;
+  // Mask sized in rem (not %) so it tracks the flame body regardless of
+  // shell height. X-radius ~half flame width, Y-radius ~half flame height.
+  // Centered slightly ABOVE the flame midpoint so the spark trail fades
+  // upward and does NOT bleed below the flame body.
+  mask-image: radial-gradient(ellipse 9rem 14rem at 50% 26%,
+    black 0%, black 40%, rgba(0, 0, 0, 0.5) 72%, transparent 92%);
+  -webkit-mask-image: radial-gradient(ellipse 9rem 14rem at 50% 26%,
+    black 0%, black 40%, rgba(0, 0, 0, 0.5) 72%, transparent 92%);
+  mix-blend-mode: screen;
+  animation: rest-hearth-embers 9.4s linear infinite;
+  will-change: background-position;
+  opacity: 0.9;
+}
+
+// Slow breathe on the ambient glow — the room pulse
+@keyframes rest-hearth-breathe {
+  0%, 100% { opacity: 0.88; transform: scale(1); }
+  50%      { opacity: 1.00; transform: scale(1.035); }
+}
+
+// Sway on the flame body — irregular stops, never returning through
+// exactly the same point, so the motion never feels looped
+@keyframes rest-hearth-sway {
+  0%   { transform: translateX(-50%)            rotate(0deg); }
+  23%  { transform: translateX(calc(-50% - 10px)) rotate(-2.2deg); }
+  46%  { transform: translateX(calc(-50% + 6px))  rotate(1.1deg); }
+  71%  { transform: translateX(calc(-50% + 12px)) rotate(2.4deg); }
+  88%  { transform: translateX(calc(-50% - 4px))  rotate(-0.8deg); }
+  100% { transform: translateX(-50%)            rotate(0deg); }
+}
+
+// Lick — rapid asymmetric scale pulses with occasional brightness spike
+@keyframes rest-hearth-lick {
+  0%   { transform: scaleY(1)    scaleX(1);    opacity: 0.78; }
+  14%  { transform: scaleY(1.14) scaleX(0.92); opacity: 0.95; }
+  29%  { transform: scaleY(0.92) scaleX(1.08); opacity: 0.72; }
+  46%  { transform: scaleY(1.22) scaleX(0.86); opacity: 1.00; }
+  63%  { transform: scaleY(0.96) scaleX(1.04); opacity: 0.82; }
+  79%  { transform: scaleY(1.10) scaleX(0.94); opacity: 0.90; }
+  100% { transform: scaleY(1)    scaleX(1);    opacity: 0.78; }
+}
+
+// Ember drift — tiled sparks rise by scrolling background-position upward.
+// Opacity fade-in/out at the ends hides the seam when the tile wraps.
+@keyframes rest-hearth-embers {
+  0%   { background-position: 0 36rem;  opacity: 0; }
+  8%   { opacity: 0.85; }
+  92%  { opacity: 0.85; }
+  100% { background-position: 0 -36rem; opacity: 0; }
 }
 
 // ── Grid-area assignments for direct children ─────────────────────────────────
@@ -97,31 +273,72 @@
 }
 
 // ── Heal preview ──────────────────────────────────────────────────────────────
+// Redesigned away from the green-pill treatment that clashed with the
+// firelight. Now reads as warm ember text with a hairline underline —
+// reinforces the bonfire language and signals "preview" via the slow pulse.
 
 .rest-heal-preview {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  padding: 0.1rem 0.5rem 0.35rem;
   font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-base);
-  background: var(--action-success-bg);
-  border: var(--border-width-thin) solid var(--action-success-border);
-  border-radius: var(--border-radius-md);
-  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: var(--font-size-small);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(var(--rest-ember-core), 0.9);
+  text-shadow:
+    0 0 10px rgba(var(--rest-ember-warm), 0.4),
+    0 0 2px rgba(var(--rest-ember-core), 0.55);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  animation: rest-heal-preview-pulse 3.2s ease-in-out infinite;
+  will-change: opacity;
+
+  // Hairline underline in warm gold, fading at the ends so it doesn't
+  // read as a rigid border. Purely decorative — doesn't box the content.
+  &::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: 70%;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(var(--rest-ember-warm), 0.35) 22%,
+      rgba(var(--rest-ember-core), 0.55) 50%,
+      rgba(var(--rest-ember-warm), 0.35) 78%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
 }
 
 .rest-heal-preview__amount {
-  color: var(--action-success);
+  color: rgba(var(--rest-ember-core), 1);
   font-weight: 700;
 }
 
 .rest-heal-preview__arrow {
-  color: var(--text-faint);
+  color: rgba(var(--rest-ember-warm), 0.7);
+  font-size: 0.85em;
+  font-weight: 300;
+  padding: 0 0.15rem;
 }
 
 .rest-heal-preview__result {
-  color: var(--text-color);
-  font-weight: 600;
+  color: rgba(var(--rest-ember-core), 0.82);
+  font-weight: 500;
+}
+
+@keyframes rest-heal-preview-pulse {
+  0%, 100% { opacity: 0.84; }
+  50%      { opacity: 1.00; }
 }
 
 .rest-full-notice {
@@ -220,5 +437,20 @@
 // ── Reduced motion ────────────────────────────────────────────────────────────
 
 @media (prefers-reduced-motion: reduce) {
-  // No animations present after campfire removal
+  // Freeze the hearth. Keep the static glow (ambient firelight reads fine
+  // without motion) but stop all flame/ember animation and hide the
+  // ember tile (a frozen tiled-dot field looks wrong, not atmospheric).
+  .rest-hearth__glow,
+  .rest-hearth__flame,
+  .rest-hearth__flame-inner,
+  .rest-hearth__embers {
+    animation: none;
+  }
+  .rest-hearth__embers {
+    opacity: 0;
+  }
+  // Stop the heal-preview pulse; the static amber text is still legible.
+  .rest-heal-preview {
+    animation: none;
+  }
 }

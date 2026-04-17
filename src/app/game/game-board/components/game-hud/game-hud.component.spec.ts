@@ -70,6 +70,43 @@ describe('GameHudComponent', () => {
       const timeEl = fixture.nativeElement.querySelector('.hud-stat.secondary:nth-child(5) .hud-value');
       expect(timeEl.textContent.trim()).toBe('02:34');
     });
+
+    it('should render the mobile-only enemies stat when isCombat is true', () => {
+      component.isCombat = true;
+      component.enemiesRemaining = 7;
+      fixture.detectChanges();
+
+      const enemiesStat = fixture.nativeElement.querySelector('.hud-stat--mobile-only');
+      expect(enemiesStat).toBeTruthy();
+      const valueEl = enemiesStat.querySelector('.hud-value');
+      expect(valueEl.textContent.trim()).toBe('7');
+    });
+
+    it('should not render the mobile-only enemies stat when isCombat is false', () => {
+      component.isCombat = false;
+      fixture.detectChanges();
+
+      const enemiesStat = fixture.nativeElement.querySelector('.hud-stat--mobile-only');
+      expect(enemiesStat).toBeNull();
+    });
+
+    it('should apply critical class to mobile enemies value when enemiesRemaining is <= 2 and > 0', () => {
+      component.isCombat = true;
+      component.enemiesRemaining = 2;
+      fixture.detectChanges();
+
+      const valueEl = fixture.nativeElement.querySelector('.hud-stat--mobile-only .hud-value');
+      expect(valueEl.classList.contains('critical')).toBeTrue();
+    });
+
+    it('should not apply critical class to mobile enemies value when enemiesRemaining is 0', () => {
+      component.isCombat = true;
+      component.enemiesRemaining = 0;
+      fixture.detectChanges();
+
+      const valueEl = fixture.nativeElement.querySelector('.hud-stat--mobile-only .hud-value');
+      expect(valueEl.classList.contains('critical')).toBeFalse();
+    });
   });
 
   describe('critical lives class', () => {

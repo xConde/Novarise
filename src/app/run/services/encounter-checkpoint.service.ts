@@ -41,6 +41,41 @@ export class EncounterCheckpointService {
       data['version'] = 4;
       return data;
     },
+    // 4 → 5: add `itemInventory` field. Item (consumable) system introduced in
+    // Sprint 5 of the engine-depth pass. Pre-v5 checkpoints had no items;
+    // default to empty inventory — no gameplay loss.
+    4: (data) => {
+      data['itemInventory'] = { entries: [] };
+      data['version'] = 5;
+      return data;
+    },
+    // 5 → 6: add `runStateFlags` field. Cross-event memory flags introduced in
+    // Sprint 6 (RunStateFlagService). Pre-v6 checkpoints had no flag state;
+    // default to empty entries — existing runs continue without chain events.
+    5: (data) => {
+      data['runStateFlags'] = { entries: [] };
+      data['version'] = 6;
+      return data;
+    },
+    // 6 → 7: add CALTROPS multiplier fields to the wave state snapshot.
+    // CALTROPS item could be consumed mid-encounter in a v6 checkpoint without
+    // these fields, causing both multipliers to silently reset to 1 on restore.
+    // Default both to 1 (no pending CALTROPS effect) — safe for all pre-v7 saves.
+    // Also back-fills consumedEventIds on runStateFlags (H4 — firesOncePerRun).
+    // Pre-v7 saves had no consumed event tracking; default to empty array.
+    6: (data) => {
+      const waveState = data['waveState'] as Record<string, unknown> | undefined;
+      if (waveState) {
+        waveState['nextWaveEnemySpeedMultiplier'] = 1;
+        waveState['activeWaveCaltropsMultiplier'] = 1;
+      }
+      const runStateFlags = data['runStateFlags'] as Record<string, unknown> | undefined;
+      if (runStateFlags && !Array.isArray(runStateFlags['consumedEventIds'])) {
+        runStateFlags['consumedEventIds'] = [];
+      }
+      data['version'] = 7;
+      return data;
+    },
   };
 
   /**
@@ -124,6 +159,9 @@ export class EncounterCheckpointService {
   }
 
   private isValidCheckpoint(data: Record<string, unknown>): boolean {
+    const itemInventory = data['itemInventory'] as Record<string, unknown> | undefined;
+    const runStateFlags = data['runStateFlags'] as Record<string, unknown> | undefined;
+
     return (
       typeof data['version'] === 'number' &&
       typeof data['timestamp'] === 'number' &&
@@ -131,7 +169,14 @@ export class EncounterCheckpointService {
       data['encounterConfig'] !== null &&
       data['encounterConfig'] !== undefined &&
       data['gameState'] !== null &&
-      data['gameState'] !== undefined
+      data['gameState'] !== undefined &&
+      itemInventory !== null &&
+      itemInventory !== undefined &&
+      Array.isArray(itemInventory['entries']) &&
+      runStateFlags !== null &&
+      runStateFlags !== undefined &&
+      Array.isArray(runStateFlags['entries']) &&
+      Array.isArray(runStateFlags['consumedEventIds'])
     );
   }
 }

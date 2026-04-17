@@ -19,7 +19,28 @@ export enum AscensionEffectType {
   SHOP_PRICE_MULTIPLIER = 'shop_price_multiplier',
   FEWER_RELIC_CHOICES = 'fewer_relic_choices',
   FEWER_CARD_CHOICES = 'fewer_card_choices',
+
+  // ── Qualitative effects (A13–A18 tier replacements) ─────────
+  /** Added to elite node weight in map generation. +15 means elite weight increases by 15. */
+  ELITE_SPAWN_RATE_BONUS = 'elite_spawn_rate_bonus',
+  /** Subtracted from shop card and relic slot counts (item slot unaffected). Value 1 = one fewer card + one fewer relic. */
+  SHOP_SLOT_REDUCTION = 'shop_slot_reduction',
+  /** Subtracted from event node count per act in map generation. Clamped to >= 0. */
+  EVENT_NODE_REDUCTION = 'event_node_reduction',
+  /** When > 0, starting relic is drawn from COMMON pool only instead of the full pool. */
+  STARTING_RELIC_DOWNGRADE = 'starting_relic_downgrade',
 }
+
+/**
+ * Numeric values for qualitative ascension effects introduced in Sprint 7.
+ * All consumers must reference these instead of inline literals.
+ */
+export const QUALITATIVE_ASCENSION_VALUES = {
+  shopSlotReduction: 1,
+  eventNodeReduction: 1,
+  eliteSpawnBonus: 15,
+  startingRelicDowngrade: 1,
+} as const;
 
 export interface AscensionEffect {
   readonly type: AscensionEffectType;
@@ -50,12 +71,12 @@ export const ASCENSION_LEVELS: ReadonlyArray<AscensionLevel> = [
   { level: 10, label: 'Bulwark', description: 'Boss enemies have 30% more health', effect: { type: AscensionEffectType.BOSS_HEALTH_MULTIPLIER, value: 1.3 } },
   { level: 11, label: 'Scarce', description: 'One fewer relic choice and one fewer card choice offered', effect: { type: AscensionEffectType.FEWER_RELIC_CHOICES, value: 1 }, additionalEffects: [{ type: AscensionEffectType.FEWER_CARD_CHOICES, value: 1 }] },
   { level: 12, label: 'Quickened', description: 'Enemies move 10% faster', effect: { type: AscensionEffectType.ENEMY_SPEED_MULTIPLIER, value: 1.1 } },
-  { level: 13, label: 'Austerity', description: 'Start with 30 less gold', effect: { type: AscensionEffectType.STARTING_GOLD_REDUCTION, value: 30 } },
-  { level: 14, label: 'Exposed', description: 'Start with 3 fewer lives', effect: { type: AscensionEffectType.STARTING_LIVES_REDUCTION, value: 3 } },
+  { level: 13, label: 'Lean Shelves', description: 'Shops feel leaner — one fewer card and one fewer relic on offer', effect: { type: AscensionEffectType.SHOP_SLOT_REDUCTION, value: QUALITATIVE_ASCENSION_VALUES.shopSlotReduction } },
+  { level: 14, label: 'Fading Echoes', description: 'The world answers less often — one fewer event node per act', effect: { type: AscensionEffectType.EVENT_NODE_REDUCTION, value: QUALITATIVE_ASCENSION_VALUES.eventNodeReduction } },
   { level: 15, label: 'Relentless', description: 'Enemies have 30% more health', effect: { type: AscensionEffectType.ENEMY_HEALTH_MULTIPLIER, value: 1.3 } },
-  { level: 16, label: 'Gourmand', description: 'All towers cost 20% more', effect: { type: AscensionEffectType.TOWER_COST_MULTIPLIER, value: 1.2 } },
+  { level: 16, label: 'Elite Surge', description: 'Elite nodes spawn more frequently across the map', effect: { type: AscensionEffectType.ELITE_SPAWN_RATE_BONUS, value: QUALITATIVE_ASCENSION_VALUES.eliteSpawnBonus } },
   { level: 17, label: 'Frugal Rest', description: 'Rest heals 50% less', effect: { type: AscensionEffectType.REST_HEAL_REDUCTION, value: 0.5 } },
-  { level: 18, label: 'Ironclad Elite', description: 'Elite enemies have 50% more health', effect: { type: AscensionEffectType.ELITE_HEALTH_MULTIPLIER, value: 1.5 } },
+  { level: 18, label: 'Diminished Start', description: 'Your starting relic is drawn from common stock only', effect: { type: AscensionEffectType.STARTING_RELIC_DOWNGRADE, value: QUALITATIVE_ASCENSION_VALUES.startingRelicDowngrade } },
   { level: 19, label: 'Haste', description: 'Enemies move 15% faster', effect: { type: AscensionEffectType.ENEMY_SPEED_MULTIPLIER, value: 1.15 } },
   { level: 20, label: 'Apex', description: 'Boss enemies have 60% more health', effect: { type: AscensionEffectType.BOSS_HEALTH_MULTIPLIER, value: 1.6 } },
 ];
@@ -107,6 +128,10 @@ function applyAscensionEffect(
     case AscensionEffectType.STARTING_LIVES_REDUCTION:
     case AscensionEffectType.FEWER_RELIC_CHOICES:
     case AscensionEffectType.FEWER_CARD_CHOICES:
+    case AscensionEffectType.ELITE_SPAWN_RATE_BONUS:
+    case AscensionEffectType.SHOP_SLOT_REDUCTION:
+    case AscensionEffectType.EVENT_NODE_REDUCTION:
+    case AscensionEffectType.STARTING_RELIC_DOWNGRADE:
       effects.set(effect.type, (current ?? 0) + effect.value);
       break;
   }

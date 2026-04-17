@@ -12,6 +12,7 @@ import { WaveDefinition } from '../../game/game-board/models/wave.model';
 import { NodeType } from './node-map.model';
 import { RelicId } from './relic.model';
 import { CardId } from './card.model';
+import { ItemType } from './item.model';
 import { ChallengeDefinition } from '../data/challenges';
 
 export interface EncounterConfig {
@@ -25,7 +26,7 @@ export interface EncounterConfig {
 }
 
 /** Reward offered after a combat encounter. */
-export type RewardItem = RelicReward | GoldReward | CardReward;
+export type RewardItem = RelicReward | GoldReward | CardReward | ItemReward;
 
 export interface RelicReward {
   readonly type: 'relic';
@@ -42,6 +43,11 @@ export interface CardReward {
   readonly cardId: CardId;
 }
 
+export interface ItemReward {
+  readonly type: 'item';
+  readonly itemType: ItemType;
+}
+
 /** Reward screen config generated after encounter victory. */
 export interface RewardScreenConfig {
   readonly goldPickup: number;
@@ -55,6 +61,8 @@ export interface RewardScreenConfig {
    * sprint will render a "Challenges completed" breakdown section.
    */
   readonly completedChallenges: readonly ChallengeDefinition[];
+  /** Node type of the completed encounter — drives the card-skip gold amount. */
+  readonly nodeType: NodeType;
 }
 
 /** Shop item in a shop node. */
@@ -80,6 +88,23 @@ export interface RunEvent {
   readonly title: string;
   readonly description: string;
   readonly choices: EventChoice[];
+  /**
+   * If set, this event is only eligible to roll when RunStateFlagService
+   * has the named flag set (value > 0).
+   */
+  readonly requiresFlag?: string;
+  /**
+   * If set, this event is only eligible to roll when RunStateFlagService
+   * does NOT have the named flag set. Useful for one-shot intro events
+   * that must never repeat once their flag is set.
+   */
+  readonly requiresFlagAbsent?: string;
+  /**
+   * If true, this event fires at most once per run. After the player
+   * resolves it (any outcome), RunStateFlagService.markEventConsumed(id)
+   * is called and the event is excluded from future rolls.
+   */
+  readonly firesOncePerRun?: boolean;
 }
 
 export interface EventChoice {
@@ -95,7 +120,19 @@ export interface EventOutcome {
   readonly removeRelicId?: RelicId;
   /** When true, resolveEvent removes a random non-starter card from the deck. */
   readonly removeCard?: boolean;
+  /** When set, resolveEvent grants this item to the player's inventory. */
+  readonly itemReward?: ItemType;
   readonly description: string;
+  /**
+   * When set, picking this outcome calls RunStateFlagService.setFlag(setsFlag).
+   * Use FLAG_KEYS constants for the value.
+   */
+  readonly setsFlag?: string;
+  /**
+   * When set, picking this outcome calls RunStateFlagService.incrementFlag(incrementsFlag).
+   * Use FLAG_KEYS constants for the value.
+   */
+  readonly incrementsFlag?: string;
   /**
    * Optional gamble: if present, resolveEvent rolls rng against winChance.
    * On win, goldDelta is replaced by winGoldDelta; on loss, by loseGoldDelta.

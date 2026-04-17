@@ -117,18 +117,8 @@
   letter-spacing: 0.04rem;
 }
 
-@media (max-width: 480px) {
-  // Mobile: stack below the challenge strip (which is pushed below End Turn)
-  .board-container .hud-wave-status {
-    top: calc(var(--shell-end-turn-top) + 5.75rem);
-    font-size: var(--font-size-2xs);
-    gap: 0.25rem;
-  }
-
-  .board-container .hud-wave-status .wave-template-badge {
-    font-size: var(--font-size-3xs);
-  }
-}
+// M1.2: .hud-wave-status is hidden on mobile (≤480px) — enemies stat is shown
+// inside .hud-stats-row instead. No mobile overrides needed for this element.
 
 .board-container .hud-challenge-strip .challenge-indicator {
   font-family: "Orbitron", sans-serif;
@@ -193,15 +183,18 @@
 }
 
 @media (max-width: 480px) {
-  // Mobile: push challenge strip well below End Turn button.
-  // End Turn box bottom ≈ shell-end-turn-top + 3rem; add 0.75rem gap.
+  // M2.1: Challenge strip moves to top-right corner next to the settings gear.
+  // Gear is fixed at top: 50px; right: var(--spacing-md) (1rem), width 44px on mobile.
+  // right: calc(--spacing-md + 2.75rem) clears the gear's left edge by ~8px.
   .board-container .hud-challenge-strip {
-    top: calc(var(--shell-end-turn-top) + 3.75rem);
-    left: var(--spacing-xs);
-    right: var(--spacing-xs);
-    max-width: calc(100vw - var(--spacing-xs) * 2);
-    justify-content: center;
+    top: var(--spacing-sm);
+    left: auto;
+    right: calc(var(--spacing-md) + 2.75rem);
+    max-width: min(45vw, 12rem);
+    justify-content: flex-end;
     font-size: var(--font-size-3xs);
+    // Override desktop left-anchor so right-anchoring takes effect.
+    transform: none;
   }
 
   .board-container .hud-challenge-strip .challenge-indicator {
@@ -310,6 +303,13 @@
 }
 
 /* Mobile responsive — HUD */
+// M1.2: hide mobile-only stat on desktop so the floating .hud-wave-status remains
+// the canonical enemies display there. On mobile the wave-status is hidden (below)
+// and this stat takes its place inside the stats row.
+.board-container .game-hud .hud-stat--mobile-only {
+  display: none;
+}
+
 @media (max-width: 480px) {
   .board-container .game-hud {
     gap: var(--spacing-xs);
@@ -324,6 +324,15 @@
   }
 
   .board-container .game-hud .hud-stat.secondary {
+    display: none;
+  }
+
+  // M1.2: show the mobile-only enemies stat; hide the standalone wave-status band
+  .board-container .game-hud .hud-stat--mobile-only {
+    display: flex;
+  }
+
+  .board-container .hud-wave-status {
     display: none;
   }
 
@@ -539,5 +548,182 @@ body.reduce-motion .board-container .game-hud .hud-value.wave-start-pulse {
 @media (prefers-reduced-motion: reduce) {
   .board-container .hud-relic-peek__item {
     transition: none;
+  }
+}
+
+// --- Sprint 5 (engine-depth): HUD items-peek ---
+
+.board-container .hud-items-peek {
+  position: absolute;
+  top: calc(var(--shell-hud-top) + var(--shell-hud-height) + 1.75rem + 2rem);
+  left: var(--shell-hud-left);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-width: min(40vw, 20rem);
+  pointer-events: none;
+  z-index: var(--z-index-overlay);
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+}
+
+.board-container .hud-items-peek__item {
+  padding: 0;
+  appearance: none;
+  pointer-events: auto;
+  position: relative;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-2xs);
+  font-weight: 800;
+  color: rgba(255, 200, 50, 0.9);
+  background: rgba(255, 200, 50, 0.08);
+  border: var(--border-width-thin) solid rgba(255, 200, 50, 0.35);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 200, 50, 0.22);
+    color: #fff;
+    transform: scale(1.1);
+  }
+
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--theme-cyan);
+    outline-offset: 2px;
+  }
+}
+
+.board-container .hud-items-peek__count {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  min-width: 0.875rem;
+  height: 0.875rem;
+  padding: 0 0.15rem;
+  font-size: 0.5rem;
+  font-weight: 700;
+  color: #111;
+  background: rgba(255, 200, 50, 0.9);
+  border-radius: 0.4375rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .hud-items-peek__item {
+    transition: none;
+  }
+}
+
+// ============================================================================
+// Mobile top-row layout (≤480px)
+//
+// The top band holds three elements that must share one visual row:
+//   stats block (left)  |  end-turn button (center-right)  |  gear (right)
+//
+// The gear is global (position: fixed, right: --spacing-md) and its mobile
+// position is owned by app.component.css. The stats and end-turn live
+// inside .board-container — positions / widths / heights are tuned here
+// so all three align at a shared top baseline with symmetric gaps.
+//
+// Target layout on 390px viewport:
+//   stats 5-220  |  12px gap  |  button 232-320  |  10px gap  |  gear 330+
+//
+// Pixel values below override the component-scoped base rule in
+// game-board.component.scss which uses `left: 50%; transform: translateX(-50%)`.
+// The base rule lives in the component file (Emulated view encapsulation
+// adds [_ngcontent-*] attribute selectors that raise its specificity); the
+// handful of !important declarations on the `transform` and positioning
+// are the minimum needed to beat the compound base+:hover+:active states
+// without adding equally-specific attribute-selector overrides here.
+// ============================================================================
+@media (max-width: 480px) {
+  // Top-row custom properties — single source of truth for the mobile
+  // layout tuning. Button is anchored from the LEFT (testing confirmed
+  // `left: X + right: auto` beats `left: auto + right: X` against the
+  // component-scoped base rule) but `left` is computed relative to
+  // viewport width so the layout still adapts to smaller devices:
+  //   left = 100vw − gear-clearance − button-width
+  //   where gear-clearance = spacing-md (16) + 2.75rem (44) + spacing-sm (10) = 70px
+  //
+  // Result on any mobile viewport: button's right edge sits 70px from
+  // the viewport's right edge, giving a consistent 10px gap to the
+  // gear's left edge (which sits at 60px from right).
+  :root {
+    --mobile-hud-top: var(--spacing-xs);
+    --mobile-hud-band-height: 44px;
+    --mobile-end-turn-width: 88px;
+    --mobile-end-turn-gear-clearance: calc(var(--spacing-md) + 2.75rem + var(--spacing-sm));
+    --mobile-end-turn-left: calc(100vw - var(--mobile-end-turn-gear-clearance) - var(--mobile-end-turn-width));
+    --mobile-stats-max-width: min(55vw, 14rem);
+  }
+
+  // Stats block — matched height to the end-turn button so the two read
+  // as a single horizontal row. Widened from the 768px default so the
+  // four stat columns can breathe.
+  .board-container .game-hud {
+    min-height: var(--mobile-hud-band-height);
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-xs) var(--spacing-md);
+    box-sizing: border-box;
+    max-width: var(--mobile-stats-max-width);
+  }
+  .board-container .game-hud .hud-stats-row {
+    gap: var(--spacing-md);
+  }
+  .board-container .game-hud .hud-stat .hud-label {
+    letter-spacing: 0.08em;
+  }
+  .board-container .game-hud .hud-stat .hud-value {
+    font-size: 15px;
+  }
+
+  // End-turn button — explicit width and left anchor beats the base
+  // rule's 50% centering. transform killed across all states so hover/
+  // active don't reintroduce a horizontal shift.
+  //
+  // flex-direction: row counteracts the base rule's `flex-direction: column`
+  // which, combined with this narrower button, would wrap "END TURN" onto
+  // two lines.
+  // Left-anchored positioning — `left: auto + right: X` was visually
+  // producing a wider-than-intended button on 390px in testing, while
+  // the previous `left: 232px` hardcoded form worked. Using the same
+  // left-anchor form but with a viewport-relative calc so the
+  // layout self-adjusts on smaller viewports (<390px) without the
+  // hardcoded-pixel breakage.
+  .board-container .end-turn-btn {
+    left: var(--mobile-end-turn-left) !important;
+    right: auto !important;
+    top: var(--mobile-hud-top) !important;
+    width: var(--mobile-end-turn-width) !important;
+    min-width: 0 !important;
+    max-width: var(--mobile-end-turn-width) !important;
+    transform: none !important;
+    padding: 6px 8px;
+    min-height: var(--mobile-hud-band-height);
+    flex-direction: row;
+    gap: 0;
+    box-sizing: border-box;
+    white-space: nowrap;
+  }
+  .board-container .end-turn-btn:hover:not(:disabled),
+  .board-container .end-turn-btn:active:not(:disabled) {
+    transform: none !important;
+  }
+  .board-container .end-turn-btn .end-turn-label {
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
   }
 }

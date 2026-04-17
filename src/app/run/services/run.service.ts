@@ -22,7 +22,9 @@ import {
   RewardScreenConfig,
   ShopItem,
   RunEvent,
+  ItemReward,
 } from '../models/encounter.model';
+import { ItemType } from '../models/item.model';
 import { ChallengeDefinition, computeChallengeGoldBonus } from '../data/challenges';
 import { RelicId, RelicRarity, RelicDefinition } from '../models/relic.model';
 import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
@@ -33,6 +35,7 @@ import {
   REST_CONFIG,
   RUN_CONFIG,
   SHOP_CONFIG,
+  ITEM_CONFIG,
   SeededRng,
   createSeededRng,
 } from '../constants/run.constants';
@@ -41,6 +44,8 @@ import { NodeMapGeneratorService } from './node-map-generator.service';
 import { EncounterService } from './encounter.service';
 import { RelicService } from './relic.service';
 import { DeckService } from './deck.service';
+import { ItemService } from './item.service';
+import { RunStateFlagService } from './run-state-flag.service';
 import { RunPersistenceService } from './run-persistence.service';
 import { RunEventBusService, RunEventType } from './run-event-bus.service';
 import { RUN_EVENTS } from '../constants/run-events';
@@ -96,6 +101,8 @@ export class RunService {
     private encounterService: EncounterService,
     private relicService: RelicService,
     private deckService: DeckService,
+    private itemService: ItemService,
+    private runStateFlagService: RunStateFlagService,
     private persistence: RunPersistenceService,
     private eventBus: RunEventBusService,
     private playerProfile: PlayerProfileService,
@@ -193,6 +200,8 @@ export class RunService {
   startNewRun(ascensionLevel = 0): void {
     this.persistence.clearSavedRun();
     this.relicService.clearRelics();
+    this.itemService.resetForRun();
+    this.runStateFlagService.resetForRun();
 
     // Clear any checkpoint leftover from a previous run before starting fresh.
     this.encounterCheckpointService.clearCheckpoint();
@@ -217,8 +226,12 @@ export class RunService {
     // Initialize the deck service with the starter deck
     this.deckService.initializeDeck(starterDeck, seed);
 
-    // Generate act 1 map
-    const map = this.nodeMapGenerator.generateActMap(0, seed);
+    // Grant a starting relic. At A18+ (STARTING_RELIC_DOWNGRADE > 0), restrict
+    // the pick to COMMON relics only; otherwise pick from the full pool.
+    this.grantStartingRelic(ascensionLevel);
+
+    // Generate act 1 map (pass ascension level so map-gen effects apply)
+    const map = this.nodeMapGenerator.generateActMap(0, seed, ascensionLevel);
     this.nodeMapSubject.next(map);
     this.persist();
   }
@@ -237,6 +250,15 @@ export class RunService {
     // Reinitialize deck from persisted card IDs so DeckService state is
     // consistent with the saved run after a page reload.
     this.deckService.initializeDeck(state.deckCardIds, state.seed);
+
+    // Restore item inventory and run-state flags. Guard with presence check for
+    // backward compat — saves made before H5 lack these fields.
+    if (state.itemInventory) {
+      this.itemService.restore(state.itemInventory);
+    }
+    if (state.runStateFlags) {
+      this.runStateFlagService.restore(state.runStateFlags);
+    }
   }
 
   /** Abandon the current run. */
@@ -435,6 +457,7 @@ export class RunService {
       cardChoices,
       bonusRewards: [],
       completedChallenges,
+      nodeType: encounter?.nodeType ?? NodeType.COMBAT,
     };
   }
 
@@ -481,7 +504,7 @@ export class RunService {
     return picked;
   }
 
-  /** Collect a reward (relic or gold). */
+  /** Collect a reward (relic, gold, card, or item). */
   collectReward(reward: RewardItem): void {
     const state = this.runState;
     if (!state) return;
@@ -498,6 +521,9 @@ export class RunService {
       case 'card':
         this.deckService.addCard(reward.cardId);
         this.updateState({ ...state, deckCardIds: [...state.deckCardIds, reward.cardId] });
+        break;
+      case 'item':
+        this.itemService.addItem(reward.itemType);
         break;
     }
     this.persist();
@@ -548,9 +574,12 @@ export class RunService {
 
     const items: ShopItem[] = [];
 
-    // Apply ascension price multiplier
+    // Apply ascension price multiplier and shop slot reduction
     const ascEffects = getAscensionEffects(state.ascensionLevel);
     const priceMultiplier = ascEffects.get(AscensionEffectType.SHOP_PRICE_MULTIPLIER) ?? 1;
+    const shopSlotReduction = ascEffects.get(AscensionEffectType.SHOP_SLOT_REDUCTION) ?? 0;
+    const relicsInShop = Math.max(0, SHOP_CONFIG.relicsInShop - shopSlotReduction);
+    const cardsInShop = Math.max(0, SHOP_CONFIG.cardsInShop - shopSlotReduction);
 
     // Relic items — weighted by rarity
     const available = this.relicService.getAvailableRelics();
@@ -565,7 +594,7 @@ export class RunService {
       { rarity: RelicRarity.RARE, weight: REWARD_RARITY_WEIGHTS.rare },
     ];
     const pickedRelicIds = new Set<RelicId>();
-    for (let i = 0; i < SHOP_CONFIG.relicsInShop; i++) {
+    for (let i = 0; i < relicsInShop; i++) {
       const remaining: Record<RelicRarity, RelicDefinition[]> = {
         [RelicRarity.COMMON]: relicByRarity[RelicRarity.COMMON].filter(r => !pickedRelicIds.has(r.id)),
         [RelicRarity.UNCOMMON]: relicByRarity[RelicRarity.UNCOMMON].filter(r => !pickedRelicIds.has(r.id)),
@@ -597,7 +626,7 @@ export class RunService {
       { rarity: CardRarity.RARE, weight: REWARD_RARITY_WEIGHTS.rare },
     ];
     const pickedCardIds = new Set<CardId>();
-    for (let i = 0; i < SHOP_CONFIG.cardsInShop; i++) {
+    for (let i = 0; i < cardsInShop; i++) {
       const remaining: Record<CardRarity, typeof allCards> = {
         [CardRarity.STARTER]: [],
         [CardRarity.COMMON]: cardByRarity[CardRarity.COMMON].filter(c => !pickedCardIds.has(c.id)),
@@ -614,6 +643,18 @@ export class RunService {
       items.push({
         item: { type: 'card', cardId: card.id },
         cost: Math.round(basePrice * priceMultiplier),
+      });
+    }
+
+    // Item (consumable) slots
+    const allItemTypes = Object.values(ItemType);
+    for (let i = 0; i < ITEM_CONFIG.shopSlotCount; i++) {
+      if (allItemTypes.length === 0) break;
+      const itemType = allItemTypes[Math.floor(rng() * allItemTypes.length)];
+      const itemReward: ItemReward = { type: 'item', itemType };
+      items.push({
+        item: itemReward,
+        cost: Math.round(ITEM_CONFIG.shopCost * priceMultiplier),
       });
     }
 
@@ -691,6 +732,24 @@ export class RunService {
       this.removeRandomNonStarterCard();
     }
 
+    // Item reward: add to consumable inventory.
+    if (outcome.itemReward) {
+      this.itemService.addItem(outcome.itemReward);
+    }
+
+    // Run state flags: persist cross-event memory within the run.
+    if (outcome.setsFlag) {
+      this.runStateFlagService.setFlag(outcome.setsFlag);
+    }
+    if (outcome.incrementsFlag) {
+      this.runStateFlagService.incrementFlag(outcome.incrementsFlag);
+    }
+
+    // Once-per-run events: mark consumed regardless of which outcome was picked.
+    if (event.firesOncePerRun) {
+      this.runStateFlagService.markEventConsumed(event.id);
+    }
+
     // Check for death by event
     const newStatus = newLives <= 0 ? RunStatus.DEFEAT : state.status;
     if (newLives <= 0) newLives = 0;
@@ -731,9 +790,25 @@ export class RunService {
   /** Generate a random event for the current node. */
   generateEvent(): void {
     const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
-    const events = RUN_EVENTS;
-    const index = Math.floor(rng() * events.length);
-    this.currentEvent = events[index];
+
+    // Filter eligible events by run-state flag requirements and once-per-run consumption.
+    const eligibleEvents = RUN_EVENTS.filter(e => {
+      if (e.requiresFlag !== undefined && !this.runStateFlagService.hasFlag(e.requiresFlag)) {
+        return false;
+      }
+      if (e.requiresFlagAbsent !== undefined && this.runStateFlagService.hasFlag(e.requiresFlagAbsent)) {
+        return false;
+      }
+      if (e.firesOncePerRun && this.runStateFlagService.isEventConsumed(e.id)) {
+        return false;
+      }
+      return true;
+    });
+
+    // Fall back to all events if every event is gated (shouldn't happen with current data).
+    const pool = eligibleEvents.length > 0 ? eligibleEvents : [...RUN_EVENTS];
+    const index = Math.floor(rng() * pool.length);
+    this.currentEvent = pool[index];
   }
 
   /** Reveal an unknown node type (used for UNKNOWN nodes). */
@@ -782,8 +857,8 @@ export class RunService {
       return;
     }
 
-    // Generate next act map
-    const newMap = this.nodeMapGenerator.generateActMap(nextAct, state.seed + nextAct * RUN_CONFIG.actSeedPrime);
+    // Generate next act map (pass ascension level so map-gen effects apply)
+    const newMap = this.nodeMapGenerator.generateActMap(nextAct, state.seed + nextAct * RUN_CONFIG.actSeedPrime, state.ascensionLevel);
     this.nodeMapSubject.next(newMap);
 
     this.updateState({
@@ -865,6 +940,24 @@ export class RunService {
     }
   }
 
+  /**
+   * A18+ forces the player to accept a random COMMON-rarity starting relic as
+   * a penalty (the "downgrade" — you lose the option of a clean empty slate).
+   * Pre-A18 runs start with zero relics, preserving historical behavior.
+   */
+  private grantStartingRelic(ascensionLevel: number): void {
+    const ascEffects = getAscensionEffects(ascensionLevel);
+    const downgrade = ascEffects.get(AscensionEffectType.STARTING_RELIC_DOWNGRADE) ?? 0;
+    if (downgrade <= 0) return;
+
+    const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
+    const pool = this.relicService.getAvailableRelics(RelicRarity.COMMON);
+    if (pool.length === 0) return;
+
+    const relic = pool[Math.floor(rng() * pool.length)];
+    this.addRelic(relic.id);
+  }
+
   private applyAscensionToConfig(config: RunConfig, level: number): RunConfig {
     if (level === 0) return config;
 
@@ -886,9 +979,13 @@ export class RunService {
   private persist(): void {
     const state = this.runState;
     const map = this.nodeMap;
-    if (state && map) {
-      this.persistence.saveRunState(state, map);
-    }
+    if (!state || !map) return;
+    const stateToSave: RunState = {
+      ...state,
+      itemInventory: this.itemService.serialize(),
+      runStateFlags: this.runStateFlagService.serialize(),
+    };
+    this.persistence.saveRunState(stateToSave, map);
   }
 
   /**
@@ -941,5 +1038,7 @@ export class RunService {
     this.runRng = null;
     this.relicService.clearRelics();
     this.deckService.clear();
+    this.itemService.resetForRun();
+    this.runStateFlagService.resetForRun();
   }
 }

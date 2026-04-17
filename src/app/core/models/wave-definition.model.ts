@@ -49,6 +49,29 @@ export function getWaveEnemyCount(wave: WaveDefinition): number {
 }
 
 /**
+ * Returns true when the wave contains more than one BOSS-type enemy in total —
+ * i.e. a "twin-boss" wave. Works for both entries[] and spawnTurns[][] formats.
+ *
+ * Used by CombatLoopService to halve per-BOSS leak damage on twin-boss waves so
+ * a full double-leak doesn't instantly defeat the player (3+3 → 2+2 lives lost).
+ */
+export function isTwinBossWave(wave: WaveDefinition): boolean {
+  let bossCount = 0;
+  if (wave.spawnTurns) {
+    for (const turn of wave.spawnTurns) {
+      for (const type of turn) {
+        if (type === EnemyType.BOSS) bossCount++;
+      }
+    }
+  } else if (wave.entries) {
+    for (const entry of wave.entries) {
+      if (entry.type === EnemyType.BOSS) bossCount += entry.count;
+    }
+  }
+  return bossCount > 1;
+}
+
+/**
  * Returns the set of EnemyTypes present in a wave, regardless of format.
  * Useful for boss-detection checks that previously accessed wave.entries directly.
  */

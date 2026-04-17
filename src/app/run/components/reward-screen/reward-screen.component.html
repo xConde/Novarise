@@ -85,6 +85,7 @@
   <app-card-draft
     *ngIf="config.cardChoices.length > 0 && !cardPicked && (relicPicked || config.relicChoices.length === 0)"
     [cardChoices]="config.cardChoices"
+    [skipGoldAmount]="skipGoldAmount"
     (cardPicked)="onCardPicked($event)"
     (skipped)="onCardSkipped()">
   </app-card-draft>

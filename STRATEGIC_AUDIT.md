@@ -1670,3 +1670,40 @@ Finding 1 is the only latent correctness bug — fixed inline. Findings 2 and 3 
 - [x] Lint cleanup (9 errors → 0)
 - [x] Red-team gate: Finding 1 shield-billboard hardening
 - [x] Commit Phase 5 + red-team hardening
+
+## Red Team Critique — 2026-04-17 (engine-depth-pass + mobile polish)
+
+Scope: 57 files changed on `feat/engine-depth-pass` vs main. This review covers the mobile HUD polish pass, the rest-screen bonfire (commit `3fe852f`), and the run-level persistence hardening — areas not yet audited in prior red-team cycles. Hooks: none configured in `.claude/settings.json` or `.claude/hooks/` — no deterministic guardrails to verify on this repo.
+
+### Finding 1: Mobile HUD layout breaks on viewports under 390px (HIGH)
+
+**Location:** `src/styles/_game-hud.scss` around line 670, `--mobile-end-turn-left: 232px` and `--mobile-end-turn-width: 88px`.
+
+**Risk:** The end-turn button uses hardcoded pixels calibrated for iPhone 12 Pro (390px width). On iPhone SE 2nd gen (375px), the button's right edge lands at `232 + 88 = 320`, which overlaps the gear's left edge at `375 - 16 - 44 = 315` by 5px. On iPhone SE 1st gen / older Android (320px), the button's right edge hits the viewport right edge exactly, leaving zero room for the gear which sits at the corner. Users on sub-390px devices see the button sitting on top of the settings gear.
+
+**Fix:** Anchor the button's right edge relative to the gear's known position using `calc`, so the layout self-adjusts across all mobile widths. Specifically: change `--mobile-end-turn-left` from `232px` to `calc(100vw - var(--mobile-end-turn-width) - 72px)` where `72px` is the gear clearance. This makes the button 88px wide, ending 72px from the right edge on any viewport, regardless of width.
+
+### Finding 2: `resumeRun` has no error boundary around deserialization (MEDIUM)
+
+**Location:** `src/app/run/services/run.service.ts:256-261` — the H5-added restore calls.
+
+**Risk:** `this.itemService.restore(state.itemInventory)` and `this.runStateFlagService.restore(state.runStateFlags)` execute without a try/catch. If the stored `itemInventory` or `runStateFlags` data in localStorage is malformed — user hand-edits, a future schema migration bug, or corruption from a half-completed write — the restore will throw an uncaught exception. The entire `resumeRun` fails, leaving the player staring at a broken state with no recovery path except clearing site data. ItemService's `restore` does validate entry shape per-key, but relies on the top-level `s.entries` being an array — if the whole object is corrupt, that assumption breaks before validation runs.
+
+**Fix:** Wrap each restore call in try/catch. On throw, log a `console.warn` with the service name and fall through to the default empty state (which each service initializes on construction anyway). Player keeps their run; they just lose items / flags, which is a vastly better outcome than a hard-crashed resume.
+
+### Finding 3: Rest-screen bonfire animations run unconditionally while the screen is mounted (LOW)
+
+**Location:** `src/app/run/components/rest-screen/rest-screen.component.scss` — `.rest-hearth__glow` (6.3s breathe), `.rest-hearth__flame` (3.9s sway with `filter: blur(6px)`), `.rest-hearth__flame-inner` (1.9s lick), `.rest-hearth__embers` (9.4s drift).
+
+**Risk:** Four concurrent CSS animations, one compounding a GPU-expensive `filter: blur(6px)`, run for as long as the player sits on the rest screen. `prefers-reduced-motion` is correctly guarded. But on low-end Android devices with non-motion-sensitive users, this is a noticeable battery drain and potential jank source. Browsers do throttle animations in background tabs, so the effect is mostly when the tab is foreground. Not a correctness bug, but worth flagging.
+
+**Fix:** No change proposed for this gate — the animations are visually important and `prefers-reduced-motion` covers the accessibility need. A `content-visibility: auto` on `.rest-hearth` could let the browser skip painting when off-screen but the rest-screen doesn't scroll, so the benefit is marginal. Leaving as-is.
+
+
+## Deployment Checklist — engine-depth-pass PR #30 final push
+
+- [ ] Step 1: Apply Finding 2 (MEDIUM) — wrap `resumeRun`'s `itemService.restore` and `runStateFlagService.restore` in try/catch with graceful fallback to empty state. Add a spec verifying resume-with-corrupt-state doesn't throw.
+- [ ] Step 2: Run the full quality gate (`tsc --noEmit` × 2 configs, `ng lint`, `ng test`, `ng build --configuration=production`) and confirm all green.
+- [ ] Step 3: Update PR #30 description with a consolidated summary of what landed since the original PR body: mobile polish pass, rest-screen bonfire, red-team hardening (Findings 1 & 2). Include the mobile smoke checklist for the user to verify visually before merge.
+- [ ] Step 4: Add a mobile-smoke section to the PR manual test checklist — iPhone SE (320/375) + iPhone 12 Pro (390) verification that the end-turn button clears the gear on all three.
+

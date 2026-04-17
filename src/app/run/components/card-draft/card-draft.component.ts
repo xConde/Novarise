@@ -10,6 +10,8 @@ import { getCardDefinition } from '../../constants/card-definitions';
 })
 export class CardDraftComponent {
   @Input() cardChoices: CardReward[] = [];
+  /** Gold awarded on skip (0 = show plain "Skip Card"). */
+  @Input() skipGoldAmount = 0;
   @Output() cardPicked = new EventEmitter<CardReward>();
   @Output() skipped = new EventEmitter<void>();
 

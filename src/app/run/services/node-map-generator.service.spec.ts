@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { NodeMapGeneratorService } from './node-map-generator.service';
 import { NodeType } from '../models/node-map.model';
 import { NODE_MAP_CONFIG } from '../constants/run.constants';
+import { QUALITATIVE_ASCENSION_VALUES } from '../models/ascension.model';
 
 describe('NodeMapGeneratorService', () => {
   let service: NodeMapGeneratorService;
@@ -129,6 +130,59 @@ describe('NodeMapGeneratorService', () => {
       const map2 = service.generateActMap(1, 42);
       // Node IDs embed actIndex, so they must differ
       expect(map1.nodes[0].id).not.toBe(map2.nodes[0].id);
+    });
+  });
+
+  describe('generateActMap() — ascension qualitative effects', () => {
+    it('A16 ELITE_SPAWN_RATE_BONUS should produce more elite nodes on average than A15 baseline', () => {
+      // Run a batch of seeds and compare elite counts between A15 and A16.
+      // A16 adds +15 to elite weight (0.12 base), so we expect a marked increase.
+      let eliteCountA15 = 0;
+      let eliteCountA16 = 0;
+      const seeds = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000];
+      for (const seed of seeds) {
+        const mapA15 = service.generateActMap(0, seed, 15);
+        const mapA16 = service.generateActMap(0, seed, 16);
+        eliteCountA15 += mapA15.nodes.filter(n => n.type === NodeType.ELITE).length;
+        eliteCountA16 += mapA16.nodes.filter(n => n.type === NodeType.ELITE).length;
+      }
+      // A16 should produce more elites than A15 across the sample
+      expect(eliteCountA16).toBeGreaterThan(eliteCountA15);
+    });
+
+    it('ELITE_SPAWN_RATE_BONUS value should be ' + QUALITATIVE_ASCENSION_VALUES.eliteSpawnBonus, () => {
+      expect(QUALITATIVE_ASCENSION_VALUES.eliteSpawnBonus).toBe(15);
+    });
+
+    it('A14 EVENT_NODE_REDUCTION should produce fewer or equal event nodes than A13 baseline', () => {
+      // A14 reduces event node budget by 1; aggregate over several seeds.
+      let eventCountA13 = 0;
+      let eventCountA14 = 0;
+      const seeds = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000];
+      for (const seed of seeds) {
+        const mapA13 = service.generateActMap(0, seed, 13);
+        const mapA14 = service.generateActMap(0, seed, 14);
+        eventCountA13 += mapA13.nodes.filter(n => n.type === NodeType.EVENT).length;
+        eventCountA14 += mapA14.nodes.filter(n => n.type === NodeType.EVENT).length;
+      }
+      // A14 must produce at most as many events as A13 (reduction is applied)
+      expect(eventCountA14).toBeLessThanOrEqual(eventCountA13);
+    });
+
+    it('A14 EVENT_NODE_REDUCTION reduces event count by exactly eventNodeReduction (deterministic)', () => {
+      // Seed 203 deterministically produces 10 EVENT nodes at A0 (no reduction)
+      // and 9 EVENT nodes at A14 (eventNodeReduction = 1), verified via the
+      // mulberry32 RNG used by NodeMapGeneratorService.
+      const DETERMINISTIC_SEED = 203;
+      const BASELINE_EVENT_COUNT = 10; // events at A0 for seed 203
+      const mapBaseline = service.generateActMap(0, DETERMINISTIC_SEED, 0);
+      const mapA14 = service.generateActMap(0, DETERMINISTIC_SEED, 14);
+      const baselineEvents = mapBaseline.nodes.filter(n => n.type === NodeType.EVENT).length;
+      const a14Events = mapA14.nodes.filter(n => n.type === NodeType.EVENT).length;
+      // Confirm seed still produces the known baseline — if this fails, the RNG changed
+      expect(baselineEvents).toBe(BASELINE_EVENT_COUNT);
+      // A14 must be exactly baseline minus the reduction constant
+      expect(a14Events).toBe(BASELINE_EVENT_COUNT - QUALITATIVE_ASCENSION_VALUES.eventNodeReduction);
     });
   });
 });
