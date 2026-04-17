@@ -117,18 +117,8 @@
   letter-spacing: 0.04rem;
 }
 
-@media (max-width: 480px) {
-  // Mobile: stack below the challenge strip (which is pushed below End Turn)
-  .board-container .hud-wave-status {
-    top: calc(var(--shell-end-turn-top) + 5.75rem);
-    font-size: var(--font-size-2xs);
-    gap: 0.25rem;
-  }
-
-  .board-container .hud-wave-status .wave-template-badge {
-    font-size: var(--font-size-3xs);
-  }
-}
+// M1.2: .hud-wave-status is hidden on mobile (≤480px) — enemies stat is shown
+// inside .hud-stats-row instead. No mobile overrides needed for this element.
 
 .board-container .hud-challenge-strip .challenge-indicator {
   font-family: "Orbitron", sans-serif;
@@ -310,6 +300,13 @@
 }
 
 /* Mobile responsive — HUD */
+// M1.2: hide mobile-only stat on desktop so the floating .hud-wave-status remains
+// the canonical enemies display there. On mobile the wave-status is hidden (below)
+// and this stat takes its place inside the stats row.
+.board-container .game-hud .hud-stat--mobile-only {
+  display: none;
+}
+
 @media (max-width: 480px) {
   .board-container .game-hud {
     gap: var(--spacing-xs);
@@ -324,6 +321,15 @@
   }
 
   .board-container .game-hud .hud-stat.secondary {
+    display: none;
+  }
+
+  // M1.2: show the mobile-only enemies stat; hide the standalone wave-status band
+  .board-container .game-hud .hud-stat--mobile-only {
+    display: flex;
+  }
+
+  .board-container .hud-wave-status {
     display: none;
   }
 
