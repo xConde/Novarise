@@ -21,6 +21,7 @@ import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 import { GamePhase } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
 import { EnemyType } from '../models/enemy.model';
+import { WaveDefinition } from '../models/wave.model';
 
 // Physics accumulator tests removed in turn-based pivot — no deltaTime semantics.
 
@@ -99,10 +100,12 @@ describe('CombatLoopService', () => {
       'spawnForTurn',
       'isSpawning',
       'getWaveReward',
+      'getCurrentWaveDefinition',
     ]);
     waveSpy.spawnForTurn.and.stub();
     waveSpy.isSpawning.and.returnValue(true); // default: still spawning (wave not done)
     waveSpy.getWaveReward.and.returnValue(50);
+    waveSpy.getCurrentWaveDefinition.and.returnValue(null); // default: no wave definition
 
     combatSpy = jasmine.createSpyObj('TowerCombatService', [
       'fireTurn',
@@ -485,6 +488,61 @@ describe('CombatLoopService', () => {
       service.resolveTurn(scene);
 
       expect(enemySpy.removeEnemy).toHaveBeenCalledWith('e1', scene);
+    });
+  });
+
+  // ─── resolveTurn() — twin-boss leak damage halving ──────────────────────────
+
+  describe('resolveTurn() — twin-boss leak damage halving', () => {
+    /** WaveDefinition with 2 BOSS entries — the twin-boss scenario. */
+    const twinBossWave: WaveDefinition = {
+      entries: [{ type: EnemyType.BOSS, count: 2, spawnInterval: 0 }],
+      reward: 300,
+    };
+
+    /** WaveDefinition with 1 BOSS entry — standard single-boss scenario. */
+    const singleBossWave: WaveDefinition = {
+      entries: [
+        { type: EnemyType.BOSS, count: 1, spawnInterval: 0 },
+        { type: EnemyType.SHIELDED, count: 2, spawnInterval: 1.5 },
+      ],
+      reward: 250,
+    };
+
+    it('twin-boss wave: both BOSSes leak → player loses ceil(3/2)+ceil(3/2) = 4 lives', () => {
+      const boss1 = makeEnemy({ id: 'b1', type: EnemyType.BOSS, leakDamage: 3 });
+      const boss2 = makeEnemy({ id: 'b2', type: EnemyType.BOSS, leakDamage: 3 });
+      enemySpy.getEnemies.and.returnValue(new Map([['b1', boss1], ['b2', boss2]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['b1', 'b2']);
+      waveSpy.getCurrentWaveDefinition.and.returnValue(twinBossWave);
+
+      service.resolveTurn(scene);
+
+      // Each BOSS loses ceil(3/2) = 2 lives; two leaks → loseLife(2) called twice.
+      expect(gameStateSpy.loseLife).toHaveBeenCalledTimes(2);
+      expect(gameStateSpy.loseLife).toHaveBeenCalledWith(2);
+    });
+
+    it('single-boss wave: BOSS leaks → player loses full 3 lives (unchanged)', () => {
+      const boss = makeEnemy({ id: 'b1', type: EnemyType.BOSS, leakDamage: 3 });
+      enemySpy.getEnemies.and.returnValue(new Map([['b1', boss]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['b1']);
+      waveSpy.getCurrentWaveDefinition.and.returnValue(singleBossWave);
+
+      service.resolveTurn(scene);
+
+      expect(gameStateSpy.loseLife).toHaveBeenCalledOnceWith(3);
+    });
+
+    it('twin-boss wave: non-BOSS enemy leaks → normal leak damage (non-boss unaffected)', () => {
+      const basic = makeEnemy({ id: 'e1', type: EnemyType.BASIC, leakDamage: 1 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', basic]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
+      waveSpy.getCurrentWaveDefinition.and.returnValue(twinBossWave);
+
+      service.resolveTurn(scene);
+
+      expect(gameStateSpy.loseLife).toHaveBeenCalledOnceWith(1);
     });
   });
 
