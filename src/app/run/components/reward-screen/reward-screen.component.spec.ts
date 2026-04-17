@@ -226,7 +226,8 @@ describe('RewardScreenComponent', () => {
   it('onCardSkipped sets cardPicked=true and emits no reward when skip gold is 0 (rest/shop nodes)', () => {
     const emitted: RewardItem[] = [];
     component.rewardCollected.subscribe(r => emitted.push(r));
-    component.nodeType = NodeType.REST;
+    component.config = { ...MOCK_CONFIG, nodeType: NodeType.REST };
+    fixture.detectChanges();
 
     component.onCardSkipped();
 
@@ -476,27 +477,27 @@ describe('RewardScreenComponent', () => {
 
   describe('skipGoldAmount (S9)', () => {
     it('skipGoldAmount is 25 when nodeType is COMBAT', () => {
-      component.nodeType = NodeType.COMBAT;
+      component.config = { ...MOCK_CONFIG, nodeType: NodeType.COMBAT };
       expect(component.skipGoldAmount).toBe(25);
     });
 
     it('skipGoldAmount is 50 when nodeType is ELITE', () => {
-      component.nodeType = NodeType.ELITE;
+      component.config = { ...MOCK_CONFIG, nodeType: NodeType.ELITE };
       expect(component.skipGoldAmount).toBe(50);
     });
 
     it('skipGoldAmount is 75 when nodeType is BOSS', () => {
-      component.nodeType = NodeType.BOSS;
+      component.config = { ...MOCK_CONFIG, nodeType: NodeType.BOSS };
       expect(component.skipGoldAmount).toBe(75);
     });
 
     it('skipGoldAmount is 0 when nodeType is REST', () => {
-      component.nodeType = NodeType.REST;
+      component.config = { ...MOCK_CONFIG, nodeType: NodeType.REST };
       expect(component.skipGoldAmount).toBe(0);
     });
 
     it('onCardSkipped() emits gold reward when skipGoldAmount > 0 (COMBAT)', () => {
-      component.nodeType = NodeType.COMBAT;
+      component.config = { ...MOCK_CONFIG, nodeType: NodeType.COMBAT };
       const emitted: RewardItem[] = [];
       component.rewardCollected.subscribe(r => emitted.push(r));
 
@@ -508,7 +509,7 @@ describe('RewardScreenComponent', () => {
     });
 
     it('onCardSkipped() does NOT emit when skipGoldAmount is 0 (REST)', () => {
-      component.nodeType = NodeType.REST;
+      component.config = { ...MOCK_CONFIG, nodeType: NodeType.REST };
       const emitted: RewardItem[] = [];
       component.rewardCollected.subscribe(r => emitted.push(r));
 
