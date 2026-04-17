@@ -57,6 +57,19 @@ export class EncounterCheckpointService {
       data['version'] = 6;
       return data;
     },
+    // 6 → 7: add CALTROPS multiplier fields to the wave state snapshot.
+    // CALTROPS item could be consumed mid-encounter in a v6 checkpoint without
+    // these fields, causing both multipliers to silently reset to 1 on restore.
+    // Default both to 1 (no pending CALTROPS effect) — safe for all pre-v7 saves.
+    6: (data) => {
+      const waveState = data['waveState'] as Record<string, unknown> | undefined;
+      if (waveState) {
+        waveState['nextWaveEnemySpeedMultiplier'] = 1;
+        waveState['activeWaveCaltropsMultiplier'] = 1;
+      }
+      data['version'] = 7;
+      return data;
+    },
   };
 
   /**

@@ -13,7 +13,7 @@ import { SerializedItemInventory } from '../../../run/models/item.model';
 import { SerializedRunStateFlags } from '../../../run/services/run-state-flag.service';
 
 /** Schema version — bump when the shape changes to enable migrations. */
-export const CHECKPOINT_VERSION = 6;
+export const CHECKPOINT_VERSION = 7;
 
 /** Plain-object snapshot of GameState (isPaused omitted — always false on restore). */
 export interface SerializableGameState {
@@ -131,6 +131,16 @@ export interface SerializableWaveState {
   readonly active: boolean;
   readonly endlessMode: boolean;
   readonly currentEndlessResult: EndlessWaveResult | null;
+  /**
+   * One-shot CALTROPS speed multiplier pending for the next wave.
+   * Optional for backwards compat; v6 checkpoints are migrated with default 1.
+   */
+  readonly nextWaveEnemySpeedMultiplier?: number;
+  /**
+   * CALTROPS multiplier consumed at startWave() for the currently active wave.
+   * Optional for backwards compat; v6 checkpoints are migrated with default 1.
+   */
+  readonly activeWaveCaltropsMultiplier?: number;
 }
 
 /** Deck service state snapshot. CardInstance is already serializable. */

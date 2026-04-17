@@ -56,6 +56,8 @@ function createTestCheckpoint(overrides: Partial<EncounterCheckpoint> = {}): Enc
       active: true,
       endlessMode: false,
       currentEndlessResult: null,
+      nextWaveEnemySpeedMultiplier: 1,
+      activeWaveCaltropsMultiplier: 1,
     },
     deckState: {
       deckState: { drawPile: [], hand: [], discardPile: [], exhaustPile: [] },
@@ -312,6 +314,32 @@ describe('EncounterCheckpointService', () => {
       expect(loaded!.itemInventory.entries.length).toBe(2);
       const bombEntry = loaded!.itemInventory.entries.find(e => e[0] === 'bomb');
       expect(bombEntry?.[1]).toBe(2);
+    });
+
+    it('migrates v6 to v7 by inserting CALTROPS multiplier defaults (1, 1) into waveState', () => {
+      // Build a v6 checkpoint (no CALTROPS fields on waveState)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v6Data: Record<string, any> = {
+        ...createTestCheckpoint({ version: 6 }),
+        version: 6,
+        waveState: {
+          currentWaveIndex: 1,
+          turnSchedule: [],
+          turnScheduleIndex: 3,
+          active: true,
+          endlessMode: false,
+          currentEndlessResult: null,
+          // nextWaveEnemySpeedMultiplier and activeWaveCaltropsMultiplier intentionally absent
+        },
+      };
+      localStorage.setItem('novarise_encounter_checkpoint', JSON.stringify(v6Data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.version).toBe(CHECKPOINT_VERSION);
+      expect(loaded!.waveState.nextWaveEnemySpeedMultiplier).toBe(1);
+      expect(loaded!.waveState.activeWaveCaltropsMultiplier).toBe(1);
     });
   });
 

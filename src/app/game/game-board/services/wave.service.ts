@@ -429,6 +429,8 @@ export class WaveService {
       active: this.active,
       endlessMode: this.endlessMode,
       currentEndlessResult: this.currentEndlessResult ? { ...this.currentEndlessResult } : null,
+      nextWaveEnemySpeedMultiplier: this.nextWaveEnemySpeedMultiplier,
+      activeWaveCaltropsMultiplier: this.activeWaveCaltropsMultiplier,
     };
   }
 
@@ -447,6 +449,9 @@ export class WaveService {
     this.active = snapshot.active;
     this.endlessMode = snapshot.endlessMode;
     this.currentEndlessResult = snapshot.currentEndlessResult ? { ...snapshot.currentEndlessResult } : null;
+    // Backwards compat: v6 checkpoints lack these fields; default to 1 (no pending CALTROPS effect).
+    this.nextWaveEnemySpeedMultiplier = snapshot.nextWaveEnemySpeedMultiplier ?? 1;
+    this.activeWaveCaltropsMultiplier = snapshot.activeWaveCaltropsMultiplier ?? 1;
   }
 
   /**
