@@ -211,6 +211,65 @@ describe('StatusEffectService', () => {
     });
   });
 
+  // --- DoT tick-order contract ---
+  //
+  // Contract: expire-first.
+  // tickTurn() checks `turnNumber >= expiresAt` BEFORE applying damage.
+  // A duration-N effect applied at turn T fires on turns T+1 to T+N-1 (N-1 ticks).
+  // BURN duration=3: expiresAt = 0+3 = 3. Fires on turns 1 and 2. Total = 2 x 5 = 10.
+
+  describe('DoT tick-order contract', () => {
+    it('contract: DoT is expire-first -- duration-3 BURN applies 2 ticks totaling 10 dmg', () => {
+      const burnCfg = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN];
+      expect(burnCfg.duration).toBe(3);
+      expect(burnCfg.damagePerTick).toBe(5);
+
+      // Track cumulative damage applied to the enemy via damageEnemy spy.
+      let totalDamage = 0;
+      enemyServiceSpy.damageEnemy.and.callFake((_id: string, dmg: number) => {
+        totalDamage += dmg;
+        return { killed: false, spawnedEnemies: [] };
+      });
+
+      const enemy = createEnemy('e1', 999, 4);
+      enemyMap.set('e1', enemy);
+
+      // Apply at turn 0 => expiresAt = 0 + 3 = 3
+      service.apply('e1', StatusEffectType.BURN, 0);
+
+      // Turn 1: 1 < 3 => damage fires (total = 5)
+      service.tickTurn(1);
+      // Turn 2: 2 < 3 => damage fires (total = 10)
+      service.tickTurn(2);
+      // Turn 3: 3 >= 3 => effect expires, NO damage this turn
+      service.tickTurn(3);
+
+      expect(totalDamage).toBe(10); // 2 ticks x 5, NOT 3 ticks x 5 = 15
+      expect(enemyServiceSpy.damageEnemy).toHaveBeenCalledTimes(2);
+      expect(service.hasEffect('e1', StatusEffectType.BURN)).toBe(false);
+    });
+
+    it('contract: turn equal to expiresAt causes expiry with zero damage that turn', () => {
+      let damageCalled = false;
+      enemyServiceSpy.damageEnemy.and.callFake((_id: string, _dmg: number) => {
+        damageCalled = true;
+        return { killed: false, spawnedEnemies: [] };
+      });
+
+      const enemy = createEnemy('e1', 999, 4);
+      enemyMap.set('e1', enemy);
+
+      // Apply at turn 0 => expiresAt = 3
+      service.apply('e1', StatusEffectType.BURN, 0);
+
+      // Skip straight to the expiry turn
+      service.tickTurn(3);
+
+      expect(damageCalled).toBe(false);
+      expect(service.hasEffect('e1', StatusEffectType.BURN)).toBe(false);
+    });
+  });
+
   // --- POISON ticking ---
   // Turn-based: Both BURN and POISON apply damagePerTick
   // exactly once per tickTurn() call. Both fire on the same turn.

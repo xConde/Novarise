@@ -81,9 +81,18 @@ export class StatusEffectService {
    * Phase 4 turn-based equivalent of {@link update}.
    *
    * Called once per resolution phase from CombatLoopService.resolveTurn().
-   * Treats `config.duration` as TURNS (not seconds) — BURN 5 → expires after 5
-   * turns. DoT effects (BURN, POISON) apply their `damagePerTick` exactly once
-   * per turn (turn-based ticks are coarse; DoT effects fire exactly once per turn).
+   * Treats `config.duration` as TURNS (not seconds). DoT effects (BURN, POISON)
+   * apply their `damagePerTick` exactly once per turn.
+   *
+   * **Contract: expire-first.**
+   * Expiry is checked BEFORE damage. When `turnNumber >= expiresAt`, the effect
+   * is removed and NO damage is dealt that turn. DoT fires only while
+   * `turnNumber < expiresAt`.
+   *
+   * Concrete tick count: a duration-N effect applied at turn T has
+   * `expiresAt = T + N`. It fires on turns T+1 to T+N-1 -- that is **N-1 ticks**.
+   * Example: BURN duration=3 applied at turn 0 fires at turns 1 and 2 (2 ticks,
+   * 10 total damage at 5/tick). It does NOT fire on turn 3.
    *
    * @param turnNumber Monotonically-increasing turn counter from CombatLoopService.
    * @returns KillInfo[] for enemies killed by DoT this turn.
