@@ -7,6 +7,7 @@ import {
   createSeededRng,
   getMapTierForNode,
 } from '../constants/run.constants';
+import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
 
 /**
  * Generates a deterministic StS-style branching node map for one act.
@@ -26,17 +27,23 @@ export class NodeMapGeneratorService {
   /**
    * Generate a full act node map deterministically from `seed`.
    * `actIndex` is 0-based (act 1 = 0, act 2 = 1).
+   * `ascensionLevel` (optional) wires in qualitative ascension effects that
+   * affect map layout (elite spawn rate, event node count).
    */
-  generateActMap(actIndex: number, seed: number): NodeMap {
+  generateActMap(actIndex: number, seed: number, ascensionLevel = 0): NodeMap {
     const rng = createSeededRng(seed);
     const totalRows = NODE_MAP_CONFIG.rowsPerAct; // 11 content rows + 1 boss row
+
+    const ascEffects = getAscensionEffects(ascensionLevel);
+    const eliteSpawnBonus = ascEffects.get(AscensionEffectType.ELITE_SPAWN_RATE_BONUS) ?? 0;
+    const eventNodeReduction = ascEffects.get(AscensionEffectType.EVENT_NODE_REDUCTION) ?? 0;
 
     // ── Step 1: Build rows with node counts ─────────────────
     // rows[0..totalRows] where rows[totalRows] is the boss row
     const rowNodeCounts = this.buildRowNodeCounts(rng, totalRows);
 
     // ── Step 2: Assign node types ────────────────────────────
-    const typeGrid = this.buildTypeGrid(rng, rowNodeCounts, totalRows, actIndex);
+    const typeGrid = this.buildTypeGrid(rng, rowNodeCounts, totalRows, actIndex, eliteSpawnBonus, eventNodeReduction);
 
     // ── Step 3: Assign campaign map IDs ─────────────────────
     const mapIdGrid = this.buildMapIdGrid(rng, rowNodeCounts, totalRows, actIndex);
@@ -100,8 +107,12 @@ export class NodeMapGeneratorService {
     rowNodeCounts: number[],
     totalRows: number,
     actIndex: number,
+    eliteSpawnBonus: number,
+    eventNodeReduction: number,
   ): NodeType[][] {
     const grid: NodeType[][] = [];
+    /** Running count of event nodes placed in this act (used for EVENT_NODE_REDUCTION). */
+    let eventNodesPlaced = 0;
 
     for (let row = 0; row <= totalRows; row++) {
       const count = rowNodeCounts[row];
@@ -118,7 +129,9 @@ export class NodeMapGeneratorService {
       } else {
         // Assign weighted random types, then enforce guarantees
         for (let col = 0; col < count; col++) {
-          rowTypes.push(this.pickNodeType(rng, row, actIndex, totalRows));
+          const picked = this.pickNodeType(rng, row, actIndex, totalRows, eliteSpawnBonus, eventNodesPlaced, eventNodeReduction);
+          if (picked === NodeType.EVENT) eventNodesPlaced++;
+          rowTypes.push(picked);
         }
 
         // Guarantee SHOP at row 5
@@ -140,23 +153,40 @@ export class NodeMapGeneratorService {
     return grid;
   }
 
-  /** Picks a weighted random NodeType for a given row, respecting elite row bounds. */
-  private pickNodeType(rng: SeededRng, row: number, _actIndex: number, totalRows: number): NodeType {
+  /**
+   * Picks a weighted random NodeType for a given row, respecting elite row bounds.
+   * `eliteSpawnBonus` (from ELITE_SPAWN_RATE_BONUS) is added to the base elite weight.
+   * `eventNodesPlaced` / `eventNodeReduction` suppress EVENT picks once the budget is reached.
+   */
+  private pickNodeType(
+    rng: SeededRng,
+    row: number,
+    _actIndex: number,
+    totalRows: number,
+    eliteSpawnBonus: number,
+    eventNodesPlaced: number,
+    eventNodeReduction: number,
+  ): NodeType {
     const w = NODE_MAP_CONFIG.nodeTypeWeights;
 
     // Build weight table — suppress elite outside [eliteMinRow, eliteMaxRow]
     const eliteAllowed = row >= NODE_MAP_CONFIG.eliteMinRow && row <= NODE_MAP_CONFIG.eliteMaxRow;
-    const eliteWeight = eliteAllowed ? w.elite : 0;
+    // Apply elite spawn rate bonus when elite is allowed
+    const eliteWeight = eliteAllowed ? (w.elite + eliteSpawnBonus) : 0;
 
     // Redistribute elite weight to combat when suppressed
-    const combatWeight = w.combat + (eliteAllowed ? 0 : w.elite);
+    const combatWeight = w.combat + (eliteAllowed ? 0 : (w.elite + eliteSpawnBonus));
+
+    // Suppress event nodes once the reduction budget is exhausted
+    const eventBudgetExceeded = eventNodeReduction > 0 && eventNodesPlaced >= (totalRows - eventNodeReduction);
+    const eventWeight = eventBudgetExceeded ? 0 : w.event;
 
     const weights: [NodeType, number][] = [
       [NodeType.COMBAT, combatWeight],
       [NodeType.ELITE, eliteWeight],
       [NodeType.REST, w.rest],
       [NodeType.SHOP, w.shop],
-      [NodeType.EVENT, w.event],
+      [NodeType.EVENT, eventWeight],
       [NodeType.UNKNOWN, w.unknown],
     ];
 

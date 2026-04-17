@@ -193,9 +193,12 @@ describe('Gameplay Integration', () => {
       // Drive the per-turn schedule until exhausted.
       // Wave 1 distributes one enemy per turn, so the loop runs exactly
       // getTotalEnemiesInWave(1) times and then isSpawning() goes false.
+      // Mirror real combat-loop ordering: spawn → step (clears spawner tile so
+      // the next turn's spawn isn't blocked by the prior-turn enemy still on it).
       const wave1Total = waveService.getTotalEnemiesInWave(1);
       while (waveService.isSpawning()) {
         waveService.spawnForTurn(scene);
+        enemyService.stepEnemiesOneTurn(() => 0);
       }
 
       expect(enemyService.getEnemies().size).toBe(wave1Total);

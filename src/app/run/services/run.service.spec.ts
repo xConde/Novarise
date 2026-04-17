@@ -162,7 +162,7 @@ describe('RunService', () => {
 
   it('startNewRun() generates act 0 node map', fakeAsync(() => {
     service.startNewRun();
-    expect(nodeMapGenerator.generateActMap).toHaveBeenCalledWith(0, jasmine.any(Number));
+    expect(nodeMapGenerator.generateActMap).toHaveBeenCalledWith(0, jasmine.any(Number), jasmine.any(Number));
     expect(service.nodeMap).not.toBeNull();
   }));
 
@@ -376,7 +376,7 @@ describe('RunService', () => {
 
     service.advanceAct();
 
-    expect(nodeMapGenerator.generateActMap).toHaveBeenCalledWith(1, jasmine.any(Number));
+    expect(nodeMapGenerator.generateActMap).toHaveBeenCalledWith(1, jasmine.any(Number), jasmine.any(Number));
     expect(service.runState!.actIndex).toBe(1);
   }));
 
@@ -1788,5 +1788,77 @@ describe('RunService', () => {
       const merchantEntry = loaded!.runStateFlags.entries.find(e => e[0] === FLAG_KEYS.MERCHANT_AIDED);
       expect(merchantEntry?.[1]).toBe(1);
     });
+  });
+
+  // ── S7: qualitative ascension effects ────────────────────────
+
+  describe('S7 — SHOP_SLOT_REDUCTION (A13)', () => {
+    beforeEach(() => {
+      const stubRelics: RelicDefinition[] = [
+        RELIC_DEFINITIONS[RelicId.IRON_HEART],
+        RELIC_DEFINITIONS[RelicId.GOLD_MAGNET],
+        RELIC_DEFINITIONS[RelicId.STURDY_BOOTS],
+        RELIC_DEFINITIONS[RelicId.QUICK_DRAW],
+        RELIC_DEFINITIONS[RelicId.LUCKY_COIN],
+      ];
+      // A18 grants a starting relic — getAvailableRelics is called on startNewRun now.
+      // Provide stubs for all rarity variants.
+      relicService.getAvailableRelics.and.callFake((rarity?: RelicRarity) => {
+        if (rarity === RelicRarity.COMMON) {
+          return stubRelics.filter(r => r.rarity === RelicRarity.COMMON);
+        }
+        return stubRelics;
+      });
+    });
+
+    it('at A12 (no SHOP_SLOT_REDUCTION), shop has 3 relics and 3 cards', fakeAsync(() => {
+      service.startNewRun(12);
+      service.generateShopItems();
+      const items = service.getShopItems();
+      const relicItems = items.filter(i => i.item.type === 'relic');
+      const cardItems = items.filter(i => i.item.type === 'card');
+      expect(relicItems.length).toBe(3); // SHOP_CONFIG.relicsInShop baseline
+      expect(cardItems.length).toBe(3); // SHOP_CONFIG.cardsInShop baseline
+    }));
+
+    it('at A13 (SHOP_SLOT_REDUCTION=1), shop has 2 relics and 2 cards', fakeAsync(() => {
+      service.startNewRun(13);
+      service.generateShopItems();
+      const items = service.getShopItems();
+      const relicItems = items.filter(i => i.item.type === 'relic');
+      const cardItems = items.filter(i => i.item.type === 'card');
+      expect(relicItems.length).toBe(2); // 3 - 1
+      expect(cardItems.length).toBe(2); // 3 - 1
+    }));
+  });
+
+  describe('S7 — STARTING_RELIC_DOWNGRADE (A18)', () => {
+    it('at A17 (no downgrade), startNewRun() calls getAvailableRelics() without rarity filter', fakeAsync(() => {
+      const stubRelics: RelicDefinition[] = [RELIC_DEFINITIONS[RelicId.IRON_HEART]];
+      relicService.getAvailableRelics.and.callFake((rarity?: RelicRarity) => {
+        return rarity ? [] : stubRelics;
+      });
+
+      service.startNewRun(17);
+
+      // getAvailableRelics called without arg for the starter relic at A17
+      const callsWithoutRarity = relicService.getAvailableRelics.calls.all()
+        .filter(c => c.args.length === 0 || c.args[0] === undefined);
+      expect(callsWithoutRarity.length).toBeGreaterThan(0);
+    }));
+
+    it('at A18 (STARTING_RELIC_DOWNGRADE=1), startNewRun() calls getAvailableRelics(COMMON)', fakeAsync(() => {
+      const stubRelics: RelicDefinition[] = [RELIC_DEFINITIONS[RelicId.IRON_HEART]];
+      relicService.getAvailableRelics.and.callFake((rarity?: RelicRarity) => {
+        return rarity === RelicRarity.COMMON ? stubRelics : [];
+      });
+
+      service.startNewRun(18);
+
+      // getAvailableRelics must be called with RelicRarity.COMMON for the starter relic at A18
+      const callsWithCommon = relicService.getAvailableRelics.calls.all()
+        .filter(c => c.args[0] === RelicRarity.COMMON);
+      expect(callsWithCommon.length).toBeGreaterThan(0);
+    }));
   });
 });

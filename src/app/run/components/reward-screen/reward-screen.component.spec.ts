@@ -223,9 +223,10 @@ describe('RewardScreenComponent', () => {
     }
   });
 
-  it('onCardSkipped sets cardPicked=true without emitting rewardCollected', () => {
+  it('onCardSkipped sets cardPicked=true and emits no reward when skip gold is 0 (rest/shop nodes)', () => {
     const emitted: RewardItem[] = [];
     component.rewardCollected.subscribe(r => emitted.push(r));
+    component.nodeType = NodeType.REST;
 
     component.onCardSkipped();
 

@@ -227,8 +227,12 @@ export class RunService {
     // Initialize the deck service with the starter deck
     this.deckService.initializeDeck(starterDeck, seed);
 
-    // Generate act 1 map
-    const map = this.nodeMapGenerator.generateActMap(0, seed);
+    // Grant a starting relic. At A18+ (STARTING_RELIC_DOWNGRADE > 0), restrict
+    // the pick to COMMON relics only; otherwise pick from the full pool.
+    this.grantStartingRelic(ascensionLevel);
+
+    // Generate act 1 map (pass ascension level so map-gen effects apply)
+    const map = this.nodeMapGenerator.generateActMap(0, seed, ascensionLevel);
     this.nodeMapSubject.next(map);
     this.persist();
   }
@@ -577,9 +581,12 @@ export class RunService {
 
     const items: ShopItem[] = [];
 
-    // Apply ascension price multiplier
+    // Apply ascension price multiplier and shop slot reduction
     const ascEffects = getAscensionEffects(state.ascensionLevel);
     const priceMultiplier = ascEffects.get(AscensionEffectType.SHOP_PRICE_MULTIPLIER) ?? 1;
+    const shopSlotReduction = ascEffects.get(AscensionEffectType.SHOP_SLOT_REDUCTION) ?? 0;
+    const relicsInShop = Math.max(0, SHOP_CONFIG.relicsInShop - shopSlotReduction);
+    const cardsInShop = Math.max(0, SHOP_CONFIG.cardsInShop - shopSlotReduction);
 
     // Relic items — weighted by rarity
     const available = this.relicService.getAvailableRelics();
@@ -594,7 +601,7 @@ export class RunService {
       { rarity: RelicRarity.RARE, weight: REWARD_RARITY_WEIGHTS.rare },
     ];
     const pickedRelicIds = new Set<RelicId>();
-    for (let i = 0; i < SHOP_CONFIG.relicsInShop; i++) {
+    for (let i = 0; i < relicsInShop; i++) {
       const remaining: Record<RelicRarity, RelicDefinition[]> = {
         [RelicRarity.COMMON]: relicByRarity[RelicRarity.COMMON].filter(r => !pickedRelicIds.has(r.id)),
         [RelicRarity.UNCOMMON]: relicByRarity[RelicRarity.UNCOMMON].filter(r => !pickedRelicIds.has(r.id)),
@@ -626,7 +633,7 @@ export class RunService {
       { rarity: CardRarity.RARE, weight: REWARD_RARITY_WEIGHTS.rare },
     ];
     const pickedCardIds = new Set<CardId>();
-    for (let i = 0; i < SHOP_CONFIG.cardsInShop; i++) {
+    for (let i = 0; i < cardsInShop; i++) {
       const remaining: Record<CardRarity, typeof allCards> = {
         [CardRarity.STARTER]: [],
         [CardRarity.COMMON]: cardByRarity[CardRarity.COMMON].filter(c => !pickedCardIds.has(c.id)),
@@ -849,8 +856,8 @@ export class RunService {
       return;
     }
 
-    // Generate next act map
-    const newMap = this.nodeMapGenerator.generateActMap(nextAct, state.seed + nextAct * RUN_CONFIG.actSeedPrime);
+    // Generate next act map (pass ascension level so map-gen effects apply)
+    const newMap = this.nodeMapGenerator.generateActMap(nextAct, state.seed + nextAct * RUN_CONFIG.actSeedPrime, state.ascensionLevel);
     this.nodeMapSubject.next(newMap);
 
     this.updateState({
@@ -930,6 +937,26 @@ export class RunService {
       });
       this.persist();
     }
+  }
+
+  /**
+   * Grant one starting relic at run start.
+   * Normal: pick from the full pool (all rarities).
+   * At A18+ (STARTING_RELIC_DOWNGRADE > 0): restrict to COMMON pool only.
+   */
+  private grantStartingRelic(ascensionLevel: number): void {
+    const rng: () => number = this.runRng ? () => this.runRng!.next() : Math.random;
+    const ascEffects = getAscensionEffects(ascensionLevel);
+    const downgrade = ascEffects.get(AscensionEffectType.STARTING_RELIC_DOWNGRADE) ?? 0;
+
+    const pool = downgrade > 0
+      ? this.relicService.getAvailableRelics(RelicRarity.COMMON)
+      : this.relicService.getAvailableRelics();
+
+    if (pool.length === 0) return;
+
+    const relic = pool[Math.floor(rng() * pool.length)];
+    this.addRelic(relic.id);
   }
 
   private applyAscensionToConfig(config: RunConfig, level: number): RunConfig {
