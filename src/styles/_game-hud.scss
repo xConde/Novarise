@@ -626,13 +626,21 @@ body.reduce-motion .board-container .game-hud .hud-value.wave-start-pulse {
 }
 
 // ============================================================================
-// M11 — Debug-style mobile end-turn override. Earlier attempts using
-// calc() with CSS vars didn't produce the expected visual result. Using
-// hardcoded pixel values to rule out var resolution / calc cascading
-// issues. Border color forced to CYAN as a visual verification marker —
-// if the border is cyan on mobile, this rule IS applying and any
-// remaining layout issue is an actual pixel math problem. If the
-// border is NOT cyan, the CSS isn't loading for some reason.
+// Mobile end-turn override. Historical note: earlier attempts (M5–M10)
+// failed because we were guessing at the cascade. The M11 debug commit
+// with a cyan border marker proved that *global* SCSS with !important
+// does win against the component-scoped base rule — what wasn't winning
+// was our pixel math. Hardcoded px values used here rather than calc(vars)
+// because we need the layout to be visually exact and verified.
+//
+// Layout:
+// - left: 220px   — clears the stats row (capped at min(55vw, 26rem) =
+//                   214px on 390px mobile, plus ~6px breathing room)
+// - right: 72px   — clears the gear (44px touch target at right: 16px,
+//                   plus 12px breathing room)
+// - top: 10px     — aligns the button vertically with the stats row
+//                   (whose position is --shell-hud-top on mobile ≈ 5px
+//                   inside .board-container)
 // ============================================================================
 @media (max-width: 480px) {
   .board-container .end-turn-btn {
@@ -646,7 +654,6 @@ body.reduce-motion .board-container .game-hud .hud-value.wave-start-pulse {
     width: auto !important;
     min-height: 44px !important;
     gap: 0 !important;
-    border-color: cyan !important;
   }
   .board-container .end-turn-btn:hover:not(:disabled),
   .board-container .end-turn-btn:active:not(:disabled) {
