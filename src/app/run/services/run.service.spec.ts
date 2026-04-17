@@ -8,6 +8,10 @@ import { RunPersistenceService } from './run-persistence.service';
 import { RunEventBusService } from './run-event-bus.service';
 import { EncounterCheckpointService } from './encounter-checkpoint.service';
 import { RunStateFlagService } from './run-state-flag.service';
+import { ItemService } from './item.service';
+import { ItemType, SerializedItemInventory } from '../models/item.model';
+import { SerializedRunStateFlags } from './run-state-flag.service';
+import { RunState } from '../models/run-state.model';
 import { FLAG_KEYS } from '../constants/flag-keys';
 import { RunEvent, EventOutcome } from '../models/encounter.model';
 import { RUN_EVENTS } from '../constants/run-events';
@@ -1736,6 +1740,218 @@ describe('RunService', () => {
       const merchantEntry = loaded!.runStateFlags.entries.find(e => e[0] === FLAG_KEYS.MERCHANT_AIDED);
       expect(merchantEntry?.[1]).toBe(1);
     });
+  });
+
+  // ── H5: run-level items + flags persistence ───────────────────
+
+  describe('H5: run-level items + flags persistence', () => {
+    let itemService: ItemService;
+    let flagService: RunStateFlagService;
+
+    beforeEach(() => {
+      itemService = TestBed.inject(ItemService);
+      flagService = TestBed.inject(RunStateFlagService);
+      itemService.resetForRun();
+      flagService.resetForRun();
+    });
+
+    afterEach(() => {
+      itemService.resetForRun();
+      flagService.resetForRun();
+    });
+
+    it('persist() includes itemService inventory in the saved state', fakeAsync(() => {
+      service.startNewRun();
+      itemService.addItem(ItemType.HEAL_POTION);
+      itemService.addItem(ItemType.HEAL_POTION);
+      itemService.addItem(ItemType.BOMB);
+
+      // Trigger persist() via selectNode
+      service.selectNode('node_0_0');
+
+      const savedState = persistence.saveRunState.calls.mostRecent().args[0] as RunState;
+      expect(savedState.itemInventory).toBeDefined();
+      const healEntry = savedState.itemInventory!.entries.find(e => e[0] === ItemType.HEAL_POTION);
+      const bombEntry = savedState.itemInventory!.entries.find(e => e[0] === ItemType.BOMB);
+      expect(healEntry?.[1]).toBe(2);
+      expect(bombEntry?.[1]).toBe(1);
+    }));
+
+    it('persist() includes runStateFlagService state', fakeAsync(() => {
+      service.startNewRun();
+      flagService.setFlag('test_flag', 3);
+
+      service.selectNode('node_0_0');
+
+      const savedState = persistence.saveRunState.calls.mostRecent().args[0] as RunState;
+      expect(savedState.runStateFlags).toBeDefined();
+      const flagEntry = savedState.runStateFlags!.entries.find(e => e[0] === 'test_flag');
+      expect(flagEntry?.[1]).toBe(3);
+    }));
+
+    it('persist() includes runStateFlagService consumedEventIds', fakeAsync(() => {
+      service.startNewRun();
+      flagService.markEventConsumed('foo_event');
+
+      service.selectNode('node_0_0');
+
+      const savedState = persistence.saveRunState.calls.mostRecent().args[0] as RunState;
+      expect(savedState.runStateFlags).toBeDefined();
+      expect(savedState.runStateFlags!.consumedEventIds).toContain('foo_event');
+    }));
+
+    it('resumeRun() restores item inventory from saved state', fakeAsync(() => {
+      const itemInventory: SerializedItemInventory = {
+        entries: [[ItemType.ENERGY_ELIXIR, 2], [ItemType.BOMB, 1]],
+      };
+      const fakeState: RunState = {
+        id: 'run_resume',
+        seed: 100,
+        ascensionLevel: 0,
+        config: { startingLives: 20, startingGold: 150, actsCount: 2, nodesPerAct: 12 },
+        actIndex: 0,
+        currentNodeId: null,
+        completedNodeIds: [],
+        lives: 20,
+        maxLives: 20,
+        gold: 150,
+        relicIds: [],
+        deckCardIds: [],
+        encounterResults: [],
+        status: 'in_progress' as any,
+        startedAt: Date.now(),
+        score: 0,
+        itemInventory,
+      };
+      persistence.loadRunState.and.returnValue(fakeState);
+      persistence.loadNodeMap.and.returnValue(makeNodeMap());
+
+      service.resumeRun();
+
+      const inventory = itemService.getInventory();
+      expect(inventory.get(ItemType.ENERGY_ELIXIR)).toBe(2);
+      expect(inventory.get(ItemType.BOMB)).toBe(1);
+    }));
+
+    it('resumeRun() restores flags from saved state', fakeAsync(() => {
+      const runStateFlags: SerializedRunStateFlags = {
+        entries: [['merchant_aided', 1], ['scout_saved', 2]],
+        consumedEventIds: [],
+      };
+      const fakeState: RunState = {
+        id: 'run_flags',
+        seed: 200,
+        ascensionLevel: 0,
+        config: { startingLives: 20, startingGold: 150, actsCount: 2, nodesPerAct: 12 },
+        actIndex: 0,
+        currentNodeId: null,
+        completedNodeIds: [],
+        lives: 20,
+        maxLives: 20,
+        gold: 150,
+        relicIds: [],
+        deckCardIds: [],
+        encounterResults: [],
+        status: 'in_progress' as any,
+        startedAt: Date.now(),
+        score: 0,
+        runStateFlags,
+      };
+      persistence.loadRunState.and.returnValue(fakeState);
+      persistence.loadNodeMap.and.returnValue(makeNodeMap());
+
+      service.resumeRun();
+
+      expect(flagService.getFlag('merchant_aided')).toBe(1);
+      expect(flagService.getFlag('scout_saved')).toBe(2);
+    }));
+
+    it('resumeRun() restores consumedEventIds from saved state', fakeAsync(() => {
+      const runStateFlags: SerializedRunStateFlags = {
+        entries: [],
+        consumedEventIds: ['wandering_merchant_intro', 'cursed_idol_offer'],
+      };
+      const fakeState: RunState = {
+        id: 'run_consumed',
+        seed: 300,
+        ascensionLevel: 0,
+        config: { startingLives: 20, startingGold: 150, actsCount: 2, nodesPerAct: 12 },
+        actIndex: 0,
+        currentNodeId: null,
+        completedNodeIds: [],
+        lives: 20,
+        maxLives: 20,
+        gold: 150,
+        relicIds: [],
+        deckCardIds: [],
+        encounterResults: [],
+        status: 'in_progress' as any,
+        startedAt: Date.now(),
+        score: 0,
+        runStateFlags,
+      };
+      persistence.loadRunState.and.returnValue(fakeState);
+      persistence.loadNodeMap.and.returnValue(makeNodeMap());
+
+      service.resumeRun();
+
+      expect(flagService.isEventConsumed('wandering_merchant_intro')).toBeTrue();
+      expect(flagService.isEventConsumed('cursed_idol_offer')).toBeTrue();
+    }));
+
+    it('resumeRun() backward-compat: RunState without itemInventory restores to empty inventory', fakeAsync(() => {
+      const fakeState: RunState = {
+        id: 'run_compat_items',
+        seed: 400,
+        ascensionLevel: 0,
+        config: { startingLives: 20, startingGold: 150, actsCount: 2, nodesPerAct: 12 },
+        actIndex: 0,
+        currentNodeId: null,
+        completedNodeIds: [],
+        lives: 20,
+        maxLives: 20,
+        gold: 150,
+        relicIds: [],
+        deckCardIds: [],
+        encounterResults: [],
+        status: 'in_progress' as any,
+        startedAt: Date.now(),
+        score: 0,
+        // intentionally no itemInventory field
+      };
+      persistence.loadRunState.and.returnValue(fakeState);
+      persistence.loadNodeMap.and.returnValue(makeNodeMap());
+
+      expect(() => service.resumeRun()).not.toThrow();
+      expect(itemService.getInventory().size).toBe(0);
+    }));
+
+    it('resumeRun() backward-compat: RunState without runStateFlags restores to empty flags', fakeAsync(() => {
+      const fakeState: RunState = {
+        id: 'run_compat_flags',
+        seed: 500,
+        ascensionLevel: 0,
+        config: { startingLives: 20, startingGold: 150, actsCount: 2, nodesPerAct: 12 },
+        actIndex: 0,
+        currentNodeId: null,
+        completedNodeIds: [],
+        lives: 20,
+        maxLives: 20,
+        gold: 150,
+        relicIds: [],
+        deckCardIds: [],
+        encounterResults: [],
+        status: 'in_progress' as any,
+        startedAt: Date.now(),
+        score: 0,
+        // intentionally no runStateFlags field
+      };
+      persistence.loadRunState.and.returnValue(fakeState);
+      persistence.loadNodeMap.and.returnValue(makeNodeMap());
+
+      expect(() => service.resumeRun()).not.toThrow();
+      expect(flagService.getAllFlags().size).toBe(0);
+    }));
   });
 
   // ── S7: qualitative ascension effects ────────────────────────

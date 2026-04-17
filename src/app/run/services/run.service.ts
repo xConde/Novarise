@@ -250,6 +250,15 @@ export class RunService {
     // Reinitialize deck from persisted card IDs so DeckService state is
     // consistent with the saved run after a page reload.
     this.deckService.initializeDeck(state.deckCardIds, state.seed);
+
+    // Restore item inventory and run-state flags. Guard with presence check for
+    // backward compat — saves made before H5 lack these fields.
+    if (state.itemInventory) {
+      this.itemService.restore(state.itemInventory);
+    }
+    if (state.runStateFlags) {
+      this.runStateFlagService.restore(state.runStateFlags);
+    }
   }
 
   /** Abandon the current run. */
@@ -970,9 +979,13 @@ export class RunService {
   private persist(): void {
     const state = this.runState;
     const map = this.nodeMap;
-    if (state && map) {
-      this.persistence.saveRunState(state, map);
-    }
+    if (!state || !map) return;
+    const stateToSave: RunState = {
+      ...state,
+      itemInventory: this.itemService.serialize(),
+      runStateFlags: this.runStateFlagService.serialize(),
+    };
+    this.persistence.saveRunState(stateToSave, map);
   }
 
   /**
