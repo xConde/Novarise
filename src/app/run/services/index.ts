@@ -3,6 +3,7 @@ export { NodeMapGeneratorService } from './node-map-generator.service';
 export { WaveGeneratorService } from './wave-generator.service';
 export { EncounterService } from './encounter.service';
 export { RelicService } from './relic.service';
+export { ItemService } from './item.service';
 export { RunPersistenceService } from './run-persistence.service';
 export { RunEventBusService } from './run-event-bus.service';
 export { DeckService } from './deck.service';

@@ -5,10 +5,12 @@
  * StS-faithful design: events are opportunities with risk, not free rewards.
  *
  * Events with `outcome.removeCard: true` trigger a random card removal in RunService.resolveEvent.
+ * Events with `outcome.itemReward` grant a consumable item to the player's inventory.
  */
 
 import { RunEvent } from '../models/encounter.model';
 import { RelicId } from '../models/relic.model';
+import { ItemType } from '../models/item.model';
 
 export const RUN_EVENTS: ReadonlyArray<RunEvent> = [
   {
@@ -285,6 +287,23 @@ export const RUN_EVENTS: ReadonlyArray<RunEvent> = [
         label: 'Decline',
         description: 'Keep your deck as-is.',
         outcome: { goldDelta: 0, livesDelta: 0, description: 'You leave your deck untouched.' },
+      },
+    ],
+  },
+  {
+    id: 'treasure_cache',
+    title: 'Treasure Cache',
+    description: 'A sealed crate bears the markings of a forward-supply depot. You can haul it out or crack it open on the spot.',
+    choices: [
+      {
+        label: 'Crack it open',
+        description: 'Take a consumable item from the cache.',
+        outcome: { goldDelta: 0, livesDelta: 0, itemReward: ItemType.HEAL_POTION, description: 'You pocket a Heal Potion from the cache.' },
+      },
+      {
+        label: 'Sell the whole crate',
+        description: 'Gain 35 gold — contents unknown.',
+        outcome: { goldDelta: 35, livesDelta: 0, description: 'The broker pays without asking questions.' },
       },
     ],
   },

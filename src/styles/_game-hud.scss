@@ -541,3 +541,77 @@ body.reduce-motion .board-container .game-hud .hud-value.wave-start-pulse {
     transition: none;
   }
 }
+
+// --- Sprint 5 (engine-depth): HUD items-peek ---
+
+.board-container .hud-items-peek {
+  position: absolute;
+  top: calc(var(--shell-hud-top) + var(--shell-hud-height) + 1.75rem + 2rem);
+  left: var(--shell-hud-left);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-width: min(40vw, 20rem);
+  pointer-events: none;
+  z-index: var(--z-index-overlay);
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+}
+
+.board-container .hud-items-peek__item {
+  padding: 0;
+  appearance: none;
+  pointer-events: auto;
+  position: relative;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-2xs);
+  font-weight: 800;
+  color: rgba(255, 200, 50, 0.9);
+  background: rgba(255, 200, 50, 0.08);
+  border: var(--border-width-thin) solid rgba(255, 200, 50, 0.35);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 200, 50, 0.22);
+    color: #fff;
+    transform: scale(1.1);
+  }
+
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--theme-cyan);
+    outline-offset: 2px;
+  }
+}
+
+.board-container .hud-items-peek__count {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  min-width: 0.875rem;
+  height: 0.875rem;
+  padding: 0 0.15rem;
+  font-size: 0.5rem;
+  font-weight: 700;
+  color: #111;
+  background: rgba(255, 200, 50, 0.9);
+  border-radius: 0.4375rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .hud-items-peek__item {
+    transition: none;
+  }
+}

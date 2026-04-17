@@ -20,6 +20,7 @@ import { GameStatsService } from './game-stats.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { RunService } from '../../../run/services/run.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
+import { ItemService } from '../../../run/services/item.service';
 import { EncounterCheckpointService } from '../../../run/services/encounter-checkpoint.service';
 import { EncounterCheckpoint, CHECKPOINT_VERSION } from '../models/encounter-checkpoint.model';
 import { WavePreviewService } from './wave-preview.service';
@@ -92,6 +93,7 @@ export class WaveCombatFacadeService {
     private challengeTrackingService: ChallengeTrackingService,
     private runService: RunService,
     private cardEffectService: CardEffectService,
+    private itemService: ItemService,
     private encounterCheckpointService: EncounterCheckpointService,
     private wavePreviewService: WavePreviewService,
     private turnHistoryService: TurnHistoryService,
@@ -282,6 +284,7 @@ export class WaveCombatFacadeService {
         challengeState: this.challengeTrackingService.serializeState(),
         wavePreview: this.wavePreviewService.serialize(),
         turnHistory: this.turnHistoryService.serialize(),
+        itemInventory: this.itemService.serialize(),
       };
 
       this.encounterCheckpointService.saveCheckpoint(checkpoint);

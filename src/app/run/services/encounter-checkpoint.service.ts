@@ -41,6 +41,14 @@ export class EncounterCheckpointService {
       data['version'] = 4;
       return data;
     },
+    // 4 → 5: add `itemInventory` field. Item (consumable) system introduced in
+    // Sprint 5 of the engine-depth pass. Pre-v5 checkpoints had no items;
+    // default to empty inventory — no gameplay loss.
+    4: (data) => {
+      data['itemInventory'] = { entries: [] };
+      data['version'] = 5;
+      return data;
+    },
   };
 
   /**

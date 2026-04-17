@@ -65,6 +65,8 @@ import { FocusTrap } from '../../shared/utils/focus-trap.util';
 import { RunService } from '../../run/services/run.service';
 import { RelicService } from '../../run/services/relic.service';
 import { RELIC_DEFINITIONS } from '../../run/models/relic.model';
+import { ItemService } from '../../run/services/item.service';
+import { ItemType, ITEM_DEFINITIONS } from '../../run/models/item.model';
 import { DeckService } from '../../run/services/deck.service';
 import { CardEffectService } from '../../run/services/card-effect.service';
 import { EncounterCheckpointService } from '../../run/services/encounter-checkpoint.service';
@@ -367,6 +369,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private encounterCheckpointService: EncounterCheckpointService,
     private turnHistoryService: TurnHistoryService,
     private wavePreviewService: WavePreviewService,
+    private itemService: ItemService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -504,6 +507,41 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       next: notifs => { this.notifications = notifs; },
       error: (error: unknown) => console.error('Notification subscription error:', error)
     });
+
+    // Wire ItemService callbacks — combat and run-level collaborators
+    this.itemService.registerCombatCallbacks(
+      () => this.gameStateService.getState().phase,
+      (damage: number) => {
+        const enemies = [...this.enemyService.getEnemies().values()];
+        const living = enemies.filter(e => !e.dying && e.health > 0);
+        if (living.length === 0) return false;
+        const scene = this.sceneService.getScene();
+        for (const enemy of living) {
+          this.enemyService.damageEnemy(enemy.id, damage);
+        }
+        // Remove dead enemies from scene
+        for (const enemy of [...this.enemyService.getEnemies().values()]) {
+          if (enemy.dying && enemy.mesh && scene) {
+            // Let the normal render loop handle dying animation; no explicit scene removal needed
+          }
+        }
+        return true;
+      },
+      (delta: number) => { this.gameStateService.addLives(delta); },
+      (amount: number) => { this.deckService.addEnergy(amount); },
+      () => { this.waveService.insertEmptyTurn(); },
+      (multiplier: number) => { this.waveService.setNextWaveEnemySpeedMultiplier(multiplier); },
+    );
+    this.itemService.registerRunCallbacks(
+      (amount: number) => { this.gameStateService.addGold(amount); },
+      () => {
+        const runState = this.runService.runState;
+        return runState?.currentNodeId !== undefined && runState?.currentNodeId !== null
+          ? this.runService.getShopItems().length > 0 || true
+          : false;
+      },
+      () => { this.runService.generateShopItems(); },
+    );
 
     if (this.runService.isRestoringCheckpoint) {
       // Restore path: run the 18-step restore coordinator
@@ -994,6 +1032,27 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
+   * Returns current item inventory as a flat list for display in the pause menu
+   * and HUD items-peek. Derived from ItemService on each change-detection cycle.
+   */
+  get itemInventoryEntries(): { type: ItemType; name: string; description: string; count: number }[] {
+    const inv = this.itemService.getInventory();
+    const result: { type: ItemType; name: string; description: string; count: number }[] = [];
+    for (const [type, count] of inv.entries()) {
+      if (count > 0) {
+        const def = ITEM_DEFINITIONS[type];
+        result.push({ type, name: def.name, description: def.description, count });
+      }
+    }
+    return result;
+  }
+
+  /** Use a consumable item from the pause menu. */
+  useItem(type: ItemType): void {
+    this.itemService.useItem(type);
+  }
+
+  /**
    * Briefly shows the turn-start banner for 1.2 s after endTurn().
    * Only flashes when phase remains COMBAT (not VICTORY/DEFEAT/INTERMISSION).
    */
@@ -1147,6 +1206,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Step 13: Restore relic encounter flags
       this.relicService.restoreEncounterFlags(checkpoint.relicFlags);
+
+      // Step 13c: Restore item (consumable) inventory. v4 checkpoints are
+      // migrated to an empty inventory by EncounterCheckpointService.
+      this.itemService.restore(checkpoint.itemInventory);
 
       // Step 13a: Restore wave-preview one-shot bonus so mid-encounter scout
       // plays survive a save/resume. Pre-v2 checkpoints are migrated to a
@@ -1560,6 +1623,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.energySub = null;
     }
 
+    this.itemService.unregisterCallbacks();
     this.gameInput.cleanup();
     this.gamePauseService.cleanup();
     window.removeEventListener('resize', this.resizeHandler);

@@ -36,6 +36,20 @@
       </button>
     </div>
 
+    <!-- Desktop-only: items peek — click to open pause menu -->
+    <div class="hud-items-peek"
+         *ngIf="itemInventoryEntries.length > 0"
+         aria-label="Items inventory">
+      <button *ngFor="let entry of itemInventoryEntries"
+              type="button"
+              class="hud-items-peek__item"
+              [attr.title]="entry.name + ' ×' + entry.count + ' — ' + entry.description"
+              [attr.aria-label]="entry.name + ' (' + entry.count + ')'"
+              (click)="togglePause()">
+        {{ entry.name.charAt(0) }}<span class="hud-items-peek__count" aria-hidden="true">{{ entry.count }}</span>
+      </button>
+    </div>
+
     <!-- Wave clear banner -->
     <!-- aria-live: assertive region — immediately announces wave completion to screen readers -->
     <div
@@ -402,6 +416,22 @@
                [attr.title]="relic.description">
             <span class="pause-menu__relic-name">{{ relic.name }}</span>
           </div>
+        </div>
+      </div>
+
+      <!-- Consumable items — use buttons in the pause menu -->
+      <div class="pause-menu__items" *ngIf="itemInventoryEntries.length > 0 && !showQuitConfirm">
+        <h3 class="pause-menu__section-title">Items</h3>
+        <div class="pause-menu__item-list">
+          <button *ngFor="let entry of itemInventoryEntries"
+                  type="button"
+                  class="pause-menu__item-btn"
+                  [attr.title]="entry.description"
+                  [attr.aria-label]="'Use ' + entry.name + ' (' + entry.count + ' owned): ' + entry.description"
+                  (click)="useItem(entry.type)">
+            <span class="pause-menu__item-name">{{ entry.name }}</span>
+            <span class="pause-menu__item-count" aria-hidden="true">×{{ entry.count }}</span>
+          </button>
         </div>
       </div>
 

@@ -12,6 +12,7 @@ import { WaveDefinition } from '../../game/game-board/models/wave.model';
 import { NodeType } from './node-map.model';
 import { RelicId } from './relic.model';
 import { CardId } from './card.model';
+import { ItemType } from './item.model';
 import { ChallengeDefinition } from '../data/challenges';
 
 export interface EncounterConfig {
@@ -25,7 +26,7 @@ export interface EncounterConfig {
 }
 
 /** Reward offered after a combat encounter. */
-export type RewardItem = RelicReward | GoldReward | CardReward;
+export type RewardItem = RelicReward | GoldReward | CardReward | ItemReward;
 
 export interface RelicReward {
   readonly type: 'relic';
@@ -40,6 +41,11 @@ export interface GoldReward {
 export interface CardReward {
   readonly type: 'card';
   readonly cardId: CardId;
+}
+
+export interface ItemReward {
+  readonly type: 'item';
+  readonly itemType: ItemType;
 }
 
 /** Reward screen config generated after encounter victory. */
@@ -97,6 +103,8 @@ export interface EventOutcome {
   readonly removeRelicId?: RelicId;
   /** When true, resolveEvent removes a random non-starter card from the deck. */
   readonly removeCard?: boolean;
+  /** When set, resolveEvent grants this item to the player's inventory. */
+  readonly itemReward?: ItemType;
   readonly description: string;
   /**
    * Optional gamble: if present, resolveEvent rolls rng against winChance.

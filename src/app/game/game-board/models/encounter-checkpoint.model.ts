@@ -9,9 +9,10 @@ import { EndlessWaveResult } from './endless-wave.model';
 import { ActiveModifier } from '../../../run/services/card-effect.service';
 import { EncounterConfig } from '../../../run/models/encounter.model';
 import { TurnEventRecord } from '../services/turn-history.service';
+import { SerializedItemInventory } from '../../../run/models/item.model';
 
 /** Schema version — bump when the shape changes to enable migrations. */
-export const CHECKPOINT_VERSION = 4;
+export const CHECKPOINT_VERSION = 5;
 
 /** Plain-object snapshot of GameState (isPaused omitted — always false on restore). */
 export interface SerializableGameState {
@@ -231,6 +232,12 @@ export interface EncounterCheckpoint {
    * (acceptable — RECAP is a convenience display, no gameplay impact).
    */
   readonly turnHistory: readonly TurnEventRecord[];
+
+  /**
+   * Serialized item (consumable) inventory. Added in v5.
+   * v4 checkpoints are migrated with an empty inventory.
+   */
+  readonly itemInventory: SerializedItemInventory;
 }
 
 /** Serializable WavePreviewService state. */

@@ -124,6 +124,15 @@ export const REWARD_CONFIG = {
   bossGuaranteedRelic: true,
 } as const;
 
+// ── Items (Consumables) ───────────────────────────────────────
+
+export const ITEM_CONFIG = {
+  /** Gold cost to buy one item from the shop. */
+  shopCost: 50,
+  /** Number of item slots offered in a shop node. */
+  shopSlotCount: 1,
+} as const;
+
 // ── Shop ──────────────────────────────────────────────────────
 
 export const SHOP_CONFIG = {

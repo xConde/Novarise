@@ -22,7 +22,9 @@ import {
   RewardScreenConfig,
   ShopItem,
   RunEvent,
+  ItemReward,
 } from '../models/encounter.model';
+import { ItemType } from '../models/item.model';
 import { ChallengeDefinition, computeChallengeGoldBonus } from '../data/challenges';
 import { RelicId, RelicRarity, RelicDefinition } from '../models/relic.model';
 import { AscensionEffectType, getAscensionEffects } from '../models/ascension.model';
@@ -33,6 +35,7 @@ import {
   REST_CONFIG,
   RUN_CONFIG,
   SHOP_CONFIG,
+  ITEM_CONFIG,
   SKIP_GOLD_BY_NODE_TYPE,
   SeededRng,
   createSeededRng,
@@ -42,6 +45,7 @@ import { NodeMapGeneratorService } from './node-map-generator.service';
 import { EncounterService } from './encounter.service';
 import { RelicService } from './relic.service';
 import { DeckService } from './deck.service';
+import { ItemService } from './item.service';
 import { RunPersistenceService } from './run-persistence.service';
 import { RunEventBusService, RunEventType } from './run-event-bus.service';
 import { RUN_EVENTS } from '../constants/run-events';
@@ -97,6 +101,7 @@ export class RunService {
     private encounterService: EncounterService,
     private relicService: RelicService,
     private deckService: DeckService,
+    private itemService: ItemService,
     private persistence: RunPersistenceService,
     private eventBus: RunEventBusService,
     private playerProfile: PlayerProfileService,
@@ -194,6 +199,7 @@ export class RunService {
   startNewRun(ascensionLevel = 0): void {
     this.persistence.clearSavedRun();
     this.relicService.clearRelics();
+    this.itemService.resetForRun();
 
     // Clear any checkpoint leftover from a previous run before starting fresh.
     this.encounterCheckpointService.clearCheckpoint();
@@ -483,7 +489,7 @@ export class RunService {
     return picked;
   }
 
-  /** Collect a reward (relic or gold). */
+  /** Collect a reward (relic, gold, card, or item). */
   collectReward(reward: RewardItem): void {
     const state = this.runState;
     if (!state) return;
@@ -500,6 +506,9 @@ export class RunService {
       case 'card':
         this.deckService.addCard(reward.cardId);
         this.updateState({ ...state, deckCardIds: [...state.deckCardIds, reward.cardId] });
+        break;
+      case 'item':
+        this.itemService.addItem(reward.itemType);
         break;
     }
     this.persist();
@@ -634,6 +643,18 @@ export class RunService {
       });
     }
 
+    // Item (consumable) slots
+    const allItemTypes = Object.values(ItemType);
+    for (let i = 0; i < ITEM_CONFIG.shopSlotCount; i++) {
+      if (allItemTypes.length === 0) break;
+      const itemType = allItemTypes[Math.floor(rng() * allItemTypes.length)];
+      const itemReward: ItemReward = { type: 'item', itemType };
+      items.push({
+        item: itemReward,
+        cost: Math.round(ITEM_CONFIG.shopCost * priceMultiplier),
+      });
+    }
+
     this.shopItems = items;
   }
 
@@ -706,6 +727,11 @@ export class RunService {
     // Card removal: remove a random non-starter card from the deck.
     if (outcome.removeCard) {
       this.removeRandomNonStarterCard();
+    }
+
+    // Item reward: add to consumable inventory.
+    if (outcome.itemReward) {
+      this.itemService.addItem(outcome.itemReward);
     }
 
     // Check for death by event
@@ -958,5 +984,6 @@ export class RunService {
     this.runRng = null;
     this.relicService.clearRelics();
     this.deckService.clear();
+    this.itemService.resetForRun();
   }
 }

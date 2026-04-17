@@ -6,6 +6,7 @@ import {
 } from '../../game/game-board/models/encounter-checkpoint.model';
 import { GamePhase, DifficultyLevel } from '../../game/game-board/models/game-state.model';
 import { NodeType } from '../models/node-map.model';
+import { SerializedItemInventory } from '../models/item.model';
 
 const CHECKPOINT_KEY = 'novarise_encounter_checkpoint';
 
@@ -81,6 +82,7 @@ function createTestCheckpoint(overrides: Partial<EncounterCheckpoint> = {}): Enc
     },
     wavePreview: { oneShotBonus: 0 },
     turnHistory: [],
+    itemInventory: { entries: [] } as SerializedItemInventory,
     ...overrides,
   };
 }
@@ -280,6 +282,35 @@ describe('EncounterCheckpointService', () => {
 
       expect(loaded).not.toBeNull();
       expect(loaded!.deckRngState).toBe(42000);
+    });
+
+    it('migrates v4 to v5 by inserting empty itemInventory', () => {
+      // Store a v4 checkpoint (no itemInventory field) directly in localStorage.
+      const v4Checkpoint = createTestCheckpoint({ version: 4 });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v4Data = { ...(v4Checkpoint as any) };
+      delete v4Data['itemInventory'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v4Data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.version).toBe(CHECKPOINT_VERSION);
+      expect(loaded!.itemInventory).toEqual({ entries: [] });
+    });
+
+    it('itemInventory round-trips correctly when populated in a v5 checkpoint', () => {
+      const checkpoint = createTestCheckpoint({
+        itemInventory: { entries: [['bomb', 2], ['heal_potion', 1]] },
+      });
+
+      service.saveCheckpoint(checkpoint);
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.itemInventory.entries.length).toBe(2);
+      const bombEntry = loaded!.itemInventory.entries.find(e => e[0] === 'bomb');
+      expect(bombEntry?.[1]).toBe(2);
     });
   });
 

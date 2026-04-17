@@ -1050,6 +1050,7 @@ describe('RunService', () => {
         gameStats: {} as any,
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
+        itemInventory: { entries: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1083,6 +1084,7 @@ describe('RunService', () => {
         gameStats: {} as any,
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
+        itemInventory: { entries: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1123,6 +1125,7 @@ describe('RunService', () => {
         gameStats: {} as any,
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
+        itemInventory: { entries: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1159,6 +1162,7 @@ describe('RunService', () => {
         gameStats: {} as any,
         challengeState: {} as any, wavePreview: { oneShotBonus: 0 },
         turnHistory: [],
+        itemInventory: { entries: [] },
       });
 
       // node_0_0 is NOT in completedNodeIds — valid checkpoint.
