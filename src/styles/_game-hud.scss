@@ -649,12 +649,20 @@ body.reduce-motion .board-container .game-hud .hud-value.wave-start-pulse {
 // ============================================================================
 @media (max-width: 480px) {
   // Top-row custom properties — single source of truth for the mobile
-  // layout tuning. Adjust these to shift the whole row.
+  // layout tuning. Values are viewport-relative where possible so the
+  // row adapts to smaller devices (iPhone SE 1st gen at 320px, SE 2nd
+  // gen at 375px) instead of breaking against hardcoded 390px math.
+  //
+  // Gear-clearance breakdown for --mobile-end-turn-right:
+  //   spacing-md (16px global right offset of .settings-cog)
+  // + 2.75rem    (44px gear touch target width on mobile)
+  // + spacing-sm (10px breathing room between button and gear)
+  // = 4.25rem (~70px) from the viewport right edge.
   :root {
     --mobile-hud-top: var(--spacing-xs);
     --mobile-hud-band-height: 44px;
-    --mobile-end-turn-left: 232px;
     --mobile-end-turn-width: 88px;
+    --mobile-end-turn-right: calc(var(--spacing-md) + 2.75rem + var(--spacing-sm));
     --mobile-stats-max-width: min(55vw, 14rem);
   }
 
@@ -686,9 +694,13 @@ body.reduce-motion .board-container .game-hud .hud-value.wave-start-pulse {
   // flex-direction: row counteracts the base rule's `flex-direction: column`
   // which, combined with this narrower button, would wrap "END TURN" onto
   // two lines.
+  // Anchor by RIGHT (relative to the gear's known corner position) + fixed
+  // width so the button's right edge is the same distance from the gear on
+  // every mobile width. Previously used `left: 232px` which broke on
+  // viewports <390px by overlapping the gear.
   .board-container .end-turn-btn {
-    left: var(--mobile-end-turn-left) !important;
-    right: auto !important;
+    left: auto !important;
+    right: var(--mobile-end-turn-right) !important;
     top: var(--mobile-hud-top) !important;
     width: var(--mobile-end-turn-width) !important;
     min-width: 0 !important;
