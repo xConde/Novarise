@@ -19,7 +19,7 @@
       <span class="hud-value" [class.score-pulse]="scorePulse">{{ score }}</span>
     </div>
     <div class="hud-stat hud-stat--mobile-only" *ngIf="isCombat">
-      <span class="hud-label">Enemies</span>
+      <span class="hud-label">Foes</span>
       <span class="hud-value" [class.critical]="enemiesRemaining > 0 && enemiesRemaining <= 2">{{ enemiesRemaining }}</span>
     </div>
     <div class="hud-stat secondary">
