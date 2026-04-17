@@ -1103,6 +1103,39 @@ describe('TowerCombatService', () => {
       // Flying enemy is unaffected by zone DoT
       expect(flyingEnemy.health).toBe(flyingHealthAfterBlast);
     });
+
+    // H1c: MORTAR initial blast must also bypass flying enemies
+    it('initial blast should NOT damage a FLYING enemy on the blast tile (H1c)', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const flyingEnemy = createTestEnemy('fly1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000, {
+        type: EnemyType.FLYING,
+        isFlying: true,
+      });
+      enemyMap.set('fly1', flyingEnemy);
+
+      // Turn 1: fire — initial blast should not damage the flying enemy
+      service.fireTurn(mockScene, TURN_1);
+
+      expect(flyingEnemy.health).toBe(1000);
+    });
+
+    it('initial blast damages a GROUND enemy co-located with a FLYING enemy (H1c positive control)', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const groundEnemy = createTestEnemy('ground1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const flyingEnemy = createTestEnemy('fly1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000, {
+        type: EnemyType.FLYING,
+        isFlying: true,
+      });
+      enemyMap.set('ground1', groundEnemy);
+      enemyMap.set('fly1', flyingEnemy);
+
+      service.fireTurn(mockScene, TURN_1);
+
+      // Ground enemy takes initial blast damage
+      expect(groundEnemy.health).toBeLessThan(10000);
+      // Flying enemy is unaffected by the initial blast
+      expect(flyingEnemy.health).toBe(10000);
+    });
   });
 
   // --- Full Lifecycle ---
