@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
 import { ShopItem } from '../../models/encounter.model';
 import { RelicDefinition, RelicRarity, RELIC_DEFINITIONS } from '../../models/relic.model';
 import { CardDefinition, CardInstance, CardRarity } from '../../models/card.model';
@@ -52,11 +52,18 @@ export class ShopScreenComponent implements OnChanges {
   /** Pre-computed relic definitions — avoids per-CD-cycle allocations in template. */
   resolvedItems: ResolvedShopItem[] = [];
 
-  ngOnChanges(): void {
-    // Reset per-visit shop state on every new shop visit (new shopItems input binding).
-    this.healCount = 0;
-    this.cardRemoveUsed = false;
-    this.activeAction = 'none';
+  ngOnChanges(changes: SimpleChanges): void {
+    // Phase 1 Sprint 4 hardening (red-team Finding 2):
+    // Per-visit state must reset ONLY when shopItems itself changes (new visit).
+    // Other inputs — currentGold, currentLives, deckCards — change far more
+    // often (deckCards in particular is a method-call binding that returns a
+    // new array reference per CD tick), so resetting here on every fire would
+    // refund the one-use card-removal slot mid-visit.
+    if (changes['shopItems']) {
+      this.healCount = 0;
+      this.cardRemoveUsed = false;
+      this.activeAction = 'none';
+    }
     this.resolvedItems = this.shopItems.map((item, index) => {
       const relic = this.resolveRelicDef(item);
       const card = this.resolveCardDef(item);

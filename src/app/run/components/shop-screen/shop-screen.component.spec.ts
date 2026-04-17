@@ -6,6 +6,14 @@ import { RelicId, RelicRarity, RELIC_DEFINITIONS } from '../../models/relic.mode
 import { SHOP_CONFIG } from '../../constants/run.constants';
 import { CardId, CardInstance } from '../../models/card.model';
 import { IconComponent } from '@shared/components/icon/icon.component';
+import { SimpleChange, SimpleChanges } from '@angular/core';
+
+/** Phase 1 hardening helper — Angular's SimpleChange constructor signature
+ *  is verbose; this wraps it for the common case where we just need to
+ *  signal "shopItems changed" or "deckCards changed" to ngOnChanges. */
+function shopItemsChanged(currentValue: unknown = [], previousValue: unknown = []): SimpleChanges {
+  return { shopItems: new SimpleChange(previousValue, currentValue, false) };
+}
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
 
@@ -88,7 +96,7 @@ describe('ShopScreenComponent', () => {
 
   describe('resolvedItems (pre-computed relic defs)', () => {
     beforeEach(() => {
-      component.ngOnChanges();
+      component.ngOnChanges(shopItemsChanged(component.shopItems));
     });
 
     it('resolves RelicDefinition for relic items', () => {
@@ -103,7 +111,7 @@ describe('ShopScreenComponent', () => {
     it('resolves null for a gold item', () => {
       const goldItem: ShopItem = { item: { type: 'gold', amount: 50 }, cost: 0 };
       component.shopItems = [goldItem];
-      component.ngOnChanges();
+      component.ngOnChanges(shopItemsChanged(component.shopItems));
       expect(component.resolvedItems[0].relic).toBeNull();
     });
 
@@ -221,7 +229,7 @@ describe('ShopScreenComponent', () => {
       component.currentLives = 3;
       component.maxLives = 7;
       component.currentGold = 1000;
-      component.ngOnChanges();
+      component.ngOnChanges(shopItemsChanged(component.shopItems));
 
       // Simulate three heals at shop A
       component.buyHeal();
@@ -231,7 +239,7 @@ describe('ShopScreenComponent', () => {
 
       // Simulate arriving at shop B — new shopItems binding triggers ngOnChanges
       component.shopItems = [UNCOMMON_ITEM, RARE_ITEM];
-      component.ngOnChanges();
+      component.ngOnChanges(shopItemsChanged(component.shopItems));
 
       expect(component.healCount).toBe(0);
     });
@@ -332,13 +340,37 @@ describe('ShopScreenComponent', () => {
       expect(component.cardRemoveUsed).toBeFalse();
     });
 
-    it('ngOnChanges resets cardRemoveUsed and activeAction on new shop visit', () => {
+    it('ngOnChanges resets cardRemoveUsed and activeAction on new shop visit (shopItems changed)', () => {
       component.cardRemoveUsed = true;
       component.activeAction = 'remove';
       component.shopItems = [UNCOMMON_ITEM];
-      component.ngOnChanges();
+      component.ngOnChanges({
+        shopItems: { currentValue: component.shopItems, previousValue: [], firstChange: false, isFirstChange: () => false },
+      } as any);
       expect(component.cardRemoveUsed).toBeFalse();
       expect(component.activeAction).toBe('none');
+    });
+
+    // Phase 1 red-team Finding 2 — the slot must NOT reset when other inputs
+    // change mid-visit (deckCards changes per CD tick under the old binding).
+    it('ngOnChanges does NOT reset cardRemoveUsed when only deckCards changes', () => {
+      component.cardRemoveUsed = true;
+      component.activeAction = 'remove';
+      component.deckCards = [makeInstance(CardId.GOLD_RUSH, 'newcard')];
+      component.ngOnChanges({
+        deckCards: { currentValue: component.deckCards, previousValue: [], firstChange: false, isFirstChange: () => false },
+      } as any);
+      expect(component.cardRemoveUsed).toBeTrue();
+      expect(component.activeAction).toBe('remove');
+    });
+
+    it('ngOnChanges does NOT reset cardRemoveUsed when only currentGold changes', () => {
+      component.cardRemoveUsed = true;
+      component.currentGold = 999;
+      component.ngOnChanges({
+        currentGold: { currentValue: 999, previousValue: 100, firstChange: false, isFirstChange: () => false },
+      } as any);
+      expect(component.cardRemoveUsed).toBeTrue();
     });
   });
 });

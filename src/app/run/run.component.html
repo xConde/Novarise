@@ -139,7 +139,7 @@
     [currentGold]="runState.gold"
     [currentLives]="runState.lives"
     [maxLives]="runState.maxLives"
-    [deckCards]="getDeckCards()"
+    [deckCards]="shopDeckSnapshot"
     (itemBought)="onShopBuy($event)"
     (shopLeft)="leaveShop()"
     (cardRemoved)="onShopCardRemoved($event)"

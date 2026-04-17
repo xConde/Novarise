@@ -1707,3 +1707,28 @@ Scope: 57 files changed on `feat/engine-depth-pass` vs main. This review covers 
 - [ ] Step 3: Update PR #30 description with a consolidated summary of what landed since the original PR body: mobile polish pass, rest-screen bonfire, red-team hardening (Findings 1 & 2). Include the mobile smoke checklist for the user to verify visually before merge.
 - [ ] Step 4: Add a mobile-smoke section to the PR manual test checklist — iPhone SE (320/375) + iPhone 12 Pro (390) verification that the end-turn button clears the gear on all three.
 
+---
+
+## Red Team Critique — Phase 1 of feat/archetype-depth (2026-04-17)
+
+Branch: `feat/archetype-depth` | Diff: 24 files / +1204 / −82 / 5618 specs passing
+Phase 1 sprints shipped: reward rarity (already done), exhaust UI (already done), card hover tooltip, shop card-removal slot, effect.value through status spells + FORTIFY upgrades, Terraform/Link keywords, archetype tag + pool weighting.
+
+### Finding 1: `removeCardFromShop` splices `deckCardIds` by CardId, not instance — silent save/restore desync (HIGH)
+**Location:** `src/app/run/services/run.service.ts:767-769`
+**Risk:** `deckCardIds` is `CardId[]` (one entry per card type, duplicates allowed). When the player has two copies of the same card and removes one, `newDeckCardIds.indexOf(target.cardId)` removes whichever copy is first. `deckService.removeCard(instanceId)` removes the correct instance. The two arrays desync silently. On reload, `initializeDeck(state.deckCardIds, state.seed)` re-seeds the deck from the persisted `deckCardIds` — restoring the removed card. The 75g purchase is silently refunded with no signal.
+**Fix:** Splice `deckCardIds` by removing exactly one matching entry (already correct via `indexOf` + 1-element splice — but the array becomes incorrect when the *other* copy was the target). The clean fix: derive `deckCardIds` from `deckService.getAllCards().map(c => c.cardId)` at persist time so the live deck is the source of truth. Alternatively, drop `deckCardIds` entirely and serialize a flat list of instance ids.
+
+### Finding 2: `ngOnChanges` resets `cardRemoveUsed` on any input change — slot refund attack (HIGH)
+**Location:** `src/app/run/components/shop-screen/shop-screen.component.ts:55-59` + `src/app/run/run.component.html:142`
+**Risk:** `ngOnChanges()` fires whenever ANY `@Input()` reference changes. The new `[deckCards]="getDeckCards()"` template binding invokes `getDeckCards()` on every change-detection tick; `getDeckCards()` → `deckService.getAllCards()` returns a brand-new array each call. Angular sees the new reference → ngOnChanges fires → `cardRemoveUsed = false` resets. The "one use per visit" guard becomes effectively absent — the slot reopens on every CD tick.
+**Fix:** Guard the reset with `SimpleChanges`: `if (changes['shopItems']) { ... }`. Additionally, change `[deckCards]="getDeckCards()"` to a memoized property (assign once when entering the shop view) to eliminate the per-CD allocation thrash.
+
+### Finding 3: `FORTIFY` uses `Math.random()` — non-deterministic, breaks seed reproducibility (MEDIUM)
+**Location:** `src/app/game/game-board/services/card-play.service.ts:543`
+**Risk:** Upgraded FORTIFY's loop uses `Math.floor(Math.random() * remaining.length)` — bypasses the seeded run RNG used by every other random selection in the codebase. Any feature relying on determinism (save/restore replay, run seeds, automated regression tests, future telemetry) will diverge whenever FORTIFY fires.
+**Fix:** Inject the seeded RNG (already exposed via `RunService.runRng`) through `SpellContext` or a dedicated provider, then replace `Math.random()` calls in `fortifyRandomTower` with the seeded source. Pre-Sprint-5 base FORTIFY had the same bug; the upgrade doubles the exposure.
+
+### Hardening for this gate
+Picked Finding 2 as the hardening fix — it's the most immediately exploitable (no duplicate-card prerequisite) and slot-reset can corrupt mid-encounter. Findings 1 + 3 enter the Closer Protocol checklist below.
+
