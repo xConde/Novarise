@@ -90,7 +90,7 @@
   @media (max-width:480px) {
     --shell-hand-height: 7.5rem;
     --shell-hud-height: 3rem;
-    // M4: End Turn button shares the stats-row band instead of stacking
+    // End Turn button shares the stats-row band instead of stacking
     // below it. Aligned to --shell-hud-top so both elements sit on the
     // same visual row — stats on the left, End Turn centered, gear right.
     --shell-end-turn-top: var(--shell-hud-top);
@@ -404,25 +404,10 @@
     }
   }
 
-  // M8: Mobile End Turn — previous attempts (M5/M6/M7) fought the base
-  // rule's `transform: translateX(-50%)` and the hover/active state's
-  // transform cascade. Each partial override produced a different wrong
-  // position. Root-cause fix: constrain BOTH `left` and `right` so the
-  // button stretches into a bounded box and eliminate transforms entirely
-  // on mobile — no centering math needed.
-  //
-  // Left bound: stats row is capped at `max-width: min(55vw, 26rem)` with
-  // `left: var(--shell-hud-left)`. Clear its right edge with a small gap.
-  // Right bound: gear is at `right: var(--spacing-md)` with a 44px touch
-  // target. Clear its left edge with a small gap.
-  //
-  // All hover/active transforms killed to prevent positional jump on tap.
-  // M10 — End-turn mobile override MOVED to _game-hud.scss global file.
-  // The pause-menu mobile fix worked because it lives in a global SCSS
-  // partial (_game-pause.scss) that reliably hot-reloads. Component-
-  // scoped SCSS in this file appears to not hot-reload consistently,
-  // so the end-turn mobile rule is now alongside the other HUD
-  // overrides in _game-hud.scss. See the M10 block there.
+  // End-turn mobile override lives in the global _game-hud.scss file
+  // (see "Mobile top-row layout" block). It was moved out of this
+  // component-scoped SCSS to sit alongside the other HUD mobile
+  // overrides so the whole top-row layout can be tuned in one place.
 
 
   // Game HUD styles moved to src/styles.css (.board-container .game-hud) for ViewEncapsulation.None reach

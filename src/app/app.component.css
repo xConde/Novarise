@@ -73,13 +73,12 @@
 }
 
 /* Sprint 30: ensure settings cog meets 44×44px touch target on mobile */
-/* M4: align gear vertical center with the HUD stats row center on mobile.
-   Stats row lives inside .board-container which starts just below the
-   ~29px .app-nav, offset by --shell-hud-top (5px) for a top of ~34px and
-   a 3rem (48px) height — visual center ≈ y=58. The gear is 44px tall via
-   min-height on mobile, so top ≈ 36px puts its icon's visual center
-   level with the stats row. Derived from spacing tokens rather than a
-   raw magic number. */
+/* Align gear vertical center with the HUD stats-row center. Stats lives
+   inside .board-container which starts just below the ~29px .app-nav,
+   offset by --shell-hud-top (5px). Stats is 48px (3rem) tall, so its
+   visual center sits at viewport y≈58. Gear is 44px tall on mobile via
+   min-height; top ≈ 36px puts the icon's visual center level with the
+   stats row. Spacing-token calc below resolves to 35px. */
 @media (max-width: 480px) {
   .settings-cog {
     top: calc(var(--spacing-sm) * 3 + var(--spacing-xs));

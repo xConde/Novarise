@@ -1673,13 +1673,13 @@ Finding 1 is the only latent correctness bug — fixed inline. Findings 2 and 3 
 
 ## Red Team Critique — 2026-04-17 (engine-depth-pass + mobile polish)
 
-Scope: 57 files changed on `feat/engine-depth-pass` vs main. This review covers the mobile HUD pass (M1–M19), the rest-screen bonfire (commit `3fe852f`), and H5 run-level persistence — areas not yet audited in prior red-team cycles. Hooks: none configured in `.claude/settings.json` or `.claude/hooks/` — no deterministic guardrails to verify on this repo.
+Scope: 57 files changed on `feat/engine-depth-pass` vs main. This review covers the mobile HUD polish pass, the rest-screen bonfire (commit `3fe852f`), and the run-level persistence hardening — areas not yet audited in prior red-team cycles. Hooks: none configured in `.claude/settings.json` or `.claude/hooks/` — no deterministic guardrails to verify on this repo.
 
 ### Finding 1: Mobile HUD layout breaks on viewports under 390px (HIGH)
 
 **Location:** `src/styles/_game-hud.scss` around line 670, `--mobile-end-turn-left: 232px` and `--mobile-end-turn-width: 88px`.
 
-**Risk:** The end-turn button uses hardcoded pixels calibrated for iPhone 12 Pro (390px width). On iPhone SE 2nd gen (375px), the button's right edge lands at `232 + 88 = 320`, which overlaps the gear's left edge at `375 - 16 - 44 = 315` by 5px — exactly the kind of overlap the M14–M18 iterations were trying to eliminate. On iPhone SE 1st gen / older Android (320px), the button's right edge hits the viewport right edge exactly, leaving zero room for the gear which sits at the corner. Users on sub-390px devices see the button sitting on top of the settings gear.
+**Risk:** The end-turn button uses hardcoded pixels calibrated for iPhone 12 Pro (390px width). On iPhone SE 2nd gen (375px), the button's right edge lands at `232 + 88 = 320`, which overlaps the gear's left edge at `375 - 16 - 44 = 315` by 5px. On iPhone SE 1st gen / older Android (320px), the button's right edge hits the viewport right edge exactly, leaving zero room for the gear which sits at the corner. Users on sub-390px devices see the button sitting on top of the settings gear.
 
 **Fix:** Anchor the button's right edge relative to the gear's known position using `calc`, so the layout self-adjusts across all mobile widths. Specifically: change `--mobile-end-turn-left` from `232px` to `calc(100vw - var(--mobile-end-turn-width) - 72px)` where `72px` is the gear clearance. This makes the button 88px wide, ending 72px from the right edge on any viewport, regardless of width.
 
@@ -1704,6 +1704,6 @@ Scope: 57 files changed on `feat/engine-depth-pass` vs main. This review covers 
 
 - [ ] Step 1: Apply Finding 2 (MEDIUM) — wrap `resumeRun`'s `itemService.restore` and `runStateFlagService.restore` in try/catch with graceful fallback to empty state. Add a spec verifying resume-with-corrupt-state doesn't throw.
 - [ ] Step 2: Run the full quality gate (`tsc --noEmit` × 2 configs, `ng lint`, `ng test`, `ng build --configuration=production`) and confirm all green.
-- [ ] Step 3: Update PR #30 description with a consolidated summary of what landed since the original PR body: mobile polish (M1–M19), rest-screen bonfire, red-team hardening (Findings 1 & 2). Include the mobile smoke checklist for the user to verify visually before merge.
+- [ ] Step 3: Update PR #30 description with a consolidated summary of what landed since the original PR body: mobile polish pass, rest-screen bonfire, red-team hardening (Findings 1 & 2). Include the mobile smoke checklist for the user to verify visually before merge.
 - [ ] Step 4: Add a mobile-smoke section to the PR manual test checklist — iPhone SE (320/375) + iPhone 12 Pro (390) verification that the end-turn button clears the gear on all three.
 
