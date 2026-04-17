@@ -194,6 +194,17 @@ export class RunService {
     }
   }
 
+  /**
+   * Phase 1 closer (Finding 3) — public bridge to the seeded run RNG.
+   * Returns a [0, 1) random number from the run PRNG when one is active,
+   * else falls back to {@link Math.random}. Used by component-scoped services
+   * (e.g. CardPlayService) that need deterministic randomness without exposing
+   * the SeededRng instance itself. Calling this advances the run PRNG state.
+   */
+  nextRandom(): number {
+    return this.runRng ? this.runRng.next() : Math.random();
+  }
+
   // ── Run Lifecycle ───────────────────────────────────────
 
   /** Start a new run with a fresh seed. */

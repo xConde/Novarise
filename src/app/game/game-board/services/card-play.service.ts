@@ -16,6 +16,7 @@ import { StatusEffectService } from './status-effect.service';
 import { CombatLoopService } from './combat-loop.service';
 import { CardEffectService, SpellContext } from '../../../run/services/card-effect.service';
 import { DeckService } from '../../../run/services/deck.service';
+import { RunService } from '../../../run/services/run.service';
 import { WavePreviewService } from './wave-preview.service';
 import { CardInstance, SpellCardEffect, ModifierCardEffect, UtilityCardEffect } from '../../../run/models/card.model';
 import { getCardDefinition } from '../../../run/constants/card-definitions';
@@ -55,6 +56,9 @@ export class CardPlayService {
     private statusEffectService: StatusEffectService,
     private combatLoopService: CombatLoopService,
     private wavePreviewService: WavePreviewService,
+    /** Phase 1 closer (Finding 3) — seeded run RNG bridge for deterministic
+     *  card-side randomness (FORTIFY tower selection). */
+    private runService: RunService,
   ) {}
 
   /**
@@ -217,7 +221,9 @@ export class CardPlayService {
     const upgradesToApply = Math.min(count, remaining.length);
 
     for (let i = 0; i < upgradesToApply; i++) {
-      const idx = Math.floor(Math.random() * remaining.length);
+      // Phase 1 closer (Finding 3) — use the seeded run RNG so save/restore
+      // and run-seed sharing produce identical FORTIFY targets across replays.
+      const idx = Math.floor(this.runService.nextRandom() * remaining.length);
       const target = remaining.splice(idx, 1)[0];
       const key = `${target.row}-${target.col}`;
 

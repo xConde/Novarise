@@ -4,6 +4,7 @@ import * as THREE from 'three';
 
 import { CardPlayService, CardPlayCallbacks } from './card-play.service';
 import { DeckService } from '../../../run/services/deck.service';
+import { RunService } from '../../../run/services/run.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { TowerCombatService } from './tower-combat.service';
 import { GameStateService } from './game-state.service';
@@ -93,6 +94,12 @@ describe('CardPlayService', () => {
       'addOneShotBonus', 'getPreviewDepth', 'getFutureWavesSummary', 'resetForEncounter',
     ]);
 
+    // Phase 1 closer (Finding 3) — RunService is injected for nextRandom().
+    // Spy returns 0 by default so deterministic tests pick index 0; specs that
+    // care about non-zero RNG can rebind via runServiceSpy.nextRandom.and.returnValue(...).
+    const runServiceSpy = jasmine.createSpyObj<RunService>('RunService', ['nextRandom']);
+    runServiceSpy.nextRandom.and.returnValue(0);
+
     TestBed.configureTestingModule({
       providers: [
         CardPlayService,
@@ -110,6 +117,7 @@ describe('CardPlayService', () => {
         { provide: StatusEffectService, useValue: statusEffectSpy },
         { provide: CombatLoopService, useValue: combatLoopSpy },
         { provide: WavePreviewService, useValue: wavePreviewSpy },
+        { provide: RunService, useValue: runServiceSpy },
       ],
     });
 
@@ -331,6 +339,23 @@ describe('CardPlayService', () => {
       service.onCardPlayed(card);
 
       expect(towerCombatSpy.upgradeTower).toHaveBeenCalledTimes(1);
+    });
+
+    // Phase 1 closer Finding 3 — FORTIFY must thread through the seeded run RNG.
+    it('FORTIFY draws random tower index from RunService.nextRandom (seeded)', () => {
+      const tower = { row: 0, col: 0, level: 1, type: TowerType.BASIC, totalInvested: 50 };
+      const placedMap = new Map<string, typeof tower>();
+      placedMap.set('0-0', tower as never);
+      towerCombatSpy.getPlacedTowers.and.returnValue(placedMap as never);
+      towerCombatSpy.upgradeTower.and.returnValue(tower as never);
+
+      const runServiceSpy = TestBed.inject(RunService) as jasmine.SpyObj<RunService>;
+      runServiceSpy.nextRandom.calls.reset();
+
+      const card: CardInstance = { instanceId: 'fort-rng', cardId: CardId.FORTIFY, upgraded: false };
+      service.onCardPlayed(card);
+
+      expect(runServiceSpy.nextRandom).toHaveBeenCalled();
     });
   });
 
