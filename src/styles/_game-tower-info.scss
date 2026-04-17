@@ -25,9 +25,14 @@
 }
 
 @media (max-width: 480px) {
-  // M7: tighten mobile tower-info panel — was eating ~40% of viewport
-  // height on smaller devices. Smaller padding, font, and row gaps bring
-  // it down to ~25-30% while still hitting WCAG touch targets on buttons.
+  // M8: mobile tower-info panel — the root problem was the close button
+  // (× glyph) inheriting --font-size-large (32px), which on a narrow
+  // viewport dominated the header and pushed stars offscreen. Combined
+  // with oversized stat rows and wide padding, the whole panel read as
+  // "broken". Fix: shrink the close button first (font-size-title → 24px
+  // is still tappable), tighten the header + stat layout, and give the
+  // action buttons explicit small font + min-width:0 so flex:1 actually
+  // divides space instead of hitting content-based min-content floors.
   .board-container .tower-info-panel {
     left: var(--spacing-xs);
     right: var(--spacing-xs);
@@ -37,21 +42,39 @@
     bottom: var(--shell-tower-info-bottom);
     max-height: 40vh;
     overflow-y: auto;
-    padding: var(--spacing-xs) var(--spacing-sm);
+    padding: var(--spacing-sm);
     font-size: var(--font-size-3xs);
 
     .tower-info-header {
       margin-bottom: var(--spacing-xs);
-      padding-bottom: 2px;
+      padding-bottom: var(--spacing-xs);
+      gap: var(--spacing-xs);
     }
     .tower-info-name {
       font-size: var(--font-size-small);
     }
+    .tower-info-close {
+      font-size: var(--font-size-title);
+      padding: 0 var(--spacing-xs);
+      line-height: 0.8;
+    }
+    .level-star {
+      font-size: var(--font-size-2xs);
+    }
     .tower-info-stats {
       gap: 2px;
+      margin-bottom: var(--spacing-xs);
     }
     .stat-row {
+      font-size: var(--font-size-2xs);
       padding: 1px 0;
+    }
+    .tower-info-targeting {
+      margin-bottom: var(--spacing-xs);
+    }
+    .targeting-btn {
+      font-size: var(--font-size-2xs);
+      padding: var(--spacing-xs) var(--spacing-sm);
     }
     .tower-info-actions {
       gap: var(--spacing-xs);
@@ -59,8 +82,14 @@
     .upgrade-btn,
     .sell-btn {
       min-width: 0;
-      padding: var(--spacing-xs);
-      font-size: var(--font-size-3xs);
+      padding: var(--spacing-xs) var(--spacing-sm);
+      font-size: var(--font-size-2xs);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .upgrade-tile-percent {
+      display: none;
     }
   }
 }
