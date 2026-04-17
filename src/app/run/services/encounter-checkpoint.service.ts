@@ -153,6 +153,9 @@ export class EncounterCheckpointService {
   }
 
   private isValidCheckpoint(data: Record<string, unknown>): boolean {
+    const itemInventory = data['itemInventory'] as Record<string, unknown> | undefined;
+    const runStateFlags = data['runStateFlags'] as Record<string, unknown> | undefined;
+
     return (
       typeof data['version'] === 'number' &&
       typeof data['timestamp'] === 'number' &&
@@ -160,7 +163,13 @@ export class EncounterCheckpointService {
       data['encounterConfig'] !== null &&
       data['encounterConfig'] !== undefined &&
       data['gameState'] !== null &&
-      data['gameState'] !== undefined
+      data['gameState'] !== undefined &&
+      itemInventory !== null &&
+      itemInventory !== undefined &&
+      Array.isArray(itemInventory['entries']) &&
+      runStateFlags !== null &&
+      runStateFlags !== undefined &&
+      Array.isArray(runStateFlags['entries'])
     );
   }
 }

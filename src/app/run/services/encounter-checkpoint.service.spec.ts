@@ -372,5 +372,61 @@ describe('EncounterCheckpointService', () => {
 
       expect(service.hasCheckpoint()).toBeFalse();
     });
+
+    it('passes validation for a valid full v7 checkpoint with itemInventory and runStateFlags', () => {
+      const checkpoint = createTestCheckpoint();
+      service.saveCheckpoint(checkpoint);
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.version).toBe(CHECKPOINT_VERSION);
+    });
+
+    it('returns null when itemInventory is missing', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data: Record<string, any> = { ...createTestCheckpoint() };
+      delete data['itemInventory'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when runStateFlags is missing', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data: Record<string, any> = { ...createTestCheckpoint() };
+      delete data['runStateFlags'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when itemInventory.entries is not an array', () => {
+      const data = {
+        ...createTestCheckpoint(),
+        itemInventory: { entries: 'not-an-array' },
+      };
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when runStateFlags.entries is not an array', () => {
+      const data = {
+        ...createTestCheckpoint(),
+        runStateFlags: { entries: 42 },
+      };
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
   });
 });
