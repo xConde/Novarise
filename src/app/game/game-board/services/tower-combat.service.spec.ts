@@ -7,7 +7,7 @@ import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
 import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_SPECIALIZATIONS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
-import { Enemy } from '../models/enemy.model';
+import { Enemy, EnemyType } from '../models/enemy.model';
 import { StatusEffectService } from './status-effect.service';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { CHAIN_LIGHTNING_CONFIG } from '../constants/combat.constants';
@@ -1062,6 +1062,46 @@ describe('TowerCombatService', () => {
       const result = service.tickMortarZonesForTurn(mockScene, TURN_1);
       expect(result.kills.length).toBe(0);
       expect(result.damageDealt).toBe(0);
+    });
+
+    it('should NOT damage a FLYING enemy standing on a mortar zone (S1: flying bypass ground effects)', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const flyingEnemy = createTestEnemy('fly1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000, {
+        type: EnemyType.FLYING,
+        isFlying: true,
+      });
+      enemyMap.set('fly1', flyingEnemy);
+
+      // Turn 1: fire — creates a mortar zone centred on the tower position
+      service.fireTurn(mockScene, TURN_1);
+      const healthAfterBlast = flyingEnemy.health;
+
+      // Turn 2: tick DoT zone — flying enemy must not take damage
+      service.tickMortarZonesForTurn(mockScene, TURN_2);
+      expect(flyingEnemy.health).toBe(healthAfterBlast);
+    });
+
+    it('should still damage a ground enemy on the same tile as a flying enemy (positive control)', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const groundEnemy = createTestEnemy('ground1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const flyingEnemy = createTestEnemy('fly1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000, {
+        type: EnemyType.FLYING,
+        isFlying: true,
+      });
+      enemyMap.set('ground1', groundEnemy);
+      enemyMap.set('fly1', flyingEnemy);
+
+      service.fireTurn(mockScene, TURN_1);
+      const groundHealthAfterBlast = groundEnemy.health;
+      const flyingHealthAfterBlast = flyingEnemy.health;
+
+      // Tick DoT zone on turn 2
+      service.tickMortarZonesForTurn(mockScene, TURN_2);
+
+      // Ground enemy takes DoT damage
+      expect(groundEnemy.health).toBeLessThan(groundHealthAfterBlast);
+      // Flying enemy is unaffected by zone DoT
+      expect(flyingEnemy.health).toBe(flyingHealthAfterBlast);
     });
   });
 

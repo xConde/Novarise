@@ -375,6 +375,8 @@ export class TowerCombatService {
       const candidates = this.spatialGrid.queryRadius(zone.centerX, zone.centerZ, zone.blastRadius);
       for (const enemy of candidates) {
         if (enemy.health <= 0) continue;
+        // S1: flying enemies bypass ground effects — mortar zones are ground-level
+        if (enemy.isFlying) continue;
         const dx = enemy.position.x - zone.centerX;
         const dz = enemy.position.z - zone.centerZ;
         if (Math.sqrt(dx * dx + dz * dz) <= zone.blastRadius) {
