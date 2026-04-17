@@ -1,13 +1,14 @@
 import { CanDeactivateFn } from '@angular/router';
-import { GameBoardComponent } from '../game-board/game-board.component';
+import { Observable } from 'rxjs';
+import { GameComponent } from '../game.component';
 
 /**
  * Prevents accidental navigation away from an active game.
- * Delegates entirely to GameBoardComponent.canLeaveGame(), which auto-pauses
- * the game, prompts the player, and records a defeat if they confirm leaving.
+ * Returns Observable<boolean> for async pause-menu confirmation,
+ * or boolean for immediate allow (terminal phases).
  */
-export const gameLeaveGuard: CanDeactivateFn<GameBoardComponent> = (
-  component: GameBoardComponent
-): boolean => {
-  return component.canLeaveGame();
+export const gameLeaveGuard: CanDeactivateFn<GameComponent> = (
+  component: GameComponent
+): Observable<boolean> | boolean => {
+  return component.requestGuardDecision();
 };

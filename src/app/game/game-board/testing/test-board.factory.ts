@@ -4,12 +4,23 @@ import { GameBoardTile } from '../models/game-board-tile';
  * Create a test game board with spawner at (0,0) and exit at (size-1, size-1).
  * All other tiles are base (traversable). Optional blocked cells become walls
  * (non-traversable), simulating placed towers or hard walls.
+ *
+ * `extraExits` drops additional EXIT tiles beyond the default corner — used
+ * by multi-exit pathfinding specs to verify enemies route to the nearest
+ * reachable exit, not just `exitTiles[0]`.
+ *
+ * `extraSpawners` drops additional SPAWNER tiles beyond the default corner —
+ * used by multi-spawner occupancy specs to verify alternate-spawner retry logic.
  */
 export function createTestBoard(
   size = 10,
-  blockedCells: { row: number; col: number }[] = []
+  blockedCells: { row: number; col: number }[] = [],
+  extraExits: { row: number; col: number }[] = [],
+  extraSpawners: { row: number; col: number }[] = []
 ): GameBoardTile[][] {
   const blocked = new Set(blockedCells.map(c => `${c.row}-${c.col}`));
+  const extraExitSet = new Set(extraExits.map(e => `${e.row}-${e.col}`));
+  const extraSpawnerSet = new Set(extraSpawners.map(s => `${s.row}-${s.col}`));
   const board: GameBoardTile[][] = [];
   for (let row = 0; row < size; row++) {
     board[row] = [];
@@ -18,6 +29,10 @@ export function createTestBoard(
         board[row][col] = GameBoardTile.createSpawner(row, col);
       } else if (row === size - 1 && col === size - 1) {
         board[row][col] = GameBoardTile.createExit(row, col);
+      } else if (extraExitSet.has(`${row}-${col}`)) {
+        board[row][col] = GameBoardTile.createExit(row, col);
+      } else if (extraSpawnerSet.has(`${row}-${col}`)) {
+        board[row][col] = GameBoardTile.createSpawner(row, col);
       } else if (blocked.has(`${row}-${col}`)) {
         board[row][col] = GameBoardTile.createWall(row, col);
       } else {

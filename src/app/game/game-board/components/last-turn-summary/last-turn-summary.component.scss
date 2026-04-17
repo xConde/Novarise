@@ -1,0 +1,240 @@
+// Recap panel — mirrors the left-side INCOMING spawn preview. Persistent
+// during combat + intermission phases, positioned at the top-right.
+
+:host {
+  position: absolute;
+  top: var(--shell-recap-top, 8rem);
+  right: var(--shell-recap-right, 0.625rem);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: rgba(10, 15, 30, 0.82);
+  border: var(--border-width-thin) solid var(--panel-blue-border);
+  border-radius: var(--border-radius-md);
+  backdrop-filter: blur(0.625rem);
+  z-index: var(--z-index-overlay);
+  color: var(--text-color);
+}
+
+:host.last-turn-summary--empty {
+  display: none;
+}
+
+.last-turn-summary {
+  font-family: "Orbitron", sans-serif;
+  color: var(--text-color);
+  min-width: 11rem;
+  max-width: 14rem;
+}
+
+.last-turn-summary__title {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  opacity: 0.7;
+  font-weight: 600;
+}
+
+.last-turn-summary__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+// ── Summary row (one per recorded turn) ──────────────────────────────
+.last-turn-summary__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  opacity: 0.55;
+  transition: opacity 0.15s ease, background 0.15s ease;
+  border-radius: var(--border-radius-sm);
+  padding: 0.1rem 0.25rem;
+  margin: 0 -0.25rem; // align inner padding with the panel edge
+}
+
+.last-turn-summary__row--recent {
+  opacity: 1;
+}
+
+.last-turn-summary__row--quiet {
+  opacity: 0.35;
+}
+
+// Clickable rows (ones with kills or damage) get a hover affordance.
+.last-turn-summary__row--expandable {
+  cursor: pointer;
+  pointer-events: auto;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--theme-cyan);
+    outline-offset: 1px;
+  }
+}
+
+.last-turn-summary__row--expanded {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+// ── Stats line (gold | damage | kills | lives) ───────────────────────
+.last-turn-summary__turn {
+  min-width: 2rem;
+  font-weight: 700;
+  color: var(--panel-blue-accent);
+  letter-spacing: 0.04em;
+}
+
+.last-turn-summary__stats {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  line-height: 1.15;
+}
+
+.last-turn-summary__stat {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.last-turn-summary__sep {
+  opacity: 0.35;
+  font-weight: 400;
+  padding: 0 0.05rem;
+}
+
+.last-turn-summary__unit {
+  margin-left: 0.1rem;
+  font-size: var(--font-size-3xs);
+  font-weight: 600;
+  opacity: 0.75;
+  text-transform: lowercase;
+}
+
+.last-turn-summary__stat--gold {
+  color: var(--game-gold);
+}
+
+.last-turn-summary__stat--danger {
+  color: rgba(255, 120, 120, 0.95);
+}
+
+.last-turn-summary__cards {
+  font-weight: 500;
+  opacity: 0.7;
+  font-size: var(--font-size-3xs);
+}
+
+.last-turn-summary__quiet {
+  color: var(--text-dim);
+  font-size: var(--font-size-xs);
+  opacity: 0.7;
+}
+
+// ── Expanded breakdown ───────────────────────────────────────────────
+// xs (same as the collapsed stats row above): opening the drawer is a
+// "more info please" signal from the player — the content should be
+// *at least* as legible as the row that led them to click. 2xs/3xs also
+// pushed Orbitron below the size it's designed to render at; xs lets
+// the geometric strokes resolve cleanly.
+.last-turn-summary__detail {
+  list-style: none;
+  padding: 0.25rem 0.5rem 0.4rem 2.25rem; // indent under the turn label
+  font-size: var(--font-size-xs);
+  color: var(--text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  animation: last-turn-summary-detail-enter 0.15s ease-out;
+}
+
+.last-turn-summary__detail-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: baseline;
+}
+
+.last-turn-summary__detail-label {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  // 2xs (was 0.55rem / ~8.8px — smaller than the content it labels,
+  // which was the wrong weight hierarchy).
+  font-size: var(--font-size-2xs);
+}
+
+.last-turn-summary__detail-entries {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+// Per-tower attribution chip — chess-style token + muted full name inline.
+// No hover tooltip: nested stacking contexts (backdrop-filter + row opacity
+// + drawer transform animation) made every tooltip approach unreliable.
+// Always-visible base name self-teaches the chess notation instead.
+.last-turn-summary__attrib {
+  position: relative;
+}
+
+// Color tints by tower type so the player's eye learns the palette.
+.last-turn-summary__attrib--basic   { color: var(--tower-color-basic, #ffaa50); }
+.last-turn-summary__attrib--sniper  { color: var(--theme-cyan); }
+.last-turn-summary__attrib--splash  { color: #ff8855; }
+.last-turn-summary__attrib--slow    { color: #88c5ff; }
+.last-turn-summary__attrib--chain   { color: #ffee66; }
+.last-turn-summary__attrib--mortar  { color: #ff7766; }
+.last-turn-summary__attrib--dot     { color: var(--theme-purple-light, #c4b8d8); }
+
+// Compact token (the "B" / "Sn2" / "M3" part) keeps the tower's tint at
+// full weight — like a chess piece annotation that leads the eye.
+.last-turn-summary__attrib-token {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+// Full base name rides alongside the token ("B BASIC", "Sn2 SNIPER").
+// UPPERCASE to match the game's UI language — card labels, tower-info
+// panel, HUD stats are all uppercase. Mixed-case was an odd island.
+// Weight hierarchy (500 vs. 700 on the token) + letter-spacing keeps
+// the token leading while giving the name crisp legibility.
+.last-turn-summary__attrib-name {
+  margin-left: 0.35rem;
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.last-turn-summary__attrib-count {
+  margin-left: 0.2rem;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+@keyframes last-turn-summary-detail-enter {
+  from { opacity: 0; transform: translateY(-0.2rem); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .last-turn-summary__detail { animation: none; }
+  .last-turn-summary__row { transition: none; }
+}
+
+@media (max-width: 768px) {
+  .last-turn-summary {
+    display: none;
+  }
+}

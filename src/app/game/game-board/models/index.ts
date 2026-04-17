@@ -10,7 +10,6 @@ export * from './game-state.model';
 export * from './game-stats.model';
 export * from './minimap.model';
 export * from './score.model';
-export * from './tile-pricing.model';
 export * from './tower-info.model';
 export * from './tower.model';
 export * from './wave-preview.model';

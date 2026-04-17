@@ -21,9 +21,6 @@ export class GameHudComponent implements OnChanges, OnDestroy {
   @Input() score = 0;
   @Input() formattedTime = '00:00';
   @Input() isEndless = false;
-  @Input() isCampaignGame = false;
-  @Input() levelName = '';
-  @Input() speedRunTimeLimit = 0;
   @Input() elapsedTime = 0;
   @Input() waveStartPulse = false;
   @Input() challengeIndicators: ChallengeIndicator[] = [];
@@ -34,6 +31,25 @@ export class GameHudComponent implements OnChanges, OnDestroy {
   goldPulse = false;
   scorePulse = false;
   goldChange = 0;
+  challengeStripExpanded = false;
+
+  toggleChallengeStrip(): void {
+    this.challengeStripExpanded = !this.challengeStripExpanded;
+  }
+
+  /** Sprint 29: hover tooltip for challenge indicators — includes current pass/fail status. */
+  getChallengeHelp(ci: ChallengeIndicator): string {
+    const status = ci.passing ? 'passing' : 'failing';
+    return `${ci.label} — ${ci.value} (currently ${status})`;
+  }
+
+  get passingCount(): number {
+    return this.challengeIndicators.filter(c => c.passing).length;
+  }
+
+  get failingCount(): number {
+    return this.challengeIndicators.filter(c => !c.passing).length;
+  }
 
   private previousGold = 0;
   private previousScore = 0;
@@ -104,22 +120,4 @@ export class GameHudComponent implements OnChanges, OnDestroy {
     }, PULSE_DURATION_MS);
   }
 
-  get speedRunRemaining(): number {
-    return Math.max(0, this.speedRunTimeLimit - this.elapsedTime);
-  }
-
-  get speedRunWarning(): boolean {
-    return this.speedRunTimeLimit > 0 && this.speedRunRemaining <= 30;
-  }
-
-  get speedRunCritical(): boolean {
-    return this.speedRunTimeLimit > 0 && this.speedRunRemaining <= 10;
-  }
-
-  get formattedSpeedRunRemaining(): string {
-    const total = Math.ceil(this.speedRunRemaining);
-    const min = Math.floor(total / 60);
-    const sec = total % 60;
-    return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-  }
 }

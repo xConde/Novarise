@@ -9,13 +9,13 @@ import { StatusEffectType } from '../../constants/status-effect.constants';
 })
 export class TowerInfoPanelComponent {
   @Input() towerInfo: PlacedTower | null = null;
-  @Input() towerStats: { damage: number; range: number; fireRate: number; statusEffect?: StatusEffectType } | null = null;
+  @Input() towerStats: { damage: number; range: number; statusEffect?: StatusEffectType } | null = null;
   @Input() upgradeCost = 0;
   @Input() upgradePercent = 0;
   @Input() sellValue = 0;
-  @Input() upgradePreview: { damage: number; range: number; fireRate: number } | null = null;
+  @Input() upgradePreview: { damage: number; range: number } | null = null;
   @Input() showSpecializationChoice = false;
-  @Input() specOptions: { spec: TowerSpecialization; label: string; description: string; damage: number; range: number; fireRate: number }[] = [];
+  @Input() specOptions: { spec: TowerSpecialization; label: string; description: string; damage: number; range: number }[] = [];
   @Input() gold = 0;
   @Input() sellConfirmPending = false;
   @Input() targetingModeLabels: Record<string, string> = {};

@@ -1,13 +1,16 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
-import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameSpeed, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_GAME_SPEEDS, VALID_TRANSITIONS } from '../models/game-state.model';
+import { DifficultyLevel, DIFFICULTY_PRESETS, GamePhase, GameState, INITIAL_GAME_STATE, INTEREST_CONFIG, STREAK_BONUS_PER_WAVE, VALID_TRANSITIONS } from '../models/game-state.model';
 import { GameModifier, ModifierEffects, mergeModifierEffects, calculateModifierScoreMultiplier } from '../models/game-modifier.model';
+import { SerializableGameState } from '../models/encounter-checkpoint.model';
 
 @Injectable()
 export class GameStateService {
   private state: GameState = { ...INITIAL_GAME_STATE, activeModifiers: new Set<GameModifier>() };
   private state$ = new BehaviorSubject<GameState>(this.state);
   private modifierEffects: ModifierEffects = {};
+  /** Additional effects from Ascent Mode ascension levels, stacked on top of player modifiers. */
+  private ascensionEffects: ModifierEffects = {};
   private phaseChange$ = new Subject<{ from: GamePhase; to: GamePhase }>();
   /** Cumulative gold spent during SETUP (tower placement before wave 1). Prevents difficulty/modifier toggle exploits. */
   private setupGoldSpent = 0;
@@ -18,6 +21,31 @@ export class GameStateService {
 
   getState(): GameState {
     return this.state;
+  }
+
+  /**
+   * Serialize the current game state to a plain JSON-safe object.
+   * Converts `activeModifiers` from a Set to an array. `isPaused` is omitted
+   * because encounters always resume unpaused.
+   */
+  serializeState(): SerializableGameState {
+    return {
+      phase: this.state.phase,
+      wave: this.state.wave,
+      maxWaves: this.state.maxWaves,
+      lives: this.state.lives,
+      maxLives: this.state.maxLives,
+      initialLives: this.state.initialLives,
+      gold: this.state.gold,
+      initialGold: this.state.initialGold,
+      score: this.state.score,
+      difficulty: this.state.difficulty,
+      isEndless: this.state.isEndless,
+      highestWave: this.state.highestWave,
+      elapsedTime: this.state.elapsedTime,
+      activeModifiers: [...this.state.activeModifiers],
+      consecutiveWavesWithoutLeak: this.state.consecutiveWavesWithoutLeak,
+    };
   }
 
   /** Emits whenever the game phase changes. Each emission carries the previous and next phase. */
@@ -124,6 +152,21 @@ export class GameStateService {
     return this.state.consecutiveWavesWithoutLeak;
   }
 
+  /** Override initial lives, max lives, and initial-lives snapshot for Ascent Mode encounters. Only works during SETUP before wave 1. */
+  setInitialLives(lives: number, maxLives: number): void {
+    if (this.state.phase !== GamePhase.SETUP || this.state.wave !== 0) return;
+    this.state.lives = lives;
+    this.state.maxLives = maxLives;
+    this.state.initialLives = lives;
+    this.emit();
+  }
+
+  /** Snapshot current gold as the encounter starting gold. Call after all initial bonuses are applied. */
+  snapshotInitialGold(): void {
+    this.state.initialGold = this.state.gold;
+    this.emit();
+  }
+
   /** Adds gold only. Use for sell refunds (should not count toward score). */
   addGold(amount: number): void {
     this.state.gold += amount;
@@ -177,6 +220,18 @@ export class GameStateService {
     return this.state.gold >= amount;
   }
 
+  /**
+   * Restore lives from a card effect (e.g. Repair Walls spell).
+   * Caps at the encounter's maxLives ceiling so healing cannot exceed the run's
+   * max (which accounts for relic bonuses and ascension modifiers).
+   * Amount must be positive; no-ops otherwise.
+   */
+  addLives(amount: number): void {
+    if (amount <= 0) return;
+    this.state.lives = Math.min(this.state.lives + amount, this.state.maxLives);
+    this.emit();
+  }
+
   /** Adds to score without awarding gold. Use for score-only bonuses (e.g., modifier multiplier adjustments). */
   addScore(points: number): void {
     this.state.score += points;
@@ -187,13 +242,6 @@ export class GameStateService {
   togglePause(): void {
     if (this.state.phase !== GamePhase.COMBAT && this.state.phase !== GamePhase.INTERMISSION) return;
     this.state.isPaused = !this.state.isPaused;
-    this.emit();
-  }
-
-  /** Sets game speed multiplier. No-op for values not in VALID_GAME_SPEEDS. */
-  setSpeed(speed: GameSpeed): void {
-    if (!VALID_GAME_SPEEDS.includes(speed)) return;
-    this.state.gameSpeed = speed;
     this.emit();
   }
 
@@ -211,9 +259,41 @@ export class GameStateService {
     this.emit();
   }
 
-  /** Returns the merged modifier effects from all active modifiers. */
+  /**
+   * Returns the merged modifier effects from all active modifiers combined with
+   * any ascension effects set via setAscensionModifierEffects().
+   */
   getModifierEffects(): ModifierEffects {
-    return this.modifierEffects;
+    const a = this.ascensionEffects;
+    const m = this.modifierEffects;
+    // Fast path: nothing from ascension
+    if (Object.keys(a).length === 0) return m;
+    // Merge: multiplicative stacking for numeric multipliers, OR for booleans
+    return {
+      enemyHealthMultiplier: (m.enemyHealthMultiplier ?? 1) * (a.enemyHealthMultiplier ?? 1),
+      enemySpeedMultiplier: (m.enemySpeedMultiplier ?? 1) * (a.enemySpeedMultiplier ?? 1),
+      towerCostMultiplier: (m.towerCostMultiplier ?? 1) * (a.towerCostMultiplier ?? 1),
+      towerDamageMultiplier: m.towerDamageMultiplier !== undefined || a.towerDamageMultiplier !== undefined
+        ? (m.towerDamageMultiplier ?? 1) * (a.towerDamageMultiplier ?? 1)
+        : undefined,
+      waveCountMultiplier: m.waveCountMultiplier !== undefined || a.waveCountMultiplier !== undefined
+        ? (m.waveCountMultiplier ?? 1) * (a.waveCountMultiplier ?? 1)
+        : undefined,
+      startingGoldMultiplier: m.startingGoldMultiplier !== undefined || a.startingGoldMultiplier !== undefined
+        ? (m.startingGoldMultiplier ?? 1) * (a.startingGoldMultiplier ?? 1)
+        : undefined,
+      disableInterest: (m.disableInterest || a.disableInterest) ? true : undefined,
+    };
+  }
+
+  /**
+   * Injects Ascent Mode ascension difficulty multipliers as additional modifier
+   * effects that stack on top of any player-chosen GameModifiers.
+   * Should be called during ngOnInit of GameBoardComponent when isInRun() is true.
+   * No-op for empty effects objects.
+   */
+  setAscensionModifierEffects(effects: ModifierEffects): void {
+    this.ascensionEffects = { ...effects };
   }
 
   /** Returns the score multiplier from active modifiers (1.0 = no change). */
@@ -227,10 +307,13 @@ export class GameStateService {
     const preset = DIFFICULTY_PRESETS[difficulty];
     this.state.difficulty = difficulty;
     this.state.lives = preset.lives;
+    this.state.maxLives = preset.lives;
+    this.state.initialLives = preset.lives;
     const goldMultiplier = this.modifierEffects.startingGoldMultiplier ?? 1;
     const startingGold = Math.floor(preset.gold * goldMultiplier);
     // Deduct cumulative gold already spent on towers to prevent toggle exploits
     this.state.gold = Math.max(0, startingGold - this.setupGoldSpent);
+    this.state.initialGold = this.state.gold;
     this.emit();
   }
 
@@ -252,13 +335,47 @@ export class GameStateService {
     this.emit();
   }
 
-  /** Resets all game state to initial values and clears modifiers. Call from `restartGame()` before a new game begins. */
+  /** Resets all game state to initial values and clears modifiers and ascension effects. Call from `restartGame()` / encounter teardown before a new game begins. */
   reset(): void {
     const from = this.state.phase;
     this.state = { ...INITIAL_GAME_STATE, activeModifiers: new Set<GameModifier>() };
     this.modifierEffects = {};
+    this.ascensionEffects = {};
     this.setupGoldSpent = 0;
     this.phaseChange$.next({ from, to: GamePhase.SETUP });
+    this.emit();
+  }
+
+  /**
+   * Restore full game state from a checkpoint snapshot, bypassing phase
+   * transition validation. Used by the encounter save/resume system.
+   * Must call setAscensionModifierEffects() before this method.
+   */
+  restoreFromCheckpoint(snapshot: SerializableGameState): void {
+    const from = this.state.phase;
+    this.state = {
+      phase: snapshot.phase,
+      wave: snapshot.wave,
+      maxWaves: snapshot.maxWaves,
+      lives: snapshot.lives,
+      maxLives: snapshot.maxLives,
+      initialLives: snapshot.initialLives,
+      gold: snapshot.gold,
+      initialGold: snapshot.initialGold,
+      score: snapshot.score,
+      difficulty: snapshot.difficulty,
+      isEndless: snapshot.isEndless,
+      highestWave: snapshot.highestWave,
+      isPaused: false,
+      elapsedTime: snapshot.elapsedTime,
+      activeModifiers: new Set(snapshot.activeModifiers),
+      consecutiveWavesWithoutLeak: snapshot.consecutiveWavesWithoutLeak,
+    };
+    this.modifierEffects = mergeModifierEffects(this.state.activeModifiers);
+    this.setupGoldSpent = 0; // Not relevant post-SETUP
+    if (from !== snapshot.phase) {
+      this.phaseChange$.next({ from, to: snapshot.phase });
+    }
     this.emit();
   }
 

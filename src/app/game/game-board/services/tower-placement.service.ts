@@ -1,12 +1,11 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { TowerType } from '../models/tower.model';
+import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
 import { DRAG_CONFIG } from '../constants/touch.constants';
 import { SceneService } from './scene.service';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
 import { TowerPreviewService } from './tower-preview.service';
-import { TilePricingService } from './tile-pricing.service';
 
 /**
  * Manages drag-and-drop tower placement state machine.
@@ -51,7 +50,6 @@ export class TowerPlacementService {
     private gameBoardService: GameBoardService,
     private gameStateService: GameStateService,
     private towerPreviewService: TowerPreviewService,
-    private tilePricingService: TilePricingService,
   ) {}
 
   /**
@@ -160,7 +158,7 @@ export class TowerPlacementService {
       const row = mesh.userData['row'] as number;
       const col = mesh.userData['col'] as number;
       const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-      const tileCost = this.tilePricingService.getTilePrice(this.dragTowerType!, row, col, costMult).cost;
+      const tileCost = Math.round(TOWER_CONFIGS[this.dragTowerType!].cost * costMult);
       const canPlace = this.gameBoardService.canPlaceTower(row, col)
         && this.gameStateService.canAfford(tileCost);
       this.towerPreviewService.showPreview(this.dragTowerType!, row, col, canPlace, this.sceneService.getScene());

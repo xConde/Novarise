@@ -2,6 +2,8 @@ import { Injectable } from '@angular/core';
 import { StatusEffectType, StatusEffectConfig, STATUS_EFFECT_CONFIGS } from '../constants/status-effect.constants';
 import { EnemyService, DamageResult } from './enemy.service';
 import { KillInfo } from './tower-combat.service';
+import { RelicService } from '../../../run/services/relic.service';
+import { SerializableStatusEffect } from '../models/encounter-checkpoint.model';
 
 interface ActiveEffect {
   config: StatusEffectConfig;
@@ -21,14 +23,17 @@ export class StatusEffectService {
   /** Total number of SLOW applications this game session (for achievement tracking). */
   private slowApplicationCount = 0;
 
-  constructor(private enemyService: EnemyService) {}
+  constructor(
+    private enemyService: EnemyService,
+    private relicService: RelicService,
+  ) {}
 
   /**
    * Apply a status effect to an enemy.
    * If the effect already exists and doesn't stack, refreshes duration.
    * Returns false if enemy is immune (e.g., flying enemies immune to SLOW).
    */
-  apply(enemyId: string, effectType: StatusEffectType, gameTime: number, speedMultiplierOverride?: number): boolean {
+  apply(enemyId: string, effectType: StatusEffectType, turnNumber: number, speedMultiplierOverride?: number): boolean {
     const enemy = this.enemyService.getEnemies().get(enemyId);
     if (!enemy || enemy.health <= 0) return false;
 
@@ -43,18 +48,21 @@ export class StatusEffectService {
       this.effects.set(enemyId, enemyEffects);
     }
 
+    // FROST_NOVA relic grants +1 turn to SLOW duration.
+    const durationBonus = effectType === StatusEffectType.SLOW ? this.relicService.getSlowDurationBonus() : 0;
+
     const existing = enemyEffects.get(effectType);
     if (existing) {
       // Effect already active — refresh duration (no stacking)
-      existing.expiresAt = gameTime + config.duration;
+      existing.expiresAt = turnNumber + config.duration + durationBonus;
       return true;
     }
 
     // New effect
     const active: ActiveEffect = {
       config,
-      expiresAt: gameTime + config.duration,
-      lastTickTime: gameTime,
+      expiresAt: turnNumber + config.duration + durationBonus,
+      lastTickTime: turnNumber,
     };
 
     // SLOW: mutate enemy speed, store original
@@ -70,19 +78,22 @@ export class StatusEffectService {
   }
 
   /**
-   * Update all active effects. Call once per physics step.
-   * - Ticks DoT effects (BURN, POISON) dealing damage
-   * - Expires effects past their duration (restores speed for SLOW)
-   * Returns array of KillInfo for enemies killed by DoT.
+   * Phase 4 turn-based equivalent of {@link update}.
+   *
+   * Called once per resolution phase from CombatLoopService.resolveTurn().
+   * Treats `config.duration` as TURNS (not seconds) — BURN 5 → expires after 5
+   * turns. DoT effects (BURN, POISON) apply their `damagePerTick` exactly once
+   * per turn (turn-based ticks are coarse; DoT effects fire exactly once per turn).
+   *
+   * @param turnNumber Monotonically-increasing turn counter from CombatLoopService.
+   * @returns KillInfo[] for enemies killed by DoT this turn.
    */
-  update(gameTime: number): KillInfo[] {
+  tickTurn(turnNumber: number): KillInfo[] {
     const kills: KillInfo[] = [];
     const toRemoveEnemies: string[] = [];
 
     for (const [enemyId, enemyEffects] of this.effects) {
       const enemy = this.enemyService.getEnemies().get(enemyId);
-
-      // Enemy no longer exists — schedule full cleanup
       if (!enemy || enemy.health <= 0) {
         toRemoveEnemies.push(enemyId);
         continue;
@@ -91,9 +102,7 @@ export class StatusEffectService {
       const expiredTypes: StatusEffectType[] = [];
 
       for (const [effectType, active] of enemyEffects) {
-        // Check expiry
-        if (gameTime >= active.expiresAt) {
-          // Restore speed for SLOW
+        if (turnNumber >= active.expiresAt) {
           if (effectType === StatusEffectType.SLOW && active.originalSpeed !== undefined) {
             enemy.speed = active.originalSpeed;
           }
@@ -101,41 +110,51 @@ export class StatusEffectService {
           continue;
         }
 
-        // Tick DoT effects
-        const tickInterval = active.config.tickInterval;
+        // DoT: apply damagePerTick exactly once per turn.
         const damagePerTick = active.config.damagePerTick;
-        if (tickInterval !== undefined && damagePerTick !== undefined && tickInterval > 0) {
-          if (gameTime - active.lastTickTime >= tickInterval) {
-            active.lastTickTime = gameTime;
-            const result: DamageResult = this.enemyService.damageEnemy(enemyId, damagePerTick);
-            if (result.killed) {
-              kills.push({ id: enemyId, damage: damagePerTick });
-              // Enemy died from DoT — clean up all effects next pass
-              toRemoveEnemies.push(enemyId);
-              break; // No need to process more effects for a dead enemy
-            }
+        if (damagePerTick !== undefined && damagePerTick > 0) {
+          const result: DamageResult = this.enemyService.damageEnemy(enemyId, damagePerTick);
+          if (result.killed) {
+            // Status-effect kills have no tower attribution (BURN/POISON/SLOW
+            // can be applied by towers OR spells; the tick itself isn't owned
+            // by any single tower). The recap surfaces these as generic DoT.
+            kills.push({ id: enemyId, damage: damagePerTick, towerType: null, towerLevel: 0 });
+            toRemoveEnemies.push(enemyId);
+            break;
           }
         }
       }
 
-      // Remove expired effects
       for (const type of expiredTypes) {
         enemyEffects.delete(type);
       }
-
-      // Clean up empty entries
       if (enemyEffects.size === 0) {
         this.effects.delete(enemyId);
       }
     }
 
-    // Clean up dead/removed enemies
     for (const enemyId of toRemoveEnemies) {
       this.effects.delete(enemyId);
     }
 
     return kills;
   }
+
+  /**
+   * Flat tile reduction to apply to an enemy's movement this turn based on
+   * active SLOW status. Returns 1 if SLOW is active, 0 otherwise. EnemyService
+   * subtracts this from the base tiles-per-turn, floored at 1 — a 0-floor
+   * would permaparalyze 1-tile movers since SLOW aura re-applies each turn.
+   */
+  getSlowTileReduction(enemyId: string): number {
+    const effects = this.effects.get(enemyId);
+    if (!effects) return 0;
+    return effects.has(StatusEffectType.SLOW) ? 1 : 0;
+  }
+
+  // M2 S2: gameTime-based update() DELETED. Replaced by tickTurn (turn-based).
+  // Spec call sites cast to (svc as any) — H2 will rewrite against tickTurn.
+
 
   /**
    * Check if an enemy has a specific effect active.
@@ -180,6 +199,37 @@ export class StatusEffectService {
   }
 
   /**
+   * Remove a specific status effect from an enemy, leaving other effects intact.
+   * Restores any mutated stats associated with the removed effect (e.g. SLOW's
+   * speed mutation). If the enemy has no effects after removal, prunes the inner
+   * map. No-op if the enemy has no effects or the specific effect isn't active.
+   *
+   * Use case: DETONATE spell card consumes BURN on each burning enemy.
+   */
+  removeEffect(enemyId: string, effectType: StatusEffectType): void {
+    const enemyEffects = this.effects.get(enemyId);
+    if (!enemyEffects) return;
+
+    const active = enemyEffects.get(effectType);
+    if (!active) return;
+
+    // SLOW restores the original enemy speed. Other effects (BURN, POISON) are
+    // passive DoT with no stat mutations to restore.
+    if (effectType === StatusEffectType.SLOW && active.originalSpeed !== undefined) {
+      const enemy = this.enemyService.getEnemies().get(enemyId);
+      if (enemy) {
+        enemy.speed = active.originalSpeed;
+      }
+    }
+
+    enemyEffects.delete(effectType);
+    if (enemyEffects.size === 0) {
+      this.effects.delete(enemyId);
+      this.effectArrayCache.delete(enemyId);
+    }
+  }
+
+  /**
    * Remove all effects from an enemy (call on death/removal).
    * Restores any modified stats (speed).
    */
@@ -202,6 +252,43 @@ export class StatusEffectService {
   /** Returns the total number of new SLOW applications this session (refreshes do not count). */
   getSlowApplicationCount(): number {
     return this.slowApplicationCount;
+  }
+
+  /** Serialize all active status effects for checkpoint save. */
+  serializeEffects(): SerializableStatusEffect[] {
+    const result: SerializableStatusEffect[] = [];
+    for (const [enemyId, effectMap] of this.effects) {
+      for (const [effectType, effect] of effectMap) {
+        result.push({
+          enemyId,
+          effectType,
+          expiresAt: effect.expiresAt,
+          lastTickTime: effect.lastTickTime,
+          ...(effect.originalSpeed !== undefined && { originalSpeed: effect.originalSpeed }),
+        });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Restore status effects from checkpoint. Rebuilds the nested Map structure.
+   * StatusEffectConfig is looked up from STATUS_EFFECT_CONFIGS by effectType.
+   */
+  restoreEffects(effects: SerializableStatusEffect[]): void {
+    this.effects.clear();
+    for (const e of effects) {
+      if (!this.effects.has(e.enemyId)) {
+        this.effects.set(e.enemyId, new Map());
+      }
+      const config = STATUS_EFFECT_CONFIGS[e.effectType];
+      this.effects.get(e.enemyId)!.set(e.effectType, {
+        config,
+        expiresAt: e.expiresAt,
+        lastTickTime: e.lastTickTime,
+        ...(e.originalSpeed !== undefined && { originalSpeed: e.originalSpeed }),
+      });
+    }
   }
 
   /**

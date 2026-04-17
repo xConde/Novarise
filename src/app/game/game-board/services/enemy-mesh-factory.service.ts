@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_STATS } from '../models/enemy.model';
-import { HEALTH_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
+import { HEALTH_BAR_CONFIG, SHIELD_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
 import { BOSS_CROWN_CONFIG, SHIELD_BREAK_CONFIG } from '../constants/effects.constants';
 
 @Injectable()
@@ -71,11 +71,28 @@ export class EnemyMeshFactoryService {
     mesh.add(healthBarFg);
     mesh.userData = { healthBarBg, healthBarFg };
 
-    // Add shield visual for SHIELDED enemies
+    // Add shield visual for SHIELDED enemies (dome mesh + shield HP bar)
     if (enemy.type === EnemyType.SHIELDED && enemy.shield !== undefined && enemy.shield > 0) {
       const shieldMesh = this.createShieldMesh(stats.size);
       mesh.add(shieldMesh);
       mesh.userData['shieldMesh'] = shieldMesh;
+
+      // Shield HP bar stacked above the health bar so absorbed damage is visible.
+      const shieldBarY = barY + SHIELD_BAR_CONFIG.yOffsetAboveHealth;
+      const shieldBgGeom = new THREE.PlaneGeometry(SHIELD_BAR_CONFIG.width, SHIELD_BAR_CONFIG.height);
+      const shieldBgMat = new THREE.MeshBasicMaterial({ color: SHIELD_BAR_CONFIG.bgColor, side: THREE.DoubleSide });
+      const shieldBarBg = new THREE.Mesh(shieldBgGeom, shieldBgMat);
+      shieldBarBg.position.set(0, shieldBarY, 0);
+
+      const shieldFgGeom = new THREE.PlaneGeometry(SHIELD_BAR_CONFIG.width, SHIELD_BAR_CONFIG.height);
+      const shieldFgMat = new THREE.MeshBasicMaterial({ color: SHIELD_BAR_CONFIG.color, side: THREE.DoubleSide });
+      const shieldBarFg = new THREE.Mesh(shieldFgGeom, shieldFgMat);
+      shieldBarFg.position.set(0, shieldBarY + 0.001, 0);
+
+      mesh.add(shieldBarBg);
+      mesh.add(shieldBarFg);
+      mesh.userData['shieldBarBg'] = shieldBarBg;
+      mesh.userData['shieldBarFg'] = shieldBarFg;
     }
 
     // Add crown ring for BOSS enemies

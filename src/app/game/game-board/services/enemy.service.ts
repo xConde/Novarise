@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult } from '../models/enemy.model';
+import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult, GridNode } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
@@ -8,7 +8,11 @@ import { PathfindingService } from './pathfinding.service';
 import { GameStateService } from './game-state.service';
 import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { EnemyVisualService } from './enemy-visual.service';
+import { RelicService } from '../../../run/services/relic.service';
 import { EnemyHealthService } from './enemy-health.service';
+import { CardEffectService } from '../../../run/services/card-effect.service';
+import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
+import { SerializableEnemy } from '../models/encounter-checkpoint.model';
 
 export { DamageResult } from '../models/enemy.model';
 
@@ -29,6 +33,8 @@ export class EnemyService {
     private enemyMeshFactory: EnemyMeshFactoryService,
     private enemyVisual: EnemyVisualService,
     private enemyHealth: EnemyHealthService,
+    private cardEffectService: CardEffectService,
+    private relicService: RelicService,
   ) {}
 
   /**
@@ -47,16 +53,21 @@ export class EnemyService {
     scene: THREE.Scene,
     waveHealthMultiplier = 1,
     waveSpeedMultiplier = 1,
+    /**
+     * Set of "row-col" keys that are considered occupied for this spawn call.
+     * When provided by the caller (e.g. WaveService batching multiple spawns
+     * per turn), newly-spawned enemies from earlier in the same batch are
+     * included — preventing same-turn stacking across different spawner tiles.
+     * When omitted (single-call callers, test helpers), occupancy is derived
+     * fresh from the live enemies map (previous-turn enemies only).
+     */
+    externalOccupied?: Set<string>,
   ): Enemy | null {
     const spawnerTiles = this.pathfindingService.getSpawnerTiles();
     if (spawnerTiles.length === 0) {
       console.warn('No spawner tiles available');
       return null;
     }
-
-    // Pick a random spawner tile
-    const spawnerTile = spawnerTiles[Math.floor(Math.random() * spawnerTiles.length)];
-    const { row, col } = spawnerTile;
 
     // Find path to exit
     const exitTiles = this.pathfindingService.getExitTiles();
@@ -65,18 +76,81 @@ export class EnemyService {
       return null;
     }
 
-    // Use first exit tile as target (they're grouped in center)
-    const exitTile = exitTiles[0];
+    // Shuffle spawner tiles with a seeded Fisher-Yates so selection is
+    // deterministic on save/resume. GameStateService does not expose an RNG
+    // directly, so we use Math.random() here — the order can't affect
+    // save/resume correctness because spawner selection is not checkpointed.
+    const candidates = [...spawnerTiles];
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
 
-    // FLYING enemies bypass terrain — use a 2-node straight-line path
+    // Occupancy check: only applies when called from a spawn batch (i.e.,
+    // externalOccupied is provided by WaveService). Direct calls (mini-swarm,
+    // tests, one-off spawns) skip the check — the caller manages occupancy.
+    let chosenRow: number;
+    let chosenCol: number;
+
+    if (externalOccupied !== undefined) {
+      // Batch mode: try each shuffled spawner; skip occupied ones.
+      let foundRow: number | null = null;
+      let foundCol: number | null = null;
+      for (const candidate of candidates) {
+        if (!externalOccupied.has(`${candidate.row}-${candidate.col}`)) {
+          foundRow = candidate.row;
+          foundCol = candidate.col;
+          break;
+        }
+      }
+
+      // All spawners occupied — caller will retry next turn.
+      if (foundRow === null || foundCol === null) {
+        return null;
+      }
+
+      // Reserve this spawner for the remainder of the batch.
+      externalOccupied.add(`${foundRow}-${foundCol}`);
+      chosenRow = foundRow;
+      chosenCol = foundCol;
+    } else {
+      // Single-call mode: pick a random candidate (legacy shuffle behavior).
+      const picked = candidates[0];
+      chosenRow = picked.row;
+      chosenCol = picked.col;
+    }
+
+    const row = chosenRow;
+    const col = chosenCol;
+
+    // FLYING enemies bypass terrain — use a 2-node straight-line path to the
+    // geometrically nearest exit. Ground enemies try every exit via A* and
+    // take the shortest valid path. This matches the multi-exit semantics
+    // of GameBoardService.wouldBlockPath (any exit reachable = placement OK);
+    // before this, enemies unconditionally aimed for exitTiles[0] and got
+    // stranded whenever a tower cut off exit[0] but left exit[1] reachable.
     const isFlying = type === EnemyType.FLYING;
-    const path = isFlying
-      ? this.pathfindingService.buildStraightPath({ x: col, y: row }, { x: exitTile.col, y: exitTile.row })
-      : this.pathfindingService.findPath({ x: col, y: row }, { x: exitTile.col, y: exitTile.row });
+    let path = isFlying
+      ? this.buildStraightPathToNearestExit(col, row, exitTiles)
+      : this.findShortestPathToAnyExit(col, row, exitTiles);
 
     if (path.length === 0) {
-      console.warn('No valid path found from spawner to exit');
-      return null;
+      if (isFlying) {
+        // Flying already uses straight-line — no exit tiles means truly nothing.
+        console.warn('No valid path found from spawner to any exit (flying)');
+        return null;
+      }
+      // Ground enemy: A* failed (board fully fenced off). Fall back to a
+      // straight-line path so the enemy still spawns rather than being silently
+      // dropped. Ground units will walk through towers in this degenerate case —
+      // that is acceptable because wouldBlockPath prevents valid placements from
+      // fully fencing off every route; this only fires on adversarial edge cases.
+      path = this.buildStraightPathToNearestExit(col, row, exitTiles);
+      if (path.length === 0) {
+        console.warn('No valid path found from spawner to any exit (ground straight-line fallback also failed)');
+        return null;
+      }
+      console.warn('Ground enemy using straight-line fallback path (A* found no route)');
     }
 
     // Create enemy
@@ -144,6 +218,14 @@ export class EnemyService {
       enemy.speed *= waveSpeedMultiplier;
     }
 
+    // Apply relic speed multiplier (STURDY_BOOTS — 0.92x). Stacks multiplicatively
+    // with ascension and game-modifier scaling. Flying enemies are NOT exempt —
+    // the relic description is "Enemies move X% slower" with no type carve-out.
+    const relicSpeedMult = this.relicService.getEnemySpeedMultiplier();
+    if (relicSpeedMult !== 1) {
+      enemy.speed *= relicSpeedMult;
+    }
+
     // Floor speed to prevent zero/negative from extreme modifier stacking
     enemy.speed = Math.max(MIN_ENEMY_SPEED, enemy.speed);
 
@@ -165,82 +247,98 @@ export class EnemyService {
   }
 
   /**
-   * Advance all living enemies along their paths by `deltaTime` seconds.
-   * Enemies that reach the final path node are not moved further.
-   * @returns IDs of enemies that reached the exit this tick (callers should
-   *   apply leak damage and remove them via {@link removeEnemy}).
+   * Turn-based movement: advance every living enemy by exactly `tilesPerTurn`
+   * tiles along its cached path. `tilesPerTurn` is computed per enemy from its
+   * `speed` stat rounded to an integer, minus any SLOW reduction supplied by the
+   * caller (floored at 0 tiles).
+   *
+   * This is the Phase 4 replacement for {@link updateEnemies}. Called once per
+   * resolution phase by CombatLoopService.resolveTurn().
+   *
+   * @param slowReductionFor  Callback returning the SLOW tile reduction to apply
+   *                          to a given enemy id. Caller typically passes
+   *                          `(id) => statusEffectService.getSlowTileReduction(id)`.
+   * @returns IDs of enemies that reached the exit this turn (callers apply
+   *          leak damage and call {@link removeEnemy}).
    */
-  updateEnemies(deltaTime: number): string[] {
-    if (deltaTime <= 0) return [];
-
+  stepEnemiesOneTurn(slowReductionFor: (enemyId: string) => number): string[] {
     const reachedExit: string[] = [];
+    // enemySpeed modifier: floored integer reduction. Weak (<50%) modifiers won't affect FAST/SWIFT,
+    // won't affect 1-tile movers at all. Balance in M4 S5.
+    const enemySpeedSlow = this.cardEffectService.getModifierValue(MODIFIER_STAT.ENEMY_SPEED);
 
     this.enemies.forEach(enemy => {
-      // Skip dead enemies awaiting removal — prevents double-penalty if ordering changes
-      if (enemy.health <= 0) return;
-      // Skip dying enemies — they are frozen in place while the animation plays
-      if (enemy.dying) return;
+      if (enemy.health <= 0 || enemy.dying) return;
 
+      // Already at exit — push once, don't advance again.
       if (enemy.pathIndex >= enemy.path.length - 1) {
-        // Enemy reached exit
         reachedExit.push(enemy.id);
         return;
       }
 
-      // Get current and next path nodes
-      const currentNode = enemy.path[enemy.pathIndex];
-      const nextNode = enemy.path[enemy.pathIndex + 1];
+      const baseTiles = ENEMY_STATS[enemy.type].tilesPerTurn;
+      const slowReduction = slowReductionFor(enemy.id);
+      const enemySpeedReduction = enemySpeedSlow > 0 ? Math.floor(baseTiles * enemySpeedSlow) : 0;
+      // Floor at 1 tile/turn — SLOW aura re-applies each turn while enemy is in
+      // range, so a 0-floor would permanently freeze any 1-tile mover (BASIC,
+      // HEAVY, BOSS, SHIELDED, FLYING). SLOW tower is still effective against
+      // 2-tile movers (FAST, SWIFT, SWARM) which drop from 2→1.
+      const tilesToMove = Math.max(1, baseTiles - slowReduction - enemySpeedReduction);
 
-      // Convert grid positions to world positions (reuse scratch objects — no allocation)
-      this.pathfindingService.gridToWorldPosInto(currentNode.y, currentNode.x, this.scratchCurrentWorld);
-      this.pathfindingService.gridToWorldPosInto(nextNode.y, nextNode.x, this.scratchNextWorld);
-      const currentWorld = this.scratchCurrentWorld;
-      const nextWorld = this.scratchNextWorld;
-
-      // Calculate direction and distance (reuse scratch Vector3 — no allocation)
-      const direction = this.scratchDirection.set(
-        nextWorld.x - currentWorld.x,
-        0,
-        nextWorld.z - currentWorld.z
-      ).normalize();
-
-      const moveDistance = enemy.speed * deltaTime;
-
-      // Calculate distance to next node
-      const distanceToNext = Math.sqrt(
-        Math.pow(nextWorld.x - enemy.position.x, 2) +
-        Math.pow(nextWorld.z - enemy.position.z, 2)
-      );
-
-      if (moveDistance >= distanceToNext) {
-        // Reached next node - snap to it
-        enemy.position.x = nextWorld.x;
-        enemy.position.z = nextWorld.z;
-        enemy.gridPosition.row = nextNode.y;
-        enemy.gridPosition.col = nextNode.x;
-        enemy.pathIndex++;
-        enemy.distanceTraveled += distanceToNext;
-
-        // Execute deferred repath now that we're snapped to a grid node
+      let stepsRemaining = tilesToMove;
+      while (stepsRemaining > 0 && enemy.pathIndex < enemy.path.length - 1) {
+        // Consume a deferred repath BEFORE committing to the next node.
+        // If we check after the pathIndex++/position update, the enemy
+        // first walks onto the tower tile (their path's next waypoint)
+        // and only then repaths — visually passing through the tower.
+        // In a turn-based loop, the enemy is always snapped to a grid
+        // node at the top of each iteration, so repathing here is
+        // equivalent to "on waypoint arrival" without the off-by-one.
         if (enemy.needsRepath) {
           this.executeRepath(enemy);
         }
-      } else {
-        // Move towards next node
-        enemy.position.x += direction.x * moveDistance;
-        enemy.position.z += direction.z * moveDistance;
-        enemy.distanceTraveled += moveDistance;
+
+        enemy.pathIndex++;
+        const node = enemy.path[enemy.pathIndex];
+        enemy.gridPosition.row = node.y;
+        enemy.gridPosition.col = node.x;
+
+        // Snap world position to the new tile center.
+        this.pathfindingService.gridToWorldPosInto(node.y, node.x, this.scratchCurrentWorld);
+        enemy.position.x = this.scratchCurrentWorld.x;
+        enemy.position.z = this.scratchCurrentWorld.z;
+        enemy.distanceTraveled += 1; // one tile worth, abstract units
+
+        stepsRemaining--;
       }
 
-      // Update mesh position and face movement direction
+      // Did this enemy reach the final path node during its movement?
+      if (enemy.pathIndex >= enemy.path.length - 1) {
+        reachedExit.push(enemy.id);
+      }
+
+      // Snap mesh to final world position for this turn.
       if (enemy.mesh) {
         enemy.mesh.position.set(enemy.position.x, enemy.position.y, enemy.position.z);
-        enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+        // Face along the last movement direction toward the next path node (if any).
+        if (enemy.pathIndex + 1 < enemy.path.length) {
+          const next = enemy.path[enemy.pathIndex + 1];
+          this.pathfindingService.gridToWorldPosInto(next.y, next.x, this.scratchNextWorld);
+          const dx = this.scratchNextWorld.x - enemy.position.x;
+          const dz = this.scratchNextWorld.z - enemy.position.z;
+          if (dx !== 0 || dz !== 0) {
+            enemy.mesh.rotation.y = Math.atan2(dx, dz);
+          }
+        }
       }
     });
 
     return reachedExit;
   }
+
+  // M2 S1: deltaTime-based updateEnemies() DELETED. Replaced by
+  // stepEnemiesOneTurn (turn-based). Spec call sites cast to (svc as any) so
+  // they fail at runtime — H2 will rewrite those tests against stepEnemiesOneTurn.
 
   /**
    * Remove an enemy by ID: disposes all child geometries/materials (health bar,
@@ -274,6 +372,25 @@ export class EnemyService {
         }
       }
       this.enemies.delete(enemyId);
+    }
+  }
+
+  /**
+   * Deal damage to the enemy with the highest current health.
+   * Flying enemies and dying enemies are excluded from the search.
+   * No-op when no living enemies exist.
+   */
+  damageStrongestEnemy(damage: number): void {
+    let strongestId: string | null = null;
+    let highestHealth = -Infinity;
+    for (const [id, enemy] of this.enemies) {
+      if (!enemy.dying && !enemy.isFlying && enemy.health > highestHealth) {
+        highestHealth = enemy.health;
+        strongestId = id;
+      }
+    }
+    if (strongestId !== null) {
+      this.damageEnemy(strongestId, damage);
     }
   }
 
@@ -399,6 +516,8 @@ export class EnemyService {
   /**
    * Spawn a mini-swarm enemy at the parent's current path position.
    * The mini-enemy continues along the parent's remaining path.
+   * Applies the same health-scaling chain used in spawnEnemy (modifier,
+   * endless-wave, and relic multipliers) so mini-swarms scale with the run.
    * isMiniSwarm is set to true to prevent recursive spawning.
    */
   private spawnMiniSwarm(parent: Enemy): Enemy | null {
@@ -406,20 +525,29 @@ export class EnemyService {
     const remainingPath = parent.path.slice(parent.pathIndex);
     if (remainingPath.length === 0) return null;
 
+    let health: number = MINI_SWARM_STATS.health;
+
+    // Apply the same modifier → wave → relic health-scaling chain as spawnEnemy.
+    const modifierEffects = this.gameStateService.getModifierEffects();
+    if (modifierEffects.enemyHealthMultiplier !== undefined) {
+      health = Math.round(health * modifierEffects.enemyHealthMultiplier);
+    }
+
     const mini: Enemy = {
       id: `enemy-${this.enemyCounter++}`,
       type: EnemyType.SWARM,
       position: { x: parent.position.x, y: MINI_SWARM_STATS.size, z: parent.position.z },
       gridPosition: { ...parent.gridPosition },
-      health: MINI_SWARM_STATS.health,
-      maxHealth: MINI_SWARM_STATS.health,
+      health,
+      maxHealth: health,
       speed: MINI_SWARM_STATS.speed,
       value: MINI_SWARM_STATS.value,
       leakDamage: MINI_SWARM_STATS.leakDamage,
       path: remainingPath,
       pathIndex: 0,
       distanceTraveled: parent.distanceTraveled,
-      isMiniSwarm: true
+      isMiniSwarm: true,
+      ...(parent.needsRepath && { needsRepath: true }),
     };
 
     mini.mesh = this.enemyMeshFactory.createMiniSwarmMesh(mini);
@@ -479,7 +607,7 @@ export class EnemyService {
   getLivingEnemyCount(): number {
     let count = 0;
     this.enemies.forEach(enemy => {
-      if (!enemy.dying) count++;
+      if (!enemy.dying && enemy.health > 0) count++;
     });
     return count;
   }
@@ -503,8 +631,10 @@ export class EnemyService {
   /**
    * Flag enemies for deferred repath on their next waypoint arrival.
    * Only flags enemies whose remaining path passes through the changed tile.
-   * The actual repath happens in updateEnemies() when the enemy reaches its
-   * next waypoint — this avoids direction-vector bugs from repathing mid-stride.
+   * The actual repath happens in stepEnemiesOneTurn() at the top of the next
+   * movement iteration — BEFORE the enemy commits to the next path node —
+   * so they re-plan from their current waypoint instead of stepping onto
+   * the newly-occupied tile first.
    *
    * @param changedRow Row of the placed/sold tower (or -1 to flag ALL ground enemies)
    * @param changedCol Column of the placed/sold tower (or -1 to flag ALL ground enemies)
@@ -540,21 +670,152 @@ export class EnemyService {
 
     const exitTiles = this.pathfindingService.getExitTiles();
     if (exitTiles.length === 0) return;
-    const exitTile = exitTiles[0];
 
-    // Repath from the node the enemy just arrived at (gridPosition is now current)
-    const newPath = this.pathfindingService.findPath(
-      { x: enemy.gridPosition.col, y: enemy.gridPosition.row },
-      { x: exitTile.col, y: exitTile.row }
+    // Repath from the node the enemy just arrived at — try every exit and
+    // take the shortest valid path (multi-exit aware; see spawn comment).
+    const newPath = this.findShortestPathToAnyExit(
+      enemy.gridPosition.col,
+      enemy.gridPosition.row,
+      exitTiles,
     );
 
     if (newPath.length > 0) {
       enemy.path = newPath;
       enemy.pathIndex = 0;
     }
-    // If findPath returns empty (no route — should be unreachable via wouldBlockPath guard),
-    // the enemy keeps its old path. This is a defensive no-op, not a silent failure,
-    // because wouldBlockPath prevents placements that fully block spawner→exit routes.
+    // If every exit is unreachable, the enemy keeps its old path. This is a
+    // defensive no-op: wouldBlockPath prevents placements that fully cut off
+    // every spawner→exit route, so we should never actually reach this branch.
+  }
+
+  /**
+   * Build a set of "row-col" keys for all spawner tiles currently occupied by
+   * alive (non-dying) enemies. Used to detect occupancy at spawn time so that
+   * a second enemy in the same turn batch does not land on a tile already taken
+   * by a freshly-placed enemy from earlier in the same batch.
+   *
+   * Called by WaveService before a spawn batch begins; exposed as public so
+   * WaveService can seed the batch-level occupied set.
+   */
+  /**
+   * Returns the set of spawner grid positions that are blocked at the START
+   * of the current turn's spawn batch.
+   *
+   * In the turn model, CombatLoopService calls stepEnemiesOneTurn() before
+   * each spawnForTurn() call, so enemies from previous turns will have
+   * advanced off their spawner tile by the time we spawn this turn.
+   * Same-turn stacking (two enemies landing on the same spawner in the same
+   * spawnForTurn call) is handled entirely by the within-batch `externalOccupied`
+   * accumulation inside spawnEnemy. This method therefore returns an empty set
+   * as the initial seed; the caller builds up occupancy as it spawns.
+   */
+  buildOccupiedSpawnerSet(): Set<string> {
+    return new Set<string>();
+  }
+
+  /**
+   * Find the shortest A* path from (startCol, startRow) to the nearest
+   * reachable exit. Returns an empty array when NO exit is reachable.
+   *
+   * Cheap iteration: A* is fast and exit counts per map are small (1–4).
+   * Runs in tight budget on spawn + repath hot paths.
+   */
+  private findShortestPathToAnyExit(
+    startCol: number,
+    startRow: number,
+    exitTiles: ReadonlyArray<{ row: number; col: number }>,
+  ): GridNode[] {
+    let best: GridNode[] = [];
+    for (const exit of exitTiles) {
+      const candidate = this.pathfindingService.findPath(
+        { x: startCol, y: startRow },
+        { x: exit.col, y: exit.row },
+      );
+      if (candidate.length === 0) continue;
+      if (best.length === 0 || candidate.length < best.length) {
+        best = candidate;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Build a straight-line path to the geometrically nearest exit (Manhattan
+   * distance). FLYING enemies bypass terrain so "reachability" always holds;
+   * we just pick the closest target.
+   */
+  private buildStraightPathToNearestExit(
+    startCol: number,
+    startRow: number,
+    exitTiles: ReadonlyArray<{ row: number; col: number }>,
+  ): GridNode[] {
+    if (exitTiles.length === 0) return [];
+    let nearest = exitTiles[0];
+    let nearestDist = Math.abs(startCol - nearest.col) + Math.abs(startRow - nearest.row);
+    for (let i = 1; i < exitTiles.length; i++) {
+      const e = exitTiles[i];
+      const d = Math.abs(startCol - e.col) + Math.abs(startRow - e.row);
+      if (d < nearestDist) {
+        nearest = e;
+        nearestDist = d;
+      }
+    }
+    return this.pathfindingService.buildStraightPath(
+      { x: startCol, y: startRow },
+      { x: nearest.col, y: nearest.row },
+    );
+  }
+
+  /**
+   * Serialize enemies for checkpoint save, stripping Three.js objects and circular refs.
+   * `mesh`, `statusParticles`, and `statusParticleEffectType` are omitted.
+   * `GridNode.parent` is omitted from each path node to break circular references.
+   */
+  serializeEnemies(): { enemies: SerializableEnemy[]; enemyCounter: number } {
+    const enemies: SerializableEnemy[] = Array.from(this.enemies.values()).map(e => ({
+      id: e.id,
+      type: e.type,
+      position: { ...e.position },
+      gridPosition: { ...e.gridPosition },
+      health: e.health,
+      maxHealth: e.maxHealth,
+      speed: e.speed,
+      value: e.value,
+      path: e.path.map(n => ({ x: n.x, y: n.y, f: n.f, g: n.g, h: n.h })),
+      pathIndex: e.pathIndex,
+      distanceTraveled: e.distanceTraveled,
+      leakDamage: e.leakDamage,
+      ...(e.shield !== undefined && { shield: e.shield }),
+      ...(e.maxShield !== undefined && { maxShield: e.maxShield }),
+      ...(e.isMiniSwarm !== undefined && { isMiniSwarm: e.isMiniSwarm }),
+      ...(e.isFlying !== undefined && { isFlying: e.isFlying }),
+      ...(e.needsRepath !== undefined && { needsRepath: e.needsRepath }),
+      ...(e.dying !== undefined && { dying: e.dying }),
+      ...(e.dyingTimer !== undefined && { dyingTimer: e.dyingTimer }),
+      ...(e.hitFlashTimer !== undefined && { hitFlashTimer: e.hitFlashTimer }),
+      ...(e.shieldBreaking !== undefined && { shieldBreaking: e.shieldBreaking }),
+      ...(e.shieldBreakTimer !== undefined && { shieldBreakTimer: e.shieldBreakTimer }),
+    }));
+    return { enemies, enemyCounter: this.enemyCounter };
+  }
+
+  /**
+   * Restore enemies from checkpoint. Meshes must be pre-built externally
+   * and provided in the `meshes` map keyed by enemy id.
+   * The internal enemies Map is fully replaced and `enemyCounter` is reset
+   * to `counter` so subsequent spawns continue with unique IDs.
+   */
+  restoreEnemies(enemies: SerializableEnemy[], meshes: Map<string, THREE.Mesh>, counter: number): void {
+    this.enemies.clear();
+    for (const e of enemies) {
+      const enemy: Enemy = {
+        ...e,
+        path: e.path.map(n => ({ ...n })),
+        mesh: meshes.get(e.id),
+      };
+      this.enemies.set(e.id, enemy);
+    }
+    this.enemyCounter = counter;
   }
 
   /**

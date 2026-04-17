@@ -14,12 +14,6 @@
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
-/* Slide in from right — for encyclopedia panel (preserves center-Y offset) */
-@keyframes encyclopedia-in {
-  from { opacity: 0; transform: translateY(-50%) translateX(16px); }
-  to   { opacity: 1; transform: translateY(-50%) translateX(0); }
-}
-
 /* Scale up from center — for spec-choice panel */
 @keyframes scale-up-in {
   from { opacity: 0; transform: scale(0.92); }
@@ -39,11 +33,8 @@
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
 }
 
-@keyframes wave-start-pulse {
-  0%   { transform: scale(1); }
-  50%  { transform: scale(1.2); }
-  100% { transform: scale(1); }
-}
+// wave-start-pulse keyframe lives in _game-hud.scss (richer 4-stop version with
+// filter:brightness) to stay colocated with the wave HUD styling that consumes it.
 
 @keyframes wave-preview-in {
   from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
@@ -100,12 +91,6 @@
   to   { opacity: 1; }
 }
 
-/* Encyclopedia mobile in */
-@keyframes encyclopedia-mobile-in {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
 /* Wave start pulse utility class */
 .wave-start-pulse {
   animation: wave-start-pulse var(--transition-medium) ease-out;
@@ -116,7 +101,6 @@
    ============================================================ */
 @media (prefers-reduced-motion: reduce) {
   .board-container .mode-indicator,
-  .encyclopedia-panel,
   .board-container .wave-preview .wave-income,
   .board-container .pause-overlay,
   .board-container .tower-info-panel .spec-choice-panel,
@@ -133,7 +117,6 @@ body.reduce-motion .tutorial-card,
 body.reduce-motion .toast,
 body.reduce-motion .board-container .overlay-content .overlay-star.filled,
 body.reduce-motion .board-container .mode-indicator,
-body.reduce-motion .encyclopedia-panel,
 body.reduce-motion .board-container .wave-preview .wave-income,
 body.reduce-motion .board-container .pause-overlay,
 body.reduce-motion .board-container .tower-info-panel .spec-choice-panel,

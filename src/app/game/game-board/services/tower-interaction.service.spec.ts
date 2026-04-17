@@ -3,7 +3,6 @@ import { TowerInteractionService, PlaceTowerResult, SellTowerResult, UpgradeTowe
 import { GameStateService } from './game-state.service';
 import { GameBoardService } from '../game-board.service';
 import { TowerCombatService } from './tower-combat.service';
-import { TilePricingService } from './tile-pricing.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameEndService } from './game-end.service';
 import { EnemyService } from './enemy.service';
@@ -18,8 +17,9 @@ import {
 } from '../models/tower.model';
 import { GamePhase } from '../models/game-state.model';
 import { BlockType } from '../models/game-board-tile';
-import { PathfindingService } from './pathfinding.service';
-import { StatusEffectService } from './status-effect.service';
+import { RelicService } from '../../../run/services/relic.service';
+import { createRelicServiceSpy } from '../testing';
+import { RunEventBusService, RunEventType } from '../../../run/services/run-event-bus.service';
 
 function makeMockTower(overrides: Partial<PlacedTower> = {}): PlacedTower {
   return {
@@ -28,7 +28,6 @@ function makeMockTower(overrides: Partial<PlacedTower> = {}): PlacedTower {
     level: 1,
     row: 2,
     col: 3,
-    lastFireTime: 0,
     kills: 0,
     totalInvested: 100,
     mesh: null as any,
@@ -42,42 +41,32 @@ describe('TowerInteractionService', () => {
   let gameStateSpy: jasmine.SpyObj<GameStateService>;
   let gameBoardSpy: jasmine.SpyObj<GameBoardService>;
   let towerCombatSpy: jasmine.SpyObj<TowerCombatService>;
-  let tilePricingSpy: jasmine.SpyObj<TilePricingService>;
   let challengeSpy: jasmine.SpyObj<ChallengeTrackingService>;
   let gameEndSpy: jasmine.SpyObj<GameEndService>;
   let enemySpy: jasmine.SpyObj<EnemyService>;
+  let eventBusSpy: jasmine.SpyObj<RunEventBusService>;
 
   beforeEach(() => {
     gameStateSpy = jasmine.createSpyObj('GameStateService', [
       'getState', 'canAfford', 'spendGold', 'addGold', 'getModifierEffects',
     ]);
     gameBoardSpy = jasmine.createSpyObj('GameBoardService', [
-      'canPlaceTower', 'placeTower', 'removeTower', 'getGameBoard',
+      'canPlaceTower', 'placeTower', 'removeTower', 'getGameBoard', 'wouldBlockPath',
     ]);
     towerCombatSpy = jasmine.createSpyObj('TowerCombatService', [
       'registerTower', 'unregisterTower', 'upgradeTower', 'upgradeTowerWithSpec', 'getTower',
-    ]);
-    tilePricingSpy = jasmine.createSpyObj('TilePricingService', [
-      'getTilePrice', 'getStrategicValue', 'invalidateCache',
     ]);
     challengeSpy = jasmine.createSpyObj('ChallengeTrackingService', [
       'recordTowerPlaced', 'recordTowerUpgraded', 'recordTowerSold',
     ]);
     gameEndSpy = jasmine.createSpyObj('GameEndService', ['recordSpecialization']);
     enemySpy = jasmine.createSpyObj('EnemyService', ['repathAffectedEnemies']);
+    eventBusSpy = jasmine.createSpyObj<RunEventBusService>('RunEventBusService', ['emit']);
 
     // Default safe stubs
     gameStateSpy.getState.and.returnValue({ phase: GamePhase.SETUP, gold: 1000 } as any);
     gameStateSpy.canAfford.and.returnValue(true);
     gameStateSpy.getModifierEffects.and.returnValue({ towerCostMultiplier: 1 } as any);
-    tilePricingSpy.getStrategicValue.and.returnValue(0);
-    tilePricingSpy.getTilePrice.and.callFake((type: TowerType) => ({
-      cost: TOWER_CONFIGS[type].cost,
-      strategicMultiplier: 0,
-      percentIncrease: 0,
-      tier: 'base' as any,
-      isPremium: false,
-    }));
 
     TestBed.configureTestingModule({
       providers: [
@@ -85,10 +74,11 @@ describe('TowerInteractionService', () => {
         { provide: GameStateService, useValue: gameStateSpy },
         { provide: GameBoardService, useValue: gameBoardSpy },
         { provide: TowerCombatService, useValue: towerCombatSpy },
-        { provide: TilePricingService, useValue: tilePricingSpy },
         { provide: ChallengeTrackingService, useValue: challengeSpy },
         { provide: GameEndService, useValue: gameEndSpy },
         { provide: EnemyService, useValue: enemySpy },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: RunEventBusService, useValue: eventBusSpy },
       ],
     });
 
@@ -154,12 +144,37 @@ describe('TowerInteractionService', () => {
       expect(challengeSpy.recordTowerPlaced).toHaveBeenCalledWith(TowerType.SNIPER, TOWER_CONFIGS[TowerType.SNIPER].cost);
     });
 
-    it('repaths enemies and invalidates cache on success', () => {
+    it('emits TOWER_PLACED with tower details on success', () => {
+      gameBoardSpy.canPlaceTower.and.returnValue(true);
+      gameBoardSpy.placeTower.and.returnValue(true);
+      service.placeTower(2, 3, TowerType.SNIPER);
+
+      expect(eventBusSpy.emit).toHaveBeenCalledWith(
+        RunEventType.TOWER_PLACED,
+        jasmine.objectContaining({
+          towerKey: '2-3',
+          type: TowerType.SNIPER,
+          row: 2,
+          col: 3,
+          cost: TOWER_CONFIGS[TowerType.SNIPER].cost,
+        }),
+      );
+    });
+
+    it('does NOT emit TOWER_PLACED when placement fails', () => {
+      gameBoardSpy.canPlaceTower.and.returnValue(false);
+      service.placeTower(0, 0, TowerType.BASIC);
+
+      const placedCalls = eventBusSpy.emit.calls.allArgs()
+        .filter(args => args[0] === RunEventType.TOWER_PLACED);
+      expect(placedCalls.length).toBe(0);
+    });
+
+    it('repaths enemies on success', () => {
       gameBoardSpy.canPlaceTower.and.returnValue(true);
       gameBoardSpy.placeTower.and.returnValue(true);
       service.placeTower(2, 3, TowerType.BASIC);
       expect(enemySpy.repathAffectedEnemies).toHaveBeenCalledWith(2, 3);
-      expect(tilePricingSpy.invalidateCache).toHaveBeenCalled();
     });
 
     it('does not double-spend gold when placeTower returns false after canPlaceTower', () => {
@@ -173,22 +188,43 @@ describe('TowerInteractionService', () => {
   // ─── wouldBlockPath ────────────────────────────────────────────────────────
 
   describe('wouldBlockPath', () => {
-    it('returns true when tile is purchasable BASE with no tower', () => {
+    it('delegates to gameBoardService.wouldBlockPath and returns true when BFS confirms blocking', () => {
+      gameBoardSpy.wouldBlockPath.and.returnValue(true);
+      expect(service.wouldBlockPath(0, 2)).toBeTrue();
+      expect(gameBoardSpy.wouldBlockPath).toHaveBeenCalledWith(0, 2);
+    });
+
+    it('delegates to gameBoardService.wouldBlockPath and returns false for a non-blocking tile', () => {
+      gameBoardSpy.wouldBlockPath.and.returnValue(false);
+      expect(service.wouldBlockPath(1, 1)).toBeFalse();
+      expect(gameBoardSpy.wouldBlockPath).toHaveBeenCalledWith(1, 1);
+    });
+  });
+
+  // ─── isPlaceableTile ───────────────────────────────────────────────────────
+
+  describe('isPlaceableTile', () => {
+    it('returns true when tile is an unoccupied purchasable BASE tile', () => {
       const tile = { type: BlockType.BASE, isPurchasable: true, towerType: null } as any;
       gameBoardSpy.getGameBoard.and.returnValue([[tile]]);
-      expect(service.wouldBlockPath(0, 0)).toBeTrue();
+      expect(service.isPlaceableTile(0, 0)).toBeTrue();
     });
 
-    it('returns false when tile has a tower placed', () => {
+    it('returns false when tile already has a tower', () => {
       const tile = { type: BlockType.BASE, isPurchasable: true, towerType: TowerType.BASIC } as any;
       gameBoardSpy.getGameBoard.and.returnValue([[tile]]);
-      expect(service.wouldBlockPath(0, 0)).toBeFalse();
+      expect(service.isPlaceableTile(0, 0)).toBeFalse();
     });
 
-    it('returns false when tile is not BASE', () => {
+    it('returns false when tile is not BASE type', () => {
       const tile = { type: BlockType.WALL, isPurchasable: false, towerType: null } as any;
       gameBoardSpy.getGameBoard.and.returnValue([[tile]]);
-      expect(service.wouldBlockPath(0, 0)).toBeFalse();
+      expect(service.isPlaceableTile(0, 0)).toBeFalse();
+    });
+
+    it('returns false for out-of-bounds row', () => {
+      gameBoardSpy.getGameBoard.and.returnValue([]);
+      expect(service.isPlaceableTile(5, 0)).toBeFalse();
     });
   });
 
@@ -244,12 +280,11 @@ describe('TowerInteractionService', () => {
       expect(challengeSpy.recordTowerSold).toHaveBeenCalled();
     });
 
-    it('repaths ALL enemies and invalidates cache on sell', () => {
+    it('repaths ALL enemies on sell', () => {
       const tower = makeMockTower();
       towerCombatSpy.unregisterTower.and.returnValue(tower);
       service.sellTower('2-3');
       expect(enemySpy.repathAffectedEnemies).toHaveBeenCalledWith(-1, -1);
-      expect(tilePricingSpy.invalidateCache).toHaveBeenCalled();
     });
 
     it('confirms unregistration BEFORE adding gold (confirm-before-refund)', () => {
@@ -257,6 +292,30 @@ describe('TowerInteractionService', () => {
       service.sellTower('2-3');
       // If unregister fails, no gold should be added
       expect(gameStateSpy.addGold).not.toHaveBeenCalled();
+    });
+
+    it('emits TOWER_SOLD with refund amount on success', () => {
+      const tower = makeMockTower({ id: '1-1', type: TowerType.SPLASH, totalInvested: 200 });
+      towerCombatSpy.unregisterTower.and.returnValue(tower);
+      service.sellTower('1-1');
+
+      expect(eventBusSpy.emit).toHaveBeenCalledWith(
+        RunEventType.TOWER_SOLD,
+        jasmine.objectContaining({
+          towerKey: '1-1',
+          type: TowerType.SPLASH,
+          refundAmount: getSellValue(200),
+        }),
+      );
+    });
+
+    it('does NOT emit TOWER_SOLD when sell fails', () => {
+      towerCombatSpy.unregisterTower.and.returnValue(undefined);
+      service.sellTower('9-9');
+
+      const soldCalls = eventBusSpy.emit.calls.allArgs()
+        .filter(args => args[0] === RunEventType.TOWER_SOLD);
+      expect(soldCalls.length).toBe(0);
     });
   });
 
@@ -301,6 +360,48 @@ describe('TowerInteractionService', () => {
       expect(result.newLevel).toBe(2);
       expect(gameStateSpy.spendGold).toHaveBeenCalled();
       expect(challengeSpy.recordTowerUpgraded).toHaveBeenCalled();
+    });
+
+    it('emits TOWER_UPGRADED on L1→L2 success (no specialization field)', () => {
+      const tower = makeMockTower({ id: '2-3', level: 1, type: TowerType.BASIC });
+      towerCombatSpy.getTower.and.returnValue(tower);
+      towerCombatSpy.upgradeTower.and.returnValue(true);
+      service.upgradeTower('2-3');
+
+      const upgradeCalls = eventBusSpy.emit.calls.allArgs()
+        .filter(args => args[0] === RunEventType.TOWER_UPGRADED);
+      expect(upgradeCalls.length).toBe(1);
+      const payload = upgradeCalls[0][1] as Record<string, unknown>;
+      expect(payload['towerKey']).toBe('2-3');
+      expect(payload['type']).toBe(TowerType.BASIC);
+      expect(payload['newLevel']).toBe(2);
+      expect(payload['specialization']).toBeUndefined();
+    });
+
+    it('emits TOWER_UPGRADED on L2→L3 success with specialization field', () => {
+      const tower = makeMockTower({ level: 2, type: TowerType.SNIPER });
+      towerCombatSpy.getTower.and.returnValue(tower);
+      towerCombatSpy.upgradeTowerWithSpec.and.returnValue(true);
+      service.upgradeTower('2-3', TowerSpecialization.ALPHA);
+
+      expect(eventBusSpy.emit).toHaveBeenCalledWith(
+        RunEventType.TOWER_UPGRADED,
+        jasmine.objectContaining({
+          newLevel: 3,
+          specialization: TowerSpecialization.ALPHA,
+        }),
+      );
+    });
+
+    it('does NOT emit TOWER_UPGRADED when upgrade fails due to affordability', () => {
+      const tower = makeMockTower({ level: 1 });
+      towerCombatSpy.getTower.and.returnValue(tower);
+      gameStateSpy.canAfford.and.returnValue(false);
+      service.upgradeTower('2-3');
+
+      const upgradeCalls = eventBusSpy.emit.calls.allArgs()
+        .filter(args => args[0] === RunEventType.TOWER_UPGRADED);
+      expect(upgradeCalls.length).toBe(0);
     });
 
     it('fails L1→L2 when combat service upgradeTower returns false', () => {
@@ -351,42 +452,6 @@ describe('TowerInteractionService', () => {
       const result = service.upgradeTower('2-3', TowerSpecialization.ALPHA);
       expect(result.success).toBeFalse();
       expect(gameStateSpy.spendGold).not.toHaveBeenCalled();
-    });
-  });
-
-  // ─── getTileCost ───────────────────────────────────────────────────────────
-
-  describe('getTileCost', () => {
-    it('returns base cost when no strategic premium', () => {
-      const info = service.getTileCost(0, 0, TowerType.BASIC);
-      expect(info.cost).toBe(TOWER_CONFIGS[TowerType.BASIC].cost);
-    });
-
-    it('applies cost multiplier from modifiers', () => {
-      gameStateSpy.getModifierEffects.and.returnValue({ towerCostMultiplier: 2 } as any);
-      tilePricingSpy.getTilePrice.and.callFake((type: TowerType, _r: number, _c: number, mult: number) => ({
-        cost: Math.round(TOWER_CONFIGS[type].cost * mult),
-        strategicMultiplier: 0,
-        percentIncrease: 0,
-        tier: 'base' as any,
-        isPremium: false,
-      }));
-      const info = service.getTileCost(0, 0, TowerType.BASIC);
-      expect(info.cost).toBe(TOWER_CONFIGS[TowerType.BASIC].cost * 2);
-    });
-
-    it('includes strategic pricing via TilePricingService', () => {
-      tilePricingSpy.getTilePrice.and.returnValue({
-        cost: 999,
-        strategicMultiplier: 0.5,
-        percentIncrease: 25,
-        tier: 'high' as any,
-        isPremium: true,
-      });
-      const info = service.getTileCost(5, 5, TowerType.SNIPER);
-      expect(info.cost).toBe(999);
-      expect(info.isPremium).toBeTrue();
-      expect(info.percentIncrease).toBe(25);
     });
   });
 });

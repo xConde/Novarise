@@ -59,21 +59,23 @@ export const DIFFICULTY_PRESETS: Record<DifficultyLevel, DifficultyPreset> = {
   }
 };
 
-export const VALID_GAME_SPEEDS = [1, 2, 3] as const;
-export type GameSpeed = typeof VALID_GAME_SPEEDS[number];
-
 export interface GameState {
   phase: GamePhase;
   wave: number;
   maxWaves: number;
   lives: number;
+  /** Maximum lives cap for this encounter (set by run state + relic bonus). Life-restore effects cap here. */
+  maxLives: number;
+  /** Lives at the very start of this encounter, before any combat. Used to compute livesLost in EncounterResult. */
+  initialLives: number;
   gold: number;
+  /** Gold at encounter start (after relic bonuses). goldEarned = gold - initialGold at encounter end. */
+  initialGold: number;
   score: number;
   difficulty: DifficultyLevel;
   isEndless: boolean;
   highestWave: number; // tracks best wave reached in endless mode
   isPaused: boolean;
-  gameSpeed: GameSpeed;
   elapsedTime: number; // total seconds spent in COMBAT phase
   activeModifiers: Set<GameModifier>;
   /** Number of consecutive waves completed without any enemy leaks. Resets to 0 on any leak. */
@@ -96,13 +98,15 @@ export const INITIAL_GAME_STATE: GameState = {
   wave: 0,
   maxWaves: WAVE_DEFINITIONS.length,
   lives: DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].lives,
+  maxLives: DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].lives,
+  initialLives: DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].lives,
   gold: DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].gold,
+  initialGold: DIFFICULTY_PRESETS[DifficultyLevel.NORMAL].gold,
   score: 0,
   difficulty: DifficultyLevel.NORMAL,
   isEndless: false,
   highestWave: 0,
   isPaused: false,
-  gameSpeed: 1,
   elapsedTime: 0,
   activeModifiers: new Set<GameModifier>(),
   consecutiveWavesWithoutLeak: 0,

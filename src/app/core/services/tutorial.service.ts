@@ -95,7 +95,7 @@ const TUTORIAL_TIPS: Record<TutorialStep, TutorialTip> = {
     step: TutorialStep.COMPLETE,
     type: 'tutorial',
     title: 'You\'re Ready!',
-    message: 'You know the basics. Good luck defending Novarise! Press H anytime for keyboard shortcuts.',
+    message: 'You know the basics. Good luck defending Novarise! Press P anytime to pause and review keyboard shortcuts.',
     position: 'center',
   },
   [TutorialStep.TIP_PLACEMENT]: {
@@ -212,6 +212,22 @@ export class TutorialService {
       this.markTipsComplete();
     }
     this.save();
+  }
+
+  /**
+   * Dismiss the current tip when the player takes a progressing action
+   * (plays a card, ends a turn, places/upgrades/sells a tower). No-op when
+   * no tutorial step is active. For the terminal COMPLETE step, advanceStep
+   * handles the marking-done → null transition, so this is safe to call
+   * without a step-type check at every action site.
+   *
+   * Intent: once the player starts playing, the helper tip has served its
+   * purpose and should fade — they've moved past the "didn't know what to
+   * do" state the tip was covering.
+   */
+  dismissOnPlayerAction(): void {
+    if (this.currentStep$.value === null) return;
+    this.advanceStep();
   }
 
   /** Skip the entire active sequence immediately. */

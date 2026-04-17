@@ -1,15 +1,7 @@
 import * as THREE from 'three';
 
-export enum EnemyType {
-  BASIC = 'BASIC',
-  FAST = 'FAST',
-  HEAVY = 'HEAVY',
-  SWIFT = 'SWIFT',
-  BOSS = 'BOSS',
-  SHIELDED = 'SHIELDED',
-  SWARM = 'SWARM',
-  FLYING = 'FLYING'
-}
+import { EnemyType } from '@core/models/enemy-type.model';
+export { EnemyType };
 
 export interface GridNode {
   x: number; // column
@@ -50,7 +42,10 @@ export interface Enemy {
 
 export interface EnemyStats {
   health: number;
+  /** Cosmetic only — used for mesh/modifier display and SLOW mutation. Actual movement is driven by `tilesPerTurn`. */
   speed: number;
+  /** Integer tiles this enemy advances per turn. Replaces the hardcoded FAST/SWIFT type-switch. */
+  tilesPerTurn: number;
   value: number;
   color: number; // Hex color for mesh
   size: number; // Sphere radius
@@ -63,8 +58,9 @@ export interface EnemyStats {
 export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
   [EnemyType.BASIC]: {
     health: 100,
-    speed: 2.0, // tiles per second
-    value: 10,
+    speed: 2.0,
+    tilesPerTurn: 1,
+    value: 5,
     color: 0xff0000, // Red
     size: 0.3,
     leakDamage: 1
@@ -72,7 +68,8 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
   [EnemyType.FAST]: {
     health: 50,
     speed: 4.0,
-    value: 15,
+    tilesPerTurn: 2,
+    value: 8,
     color: 0xffff00, // Yellow
     size: 0.25,
     leakDamage: 1
@@ -80,7 +77,8 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
   [EnemyType.HEAVY]: {
     health: 300,
     speed: 1.0,
-    value: 30,
+    tilesPerTurn: 1,
+    value: 15,
     color: 0x0000ff, // Blue
     size: 0.4,
     leakDamage: 2
@@ -88,7 +86,8 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
   [EnemyType.SWIFT]: {
     health: 80,
     speed: 3.0,
-    value: 20,
+    tilesPerTurn: 2,
+    value: 10,
     color: 0x00ffff, // Cyan
     size: 0.3,
     leakDamage: 1
@@ -96,7 +95,8 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
   [EnemyType.BOSS]: {
     health: 1000,
     speed: 0.5,
-    value: 100,
+    tilesPerTurn: 1,
+    value: 50,
     color: 0xff00ff, // Magenta
     size: 0.6,
     leakDamage: 3
@@ -104,7 +104,8 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
   [EnemyType.SHIELDED]: {
     health: 120,
     speed: 1.2,
-    value: 25,
+    tilesPerTurn: 1,
+    value: 13,
     color: 0x4444ff, // Blue
     size: 0.35,
     leakDamage: 2,
@@ -113,7 +114,8 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
   [EnemyType.SWARM]: {
     health: 40,
     speed: 2.5,
-    value: 8,
+    tilesPerTurn: 2,
+    value: 4,
     color: 0xaaaa00, // Yellow-green
     size: 0.25,
     leakDamage: 1,
@@ -122,7 +124,8 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
   [EnemyType.FLYING]: {
     health: 60,
     speed: 2.5,
-    value: 20,
+    tilesPerTurn: 1,
+    value: 10,
     color: 0x88ccff, // Light blue
     size: 0.3,
     leakDamage: 1
@@ -143,7 +146,8 @@ export const MINI_SWARM_MESH_SEGMENTS = 12;
 export const MINI_SWARM_STATS = {
   health: 15,
   speed: 3,
-  value: 3,
+  tilesPerTurn: 1,
+  value: 2,
   color: 0xaaaa00, // Same yellow-green as parent
   size: 0.15,
   leakDamage: 1

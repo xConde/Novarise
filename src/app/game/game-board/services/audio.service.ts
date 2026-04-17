@@ -193,6 +193,11 @@ export class AudioService {
     this.playArpeggio(cfg.notes, cfg.noteDuration, cfg.noteGap, cfg.oscillatorType, cfg.gain);
   }
 
+  playLifeLoss(): void {
+    const cfg = AUDIO_CONFIG.lifeLoss;
+    this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.oscillatorType, cfg.gain);
+  }
+
   playDefeat(): void {
     const cfg = AUDIO_CONFIG.defeat;
     this.playTone(cfg.frequency, cfg.endFrequency, cfg.duration, cfg.oscillatorType, cfg.gain);

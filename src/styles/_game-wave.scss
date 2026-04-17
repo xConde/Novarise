@@ -1,17 +1,19 @@
 /* ============================================================
    game-board: wave preview panel
+   Phase H9: grid-anchored to `sidepanel` area (right side of combat shell).
+   Previously position: fixed + transform. The board-container grid guarantees
+   the panel has a reserved slot even when *ngIf hides it.
    ============================================================ */
 .board-container .wave-preview {
   background: rgba(0, 0, 0, 0.82);
-  border-radius: var(--border-radius-md);
   backdrop-filter: blur(0.625rem);
   z-index: var(--z-index-overlay);
   font-family: "Orbitron", sans-serif;
-  position: fixed;
-  top: 8rem;
-  left: 50%;
-  transform: translateX(-50%);
-  min-width: 12rem;
+  position: absolute;
+  top: var(--shell-wave-top);
+  right: var(--shell-wave-right);
+  min-width: 14rem;
+  max-width: 18rem;
   padding: var(--spacing-md) var(--spacing-lg);
   border: var(--border-width-thin) solid var(--theme-purple-a50);
   border-radius: var(--border-radius-lg);
@@ -22,40 +24,9 @@
   overflow-y: auto;
 }
 
-@media (max-width: 768px) {
-  .board-container .wave-preview { min-width: 10rem; }
-}
-
-@media (max-width: 480px) {
+@media (max-width: 1023px) {
   .board-container .wave-preview {
-    position: absolute;  /* Override fixed — align with absolute-positioned controls */
-    top: var(--spacing-md);  /* Same top as E/help/audio row */
-    left: var(--spacing-xs);
-    right: auto;
-    transform: none;
-    font-size: var(--font-size-3xs);
-    padding: 0.2rem 0.4rem;
-    min-width: auto;
-    max-width: 55%;
-    max-height: 25vh;
-    text-align: left;
-    border-radius: var(--border-radius-sm);
-  }
-
-  .board-container .wave-preview .wave-preview-header {
-    align-items: flex-start;
-    margin-bottom: 0.15rem;
-    gap: 0;
-  }
-
-  .board-container .wave-preview .wave-preview-list {
-    gap: 0.1rem;
-  }
-
-  .board-container .wave-preview .wave-income {
-    font-size: var(--font-size-3xs);
-    padding: 0.1rem 0;
-    margin-top: 0.1rem;
+    max-width: 16rem;
   }
 }
 
@@ -75,8 +46,18 @@
 }
 
 @media (max-width: 480px) {
+  .board-container .wave-preview {
+    right: var(--spacing-xs);
+    top: calc(var(--shell-hud-top) + var(--shell-hud-height) + var(--spacing-xs));
+    max-width: 48vw;
+    max-height: 30vh;
+    font-size: var(--font-size-3xs);
+    padding: var(--spacing-xs);
+    overflow-y: auto;
+  }
+
   .board-container .wave-preview .wave-preview-header .wave-number {
-    font-size: 0.875rem;
+    font-size: var(--font-size-small);
     letter-spacing: 0.05rem;
     margin: 0;
   }
@@ -159,8 +140,8 @@
   width: 100%;
   margin-top: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  background: rgba(255, 255, 255, 0.06);
-  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.2);
+  background: var(--border-structural);
+  border: var(--border-width-thin) solid var(--border-color);
   border-radius: var(--border-radius-md);
   color: var(--text-color);
   font-size: var(--font-size-title);
@@ -178,7 +159,7 @@
 .board-container .wave-preview .wave-btn:active { transform: scale(0.98); }
 
 .board-container .wave-preview .wave-btn .wave-hint {
-  font-size: 0.5rem;
+  font-size: var(--font-size-tiny);
   color: rgba(255, 255, 255, 0.3);
   text-transform: uppercase;
   letter-spacing: 0.05rem;
@@ -232,11 +213,11 @@
 /* Wave preview NEW badge */
 .wave-preview-new {
   font-family: 'Orbitron', sans-serif;
-  font-size: 0.5rem;
+  font-size: var(--font-size-tiny);
   font-weight: 700;
-  color: var(--game-gold, #ffd700);
+  color: var(--game-gold);
   background: var(--game-gold-a15);
-  border: 1px solid var(--game-gold-a40);
+  border: var(--border-width-thin) solid var(--game-gold-a40);
   border-radius: 3px;
   padding: 1px 4px;
   align-self: center;

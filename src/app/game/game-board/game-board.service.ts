@@ -416,6 +416,27 @@ export class GameBoardService {
     return true;
   }
 
+  /**
+   * Directly mark a tile as occupied by a tower without running BFS path validation.
+   * Use during checkpoint restore to avoid false-positive path-blocked rejections when
+   * towers are placed one-by-one before the full saved layout is reconstructed.
+   */
+  forceSetTower(row: number, col: number, towerType: TowerType): void {
+    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+      return;
+    }
+    const oldTile = this.gameBoard[row][col];
+    this.gameBoard[row][col] = new GameBoardTile(
+      oldTile.x,
+      oldTile.y,
+      BlockType.TOWER,
+      false,
+      false,
+      oldTile.cost,
+      towerType
+    );
+  }
+
   removeTower(row: number, col: number): boolean {
     if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
       return false;

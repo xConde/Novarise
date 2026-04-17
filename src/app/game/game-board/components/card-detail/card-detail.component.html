@@ -1,0 +1,67 @@
+<div class="card-detail-backdrop"
+     (click)="onBackdropClick($event)"
+     role="dialog"
+     aria-modal="true"
+     [attr.aria-label]="definition.name + ' — card details'">
+  <div class="card-detail" [class]="'card-detail card-detail--' + typeClassSuffix">
+
+    <!-- Header: name + close -->
+    <header class="card-detail__header">
+      <div class="card-detail__titles">
+        <h2 class="card-detail__name">
+          {{ definition.name }}<span *ngIf="card.instance.upgraded" class="card-detail__upgraded">+</span>
+        </h2>
+        <div class="card-detail__meta">
+          <span class="card-detail__type">{{ typeLabel }}</span>
+          <span class="card-detail__divider" aria-hidden="true">·</span>
+          <span class="card-detail__rarity card-detail__rarity--{{ definition.rarity }}">{{ rarityLabel }}</span>
+        </div>
+      </div>
+      <button class="card-detail__close"
+              type="button"
+              (click)="close()"
+              aria-label="Close card details">×</button>
+    </header>
+
+    <!-- Cost / gold strip -->
+    <div class="card-detail__costs">
+      <span class="card-detail__cost-chip">
+        <strong>{{ definition.energyCost }}</strong>
+        <span>Energy</span>
+      </span>
+      <span class="card-detail__cost-chip card-detail__cost-chip--gold"
+            *ngIf="card.goldCost !== null">
+        <strong>{{ card.goldCost }}</strong>
+        <span>Gold</span>
+      </span>
+    </div>
+
+    <!-- Keyword chips -->
+    <div class="card-detail__keywords" *ngIf="hasKeywords" aria-label="Card keywords">
+      <span *ngFor="let kw of activeKeywords"
+            class="card-detail__keyword"
+            [ngClass]="kw.className">{{ kw.label }}</span>
+    </div>
+
+    <!-- Descriptions: current + upgraded preview -->
+    <section class="card-detail__body" aria-label="Card rules text">
+      <div class="card-detail__desc-block">
+        <h3 class="card-detail__desc-label">{{ card.instance.upgraded ? 'Effect' : 'Current effect' }}</h3>
+        <p class="card-detail__desc">
+          {{ card.instance.upgraded ? upgradedDescription : definition.description }}
+        </p>
+      </div>
+      <div class="card-detail__desc-block card-detail__desc-block--upgraded"
+           *ngIf="hasUpgrade && !card.instance.upgraded">
+        <h3 class="card-detail__desc-label card-detail__desc-label--upgraded">After upgrade</h3>
+        <p class="card-detail__desc card-detail__desc--upgraded">{{ upgradedDescription }}</p>
+      </div>
+    </section>
+
+    <!-- Footer hint -->
+    <footer class="card-detail__footer">
+      <span class="card-detail__hint" aria-hidden="true">Esc or click outside to close</span>
+    </footer>
+
+  </div>
+</div>

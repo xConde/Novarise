@@ -8,15 +8,25 @@ import { TowerCombatService } from './tower-combat.service';
 import { EnemyService } from './enemy.service';
 import { GameStatsService } from './game-stats.service';
 import { GameEndService } from './game-end.service';
+import { StatusEffectService } from './status-effect.service';
+import { RelicService } from '../../../run/services/relic.service';
+import { RunEventBusService, RunEventType } from '../../../run/services/run-event-bus.service';
+import { CardEffectService } from '../../../run/services/card-effect.service';
+import { GameNotificationService, NotificationType } from './game-notification.service';
+import { AudioService } from './audio.service';
+import { ScreenShakeService } from './screen-shake.service';
+import { createRelicServiceSpy, createCardEffectServiceSpy } from '../testing';
+import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 
 import { GamePhase } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
 import { EnemyType } from '../models/enemy.model';
-import { PHYSICS_CONFIG } from '../constants/physics.constants';
+
+// Physics accumulator tests removed in turn-based pivot — no deltaTime semantics.
 
 /** Minimal Enemy stub sufficient for CombatLoopService tests. */
 function makeEnemy(overrides: Partial<{
-  id: string; type: EnemyType; value: number; leakDamage: number;
+  id: string; type: EnemyType; value: number; leakDamage: number; dying: boolean;
   position: { x: number; y: number; z: number };
 }> = {}): any {
   return {
@@ -24,6 +34,7 @@ function makeEnemy(overrides: Partial<{
     type: overrides.type ?? EnemyType.BASIC,
     value: overrides.value ?? 10,
     leakDamage: overrides.leakDamage ?? 1,
+    dying: overrides.dying ?? false,
     position: overrides.position ?? { x: 0, y: 0, z: 0 },
   };
 }
@@ -36,20 +47,32 @@ describe('CombatLoopService', () => {
   let enemySpy: jasmine.SpyObj<EnemyService>;
   let gameStatsSpy: jasmine.SpyObj<GameStatsService>;
   let gameEndSpy: jasmine.SpyObj<GameEndService>;
+  let eventBusSpy: jasmine.SpyObj<RunEventBusService>;
+  let notificationSpy: jasmine.SpyObj<GameNotificationService>;
+  let audioSpy: jasmine.SpyObj<AudioService>;
+  let screenShakeSpy: jasmine.SpyObj<ScreenShakeService>;
   let scene: THREE.Scene;
 
-  const FIXED_DT = PHYSICS_CONFIG.fixedTimestep;
-
-  function setupState(phase: GamePhase = GamePhase.COMBAT): void {
+  /**
+   * Set up getState() to return a stable COMBAT state.
+   * Callers can override individual calls using callFake if phase transitions
+   * are needed within a single resolveTurn() execution.
+   *
+   * resolveTurn() calls getState() up to 3 times per turn:
+   *   call 1: waveAtTurnStart (at top of method)
+   *   call 2: currentPhase check (after leak loop)
+   *   call 3: postWavePhase (after completeWave(), inside wave-completion block)
+   */
+  function setupState(phase: GamePhase = GamePhase.COMBAT, wave = 1): void {
     gameStateSpy.getState.and.returnValue({
       phase,
-      wave: 1,
+      wave,
       lives: 10,
       gold: 100,
       score: 0,
       isPaused: false,
       isEndless: false,
-      gameSpeed: 1,
+      
       difficulty: 'normal',
       maxWaves: 10,
       elapsedTime: 0,
@@ -72,23 +95,33 @@ describe('CombatLoopService', () => {
     ]);
     setupState();
 
-    waveSpy = jasmine.createSpyObj('WaveService', ['update', 'isSpawning', 'getWaveReward']);
+    waveSpy = jasmine.createSpyObj('WaveService', [
+      'spawnForTurn',
+      'isSpawning',
+      'getWaveReward',
+    ]);
+    waveSpy.spawnForTurn.and.stub();
     waveSpy.isSpawning.and.returnValue(true); // default: still spawning (wave not done)
     waveSpy.getWaveReward.and.returnValue(50);
 
-    combatSpy = jasmine.createSpyObj('TowerCombatService', ['update', 'drainAudioEvents']);
-    combatSpy.update.and.returnValue({ killed: [], fired: [], hitCount: 0 });
+    combatSpy = jasmine.createSpyObj('TowerCombatService', [
+      'fireTurn',
+      'tickMortarZonesForTurn',
+      'drainAudioEvents',
+    ]);
+    combatSpy.fireTurn.and.returnValue({ killed: [], fired: [], hitCount: 0, damageDealt: 0 });
+    combatSpy.tickMortarZonesForTurn.and.returnValue({ kills: [], damageDealt: 0 });
     combatSpy.drainAudioEvents.and.returnValue([]);
 
     enemySpy = jasmine.createSpyObj('EnemyService', [
       'getEnemies',
-      'updateEnemies',
+      'stepEnemiesOneTurn',
       'removeEnemy',
       'startDyingAnimation',
       'getLivingEnemyCount',
     ]);
     enemySpy.getEnemies.and.returnValue(new Map());
-    enemySpy.updateEnemies.and.returnValue([]);
+    enemySpy.stepEnemiesOneTurn.and.returnValue([]);
     // Default: no living enemies (wave appears done unless overridden per-test)
     enemySpy.getLivingEnemyCount.and.returnValue(0);
 
@@ -101,7 +134,35 @@ describe('CombatLoopService', () => {
     gameEndSpy.isRecorded.and.returnValue(false);
     gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: [], completedChallenges: [] });
 
+    eventBusSpy = jasmine.createSpyObj<RunEventBusService>('RunEventBusService', ['emit']);
+
     scene = new THREE.Scene();
+
+    const statusEffectSpy = jasmine.createSpyObj<StatusEffectService>('StatusEffectService', [
+      'tickTurn',
+      'getSlowTileReduction',
+      'apply',
+      'hasEffect',
+      'getEffects',
+      'getAllActiveEffects',
+      'removeAllEffects',
+      'cleanup',
+    ]);
+    statusEffectSpy.tickTurn.and.returnValue([]);
+    statusEffectSpy.getSlowTileReduction.and.returnValue(0);
+    statusEffectSpy.getAllActiveEffects.and.returnValue(new Map());
+    statusEffectSpy.getEffects.and.returnValue([]);
+
+    notificationSpy = jasmine.createSpyObj<GameNotificationService>('GameNotificationService', ['show', 'dismiss', 'clear', 'getNotifications']);
+    audioSpy = jasmine.createSpyObj<AudioService>('AudioService', [
+      'playTowerFire', 'playEnemyHit', 'playEnemyDeath', 'playWaveStart',
+      'playWaveClear', 'playGoldEarned', 'playTowerPlace', 'playTowerUpgrade',
+      'playTowerSell', 'playDefeat', 'playVictory', 'playLifeLoss',
+      'playAchievementSound', 'playStreakSound', 'playChallengeSound',
+      'playSfx', 'playSequence', 'setVolume', 'toggleMute', 'cleanup',
+      'resetFrameCounters',
+    ]);
+    screenShakeSpy = jasmine.createSpyObj<ScreenShakeService>('ScreenShakeService', ['trigger', 'update', 'cleanup']);
 
     TestBed.configureTestingModule({
       providers: [
@@ -112,6 +173,13 @@ describe('CombatLoopService', () => {
         { provide: EnemyService, useValue: enemySpy },
         { provide: GameStatsService, useValue: gameStatsSpy },
         { provide: GameEndService, useValue: gameEndSpy },
+        { provide: StatusEffectService, useValue: statusEffectSpy },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: RunEventBusService, useValue: eventBusSpy },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+        { provide: GameNotificationService, useValue: notificationSpy },
+        { provide: AudioService, useValue: audioSpy },
+        { provide: ScreenShakeService, useValue: screenShakeSpy },
       ],
     });
 
@@ -126,100 +194,108 @@ describe('CombatLoopService', () => {
     expect(service).toBeTruthy();
   });
 
+  // ─── reset() ────────────────────────────────────────────────────────────────
+
   describe('reset()', () => {
-    it('should zero both accumulators', () => {
-      // Prime accumulators with one tick
-      service.tick(0.016, 1, scene, null);
+    it('should zero the turn counter', () => {
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+      expect(service.getTurnNumber()).toBe(2);
+
       service.reset();
 
-      // After reset, a tiny delta should not trigger any physics steps
-      const result = service.tick(0.001, 1, scene, null);
-      expect(combatSpy.update).not.toHaveBeenCalled(); // no step triggered
-      expect(result.kills.length).toBe(0);
+      expect(service.getTurnNumber()).toBe(0);
     });
 
-    it('should clear kill and firedType buffers', () => {
+    it('should clear kill and firedType buffers so next turn returns empty result', () => {
       const enemy = makeEnemy({ id: 'e1', value: 5 });
       const enemies = new Map([['e1', enemy]]);
       enemySpy.getEnemies.and.returnValue(enemies);
-      combatSpy.update.and.returnValue({
-        killed: [{ id: 'e1', damage: 5 }],
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'e1', damage: 5, towerType: null, towerLevel: 0 }],
         fired: [TowerType.BASIC],
-        hitCount: 1,
+        hitCount: 1, damageDealt: 0,
       });
 
-      service.tick(FIXED_DT, 1, scene, null);
+      service.resolveTurn(scene);
       service.reset();
 
-      // Tick with empty combat to get clean result
-      combatSpy.update.and.returnValue({ killed: [], fired: [], hitCount: 0 });
+      // Reset spies to empty state
+      combatSpy.fireTurn.and.returnValue({ killed: [], fired: [], hitCount: 0, damageDealt: 0 });
       enemySpy.getEnemies.and.returnValue(new Map());
-      const result = service.tick(FIXED_DT, 1, scene, null);
+
+      const result = service.resolveTurn(scene);
 
       expect(result.kills.length).toBe(0);
       expect(result.firedTypes.size).toBe(0);
     });
 
     it('should clear leakedThisWave flag so streak can be awarded after reset', () => {
-      // Cause a leak to set leakedThisWave = true
+      // Prime leakedThisWave by having an enemy leak
       const leakEnemy = makeEnemy({ id: 'leak1' });
       enemySpy.getEnemies.and.returnValue(new Map([['leak1', leakEnemy]]));
-      enemySpy.updateEnemies.and.returnValue(['leak1']);
-      service.tick(FIXED_DT, 1, scene, null);
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['leak1']);
+      service.resolveTurn(scene);
 
       // reset() should clear leakedThisWave
       service.reset();
+      enemySpy.stepEnemiesOneTurn.and.returnValue([]);
 
       // Now set up a clean wave-clear — streak bonus should fire
       waveSpy.isSpawning.and.returnValue(false);
       enemySpy.getEnemies.and.returnValue(new Map());
-      enemySpy.updateEnemies.and.returnValue([]);
+      gameStatsSpy.recordEnemyLeaked.calls.reset();
+      gameStatsSpy.recordGoldEarned.calls.reset();
       gameStateSpy.addStreakBonus.and.returnValue(50);
       gameStateSpy.getStreak.and.returnValue(1);
       gameStateSpy.awardInterest.and.returnValue(0);
+
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
 
-      service.tick(FIXED_DT, 1, scene, null);
+      service.resolveTurn(scene);
 
       expect(gameStateSpy.addStreakBonus).toHaveBeenCalled();
     });
   });
+
+  // ─── resetLeakState() ───────────────────────────────────────────────────────
 
   describe('resetLeakState()', () => {
     it('should clear leakedThisWave so a clean wave can earn streak bonus', () => {
       // Leak an enemy to prime leakedThisWave
       const leakEnemy = makeEnemy({ id: 'leak1' });
       enemySpy.getEnemies.and.returnValue(new Map([['leak1', leakEnemy]]));
-      enemySpy.updateEnemies.and.returnValue(['leak1']);
-      service.tick(FIXED_DT, 1, scene, null);
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['leak1']);
+      service.resolveTurn(scene);
 
       // Reset just the leak state (simulating startWave)
       service.resetLeakState();
+      enemySpy.stepEnemiesOneTurn.and.returnValue([]);
 
       // Set up a wave-clear — streak bonus should fire since leak state was reset
       waveSpy.isSpawning.and.returnValue(false);
       enemySpy.getEnemies.and.returnValue(new Map());
-      enemySpy.updateEnemies.and.returnValue([]);
       gameStateSpy.addStreakBonus.and.returnValue(50);
       gameStateSpy.getStreak.and.returnValue(1);
       gameStateSpy.awardInterest.and.returnValue(0);
+
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 2, lives: 9, gold: 100, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
 
-      service.tick(FIXED_DT, 1, scene, null);
+      service.resolveTurn(scene);
 
       expect(gameStateSpy.addStreakBonus).toHaveBeenCalled();
     });
@@ -229,80 +305,59 @@ describe('CombatLoopService', () => {
     });
   });
 
-  describe('flushElapsedTime()', () => {
-    it('should flush accumulated elapsed time and return the amount', () => {
-      // Advance time in two ticks (each less than fixedTimestep to avoid physics)
-      service.tick(0.3, 1, scene, null);
-      service.tick(0.4, 1, scene, null);
+  // ─── getTurnNumber() ────────────────────────────────────────────────────────
 
-      const flushed = service.flushElapsedTime();
-
-      expect(flushed).toBeCloseTo(0.7, 5);
-      expect(gameStateSpy.addElapsedTime).toHaveBeenCalled();
+  describe('getTurnNumber()', () => {
+    it('should return 0 before any turns are resolved', () => {
+      expect(service.getTurnNumber()).toBe(0);
     });
 
-    it('should return 0 and not call addElapsedTime if nothing accumulated', () => {
-      const flushed = service.flushElapsedTime();
+    it('should increment by 1 for each resolveTurn call', () => {
+      service.resolveTurn(scene);
+      expect(service.getTurnNumber()).toBe(1);
 
-      expect(flushed).toBe(0);
-      expect(gameStateSpy.addElapsedTime).not.toHaveBeenCalled();
+      service.resolveTurn(scene);
+      expect(service.getTurnNumber()).toBe(2);
+
+      service.resolveTurn(scene);
+      expect(service.getTurnNumber()).toBe(3);
     });
 
-    it('should reset accumulator to 0 after flush', () => {
-      service.tick(0.5, 1, scene, null);
-      service.flushElapsedTime();
-      // Call again — should return 0
-      const second = service.flushElapsedTime();
-      expect(second).toBe(0);
+    it('should reset to 0 after reset()', () => {
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+      service.reset();
+      expect(service.getTurnNumber()).toBe(0);
     });
   });
 
-  describe('tick() — physics accumulator', () => {
-    it('should not run any physics steps when deltaTime is below the fixed timestep', () => {
-      service.tick(0.001, 1, scene, null);
+  // ─── resolveTurn() — spawning delegation ────────────────────────────────────
 
-      expect(combatSpy.update).not.toHaveBeenCalled();
-      expect(waveSpy.update).not.toHaveBeenCalled();
+  describe('resolveTurn() — spawning', () => {
+    it('should call waveService.spawnForTurn(scene) each turn', () => {
+      service.resolveTurn(scene);
+
+      expect(waveSpy.spawnForTurn).toHaveBeenCalledWith(scene);
     });
 
-    it('should run exactly one physics step when deltaTime equals fixedTimestep', () => {
-      service.tick(FIXED_DT, 1, scene, null);
+    it('should call spawnForTurn once per resolveTurn call', () => {
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
 
-      expect(combatSpy.update).toHaveBeenCalledTimes(1);
-      expect(waveSpy.update).toHaveBeenCalledTimes(1);
-    });
-
-    it('should accumulate across multiple ticks before stepping', () => {
-      // Each tick is half a step — need two to fire one step
-      service.tick(FIXED_DT / 2, 1, scene, null);
-      expect(combatSpy.update).not.toHaveBeenCalled();
-
-      service.tick(FIXED_DT / 2, 1, scene, null);
-      expect(combatSpy.update).toHaveBeenCalledTimes(1);
-    });
-
-    it('should cap steps at PHYSICS_CONFIG.maxStepsPerFrame', () => {
-      // Pass a huge delta that would require many steps
-      service.tick(10, 1, scene, null);
-
-      expect(combatSpy.update).toHaveBeenCalledTimes(PHYSICS_CONFIG.maxStepsPerFrame);
-    });
-
-    it('should scale accumulation by gameSpeed', () => {
-      // At speed 2, half the fixedTimestep triggers a full step
-      service.tick(FIXED_DT / 2, 2, scene, null);
-
-      expect(combatSpy.update).toHaveBeenCalledTimes(1);
+      expect(waveSpy.spawnForTurn).toHaveBeenCalledTimes(3);
     });
   });
 
-  describe('tick() — kill processing', () => {
+  // ─── resolveTurn() — kill processing ────────────────────────────────────────
+
+  describe('resolveTurn() — kill processing', () => {
     it('should award gold and record stat for each kill', () => {
       const enemy = makeEnemy({ id: 'e1', value: 25 });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
-      combatSpy.update.and.returnValue({ killed: [{ id: 'e1', damage: 10 }], fired: [], hitCount: 0 });
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 10, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
 
-      service.tick(FIXED_DT, 1, scene, null);
+      service.resolveTurn(scene);
 
       expect(gameStateSpy.addGoldAndScore).toHaveBeenCalledWith(25);
       expect(gameStatsSpy.recordGoldEarned).toHaveBeenCalledWith(25);
@@ -311,9 +366,9 @@ describe('CombatLoopService', () => {
     it('should snapshot kill position and damage in result.kills', () => {
       const enemy = makeEnemy({ id: 'e1', value: 10, position: { x: 1, y: 2, z: 3 } });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
-      combatSpy.update.and.returnValue({ killed: [{ id: 'e1', damage: 7 }], fired: [], hitCount: 0 });
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 7, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(result.kills.length).toBe(1);
       expect(result.kills[0].damage).toBe(7);
@@ -324,51 +379,79 @@ describe('CombatLoopService', () => {
     it('should call startDyingAnimation for each kill instead of removeEnemy', () => {
       const enemy = makeEnemy({ id: 'e1' });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
-      combatSpy.update.and.returnValue({ killed: [{ id: 'e1', damage: 5 }], fired: [], hitCount: 0 });
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 5, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
 
-      service.tick(FIXED_DT, 1, scene, null);
+      service.resolveTurn(scene);
 
       expect(enemySpy.startDyingAnimation).toHaveBeenCalledWith('e1');
       expect(enemySpy.removeEnemy).not.toHaveBeenCalledWith('e1', scene);
     });
 
-    it('should accumulate kills across physics steps in the same frame', () => {
-      let callCount = 0;
-      const enemies = new Map([
-        ['e1', makeEnemy({ id: 'e1', value: 5 })],
-        ['e2', makeEnemy({ id: 'e2', value: 5 })],
-      ]);
-      enemySpy.getEnemies.and.returnValue(enemies);
-      combatSpy.update.and.callFake(() => {
-        callCount++;
-        const id = callCount === 1 ? 'e1' : 'e2';
-        return { killed: [{ id, damage: 3 }], fired: [], hitCount: 0 };
-      });
+    it('should skip kill processing for enemies already marked dying', () => {
+      const enemy = makeEnemy({ id: 'e1', dying: true, value: 20 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 5, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
 
-      // Two steps in one tick
-      const result = service.tick(FIXED_DT * 2, 1, scene, null);
+      const result = service.resolveTurn(scene);
+
+      expect(result.kills.length).toBe(0);
+      expect(gameStateSpy.addGoldAndScore).not.toHaveBeenCalled();
+      expect(enemySpy.startDyingAnimation).not.toHaveBeenCalled();
+    });
+
+    it('should process mortar kills in addition to tower fire kills', () => {
+      const e1 = makeEnemy({ id: 'e1', value: 10 });
+      const e2 = makeEnemy({ id: 'e2', value: 15 });
+      enemySpy.getEnemies.and.callFake((id?: string) => {
+        const map = new Map([['e1', e1], ['e2', e2]]);
+        return map;
+      });
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 5, towerType: null, towerLevel: 0 }], fired: [], hitCount: 1, damageDealt: 0 });
+      combatSpy.tickMortarZonesForTurn.and.returnValue({ kills: [{ id: 'e2', damage: 8, towerType: null, towerLevel: 0 }], damageDealt: 0 });
+
+      const result = service.resolveTurn(scene);
 
       expect(result.kills.length).toBe(2);
+      expect(gameStatsSpy.recordGoldEarned).toHaveBeenCalledTimes(2);
+    });
+
+    it('should include hitCount from fireTurn in result', () => {
+      combatSpy.fireTurn.and.returnValue({ killed: [], fired: [], hitCount: 4, damageDealt: 0 });
+
+      const result = service.resolveTurn(scene);
+
+      expect(result.hitCount).toBe(4);
+    });
+
+    it('should accumulate firedTypes from TowerCombatService.fireTurn', () => {
+      combatSpy.fireTurn.and.returnValue({ killed: [], fired: [TowerType.BASIC, TowerType.SNIPER], hitCount: 0, damageDealt: 0 });
+
+      const result = service.resolveTurn(scene);
+
+      expect(result.firedTypes.has(TowerType.BASIC)).toBeTrue();
+      expect(result.firedTypes.has(TowerType.SNIPER)).toBeTrue();
     });
   });
 
-  describe('tick() — enemy leak handling', () => {
+  // ─── resolveTurn() — enemy leak handling ────────────────────────────────────
+
+  describe('resolveTurn() — enemy leak handling', () => {
     it('should call loseLife and recordEnemyLeaked when an enemy reaches the exit', () => {
       const enemy = makeEnemy({ id: 'e1', leakDamage: 2 });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
-      enemySpy.updateEnemies.and.returnValue(['e1']);
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
 
-      service.tick(FIXED_DT, 1, scene, null);
+      service.resolveTurn(scene);
 
       expect(gameStateSpy.loseLife).toHaveBeenCalledWith(2);
       expect(gameStatsSpy.recordEnemyLeaked).toHaveBeenCalled();
     });
 
     it('should set result.leaked = true when any enemy exits', () => {
-      enemySpy.updateEnemies.and.returnValue(['e1']);
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
       enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy({ id: 'e1' })]]));
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(result.leaked).toBeTrue();
     });
@@ -379,59 +462,69 @@ describe('CombatLoopService', () => {
         ['e2', makeEnemy({ id: 'e2' })],
       ]);
       enemySpy.getEnemies.and.returnValue(enemies);
-      enemySpy.updateEnemies.and.returnValue(['e1', 'e2']);
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1', 'e2']);
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(result.exitCount).toBe(2);
     });
 
     it('should set result.leaked = false when no enemies exit', () => {
-      enemySpy.updateEnemies.and.returnValue([]);
+      enemySpy.stepEnemiesOneTurn.and.returnValue([]);
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(result.leaked).toBeFalse();
     });
+
+    it('should call removeEnemy for each leaked enemy', () => {
+      const enemy = makeEnemy({ id: 'e1' });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
+
+      service.resolveTurn(scene);
+
+      expect(enemySpy.removeEnemy).toHaveBeenCalledWith('e1', scene);
+    });
   });
 
-  describe('tick() — defeat handling', () => {
-    it('should set defeatTriggered = true when phase becomes DEFEAT mid-frame', () => {
+  // ─── resolveTurn() — defeat handling ────────────────────────────────────────
+
+  describe('resolveTurn() — defeat handling', () => {
+    it('should set defeatTriggered = true when phase becomes DEFEAT after leak', () => {
       let callCount = 0;
-      gameStateSpy.getState.and.callFake(() => {
-        callCount++;
-        // First call (wave number capture), then return DEFEAT on the per-step re-read
-        return {
-          phase: callCount === 1 ? GamePhase.COMBAT : GamePhase.DEFEAT,
-          wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-          isEndless: false, gameSpeed: 1, difficulty: 'normal',
-          maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
-          highestWave: 0, activeModifiers: new Set(),
-        } as any;
-      });
-      enemySpy.updateEnemies.and.returnValue(['e1']);
+      gameStateSpy.getState.and.callFake(() => ({
+        // call 0: waveAtTurnStart → COMBAT
+        // call 1: currentPhase after leaks → DEFEAT
+        phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
+        wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
+        isEndless: false, difficulty: 'normal',
+        maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
+        highestWave: 0, activeModifiers: new Set(),
+      } as any));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
       enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy({ id: 'e1' })]]));
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(result.defeatTriggered).toBeTrue();
     });
 
-    it('should record game end on DEFEAT mid-frame', () => {
+    it('should record game end on DEFEAT', () => {
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
         wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
-      enemySpy.updateEnemies.and.returnValue(['e1']);
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
       enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy({ id: 'e1' })]]));
 
-      service.tick(FIXED_DT, 1, scene, null);
+      service.resolveTurn(scene);
 
-      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false, null);
+      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false, jasmine.any(Number));
     });
 
     it('should not call recordEnd if already recorded', () => {
@@ -440,31 +533,66 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
         wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
-      enemySpy.updateEnemies.and.returnValue(['e1']);
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
       enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy({ id: 'e1' })]]));
 
-      service.tick(FIXED_DT, 1, scene, null);
+      service.resolveTurn(scene);
 
       expect(gameEndSpy.recordEnd).not.toHaveBeenCalled();
     });
+
+    it('should set result.gameEnd with isVictory=false on defeat', () => {
+      let callCount = 0;
+      gameStateSpy.getState.and.callFake(() => ({
+        phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
+        wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
+        isEndless: false, difficulty: 'normal',
+        maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
+        highestWave: 0, activeModifiers: new Set(),
+      } as any));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy({ id: 'e1' })]]));
+      gameEndSpy.recordEnd.and.returnValue({
+        newlyUnlockedAchievements: ['ach1'],
+        completedChallenges: [],
+      });
+
+      const result = service.resolveTurn(scene);
+
+      expect(result.gameEnd).not.toBeNull();
+      expect(result.gameEnd!.isVictory).toBeFalse();
+      expect(result.gameEnd!.newlyUnlockedAchievements).toEqual(['ach1']);
+    });
   });
 
-  describe('tick() — wave completion', () => {
-    function setupWaveClear(resultPhase: GamePhase): void {
+  // ─── resolveTurn() — wave completion ────────────────────────────────────────
+
+  describe('resolveTurn() — wave completion', () => {
+    /**
+     * Helper: configure spies for a wave-clear scenario.
+     * resolveTurn() calls getState() 3 times:
+     *   call 0: waveAtTurnStart → COMBAT
+     *   call 1: currentPhase (after leak loop) → COMBAT
+     *   call 2: postWavePhase (after completeWave) → resultPhase
+     */
+    function setupWaveClear(resultPhase: GamePhase, wave = 1): void {
       waveSpy.isSpawning.and.returnValue(false);
-      enemySpy.getEnemies.and.returnValue(new Map()); // no enemies left
+      enemySpy.getLivingEnemyCount.and.returnValue(0);
+      enemySpy.getEnemies.and.returnValue(new Map());
+      enemySpy.stepEnemiesOneTurn.and.returnValue([]);
       gameStateSpy.addStreakBonus.and.returnValue(0);
       gameStateSpy.getStreak.and.returnValue(0);
       gameStateSpy.awardInterest.and.returnValue(0);
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ < 2 ? GamePhase.COMBAT : resultPhase,
-        wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        wave,
+        lives: 10, gold: 100, score: 0, isPaused: false,
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
@@ -474,7 +602,7 @@ describe('CombatLoopService', () => {
       waveSpy.getWaveReward.and.returnValue(75);
       setupWaveClear(GamePhase.INTERMISSION);
 
-      service.tick(FIXED_DT, 1, scene, null);
+      service.resolveTurn(scene);
 
       expect(gameStateSpy.completeWave).toHaveBeenCalledWith(75);
     });
@@ -483,7 +611,7 @@ describe('CombatLoopService', () => {
       setupWaveClear(GamePhase.INTERMISSION);
       gameStateSpy.awardInterest.and.returnValue(10);
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(result.waveCompletion).not.toBeNull();
       expect(result.waveCompletion!.resultPhase).toBe(GamePhase.INTERMISSION);
@@ -493,7 +621,7 @@ describe('CombatLoopService', () => {
     it('should emit waveCompletion with VICTORY resultPhase', () => {
       setupWaveClear(GamePhase.VICTORY);
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(result.waveCompletion).not.toBeNull();
       expect(result.waveCompletion!.resultPhase).toBe(GamePhase.VICTORY);
@@ -504,65 +632,110 @@ describe('CombatLoopService', () => {
       gameStateSpy.addStreakBonus.and.returnValue(100);
       gameStateSpy.getStreak.and.returnValue(2);
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(gameStateSpy.addStreakBonus).toHaveBeenCalled();
       expect(result.waveCompletion!.streakBonus).toBe(100);
       expect(result.waveCompletion!.streakCount).toBe(2);
     });
 
-    it('should NOT award streak bonus when an enemy leaked in a prior tick this wave', () => {
-      // Simulate a leak happening in a prior tick by priming leakedThisWave
-      // via a tick that causes an exit, then resetting wave spawning state for the clear tick
+    // ── Phase 12: RunEventBus emits for wave completion sources ──────────
+
+    it('emits GOLD_EARNED with source=wave when the wave reward is positive', () => {
+      waveSpy.getWaveReward.and.returnValue(75);
+      setupWaveClear(GamePhase.INTERMISSION);
+
+      service.resolveTurn(scene);
+
+      expect(eventBusSpy.emit).toHaveBeenCalledWith(
+        RunEventType.GOLD_EARNED,
+        jasmine.objectContaining({ amount: 75, source: 'wave' }),
+      );
+    });
+
+    it('emits GOLD_EARNED with source=streak when a streak bonus lands', () => {
+      waveSpy.getWaveReward.and.returnValue(0);
+      setupWaveClear(GamePhase.INTERMISSION);
+      gameStateSpy.addStreakBonus.and.returnValue(50);
+      gameStateSpy.getStreak.and.returnValue(2);
+
+      service.resolveTurn(scene);
+
+      expect(eventBusSpy.emit).toHaveBeenCalledWith(
+        RunEventType.GOLD_EARNED,
+        jasmine.objectContaining({ amount: 50, source: 'streak' }),
+      );
+    });
+
+    it('emits GOLD_EARNED with source=interest when interest is awarded', () => {
+      waveSpy.getWaveReward.and.returnValue(0);
+      setupWaveClear(GamePhase.INTERMISSION);
+      gameStateSpy.awardInterest.and.returnValue(15);
+
+      service.resolveTurn(scene);
+
+      expect(eventBusSpy.emit).toHaveBeenCalledWith(
+        RunEventType.GOLD_EARNED,
+        jasmine.objectContaining({ amount: 15, source: 'interest' }),
+      );
+    });
+
+    it('does NOT emit GOLD_EARNED when all sources are zero (leak-interrupted wave)', () => {
+      waveSpy.getWaveReward.and.returnValue(0);
+      setupWaveClear(GamePhase.INTERMISSION);
+      gameStateSpy.awardInterest.and.returnValue(0);
+      // addStreakBonus returns 0 too (the default) — no streak fires.
+
+      service.resolveTurn(scene);
+
+      const goldCalls = eventBusSpy.emit.calls.allArgs()
+        .filter(args => args[0] === RunEventType.GOLD_EARNED);
+      expect(goldCalls.length).toBe(0);
+    });
+
+    it('should NOT award streak bonus when an enemy leaked in a prior turn this wave', () => {
+      // Turn 1: cause a leak to set leakedThisWave
       const enemy = makeEnemy({ id: 'e_leak' });
       enemySpy.getEnemies.and.returnValue(new Map([['e_leak', enemy]]));
-      enemySpy.updateEnemies.and.returnValue(['e_leak']); // enemy reaches exit
-      // Leak tick — no wave clear yet (still spawning)
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e_leak']);
       waveSpy.isSpawning.and.returnValue(true);
-      service.tick(FIXED_DT, 1, scene, null);
+      service.resolveTurn(scene);
 
-      // Now set up wave-clear conditions
-      waveSpy.isSpawning.and.returnValue(false);
-      enemySpy.getEnemies.and.returnValue(new Map());
-      enemySpy.updateEnemies.and.returnValue([]);
-      gameStateSpy.addStreakBonus.and.returnValue(0);
-      gameStateSpy.awardInterest.and.returnValue(0);
-      let callCount = 0;
-      gameStateSpy.getState.and.callFake(() => ({
-        phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
-        wave: 1, lives: 9, gold: 100, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
-        maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
-        highestWave: 0, activeModifiers: new Set(),
-      } as any));
+      // Turn 2: wave clears — streak bonus should NOT fire
+      setupWaveClear(GamePhase.INTERMISSION);
+      // addStreakBonus reset so we can assert it was NOT called
+      gameStateSpy.addStreakBonus.calls.reset();
 
-      service.tick(FIXED_DT, 1, scene, null);
+      service.resolveTurn(scene);
 
       expect(gameStateSpy.addStreakBonus).not.toHaveBeenCalled();
     });
 
-    it('should NOT award streak bonus when an enemy leaked this frame', () => {
+    it('should NOT award streak bonus when an enemy leaked this same turn', () => {
       waveSpy.isSpawning.and.returnValue(false);
       gameStateSpy.addStreakBonus.and.returnValue(0);
       gameStateSpy.awardInterest.and.returnValue(0);
+
+      // getState call sequence:
+      //   call 0: waveAtTurnStart → COMBAT
+      //   call 1: currentPhase after leaks → COMBAT (enemy leaked but lives != 0)
+      //   call 2: postWavePhase after completeWave → INTERMISSION
       let callCount = 0;
-      // Phase: COMBAT on first read (wave capture), COMBAT on enemy re-read, INTERMISSION after completeWave
       gameStateSpy.getState.and.callFake(() => ({
-        phase: callCount++ < 3 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
-        wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
+        wave: 1, lives: 9, gold: 100, score: 0, isPaused: false,
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
-      const enemy = makeEnemy({ id: 'e1' });
-      let callCountEnemy = 0;
-      enemySpy.getEnemies.and.callFake(() => {
-        // Return non-empty on first call (for leak handling), empty for wave-clear check
-        return callCountEnemy++ === 0 ? new Map([['e1', enemy]]) : new Map();
-      });
-      enemySpy.updateEnemies.and.returnValue(['e1']); // enemy leaks
 
-      service.tick(FIXED_DT, 1, scene, null);
+      // Enemy leaks this turn AND wave clears (getLivingEnemyCount=0 after removing leaker)
+      const enemy = makeEnemy({ id: 'e1' });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
+      enemySpy.getLivingEnemyCount.and.returnValue(0);
+
+      service.resolveTurn(scene);
 
       expect(gameStateSpy.addStreakBonus).not.toHaveBeenCalled();
     });
@@ -571,9 +744,9 @@ describe('CombatLoopService', () => {
       setupWaveClear(GamePhase.VICTORY);
       gameEndSpy.recordEnd.and.returnValue({ newlyUnlockedAchievements: ['ach1'], completedChallenges: [] });
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
-      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(true, null);
+      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(true, jasmine.any(Number));
       expect(result.gameEnd).not.toBeNull();
       expect(result.gameEnd!.isVictory).toBeTrue();
       expect(result.gameEnd!.newlyUnlockedAchievements).toEqual(['ach1']);
@@ -582,7 +755,7 @@ describe('CombatLoopService', () => {
     it('should not emit waveCompletion when spawning is still active', () => {
       waveSpy.isSpawning.and.returnValue(true);
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(result.waveCompletion).toBeNull();
       expect(gameStateSpy.completeWave).not.toHaveBeenCalled();
@@ -590,122 +763,193 @@ describe('CombatLoopService', () => {
 
     it('should not emit waveCompletion when enemies are still alive', () => {
       waveSpy.isSpawning.and.returnValue(false);
-      enemySpy.getEnemies.and.returnValue(new Map([['e1', makeEnemy()]]));
-      // Simulate living enemies — getLivingEnemyCount returns non-zero
       enemySpy.getLivingEnemyCount.and.returnValue(1);
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(result.waveCompletion).toBeNull();
     });
-  });
 
-  describe('tick() — fired types and hit count', () => {
-    it('should accumulate firedTypes from TowerCombatService', () => {
-      combatSpy.update.and.returnValue({ killed: [], fired: [TowerType.BASIC, TowerType.SNIPER], hitCount: 0 });
+    it('should not emit waveCompletion when phase is DEFEAT (not COMBAT)', () => {
+      // Phase becomes DEFEAT after a catastrophic leak — wave completion should not fire
+      let callCount = 0;
+      gameStateSpy.getState.and.callFake(() => ({
+        phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
+        wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
+        isEndless: false, difficulty: 'normal',
+        maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
+        highestWave: 0, activeModifiers: new Set(),
+      } as any));
+      waveSpy.isSpawning.and.returnValue(false);
+      enemySpy.getLivingEnemyCount.and.returnValue(0);
+      const enemy = makeEnemy({ id: 'e1' });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
-      expect(result.firedTypes.has(TowerType.BASIC)).toBeTrue();
-      expect(result.firedTypes.has(TowerType.SNIPER)).toBeTrue();
+      expect(result.waveCompletion).toBeNull();
+      expect(gameStateSpy.completeWave).not.toHaveBeenCalled();
     });
 
-    it('should accumulate hitCount across physics steps', () => {
-      let step = 0;
-      combatSpy.update.and.callFake(() => ({
-        killed: [], fired: [], hitCount: step++ === 0 ? 3 : 2,
-      }));
+    it('should award interest on INTERMISSION transition', () => {
+      setupWaveClear(GamePhase.INTERMISSION);
+      gameStateSpy.awardInterest.and.returnValue(20);
 
-      // Two steps in one tick
-      const result = service.tick(FIXED_DT * 2, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
-      expect(result.hitCount).toBe(5);
+      expect(gameStateSpy.awardInterest).toHaveBeenCalled();
+      expect(result.waveCompletion!.interestEarned).toBe(20);
+    });
+
+    it('should NOT award interest on VICTORY transition', () => {
+      setupWaveClear(GamePhase.VICTORY);
+
+      service.resolveTurn(scene);
+
+      expect(gameStateSpy.awardInterest).not.toHaveBeenCalled();
+    });
+
+    it('wave reward is correctly passed to completeWave', () => {
+      waveSpy.getWaveReward.and.returnValue(120);
+      setupWaveClear(GamePhase.INTERMISSION);
+
+      service.resolveTurn(scene);
+
+      expect(gameStateSpy.completeWave).toHaveBeenCalledWith(120);
     });
   });
 
-  describe('tick() — combat audio events', () => {
+  // ─── resolveTurn() — combat audio events ────────────────────────────────────
+
+  describe('resolveTurn() — combat audio events', () => {
     it('should include drained combat audio events in the result', () => {
       const events = [{ type: 'sfx' as const, sfxKey: 'chain' }];
       combatSpy.drainAudioEvents.and.returnValue(events);
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(result.combatAudioEvents).toEqual(events);
     });
-  });
 
-  describe('tick() — elapsed time flush', () => {
-    it('should flush accumulated elapsed time when threshold exceeded', () => {
-      // Exceed PHYSICS_CONFIG.elapsedTimeFlushIntervalS (1 second) in one tick
-      service.tick(PHYSICS_CONFIG.elapsedTimeFlushIntervalS + 0.01, 1, scene, null);
+    it('should return empty combatAudioEvents when nothing fired', () => {
+      combatSpy.drainAudioEvents.and.returnValue([]);
 
-      expect(gameStateSpy.addElapsedTime).toHaveBeenCalled();
-    });
+      const result = service.resolveTurn(scene);
 
-    it('should not flush if accumulated time is below threshold', () => {
-      service.tick(0.5, 1, scene, null);
-
-      // Internal periodic flush shouldn't fire for 0.5s
-      expect(gameStateSpy.addElapsedTime).not.toHaveBeenCalled();
+      expect(result.combatAudioEvents).toEqual([]);
     });
   });
 
-  // ─── pause handling ─────────────────────────────────────────────────────────
-  // CombatLoopService.tick() has no internal isPaused guard — the component is
-  // responsible for not calling tick() when paused. The contract here is that
-  // a tick with deltaTime=0 (the effective no-op the component uses) performs
-  // zero physics steps and does not advance the physics accumulator.
+  // ─── resolveTurn() — defensive copies: kills and firedTypes ────────────────
 
-  describe('tick() — pause behavior (deltaTime=0 contract)', () => {
-    it('should perform no physics steps when deltaTime is 0', () => {
-      service.tick(0, 1, scene, null);
+  describe('resolveTurn() — defensive copy of kills and firedTypes', () => {
+    it('mutating the returned kills array does not affect the next turn result', () => {
+      const enemy = makeEnemy({ id: 'e1', value: 10 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 5, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
 
-      expect(combatSpy.update).not.toHaveBeenCalled();
-      expect(waveSpy.update).not.toHaveBeenCalled();
+      const result = service.resolveTurn(scene);
+      // Poison the returned array after consumption
+      result.kills.push({ damage: 999, position: { x: 0, y: 0, z: 0 }, color: 0, value: 999 });
+
+      // Next turn with no kills — the internal buffer should be unaffected
+      combatSpy.fireTurn.and.returnValue({ killed: [], fired: [], hitCount: 0, damageDealt: 0 });
+      enemySpy.getEnemies.and.returnValue(new Map());
+      const next = service.resolveTurn(scene);
+
+      expect(next.kills.length).toBe(0);
     });
 
-    it('should return zero kills, zero hitCount, and no waveCompletion when deltaTime is 0', () => {
-      const result = service.tick(0, 1, scene, null);
+    it('mutating the returned firedTypes set does not affect the next turn result', () => {
+      combatSpy.fireTurn.and.returnValue({ killed: [], fired: [TowerType.BASIC], hitCount: 0, damageDealt: 0 });
 
-      expect(result.kills.length).toBe(0);
-      expect(result.hitCount).toBe(0);
-      expect(result.waveCompletion).toBeNull();
+      const result = service.resolveTurn(scene);
+      expect(result.firedTypes.has(TowerType.BASIC)).toBeTrue();
+      // Poison the returned set
+      result.firedTypes.add(TowerType.SNIPER);
+
+      // Next turn with no fired types — internal set should be unaffected
+      combatSpy.fireTurn.and.returnValue({ killed: [], fired: [], hitCount: 0, damageDealt: 0 });
+      const next = service.resolveTurn(scene);
+
+      expect(next.firedTypes.has(TowerType.BASIC)).toBeFalse();
+      expect(next.firedTypes.has(TowerType.SNIPER)).toBeFalse();
     });
 
-    it('should not advance physics accumulator — subsequent tiny delta still triggers no steps', () => {
-      // Simulate a series of zero-delta ticks (paused frames)
-      service.tick(0, 1, scene, null);
-      service.tick(0, 1, scene, null);
-      service.tick(0, 1, scene, null);
+    it('returned kills array is a snapshot — contains events from current turn only', () => {
+      const enemy = makeEnemy({ id: 'e1', value: 5 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 3, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
 
-      // Small non-zero delta still below fixedTimestep — should still be no steps
-      service.tick(0.001, 1, scene, null);
+      const first = service.resolveTurn(scene);
 
-      expect(combatSpy.update).not.toHaveBeenCalled();
+      // Second turn with no kills
+      combatSpy.fireTurn.and.returnValue({ killed: [], fired: [], hitCount: 0, damageDealt: 0 });
+      enemySpy.getEnemies.and.returnValue(new Map());
+      service.resolveTurn(scene);
+
+      // The first result should still hold the original kill (it's a copy, not a reference)
+      expect(first.kills.length).toBe(1);
+      expect(first.kills[0].damage).toBe(3);
+    });
+  });
+
+  // ─── card modifier wiring ────────────────────────────────────────────────────
+
+  describe('card modifier wiring', () => {
+    let cardEffectSpy: jasmine.SpyObj<CardEffectService>;
+
+    beforeEach(() => {
+      cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
     });
 
-    it('should still accumulate elapsed time even at deltaTime=0', () => {
-      // Advance elapsed time to near the flush threshold via a non-physics tick
-      service.tick(PHYSICS_CONFIG.elapsedTimeFlushIntervalS - 0.001, 1, scene, null);
-      expect(gameStateSpy.addElapsedTime).not.toHaveBeenCalled();
+    it('goldMultiplier: 0.5 modifier multiplies awarded gold by 1.5x', () => {
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) => stat === 'goldMultiplier' ? 0.5 : 0);
 
-      // A zero-delta tick does not push elapsed time over the threshold
-      service.tick(0, 1, scene, null);
-      expect(gameStateSpy.addElapsedTime).not.toHaveBeenCalled();
+      const enemy = makeEnemy({ id: 'e1', value: 20 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 20, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
+
+      service.resolveTurn(scene);
+
+      // relicSpy returns 1.0 gold mult by default, cardGoldMult=1.5 → 20 * 1 * 1.5 = 30
+      expect(gameStateSpy.addGoldAndScore).toHaveBeenCalledWith(30);
     });
 
-    it('should not advance accumulator across multiple zero-delta ticks followed by one FIXED_DT', () => {
-      // After several zero-delta ticks the accumulator is 0;
-      // exactly one fixedTimestep should trigger exactly one physics step
-      service.tick(0, 1, scene, null);
-      service.tick(0, 1, scene, null);
-      combatSpy.update.calls.reset();
-      waveSpy.update.calls.reset();
+    it('leakBlock: first leak blocked (no life lost), second leak blocked, third leak costs life', () => {
+      cardEffectSpy.getModifierValue.and.returnValue(0);
+      // Register 2 charges of leakBlock in the real cardEffectService via spy on tryConsumeLeakBlock
+      let leakBlockCharges = 2;
+      cardEffectSpy.tryConsumeLeakBlock.and.callFake(() => {
+        if (leakBlockCharges > 0) {
+          leakBlockCharges--;
+          return true;
+        }
+        return false;
+      });
 
-      service.tick(FIXED_DT, 1, scene, null);
+      const enemy1 = makeEnemy({ id: 'e1', leakDamage: 1 });
+      const enemy2 = makeEnemy({ id: 'e2', leakDamage: 1 });
+      const enemy3 = makeEnemy({ id: 'e3', leakDamage: 1 });
 
-      expect(combatSpy.update).toHaveBeenCalledTimes(1);
-      expect(waveSpy.update).toHaveBeenCalledTimes(1);
+      // Turn 1: e1 leaks — should be blocked
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy1]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
+      service.resolveTurn(scene);
+      expect(gameStateSpy.loseLife).not.toHaveBeenCalled();
+
+      // Turn 2: e2 leaks — should be blocked
+      enemySpy.getEnemies.and.returnValue(new Map([['e2', enemy2]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e2']);
+      service.resolveTurn(scene);
+      expect(gameStateSpy.loseLife).not.toHaveBeenCalled();
+
+      // Turn 3: e3 leaks — no charges left, life should be lost
+      enemySpy.getEnemies.and.returnValue(new Map([['e3', enemy3]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e3']);
+      service.resolveTurn(scene);
+      expect(gameStateSpy.loseLife).toHaveBeenCalledWith(1);
     });
   });
 
@@ -714,7 +958,9 @@ describe('CombatLoopService', () => {
   describe('integration: wave lifecycle', () => {
     it('full wave clear: spawn done, no enemies left → waveCompletion emitted', () => {
       waveSpy.isSpawning.and.returnValue(false);
+      enemySpy.getLivingEnemyCount.and.returnValue(0);
       enemySpy.getEnemies.and.returnValue(new Map());
+      enemySpy.stepEnemiesOneTurn.and.returnValue([]);
       gameStateSpy.addStreakBonus.and.returnValue(0);
       gameStateSpy.getStreak.and.returnValue(0);
       gameStateSpy.awardInterest.and.returnValue(0);
@@ -722,12 +968,12 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(result.waveCompletion).not.toBeNull();
       expect(result.waveCompletion!.resultPhase).toBe(GamePhase.INTERMISSION);
@@ -737,18 +983,32 @@ describe('CombatLoopService', () => {
     it('enemy leaks to exit → loseLife called, result.leaked = true', () => {
       const enemy = makeEnemy({ id: 'leaked1', leakDamage: 3 });
       enemySpy.getEnemies.and.returnValue(new Map([['leaked1', enemy]]));
-      enemySpy.updateEnemies.and.returnValue(['leaked1']); // enemy reached exit
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['leaked1']);
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(gameStateSpy.loseLife).toHaveBeenCalledWith(3);
       expect(result.leaked).toBeTrue();
     });
 
+    it('emits ENEMY_LEAKED with enemyType + leakCost for each leak', () => {
+      const enemy = makeEnemy({ id: 'leaked1', leakDamage: 3 });
+      enemySpy.getEnemies.and.returnValue(new Map([['leaked1', enemy]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['leaked1']);
+
+      service.resolveTurn(scene);
+
+      expect(eventBusSpy.emit).toHaveBeenCalledWith(
+        RunEventType.ENEMY_LEAKED,
+        jasmine.objectContaining({ leakCost: 3 }),
+      );
+    });
+
     it('wave completion with no leaks awards streak bonus', () => {
       waveSpy.isSpawning.and.returnValue(false);
+      enemySpy.getLivingEnemyCount.and.returnValue(0);
       enemySpy.getEnemies.and.returnValue(new Map());
-      enemySpy.updateEnemies.and.returnValue([]);
+      enemySpy.stepEnemiesOneTurn.and.returnValue([]);
       gameStateSpy.addStreakBonus.and.returnValue(50);
       gameStateSpy.getStreak.and.returnValue(3);
       gameStateSpy.awardInterest.and.returnValue(0);
@@ -756,12 +1016,12 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 3, lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
-        maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 3,
+        isEndless: false, difficulty: 'normal',
+        maxWaves: 10, elapsedTime: 3, consecutiveWavesWithoutLeak: 3,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(gameStateSpy.addStreakBonus).toHaveBeenCalled();
       expect(result.waveCompletion!.streakBonus).toBe(50);
@@ -771,7 +1031,9 @@ describe('CombatLoopService', () => {
     it('wave reward is correctly passed to completeWave', () => {
       waveSpy.isSpawning.and.returnValue(false);
       waveSpy.getWaveReward.and.returnValue(120);
+      enemySpy.getLivingEnemyCount.and.returnValue(0);
       enemySpy.getEnemies.and.returnValue(new Map());
+      enemySpy.stepEnemiesOneTurn.and.returnValue([]);
       gameStateSpy.addStreakBonus.and.returnValue(0);
       gameStateSpy.getStreak.and.returnValue(0);
       gameStateSpy.awardInterest.and.returnValue(0);
@@ -779,38 +1041,40 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
         wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
 
-      service.tick(FIXED_DT, 1, scene, null);
+      service.resolveTurn(scene);
 
       expect(gameStateSpy.completeWave).toHaveBeenCalledWith(120);
     });
 
-    it('DEFEAT mid-frame: defeatTriggered = true, recordEnd called', () => {
+    it('DEFEAT mid-turn: defeatTriggered = true, recordEnd called', () => {
       const enemy = makeEnemy({ id: 'e1', leakDamage: 99 });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
-      enemySpy.updateEnemies.and.returnValue(['e1']);
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
       let callCount = 0;
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ === 0 ? GamePhase.COMBAT : GamePhase.DEFEAT,
         wave: 1, lives: 0, gold: 0, score: 0, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 0, consecutiveWavesWithoutLeak: 0,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(result.defeatTriggered).toBeTrue();
-      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false, null);
+      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false, jasmine.any(Number));
     });
 
     it('VICTORY: waveCompletion resultPhase is VICTORY, recordEnd called with isVictory=true', () => {
       waveSpy.isSpawning.and.returnValue(false);
+      enemySpy.getLivingEnemyCount.and.returnValue(0);
       enemySpy.getEnemies.and.returnValue(new Map());
+      enemySpy.stepEnemiesOneTurn.and.returnValue([]);
       gameStateSpy.addStreakBonus.and.returnValue(0);
       gameStateSpy.getStreak.and.returnValue(0);
       gameStateSpy.awardInterest.and.returnValue(0);
@@ -819,71 +1083,227 @@ describe('CombatLoopService', () => {
       gameStateSpy.getState.and.callFake(() => ({
         phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.VICTORY,
         wave: 10, lives: 10, gold: 100, score: 500, isPaused: false,
-        isEndless: false, gameSpeed: 1, difficulty: 'normal',
+        isEndless: false, difficulty: 'normal',
         maxWaves: 10, elapsedTime: 60, consecutiveWavesWithoutLeak: 5,
         highestWave: 0, activeModifiers: new Set(),
       } as any));
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
+      const result = service.resolveTurn(scene);
 
       expect(result.waveCompletion!.resultPhase).toBe(GamePhase.VICTORY);
-      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(true, null);
+      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(true, jasmine.any(Number));
       expect(result.gameEnd).not.toBeNull();
       expect(result.gameEnd!.isVictory).toBeTrue();
     });
+
+    it('multi-turn: three turns of combat → turn counter increments correctly', () => {
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+
+      expect(service.getTurnNumber()).toBe(3);
+    });
+
+    it('multi-turn: kills accumulate independently each turn (no cross-turn bleed)', () => {
+      const e1 = makeEnemy({ id: 'e1', value: 5 });
+      const e2 = makeEnemy({ id: 'e2', value: 5 });
+
+      // Turn 1: kill e1
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', e1]]));
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e1', damage: 5, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
+      const result1 = service.resolveTurn(scene);
+
+      // Turn 2: kill e2
+      enemySpy.getEnemies.and.returnValue(new Map([['e2', e2]]));
+      combatSpy.fireTurn.and.returnValue({ killed: [{ id: 'e2', damage: 5, towerType: null, towerLevel: 0 }], fired: [], hitCount: 0, damageDealt: 0 });
+      const result2 = service.resolveTurn(scene);
+
+      expect(result1.kills.length).toBe(1);
+      expect(result1.kills[0].value).toBe(5);
+      expect(result2.kills.length).toBe(1);
+      expect(result2.kills[0].value).toBe(5);
+    });
   });
 
-  // ─── defensive copies: kills and firedTypes ──────────────────────────────
+  // ─── checkpoint state accessors ─────────────────────────────────────────────
 
-  describe('tick() — defensive copy of kills and firedTypes', () => {
-    it('mutating the returned kills array does not affect the next tick result', () => {
+  describe('checkpoint state accessors', () => {
+    it('getTurnNumber()/setTurnNumber() roundtrip', () => {
+      service.resolveTurn(scene);
+      expect(service.getTurnNumber()).toBe(1);
+
+      service.setTurnNumber(42);
+      expect(service.getTurnNumber()).toBe(42);
+    });
+
+    it('getLeakedThisWave()/setLeakedThisWave() roundtrip', () => {
+      expect(service.getLeakedThisWave()).toBe(false);
+
+      service.setLeakedThisWave(true);
+      expect(service.getLeakedThisWave()).toBe(true);
+
+      service.setLeakedThisWave(false);
+      expect(service.getLeakedThisWave()).toBe(false);
+    });
+  });
+
+  // ─── feedback signals — Fix 1: REINFORCED_WALLS notification ────────────────
+
+  describe('feedback signals — Reinforced Walls notification', () => {
+    let relicSpy: jasmine.SpyObj<RelicService>;
+
+    beforeEach(() => {
+      relicSpy = TestBed.inject(RelicService) as jasmine.SpyObj<RelicService>;
+    });
+
+    it('shows INFO notification when shouldBlockLeak() returns true', () => {
+      relicSpy.shouldBlockLeak.and.returnValue(true);
+      const enemy = makeEnemy({ id: 'e1' });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
+
+      service.resolveTurn(scene);
+
+      expect(notificationSpy.show).toHaveBeenCalledWith(
+        NotificationType.INFO,
+        'Reinforced Walls',
+        'Reinforced Walls blocked a leak',
+      );
+    });
+
+    it('does NOT show Reinforced Walls notification when shouldBlockLeak() returns false', () => {
+      relicSpy.shouldBlockLeak.and.returnValue(false);
+      const enemy = makeEnemy({ id: 'e1' });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
+
+      service.resolveTurn(scene);
+
+      const reinforcedCalls = notificationSpy.show.calls.allArgs()
+        .filter(args => args[1] === 'Reinforced Walls');
+      expect(reinforcedCalls.length).toBe(0);
+    });
+  });
+
+  // ─── feedback signals — Fix 1: LUCKY_COIN notification ─────────────────────
+
+  describe('feedback signals — Lucky Coin notification', () => {
+    let relicSpy: jasmine.SpyObj<RelicService>;
+
+    beforeEach(() => {
+      relicSpy = TestBed.inject(RelicService) as jasmine.SpyObj<RelicService>;
+    });
+
+    it('shows ONE aggregated INFO notification when rollLuckyCoin() procs on a single kill', () => {
+      relicSpy.rollLuckyCoin.and.returnValue(1.5);
       const enemy = makeEnemy({ id: 'e1', value: 10 });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
-      combatSpy.update.and.returnValue({ killed: [{ id: 'e1', damage: 5 }], fired: [], hitCount: 0 });
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'e1', damage: 10, towerType: null, towerLevel: 0 }],
+        fired: [], hitCount: 0, damageDealt: 0,
+      });
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
-      // Poison the returned array after consumption
-      result.kills.push({ damage: 999, position: { x: 0, y: 0, z: 0 }, color: 0, value: 999 });
+      service.resolveTurn(scene);
 
-      // Next tick with no kills — the internal buffer should be unaffected
-      combatSpy.update.and.returnValue({ killed: [], fired: [], hitCount: 0 });
-      enemySpy.getEnemies.and.returnValue(new Map());
-      const next = service.tick(FIXED_DT, 1, scene, null);
-
-      expect(next.kills.length).toBe(0);
+      const luckyCalls = notificationSpy.show.calls.allArgs()
+        .filter(args => args[1] === 'Lucky Coin');
+      expect(luckyCalls.length).toBe(1);
+      expect(luckyCalls[0][0]).toBe(NotificationType.INFO);
+      expect(luckyCalls[0][2]).toMatch(/^\+\d+ bonus gold \(Lucky Coin\)$/);
     });
 
-    it('mutating the returned firedTypes set does not affect the next tick result', () => {
-      combatSpy.update.and.returnValue({ killed: [], fired: [TowerType.BASIC], hitCount: 0 });
+    it('aggregates multiple procs per turn into ONE notification with count', () => {
+      relicSpy.rollLuckyCoin.and.returnValue(1.5);
+      const e1 = makeEnemy({ id: 'e1', value: 10 });
+      const e2 = makeEnemy({ id: 'e2', value: 10 });
+      const e3 = makeEnemy({ id: 'e3', value: 10 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', e1], ['e2', e2], ['e3', e3]]));
+      combatSpy.fireTurn.and.returnValue({
+        killed: [
+          { id: 'e1', damage: 10, towerType: null, towerLevel: 0 },
+          { id: 'e2', damage: 10, towerType: null, towerLevel: 0 },
+          { id: 'e3', damage: 10, towerType: null, towerLevel: 0 },
+        ],
+        fired: [], hitCount: 0, damageDealt: 0,
+      });
 
-      const result = service.tick(FIXED_DT, 1, scene, null);
-      expect(result.firedTypes.has(TowerType.BASIC)).toBeTrue();
-      // Poison the returned set
-      result.firedTypes.add(TowerType.SNIPER);
+      service.resolveTurn(scene);
 
-      // Next tick with no fired types — internal set should be unaffected
-      combatSpy.update.and.returnValue({ killed: [], fired: [], hitCount: 0 });
-      const next = service.tick(FIXED_DT, 1, scene, null);
-
-      expect(next.firedTypes.has(TowerType.BASIC)).toBeFalse();
-      expect(next.firedTypes.has(TowerType.SNIPER)).toBeFalse();
+      const luckyCalls = notificationSpy.show.calls.allArgs()
+        .filter(args => args[1] === 'Lucky Coin');
+      expect(luckyCalls.length).toBe(1);
+      expect(luckyCalls[0][2]).toMatch(/^Lucky Coin ×3 \(\+\d+ bonus gold\)$/);
     });
 
-    it('returned kills array is a snapshot — contains events from current tick only', () => {
-      const enemy = makeEnemy({ id: 'e1', value: 5 });
+    it('does NOT show Lucky Coin notification when rollLuckyCoin() returns 1', () => {
+      relicSpy.rollLuckyCoin.and.returnValue(1);
+      const enemy = makeEnemy({ id: 'e1', value: 10 });
       enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
-      combatSpy.update.and.returnValue({ killed: [{ id: 'e1', damage: 3 }], fired: [], hitCount: 0 });
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'e1', damage: 10, towerType: null, towerLevel: 0 }],
+        fired: [], hitCount: 0, damageDealt: 0,
+      });
 
-      const first = service.tick(FIXED_DT, 1, scene, null);
+      service.resolveTurn(scene);
 
-      // Second tick with no kills
-      combatSpy.update.and.returnValue({ killed: [], fired: [], hitCount: 0 });
-      enemySpy.getEnemies.and.returnValue(new Map());
-      service.tick(FIXED_DT, 1, scene, null);
+      const luckyCalls = notificationSpy.show.calls.allArgs()
+        .filter(args => args[1] === 'Lucky Coin');
+      expect(luckyCalls.length).toBe(0);
+    });
+  });
 
-      // The first result should still hold the original kill (it's a copy, not a reference)
-      expect(first.kills.length).toBe(1);
-      expect(first.kills[0].damage).toBe(3);
+  // ─── feedback signals — Fix 2: boss-kill screen shake ───────────────────────
+
+  describe('feedback signals — boss-kill screen shake', () => {
+    it('triggers screen shake with bossHitIntensity when a BOSS enemy is killed', () => {
+      const boss = makeEnemy({ id: 'boss1', type: EnemyType.BOSS, value: 50 });
+      enemySpy.getEnemies.and.returnValue(new Map([['boss1', boss]]));
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'boss1', damage: 50, towerType: TowerType.BASIC, towerLevel: 1 }],
+        fired: [], hitCount: 1, damageDealt: 50,
+      });
+
+      service.resolveTurn(scene);
+
+      expect(screenShakeSpy.trigger).toHaveBeenCalledWith(
+        SCREEN_SHAKE_CONFIG.bossHitIntensity,
+        SCREEN_SHAKE_CONFIG.bossHitDuration,
+      );
+    });
+
+    it('does NOT trigger boss screen shake when a non-BOSS enemy is killed', () => {
+      const basic = makeEnemy({ id: 'e1', type: EnemyType.BASIC, value: 10 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', basic]]));
+      combatSpy.fireTurn.and.returnValue({
+        killed: [{ id: 'e1', damage: 10, towerType: TowerType.BASIC, towerLevel: 1 }],
+        fired: [], hitCount: 1, damageDealt: 10,
+      });
+
+      service.resolveTurn(scene);
+
+      expect(screenShakeSpy.trigger).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── feedback signals — Fix 3: life-loss audio ──────────────────────────────
+
+  describe('feedback signals — life-loss audio', () => {
+    it('calls audioService.playLifeLoss() when loseLife() is invoked on a leak', () => {
+      const enemy = makeEnemy({ id: 'e1', leakDamage: 1 });
+      enemySpy.getEnemies.and.returnValue(new Map([['e1', enemy]]));
+      enemySpy.stepEnemiesOneTurn.and.returnValue(['e1']);
+
+      service.resolveTurn(scene);
+
+      expect(audioSpy.playLifeLoss).toHaveBeenCalled();
+    });
+
+    it('does NOT call audioService.playLifeLoss() when no enemy leaks', () => {
+      enemySpy.stepEnemiesOneTurn.and.returnValue([]);
+
+      service.resolveTurn(scene);
+
+      expect(audioSpy.playLifeLoss).not.toHaveBeenCalled();
     });
   });
 });

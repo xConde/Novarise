@@ -194,6 +194,63 @@ GameBoardComponent
 
 **Achievement categories** (`achievement.model.ts`): 26 achievements across 4 categories: Combat, Campaign, Endless, Challenge. Threshold constants and helper functions extracted from `PlayerProfileService` into a dedicated model file.
 
+## Ascent Mode (Roguelite Shell)
+
+**Route:** `/ascent` — lazy-loaded `AscentModule`
+
+**Module structure:**
+- `AscentComponent` — root coordinator with view mode state machine (`start` | `map` | `reward` | `shop` | `rest` | `event` | `act-transition` | `summary`)
+- `NodeMapComponent` — SVG node map rendering with bezier-curve connections and absolute-positioned node buttons
+- `RewardScreenComponent` — post-combat relic choice (pick one of 3, or skip)
+- `ShopScreenComponent` — relic shop + per-life healing
+- `RestScreenComponent` — campfire heal with CSS-only fire animation
+- `EventScreenComponent` — narrative choice events with outcome panel
+- `ActTransitionComponent` — act completion overlay showing boss name and act stats
+- `RunSummaryComponent` — end-of-run stats: score, kills, gold, timeline, relic strip
+- `RelicInventoryComponent` — compact relic bar with mouse-position-clamped tooltips
+
+**Services (all root-scoped via `providedIn: 'root'`, survive `/ascent` ↔ `/play` transitions):**
+- `RunService` — central run orchestrator; BehaviorSubject state for `runState$` and `nodeMap$`; manages full lifecycle: start → encounter → reward → advance → end
+- `RelicService` — pull-model relic effects; cached `RelicModifiers` rebuilt only when relic set changes; trigger-based relics (`ARCHITECTS_BLUEPRINT`, `REINFORCED_WALLS`, `LUCKY_COIN`) handled separately
+- `NodeMapGeneratorService` — deterministic seeded node graph (mulberry32 RNG); 11 content rows + boss row; SHOP guaranteed row 5, REST guaranteed row 8
+- `WaveGeneratorService` — procedural wave composition with depth-tiered enemy pools; elite nodes inject a BOSS wave; boss nodes use themed presets from `boss-presets.ts`
+- `EncounterService` — node → `EncounterConfig` orchestration; loads campaign map into `MapBridgeService` before `/play` navigation
+- `RunEventBusService` — pub-sub `Subject<RunEvent>` for cross-service events (encounter start/end, wave, kills, gold)
+- `RunPersistenceService` — localStorage save/resume; keys: `novarise_ascent_run`, `novarise_ascent_map`, `novarise_ascent_max_ascension`
+
+**Constants** (`ascent/constants/ascent.constants.ts`):
+- `NODE_MAP_CONFIG` — row counts, node type weights, guaranteed row positions, elite row bounds
+- `ENCOUNTER_CONFIG` — wave counts per encounter type, enemy scaling, elite/boss health/gold multipliers
+- `REWARD_CONFIG` — gold base/per-row, relic choice counts, elite/boss gold reward multipliers
+- `SHOP_CONFIG` — relic count, price by rarity, heal cost/limit
+- `REST_CONFIG` — heal percentage (0.3), minimum heal (2)
+- `RUN_CONFIG` — seed primes for resume/act progression, score per kill, min starting gold/lives
+- `RELIC_EFFECT_CONFIG` — non-obvious relic numeric values (IRON_HEART bonus, LUCKY_COIN probability/multiplier, tower-specific multipliers)
+- `createSeededRng(seed)` — mulberry32 PRNG returning `[0, 1)` floats
+
+**Integration points with existing game:**
+- `TowerCombatService`: reads `RelicService.getDamageMultiplier()`, `getFireRateMultiplier()`, `getRangeMultiplier()`, `getSplashRadiusMultiplier()`, `getChainBounceBonus()`, `rollLuckyCoin()`
+- `CombatLoopService`: reads `RelicService.getGoldMultiplier()`, `shouldBlockLeak()`, emits `RunEventBusService` events
+- `TowerInteractionService`: reads `RelicService.getTowerCostMultiplier()`, `getUpgradeCostMultiplier()`, `getSellRefundRate()`, `isNextTowerFree()` / `consumeFreeTower()`
+- `EnemyService`: reads `RelicService.getEnemySpeedMultiplier()`, `getSpawnIntervalMultiplier()`
+- `GameStateService`: ascension modifier effects applied via `EncounterConfig`; `setInitialLives()` receives lives from `RunState`
+- `GameBoardComponent`: calls `RunService.recordEncounterResult()` on victory/defeat; reads `EncounterConfig` for wave definitions
+
+**Data flow:**
+```
+AscentComponent → RunService.prepareEncounter()
+  → EncounterService.prepareEncounter() + loadEncounterMap()
+      → WaveGeneratorService (waves)
+      → CampaignMapService.loadLevel() → MapBridgeService.setEditorMapState()
+  → navigate /play
+      → GameBoardComponent reads map + encounter waves
+      → on finish → RunService.recordEncounterResult()
+  → navigate /ascent
+      → AscentComponent.handleEncounterReturn()
+          → RunService.consumePendingEncounterResult()
+          → victory: show reward screen; defeat: show summary
+```
+
 ## Extracted Services (hardening history)
 
 Services extracted from the god component and oversized services over multiple hardening branches:

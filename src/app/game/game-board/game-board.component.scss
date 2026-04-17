@@ -6,11 +6,73 @@
   font-family: "Orbitron", sans-serif;
 }
 
+// Phase 7: Combat shell — CSS Grid with named template areas.
+// Every primary UI slot is reserved even when empty; `visibility: hidden`
+// (not `*ngIf`) is the preferred toggle inside a reserved cell so siblings
+// never shift. Overlays (pause menu, banners, toasts, tutorials) remain
+// absolutely positioned — they're floaters, not shell elements.
+//
+// Named grid areas:
+//   hud        — top bar HUD (lives, gold, wave, score)
+//   preview    — left sidebar: incoming spawn timeline
+//   canvas     — Three.js render target
+//   sidepanel  — right sidebar: setup panel / tower info / wave preview
+//   hand       — card hand at the bottom
+//
+// Media queries SCALE the grid tracks — they never reshuffle areas. Mobile
+// collapses sidepanel width and drops preview to a thin strip rather than
+// rearranging the order.
 .board-container {
-  --tower-bar-height: 9rem; // shared anchor: icon(40px) + text(48px) + padding(20px+20px) + bar-padding(20px) ≈ 148px
+  --shell-hud-height: 4rem;
+  // 10rem fits the 8.5rem cards (description moved to right-click modal)
+  // plus ~1.5rem of hover-lift headroom. Shrunk from 12.5rem after
+  // Phase 13 card-face simplification.
+  --shell-hand-height: 10rem;
+  // Shell positioning tokens — used throughout _game-*.scss partials.
+  // Desktop defaults; mobile overrides in @media (max-width:480px) block below.
+  // Rationale:
+  //   --shell-hud-top/left:          HUD bar position (top-left corner)
+  //   --shell-end-turn-top:          End Turn button position (top-center)
+  //   --shell-minimap-bottom/left:   Minimap position (bottom-left above hand)
+  //   --shell-controls-bottom/right: Game controls position (bottom-right)
+  //   --shell-spawn-top/left:        INCOMING spawn preview (below HUD+challenges)
+  //   --shell-wave-top/right:        Wave/Next Wave panel (top-right)
+  //   --shell-recap-top/right:       RECAP turn-history panel (mirrors spawn preview on the right)
+  //   --shell-tower-info-bottom:     Tower info panel (bottom-center above hand)
+  --shell-hud-top: var(--spacing-sm);
+  --shell-hud-left: var(--spacing-sm);
+  --shell-end-turn-top: var(--spacing-sm);
+  --shell-minimap-bottom: var(--spacing-sm);
+  --shell-minimap-left: var(--spacing-sm);
+  --shell-controls-bottom: var(--spacing-sm);
+  --shell-controls-right: var(--spacing-sm);
+  // Leave room for HUD bar + challenge indicator strip below it (~3rem) before stacking spawn preview
+  --shell-spawn-top: calc(var(--shell-hud-top) + var(--shell-hud-height) + 3rem);
+  --shell-spawn-left: var(--spacing-sm);
+  --shell-wave-top: var(--spacing-sm);
+  --shell-wave-right: var(--spacing-sm);
+  // Recap panel sits at the same vertical offset as INCOMING but on the right edge.
+  // During INTERMISSION/SETUP, `.wave-preview` occupies top-right — push RECAP
+  // below it (the :has() rule further down overrides --shell-recap-top then).
+  --shell-recap-top: var(--shell-spawn-top);
+  --shell-recap-right: var(--spacing-sm);
+  --shell-tower-info-bottom: var(--spacing-sm);
 
-  display: flex;
-  flex-direction: column;
+  // When the wave-preview panel is mounted (INTERMISSION / SETUP phases), it
+  // owns the top-right corner. The RECAP sits right under it — max-height of
+  // wave-preview is min(45vh, 350px), so ~24rem top clears it on all screens
+  // tall enough to matter.
+  &:has(.canvas-overlays > .wave-preview) {
+    --shell-recap-top: calc(var(--shell-wave-top) + 24rem);
+  }
+
+  // Sprint 2: 1-column grid (canvas fills available space, hand row below)
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr var(--shell-hand-height);
+  grid-template-areas:
+    "canvas"
+    "hand";
   border: var(--border-width-thin) solid var(--game-primary);
   height: 100%;
   width: 100%;
@@ -21,81 +83,322 @@
     border-top: var(--border-width-thin) solid var(--game-primary);
   }
 
+  @media (max-width:768px) {
+    --shell-hand-height: 8.5rem;
+  }
+
+  @media (max-width:480px) {
+    --shell-hand-height: 7.5rem;
+    --shell-hud-height: 3rem;
+    // End Turn sits cleanly below HUD with a visible gap (not flush)
+    --shell-end-turn-top: calc(var(--shell-hud-top) + var(--shell-hud-height) + var(--spacing-sm));
+    // Mobile stacking: HUD → End Turn → challenge pills → wave status → spawn preview.
+    // Spawn preview sits well below to avoid the stacked overlay cluster.
+    --shell-spawn-top: calc(var(--shell-end-turn-top) + 7.5rem);
+    --shell-hud-top: var(--spacing-xs);
+    --shell-hud-left: var(--spacing-xs);
+    --shell-minimap-bottom: var(--spacing-sm);
+    --shell-minimap-left: var(--spacing-xs);
+    --shell-controls-bottom: var(--spacing-xs);
+    --shell-controls-right: var(--spacing-sm);
+  }
+
   .canvas-container {
+    grid-area: canvas;
     width: 100%;
-    flex: 1;
+    height: 100%;
     position: relative;
     overflow: hidden;
   }
 
-  // --- Top-right controls cluster ---
-  .top-right-controls {
-    position: absolute;
-    top: var(--spacing-md);
-    right: var(--spacing-md);
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    z-index: var(--z-index-overlay);
-  }
+  // Sprint 5: canvas-overlays — sits in the canvas grid cell, stacks on top of
+  // .canvas-container via DOM order. All HUD overlay elements live inside here.
+  // pointer-events: none so the overlay div itself doesn't block canvas input;
+  // children opt back in via pointer-events: auto.
+  .canvas-overlays {
+    grid-area: canvas;
+    position: relative;
+    pointer-events: none;
+    z-index: var(--z-index-base);
 
-  .help-btn {
-    @include glass-panel;
-    width: 2.75rem;
-    height: 2.75rem;
-    padding: 0;
-    border: var(--border-width-thin) solid var(--theme-purple-a50);
-    color: var(--theme-purple-mid);
-    line-height: 0;
-    cursor: pointer;
-    transition: all var(--transition-fast) ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-
-    &:hover {
-      background: var(--theme-purple-a30);
-      border-color: var(--theme-purple-a80);
-      color: var(--theme-purple-lighter);
+    > * {
+      pointer-events: auto;
     }
   }
 
-  // --- FPS counter ---
+  // FPS counter — top-right corner, monospace, semi-transparent debug overlay.
+  // pointer-events:none so it never blocks canvas input.
   .fps-counter {
-    color: var(--theme-purple-mid);
-    font-family: "Orbitron", sans-serif;
-    font-size: 0.7rem;
-    opacity: 0.6;
+    position: absolute;
+    top: var(--spacing-xs, 0.25rem);
+    right: var(--spacing-xs, 0.25rem);
+    font-family: monospace;
+    font-size: var(--font-size-2xs);
+    color: rgba(255, 255, 255, 0.6);
+    background: rgba(0, 0, 0, 0.45);
+    padding: 0.125rem 0.35rem;
+    border-radius: 0.2rem;
+    pointer-events: none;
+    z-index: var(--z-index-overlay);
+    user-select: none;
   }
 
-  .audio-toggle-btn {
-    @include glass-panel;
-    min-width: 2.75rem;
-    min-height: 2.75rem;
-    padding: var(--spacing-xs) var(--spacing-sm);
-    border: var(--border-width-thin) solid var(--theme-purple-a50);
-    color: var(--theme-purple-mid);
-    cursor: pointer;
-    transition: all var(--transition-fast) ease;
-    line-height: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  // M1 S4: card-hand host gets the `hand` grid area (bottom row).
+  // The component's inner `.card-hand` class handles visual layout inside
+  // the slot via flex. Position:fixed was replaced with grid placement.
+  app-card-hand {
+    grid-area: hand;
+    display: block;
+    width: 100%;
+    height: 100%;
+    z-index: calc(var(--z-index-overlay) + 5);
+  }
 
-    &:hover {
-      background: var(--theme-purple-a30);
-      border-color: var(--theme-purple-a80);
-      color: var(--theme-purple-lighter);
+  // --- Phase H9: Wave preview ---
+  // Shown during SETUP (first-time wave preview) and INTERMISSION (next-wave
+  // summary). Will be repositioned in Phase 3 using shell positioning variables.
+  .wave-preview {
+    min-width: 14rem;
+    max-width: 18rem;
+
+    @media (max-width:1023px) {
+      display: none;
     }
   }
+
+  // --- Phase 15: RECAP turn-history panel ---
+  // The component owns its own glass-panel shell + positioning (see
+  // last-turn-summary.component.scss :host rule). Placed here as an
+  // orientation comment only so future readers searching the ancestor SCSS
+  // can find the sibling of .spawn-preview.
+
+  // --- Phase 7: Spawn preview ---
+  // Always visible during COMBAT. Repositioned in Phase 3 as absolute overlay.
+  .spawn-preview {
+    @include glass-panel(rgba(10, 15, 30, 0.82));
+    position: absolute;
+    top: var(--shell-spawn-top);
+    left: var(--shell-spawn-left);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: var(--border-width-thin) solid var(--panel-blue-border);
+    color: var(--text-color);
+    pointer-events: none;
+    z-index: var(--z-index-overlay);
+
+    @media (max-width:768px) {
+      display: none;
+    }
+
+    .spawn-preview__title {
+      margin: 0 0 var(--spacing-xs) 0;
+      font-size: var(--font-size-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      opacity: 0.7;
+      font-weight: 600;
+    }
+
+    // Future-wave block — only rendered when scout card / relic is active.
+    // Sits below the Incoming turn list with a top divider to signal the
+    // different scope (future waves, not current-wave turns).
+    .spawn-preview__future {
+      margin-top: var(--spacing-sm);
+      padding-top: var(--spacing-xs);
+      border-top: var(--border-width-thin) solid rgba(255, 215, 0, 0.25);
+
+      .spawn-preview__subtitle {
+        margin: 0 0 var(--spacing-xs) 0;
+        font-size: var(--font-size-2xs);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--game-gold);
+        font-weight: 700;
+      }
+
+      .spawn-preview__future-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+      }
+
+      .spawn-preview__future-wave {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        font-size: var(--font-size-xs);
+      }
+    }
+
+    .spawn-preview__list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .spawn-preview__turn {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      font-size: var(--font-size-xs);
+
+      &--empty {
+        opacity: 0.4;
+      }
+    }
+
+    .spawn-preview__label {
+      min-width: 2.25rem;
+      font-weight: 700;
+      color: var(--panel-blue-accent);
+    }
+
+    .spawn-preview__spawns {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: var(--spacing-xs);
+    }
+
+    .spawn-preview__enemy {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.15rem;
+    }
+
+    .spawn-preview__dot {
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .spawn-preview__count {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .spawn-preview__label {
+      font-size: var(--font-size-3xs);
+      color: var(--text-muted, rgba(255, 255, 255, 0.5));
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-left: 0.15rem;
+    }
+
+    .spawn-preview__empty {
+      font-style: italic;
+      opacity: 0.5;
+    }
+
+    // Enemy-type dot colors — mirrors _game-wave.scss wave-preview dot rules
+    // scoped to .spawn-preview so they apply to the INCOMING panel as well.
+    .enemy-dot[data-type='basic']    { background: var(--enemy-color-basic);   box-shadow: 0 0 4px var(--enemy-glow-basic); }
+    .enemy-dot[data-type='fast']     { background: var(--enemy-color-fast);    box-shadow: 0 0 4px var(--enemy-glow-fast); }
+    .enemy-dot[data-type='heavy']    { background: var(--enemy-color-heavy);   box-shadow: 0 0 4px var(--enemy-glow-heavy); }
+    .enemy-dot[data-type='swift']    { background: var(--enemy-color-flying);  box-shadow: 0 0 4px var(--enemy-glow-flying); }
+    .enemy-dot[data-type='boss']     { background: var(--enemy-color-boss);    box-shadow: 0 0 4px var(--enemy-glow-boss); }
+    .enemy-dot[data-type='shielded'] { background: var(--enemy-color-shield);  box-shadow: 0 0 4px var(--enemy-glow-shielded); }
+    .enemy-dot[data-type='swarm']    { background: var(--enemy-color-swarm);   box-shadow: 0 0 4px var(--enemy-glow-swarm); }
+    .enemy-dot[data-type='flying']   { background: var(--enemy-color-flying);  box-shadow: 0 0 4px var(--enemy-glow-flying); }
+  }
+
+  // --- Phase 4: End Turn button (turn-based combat) ---
+  // Positioned top-center during COMBAT phase. Shell migration in Phase 7 will
+  // move this into a dedicated grid slot.
+  .end-turn-btn {
+    @include glass-panel(rgba(30, 10, 50, 0.88));
+    position: absolute;
+    top: var(--shell-end-turn-top);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: var(--spacing-sm) var(--spacing-xl);
+    border: var(--border-width-medium) solid var(--theme-purple-a80);
+    color: var(--text-color);
+    font-size: var(--font-size-small);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all var(--transition-fast) ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.125rem;
+    min-width: 8rem;
+    min-height: 3rem;
+    z-index: calc(var(--z-index-overlay) + 1);
+    box-shadow: 0 0 1.25rem rgba(160, 100, 220, 0.4);
+
+    &:hover:not(:disabled) {
+      background: rgba(60, 20, 90, 0.9);
+      border-color: var(--theme-purple-lighter);
+      box-shadow: 0 0 1.5rem rgba(200, 140, 255, 0.6);
+      transform: translateX(-50%) translateY(-1px);
+    }
+
+    &:active:not(:disabled) {
+      transform: translateX(-50%) translateY(1px);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .end-turn-label {
+      text-transform: uppercase;
+    }
+
+    .end-turn-hint {
+      font-size: var(--font-size-xs);
+      opacity: 0.7;
+      font-weight: 400;
+      letter-spacing: 0.1em;
+    }
+
+    // Sprint 39: hand-stuck pulse — gentle cyan nudge when no cards are playable.
+    // No !important — the keyframe drives box-shadow entirely; specificity of
+    // .end-turn-btn.end-turn-btn--stuck already beats the :hover rule.
+    &--stuck {
+      animation: end-turn-stuck-pulse 2s ease-in-out infinite;
+      border-color: var(--theme-cyan);
+    }
+  }
+
+  @keyframes end-turn-stuck-pulse {
+    0%, 100% {
+      box-shadow: 0 0 1.25rem rgba(0, 255, 255, 0.4);
+      border-color: var(--theme-cyan);
+    }
+    50% {
+      box-shadow: 0 0 1.75rem rgba(0, 255, 255, 0.7);
+      border-color: #88ffff;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .end-turn-btn--stuck {
+      animation: none;
+    }
+    .path-blocked-warning {
+      animation: none;
+    }
+    .context-lost-hint {
+      animation: none;
+    }
+  }
+
 
   // Game HUD styles moved to src/styles.css (.board-container .game-hud) for ViewEncapsulation.None reach
   // Wave status row now lives inside the HUD component — styles in src/styles/_game-hud.scss
 
   .path-blocked-warning {
     position: absolute;
-    top: calc(var(--spacing-md) + 5rem);
+    top: calc(var(--shell-end-turn-top) + 4.25rem);
     left: 50%;
     transform: translateX(-50%);
     padding: 0.4rem var(--spacing-lg);
@@ -104,7 +407,7 @@
     border-radius: var(--border-radius-md);
     color: #fff;
     font-family: "Orbitron", sans-serif;
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
     font-weight: 600;
     white-space: nowrap;
     z-index: var(--z-index-overlay);
@@ -115,6 +418,17 @@
   @keyframes path-blocked-fade-in {
     from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
     to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
+  @media (max-width: 480px) {
+    .path-blocked-warning {
+      top: calc(var(--shell-end-turn-top) + 3rem);
+      font-size: var(--font-size-2xs);
+      padding: 0.3rem var(--spacing-md);
+      max-width: 80vw;
+      white-space: normal;
+      text-align: center;
+    }
   }
 
   // Wave preview panel — styles moved to src/styles.css (.board-container .wave-preview)
@@ -173,7 +487,7 @@
       background: var(--theme-purple);
       color: var(--text-color);
       border: none;
-      border-radius: 4px;
+      border-radius: var(--border-radius-sm);
       cursor: pointer;
       min-height: 2.75rem;
 
@@ -200,43 +514,15 @@
 // --- Responsive breakpoints ---
 // Tablet (max-width: 768px) — HUD and overlay responsive rules moved to src/styles.css
 
-// Mobile (max-width: 480px) — HUD responsive rules moved to src/styles.css; only non-HUD rules remain
-@media (max-width:480px) {
-  .board-container {
-    --tower-bar-height: 7.75rem; // 2-row grid: 10px pad + 44px row + 5px gap + 44px row + 10px pad + border + radius = 124px
-
-    // Victory/defeat overlay — responsive rules moved to src/styles.css (child component can't be reached by scoped CSS)
-  }
-}
-
 // --- Animations ---
-@keyframes pulse-critical {
-  from { opacity: 1; }
-  to { opacity: 0.5; }
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.8);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
+// pulse-critical, fade-in, scale-in keyframes are canonical in src/styles/_animations.scss.
+// Removed duplicates here to avoid divergence. pulse-critical canonical: opacity 1→0.4.
 
 // hud-value-pulse, gold-change-float keyframes moved to src/styles.css
 // prefers-reduced-motion and body.reduce-motion HUD animation blocks moved to src/styles.css
 
 // wave-preview-in keyframe moved to src/styles.css
 
-// help-overlay moved to src/styles.css (.board-container .help-overlay)
 
 // --- Drag cursor override ---
 // !important required: Three.js sets cursor via inline styles on the canvas element
@@ -245,3 +531,112 @@
 }
 
 // mode-indicator moved to src/styles.css (.board-container .mode-indicator)
+
+// --- Turn-start banner (Sprint 21) ---
+
+.board-container .turn-start-banner {
+  position: absolute;
+  top: calc(var(--shell-end-turn-top) + 6rem);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--spacing-sm) var(--spacing-xl);
+  background: rgba(10, 20, 40, 0.9);
+  border: var(--border-width-thin) solid var(--theme-cyan);
+  border-radius: var(--border-radius-md);
+  color: var(--theme-cyan);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: calc(var(--z-index-overlay) + 1);
+  box-shadow: 0 0 1rem rgba(0, 255, 255, 0.3);
+  white-space: nowrap;
+  animation: turn-banner-flash 1.2s ease-out forwards;
+}
+
+@keyframes turn-banner-flash {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(-0.5rem) scale(0.9); }
+  20%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  80%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .turn-start-banner {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+body.reduce-motion .board-container .path-blocked-warning { animation: none; }
+body.reduce-motion .board-container .context-lost-hint { animation: none; }
+
+
+// ── Placement mode indicator — floats in canvas area during tower placement ──
+
+.board-container .placement-indicator {
+  position: absolute;
+  bottom: calc(var(--spacing-lg) + 1rem);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 0.5rem 1rem;
+  background: rgba(255, 215, 0, 0.12);
+  border: var(--border-width-thin) solid rgba(255, 215, 0, 0.5);
+  border-radius: var(--border-radius-md);
+  backdrop-filter: blur(6px);
+  color: var(--game-gold);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: var(--z-index-overlay);
+  box-shadow: 0 0 1rem rgba(255, 215, 0, 0.2);
+  animation: placement-indicator-pulse 1.6s ease-in-out infinite;
+}
+
+.board-container .placement-indicator__text {
+  color: var(--game-gold);
+}
+
+.board-container .placement-indicator__hint {
+  opacity: 0.6;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: var(--font-size-2xs);
+
+  &::before {
+    content: '·';
+    margin: 0 0.4rem;
+    opacity: 0.5;
+  }
+}
+
+@keyframes placement-indicator-pulse {
+  0%, 100% { box-shadow: 0 0 1rem rgba(255, 215, 0, 0.2); border-color: rgba(255, 215, 0, 0.5); }
+  50%       { box-shadow: 0 0 1.5rem rgba(255, 215, 0, 0.45); border-color: rgba(255, 215, 0, 0.8); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .placement-indicator { animation: none; }
+}
+
+body.reduce-motion .board-container .placement-indicator { animation: none; }
+
+@media (max-width: 480px) {
+  .board-container .placement-indicator {
+    bottom: calc(var(--spacing-sm) + 0.5rem);
+    padding: 0.35rem 0.7rem;
+    font-size: var(--font-size-2xs);
+
+    .placement-indicator__hint { display: none; }
+  }
+}

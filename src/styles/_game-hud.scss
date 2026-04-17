@@ -8,12 +8,12 @@
   font-family: "Orbitron", sans-serif;
 
   position: absolute;
-  top: var(--spacing-md);
-  left: 50%;
-  transform: translateX(-50%);
+  top: var(--shell-hud-top);
+  left: var(--shell-hud-left);
+  max-width: min(55vw, 26rem);
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 0;
   padding: var(--spacing-sm) var(--spacing-lg);
   border: var(--border-width-thin) solid var(--border-color);
@@ -24,6 +24,7 @@
   .board-container .game-hud {
     padding: var(--spacing-xs) var(--spacing-md);
     font-size: var(--font-size-small);
+    max-width: min(50vw, 22rem);
   }
 }
 
@@ -39,40 +40,76 @@
   }
 }
 
-.board-container .game-hud .challenge-indicators {
+/* Challenge indicators — extracted from HUD, positioned below it (Sprint 11-12) */
+.board-container .hud-challenge-strip {
+  position: absolute;
+  top: calc(var(--shell-hud-top) + var(--shell-hud-height) + var(--spacing-xs));
+  left: var(--shell-hud-left);
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
-  justify-content: center;
-  margin-top: 0.25rem;
-  padding-top: 0.25rem;
-  border-top: 1px solid var(--border-color-subtle);
-  width: 100%;
+  max-width: min(55vw, 26rem);
+  pointer-events: none;
+  z-index: var(--z-index-overlay);
 }
 
-/* Wave status row (enemies remaining) — lives inside the HUD so it flows below challenge indicators */
-.board-container .game-hud .hud-wave-status {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  margin-top: 0.25rem;
-  padding-top: 0.25rem;
-  border-top: 1px solid var(--border-color-subtle);
-  width: 100%;
+/* Wave status row (enemies remaining) — extracted from HUD, centered below End Turn (Sprint 11-12) */
+.board-container .hud-wave-status {
+  position: absolute;
+  top: calc(var(--shell-end-turn-top) + 4.25rem);
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: var(--z-index-overlay);
   color: rgba(255, 136, 136, 0.8);
   font-family: 'Orbitron', sans-serif;
   font-size: 0.7rem;
   text-align: center;
+  white-space: nowrap;
 }
 
-.board-container .game-hud .hud-wave-status .wave-enemy-count {
+.board-container .hud-wave-status .wave-enemy-count {
   font-weight: 700;
   color: var(--game-wave-text);
 }
 
-.board-container .game-hud .hud-wave-status .wave-template-badge {
+// Critical state — ≤2 enemies remaining. Grab the player's attention so they
+// can decide whether to push for the wave clear or save energy for next turn.
+.board-container .hud-wave-status--critical {
+  color: rgba(255, 180, 80, 0.95);
+  font-weight: 700;
+  animation: wave-status-critical-pulse 1.4s ease-in-out infinite;
+
+  .wave-enemy-count {
+    color: rgba(255, 120, 60, 1);
+    text-shadow: 0 0 0.5rem rgba(255, 120, 60, 0.7);
+    font-size: 1.15em;
+  }
+}
+
+// Wave swept — positive celebration colour (green), no pulse.
+.board-container .hud-wave-status--cleared {
+  color: rgba(120, 220, 140, 0.9);
+  font-weight: 700;
+
+  .wave-enemy-count {
+    color: rgba(120, 220, 140, 1);
+    text-shadow: 0 0 0.4rem rgba(120, 220, 140, 0.6);
+  }
+}
+
+@keyframes wave-status-critical-pulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .hud-wave-status--critical {
+    animation: none;
+  }
+}
+
+.board-container .hud-wave-status .wave-template-badge {
   font-size: 0.6rem;
   color: var(--theme-purple);
   text-transform: capitalize;
@@ -81,40 +118,94 @@
 }
 
 @media (max-width: 480px) {
-  .board-container .game-hud .hud-wave-status {
-    font-size: 0.625rem;
+  // Mobile: stack below the challenge strip (which is pushed below End Turn)
+  .board-container .hud-wave-status {
+    top: calc(var(--shell-end-turn-top) + 5.75rem);
+    font-size: var(--font-size-2xs);
     gap: 0.25rem;
   }
 
-  .board-container .game-hud .hud-wave-status .wave-template-badge {
-    font-size: 0.5625rem;
+  .board-container .hud-wave-status .wave-template-badge {
+    font-size: var(--font-size-3xs);
   }
 }
 
-.board-container .game-hud .challenge-indicator {
+.board-container .hud-challenge-strip .challenge-indicator {
   font-family: "Orbitron", sans-serif;
-  font-size: 0.625rem;
+  font-size: var(--font-size-3xs);
   font-weight: 600;
   letter-spacing: 0.03rem;
-  padding: 0.125rem 0.5rem;
+  padding: 0.1rem 0.4rem;
   border-radius: 1rem;
-  border: 1px solid currentColor;
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.18);
   white-space: nowrap;
 }
 
-.board-container .game-hud .challenge-indicator.passing {
-  color: var(--action-success);
-  background: rgba(0, 180, 80, 0.1);
+.board-container .hud-challenge-strip .challenge-indicator.passing {
+  color: rgba(120, 220, 140, 0.8);
+  background: rgba(60, 180, 120, 0.06);
 }
 
-.board-container .game-hud .challenge-indicator.failing {
+.board-container .hud-challenge-strip .challenge-indicator.failing {
   color: var(--action-danger);
   background: var(--action-danger-bg);
 }
 
+.board-container .hud-challenge-toggle {
+  background: transparent;
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.15);
+  border-radius: 1rem;
+  padding: 0.1rem 0.45rem;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-3xs);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  pointer-events: auto;
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.3);
+    color: var(--text-color);
+  }
+
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--theme-cyan);
+    outline-offset: 2px;
+  }
+}
+
+.board-container .hud-challenge-summary {
+  display: inline-flex;
+  gap: 0.15rem;
+}
+
+.board-container .challenge-dot {
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  line-height: 1;
+  display: inline-block;
+
+  &--passing { color: rgba(120, 220, 140, 0.9); }
+  &--failing { color: rgba(255, 120, 120, 0.95); }
+}
+
 @media (max-width: 480px) {
-  .board-container .game-hud .challenge-indicator {
-    font-size: 0.5625rem;
+  // Mobile: push challenge strip well below End Turn button.
+  // End Turn box bottom ≈ shell-end-turn-top + 3rem; add 0.75rem gap.
+  .board-container .hud-challenge-strip {
+    top: calc(var(--shell-end-turn-top) + 3.75rem);
+    left: var(--spacing-xs);
+    right: var(--spacing-xs);
+    max-width: calc(100vw - var(--spacing-xs) * 2);
+    justify-content: center;
+    font-size: var(--font-size-3xs);
+  }
+
+  .board-container .hud-challenge-strip .challenge-indicator {
+    font-size: var(--font-size-3xs);
     padding: 0.0625rem 0.375rem;
   }
 }
@@ -136,7 +227,7 @@
 }
 
 .board-container .game-hud .hud-stat .hud-label {
-  font-size: 0.625rem;
+  font-size: var(--font-size-2xs);
   text-transform: uppercase;
   letter-spacing: 0.0625rem;
   color: var(--text-dim);
@@ -174,7 +265,7 @@
   left: 50%;
   transform: translateX(-50%);
   font-family: "Orbitron", sans-serif;
-  font-size: 0.625rem;
+  font-size: var(--font-size-2xs);
   font-weight: 700;
   color: var(--game-gold);
   pointer-events: none;
@@ -210,7 +301,7 @@
 /* Tablet responsive — HUD */
 @media (max-width: 768px) {
   .board-container .game-hud .hud-stat .hud-label {
-    font-size: 0.5625rem;
+    font-size: var(--font-size-3xs);
   }
 
   .board-container .game-hud .hud-stat .hud-value {
@@ -223,12 +314,13 @@
   .board-container .game-hud {
     gap: var(--spacing-xs);
     padding: var(--spacing-xs) var(--spacing-xs);
-    font-size: 0.625rem;
-    max-width: calc(100vw - 1.5rem);
+    font-size: var(--font-size-2xs);
+    max-width: calc(100vw - var(--shell-hud-left) * 2);
   }
 
   .board-container .game-hud .hud-stats-row {
-    gap: var(--spacing-xs);
+    flex-wrap: nowrap;
+    gap: var(--spacing-sm);
   }
 
   .board-container .game-hud .hud-stat.secondary {
@@ -236,7 +328,7 @@
   }
 
   .board-container .game-hud .hud-stat .hud-label {
-    font-size: 0.5rem;
+    font-size: var(--font-size-tiny);
     letter-spacing: 0;
   }
 
@@ -287,18 +379,18 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
 /* ===== Toast notification system ===== */
 .toast-stack {
   position: fixed;
-  bottom: 5rem; /* above tower bar */
+  bottom: calc(var(--shell-hand-height, 9rem) + var(--spacing-sm));
   right: 1rem;
   display: flex;
   flex-direction: column-reverse;
   gap: 0.5rem;
-  z-index: 500;
+  z-index: calc(var(--z-index-modal) + 50);
   pointer-events: none;
 }
 
 .toast {
   padding: 0.75rem 1rem;
-  border-radius: 8px;
+  border-radius: var(--border-radius-lg);
   min-width: 200px;
   max-width: 320px;
   pointer-events: auto;
@@ -310,22 +402,22 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
 
 .toast--achievement {
   background: var(--game-gold-a15);
-  border: 1px solid var(--game-gold-a50);
+  border: var(--border-width-thin) solid var(--game-gold-a50);
 }
 
 .toast--streak {
   background: rgba(0, 255, 255, 0.1);
-  border: 1px solid rgba(0, 255, 255, 0.4);
+  border: var(--border-width-thin) solid rgba(0, 255, 255, 0.4);
 }
 
 .toast--challenge {
   background: rgba(180, 100, 255, 0.15);
-  border: 1px solid rgba(180, 100, 255, 0.4);
+  border: var(--border-width-thin) solid rgba(180, 100, 255, 0.4);
 }
 
 .toast--info {
   background: rgba(200, 200, 255, 0.1);
-  border: 1px solid rgba(200, 200, 255, 0.3);
+  border: var(--border-width-thin) solid rgba(200, 200, 255, 0.3);
 }
 
 .toast__title {
@@ -348,12 +440,36 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
   }
 }
 
+// Wave-start pulse animation — class binding exists in game-hud.component.html
+// line 14, but the keyframes were missing. Brief scale + color flash on the
+// wave number when a new wave begins.
+@keyframes wave-start-pulse {
+  0%   { transform: scale(1);    filter: brightness(1); }
+  30%  { transform: scale(1.2);  filter: brightness(1.5); }
+  60%  { transform: scale(1.05); filter: brightness(1.2); }
+  100% { transform: scale(1);    filter: brightness(1); }
+}
+
+.board-container .game-hud .hud-value.wave-start-pulse {
+  animation: wave-start-pulse 600ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .game-hud .hud-value.wave-start-pulse {
+    animation: none;
+  }
+}
+
+body.reduce-motion .board-container .game-hud .hud-value.wave-start-pulse {
+  animation: none;
+}
+
 /* Mobile: full-width toasts from bottom */
 @media (max-width: 768px) {
   .toast-stack {
     left: 0.5rem;
     right: 0.5rem;
-    bottom: 6rem;
+    bottom: calc(var(--shell-hand-height, 8rem) + var(--spacing-sm));
   }
 
   .toast {
@@ -364,6 +480,64 @@ body.reduce-motion .board-container .game-hud .hud-stat .gold-change {
 
 @media (max-width: 480px) {
   .toast-stack {
-    bottom: calc(var(--tower-bar-height, 7.75rem) + 0.5rem);
+    bottom: calc(var(--shell-hand-height, 7rem) + var(--spacing-xs));
+  }
+}
+
+// --- HUD relic quick-peek (Sprint 24) ---
+// Desktop-only horizontal row of active relic letter-chips beneath the HUD strip.
+// Gives players an at-a-glance view of what relics are shaping their run.
+
+.board-container .hud-relic-peek {
+  position: absolute;
+  top: calc(var(--shell-hud-top) + var(--shell-hud-height) + 1.75rem);
+  left: var(--shell-hud-left);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-width: min(40vw, 20rem);
+  pointer-events: none;
+  z-index: var(--z-index-overlay);
+
+  @media (max-width: 768px) {
+    display: none; // too cramped on mobile — pause menu has the full list
+  }
+}
+
+.board-container .hud-relic-peek__item {
+  // Button reset — remove browser default border/background/padding
+  padding: 0;
+  appearance: none;
+  pointer-events: auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-2xs);
+  font-weight: 800;
+  color: var(--theme-purple-lighter);
+  background: rgba(140, 90, 200, 0.1);
+  border: var(--border-width-thin) solid rgba(140, 90, 200, 0.4);
+  border-radius: 50%;
+  cursor: help;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+
+  &:hover {
+    background: rgba(140, 90, 200, 0.25);
+    color: #fff;
+    transform: scale(1.1);
+  }
+
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--theme-cyan);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-container .hud-relic-peek__item {
+    transition: none;
   }
 }

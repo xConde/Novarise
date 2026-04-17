@@ -30,6 +30,12 @@ export interface PlayerProfile {
   maxModifiersUsedInVictory: number;
   // Challenge tracking
   completedChallengeCount: number;
+  // Run tracking
+  runsAttempted: number;
+  runsCompleted: number;
+  highestAscensionBeaten: number;
+  runTotalKills: number;
+  runBestScore: number;
 }
 
 export interface GameEndStats {

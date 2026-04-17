@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { TowerCombatService, KillInfo, CombatAudioEvent } from './tower-combat.service';
+import { TowerCombatService, KillInfo, CombatAudioEvent, RegisterTowerOptions } from './tower-combat.service';
 import { ChainLightningService } from './chain-lightning.service';
-import { ProjectileService } from './projectile.service';
+// M2 S5: ProjectileService import removed (file deleted)
 import { CombatVFXService } from './combat-vfx.service';
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
@@ -9,19 +9,21 @@ import { GameStateService } from './game-state.service';
 import { TowerType, TowerSpecialization, TOWER_CONFIGS, TOWER_SPECIALIZATIONS, MAX_TOWER_LEVEL, getUpgradeCost, getSellValue, getEffectiveStats, TowerStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { Enemy } from '../models/enemy.model';
 import { StatusEffectService } from './status-effect.service';
-import { StatusEffectType, STATUS_EFFECT_CONFIGS } from '../constants/status-effect.constants';
-import { CHAIN_LIGHTNING_CONFIG, IMPACT_FLASH_CONFIG } from '../constants/combat.constants';
+import { StatusEffectType } from '../constants/status-effect.constants';
+import { CHAIN_LIGHTNING_CONFIG } from '../constants/combat.constants';
 import { PROJECTILE_VISUAL_CONFIG } from '../constants/effects.constants';
 import * as THREE from 'three';
-import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy } from '../testing';
+import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy, createRelicServiceSpy, createCardEffectServiceSpy } from '../testing';
 import { TowerAnimationService } from './tower-animation.service';
+import { RelicService } from '../../../run/services/relic.service';
+import { CardEffectService } from '../../../run/services/card-effect.service';
 
 describe('TowerCombatService', () => {
   let service: TowerCombatService;
-  let projectileService: ProjectileService;
   let combatVFXService: CombatVFXService;
   let enemyServiceSpy: jasmine.SpyObj<EnemyService>;
   let gameBoardServiceSpy: jasmine.SpyObj<GameBoardService>;
+  let relicServiceSpy: jasmine.SpyObj<RelicService>;
   let statusEffectService: StatusEffectService;
   let mockScene: THREE.Scene;
   let enemyMap: Map<string, Enemy>;
@@ -32,6 +34,11 @@ describe('TowerCombatService', () => {
   const TOWER_WORLD_X = -0.5;
   const TOWER_WORLD_Z = 0;
 
+  // Turn numbers for sequential tests
+  const TURN_1 = 1;
+  const TURN_2 = 2;
+  const TURN_3 = 3;
+
   // Helper: create a mock enemy at a world position
   const createEnemy = (id: string, x: number, z: number, health = 100): Enemy =>
     createTestEnemy(id, x, z, health);
@@ -41,22 +48,23 @@ describe('TowerCombatService', () => {
 
     enemyServiceSpy = createEnemyServiceSpy(enemyMap);
     gameBoardServiceSpy = createGameBoardServiceSpy(25, 20, 1);
+    relicServiceSpy = createRelicServiceSpy();
 
     TestBed.configureTestingModule({
       providers: [
         TowerCombatService,
         ChainLightningService,
-        ProjectileService,
         CombatVFXService,
         StatusEffectService,
         GameStateService,
         { provide: EnemyService, useValue: enemyServiceSpy },
         { provide: GameBoardService, useValue: gameBoardServiceSpy },
         { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: relicServiceSpy },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
       ]
     });
     service = TestBed.inject(TowerCombatService);
-    projectileService = TestBed.inject(ProjectileService);
     combatVFXService = TestBed.inject(CombatVFXService);
     statusEffectService = TestBed.inject(StatusEffectService);
     mockScene = new THREE.Scene();
@@ -86,6 +94,32 @@ describe('TowerCombatService', () => {
       expect(tower.mesh).toBe(mesh);
     });
 
+    it('should store placedAtTurn when provided', () => {
+      service.registerTower(3, 7, TowerType.BASIC, new THREE.Group(), 50, { placedAtTurn: 5 });
+      const tower = service.getTower('3-7')!;
+      expect(tower.placedAtTurn).toBe(5);
+    });
+
+    it('should default placedAtTurn to 0 when not provided', () => {
+      service.registerTower(3, 7, TowerType.BASIC, new THREE.Group());
+      const tower = service.getTower('3-7')!;
+      expect(tower.placedAtTurn).toBe(0);
+    });
+
+    it('should assign the same placedAtTurn when two towers are placed on the same turn', () => {
+      service.registerTower(1, 1, TowerType.BASIC, new THREE.Group(), 50, { placedAtTurn: 3 });
+      service.registerTower(2, 2, TowerType.SNIPER, new THREE.Group(), 125, { placedAtTurn: 3 });
+      expect(service.getTower('1-1')!.placedAtTurn).toBe(3);
+      expect(service.getTower('2-2')!.placedAtTurn).toBe(3);
+    });
+
+    it('should assign different placedAtTurn for towers placed on different turns', () => {
+      service.registerTower(1, 1, TowerType.BASIC, new THREE.Group(), 50, { placedAtTurn: 2 });
+      service.registerTower(2, 2, TowerType.SNIPER, new THREE.Group(), 125, { placedAtTurn: 7 });
+      expect(service.getTower('1-1')!.placedAtTurn).toBe(2);
+      expect(service.getTower('2-2')!.placedAtTurn).toBe(7);
+    });
+
     it('should allow multiple towers', () => {
       service.registerTower(1, 1, TowerType.BASIC, new THREE.Group());
       service.registerTower(2, 2, TowerType.SNIPER, new THREE.Group());
@@ -105,7 +139,7 @@ describe('TowerCombatService', () => {
       const enemy = createEnemy('e1', 20, 20);
       enemyMap.set('e1', enemy);
 
-      const result = service.update(2.0, mockScene);
+      const result = service.fireTurn(mockScene, TURN_1);
       expect(result.killed.length).toBe(0);
       // Enemy health should be unchanged
       expect(enemy.health).toBe(100);
@@ -114,12 +148,11 @@ describe('TowerCombatService', () => {
     it('should fire at an enemy within range (verified by damage)', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
 
-      // Enemy at tower position — projectile hits on same frame it's created
+      // Enemy at tower position — instant damage
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
       enemyMap.set('e1', enemy);
 
-      service.update(2.0, mockScene);
-      // Projectile was created AND hit in same frame (dist=0)
+      service.fireTurn(mockScene, TURN_1);
       expect(enemy.health).toBeLessThan(1000);
     });
 
@@ -130,14 +163,14 @@ describe('TowerCombatService', () => {
       const nearEnemy = createEnemy('near', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
       enemyMap.set('near', nearEnemy);
 
-      // Far enemy at (2, 2) — distance ~2.9
-      const farEnemy = createEnemy('far', 2, 2, 1000);
+      // Far enemy at (2, 2) — distance ~2.9, within BASIC range=3
+      const farEnemy = createEnemy('far', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 1000);
       enemyMap.set('far', farEnemy);
 
-      // Fire — projectile targets nearest and hits immediately (dist=0)
-      service.update(2.0, mockScene);
+      // fireTurn fires once per turn (shotsPerTurn=1); nearest mode targets nearEnemy
+      service.fireTurn(mockScene, TURN_1);
 
-      // Near enemy should take damage, far enemy should not
+      // Near enemy should take damage, far enemy should not (only one shot per turn)
       expect(nearEnemy.health).toBeLessThan(1000);
       expect(farEnemy.health).toBe(1000);
     });
@@ -154,9 +187,7 @@ describe('TowerCombatService', () => {
       const alive = createEnemy('alive', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 1000);
       enemyMap.set('alive', alive);
 
-      // Fire and advance enough for projectile to travel 1 tile
-      service.update(0.016, mockScene);
-      service.update(0.5, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       // Dead enemy should still be at 0, alive should take damage
       expect(dead.health).toBe(0);
@@ -193,9 +224,12 @@ describe('TowerCombatService', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
       const key = `${TOWER_ROW}-${TOWER_COL}`;
 
-      // Default is NEAREST (index 0) → cycles to FIRST (index 1)
+      // Default is NEAREST (index 0) → cycles: FARTHEST, FIRST, LAST, STRONGEST, WEAKEST, wraps to NEAREST
+      expect(service.cycleTargetingMode(key)).toBe(TargetingMode.FARTHEST);
       expect(service.cycleTargetingMode(key)).toBe(TargetingMode.FIRST);
+      expect(service.cycleTargetingMode(key)).toBe(TargetingMode.LAST);
       expect(service.cycleTargetingMode(key)).toBe(TargetingMode.STRONGEST);
+      expect(service.cycleTargetingMode(key)).toBe(TargetingMode.WEAKEST);
       expect(service.cycleTargetingMode(key)).toBe(TargetingMode.NEAREST); // wraps around
     });
 
@@ -216,7 +250,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('close', close);
       enemyMap.set('far', far);
 
-      service.update(2.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       // Nearest (close) should be targeted — takes damage first
       expect(close.health).toBeLessThan(50);
@@ -237,10 +271,10 @@ describe('TowerCombatService', () => {
       enemyMap.set('close', close);
       enemyMap.set('far', far);
 
-      service.update(2.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       // 'first' mode targets the enemy closest to exit (highest distanceTraveled)
-      // far enemy should be targeted — projectile at tower position travels toward far
+      // far enemy should be targeted — damage applied instantly
       expect(far.health).toBeLessThan(1000);
       expect(close.health).toBe(1000);
     });
@@ -259,12 +293,75 @@ describe('TowerCombatService', () => {
       enemyMap.set('weak', weak);
       enemyMap.set('strong', strong);
 
-      service.update(2.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       // 'strongest' mode targets the enemy with highest current health
       // strong (500hp) should be targeted, weak (50hp) should not
       expect(strong.health).toBeLessThan(500);
       expect(weak.health).toBe(50);
+    });
+
+    it('findTarget with last returns enemy least far along path', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.setTargetingMode(key, TargetingMode.LAST);
+
+      // Enemy that just entered (low distanceTraveled)
+      const newEnemy = createEnemy('new', TOWER_WORLD_X + 0.5, TOWER_WORLD_Z, 1000);
+      newEnemy.distanceTraveled = 1;
+      // Enemy further along path
+      const oldEnemy = createEnemy('old', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 1000);
+      oldEnemy.distanceTraveled = 15;
+      enemyMap.set('new', newEnemy);
+      enemyMap.set('old', oldEnemy);
+
+      service.fireTurn(mockScene, TURN_1);
+
+      // 'last' mode targets the enemy with lowest distanceTraveled (just entered)
+      expect(newEnemy.health).toBeLessThan(1000);
+      expect(oldEnemy.health).toBe(1000);
+    });
+
+    it('findTarget with farthest returns spatially farthest enemy from tower', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.setTargetingMode(key, TargetingMode.FARTHEST);
+
+      // Close enemy (within range=3)
+      const close = createEnemy('close', TOWER_WORLD_X + 0.5, TOWER_WORLD_Z, 1000);
+      close.distanceTraveled = 5;
+      // Far enemy (farther away but still within range=3)
+      const far = createEnemy('far', TOWER_WORLD_X + 2.5, TOWER_WORLD_Z, 1000);
+      far.distanceTraveled = 1;
+      enemyMap.set('close', close);
+      enemyMap.set('far', far);
+
+      service.fireTurn(mockScene, TURN_1);
+
+      // 'farthest' mode targets the enemy with greatest Euclidean distance from tower
+      expect(far.health).toBeLessThan(1000);
+      expect(close.health).toBe(1000);
+    });
+
+    it('findTarget with weakest returns enemy with lowest health', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const key = `${TOWER_ROW}-${TOWER_COL}`;
+      service.setTargetingMode(key, TargetingMode.WEAKEST);
+
+      // Low-health enemy
+      const weak = createEnemy('weak', TOWER_WORLD_X + 0.5, TOWER_WORLD_Z, 50);
+      weak.distanceTraveled = 1;
+      // High-health enemy
+      const strong = createEnemy('strong', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 500);
+      strong.distanceTraveled = 5;
+      enemyMap.set('weak', weak);
+      enemyMap.set('strong', strong);
+
+      service.fireTurn(mockScene, TURN_1);
+
+      // 'weakest' mode targets the enemy with lowest current health
+      expect(weak.health).toBeLessThan(50);
+      expect(strong.health).toBe(500);
     });
 
     it('should preserve targeting mode across upgrade', () => {
@@ -280,62 +377,60 @@ describe('TowerCombatService', () => {
     });
   });
 
-  // --- Fire Rate ---
+  // --- Fire Rate (turn-based: each fireTurn fires once per tower) ---
+  // NOTE: Physics-cooldown semantics are GONE. In turn-based mode each tower fires
+  // shotsPerTurn times (currently 1) on every fireTurn() call. Tests asserting
+  // "fires every X seconds" or "fires N times in T seconds" are deleted because the
+  // deltaTime loop no longer exists.
 
-  describe('fire rate', () => {
-    it('should respect fire rate cooldown (single damage application)', () => {
+  describe('fire rate (turn-based)', () => {
+    it('should apply damage on each fireTurn call (one shot per turn)', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-      // Enemy at tower position — each shot hits instantly
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
       enemyMap.set('e1', enemy);
 
-      // First shot — fires immediately, hits instantly (dmg 25)
-      service.update(0.5, mockScene);
-      expect(enemy.health).toBe(10000 - 25);
+      // Turn 1 — fires once → 1 × baseDamage taken
+      service.fireTurn(mockScene, TURN_1);
+      const healthAfterTurn1 = enemy.health;
+      expect(healthAfterTurn1).toBe(10000 - TOWER_CONFIGS[TowerType.BASIC].damage);
 
-      // 0.4s later — BASIC fire rate is 1.0s, should NOT fire again
-      service.update(0.4, mockScene);
-      expect(enemy.health).toBe(10000 - 25); // No additional damage
+      // Turn 2 — fires again → another baseDamage taken
+      service.fireTurn(mockScene, TURN_2);
+      expect(enemy.health).toBe(healthAfterTurn1 - TOWER_CONFIGS[TowerType.BASIC].damage);
     });
 
-    it('should fire again after cooldown expires', () => {
+    it('should fire on turn 1 (no warm-up needed)', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
       enemyMap.set('e1', enemy);
 
-      // First shot — instant hit
-      service.update(0.016, mockScene);
-      expect(enemy.health).toBe(10000 - 25);
-
-      // Advance past fire rate (1.0s) — second shot fires and hits
-      service.update(1.1, mockScene);
-      expect(enemy.health).toBe(10000 - 50); // Two hits of 25 damage
+      const result = service.fireTurn(mockScene, TURN_1);
+      expect(result.fired).toContain(TowerType.BASIC);
+      expect(enemy.health).toBeLessThan(10000);
     });
   });
 
   // --- Damage ---
 
   describe('damage', () => {
-    it('should apply damage when projectile hits', () => {
+    it('should apply damage when tower fires', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
 
-      // Enemy at tower position — instant hit
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
       enemyMap.set('e1', enemy);
 
-      service.update(0.016, mockScene);
+      service.fireTurn(mockScene, TURN_1);
       expect(enemy.health).toBe(1000 - TOWER_CONFIGS[TowerType.BASIC].damage);
     });
 
-    it('should return killed enemy IDs on the frame the kill happens', () => {
+    it('should return killed enemy IDs on the turn the kill happens', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
 
       // Enemy with exactly lethal health — dies from first hit
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 25);
       enemyMap.set('e1', enemy);
 
-      // First update: tower fires AND projectile hits (dist=0) → kill
-      const result = service.update(0.016, mockScene);
+      const result = service.fireTurn(mockScene, TURN_1);
       expect(result.killed.map((k: KillInfo) => k.id)).toContain('e1');
     });
 
@@ -346,7 +441,7 @@ describe('TowerCombatService', () => {
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 25);
       enemyMap.set('e1', enemy);
 
-      const result = service.update(0.016, mockScene);
+      const result = service.fireTurn(mockScene, TURN_1);
       const kill = result.killed.find((k: KillInfo) => k.id === 'e1');
       expect(kill).toBeDefined();
       expect(kill!.damage).toBe(TOWER_CONFIGS[TowerType.BASIC].damage);
@@ -358,7 +453,7 @@ describe('TowerCombatService', () => {
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
       enemyMap.set('e1', enemy);
 
-      const result = service.update(0.016, mockScene);
+      const result = service.fireTurn(mockScene, TURN_1);
       expect(result.killed.map((k: KillInfo) => k.id)).not.toContain('e1');
     });
   });
@@ -377,7 +472,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e1', e1);
       enemyMap.set('e2', e2);
 
-      service.update(0.016, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       // Primary target should definitely be damaged
       expect(e1.health).toBeLessThan(1000);
@@ -395,7 +490,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('near', near);
       enemyMap.set('far', far);
 
-      service.update(0.016, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       expect(near.health).toBeLessThan(1000);
       expect(far.health).toBe(1000); // Out of splash range
@@ -403,157 +498,11 @@ describe('TowerCombatService', () => {
   });
 
   // --- Projectile Lifecycle ---
-
-  describe('projectile lifecycle', () => {
-    it('should clean up projectile when target is removed from map', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-
-      // Enemy at distance — projectile needs time to travel
-      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 1000);
-      enemyMap.set('e1', enemy);
-
-      // Fire — projectile is in flight
-      service.update(0.016, mockScene);
-      // Enemy health unchanged (projectile still traveling)
-      expect(enemy.health).toBe(1000);
-
-      // Remove enemy from map before projectile arrives
-      enemyMap.delete('e1');
-
-      // Next update: projectile should detect missing target and self-destruct
-      // No crash expected
-      const result = service.update(0.016, mockScene);
-      expect(result.killed.length).toBe(0);
-    });
-
-    it('should not crash on rapid fire and miss cycle', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-
-      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 1000);
-      enemyMap.set('e1', enemy);
-
-      // Fire
-      service.update(0.016, mockScene);
-
-      // Remove and re-add enemy (simulating external kill + respawn)
-      enemyMap.delete('e1');
-      service.update(0.016, mockScene);
-
-      const newEnemy = createEnemy('e2', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 1000);
-      enemyMap.set('e2', newEnemy);
-
-      // Advance past fire rate — tower should target new enemy
-      service.update(1.1, mockScene);
-      service.update(0.5, mockScene);
-      expect(newEnemy.health).toBeLessThan(1000);
-    });
-
-    it('should initialize projectile with null trail and empty trailPositions', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-
-      // Enemy at distance so projectile stays in flight
-      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 1000);
-      enemyMap.set('e1', enemy);
-
-      service.update(0.016, mockScene);
-
-      // Projectile state now lives in ProjectileService
-      const projectiles = (projectileService as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
-      expect(projectiles.length).toBeGreaterThan(0);
-      // After first update, trail is still null (needs >=2 positions), trailPositions has 1 entry
-      expect(projectiles[0].trail).toBeNull();
-    });
-
-    it('should create trail after projectile has moved at least 2 frames', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-
-      // Enemy within BASIC range (3) but far enough for multiple frames of travel
-      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 10000);
-      enemyMap.set('e1', enemy);
-
-      // Frame 1: fire + first move — 1 trail position, no trail line yet
-      service.update(0.016, mockScene);
-      // Frame 2: second move — 2 trail positions, trail created
-      service.update(0.016, mockScene);
-
-      // Projectile state now lives in ProjectileService
-      const projectiles = (projectileService as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
-      expect(projectiles.length).toBeGreaterThan(0);
-      expect(projectiles[0].trail).not.toBeNull();
-      expect(projectiles[0].trailPositions.length).toBeGreaterThanOrEqual(2);
-    });
-
-    it('should clean up trail when projectile is removed', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-
-      // Enemy within BASIC range (3) but far enough for multiple frames of travel
-      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 10000);
-      enemyMap.set('e1', enemy);
-
-      // Build up a trail
-      service.update(0.016, mockScene);
-      service.update(0.016, mockScene);
-
-      // Projectile state now lives in ProjectileService
-      const projectiles = (projectileService as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
-      expect(projectiles.length).toBeGreaterThan(0);
-      const trail = projectiles[0].trail;
-      expect(trail).not.toBeNull();
-
-      // Remove enemy — projectile should be cleaned up including trail
-      enemyMap.delete('e1');
-      service.update(0.016, mockScene);
-
-      // Trail should have been removed from scene
-      expect(trail).toBeTruthy();
-      expect(mockScene.children).not.toContain(trail!);
-    });
-
-    it('should reuse trail geometry reference and grow drawRange.count as trail builds', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-
-      // Enemy far enough to keep projectile in flight for several frames
-      const enemy = createEnemy('e1', TOWER_WORLD_X + 2.5, TOWER_WORLD_Z, 100000);
-      enemyMap.set('e1', enemy);
-
-      // Frame 1: fire projectile
-      service.update(0.016, mockScene);
-      // Frame 2: trail is created (2 positions)
-      service.update(0.016, mockScene);
-
-      // Projectile state now lives in ProjectileService
-      const projectiles = (projectileService as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
-      expect(projectiles.length).toBeGreaterThan(0);
-      const trail = projectiles[0].trail!;
-      expect(trail).not.toBeNull();
-
-      const geometryRef = trail.geometry;
-      const countAfter2 = trail.geometry.drawRange.count;
-      expect(countAfter2).toBeGreaterThanOrEqual(2);
-
-      // Record the position attribute version before next update
-      const posAttrBefore = trail.geometry.getAttribute('position') as THREE.BufferAttribute;
-      const versionBefore = posAttrBefore.version;
-
-      // Frame 3: trail grows
-      service.update(0.016, mockScene);
-
-      const projectilesAfter = (projectileService as any)['projectiles'] as { trail: THREE.Line | null; trailPositions: THREE.Vector3[] }[];
-      expect(projectilesAfter.length).toBeGreaterThan(0);
-      const trailAfter = projectilesAfter[0].trail!;
-
-      // Geometry reference must be the same object (in-place update, not replaced)
-      expect(trailAfter.geometry).toBe(geometryRef);
-
-      // drawRange.count must have grown
-      const countAfter3 = trailAfter.geometry.drawRange.count;
-      expect(countAfter3).toBeGreaterThan(countAfter2);
-
-      // Position attribute version should have incremented (needsUpdate = true bumps version)
-      const posAttrAfter = trailAfter.geometry.getAttribute('position') as THREE.BufferAttribute;
-      expect(posAttrAfter.version).toBeGreaterThan(versionBefore);
-    });
-  });
+  // NOTE: The old deltaTime-based projectile flight system (ProjectileService) is
+  // DELETED (M2 S5). Damage is now instantaneous in fireTurn(). All tests exercising
+  // projectile-in-flight state, trail geometry, pool lifecycle, and visual config
+  // of in-flight meshes have been removed because the underlying objects no longer
+  // exist. Damage semantics are covered in the 'damage' and 'targeting' suites above.
 
   // --- Kill Tracking ---
 
@@ -561,31 +510,30 @@ describe('TowerCombatService', () => {
     it('should increment tower kill count', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
 
-      // Enemy that dies in one hit (at tower position for instant hit)
+      // Enemy that dies in one hit
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1);
       enemyMap.set('e1', enemy);
 
-      service.update(0.016, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       const tower = service.getTower(`${TOWER_ROW}-${TOWER_COL}`)!;
       expect(tower.kills).toBe(1);
     });
 
-    it('should track kills across multiple enemies', () => {
+    it('should track kills across multiple enemies over multiple turns', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
 
-      // First enemy — dies in one hit
+      // First enemy — dies in one hit (turn 1)
       const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1);
       enemyMap.set('e1', e1);
-      service.update(0.016, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
-      // Remove dead enemy, add new one
+      // Remove dead enemy, add new one for turn 2
       enemyMap.delete('e1');
       const e2 = createEnemy('e2', TOWER_WORLD_X, TOWER_WORLD_Z, 1);
       enemyMap.set('e2', e2);
 
-      // Advance past fire rate for second kill
-      service.update(1.1, mockScene);
+      service.fireTurn(mockScene, TURN_2);
 
       const tower = service.getTower(`${TOWER_ROW}-${TOWER_COL}`)!;
       expect(tower.kills).toBe(2);
@@ -603,27 +551,21 @@ describe('TowerCombatService', () => {
       expect(service.getPlacedTowers().size).toBe(0);
     });
 
-    it('should reset game time so new towers fire immediately', () => {
+    it('should fire immediately after cleanup + re-register (no warm-up)', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
-      enemyMap.set('e1', enemy);
-
-      // Advance game time significantly
-      service.update(5.0, mockScene);
       service.cleanup(mockScene);
 
       // Register new tower after cleanup
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
       const freshEnemy = createEnemy('e2', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
-      enemyMap.clear();
       enemyMap.set('e2', freshEnemy);
 
-      // New tower should fire immediately (gameTime reset)
-      service.update(0.016, mockScene);
+      // New tower should fire immediately on turn 1
+      service.fireTurn(mockScene, TURN_1);
       expect(freshEnemy.health).toBeLessThan(10000);
     });
 
-    it('should not throw when cleaning up with no projectiles', () => {
+    it('should not throw when cleaning up with no towers', () => {
       expect(() => service.cleanup(mockScene)).not.toThrow();
     });
   });
@@ -631,30 +573,21 @@ describe('TowerCombatService', () => {
   // --- Edge Cases ---
 
   describe('edge cases', () => {
-    it('should handle update with no towers', () => {
+    it('should handle fireTurn with no towers', () => {
       const enemy = createEnemy('e1', 0, 0);
       enemyMap.set('e1', enemy);
 
-      const result = service.update(1.0, mockScene);
+      const result = service.fireTurn(mockScene, TURN_1);
       expect(result.killed.length).toBe(0);
     });
 
-    it('should handle update with no enemies', () => {
+    it('should handle fireTurn with no enemies', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-      const result = service.update(1.0, mockScene);
+      const result = service.fireTurn(mockScene, TURN_1);
       expect(result.killed.length).toBe(0);
     });
 
-    it('should handle zero deltaTime', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z);
-      enemyMap.set('e1', enemy);
-
-      const result = service.update(0, mockScene);
-      expect(result.killed.length).toBe(0);
-    });
-
-    it('should not double-count kills from multiple projectiles in same frame', () => {
+    it('should not double-count kills when multiple towers target the same low-health enemy', () => {
       // Two towers targeting the same enemy
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
       service.registerTower(TOWER_ROW, TOWER_COL + 1, TowerType.BASIC, new THREE.Group());
@@ -663,9 +596,9 @@ describe('TowerCombatService', () => {
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1);
       enemyMap.set('e1', enemy);
 
-      const result = service.update(0.016, mockScene);
+      const result = service.fireTurn(mockScene, TURN_1);
 
-      // Should only report the kill once (second projectile sees health <= 0)
+      // Should only report the kill once (second tower sees health <= 0)
       const e1Kills = result.killed.filter((k: KillInfo) => k.id === 'e1');
       expect(e1Kills.length).toBe(1);
     });
@@ -732,11 +665,42 @@ describe('TowerCombatService', () => {
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
       enemyMap.set('e1', enemy);
 
-      service.update(0.016, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       // Level 2 BASIC: 25 * 1.5 = 38 (rounded)
       const expectedDamage = getEffectiveStats(TowerType.BASIC, 2).damage;
       expect(enemy.health).toBe(10000 - expectedDamage);
+    });
+  });
+
+  // --- Upgraded card semantic (startLevel: 2) ---
+
+  describe('upgraded tower card placement (startLevel 2 semantic)', () => {
+    it('registers at L1 then upgrades to L2 at zero additional cost (upgraded card semantic)', () => {
+      service.registerTower(5, 5, TowerType.BASIC, new THREE.Group());
+      const baseCost = TOWER_CONFIGS[TowerType.BASIC].cost;
+      expect(service.getTower('5-5')!.level).toBe(1);
+
+      // Simulate the upgraded-card logic in game-board.component.ts:
+      // actualCost = 0 because the card upgrade "pays" for the level-2 placement.
+      const result = service.upgradeTower('5-5', 0);
+
+      expect(result).toBeTrue();
+      const tower = service.getTower('5-5')!;
+      expect(tower.level).toBe(2);
+      // totalInvested = placement cost only (upgrade was "free" via card)
+      expect(tower.totalInvested).toBe(baseCost);
+    });
+
+    it('level-2 tower from upgraded card has L2 effective stats', () => {
+      service.registerTower(5, 5, TowerType.SNIPER, new THREE.Group());
+      service.upgradeTower('5-5', 0);
+
+      const l1Stats = getEffectiveStats(TowerType.SNIPER, 1);
+      const l2Stats = getEffectiveStats(TowerType.SNIPER, 2);
+
+      // L2 damage must be strictly greater than L1 damage
+      expect(l2Stats.damage).toBeGreaterThan(l1Stats.damage);
     });
   });
 
@@ -763,6 +727,7 @@ describe('TowerCombatService', () => {
       service.registerTower(5, 5, TowerType.BASIC, new THREE.Group());
       service.upgradeTower('5-5'); // 1 → 2
       service.upgradeTowerWithSpec('5-5', TowerSpecialization.ALPHA); // 2 → 3
+
       const result = service.upgradeTowerWithSpec('5-5', TowerSpecialization.BETA);
       expect(result).toBeFalse();
     });
@@ -810,57 +775,63 @@ describe('TowerCombatService', () => {
   });
 
   // --- Slow Tower ---
+  // NOTE: SLOW tower in turn-based mode applies via applySlowAura() inside fireTurn().
+  // StatusEffectService.apply() receives turnNumber (not gameTime) as the clock — this
+  // was a bug that was fixed earlier this session. Speed restoration after expiry
+  // depends on StatusEffectService.tickTurn() being called externally by CombatLoopService,
+  // so the old real-time "advance 2.5s and verify restored speed" tests are deleted here
+  // (those semantics live in status-effect.service.spec.ts).
 
   describe('Slow tower', () => {
-    it('should reduce enemy speed when within range', () => {
+    it('should apply slow status effect to enemy within range', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 100);
-      const originalSpeed = enemy.speed;
       enemyMap.set('e1', enemy);
 
-      service.update(0.6, mockScene); // past SLOW fireRate of 0.5s
-      const slowFactor = TOWER_CONFIGS[TowerType.SLOW].slowFactor!;
-      expect(enemy.speed).toBeCloseTo(originalSpeed * slowFactor);
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
+
+      service.fireTurn(mockScene, TURN_1);
+
+      const slowCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.SLOW);
+      expect(slowCalls.length).toBeGreaterThan(0);
+      expect(slowCalls[0].args[0]).toBe('e1');
     });
 
-    it('should not reduce speed below slowFactor when aura pulses again before expiry', () => {
+    it('should pass turnNumber as clock to StatusEffectService.apply for SLOW', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
       const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 100);
-      const originalSpeed = enemy.speed;
       enemyMap.set('e1', enemy);
 
-      service.update(0.6, mockScene); // first pulse
-      const speedAfterFirst = enemy.speed;
-      service.update(0.6, mockScene); // second pulse — should refresh duration, not stack
-      expect(enemy.speed).toBeCloseTo(speedAfterFirst); // same speed, not halved again
-    });
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
 
-    it('should restore enemy speed after slow expires when enemy leaves range', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
-      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 100);
-      const originalSpeed = enemy.speed;
-      enemyMap.set('e1', enemy);
+      service.fireTurn(mockScene, TURN_1);
 
-      service.update(0.6, mockScene); // apply slow (expires at gameTime=2.6)
-      expect(enemy.speed).toBeLessThan(originalSpeed);
-
-      // Move enemy out of tower range so the slow tower cannot re-apply the aura
-      // SLOW range is 2.5, so place enemy far outside
-      enemy.position.x = TOWER_WORLD_X + 10;
-
-      // Advance well past slowDuration (2s) — slow expires at 2.6, we advance to 3.1
-      service.update(2.5, mockScene);
-      expect(enemy.speed).toBeCloseTo(originalSpeed);
+      const slowCall = applySpy.calls.all().find(c => c.args[1] === StatusEffectType.SLOW);
+      expect(slowCall).toBeDefined();
+      // Third arg is turnNumber (1), NOT gameTime (which would be 0 — the pre-fix bug)
+      expect(slowCall!.args[2]).toBe(TURN_1);
     });
 
     it('should not affect enemies outside range', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
       const farEnemy = createEnemy('far', 20, 20, 100);
-      const originalSpeed = farEnemy.speed;
       enemyMap.set('far', farEnemy);
 
-      service.update(0.6, mockScene);
-      expect(farEnemy.speed).toBeCloseTo(originalSpeed); // unchanged
+      const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
+
+      service.fireTurn(mockScene, TURN_1);
+
+      const slowCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.SLOW);
+      expect(slowCalls.length).toBe(0);
+    });
+
+    it('should include SLOW in fired array when slow tower pulses', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SLOW, new THREE.Group());
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 100);
+      enemyMap.set('e1', enemy);
+
+      const result = service.fireTurn(mockScene, TURN_1);
+      expect(result.fired).toContain(TowerType.SLOW);
     });
 
     it('should restore all slow effects on cleanup', () => {
@@ -869,10 +840,11 @@ describe('TowerCombatService', () => {
       const originalSpeed = enemy.speed;
       enemyMap.set('e1', enemy);
 
-      service.update(0.6, mockScene);
-      expect(enemy.speed).toBeLessThan(originalSpeed);
+      service.fireTurn(mockScene, TURN_1);
+      // Enemy speed may now be reduced by StatusEffectService
 
       service.cleanup(mockScene);
+      // After cleanup, StatusEffectService.cleanup() restores speeds
       expect(enemy.speed).toBeCloseTo(originalSpeed);
     });
   });
@@ -885,7 +857,7 @@ describe('TowerCombatService', () => {
       const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
       enemyMap.set('e1', e1);
 
-      service.update(1.0, mockScene); // past CHAIN fireRate of 0.8s
+      service.fireTurn(mockScene, TURN_1);
       expect(e1.health).toBeLessThan(1000);
     });
 
@@ -899,7 +871,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e1', e1);
       enemyMap.set('e2', e2);
 
-      service.update(1.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
       expect(e1.health).toBeLessThan(1000);
       expect(e2.health).toBeLessThan(1000);
     });
@@ -914,7 +886,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e1', e1);
       enemyMap.set('e2', e2);
 
-      service.update(1.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
       expect(e1.health).toBeLessThan(1000);
       expect(e2.health).toBe(1000); // out of chain range
     });
@@ -926,7 +898,7 @@ describe('TowerCombatService', () => {
       const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
       enemyMap.set('e1', e1);
 
-      service.update(1.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
       // Damage should equal exactly one hit (chainCount=3 but only one target)
       const expectedDamage = TOWER_CONFIGS[TowerType.CHAIN].damage;
       expect(e1.health).toBe(1000 - expectedDamage);
@@ -942,7 +914,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e1', e1);
       enemyMap.set('e2', e2);
 
-      service.update(1.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       const e1Damage = 1000 - e1.health;
       const e2Damage = 1000 - e2.health;
@@ -960,7 +932,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e1', e1);
       enemyMap.set('e2', e2);
 
-      const result = service.update(1.0, mockScene);
+      const result = service.fireTurn(mockScene, TURN_1);
       const killedIds = result.killed.map((k: KillInfo) => k.id);
       expect(killedIds).toContain('e1');
       expect(killedIds).toContain('e2');
@@ -970,63 +942,65 @@ describe('TowerCombatService', () => {
   // --- Mortar Tower ---
 
   describe('Mortar tower', () => {
-    it('should fire a projectile toward target', () => {
+    it('should fire and appear in fired list on turn 1', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
       const e1 = createEnemy('e1', TOWER_WORLD_X + 3, TOWER_WORLD_Z, 1000);
       enemyMap.set('e1', e1);
 
-      // Fire — mortar projectile is slow (speed=4), not instant
-      const result = service.update(3.1, mockScene); // past fireRate of 3.0s
+      const result = service.fireTurn(mockScene, TURN_1);
       expect(result.fired).toContain(TowerType.MORTAR);
     });
 
-    it('should create a blast zone on impact that deals DoT', () => {
+    it('should deal initial blast damage on the turn it fires', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
-      // Enemy at tower position — mortar projectile hits instantly (dist=0)
+      // Enemy at tower position — within blast radius
       const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
       enemyMap.set('e1', e1);
 
-      // First update fires and hits instantly; zone is created; initial tick damages
-      service.update(3.1, mockScene);
+      service.fireTurn(mockScene, TURN_1);
       expect(e1.health).toBeLessThan(1000);
     });
 
-    it('should deal DoT per second for dotDuration seconds', () => {
+    it('should deal DoT on subsequent turns via tickMortarZonesForTurn', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
       const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
       enemyMap.set('e1', e1);
 
-      // Fire and hit (instant at dist=0) — creates zone, initial tick deals dotDamage
-      service.update(3.1, mockScene);
-      const healthAfterImpact = e1.health;
+      // Turn 1: fires, drops zone, initial blast applies
+      service.fireTurn(mockScene, TURN_1);
+      const healthAfterBlast = e1.health;
 
-      // Advance slightly past 1 second to trigger next DoT tick (avoid floating-point boundary)
-      service.update(1.1, mockScene);
-      expect(e1.health).toBeLessThan(healthAfterImpact);
+      // Turn 2: tick mortar zones AFTER fireTurn so zone doesn't double-tick
+      service.fireTurn(mockScene, TURN_2); // tower fires again (new blast)
+      // Also tick the existing zone from turn 1
+      service.tickMortarZonesForTurn(mockScene, TURN_2);
+
+      // Health should have decreased further from the zone DoT tick
+      expect(e1.health).toBeLessThan(healthAfterBlast);
     });
 
-    it('should stop dealing DoT after dotDuration expires', () => {
+    it('should stop dealing DoT after dotDuration turns expire', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
       const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
       enemyMap.set('e1', e1);
 
-      // Fire and hit at gameTime=3.1 — zone created, expires at 3.1+3=6.1
-      service.update(3.1, mockScene);
-      const healthAfterImpact = e1.health;
+      // Turn 1: fire — zone created with expiresOnTurn = 1 + dotDuration (3) = 4
+      service.fireTurn(mockScene, TURN_1);
 
-      // Advance 1.1s to trigger one DoT tick (gameTime → 4.2, still within zone lifetime)
-      service.update(1.1, mockScene);
-      expect(e1.health).toBeLessThan(healthAfterImpact);
-
-      // Advance well past expiry (need gameTime > 6.1; currently 4.2 + 2.1 = 6.3 > 6.1)
-      // Move e1 far out of range to prevent new mortar shots from refiring
+      // Move enemy out of range so new mortar shots from tower don't refuel damage
       e1.position.x = TOWER_WORLD_X + 20;
-      service.update(2.1, mockScene); // gameTime = 6.3 > 6.1 — zone expires
-      const healthAfterExpiry = e1.health;
 
-      // No more ticks after expiry
-      service.update(2.0, mockScene);
-      expect(e1.health).toBe(healthAfterExpiry);
+      // Tick turns 2 and 3 — still within zone lifetime (< 4)
+      service.tickMortarZonesForTurn(mockScene, TURN_2);
+      service.tickMortarZonesForTurn(mockScene, TURN_3);
+      const healthAfterActiveTurns = e1.health;
+
+      // Turn 4 and 5 — zone expired (turnNumber >= expiresOnTurn=4)
+      service.tickMortarZonesForTurn(mockScene, 4);
+      service.tickMortarZonesForTurn(mockScene, 5);
+
+      // Health should not decrease after zone expiry
+      expect(e1.health).toBe(healthAfterActiveTurns);
     });
 
     it('should damage multiple enemies within blastRadius', () => {
@@ -1039,7 +1013,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e2', e2);
 
       // Fire and impact at tower position
-      service.update(3.1, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       expect(e1.health).toBeLessThan(1000);
       expect(e2.health).toBeLessThan(1000);
@@ -1055,7 +1029,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e1', e1);
       enemyMap.set('far', far);
 
-      service.update(3.1, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       expect(e1.health).toBeLessThan(1000);
       expect(far.health).toBe(1000);
@@ -1066,13 +1040,28 @@ describe('TowerCombatService', () => {
       const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
       enemyMap.set('e1', e1);
 
-      service.update(3.1, mockScene); // creates zone
+      service.fireTurn(mockScene, TURN_1); // creates zone
 
       service.cleanup(mockScene); // should dispose zone mesh without throwing
 
-      // After cleanup, no more DoT
-      service.update(1.0, mockScene);
-      // No crash expected; health unchanged after cleanup
+      // After cleanup, no more DoT on next tick
+      const result = service.tickMortarZonesForTurn(mockScene, TURN_2);
+      expect(result.kills.length).toBe(0);
+    });
+
+    it('clearMortarZonesForWaveEnd should zero turnMortarZones so wave-N zones do not bleed into wave N+1', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
+      enemyMap.set('e1', e1);
+
+      service.fireTurn(mockScene, TURN_1); // creates zone with remaining turns
+
+      service.clearMortarZonesForWaveEnd(mockScene);
+
+      // Zone is cleared — DoT tick on next wave's turn 1 should produce no damage
+      const result = service.tickMortarZonesForTurn(mockScene, TURN_1);
+      expect(result.kills.length).toBe(0);
+      expect(result.damageDealt).toBe(0);
     });
   });
 
@@ -1129,7 +1118,7 @@ describe('TowerCombatService', () => {
       const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
       enemyMap.set('e1', e1);
 
-      service.update(1.0, mockScene); // past CHAIN fireRate
+      service.fireTurn(mockScene, TURN_1);
 
       const chainArcs = combatVFXService.getChainArcs();
       expect(chainArcs.length).toBeGreaterThan(0);
@@ -1147,7 +1136,7 @@ describe('TowerCombatService', () => {
       const e1 = createEnemy('e1', targetX, targetZ, 1000);
       enemyMap.set('e1', e1);
 
-      service.update(1.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       const chainArcs = combatVFXService.getChainArcs();
       expect(chainArcs.length).toBeGreaterThan(0);
@@ -1170,107 +1159,17 @@ describe('TowerCombatService', () => {
   });
 
   // --- Impact Flash ---
-
-  describe('impact flash', () => {
-    it('should spawn an impact flash when a projectile hits an enemy', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-
-      // Enemy at tower position — projectile hits instantly (dist=0)
-      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
-      enemyMap.set('e1', e1);
-
-      service.update(2.0, mockScene);
-
-      expect(combatVFXService.getImpactFlashCount()).toBeGreaterThan(0);
-    });
-
-    it('should create flash with SphereGeometry', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
-      enemyMap.set('e1', e1);
-
-      service.update(2.0, mockScene);
-
-      const impactFlashes = combatVFXService.getImpactFlashes();
-      expect(impactFlashes.length).toBeGreaterThan(0);
-      expect(impactFlashes[0].mesh.geometry).toBeInstanceOf(THREE.SphereGeometry);
-    });
-
-    it('should clean up flash after its lifetime expires', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
-      enemyMap.set('e1', e1);
-
-      service.update(2.0, mockScene); // fire + hit → flash spawned
-
-      expect(combatVFXService.getImpactFlashCount()).toBeGreaterThan(0);
-
-      // Move enemy far away so no new flashes are spawned
-      e1.position.x = TOWER_WORLD_X + 20;
-
-      // Advance time past flash lifetime (IMPACT_FLASH_CONFIG.lifetime = 0.08s)
-      service.update(IMPACT_FLASH_CONFIG.lifetime + 0.01, mockScene);
-
-      expect(combatVFXService.getImpactFlashCount()).toBe(0);
-    });
-
-    it('should share the same geometry reference across multiple impact flashes', () => {
-      // Register two towers so two projectiles can fire simultaneously
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-      service.registerTower(TOWER_ROW + 1, TOWER_COL, TowerType.BASIC, new THREE.Group());
-
-      // Two enemies — each at its tower's position for instant hit
-      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
-      enemyMap.set('e1', e1);
-
-      // Second tower is at row+1 → world Z offset by 1 tile
-      const e2 = createEnemy('e2', TOWER_WORLD_X, TOWER_WORLD_Z + 1, 1000);
-      enemyMap.set('e2', e2);
-
-      service.update(2.0, mockScene);
-
-      const impactFlashes = combatVFXService.getImpactFlashes();
-      expect(impactFlashes.length).toBeGreaterThanOrEqual(2);
-
-      // Both flash meshes should share the same geometry instance (shared pool)
-      expect(impactFlashes[0].mesh.geometry).toBe(impactFlashes[1].mesh.geometry);
-    });
-
-    it('should re-create flash geometry after cleanup disposes it', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-
-      // First flash — instant hit
-      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
-      enemyMap.set('e1', e1);
-      service.update(2.0, mockScene);
-
-      const flashesBefore = combatVFXService.getImpactFlashes();
-      expect(flashesBefore.length).toBeGreaterThan(0);
-      const geometryBeforeCleanup = flashesBefore[0].mesh.geometry;
-
-      // Cleanup disposes the shared geometry and sets it to null
-      service.cleanup(mockScene);
-
-      // Re-register tower and create a new flash
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-      const e2 = createEnemy('e2', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
-      enemyMap.set('e2', e2);
-      service.update(2.0, mockScene);
-
-      const flashesAfter = combatVFXService.getImpactFlashes();
-      expect(flashesAfter.length).toBeGreaterThan(0);
-      const geometryAfterCleanup = flashesAfter[0].mesh.geometry;
-
-      // New geometry must be a different reference (old one was disposed)
-      expect(geometryAfterCleanup).not.toBe(geometryBeforeCleanup);
-      expect(geometryAfterCleanup).toBeInstanceOf(THREE.SphereGeometry);
-    });
-  });
+  // NOTE: Impact flash VFX (CombatVFXService.getImpactFlashCount) was driven by
+  // projectile hits in the old deltaTime path. In the turn-based path (fireTurn),
+  // startHitFlash() is called on EnemyService which handles the enemy's flash
+  // state — no scene-level flash sphere is spawned by TowerCombatService.
+  // These tests are removed; impact flash is now CombatVFXService internal state
+  // untouched by fireTurn() directly.
 
   // --- Status Effect Wiring ---
 
   describe('status effect wiring', () => {
-    it('Mortar blast should apply BURN to surviving enemies in blast radius', () => {
+    it('Mortar blast should apply statusEffect to surviving enemies in blast radius', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
       // Enemy at tower position — mortar hits instantly, has high health so it survives
       const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
@@ -1278,14 +1177,15 @@ describe('TowerCombatService', () => {
 
       const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
 
-      service.update(3.1, mockScene); // past MORTAR fireRate of 3.0s — fires and hits
+      service.fireTurn(mockScene, TURN_1); // fires and hits
 
+      // MORTAR config has statusEffect = BURN
       const burnCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.BURN);
       expect(burnCalls.length).toBeGreaterThan(0);
       expect(burnCalls[0].args[0]).toBe('e1');
     });
 
-    it('Mortar blast should NOT apply BURN to enemies killed by the blast', () => {
+    it('Mortar blast should NOT apply statusEffect to enemies killed by the blast', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
       // Enemy with exactly dotDamage health — killed by initial blast
       const dotDamage = TOWER_CONFIGS[TowerType.MORTAR].dotDamage!;
@@ -1294,7 +1194,7 @@ describe('TowerCombatService', () => {
 
       const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
 
-      service.update(3.1, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       // Enemy was killed — apply should not be called for it with BURN
       const burnCalls = applySpy.calls.all().filter(
@@ -1303,18 +1203,18 @@ describe('TowerCombatService', () => {
       expect(burnCalls.length).toBe(0);
     });
 
-    it('Mortar zone DoT ticks should apply BURN to surviving enemies in zone', () => {
+    it('Mortar zone DoT ticks should apply statusEffect to surviving enemies in zone', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
       const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
       enemyMap.set('e1', e1);
 
       // Fire and create zone
-      service.update(3.1, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
 
-      // Advance 1.1s to trigger DoT tick inside zone
-      service.update(1.1, mockScene);
+      // Tick zone on turn 2 — enemy still in zone, status effect should fire
+      service.tickMortarZonesForTurn(mockScene, TURN_2);
 
       const burnCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.BURN);
       expect(burnCalls.length).toBeGreaterThan(0);
@@ -1332,7 +1232,7 @@ describe('TowerCombatService', () => {
 
       const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
 
-      service.update(2.0, mockScene); // past SPLASH fireRate
+      service.fireTurn(mockScene, TURN_1);
 
       const poisonCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.POISON);
       expect(poisonCalls.length).toBeGreaterThan(0);
@@ -1351,7 +1251,7 @@ describe('TowerCombatService', () => {
 
       const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
 
-      service.update(2.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       // Enemy killed — should not receive POISON
       const poisonCalls = applySpy.calls.all().filter(
@@ -1367,10 +1267,9 @@ describe('TowerCombatService', () => {
 
       const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
 
-      service.update(2.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
-      // SLOW apply (from slow tower) is expected to not be called at all, but neither should any other effect
-      // Only SLOW towers call apply — Basic should not call it
+      // Basic tower has no statusEffect — only SLOW tower calls apply
       const nonSlowCalls = applySpy.calls.all().filter(
         c => c.args[1] !== StatusEffectType.SLOW
       );
@@ -1384,7 +1283,7 @@ describe('TowerCombatService', () => {
 
       const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
 
-      service.update(3.0, mockScene); // past SNIPER fireRate of 2.5s
+      service.fireTurn(mockScene, TURN_1);
 
       const nonSlowCalls = applySpy.calls.all().filter(
         c => c.args[1] !== StatusEffectType.SLOW
@@ -1407,7 +1306,7 @@ describe('TowerCombatService', () => {
 
       const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
 
-      service.update(1.0, mockScene); // past CHAIN TESLA fireRate (0.8 * 0.8 = 0.64s)
+      service.fireTurn(mockScene, TURN_1);
 
       const burnCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.BURN);
       expect(burnCalls.length).toBeGreaterThanOrEqual(2);
@@ -1429,7 +1328,7 @@ describe('TowerCombatService', () => {
 
       const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
 
-      service.update(1.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       const burnCalls = applySpy.calls.all().filter(
         c => c.args[0] === 'e1' && c.args[1] === StatusEffectType.BURN
@@ -1448,7 +1347,7 @@ describe('TowerCombatService', () => {
 
       const applySpy = spyOn(statusEffectService, 'apply').and.callThrough();
 
-      service.update(1.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       const burnCalls = applySpy.calls.all().filter(c => c.args[1] === StatusEffectType.BURN);
       expect(burnCalls.length).toBe(0);
@@ -1456,90 +1355,14 @@ describe('TowerCombatService', () => {
   });
 
   // --- MORTAR BURN DoT full-chain integration ---
-
-  describe('Mortar BURN DoT integration', () => {
-    it('BURN ticks from StatusEffectService should reduce enemy health after mortar blast', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
-      // Enemy survives the initial blast — high health
-      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
-      enemyMap.set('e1', e1);
-
-      // Fire and impact at gameTime=3.1 — creates zone, initial tick deals dotDamage,
-      // and BURN is applied to the surviving enemy
-      service.update(3.1, mockScene);
-      const healthAfterBlast = e1.health;
-
-      // Advance exactly one BURN tick interval (0.5s) to trigger the first BURN DoT tick.
-      // BURN damagePerTick=5, tickInterval=0.5 — StatusEffectService.update() is called
-      // inside TowerCombatService.update(), so a second update drives the DoT tick.
-      const burnCfg = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN];
-
-      // Move enemy out of blast radius before next update so the mortar zone DoT
-      // (tickInterval=1.0s) does NOT fire during this tick — only BURN fires.
-      e1.position.x = TOWER_WORLD_X + 100;
-      service.update(burnCfg.tickInterval!, mockScene);
-
-      // Health must have decreased from the BURN DoT tick
-      expect(e1.health).toBeLessThan(healthAfterBlast);
-      // The exact decrease must equal BURN damagePerTick
-      expect(healthAfterBlast - e1.health).toBe(burnCfg.damagePerTick!);
-    });
-
-    it('BURN deals cumulative damage across multiple ticks after mortar blast', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
-      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
-      enemyMap.set('e1', e1);
-
-      service.update(3.1, mockScene); // fire + blast + BURN applied
-
-      const burnCfg = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN];
-      // Move enemy out of mortar zone so only BURN damages it from here on
-      e1.position.x = TOWER_WORLD_X + 100;
-      const healthAfterBlast = e1.health;
-
-      // Advance by 1.1x the tick interval to avoid exact floating-point tick boundary
-      // issues. This guarantees exactly one tick fires per update() call.
-      const step = burnCfg.tickInterval! * 1.1; // 0.55s — safely crosses 0.5s boundary
-
-      // First BURN tick
-      service.update(step, mockScene);
-      const healthAfterTick1 = e1.health;
-      expect(healthAfterTick1).toBeLessThan(healthAfterBlast);
-      expect(healthAfterBlast - healthAfterTick1).toBe(burnCfg.damagePerTick!);
-
-      // Second BURN tick — health decreases again by the same amount
-      service.update(step, mockScene);
-      const healthAfterTick2 = e1.health;
-      expect(healthAfterTick2).toBeLessThan(healthAfterTick1);
-      expect(healthAfterTick1 - healthAfterTick2).toBe(burnCfg.damagePerTick!);
-    });
-
-    it('BURN tick kills enemy when remaining health equals one tick damage', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
-      const burnCfg = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN];
-
-      // Enemy health: blast damage + exactly enough to survive blast, then die on first BURN tick
-      // dotDamage (initial blast) + burnDamagePerTick = total lethal health
-      const dotDamage = TOWER_CONFIGS[TowerType.MORTAR].dotDamage!;
-      const initialHealth = dotDamage + burnCfg.damagePerTick!;
-      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, initialHealth);
-      enemyMap.set('e1', e1);
-
-      // Fire and blast — enemy survives with exactly burnCfg.damagePerTick health
-      service.update(3.1, mockScene);
-      expect(e1.health).toBe(burnCfg.damagePerTick!);
-
-      // Move out of mortar zone so only BURN ticks
-      e1.position.x = TOWER_WORLD_X + 100;
-
-      // Advance one BURN tick — should kill the enemy via StatusEffectService
-      const result = service.update(burnCfg.tickInterval!, mockScene);
-
-      // Kill should be reported from the DoT tick
-      const dotKills = result.killed.filter((k: KillInfo) => k.id === 'e1');
-      expect(dotKills.length).toBe(1);
-    });
-  });
+  // NOTE: The old tests drove BURN ticks via StatusEffectService.update(deltaTime)
+  // called inside the old physics loop. That loop is deleted. BURN ticks now run
+  // via StatusEffectService.tickTurn() called from CombatLoopService.resolveTurn().
+  // Those semantics are covered in status-effect.service.spec.ts and the
+  // combat-integration.spec.ts mortar section. Deleted tests:
+  //   - "BURN ticks from StatusEffectService should reduce enemy health after mortar blast"
+  //   - "BURN deals cumulative damage across multiple ticks after mortar blast"
+  //   - "BURN tick kills enemy when remaining health equals one tick damage"
 
   // --- Chain damage-per-hop: 3-enemy falloff chain ---
 
@@ -1558,7 +1381,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e2', e2);
       enemyMap.set('e3', e3);
 
-      service.update(1.0, mockScene); // past CHAIN fireRate of 0.8s
+      service.fireTurn(mockScene, TURN_1);
 
       const e1Damage = 10000 - e1.health;
       const e2Damage = 10000 - e2.health;
@@ -1592,7 +1415,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e3', e3);
       enemyMap.set('e4', e4);
 
-      service.update(1.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       expect(10000 - e1.health).toBe(baseDamage);
     });
@@ -1608,7 +1431,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e2', e2);
       enemyMap.set('e3', e3);
 
-      service.update(1.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       const e1Damage = 10000 - e1.health;
       const e2Damage = 10000 - e2.health;
@@ -1630,7 +1453,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e1', e1);
       enemyMap.set('e2', e2);
 
-      service.update(1.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       const e1Damage = 10000 - e1.health;
       const e2Damage = 10000 - e2.health;
@@ -1650,7 +1473,7 @@ describe('TowerCombatService', () => {
       const inRange = createEnemy('in', TOWER_WORLD_X + 1, TOWER_WORLD_Z, 10000);
       enemyMap.set('in', inRange);
 
-      service.update(2.0, mockScene); // fire rate 1.0s — fires after 1.0s
+      service.fireTurn(mockScene, TURN_1);
 
       expect(inRange.health).toBeLessThan(10000);
     });
@@ -1662,34 +1485,34 @@ describe('TowerCombatService', () => {
       const outOfRange = createEnemy('out', TOWER_WORLD_X + 5, TOWER_WORLD_Z, 10000);
       enemyMap.set('out', outOfRange);
 
-      service.update(2.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       expect(outOfRange.health).toBe(10000); // untouched
     });
 
-    it('spatial grid rebuilds every update — newly added enemies are found immediately', () => {
+    it('spatial grid rebuilds every turn — newly added enemies are found immediately', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
 
-      // First update with no enemies — no fire
-      service.update(1.1, mockScene);
+      // Turn 1 with no enemies — no fire (spatial grid built but empty)
+      service.fireTurn(mockScene, TURN_1);
 
-      // Add enemy for the second update — grid rebuilds and finds it
+      // Add enemy for turn 2 — grid rebuilds and finds it
       const lateEnemy = createEnemy('late', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
       enemyMap.set('late', lateEnemy);
 
-      service.update(1.1, mockScene); // fire rate resets each update; tower fires
+      service.fireTurn(mockScene, TURN_2);
 
       expect(lateEnemy.health).toBeLessThan(10000);
     });
 
-    it('spatial grid rebuilds correctly after an enemy is removed between updates', () => {
+    it('spatial grid rebuilds correctly after an enemy is removed between turns', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
 
       const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1);
       enemyMap.set('e1', e1);
 
-      // First update: tower fires and kills e1 (health=1)
-      service.update(2.0, mockScene);
+      // Turn 1: tower fires and kills e1 (health=1)
+      service.fireTurn(mockScene, TURN_1);
       // Remove killed enemy from map (simulate EnemyService removal)
       enemyMap.delete('e1');
 
@@ -1697,7 +1520,7 @@ describe('TowerCombatService', () => {
       const e2 = createEnemy('e2', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
       enemyMap.set('e2', e2);
 
-      service.update(1.1, mockScene); // past fire rate
+      service.fireTurn(mockScene, TURN_2);
 
       expect(e2.health).toBeLessThan(10000);
     });
@@ -1712,7 +1535,7 @@ describe('TowerCombatService', () => {
       enemyMap.set('e1', e1);
       enemyMap.set('e2', e2);
 
-      service.update(1.0, mockScene); // past CHAIN fireRate
+      service.fireTurn(mockScene, TURN_1);
 
       // Both enemies should have been found by the spatial grid
       expect(e1.health).toBeLessThan(10000);
@@ -1733,7 +1556,7 @@ describe('TowerCombatService', () => {
       const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
       enemyMap.set('e1', e1);
 
-      service.update(1.0, mockScene); // past CHAIN fireRate
+      service.fireTurn(mockScene, TURN_1);
       const events = service.drainAudioEvents();
       const sfxEvents = events.filter((e: CombatAudioEvent) => e.type === 'sfx' && e.sfxKey === 'chainZap');
       expect(sfxEvents.length).toBeGreaterThan(0);
@@ -1744,7 +1567,7 @@ describe('TowerCombatService', () => {
       const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
       enemyMap.set('e1', e1);
 
-      service.update(1.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
       service.drainAudioEvents(); // first drain
 
       // Second drain should be empty
@@ -1753,82 +1576,18 @@ describe('TowerCombatService', () => {
     });
 
     it('should not accumulate audio events when no towers fire', () => {
-      service.update(0.016, mockScene); // no towers registered
+      service.fireTurn(mockScene, TURN_1); // no towers registered
       const events = service.drainAudioEvents();
       expect(events).toEqual([]);
     });
   });
 
-  // --- Projectile visual config applied on fire and reset on pool release ---
-
-  describe('projectile visual config applied on fire', () => {
-    it('should apply BASIC visual config color when BASIC tower fires', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-
-      // Place enemy within BASIC range (3) but not at exact tower position so projectile is in-flight
-      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 1000);
-      enemyMap.set('e1', enemy);
-
-      // deltaTime=0.016 — tower fires (lastFireTime=-Infinity) but projectile won't reach enemy yet
-      service.update(0.016, mockScene);
-
-      // Find the projectile mesh added to scene
-      const projectileMesh = mockScene.children.find(
-        (c): c is THREE.Mesh => c instanceof THREE.Mesh && c.visible
-      );
-
-      expect(projectileMesh).toBeDefined();
-      const mat = projectileMesh!.material as THREE.MeshStandardMaterial;
-      // BASIC config color is 0xffffcc
-      expect(mat.color.getHex()).toBe(0xffffcc);
-      expect(mat.emissiveIntensity).toBeGreaterThan(0);
-    });
-
-    it('should apply SNIPER visual config and set scaleZ on sniper projectile', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SNIPER, new THREE.Group());
-
-      // Place enemy within SNIPER range (8), far enough so projectile is in-flight
-      const enemy = createEnemy('e1', TOWER_WORLD_X + 2, TOWER_WORLD_Z, 1000);
-      enemyMap.set('e1', enemy);
-
-      service.update(0.016, mockScene);
-
-      const projectileMesh = mockScene.children.find(
-        (c): c is THREE.Mesh => c instanceof THREE.Mesh && c.visible
-      );
-
-      expect(projectileMesh).toBeDefined();
-      const mat = projectileMesh!.material as THREE.MeshStandardMaterial;
-      expect(mat.color.getHex()).toBe(0xff4444);
-      // scaleZ should differ from scaleX (elongated)
-      expect(projectileMesh!.scale.z).toBeGreaterThan(projectileMesh!.scale.x);
-    });
-
-    it('should reset material and scale to defaults when projectile returns to pool', () => {
-      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
-
-      // Enemy at tower position — projectile hits and returns to pool on first update
-      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 1000);
-      enemyMap.set('e1', enemy);
-
-      // First update: fires and hits (enemy at dist=0)
-      service.update(2.0, mockScene);
-
-      // The pool mesh should now be reset (visible=false, neutral material)
-      const pooledMesh = mockScene.children.find(
-        (c): c is THREE.Mesh => c instanceof THREE.Mesh && !c.visible
-      );
-
-      expect(pooledMesh).toBeDefined();
-      const mat = pooledMesh!.material as THREE.MeshStandardMaterial;
-      expect(mat.color.getHex()).toBe(0xffffff);
-      expect(mat.emissive.getHex()).toBe(0x000000);
-      expect(mat.emissiveIntensity).toBe(0);
-      expect(pooledMesh!.scale.x).toBe(1);
-      expect(pooledMesh!.scale.y).toBe(1);
-      expect(pooledMesh!.scale.z).toBe(1);
-    });
-  });
+  // --- Projectile visual config applied on fire ---
+  // NOTE: The old tests verified in-flight projectile mesh color/material state from
+  // ProjectileService. That service is DELETED (M2 S5). fireTurn() applies damage
+  // instantaneously — no in-flight mesh is created for BASIC/SNIPER/SPLASH/MORTAR
+  // towers. These visual config tests are removed. The PROJECTILE_VISUAL_CONFIG
+  // data structure itself is tested in the Tower Model Functions section below.
 
   // ── Boundary conditions ────────────────────────────────────────────────────
 
@@ -1851,23 +1610,23 @@ describe('TowerCombatService', () => {
       const enemy = createEnemy('edge-e', EDGE_WORLD_X, EDGE_WORLD_Z, 1000);
       enemyMap.set('edge-e', enemy);
 
-      service.update(0.016, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       expect(enemy.health).toBeLessThan(1000);
     });
 
-    it('update with no enemies returns empty killed array and does not throw', () => {
+    it('fireTurn with no enemies returns empty killed array and does not throw', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
       // enemyMap is empty
 
-      let result: ReturnType<typeof service.update> | undefined;
-      expect(() => { result = service.update(0.016, mockScene); }).not.toThrow();
+      let result: { killed: { id: string; damage: number }[]; fired: TowerType[]; hitCount: number } | undefined;
+      expect(() => { result = service.fireTurn(mockScene, TURN_1); }).not.toThrow();
       expect(result!.killed.length).toBe(0);
     });
 
-    it('update with no towers and no enemies does not throw', () => {
+    it('fireTurn with no towers and no enemies does not throw', () => {
       // No towers registered, no enemies
-      expect(() => service.update(0.016, mockScene)).not.toThrow();
+      expect(() => service.fireTurn(mockScene, TURN_1)).not.toThrow();
     });
 
     it('enemy at exact BASIC range boundary (distance === range) is targeted', () => {
@@ -1878,9 +1637,7 @@ describe('TowerCombatService', () => {
       const enemy = createEnemy('boundary-e', exactRangeX, TOWER_WORLD_Z, 1000);
       enemyMap.set('boundary-e', enemy);
 
-      // Fire + allow projectile travel time
-      service.update(0.016, mockScene);
-      service.update(1.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       expect(enemy.health).toBeLessThan(1000);
     });
@@ -1892,12 +1649,334 @@ describe('TowerCombatService', () => {
       const enemy = createEnemy('outside-e', outsideRangeX, TOWER_WORLD_Z, 1000);
       enemyMap.set('outside-e', enemy);
 
-      service.update(2.0, mockScene);
+      service.fireTurn(mockScene, TURN_1);
 
       expect(enemy.health).toBe(1000);
     });
   });
 
+  // --- Card Modifier Wiring Tests ---
+
+  describe('card modifier wiring', () => {
+    let cardEffectSpy: jasmine.SpyObj<CardEffectService>;
+
+    beforeEach(() => {
+      cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+    });
+
+    it('fireRate: positive boost gives 2 shots per turn (ceil semantic)', () => {
+      // BASIC tower at tower position, enemy at tower position — always in range
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      // 30% fireRate boost → ceil(1.3) = 2 shots per turn
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) => stat === 'fireRate' ? 0.3 : 0);
+
+      const result = service.fireTurn(mockScene, TURN_1);
+
+      // Two shots fired — both hit the same enemy (only one in range)
+      expect(result.fired.length).toBe(2);
+    });
+
+    it('sniperDamage: boosts SNIPER damage but leaves BASIC tower unchanged', () => {
+      // SNIPER tower and BASIC tower, each at different rows so firing order is deterministic
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SNIPER, new THREE.Group());
+      service.registerTower(TOWER_ROW + 1, TOWER_COL, TowerType.BASIC, new THREE.Group());
+
+      const sniperEnemy = createEnemy('se', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const basicEnemy = createEnemy('be', TOWER_WORLD_X, TOWER_WORLD_Z + 0.01, 10000);
+      enemyMap.set('se', sniperEnemy);
+      enemyMap.set('be', basicEnemy);
+
+      const baseSniperDamage = 80; // TOWER_CONFIGS[SNIPER].damage
+      const baseBasicDamage = 25;  // TOWER_CONFIGS[BASIC].damage
+
+      // Apply 50% sniperDamage boost
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) => stat === 'sniperDamage' ? 0.5 : 0);
+
+      service.fireTurn(mockScene, TURN_1);
+
+      // SNIPER damage should be boosted by 50%
+      const sniperDamageTaken = 10000 - sniperEnemy.health;
+      expect(sniperDamageTaken).toBe(Math.round(baseSniperDamage * 1.5));
+
+      // BASIC damage should be unchanged
+      const basicDamageTaken = 10000 - basicEnemy.health;
+      expect(basicDamageTaken).toBe(baseBasicDamage);
+    });
+
+    it('chainBounces: extra bounces increase hitCount beyond chainCount', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.CHAIN, new THREE.Group());
+
+      // 6 enemies so chain has targets for all chainCount(3) + extraBounces(2) + primary = 6 hits
+      for (let i = 0; i < 6; i++) {
+        const e = createEnemy(`e${i}`, TOWER_WORLD_X + i * 0.2, TOWER_WORLD_Z, 10000);
+        enemyMap.set(`e${i}`, e);
+      }
+
+      // 2 extra bounces on top of chainCount=3
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) => stat === 'chainBounces' ? 2 : 0);
+
+      const result = service.fireTurn(mockScene, TURN_1);
+
+      // hitCount reflects actual enemies struck: primary + up to chainCount+extraBounces bounces
+      // With 6 enemies in range and high damage (15 base) all 6 slots fire → hitCount >= 6
+      expect(result.hitCount).toBeGreaterThanOrEqual(6);
+    });
+  });
+
+  // --- QUICK_DRAW relic: +1 shot on tower placement turn ---
+
+  describe('QUICK_DRAW relic (hasQuickDraw)', () => {
+    const PLACEMENT_TURN = 3;
+
+    it('tower placed on turn N with QUICK_DRAW fires 2 shots on turn N', () => {
+      relicServiceSpy.hasQuickDraw.and.returnValue(true);
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group(), 50, { placedAtTurn: PLACEMENT_TURN });
+
+      // Two enemies at tower position, enough health to survive one shot each
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + 0.1, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      const result = service.fireTurn(mockScene, PLACEMENT_TURN);
+
+      // With QUICK_DRAW, 2 shots fired — both enemies should take damage
+      expect(result.fired.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('tower placed on turn N with QUICK_DRAW fires only 1 shot on turn N+1', () => {
+      relicServiceSpy.hasQuickDraw.and.returnValue(true);
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group(), 50, { placedAtTurn: PLACEMENT_TURN });
+
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + 0.1, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      // Fire on turn N+1 — no bonus
+      const result = service.fireTurn(mockScene, PLACEMENT_TURN + 1);
+
+      expect(result.fired.length).toBe(1);
+    });
+
+    it('tower without QUICK_DRAW fires only 1 shot even on placement turn', () => {
+      relicServiceSpy.hasQuickDraw.and.returnValue(false);
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group(), 50, { placedAtTurn: PLACEMENT_TURN });
+
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + 0.1, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+
+      const result = service.fireTurn(mockScene, PLACEMENT_TURN);
+
+      expect(result.fired.length).toBe(1);
+    });
+
+    it('QUICK_DRAW + FIRE_RATE modifier stack additively on placement turn', () => {
+      relicServiceSpy.hasQuickDraw.and.returnValue(true);
+      // fireRateBoost = 0.3 → baseShots = ceil(1.3) = 2, then +1 QUICK_DRAW = 3 shots
+      // MODIFIER_STAT.FIRE_RATE = 'fireRate' (see modifier-stat.constants.ts)
+      const cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === 'fireRate' ? 0.3 : 0
+      );
+
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group(), 50, { placedAtTurn: PLACEMENT_TURN });
+
+      const e1 = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      const e2 = createEnemy('e2', TOWER_WORLD_X + 0.1, TOWER_WORLD_Z, 10000);
+      const e3 = createEnemy('e3', TOWER_WORLD_X + 0.2, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+      enemyMap.set('e3', e3);
+
+      const result = service.fireTurn(mockScene, PLACEMENT_TURN);
+
+      // baseShots=2 (from FIRE_RATE 0.3) + 1 (QUICK_DRAW) = 3 shots
+      expect(result.fired.length).toBe(3);
+    });
+  });
+
+});
+
+// --- cardStatOverrides Tests ---
+// Separate top-level describes because the nested scope of 'TowerCombatService'
+// describe is only accessible within that block.
+
+describe('TowerCombatService registerTower cardStatOverrides', () => {
+  // Tower at row=5, col=5 on a 25x20 board
+  const ROW = 5;
+  const COL = 5;
+  let svc: TowerCombatService;
+
+  beforeEach(() => {
+    const localEnemyMap = new Map<string, Enemy>();
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(localEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+      ]
+    });
+    svc = TestBed.inject(TowerCombatService);
+  });
+
+  it('stores undefined cardStatOverrides when not provided', () => {
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50);
+    const tower = svc.getTower(`${ROW}-${COL}`)!;
+    expect(tower.cardStatOverrides).toBeUndefined();
+  });
+
+  it('stores the provided cardStatOverrides object on the placed tower', () => {
+    const overrides = { damageMultiplier: 0.5 };
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: overrides });
+    const tower = svc.getTower(`${ROW}-${COL}`)!;
+    expect(tower.cardStatOverrides).toEqual(overrides);
+  });
+});
+
+describe('TowerCombatService fireTurn cardStatOverrides composition', () => {
+  // Tower at row=10, col=12 on a 25x20 board (world position -0.5, 0)
+  const ROW = 10;
+  const COL = 12;
+  const WORLD_X = -0.5;
+  const WORLD_Z = 0;
+
+  let svc: TowerCombatService;
+  let localEnemyMap: Map<string, Enemy>;
+  let relicSpy: jasmine.SpyObj<RelicService>;
+  let scene: THREE.Scene;
+
+  beforeEach(() => {
+    localEnemyMap = new Map<string, Enemy>();
+    relicSpy = createRelicServiceSpy();
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(localEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: relicSpy },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+      ]
+    });
+    svc = TestBed.inject(TowerCombatService);
+    scene = new THREE.Scene();
+  });
+
+  afterEach(() => {
+    scene.clear();
+  });
+
+  it('applies damageMultiplier 0.7 reduces damage to round(base times 0.7)', () => {
+    const baseDmg = TOWER_CONFIGS[TowerType.BASIC].damage;
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: { damageMultiplier: 0.7 } });
+    const enemy = createTestEnemy('e1', WORLD_X, WORLD_Z, 10000);
+    localEnemyMap.set('e1', enemy);
+    svc.fireTurn(scene, 1);
+    const expectedDamage = Math.round(baseDmg * 0.7);
+    expect(enemy.health).toBe(10000 - expectedDamage);
+  });
+
+  it('composes damageMultiplier with relic getDamageMultiplier multiplicatively', () => {
+    relicSpy.getDamageMultiplier.and.returnValue(1.2);
+    (Object.getOwnPropertyDescriptor(relicSpy, 'relicCount')!.get as jasmine.Spy).and.returnValue(1);
+    const baseDmg = TOWER_CONFIGS[TowerType.BASIC].damage;
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: { damageMultiplier: 0.7 } });
+    const enemy = createTestEnemy('e1', WORLD_X, WORLD_Z, 10000);
+    localEnemyMap.set('e1', enemy);
+    svc.fireTurn(scene, 1);
+    const expectedDamage = Math.round(baseDmg * 1.2 * 0.7);
+    expect(enemy.health).toBe(10000 - expectedDamage);
+  });
+
+  it('rangeMultiplier 1.5 enemy at 1.4x base range is hit', () => {
+    const baseRange = TOWER_CONFIGS[TowerType.BASIC].range;
+    const extendedX = WORLD_X + baseRange * 1.4;
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: { rangeMultiplier: 1.5 } });
+    const enemy = createTestEnemy('e1', extendedX, WORLD_Z, 10000);
+    localEnemyMap.set('e1', enemy);
+    svc.fireTurn(scene, 1);
+    expect(enemy.health).toBeLessThan(10000);
+  });
+
+  it('rangeMultiplier 1.5 enemy beyond extended range is NOT hit', () => {
+    const baseRange = TOWER_CONFIGS[TowerType.BASIC].range;
+    const beyondX = WORLD_X + baseRange * 1.6;
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: { rangeMultiplier: 1.5 } });
+    const enemy = createTestEnemy('e1', beyondX, WORLD_Z, 10000);
+    localEnemyMap.set('e1', enemy);
+    svc.fireTurn(scene, 1);
+    expect(enemy.health).toBe(10000);
+  });
+
+  it('splashRadiusMultiplier 0.6 SPLASH tower secondary outside reduced radius is NOT hit', () => {
+    const baseSplash = TOWER_CONFIGS[TowerType.SPLASH].splashRadius;
+    const outsideReducedRadius = baseSplash * 0.7;
+    svc.registerTower(ROW, COL, TowerType.SPLASH, new THREE.Group(), 75, { cardStatOverrides: { splashRadiusMultiplier: 0.6 } });
+    const primary = createTestEnemy('primary', WORLD_X, WORLD_Z, 10000);
+    const secondary = createTestEnemy('secondary', WORLD_X + outsideReducedRadius, WORLD_Z, 10000);
+    localEnemyMap.set('primary', primary);
+    localEnemyMap.set('secondary', secondary);
+    svc.fireTurn(scene, 1);
+    expect(primary.health).toBeLessThan(10000);
+    expect(secondary.health).toBe(10000);
+  });
+
+  it('chainBounceBonus 1 on CHAIN tower is stored additively', () => {
+    svc.registerTower(ROW, COL, TowerType.CHAIN, new THREE.Group(), 120, { cardStatOverrides: { chainBounceBonus: 1 } });
+    const tower = svc.getTower(`${ROW}-${COL}`)!;
+    expect(tower.cardStatOverrides?.chainBounceBonus).toBe(1);
+  });
+
+  it('chainBounceBonus and relic getChainBounceBonus stack additively both equal 1', () => {
+    relicSpy.getChainBounceBonus.and.returnValue(1);
+    (Object.getOwnPropertyDescriptor(relicSpy, 'relicCount')!.get as jasmine.Spy).and.returnValue(1);
+    svc.registerTower(ROW, COL, TowerType.CHAIN, new THREE.Group(), 120, { cardStatOverrides: { chainBounceBonus: 1 } });
+    const tower = svc.getTower(`${ROW}-${COL}`)!;
+    // Combined = baseChainCount + 1 (relic) + 1 (card) = base + 2
+    expect(tower.cardStatOverrides?.chainBounceBonus).toBe(1);
+    expect(relicSpy.getChainBounceBonus()).toBe(1);
+  });
+
+  it('dotDamageMultiplier 0.8 on MORTAR tower is stored', () => {
+    svc.registerTower(ROW, COL, TowerType.MORTAR, new THREE.Group(), 140, { cardStatOverrides: { dotDamageMultiplier: 0.8 } });
+    const tower = svc.getTower(`${ROW}-${COL}`)!;
+    expect(tower.cardStatOverrides?.dotDamageMultiplier).toBe(0.8);
+  });
+
+  it('undefined cardStatOverrides applies identity no change to base damage', () => {
+    const baseDmg = TOWER_CONFIGS[TowerType.BASIC].damage;
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50);
+    const enemy = createTestEnemy('e1', WORLD_X, WORLD_Z, 10000);
+    localEnemyMap.set('e1', enemy);
+    svc.fireTurn(scene, 1);
+    expect(enemy.health).toBe(10000 - baseDmg);
+  });
+
+  it('empty cardStatOverrides uses identity values final damage equals baseDamage', () => {
+    const baseDmg = TOWER_CONFIGS[TowerType.BASIC].damage;
+    svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: {} });
+    const enemy = createTestEnemy('e1', WORLD_X, WORLD_Z, 10000);
+    localEnemyMap.set('e1', enemy);
+    svc.fireTurn(scene, 1);
+    expect(enemy.health).toBe(10000 - baseDmg);
+  });
 });
 
 // --- Tower Model Pure Function Tests ---
@@ -1958,7 +2037,6 @@ describe('Tower Model Functions', () => {
         const stats = getEffectiveStats(type, 1);
         expect(stats.damage).toBe(TOWER_CONFIGS[type].damage);
         expect(stats.range).toBe(TOWER_CONFIGS[type].range);
-        expect(stats.fireRate).toBe(TOWER_CONFIGS[type].fireRate);
       }
     });
 
@@ -1972,14 +2050,8 @@ describe('Tower Model Functions', () => {
       expect(stats.range).toBeGreaterThan(TOWER_CONFIGS[TowerType.BASIC].range);
     });
 
-    it('should decrease fire rate (faster) at level 2', () => {
-      const stats = getEffectiveStats(TowerType.BASIC, 2);
-      expect(stats.fireRate).toBeLessThan(TOWER_CONFIGS[TowerType.BASIC].fireRate);
-    });
-
-    it('should preserve non-scaling stats (projectileSpeed, splashRadius, color)', () => {
+    it('should preserve non-scaling stats (splashRadius, color)', () => {
       const stats = getEffectiveStats(TowerType.SPLASH, 3);
-      expect(stats.projectileSpeed).toBe(TOWER_CONFIGS[TowerType.SPLASH].projectileSpeed);
       expect(stats.splashRadius).toBe(TOWER_CONFIGS[TowerType.SPLASH].splashRadius);
       expect(stats.color).toBe(TOWER_CONFIGS[TowerType.SPLASH].color);
     });
@@ -1989,7 +2061,6 @@ describe('Tower Model Functions', () => {
       const lvl3 = getEffectiveStats(TowerType.SNIPER, MAX_TOWER_LEVEL);
       expect(lvl3.damage).toBeGreaterThan(lvl1.damage);
       expect(lvl3.range).toBeGreaterThan(lvl1.range);
-      expect(lvl3.fireRate).toBeLessThan(lvl1.fireRate);
     });
 
     it('should clamp level 0 to base stats (defensive)', () => {
@@ -2008,7 +2079,6 @@ describe('Tower Model Functions', () => {
         const lvl3 = getEffectiveStats(type, 3);
         expect(lvl3.damage).toBeGreaterThan(base.damage);
         expect(lvl3.range).toBeGreaterThan(base.range);
-        expect(lvl3.fireRate).toBeLessThan(base.fireRate);
       }
     });
 
@@ -2023,7 +2093,6 @@ describe('Tower Model Functions', () => {
     it('should preserve SLOW-specific optional stats through getEffectiveStats', () => {
       const stats = getEffectiveStats(TowerType.SLOW, 1);
       expect(stats.slowFactor).toBe(TOWER_CONFIGS[TowerType.SLOW].slowFactor);
-      expect(stats.slowDuration).toBe(TOWER_CONFIGS[TowerType.SLOW].slowDuration);
     });
 
     it('should preserve CHAIN-specific optional stats through getEffectiveStats', () => {
@@ -2066,7 +2135,6 @@ describe('Tower Model Functions', () => {
           const s = TOWER_SPECIALIZATIONS[type as TowerType][spec];
           expect(s.damage).toBeGreaterThan(0);
           expect(s.range).toBeGreaterThan(0);
-          expect(s.fireRate).toBeGreaterThan(0);
         }
       }
     });
@@ -2098,7 +2166,6 @@ describe('Tower Model Functions', () => {
       const stats = getEffectiveStats(TowerType.BASIC, MAX_TOWER_LEVEL, TowerSpecialization.ALPHA);
       expect(stats.damage).toBe(Math.round(base.damage * spec.damage));
       expect(stats.range).toBe(+(base.range * spec.range).toFixed(2));
-      expect(stats.fireRate).toBe(+(base.fireRate * spec.fireRate).toFixed(2));
     });
 
     it('should use standard L3 multipliers when no specialization is provided', () => {
@@ -2149,7 +2216,7 @@ describe('Tower Model Functions', () => {
       const alpha = getEffectiveStats(TowerType.SNIPER, MAX_TOWER_LEVEL, TowerSpecialization.ALPHA);
       const beta = getEffectiveStats(TowerType.SNIPER, MAX_TOWER_LEVEL, TowerSpecialization.BETA);
       // At least one stat should differ
-      const differs = alpha.damage !== beta.damage || alpha.range !== beta.range || alpha.fireRate !== beta.fireRate;
+      const differs = alpha.damage !== beta.damage || alpha.range !== beta.range;
       expect(differs).toBeTrue();
     });
   });
@@ -2163,8 +2230,6 @@ describe('Tower Model Functions', () => {
       expect(cfg.slowFactor).toBeDefined();
       expect(cfg.slowFactor!).toBeGreaterThan(0);
       expect(cfg.slowFactor!).toBeLessThan(1);
-      expect(cfg.slowDuration).toBeDefined();
-      expect(cfg.slowDuration!).toBeGreaterThan(0);
     });
 
     it('should have CHAIN tower config with required fields', () => {
@@ -2244,31 +2309,349 @@ describe('Tower Model Functions', () => {
         PROJECTILE_VISUAL_CONFIG[TowerType.BASIC]!.emissiveIntensity
       );
     });
+  });
 
-    it('MORTAR config should have larger scale than BASIC', () => {
-      expect(PROJECTILE_VISUAL_CONFIG[TowerType.MORTAR]!.scale).toBeGreaterThan(
-        PROJECTILE_VISUAL_CONFIG[TowerType.BASIC]!.scale
-      );
+});
+
+// --- Checkpoint serialization ---
+
+describe('TowerCombatService checkpoint serialization', () => {
+  const ROW = 5;
+  const COL = 7;
+  const KEY = `${ROW}-${COL}`;
+
+  let svc: TowerCombatService;
+  let localEnemyMap: Map<string, Enemy>;
+
+  beforeEach(() => {
+    localEnemyMap = new Map<string, Enemy>();
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(localEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+      ]
+    });
+    svc = TestBed.inject(TowerCombatService);
+  });
+
+  describe('serializeTowers', () => {
+    it('strips mesh, muzzleFlashTimer, and originalEmissiveIntensity from serialized output', () => {
+      const mesh = new THREE.Group();
+      svc.registerTower(ROW, COL, TowerType.BASIC, mesh);
+
+      // Manually set Three.js-only fields to confirm they are stripped.
+      const tower = svc.getTower(KEY)!;
+      tower.muzzleFlashTimer = 0.5;
+      tower.originalEmissiveIntensity = new Map([['child', 1.0]]);
+
+      const result = svc.serializeTowers();
+      expect(result.length).toBe(1);
+
+      const serialized = result[0] as unknown as Record<string, unknown>;
+      expect(serialized['mesh']).toBeUndefined();
+      expect(serialized['muzzleFlashTimer']).toBeUndefined();
+      expect(serialized['originalEmissiveIntensity']).toBeUndefined();
     });
 
-    it('SNIPER config should have smaller scale than BASIC (fast, narrow bullet)', () => {
-      expect(PROJECTILE_VISUAL_CONFIG[TowerType.SNIPER]!.scale).toBeLessThan(
-        PROJECTILE_VISUAL_CONFIG[TowerType.BASIC]!.scale
-      );
+    it('preserves all required non-Three.js fields', () => {
+      svc.registerTower(ROW, COL, TowerType.SNIPER, new THREE.Group(), 125, { placedAtTurn: 3 });
+
+      const result = svc.serializeTowers();
+      expect(result.length).toBe(1);
+
+      const s = result[0];
+      expect(s.id).toBe(KEY);
+      expect(s.type).toBe(TowerType.SNIPER);
+      expect(s.level).toBe(1);
+      expect(s.row).toBe(ROW);
+      expect(s.col).toBe(COL);
+      expect(s.kills).toBe(0);
+      expect(s.totalInvested).toBe(125);
+      expect(s.targetingMode).toBe(DEFAULT_TARGETING_MODE);
+      expect(s.placedAtTurn).toBe(3);
     });
 
-    it('each defined config should have required numeric fields', () => {
-      const projectileTypes = [TowerType.BASIC, TowerType.SNIPER, TowerType.SPLASH, TowerType.MORTAR];
-      for (const type of projectileTypes) {
-        const cfg = PROJECTILE_VISUAL_CONFIG[type]!;
-        expect(typeof cfg.color).toBe('number');
-        expect(typeof cfg.emissive).toBe('number');
-        expect(typeof cfg.scale).toBe('number');
-        expect(typeof cfg.emissiveIntensity).toBe('number');
-        expect(cfg.scale).toBeGreaterThan(0);
-        expect(cfg.emissiveIntensity).toBeGreaterThanOrEqual(0);
-      }
+    it('includes specialization and cardStatOverrides when present', () => {
+      const overrides = { damageMultiplier: 1.5, rangeMultiplier: 1.2 };
+      svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: overrides });
+      svc.upgradeTower(KEY);
+      svc.upgradeTowerWithSpec(KEY, TowerSpecialization.BETA);
+
+      const result = svc.serializeTowers();
+      expect(result.length).toBe(1);
+
+      const s = result[0];
+      expect(s.specialization).toBe(TowerSpecialization.BETA);
+      expect(s.cardStatOverrides).toEqual(overrides);
+    });
+
+    it('omits specialization and cardStatOverrides when not set', () => {
+      svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group());
+
+      const result = svc.serializeTowers();
+      const serialized = result[0] as unknown as Record<string, unknown>;
+      expect(serialized['specialization']).toBeUndefined();
+      expect(serialized['cardStatOverrides']).toBeUndefined();
+    });
+
+    it('serializes multiple towers', () => {
+      svc.registerTower(1, 1, TowerType.BASIC, new THREE.Group());
+      svc.registerTower(2, 3, TowerType.SNIPER, new THREE.Group());
+      svc.registerTower(4, 5, TowerType.SPLASH, new THREE.Group());
+
+      const result = svc.serializeTowers();
+      expect(result.length).toBe(3);
+
+      const ids = result.map(t => t.id);
+      expect(ids).toContain('1-1');
+      expect(ids).toContain('2-3');
+      expect(ids).toContain('4-5');
+    });
+
+    it('returns empty array when no towers are registered', () => {
+      expect(svc.serializeTowers()).toEqual([]);
+    });
+
+    it('cardStatOverrides object is a shallow copy (not a reference to the original)', () => {
+      const overrides = { damageMultiplier: 0.8 };
+      svc.registerTower(ROW, COL, TowerType.BASIC, new THREE.Group(), 50, { cardStatOverrides: overrides });
+
+      const result = svc.serializeTowers();
+      const serialized = result[0].cardStatOverrides!;
+
+      // Mutating the serialized copy should not affect the original
+      (serialized as { damageMultiplier: number }).damageMultiplier = 999;
+      expect(overrides.damageMultiplier).toBe(0.8);
     });
   });
 
+  describe('serializeMortarZones', () => {
+    it('returns empty array when no mortar zones are active', () => {
+      expect(svc.serializeMortarZones()).toEqual([]);
+    });
+
+    it('captures zone data after mortar fires', () => {
+      const scene = new THREE.Scene();
+      svc.registerTower(10, 12, TowerType.MORTAR, new THREE.Group());
+
+      const enemy = createTestEnemy('e1', -0.5, 0, 10000);
+      localEnemyMap.set('e1', enemy);
+
+      svc.fireTurn(scene, 1);
+
+      const zones = svc.serializeMortarZones();
+      expect(zones.length).toBeGreaterThan(0);
+
+      const z = zones[0];
+      expect(typeof z.centerX).toBe('number');
+      expect(typeof z.centerZ).toBe('number');
+      expect(z.blastRadius).toBeGreaterThan(0);
+      expect(z.dotDamage).toBeGreaterThan(0);
+      expect(z.expiresOnTurn).toBeGreaterThan(1);
+
+      scene.clear();
+    });
+  });
+
+  describe('restoreTowers', () => {
+    it('rebuilds placedTowers Map from serialized data with provided meshes', () => {
+      const mesh = new THREE.Group();
+      const meshes = new Map<string, THREE.Group>([[KEY, mesh]]);
+
+      const serialized = [
+        {
+          id: KEY,
+          type: TowerType.SNIPER,
+          level: 2,
+          row: ROW,
+          col: COL,
+          kills: 5,
+          totalInvested: 200,
+          targetingMode: TargetingMode.FIRST,
+          placedAtTurn: 2,
+        },
+      ];
+
+      svc.restoreTowers(serialized, meshes);
+
+      const restored = svc.getTower(KEY)!;
+      expect(restored).toBeTruthy();
+      expect(restored.id).toBe(KEY);
+      expect(restored.type).toBe(TowerType.SNIPER);
+      expect(restored.level).toBe(2);
+      expect(restored.row).toBe(ROW);
+      expect(restored.col).toBe(COL);
+      expect(restored.kills).toBe(5);
+      expect(restored.totalInvested).toBe(200);
+      expect(restored.targetingMode).toBe(TargetingMode.FIRST);
+      expect(restored.placedAtTurn).toBe(2);
+      expect(restored.mesh).toBe(mesh);
+    });
+
+    it('sets mesh to null when tower id is not in the meshes map', () => {
+      const serialized = [
+        {
+          id: KEY,
+          type: TowerType.BASIC,
+          level: 1,
+          row: ROW,
+          col: COL,
+          kills: 0,
+          totalInvested: 50,
+          targetingMode: DEFAULT_TARGETING_MODE,
+        },
+      ];
+
+      svc.restoreTowers(serialized, new Map());
+
+      const restored = svc.getTower(KEY)!;
+      expect(restored).toBeTruthy();
+      expect(restored.mesh).toBeNull();
+    });
+
+    it('clears any previously registered towers before restoring', () => {
+      svc.registerTower(0, 0, TowerType.BASIC, new THREE.Group());
+      svc.registerTower(1, 1, TowerType.SNIPER, new THREE.Group());
+      expect(svc.getPlacedTowers().size).toBe(2);
+
+      const serialized = [
+        {
+          id: KEY,
+          type: TowerType.SPLASH,
+          level: 1,
+          row: ROW,
+          col: COL,
+          kills: 0,
+          totalInvested: 75,
+          targetingMode: DEFAULT_TARGETING_MODE,
+        },
+      ];
+
+      svc.restoreTowers(serialized, new Map());
+
+      expect(svc.getPlacedTowers().size).toBe(1);
+      expect(svc.getTower('0-0')).toBeUndefined();
+      expect(svc.getTower('1-1')).toBeUndefined();
+      expect(svc.getTower(KEY)).toBeTruthy();
+    });
+
+    it('restore → serialize roundtrip preserves all scalar fields', () => {
+      const overrides = { damageMultiplier: 1.3 };
+      const mesh = new THREE.Group();
+      const meshes = new Map<string, THREE.Group>([[KEY, mesh]]);
+
+      const original = [
+        {
+          id: KEY,
+          type: TowerType.SPLASH,
+          level: 3,
+          row: ROW,
+          col: COL,
+          kills: 12,
+          totalInvested: 300,
+          targetingMode: TargetingMode.STRONGEST,
+          specialization: TowerSpecialization.ALPHA,
+          placedAtTurn: 4,
+          cardStatOverrides: overrides,
+        },
+      ];
+
+      svc.restoreTowers(original, meshes);
+
+      const roundtripped = svc.serializeTowers();
+      expect(roundtripped.length).toBe(1);
+
+      const rt = roundtripped[0];
+      expect(rt.id).toBe(KEY);
+      expect(rt.type).toBe(TowerType.SPLASH);
+      expect(rt.level).toBe(3);
+      expect(rt.kills).toBe(12);
+      expect(rt.totalInvested).toBe(300);
+      expect(rt.targetingMode).toBe(TargetingMode.STRONGEST);
+      expect(rt.specialization).toBe(TowerSpecialization.ALPHA);
+      expect(rt.placedAtTurn).toBe(4);
+      expect(rt.cardStatOverrides).toEqual(overrides);
+
+      // mesh must not leak through
+      const serialized = rt as unknown as Record<string, unknown>;
+      expect(serialized['mesh']).toBeUndefined();
+    });
+  });
+
+  describe('restoreMortarZones', () => {
+    it('restores mortar zones from serialized data', () => {
+      const zones = [
+        {
+          centerX: 1.5,
+          centerZ: -2.0,
+          blastRadius: 3.0,
+          dotDamage: 20,
+          expiresOnTurn: 5,
+          statusEffect: StatusEffectType.BURN,
+        },
+        {
+          centerX: 0,
+          centerZ: 0,
+          blastRadius: 2.0,
+          dotDamage: 15,
+          expiresOnTurn: 8,
+        },
+      ];
+
+      svc.restoreMortarZones(zones);
+
+      const serialized = svc.serializeMortarZones();
+      expect(serialized.length).toBe(2);
+
+      expect(serialized[0].centerX).toBe(1.5);
+      expect(serialized[0].centerZ).toBe(-2.0);
+      expect(serialized[0].blastRadius).toBe(3.0);
+      expect(serialized[0].dotDamage).toBe(20);
+      expect(serialized[0].expiresOnTurn).toBe(5);
+      expect(serialized[0].statusEffect).toBe(StatusEffectType.BURN);
+
+      expect(serialized[1].statusEffect).toBeUndefined();
+    });
+
+    it('overwrites previously active zones', () => {
+      const scene = new THREE.Scene();
+      svc.registerTower(10, 12, TowerType.MORTAR, new THREE.Group());
+      const enemy = createTestEnemy('e1', -0.5, 0, 10000);
+      localEnemyMap.set('e1', enemy);
+      svc.fireTurn(scene, 1); // creates a zone
+
+      expect(svc.serializeMortarZones().length).toBeGreaterThan(0);
+
+      svc.restoreMortarZones([]); // clear via restore
+
+      expect(svc.serializeMortarZones().length).toBe(0);
+      scene.clear();
+    });
+
+    it('restored zones are independent copies (not shared references)', () => {
+      const zone = {
+        centerX: 1.0,
+        centerZ: 2.0,
+        blastRadius: 2.5,
+        dotDamage: 10,
+        expiresOnTurn: 6,
+      };
+
+      svc.restoreMortarZones([zone]);
+
+      // Mutate the source — the internal copy should be unaffected
+      zone.centerX = 999;
+
+      const serialized = svc.serializeMortarZones();
+      expect(serialized[0].centerX).toBe(1.0);
+    });
+  });
 });

@@ -3,7 +3,7 @@ import { GamePauseService } from './game-pause.service';
 import { GameStateService } from './game-state.service';
 import { MinimapService } from './minimap.service';
 import { GameEndService } from './game-end.service';
-import { GamePhase, DifficultyLevel, INITIAL_GAME_STATE } from '../models/game-state.model';
+import { GamePhase, INITIAL_GAME_STATE } from '../models/game-state.model';
 
 describe('GamePauseService', () => {
   let service: GamePauseService;
@@ -80,51 +80,53 @@ describe('GamePauseService', () => {
       expect(service.showQuitConfirm).toBeFalse();
     });
 
-    it('should record defeat and return campaign route for campaign games', () => {
-      const route = service.confirmQuit(true);
-      expect(route).toBe('/campaign');
-      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false, null);
+    it('should record defeat and return /run route (run hub)', () => {
+      const route = service.confirmQuit();
+      expect(route).toBe('/run');
+      expect(gameEndSpy.recordEnd).toHaveBeenCalledWith(false);
       expect(service.showQuitConfirm).toBeFalse();
-    });
-
-    it('should return home route for non-campaign games', () => {
-      const route = service.confirmQuit(false);
-      expect(route).toBe('/');
     });
   });
 
-  describe('canLeaveGame', () => {
-    it('should allow navigation during SETUP phase', () => {
-      expect(service.canLeaveGame()).toBeTrue();
+  describe('requestGuardDecision', () => {
+    it('should always emit true immediately (checkpoint auto-saves)', (done) => {
+      service.requestGuardDecision().subscribe(result => {
+        expect(result).toBeTrue();
+        done();
+      });
     });
 
-    it('should allow navigation during VICTORY phase', () => {
+    it('should emit true during COMBAT phase without pausing', (done) => {
       gameStateSpy.getState.and.returnValue({
         ...INITIAL_GAME_STATE,
-        phase: GamePhase.VICTORY,
-        wave: 10,
-        score: 1000,
-        elapsedTime: 120,
+        phase: GamePhase.COMBAT,
+        wave: 1,
+        isPaused: false,
       });
-      expect(service.canLeaveGame()).toBeTrue();
+      service.requestGuardDecision().subscribe(result => {
+        expect(result).toBeTrue();
+        expect(gameStateSpy.togglePause).not.toHaveBeenCalled();
+        done();
+      });
     });
 
-    it('should allow navigation during DEFEAT phase', () => {
+    it('should emit true during INTERMISSION phase', (done) => {
       gameStateSpy.getState.and.returnValue({
         ...INITIAL_GAME_STATE,
-        phase: GamePhase.DEFEAT,
-        wave: 5,
-        lives: 0,
-        score: 500,
-        elapsedTime: 60,
+        phase: GamePhase.INTERMISSION,
+        wave: 1,
       });
-      expect(service.canLeaveGame()).toBeTrue();
+      service.requestGuardDecision().subscribe(result => {
+        expect(result).toBeTrue();
+        done();
+      });
     });
   });
 
   describe('reset', () => {
     it('should clear autoPaused and showQuitConfirm', () => {
       service.requestQuit();
+      service.autoPaused = true;
       service.reset();
       expect(service.autoPaused).toBeFalse();
       expect(service.showQuitConfirm).toBeFalse();

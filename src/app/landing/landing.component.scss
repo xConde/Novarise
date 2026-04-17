@@ -1,7 +1,16 @@
+// M5 S1: Home shell — CSS Grid with named template areas. Reserved slots
+// for [glow] background, [content] center column, [version] footer.
+// Mobile breakpoints scale grid track sizes (--landing-content-width)
+// rather than reshuffling areas.
 .landing-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-rows: 1fr [content] auto 1fr [version] auto;
+  grid-template-columns: 1fr [content] minmax(280px, min(480px, 85vw)) 1fr;
+  grid-template-areas:
+    ".       .       ."
+    ".       content ."
+    ".       .       ."
+    "version version version";
   min-height: 100vh;
   background-color: var(--bg-color);
   color: var(--text-color);
@@ -9,7 +18,7 @@
   overflow: hidden;
   padding: var(--spacing-md);
 
-  // Subtle radial gradient behind content
+  // Subtle radial gradient behind content (decorative — does not occupy a grid slot)
   &::before {
     content: '';
     position: absolute;
@@ -25,9 +34,10 @@
 }
 
 .landing-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  grid-area: content;
+  display: grid;
+  grid-template-rows: [title] auto [subtitle] auto [actions] auto;
+  justify-items: center;
   gap: var(--spacing-lg);
   position: relative;
   z-index: 1;
@@ -35,14 +45,15 @@
 
 .landing-title {
   font-family: "Orbitron", sans-serif;
-  font-size: 4rem;
+  font-size: clamp(2rem, 5.5vw, 4rem);
   font-weight: 700;
-  letter-spacing: 0.4em;
+  letter-spacing: clamp(0.2em, 0.4em, 0.4em);
   color: var(--theme-purple-lighter);
   text-shadow: 0 0 20px var(--theme-purple-glow),
                0 0 40px var(--theme-purple-glow);
   margin: 0;
-  text-indent: 0.4em; // Compensate letter-spacing on last char for centering
+  justify-self: stretch;
+  text-align: center;
 }
 
 .landing-subtitle {
@@ -52,12 +63,15 @@
   letter-spacing: 0.3em;
   text-transform: uppercase;
   margin: 0;
-  text-indent: 0.3em;
+  justify-self: stretch;
+  text-align: center;
 }
 
 .landing-actions {
-  display: flex;
-  flex-direction: column;
+  // M5 S1: grid with reserved slots for each action button (content-driven
+  // ordering preserved by *ngIf order, but the grid tracks are uniform).
+  display: grid;
+  grid-auto-rows: minmax(2.75rem, auto); // WCAG min touch target
   gap: var(--spacing-md);
   width: 100%;
   max-width: 280px;
@@ -110,7 +124,7 @@
 
 .landing-btn__progress {
   display: block;
-  font-size: 0.6rem;
+  font-size: var(--font-size-xs);
   letter-spacing: 0.08em;
   color: var(--theme-purple-mid);
   margin-top: 2px;
@@ -118,20 +132,108 @@
 }
 
 .landing-version {
-  position: absolute;
-  bottom: var(--spacing-md);
-  right: var(--spacing-md);
-  font-size: 0.7rem;
+  // M5 S1: assigned to the [version] grid row instead of position:absolute.
+  grid-area: version;
+  justify-self: end;
+  align-self: end;
+  padding-right: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+  font-size: var(--font-size-xs);
   color: var(--theme-purple-mid);
   opacity: 0.5;
 }
 
-// Responsive
-@media (max-width: 768px) {
-  .landing-title {
-    font-size: var(--font-size-hero); // 3rem
+// Phase H4 demoted profile button — slightly muted to communicate "secondary action"
+.landing-btn--muted {
+  opacity: 0.65;
+  &:hover { opacity: 1; }
+}
+
+// Ascension unlock cluster — shown only when maxAscension > 0 (returning players).
+// CSS Grid stepper row: [−] [label] [+] with natural column sizing.
+.ascension-selector {
+  display: grid;
+  grid-template-rows: [stepper] auto [preview] auto [mastered] auto;
+  justify-items: center;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-lg);
+  width: 100%;
+
+  &__row {
+    display: grid;
+    grid-template-columns: [minus] 2.5rem [label] 1fr [plus] 2.5rem;
+    align-items: center;
+    gap: var(--spacing-sm);
+    width: 100%;
+    max-width: 280px;
   }
 
+  &__step {
+    grid-area: auto;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--border-radius-md);
+    border: var(--border-width-thin) solid var(--game-gold-a40);
+    background: var(--game-gold-a08);
+    color: var(--game-gold);
+    font-family: "Orbitron", sans-serif;
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background var(--transition-fast) ease,
+                box-shadow var(--transition-fast) ease;
+
+    &:hover:not(:disabled) {
+      background: var(--game-gold-a25);
+      box-shadow: 0 0 8px var(--game-gold-a40);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--game-gold);
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+  }
+
+  &__label {
+    text-align: center;
+    font-family: "Orbitron", sans-serif;
+    font-size: var(--font-size-small);
+    font-weight: 600;
+    color: var(--game-gold);
+    letter-spacing: 0.08em;
+  }
+
+  &__preview {
+    font-size: var(--font-size-xs);
+    color: var(--game-gold-a60);
+    letter-spacing: 0.05em;
+    margin: 0;
+    text-align: center;
+  }
+
+  // Tiny gold pill shown when player has beaten A20.
+  &__mastered {
+    display: inline-block;
+    padding: 0.1875rem var(--spacing-sm);
+    border-radius: var(--border-radius-lg);
+    background: var(--game-gold-a15);
+    border: var(--border-width-thin) solid var(--game-gold-a40);
+    color: var(--game-gold);
+    font-family: "Orbitron", sans-serif;
+    font-size: var(--font-size-2xs);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+}
+
+// Responsive
+@media (max-width: 768px) {
   .landing-content {
     gap: var(--spacing-md);
   }
@@ -142,15 +244,8 @@
 }
 
 @media (max-width: 480px) {
-  .landing-title {
-    font-size: var(--font-size-large); // 2rem
-    letter-spacing: 0.2em;
-    text-indent: 0.2em;
-  }
-
   .landing-subtitle {
     letter-spacing: 0.15em;
-    text-indent: 0.15em;
   }
 
   .landing-content {

@@ -67,12 +67,20 @@ export function getWavePreviewFull(
   const definitionIndex = waveIndex - 1;
 
   if (definitionIndex < activeDefinitions.length) {
-    // Static wave definition — aggregate entries by type
+    // Static wave definition — aggregate by type, supporting both entries[] and spawnTurns[][] formats.
     const wave = activeDefinitions[definitionIndex];
     const counts = new Map<EnemyType, number>();
 
-    for (const entry of wave.entries) {
-      counts.set(entry.type, (counts.get(entry.type) ?? 0) + entry.count);
+    if (wave.spawnTurns) {
+      for (const turn of wave.spawnTurns) {
+        for (const type of turn) {
+          counts.set(type, (counts.get(type) ?? 0) + 1);
+        }
+      }
+    } else if (wave.entries) {
+      for (const entry of wave.entries) {
+        counts.set(entry.type, (counts.get(entry.type) ?? 0) + entry.count);
+      }
     }
 
     const entries = Array.from(counts.entries()).map(([type, count]) => ({

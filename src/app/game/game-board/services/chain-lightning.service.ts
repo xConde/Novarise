@@ -43,7 +43,7 @@ export class ChainLightningService {
    * @param towerWorldX  Pre-computed world X of the firing tower.
    * @param towerWorldZ  Pre-computed world Z of the firing tower.
    * @param spatialGrid  The spatial grid rebuilt this physics step by TowerCombatService.
-   * @param gameTime     Current accumulated game time for VFX expiry timestamps.
+   * @param turnNumber   Current turn counter, used for status-effect expiry timestamps.
    * @returns List of enemies killed by this chain.
    */
   fire(
@@ -54,11 +54,14 @@ export class ChainLightningService {
     towerWorldX: number,
     towerWorldZ: number,
     spatialGrid: SpatialGrid,
-    gameTime: number,
-  ): KillInfo[] {
-    const chainCount = stats.chainCount ?? 3;
+    turnNumber: number,
+    extraBounces = 0,
+  ): { kills: KillInfo[]; damageDealt: number; hitCount: number } {
+    const chainCount = (stats.chainCount ?? 3) + extraBounces;
     const chainRange = stats.chainRange ?? 2;
     const kills: KillInfo[] = [];
+    let damageDealt = 0;
+    let hitCount = 0;
     const hitIds = new Set<string>();
 
     this.pendingAudioEvents.push({ type: 'sfx', sfxKey: 'chainZap' });
@@ -73,22 +76,25 @@ export class ChainLightningService {
 
     for (let bounce = 0; bounce <= chainCount; bounce++) {
       hitIds.add(currentTarget.id);
+      hitCount++;
 
       // Delegate arc creation to CombatVFXService
       this.combatVFXService.createChainArc(
         previousX, previousZ,
         currentTarget.position.x, currentTarget.position.z,
-        stats.color, scene, gameTime
+        stats.color, scene,
       );
 
       // Deal damage
       const chainResult = this.enemyService.damageEnemy(currentTarget.id, currentDamage);
+      damageDealt += currentDamage;
       if (chainResult.killed) {
-        kills.push({ id: currentTarget.id, damage: currentDamage });
+        // Chain kills attribute to the CHAIN tower that fired the first arc.
+        kills.push({ id: currentTarget.id, damage: currentDamage, towerType: tower.type, towerLevel: tower.level });
       } else {
         this.enemyService.startHitFlash(currentTarget.id);
         if (stats.statusEffect) {
-          this.statusEffectService.apply(currentTarget.id, stats.statusEffect, gameTime);
+          this.statusEffectService.apply(currentTarget.id, stats.statusEffect, turnNumber);
         }
       }
       // Mini-swarm meshes from chain kills are added to scene here
@@ -102,16 +108,20 @@ export class ChainLightningService {
       const nextTarget = this.findChainTarget(currentTarget, chainRange, hitIds, spatialGrid);
       if (!nextTarget) break;
 
+      // Compute damage for the next bounce before committing to it.
+      // If it would round below the minimum threshold, the arc dissipates.
+      const nextDamage = Math.round(currentDamage * CHAIN_LIGHTNING_CONFIG.damageFalloff);
+      if (nextDamage < CHAIN_LIGHTNING_CONFIG.minDamageToBounce) break;
+
       // Advance "from" position to the current hit before moving to next target
       previousX = currentTarget.position.x;
       previousZ = currentTarget.position.z;
 
-      currentDamage = Math.round(currentDamage * CHAIN_LIGHTNING_CONFIG.damageFalloff);
-      if (currentDamage <= 0) break;
+      currentDamage = nextDamage;
       currentTarget = nextTarget;
     }
 
-    return kills;
+    return { kills, damageDealt, hitCount };
   }
 
   /**

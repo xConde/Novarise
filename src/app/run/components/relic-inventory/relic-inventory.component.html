@@ -1,0 +1,47 @@
+<!-- Relic Inventory: compact icon row with hover tooltip -->
+<div class="relic-inventory" aria-label="Relic inventory">
+
+  <!-- Empty state -->
+  <span class="relic-inventory__empty" *ngIf="relics.length === 0" aria-live="polite">
+    No relics
+  </span>
+
+  <!-- Relic badges wrapper — grid-area target for the badge strip -->
+  <div class="relic-inventory__badges" *ngIf="relics.length > 0">
+    <button
+      *ngFor="let relic of relics"
+      class="relic-badge"
+      [class]="getRarityClass(relic.rarity)"
+      [style.background]="getBadgeBg(relic.rarity)"
+      [style.border-color]="getBadgeBorder(relic.rarity)"
+      [attr.aria-label]="relic.name + ' — ' + relic.description"
+      [attr.aria-describedby]="hoveredRelic?.id === relic.id ? 'relic-tooltip' : null"
+      type="button"
+      (mouseenter)="showTooltip(relic, $event)"
+      (mouseleave)="hideTooltip()"
+      (focus)="showTooltip(relic, $event)"
+      (blur)="hideTooltip()"
+      (keydown.escape)="hideTooltip()"
+    >
+      <app-icon name="diamond" [size]="14"></app-icon>
+    </button>
+  </div>
+
+  <!-- Floating tooltip -->
+  <div
+    *ngIf="hoveredRelic"
+    id="relic-tooltip"
+    class="relic-tooltip"
+    [class]="getRarityClass(hoveredRelic.rarity)"
+    [style.left.px]="tooltipX"
+    [style.top.px]="tooltipY"
+    role="tooltip"
+    aria-live="polite"
+  >
+    <div class="relic-tooltip__name">{{ hoveredRelic.name }}</div>
+    <div class="relic-tooltip__desc">{{ hoveredRelic.description }}</div>
+    <div class="relic-tooltip__flavor">{{ hoveredRelic.flavorText }}</div>
+    <span class="relic-tooltip__rarity">{{ hoveredRelic.rarity }}</span>
+  </div>
+
+</div>

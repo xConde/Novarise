@@ -5,11 +5,11 @@
   background: rgba(0, 0, 0, 0.85);
   border-radius: var(--border-radius-md);
   backdrop-filter: blur(0.625rem);
-  z-index: var(--z-index-overlay);
+  z-index: calc(var(--z-index-overlay) + 3);
   font-family: "Orbitron", sans-serif;
   position: absolute;
-  top: var(--spacing-md);
-  right: var(--spacing-md);
+  top: var(--shell-hud-top);
+  right: var(--spacing-sm);
   width: min(18rem, 35vw);
   max-height: calc(100vh - var(--spacing-xl));
   overflow-y: auto;
@@ -23,35 +23,30 @@
 
 /* Dark scrollbar for panels */
 .board-container .setup-panel,
-.encyclopedia-panel,
 .editor-modal-list {
   scrollbar-width: thin;
-  scrollbar-color: var(--theme-purple-a50, rgba(106, 90, 154, 0.5)) transparent;
+  scrollbar-color: var(--theme-purple-a50) transparent;
 }
 
 .board-container .setup-panel::-webkit-scrollbar,
-.encyclopedia-panel::-webkit-scrollbar,
 .editor-modal-list::-webkit-scrollbar {
   width: 8px;
 }
 
 .board-container .setup-panel::-webkit-scrollbar-track,
-.encyclopedia-panel::-webkit-scrollbar-track,
 .editor-modal-list::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.2);
 }
 
 .board-container .setup-panel::-webkit-scrollbar-thumb,
-.encyclopedia-panel::-webkit-scrollbar-thumb,
 .editor-modal-list::-webkit-scrollbar-thumb {
-  background: var(--theme-purple-a50, rgba(106, 90, 154, 0.5));
-  border-radius: 4px;
+  background: var(--theme-purple-a50);
+  border-radius: var(--border-radius-sm);
 }
 
 .board-container .setup-panel::-webkit-scrollbar-thumb:hover,
-.encyclopedia-panel::-webkit-scrollbar-thumb:hover,
 .editor-modal-list::-webkit-scrollbar-thumb:hover {
-  background: var(--theme-purple-a70, rgba(106, 90, 154, 0.7));
+  background: var(--theme-purple-a70);
 }
 
 .board-container .setup-section-label {
@@ -218,12 +213,12 @@
 @media (max-width: 768px) {
   .board-container .setup-panel {
     position: absolute;
-    top: auto;
-    bottom: calc(var(--spacing-md) + var(--tower-bar-height));
+    top: var(--shell-hud-top);
+    bottom: auto;
     left: auto;
     right: var(--spacing-sm);
     width: min(16rem, 55vw);
-    max-height: calc(100vh - var(--tower-bar-height) - 4rem);
+    max-height: 70vh;
     overflow-y: auto;
     padding: var(--spacing-sm);
     gap: var(--spacing-xs);
@@ -253,13 +248,13 @@
 
 @media (max-width: 480px) {
   .board-container .setup-panel {
-    position: fixed;
+    position: absolute;
     top: auto;
     right: 0;
-    bottom: var(--tower-bar-height);
+    bottom: 0;
     left: 0;
     width: 100%;
-    max-height: calc(100vh - var(--tower-bar-height) - 4rem);
+    max-height: 60vh;
     border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
     border-bottom: none;
     padding: 0.25rem 0.5rem 0.5rem;
@@ -270,7 +265,7 @@
 
   /* Section label (Difficulty / Modifiers headings) */
   .board-container .setup-panel .setup-section-label {
-    font-size: 0.5rem;
+    font-size: var(--font-size-tiny);
     margin-bottom: 0.1rem;
     letter-spacing: 0.05rem;
   }
@@ -283,7 +278,7 @@
   }
 
   .board-container .setup-panel .campaign-level-info__number {
-    font-size: 0.5rem;
+    font-size: var(--font-size-tiny);
   }
 
   .board-container .setup-panel .campaign-level-info__name {
@@ -303,14 +298,14 @@
   }
 
   .board-container .setup-panel .campaign-challenges-preview__title {
-    font-size: 0.5rem;
+    font-size: var(--font-size-tiny);
     margin-bottom: 0.1rem;
     letter-spacing: 0.05rem;
   }
 
   .board-container .setup-panel .challenge-preview-item {
     padding: 0.15rem 0.3rem;
-    font-size: 0.5rem;
+    font-size: var(--font-size-tiny);
     gap: 0.2rem;
   }
 
@@ -357,62 +352,7 @@
     min-height: 2.5rem;
     font-size: 0.65rem;
     padding: 0.25rem;
-    z-index: 1;
+    z-index: var(--z-index-base);
   }
 }
 
-/* ============================================================
-   game-board: help overlay
-   ============================================================ */
-.board-container .help-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-index-modal);
-}
-
-.board-container .help-overlay .help-content {
-  background: var(--nav-bg-a90);
-  border: var(--border-width-thin) solid var(--theme-purple);
-  border-radius: var(--border-radius-lg);
-  padding: var(--spacing-lg) var(--spacing-xl);
-  max-width: 20rem;
-}
-
-.board-container .help-overlay .help-content h3 {
-  margin: 0 0 var(--spacing-sm);
-  color: var(--theme-purple-light);
-  font-size: var(--font-size-base);
-}
-
-.board-container .help-overlay .help-grid {
-  display: grid;
-  grid-template-columns: 4.375rem 1fr;
-  gap: var(--spacing-xs) var(--spacing-sm);
-  font-size: var(--font-size-small);
-}
-
-.board-container .help-overlay .help-grid kbd {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 2px var(--spacing-xs);
-  border-radius: var(--border-radius-sm);
-  text-align: center;
-  font-family: monospace;
-  color: var(--text-color);
-  border: none;
-}
-
-.board-container .help-overlay .help-grid span { color: rgba(255, 255, 255, 0.7); }
-
-.board-container .help-overlay .help-dismiss {
-  margin: var(--spacing-sm) 0 0;
-  font-size: 0.6875rem;
-  color: rgba(255, 255, 255, 0.4);
-  text-align: center;
-}

@@ -3,9 +3,9 @@ import {
   TowerType,
   TowerSpecialization,
   TOWER_SPECIALIZATIONS,
+  TOWER_CONFIGS,
   MAX_TOWER_LEVEL,
   getUpgradeCost,
-  getSellValue,
   getEffectiveStats,
 } from '../models/tower.model';
 import { BlockType } from '../models/game-board-tile';
@@ -13,10 +13,11 @@ import { GamePhase } from '../models/game-state.model';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
 import { TowerCombatService } from './tower-combat.service';
-import { TilePricingService, TilePriceInfo } from './tile-pricing.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
 import { GameEndService } from './game-end.service';
 import { EnemyService } from './enemy.service';
+import { RelicService } from '../../../run/services/relic.service';
+import { RunEventBusService, RunEventType } from '../../../run/services/run-event-bus.service';
 
 export interface PlaceTowerResult {
   success: boolean;
@@ -37,7 +38,7 @@ export interface UpgradeTowerResult {
   /** True when L2→L3 spec is required but was not provided — caller must show spec chooser. */
   needsSpecialization?: boolean;
   /** Pre-computed spec options for the chooser UI (only set when needsSpecialization=true). */
-  specOptions?: { spec: TowerSpecialization; label: string; description: string; damage: number; range: number; fireRate: number }[];
+  specOptions?: { spec: TowerSpecialization; label: string; description: string; damage: number; range: number }[];
 }
 
 /**
@@ -59,10 +60,11 @@ export class TowerInteractionService {
     private gameStateService: GameStateService,
     private gameBoardService: GameBoardService,
     private towerCombatService: TowerCombatService,
-    private tilePricingService: TilePricingService,
     private challengeTrackingService: ChallengeTrackingService,
     private gameEndService: GameEndService,
     private enemyService: EnemyService,
+    private relicService: RelicService,
+    private runEventBus: RunEventBusService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -74,7 +76,7 @@ export class TowerInteractionService {
    *
    * Checks: terminal phase, bounds, tile type, path blocking, gold.
    * On success: places tower on board, spends gold, registers with combat service,
-   * repaths enemies, invalidates pricing cache.
+   * repaths enemies.
    *
    * Does NOT create the mesh — returns result for the component to handle visuals.
    */
@@ -86,8 +88,14 @@ export class TowerInteractionService {
 
     if (!this.gameBoardService.canPlaceTower(row, col)) return FAIL;
 
-    const priceInfo = this.getTileCost(row, col, type);
-    const effectiveCost = priceInfo.cost;
+    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
+    const baseCost = Math.round(TOWER_CONFIGS[type].cost * costMult);
+    let effectiveCost = Math.round(baseCost * this.relicService.getTowerCostMultiplier());
+
+    if (this.relicService.isNextTowerFree()) {
+      this.relicService.consumeFreeTower();
+      effectiveCost = 0;
+    }
 
     if (!this.gameStateService.canAfford(effectiveCost)) return FAIL;
 
@@ -103,16 +111,27 @@ export class TowerInteractionService {
 
     // Repath enemies whose path crosses the newly placed tile
     this.enemyService.repathAffectedEnemies(row, col);
-    this.tilePricingService.invalidateCache();
+
+    this.runEventBus.emit(RunEventType.TOWER_PLACED, { towerKey, type, row, col, cost: effectiveCost });
 
     return { success: true, cost: effectiveCost, towerKey };
   }
 
   /**
-   * Whether placing at (row, col) would fail only due to path blocking.
-   * Useful so the component can show the path-blocked warning.
+   * Whether placing at (row, col) would block all spawner→exit paths.
+   * Delegates to the BFS-based check in GameBoardService.
+   * Use this to decide whether to show the path-blocked warning banner.
    */
   wouldBlockPath(row: number, col: number): boolean {
+    return this.gameBoardService.wouldBlockPath(row, col);
+  }
+
+  /**
+   * Whether (row, col) is a tile on which a tower could theoretically be placed,
+   * ignoring path-blocking and gold. Returns true when the tile is an unoccupied,
+   * purchasable BASE tile within bounds.
+   */
+  isPlaceableTile(row: number, col: number): boolean {
     const board = this.gameBoardService.getGameBoard();
     const tile = board[row]?.[col];
     return (
@@ -145,7 +164,8 @@ export class TowerInteractionService {
     const soldTower = this.towerCombatService.unregisterTower(towerKey);
     if (!soldTower) return FAIL;
 
-    const refund = getSellValue(soldTower.totalInvested);
+    const sellRate = this.relicService.getSellRefundRate();
+    const refund = Math.round(soldTower.totalInvested * sellRate);
     this.gameStateService.addGold(refund);
 
     // Remove tile from board state
@@ -155,7 +175,10 @@ export class TowerInteractionService {
 
     // Repath ALL ground enemies — freed tile may open shorter paths
     this.enemyService.repathAffectedEnemies(-1, -1);
-    this.tilePricingService.invalidateCache();
+
+    this.runEventBus.emit(RunEventType.TOWER_SOLD, {
+      towerKey, type: soldTower.type, refundAmount: refund,
+    });
 
     return { success: true, refundAmount: refund };
   }
@@ -183,9 +206,8 @@ export class TowerInteractionService {
     if (!tower) return FAIL;
     if (tower.level >= MAX_TOWER_LEVEL) return FAIL;
 
-    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-    const tileStrategic = this.tilePricingService.getStrategicValue(tower.row, tower.col);
-    const cost = getUpgradeCost(tower.type, tower.level, costMult, tileStrategic);
+    const costMult = (this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1) * this.relicService.getUpgradeCostMultiplier();
+    const cost = getUpgradeCost(tower.type, tower.level, costMult);
 
     if (!this.gameStateService.canAfford(cost)) return FAIL;
 
@@ -206,14 +228,12 @@ export class TowerInteractionService {
               ...specs[TowerSpecialization.ALPHA],
               damage: alphaStats.damage,
               range: alphaStats.range,
-              fireRate: alphaStats.fireRate,
             },
             {
               spec: TowerSpecialization.BETA,
               ...specs[TowerSpecialization.BETA],
               damage: betaStats.damage,
               range: betaStats.range,
-              fireRate: betaStats.fireRate,
             },
           ],
         };
@@ -225,6 +245,10 @@ export class TowerInteractionService {
       this.challengeTrackingService.recordTowerUpgraded(cost);
       this.gameEndService.recordSpecialization();
 
+      this.runEventBus.emit(RunEventType.TOWER_UPGRADED, {
+        towerKey, type: tower.type, newLevel: tower.level + 1, cost, specialization,
+      });
+
       return { success: true, cost, newLevel: tower.level + 1, specialization };
 
     } else {
@@ -233,20 +257,12 @@ export class TowerInteractionService {
       this.gameStateService.spendGold(cost);
       this.challengeTrackingService.recordTowerUpgraded(cost);
 
+      this.runEventBus.emit(RunEventType.TOWER_UPGRADED, {
+        towerKey, type: tower.type, newLevel: tower.level + 1, cost,
+      });
+
       return { success: true, cost, newLevel: tower.level + 1 };
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Tile cost
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Get the strategic cost for placing a tower on a specific tile.
-   * Applies modifier cost multiplier and strategic tile premium.
-   */
-  getTileCost(row: number, col: number, baseType: TowerType): TilePriceInfo {
-    const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-    return this.tilePricingService.getTilePrice(baseType, row, col, costMult);
-  }
 }

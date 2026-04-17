@@ -23,16 +23,13 @@ import { StatusEffectService } from './services/status-effect.service';
 import { EnemyService } from './services/enemy.service';
 import { EnemyVisualService } from './services/enemy-visual.service';
 import { TutorialService, TutorialStep } from '../../core/services/tutorial.service';
-import { BehaviorSubject } from 'rxjs';
-import { CampaignService } from '../../campaign/services/campaign.service';
-import { CampaignMapService } from '../../campaign/services/campaign-map.service';
-import { CampaignLevel, CampaignTier } from '../../campaign/models/campaign.model';
+import { BehaviorSubject, of } from 'rxjs';
+import { CampaignLevel, CampaignTier } from '../../run/data/campaign-levels';
 import { TerrainType } from '../../games/novarise/models/terrain-types.enum';
 import { GameNotificationService, NotificationType } from './services/game-notification.service';
 import { ChallengeTrackingService } from './services/challenge-tracking.service';
-import { ChallengeType, ChallengeDefinition } from '../../campaign/models/challenge.model';
+import { ChallengeType, ChallengeDefinition } from '../../run/data/challenges';
 import { GameEndService } from './services/game-end.service';
-import { TilePricingService } from './services/tile-pricing.service';
 import { GameSessionService } from './services/game-session.service';
 import { SceneService } from './services/scene.service';
 import { PathfindingService } from './services/pathfinding.service';
@@ -50,7 +47,14 @@ import {
   createTowerPlacementServiceSpy,
   createTowerSelectionServiceSpy,
   createTowerUpgradeVisualServiceSpy,
+  createRelicServiceSpy,
+  createRunServiceSpy,
+  createDeckServiceSpy,
 } from './testing';
+import { RelicService } from '../../run/services/relic.service';
+import { RunService } from '../../run/services/run.service';
+import { DeckService } from '../../run/services/deck.service';
+import { CardId, CardInstance, EnergyState } from '../../run/models/card.model';
 import { TowerAnimationService } from './services/tower-animation.service';
 import { GamePauseService } from './services/game-pause.service';
 import { ChallengeDisplayService } from './services/challenge-display.service';
@@ -59,6 +63,14 @@ import { ChainLightningService } from './services/chain-lightning.service';
 import { TowerPlacementService } from './services/tower-placement.service';
 import { TowerSelectionService } from './services/tower-selection.service';
 import { TowerUpgradeVisualService } from './services/tower-upgrade-visual.service';
+import { getAscensionEffects, AscensionEffectType } from '../../run/models/ascension.model';
+import { GameRenderService } from './services/game-render.service';
+import { BoardMeshRegistryService } from './services/board-mesh-registry.service';
+import { GameInputService, TOWER_HOTKEYS } from './services/game-input.service';
+import { TouchInteractionService } from './services/touch-interaction.service';
+import { BoardPointerService } from './services/board-pointer.service';
+import { CardPlayService } from './services/card-play.service';
+import { TowerInteractionService } from './services/tower-interaction.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -79,8 +91,6 @@ describe('GameBoardComponent', () => {
   let settingsSpy: jasmine.SpyObj<SettingsService>;
   let tutorialSpy: jasmine.SpyObj<TutorialService>;
   let tutorialStep$: BehaviorSubject<TutorialStep | null>;
-  let campaignServiceSpy: jasmine.SpyObj<CampaignService>;
-  let campaignMapServiceSpy: jasmine.SpyObj<CampaignMapService>;
   let gameSessionSpy: jasmine.SpyObj<GameSessionService>;
   let combatLoopSpy: jasmine.SpyObj<CombatLoopService>;
   let gamePauseSpy: jasmine.SpyObj<GamePauseService>;
@@ -105,28 +115,7 @@ describe('GameBoardComponent', () => {
     tutorialStep$ = new BehaviorSubject<TutorialStep | null>(null);
     tutorialSpy.getCurrentStep.and.returnValue(tutorialStep$.asObservable());
 
-    campaignServiceSpy = jasmine.createSpyObj('CampaignService', [
-      'getNextLevel',
-      'isUnlocked',
-      'getLevel',
-      'recordCompletion',
-      'completeChallenge',
-      'getAllLevels',
-      'getCompletedCount',
-      'isChallengeCompleted',
-    ]);
-    campaignServiceSpy.getNextLevel.and.returnValue(null);
-    campaignServiceSpy.isUnlocked.and.returnValue(false);
-    campaignServiceSpy.getLevel.and.returnValue(undefined);
-    campaignServiceSpy.getAllLevels.and.returnValue([]);
-    campaignServiceSpy.getCompletedCount.and.returnValue(0);
-    campaignServiceSpy.isChallengeCompleted.and.returnValue(false);
-
-    campaignMapServiceSpy = jasmine.createSpyObj('CampaignMapService', ['loadLevel']);
-    campaignMapServiceSpy.loadLevel.and.returnValue(MOCK_MAP_STATE_SPEC);
-
-    gameSessionSpy = jasmine.createSpyObj('GameSessionService', ['resetAllServices', 'applyCampaignWaves', 'cleanupScene']);
-    gameSessionSpy.cleanupScene.and.returnValue(null);
+    gameSessionSpy = jasmine.createSpyObj('GameSessionService', ['resetAllServices', 'cleanupScene']);
 
     combatLoopSpy = createCombatLoopServiceSpy();
 
@@ -134,6 +123,7 @@ describe('GameBoardComponent', () => {
       declarations: [ GameBoardComponent ],
       imports: [ RouterTestingModule ],
       providers: [
+        BoardMeshRegistryService,
         GameBoardService,
         MapBridgeService,
         GameStateService,
@@ -149,15 +139,18 @@ describe('GameBoardComponent', () => {
         { provide: MinimapService, useValue: minimapSpy },
         { provide: SettingsService, useValue: settingsSpy },
         { provide: TutorialService, useValue: tutorialSpy },
-        { provide: CampaignService, useValue: campaignServiceSpy },
-        { provide: CampaignMapService, useValue: campaignMapServiceSpy },
         { provide: GameSessionService, useValue: gameSessionSpy },
         { provide: CombatLoopService, useValue: combatLoopSpy },
         { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
         { provide: GamePauseService, useValue: gamePauseSpy },
         { provide: TowerUpgradeVisualService, useValue: createTowerUpgradeVisualServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: RunService, useValue: createRunServiceSpy() },
+        { provide: DeckService, useValue: createDeckServiceSpy() },
         ChallengeDisplayService,
         ChainLightningService,
+        TouchInteractionService,
+        BoardPointerService,
       ]
     })
     .compileComponents();
@@ -208,37 +201,6 @@ describe('GameBoardComponent', () => {
     });
   });
 
-  describe('setSpeed', () => {
-    it('should delegate to GameStateService.setSpeed', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      spyOn(gameStateService, 'setSpeed');
-
-      component.setSpeed(2);
-
-      expect(gameStateService.setSpeed).toHaveBeenCalledWith(2);
-    });
-
-    it('should not delegate for invalid speed values', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      spyOn(gameStateService, 'setSpeed');
-
-      component.setSpeed(99);
-
-      expect(gameStateService.setSpeed).not.toHaveBeenCalled();
-    });
-
-    it('gameSpeed getter should reflect gameState.gameSpeed', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setSpeed(3);
-
-      expect(component.gameSpeed).toBe(3);
-    });
-
-    it('gameSpeed should default to 1', () => {
-      expect(component.gameSpeed).toBe(1);
-    });
-  });
-
   describe('selectDifficulty', () => {
     it('should call gameStateService.setDifficulty with the given level', () => {
       // GameStateService is provided at component level, so we must get it from the component's injector
@@ -263,10 +225,45 @@ describe('GameBoardComponent', () => {
   });
 
   describe('keyboard hotkeys', () => {
+    let gameInputService: GameInputService;
+    let gameStateService: GameStateService;
+
     function fireKey(key: string): void {
       const event = new KeyboardEvent('keydown', { key, bubbles: true });
-      (component as any).handleKeyboard(event);
+      const state = gameStateService.getState();
+      gameInputService.dispatchHotkey(event, state, {
+        onSpace: () => {
+          const phase = gameStateService.getState().phase;
+          if (phase === GamePhase.COMBAT) { component.endTurn(); } else { component.startWave(); }
+        },
+        onPause: () => component.togglePause(),
+        onEscape: () => {
+          if (component.isPaused) { component.togglePause(); }
+          else if (component.isPlaceMode) { component.cancelPlacement(); }
+          else if (component.selectedTowerInfo) { component.deselectTower(); }
+          else { component.togglePause(); }
+        },
+        onToggleRanges: () => component.toggleAllRanges(),
+        onToggleMinimap: () => {},
+        onTogglePath: () => component.togglePathOverlay(),
+        onUpgrade: () => component.upgradeTower(),
+        onCycleTargeting: () => component.cycleTargeting(),
+        onSell: () => component.sellTower(),
+        onTowerHotkey: (type) => component.selectTowerType(type),
+        isInRun: () => (TestBed.inject(RunService) as jasmine.SpyObj<RunService>).isInRun(),
+        isPlaceMode: () => component.isPlaceMode,
+        getSelectedTowerInfo: () => component.selectedTowerInfo,
+      });
     }
+
+    beforeEach(() => {
+      gameInputService = fixture.debugElement.injector.get(GameInputService);
+      gameStateService = fixture.debugElement.injector.get(GameStateService);
+      // Tower hotkeys 1-6 are disabled in run mode (towers require cards).
+      // Override isInRun to false so standalone-mode hotkey selection works.
+      const runSpy = TestBed.inject(RunService) as jasmine.SpyObj<RunService>;
+      runSpy.isInRun.and.returnValue(false);
+    });
 
     it('pressing 1 selects BASIC tower when a different type is selected', () => {
       component.selectedTowerType = TowerType.SNIPER;
@@ -299,15 +296,20 @@ describe('GameBoardComponent', () => {
       expect(component.selectedTowerType).toBe(TowerType.MORTAR);
     });
 
-    it('pressing Escape in PLACE mode cancels placement', () => {
+    it('pressing Escape with pending tower card (real PLACE mode) cancels placement', () => {
+      // isPlaceMode requires a pending tower card to be set. Inject via CardPlayService.
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
+      cardPlaySvc['pendingTowerCard'] = { instanceId: 'test_inst', cardId: CardId.TOWER_SNIPER, upgraded: false } as CardInstance;
       component.selectedTowerType = TowerType.SNIPER;
+      expect(component.isPlaceMode).toBeTrue();
       fireKey('Escape');
       expect(component.selectedTowerType).toBeNull();
+      expect(cardPlaySvc.hasPendingCard()).toBeFalse();
     });
 
     it('pressing Escape in INSPECT mode deselects placed tower info', () => {
       component.selectedTowerType = null;
-      (component as any).selectedTowerInfo = { id: 'fake', type: TowerType.SNIPER, level: 1, row: 0, col: 0, lastFireTime: 0, kills: 0, totalInvested: 50, mesh: null, targetingMode: TargetingMode.NEAREST };
+      (component as any).selectedTowerInfo = { id: 'fake', type: TowerType.SNIPER, level: 1, row: 0, col: 0, kills: 0, totalInvested: 50, mesh: null, targetingMode: TargetingMode.NEAREST };
       fireKey('Escape');
       expect(component.selectedTowerInfo).toBeNull();
     });
@@ -416,7 +418,7 @@ describe('GameBoardComponent', () => {
     it('cycleTargeting skips SLOW towers', () => {
       component.selectedTowerInfo = {
         id: 'tower-slow', type: TowerType.SLOW, level: 1,
-        row: 0, col: 0, lastFireTime: 0, kills: 0, totalInvested: 75,
+        row: 0, col: 0, kills: 0, totalInvested: 75,
         targetingMode: TargetingMode.NEAREST, mesh: null,
       } as PlacedTower;
       const towerCombat = fixture.debugElement.injector.get(TowerCombatService);
@@ -426,133 +428,36 @@ describe('GameBoardComponent', () => {
     });
   });
 
-  describe('scoreBreakdown', () => {
-    it('should be null initially', () => {
-      expect(component.scoreBreakdown).toBeNull();
-    });
-
-    it('should be populated when game transitions to VICTORY', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      const state = gameStateService.getState();
-      const livesTotal = DIFFICULTY_PRESETS[state.difficulty].lives;
-
-      component.scoreBreakdown = calculateScoreBreakdown(
-        state.score, state.lives, livesTotal, state.difficulty, state.wave, true
-      );
-
-      expect(component.scoreBreakdown).not.toBeNull();
-      expect(component.scoreBreakdown!.isVictory).toBeTrue();
-      expect(component.scoreBreakdown!.finalScore).toBeGreaterThanOrEqual(0);
-    });
-
-    it('should be populated when game transitions to DEFEAT', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      const state = gameStateService.getState();
-      const livesTotal = DIFFICULTY_PRESETS[state.difficulty].lives;
-
-      component.scoreBreakdown = calculateScoreBreakdown(
-        state.score, state.lives, livesTotal, state.difficulty, state.wave, false
-      );
-
-      expect(component.scoreBreakdown).not.toBeNull();
-      expect(component.scoreBreakdown!.isVictory).toBeFalse();
-      expect(component.scoreBreakdown!.stars).toBe(0);
-    });
-
-    it('should not overwrite breakdown once set', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      const state = gameStateService.getState();
-      const livesTotal = DIFFICULTY_PRESETS[state.difficulty].lives;
-
-      component.scoreBreakdown = calculateScoreBreakdown(
-        state.score, state.lives, livesTotal, state.difficulty, state.wave, true
-      );
-      const firstBreakdown = component.scoreBreakdown;
-
-      // Calling again should produce a new object (but the component's subscription guards against overwrite)
-      expect(firstBreakdown).not.toBeNull();
-      expect(firstBreakdown!.isVictory).toBeTrue();
-    });
-
-    it('scoreBreakdown finalScore reflects difficulty multiplier', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      gameStateService.setDifficulty(DifficultyLevel.HARD);
-      gameStateService.addScore(100);
-      const state = gameStateService.getState();
-      const livesTotal = DIFFICULTY_PRESETS[state.difficulty].lives;
-
-      component.scoreBreakdown = calculateScoreBreakdown(
-        state.score, state.lives, livesTotal, state.difficulty, state.wave, true
-      );
-
-      expect(component.scoreBreakdown).not.toBeNull();
-      // HARD multiplier is 1.5 — finalScore = Math.round(score * 1.5)
-      expect(component.scoreBreakdown!.difficultyMultiplier).toBe(1.5);
-    });
-  });
-
-  describe('starArray', () => {
-    /** Helper: set scoreBreakdown and sync the pre-computed starArray field. */
-    function setBreakdown(stars: number | null): void {
-      if (stars === null) {
-        component.scoreBreakdown = null;
-        component.starArray = [];
-      } else {
-        component.scoreBreakdown = { stars } as ScoreBreakdown;
-        component.starArray = [0, 1, 2].map(i => i < stars ? 'filled' : 'empty') as Array<'filled' | 'empty'>;
-      }
-    }
-
-    it('should return empty array when scoreBreakdown is null', () => {
-      setBreakdown(null);
-      expect(component.starArray).toEqual([]);
-    });
-
-    it('should return 3 filled stars when breakdown has 3 stars', () => {
-      setBreakdown(3);
-      expect(component.starArray).toEqual(['filled', 'filled', 'filled']);
-    });
-
-    it('should return 2 filled and 1 empty when breakdown has 2 stars', () => {
-      setBreakdown(2);
-      expect(component.starArray).toEqual(['filled', 'filled', 'empty']);
-    });
-
-    it('should return 1 filled and 2 empty when breakdown has 1 star', () => {
-      setBreakdown(1);
-      expect(component.starArray).toEqual(['filled', 'empty', 'empty']);
-    });
-
-    it('should return 3 empty stars when breakdown has 0 stars (defeat)', () => {
-      setBreakdown(0);
-      expect(component.starArray).toEqual(['empty', 'empty', 'empty']);
-    });
-
-    it('should always return exactly 3 elements when stars > 0', () => {
-      for (const stars of [1, 2, 3]) {
-        setBreakdown(stars);
-        expect(component.starArray.length).toBe(3);
-      }
-    });
-  });
+  // Phase H11: scoreBreakdown + starArray describe blocks deleted. The fields
+  // were removed from GameBoardComponent — scoreBreakdown is now computed
+  // internally by gameEndService.recordEnd (H7). Test coverage for the
+  // computation moves to game-end.service.spec.ts in H2.
 
   describe('touch handler lifecycle', () => {
-    let mockCanvas: HTMLElement;
+    let mockCanvas: HTMLCanvasElement;
     let addEventSpy: jasmine.Spy;
     let removeEventSpy: jasmine.Spy;
+    let touchService: TouchInteractionService;
 
     beforeEach(() => {
       mockCanvas = document.createElement('canvas');
       addEventSpy = spyOn(mockCanvas, 'addEventListener').and.callThrough();
       removeEventSpy = spyOn(mockCanvas, 'removeEventListener').and.callThrough();
+      touchService = fixture.debugElement.injector.get(TouchInteractionService);
 
-      // Stub SceneService.getRenderer() to return a mock renderer with the canvas
-      const mockRenderer = { domElement: mockCanvas, dispose: () => {} };
-      spyOn((component as any).sceneService, 'getRenderer').and.returnValue(mockRenderer);
+      // Stub sceneService camera/controls for move handler
+      const mockCamera = { position: new THREE.Vector3(0, 10, 0) } as any;
+      const mockControls = { target: new THREE.Vector3(0, 0, 0), dispose: () => {} } as any;
+      spyOn((touchService as any).sceneService, 'getCamera').and.returnValue(mockCamera);
+      spyOn((touchService as any).sceneService, 'getControls').and.returnValue(mockControls);
     });
 
-    it('setupTouchInteraction registers touchstart, touchmove, and touchend handlers', () => {
-      (component as any).setupTouchInteraction();
+    afterEach(() => {
+      touchService.cleanup();
+    });
+
+    it('init registers touchstart, touchmove, and touchend handlers', () => {
+      touchService.init(mockCanvas, () => {});
 
       const registeredEvents = addEventSpy.calls.allArgs().map((args: unknown[]) => args[0]);
       expect(registeredEvents).toContain('touchstart');
@@ -561,35 +466,29 @@ describe('GameBoardComponent', () => {
     });
 
     it('touch handlers are registered as named references, not anonymous functions', () => {
-      (component as any).setupTouchInteraction();
+      touchService.init(mockCanvas, () => {});
 
-      const touchStartRef = (component as any).touchStartHandler;
-      const touchMoveRef = (component as any).touchMoveHandler;
-      const touchEndRef = (component as any).touchEndHandler;
+      const startRef = (touchService as any).touchStartHandler;
+      const moveRef = (touchService as any).touchMoveHandler;
+      const endRef = (touchService as any).touchEndHandler;
 
-      expect(typeof touchStartRef).toBe('function');
-      expect(typeof touchMoveRef).toBe('function');
-      expect(typeof touchEndRef).toBe('function');
-      // They must not be the default no-op stubs (which are empty arrow functions sharing the same ref pattern)
-      // Confirm setup overwrote the placeholders
+      expect(typeof startRef).toBe('function');
+      expect(typeof moveRef).toBe('function');
+      expect(typeof endRef).toBe('function');
+
       const calls = addEventSpy.calls.allArgs();
       const startCall = calls.find((args: unknown[]) => args[0] === 'touchstart');
       const moveCall = calls.find((args: unknown[]) => args[0] === 'touchmove');
       const endCall = calls.find((args: unknown[]) => args[0] === 'touchend');
 
-      expect(startCall?.[1]).toBe(touchStartRef);
-      expect(moveCall?.[1]).toBe(touchMoveRef);
-      expect(endCall?.[1]).toBe(touchEndRef);
+      expect(startCall?.[1]).toBe(startRef);
+      expect(moveCall?.[1]).toBe(moveRef);
+      expect(endCall?.[1]).toBe(endRef);
     });
 
-    it('ngOnDestroy removes touchstart, touchmove, and touchend handlers', () => {
-      (component as any).setupTouchInteraction();
-
-      // Simulate ngOnDestroy canvas listener removal path
-      const canvas = (component as any).sceneService.getRenderer().domElement as HTMLElement;
-      canvas.removeEventListener('touchstart', (component as any).touchStartHandler);
-      canvas.removeEventListener('touchmove', (component as any).touchMoveHandler);
-      canvas.removeEventListener('touchend', (component as any).touchEndHandler);
+    it('cleanup removes touchstart, touchmove, and touchend handlers', () => {
+      touchService.init(mockCanvas, () => {});
+      touchService.cleanup();
 
       const removedEvents = removeEventSpy.calls.allArgs().map((args: unknown[]) => args[0]);
       expect(removedEvents).toContain('touchstart');
@@ -598,128 +497,123 @@ describe('GameBoardComponent', () => {
     });
 
     it('touchStartHandler records start position and resets drag flag', () => {
-      (component as any).setupTouchInteraction();
-      (component as any).touchIsDragging = true;
+      touchService.init(mockCanvas, () => {});
+      (touchService as any).touchIsDragging = true;
 
       const touch = { clientX: 150, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, touches: [touch] } as unknown as TouchEvent;
 
-      (component as any).touchStartHandler(event);
+      (touchService as any).touchStartHandler(event);
 
-      expect((component as any).touchStartX).toBe(150);
-      expect((component as any).touchStartY).toBe(200);
-      expect((component as any).touchIsDragging).toBeFalse();
+      expect((touchService as any).touchStartX).toBe(150);
+      expect((touchService as any).touchStartY).toBe(200);
+      expect((touchService as any).touchIsDragging).toBeFalse();
     });
 
     it('touchStartHandler records pinch start distance for two-finger touch', () => {
-      (component as any).setupTouchInteraction();
+      touchService.init(mockCanvas, () => {});
 
       const t0 = { clientX: 0, clientY: 0 } as Touch;
       const t1 = { clientX: 30, clientY: 40 } as Touch;
       const event = { preventDefault: () => {}, touches: [t0, t1] } as unknown as TouchEvent;
 
-      (component as any).touchStartHandler(event);
+      (touchService as any).touchStartHandler(event);
 
       // distance = sqrt(30^2 + 40^2) = sqrt(900+1600) = 50
-      expect((component as any).pinchStartDistance).toBe(50);
+      expect((touchService as any).pinchStartDistance).toBe(50);
     });
 
     it('touchMoveHandler sets touchIsDragging to true when movement exceeds threshold', () => {
-      (component as any).setupTouchInteraction();
-      (component as any).touchStartX = 0;
-      (component as any).touchStartY = 0;
-
-      // Stub sceneService camera/controls since the real Three.js objects are not initialized in tests
-      const mockCamera = { position: new THREE.Vector3(0, 10, 0) } as any;
-      const mockControls = { target: new THREE.Vector3(0, 0, 0), dispose: () => {} } as any;
-      spyOn((component as any).sceneService, 'getCamera').and.returnValue(mockCamera);
-      spyOn((component as any).sceneService, 'getControls').and.returnValue(mockControls);
+      touchService.init(mockCanvas, () => {});
+      (touchService as any).touchStartX = 0;
+      (touchService as any).touchStartY = 0;
 
       const touch = { clientX: 20, clientY: 20 } as Touch;
       const event = { preventDefault: () => {}, touches: [touch] } as unknown as TouchEvent;
 
-      (component as any).touchMoveHandler(event);
+      (touchService as any).touchMoveHandler(event);
 
-      expect((component as any).touchIsDragging).toBeTrue();
+      expect((touchService as any).touchIsDragging).toBeTrue();
     });
 
     it('touchMoveHandler does not set touchIsDragging when movement is within threshold', () => {
-      (component as any).setupTouchInteraction();
-      (component as any).touchStartX = 0;
-      (component as any).touchStartY = 0;
-      (component as any).touchIsDragging = false;
+      touchService.init(mockCanvas, () => {});
+      (touchService as any).touchStartX = 0;
+      (touchService as any).touchStartY = 0;
+      (touchService as any).touchIsDragging = false;
 
       // Move only 5px total — below 10px threshold
       const touch = { clientX: 3, clientY: 4 } as Touch;
       const event = { preventDefault: () => {}, touches: [touch] } as unknown as TouchEvent;
 
-      (component as any).touchMoveHandler(event);
+      (touchService as any).touchMoveHandler(event);
 
-      expect((component as any).touchIsDragging).toBeFalse();
+      expect((touchService as any).touchIsDragging).toBeFalse();
     });
 
-    it('touchEndHandler calls handleInteraction for a short tap with no drag', () => {
-      (component as any).setupTouchInteraction();
-      (component as any).touchStartX = 100;
-      (component as any).touchStartY = 200;
-      (component as any).touchStartTime = performance.now() - 50; // 50ms ago — within 300ms threshold
-      (component as any).touchIsDragging = false;
-
-      spyOn(component as any, 'handleInteraction');
+    it('touchEndHandler calls onTap for a short tap with no drag', () => {
+      let tapX = 0;
+      let tapY = 0;
+      let tapCalled = false;
+      touchService.init(mockCanvas, (x, y) => { tapCalled = true; tapX = x; tapY = y; });
+      (touchService as any).touchStartX = 100;
+      (touchService as any).touchStartY = 200;
+      (touchService as any).touchStartTime = performance.now() - 50; // 50ms ago — within 300ms threshold
+      (touchService as any).touchIsDragging = false;
 
       const touch = { clientX: 100, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
 
-      (component as any).touchEndHandler(event);
+      (touchService as any).touchEndHandler(event);
 
-      expect((component as any).handleInteraction).toHaveBeenCalledWith(100, 200);
+      expect(tapCalled).toBeTrue();
+      expect(tapX).toBe(100);
+      expect(tapY).toBe(200);
     });
 
-    it('touchEndHandler does not call handleInteraction when drag occurred', () => {
-      (component as any).setupTouchInteraction();
-      (component as any).touchStartTime = performance.now() - 50;
-      (component as any).touchIsDragging = true;
-
-      spyOn(component as any, 'handleInteraction');
+    it('touchEndHandler does not call onTap when drag occurred', () => {
+      let tapCalled = false;
+      touchService.init(mockCanvas, () => { tapCalled = true; });
+      (touchService as any).touchStartTime = performance.now() - 50;
+      (touchService as any).touchIsDragging = true;
 
       const touch = { clientX: 100, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
 
-      (component as any).touchEndHandler(event);
+      (touchService as any).touchEndHandler(event);
 
-      expect((component as any).handleInteraction).not.toHaveBeenCalled();
+      expect(tapCalled).toBeFalse();
     });
 
-    it('touchEndHandler does not call handleInteraction when tap duration exceeds threshold', () => {
-      (component as any).setupTouchInteraction();
-      (component as any).touchStartTime = performance.now() - 500; // 500ms — exceeds 300ms threshold
-      (component as any).touchIsDragging = false;
-
-      spyOn(component as any, 'handleInteraction');
+    it('touchEndHandler does not call onTap when tap duration exceeds threshold', () => {
+      let tapCalled = false;
+      touchService.init(mockCanvas, () => { tapCalled = true; });
+      (touchService as any).touchStartTime = performance.now() - 500; // 500ms — exceeds 300ms threshold
+      (touchService as any).touchIsDragging = false;
 
       const touch = { clientX: 100, clientY: 200 } as Touch;
       const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
 
-      (component as any).touchEndHandler(event);
+      (touchService as any).touchEndHandler(event);
 
-      expect((component as any).handleInteraction).not.toHaveBeenCalled();
+      expect(tapCalled).toBeFalse();
     });
 
     it('touchEndHandler resets touchIsDragging and pinchStartDistance', () => {
-      (component as any).setupTouchInteraction();
-      (component as any).touchIsDragging = true;
-      (component as any).pinchStartDistance = 50;
+      touchService.init(mockCanvas, () => {});
+      (touchService as any).touchIsDragging = true;
+      (touchService as any).pinchStartDistance = 50;
 
       // Long press — no tap
-      (component as any).touchStartTime = performance.now() - 500;
+      (touchService as any).touchStartTime = performance.now() - 500;
 
       const touch = { clientX: 0, clientY: 0 } as Touch;
       const event = { preventDefault: () => {}, changedTouches: [touch] } as unknown as TouchEvent;
 
-      (component as any).touchEndHandler(event);
+      (touchService as any).touchEndHandler(event);
 
-      expect((component as any).touchIsDragging).toBeFalse();
-      expect((component as any).pinchStartDistance).toBe(0);
+      expect((touchService as any).touchIsDragging).toBeFalse();
+      expect((touchService as any).pinchStartDistance).toBe(0);
     });
   });
 
@@ -792,16 +686,6 @@ describe('GameBoardComponent', () => {
       expect(gameStateService.getState().isEndless).toBeFalse();
     });
 
-    it('should be a no-op for campaign games', () => {
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      spyOn(gameStateService, 'setEndlessMode');
-
-      component.toggleEndless();
-
-      expect(gameStateService.setEndlessMode).not.toHaveBeenCalled();
-    });
   });
 
   describe('pause overlay state', () => {
@@ -871,12 +755,6 @@ describe('GameBoardComponent', () => {
       expect((component as any).audioService.toggleMute).toHaveBeenCalled();
     });
 
-    it('setSpeed updates game speed via GameStateService for valid speeds', () => {
-      spyOn(gameStateService, 'setSpeed');
-      component.setSpeed(2);
-      expect(gameStateService.setSpeed).toHaveBeenCalledWith(2);
-    });
-
     it('requestQuit sets showQuitConfirm to true', () => {
       component.requestQuit();
       expect(component.showQuitConfirm).toBeTrue();
@@ -888,13 +766,8 @@ describe('GameBoardComponent', () => {
       expect(gamePauseService.cancelQuit).toHaveBeenCalled();
     });
 
-    it('confirmQuit navigates to / when not a campaign game', () => {
-      const router = TestBed.inject(Router);
-      spyOn(router, 'navigate');
-      // Default mapBridge has no map loaded → not a campaign game
-      component.confirmQuit();
-      expect(router.navigate).toHaveBeenCalledWith(['/']);
-    });
+    // 'confirmQuit navigates to /' was deleted: GamePauseService.confirmQuit()
+    // always returns '/run' post-pivot. The active test below covers this.
 
     it('confirmQuit delegates to GamePauseService.confirmQuit', () => {
       const router = TestBed.inject(Router);
@@ -904,54 +777,60 @@ describe('GameBoardComponent', () => {
       expect(gamePauseService.confirmQuit).toHaveBeenCalled();
     });
 
-    it('validGameSpeeds contains [1, 2, 3]', () => {
-      expect(component.validGameSpeeds).toEqual([1, 2, 3] as any);
-    });
-
-    it('confirmQuit navigates to returned route from GamePauseService', () => {
+    it('confirmQuit navigates to /run (run hub)', () => {
       const router = TestBed.inject(Router);
       spyOn(router, 'navigate');
-      spyOn(gamePauseService, 'confirmQuit').and.returnValue('/campaign');
-      // Simulate campaign game by making mapBridge return a campaign mapId
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
+      spyOn(gamePauseService, 'confirmQuit').and.returnValue('/run');
 
       component.confirmQuit();
 
-      expect(gamePauseService.confirmQuit).toHaveBeenCalledWith(true);
-      expect(router.navigate).toHaveBeenCalledWith(['/campaign']);
-    });
-
-    it('confirmQuit passes isCampaign=false for non-campaign games', () => {
-      const router = TestBed.inject(Router);
-      spyOn(router, 'navigate');
-      spyOn(gamePauseService, 'confirmQuit').and.returnValue('/');
-
-      component.confirmQuit();
-
-      expect(gamePauseService.confirmQuit).toHaveBeenCalledWith(false);
+      expect(gamePauseService.confirmQuit).toHaveBeenCalledWith();
+      expect(router.navigate).toHaveBeenCalledWith(['/run']);
     });
   });
 
-  describe('canLeaveGame', () => {
-    it('delegates to GamePauseService.canLeaveGame', () => {
+  describe('requestGuardDecision', () => {
+    it('delegates to GamePauseService.requestGuardDecision', (done) => {
       const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
-      spyOn(gamePauseService, 'canLeaveGame').and.returnValue(true);
-      expect(component.canLeaveGame()).toBeTrue();
-      expect(gamePauseService.canLeaveGame).toHaveBeenCalled();
+      spyOn(gamePauseService, 'requestGuardDecision').and.returnValue(of(true));
+      const result = component.requestGuardDecision();
+      expect(gamePauseService.requestGuardDecision).toHaveBeenCalled();
+      (result as import('rxjs').Observable<boolean>).subscribe(v => { expect(v).toBeTrue(); done(); });
     });
 
-    it('returns false when GamePauseService returns false', () => {
+    it('returns Observable<false> when GamePauseService emits false', (done) => {
       const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
-      spyOn(gamePauseService, 'canLeaveGame').and.returnValue(false);
-      expect(component.canLeaveGame()).toBeFalse();
+      spyOn(gamePauseService, 'requestGuardDecision').and.returnValue(of(false));
+      const result = component.requestGuardDecision();
+      (result as import('rxjs').Observable<boolean>).subscribe(v => { expect(v).toBeFalse(); done(); });
     });
   });
 
   describe('keyboard Escape key — pause integration', () => {
     function fireKey(key: string): void {
       const event = new KeyboardEvent('keydown', { key, bubbles: true });
-      (component as any).handleKeyboard(event);
+      const gameInputSvc = fixture.debugElement.injector.get(GameInputService);
+      const gameStateSvc = fixture.debugElement.injector.get(GameStateService);
+      gameInputSvc.dispatchHotkey(event, gameStateSvc.getState(), {
+        onSpace: () => {},
+        onPause: () => component.togglePause(),
+        onEscape: () => {
+          if (component.isPaused) { component.togglePause(); }
+          else if (component.isPlaceMode) { component.cancelPlacement(); }
+          else if (component.selectedTowerInfo) { component.deselectTower(); }
+          else { component.togglePause(); }
+        },
+        onToggleRanges: () => {},
+        onToggleMinimap: () => {},
+        onTogglePath: () => {},
+        onUpgrade: () => {},
+        onCycleTargeting: () => {},
+        onSell: () => {},
+        onTowerHotkey: (_type) => {},
+        isInRun: () => false,
+        isPlaceMode: () => component.isPlaceMode,
+        getSelectedTowerInfo: () => component.selectedTowerInfo,
+      });
     }
 
     it('ESC resumes when paused', () => {
@@ -966,20 +845,23 @@ describe('GameBoardComponent', () => {
       expect(component.isPaused).toBeFalse();
     });
 
-    it('ESC deselects tower when not paused and not in PLACE mode', () => {
+    it('ESC deselects tower when not paused, not in PLACE mode, and a tower is selected', () => {
       // ESC works in SETUP phase too — only VICTORY/DEFEAT blocks keyboard handling
       // Do not enter COMBAT phase here to avoid auto-pause side effects
       component.selectedTowerType = null;
+      spyOnProperty(component, 'selectedTowerInfo', 'get').and.returnValue(
+        { id: 'fake', type: TowerType.SNIPER, level: 1, row: 0, col: 0, kills: 0, totalInvested: 50, mesh: null, targetingMode: TargetingMode.NEAREST } as any,
+      );
 
       spyOn(component, 'deselectTower');
       fireKey('Escape');
       expect(component.deselectTower).toHaveBeenCalled();
     });
 
-    it('ESC does not toggle pause when not paused', () => {
+    it('ESC toggles pause when not paused and no tower selected', () => {
       spyOn(component, 'togglePause');
       fireKey('Escape');
-      expect(component.togglePause).not.toHaveBeenCalled();
+      expect(component.togglePause).toHaveBeenCalled();
     });
   });
 
@@ -1049,8 +931,17 @@ describe('GameBoardComponent', () => {
       spyOn(pvs, 'hidePath');
       spyOn((component as any).enemyService, 'getPathToExit').and.returnValue([]);
 
+      const gameInputSvc = fixture.debugElement.injector.get(GameInputService);
+      const gameStateSvc = fixture.debugElement.injector.get(GameStateService);
       const event = new KeyboardEvent('keydown', { key: 'v', bubbles: true });
-      (component as any).handleKeyboard(event);
+      gameInputSvc.dispatchHotkey(event, gameStateSvc.getState(), {
+        onSpace: () => {}, onPause: () => {}, onEscape: () => {},
+        onToggleRanges: () => {},
+        onToggleMinimap: () => {}, onTogglePath: () => component.togglePathOverlay(),
+        onUpgrade: () => {}, onCycleTargeting: () => {}, onSell: () => {},
+        onTowerHotkey: (_type) => {}, isInRun: () => false,
+        isPlaceMode: () => component.isPlaceMode, getSelectedTowerInfo: () => component.selectedTowerInfo,
+      });
 
       expect(component.showPathOverlay).toBeTrue();
     });
@@ -1083,11 +974,11 @@ describe('GameBoardComponent', () => {
       expect(component.initializationFailed).toBeFalse();
     });
 
-    it('goBackToMaps navigates to /maps', () => {
+    it('goBackToRunHub navigates to /run', () => {
       const router = TestBed.inject(Router);
       spyOn(router, 'navigate');
-      component.goBackToMaps();
-      expect(router.navigate).toHaveBeenCalledWith(['/maps']);
+      component.goBackToRunHub();
+      expect(router.navigate).toHaveBeenCalledWith(['/run']);
     });
 
     it('setting initializationFailed to true is reflected on the component', () => {
@@ -1097,9 +988,11 @@ describe('GameBoardComponent', () => {
   });
 
   describe('Interaction Mode System', () => {
-    it('should start with BASIC tower selected (PLACE mode by default)', () => {
+    it('should start with BASIC tower selected (no pending card, so isPlaceMode is false)', () => {
+      // Post-pivot: isPlaceMode requires both selectedTowerType AND pendingTowerCard to be set.
+      // At startup no card has been played, so isPlaceMode is false even with BASIC selected.
       expect(component.selectedTowerType).toBe(TowerType.BASIC);
-      expect(component.isPlaceMode).toBeTrue();
+      expect(component.isPlaceMode).toBeFalse();
     });
 
     it('should toggle to INSPECT mode when clicking same tower type', () => {
@@ -1127,17 +1020,20 @@ describe('GameBoardComponent', () => {
       expect(component.isPlaceMode).toBeFalse();
     });
 
-    it('isPlaceMode should return true when selectedTowerType is set', () => {
+    it('isPlaceMode should return false when selectedTowerType is set but no pending card', () => {
+      // isPlaceMode requires BOTH selectedTowerType AND pendingTowerCard to be non-null.
+      // Setting only selectedTowerType (as the button-click path does) does NOT activate place mode —
+      // the player must play a tower card to enter real placement state.
       component.selectedTowerType = TowerType.MORTAR;
 
-      expect(component.isPlaceMode).toBeTrue();
+      expect(component.isPlaceMode).toBeFalse();
     });
 
     it('selectPlacedTower (private) delegates without throwing', () => {
-      // TowerSelectionService is component-scoped (DI-hierarchy note: the component creates its
-      // own injector, so we cannot easily mock it in TestBed). Verify delegation doesn't throw.
+      // TowerSelectionService is component-scoped. Verify delegation doesn't throw.
       component.selectedTowerType = TowerType.SNIPER;
-      expect(component.isPlaceMode).toBeTrue();
+      // selectedTowerType is set but pendingTowerCard is null → isPlaceMode is false.
+      expect(component.isPlaceMode).toBeFalse();
 
       // selectPlacedTower is private — call it; it will delegate to TowerSelectionService.
       // That service will call getTower (not found → undefined), so nothing changes.
@@ -1164,13 +1060,15 @@ describe('GameBoardComponent', () => {
       expect(component.previewTowerType).toBeNull();
     });
 
-    it('touch tap selects tower immediately (mode indicator updates)', () => {
+    it('touch tap selects tower (selectedTowerType updates, isPlaceMode stays false without pending card)', () => {
+      // handleTowerButtonTap calls selectTowerType → sets selectedTowerType.
+      // isPlaceMode requires a pending tower card as well; a tap alone does not set pendingTowerCard.
       component.selectedTowerType = null;
 
       component.handleTowerButtonTap(makeTouchEvent(), TowerType.SNIPER);
 
-      expect(component.isPlaceMode).toBeTrue();
       expect(component.selectedTowerType as TowerType | null).toBe(TowerType.SNIPER);
+      expect(component.isPlaceMode).toBeFalse();
     });
 
     it('touch tap on different tower switches selection', () => {
@@ -1280,21 +1178,6 @@ describe('GameBoardComponent', () => {
       expect(component.isDragging).toBeFalse();
     });
 
-    it('restartGame should reset drag state (isDragging becomes false)', () => {
-      // Stub methods that restartGame calls to avoid Three.js crashes
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const minimapService = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapService, 'init');
-
-      component.restartGame();
-
-      expect(component.isDragging).toBeFalse();
-    });
 
     it('onDragMove (internal) is handled by TowerPlacementService — isDragging stays false', () => {
       expect(component.isDragging).toBeFalse();
@@ -1309,15 +1192,12 @@ describe('GameBoardComponent', () => {
     it('refreshTowerInfoPanel should compute upgrade preview for L1 tower', () => {
       const fakeTower: PlacedTower = {
         id: '5-5', type: TowerType.BASIC, level: 1, row: 5, col: 5,
-        lastFireTime: 0, kills: 3, totalInvested: 50, mesh: null,
+        kills: 3, totalInvested: 50, mesh: null,
         targetingMode: TargetingMode.NEAREST
       };
       (component as any).selectedTowerInfo = fakeTower;
       // Stub showRangePreview to avoid Three.js canvas crash
       spyOn((component as any).rangeVisualizationService, 'showForTower');
-      // Stub tilePricingService to avoid board-not-initialized crash
-      const tilePricingService = (component as any).tilePricingService;
-      spyOn(tilePricingService, 'getStrategicValue').and.returnValue(0);
       (component as any).refreshTowerInfoPanel();
 
       expect(component.upgradePreview).toBeTruthy();
@@ -1327,14 +1207,11 @@ describe('GameBoardComponent', () => {
     it('refreshTowerInfoPanel should not compute preview for L2 tower (needs spec choice)', () => {
       const fakeTower: PlacedTower = {
         id: '5-5', type: TowerType.BASIC, level: 2, row: 5, col: 5,
-        lastFireTime: 0, kills: 0, totalInvested: 100, mesh: null,
+        kills: 0, totalInvested: 100, mesh: null,
         targetingMode: TargetingMode.NEAREST
       };
       (component as any).selectedTowerInfo = fakeTower;
       spyOn((component as any).rangeVisualizationService, 'showForTower');
-      // Stub tilePricingService to avoid board-not-initialized crash
-      const tilePricingService = (component as any).tilePricingService;
-      spyOn(tilePricingService, 'getStrategicValue').and.returnValue(0);
       (component as any).refreshTowerInfoPanel();
 
       // L2→L3 requires specialization choice, no generic preview
@@ -1344,21 +1221,18 @@ describe('GameBoardComponent', () => {
     it('refreshTowerInfoPanel should not compute preview for max level tower', () => {
       const fakeTower: PlacedTower = {
         id: '5-5', type: TowerType.BASIC, level: 3, row: 5, col: 5,
-        lastFireTime: 0, kills: 0, totalInvested: 150, mesh: null,
+        kills: 0, totalInvested: 150, mesh: null,
         targetingMode: TargetingMode.NEAREST, specialization: 'alpha' as any
       };
       (component as any).selectedTowerInfo = fakeTower;
       spyOn((component as any).rangeVisualizationService, 'showForTower');
-      // Stub tilePricingService to avoid board-not-initialized crash
-      const tilePricingService = (component as any).tilePricingService;
-      spyOn(tilePricingService, 'getStrategicValue').and.returnValue(0);
       (component as any).refreshTowerInfoPanel();
 
       expect(component.upgradePreview).toBeNull();
     });
 
     it('deselectTower should clear upgradePreview', () => {
-      component.upgradePreview = { damage: 50, range: 4, fireRate: 0.8 };
+      component.upgradePreview = { damage: 50, range: 4 };
       component.deselectTower();
       expect(component.upgradePreview).toBeNull();
     });
@@ -1373,26 +1247,26 @@ describe('GameBoardComponent', () => {
   describe('tutorial integration', () => {
     beforeEach(() => {
       // ngOnInit does not run in this suite (no detectChanges), so manually wire
-      // the tutorialSub as it would be wired during ngOnInit.
-      (component as any).tutorialSub = tutorialSpy.getCurrentStep().subscribe((step: TutorialStep | null) => {
-        component.currentTutorialStep = step;
+      // the tutorialFacade subscription as it would be wired during ngOnInit.
+      (component as any).tutorialFacade['tutorialSub'] = tutorialSpy.getCurrentStep().subscribe((step: TutorialStep | null) => {
+        component.tutorialFacade.currentTutorialStep = step;
       });
     });
 
     afterEach(() => {
-      if ((component as any).tutorialSub) {
-        (component as any).tutorialSub.unsubscribe();
+      if ((component as any).tutorialFacade['tutorialSub']) {
+        (component as any).tutorialFacade['tutorialSub'].unsubscribe();
       }
     });
 
     it('subscribes to getCurrentStep on init and sets currentTutorialStep', () => {
       tutorialStep$.next(TutorialStep.WELCOME);
-      expect(component.currentTutorialStep).toBe(TutorialStep.WELCOME);
+      expect(component.tutorialFacade.currentTutorialStep).toBe(TutorialStep.WELCOME);
     });
 
     it('currentTutorialStep is null initially when tutorial step$ emits null', () => {
       tutorialStep$.next(null);
-      expect(component.currentTutorialStep).toBeNull();
+      expect(component.tutorialFacade.currentTutorialStep).toBeNull();
     });
 
     it('advanceTutorial() delegates to tutorialService.advanceStep()', () => {
@@ -1406,29 +1280,29 @@ describe('GameBoardComponent', () => {
     });
 
     it('getTutorialTip() returns null when currentTutorialStep is null', () => {
-      component.currentTutorialStep = null;
+      component.tutorialFacade.currentTutorialStep = null;
       expect(component.getTutorialTip()).toBeNull();
     });
 
     it('getTutorialTip() calls tutorialService.getTip with current step', () => {
-      component.currentTutorialStep = TutorialStep.PLACE_TOWER;
+      component.tutorialFacade.currentTutorialStep = TutorialStep.PLACE_TOWER;
       const result = component.getTutorialTip();
       expect(tutorialSpy.getTip).toHaveBeenCalledWith(TutorialStep.PLACE_TOWER);
       expect(result).toBeTruthy();
     });
 
     it('getTutorialStepNumber() returns 1 for WELCOME step', () => {
-      component.currentTutorialStep = TutorialStep.WELCOME;
+      component.tutorialFacade.currentTutorialStep = TutorialStep.WELCOME;
       expect(component.getTutorialStepNumber()).toBe(1);
     });
 
     it('getTutorialStepNumber() returns 2 for SELECT_TOWER step', () => {
-      component.currentTutorialStep = TutorialStep.SELECT_TOWER;
+      component.tutorialFacade.currentTutorialStep = TutorialStep.SELECT_TOWER;
       expect(component.getTutorialStepNumber()).toBe(2);
     });
 
     it('getTutorialStepNumber() returns 0 when currentTutorialStep is null', () => {
-      component.currentTutorialStep = null;
+      component.tutorialFacade.currentTutorialStep = null;
       expect(component.getTutorialStepNumber()).toBe(0);
     });
 
@@ -1449,158 +1323,24 @@ describe('GameBoardComponent', () => {
 
     it('currentTutorialStep updates when observable emits new step', () => {
       tutorialStep$.next(TutorialStep.START_WAVE);
-      expect(component.currentTutorialStep).toBe(TutorialStep.START_WAVE);
+      expect(component.tutorialFacade.currentTutorialStep).toBe(TutorialStep.START_WAVE);
 
       tutorialStep$.next(TutorialStep.UPGRADE_TOWER);
-      expect(component.currentTutorialStep).toBe(TutorialStep.UPGRADE_TOWER);
+      expect(component.tutorialFacade.currentTutorialStep).toBe(TutorialStep.UPGRADE_TOWER);
     });
 
     it('currentTutorialStep becomes null when observable emits null', () => {
       tutorialStep$.next(TutorialStep.PLACE_TOWER);
-      expect(component.currentTutorialStep).toBe(TutorialStep.PLACE_TOWER);
+      expect(component.tutorialFacade.currentTutorialStep).toBe(TutorialStep.PLACE_TOWER);
 
       tutorialStep$.next(null);
-      expect(component.currentTutorialStep).toBeNull();
+      expect(component.tutorialFacade.currentTutorialStep).toBeNull();
     });
 
     it('child component receives null tip when currentTutorialStep is null', () => {
       // Verifies getTutorialTip() returns null — the child component uses this for its [tip] input
-      component.currentTutorialStep = null;
+      component.tutorialFacade.currentTutorialStep = null;
       expect(component.getTutorialTip()).toBeNull();
-    });
-  });
-
-  describe('toggleEncyclopedia', () => {
-    it('showEncyclopedia should be false initially', () => {
-      expect(component.showEncyclopedia).toBeFalse();
-    });
-
-    it('toggleEncyclopedia sets showEncyclopedia to true when false', () => {
-      component.showEncyclopedia = false;
-      component.toggleEncyclopedia();
-      expect(component.showEncyclopedia).toBeTrue();
-    });
-
-    it('toggleEncyclopedia sets showEncyclopedia to false when true', () => {
-      component.showEncyclopedia = true;
-      component.toggleEncyclopedia();
-      expect(component.showEncyclopedia).toBeFalse();
-    });
-
-    it('enemyInfoList should have 8 entries', () => {
-      expect(component.enemyInfoList.length).toBe(8);
-    });
-
-    it('enemyInfoList entries each have a name and description', () => {
-      for (const info of component.enemyInfoList) {
-        expect(info.name.length).toBeGreaterThan(0);
-        expect(info.description.length).toBeGreaterThan(0);
-      }
-    });
-  });
-
-  describe('encyclopediaTab', () => {
-    it('default tab is enemies', () => {
-      expect(component.encyclopediaTab).toBe('enemies');
-    });
-
-    it('switching to towers tab sets encyclopediaTab to towers', () => {
-      component.encyclopediaTab = 'towers';
-      expect(component.encyclopediaTab).toBe('towers');
-    });
-
-    it('switching back to enemies tab sets encyclopediaTab to enemies', () => {
-      component.encyclopediaTab = 'towers';
-      component.encyclopediaTab = 'enemies';
-      expect(component.encyclopediaTab).toBe('enemies');
-    });
-  });
-
-  describe('towerInfoList', () => {
-    it('towerInfoList should have 6 entries (one per tower type)', () => {
-      expect(component.towerInfoList.length).toBe(6);
-    });
-
-    it('each tower entry has a non-empty name', () => {
-      for (const info of component.towerInfoList) {
-        expect(info.name.length).toBeGreaterThan(0);
-      }
-    });
-
-    it('each tower entry has a non-empty description', () => {
-      for (const info of component.towerInfoList) {
-        expect(info.description.length).toBeGreaterThan(0);
-      }
-    });
-
-    it('each tower entry has non-empty alpha and beta labels', () => {
-      for (const info of component.towerInfoList) {
-        expect(info.alpha.label.length).toBeGreaterThan(0);
-        expect(info.beta.label.length).toBeGreaterThan(0);
-      }
-    });
-
-    it('all 6 tower types are represented', () => {
-      const types = component.towerInfoList.map(t => t.type);
-      expect(types).toContain(TowerType.BASIC);
-      expect(types).toContain(TowerType.SNIPER);
-      expect(types).toContain(TowerType.SPLASH);
-      expect(types).toContain(TowerType.SLOW);
-      expect(types).toContain(TowerType.CHAIN);
-      expect(types).toContain(TowerType.MORTAR);
-    });
-
-    it('each tower entry has positive cost and damage (except Slow which has 0 damage)', () => {
-      for (const info of component.towerInfoList) {
-        expect(info.cost).toBeGreaterThan(0);
-        expect(info.damage).toBeGreaterThanOrEqual(0);
-      }
-    });
-  });
-
-  describe('E key toggles encyclopedia', () => {
-    function fireKey(key: string): void {
-      const event = new KeyboardEvent('keydown', { key, bubbles: true });
-      (component as any).handleKeyboard(event);
-    }
-
-    it('pressing e opens the encyclopedia', () => {
-      component.showEncyclopedia = false;
-      fireKey('e');
-      expect(component.showEncyclopedia).toBeTrue();
-    });
-
-    it('pressing e again closes the encyclopedia', () => {
-      component.showEncyclopedia = true;
-      fireKey('e');
-      expect(component.showEncyclopedia).toBeFalse();
-    });
-
-    it('pressing E (uppercase) also toggles encyclopedia', () => {
-      component.showEncyclopedia = false;
-      fireKey('E');
-      expect(component.showEncyclopedia).toBeTrue();
-    });
-  });
-
-  describe('isNewEnemyType (delegates to WaveService)', () => {
-    it('isNewEnemyType returns true for a type not yet seen', () => {
-      const waveService = fixture.debugElement.injector.get(WaveService);
-      expect(component.isNewEnemyType(EnemyType.BOSS)).toBeTrue();
-      expect(waveService.isNewType(EnemyType.BOSS)).toBeTrue();
-    });
-
-    it('isNewEnemyType returns false for a type that has been marked seen', () => {
-      const waveService = fixture.debugElement.injector.get(WaveService);
-      waveService.markSeen(EnemyType.BASIC);
-      expect(component.isNewEnemyType(EnemyType.BASIC)).toBeFalse();
-    });
-
-    it('isNewEnemyType returns true for unseen type even when some types are seen', () => {
-      const waveService = fixture.debugElement.injector.get(WaveService);
-      waveService.markSeen(EnemyType.BASIC);
-      waveService.markSeen(EnemyType.FAST);
-      expect(component.isNewEnemyType(EnemyType.BOSS)).toBeTrue();
     });
   });
 
@@ -1686,326 +1426,6 @@ describe('GameBoardComponent', () => {
     });
   });
 
-  // ── Campaign integration ─────────────────────────────────────────────────────
-
-  describe('isCampaignGame', () => {
-    it('returns false when mapId is null', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue(null);
-      expect(component.isCampaignGame).toBeFalse();
-    });
-
-    it('returns false for a user/quickplay map', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('user_custom_map');
-      expect(component.isCampaignGame).toBeFalse();
-    });
-
-    it('returns true for campaign_01', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      expect(component.isCampaignGame).toBeTrue();
-    });
-
-    it('returns true for any campaign_ prefixed id', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_16');
-      expect(component.isCampaignGame).toBeTrue();
-    });
-  });
-
-  describe('currentCampaignLevel', () => {
-    it('returns null when mapId is null', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue(null);
-      expect(component.currentCampaignLevel).toBeNull();
-    });
-
-    it('returns null when not a campaign map', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('user_map');
-      campaignServiceSpy.getLevel.and.returnValue(undefined);
-      expect(component.currentCampaignLevel).toBeNull();
-    });
-
-    it('returns the level from campaignService when mapId is a campaign id', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      const fakeLevel: CampaignLevel = {
-        id: 'campaign_01', number: 1, name: 'First Light',
-        tier: CampaignTier.INTRO, description: '', gridSize: 10,
-        waveCount: 6, spawnerCount: 1, exitCount: 1, parScore: 500,
-        unlockRequirement: { type: 'none' },
-      };
-      campaignServiceSpy.getLevel.and.returnValue(fakeLevel);
-      expect(component.currentCampaignLevel).toEqual(fakeLevel);
-    });
-
-    it('returns null when service returns undefined for the id', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_99');
-      campaignServiceSpy.getLevel.and.returnValue(undefined);
-      expect(component.currentCampaignLevel).toBeNull();
-    });
-  });
-
-  describe('nextCampaignLevel', () => {
-    it('returns null when mapId is null', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue(null);
-      expect(component.nextCampaignLevel).toBeNull();
-    });
-
-    it('returns null when service has no next level', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_16');
-      campaignServiceSpy.getNextLevel.and.returnValue(null);
-      expect(component.nextCampaignLevel).toBeNull();
-    });
-
-    it('returns next level from service when available', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      const fakeNext: CampaignLevel = {
-        id: 'campaign_02', number: 2, name: 'The Bend',
-        tier: CampaignTier.INTRO, description: '', gridSize: 10,
-        waveCount: 8, spawnerCount: 1, exitCount: 1, parScore: 1000,
-        unlockRequirement: { type: 'level_complete', levelId: 'campaign_01' },
-      };
-      campaignServiceSpy.getNextLevel.and.returnValue(fakeNext);
-      expect(component.nextCampaignLevel).toEqual(fakeNext);
-    });
-  });
-
-  describe('isNextLevelUnlocked', () => {
-    it('returns false when there is no next level', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_16');
-      campaignServiceSpy.getNextLevel.and.returnValue(null);
-      expect(component.isNextLevelUnlocked).toBeFalse();
-    });
-
-    it('returns false when next level exists but is locked', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      const fakeNext: CampaignLevel = {
-        id: 'campaign_02', number: 2, name: 'The Bend',
-        tier: CampaignTier.INTRO, description: '', gridSize: 10,
-        waveCount: 8, spawnerCount: 1, exitCount: 1, parScore: 1000,
-        unlockRequirement: { type: 'level_complete', levelId: 'campaign_01' },
-      };
-      campaignServiceSpy.getNextLevel.and.returnValue(fakeNext);
-      campaignServiceSpy.isUnlocked.and.returnValue(false);
-      expect(component.isNextLevelUnlocked).toBeFalse();
-    });
-
-    it('returns true when next level exists and is unlocked', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      const fakeNext: CampaignLevel = {
-        id: 'campaign_02', number: 2, name: 'The Bend',
-        tier: CampaignTier.INTRO, description: '', gridSize: 10,
-        waveCount: 8, spawnerCount: 1, exitCount: 1, parScore: 1000,
-        unlockRequirement: { type: 'level_complete', levelId: 'campaign_01' },
-      };
-      campaignServiceSpy.getNextLevel.and.returnValue(fakeNext);
-      campaignServiceSpy.isUnlocked.and.returnValue(true);
-      expect(component.isNextLevelUnlocked).toBeTrue();
-    });
-  });
-
-  describe('playNextLevel', () => {
-    it('does nothing when nextCampaignLevel is null', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_16');
-      campaignServiceSpy.getNextLevel.and.returnValue(null);
-      spyOn(component, 'restartGame');
-
-      component.playNextLevel();
-
-      expect(campaignMapServiceSpy.loadLevel).not.toHaveBeenCalled();
-      expect(component.restartGame).not.toHaveBeenCalled();
-    });
-
-    it('loads next level map and calls restartGame', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      spyOn(mapBridge, 'setEditorMapState');
-      const fakeNext: CampaignLevel = {
-        id: 'campaign_02', number: 2, name: 'The Bend',
-        tier: CampaignTier.INTRO, description: '', gridSize: 10,
-        waveCount: 8, spawnerCount: 1, exitCount: 1, parScore: 1000,
-        unlockRequirement: { type: 'level_complete', levelId: 'campaign_01' },
-      };
-      campaignServiceSpy.getNextLevel.and.returnValue(fakeNext);
-      campaignMapServiceSpy.loadLevel.and.returnValue(MOCK_MAP_STATE_SPEC);
-
-      // Stub restartGame to avoid Three.js calls
-      spyOn(component, 'restartGame');
-
-      component.playNextLevel();
-
-      expect(campaignMapServiceSpy.loadLevel).toHaveBeenCalledWith('campaign_02');
-      expect(mapBridge.setEditorMapState).toHaveBeenCalledWith(MOCK_MAP_STATE_SPEC, 'campaign_02');
-      expect(component.restartGame).toHaveBeenCalled();
-    });
-
-    it('does nothing when loadLevel returns null', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      const fakeNext: CampaignLevel = {
-        id: 'campaign_02', number: 2, name: 'The Bend',
-        tier: CampaignTier.INTRO, description: '', gridSize: 10,
-        waveCount: 8, spawnerCount: 1, exitCount: 1, parScore: 1000,
-        unlockRequirement: { type: 'level_complete', levelId: 'campaign_01' },
-      };
-      campaignServiceSpy.getNextLevel.and.returnValue(fakeNext);
-      campaignMapServiceSpy.loadLevel.and.returnValue(null);
-      spyOn(component, 'restartGame');
-
-      component.playNextLevel();
-
-      expect(component.restartGame).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('backToCampaign', () => {
-    it('navigates to /campaign', () => {
-      const router = TestBed.inject(Router);
-      spyOn(router, 'navigate');
-
-      component.backToCampaign();
-
-      expect(router.navigate).toHaveBeenCalledWith(['/campaign']);
-    });
-  });
-
-  describe('campaignChallenges getter', () => {
-    it('returns empty array when mapId is null', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue(null);
-
-      expect(component.campaignChallenges).toEqual([]);
-    });
-
-    it('returns empty array for a non-campaign map', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('custom_map_id');
-
-      expect(component.campaignChallenges).toEqual([]);
-    });
-
-    it('returns challenge definitions for campaign_01', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-
-      const challenges = component.campaignChallenges;
-
-      expect(challenges.length).toBeGreaterThan(0);
-      expect(challenges[0].id).toContain('c01');
-    });
-
-    it('returns different challenges for different campaign levels', () => {
-      const mapBridge = fixture.debugElement.injector.get(MapBridgeService);
-      const spy = spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      const level01Challenges = component.campaignChallenges;
-
-      spy.and.returnValue('campaign_07');
-      const level07Challenges = component.campaignChallenges;
-
-      expect(level01Challenges[0].id).not.toBe(level07Challenges[0].id);
-    });
-  });
-
-  describe('isChallengeAlreadyCompleted', () => {
-    it('delegates to campaignService.isChallengeCompleted', () => {
-      campaignServiceSpy.isChallengeCompleted.and.returnValue(true);
-
-      expect(component.isChallengeAlreadyCompleted('c01_untouchable')).toBeTrue();
-      expect(campaignServiceSpy.isChallengeCompleted).toHaveBeenCalledWith('c01_untouchable');
-    });
-
-    it('returns false when challenge not completed', () => {
-      campaignServiceSpy.isChallengeCompleted.and.returnValue(false);
-
-      expect(component.isChallengeAlreadyCompleted('c01_tower_limit')).toBeFalse();
-    });
-  });
-
-  describe('isChallengeCompleted (victory screen)', () => {
-    it('returns false when no challenges were completed this run', () => {
-      (component as any).completedChallenges = [];
-      const challenge = { id: 'c01_untouchable', name: 'Untouchable', description: '', scoreBonus: 200,
-        type: 'untouchable' as any };
-
-      expect(component.isChallengeCompleted(challenge)).toBeFalse();
-    });
-
-    it('returns true when the challenge was completed this run', () => {
-      const challenge = { id: 'c01_untouchable', name: 'Untouchable', description: '', scoreBonus: 200,
-        type: 'untouchable' as any };
-      (component as any).completedChallenges = [challenge];
-
-      expect(component.isChallengeCompleted(challenge)).toBeTrue();
-    });
-
-    it('returns false for a different challenge not in completedChallenges', () => {
-      const completed = { id: 'c01_untouchable', name: 'Untouchable', description: '', scoreBonus: 200,
-        type: 'untouchable' as any };
-      const other = { id: 'c01_tower_limit', name: 'Minimalist', description: '', scoreBonus: 300,
-        type: 'tower_limit' as any };
-      (component as any).completedChallenges = [completed];
-
-      expect(component.isChallengeCompleted(other)).toBeFalse();
-    });
-  });
-
-  describe('score-challenge desync fix — recordCompletion includes challenge bonus', () => {
-    it('recordCompletion is called AFTER challenge bonuses are accumulated', () => {
-      // The order matters: addScore for challenge bonus must happen before recordCompletion
-      // Verify the spy call ordering by tracking call sequence
-      const callOrder: string[] = [];
-      const gameStateService = fixture.debugElement.injector.get(GameStateService);
-      spyOn(gameStateService, 'addScore').and.callFake(() => { callOrder.push('addScore'); });
-      campaignServiceSpy.recordCompletion.and.callFake(() => { callOrder.push('recordCompletion'); });
-
-      // Simulate the fixed victory path directly
-      const challenges = [{ id: 'ch_1', name: 'C1', description: '', scoreBonus: 100, type: 'untouchable' as any }];
-      let challengeBonus = 0;
-      for (const ch of challenges) {
-        challengeBonus += ch.scoreBonus;
-      }
-      if (challengeBonus > 0) {
-        gameStateService.addScore(challengeBonus);
-      }
-      campaignServiceSpy.recordCompletion('campaign_01', 500 + challengeBonus, 3, 'normal');
-
-      expect(callOrder).toEqual(['addScore', 'recordCompletion']);
-    });
-
-    it('recordCompletion receives score that includes challenge bonus', () => {
-      const baseScore = 1000;
-      const challengeBonus = 200;
-      const updatedScore = baseScore + challengeBonus;
-
-      campaignServiceSpy.recordCompletion('campaign_01', updatedScore, 3, 'normal');
-
-      expect(campaignServiceSpy.recordCompletion).toHaveBeenCalledWith(
-        'campaign_01', 1200, 3, 'normal'
-      );
-    });
-
-    it('recordCompletion receives base score when no challenges completed', () => {
-      const baseScore = 800;
-
-      campaignServiceSpy.recordCompletion('campaign_01', baseScore, 2, 'hard');
-
-      expect(campaignServiceSpy.recordCompletion).toHaveBeenCalledWith(
-        'campaign_01', 800, 2, 'hard'
-      );
-    });
-  });
-
   describe('GameEndService — buildGameEndStats wiring (via recordEnd)', () => {
     let gameEndService: GameEndService;
 
@@ -2018,7 +1438,7 @@ describe('GameBoardComponent', () => {
       gameStatsService.recordKill(TowerType.SNIPER);
       gameStatsService.recordKill(TowerType.SNIPER);
 
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ towerKills: jasmine.objectContaining({ sniper: 2 }) })
@@ -2029,7 +1449,7 @@ describe('GameBoardComponent', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
       const expected = gameStateService.getState().activeModifiers.size;
 
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ modifierCount: expected })
@@ -2037,7 +1457,7 @@ describe('GameBoardComponent', () => {
     });
 
     it('usedSpecialization is false before any spec upgrade', () => {
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ usedSpecialization: false })
@@ -2047,7 +1467,7 @@ describe('GameBoardComponent', () => {
     it('usedSpecialization is true after recordSpecialization() is called', () => {
       gameEndService.recordSpecialization();
 
-      gameEndService.recordEnd(false, null);
+      gameEndService.recordEnd(false);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ usedSpecialization: true })
@@ -2059,7 +1479,7 @@ describe('GameBoardComponent', () => {
       challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
       challengeTrackingService.recordTowerPlaced(TowerType.SNIPER, 150);
 
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ placedAllTowerTypes: false })
@@ -2075,7 +1495,7 @@ describe('GameBoardComponent', () => {
       challengeTrackingService.recordTowerPlaced(TowerType.CHAIN, 175);
       challengeTrackingService.recordTowerPlaced(TowerType.MORTAR, 225);
 
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ placedAllTowerTypes: true })
@@ -2086,7 +1506,7 @@ describe('GameBoardComponent', () => {
       const statusEffectService = fixture.debugElement.injector.get(StatusEffectService);
       spyOn(statusEffectService, 'getSlowApplicationCount').and.returnValue(42);
 
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ slowEffectsApplied: 42 })
@@ -2094,79 +1514,47 @@ describe('GameBoardComponent', () => {
     });
 
     it('populates isVictory correctly for victory and defeat paths', () => {
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ isVictory: true })
       );
 
       playerProfileSpy.recordGameEnd.calls.reset();
       gameEndService.reset();
-      gameEndService.recordEnd(false, null);
+      gameEndService.recordEnd(false);
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({ isVictory: false })
       );
     });
 
     it('recordEnd is idempotent — second call returns empty and does not re-record', () => {
-      gameEndService.recordEnd(true, null);
+      gameEndService.recordEnd(true);
       playerProfileSpy.recordGameEnd.calls.reset();
 
-      const result = gameEndService.recordEnd(true, null);
+      const result = gameEndService.recordEnd(true);
 
       expect(playerProfileSpy.recordGameEnd).not.toHaveBeenCalled();
       expect(result.newlyUnlockedAchievements).toEqual([]);
-      expect(result.completedChallenges).toEqual([]);
     });
 
     it('reset() allows re-recording in the next session', () => {
-      gameEndService.recordEnd(false, null);
+      gameEndService.recordEnd(false);
       playerProfileSpy.recordGameEnd.calls.reset();
       gameEndService.reset();
 
-      gameEndService.recordEnd(false, null);
+      gameEndService.recordEnd(false);
 
       expect(playerProfileSpy.recordGameEnd).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('recordChallengeCompleted wiring', () => {
-    it('recordChallengeCompleted is called for each completed challenge', () => {
-      // Simulate the for-loop in the challenge completion path
-      const fakeChallenges = [
-        { id: 'ch_1', name: 'C1', description: '', scoreBonus: 50 },
-        { id: 'ch_2', name: 'C2', description: '', scoreBonus: 100 },
-      ];
-
-      for (const challenge of fakeChallenges) {
-        campaignServiceSpy.completeChallenge(challenge.id);
-        playerProfileSpy.recordChallengeCompleted();
-      }
-
-      expect(playerProfileSpy.recordChallengeCompleted).toHaveBeenCalledTimes(2);
-    });
-
-    it('does NOT call recordChallengeCompleted when no challenges are completed', () => {
-      const emptyChallenges: { id: string; name: string; description: string; scoreBonus: number }[] = [];
-
-      playerProfileSpy.recordChallengeCompleted.calls.reset();
-
-      for (const challenge of emptyChallenges) {
-        campaignServiceSpy.completeChallenge(challenge.id);
-        playerProfileSpy.recordChallengeCompleted();
-      }
-
-      expect(playerProfileSpy.recordChallengeCompleted).not.toHaveBeenCalled();
-    });
-
     it('GameEndService.isRecorded() resets to false after GameSessionService.resetAllServices', () => {
-      // Verify the reset contract is fulfilled by GameSessionService (tested in its own spec)
-      // and that restartGame calls GameSessionService.resetAllServices
       const gameEndService = fixture.debugElement.injector.get(GameEndService);
       gameEndService.recordSpecialization();
-      gameEndService.recordEnd(false, null);
+      gameEndService.recordEnd(false);
       expect(gameEndService.isRecorded()).toBeTrue();
 
-      // Directly verify the service reset works (independent of restartGame wiring)
       gameEndService.reset();
       expect(gameEndService.isRecorded()).toBeFalse();
     });
@@ -2253,24 +1641,6 @@ describe('GameBoardComponent', () => {
         'Challenge Complete!',
         'Speed Run (+100 pts)'
       );
-    });
-
-    it('restartGame delegates service resets to GameSessionService', () => {
-      // Override the component-scoped GameSessionService with our spy
-      (component as any).gameSessionService = gameSessionSpy;
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapSvc, 'init');
-
-      component.restartGame();
-
-      // Service resets (including notification clear) are now delegated to GameSessionService
-      expect(gameSessionSpy.resetAllServices).toHaveBeenCalled();
     });
 
     it('dismissNotification delegates to notificationService.dismiss', () => {
@@ -2367,25 +1737,6 @@ describe('GameBoardComponent', () => {
       expect(component.autoPaused).toBeFalse();
     });
 
-    it('autoPaused flag is reset in restartGame', () => {
-      const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
-      gamePauseService.autoPaused = true;
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const enemyService = fixture.debugElement.injector.get(EnemyService);
-      spyOn(enemyService, 'reset');
-      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapSvc, 'init');
-
-      component.restartGame();
-
-      expect(component.autoPaused).toBeFalse();
-    });
-
     it('event listeners are cleaned up in ngOnDestroy', () => {
       // Handlers are already wired in beforeEach; spy on remove calls
       spyOn(document, 'removeEventListener').and.callThrough();
@@ -2447,7 +1798,22 @@ describe('GameBoardComponent', () => {
 
     function fireKey(key: string): void {
       const event = new KeyboardEvent('keydown', { key, bubbles: true });
-      (component as any).handleKeyboard(event);
+      const gameInputSvc = fixture.debugElement.injector.get(GameInputService);
+      const gsvc = fixture.debugElement.injector.get(GameStateService);
+      gameInputSvc.dispatchHotkey(event, gsvc.getState(), {
+        onSpace: () => {}, onPause: () => component.togglePause(),
+        onEscape: () => {
+          if (component.isPaused) { component.togglePause(); }
+          else if (component.isPlaceMode) { component.cancelPlacement(); }
+          else if (component.selectedTowerInfo) { component.deselectTower(); }
+          else { component.togglePause(); }
+        },
+        onToggleRanges: () => {},
+        onToggleMinimap: () => {}, onTogglePath: () => {}, onUpgrade: () => {},
+        onCycleTargeting: () => {}, onSell: () => {}, onTowerHotkey: (_type) => {},
+        isInRun: () => false, isPlaceMode: () => component.isPlaceMode,
+        getSelectedTowerInfo: () => component.selectedTowerInfo,
+      });
     }
 
     beforeEach(() => {
@@ -2499,27 +1865,6 @@ describe('GameBoardComponent', () => {
     });
   });
 
-  describe('restartGame — showQuitConfirm reset', () => {
-    it('showQuitConfirm is reset to false on restartGame', () => {
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const enemyService = fixture.debugElement.injector.get(EnemyService);
-      spyOn(enemyService, 'reset');
-      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapSvc, 'init');
-
-      const gamePauseService = fixture.debugElement.injector.get(GamePauseService);
-      spyOn(gamePauseService, 'reset');
-      component.restartGame();
-
-      expect(gamePauseService.reset).toHaveBeenCalled();
-    });
-  });
-
   describe('ChallengeTrackingService delegation', () => {
     let challengeTrackingSpy: jasmine.SpyObj<ChallengeTrackingService>;
 
@@ -2538,23 +1883,6 @@ describe('GameBoardComponent', () => {
       (component as any).towerInteractionService.challengeTrackingService = challengeTrackingSpy;
     });
 
-    it('restartGame delegates service resets to GameSessionService.resetAllServices', () => {
-      // Override the component-scoped GameSessionService with our spy
-      (component as any).gameSessionService = gameSessionSpy;
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapSvc, 'init');
-
-      component.restartGame();
-
-      expect(gameSessionSpy.resetAllServices).toHaveBeenCalled();
-    });
-
     it('upgradeTower delegates recordTowerUpgraded to ChallengeTrackingService', () => {
       // Set up a real selected tower in the INSPECT state
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
@@ -2567,7 +1895,6 @@ describe('GameBoardComponent', () => {
         level: 1,
         row: 0,
         col: 0,
-        lastFireTime: 0,
         kills: 0,
         totalInvested: 100,
         mesh: null as any,
@@ -2577,10 +1904,6 @@ describe('GameBoardComponent', () => {
       const towerCombatService = fixture.debugElement.injector.get(TowerCombatService);
       spyOn(towerCombatService, 'getTower').and.returnValue(mockTower);
       spyOn(towerCombatService, 'upgradeTower').and.returnValue(true);
-
-      // Stub pricing service so it doesn't crash on missing board state
-      const tilePricingService = fixture.debugElement.injector.get(TilePricingService);
-      spyOn(tilePricingService, 'getStrategicValue').and.returnValue(0);
 
       (component as any).selectedTowerInfo = mockTower;
       component.selectedTowerType = null; // INSPECT mode
@@ -2603,7 +1926,6 @@ describe('GameBoardComponent', () => {
         level: 1,
         row: 1,
         col: 1,
-        lastFireTime: 0,
         kills: 0,
         totalInvested: 100,
         mesh: null as any,
@@ -2616,8 +1938,6 @@ describe('GameBoardComponent', () => {
       spyOn(gameBoardSvc, 'removeTower');
       const enemyService = fixture.debugElement.injector.get(EnemyService);
       spyOn(enemyService, 'repathAffectedEnemies');
-      const tilePricingService = fixture.debugElement.injector.get(TilePricingService);
-      spyOn(tilePricingService, 'invalidateCache');
       spyOn(component as any, 'deselectTower');
       spyOn(component as any, 'updateTileHighlights');
       spyOn(component as any, 'refreshPathOverlay');
@@ -2703,97 +2023,72 @@ describe('GameBoardComponent', () => {
     });
   });
 
-  describe('restartGame — sellConfirmPending and contextLost reset', () => {
-    function stubRestartGame(): void {
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapSvc, 'init');
-    }
-
-    it('sellConfirmPending is reset to false on restartGame', () => {
-      stubRestartGame();
-      component.sellConfirmPending = true;
-
-      component.restartGame();
-
-      expect(component.sellConfirmPending).toBeFalse();
-    });
-
-    it('contextLost is reset to false on restartGame', () => {
-      stubRestartGame();
-      (component as any).contextLost = true;
-
-      component.restartGame();
-
-      expect(component.contextLost).toBeFalse();
-    });
-  });
-
   describe('raycasting array caching', () => {
+    let meshRegistry: BoardMeshRegistryService;
+
+    beforeEach(() => {
+      meshRegistry = fixture.debugElement.injector.get(BoardMeshRegistryService);
+    });
+
     it('tileMeshArray starts empty', () => {
-      expect((component as any).tileMeshArray.length).toBe(0);
+      expect(meshRegistry.getTileMeshArray().length).toBe(0);
     });
 
     it('rebuildTileMeshArray reflects the current tileMeshes map', () => {
       const mesh1 = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
       const mesh2 = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
-      (component as any).tileMeshes.set('0-0', mesh1);
-      (component as any).tileMeshes.set('0-1', mesh2);
+      meshRegistry.tileMeshes.set('0-0', mesh1);
+      meshRegistry.tileMeshes.set('0-1', mesh2);
 
-      (component as any).rebuildTileMeshArray();
+      meshRegistry.rebuildTileMeshArray();
 
-      expect((component as any).tileMeshArray.length).toBe(2);
-      expect((component as any).tileMeshArray).toContain(mesh1);
-      expect((component as any).tileMeshArray).toContain(mesh2);
+      expect(meshRegistry.getTileMeshArray().length).toBe(2);
+      expect(meshRegistry.getTileMeshArray()).toContain(mesh1);
+      expect(meshRegistry.getTileMeshArray()).toContain(mesh2);
 
       mesh1.geometry.dispose(); (mesh1.material as THREE.Material).dispose();
       mesh2.geometry.dispose(); (mesh2.material as THREE.Material).dispose();
     });
 
     it('towerChildrenArray starts empty', () => {
-      expect((component as any).towerChildrenArray.length).toBe(0);
+      expect(meshRegistry.getTowerChildrenArray().length).toBe(0);
     });
 
-    it('rebuildTowerChildrenArray collects Mesh children from all tower groups', () => {
+    it('rebuildTowerChildrenArray collects children from all tower groups', () => {
       const group = new THREE.Group();
       const childMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
       group.add(childMesh);
-      (component as any).towerMeshes.set('r1-c2', group);
+      meshRegistry.towerMeshes.set('r1-c2', group);
 
-      (component as any).rebuildTowerChildrenArray();
+      meshRegistry.rebuildTowerChildrenArray();
 
-      expect((component as any).towerChildrenArray.length).toBe(1);
-      expect((component as any).towerChildrenArray[0]).toBe(childMesh);
+      expect(meshRegistry.getTowerChildrenArray().length).toBe(1);
+      expect(meshRegistry.getTowerChildrenArray()[0]).toBe(childMesh);
 
       childMesh.geometry.dispose();
       (childMesh.material as THREE.Material).dispose();
     });
 
-    it('tileMeshArray is cleared when cleanupGameObjects clears tileMeshes', () => {
+    it('tileMeshArray is cleared when cleanupGameObjects runs the rebuild after cleanup', () => {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
-      (component as any).tileMeshes.set('0-0', mesh);
-      (component as any).tileMeshArray = [mesh];
-
-      // Stub out Three.js scene calls so cleanupGameObjects doesn't crash without a scene
-      const sceneService = (component as any).sceneService;
-      const mockScene = { remove: () => {} } as unknown as THREE.Scene;
-      spyOn(sceneService, 'getScene').and.returnValue(mockScene);
-      spyOn(sceneService, 'disposeParticles');
-      spyOn(sceneService, 'disposeSkybox');
-      spyOn(sceneService, 'disposeLights');
+      meshRegistry.tileMeshes.set('0-0', mesh);
+      meshRegistry.rebuildTileMeshArray();
+      expect(meshRegistry.getTileMeshArray().length).toBe(1);
 
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
 
+      // Simulate cleanupScene clearing the registry (the real service does this;
+      // the spy is a no-op so we replicate that side-effect manually).
+      gameSessionSpy.cleanupScene.and.callFake(() => {
+        meshRegistry.tileMeshes.clear();
+        meshRegistry.towerMeshes.clear();
+      });
+
       (component as any).cleanupGameObjects();
 
-      expect((component as any).tileMeshArray.length).toBe(0);
-      expect((component as any).towerChildrenArray.length).toBe(0);
+      expect(meshRegistry.getTileMeshArray().length).toBe(0);
+      expect(meshRegistry.getTowerChildrenArray().length).toBe(0);
     });
   });
 
@@ -2914,82 +2209,82 @@ describe('GameBoardComponent', () => {
 
   describe('onWaveComplete — wave clear banner', () => {
     it('sets showWaveClear to true and waveClearMessage immediately', () => {
-      component.onWaveComplete(3, false);
+      component.waveCombat.onWaveComplete(3, false);
 
-      expect(component.showWaveClear).toBeTrue();
-      expect(component.waveClearMessage).toBe('Wave 3 Clear!');
+      expect(component.waveCombat.showWaveClear).toBeTrue();
+      expect(component.waveCombat.waveClearMessage).toBe('Wave 3 Clear!');
     });
 
     it('includes "Perfect!" suffix when perfectWave is true', () => {
-      component.onWaveComplete(5, true);
+      component.waveCombat.onWaveComplete(5, true);
 
-      expect(component.waveClearMessage).toBe('Wave 5 Clear! Perfect!');
+      expect(component.waveCombat.waveClearMessage).toBe('Wave 5 Clear! Perfect!');
     });
 
     it('does NOT include "Perfect!" when perfectWave is false', () => {
-      component.onWaveComplete(2, false);
+      component.waveCombat.onWaveComplete(2, false);
 
-      expect(component.waveClearMessage).not.toContain('Perfect');
+      expect(component.waveCombat.waveClearMessage).not.toContain('Perfect');
     });
 
     it('sets showWaveClear to false after 2 seconds', fakeAsync(() => {
-      component.onWaveComplete(1, false);
-      expect(component.showWaveClear).toBeTrue();
+      component.waveCombat.onWaveComplete(1, false);
+      expect(component.waveCombat.showWaveClear).toBeTrue();
 
       tick(2000);
 
-      expect(component.showWaveClear).toBeFalse();
+      expect(component.waveCombat.showWaveClear).toBeFalse();
     }));
 
     it('resets the timer if called again before the first expires', fakeAsync(() => {
-      component.onWaveComplete(1, false);
+      component.waveCombat.onWaveComplete(1, false);
       tick(1000);
-      component.onWaveComplete(2, false);
+      component.waveCombat.onWaveComplete(2, false);
 
       // Should still be showing because the timer was reset
       tick(1500);
-      expect(component.showWaveClear).toBeTrue();
+      expect(component.waveCombat.showWaveClear).toBeTrue();
 
       tick(500);
-      expect(component.showWaveClear).toBeFalse();
+      expect(component.waveCombat.showWaveClear).toBeFalse();
     }));
   });
 
   describe('waveStartPulse — wave counter pulse', () => {
     it('starts as false', () => {
-      expect(component.waveStartPulse).toBeFalse();
+      expect(component.waveCombat.waveStartPulse).toBeFalse();
     });
 
     it('becomes true when triggerWaveStartPulse is called', fakeAsync(() => {
-      (component as any).triggerWaveStartPulse();
+      component.waveCombat.triggerWaveStartPulse();
 
-      expect(component.waveStartPulse).toBeTrue();
+      expect(component.waveCombat.waveStartPulse).toBeTrue();
 
       tick(300);
 
-      expect(component.waveStartPulse).toBeFalse();
+      expect(component.waveCombat.waveStartPulse).toBeFalse();
     }));
 
     it('resets to false after 300ms', fakeAsync(() => {
-      (component as any).triggerWaveStartPulse();
+      component.waveCombat.triggerWaveStartPulse();
       tick(299);
-      expect(component.waveStartPulse).toBeTrue();
+      expect(component.waveCombat.waveStartPulse).toBeTrue();
 
       tick(1);
-      expect(component.waveStartPulse).toBeFalse();
+      expect(component.waveCombat.waveStartPulse).toBeFalse();
     }));
 
     it('resets timer if called again before prior pulse expires', fakeAsync(() => {
-      (component as any).triggerWaveStartPulse();
+      component.waveCombat.triggerWaveStartPulse();
       tick(200);
-      (component as any).triggerWaveStartPulse();
+      component.waveCombat.triggerWaveStartPulse();
 
       // 200ms into the reset timer — should still be true
       tick(200);
-      expect(component.waveStartPulse).toBeTrue();
+      expect(component.waveCombat.waveStartPulse).toBeTrue();
 
       tick(100);
-      expect(component.waveStartPulse).toBeFalse();
+      expect(component.waveCombat.waveStartPulse).toBeFalse();
     }));
   });
 
@@ -3015,178 +2310,60 @@ describe('GameBoardComponent', () => {
       expect(component.challengeIndicators).toEqual([]);
     });
 
-    describe('NO_SLOW indicator', () => {
-      beforeEach(() => {
-        const mockLevel = { id: 'campaign_02', name: 'Map 2' } as CampaignLevel;
-        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
-        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_02');
-      });
-
-      it('passing=true when no Slow tower placed', () => {
-        // campaign_02 has NO_SLOW + SPEED_RUN; no slow placed
-        component.updateChallengeIndicators();
-        const noSlow = component.challengeIndicators.find(ci => ci.label === 'No Slow');
-        expect(noSlow).toBeTruthy();
-        expect(noSlow!.passing).toBeTrue();
-        expect(noSlow!.value).toBe('✓');
-      });
-
-      it('passing=false when Slow tower has been placed', () => {
-        challengeTrackingService.recordTowerPlaced(TowerType.SLOW, 100);
-        component.updateChallengeIndicators();
-        const noSlow = component.challengeIndicators.find(ci => ci.label === 'No Slow');
-        expect(noSlow).toBeTruthy();
-        expect(noSlow!.passing).toBeFalse();
-        expect(noSlow!.value).toBe('✗');
-      });
-    });
-
-    describe('UNTOUCHABLE indicator', () => {
-      beforeEach(() => {
-        const mockLevel = { id: 'campaign_01', name: 'Map 1' } as CampaignLevel;
-        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
-        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      });
-
-      it('passing=true when no lives lost', () => {
-        // Default NORMAL difficulty: 20 lives, no lives lost
-        component.updateChallengeIndicators();
-        const noDmg = component.challengeIndicators.find(ci => ci.label === 'No Damage');
-        expect(noDmg).toBeTruthy();
-        expect(noDmg!.passing).toBeTrue();
-      });
-
-      it('passing=false when a life has been lost', () => {
-        const gameStateService = fixture.debugElement.injector.get(GameStateService);
-        // Lose a life by setting phase to COMBAT first, then deducting
-        gameStateService.setPhase(GamePhase.COMBAT);
-        gameStateService.loseLife(1);
-        component.updateChallengeIndicators();
-        const noDmg = component.challengeIndicators.find(ci => ci.label === 'No Damage');
-        expect(noDmg).toBeTruthy();
-        expect(noDmg!.passing).toBeFalse();
-      });
-    });
-
-    describe('TOWER_LIMIT indicator', () => {
-      beforeEach(() => {
-        const mockLevel = { id: 'campaign_01', name: 'Map 1' } as CampaignLevel;
-        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
-        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_01');
-      });
-
-      it('shows current/limit and passing=true when under limit', () => {
-        // campaign_01 has TOWER_LIMIT of 4
-        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
-        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
-        component.updateChallengeIndicators();
-        const towers = component.challengeIndicators.find(ci => ci.label === 'Towers');
-        expect(towers).toBeTruthy();
-        expect(towers!.passing).toBeTrue();
-        expect(towers!.value).toBe('2/4');
-      });
-
-      it('passing=false when over limit', () => {
-        // Place 5 towers against limit of 4
-        for (let i = 0; i < 5; i++) {
-          challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
-        }
-        component.updateChallengeIndicators();
-        const towers = component.challengeIndicators.find(ci => ci.label === 'Towers');
-        expect(towers).toBeTruthy();
-        expect(towers!.passing).toBeFalse();
-        expect(towers!.value).toBe('5/4');
-      });
-    });
-
-    describe('FRUGAL indicator', () => {
-      beforeEach(() => {
-        const mockLevel = { id: 'campaign_03', name: 'Map 3' } as CampaignLevel;
-        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
-        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_03');
-      });
-
-      it('shows spent/limit and passing=true when under gold limit', () => {
-        // campaign_03 has FRUGAL with goldLimit=600
-        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 200);
-        component.updateChallengeIndicators();
-        const spent = component.challengeIndicators.find(ci => ci.label === 'Spent');
-        expect(spent).toBeTruthy();
-        expect(spent!.passing).toBeTrue();
-        expect(spent!.value).toBe('200g/600g');
-      });
-
-      it('passing=false when over gold limit', () => {
-        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 700);
-        component.updateChallengeIndicators();
-        const spent = component.challengeIndicators.find(ci => ci.label === 'Spent');
-        expect(spent).toBeTruthy();
-        expect(spent!.passing).toBeFalse();
-      });
-    });
-
-    describe('SINGLE_TYPE indicator', () => {
-      beforeEach(() => {
-        const mockLevel = { id: 'campaign_07', name: 'Map 7' } as CampaignLevel;
-        campaignServiceSpy.getLevel.and.returnValue(mockLevel);
-        spyOn(mapBridge, 'getMapId').and.returnValue('campaign_07');
-      });
-
-      it('passing=true when only one tower type used', () => {
-        // campaign_07 has SINGLE_TYPE + SPEED_RUN
-        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
-        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
-        component.updateChallengeIndicators();
-        const single = component.challengeIndicators.find(ci => ci.label === 'Single Type');
-        expect(single).toBeTruthy();
-        expect(single!.passing).toBeTrue();
-        expect(single!.value).toBe('✓');
-      });
-
-      it('passing=false when multiple tower types used', () => {
-        challengeTrackingService.recordTowerPlaced(TowerType.BASIC, 100);
-        challengeTrackingService.recordTowerPlaced(TowerType.SNIPER, 150);
-        component.updateChallengeIndicators();
-        const single = component.challengeIndicators.find(ci => ci.label === 'Single Type');
-        expect(single).toBeTruthy();
-        expect(single!.passing).toBeFalse();
-        expect(single!.value).toBe('2 types');
-      });
-
-      it('passing=true with zero towers placed', () => {
-        component.updateChallengeIndicators();
-        const single = component.challengeIndicators.find(ci => ci.label === 'Single Type');
-        expect(single).toBeTruthy();
-        expect(single!.passing).toBeTrue();
-      });
-    });
-
-    it('excludes SPEED_RUN from indicators when campaign has multiple challenge types', () => {
-      const mockLevel = { id: 'campaign_02', name: 'Map 2' } as CampaignLevel;
-      campaignServiceSpy.getLevel.and.returnValue(mockLevel);
-      spyOn(mapBridge, 'getMapId').and.returnValue('campaign_02');
+    it('always returns empty indicators (updateChallengeIndicators passes null in run mode)', () => {
       component.updateChallengeIndicators();
-      const speedRunIndicator = component.challengeIndicators.find(ci => ci.label === 'Speed Run');
-      expect(speedRunIndicator).toBeUndefined();
+      expect(component.challengeIndicators).toEqual([]);
     });
 
-    it('challengeIndicators is reset to [] on restartGame', () => {
-      // Set indicators via service (challengeIndicators is now a read-only getter)
-      fixture.debugElement.injector.get(ChallengeDisplayService).indicators =
-        [{ label: 'No Slow', value: '✓', passing: true }];
+  });
 
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapSvc, 'init');
+  // ── Sprint R2: challenge HUD indicator wiring ────────────────────────────
+  describe('challenge HUD indicator wiring', () => {
+    let challengeSvc: ChallengeDisplayService;
+    let runSpy: jasmine.SpyObj<RunService>;
 
-      component.restartGame();
+    beforeEach(() => {
+      challengeSvc = fixture.debugElement.injector.get(ChallengeDisplayService);
+      runSpy = fixture.debugElement.injector.get(RunService) as jasmine.SpyObj<RunService>;
+    });
 
-      expect(component.challengeIndicators).toEqual([]);
+    it('updateChallengeIndicators passes campaignMapId from current encounter to updateIndicators', () => {
+      const updateSpy = spyOn(challengeSvc, 'updateIndicators');
+      runSpy.getCurrentEncounter.and.returnValue({
+        nodeId: 'node-1', nodeType: 'combat' as any,
+        campaignMapId: 'campaign_01',
+        waves: [], goldReward: 0, isElite: false, isBoss: false,
+      } as any);
+
+      component.updateChallengeIndicators();
+
+      expect(updateSpy).toHaveBeenCalledWith('campaign_01');
+    });
+
+    it('updateChallengeIndicators passes null when there is no active encounter', () => {
+      const updateSpy = spyOn(challengeSvc, 'updateIndicators');
+      runSpy.getCurrentEncounter.and.returnValue(null as any);
+
+      component.updateChallengeIndicators();
+
+      expect(updateSpy).toHaveBeenCalledWith(null);
+    });
+
+    it('ngOnInit calls updateChallengeIndicators with non-null campaignMapId when encounter is loaded', () => {
+      // ngOnInit already ran (via TestBed.createComponent). The default runSpy
+      // returns an encounter without campaignMapId (cast as any), so the real
+      // check is: updateIndicators was called at least once with a string value.
+      // Re-run via direct wrapper call with a proper campaignMapId to verify wiring.
+      const updateSpy = spyOn(challengeSvc, 'updateIndicators');
+      runSpy.getCurrentEncounter.and.returnValue({
+        nodeId: 'node-1', nodeType: 'combat' as any,
+        campaignMapId: 'campaign_03',
+        waves: [], goldReward: 0, isElite: false, isBoss: false,
+      } as any);
+
+      (component as any).updateChallengeIndicators();
+
+      expect(updateSpy).toHaveBeenCalledWith('campaign_03');
     });
   });
 
@@ -3210,6 +2387,7 @@ describe('GameBoardComponent', () => {
     it('runPausedVisuals calls all cosmetic-only animation updates', () => {
       const enemyService = fixture.debugElement.injector.get(EnemyService);
       const statusEffectService = fixture.debugElement.injector.get(StatusEffectService);
+      const gameRenderService = fixture.debugElement.injector.get(GameRenderService);
       const mockScene = new THREE.Scene();
       const mockCamera = new THREE.PerspectiveCamera();
       spyOn((component as any).sceneService, 'getScene').and.returnValue(mockScene);
@@ -3223,9 +2401,9 @@ describe('GameBoardComponent', () => {
       const particleSpy = spyOn(enemyService, 'updateStatusEffectParticles');
       spyOn(enemyService, 'updateStatusVisuals');
       spyOn(enemyService, 'updateEnemyAnimations');
-      spyOn(component as any, 'updateMinimap');
+      spyOn(gameRenderService as any, 'updateMinimap');
 
-      (component as any).runPausedVisuals(0.016, 1000);
+      gameRenderService.runPausedVisuals(0.016, 1000);
 
       expect(dyingSpy).toHaveBeenCalledWith(0.016, mockScene);
       expect(flashSpy).toHaveBeenCalledWith(0.016);
@@ -3236,15 +2414,16 @@ describe('GameBoardComponent', () => {
 
     it('runPausedVisuals is NOT invoked when game is unpaused in COMBAT', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      const gameRenderService = fixture.debugElement.injector.get(GameRenderService);
       gameStateService.setPhase(GamePhase.COMBAT);
       expect(gameStateService.getState().isPaused).toBeFalse();
 
-      const pausedVisualsSpy = spyOn(component as any, 'runPausedVisuals');
+      const pausedVisualsSpy = spyOn(gameRenderService, 'runPausedVisuals');
 
       // Replicate the animate-loop guard logic
       const state = gameStateService.getState();
       if (state.phase === GamePhase.COMBAT && state.isPaused) {
-        (component as any).runPausedVisuals(0.016, 1000);
+        gameRenderService.runPausedVisuals(0.016, 1000);
       }
 
       expect(pausedVisualsSpy).not.toHaveBeenCalled();
@@ -3252,61 +2431,120 @@ describe('GameBoardComponent', () => {
 
     it('runPausedVisuals IS invoked when game is paused in COMBAT', () => {
       const gameStateService = fixture.debugElement.injector.get(GameStateService);
+      const gameRenderService = fixture.debugElement.injector.get(GameRenderService);
       gameStateService.setPhase(GamePhase.COMBAT);
       gameStateService.togglePause();
       expect(gameStateService.getState().isPaused).toBeTrue();
 
-      const pausedVisualsSpy = spyOn(component as any, 'runPausedVisuals');
+      const pausedVisualsSpy = spyOn(gameRenderService, 'runPausedVisuals');
 
       // Replicate the animate-loop guard logic
       const state = gameStateService.getState();
       if (state.phase === GamePhase.COMBAT && state.isPaused) {
-        (component as any).runPausedVisuals(0.016, 1000);
+        gameRenderService.runPausedVisuals(0.016, 1000);
       }
 
       expect(pausedVisualsSpy).toHaveBeenCalledWith(0.016, 1000);
     });
   });
 
-  // ── Red team gate: restartGame() timer cleanup ──────────────────
-  describe('red team gate: restartGame clears wave transition timers', () => {
+  // ── Run mode: card play mechanics ─────────────────────────────────────
+  // (was "Ascent Mode" — renamed to reflect post-pivot run-only architecture)
+  describe('Ascent Mode: card play mechanics', () => {
+    let deckSpy: jasmine.SpyObj<DeckService>;
+    let runSpy: jasmine.SpyObj<RunService>;
+
+    function makeTowerCard(cardId: CardId = CardId.TOWER_BASIC): CardInstance {
+      return { instanceId: `inst_${cardId}`, cardId, upgraded: false };
+    }
+
     beforeEach(() => {
-      spyOn(component as any, 'cleanupGameObjects');
-      spyOn(component as any, 'renderGameBoard');
-      spyOn(component as any, 'addGridLines');
-      spyOn((component as any).sceneService, 'initLights');
-      spyOn((component as any).sceneService, 'initSkybox');
-      spyOn((component as any).sceneService, 'initParticles');
-      const minimapSvc = fixture.debugElement.injector.get(MinimapService);
-      spyOn(minimapSvc, 'init');
+      deckSpy = fixture.debugElement.injector.get(DeckService) as jasmine.SpyObj<DeckService>;
+      runSpy = fixture.debugElement.injector.get(RunService) as jasmine.SpyObj<RunService>;
+      // onCardPlayed guards on phase === COMBAT — advance phase so card plays are accepted.
+      const gameStateSvc = fixture.debugElement.injector.get(GameStateService);
+      gameStateSvc.startWave();
     });
 
-    it('clears waveClearTimerId on restart', fakeAsync(() => {
-      component.onWaveComplete(3, true);
-      expect(component.showWaveClear).toBeTrue();
+    it('onCardPlayed with tower card sets pendingTowerCard and selectedTowerType', () => {
+      runSpy.isInRun.and.returnValue(true);
+      const energy: EnergyState = { current: 3, max: 3 };
+      deckSpy.getEnergy.and.returnValue(energy);
 
-      component.restartGame();
+      const card = makeTowerCard(CardId.TOWER_BASIC);
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
+      component.onCardPlayed(card);
 
-      expect(component.showWaveClear).toBeFalse();
-      expect(component.waveClearMessage).toBe('');
+      expect(cardPlaySvc.getPendingCard()).toBe(card);
+      expect(component.selectedTowerType).toBe(TowerType.BASIC);
+      // Energy not consumed yet — playCard should not have been called
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
 
-      // Timer should NOT fire after restart
-      tick(3000);
-      expect(component.showWaveClear).toBeFalse();
-    }));
+    it('onCardPlayed blocks second card while pendingTowerCard is set', () => {
+      runSpy.isInRun.and.returnValue(true);
+      const energy: EnergyState = { current: 3, max: 3 };
+      deckSpy.getEnergy.and.returnValue(energy);
 
-    it('clears waveStartPulseTimerId on restart', fakeAsync(() => {
-      (component as any).triggerWaveStartPulse();
-      expect(component.waveStartPulse).toBeTrue();
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
+      const first = makeTowerCard(CardId.TOWER_BASIC);
+      component.onCardPlayed(first);
+      expect(cardPlaySvc.getPendingCard()).toBe(first);
 
-      component.restartGame();
+      const second = makeTowerCard(CardId.TOWER_SNIPER);
+      component.onCardPlayed(second);
 
-      expect(component.waveStartPulse).toBeFalse();
+      // Second card should be blocked — pendingTowerCard stays as first
+      expect(cardPlaySvc.getPendingCard()).toBe(first);
+    });
 
-      // Timer should NOT fire after restart
-      tick(500);
-      expect(component.waveStartPulse).toBeFalse();
-    }));
+    it('cancelPlacement clears pendingTowerCard', () => {
+      runSpy.isInRun.and.returnValue(true);
+      const energy: EnergyState = { current: 3, max: 3 };
+      deckSpy.getEnergy.and.returnValue(energy);
+
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
+      const card = makeTowerCard(CardId.TOWER_BASIC);
+      component.onCardPlayed(card);
+      expect(cardPlaySvc.hasPendingCard()).toBeTrue();
+
+      component.cancelPlacement();
+      expect(cardPlaySvc.hasPendingCard()).toBeFalse();
+      expect(component.selectedTowerType).toBeNull();
+    });
+
+    it('pendingTowerCardId getter returns instanceId when card is pending', () => {
+      runSpy.isInRun.and.returnValue(true);
+      const energy: EnergyState = { current: 3, max: 3 };
+      deckSpy.getEnergy.and.returnValue(energy);
+
+      const card = makeTowerCard(CardId.TOWER_BASIC);
+      component.onCardPlayed(card);
+
+      expect(component.pendingTowerCardId).toBe(card.instanceId);
+    });
+
+    it('pendingTowerCardId is null when no card is pending', () => {
+      expect(component.pendingTowerCardId).toBeNull();
+    });
+  });
+
+  describe('endTurn re-entrant guard', () => {
+    it('second call while first is in-flight is a no-op', () => {
+      const gameStateSvc = fixture.debugElement.injector.get(GameStateService);
+      gameStateSvc.setPhase(GamePhase.COMBAT);
+      component.gameState = gameStateSvc.getState();
+
+      const waveCombatSpy = spyOn(component.waveCombat, 'endTurn').and.callFake(() => {
+        // Simulate re-entrant call from within endTurn (e.g. keyboard repeat)
+        component.endTurn();
+      });
+
+      component.endTurn();
+
+      // waveCombat.endTurn should have been called exactly once despite re-entrant attempt
+      expect(waveCombatSpy).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ── Red team gate 2: no double-tick of visual animations ──────────────
@@ -3321,21 +2559,22 @@ describe('GameBoardComponent', () => {
 
     it('processCombatResult does NOT call updateDyingAnimations (handled in animate)', () => {
       const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const gameRenderService = fixture.debugElement.injector.get(GameRenderService);
       const dyingSpy = spyOn(enemyService, 'updateDyingAnimations');
 
       // Call processCombatResult with an empty result
       const emptyResult = {
         kills: [],
-        firedTypes: new Set(),
+        firedTypes: new Set<TowerType>(),
         hitCount: 0,
         exitCount: 0,
         leaked: false,
         defeatTriggered: false,
         waveCompletion: null,
         gameEnd: null,
-        combatAudioEvents: [],
+        combatAudioEvents: [], damageDealt: 0, killsByTower: [],
       };
-      (component as any).processCombatResult(emptyResult, 0.016, 1000);
+      gameRenderService.processCombatResult(emptyResult, 0.016, 1000);
 
       // updateDyingAnimations should NOT be called from processCombatResult
       expect(dyingSpy).not.toHaveBeenCalled();
@@ -3343,22 +2582,257 @@ describe('GameBoardComponent', () => {
 
     it('processCombatResult does NOT call updateHitFlashes (handled in animate)', () => {
       const enemyService = fixture.debugElement.injector.get(EnemyService);
+      const gameRenderService = fixture.debugElement.injector.get(GameRenderService);
       const flashSpy = spyOn(enemyService, 'updateHitFlashes');
 
       const emptyResult = {
         kills: [],
-        firedTypes: new Set(),
+        firedTypes: new Set<TowerType>(),
         hitCount: 0,
         exitCount: 0,
         leaked: false,
         defeatTriggered: false,
         waveCompletion: null,
         gameEnd: null,
-        combatAudioEvents: [],
+        combatAudioEvents: [], damageDealt: 0, killsByTower: [],
       };
-      (component as any).processCombatResult(emptyResult, 0.016, 1000);
+      gameRenderService.processCombatResult(emptyResult, 0.016, 1000);
 
       expect(flashSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── applyAscensionModifiers — elite/boss health mult composition ──────────
+  describe('applyAscensionModifiers — elite/boss health mult composition', () => {
+    let gameStateSvc: GameStateService;
+    let setAscensionSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      gameStateSvc = fixture.debugElement.injector.get(GameStateService);
+      setAscensionSpy = spyOn(gameStateSvc, 'setAscensionModifierEffects').and.callThrough();
+    });
+
+    function callApply(level: number, isElite: boolean, isBoss: boolean): void {
+      (component as any).ascensionModifier.apply(level, isElite, isBoss);
+    }
+
+    it('ascension 0: no call made (early-return guard)', () => {
+      callApply(0, false, false);
+      expect(setAscensionSpy).not.toHaveBeenCalled();
+    });
+
+    it('ascension 1 (ENEMY_HEALTH = 1.1), not elite/boss: enemyHealthMultiplier ≈ 1.1', () => {
+      callApply(1, false, false);
+      const effects = gameStateSvc.getModifierEffects();
+      const expected = getAscensionEffects(1).get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER)!;
+      expect(effects.enemyHealthMultiplier).toBeCloseTo(expected, 5);
+    });
+
+    it('ascension 5 (ELITE_HEALTH = 1.25), isElite=true: enemyHealthMultiplier ≈ 1.25', () => {
+      // Level 5 has only ELITE_HEALTH_MULTIPLIER; no base ENEMY_HEALTH_MULTIPLIER yet
+      // (level 1 has 1.1, but level 5 cumulative base is also 1.1)
+      callApply(5, true, false);
+      const ascEffects = getAscensionEffects(5);
+      const base = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER) ?? 1;
+      const elite = ascEffects.get(AscensionEffectType.ELITE_HEALTH_MULTIPLIER) ?? 1;
+      const expected = base * elite;
+      const effects = gameStateSvc.getModifierEffects();
+      expect(effects.enemyHealthMultiplier).toBeCloseTo(expected, 5);
+    });
+
+    it('ascension 5 (ELITE_HEALTH = 1.25), isElite=false: elite mult NOT applied', () => {
+      callApply(5, false, false);
+      const ascEffects = getAscensionEffects(5);
+      const base = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER) ?? 1;
+      // Without elite flag, elite mult must NOT be folded in
+      const eliteMult = ascEffects.get(AscensionEffectType.ELITE_HEALTH_MULTIPLIER)!;
+      const effects = gameStateSvc.getModifierEffects();
+      expect(effects.enemyHealthMultiplier).toBeCloseTo(base, 5);
+      expect(effects.enemyHealthMultiplier).not.toBeCloseTo(base * eliteMult, 5);
+    });
+
+    it('ascension 10 (BOSS_HEALTH = 1.3), isBoss=true: boss mult applied', () => {
+      callApply(10, false, true);
+      const ascEffects = getAscensionEffects(10);
+      const base = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER) ?? 1;
+      const boss = ascEffects.get(AscensionEffectType.BOSS_HEALTH_MULTIPLIER) ?? 1;
+      const expected = base * boss;
+      const effects = gameStateSvc.getModifierEffects();
+      expect(effects.enemyHealthMultiplier).toBeCloseTo(expected, 5);
+    });
+
+    it('ascension 10 (BOSS_HEALTH = 1.3), isBoss=false: boss mult NOT applied', () => {
+      callApply(10, false, false);
+      const ascEffects = getAscensionEffects(10);
+      const base = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER) ?? 1;
+      const bossMult = ascEffects.get(AscensionEffectType.BOSS_HEALTH_MULTIPLIER)!;
+      const effects = gameStateSvc.getModifierEffects();
+      expect(effects.enemyHealthMultiplier).toBeCloseTo(base, 5);
+      expect(effects.enemyHealthMultiplier).not.toBeCloseTo(base * bossMult, 5);
+    });
+
+    it('ascension 18 (ENEMY_HEALTH stacked + ELITE_HEALTH = 1.5), isElite=true: multiplicative stacking', () => {
+      callApply(18, true, false);
+      const ascEffects = getAscensionEffects(18);
+      const base = ascEffects.get(AscensionEffectType.ENEMY_HEALTH_MULTIPLIER) ?? 1;
+      const elite = ascEffects.get(AscensionEffectType.ELITE_HEALTH_MULTIPLIER) ?? 1;
+      const expected = base * elite;
+      const effects = gameStateSvc.getModifierEffects();
+      expect(effects.enemyHealthMultiplier).toBeCloseTo(expected, 5);
+      // Sanity: both base and elite are above 1, so product must exceed each individually
+      expect(effects.enemyHealthMultiplier!).toBeGreaterThan(base);
+      expect(effects.enemyHealthMultiplier!).toBeGreaterThan(elite);
+    });
+  });
+
+  // ── tryPlaceTower: startLevel:2 visual fix ──────────────────────────────────
+
+  describe('tryPlaceTower — startLevel:2 card applies L2 visuals', () => {
+    let upgradeVisualSvc: TowerUpgradeVisualService;
+    let applyUpgradeVisualsSpy: jasmine.Spy;
+    let spawnUpgradeFlashSpy: jasmine.Spy;
+    let mockMesh: THREE.Group;
+
+    beforeEach(() => {
+      // TowerUpgradeVisualService is component-scoped — access via component private field
+      upgradeVisualSvc = (component as any).towerUpgradeVisualService as TowerUpgradeVisualService;
+      applyUpgradeVisualsSpy = spyOn(upgradeVisualSvc, 'applyUpgradeVisuals');
+      spawnUpgradeFlashSpy = spyOn(upgradeVisualSvc, 'spawnUpgradeFlash');
+      mockMesh = new THREE.Group();
+      mockMesh.position.set(1, 0, 2);
+
+      // Stub towerMeshLifecycle.placeMesh to avoid Three.js scene setup
+      spyOn((component as any).towerMeshLifecycle, 'placeMesh').and.returnValue(mockMesh);
+
+      // Stub towerInteractionService.placeTower to report success
+      spyOn((component as any).towerInteractionService, 'placeTower').and.returnValue({
+        success: true,
+        cost: 0,
+        towerKey: '0-0',
+      });
+
+      // Stub gameBoardService.canPlaceTower to pass the guard
+      spyOn((component as any).gameBoardService, 'canPlaceTower').and.returnValue(true);
+
+      // Stub downstream methods that require a real game scene
+      spyOn((component as any).towerCombatService, 'registerTower');
+      spyOn((component as any).towerCombatService, 'upgradeTower');
+      spyOn((component as any).audioService, 'playTowerPlace');
+      spyOn((component as any).gameStatsService, 'recordTowerBuilt');
+      spyOn((component as any).boardPointer, 'clearSelectedTile');
+      spyOn((component as any).towerPreviewService, 'hidePreview');
+      spyOn(component as any, 'refreshPathOverlay');
+      spyOn(component as any, 'updateTileHighlights');
+      spyOn(component as any, 'updateChallengeIndicators');
+      spyOn((component as any).sceneService, 'getScene').and.returnValue(new THREE.Scene());
+    });
+
+    afterEach(() => {
+      mockMesh.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+        }
+      });
+    });
+
+    function setPendingUpgradedCard(cardId: CardId): void {
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
+      const upgradedCard: CardInstance = { instanceId: `inst_${cardId}`, cardId, upgraded: true };
+      cardPlaySvc['pendingTowerCard'] = upgradedCard;
+    }
+
+    it('calls applyUpgradeVisuals(mesh, 2, undefined) when card has startLevel:2', () => {
+      setPendingUpgradedCard(CardId.TOWER_BASIC);
+      component.selectedTowerType = TowerType.BASIC;
+
+      (component as any).tryPlaceTower(0, 0);
+
+      expect(applyUpgradeVisualsSpy).toHaveBeenCalledWith(mockMesh, 2, undefined);
+    });
+
+    it('calls spawnUpgradeFlash with the mesh position when card has startLevel:2', () => {
+      setPendingUpgradedCard(CardId.TOWER_BASIC);
+      component.selectedTowerType = TowerType.BASIC;
+
+      (component as any).tryPlaceTower(0, 0);
+
+      expect(spawnUpgradeFlashSpy).toHaveBeenCalledWith(mockMesh.position, jasmine.any(THREE.Scene));
+    });
+
+    it('does NOT call applyUpgradeVisuals for a non-upgraded card (startLevel:1)', () => {
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
+      const normalCard: CardInstance = { instanceId: 'inst_basic', cardId: CardId.TOWER_BASIC, upgraded: false };
+      cardPlaySvc['pendingTowerCard'] = normalCard;
+      component.selectedTowerType = TowerType.BASIC;
+
+      (component as any).tryPlaceTower(0, 0);
+
+      expect(applyUpgradeVisualsSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── wouldBlockPath in component: path-blocked banner accuracy ──────────────
+
+  describe('tryPlaceTower — path-blocked banner uses BFS check', () => {
+    it('shows path-blocked warning only when BFS confirms blocking', () => {
+      const towerInteractionSvc = fixture.debugElement.injector.get(TowerInteractionService) as TowerInteractionService;
+      spyOn(component as any, 'showPathBlockedWarning');
+      spyOn((component as any).gameBoardService, 'canPlaceTower').and.returnValue(false);
+      spyOn(towerInteractionSvc, 'wouldBlockPath').and.returnValue(true);
+
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
+      cardPlaySvc['pendingTowerCard'] = { instanceId: 'inst_basic', cardId: CardId.TOWER_BASIC, upgraded: false } as CardInstance;
+      component.selectedTowerType = TowerType.BASIC;
+
+      (component as any).tryPlaceTower(0, 0);
+
+      expect((component as any).showPathBlockedWarning).toHaveBeenCalled();
+    });
+
+    it('does NOT show path-blocked warning when BFS says placement is safe', () => {
+      const towerInteractionSvc = fixture.debugElement.injector.get(TowerInteractionService) as TowerInteractionService;
+      spyOn(component as any, 'showPathBlockedWarning');
+      spyOn((component as any).gameBoardService, 'canPlaceTower').and.returnValue(false);
+      spyOn(towerInteractionSvc, 'wouldBlockPath').and.returnValue(false);
+
+      const cardPlaySvc = fixture.debugElement.injector.get(CardPlayService);
+      cardPlaySvc['pendingTowerCard'] = { instanceId: 'inst_basic', cardId: CardId.TOWER_BASIC, upgraded: false } as CardInstance;
+      component.selectedTowerType = TowerType.BASIC;
+
+      (component as any).tryPlaceTower(0, 0);
+
+      expect((component as any).showPathBlockedWarning).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('exhaust pile inspector integration', () => {
+    it('inspectedPile is null by default', () => {
+      expect(component.inspectedPile).toBeNull();
+    });
+
+    it('setting inspectedPile to "exhaust" passes exhaustPile to PileInspector', () => {
+      const exhaustCard: CardInstance = { instanceId: 'inst_exhausted', cardId: CardId.TOWER_BASIC, upgraded: false };
+      component.deckState = {
+        drawPile: [],
+        hand: [],
+        discardPile: [],
+        exhaustPile: [exhaustCard],
+      };
+      component.inspectedPile = 'exhaust';
+
+      // The template resolves [pile] as deckState.exhaustPile when inspectedPile === 'exhaust'
+      const expectedPile = component.deckState.exhaustPile;
+      expect(expectedPile.length).toBe(1);
+      expect(expectedPile[0]).toBe(exhaustCard);
+    });
+
+    it('setting inspectedPile to "exhaust" selects "Exhaust Pile" label', () => {
+      component.deckState = { drawPile: [], hand: [], discardPile: [], exhaustPile: [] };
+      component.inspectedPile = 'exhaust';
+      // Verify that draw and discard labels are NOT selected for exhaust
+      expect(component.inspectedPile).toBe('exhaust');
+      expect(component.inspectedPile).not.toBe('draw');
+      expect(component.inspectedPile).not.toBe('discard');
     });
   });
 

@@ -1,13 +1,14 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { RANGE_PREVIEW_CONFIG, SELECTION_RING_CONFIG } from '../constants/ui.constants';
-import { PlacedTower, getEffectiveStats } from '../models/tower.model';
+import { PlacedTower, TowerType, TOWER_CONFIGS, getEffectiveStats } from '../models/tower.model';
 import { disposeMesh } from '../utils/three-utils';
 import { gridToWorld } from '../utils/coordinate-utils';
 
 @Injectable()
 export class RangeVisualizationService {
   private rangePreviewMesh: THREE.Mesh | null = null;
+  private hoverRangeMesh: THREE.Mesh | null = null;
   private selectionRingMesh: THREE.Mesh | null = null;
   private rangeRingMeshes: THREE.Mesh[] = [];
 
@@ -44,6 +45,43 @@ export class RangeVisualizationService {
     this.selectionRingMesh.rotation.x = -Math.PI / 2;
     this.selectionRingMesh.position.set(x, RANGE_PREVIEW_CONFIG.yPosition + SELECTION_RING_CONFIG.yOffset, z);
     scene.add(this.selectionRingMesh);
+  }
+
+  /**
+   * Show a range ring at a prospective placement position — no selection ring.
+   * Called during placement mode as the pointer hovers tiles so the player
+   * can see exactly where the tower would cover before committing.
+   */
+  showForPosition(
+    towerType: TowerType,
+    row: number,
+    col: number,
+    boardWidth: number,
+    boardHeight: number,
+    tileSize: number,
+    scene: THREE.Scene
+  ): void {
+    this.hideHoverRange(scene);
+    const config = TOWER_CONFIGS[towerType];
+    const { x, z } = gridToWorld(row, col, boardWidth, boardHeight, tileSize);
+    // Slightly lower opacity than placed-tower preview — signals "not yet committed"
+    this.hoverRangeMesh = this.createRangeRing(
+      config.range,
+      config.color,
+      RANGE_PREVIEW_CONFIG.opacity * 0.6,
+      x,
+      z
+    );
+    scene.add(this.hoverRangeMesh);
+  }
+
+  /** Hide the hover-preview range ring. */
+  hideHoverRange(scene: THREE.Scene): void {
+    if (this.hoverRangeMesh) {
+      scene.remove(this.hoverRangeMesh);
+      disposeMesh(this.hoverRangeMesh);
+      this.hoverRangeMesh = null;
+    }
   }
 
   /** Remove the single-tower range preview and selection ring. */
@@ -103,6 +141,7 @@ export class RangeVisualizationService {
   /** Remove all range ring meshes. Used during cleanup. */
   cleanup(scene: THREE.Scene): void {
     this.removePreview(scene);
+    this.hideHoverRange(scene);
     for (const mesh of this.rangeRingMeshes) {
       scene.remove(mesh);
       disposeMesh(mesh);

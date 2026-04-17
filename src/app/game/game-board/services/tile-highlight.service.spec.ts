@@ -3,9 +3,7 @@ import * as THREE from 'three';
 import { TileHighlightService } from './tile-highlight.service';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
-import { TilePricingService, TilePriceInfo } from './tile-pricing.service';
-import { PriceLabelService } from './price-label.service';
-import { TILE_EMISSIVE, HEATMAP_GRADIENT } from '../constants/ui.constants';
+import { TILE_EMISSIVE } from '../constants/ui.constants';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
 import { TowerType } from '../models/tower.model';
 
@@ -23,16 +21,6 @@ function makeMesh(row: number, col: number, type: BlockType = BlockType.BASE): T
   return mesh;
 }
 
-function makePriceInfo(cost: number, strategicMultiplier: number, percentIncrease = 0): TilePriceInfo {
-  return {
-    cost,
-    strategicMultiplier,
-    percentIncrease,
-    tier: 'base',
-    isPremium: false,
-  };
-}
-
 function makeTile(
   row: number,
   col: number,
@@ -40,7 +28,6 @@ function makeTile(
   isPurchasable = true,
   towerType: TowerType | null = null
 ): GameBoardTile {
-  // GameBoardTile stores position as x/y (x=row, y=col) internally
   const tile = new GameBoardTile(row, col, type, type !== BlockType.WALL, isPurchasable, 0, towerType);
   return tile;
 }
@@ -69,40 +56,29 @@ describe('TileHighlightService', () => {
   let service: TileHighlightService;
   let boardSpy: jasmine.SpyObj<GameBoardService>;
   let stateSpy: jasmine.SpyObj<GameStateService>;
-  let pricingSpy: jasmine.SpyObj<TilePricingService>;
-  let labelSpy: jasmine.SpyObj<PriceLabelService>;
   let scene: THREE.Scene;
 
   beforeEach(() => {
     boardSpy = jasmine.createSpyObj<GameBoardService>(
       'GameBoardService',
-      ['getGameBoard', 'getBoardWidth', 'getBoardHeight', 'getTileSize']
+      ['getGameBoard', 'getBoardWidth', 'getBoardHeight', 'getTileSize', 'wouldBlockPath']
     );
     stateSpy = jasmine.createSpyObj<GameStateService>(
       'GameStateService',
       ['canAfford']
     );
-    pricingSpy = jasmine.createSpyObj<TilePricingService>(
-      'TilePricingService',
-      ['getTilePrice', 'getTilePriceMap']
-    );
-    labelSpy = jasmine.createSpyObj<PriceLabelService>(
-      'PriceLabelService',
-      ['showLabels', 'hideLabels']
-    );
 
     boardSpy.getBoardWidth.and.returnValue(5);
     boardSpy.getBoardHeight.and.returnValue(5);
     boardSpy.getTileSize.and.returnValue(1);
-    pricingSpy.getTilePriceMap.and.returnValue(new Map());
+    // Default: no tile blocks the path. Per-test overrides re-target specific tiles.
+    boardSpy.wouldBlockPath.and.returnValue(false);
 
     TestBed.configureTestingModule({
       providers: [
         TileHighlightService,
-        { provide: GameBoardService,   useValue: boardSpy  },
-        { provide: GameStateService,   useValue: stateSpy  },
-        { provide: TilePricingService, useValue: pricingSpy },
-        { provide: PriceLabelService,  useValue: labelSpy  },
+        { provide: GameBoardService, useValue: boardSpy },
+        { provide: GameStateService, useValue: stateSpy },
       ],
     });
     service = TestBed.inject(TileHighlightService);
@@ -118,7 +94,7 @@ describe('TileHighlightService', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // updateHighlights — affordable tiles
+  // updateHighlights
   // ---------------------------------------------------------------------------
 
   describe('updateHighlights', () => {
@@ -128,7 +104,6 @@ describe('TileHighlightService', () => {
         [makeTile(1, 0), makeTile(1, 1)],
       ];
       boardSpy.getGameBoard.and.returnValue(board);
-      pricingSpy.getTilePrice.and.returnValue(makePriceInfo(100, 0.3));
       stateSpy.canAfford.and.returnValue(true);
 
       const tileMeshes = makeTileMeshes([
@@ -146,10 +121,9 @@ describe('TileHighlightService', () => {
       disposeMeshMap(tileMeshes);
     });
 
-    it('applies heatmap emissive color to affordable tiles', () => {
+    it('applies emissive color to affordable tiles', () => {
       const board = [[makeTile(0, 0)]];
       boardSpy.getGameBoard.and.returnValue(board);
-      pricingSpy.getTilePrice.and.returnValue(makePriceInfo(50, 0.0)); // min strategic value
       stateSpy.canAfford.and.returnValue(true);
 
       const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
@@ -157,7 +131,6 @@ describe('TileHighlightService', () => {
 
       const mesh = tileMeshes.get('0-0')!;
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      // At strategic value 0.0 heatmap returns green stop (first gradient stop)
       expect(mat.emissiveIntensity).toBeGreaterThan(0);
       expect(mesh.userData['heatmapR']).toBeDefined();
       expect(mesh.userData['heatmapG']).toBeDefined();
@@ -170,7 +143,6 @@ describe('TileHighlightService', () => {
     it('dims emissive for unaffordable-but-valid tiles', () => {
       const board = [[makeTile(0, 0)]];
       boardSpy.getGameBoard.and.returnValue(board);
-      pricingSpy.getTilePrice.and.returnValue(makePriceInfo(200, 0.5));
       stateSpy.canAfford.and.returnValue(false); // cannot afford
 
       const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
@@ -178,12 +150,8 @@ describe('TileHighlightService', () => {
 
       const mesh = tileMeshes.get('0-0')!;
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      const { color, intensity } = service.interpolateHeatmap(0.5);
-      const dim = TILE_EMISSIVE.unaffordableDimming;
-
-      expect(mat.emissiveIntensity).toBeCloseTo(intensity * dim, 5);
-      expect(mesh.userData['heatmapIntensity']).toBeCloseTo(intensity * dim, 5);
-      expect(mesh.userData['heatmapR']).toBeCloseTo(color.r * dim, 5);
+      const expectedIntensity = TILE_EMISSIVE.validPlacement * TILE_EMISSIVE.unaffordableDimming;
+      expect(mat.emissiveIntensity).toBeCloseTo(expectedIntensity, 5);
 
       disposeMeshMap(tileMeshes);
     });
@@ -191,7 +159,6 @@ describe('TileHighlightService', () => {
     it('skips the selected tile', () => {
       const board = [[makeTile(0, 0)]];
       boardSpy.getGameBoard.and.returnValue(board);
-      pricingSpy.getTilePrice.and.returnValue(makePriceInfo(50, 0.0));
       stateSpy.canAfford.and.returnValue(true);
 
       const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
@@ -211,7 +178,6 @@ describe('TileHighlightService', () => {
       service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
 
       expect(service.isHighlighted('0-0')).toBeFalse();
-      expect(pricingSpy.getTilePrice).not.toHaveBeenCalled();
 
       disposeMeshMap(tileMeshes);
     });
@@ -229,27 +195,69 @@ describe('TileHighlightService', () => {
       disposeMeshMap(tileMeshes);
     });
 
-    it('calls showLabels when highlighted tiles exist', () => {
-      const board = [[makeTile(0, 0)]];
-      boardSpy.getGameBoard.and.returnValue(board);
-      pricingSpy.getTilePrice.and.returnValue(makePriceInfo(50, 0.0));
-      stateSpy.canAfford.and.returnValue(true);
+    // ── Path-blocking tile branch (Phase 14) ────────────────────────────────
 
-      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
+    it('renders path-blocking tiles in the blocked color, not the valid one', () => {
+      const board = [[makeTile(0, 0), makeTile(0, 1)]];
+      boardSpy.getGameBoard.and.returnValue(board);
+      stateSpy.canAfford.and.returnValue(true);
+      // Tile (0,1) would cut off the only path. (0,0) is fine.
+      boardSpy.wouldBlockPath.and.callFake((r: number, c: number) => r === 0 && c === 1);
+
+      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }, { row: 0, col: 1 }]);
       service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
 
-      expect(labelSpy.showLabels).toHaveBeenCalled();
+      const validMesh = tileMeshes.get('0-0')!;
+      const blockedMesh = tileMeshes.get('0-1')!;
+      const validMat = validMesh.material as THREE.MeshStandardMaterial;
+      const blockedMat = blockedMesh.material as THREE.MeshStandardMaterial;
+
+      expect(validMat.emissive.getHex()).toBe(TILE_EMISSIVE.validPlacementColor);
+      expect(blockedMat.emissive.getHex()).toBe(TILE_EMISSIVE.blockedPlacementColor);
+
+      // Both are still "highlighted" (tracked for cleanup) — the blocked
+      // tile is just painted differently so the player sees it's not an option.
+      expect(service.isHighlighted('0-0')).toBeTrue();
+      expect(service.isHighlighted('0-1')).toBeTrue();
 
       disposeMeshMap(tileMeshes);
     });
 
-    it('does not call showLabels when no tiles are highlighted', () => {
-      // Board is empty — loop never reaches highlighting
-      boardSpy.getGameBoard.and.returnValue([]);
-      const tileMeshes = new Map<string, THREE.Mesh>();
+    it('blocked tiles use the dedicated blocked intensity (not the affordability dim)', () => {
+      const board = [[makeTile(0, 0)]];
+      boardSpy.getGameBoard.and.returnValue(board);
+      stateSpy.canAfford.and.returnValue(false); // would dim a valid tile
+      boardSpy.wouldBlockPath.and.returnValue(true);
+
+      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
       service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
 
-      expect(labelSpy.showLabels).not.toHaveBeenCalled();
+      const mesh = tileMeshes.get('0-0')!;
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      // Blocked intensity is a standalone constant — NOT the dimmed
+      // validPlacement intensity. This lets the red read at full strength
+      // even when the player can't afford the tower.
+      expect(mat.emissiveIntensity).toBeCloseTo(TILE_EMISSIVE.blockedPlacement, 5);
+
+      disposeMeshMap(tileMeshes);
+    });
+
+    it('clearHighlights restores blocked tiles to the default emissive too', () => {
+      const board = [[makeTile(0, 0)]];
+      boardSpy.getGameBoard.and.returnValue(board);
+      stateSpy.canAfford.and.returnValue(true);
+      boardSpy.wouldBlockPath.and.returnValue(true);
+
+      const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
+      service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
+      service.clearHighlights(tileMeshes, scene);
+
+      const mesh = tileMeshes.get('0-0')!;
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      expect(mat.emissiveIntensity).toBe(TILE_EMISSIVE.base);
+      expect(service.isHighlighted('0-0')).toBeFalse();
+
+      disposeMeshMap(tileMeshes);
     });
   });
 
@@ -261,13 +269,11 @@ describe('TileHighlightService', () => {
     it('restores original emissive values on all highlighted tiles', () => {
       const board = [[makeTile(0, 0)]];
       boardSpy.getGameBoard.and.returnValue(board);
-      pricingSpy.getTilePrice.and.returnValue(makePriceInfo(50, 0.3));
       stateSpy.canAfford.and.returnValue(true);
 
       const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
       service.updateHighlights(TowerType.BASIC, tileMeshes, null, scene, 1);
 
-      // Verify it was highlighted first
       expect(service.isHighlighted('0-0')).toBeTrue();
 
       service.clearHighlights(tileMeshes, scene);
@@ -284,7 +290,6 @@ describe('TileHighlightService', () => {
     it('clears the highlightedTiles set', () => {
       const board = [[makeTile(0, 0)]];
       boardSpy.getGameBoard.and.returnValue(board);
-      pricingSpy.getTilePrice.and.returnValue(makePriceInfo(50, 0.3));
       stateSpy.canAfford.and.returnValue(true);
 
       const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
@@ -295,12 +300,6 @@ describe('TileHighlightService', () => {
 
       disposeMeshMap(tileMeshes);
     });
-
-    it('calls hideLabels on the scene', () => {
-      boardSpy.getGameBoard.and.returnValue([]);
-      service.clearHighlights(new Map(), scene);
-      expect(labelSpy.hideLabels).toHaveBeenCalledWith(scene);
-    });
   });
 
   // ---------------------------------------------------------------------------
@@ -308,10 +307,9 @@ describe('TileHighlightService', () => {
   // ---------------------------------------------------------------------------
 
   describe('restoreAfterHover', () => {
-    it('restores heatmap color when tile is highlighted', () => {
+    it('restores highlight emissive when tile is highlighted', () => {
       const board = [[makeTile(0, 0)]];
       boardSpy.getGameBoard.and.returnValue(board);
-      pricingSpy.getTilePrice.and.returnValue(makePriceInfo(50, 0.3));
       stateSpy.canAfford.and.returnValue(true);
 
       const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
@@ -334,7 +332,6 @@ describe('TileHighlightService', () => {
       const mat = mesh.material as THREE.MeshStandardMaterial;
       mat.emissiveIntensity = TILE_EMISSIVE.hover;
 
-      // No highlights active
       service.restoreAfterHover(mesh);
 
       expect(mat.emissiveIntensity).toBe(TILE_EMISSIVE.base);
@@ -371,54 +368,6 @@ describe('TileHighlightService', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // interpolateHeatmap
-  // ---------------------------------------------------------------------------
-
-  describe('interpolateHeatmap', () => {
-    it('returns first stop color for value 0', () => {
-      const result = service.interpolateHeatmap(0);
-      const first = HEATMAP_GRADIENT[0];
-      expect(result.color.r).toBeCloseTo(first[1], 5);
-      expect(result.color.g).toBeCloseTo(first[2], 5);
-      expect(result.color.b).toBeCloseTo(first[3], 5);
-      expect(result.intensity).toBeCloseTo(first[4], 5);
-    });
-
-    it('returns last stop color for maximum value', () => {
-      const stops = HEATMAP_GRADIENT;
-      const maxVal = stops[stops.length - 1][0];
-      const result = service.interpolateHeatmap(maxVal);
-      const last = stops[stops.length - 1];
-      expect(result.color.r).toBeCloseTo(last[1], 5);
-      expect(result.color.g).toBeCloseTo(last[2], 5);
-      expect(result.color.b).toBeCloseTo(last[3], 5);
-      expect(result.intensity).toBeCloseTo(last[4], 5);
-    });
-
-    it('clamps values below 0 to the first stop', () => {
-      const result = service.interpolateHeatmap(-1);
-      const first = HEATMAP_GRADIENT[0];
-      expect(result.color.r).toBeCloseTo(first[1], 5);
-    });
-
-    it('clamps values above max to the last stop', () => {
-      const stops = HEATMAP_GRADIENT;
-      const result = service.interpolateHeatmap(999);
-      const last = stops[stops.length - 1];
-      expect(result.color.r).toBeCloseTo(last[1], 5);
-    });
-
-    it('interpolates linearly between stops', () => {
-      // Mid-point between stop[0] and stop[1] should average their values
-      const stops = HEATMAP_GRADIENT;
-      const midVal = (stops[0][0] + stops[1][0]) / 2;
-      const result = service.interpolateHeatmap(midVal);
-      const expectedR = (stops[0][1] + stops[1][1]) / 2;
-      expect(result.color.r).toBeCloseTo(expectedR, 5);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
   // isHighlighted / getHighlightedTiles
   // ---------------------------------------------------------------------------
 
@@ -430,7 +379,6 @@ describe('TileHighlightService', () => {
     it('returns true after highlighting', () => {
       const board = [[makeTile(0, 0)]];
       boardSpy.getGameBoard.and.returnValue(board);
-      pricingSpy.getTilePrice.and.returnValue(makePriceInfo(50, 0.0));
       stateSpy.canAfford.and.returnValue(true);
 
       const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);
@@ -450,7 +398,6 @@ describe('TileHighlightService', () => {
     it('reflects current highlight state', () => {
       const board = [[makeTile(0, 0)]];
       boardSpy.getGameBoard.and.returnValue(board);
-      pricingSpy.getTilePrice.and.returnValue(makePriceInfo(50, 0.0));
       stateSpy.canAfford.and.returnValue(true);
 
       const tileMeshes = makeTileMeshes([{ row: 0, col: 0 }]);

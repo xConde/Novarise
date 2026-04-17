@@ -1,0 +1,109 @@
+<div
+  class="run-summary"
+  [class.run-summary--victory]="isVictory"
+  [class.run-summary--defeat]="!isVictory"
+  role="main"
+  aria-label="Run summary"
+>
+  <!-- Background glow -->
+  <div class="run-summary__glow" aria-hidden="true"></div>
+
+  <!-- Header -->
+  <header class="run-summary__header">
+    <h1 class="run-summary__title">
+      {{ isVictory ? 'Ascent Complete!' : 'Run Failed' }}
+    </h1>
+    <span
+      *ngIf="ascensionLabel"
+      class="run-summary__ascension-badge"
+      [attr.aria-label]="ascensionLabel"
+    >{{ ascensionLabel }}</span>
+  </header>
+
+  <!-- Score -->
+  <div class="run-summary__score" [attr.aria-label]="'Final score ' + runState.score">
+    <span class="run-summary__score-label">Score</span>
+    <span class="run-summary__score-value">{{ runState.score }}</span>
+  </div>
+
+  <!-- Stats grid -->
+  <section class="run-summary__stats" aria-label="Run statistics">
+    <div class="stat-card">
+      <span class="stat-card__value">{{ encountersCompleted }}/{{ totalEncounters }}</span>
+      <span class="stat-card__label">Encounters</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card__value">{{ totalKills }}</span>
+      <span class="stat-card__label">Enemies Killed</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card__value">{{ totalGoldEarned }}</span>
+      <span class="stat-card__label">Gold Earned</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card__value">{{ actsReached }}</span>
+      <span class="stat-card__label">Acts Reached</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card__value">{{ runDuration }}</span>
+      <span class="stat-card__label">Run Duration</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-card__value">{{ runState.relicIds.length }}</span>
+      <span class="stat-card__label">Relics Collected</span>
+    </div>
+  </section>
+
+  <!-- Relics section -->
+  <section class="run-summary__relics" *ngIf="relicDefinitions.length > 0" aria-label="Relics collected">
+    <h2 class="run-summary__section-title">Relics</h2>
+    <div class="run-summary__relic-strip">
+      <div
+        *ngFor="let relic of relicDefinitions"
+        class="relic-badge"
+        [class]="'relic-badge--' + relic.rarity"
+        [title]="relic.name + ': ' + relic.description"
+      >
+        <span class="relic-badge__name">{{ relic.name }}</span>
+        <span class="relic-badge__desc">{{ relic.description }}</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Encounter timeline -->
+  <section class="run-summary__timeline" *ngIf="runState.encounterResults.length > 0" aria-label="Encounter timeline">
+    <h2 class="run-summary__section-title">Journey</h2>
+    <ol class="run-summary__encounter-list">
+      <li
+        *ngFor="let result of runState.encounterResults; let i = index"
+        class="encounter-entry"
+        [class.encounter-entry--victory]="result.victory"
+        [class.encounter-entry--defeat]="!result.victory"
+        [attr.aria-label]="'Encounter ' + (i + 1) + ': ' + (result.victory ? 'victory' : 'defeat')"
+      >
+        <span class="encounter-entry__index">{{ i + 1 }}</span>
+        <span class="encounter-entry__type">{{ result.nodeType | titlecase }}</span>
+        <span class="encounter-entry__outcome">{{ result.victory ? 'Victory' : 'Defeat' }}</span>
+        <span class="encounter-entry__kills"><app-icon name="kills" [size]="12"></app-icon> {{ result.enemiesKilled }}</span>
+      </li>
+    </ol>
+  </section>
+
+  <!-- Action buttons -->
+  <div class="run-summary__actions">
+    <button
+      class="run-summary__btn run-summary__btn--secondary"
+      type="button"
+      (click)="onReturnToMenu()"
+    >
+      Return to Menu
+    </button>
+    <button
+      class="run-summary__btn run-summary__btn--primary"
+      type="button"
+      (click)="onStartNewRun()"
+    >
+      New Run
+    </button>
+  </div>
+</div>

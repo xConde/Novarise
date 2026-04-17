@@ -30,6 +30,19 @@ export const HEALTH_BAR_CONFIG = {
   thresholdLow: 0.3
 };
 
+/**
+ * Shield bar — a second bar rendered above the health bar for SHIELDED enemies.
+ * Makes absorbed damage visible so players understand why the HP bar isn't
+ * moving while towers are hitting the target.
+ */
+export const SHIELD_BAR_CONFIG = {
+  width: 0.5,
+  height: 0.05,
+  yOffsetAboveHealth: 0.07, // stacked above the health bar
+  bgColor: 0x1a1a33,
+  color: 0x66ccff, // cyan — distinct from HP green
+};
+
 export const PROJECTILE_CONFIG = {
   radius: 0.08,
   segments: 6,
@@ -80,6 +93,14 @@ export const TILE_EMISSIVE = {
   validPlacementColor: 0x00ccaa,
   /** Dimming factor for unaffordable-but-valid tiles in PLACE mode (0-1, lower = dimmer). */
   unaffordableDimming: 0.35,
+  /**
+   * Intensity for tiles that *would* block the enemy path if a tower were
+   * placed there. Same magnitude as validPlacement so the eye picks them up
+   * at a glance — the color (red) does the disambiguation.
+   */
+  blockedPlacement: 0.45,
+  /** Emissive color override for path-blocking tiles (warm red). */
+  blockedPlacementColor: 0xcc3322,
 } as const;
 
 /**

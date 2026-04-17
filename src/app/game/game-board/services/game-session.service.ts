@@ -12,7 +12,6 @@ import { StatusEffectService } from './status-effect.service';
 import { MapBridgeService } from '@core/services/map-bridge.service';
 import { TutorialService } from '@core/services/tutorial.service';
 import { PlayerProfileService } from '@core/services/player-profile.service';
-import { CAMPAIGN_WAVE_DEFINITIONS } from '@campaign/waves/campaign-waves';
 import { TowerCombatService } from './tower-combat.service';
 import { TowerPreviewService } from './tower-preview.service';
 import { DamagePopupService } from './damage-popup.service';
@@ -22,17 +21,14 @@ import { TileHighlightService } from './tile-highlight.service';
 import { RangeVisualizationService } from './range-visualization.service';
 import { TowerUpgradeVisualService } from './tower-upgrade-visual.service';
 import { SceneService } from './scene.service';
+import { BoardMeshRegistryService } from './board-mesh-registry.service';
+import { CombatLoopService } from './combat-loop.service';
+import { WavePreviewService } from './wave-preview.service';
+import { GamePauseService } from './game-pause.service';
 import { disposeMaterial } from '../utils/three-utils';
 
-/** Options bag passed to cleanupScene — holds component-owned mesh maps. */
-export interface CleanupSceneOpts {
-  tileMeshes: Map<string, THREE.Mesh>;
-  towerMeshes: Map<string, THREE.Group>;
-  gridLines: THREE.Group | null;
-}
-
 /**
- * Orchestrates game-level lifecycle: service resets on restart and campaign wave wiring.
+ * Orchestrates game-level lifecycle: service resets on restart and Three.js scene cleanup.
  * Component-scoped — provided in GameModule alongside the other game services.
  */
 @Injectable()
@@ -58,6 +54,10 @@ export class GameSessionService {
     private rangeVisualizationService: RangeVisualizationService,
     private towerUpgradeVisualService: TowerUpgradeVisualService,
     private sceneService: SceneService,
+    private meshRegistry: BoardMeshRegistryService,
+    private combatLoopService: CombatLoopService,
+    private wavePreviewService: WavePreviewService,
+    private gamePauseService: GamePauseService,
   ) {}
 
   /**
@@ -76,42 +76,34 @@ export class GameSessionService {
     this.statusEffectService.cleanup();
     this.tutorialService.resetCurrentStep();
     this.playerProfileService.resetSession();
-  }
-
-  /**
-   * Load campaign wave definitions for the current map into WaveService and GameStateService.
-   * No-op for non-campaign maps (standard 10-wave gameplay is unchanged).
-   * Must be called after waveService.reset() — reset clears custom wave definitions.
-   */
-  applyCampaignWaves(): void {
-    const mapId = this.mapBridge.getMapId();
-    if (!mapId?.startsWith('campaign_')) return;
-
-    const waves = CAMPAIGN_WAVE_DEFINITIONS[mapId];
-    if (!waves) return;
-
-    this.waveService.setCustomWaves(waves);
-    this.gameStateService.setMaxWaves(waves.length);
+    // Clear per-encounter turn counter / leak flag / frame buffers. Without this,
+    // turnNumber carries over from the prior encounter and SPEED_RUN challenges
+    // start wildly over budget on encounter 2+. (Regression discovered after
+    // Phase 10 retargeted SPEED_RUN to turn count.)
+    this.combatLoopService.reset();
+    // Clear one-shot scout bonuses from scout spells played in a prior encounter.
+    this.wavePreviewService.resetForEncounter();
+    // Clear stale autoPaused / showQuitConfirm state from a prior encounter so
+    // the pause menu doesn't open mid-new-encounter stuck on the quit dialog.
+    this.gamePauseService.reset();
   }
 
   /**
    * Dispose all Three.js scene objects (tile meshes, tower meshes, grid lines) and
    * clean up all associated services. Call before resetAllServices() on restart.
    *
-   * The opts maps are mutated in place: they are cleared after disposal so the
-   * component's cached arrays become empty without requiring separate calls.
-   *
-   * @returns The gridLines reference set to null (caller should assign to its field).
+   * Mesh maps in BoardMeshRegistryService are cleared in place after disposal so
+   * the registry's cached arrays become empty without requiring separate calls.
    */
-  cleanupScene(opts: CleanupSceneOpts): null {
+  cleanupScene(): void {
     const scene = this.sceneService.getScene();
 
     // Guard: scene may be null during WebGL context-loss recovery or mid-disposal.
-    // Clear the component's mesh maps so its cached arrays rebuild empty, then bail.
+    // Clear the registry's mesh maps so cached arrays rebuild empty, then bail.
     if (!scene) {
-      opts.tileMeshes.clear();
-      opts.towerMeshes.clear();
-      return null;
+      this.meshRegistry.tileMeshes.clear();
+      this.meshRegistry.towerMeshes.clear();
+      return;
     }
 
     // Clean up tower combat state (projectiles)
@@ -131,7 +123,7 @@ export class GameSessionService {
     this.pathVisualizationService.cleanup();
 
     // Clean up tile highlights (needs tile meshes before they are cleared)
-    this.tileHighlightService.clearHighlights(opts.tileMeshes, scene);
+    this.tileHighlightService.clearHighlights(this.meshRegistry.tileMeshes, scene);
 
     // Clean up range preview and range toggle rings
     this.rangeVisualizationService.cleanup(scene);
@@ -140,7 +132,7 @@ export class GameSessionService {
     this.towerUpgradeVisualService.cleanup(scene);
 
     // Dispose tower meshes
-    opts.towerMeshes.forEach(group => {
+    this.meshRegistry.towerMeshes.forEach(group => {
       scene.remove(group);
       group.traverse(child => {
         if (child instanceof THREE.Mesh) {
@@ -149,32 +141,31 @@ export class GameSessionService {
         }
       });
     });
-    opts.towerMeshes.clear();
+    this.meshRegistry.towerMeshes.clear();
 
     // Dispose tile meshes
-    opts.tileMeshes.forEach(mesh => {
+    this.meshRegistry.tileMeshes.forEach(mesh => {
       scene.remove(mesh);
       mesh.geometry.dispose();
       disposeMaterial(mesh.material);
     });
-    opts.tileMeshes.clear();
+    this.meshRegistry.tileMeshes.clear();
 
     // Dispose grid lines
-    if (opts.gridLines) {
-      scene.remove(opts.gridLines);
-      opts.gridLines.traverse(child => {
+    if (this.meshRegistry.gridLines) {
+      scene.remove(this.meshRegistry.gridLines);
+      this.meshRegistry.gridLines.traverse(child => {
         if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
           child.geometry.dispose();
           disposeMaterial(child.material);
         }
       });
     }
+    this.meshRegistry.gridLines = null;
 
     // Delegate particles, skybox, and lights cleanup to SceneService
     this.sceneService.disposeParticles();
     this.sceneService.disposeSkybox();
     this.sceneService.disposeLights();
-
-    return null;
   }
 }

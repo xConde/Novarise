@@ -15,7 +15,6 @@ export {
   createMapBridgeServiceSpy,
   createMapStorageServiceSpy,
   createPlayerProfileServiceSpy,
-  createCampaignServiceSpy,
   createGameStateServiceSpy,
   createGameEndServiceSpy,
   createWaveServiceSpy,
@@ -26,7 +25,12 @@ export {
   createChallengeDisplayServiceSpy,
   createTowerPlacementServiceSpy,
   createTowerSelectionServiceSpy,
-  createProjectileServiceSpy,
+  // createProjectileServiceSpy removed (M2 S5 — projectile.service.ts deleted)
   createTowerUpgradeVisualServiceSpy,
   createGameSessionServiceSpy,
+  createRelicServiceSpy,
+  createRunServiceSpy,
+  createDeckServiceSpy,
+  createCardEffectServiceSpy,
+  createScreenShakeServiceSpy,
 } from './test-spies.factory';

@@ -20,7 +20,6 @@ describe('SettingsService', () => {
     const settings = service.get();
     expect(settings.audioMuted).toBe(false);
     expect(settings.difficulty).toBe(DifficultyLevel.NORMAL);
-    expect(settings.gameSpeed).toBe(1);
     expect(settings.showFps).toBe(false);
     expect(settings.reduceMotion).toBe(false);
   });
@@ -41,14 +40,12 @@ describe('SettingsService', () => {
     const settings = service.get();
     expect(settings.difficulty).toBe(DifficultyLevel.HARD);
     expect(settings.audioMuted).toBe(true);
-    expect(settings.gameSpeed).toBe(1); // untouched
   });
 
   it('should load persisted settings on construction', () => {
     const saved: GameSettings = {
       audioMuted: true,
       difficulty: DifficultyLevel.NIGHTMARE,
-      gameSpeed: 3,
       showFps: true,
       reduceMotion: true,
     };
@@ -58,7 +55,6 @@ describe('SettingsService', () => {
     const settings = freshService.get();
     expect(settings.audioMuted).toBe(true);
     expect(settings.difficulty).toBe(DifficultyLevel.NIGHTMARE);
-    expect(settings.gameSpeed).toBe(3);
     expect(settings.showFps).toBe(true);
     expect(settings.reduceMotion).toBe(true);
   });
@@ -79,17 +75,15 @@ describe('SettingsService', () => {
     const settings = freshService.get();
     expect(settings.audioMuted).toBe(true);
     expect(settings.difficulty).toBe(DifficultyLevel.NORMAL); // default filled in
-    expect(settings.gameSpeed).toBe(1); // default filled in
   });
 
   it('should reset to defaults', () => {
-    service.update({ audioMuted: true, difficulty: DifficultyLevel.NIGHTMARE, gameSpeed: 3, showFps: true, reduceMotion: true });
+    service.update({ audioMuted: true, difficulty: DifficultyLevel.NIGHTMARE, showFps: true, reduceMotion: true });
     service.reset();
 
     const settings = service.get();
     expect(settings.audioMuted).toBe(false);
     expect(settings.difficulty).toBe(DifficultyLevel.NORMAL);
-    expect(settings.gameSpeed).toBe(1);
     expect(settings.showFps).toBe(false);
     expect(settings.reduceMotion).toBe(false);
   });

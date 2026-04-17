@@ -5,16 +5,15 @@ import {
   PlacedTower,
   MAX_TOWER_LEVEL,
   getUpgradeCost,
-  getSellValue,
   getEffectiveStats,
 } from '../models/tower.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { TowerCombatService } from './tower-combat.service';
-import { TilePricingService } from './tile-pricing.service';
 import { GameStateService } from './game-state.service';
 import { RangeVisualizationService } from './range-visualization.service';
 import { GameBoardService } from '../game-board.service';
 import { SceneService } from './scene.service';
+import { RelicService } from '../../../run/services/relic.service';
 
 /**
  * Manages tower inspection / selection panel state.
@@ -30,24 +29,24 @@ import { SceneService } from './scene.service';
 @Injectable()
 export class TowerSelectionService {
   selectedTowerInfo: PlacedTower | null = null;
-  selectedTowerStats: { damage: number; range: number; fireRate: number; statusEffect?: StatusEffectType } | null = null;
+  selectedTowerStats: { damage: number; range: number; statusEffect?: StatusEffectType } | null = null;
   selectedTowerUpgradeCost = 0;
   /** Strategic tile premium % applied to the upgrade cost (0 = no premium). */
   selectedTowerUpgradePercent = 0;
   selectedTowerSellValue = 0;
   /** Preview of stats after upgrading (null if at max level or below L2→L3 which needs spec). */
-  upgradePreview: { damage: number; range: number; fireRate: number } | null = null;
+  upgradePreview: { damage: number; range: number } | null = null;
   showSpecializationChoice = false;
-  specOptions: { spec: TowerSpecialization; label: string; description: string; damage: number; range: number; fireRate: number }[] = [];
+  specOptions: { spec: TowerSpecialization; label: string; description: string; damage: number; range: number }[] = [];
   sellConfirmPending = false;
 
   constructor(
     private towerCombatService: TowerCombatService,
-    private tilePricingService: TilePricingService,
     private gameStateService: GameStateService,
     private rangeVisualizationService: RangeVisualizationService,
     private gameBoardService: GameBoardService,
     private sceneService: SceneService,
+    private relicService: RelicService,
   ) {}
 
   /**
@@ -83,17 +82,17 @@ export class TowerSelectionService {
     if (!this.selectedTowerInfo) return;
     const tower = this.selectedTowerInfo;
     const stats = getEffectiveStats(tower.type, tower.level, tower.specialization);
-    this.selectedTowerStats = { damage: stats.damage, range: stats.range, fireRate: stats.fireRate, statusEffect: stats.statusEffect };
+    this.selectedTowerStats = { damage: stats.damage, range: stats.range, statusEffect: stats.statusEffect };
     const costMult = this.gameStateService.getModifierEffects().towerCostMultiplier ?? 1;
-    const tileStrategic = this.tilePricingService.getStrategicValue(tower.row, tower.col);
-    this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level, costMult, tileStrategic);
-    this.selectedTowerUpgradePercent = Math.round(tileStrategic * 100);
-    this.selectedTowerSellValue = getSellValue(tower.totalInvested);
+    this.selectedTowerUpgradeCost = getUpgradeCost(tower.type, tower.level, costMult);
+    this.selectedTowerUpgradePercent = 0;
+    // Use relic-aware rate so the preview matches what TowerInteractionService.sellTower() pays out.
+    this.selectedTowerSellValue = Math.round(tower.totalInvested * this.relicService.getSellRefundRate());
 
     // Compute upgrade preview (L1→L2 only; L2→L3 requires spec choice so preview is per-spec)
     if (tower.level < MAX_TOWER_LEVEL - 1) {
       const nextStats = getEffectiveStats(tower.type, tower.level + 1);
-      this.upgradePreview = { damage: nextStats.damage, range: nextStats.range, fireRate: nextStats.fireRate };
+      this.upgradePreview = { damage: nextStats.damage, range: nextStats.range };
     } else {
       this.upgradePreview = null;
     }

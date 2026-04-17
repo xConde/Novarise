@@ -1,30 +1,25 @@
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y, IMPACT_FLASH_CONFIG } from '../constants/combat.constants';
+import { CHAIN_LIGHTNING_CONFIG, MORTAR_VISUAL_CONFIG, GROUND_EFFECT_Y } from '../constants/combat.constants';
 import { disposeMesh } from '../utils/three-utils';
 
 /** A chain arc line that persists for a short visual duration before removal. */
 export interface ChainArcEntry {
   line: THREE.Line;
-  expiresAt: number;
-}
-
-/** A brief impact flash sphere that fades and disappears. */
-export interface ImpactFlashEntry {
-  mesh: THREE.Mesh;
+  /** Real-time millisecond timestamp (performance.now()) after which the arc is removed. */
   expiresAt: number;
 }
 
 /** A mortar blast zone mesh entry owned by VFX (separate from the data record in TCS). */
 export interface MortarZoneMeshEntry {
   mesh: THREE.Mesh;
-  expiresAt: number;
+  /** Turn number AFTER which the visual zone is removed. */
+  expiresOnTurn: number;
 }
 
 /**
  * Owns all visual-only Three.js objects for tower combat:
  * - Chain lightning arc lines (ChainArcEntry[])
- * - Impact flash spheres (ImpactFlashEntry[])
  * - Mortar blast zone circle meshes (MortarZoneMeshEntry[])
  *
  * Call updateVisuals() each frame to expire objects, and cleanup() on destroy/restart.
@@ -32,24 +27,12 @@ export interface MortarZoneMeshEntry {
 @Injectable()
 export class CombatVFXService {
   private chainArcs: ChainArcEntry[] = [];
-  private impactFlashes: ImpactFlashEntry[] = [];
   private mortarZoneMeshes: MortarZoneMeshEntry[] = [];
-  private sharedImpactFlashGeometry: THREE.SphereGeometry | null = null;
-
-  private getImpactFlashGeometry(): THREE.SphereGeometry {
-    if (!this.sharedImpactFlashGeometry) {
-      this.sharedImpactFlashGeometry = new THREE.SphereGeometry(
-        IMPACT_FLASH_CONFIG.radius,
-        IMPACT_FLASH_CONFIG.segments,
-        IMPACT_FLASH_CONFIG.segments
-      );
-    }
-    return this.sharedImpactFlashGeometry;
-  }
 
   /**
    * Creates a zigzag chain lightning arc line from (fromX,fromZ) to (toX,toZ) and adds it to the scene.
-   * The arc expires at `gameTime + CHAIN_LIGHTNING_CONFIG.arcLifetime`.
+   * The arc expires after CHAIN_LIGHTNING_CONFIG.arcLifetime seconds of real wall-clock time,
+   * captured internally via performance.now() — callers do NOT pass a time argument.
    */
   createChainArc(
     fromX: number,
@@ -58,7 +41,6 @@ export class CombatVFXService {
     toZ: number,
     arcColor: number,
     scene: THREE.Scene,
-    gameTime: number
   ): void {
     const segs = CHAIN_LIGHTNING_CONFIG.zigzagSegments;
     const jitter = CHAIN_LIGHTNING_CONFIG.zigzagJitter;
@@ -88,30 +70,17 @@ export class CombatVFXService {
     });
     const arc = new THREE.Line(arcGeom, arcMat);
     scene.add(arc);
-    this.chainArcs.push({ line: arc, expiresAt: gameTime + CHAIN_LIGHTNING_CONFIG.arcLifetime });
-  }
-
-  /**
-   * Creates an impact flash sphere at (x, z) and adds it to the scene.
-   * Uses a shared SphereGeometry — only the material is per-flash.
-   */
-  createImpactFlash(x: number, z: number, scene: THREE.Scene, gameTime: number): void {
-    const geometry = this.getImpactFlashGeometry();
-    const material = new THREE.MeshBasicMaterial({
-      color: IMPACT_FLASH_CONFIG.color,
-      transparent: true,
-      opacity: IMPACT_FLASH_CONFIG.opacity
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, IMPACT_FLASH_CONFIG.spawnHeight, z);
-    scene.add(mesh);
-    this.impactFlashes.push({ mesh, expiresAt: gameTime + IMPACT_FLASH_CONFIG.lifetime });
+    const now = performance.now();
+    this.chainArcs.push({ line: arc, expiresAt: now + CHAIN_LIGHTNING_CONFIG.arcLifetime * 1000 });
   }
 
   /**
    * Creates a mortar blast zone circle mesh at (impactX, impactZ) and adds it to the scene.
    * Returns the mesh so TowerCombatService can correlate with its data record if needed.
-   * The mesh expires at `gameTime + dotDuration`.
+   * The visual persists until `tickMortarZoneVisualsForTurn` expires it at turn >= currentTurn + dotDuration,
+   * matching the turn-based DoT zone lifetime exactly.
+   *
+   * @param currentTurn The turn on which the zone is created (from CombatLoopService.getTurnNumber()).
    */
   createMortarZoneMesh(
     impactX: number,
@@ -119,7 +88,7 @@ export class CombatVFXService {
     blastRadius: number,
     dotDuration: number,
     scene: THREE.Scene,
-    gameTime: number
+    currentTurn: number,
   ): THREE.Mesh {
     const geometry = new THREE.CircleGeometry(blastRadius, MORTAR_VISUAL_CONFIG.zoneSegments);
     const material = new THREE.MeshBasicMaterial({
@@ -132,20 +101,19 @@ export class CombatVFXService {
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.set(impactX, GROUND_EFFECT_Y, impactZ);
     scene.add(mesh);
-    this.mortarZoneMeshes.push({ mesh, expiresAt: gameTime + dotDuration });
+    this.mortarZoneMeshes.push({ mesh, expiresOnTurn: currentTurn + dotDuration });
     return mesh;
   }
 
   /**
-   * Expires and disposes chain arcs, impact flashes, and mortar zone meshes whose
-   * expiresAt has passed. Also fades impact flashes proportionally over their lifetime.
-   * Call once per frame (not per physics step).
+   * Expires and disposes chain arcs whose real-time wall-clock has elapsed.
+   * Call once per RAF frame from game-board.component.ts.animate().
    */
-  updateVisuals(gameTime: number, scene: THREE.Scene): void {
-    // Expire chain arcs
+  updateVisuals(scene: THREE.Scene): void {
+    const now = performance.now();
     const survivingArcs: ChainArcEntry[] = [];
     for (const arc of this.chainArcs) {
-      if (gameTime >= arc.expiresAt) {
+      if (now >= arc.expiresAt) {
         scene.remove(arc.line);
         arc.line.geometry.dispose();
         (arc.line.material as THREE.Material).dispose();
@@ -154,26 +122,18 @@ export class CombatVFXService {
       }
     }
     this.chainArcs = survivingArcs;
+  }
 
-    // Expire and fade impact flashes (geometry is shared — only dispose material)
-    const survivingFlashes: ImpactFlashEntry[] = [];
-    for (const flash of this.impactFlashes) {
-      if (gameTime >= flash.expiresAt) {
-        scene.remove(flash.mesh);
-        (flash.mesh.material as THREE.Material).dispose();
-      } else {
-        const remaining = flash.expiresAt - gameTime;
-        const pct = remaining / IMPACT_FLASH_CONFIG.lifetime;
-        (flash.mesh.material as THREE.MeshBasicMaterial).opacity = IMPACT_FLASH_CONFIG.opacity * pct;
-        survivingFlashes.push(flash);
-      }
-    }
-    this.impactFlashes = survivingFlashes;
-
-    // Expire mortar zone meshes
+  /**
+   * Expires and disposes mortar zone meshes whose turn count has elapsed.
+   * Call once per turn after CombatLoopService.resolveTurn() completes.
+   *
+   * @param turnNumber The current turn number (from CombatLoopService.getTurnNumber()).
+   */
+  tickMortarZoneVisualsForTurn(turnNumber: number, scene: THREE.Scene): void {
     const survivingZones: MortarZoneMeshEntry[] = [];
     for (const zone of this.mortarZoneMeshes) {
-      if (gameTime >= zone.expiresAt) {
+      if (turnNumber >= zone.expiresOnTurn) {
         scene.remove(zone.mesh);
         disposeMesh(zone.mesh);
       } else {
@@ -184,7 +144,20 @@ export class CombatVFXService {
   }
 
   /**
-   * Disposes all tracked visual objects and clears the shared geometry.
+   * Disposes all mortar zone meshes without touching chain arcs.
+   * Call from TowerCombatService.clearMortarZonesForWaveEnd() so zones from
+   * wave N do not bleed into wave N+1.
+   */
+  clearMortarZoneMeshes(scene: THREE.Scene): void {
+    for (const zone of this.mortarZoneMeshes) {
+      scene.remove(zone.mesh);
+      disposeMesh(zone.mesh);
+    }
+    this.mortarZoneMeshes = [];
+  }
+
+  /**
+   * Disposes all tracked visual objects.
    * Call from TowerCombatService.cleanup() on restart and ngOnDestroy.
    */
   cleanup(scene: THREE.Scene): void {
@@ -194,17 +167,6 @@ export class CombatVFXService {
       (arc.line.material as THREE.Material).dispose();
     }
     this.chainArcs = [];
-
-    for (const flash of this.impactFlashes) {
-      scene.remove(flash.mesh);
-      (flash.mesh.material as THREE.Material).dispose();
-    }
-    this.impactFlashes = [];
-
-    if (this.sharedImpactFlashGeometry) {
-      this.sharedImpactFlashGeometry.dispose();
-      this.sharedImpactFlashGeometry = null;
-    }
 
     for (const zone of this.mortarZoneMeshes) {
       scene.remove(zone.mesh);
@@ -217,8 +179,5 @@ export class CombatVFXService {
 
   getChainArcCount(): number { return this.chainArcs.length; }
   getChainArcs(): ReadonlyArray<ChainArcEntry> { return this.chainArcs; }
-  getImpactFlashCount(): number { return this.impactFlashes.length; }
-  getImpactFlashes(): ReadonlyArray<ImpactFlashEntry> { return this.impactFlashes; }
   getMortarZoneMeshCount(): number { return this.mortarZoneMeshes.length; }
-  getSharedFlashGeometry(): THREE.SphereGeometry | null { return this.sharedImpactFlashGeometry; }
 }

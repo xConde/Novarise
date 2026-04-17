@@ -3,16 +3,17 @@ import * as THREE from 'three';
 
 import { TowerSelectionService } from './tower-selection.service';
 import { TowerCombatService } from './tower-combat.service';
-import { TilePricingService } from './tile-pricing.service';
 import { GameStateService } from './game-state.service';
 import { RangeVisualizationService } from './range-visualization.service';
 import { GameBoardService } from '../game-board.service';
 import { SceneService } from './scene.service';
+import { RelicService } from '../../../run/services/relic.service';
 import { TowerType, PlacedTower, TargetingMode } from '../models/tower.model';
 import { INITIAL_GAME_STATE } from '../models/game-state.model';
 import {
   createGameBoardServiceSpy,
   createGameStateServiceSpy,
+  createRelicServiceSpy,
   createSceneServiceSpy,
   createTowerCombatServiceSpy,
 } from '../testing';
@@ -24,7 +25,6 @@ function createMockTower(overrides: Partial<PlacedTower> = {}): PlacedTower {
     level: 1,
     row: 0,
     col: 0,
-    lastFireTime: 0,
     kills: 0,
     totalInvested: 100,
     mesh: null as unknown as THREE.Group,
@@ -37,35 +37,31 @@ function createMockTower(overrides: Partial<PlacedTower> = {}): PlacedTower {
 describe('TowerSelectionService', () => {
   let service: TowerSelectionService;
   let towerCombatSpy: jasmine.SpyObj<TowerCombatService>;
-  let tilePricingSpy: jasmine.SpyObj<TilePricingService>;
   let gameStateSpy: jasmine.SpyObj<GameStateService>;
   let rangeVisSpy: jasmine.SpyObj<RangeVisualizationService>;
   let gameBoardSpy: jasmine.SpyObj<GameBoardService>;
   let sceneSpy: jasmine.SpyObj<SceneService>;
+  let relicSpy: jasmine.SpyObj<RelicService>;
 
   beforeEach(() => {
     towerCombatSpy = createTowerCombatServiceSpy();
-
-    tilePricingSpy = jasmine.createSpyObj<TilePricingService>('TilePricingService', [
-      'getTilePrice', 'getStrategicValue', 'invalidateCache',
-    ]);
-    tilePricingSpy.getStrategicValue.and.returnValue(0);
     gameStateSpy = createGameStateServiceSpy();
     rangeVisSpy = jasmine.createSpyObj<RangeVisualizationService>('RangeVisualizationService', [
       'showForTower', 'removePreview', 'cleanup', 'toggleAllRanges',
     ]);
     gameBoardSpy = createGameBoardServiceSpy();
     sceneSpy = createSceneServiceSpy();
+    relicSpy = createRelicServiceSpy();
 
     TestBed.configureTestingModule({
       providers: [
         TowerSelectionService,
         { provide: TowerCombatService, useValue: towerCombatSpy },
-        { provide: TilePricingService, useValue: tilePricingSpy },
         { provide: GameStateService, useValue: gameStateSpy },
         { provide: RangeVisualizationService, useValue: rangeVisSpy },
         { provide: GameBoardService, useValue: gameBoardSpy },
         { provide: SceneService, useValue: sceneSpy },
+        { provide: RelicService, useValue: relicSpy },
       ],
     });
 
@@ -190,6 +186,26 @@ describe('TowerSelectionService', () => {
       service.refreshTowerInfoPanel();
 
       expect(service.upgradePreview).not.toBeNull();
+    });
+
+    it('sell preview uses base 0.5 rate without SALVAGE_KIT', () => {
+      relicSpy.getSellRefundRate.and.returnValue(0.5);
+      const tower = createMockTower({ totalInvested: 200 });
+      service.selectedTowerInfo = tower;
+
+      service.refreshTowerInfoPanel();
+
+      expect(service.selectedTowerSellValue).toBe(100);
+    });
+
+    it('sell preview uses relic-adjusted 0.75 rate with SALVAGE_KIT active', () => {
+      relicSpy.getSellRefundRate.and.returnValue(0.75);
+      const tower = createMockTower({ totalInvested: 200 });
+      service.selectedTowerInfo = tower;
+
+      service.refreshTowerInfoPanel();
+
+      expect(service.selectedTowerSellValue).toBe(150);
     });
   });
 

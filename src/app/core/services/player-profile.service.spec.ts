@@ -771,6 +771,11 @@ describe('PlayerProfileService', () => {
         hasPlacedAllTowerTypes: false,
         maxModifiersUsedInVictory: 2,
         completedChallengeCount: 3,
+        runsAttempted: 0,
+        runsCompleted: 0,
+        highestAscensionBeaten: 0,
+        runTotalKills: 0,
+        runBestScore: 0,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
       const fresh = new PlayerProfileService(new StorageService());
@@ -876,6 +881,93 @@ describe('PlayerProfileService', () => {
       );
       const fresh = new PlayerProfileService(new StorageService());
       expect(fresh.getProfile().towerKills).toEqual({});
+    });
+  });
+
+  // ── M5 S10: pre-pivot ascent* → run* field migration ──────────────────────
+
+  describe('pre-pivot ascent* field migration', () => {
+    it('migrates ascentRunsAttempted → runsAttempted when only legacy field is present', () => {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          totalGamesPlayed: 0,
+          achievements: [],
+          ascentRunsAttempted: 7,
+          ascentRunsCompleted: 3,
+          ascentTotalKills: 120,
+          ascentBestScore: 4500,
+        })
+      );
+      const fresh = new PlayerProfileService(new StorageService());
+      const p = fresh.getProfile();
+      expect(p.runsAttempted).toBe(7);
+      expect(p.runsCompleted).toBe(3);
+      expect(p.runTotalKills).toBe(120);
+      expect(p.runBestScore).toBe(4500);
+    });
+
+    it('prefers new run* field over legacy ascent* field when both present', () => {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          totalGamesPlayed: 0,
+          achievements: [],
+          runsAttempted: 5,
+          ascentRunsAttempted: 99,
+          runsCompleted: 2,
+          ascentRunsCompleted: 88,
+        })
+      );
+      const fresh = new PlayerProfileService(new StorageService());
+      const p = fresh.getProfile();
+      expect(p.runsAttempted).toBe(5);
+      expect(p.runsCompleted).toBe(2);
+    });
+
+    it('defaults to 0 when both legacy and new fields are absent', () => {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ totalGamesPlayed: 1, achievements: [] })
+      );
+      const fresh = new PlayerProfileService(new StorageService());
+      const p = fresh.getProfile();
+      expect(p.runsAttempted).toBe(0);
+      expect(p.runsCompleted).toBe(0);
+      expect(p.runTotalKills).toBe(0);
+      expect(p.runBestScore).toBe(0);
+    });
+
+    it('defaults to 0 when legacy field is malformed (non-number)', () => {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          totalGamesPlayed: 0,
+          achievements: [],
+          ascentRunsAttempted: 'corrupt',
+          ascentBestScore: null,
+        })
+      );
+      const fresh = new PlayerProfileService(new StorageService());
+      const p = fresh.getProfile();
+      expect(p.runsAttempted).toBe(0);
+      expect(p.runBestScore).toBe(0);
+    });
+
+    it('migration is idempotent — loading twice gives same result', () => {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          totalGamesPlayed: 0,
+          achievements: [],
+          runsAttempted: 4,
+          runsCompleted: 1,
+        })
+      );
+      const first = new PlayerProfileService(new StorageService());
+      expect(first.getProfile().runsAttempted).toBe(4);
+      const second = new PlayerProfileService(new StorageService());
+      expect(second.getProfile().runsAttempted).toBe(4);
     });
   });
 

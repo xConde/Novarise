@@ -7,14 +7,20 @@ import {
   AchievementCategory,
   ACHIEVEMENTS,
 } from '../core/services/player-profile.service';
-import { SettingsService } from '../core/services/settings.service';
-import { DifficultyLevel, GameSpeed, VALID_GAME_SPEEDS } from '../game/game-board/models/game-state.model';
+import { TowerType } from '../game/game-board/models/tower.model';
 
 export interface AchievementCategoryGroup {
   category: AchievementCategory;
   label: string;
   achievements: Achievement[];
   unlockedCount: number;
+}
+
+export interface TowerKillRow {
+  type: TowerType;
+  label: string;
+  kills: number;
+  pct: number;
 }
 
 const CATEGORY_LABELS: Record<AchievementCategory, string> = {
@@ -26,6 +32,35 @@ const CATEGORY_LABELS: Record<AchievementCategory, string> = {
 
 const CATEGORY_ORDER: AchievementCategory[] = ['campaign', 'combat', 'endless', 'challenge'];
 
+const TOWER_LABELS: Record<TowerType, string> = {
+  [TowerType.BASIC]:  'Basic',
+  [TowerType.SNIPER]: 'Sniper',
+  [TowerType.SPLASH]: 'Splash',
+  [TowerType.SLOW]:   'Slow',
+  [TowerType.CHAIN]:  'Chain',
+  [TowerType.MORTAR]: 'Mortar',
+};
+
+const ALL_TOWER_TYPES: TowerType[] = [
+  TowerType.BASIC,
+  TowerType.SNIPER,
+  TowerType.SPLASH,
+  TowerType.SLOW,
+  TowerType.CHAIN,
+  TowerType.MORTAR,
+];
+
+const TOTAL_ACHIEVEMENTS = 26;
+
+const RANK_THRESHOLDS: { min: number; title: string }[] = [
+  { min: 25, title: 'Novarise' },
+  { min: 19, title: 'Champion' },
+  { min: 13, title: 'Elite' },
+  { min: 7,  title: 'Commander' },
+  { min: 3,  title: 'Defender' },
+  { min: 0,  title: 'Recruit' },
+];
+
 @Component({
   selector: 'app-profile',
   templateUrl: './profile.component.html',
@@ -35,26 +70,15 @@ export class ProfileComponent implements OnInit {
   profile!: PlayerProfile;
   allAchievements: Achievement[] = ACHIEVEMENTS;
   categoryGroups: AchievementCategoryGroup[] = [];
+  towerKillRows: TowerKillRow[] = [];
+  arsenalExpanded = false;
   private unlockedSet = new Set<string>();
+  private expandedCategories = new Set<AchievementCategory>();
 
-  // Settings state
-  audioMuted = false;
-  currentDifficulty: DifficultyLevel = DifficultyLevel.NORMAL;
-  currentSpeed: GameSpeed = 1;
-  showFps = false;
-  reduceMotion = false;
-
-  readonly difficulties: DifficultyLevel[] = [
-    DifficultyLevel.EASY,
-    DifficultyLevel.NORMAL,
-    DifficultyLevel.HARD,
-    DifficultyLevel.NIGHTMARE,
-  ];
-  readonly speeds: readonly GameSpeed[] = VALID_GAME_SPEEDS;
+  readonly totalAchievements = TOTAL_ACHIEVEMENTS;
 
   constructor(
     private profileService: PlayerProfileService,
-    private settingsService: SettingsService,
     private router: Router
   ) {}
 
@@ -62,19 +86,7 @@ export class ProfileComponent implements OnInit {
     this.profile = this.profileService.getProfile();
     this.unlockedSet = new Set(this.profile.achievements);
     this.categoryGroups = this.buildCategoryGroups();
-    this.loadSettings();
-  }
-
-  private loadSettings(): void {
-    const s = this.settingsService.get();
-    this.audioMuted = s.audioMuted;
-    this.currentDifficulty = s.difficulty;
-    this.currentSpeed = s.gameSpeed as GameSpeed;
-    this.showFps = s.showFps;
-    this.reduceMotion = s.reduceMotion;
-    if (this.reduceMotion) {
-      document.body.classList.add('reduce-motion');
-    }
+    this.towerKillRows = this.buildTowerKillRows();
   }
 
   private buildCategoryGroups(): AchievementCategoryGroup[] {
@@ -90,8 +102,32 @@ export class ProfileComponent implements OnInit {
     });
   }
 
+  private buildTowerKillRows(): TowerKillRow[] {
+    const kills = this.profile.towerKills;
+    const counts = ALL_TOWER_TYPES.map((t) => kills[t] ?? 0);
+    const maxKills = Math.max(...counts, 1);
+    return ALL_TOWER_TYPES.map((type, i) => ({
+      type,
+      label: TOWER_LABELS[type],
+      kills: counts[i],
+      pct: Math.round((counts[i] / maxKills) * 100),
+    }));
+  }
+
   isUnlocked(achievementId: string): boolean {
     return this.unlockedSet.has(achievementId);
+  }
+
+  toggleCategory(category: AchievementCategory): void {
+    if (this.expandedCategories.has(category)) {
+      this.expandedCategories.delete(category);
+    } else {
+      this.expandedCategories.add(category);
+    }
+  }
+
+  isCategoryExpanded(category: AchievementCategory): boolean {
+    return this.expandedCategories.has(category);
   }
 
   get winRate(): string {
@@ -99,41 +135,30 @@ export class ProfileComponent implements OnInit {
     return ((this.profile.totalVictories / this.profile.totalGamesPlayed) * 100).toFixed(0);
   }
 
+  get runWinRate(): string {
+    if (this.profile.runsAttempted === 0) return '0';
+    return ((this.profile.runsCompleted / this.profile.runsAttempted) * 100).toFixed(0);
+  }
+
   get unlockedCount(): number {
     return this.profile.achievements.length;
   }
 
-  toggleAudio(): void {
-    this.audioMuted = !this.audioMuted;
-    this.settingsService.update({ audioMuted: this.audioMuted });
-  }
-
-  setDifficulty(difficulty: DifficultyLevel): void {
-    this.currentDifficulty = difficulty;
-    this.settingsService.update({ difficulty });
-  }
-
-  setSpeed(speed: GameSpeed): void {
-    this.currentSpeed = speed;
-    this.settingsService.update({ gameSpeed: speed });
-  }
-
-  toggleFps(): void {
-    this.showFps = !this.showFps;
-    this.settingsService.update({ showFps: this.showFps });
-  }
-
-  toggleReduceMotion(): void {
-    this.reduceMotion = !this.reduceMotion;
-    this.settingsService.update({ reduceMotion: this.reduceMotion });
-    if (this.reduceMotion) {
-      document.body.classList.add('reduce-motion');
-    } else {
-      document.body.classList.remove('reduce-motion');
+  get rankTitle(): string {
+    const count = this.unlockedCount;
+    for (const threshold of RANK_THRESHOLDS) {
+      if (count >= threshold.min) {
+        return threshold.title;
+      }
     }
+    return 'Recruit';
   }
 
-  goHome(): void {
+  get achievementProgressPct(): number {
+    return Math.round((this.unlockedCount / TOTAL_ACHIEVEMENTS) * 100);
+  }
+
+  goBack(): void {
     this.router.navigate(['/']);
   }
 }

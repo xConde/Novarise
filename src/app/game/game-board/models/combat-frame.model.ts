@@ -1,11 +1,22 @@
 import { TowerType } from './tower.model';
 import { GamePhase } from './game-state.model';
-import { ChallengeDefinition } from '@campaign/models/challenge.model';
+import { ChallengeDefinition } from '../../../run/data/challenges';
 
-/** Info about a tower kill — includes the damage of the final hit. */
+/**
+ * Info about a tower kill — includes the damage of the final hit, the
+ * tower type that landed the killing blow, and that tower's level at the
+ * time of the kill. `towerType` is null for non-tower kills (e.g.
+ * status-effect DoT ticks); `towerLevel` is 0 in that case.
+ *
+ * Mortar zones stash the placer's level on the zone itself so attribution
+ * stays correct even if the player upgrades the mortar before the zone's
+ * DoT ticks expire.
+ */
 export interface KillInfo {
   id: string;
   damage: number;
+  towerType: TowerType | null;
+  towerLevel: number;
 }
 
 /** Deferred audio event accumulated during physics steps, drained once per frame by the component. */
@@ -37,7 +48,7 @@ export interface WaveCompletionEvent {
 export interface GameEndEvent {
   isVictory: boolean;
   newlyUnlockedAchievements: string[];
-  completedChallenges: ChallengeDefinition[];
+  completedChallenges: readonly ChallengeDefinition[];
 }
 
 /**
@@ -63,4 +74,23 @@ export interface CombatFrameResult {
   gameEnd: GameEndEvent | null;
   /** Deferred combat audio events (chain lightning, mortar sounds, etc.). */
   combatAudioEvents: CombatAudioEvent[];
+  /**
+   * Total damage dealt this frame — tower fire + mortar-zone DoT ticks.
+   * Status-effect DoT damage (BURN/POISON) is included via its own kill
+   * reporting; non-lethal DoT ticks are NOT counted here to keep the number
+   * tied to "offensive pressure the player's build is producing".
+   */
+  damageDealt: number;
+  /**
+   * Kill attribution grouped by (tower type, tower level) pair — array of
+   * entries rather than a nested record so templates can *ngFor over it
+   * directly and display in a compact ordering. Tier-1 (level 1) rows
+   * render without a suffix per design; tier 2+ show the number. DoT kills
+   * land in the `dot` bucket with level=0.
+   */
+  killsByTower: ReadonlyArray<{
+    readonly type: TowerType | 'dot';
+    readonly level: number;
+    readonly count: number;
+  }>;
 }

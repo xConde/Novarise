@@ -1,0 +1,412 @@
+// ── Card entrance animation ───────────────────────────────────────────────────
+
+@keyframes shop-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--spacing-md));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ── Shell grid ────────────────────────────────────────────────────────────────
+// M5 P4: CSS Grid shell with named areas. Every section has a reserved slot
+// so the shop layout stays stable regardless of which items the server returns.
+// Media queries tune custom properties — areas never reshuffle.
+
+.shop-screen {
+  // Shell custom properties
+  --shop-header-size: auto;
+  --shop-footer-size: auto;
+
+  display: grid;
+  grid-template-rows:
+    [header-start]  var(--shop-header-size)   [header-end]
+    [relics-start]  auto                       [relics-end]
+    [cards-start]   auto                       [cards-end]
+    [heal-start]    auto                       [heal-end]
+    [footer-start]  var(--shop-footer-size)    [footer-end];
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "header"
+    "relics"
+    "cards"
+    "heal"
+    "footer";
+  justify-items: center;
+  gap: var(--spacing-xl);
+  padding: var(--spacing-2xl) var(--spacing-md) var(--spacing-xl);
+  text-align: center;
+  color: var(--text-color);
+}
+
+// ── Grid-area assignments for direct children ─────────────────────────────────
+
+.shop-header       { grid-area: header; }
+
+// The two .shop-items sections map to relics / cards respectively.
+// Angular renders them in DOM order; nth-of-type maps positionally to the areas.
+// We use explicit class selectors added to the HTML to avoid :nth-of-type fragility.
+.shop-items--relics { grid-area: relics; }
+.shop-items--cards  { grid-area: cards; }
+.shop-heal          { grid-area: heal; }
+.shop-leave-btn     { grid-area: footer; }
+
+// ── Header ────────────────────────────────────────────────────────────────────
+
+.shop-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.shop-title {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-large);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--game-gold);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.shop-icon {
+  font-size: var(--font-size-large);
+  opacity: 0.85;
+}
+
+.shop-gold {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  color: var(--game-gold);
+  margin: 0;
+}
+
+// ── Section title ─────────────────────────────────────────────────────────────
+
+.shop-section-title {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  margin: 0 0 var(--spacing-md);
+}
+
+// ── Items section ─────────────────────────────────────────────────────────────
+
+.shop-items {
+  // grid-area assigned via .shop-items--relics / .shop-items--cards above
+  // Flex-column inside the grid cell for section title + item list stacking
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  width: 100%;
+  max-width: 56rem;
+}
+
+.shop-item-list {
+  display: flex;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+
+.shop-empty {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  color: var(--text-faint);
+  font-style: italic;
+  margin: 0;
+}
+
+// ── Shop card ─────────────────────────────────────────────────────────────────
+
+.shop-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md) var(--spacing-sm) var(--spacing-sm);
+  width: 13rem;
+  border: var(--border-width-medium) solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  background: var(--theme-purple-a10);
+  color: var(--text-color);
+  font-family: "Orbitron", sans-serif;
+  position: relative;
+  animation: shop-card-in 0.3s ease both;
+  transition: border-color var(--transition-fast) ease,
+              background var(--transition-fast) ease,
+              box-shadow var(--transition-fast) ease;
+
+  &:nth-child(2) { animation-delay: 0.06s; }
+  &:nth-child(3) { animation-delay: 0.12s; }
+
+  // ── Rarity variants ───────────────────────────────────────────────────
+
+  &--common {
+    background: var(--run-relic-common-bg);
+    border-color: var(--run-relic-common-border);
+
+    .shop-card__rarity { color: var(--run-relic-common); }
+    .shop-card__icon   { color: var(--run-relic-common); }
+  }
+
+  &--uncommon {
+    background: var(--run-relic-uncommon-bg);
+    border-color: var(--run-relic-uncommon-border);
+
+    .shop-card__rarity { color: var(--run-relic-uncommon); }
+    .shop-card__icon   { color: var(--run-relic-uncommon); }
+  }
+
+  &--rare {
+    background: var(--run-relic-rare-bg);
+    border-color: var(--run-relic-rare-border);
+
+    .shop-card__rarity { color: var(--run-relic-rare); }
+    .shop-card__icon   { color: var(--run-relic-rare); }
+  }
+
+  // ── Unaffordable state ─────────────────────────────────────────────────
+
+  &--unaffordable {
+    opacity: 0.4;
+    filter: grayscale(0.5);
+  }
+}
+
+// ── Card inner elements ───────────────────────────────────────────────────────
+
+.shop-card__icon {
+  font-size: var(--font-size-title);
+  line-height: 1;
+}
+
+.shop-card__rarity {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.shop-card__name {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  color: var(--text-color);
+}
+
+.shop-card__description {
+  font-size: var(--font-size-small);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.shop-card__flavor {
+  font-size: var(--font-size-xs);
+  color: var(--text-faint);
+  line-height: 1.4;
+  font-style: italic;
+}
+
+// ── Buy button ────────────────────────────────────────────────────────────────
+
+.shop-card__buy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-md);
+  min-height: 2.75rem; // WCAG 44px
+  border: var(--border-width-thin) solid var(--game-gold-a40);
+  border-radius: var(--border-radius-md);
+  background: var(--game-gold-a15);
+  color: var(--game-gold);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition-fast) ease,
+              border-color var(--transition-fast) ease;
+
+  &:hover:not(:disabled) {
+    background: var(--game-gold-a25);
+    border-color: var(--game-gold-a60);
+  }
+
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--game-gold);
+    outline-offset: 3px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  &--unaffordable {
+    color: var(--action-danger);
+    border-color: var(--action-danger-border);
+    background: var(--action-danger-bg);
+  }
+}
+
+.shop-price-coin {
+  font-size: var(--font-size-small);
+}
+
+// ── Heal section ──────────────────────────────────────────────────────────────
+
+.shop-heal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  border: var(--border-width-thin) solid var(--action-success-border);
+  border-radius: var(--border-radius-lg);
+  background: var(--action-success-bg);
+  width: 100%;
+  max-width: 22rem;
+}
+
+.shop-heal-info {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.shop-heal-status {
+  color: var(--game-health);
+  font-weight: 700;
+}
+
+.shop-heal-count {
+  color: var(--text-muted);
+  font-size: var(--font-size-small);
+}
+
+.shop-heal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-lg);
+  min-height: 2.75rem; // WCAG 44px
+  min-width: 12rem;
+  border: var(--border-width-thin) solid var(--action-success-border);
+  border-radius: var(--border-radius-md);
+  background: var(--action-success-bg);
+  color: var(--action-success);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition-fast) ease,
+              border-color var(--transition-fast) ease;
+
+  &:hover:not(:disabled) {
+    background: var(--action-success-bg);
+    filter: brightness(1.5);
+    border-color: var(--action-success);
+  }
+
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--action-success);
+    outline-offset: 3px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+}
+
+.shop-heal-cost {
+  &--unaffordable {
+    color: var(--action-danger);
+  }
+}
+
+.shop-heal-disabled-hint {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-xs);
+  color: var(--text-faint);
+  margin: 0;
+  font-style: italic;
+}
+
+// ── Leave button ──────────────────────────────────────────────────────────────
+
+.shop-leave-btn {
+  min-width: 10rem;
+  min-height: 2.75rem; // WCAG 44px
+}
+
+// ── Responsive ────────────────────────────────────────────────────────────────
+// Media queries scale the shell custom properties — grid-template-areas unchanged.
+
+@media (max-width: 768px) {
+  .shop-screen {
+    --shop-header-size: auto;
+    gap: var(--spacing-lg);
+  }
+
+  .shop-item-list {
+    gap: var(--spacing-sm);
+  }
+
+  .shop-card {
+    width: 11rem;
+    padding: var(--spacing-sm) var(--spacing-xs);
+  }
+
+  .shop-title { font-size: var(--font-size-title); }
+}
+
+@media (max-width: 480px) {
+  .shop-screen {
+    padding: var(--spacing-lg) var(--spacing-sm) var(--spacing-md);
+    gap: var(--spacing-md);
+  }
+
+  .shop-item-list {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .shop-card {
+    width: 100%;
+    max-width: 18rem;
+  }
+}
+
+// ── Reduced motion ────────────────────────────────────────────────────────────
+
+@media (prefers-reduced-motion: reduce) {
+  .shop-card {
+    animation: none;
+    transition: none;
+  }
+
+  .shop-card__buy-btn,
+  .shop-heal-btn {
+    transition: none;
+  }
+}

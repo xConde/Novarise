@@ -1,0 +1,205 @@
+// ── Sizing constants ──────────────────────────────────────────────────────────
+$badge-size:        1.75rem;  // 28px
+$badge-size-mobile: 1.5rem;   // 24px
+$tooltip-max-width: 15rem;    // 240px
+$tooltip-z:         var(--z-index-modal);
+
+// ── Root ──────────────────────────────────────────────────────────────────────
+// M5 P4: CSS Grid shell with named template areas. The relic-inventory is a
+// compact inline widget used inside the run topbar grid cell. It has two
+// reserved slots: [empty] for the no-relics message and [badges] for the icon
+// row. Only one slot is populated at a time via *ngIf (router-level swap —
+// acceptable per §5 exception). The floating tooltip uses position:fixed and
+// escapes the grid entirely.
+
+.relic-inventory {
+  display: grid;
+  grid-template-rows: auto;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "empty"
+    "badges";
+  align-items: center;
+  position: relative;
+}
+
+// ── Empty state ───────────────────────────────────────────────────────────────
+
+.relic-inventory__empty {
+  grid-area: empty;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-xs);
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+// ── Badge strip ───────────────────────────────────────────────────────────────
+// Flex is allowed inside a grid cell for small local alignment (§4).
+
+.relic-inventory__badges {
+  grid-area: badges;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+// ── Relic badge ───────────────────────────────────────────────────────────────
+
+.relic-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: $badge-size;
+  height: $badge-size;
+  border-radius: 50%;
+  border: var(--border-width-thin) solid transparent;
+  font-size: var(--font-size-xs);
+  color: var(--text-color);
+  cursor: pointer;
+  padding: 0;
+  transition: box-shadow var(--transition-fast) ease,
+              transform var(--transition-fast) ease;
+  // WCAG minimum touch target
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+
+  &:hover,
+  &:focus-visible {
+    transform: scale(1.15);
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: 0 0 0 2px var(--border-color-strong);
+  }
+
+  // Rarity styling
+  &.relic--common {
+    background: var(--run-relic-common-bg);
+    border-color: var(--run-relic-common-border);
+
+    &:hover,
+    &:focus-visible {
+      box-shadow: var(--shadow-sm) var(--run-relic-common);
+    }
+  }
+
+  &.relic--uncommon {
+    background: var(--run-relic-uncommon-bg);
+    border-color: var(--run-relic-uncommon-border);
+
+    &:hover,
+    &:focus-visible {
+      box-shadow: var(--shadow-sm) var(--panel-blue-border);
+    }
+  }
+
+  &.relic--rare {
+    background: var(--run-relic-rare-bg);
+    border-color: var(--run-relic-rare-border);
+
+    &:hover,
+    &:focus-visible {
+      box-shadow: var(--shadow-sm) var(--game-gold-a50);
+    }
+  }
+}
+
+// ── Tooltip ───────────────────────────────────────────────────────────────────
+
+.relic-tooltip {
+  position: fixed;
+  z-index: var(--z-index-modal);
+  max-width: $tooltip-max-width;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--nav-bg-a90);
+  border: var(--border-width-thin) solid var(--theme-purple-a50);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md) rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  font-family: "Orbitron", sans-serif;
+
+  // Rarity-specific border override
+  &.relic--uncommon {
+    border-color: var(--run-relic-uncommon-border);
+  }
+
+  &.relic--rare {
+    border-color: var(--run-relic-rare-border);
+  }
+}
+
+.relic-tooltip__name {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  color: var(--text-color);
+  margin-bottom: var(--spacing-xs);
+}
+
+.relic-tooltip__desc {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-bottom: var(--spacing-xs);
+}
+
+.relic-tooltip__flavor {
+  font-size: var(--font-size-xs);
+  font-style: italic;
+  color: var(--text-faint);
+  line-height: 1.4;
+  margin-bottom: var(--spacing-xs);
+}
+
+.relic-tooltip__rarity {
+  display: inline-block;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  text-transform: capitalize;
+  letter-spacing: 0.06em;
+  padding: var(--spacing-xs) var(--spacing-xs);
+  border-radius: var(--border-radius-sm);
+  background: var(--theme-purple-a10);
+  color: var(--text-muted);
+
+  .relic--common &  {
+    color: var(--run-relic-common);
+    background: var(--run-relic-common-bg);
+  }
+
+  .relic--uncommon & {
+    color: var(--run-relic-uncommon);
+    background: var(--run-relic-uncommon-bg);
+  }
+
+  .relic--rare & {
+    color: var(--run-relic-rare);
+    background: var(--run-relic-rare-bg);
+  }
+}
+
+// ── Responsive ────────────────────────────────────────────────────────────────
+
+@media (max-width: 768px) {
+  .relic-badge {
+    width: $badge-size-mobile;
+    height: $badge-size-mobile;
+    font-size: var(--font-size-2xs);
+  }
+}
+
+// ── Reduced motion ────────────────────────────────────────────────────────────
+
+@media (prefers-reduced-motion: reduce) {
+  .relic-badge {
+    transition: none;
+
+    &:hover,
+    &:focus-visible {
+      transform: none;
+    }
+  }
+}

@@ -2,21 +2,33 @@
  * Combat integration tests: TowerCombatService working against a real EnemyService spy.
  * These tests cover end-to-end combat scenarios — tower fires, enemy takes damage,
  * kills are recorded, gold is awarded.
+ *
+ * M2 S4 migration: update(deltaTime, scene) → fireTurn(scene, turnNumber).
+ * DeltaTime and fire-rate cooldowns are gone; each fireTurn() call is one turn.
  */
 import { TestBed } from '@angular/core/testing';
 import * as THREE from 'three';
 
 import { TowerCombatService, KillInfo } from './tower-combat.service';
 import { ChainLightningService } from './chain-lightning.service';
-import { ProjectileService } from './projectile.service';
+// M2 S5: ProjectileService import removed (file deleted)
 import { EnemyService } from './enemy.service';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
 import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
+import { RelicService } from '../../../run/services/relic.service';
+import { CardEffectService } from '../../../run/services/card-effect.service';
 
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
-import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy, createTowerAnimationServiceSpy } from '../testing';
+import {
+  createTestEnemy,
+  createGameBoardServiceSpy,
+  createEnemyServiceSpy,
+  createTowerAnimationServiceSpy,
+  createRelicServiceSpy,
+  createCardEffectServiceSpy,
+} from '../testing';
 import { TowerAnimationService } from './tower-animation.service';
 import { Enemy } from '../models/enemy.model';
 
@@ -31,6 +43,9 @@ describe('combat integration', () => {
   const TOWER_X = -0.5;
   const TOWER_Z = 0;
 
+  // Turn number used as the first turn in all single-turn tests
+  const TURN_1 = 1;
+
   beforeEach(() => {
     enemyMap = new Map();
 
@@ -41,13 +56,14 @@ describe('combat integration', () => {
       providers: [
         TowerCombatService,
         ChainLightningService,
-        ProjectileService,
         CombatVFXService,
         StatusEffectService,
         GameStateService,
         { provide: EnemyService, useValue: enemyServiceSpy },
         { provide: GameBoardService, useValue: gameBoardServiceSpy },
         { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
       ],
     });
 
@@ -60,18 +76,18 @@ describe('combat integration', () => {
     scene.clear();
   });
 
-  // ─── 1. Full combat tick: register tower, add enemy in range, call update() → kill ───
+  // ─── 1. Full combat tick: register tower, add enemy in range, fireTurn() → kill ───
 
   describe('full combat tick: tower fires, enemy dies, kill returned', () => {
     it('should return a kill when enemy health equals tower damage (one-shot)', () => {
       const damage = TOWER_CONFIGS[TowerType.BASIC].damage; // 25
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
 
-      // Enemy at tower world position — distance=0, so projectile hits immediately
+      // Enemy at tower world position — distance=0, within range
       const enemy = createTestEnemy('e1', TOWER_X, TOWER_Z, damage);
       enemyMap.set('e1', enemy);
 
-      const result = service.update(0.016, scene);
+      const result = service.fireTurn(scene, TURN_1);
 
       expect(result.killed.length).toBe(1);
       expect(result.killed[0].id).toBe('e1');
@@ -84,7 +100,7 @@ describe('combat integration', () => {
       const enemy = createTestEnemy('e1', TOWER_X, TOWER_Z, damage);
       enemyMap.set('e1', enemy);
 
-      const result = service.update(0.016, scene);
+      const result = service.fireTurn(scene, TURN_1);
 
       expect(result.killed[0].damage).toBe(damage);
     });
@@ -92,11 +108,11 @@ describe('combat integration', () => {
     it('should reduce enemy health on hit before kill', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
 
-      // Enemy health far above damage — survives multiple hits
+      // Enemy health far above damage — survives the hit
       const enemy = createTestEnemy('e1', TOWER_X, TOWER_Z, 10000);
       enemyMap.set('e1', enemy);
 
-      service.update(0.016, scene);
+      service.fireTurn(scene, TURN_1);
 
       expect(enemy.health).toBeLessThan(10000);
     });
@@ -112,7 +128,7 @@ describe('combat integration', () => {
       const enemy = createTestEnemy('e1', 20, 20, 100);
       enemyMap.set('e1', enemy);
 
-      const result = service.update(2.0, scene);
+      const result = service.fireTurn(scene, TURN_1);
 
       expect(result.killed.length).toBe(0);
       expect(enemy.health).toBe(100); // untouched
@@ -122,7 +138,7 @@ describe('combat integration', () => {
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
       // enemyMap is empty by default
 
-      const result = service.update(2.0, scene);
+      const result = service.fireTurn(scene, TURN_1);
 
       expect(result.killed.length).toBe(0);
       expect(result.fired.length).toBe(0);
@@ -133,7 +149,7 @@ describe('combat integration', () => {
       const enemy = createTestEnemy('e1', TOWER_X, TOWER_Z, 100);
       enemyMap.set('e1', enemy);
 
-      const result = service.update(0.016, scene);
+      const result = service.fireTurn(scene, TURN_1);
 
       expect(result.killed.length).toBe(0);
       expect(result.fired.length).toBe(0);
@@ -153,7 +169,7 @@ describe('combat integration', () => {
       const enemy = createTestEnemy('e1', TOWER_X, TOWER_Z, damage);
       enemyMap.set('e1', enemy);
 
-      const result = service.update(0.016, scene);
+      const result = service.fireTurn(scene, TURN_1);
 
       // Only one kill should be reported (the fatal hit)
       const killsForE1 = result.killed.filter((k: KillInfo) => k.id === 'e1');
@@ -168,14 +184,14 @@ describe('combat integration', () => {
       // SPLASH tower: splashRadius = 1.5, damage = 15
       service.registerTower(TOWER_ROW, TOWER_COL, TowerType.SPLASH, new THREE.Group());
 
-      // Primary target at tower position — instant hit
+      // Primary target at tower position — within range
       const primary = createTestEnemy('p', TOWER_X, TOWER_Z, 1000);
       // Secondary target within splash radius
       const secondary = createTestEnemy('s', TOWER_X + 0.8, TOWER_Z, 1000);
       enemyMap.set('p', primary);
       enemyMap.set('s', secondary);
 
-      service.update(0.016, scene);
+      service.fireTurn(scene, TURN_1);
 
       expect(primary.health).toBeLessThan(1000);
       expect(secondary.health).toBeLessThan(1000);
@@ -190,7 +206,7 @@ describe('combat integration', () => {
       enemyMap.set('p', primary);
       enemyMap.set('out', outside);
 
-      service.update(0.016, scene);
+      service.fireTurn(scene, TURN_1);
 
       expect(primary.health).toBeLessThan(1000);
       expect(outside.health).toBe(1000);
@@ -207,7 +223,7 @@ describe('combat integration', () => {
       const enemy = createTestEnemy('e1', TOWER_X, TOWER_Z, damage);
       enemyMap.set('e1', enemy);
 
-      const result = service.update(0.016, scene);
+      const result = service.fireTurn(scene, TURN_1);
 
       expect(result.killed[0].id).toBe('e1');
       expect(result.killed[0].damage).toBe(damage);
@@ -219,13 +235,48 @@ describe('combat integration', () => {
       const enemy = createTestEnemy('e1', TOWER_X, TOWER_Z, 10000);
       enemyMap.set('e1', enemy);
 
-      const result = service.update(0.016, scene);
+      const result = service.fireTurn(scene, TURN_1);
 
       expect(result.fired).toContain(TowerType.SNIPER);
     });
   });
 
-  // ─── 6. No towers registered → update is a no-op ───
+  // ─── 6. Mortar: initial blast + zone DoT on subsequent turn ───
+
+  describe('mortar tower: blast on placement turn, DoT zone ticks next turn', () => {
+    it('should damage enemies in blast radius on the placement turn', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+
+      // Enemy at tower position — within mortar blast radius
+      const enemy = createTestEnemy('e1', TOWER_X, TOWER_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      service.fireTurn(scene, TURN_1);
+
+      expect(enemy.health).toBeLessThan(10000);
+    });
+
+    it('should tick mortar zone DoT on subsequent turn', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.MORTAR, new THREE.Group());
+
+      const enemy = createTestEnemy('e1', TOWER_X, TOWER_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      // Turn 1: mortar fires, drops zone, initial blast applies
+      service.fireTurn(scene, TURN_1);
+      const healthAfterBlast = enemy.health;
+
+      // Rebuild the spatial grid state — enemy still alive
+      // Turn 2: zone DoT should tick
+      const dotResult = service.tickMortarZonesForTurn(scene, TURN_1 + 1);
+
+      // Enemy should take additional DoT damage (or be killed)
+      const zoneDidDamage = enemy.health < healthAfterBlast || dotResult.kills.some(k => k.id === 'e1');
+      expect(zoneDidDamage).toBeTrue();
+    });
+  });
+
+  // ─── 7. No towers registered → fireTurn is a no-op ───
 
   describe('cleanup', () => {
     it('should report zero towers after cleanup', () => {

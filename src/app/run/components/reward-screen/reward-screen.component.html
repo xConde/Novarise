@@ -1,0 +1,113 @@
+<div class="reward-screen" role="main" aria-label="Victory reward screen">
+
+  <!-- Header -->
+  <div class="reward-header">
+    <h2 class="reward-title" aria-live="polite">Victory!</h2>
+    <p class="reward-gold" [attr.aria-label]="'Gold earned: ' + config.goldPickup + ' gold'">
+      +{{ config.goldPickup }}g
+    </p>
+  </div>
+
+  <!-- Challenges completed — shown only when the encounter is a campaign
+       map with challenge objectives and at least one was satisfied. The
+       per-challenge gold bonus is already included in config.goldPickup;
+       this block surfaces the breakdown so the player sees what earned it. -->
+  <section class="reward-challenges"
+           *ngIf="config.completedChallenges.length > 0"
+           [attr.aria-label]="'Completed ' + config.completedChallenges.length + ' challenges for ' + totalChallengeGold + ' bonus gold'">
+    <h3 class="reward-challenges-title">
+      Challenges Completed
+      <span class="reward-challenges-total">+{{ totalChallengeGold }}g</span>
+    </h3>
+    <ul class="reward-challenge-list" role="list">
+      <li *ngFor="let challenge of config.completedChallenges"
+          class="reward-challenge-item" role="listitem">
+        <span class="reward-challenge-check" aria-hidden="true">
+          <app-icon name="check" [size]="14"></app-icon>
+        </span>
+        <span class="reward-challenge-name">{{ challenge.name }}</span>
+        <span class="reward-challenge-desc">{{ challenge.description }}</span>
+        <span class="reward-challenge-gold">+{{ challengeGoldBonus(challenge) }}g</span>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Relic choices -->
+  <section class="reward-choices" *ngIf="relicCards.length > 0 && !relicPicked">
+    <h3 class="reward-choices-title">Choose a Relic</h3>
+    <p class="reward-choices-hint">Select one to add to your run, or skip.</p>
+
+    <div class="reward-card-list" role="list">
+      <button
+        class="reward-card"
+        [class]="'reward-card reward-card--' + getRarityClass(relic.rarity)"
+        [class.reward-card--selected]="selectedRelic === relic.id"
+        *ngFor="let relic of relicCards; let i = index"
+        (click)="pickRelic(relic)"
+        [attr.aria-label]="'Option ' + (i + 1) + '. ' + relic.name + ': ' + relic.description + '. Rarity: ' + relic.rarity + '. Press ' + (i + 1) + ' to pick.'"
+        [attr.aria-pressed]="selectedRelic === relic.id"
+        [attr.aria-keyshortcuts]="(i + 1).toString()"
+        role="listitem"
+        type="button"
+      >
+        <span class="reward-card__hotkey" aria-hidden="true">{{ i + 1 }}</span>
+        <span class="reward-card__icon" aria-hidden="true"><app-icon name="diamond" [size]="16"></app-icon></span>
+        <span class="reward-card__rarity">{{ relic.rarity }}</span>
+        <span class="reward-card__name">{{ relic.name }}</span>
+        <span class="reward-card__description">{{ relic.description }}</span>
+        <em class="reward-card__flavor">{{ relic.flavorText }}</em>
+        <span class="reward-card__check" *ngIf="selectedRelic === relic.id" aria-hidden="true"><app-icon name="check" [size]="14"></app-icon></span>
+      </button>
+    </div>
+
+    <button
+      class="run-btn run-btn--secondary reward-skip-btn"
+      type="button"
+      (click)="skipRelics()"
+      aria-label="Skip relics and continue without picking one. Press Escape to skip."
+      aria-keyshortcuts="Escape"
+    >
+      Skip Relics <span class="reward-skip-btn__hint" aria-hidden="true">(Esc)</span>
+    </button>
+  </section>
+
+  <!-- Confirmation after relic pick / skip -->
+  <section class="reward-picked" *ngIf="relicPicked" aria-live="polite">
+    <p *ngIf="selectedRelicName; else skippedRelicTpl" class="reward-picked__message reward-picked__message--selected">
+      Relic acquired: <strong>{{ selectedRelicName }}</strong>
+    </p>
+    <ng-template #skippedRelicTpl>
+      <p class="reward-picked__message reward-picked__message--skipped">No relic taken.</p>
+    </ng-template>
+  </section>
+
+  <!-- Card choices (shown after relic section is resolved, or immediately when no relics) -->
+  <app-card-draft
+    *ngIf="config.cardChoices.length > 0 && !cardPicked && (relicPicked || config.relicChoices.length === 0)"
+    [cardChoices]="config.cardChoices"
+    (cardPicked)="onCardPicked($event)"
+    (skipped)="onCardSkipped()">
+  </app-card-draft>
+
+  <!-- Confirmation after card pick / skip -->
+  <section class="reward-picked" *ngIf="cardPicked && config.cardChoices.length > 0" aria-live="polite">
+    <p *ngIf="pickedCardName; else skippedCardTpl" class="reward-picked__message reward-picked__message--selected">
+      Added to deck: <strong>{{ pickedCardName }}</strong>
+    </p>
+    <ng-template #skippedCardTpl>
+      <p class="reward-picked__message reward-picked__message--skipped">No card taken.</p>
+    </ng-template>
+  </section>
+
+  <!-- Continue -->
+  <button
+    class="run-btn run-btn--primary reward-continue-btn"
+    type="button"
+    *ngIf="canContinue"
+    (click)="continue()"
+    aria-label="Continue to the node map"
+  >
+    Continue
+  </button>
+
+</div>

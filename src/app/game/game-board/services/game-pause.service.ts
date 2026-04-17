@@ -1,8 +1,10 @@
 import { Injectable, OnDestroy } from '@angular/core';
+import { Observable } from 'rxjs';
 import { GameStateService } from './game-state.service';
 import { MinimapService } from './minimap.service';
 import { GameEndService } from './game-end.service';
 import { GamePhase } from '../models/game-state.model';
+import { EncounterCheckpointService } from '../../../run/services/encounter-checkpoint.service';
 
 /**
  * Manages pause/resume, auto-pause on visibility loss, and quit confirmation.
@@ -28,6 +30,7 @@ export class GamePauseService implements OnDestroy {
     private gameStateService: GameStateService,
     private minimapService: MinimapService,
     private gameEndService: GameEndService,
+    private encounterCheckpointService: EncounterCheckpointService,
   ) {}
 
   get isPaused(): boolean {
@@ -64,42 +67,26 @@ export class GamePauseService implements OnDestroy {
   }
 
   /**
-   * Confirm quit: record defeat and return the navigation target route.
-   * @param isCampaign Whether this is a campaign game.
-   * @returns The route to navigate to.
+   * Confirm quit: clear checkpoint, record defeat, return navigation target.
+   * @returns The route to navigate to (always '/run').
    */
-  confirmQuit(isCampaign: boolean): string {
+  confirmQuit(): string {
     this.showQuitConfirm = false;
-    this.gameEndService.recordEnd(false, null);
-    return isCampaign ? '/campaign' : '/';
+    this.encounterCheckpointService.clearCheckpoint();
+    // Quit path — defeat, no challenges evaluated, turnsUsed is irrelevant.
+    this.gameEndService.recordEnd(false);
+    return '/run';
   }
 
   /**
-   * Guard check for route deactivation. Auto-pauses if in combat, asks confirmation.
-   * @returns true to allow navigation, false to stay.
+   * Called by the CanDeactivate guard when the player tries to navigate away.
+   * Checkpoint already exists from the last auto-save — allow immediately.
    */
-  canLeaveGame(): boolean {
-    const state = this.gameStateService.getState();
-
-    if (
-      state.phase === GamePhase.SETUP ||
-      state.phase === GamePhase.VICTORY ||
-      state.phase === GamePhase.DEFEAT
-    ) {
-      return true;
-    }
-
-    if (!state.isPaused) {
-      this.gameStateService.togglePause();
-    }
-
-    const shouldLeave = confirm('Leave game? Progress will be lost.');
-    if (!shouldLeave) {
-      return false;
-    }
-
-    this.gameEndService.recordEnd(false, null);
-    return true;
+  requestGuardDecision(): Observable<boolean> {
+    return new Observable(subscriber => {
+      subscriber.next(true);
+      subscriber.complete();
+    });
   }
 
   /** Reset pause-related state (called on game restart). */

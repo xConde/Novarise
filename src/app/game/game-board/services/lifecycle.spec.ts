@@ -5,7 +5,7 @@ import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { PathfindingService } from './pathfinding.service';
 import { TowerCombatService } from './tower-combat.service';
 import { ChainLightningService } from './chain-lightning.service';
-import { ProjectileService } from './projectile.service';
+// M2 S5: ProjectileService import removed (file deleted)
 import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
 import { AudioService } from './audio.service';
@@ -22,6 +22,8 @@ import { createTestEnemy, createTestBoard, createGameBoardServiceSpy, createEnem
 import { TowerAnimationService } from './tower-animation.service';
 import { EnemyVisualService } from './enemy-visual.service';
 import { EnemyHealthService } from './enemy-health.service';
+import { RelicService } from '../../../run/services/relic.service';
+import { RunEventBusService } from '../../../run/services/run-event-bus.service';
 
 // ============================================================================
 // 1. EnemyService lifecycle
@@ -129,7 +131,6 @@ describe('TowerCombatService lifecycle', () => {
       providers: [
         TowerCombatService,
         ChainLightningService,
-        ProjectileService,
         CombatVFXService,
         StatusEffectService,
         GameStateService,
@@ -160,42 +161,43 @@ describe('TowerCombatService lifecycle', () => {
     expect(service.getPlacedTowers().size).toBe(0);
   });
 
-  it('cleanup() should clear all projectiles', () => {
-    // Tower at row=10, col=12 on 25x20 board → world pos (-0.5, 0)
-    // Place enemy 2 tiles away (within basic range=3) so projectile is in-flight
+  it('cleanup() should clear all VFX and reset tower state', () => {
+    // Turn-based: fireTurn replaces the old deltaTime-based update.
+    // M2 S5: projectiles were removed entirely (projectile.service.ts deleted).
+    // fireTurn() resolves hits instantly — no in-flight projectiles.
+    // Verify cleanup() still empties the tower map and scene children.
     service.registerTower(10, 12, TowerType.BASIC, new THREE.Group());
     const enemy = createEnemy('e-1', 1.5, 0, 9999);
     enemyMap.set(enemy.id, enemy);
 
-    // Use tiny deltaTime: tower fires (lastFireTime=-Infinity passes fireRate check)
-    // but projectile only moves 8 * 0.01 = 0.08 tiles, well short of 2-tile distance
-    service.update(0.01, scene);
-    const sceneChildrenBeforeCleanup = scene.children.length;
-    expect(sceneChildrenBeforeCleanup).toBeGreaterThan(0);
+    // fireTurn resolves hits immediately (no projectile phase)
+    service.fireTurn(scene, 1);
 
     service.cleanup(scene);
 
-    // All projectile meshes removed from scene
+    // All tower map entries cleared
+    expect(service.getPlacedTowers().size).toBe(0);
+    // Scene children should be empty after cleanup
     expect(scene.children.length).toBe(0);
   });
 
-  it('cleanup() should reset projectileCounter and gameTime to 0', () => {
-    // Fire a projectile to increment counter
+  it('cleanup() should reset state so fireTurn works cleanly after re-init', () => {
+    // fireTurn replaces the old deltaTime-based update (M2 S5 projectile purge)
     service.registerTower(10, 12, TowerType.BASIC, new THREE.Group());
     const enemy = createEnemy('e-1', 1.5, 0, 9999);
     enemyMap.set(enemy.id, enemy);
-    service.update(0.01, scene);
+    service.fireTurn(scene, 1);
 
     service.cleanup(scene);
 
-    // Towers map is empty, no projectiles remain, no errors
+    // Towers map is empty, no errors
     expect(service.getPlacedTowers().size).toBe(0);
 
     // Re-register and fire again — should work cleanly from reset state
     service.registerTower(5, 5, TowerType.BASIC, new THREE.Group());
     const enemy2 = createEnemy('e-2', 1.5, 0, 9999);
     enemyMap.set(enemy2.id, enemy2);
-    expect(() => service.update(0.01, scene)).not.toThrow();
+    expect(() => service.fireTurn(scene, 2)).not.toThrow();
   });
 
   it('cleanup() should remove tower meshes from scene', () => {
@@ -329,7 +331,6 @@ describe('GameStateService lifecycle', () => {
     expect(state.isEndless).toBe(INITIAL_GAME_STATE.isEndless);
     expect(state.highestWave).toBe(INITIAL_GAME_STATE.highestWave);
     expect(state.isPaused).toBe(INITIAL_GAME_STATE.isPaused);
-    expect(state.gameSpeed).toBe(INITIAL_GAME_STATE.gameSpeed);
     expect(state.elapsedTime).toBe(INITIAL_GAME_STATE.elapsedTime);
     expect(state.difficulty).toBe(INITIAL_GAME_STATE.difficulty);
   });
@@ -355,13 +356,21 @@ describe('WaveService lifecycle', () => {
   let scene: THREE.Scene;
 
   beforeEach(() => {
-    enemyServiceSpy = jasmine.createSpyObj('EnemyService', ['spawnEnemy']);
+    enemyServiceSpy = jasmine.createSpyObj('EnemyService', ['spawnEnemy', 'buildOccupiedSpawnerSet']);
     enemyServiceSpy.spawnEnemy.and.returnValue({ id: 'enemy-0' } as unknown as Enemy);
+    enemyServiceSpy.buildOccupiedSpawnerSet.and.returnValue(new Set<string>());
+
+    const relicServiceSpy = jasmine.createSpyObj('RelicService', ['getTurnDelayPerWave']);
+    relicServiceSpy.getTurnDelayPerWave.and.returnValue(0);
+
+    const eventBusSpy = jasmine.createSpyObj('RunEventBusService', ['emit']);
 
     TestBed.configureTestingModule({
       providers: [
         WaveService,
-        { provide: EnemyService, useValue: enemyServiceSpy }
+        { provide: EnemyService, useValue: enemyServiceSpy },
+        { provide: RelicService, useValue: relicServiceSpy },
+        { provide: RunEventBusService, useValue: eventBusSpy },
       ]
     });
 
@@ -376,8 +385,8 @@ describe('WaveService lifecycle', () => {
 
   it('partially spawned wave should still report active', () => {
     service.startWave(1, scene);
-    // Spawn some but not all
-    service.update(0.5, scene);
+    // Wave 1 has 5 turns. Spawn 1 turn — 4 turns remain, still active.
+    service.spawnForTurn(scene);
     expect(service.isSpawning()).toBeTrue();
   });
 
@@ -403,10 +412,11 @@ describe('WaveService lifecycle', () => {
 
   it('reset() should allow starting wave 1 again from clean state', () => {
     service.startWave(1, scene);
-    // Fully spawn wave 1
-    for (let i = 0; i < 100; i++) {
-      service.update(1, scene);
+    // Fully drain wave 1 turn schedule (5 turns)
+    for (let i = 0; i < 10; i++) {
+      service.spawnForTurn(scene);
     }
+    expect(service.isSpawning()).toBeFalse();
 
     service.reset();
     service.startWave(1, scene);
@@ -513,7 +523,7 @@ describe('MinimapService lifecycle', () => {
     };
 
     // First update at t=1000
-    service.update(1000, terrain, []);
+    (service as any).update(1000, terrain, []);
 
     service.cleanup();
 
@@ -521,7 +531,7 @@ describe('MinimapService lifecycle', () => {
     service.init(container);
     // If lastUpdateTime was not reset, this would be throttled because
     // 0 - 1000 < updateIntervalMs. We verify it runs by checking no throw.
-    expect(() => service.update(0, terrain, [])).not.toThrow();
+    expect(() => (service as any).update(0, terrain, [])).not.toThrow();
   });
 
   it('cleanup() should be idempotent (safe to call without init)', () => {

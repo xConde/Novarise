@@ -134,25 +134,34 @@
   --panel-neutral-hover: rgba(120, 120, 120, 0.4);
 
   /* Text opacity variants */
-  --text-muted: rgba(255, 255, 255, 0.6);
-  --text-dim: rgba(255, 255, 255, 0.5);
-  --text-faint: rgba(255, 255, 255, 0.4);
-  --text-subtle: rgba(255, 255, 255, 0.45);
-  --text-dimmer: rgba(255, 255, 255, 0.55);
+  --text-muted: rgba(255, 255, 255, 0.65);
+  --text-dim: rgba(255, 255, 255, 0.55);
+  --text-faint: rgba(255, 255, 255, 0.45);
+  --text-subtle: rgba(255, 255, 255, 0.5);
+  --text-dimmer: rgba(255, 255, 255, 0.6);
 
   /* Glass panel backgrounds (semi-transparent dark backgrounds) */
   --glass-bg: rgba(0, 0, 0, 0.75);
 
+  /* Structural borders (dark UI) */
+  --border-structural: rgba(255, 255, 255, 0.08);
+  --border-structural-subtle: rgba(255, 255, 255, 0.05);
+  --border-interactive: rgba(255, 255, 255, 0.12);
+  --border-interactive-hover: rgba(255, 255, 255, 0.22);
+  --surface-subtle: rgba(255, 255, 255, 0.03);
+  --surface-bar-track: rgba(255, 255, 255, 0.05);
+  --surface-bar-track-alt: rgba(255, 255, 255, 0.08);
+
   /* Typography Scale */
-  --font-size-hero: 3rem;
-  --font-size-large: 2rem;
-  --font-size-title: 1.5rem;
-  --font-size-base: 1rem;
-  --font-size-small: 0.875rem;
-  --font-size-xs: 0.75rem;
-  --font-size-2xs: 0.625rem;
-  --font-size-3xs: 0.5625rem;
-  --font-size-tiny: 0.5rem;
+  --font-size-hero: 3rem;        /* 48px */
+  --font-size-large: 2rem;       /* 32px */
+  --font-size-title: 1.5rem;     /* 24px */
+  --font-size-base: 1rem;        /* 16px */
+  --font-size-small: 0.875rem;   /* 14px */
+  --font-size-xs: 0.8125rem;     /* 13px — UI floor for labels/meta */
+  --font-size-2xs: 0.6875rem;    /* 11px — HUD compact */
+  --font-size-3xs: 0.625rem;     /* 10px — HUD minimal */
+  --font-size-tiny: 0.5625rem;   /* 9px  — HUD micro (hotkeys, costs) */
 
   /* Spacing System */
   --spacing-xs: 0.3125rem;   /* 5px */
@@ -186,4 +195,30 @@
   --z-index-base: 1;
   --z-index-overlay: 10;
   --z-index-modal: 100;
+
+  /* ── Run Mode ────────────────────────────────────────── */
+
+  /* Node type colors (derived from existing palette) */
+  --run-node-combat: var(--panel-blue-accent);
+  --run-node-elite: var(--game-accent-orange);
+  --run-node-boss: var(--game-health);
+  --run-node-rest: var(--action-success);
+  --run-node-shop: var(--game-gold);
+  --run-node-event: var(--theme-purple-light);
+  --run-node-unknown: var(--text-faint);
+
+  /* Relic rarity colors */
+  --run-relic-common: var(--text-muted);
+  --run-relic-uncommon: var(--panel-blue-accent);
+  --run-relic-rare: var(--game-gold);
+
+  /* Relic rarity backgrounds (low-alpha tints) */
+  --run-relic-common-bg: rgba(255, 255, 255, 0.06);
+  --run-relic-uncommon-bg: rgba(100, 200, 255, 0.08);
+  --run-relic-rare-bg: var(--game-gold-a08);
+
+  /* Relic rarity borders */
+  --run-relic-common-border: var(--border-color);
+  --run-relic-uncommon-border: var(--panel-blue-border);
+  --run-relic-rare-border: var(--game-gold-a40);
 }

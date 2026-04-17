@@ -6,7 +6,7 @@ import { PathfindingService } from './pathfinding.service';
 import { GameStateService } from './game-state.service';
 import { TowerCombatService } from './tower-combat.service';
 import { ChainLightningService } from './chain-lightning.service';
-import { ProjectileService } from './projectile.service';
+// M2 S5: ProjectileService import removed (file deleted)
 import { CombatVFXService } from './combat-vfx.service';
 import { StatusEffectService } from './status-effect.service';
 import { GameBoardService } from '../game-board.service';
@@ -101,19 +101,22 @@ describe('Flying Enemy', () => {
       expect(enemy.position.y).not.toBe(ENEMY_STATS[EnemyType.FLYING].size);
     });
 
-    it('should spawn even when ground path is fully blocked', () => {
-      // Block both neighbours of spawner (0,0) so A* would fail
+    it('should spawn even when ground A* path is fully blocked (both use fallback)', () => {
+      // Block both neighbours of spawner (0,0) so A* would fail for ground enemies.
+      // Fix #43: ground enemy falls back to straight-line path, so it still spawns.
+      // Flying enemy is unchanged — always uses straight-line path.
       const wallCells = [
         { row: 0, col: 1 },
         { row: 1, col: 0 }
       ];
       gameBoardService.getGameBoard.and.returnValue(createTestBoard(10, wallCells));
 
-      // Ground enemy should fail
+      // Ground enemy now uses straight-line fallback — spawns successfully
       const ground = enemyService.spawnEnemy(EnemyType.BASIC, mockScene);
-      expect(ground).toBeNull();
+      expect(ground).toBeTruthy();
+      expect(ground!.path.length).toBeGreaterThan(0);
 
-      // Flying enemy should succeed
+      // Flying enemy also succeeds with its straight-line path
       const flyer = enemyService.spawnEnemy(EnemyType.FLYING, mockScene);
       expect(flyer).toBeTruthy();
       expect(flyer!.path.length).toBe(2);
@@ -121,27 +124,26 @@ describe('Flying Enemy', () => {
   });
 
   // ---------------------------------------------------------------
-  // Movement
+  // Movement (turn-based: stepEnemiesOneTurn replaces updateEnemies)
   // ---------------------------------------------------------------
   describe('Movement', () => {
     it('should move in a straight line from spawner to exit', () => {
       const enemy = enemyService.spawnEnemy(EnemyType.FLYING, mockScene)!;
-      const startX = enemy.position.x;
-      const startZ = enemy.position.z;
+      const startPathIndex = enemy.pathIndex;
 
-      enemyService.updateEnemies(0.1);
+      // FLYING enemies always advance 1 tile/turn (not FAST/SWIFT)
+      enemyService.stepEnemiesOneTurn(() => 0);
 
-      // Should have moved
-      const hasMoved =
-        enemy.position.x !== startX || enemy.position.z !== startZ;
-      expect(hasMoved).toBe(true);
+      // pathIndex should have advanced and distanceTraveled incremented
+      expect(enemy.pathIndex).toBeGreaterThan(startPathIndex);
       expect(enemy.distanceTraveled).toBeGreaterThan(0);
     });
 
     it('should maintain FLYING_ENEMY_HEIGHT during movement', () => {
       const enemy = enemyService.spawnEnemy(EnemyType.FLYING, mockScene)!;
 
-      enemyService.updateEnemies(0.5);
+      // Advance one turn
+      enemyService.stepEnemiesOneTurn(() => 0);
 
       expect(enemy.position.y).toBe(FLYING_ENEMY_HEIGHT);
     });
@@ -149,8 +151,9 @@ describe('Flying Enemy', () => {
     it('should NOT change altitude as it moves', () => {
       const enemy = enemyService.spawnEnemy(EnemyType.FLYING, mockScene)!;
 
-      for (let i = 0; i < 10; i++) {
-        enemyService.updateEnemies(0.1);
+      // Advance several turns — flying path has only 2 nodes so stop at the end
+      for (let i = 0; i < 3; i++) {
+        enemyService.stepEnemiesOneTurn(() => 0);
         expect(enemy.position.y).toBe(FLYING_ENEMY_HEIGHT);
       }
     });
@@ -168,10 +171,8 @@ describe('Flying Enemy', () => {
       const enemy = enemyService.spawnEnemy(EnemyType.FLYING, mockScene)!;
       expect(enemy).toBeTruthy();
 
-      // Move it enough to cross the board
-      for (let i = 0; i < 100; i++) {
-        enemyService.updateEnemies(0.1);
-      }
+      // Advance at least one turn — flying enemy ignores walls
+      enemyService.stepEnemiesOneTurn(() => 0);
 
       expect(enemy.distanceTraveled).toBeGreaterThan(0);
     });
@@ -179,10 +180,10 @@ describe('Flying Enemy', () => {
     it('should reach exit and trigger exit detection normally', () => {
       const enemy = enemyService.spawnEnemy(EnemyType.FLYING, mockScene)!;
 
-      // Force to last path node
+      // Force to last path node (already at exit)
       enemy.pathIndex = enemy.path.length - 1;
 
-      const reachedExit = enemyService.updateEnemies(0.1);
+      const reachedExit = enemyService.stepEnemiesOneTurn(() => 0);
       expect(reachedExit).toContain(enemy.id);
     });
   });
@@ -251,7 +252,6 @@ describe('Flying Enemy', () => {
           providers: [
             TowerCombatService,
             ChainLightningService,
-            ProjectileService,
             CombatVFXService,
             StatusEffectService,
             GameStateService,
@@ -301,10 +301,10 @@ describe('Flying Enemy', () => {
 
         const originalSpeed = flyingEnemy.speed;
 
-        // Update past slow tower fire rate to trigger aura
-        combatService.update(0.6, combatScene);
+        // Turn-based: fire one turn to trigger slow aura
+        combatService.fireTurn(combatScene, 1);
 
-        // Speed should NOT change
+        // Speed should NOT change — flying enemies are immune to SLOW
         expect(flyingEnemy.speed).toBe(originalSpeed);
       });
 
@@ -348,13 +348,14 @@ describe('Flying Enemy', () => {
         const groundOriginal = groundEnemy.speed;
         const flyingOriginal = flyingEnemy.speed;
 
-        combatService.update(0.6, combatScene);
+        // Turn-based: fire one turn to trigger slow aura on both nearby enemies
+        combatService.fireTurn(combatScene, 1);
 
-        // Ground enemy should be slowed
+        // Ground enemy should be slowed (speed multiplied by slowFactor)
         const slowFactor = TOWER_CONFIGS[TowerType.SLOW].slowFactor!;
         expect(groundEnemy.speed).toBeCloseTo(groundOriginal * slowFactor);
 
-        // Flying enemy should NOT be slowed
+        // Flying enemy should NOT be slowed — immune
         expect(flyingEnemy.speed).toBe(flyingOriginal);
       });
 
@@ -380,8 +381,8 @@ describe('Flying Enemy', () => {
 
         const initialHealth = flyingEnemy.health;
 
-        // Update past basic tower fire rate
-        combatService.update(1.1, combatScene);
+        // Turn-based: fire one turn — basic tower targets nearest enemy
+        combatService.fireTurn(combatScene, 1);
 
         // Should have been damaged
         expect(flyingEnemy.health).toBeLessThan(initialHealth);
@@ -482,9 +483,10 @@ describe('Flying Enemy', () => {
       expect(flyer1.id).not.toBe(flyer2.id);
       expect(enemyService.getEnemies().size).toBeGreaterThanOrEqual(2);
 
-      enemyService.updateEnemies(0.1);
+      // Turn-based: advance one turn for all enemies
+      enemyService.stepEnemiesOneTurn(() => 0);
 
-      // Both should have moved
+      // Both should have moved (1 tile/turn each)
       expect(flyer1.distanceTraveled).toBeGreaterThan(0);
       expect(flyer2.distanceTraveled).toBeGreaterThan(0);
     });
@@ -517,7 +519,8 @@ describe('Flying Enemy', () => {
       const initialPos = { ...enemy.position };
 
       enemyService.damageEnemy(enemy.id, enemy.maxHealth);
-      enemyService.updateEnemies(0.5);
+      // Turn-based: step one turn — dead enemy (health <= 0) should be skipped
+      enemyService.stepEnemiesOneTurn(() => 0);
 
       expect(enemy.position.x).toBe(initialPos.x);
       expect(enemy.position.z).toBe(initialPos.z);

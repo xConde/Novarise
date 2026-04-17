@@ -1,15 +1,6 @@
 import { EnemyType } from './enemy.model';
-
-export interface WaveEntry {
-  type: EnemyType;
-  count: number;
-  spawnInterval: number; // seconds between spawns
-}
-
-export interface WaveDefinition {
-  entries: WaveEntry[];
-  reward: number; // bonus gold for completing wave
-}
+import { WaveEntry, WaveDefinition, getWaveEnemyCount, getWaveEnemyTypes } from '@core/models/wave-definition.model';
+export { WaveEntry, WaveDefinition, getWaveEnemyCount, getWaveEnemyTypes };
 
 export const WAVE_DEFINITIONS: WaveDefinition[] = [
   // Wave 1: Easy intro

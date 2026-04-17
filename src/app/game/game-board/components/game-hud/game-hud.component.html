@@ -18,36 +18,48 @@
       <span class="hud-label">Score</span>
       <span class="hud-value" [class.score-pulse]="scorePulse">{{ score }}</span>
     </div>
-    <div class="hud-stat" [class.secondary]="speedRunTimeLimit === 0" [class.speed-run-active]="speedRunTimeLimit > 0">
-      <span class="hud-label" *ngIf="speedRunTimeLimit === 0">Time</span>
-      <span class="hud-label speed-run-label" *ngIf="speedRunTimeLimit > 0">Speed Run</span>
-      <span class="hud-value" *ngIf="speedRunTimeLimit === 0">{{ formattedTime }}</span>
-      <span class="hud-value speed-run-timer"
-            *ngIf="speedRunTimeLimit > 0"
-            [class.warning]="speedRunWarning"
-            [class.critical]="speedRunCritical">
-        {{ formattedSpeedRunRemaining }}
-      </span>
+    <div class="hud-stat secondary">
+      <span class="hud-label">Time</span>
+      <span class="hud-value">{{ formattedTime }}</span>
     </div>
-    <span class="hud-level-name" *ngIf="isCampaignGame && levelName" aria-label="Level name">{{ levelName }}</span>
   </div>
-  <div class="challenge-indicators" *ngIf="challengeIndicators.length > 0" aria-label="Challenge progress">
+</div>
+<div class="hud-challenge-strip"
+     *ngIf="challengeIndicators.length > 0"
+     aria-label="Challenge progress">
+  <button class="hud-challenge-toggle"
+          (click)="toggleChallengeStrip()"
+          [attr.aria-expanded]="challengeStripExpanded"
+          [attr.aria-label]="challengeStripExpanded ? 'Collapse challenge indicators' : 'Expand challenge indicators'">
+    <span *ngIf="!challengeStripExpanded" class="hud-challenge-summary">
+      <span class="challenge-dot challenge-dot--passing" *ngFor="let _ of [].constructor(passingCount)">✓</span>
+      <span class="challenge-dot challenge-dot--failing" *ngFor="let _ of [].constructor(failingCount)">✗</span>
+    </span>
+    <span *ngIf="challengeStripExpanded" aria-hidden="true">×</span>
+  </button>
+  <ng-container *ngIf="challengeStripExpanded">
     <span
       class="challenge-indicator"
       *ngFor="let ci of challengeIndicators"
       [class.passing]="ci.passing"
       [class.failing]="!ci.passing"
-      [attr.aria-label]="ci.label + ': ' + ci.value">
+      [attr.aria-label]="ci.label + ': ' + ci.value"
+      [attr.title]="getChallengeHelp(ci)">
       {{ ci.label }}: {{ ci.value }}
     </span>
-  </div>
-  <div class="hud-wave-status" *ngIf="isCombat">
-    <span class="wave-enemy-count">{{ enemiesRemaining }}</span> enemies remaining
-    <span
-      *ngIf="isEndless && currentEndlessTemplate"
-      class="wave-template-badge"
-      aria-label="Current wave type">
-      {{ currentEndlessTemplate }}
-    </span>
-  </div>
+  </ng-container>
+</div>
+<div class="hud-wave-status"
+     *ngIf="isCombat"
+     [class.hud-wave-status--critical]="enemiesRemaining > 0 && enemiesRemaining <= 2"
+     [class.hud-wave-status--cleared]="enemiesRemaining === 0"
+     aria-live="polite">
+  <span class="wave-enemy-count">{{ enemiesRemaining }}</span>
+  {{ enemiesRemaining === 1 ? 'enemy remaining' : 'enemies remaining' }}
+  <span
+    *ngIf="isEndless && currentEndlessTemplate"
+    class="wave-template-badge"
+    aria-label="Current wave type">
+    {{ currentEndlessTemplate }}
+  </span>
 </div>

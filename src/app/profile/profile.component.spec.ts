@@ -7,23 +7,12 @@ import {
   ACHIEVEMENTS,
   AchievementCategory,
 } from '../core/services/player-profile.service';
-import { SettingsService, GameSettings } from '../core/services/settings.service';
-import { DifficultyLevel } from '../game/game-board/models/game-state.model';
 
 describe('ProfileComponent', () => {
   let component: ProfileComponent;
   let fixture: ComponentFixture<ProfileComponent>;
   let router: jasmine.SpyObj<Router>;
   let profileService: jasmine.SpyObj<PlayerProfileService>;
-  let settingsService: jasmine.SpyObj<SettingsService>;
-
-  const mockSettings: GameSettings = {
-    audioMuted: false,
-    difficulty: DifficultyLevel.NORMAL,
-    gameSpeed: 1,
-    showFps: false,
-    reduceMotion: false,
-  };
 
   const mockProfile: PlayerProfile = {
     totalGamesPlayed: 15,
@@ -41,6 +30,11 @@ describe('ProfileComponent', () => {
     hasPlacedAllTowerTypes: false,
     maxModifiersUsedInVictory: 0,
     completedChallengeCount: 0,
+    runsAttempted: 0,
+    runsCompleted: 0,
+    highestAscensionBeaten: 0,
+    runTotalKills: 0,
+    runBestScore: 0,
   };
 
   beforeEach(async () => {
@@ -48,15 +42,11 @@ describe('ProfileComponent', () => {
     profileService = jasmine.createSpyObj('PlayerProfileService', ['getProfile']);
     profileService.getProfile.and.returnValue({ ...mockProfile, achievements: [...mockProfile.achievements] });
 
-    settingsService = jasmine.createSpyObj('SettingsService', ['get', 'update']);
-    settingsService.get.and.returnValue({ ...mockSettings });
-
     await TestBed.configureTestingModule({
       declarations: [ProfileComponent],
       providers: [
         { provide: Router, useValue: router },
         { provide: PlayerProfileService, useValue: profileService },
-        { provide: SettingsService, useValue: settingsService },
       ]
     }).compileComponents();
 
@@ -71,7 +61,7 @@ describe('ProfileComponent', () => {
 
   it('should display profile title', () => {
     const title = fixture.nativeElement.querySelector('.profile-title');
-    expect(title.textContent).toContain('PROFILE');
+    expect(title.textContent).toContain('Profile');
   });
 
   it('should render stats grid with correct values', () => {
@@ -122,21 +112,32 @@ describe('ProfileComponent', () => {
     expect(countEl.textContent).toContain(`2 / ${ACHIEVEMENTS.length} Unlocked`);
   });
 
-  it('should render all achievement cards across all categories', () => {
+  it('should render all achievement cards when categories are expanded', () => {
+    // Expand all categories to make cards visible
+    component.categoryGroups.forEach(g => component.toggleCategory(g.category));
+    fixture.detectChanges();
     const cards = fixture.nativeElement.querySelectorAll('.achievement-card');
     expect(cards.length).toBe(ACHIEVEMENTS.length);
   });
 
   it('should apply unlocked class to unlocked achievements', () => {
+    component.categoryGroups.forEach(g => component.toggleCategory(g.category));
+    fixture.detectChanges();
     const unlockedCards = fixture.nativeElement.querySelectorAll('.achievement-card.unlocked');
     const lockedCards = fixture.nativeElement.querySelectorAll('.achievement-card.locked');
     expect(unlockedCards.length).toBe(2);
     expect(lockedCards.length).toBe(ACHIEVEMENTS.length - 2);
   });
 
-  it('should navigate home on goHome()', () => {
-    component.goHome();
+  it('should navigate home on goBack()', () => {
+    component.goBack();
     expect(router.navigate).toHaveBeenCalledWith(['/']);
+  });
+
+  it('should render back button in nav', () => {
+    const backBtn = fixture.nativeElement.querySelector('.nav-back');
+    expect(backBtn).toBeTruthy();
+    expect(backBtn.textContent).toContain('Back');
   });
 
   it('should not show first-time hint when games have been played', () => {
@@ -160,6 +161,8 @@ describe('ProfileComponent', () => {
   });
 
   it('should show "How to unlock:" hint on locked achievement cards', () => {
+    component.categoryGroups.forEach(g => component.toggleCategory(g.category));
+    fixture.detectChanges();
     const lockedCards = fixture.nativeElement.querySelectorAll('.achievement-card.locked');
     expect(lockedCards.length).toBeGreaterThan(0);
     const hints = lockedCards[0].querySelectorAll('.achievement-hint');
@@ -168,10 +171,132 @@ describe('ProfileComponent', () => {
   });
 
   it('should not show "How to unlock:" hint on unlocked achievement cards', () => {
+    component.categoryGroups.forEach(g => component.toggleCategory(g.category));
+    fixture.detectChanges();
     const unlockedCards = fixture.nativeElement.querySelectorAll('.achievement-card.unlocked');
     expect(unlockedCards.length).toBeGreaterThan(0);
     const hints = unlockedCards[0].querySelectorAll('.achievement-hint');
     expect(hints.length).toBe(0);
+  });
+
+  // ── Collapsible Sections ──────────────────────────────────────────────────
+
+  describe('collapsible sections', () => {
+    it('should start with arsenal collapsed', () => {
+      expect(component.arsenalExpanded).toBeFalse();
+      const rows = fixture.nativeElement.querySelectorAll('.arsenal-row');
+      expect(rows.length).toBe(0);
+    });
+
+    it('should expand arsenal on toggle', () => {
+      component.arsenalExpanded = true;
+      fixture.detectChanges();
+      const rows = fixture.nativeElement.querySelectorAll('.arsenal-row');
+      expect(rows.length).toBe(6);
+    });
+
+    it('should start with achievement categories collapsed', () => {
+      const cards = fixture.nativeElement.querySelectorAll('.achievement-card');
+      expect(cards.length).toBe(0);
+    });
+
+    it('should toggle a category open and closed', () => {
+      expect(component.isCategoryExpanded('combat')).toBeFalse();
+      component.toggleCategory('combat');
+      expect(component.isCategoryExpanded('combat')).toBeTrue();
+      component.toggleCategory('combat');
+      expect(component.isCategoryExpanded('combat')).toBeFalse();
+    });
+  });
+
+  // ── Player Banner ──────────────────────────────────────────────────────────
+
+  describe('player banner', () => {
+    it('should render the banner rank badge', () => {
+      const badge = fixture.nativeElement.querySelector('.banner-rank-badge');
+      expect(badge).toBeTruthy();
+    });
+
+    it('should show rank title "Recruit" for 2 unlocked achievements', () => {
+      expect(component.rankTitle).toBe('Recruit');
+      const rankEl = fixture.nativeElement.querySelector('.banner-rank-title');
+      expect(rankEl.textContent.trim()).toBe('Recruit');
+    });
+
+    it('should compute correct achievementProgressPct', () => {
+      expect(component.achievementProgressPct).toBe(8);
+    });
+
+    it('should show rank "Defender" for 3 achievements', () => {
+      profileService.getProfile.and.returnValue({
+        ...mockProfile,
+        achievements: ['a', 'b', 'c'],
+      });
+      const newFixture = TestBed.createComponent(ProfileComponent);
+      newFixture.detectChanges();
+      expect(newFixture.componentInstance.rankTitle).toBe('Defender');
+    });
+
+    it('should show rank "Novarise" for 25+ achievements', () => {
+      const twentyFive = Array.from({ length: 25 }, (_, i) => `ach_${i}`);
+      profileService.getProfile.and.returnValue({
+        ...mockProfile,
+        achievements: twentyFive,
+      });
+      const newFixture = TestBed.createComponent(ProfileComponent);
+      newFixture.detectChanges();
+      expect(newFixture.componentInstance.rankTitle).toBe('Novarise');
+    });
+
+    it('should render banner progress bar fill', () => {
+      const fill = fixture.nativeElement.querySelector('.banner-progress-fill');
+      expect(fill).toBeTruthy();
+    });
+  });
+
+  // ── Tower Arsenal ──────────────────────────────────────────────────────────
+
+  describe('tower arsenal', () => {
+    it('should build towerKillRows with 6 entries', () => {
+      expect(component.towerKillRows.length).toBe(6);
+    });
+
+    it('should show all tower types even with 0 kills', () => {
+      const labels = component.towerKillRows.map((r) => r.label);
+      expect(labels).toContain('Basic');
+      expect(labels).toContain('Sniper');
+      expect(labels).toContain('Splash');
+      expect(labels).toContain('Slow');
+      expect(labels).toContain('Chain');
+      expect(labels).toContain('Mortar');
+    });
+
+    it('should set pct=0 for all rows when towerKills is empty', () => {
+      component.towerKillRows.forEach((row) => {
+        expect(row.kills).toBe(0);
+      });
+    });
+
+    it('should compute pct=100 for the tower with most kills', () => {
+      profileService.getProfile.and.returnValue({
+        ...mockProfile,
+        towerKills: { basic: 100, sniper: 50 },
+      });
+      const newFixture = TestBed.createComponent(ProfileComponent);
+      newFixture.detectChanges();
+      const rows = newFixture.componentInstance.towerKillRows;
+      const basicRow = rows.find((r) => r.label === 'Basic')!;
+      const sniperRow = rows.find((r) => r.label === 'Sniper')!;
+      expect(basicRow.pct).toBe(100);
+      expect(sniperRow.pct).toBe(50);
+    });
+
+    it('should render 6 arsenal-row elements when expanded', () => {
+      component.arsenalExpanded = true;
+      fixture.detectChanges();
+      const rows = fixture.nativeElement.querySelectorAll('.arsenal-row');
+      expect(rows.length).toBe(6);
+    });
   });
 
   // ── Category grouping ──────────────────────────────────────────────────────
@@ -209,7 +334,6 @@ describe('ProfileComponent', () => {
     });
 
     it('should show correct unlockedCount per category', () => {
-      // first_victory = combat, veteran = combat
       const combatGroup = component.categoryGroups.find((g) => g.category === 'combat')!;
       expect(combatGroup.unlockedCount).toBe(2);
 
@@ -261,172 +385,4 @@ describe('ProfileComponent', () => {
     });
   });
 
-  // ── Settings section ───────────────────────────────────────────────────────
-
-  describe('settings section', () => {
-    it('should render the settings section', () => {
-      const section = fixture.nativeElement.querySelector('.settings-section');
-      expect(section).toBeTruthy();
-    });
-
-    it('should render the settings title', () => {
-      const title = fixture.nativeElement.querySelector('.settings-title');
-      expect(title).toBeTruthy();
-      expect(title.textContent).toContain('Settings');
-    });
-
-    it('should load settings from SettingsService on init', () => {
-      expect(settingsService.get).toHaveBeenCalled();
-      expect(component.audioMuted).toBe(false);
-      expect(component.currentDifficulty).toBe(DifficultyLevel.NORMAL);
-      expect(component.currentSpeed).toBe(1);
-      expect(component.showFps).toBe(false);
-      expect(component.reduceMotion).toBe(false);
-    });
-
-    it('should load muted state when settings have audioMuted=true', () => {
-      settingsService.get.and.returnValue({ ...mockSettings, audioMuted: true });
-      const newFixture = TestBed.createComponent(ProfileComponent);
-      newFixture.detectChanges();
-      expect(newFixture.componentInstance.audioMuted).toBe(true);
-    });
-
-    it('should render 4 difficulty buttons', () => {
-      const difficultyButtons = fixture.nativeElement.querySelectorAll('.setting-options button');
-      // First setting-options group is difficulty (4 buttons), second is speed (3 buttons)
-      const allOptionBtns = Array.from(
-        fixture.nativeElement.querySelectorAll('.setting-option-btn')
-      ) as HTMLButtonElement[];
-      expect(allOptionBtns.length).toBe(7); // 4 difficulties + 3 speeds
-    });
-
-    it('should toggle audio and call settingsService.update', () => {
-      component.toggleAudio();
-      expect(component.audioMuted).toBe(true);
-      expect(settingsService.update).toHaveBeenCalledWith({ audioMuted: true });
-
-      component.toggleAudio();
-      expect(component.audioMuted).toBe(false);
-      expect(settingsService.update).toHaveBeenCalledWith({ audioMuted: false });
-    });
-
-    it('should show "On" when audio is not muted', () => {
-      component.audioMuted = false;
-      fixture.detectChanges();
-      const toggleBtns = fixture.nativeElement.querySelectorAll('.setting-toggle');
-      const audioBtn = toggleBtns[0] as HTMLButtonElement;
-      expect((audioBtn.textContent ?? '').trim()).toBe('On');
-    });
-
-    it('should show "Muted" when audio is muted', () => {
-      component.audioMuted = true;
-      fixture.detectChanges();
-      const toggleBtns = fixture.nativeElement.querySelectorAll('.setting-toggle');
-      const audioBtn = toggleBtns[0] as HTMLButtonElement;
-      expect((audioBtn.textContent ?? '').trim()).toBe('Muted');
-    });
-
-    it('should set difficulty and persist', () => {
-      component.setDifficulty(DifficultyLevel.HARD);
-      expect(component.currentDifficulty).toBe(DifficultyLevel.HARD);
-      expect(settingsService.update).toHaveBeenCalledWith({ difficulty: DifficultyLevel.HARD });
-    });
-
-    it('should set speed and persist', () => {
-      component.setSpeed(2);
-      expect(component.currentSpeed).toBe(2);
-      expect(settingsService.update).toHaveBeenCalledWith({ gameSpeed: 2 });
-    });
-
-    it('should toggle FPS and persist', () => {
-      component.toggleFps();
-      expect(component.showFps).toBe(true);
-      expect(settingsService.update).toHaveBeenCalledWith({ showFps: true });
-
-      component.toggleFps();
-      expect(component.showFps).toBe(false);
-      expect(settingsService.update).toHaveBeenCalledWith({ showFps: false });
-    });
-
-    it('should show "On" when FPS counter is enabled', () => {
-      component.showFps = true;
-      fixture.detectChanges();
-      const toggleBtns = fixture.nativeElement.querySelectorAll('.setting-toggle');
-      const fpsBtn = toggleBtns[1] as HTMLButtonElement;
-      expect((fpsBtn.textContent ?? '').trim()).toBe('On');
-    });
-
-    it('should show "Off" when FPS counter is disabled', () => {
-      component.showFps = false;
-      fixture.detectChanges();
-      const toggleBtns = fixture.nativeElement.querySelectorAll('.setting-toggle');
-      const fpsBtn = toggleBtns[1] as HTMLButtonElement;
-      expect((fpsBtn.textContent ?? '').trim()).toBe('Off');
-    });
-
-    it('should toggle reduceMotion, persist, and add class to body', () => {
-      component.toggleReduceMotion();
-      expect(component.reduceMotion).toBe(true);
-      expect(settingsService.update).toHaveBeenCalledWith({ reduceMotion: true });
-      expect(document.body.classList.contains('reduce-motion')).toBe(true);
-
-      component.toggleReduceMotion();
-      expect(component.reduceMotion).toBe(false);
-      expect(settingsService.update).toHaveBeenCalledWith({ reduceMotion: false });
-      expect(document.body.classList.contains('reduce-motion')).toBe(false);
-    });
-
-    it('should apply reduce-motion class on init when setting is persisted (red team gate)', () => {
-      // Clean up any existing class from prior tests
-      document.body.classList.remove('reduce-motion');
-      // Simulate persisted reduceMotion=true
-      settingsService.get.and.returnValue({
-        audioMuted: false,
-        difficulty: DifficultyLevel.NORMAL,
-        gameSpeed: 1,
-        showFps: false,
-        reduceMotion: true,
-      });
-      component.ngOnInit();
-      expect(document.body.classList.contains('reduce-motion')).toBe(true);
-      // Clean up
-      document.body.classList.remove('reduce-motion');
-    });
-
-    it('should mark active difficulty button with active class', () => {
-      component.currentDifficulty = DifficultyLevel.HARD;
-      fixture.detectChanges();
-      const allOptionBtns = Array.from(
-        fixture.nativeElement.querySelectorAll('.setting-option-btn')
-      ) as HTMLButtonElement[];
-      const activeButtons = allOptionBtns.filter((btn) => btn.classList.contains('active'));
-      // Only one difficulty button should be active (hard) plus the active speed button (1×)
-      const activeTexts = activeButtons.map((btn) => btn.textContent?.trim());
-      expect(activeTexts).toContain('Hard');
-    });
-
-    it('should mark active speed button with active class', () => {
-      component.currentSpeed = 2;
-      fixture.detectChanges();
-      const allOptionBtns = Array.from(
-        fixture.nativeElement.querySelectorAll('.setting-option-btn')
-      ) as HTMLButtonElement[];
-      const activeButtons = allOptionBtns.filter((btn) => btn.classList.contains('active'));
-      const activeTexts = activeButtons.map((btn) => btn.textContent?.trim());
-      expect(activeTexts).toContain('2×');
-    });
-
-    it('should expose difficulties array with all 4 levels', () => {
-      expect(component.difficulties).toEqual([
-        DifficultyLevel.EASY,
-        DifficultyLevel.NORMAL,
-        DifficultyLevel.HARD,
-        DifficultyLevel.NIGHTMARE,
-      ]);
-    });
-
-    it('should expose speeds array as [1, 2, 3]', () => {
-      expect(Array.from(component.speeds)).toEqual([1, 2, 3]);
-    });
-  });
 });

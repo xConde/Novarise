@@ -1,0 +1,962 @@
+/* ============================================================
+   CardHandComponent — Ascent Mode card hand bar
+   ============================================================ */
+
+// Card type accent colours (top border + left edge + icon tint)
+$card-type-colors: (
+  tower:    var(--tower-color-basic),
+  spell:    var(--theme-cyan),
+  modifier: var(--theme-purple),
+  utility:  var(--action-success),
+);
+
+// Rarity glow colours (subtle box-shadow)
+$card-rarity-glows: (
+  starter:  rgba(255, 255, 255, 0.08),
+  common:   rgba(255, 255, 255, 0.08),
+  uncommon: rgba(100, 200, 255, 0.15),
+  rare:     rgba(255, 215, 0, 0.2),
+);
+
+// ── Container bar (M1 S4: grid-area assigned on host) ───────
+// The `app-card-hand` host element is placed in the parent game-board
+// `grid-area: hand` slot (see game-board.component.scss `:host-context` rule).
+// This `.card-hand` class is the INNER content — the flex row of cards,
+// energy, and piles. No fixed/absolute positioning — the grid slot owns
+// placement.
+
+.card-hand {
+  width: 100%;
+  height: 100%;
+  z-index: calc(var(--z-index-overlay) + 5);
+
+  display: flex;
+  // stretch so .card-hand__cards can claim the full bar height and anchor its
+  // cards to the bottom — gives the hover lift real headroom above the card.
+  // Energy panel + piles opt back to centered via align-self.
+  align-items: stretch;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+
+  // overflow-y: visible so card tooltips (bottom: calc(100% + 0.5rem)) can
+  // escape upward into the canvas grid area without clipping.
+  overflow: visible;
+
+  background: var(--glass-bg);
+  backdrop-filter: blur(0.75rem);
+  border-top: var(--border-width-thin) solid var(--border-color);
+  font-family: "Orbitron", sans-serif;
+
+  // Slide-in from bottom
+  animation: card-hand-enter 0.25s ease-out;
+
+  @media (max-width: 768px) {
+    gap: var(--spacing-xs);
+  }
+
+  @media (max-width: 480px) {
+    padding: var(--spacing-xs);
+    gap: var(--spacing-xs);
+    overflow-x: clip;
+    overflow-y: visible;
+    // M1 S4: flex-wrap removed — the shell grid reserves the hand slot height;
+    // cards stay in a single row and overflow horizontally if needed.
+    // overflow-x: clip prevents horizontal scrollbar without clipping vertical hover-lift.
+  }
+}
+
+// Host block — ensures the component occupies its grid-area slot.
+:host {
+  display: block;
+  width: 100%;
+}
+
+@keyframes card-hand-enter {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+// ── Energy display — pip orbs ────────────────────────────────
+
+.card-hand__energy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  align-self: center; // parent is align-items:stretch; keep energy vertically centered
+  gap: 0.2rem;
+  min-width: 3.5rem;
+  flex-shrink: 0;
+  padding: 0.25rem var(--spacing-xs);
+  background: rgba(255, 215, 0, 0.07);
+  border: var(--border-width-thin) solid rgba(255, 215, 0, 0.25);
+  border-radius: var(--border-radius-md);
+  color: var(--game-gold);
+
+  @media (max-width: 480px) {
+    flex-direction: row;
+    flex-shrink: 1;
+    min-width: 2.5rem;
+    gap: 0.25rem;
+    padding: 0.15rem var(--spacing-xs);
+    font-size: var(--font-size-3xs);
+  }
+}
+
+.energy-label {
+  font-size: var(--font-size-3xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--game-gold);
+  opacity: 0.8;
+  line-height: 1;
+
+  @media (max-width: 480px) {
+    display: none; // inline with pips on mobile — label takes space
+  }
+}
+
+.energy-pips {
+  display: flex;
+  gap: 0.2rem;
+  align-items: center;
+}
+
+.energy-pip {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: rgba(255, 215, 0, 0.15);
+  border: var(--border-width-thin) solid rgba(255, 215, 0, 0.4);
+  // Sprint 38: added transform transition for pip-fill animation
+  transition: background var(--transition-fast) ease,
+              box-shadow var(--transition-fast) ease,
+              transform 0.2s ease;
+
+  &--filled {
+    background: var(--game-gold);
+    box-shadow: 0 0 0.3rem rgba(255, 215, 0, 0.7);
+    border-color: var(--game-gold);
+    // Sprint 38: pop-in keyframe on fill
+    animation: energy-pip-fill 0.3s ease-out;
+  }
+
+  @media (max-width: 480px) {
+    width: 0.45rem;
+    height: 0.45rem;
+  }
+}
+
+.energy-fraction {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  color: var(--game-gold);
+  line-height: 1;
+  letter-spacing: 0.03em;
+
+  @media (max-width: 480px) {
+    font-size: var(--font-size-2xs);
+  }
+}
+
+// ── Cards area ───────────────────────────────────────────────
+
+.card-hand__cards {
+  flex: 1;
+  align-self: stretch; // claim full hand-bar height → headroom above cards for hover lift
+  display: flex;
+  align-items: flex-end; // anchor cards to bottom so hover lifts upward within bar
+  justify-content: center;
+  gap: var(--spacing-xs);
+  // overflow-x: clip (not auto). `auto` on one axis forces the other to compute
+  // as `auto`, which would clip the hover-lift translateY AND the tooltip at
+  // the top of the cards row. `clip` is a pure paint clip — it clips horizontal
+  // overflow without forcing vertical clipping. Fan layout handles >5 card
+  // horizontal overlap so scroll is not needed.
+  overflow-x: clip;
+  overflow-y: visible;
+  // Give the tooltip + hover lift a 4rem breathing zone above the clip edge so
+  // they render cleanly above the card rather than being shaved at the top.
+  overflow-clip-margin: 4rem;
+
+  @media (max-width: 480px) {
+    gap: 0;
+    flex: 1 1 0;
+    min-width: 0; // allow flex shrink so piles column stays visible
+  }
+}
+
+// ── Fan overlap (> 5 cards) ─────────────────────────────────
+
+.card-hand__cards--fan .card {
+  margin-left: var(--card-fan-margin, 0);
+}
+
+.card-hand__cards--fan .card:first-child {
+  margin-left: 0;
+}
+
+.card-hand__cards--fan .card--playable:hover,
+.card-hand__cards--fan .card:focus-visible {
+  z-index: 2;
+  position: relative;
+}
+
+// Mobile: gentler overlap — readable cards. Shrink card size instead of
+// crushing them together. 5 cards @ 3.5rem w/ -0.3rem overlap = 16.3rem (~261px).
+@media (max-width: 480px) {
+  .card-hand__cards .card {
+    margin-left: -0.3rem;
+  }
+  .card-hand__cards .card:first-child {
+    margin-left: 0;
+  }
+  .card-hand__cards .card--playable:hover,
+  .card-hand__cards .card:focus-visible {
+    z-index: 2;
+    position: relative;
+  }
+  // Tighter fan only when hand exceeds 5 cards
+  .card-hand__cards--fan .card {
+    margin-left: -0.6rem;
+  }
+  .card-hand__cards--fan .card:first-child {
+    margin-left: 0;
+  }
+}
+
+// ── Individual card ──────────────────────────────────────────
+
+.card {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  // padding-top reserves space for the absolute-positioned cost pill + corner icon;
+  // padding-bottom leaves the instance dot its corner.
+  padding: 2.1rem var(--spacing-xs) 0.9rem;
+  gap: 0.25rem;
+
+  width: 6.25rem;
+  // Min-height shrunk from 11rem to 8.5rem after description moved to the
+  // right-click detail modal. Leaves room for: cost pill, name (2 lines),
+  // gold cost, keyword badges, instance dot.
+  min-height: 8.5rem;
+
+  background: rgba(10, 5, 20, 0.88);
+  border: var(--border-width-thin) solid var(--border-color);
+  border-top-width: 0.1875rem; // 3px accent top border
+  // Left edge accent stripe — subtle gradient per card type
+  border-left-width: 0.1875rem;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  font-family: "Orbitron", sans-serif;
+
+  transition:
+    transform var(--transition-fast) ease,
+    box-shadow var(--transition-fast) ease,
+    opacity var(--transition-fast) ease,
+    filter var(--transition-fast) ease;
+
+  // WCAG 44px minimum touch target
+  min-width: 2.75rem;
+
+  // Focus visible ring
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--theme-cyan);
+    outline-offset: var(--border-width-medium);
+  }
+
+  @media (max-width: 768px) {
+    width: 5.25rem;
+    min-height: 7rem;
+    padding: 1.9rem var(--spacing-xs) 0.8rem;
+  }
+
+  @media (max-width: 480px) {
+    width: 3.75rem;
+    min-width: 3.75rem;
+    min-height: 5.5rem;
+    padding: 1.5rem 0.25rem 0.5rem;
+    gap: 0.1rem;
+    font-size: var(--font-size-3xs);
+  }
+}
+
+// ─── Card layer stack (z-index) ───
+//   0: .card::before         → art zone radial gradient
+//   0: .card::after          → scan-line texture (+ rare shimmer override)
+//   1: .card > *             → all children (name, type-icon, gold-cost)
+//   2: .card__cost, .card__upgraded-badge, .card__instance-dot → always on top
+
+// Sprint 9 — Art zone foundation
+// Top ~55% of the card is a pseudo-element layer with a radial gradient
+// per card type. Creates a colored "art splash" that IS the visual identity.
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 55%;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(ellipse at 50% 60%, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
+  transition: opacity var(--transition-fast) ease;
+}
+
+// Ensure all card content layers above the art-zone pseudo
+.card > * {
+  position: relative;
+  z-index: 1;
+}
+
+// Sprint 13 — Scan-line CRT texture
+// Subtle 1px horizontal lines give a holographic feel without image assets.
+// mix-blend-mode: overlay blends with the art zone below.
+.card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 1px,
+    rgba(255, 255, 255, 0.025) 1px,
+    rgba(255, 255, 255, 0.025) 2px
+  );
+  opacity: 0.6;
+  mix-blend-mode: overlay;
+}
+
+// ── Card type accent borders (top + left edge) ───────────────
+
+@each $type, $color in $card-type-colors {
+  .card--#{$type} {
+    border-top-color: #{$color};
+    border-left-color: #{$color};
+
+    .card__type-icon {
+      color: #{$color};
+    }
+  }
+}
+
+// Sprint 10 — Per-type art-zone gradients
+// Each card type gets a distinct radial glow in the art zone pseudo-element.
+
+// Fallback for browsers that don't support color-mix() (Safari < 16.2, Firefox < 113)
+@supports not (background: color-mix(in srgb, red 50%, transparent)) {
+  .card--tower::before {
+    background: radial-gradient(
+      ellipse at 50% 60%,
+      rgba(255, 102, 0, 0.28) 0%,
+      rgba(255, 102, 0, 0.05) 65%,
+      transparent 100%
+    );
+  }
+  .card--upgraded::before {
+    background: radial-gradient(ellipse at 50% 30%, rgba(255, 215, 0, 0.2) 0%, transparent 60%);
+  }
+}
+
+.card--tower::before {
+  // Uses per-tower-type accent (--card-tower-accent bound per card in HTML),
+  // falling back to the generic tower color if not set.
+  background: radial-gradient(
+    ellipse at 50% 60%,
+    color-mix(in srgb, var(--card-tower-accent, var(--tower-color-basic)) 50%, transparent) 0%,
+    color-mix(in srgb, var(--card-tower-accent, var(--tower-color-basic)) 10%, transparent) 65%,
+    transparent 100%
+  );
+}
+
+.card--spell::before {
+  background: radial-gradient(
+    ellipse at 50% 60%,
+    rgba(0, 255, 255, 0.22) 0%,
+    rgba(0, 255, 255, 0.04) 65%,
+    transparent 100%
+  );
+}
+
+.card--modifier::before {
+  background: radial-gradient(
+    ellipse at 50% 60%,
+    rgba(140, 90, 200, 0.28) 0%,
+    rgba(140, 90, 200, 0.05) 65%,
+    transparent 100%
+  );
+}
+
+.card--utility::before {
+  background: radial-gradient(
+    ellipse at 50% 60%,
+    rgba(80, 255, 136, 0.22) 0%,
+    rgba(80, 255, 136, 0.04) 65%,
+    transparent 100%
+  );
+}
+
+// Expose per-type accent as a CSS custom property for hover glow + Sprint 15 upgraded blend.
+// Tower cards use the per-tower-type accent when available (Sprint 12).
+.card--tower    { --card-type-color: var(--card-tower-accent, #{map-get($card-type-colors, tower)}); }
+.card--spell    { --card-type-color: #{map-get($card-type-colors, spell)}; }
+.card--modifier { --card-type-color: #{map-get($card-type-colors, modifier)}; }
+.card--utility  { --card-type-color: #{map-get($card-type-colors, utility)}; }
+
+// ── Card rarity glow ─────────────────────────────────────────
+
+// Sprint 14 — Rarity frame treatment (replaces @each glow loop)
+
+.card--starter,
+.card--common {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.card--uncommon {
+  border-color: rgba(100, 200, 255, 0.5);
+  box-shadow:
+    0 0 0.5rem rgba(100, 200, 255, 0.25),
+    inset 0 0 0.25rem rgba(100, 200, 255, 0.08);
+}
+
+.card--rare {
+  border-color: rgba(255, 215, 0, 0.6);
+  box-shadow:
+    0 0 0.6rem rgba(255, 215, 0, 0.35),
+    inset 0 0 0.3rem rgba(255, 215, 0, 0.12);
+}
+
+// Rare-card foil shimmer — diagonal gold band sweeps across every 3s.
+// Overrides Sprint 13's scan-line ::after with a layered background
+// (scan-lines + shimmer combined so we stay within the single ::after slot).
+.card--rare::after {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 1px,
+      rgba(255, 255, 255, 0.025) 1px,
+      rgba(255, 255, 255, 0.025) 2px
+    ),
+    linear-gradient(
+      115deg,
+      transparent 40%,
+      rgba(255, 215, 0, 0.18) 48%,
+      rgba(255, 255, 255, 0.35) 50%,
+      rgba(255, 215, 0, 0.18) 52%,
+      transparent 60%
+    );
+  background-size: 100% 2px, 300% 100%;
+  background-position: 0 0, -150% 0;
+  animation: rare-shimmer 3s ease-in-out infinite;
+}
+
+@keyframes rare-shimmer {
+  0%, 100% { background-position: 0 0, -150% 0; }
+  50%       { background-position: 0 0,  150% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card--rare::after {
+    animation: none;
+    background-position: 0 0, 0 0;
+  }
+}
+
+body.reduce-motion .card--rare::after { animation: none; background-position: 0 0, 0 0; }
+
+// ── Card states ──────────────────────────────────────────────
+
+.card--playable {
+  &:hover {
+    // Subtle lift — no scale. Scale was jarring (neighboring cards looked
+    // displaced on mouseover). Pure translateY + elevated shadow reads as
+    // "selected" without the pop-out distortion.
+    transform: translateY(-0.5rem);
+    filter: brightness(1.08);
+    box-shadow:
+      0 0.5rem 1rem rgba(0, 0, 0, 0.5),
+      0 0 0.6rem var(--card-type-color, rgba(255, 255, 255, 0.2));
+    z-index: 1;
+  }
+
+  &:active { transform: translateY(-0.2rem); }
+}
+
+// Unplayable cards — can't afford energy or gold cost.
+// Use a strong but readable visual: darker body, desaturated colors,
+// a subtle red tint on the top border, and a distinct "blocked" cost badge.
+.card--unplayable {
+  opacity: 0.55;
+  filter: grayscale(40%) brightness(0.75);
+  cursor: not-allowed;
+  pointer-events: none;
+  border-top-color: rgba(255, 60, 60, 0.55) !important;
+  box-shadow: inset 0 0.125rem 0 rgba(255, 60, 60, 0.2);
+
+  // Keep the card name readable even when card is dimmed
+  .card__name, .card__gold-cost {
+    filter: brightness(1.4);
+  }
+
+  // Red cost badge — signals "can't afford"
+  .card__cost:not(.card__cost--affordable) {
+    background: rgba(255, 60, 60, 0.15);
+    border-color: rgba(255, 60, 60, 0.55);
+    color: rgba(255, 140, 140, 0.95);
+  }
+}
+
+// Sprint 15 — Upgraded state polish
+.card--upgraded {
+  border-top-width: 0.25rem; // slightly thicker top accent
+  box-shadow:
+    inset 0 0 0.4rem rgba(255, 215, 0, 0.15),
+    0 0 0.4rem rgba(255, 215, 0, 0.2);
+
+  // Blend art zone toward gold to signal power-up while preserving type identity
+  &::before {
+    background:
+      radial-gradient(
+        ellipse at 50% 30%,
+        rgba(255, 215, 0, 0.2) 0%,
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse at 50% 60%,
+        color-mix(in srgb, var(--card-type-color, rgba(255, 255, 255, 0.2)) 50%, transparent) 0%,
+        color-mix(in srgb, var(--card-type-color, rgba(255, 255, 255, 0.2)) 10%, transparent) 65%,
+        transparent 100%
+      );
+  }
+}
+
+// Pending card (active placement mode) — glowing border, no lift (avoids clipping)
+.card--pending {
+  filter: brightness(1.3) !important;
+  z-index: 2;
+  box-shadow:
+    0 0 1rem rgba(255, 215, 0, 0.5),
+    0 0.75rem 2rem rgba(0, 0, 0, 0.6) !important;
+  border-top-color: var(--game-gold) !important;
+  border-left-color: var(--game-gold) !important;
+  animation: card-pending-pulse 1.5s ease-in-out infinite;
+}
+
+// Other cards when one is pending — dimmed
+.card--dimmed {
+  opacity: 0.3;
+  filter: grayscale(50%);
+  pointer-events: none;
+}
+
+@keyframes card-pending-pulse {
+  0%, 100% { box-shadow: 0 0 0.75rem rgba(255, 215, 0, 0.4), 0 0.75rem 2rem rgba(0, 0, 0, 0.6); }
+  50%       { box-shadow: 0 0 1.5rem rgba(255, 215, 0, 0.7), 0 0.75rem 2rem rgba(0, 0, 0, 0.6); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card--pending { animation: none; }
+  .card--playable { transition: none; }
+  .card-hand { animation: none; }
+}
+
+body.reduce-motion .card--pending { animation: none; }
+body.reduce-motion .card-hand { animation: none; }
+
+// ── Card internals ───────────────────────────────────────────
+
+// Cost pill — value + "Energy" label as ONE inline-flex chip at top-left.
+// Previous design (circle badge + floating absolute label) read as two
+// disconnected elements floating over the art zone. The pill unifies them
+// so the cost indicator is a single coherent UI element.
+.card__cost {
+  position: absolute;
+  top: 0.3rem;
+  left: 0.3rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem 0.15rem 0.4rem;
+  background: rgba(10, 5, 20, 0.82);
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-family: "Orbitron", sans-serif;
+  line-height: 1;
+  z-index: 2; // above art zone + scan lines
+  pointer-events: none;
+
+  @media (max-width: 480px) {
+    top: 0.2rem;
+    left: 0.2rem;
+    padding: 0.1rem 0.35rem 0.1rem 0.3rem;
+    gap: 0.2rem;
+  }
+}
+
+// Number inside the pill — bold, slightly larger than the label so the value dominates.
+.card__cost-value {
+  font-size: var(--font-size-small);
+  font-weight: 800;
+  color: inherit; // follows .card__cost color (drives affordable/unplayable tint)
+
+  @media (max-width: 480px) {
+    font-size: var(--font-size-xs);
+  }
+}
+
+// "Energy" label — disambiguates the number. Hidden on very narrow cards.
+.card__cost-label {
+  font-size: var(--font-size-3xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: inherit; // follows .card__cost color
+  opacity: 0.85; // label sits slightly quieter than the numeric value
+
+  @media (max-width: 480px) {
+    display: none; // card too narrow for the word
+  }
+}
+
+.card__cost--affordable {
+  background: rgba(255, 215, 0, 0.18);
+  border-color: rgba(255, 215, 0, 0.65);
+  color: var(--game-gold); // propagates to .card__cost-value / .card__cost-label via inherit
+  box-shadow: 0 0 0.5rem rgba(255, 215, 0, 0.45);
+}
+
+// Instance identifier dot — tinted per-instance so duplicate cards are
+// visually distinguishable. Bottom-right corner, small, quiet — NOT a
+// gameplay signal, just instance identity at a glance.
+.card__instance-dot {
+  position: absolute;
+  bottom: 0.25rem;
+  right: 0.25rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  opacity: 0.55;
+  box-shadow: 0 0 0.2rem currentColor;
+  pointer-events: none;
+  z-index: 2; // Sprint 16: above scan-line texture
+
+  @media (max-width: 480px) {
+    width: 0.35rem;
+    height: 0.35rem;
+    bottom: 0.15rem;
+    right: 0.15rem;
+  }
+}
+
+// Upgraded "+" badge — top-right corner
+// Sprint 15: bumped text-shadow + letter-spacing, z-index 2
+.card__upgraded-badge {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.25rem;
+  font-size: var(--font-size-2xs);
+  font-weight: 900;
+  color: var(--game-gold);
+  line-height: 1;
+  text-shadow: 0 0 0.6rem rgba(255, 215, 0, 0.9);
+  letter-spacing: 0.06em;
+  z-index: 2; // above art zone + scan lines
+
+  @media (max-width: 480px) {
+    font-size: var(--font-size-3xs);
+  }
+}
+
+// Card name — first flow item after the top padding reserved for cost pill.
+// The old `margin-top: 55%` (push name below old art zone) was removed now
+// that the card is a normal flex-column: pill is absolute, name is flow.
+.card__name {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  color: var(--text-color);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  text-align: center;
+  line-height: 1.15;
+  word-break: break-word;
+
+  @media (max-width: 768px) {
+    font-size: var(--font-size-2xs);
+  }
+
+  @media (max-width: 480px) {
+    font-size: var(--font-size-3xs);
+  }
+}
+
+// Gold cost — shown below card name on tower cards
+// Sprint 16: ensure z-index 1 above scan lines (already inherits from .card > *)
+.card__gold-cost {
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  color: var(--gold-color, #f5c542);
+  text-align: center;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  position: relative;
+  z-index: 1; // above scan-line texture
+
+  @media (max-width: 480px) {
+    font-size: var(--font-size-3xs);
+  }
+}
+
+// Sprint 11 — Type icon: dominant "art" of the card.
+// Centered in the top art zone (55% height) at 48px on desktop.
+// The @each type-color rule above keeps per-type color tinting.
+// Type icon — demoted from a 48px dominant "art" element to a small top-right
+// corner chip. Description text now carries the card's meaning; the icon just
+// signals type at a glance (tower/spell/modifier/utility).
+.card__type-icon {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.4rem;
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 2; // sits beside the cost pill in the top strip
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  @media (max-width: 480px) {
+    top: 0.3rem;
+    right: 0.3rem;
+    width: 1rem;
+    height: 1rem;
+  }
+}
+
+// ── Pile counts ──────────────────────────────────────────────
+
+.card-hand__piles {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  align-self: center; // parent is align-items:stretch; keep piles vertically centered
+  gap: 0.3rem;
+  flex-shrink: 0;
+  min-width: 3.5rem;
+
+  @media (max-width: 480px) {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 2.5rem;
+    font-size: var(--font-size-3xs);
+  }
+}
+
+.pile-count {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  // Button reset — pile counters are now interactive buttons
+  background: transparent;
+  border: var(--border-width-thin) solid transparent;
+  padding: 0.2rem 0.35rem;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  font-family: "Orbitron", sans-serif;
+  transition: background var(--transition-fast) ease, border-color var(--transition-fast) ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--theme-cyan);
+    outline-offset: 2px;
+  }
+}
+
+.pile-label {
+  font-size: var(--font-size-2xs);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+
+  @media (max-width: 480px) {
+    display: none; // just show icon + number on mobile
+  }
+}
+
+.pile-value {
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  line-height: 1;
+
+  @media (max-width: 480px) {
+    font-size: var(--font-size-small);
+  }
+}
+
+.pile-count--draw {
+  color: var(--panel-blue-accent);
+
+  .pile-value { color: var(--panel-blue-accent); }
+}
+
+.pile-count--discard {
+  color: var(--text-dim);
+
+  .pile-value { color: var(--text-dim); }
+}
+
+.pile-count--exhaust {
+  color: rgb(255, 120, 120);
+
+  .pile-value { color: rgb(255, 120, 120); }
+}
+
+// ── H3 keyword chips ─────────────────────────────────────────
+// Small labels for exhaust / retain / innate / ethereal. Sit just above
+// the description so players can scan mechanics without reading rules text.
+// Color-coded for recognizability:
+//   - innate (green): enters hand on encounter start
+//   - retain (cyan): survives end-of-turn discard
+//   - ethereal (purple): exhausts if unplayed at end of turn
+//   - exhaust (red): single-use, removed on play
+.card__keywords {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.1rem 0;
+  position: relative;
+  z-index: 1;
+
+  @media (max-width: 480px) {
+    display: none; // cards too narrow for keyword chips on mobile
+  }
+}
+
+.card__keyword {
+  font-family: "Orbitron", sans-serif;
+  // Compact 1–2 letter badges (I / R / Et / Ex). Full words in the
+  // right-click detail modal so the card face stays scannable.
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+  width: 1rem;
+  height: 1rem;
+  min-width: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.1rem;
+  border-radius: 50%;
+  border: var(--border-width-thin) solid;
+  background: rgba(10, 5, 20, 0.7);
+  cursor: help;
+}
+
+.card__keyword--innate {
+  color: var(--action-success);
+  border-color: rgba(80, 255, 136, 0.55);
+}
+
+.card__keyword--retain {
+  color: var(--theme-cyan);
+  border-color: rgba(100, 220, 255, 0.55);
+}
+
+.card__keyword--ethereal {
+  color: var(--theme-purple-light);
+  border-color: rgba(180, 130, 240, 0.55);
+}
+
+.card__keyword--exhaust {
+  color: rgb(255, 120, 120);
+  border-color: rgba(255, 90, 90, 0.6);
+}
+
+// Description body text block was removed from the card face — players
+// now reach full rules via right-click (desktop) / long-press (touch), which
+// opens the CardDetailComponent modal. The card face is kept terse
+// (cost pill, name, gold cost, keyword badges) for at-a-glance scanning.
+// aria-label on the card button still carries the full description for
+// screen-reader users.
+
+// ── Sprint 36 — Card-play lift animation ─────────────────────
+
+@keyframes card-play-lift {
+  0%   { transform: translateY(0) scale(1);    opacity: 1; }
+  60%  { transform: translateY(-3rem) scale(1.05); opacity: 0.8; }
+  100% { transform: translateY(-4rem) scale(0.9); opacity: 0; }
+}
+
+.card.card--playing {
+  animation: card-play-lift 0.22s ease-out forwards;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card.card--playing {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+body.reduce-motion .card.card--playing { animation: none; opacity: 0; }
+
+// ── Sprint 37 — Pile count pulse ─────────────────────────────
+
+@keyframes pile-count-pulse {
+  0%   { transform: scale(1);    filter: brightness(1); }
+  40%  { transform: scale(1.15); filter: brightness(1.4); color: var(--game-gold); }
+  100% { transform: scale(1);    filter: brightness(1); }
+}
+
+.pile-count--pulse .pile-value {
+  animation: pile-count-pulse 0.35s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pile-count--pulse .pile-value { animation: none; }
+}
+
+body.reduce-motion .pile-count--pulse .pile-value { animation: none; }
+
+// ── Sprint 38 — Energy pip fill animation ────────────────────
+// (Duplicate .energy-pip block removed — transitions + animation merged into the
+// canonical definition above near .energy-pips)
+
+@keyframes energy-pip-fill {
+  0%   { transform: scale(0.6); filter: brightness(1.8); }
+  60%  { transform: scale(1.2); filter: brightness(1.4); }
+  100% { transform: scale(1);   filter: brightness(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .energy-pip--filled {
+    animation: none;
+  }
+}
+
+body.reduce-motion .energy-pip--filled { animation: none; }

@@ -72,7 +72,7 @@
 .board-container .overlay-content .overlay-star {
   font-size: 2.5rem;
   line-height: 1;
-  transition: transform 0.2s ease;
+  transition: transform var(--transition-fast) ease;
 }
 
 .board-container .overlay-content .overlay-star.filled {
@@ -134,7 +134,7 @@
 
 .board-container .overlay-content .score-row.final {
   border-bottom: none;
-  border-top: var(--border-width-medium) solid rgba(255, 255, 255, 0.2);
+  border-top: var(--border-width-medium) solid var(--border-color);
   margin-top: var(--spacing-xs);
   padding-top: var(--spacing-sm);
 }

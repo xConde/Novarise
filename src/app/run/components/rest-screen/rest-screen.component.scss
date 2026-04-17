@@ -1,0 +1,224 @@
+// ── Shell grid ────────────────────────────────────────────────────────────────
+// M5 P4: CSS Grid shell with named areas. The upgrade panel and action row each
+// have a reserved slot so neither triggers reflow when toggled by *ngIf.
+// The icon, title, and subtitle each occupy their own auto row in the `header`
+// band — they stack naturally and share the top of the shell.
+// Media queries tune custom properties — areas never reshuffle.
+
+.rest-screen {
+  // Shell custom properties
+  --rest-status-size: auto;
+  --rest-preview-size: auto;
+  --rest-panel-size: auto;
+  --rest-actions-size: auto;
+
+  display: grid;
+  grid-template-rows:
+    [icon-start]    auto                       [icon-end]
+    [title-start]   auto                       [title-end]
+    [subtitle-start] auto                      [subtitle-end]
+    [status-start]  var(--rest-status-size)    [status-end]
+    [preview-start] var(--rest-preview-size)   [preview-end]
+    [panel-start]   var(--rest-panel-size)     [panel-end]
+    [actions-start] var(--rest-actions-size)   [actions-end];
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "icon"
+    "title"
+    "subtitle"
+    "status"
+    "preview"
+    "panel"
+    "actions";
+  justify-items: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-2xl) var(--spacing-md) var(--spacing-xl);
+  text-align: center;
+  color: var(--text-color);
+}
+
+// ── Grid-area assignments for direct children ─────────────────────────────────
+
+.rest-icon          { grid-area: icon; }
+.rest-title         { grid-area: title; }
+.rest-subtitle      { grid-area: subtitle; }
+.rest-lives         { grid-area: status; }
+.rest-heal-preview  { grid-area: preview; }
+.rest-full-notice   { grid-area: preview; }
+.rest-upgrade-panel { grid-area: panel; }
+.rest-actions       { grid-area: actions; }
+
+// ── Rest icon (replaces campfire animation) ───────────────────────────────────
+
+.rest-icon {
+  // grid-area: icon — assigned above in shell section
+  font-size: var(--font-size-hero);
+  line-height: 1;
+  color: var(--action-success);
+  // margin-bottom removed: spacing handled by shell grid gap
+}
+
+// ── Text ──────────────────────────────────────────────────────────────────────
+
+.rest-title {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-large);
+  font-weight: 800;
+  color: var(--theme-purple-lighter);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.rest-subtitle {
+  color: var(--text-muted);
+  font-size: var(--font-size-small);
+  margin: 0;
+  max-width: 24rem;
+}
+
+// ── Lives display ─────────────────────────────────────────────────────────────
+
+.rest-lives {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-title);
+  font-weight: 700;
+}
+
+.rest-lives__heart {
+  color: var(--game-health);
+}
+
+.rest-lives__value {
+  color: var(--text-color);
+}
+
+// ── Heal preview ──────────────────────────────────────────────────────────────
+
+.rest-heal-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-base);
+  background: var(--action-success-bg);
+  border: var(--border-width-thin) solid var(--action-success-border);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-xs) var(--spacing-md);
+}
+
+.rest-heal-preview__amount {
+  color: var(--action-success);
+  font-weight: 700;
+}
+
+.rest-heal-preview__arrow {
+  color: var(--text-faint);
+}
+
+.rest-heal-preview__result {
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+.rest-full-notice {
+  font-family: "Orbitron", sans-serif;
+  color: var(--text-faint);
+  font-size: var(--font-size-small);
+  margin: 0;
+}
+
+// ── Action buttons ────────────────────────────────────────────────────────────
+
+.rest-actions {
+  // grid-area: actions — assigned above in shell section
+  // Flex row inside the grid cell for side-by-side button alignment
+  display: flex;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;   // allowed: local alignment inside a grid cell
+  justify-content: center;
+}
+
+.rest-btn {
+  min-width: 9rem;
+  min-height: 2.75rem; // WCAG 44px
+}
+
+// ── Upgrade-card button: before/after description block ──────────────────────
+
+.rest-card-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.65rem 1rem;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+.rest-card-btn__name {
+  font-weight: 700;
+  font-size: var(--font-size-small);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rest-card-btn__desc {
+  font-size: var(--font-size-2xs);
+  font-weight: 500;
+}
+
+.rest-card-btn__desc--current {
+  color: var(--text-dim);
+}
+
+.rest-card-btn__desc--upgraded {
+  color: var(--game-gold);
+  font-weight: 600;
+}
+
+.rest-card-btn__arrow {
+  font-size: var(--font-size-2xs);
+  color: var(--game-gold);
+  opacity: 0.7;
+  line-height: 1;
+}
+
+// ── Responsive ────────────────────────────────────────────────────────────────
+// Media queries scale the shell custom properties — grid-template-areas unchanged.
+
+@media (max-width: 768px) {
+  .rest-screen {
+    gap: var(--spacing-md);
+  }
+
+  .rest-title { font-size: var(--font-size-title); }
+}
+
+@media (max-width: 480px) {
+  .rest-screen {
+    padding: var(--spacing-lg) var(--spacing-sm) var(--spacing-md);
+    gap: var(--spacing-sm);
+  }
+
+  .rest-actions {
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+
+  .rest-btn {
+    width: 100%;
+    max-width: 16rem;
+  }
+}
+
+// ── Reduced motion ────────────────────────────────────────────────────────────
+
+@media (prefers-reduced-motion: reduce) {
+  // No animations present after campfire removal
+}

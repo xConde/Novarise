@@ -8,12 +8,15 @@ import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model'
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { GameBoardTile } from '../models/game-board-tile';
 import { StatusEffectType } from '../constants/status-effect.constants';
-import { HIT_FLASH_CONFIG } from '../constants/effects.constants';
+import { HIT_FLASH_CONFIG, STATUS_EFFECT_VISUAL_CONFIG } from '../constants/effects.constants';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
-import { createTestBoard, createGameBoardServiceSpy } from '../testing';
+import { createTestBoard, createGameBoardServiceSpy, createCardEffectServiceSpy } from '../testing';
 import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { EnemyVisualService } from './enemy-visual.service';
 import { EnemyHealthService } from './enemy-health.service';
+import { CardEffectService } from '../../../run/services/card-effect.service';
+import { SerializableEnemy } from '../models/encounter-checkpoint.model';
+import { createTestEnemy } from '../testing/test-enemy.factory';
 
 /**
  * Helper: configure modifier effects on the real GameStateService.
@@ -41,7 +44,8 @@ describe('EnemyService', () => {
         EnemyHealthService,
         EnemyMeshFactoryService,
         GameStateService,
-        { provide: GameBoardService, useValue: gameBoardServiceSpy }
+        { provide: GameBoardService, useValue: gameBoardServiceSpy },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
       ]
     });
 
@@ -180,8 +184,9 @@ describe('EnemyService', () => {
       expect(enemy).toBeNull();
     });
 
-    it('should return null when path is completely blocked', () => {
-      // Create a board with blocked path
+    it('should use straight-line fallback when A* path is blocked (not return null)', () => {
+      // When the A* path from spawner is blocked, ground enemies fall back to a
+      // straight-line path (Fix #43). Verify the enemy still spawns.
       const blockedCells = [
         { row: 0, col: 1 },
         { row: 1, col: 0 }
@@ -189,7 +194,9 @@ describe('EnemyService', () => {
       gameBoardService.getGameBoard.and.returnValue(createTestBoard(10, blockedCells));
 
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      expect(enemy).toBeNull();
+      // Ground enemy uses straight-line fallback — still spawns
+      expect(enemy).toBeTruthy();
+      expect(enemy!.path.length).toBeGreaterThan(0);
     });
   });
 
@@ -259,6 +266,88 @@ describe('EnemyService', () => {
     });
   });
 
+  // ── Multi-exit routing (Phase 15) ──────────────────────────────────────
+  // wouldBlockPath considers ANY exit reachable as a valid placement; before
+  // this pass, enemies only targeted exitTiles[0], so a tower that cut off
+  // exit[0] but left exit[1] reachable would strand every enemy mid-path.
+  // These tests lock in "enemy always takes the shortest path to any
+  // reachable exit" to keep the two sides aligned.
+
+  describe('multi-exit pathfinding', () => {
+    it('routes to the nearer exit when both are reachable', () => {
+      // Default exit at (9,9); add a second exit at (0,9). From (0,0) the
+      // Manhattan distance is 9 to (0,9) and 18 to (9,9) — the shorter route
+      // should win.
+      gameBoardService.getGameBoard.and.returnValue(
+        createTestBoard(10, [], [{ row: 0, col: 9 }]),
+      );
+      service.clearPathCache();
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const lastNode = enemy.path[enemy.path.length - 1];
+
+      expect(lastNode.x).toBe(9);
+      expect(lastNode.y).toBe(0);
+      expect(enemy.path.length).toBe(10); // 9 steps + start node
+    });
+
+    it('falls through to the secondary exit when the primary is blocked', () => {
+      // Wall off the entire col=9 route to the corner exit; leave a corridor
+      // to the secondary exit at (0,9).
+      const blocked: { row: number; col: number }[] = [];
+      for (let row = 0; row <= 8; row++) blocked.push({ row, col: 8 });
+      gameBoardService.getGameBoard.and.returnValue(
+        createTestBoard(10, blocked, [{ row: 9, col: 0 }]),
+      );
+      service.clearPathCache();
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const lastNode = enemy.path[enemy.path.length - 1];
+
+      // With the right-side wall sealing off (9,9), the enemy should route
+      // to the bottom-left exit instead.
+      expect(lastNode.x).toBe(0);
+      expect(lastNode.y).toBe(9);
+    });
+
+    it('uses straight-line fallback for both ground and flying when A* path is blocked', () => {
+      // A* from (0,0) is blocked by walls at its two neighbours. Both ground and
+      // flying enemies still spawn: ground via the straight-line fallback (Fix #43),
+      // flying via its normal straight-line path (unchanged).
+      const blocked = [
+        { row: 0, col: 1 },
+        { row: 1, col: 0 },
+      ];
+      gameBoardService.getGameBoard.and.returnValue(
+        createTestBoard(10, blocked, [{ row: 0, col: 9 }]),
+      );
+      service.clearPathCache();
+
+      const ground = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(ground).toBeTruthy();
+      expect(ground!.path.length).toBeGreaterThan(0);
+
+      service.clearPathCache();
+      const flying = service.spawnEnemy(EnemyType.FLYING, mockScene);
+      expect(flying).toBeTruthy();
+      expect(flying!.path.length).toBe(2);
+    });
+
+    it('FLYING enemies pick the geometrically nearest exit via straight line', () => {
+      // Two exits: (9,9) and (0,9). Spawner at (0,0). (0,9) is closer.
+      gameBoardService.getGameBoard.and.returnValue(
+        createTestBoard(10, [], [{ row: 0, col: 9 }]),
+      );
+      service.clearPathCache();
+
+      const enemy = service.spawnEnemy(EnemyType.FLYING, mockScene)!;
+      const lastNode = enemy.path[enemy.path.length - 1];
+
+      expect(lastNode.x).toBe(9);
+      expect(lastNode.y).toBe(0);
+    });
+  });
+
   describe('Path Caching', () => {
     it('should cache paths for reuse', () => {
       const enemy1 = service.spawnEnemy(EnemyType.BASIC, mockScene);
@@ -305,35 +394,32 @@ describe('EnemyService', () => {
 
   describe('Enemy Movement', () => {
     it('should move enemy along path', () => {
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      const initialPathIndex = enemy!.pathIndex;
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
 
-      // Update with small delta time
-      service.updateEnemies(0.1);
+      // One turn advances BASIC enemy by 1 tile — distanceTraveled increments by 1
+      service.stepEnemiesOneTurn(() => 0);
 
-      // Enemy should have moved
-      expect(enemy!.distanceTraveled).toBeGreaterThan(0);
+      expect(enemy.distanceTraveled).toBeGreaterThan(0);
     });
 
     it('should advance pathIndex when reaching next node', () => {
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
 
-      // Update with large delta time to ensure node advancement
-      service.updateEnemies(2.0);
+      // One turn for a BASIC enemy advances pathIndex by 1
+      service.stepEnemiesOneTurn(() => 0);
 
-      // Should have advanced at least one node
-      expect(enemy!.pathIndex).toBeGreaterThan(0);
+      expect(enemy.pathIndex).toBeGreaterThan(0);
     });
 
     it('should update mesh position during movement', () => {
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      const initialMeshPos = enemy!.mesh!.position.clone();
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const initialMeshPos = enemy.mesh!.position.clone();
 
-      service.updateEnemies(0.5);
+      service.stepEnemiesOneTurn(() => 0);
 
-      const newMeshPos = enemy!.mesh!.position;
+      const newMeshPos = enemy.mesh!.position;
 
-      // Mesh should have moved (x or z changed)
+      // Mesh should have snapped to the next tile center (x or z changed)
       const hasMoved =
         newMeshPos.x !== initialMeshPos.x ||
         newMeshPos.z !== initialMeshPos.z;
@@ -342,54 +428,113 @@ describe('EnemyService', () => {
     });
 
     it('should return enemy IDs that reached exit', () => {
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
 
-      // Force enemy to last node
-      enemy!.pathIndex = enemy!.path.length - 1;
+      // Place enemy at the final path node — stepEnemiesOneTurn immediately
+      // adds it to reachedExit via the early-exit guard.
+      enemy.pathIndex = enemy.path.length - 1;
 
-      const reachedExit = service.updateEnemies(0.1);
+      const reachedExit = service.stepEnemiesOneTurn(() => 0);
 
-      expect(reachedExit).toContain(enemy!.id);
+      expect(reachedExit).toContain(enemy.id);
     });
 
     it('should handle multiple enemies simultaneously', () => {
-      const enemy1 = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      const enemy2 = service.spawnEnemy(EnemyType.FAST, mockScene);
-      const enemy3 = service.spawnEnemy(EnemyType.HEAVY, mockScene);
+      const enemy1 = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const enemy2 = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      const enemy3 = service.spawnEnemy(EnemyType.HEAVY, mockScene)!;
 
-      service.updateEnemies(0.1);
+      service.stepEnemiesOneTurn(() => 0);
 
-      // All enemies should have moved
-      expect(enemy1!.distanceTraveled).toBeGreaterThan(0);
-      expect(enemy2!.distanceTraveled).toBeGreaterThan(0);
-      expect(enemy3!.distanceTraveled).toBeGreaterThan(0);
+      // All enemies should have advanced at least 1 tile
+      expect(enemy1.distanceTraveled).toBeGreaterThan(0);
+      expect(enemy2.distanceTraveled).toBeGreaterThan(0);
+      expect(enemy3.distanceTraveled).toBeGreaterThan(0);
 
-      // Fast enemy should have moved more than heavy
-      expect(enemy2!.distanceTraveled).toBeGreaterThan(enemy3!.distanceTraveled);
+      // FAST moves 2 tiles/turn, HEAVY moves 1 — FAST should have traveled more
+      expect(enemy2.distanceTraveled).toBeGreaterThan(enemy3.distanceTraveled);
     });
 
-    it('should maintain consistent speed regardless of frame rate', () => {
-      // Test each frame rate in isolation to avoid cross-contamination
+    // Tests for physics-loop sub-step accumulation (frame-rate consistency) removed
+    // in the turn-based pivot. Movement is now integer tile-stepping via
+    // stepEnemiesOneTurn — no deltaTime semantics.
+  });
 
-      // 60 FPS: 10 frames at 1/60s each = 0.1667s total
-      const enemy1 = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      for (let i = 0; i < 10; i++) {
-        service.updateEnemies(1/60);
+  describe('stepEnemiesOneTurn — tile stepping and SLOW semantics', () => {
+    it('BASIC enemy moves exactly 1 tile per turn', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.pathIndex).toBe(startIndex + 1);
+      expect(enemy.distanceTraveled).toBe(1);
+    });
+
+    it('FAST enemy moves exactly 2 tiles per turn', () => {
+      const enemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // FAST has baseTiles=2 — advances 2 nodes in one turn
+      expect(enemy.pathIndex).toBe(startIndex + 2);
+      expect(enemy.distanceTraveled).toBe(2);
+    });
+
+    it('SWIFT enemy moves exactly 2 tiles per turn', () => {
+      const enemy = service.spawnEnemy(EnemyType.SWIFT, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.pathIndex).toBe(startIndex + 2);
+      expect(enemy.distanceTraveled).toBe(2);
+    });
+
+    it('BASIC enemy slowed (slowReduction=1) still moves 1 tile (floor-at-1 prevents paralysis)', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      // slowReduction=1 would take BASIC (baseTiles=1) to 0, but the floor-at-1
+      // prevents paralysis since SLOW aura re-applies each turn while in range.
+      service.stepEnemiesOneTurn(() => 1);
+
+      expect(enemy.pathIndex).toBe(startIndex + 1);
+    });
+
+    it('FAST enemy slowed (slowReduction=1) moves only 1 tile per turn', () => {
+      const enemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      // slowReduction=1 reduces FAST (baseTiles=2) to 1 → still moves 1 tile
+      service.stepEnemiesOneTurn(() => 1);
+
+      expect(enemy.pathIndex).toBe(startIndex + 1);
+    });
+
+    it('enemy at the final path node is reported in returned exit list', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      enemy.pathIndex = enemy.path.length - 1;
+
+      const reachedExit = service.stepEnemiesOneTurn(() => 0);
+
+      expect(reachedExit).toContain(enemy.id);
+    });
+
+    it('enemy completes full path traversal from spawner to exit', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const pathLength = enemy.path.length; // 19 nodes on 10x10 board
+      let reachedExit: string[] = [];
+
+      // Keep stepping until the enemy reaches the exit
+      for (let turn = 0; turn < pathLength + 1 && reachedExit.length === 0; turn++) {
+        reachedExit = service.stepEnemiesOneTurn(() => 0);
       }
-      const distance1 = enemy1!.distanceTraveled;
 
-      // Remove enemy1 before testing enemy2
-      service.removeEnemy(enemy1!.id, mockScene);
-
-      // 30 FPS: 5 frames at 1/30s each = 0.1667s total
-      const enemy2 = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      for (let i = 0; i < 5; i++) {
-        service.updateEnemies(1/30);
-      }
-      const distance2 = enemy2!.distanceTraveled;
-
-      // Should be approximately the same distance (within 5% tolerance)
-      expect(Math.abs(distance1 - distance2) / distance1).toBeLessThan(0.05);
+      expect(reachedExit).toContain(enemy.id);
+      expect(enemy.gridPosition.row).toBe(9); // exit row
+      expect(enemy.gridPosition.col).toBe(9); // exit col
     });
   });
 
@@ -463,41 +608,9 @@ describe('EnemyService', () => {
   });
 
   describe('Edge Cases', () => {
-    it('should handle zero delta time', () => {
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      const initialDistance = enemy!.distanceTraveled;
-
-      service.updateEnemies(0);
-
-      expect(enemy!.distanceTraveled).toBe(initialDistance);
-    });
-
-    it('should handle very large delta time', () => {
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
-
-      // Multiple updates with large delta time (1 second each)
-      service.updateEnemies(1.0);
-      service.updateEnemies(1.0);
-      service.updateEnemies(1.0);
-
-      // Should advance multiple nodes
-      expect(enemy!.pathIndex).toBeGreaterThan(1);
-    });
-
-    it('should handle negative delta time gracefully', () => {
-      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
-      const initialPathIndex = enemy!.pathIndex;
-      const initialPos = { ...enemy!.position };
-
-      // Negative delta should be rejected entirely
-      const result = service.updateEnemies(-0.1);
-
-      // Should not move at all (pathIndex and position unchanged)
-      expect(enemy!.pathIndex).toBe(initialPathIndex);
-      expect(enemy!.position.x).toBe(initialPos.x);
-      expect(enemy!.position.z).toBe(initialPos.z);
-      expect(result).toEqual([]);
-    });
+    // Tests for zero/negative/large deltaTime removed in the turn-based pivot.
+    // Movement is now integer tile-stepping via stepEnemiesOneTurn — no
+    // deltaTime accumulator semantics exist in the new API.
 
     it('should get all active enemies', () => {
       service.spawnEnemy(EnemyType.BASIC, mockScene);
@@ -873,27 +986,28 @@ describe('EnemyService', () => {
   describe('Dead Enemy Movement Guard', () => {
     it('should not move dead enemies', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
-      const initialPos = { ...enemy.position };
 
       // Kill the enemy
       service.damageEnemy(enemy.id, enemy.maxHealth);
+      const posAfterDeath = { ...enemy.position };
 
-      // Try to move
-      service.updateEnemies(0.5);
+      // stepEnemiesOneTurn should skip enemies with health <= 0
+      service.stepEnemiesOneTurn(() => 0);
 
       // Position should not change
-      expect(enemy.position.x).toBe(initialPos.x);
-      expect(enemy.position.z).toBe(initialPos.z);
+      expect(enemy.position.x).toBe(posAfterDeath.x);
+      expect(enemy.position.z).toBe(posAfterDeath.z);
     });
 
     it('should not report dead enemies as reaching exit', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
 
-      // Put enemy at exit and kill it
+      // Put enemy at the final path node and kill it — health <= 0 guard skips it
       enemy.pathIndex = enemy.path.length - 1;
       service.damageEnemy(enemy.id, enemy.maxHealth);
 
-      const reachedExit = service.updateEnemies(0.1);
+      // Dead enemy (health <= 0) is skipped before the reachedExit check
+      const reachedExit = service.stepEnemiesOneTurn(() => 0);
 
       expect(reachedExit).not.toContain(enemy.id);
     });
@@ -1001,14 +1115,14 @@ describe('EnemyService', () => {
         service.spawnEnemy(EnemyType.BASIC, mockScene);
       }
 
-      // Update all enemies
-      service.updateEnemies(0.016); // ~60 FPS
+      // Advance all enemies one turn — turn-based step replaces deltaTime loop
+      service.stepEnemiesOneTurn(() => 0);
 
       const endTime = performance.now();
       const duration = endTime - startTime;
 
-      // Should complete in reasonable time (< 16ms for 60 FPS)
-      expect(duration).toBeLessThan(100); // Allow 100ms for test overhead
+      // Should complete in reasonable time (< 100ms for test overhead)
+      expect(duration).toBeLessThan(100);
       expect(service.getEnemies().size).toBe(enemyCount);
     });
   });
@@ -1473,44 +1587,42 @@ describe('EnemyService', () => {
       expect(enemy).toBeTruthy();
       expect(enemy.mesh).toBeTruthy();
 
-      // Initial rotation should be 0 (default)
+      // Initial rotation should be 0 (default, before any movement)
       const initialRotY = enemy.mesh!.rotation.y;
       expect(initialRotY).toBe(0);
 
-      // Update enemies to move them along path — rotation should change
-      service.updateEnemies(0.016);
+      // stepEnemiesOneTurn snaps the mesh to the new tile and rotates toward next node
+      service.stepEnemiesOneTurn(() => 0);
 
       // The enemy should now face its movement direction
-      // Path goes from (0,0) toward (9,9), so rotation should be non-zero
-      // unless the first segment happens to align with default facing
       const afterRotY = enemy.mesh!.rotation.y;
-      // atan2 of some direction vector — just verify it was set (not NaN)
+      // atan2 result should be a valid finite number, not NaN
       expect(isNaN(afterRotY)).toBe(false);
     });
 
     it('should face correct direction for known path segment', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       expect(enemy).toBeTruthy();
-      expect(enemy.path.length).toBeGreaterThanOrEqual(2);
+      expect(enemy.path.length).toBeGreaterThanOrEqual(3);
 
-      // Compute expected angle from the first path segment
-      // path nodes use {x: col, y: row} — gridToWorld(row, col) = (col - w/2, row - h/2)
-      const boardWidth = 10;
-      const boardHeight = 10;
-      const node0 = enemy.path[0]; // {x: col, y: row}
+      // After stepEnemiesOneTurn the enemy is at path[1]; mesh rotation is
+      // computed toward path[2] (the next node to visit).
+      // path nodes use {x: col, y: row} — gridToWorld: x = col-5, z = row-5 (10x10 board, tileSize=1)
+      const boardHalf = 5; // 10 / 2
       const node1 = enemy.path[1];
-      const world0x = (node0.x - boardWidth / 2);
-      const world0z = (node0.y - boardHeight / 2);
-      const world1x = (node1.x - boardWidth / 2);
-      const world1z = (node1.y - boardHeight / 2);
-      const dx = world1x - world0x;
-      const dz = world1z - world0z;
+      const node2 = enemy.path[2];
+      const world1x = node1.x - boardHalf;
+      const world1z = node1.y - boardHalf;
+      const world2x = node2.x - boardHalf;
+      const world2z = node2.y - boardHalf;
+      const dx = world2x - world1x;
+      const dz = world2z - world1z;
       const expectedAngle = Math.atan2(dx, dz);
 
-      service.updateEnemies(0.016);
+      service.stepEnemiesOneTurn(() => 0);
       const rotY = enemy.mesh!.rotation.y;
 
-      // Rotation should match the expected angle from the path direction
+      // Rotation should match the expected angle toward the next path node
       expect(rotY).toBeCloseTo(expectedAngle, 1);
     });
   });
@@ -1644,6 +1756,35 @@ describe('EnemyService', () => {
         expect(enemy.path[i].y).toBe(originalPath[i].y);
       }
     });
+
+    it('consumes needsRepath BEFORE advancing pathIndex (regression for tower-passthrough)', () => {
+      // Regression: prior implementation did `pathIndex++` + position update
+      // FIRST and then checked needsRepath, which caused enemies to walk ONTO
+      // a newly-placed tower tile before repathing from it. The repath must
+      // fire at the top of the movement iteration — when the enemy is still
+      // snapped to its current waypoint — so it re-plans from there.
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(9, 9)];
+      enemy.pathIndex = 0;
+      enemy.needsRepath = true;
+
+      let pathIndexWhenRepathFired = -1;
+      // Spy on the private executeRepath to record when it was invoked.
+      // Short-circuit the actual repath so we don't depend on the real A*
+      // returning a specific shape here — we're asserting ordering, not
+      // pathfinding correctness (covered separately).
+      spyOn<any>(service, 'executeRepath').and.callFake((e: any) => {
+        pathIndexWhenRepathFired = e.pathIndex;
+        e.needsRepath = false;
+      });
+
+      // `() => 0` is the SLOW reduction callback — no SLOW, so the enemy
+      // takes its full 1-tile step this turn, exercising the while loop.
+      service.stepEnemiesOneTurn(() => 0);
+
+      // If the bug regresses (increment-before-repath), this would be 1.
+      expect(pathIndexWhenRepathFired).toBe(0);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -1696,16 +1837,6 @@ describe('EnemyService', () => {
       expect(enemy.needsRepath).toBeFalsy();
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // Deferred repath execution in updateEnemies
-  // ---------------------------------------------------------------------------
-  // Strategy: place enemy at the world position of pathIndex node so that
-  // a deltaTime of 0.6s causes moveDistance (2.0 * 0.6 = 1.2) >= distanceToNext (1.0),
-  // triggering a snap and executeRepath.
-  // Board: 10x10 with spawner (0,0), exit (9,9), all other tiles traversable.
-  // gridToWorld(row=r, col=c) => {x: c-5, z: r-5}
-  // ---------------------------------------------------------------------------
 
   // ---------------------------------------------------------------------------
   // Death animation — startDyingAnimation / updateDyingAnimations / getLivingEnemyCount
@@ -1924,16 +2055,31 @@ describe('EnemyService', () => {
 
       expect(service.getLivingEnemyCount()).toBe(0);
     });
+
+    it('should not count an enemy with hp=0 that has not yet started dying animation', () => {
+      const e1 = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+
+      // Damage e1 to 0 without calling startDyingAnimation — pre-animation dead state
+      service.damageEnemy(e1.id, e1.maxHealth);
+
+      // e1.dying is undefined/falsy before startDyingAnimation, but health === 0
+      // must not count as living
+      expect(e1.dying).toBeFalsy();
+      expect(e1.health).toBeLessThanOrEqual(0);
+      expect(service.getLivingEnemyCount()).toBe(1);
+    });
   });
 
   describe('dying enemies — movement and targeting exclusions', () => {
-    it('dying enemies should not move during updateEnemies', () => {
+    it('dying enemies should not move during stepEnemiesOneTurn', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       service.damageEnemy(enemy.id, enemy.maxHealth);
       service.startDyingAnimation(enemy.id);
       const pos = { ...enemy.position };
 
-      service.updateEnemies(0.5);
+      // stepEnemiesOneTurn skips dying enemies (enemy.dying === true)
+      service.stepEnemiesOneTurn(() => 0);
 
       expect(enemy.position.x).toBe(pos.x);
       expect(enemy.position.z).toBe(pos.z);
@@ -1941,12 +2087,13 @@ describe('EnemyService', () => {
 
     it('dying enemies should not appear in reached-exit list', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
-      // Place at last path node so it would normally register as leaked
+      // Place at last path node — would normally be pushed to reachedExit
       enemy.pathIndex = enemy.path.length - 1;
       service.damageEnemy(enemy.id, enemy.maxHealth);
       service.startDyingAnimation(enemy.id);
 
-      const reached = service.updateEnemies(0.1);
+      // stepEnemiesOneTurn skips dying enemies entirely
+      const reached = service.stepEnemiesOneTurn(() => 0);
 
       expect(reached).not.toContain(enemy.id);
     });
@@ -2015,18 +2162,54 @@ describe('EnemyService', () => {
     });
   });
 
-  describe('deferred repath execution in updateEnemies', () => {
+  // ---------------------------------------------------------------------------
+  // Deferred repath execution in stepEnemiesOneTurn
+  // ---------------------------------------------------------------------------
+  // In the turn-based model, executeRepath fires during stepEnemiesOneTurn
+  // immediately after the enemy advances to each new tile (if needsRepath=true).
+  // No deltaTime semantics — one call to stepEnemiesOneTurn advances BASIC
+  // enemies by exactly 1 tile, triggering any pending repath at that tile.
+  // ---------------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------------
+  // Card modifier wiring: enemySpeed
+  // ---------------------------------------------------------------------------
+
+  describe('card modifier wiring — enemySpeed', () => {
+    it('enemySpeed 0.5 reduces FAST enemy (2 tiles/turn) to 1 tile', () => {
+      const cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) => stat === 'enemySpeed' ? 0.5 : 0);
+
+      const enemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      // 50% of baseTiles(2) = floor(1.0) = 1 reduction → moves 1 tile
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.pathIndex).toBe(startIndex + 1);
+    });
+
+    it('enemySpeed 0 leaves FAST enemy movement unchanged (2 tiles/turn)', () => {
+      const cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+      cardEffectSpy.getModifierValue.and.returnValue(0);
+
+      const enemy = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      expect(enemy.pathIndex).toBe(startIndex + 2);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Deferred repath execution in stepEnemiesOneTurn
+  // ---------------------------------------------------------------------------
+
+  describe('deferred repath execution in stepEnemiesOneTurn', () => {
 
     function node(col: number, row: number): import('../models/enemy.model').GridNode {
       return { x: col, y: row, g: 0, h: 0, f: 0 };
-    }
-
-    /**
-     * Return the world {x, z} for a grid (row, col) on a 10x10 board with tileSize=1.
-     * Mirrors gridToWorld: x = col - 5, z = row - 5.
-     */
-    function worldOf(row: number, col: number): { x: number; z: number } {
-      return { x: col - 5, z: row - 5 };
     }
 
     it('should execute repath when enemy reaches a waypoint with needsRepath=true', () => {
@@ -2034,16 +2217,13 @@ describe('EnemyService', () => {
       // Set a straight 4-node path along row=0: col 0→1→2→3
       enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(3, 0)];
       enemy.pathIndex = 0;
-      // Position enemy exactly at world coords of node 0 (row=0, col=0)
-      const w0 = worldOf(0, 0);
-      enemy.position.x = w0.x;
-      enemy.position.z = w0.z;
+      enemy.gridPosition = { row: 0, col: 0 };
       enemy.needsRepath = true;
 
       const pathBefore = enemy.path.slice();
 
-      // deltaTime=0.6 → moveDistance=2.0*0.6=1.2 >= 1.0 → snaps to node 1 → executeRepath fires
-      service.updateEnemies(0.6);
+      // One turn advances BASIC 1 tile to node(1,0) → executeRepath fires
+      service.stepEnemiesOneTurn(() => 0);
 
       // Path must now be the A* result from current grid position, not the original stub
       expect(enemy.path).not.toEqual(pathBefore);
@@ -2057,14 +2237,12 @@ describe('EnemyService', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(3, 0)];
       enemy.pathIndex = 0;
-      const w0 = worldOf(0, 0);
-      enemy.position.x = w0.x;
-      enemy.position.z = w0.z;
+      enemy.gridPosition = { row: 0, col: 0 };
       enemy.needsRepath = false;
 
       const pathBefore = enemy.path.slice();
 
-      service.updateEnemies(0.6);
+      service.stepEnemiesOneTurn(() => 0);
 
       // Path must be unchanged — no repath was requested
       expect(enemy.path.length).toBe(pathBefore.length);
@@ -2074,20 +2252,24 @@ describe('EnemyService', () => {
       }
     });
 
-    it('should repath from the snapped grid position, not the original start', () => {
+    it('should repath from the CURRENT waypoint before stepping, not after', () => {
+      // Regression: previous implementation repathed AFTER advancing pathIndex
+      // and snapping world position, which meant an enemy whose next waypoint
+      // was a newly-placed tower would first walk ONTO the tower, then repath
+      // from that tile. The fix moves the repath to the top of the movement
+      // iteration — so path[0] of the new path is the enemy's ORIGINAL
+      // position this turn (col=0, row=0), not col=1.
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
-      // Path: row=0, col 0→1→2 then onwards
       enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(3, 0), node(9, 9)];
       enemy.pathIndex = 0;
-      const w0 = worldOf(0, 0);
-      enemy.position.x = w0.x;
-      enemy.position.z = w0.z;
+      enemy.gridPosition = { row: 0, col: 0 };
       enemy.needsRepath = true;
 
-      service.updateEnemies(0.6); // snaps to col=1, row=0 → executeRepath fires
+      service.stepEnemiesOneTurn(() => 0);
 
-      // After repath, path[0] must be the arrived-at node (col=1, row=0)
-      expect(enemy.path[0].x).toBe(1);
+      // Repath ran FROM the original grid position (col=0, row=0) — the
+      // new path[0] must be that tile, not the post-step tile (col=1).
+      expect(enemy.path[0].x).toBe(0);
       expect(enemy.path[0].y).toBe(0);
     });
 
@@ -2095,12 +2277,10 @@ describe('EnemyService', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       enemy.path = [node(0, 0), node(1, 0), node(2, 0), node(9, 9)];
       enemy.pathIndex = 0;
-      const w0 = worldOf(0, 0);
-      enemy.position.x = w0.x;
-      enemy.position.z = w0.z;
+      enemy.gridPosition = { row: 0, col: 0 };
       enemy.needsRepath = true;
 
-      service.updateEnemies(0.6); // triggers executeRepath
+      service.stepEnemiesOneTurn(() => 0); // triggers executeRepath
 
       expect(enemy.needsRepath).toBe(false);
     });
@@ -2425,7 +2605,7 @@ describe('EnemyService', () => {
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
 
       expect(enemy.statusParticles).toBeTruthy();
-      expect(enemy.statusParticles!.length).toBe(3); // maxParticlesPerEnemy
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
     });
 
     it('creates POISON particles when enemy has POISON effect', () => {
@@ -2435,7 +2615,7 @@ describe('EnemyService', () => {
 
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
 
-      expect(enemy.statusParticles!.length).toBe(3);
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
       // Poison particles use green color
       const mat = enemy.statusParticles![0].material as THREE.MeshBasicMaterial;
       expect(mat.color.getHex()).toBe(0x44ff44);
@@ -2448,7 +2628,7 @@ describe('EnemyService', () => {
 
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
 
-      expect(enemy.statusParticles!.length).toBe(3);
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
       // Slow particles use ice-blue color
       const mat = enemy.statusParticles![0].material as THREE.MeshBasicMaterial;
       expect(mat.color.getHex()).toBe(0x88ccff);
@@ -2460,7 +2640,7 @@ describe('EnemyService', () => {
       activeEffects.set(enemy.id, [StatusEffectType.BURN]);
 
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
-      expect(enemy.statusParticles!.length).toBe(3);
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
 
       // Effect ended — no entry for this enemy
       const noEffects = new Map<string, StatusEffectType[]>();
@@ -2476,7 +2656,7 @@ describe('EnemyService', () => {
 
       // Create particles first
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
-      expect(enemy.statusParticles!.length).toBe(3);
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
 
       // Mark as dying
       service.damageEnemy(enemy.id, enemy.maxHealth);
@@ -2494,8 +2674,8 @@ describe('EnemyService', () => {
 
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
       const initialSceneCount = mockScene.children.length;
-      // 3 particles added to scene = enemy mesh + 3 particles
-      expect(mockScene.children.length).toBeGreaterThanOrEqual(4);
+      // particles added to scene = enemy mesh + maxParticlesPerEnemy particles
+      expect(mockScene.children.length).toBeGreaterThanOrEqual(1 + STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
 
       service.removeEnemy(enemy.id, mockScene);
 
@@ -2510,7 +2690,7 @@ describe('EnemyService', () => {
       activeEffects.set(enemy.id, [StatusEffectType.BURN]);
 
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
-      expect(enemy.statusParticles!.length).toBe(3);
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
 
       service.cleanup(mockScene);
 
@@ -2531,7 +2711,7 @@ describe('EnemyService', () => {
       expect(!enemy.statusParticles || enemy.statusParticles.length === 0).toBe(true);
     });
 
-    it('respects max particle limit of 3 per enemy per effect', () => {
+    it('respects maxParticlesPerEnemy limit per enemy per effect', () => {
       const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
       const activeEffects = new Map<string, StatusEffectType[]>();
       activeEffects.set(enemy.id, [StatusEffectType.POISON]);
@@ -2541,7 +2721,7 @@ describe('EnemyService', () => {
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
       service.updateStatusEffectParticles(0.016, mockScene, activeEffects);
 
-      expect(enemy.statusParticles!.length).toBe(3);
+      expect(enemy.statusParticles!.length).toBe(STATUS_EFFECT_VISUAL_CONFIG.maxParticlesPerEnemy);
     });
 
     it('does not throw for zero deltaTime', () => {
@@ -2567,6 +2747,308 @@ describe('EnemyService', () => {
       particles.forEach(p => {
         expect(p.parent).toBe(mockScene);
       });
+    });
+  });
+
+  describe('checkpoint serialization', () => {
+    it('serializeEnemies() strips mesh, statusParticles, and statusParticleEffectType', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // Attach particle-like fields manually to simulate visual state
+      enemy.statusParticles = [new THREE.Mesh()];
+      enemy.statusParticleEffectType = 'burn';
+
+      const { enemies } = service.serializeEnemies();
+      const serialized = enemies.find(e => e.id === enemy.id)!;
+
+      expect(serialized).toBeTruthy();
+      expect((serialized as unknown as Record<string, unknown>)['mesh']).toBeUndefined();
+      expect((serialized as unknown as Record<string, unknown>)['statusParticles']).toBeUndefined();
+      expect((serialized as unknown as Record<string, unknown>)['statusParticleEffectType']).toBeUndefined();
+
+      // Clean up the dummy particle mesh
+      enemy.statusParticles[0].geometry.dispose();
+      enemy.statusParticles = undefined;
+    });
+
+    it('serializeEnemies() strips GridNode.parent circular references', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      // Attach a parent ref to a path node to simulate A* output
+      if (enemy.path.length > 0) {
+        enemy.path[0].parent = enemy.path[0]; // self-reference as stand-in
+      }
+
+      const { enemies } = service.serializeEnemies();
+      const serialized = enemies.find(e => e.id === enemy.id)!;
+
+      serialized.path.forEach(node => {
+        expect((node as unknown as Record<string, unknown>)['parent']).toBeUndefined();
+      });
+    });
+
+    it('serializeEnemies() captures all combat-relevant fields', () => {
+      const enemy = service.spawnEnemy(EnemyType.SHIELDED, mockScene)!;
+      // Mutate a few fields to have non-default values
+      enemy.health = 42;
+      enemy.pathIndex = 1;
+      enemy.distanceTraveled = 3;
+      enemy.dying = true;
+      enemy.dyingTimer = 0.5;
+      enemy.hitFlashTimer = 0.1;
+      enemy.needsRepath = true;
+
+      const { enemies } = service.serializeEnemies();
+      const s = enemies.find(e => e.id === enemy.id)!;
+
+      expect(s.id).toBe(enemy.id);
+      expect(s.type).toBe(EnemyType.SHIELDED);
+      expect(s.health).toBe(42);
+      expect(s.maxHealth).toBe(enemy.maxHealth);
+      expect(s.speed).toBe(enemy.speed);
+      expect(s.value).toBe(enemy.value);
+      expect(s.leakDamage).toBe(enemy.leakDamage);
+      expect(s.pathIndex).toBe(1);
+      expect(s.distanceTraveled).toBe(3);
+      expect(s.position).toEqual(enemy.position);
+      expect(s.gridPosition).toEqual(enemy.gridPosition);
+      expect(s.shield).toBe(ENEMY_STATS[EnemyType.SHIELDED].maxShield);
+      expect(s.maxShield).toBe(ENEMY_STATS[EnemyType.SHIELDED].maxShield);
+      expect(s.dying).toBeTrue();
+      expect(s.dyingTimer).toBe(0.5);
+      expect(s.hitFlashTimer).toBe(0.1);
+      expect(s.needsRepath).toBeTrue();
+    });
+
+    it('serializeEnemies() returns the current enemyCounter', () => {
+      // Spawn a couple of enemies to advance the counter
+      service.spawnEnemy(EnemyType.BASIC, mockScene);
+      service.spawnEnemy(EnemyType.FAST, mockScene);
+
+      const { enemyCounter } = service.serializeEnemies();
+      // Counter increments once per spawn; after 2 spawns it should be 2
+      expect(enemyCounter).toBe(2);
+    });
+
+    it('restoreEnemies() rebuilds the enemies Map from serialized data', () => {
+      const mesh = new THREE.Mesh();
+      const serialized: SerializableEnemy[] = [
+        {
+          id: 'enemy-99',
+          type: EnemyType.BASIC,
+          position: { x: 1, y: 0.3, z: 2 },
+          gridPosition: { row: 2, col: 1 },
+          health: 80,
+          maxHealth: 100,
+          speed: 1,
+          value: 10,
+          path: [{ x: 1, y: 2, f: 0, g: 0, h: 0 }],
+          pathIndex: 0,
+          distanceTraveled: 2,
+          leakDamage: 1,
+        }
+      ];
+      const meshMap = new Map<string, THREE.Mesh>([['enemy-99', mesh]]);
+
+      service.restoreEnemies(serialized, meshMap, 100);
+
+      const restored = service.getEnemies();
+      expect(restored.size).toBe(1);
+
+      const e = restored.get('enemy-99')!;
+      expect(e).toBeTruthy();
+      expect(e.type).toBe(EnemyType.BASIC);
+      expect(e.health).toBe(80);
+      expect(e.position).toEqual({ x: 1, y: 0.3, z: 2 });
+      expect(e.gridPosition).toEqual({ row: 2, col: 1 });
+      expect(e.mesh).toBe(mesh);
+
+      // Clean up
+      mesh.geometry.dispose();
+      service.getEnemies().clear();
+    });
+
+    it('serialize → restore roundtrip preserves all fields for multiple enemies', () => {
+      const e1 = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const e2 = service.spawnEnemy(EnemyType.FAST, mockScene)!;
+      e1.health = 55;
+      e2.distanceTraveled = 4;
+
+      const { enemies: serialized, enemyCounter } = service.serializeEnemies();
+
+      // Build a mesh map from the original meshes so restore can attach them
+      const meshMap = new Map<string, THREE.Mesh>();
+      service.getEnemies().forEach((enemy, id) => {
+        if (enemy.mesh) meshMap.set(id, enemy.mesh);
+      });
+
+      // Reset service state before restore (simulate a fresh load)
+      service.getEnemies().clear();
+
+      service.restoreEnemies(serialized, meshMap, enemyCounter);
+
+      const restored = service.getEnemies();
+      expect(restored.size).toBe(2);
+
+      const r1 = restored.get(e1.id)!;
+      expect(r1.health).toBe(55);
+      expect(r1.type).toBe(EnemyType.BASIC);
+      expect(r1.mesh).toBeTruthy();
+
+      const r2 = restored.get(e2.id)!;
+      expect(r2.distanceTraveled).toBe(4);
+      expect(r2.type).toBe(EnemyType.FAST);
+
+      // Verify counter was restored
+      const { enemyCounter: counterAfterRestore } = service.serializeEnemies();
+      expect(counterAfterRestore).toBe(enemyCounter);
+    });
+  });
+
+  describe('damageStrongestEnemy — flying exclusion', () => {
+    it('skips a flying enemy and damages the strongest non-flying enemy instead', () => {
+      const flyingEnemy = service.spawnEnemy(EnemyType.FLYING, mockScene)!;
+      flyingEnemy.health = 9999; // highest health — should NOT be targeted
+
+      const groundEnemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const groundHealthBefore = groundEnemy.health;
+
+      service.damageStrongestEnemy(10);
+
+      expect(flyingEnemy.health).toBe(9999); // flying enemy untouched
+      expect(groundEnemy.health).toBe(groundHealthBefore - 10); // ground enemy damaged
+    });
+
+    it('is a no-op when only flying enemies are present', () => {
+      const flyingEnemy = service.spawnEnemy(EnemyType.FLYING, mockScene)!;
+      const healthBefore = flyingEnemy.health;
+
+      service.damageStrongestEnemy(50);
+
+      expect(flyingEnemy.health).toBe(healthBefore); // no damage applied
+    });
+
+    it('damages the ground enemy with highest health when multiple ground enemies exist', () => {
+      const weak = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      weak.health = 10;
+
+      const strong = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      strong.health = 100;
+
+      service.damageStrongestEnemy(25);
+
+      expect(strong.health).toBe(75); // strongest ground enemy damaged
+      expect(weak.health).toBe(10);   // weaker ground enemy untouched
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Spawner occupancy — Fix #42: alternate-spawner retry (batch mode)
+  //
+  // Occupancy checking is only active in BATCH mode (externalOccupied set
+  // passed by WaveService.spawnForTurn). Direct single calls bypass the check
+  // to preserve backwards compatibility with tests and mini-swarm spawning.
+  // ---------------------------------------------------------------------------
+
+  describe('spawner occupancy — alternate-spawner retry (batch mode)', () => {
+    it('returns null when the single spawner is pre-occupied in batch mode', () => {
+      // Pre-occupy the only spawner (0,0) via the batch-occupied set
+      const occupied = new Set<string>(['0-0']);
+      const result = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1, occupied);
+      expect(result).toBeNull();
+    });
+
+    it('spawns at alternate spawner when primary is pre-occupied in batch mode', () => {
+      // Board with two spawners: default at (0,0) and extra at (1,0)
+      const boardWith2Spawners = createTestBoard(10, [], [], [{ row: 1, col: 0 }]);
+      gameBoardService.getGameBoard.and.returnValue(boardWith2Spawners);
+
+      // Pre-occupy one spawner via batch set
+      const occupied = new Set<string>(['0-0']);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1, occupied);
+      // Must land at the OTHER spawner (1,0)
+      expect(enemy).not.toBeNull();
+      expect(enemy!.gridPosition).toEqual({ row: 1, col: 0 });
+    });
+
+    it('buildOccupiedSpawnerSet() returns empty set (dying enemies not included)', () => {
+      // buildOccupiedSpawnerSet() always returns an empty set. Dying enemies
+      // are not included — this test verifies the invariant still holds.
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      service.damageEnemy(enemy.id, enemy.maxHealth);
+      service.startDyingAnimation(enemy.id);
+      expect(enemy.dying).toBeTrue();
+
+      const occupied = service.buildOccupiedSpawnerSet();
+      expect(occupied.has('0-0')).toBeFalse();
+    });
+
+    it('buildOccupiedSpawnerSet() always returns empty set (same-turn stacking handled by externalOccupied)', () => {
+      // buildOccupiedSpawnerSet() returns an empty seed set. Within-batch
+      // accumulation of externalOccupied in spawnEnemy handles same-turn stacking.
+      // Pre-existing enemies from prior turns have moved off the spawner via
+      // stepEnemiesOneTurn() before the next spawnForTurn() call.
+      service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const occupied = service.buildOccupiedSpawnerSet();
+      expect(occupied.size).toBe(0);
+    });
+
+    it('returns null only after all spawners are checked and occupied (batch mode)', () => {
+      // Board with two spawners: default (0,0) and extra (1,0)
+      const boardWith2Spawners = createTestBoard(10, [], [], [{ row: 1, col: 0 }]);
+      gameBoardService.getGameBoard.and.returnValue(boardWith2Spawners);
+
+      // Pre-occupy BOTH spawners
+      const occupied = new Set<string>(['0-0', '1-0']);
+      const result = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1, occupied);
+      expect(result).toBeNull();
+    });
+
+    it('batch set is updated with chosen spawner after successful spawn', () => {
+      const boardWith2Spawners = createTestBoard(10, [], [], [{ row: 1, col: 0 }]);
+      gameBoardService.getGameBoard.and.returnValue(boardWith2Spawners);
+
+      // Start with empty occupied set
+      const occupied = new Set<string>();
+      const first = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1, occupied)!;
+      expect(first).not.toBeNull();
+
+      // Set must now contain the chosen spawner
+      const firstKey = `${first.gridPosition.row}-${first.gridPosition.col}`;
+      expect(occupied.has(firstKey)).toBeTrue();
+
+      // Second spawn in same batch must go to the other spawner
+      const second = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1, occupied)!;
+      expect(second).not.toBeNull();
+      const secondKey = `${second.gridPosition.row}-${second.gridPosition.col}`;
+      expect(secondKey).not.toBe(firstKey);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Ground straight-line fallback — Fix #43: no-path case
+  // ---------------------------------------------------------------------------
+
+  describe('ground enemy straight-line fallback — no A* path', () => {
+    it('spawns a ground enemy with a straight-line path when A* is blocked', () => {
+      // Block every tile except spawner column 0 and exit column 9, forcing
+      // the entire interior to be walls. The exit (9,9) is still reachable in
+      // a straight line but A* may not find a path through the walls.
+      // We simulate "no path" by blocking the entire row 0 cols 1-8:
+      const blockedCells: { row: number; col: number }[] = [];
+      for (let col = 1; col <= 8; col++) blockedCells.push({ row: 0, col });
+      // Also block col 1-8 for rows 1-8 (leave path only on col 0 and col 9)
+      for (let row = 1; row <= 8; row++) {
+        for (let col = 1; col <= 8; col++) {
+          blockedCells.push({ row, col });
+        }
+      }
+      gameBoardService.getGameBoard.and.returnValue(createTestBoard(10, blockedCells));
+
+      // The only traversable tiles are col 0 (rows 0-9) and col 9 (rows 0-9).
+      // A* can't cross — it would return empty. Fallback should produce a path.
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      // Should still spawn (straight-line fallback) rather than return null
+      expect(enemy).not.toBeNull();
+      expect(enemy!.path.length).toBeGreaterThan(0);
     });
   });
 });

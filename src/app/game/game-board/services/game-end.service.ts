@@ -7,15 +7,19 @@ import { GameNotificationService, NotificationType } from './game-notification.s
 import { MapBridgeService } from '@core/services/map-bridge.service';
 import { AudioService } from './audio.service';
 import { ChallengeTrackingService } from './challenge-tracking.service';
-import { CampaignService } from '@campaign/services/campaign.service';
-import { ChallengeEvaluatorService } from '@campaign/services/challenge-evaluator.service';
-import { ChallengeDefinition } from '@campaign/models/challenge.model';
-import { ScoreBreakdown } from '../models/score.model';
+import { calculateScoreBreakdown, ScoreBreakdown } from '../models/score.model';
 import { DIFFICULTY_PRESETS } from '../models/game-state.model';
+import { ChallengeDefinition, evaluateChallenges, GameEndState } from '../../../run/data/challenges';
 
 /** Data returned from recordEnd() for use by the component (display/UI updates). */
 export interface GameEndResult {
   newlyUnlockedAchievements: string[];
+  /**
+   * Challenges the player satisfied on this encounter victory (computed by
+   * `evaluateChallenges` against the end-of-encounter snapshot). Empty on
+   * defeat, quit, non-campaign maps, or when no challenges were met.
+   * Consumed by RunService.completeEncounter (Sprint R4) to award gold bonuses.
+   */
   completedChallenges: ChallengeDefinition[];
 }
 
@@ -39,8 +43,6 @@ export class GameEndService {
     private mapBridge: MapBridgeService,
     private audioService: AudioService,
     private challengeTrackingService: ChallengeTrackingService,
-    private campaignService: CampaignService,
-    private challengeEvaluatorService: ChallengeEvaluatorService,
   ) {}
 
   /** Call once when the player confirms a L3 specialization upgrade. */
@@ -59,14 +61,33 @@ export class GameEndService {
    * Idempotent — subsequent calls within the same session return an empty result without
    * re-recording anything.
    *
-   * @param isVictory      True for VICTORY, false for DEFEAT or quit.
-   * @param scoreBreakdown Score data computed at transition time. Null for quit before first wave.
+   * Phase H7: scoreBreakdown is COMPUTED here from current GameState. A
+   * pre-wave quit (wave=0, score=0) still produces a valid (zeroed)
+   * scoreBreakdown that recordMapScore handles correctly.
+   *
+   * @param isVictory  True for VICTORY, false for DEFEAT or quit.
+   * @param turnsUsed  Turn number at encounter end (read from CombatLoopService
+   *                   by the caller). Used only for SPEED_RUN challenge
+   *                   evaluation on victory. Defaults to 0 for quit/defeat
+   *                   paths that don't evaluate challenges anyway.
    */
-  recordEnd(isVictory: boolean, scoreBreakdown: ScoreBreakdown | null): GameEndResult {
+  recordEnd(isVictory: boolean, turnsUsed = 0): GameEndResult {
     if (this.gameEndRecorded) {
       return { newlyUnlockedAchievements: [], completedChallenges: [] };
     }
     this.gameEndRecorded = true;
+
+    // H7: compute scoreBreakdown from current state — never trust the caller.
+    const state = this.gameStateService.getState();
+    const scoreBreakdown: ScoreBreakdown = calculateScoreBreakdown(
+      state.score,
+      state.lives,
+      DIFFICULTY_PRESETS[state.difficulty].lives,
+      state.difficulty,
+      state.wave,
+      isVictory,
+      this.gameStateService.getModifierScoreMultiplier(),
+    );
 
     // Build GameEndStats from current service state
     const challengeSnapshot = this.challengeTrackingService.getSnapshot();
@@ -88,11 +109,10 @@ export class GameEndService {
       }
     }
 
-    // Record map score. scoreBreakdown.stars is already 0 when isVictory=false
-    // (the score model computes 0 stars on defeat). For quit, scoreBreakdown is null
-    // (only computed on entering VICTORY/DEFEAT), so this block is skipped entirely.
+    // Record map score. scoreBreakdown is always non-null after H7.
+    // scoreBreakdown.stars is 0 on defeat (per the score model).
     const mapId = this.mapBridge.getMapId();
-    if (mapId && scoreBreakdown) {
+    if (mapId) {
       this.playerProfileService.recordMapScore(
         mapId,
         scoreBreakdown.finalScore,
@@ -101,47 +121,36 @@ export class GameEndService {
       );
     }
 
-    // Campaign-specific: evaluate challenges and record completion (VICTORY on campaign levels only)
+    // Challenge evaluation — only on victory. Defeat and quit never complete challenges.
+    // Campaign map check: getChallengesForLevel returns [] for non-campaign maps, so
+    // evaluateChallenges() is safe to call unconditionally — it will just return [].
     let completedChallenges: ChallengeDefinition[] = [];
-    if (isVictory && mapId && this.campaignService.getLevel(mapId)) {
-      const endState = this.gameStateService.getState();
-      const challengeInput = {
+    if (isVictory && mapId) {
+      const snapshot = this.challengeTrackingService.getSnapshot();
+      const gameEndState: GameEndState = {
         livesLost: gameEndStats.livesLost,
-        elapsedTime: endState.elapsedTime,
-        totalGoldSpent: challengeSnapshot.totalGoldSpent,
-        maxTowersPlaced: challengeSnapshot.maxTowersPlaced,
-        towerTypesUsed: challengeSnapshot.towerTypesUsed,
+        turnsUsed,   // passed by caller (CombatLoopService has the turn counter)
+        totalGoldSpent: snapshot.totalGoldSpent,
+        maxTowersPlaced: snapshot.maxTowersPlaced,
+        towerTypesUsed: snapshot.towerTypesUsed,
       };
 
-      const newlyChallenged = this.challengeEvaluatorService.evaluateChallenges(mapId, challengeInput);
-      completedChallenges = newlyChallenged;
+      completedChallenges = evaluateChallenges(mapId, gameEndState);
 
-      let challengeBonus = 0;
-      for (const challenge of newlyChallenged) {
-        if (!this.campaignService.isChallengeCompleted(challenge.id)) {
-          this.playerProfileService.recordChallengeCompleted();
-        }
-        this.campaignService.completeChallenge(challenge.id);
-        challengeBonus += challenge.scoreBonus;
+      // Side effects: sound + notification per completion. Reward translation
+      // (challenge.scoreBonus → run-mode gold) happens later in
+      // RunService.generateRewards; this service just emits the list and the
+      // immediate player-facing feedback. Notification body uses the challenge
+      // description rather than the raw scoreBonus to avoid lying about currency
+      // units ("pts" vs. gold).
+      for (const challenge of completedChallenges) {
         this.audioService.playChallengeSound();
         this.notificationService.show(
           NotificationType.CHALLENGE,
-          'Challenge Complete!',
-          `${challenge.name} (+${challenge.scoreBonus} pts)`,
+          `Challenge: ${challenge.name}`,
+          challenge.description,
         );
       }
-
-      if (challengeBonus > 0) {
-        this.gameStateService.addScore(challengeBonus);
-      }
-
-      const updatedScore = (scoreBreakdown?.finalScore ?? 0) + challengeBonus;
-      this.campaignService.recordCompletion(
-        mapId,
-        updatedScore,
-        scoreBreakdown?.stars ?? 0,
-        endState.difficulty,
-      );
     }
 
     return { newlyUnlockedAchievements: newlyUnlocked, completedChallenges };

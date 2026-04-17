@@ -1,0 +1,153 @@
+// Settings — same dark game aesthetic as profile.
+// Dense rows, structural borders, purple accent only.
+
+.settings-container {
+  min-height: 100%;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  padding: var(--spacing-lg) var(--spacing-md) var(--spacing-2xl);
+
+  // Ambient glow — understated atmosphere, not a feature
+  &::before {
+    content: '';
+    position: fixed;
+    top: 40%;
+    left: 50%;
+    width: min(500px, 70vw);
+    height: min(500px, 70vw);
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, var(--theme-purple-glow) 0%, transparent 70%);
+    pointer-events: none;
+    opacity: 0.12;
+  }
+}
+
+.settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  user-select: none;
+}
+
+// ── Header ────────────────────────────────────────────────────────────────────
+
+.settings-header {
+  display: flex;
+  align-items: center;
+}
+
+.settings-page-title {
+  font-family: "Orbitron", sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--theme-purple-lighter);
+  margin: 0;
+}
+
+// ── Settings Grid ─────────────────────────────────────────────────────────────
+
+.settings-grid {
+  display: flex;
+  flex-direction: column;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-structural-subtle);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.setting-label {
+  font-size: var(--font-size-small);
+  color: var(--text-muted);
+}
+
+.setting-toggle {
+  padding: 4px 12px;
+  min-width: 3.5rem;
+  min-height: 2.75rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-interactive);
+  background: transparent;
+  color: var(--text-faint);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  &.active {
+    background: var(--theme-purple-a20);
+    border-color: var(--theme-purple);
+    color: var(--theme-purple-lighter);
+  }
+
+  &:hover {
+    border-color: var(--border-interactive-hover);
+    color: var(--text-color);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--theme-purple-lighter);
+    outline-offset: 2px;
+  }
+}
+
+.setting-options {
+  display: flex;
+  gap: 4px;
+}
+
+.setting-option-btn {
+  padding: 4px 10px;
+  min-height: 2.75rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-interactive);
+  background: transparent;
+  color: var(--text-faint);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  &.active {
+    background: var(--theme-purple-a20);
+    border-color: var(--theme-purple);
+    color: var(--theme-purple-lighter);
+  }
+
+  &:hover {
+    border-color: var(--border-interactive-hover);
+    color: var(--text-color);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--theme-purple-lighter);
+    outline-offset: 2px;
+  }
+}
+
+// ── Responsive ────────────────────────────────────────────────────────────────
+
+@media (max-width: 600px) {
+  .setting-row {
+    flex-wrap: wrap;
+  }
+
+  .setting-options {
+    flex-wrap: wrap;
+  }
+}

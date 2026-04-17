@@ -20,11 +20,6 @@
       <span class="stat-preview" *ngIf="upgradePreview" [attr.aria-label]="'After upgrade: ' + upgradePreview.range">{{ upgradePreview.range }}</span>
     </div>
     <div class="stat-row">
-      <span class="stat-label">Fire Rate</span>
-      <span class="stat-value">{{ towerStats!.fireRate }}s</span>
-      <span class="stat-preview" *ngIf="upgradePreview" [attr.aria-label]="'After upgrade: ' + upgradePreview.fireRate + 's'">{{ upgradePreview.fireRate }}s</span>
-    </div>
-    <div class="stat-row">
       <span class="stat-label">Kills</span>
       <span class="stat-value">{{ towerInfo!.kills }}</span>
     </div>
@@ -72,7 +67,7 @@
       [attr.aria-label]="'Specialize: ' + opt.label + ' — ' + opt.description">
       <span class="spec-label">{{ opt.label }}</span>
       <span class="spec-desc">{{ opt.description }}</span>
-      <span class="spec-stats">DMG {{ opt.damage }} | RNG {{ opt.range }} | {{ opt.fireRate }}s</span>
+      <span class="spec-stats">DMG {{ opt.damage }} | RNG {{ opt.range }}</span>
     </button>
     <button class="spec-cancel-btn" (click)="cancelSpecialization.emit()" aria-label="Cancel specialization">Cancel</button>
   </div>

@@ -23,21 +23,25 @@
 
 .board-container .pause-menu {
   cursor: default;
-  background: var(--panel-blue-bg, #1a1a2e);
-  border: 1px solid var(--theme-purple, #6a5a9a);
+  user-select: none;
+  -webkit-user-select: none;
+  background: var(--panel-blue-bg);
+  border: var(--border-width-thin) solid var(--theme-purple);
   border-radius: var(--border-radius-md);
-  box-shadow: 0 0 2rem var(--theme-purple-a50, rgba(106, 90, 154, 0.5));
+  box-shadow: 0 0 2rem var(--theme-purple-a50);
   padding: 1.5rem 2rem;
   width: min(22rem, 90vw);
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1rem;
   font-family: "Orbitron", sans-serif;
+  // Anchor for the pinned audio toggle (top-right corner).
+  position: relative;
 }
 
 @media (max-width: 480px) {
   .board-container .pause-menu {
-    padding: 1rem;
+    padding: 1rem 1.25rem;
     width: min(20rem, 95vw);
     gap: 0.75rem;
   }
@@ -45,12 +49,6 @@
   .board-container .pause-menu__title {
     font-size: var(--font-size-large);
     letter-spacing: 0.2rem;
-  }
-
-  .board-container .pause-menu__stats {
-    grid-template-columns: 1fr 1fr;
-    gap: 0.3rem 0.5rem;
-    padding: 0.5rem 0;
   }
 }
 
@@ -64,77 +62,82 @@
   text-align: center;
 }
 
+.board-container .pause-menu__subtitle {
+  font-size: var(--font-size-xs);
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.12rem;
+  text-align: center;
+  margin: -0.5rem 0 0;
+}
+
 .board-container .pause-menu__stats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.25rem;
+  border-top: var(--border-width-thin) solid var(--border-interactive);
+  border-bottom: var(--border-width-thin) solid var(--border-interactive);
   padding: 0.75rem 0;
 }
 
 .board-container .pause-stat {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  align-items: center;
+  gap: 0.125rem;
 }
 
 .board-container .pause-stat__label {
-  font-size: var(--font-size-xs, 0.65rem);
-  color: var(--text-subtle);
+  font-size: 0.6875rem;
+  color: var(--text-faint);
   text-transform: uppercase;
-  letter-spacing: 0.05rem;
+  letter-spacing: 0.06rem;
 }
 
 .board-container .pause-stat__value {
-  font-size: var(--font-size-small, 0.8rem);
+  font-size: var(--font-size-small);
   color: var(--text-color);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
-.board-container .pause-menu__settings {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.board-container .pause-setting {
-  display: flex;
+// Mute toggle — pinned to the modal's top-right corner as an icon-only
+// button. Previously lived between the stats strip and the controls
+// drawer as a chunky labeled button, which was an odd emphasis spot for
+// a secondary control. Corner placement matches the "modal-level toggle"
+// convention (X buttons, settings gears, etc.).
+//
+// Size kept small (1.75rem) so the "PAUSED" title — which is hero-size
+// with 0.4rem letter-spacing — has breathing room on the right. Pushed
+// to the extreme corner (0.5rem inset) for the same reason.
+.board-container .pause-audio-toggle {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.board-container .pause-setting__label {
-  font-size: var(--font-size-xs, 0.65rem);
-  color: var(--text-dimmer);
-  text-transform: uppercase;
-  letter-spacing: 0.05rem;
-  flex-shrink: 0;
-}
-
-.board-container .pause-setting__btn {
-  font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-xs, 0.65rem);
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-color);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  background: transparent;
+  color: var(--text-faint);
+  border: var(--border-width-thin) solid var(--border-interactive);
   border-radius: var(--border-radius-sm);
-  padding: 0.4rem 0.875rem;
-  min-height: 2.75rem;
   cursor: pointer;
-  transition: background var(--transition-fast) ease, border-color var(--transition-fast) ease;
+  transition: color var(--transition-fast) ease,
+              border-color var(--transition-fast) ease;
 }
 
-.board-container .pause-setting__btn:hover {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: var(--theme-purple-a80);
+.board-container .pause-audio-toggle:hover {
+  color: var(--text-muted);
+  border-color: var(--border-interactive-hover);
 }
 
-@media (max-width: 768px) {
-  .board-container .pause-setting__btn {
-    min-height: 2.75rem;
-  }
+.board-container .pause-audio-toggle svg {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
 }
 
 .board-container .pause-speed-btns {
@@ -144,10 +147,10 @@
 
 .board-container .pause-speed-btn {
   font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-xs, 0.65rem);
+  font-size: var(--font-size-xs);
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-color);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: var(--border-width-thin) solid var(--border-color);
   border-radius: var(--border-radius-sm);
   padding: 0.4rem 0.625rem;
   min-height: 2.75rem;
@@ -176,11 +179,11 @@
 .board-container .pause-menu__quit-confirm {
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
+  gap: 0.5rem;
 }
 
 .board-container .quit-confirm__text {
-  font-size: var(--font-size-small, 0.8rem);
+  font-size: var(--font-size-small);
   color: rgba(255, 255, 255, 0.7);
   text-align: center;
   margin: 0 0 0.25rem;
@@ -190,14 +193,14 @@
 .board-container .quit-confirm__actions {
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
+  gap: 0.5rem;
 }
 
 .board-container .pause-action {
   font-family: "Orbitron", sans-serif;
-  font-size: var(--font-size-small, 0.8rem);
+  font-size: var(--font-size-small);
   border-radius: var(--border-radius-sm);
-  padding: 0.75rem 1rem;
+  padding: 0.625rem 1rem;
   min-height: 2.75rem;
   cursor: pointer;
   transition: background var(--transition-fast) ease, border-color var(--transition-fast) ease;
@@ -205,26 +208,20 @@
   letter-spacing: 0.05rem;
 }
 
-@media (max-width: 768px) {
-  .board-container .pause-action {
-    min-height: 2.75rem;
-  }
-}
-
 .board-container .pause-action.pause-action--primary {
-  background: var(--theme-purple, #6a5a9a);
+  background: var(--theme-purple);
   color: var(--text-color);
-  border: 1px solid var(--theme-purple-lighter, #9a8aca);
+  border: var(--border-width-thin) solid var(--theme-purple-lighter);
 }
 
 .board-container .pause-action.pause-action--primary:hover {
-  background: var(--theme-purple-lighter, #9a8aca);
+  background: var(--theme-purple-lighter);
 }
 
 .board-container .pause-action.pause-action--quit {
   background: transparent;
   color: var(--text-dimmer);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: var(--border-width-thin) solid var(--border-color);
 }
 
 .board-container .pause-action.pause-action--quit:hover {
@@ -233,19 +230,193 @@
   color: rgba(255, 180, 180, 0.9);
 }
 
-.board-container .pause-menu__auto-hint {
-  font-size: var(--font-size-xs, 0.65rem);
-  color: rgba(255, 200, 80, 0.75);
+.board-container .pause-action.pause-action--save {
+  background: rgba(212, 175, 55, 0.15);
+  color: rgba(212, 175, 55, 0.9);
+  border: var(--border-width-thin) solid rgba(212, 175, 55, 0.35);
+}
+
+.board-container .pause-action.pause-action--save:hover {
+  background: rgba(212, 175, 55, 0.25);
+  border-color: rgba(212, 175, 55, 0.55);
+  color: rgba(232, 200, 80, 1);
+}
+
+.board-container .pause-menu__nav-prompt {
+  color: rgba(212, 175, 55, 0.9);
   text-align: center;
-  margin: 0 0 0.25rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.board-container .pause-menu__auto-hint {
+  font-size: 0.6875rem;
+  color: rgba(255, 200, 80, 0.65);
+  text-align: center;
+  margin: 0;
   letter-spacing: 0.03rem;
 }
 
 .board-container .pause-menu__hint {
-  font-size: var(--font-size-xs, 0.65rem);
-  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.6875rem;
+  color: rgba(255, 255, 255, 0.25);
   text-align: center;
   margin: 0;
-  letter-spacing: 0.05rem;
+  letter-spacing: 0.04rem;
 }
+
+@media (hover: none) {
+  .board-container .pause-menu__hint {
+    display: none;
+  }
+}
+
+
+// --- Pause menu relic panel (Sprint 23) ---
+
+.board-container .pause-menu__section-title {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.board-container .pause-menu__relics {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: var(--border-width-thin) solid rgba(255, 255, 255, 0.1);
+}
+
+.board-container .pause-menu__relic-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+}
+
+.board-container .pause-menu__relic {
+  padding: 0.3rem 0.5rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--border-radius-sm);
+  cursor: help;
+
+  &:hover {
+    border-color: var(--theme-purple-lighter);
+    background: rgba(140, 90, 200, 0.08);
+  }
+}
+
+.board-container .pause-menu__relic-name {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-2xs);
+  color: var(--text-color);
+  letter-spacing: 0.03em;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+// --- Sprint 27: pause-menu settings section (audio only) ---
+// Removed: the only child (mute toggle) moved to the modal's top-right
+// corner, so this wrapper was rendering empty space + a phantom gap.
+
+
+// --- Sprint 28: collapsible controls reference ---
+
+.board-container .pause-menu__controls-summary {
+  cursor: pointer;
+  // Flex so the triangle sits on its own axis with predictable gap.
+  // Previously the triangle + trailing space in `content: '▸ '` was
+  // rendering flush to the "CONTROLS" text, which looked cramped.
+  display: flex;
+  align-items: center;
+  width: 100%;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 0.5rem 0.25rem;
+  list-style: none;
+
+  &::-webkit-details-marker { display: none; }
+
+  &::before {
+    content: '▸';
+    display: inline-block;
+    // Fixed width so the ▸ ↔ ▾ swap doesn't shift the label horizontally.
+    width: 0.9rem;
+    margin-right: 0.5rem;
+    text-align: center;
+    transition: transform 0.15s ease;
+  }
+
+  &:hover {
+    color: var(--text-color);
+  }
+
+  &:focus-visible {
+    outline: var(--border-width-medium) solid var(--theme-cyan);
+    outline-offset: 2px;
+    border-radius: var(--border-radius-sm);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &::before { transition: none; }
+  }
+}
+
+.board-container .pause-menu__controls[open] .pause-menu__controls-summary::before {
+  content: '▾';
+}
+
+// When the drawer is open, the list area acts as a click-to-close
+// target — cursor: pointer signals "you can click anywhere here to
+// collapse this" without needing a dedicated close button.
+.board-container .pause-menu__controls[open] .pause-menu__controls-list {
+  cursor: pointer;
+}
+
+.board-container .pause-menu__controls-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-top: var(--spacing-xs);
+  font-size: var(--font-size-2xs);
+  color: var(--text-color);
+}
+
+.board-container .pause-menu__control-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.board-container .pause-menu__key {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  min-width: 1.4rem;
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-3xs);
+  font-weight: 700;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--border-radius-sm);
+  color: var(--text-color);
+  letter-spacing: 0.04em;
+}
+
+.board-container .pause-menu__sep {
+  color: var(--text-muted);
+  opacity: 0.6;
+  margin: 0 0.1rem;
+}
+
 

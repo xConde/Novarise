@@ -32,7 +32,6 @@ describe('ChainLightningService', () => {
     level: 1,
     row,
     col,
-    lastFireTime: -Infinity,
     kills: 0,
     totalInvested: TOWER_CONFIGS[TowerType.CHAIN].cost,
     targetingMode: 'nearest' as PlacedTower['targetingMode'],
@@ -264,7 +263,7 @@ describe('ChainLightningService', () => {
       enemyMap.set('e2', e2);
       populateGrid(e1, e2);
 
-      const kills = service.fire(makeTower(), e1, stats, mockScene, TOWER_X, TOWER_Z, spatialGrid, GAME_TIME);
+      const { kills } = service.fire(makeTower(), e1, stats, mockScene, TOWER_X, TOWER_Z, spatialGrid, GAME_TIME);
 
       expect(kills.length).toBeGreaterThanOrEqual(1);
       expect(kills.some(k => k.id === 'e1')).toBeTrue();
@@ -276,7 +275,7 @@ describe('ChainLightningService', () => {
       enemyMap.set('e1', e1);
       populateGrid(e1);
 
-      const kills = service.fire(makeTower(), e1, stats, mockScene, TOWER_X, TOWER_Z, spatialGrid, GAME_TIME);
+      const { kills } = service.fire(makeTower(), e1, stats, mockScene, TOWER_X, TOWER_Z, spatialGrid, GAME_TIME);
 
       expect(kills.length).toBe(0);
     });
@@ -365,8 +364,9 @@ describe('ChainLightningService', () => {
       (miniMesh.material as THREE.Material).dispose();
     });
 
-    it('should stop chaining when currentDamage would drop to 0 after falloff', () => {
-      // Use very low damage so that falloff quickly reaches 0
+
+    it('should halt chain when next bounce damage rounds below minDamageToBounce', () => {
+      // damage=1: Math.round(1 * 0.7) = 1, which is < minDamageToBounce(2) — chain stops after primary hit
       const stats = { ...makeStats(), damage: 1 };
       const chainRange = stats.chainRange ?? 2;
 
@@ -376,13 +376,77 @@ describe('ChainLightningService', () => {
       enemyMap.set('e2', e2);
       populateGrid(e1, e2);
 
-      // Math.round(1 * 0.7) = 1; Math.round(1 * 0.7) = 1 again — chain will continue until
-      // chainCount runs out. This test verifies the zero-damage guard doesn't accidentally
-      // terminate a valid chain. Set damage=1 which stays 1 after falloff.
       service.fire(makeTower(), e1, stats, mockScene, TOWER_X, TOWER_Z, spatialGrid, GAME_TIME);
 
-      // Both should have taken at least 1 damage — guard doesn't incorrectly stop them
-      expect(e1.health).toBeLessThan(10000);
+      // Primary target is hit; e2 must NOT be hit because next-bounce damage < minDamageToBounce
+      expect(e1.health).toBe(10000 - 1);
+      expect(e2.health).toBe(10000);
+    });
+
+    it('should halt chain on 3rd bounce when damage falls below minDamageToBounce mid-chain', () => {
+      // damage=3: bounce0=3, bounce1=Math.round(3*0.7)=2 (>=2 — proceed),
+      // bounce2=Math.round(2*0.7)=1 (<2 — halt before bounce2)
+      const stats = { ...makeStats(), damage: 3 };
+      const chainRange = stats.chainRange ?? 2;
+
+      const e1 = createTestEnemy('e1', 0.5, 0, 10000);
+      const e2 = createTestEnemy('e2', 0.5 + chainRange * 0.4, 0, 10000);
+      const e3 = createTestEnemy('e3', 0.5 + chainRange * 0.7, 0, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+      enemyMap.set('e3', e3);
+      populateGrid(e1, e2, e3);
+
+      service.fire(makeTower(), e1, stats, mockScene, TOWER_X, TOWER_Z, spatialGrid, GAME_TIME);
+
+      expect(e1.health).toBe(10000 - 3);
+      expect(e2.health).toBe(10000 - 2);
+      expect(e3.health).toBe(10000); // halted before this bounce
+    });
+
+    it('should return hitCount equal to number of enemies actually struck', () => {
+      // damage=1 halts chain after primary hit — hitCount should be 1
+      const stats = { ...makeStats(), damage: 1 };
+      const chainRange = stats.chainRange ?? 2;
+
+      const e1 = createTestEnemy('e1', 0.5, 0, 10000);
+      const e2 = createTestEnemy('e2', 0.5 + chainRange * 0.4, 0, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+      populateGrid(e1, e2);
+
+      const result = service.fire(makeTower(), e1, stats, mockScene, TOWER_X, TOWER_Z, spatialGrid, GAME_TIME);
+
+      expect(result.hitCount).toBe(1);
+    });
+
+    it('should return hitCount matching actual bounces when chain breaks early', () => {
+      // damage=3: hits e1(3) then e2(2) then halts. hitCount = 2
+      const stats = { ...makeStats(), damage: 3 };
+      const chainRange = stats.chainRange ?? 2;
+
+      const e1 = createTestEnemy('e1', 0.5, 0, 10000);
+      const e2 = createTestEnemy('e2', 0.5 + chainRange * 0.4, 0, 10000);
+      const e3 = createTestEnemy('e3', 0.5 + chainRange * 0.7, 0, 10000);
+      enemyMap.set('e1', e1);
+      enemyMap.set('e2', e2);
+      enemyMap.set('e3', e3);
+      populateGrid(e1, e2, e3);
+
+      const result = service.fire(makeTower(), e1, stats, mockScene, TOWER_X, TOWER_Z, spatialGrid, GAME_TIME);
+
+      expect(result.hitCount).toBe(2);
+    });
+
+    it('should return hitCount=1 when no second target is in range', () => {
+      const stats = makeStats();
+      const e1 = createTestEnemy('e1', 0.5, 0, 10000);
+      enemyMap.set('e1', e1);
+      populateGrid(e1);
+
+      const result = service.fire(makeTower(), e1, stats, mockScene, TOWER_X, TOWER_Z, spatialGrid, GAME_TIME);
+
+      expect(result.hitCount).toBe(1);
     });
   });
 });

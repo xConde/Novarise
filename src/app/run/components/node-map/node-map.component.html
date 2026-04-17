@@ -1,0 +1,59 @@
+<!-- Slay the Spire-style node map with SVG connections -->
+<div class="node-map-container" #mapContainer>
+  <div
+    class="node-map-scroll"
+    [style.width.px]="mapWidth"
+    [style.height.px]="mapHeight"
+  >
+
+    <!-- ── SVG connection layer ───────────────────────────────── -->
+    <svg
+      class="node-map-svg"
+      [attr.viewBox]="'0 0 ' + mapWidth + ' ' + mapHeight"
+      [style.width.px]="mapWidth"
+      [style.height.px]="mapHeight"
+      aria-hidden="true"
+    >
+      <path
+        *ngFor="let conn of connectionPaths"
+        [attr.d]="conn.d"
+        class="node-connection"
+        [class.node-connection--active]="conn.active"
+        [class.node-connection--visited]="conn.visited"
+      />
+    </svg>
+
+    <!-- ── Node layer ─────────────────────────────────────────── -->
+    <button
+      *ngFor="let node of nodeMap.nodes"
+      class="map-node"
+      [class.map-node--selectable]="isSelectable(node)"
+      [class.map-node--visited]="isVisited(node.id)"
+      [class.map-node--current]="isCurrent(node.id)"
+      [class.map-node--checkpointed]="isCheckpointed(node.id)"
+      [class.map-node--combat]="node.type === NodeType.COMBAT"
+      [class.map-node--elite]="node.type === NodeType.ELITE"
+      [class.map-node--boss]="node.type === NodeType.BOSS"
+      [class.map-node--rest]="node.type === NodeType.REST"
+      [class.map-node--shop]="node.type === NodeType.SHOP"
+      [class.map-node--event]="node.type === NodeType.EVENT"
+      [class.map-node--unknown]="node.type === NodeType.UNKNOWN"
+      [style.left.px]="getNodeLeft(node.id)"
+      [style.top.px]="getNodeTop(node.id)"
+      [disabled]="!isSelectable(node)"
+      (click)="onNodeClick(node)"
+      [title]="getNodeTooltip(node)"
+      [attr.aria-label]="getNodeTooltip(node)"
+    >
+      <span class="map-node-icon" aria-hidden="true">
+        <app-icon [name]="getNodeIcon(node.type)" [size]="node.type === 'boss' ? 22 : 18"></app-icon>
+      </span>
+      <span
+        *ngIf="isCheckpointed(node.id)"
+        class="map-node__resume-badge"
+        aria-label="Resume saved encounter"
+      >RESUME</span>
+    </button>
+
+  </div>
+</div>

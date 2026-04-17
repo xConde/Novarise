@@ -1,0 +1,10 @@
+export enum EnemyType {
+  BASIC = 'BASIC',
+  FAST = 'FAST',
+  HEAVY = 'HEAVY',
+  SWIFT = 'SWIFT',
+  BOSS = 'BOSS',
+  SHIELDED = 'SHIELDED',
+  SWARM = 'SWARM',
+  FLYING = 'FLYING'
+}

@@ -21,7 +21,7 @@
     flex-shrink: 0; // Don't shrink title
 
     .letter {
-      font-size: 3rem;
+      font-size: var(--font-size-hero);
       font-family: "Orbitron", sans-serif;
       color: var(--theme-purple-light);
       margin: 0 0.25rem;
@@ -64,7 +64,7 @@
       .context-lost-message {
         font-family: "Orbitron", sans-serif;
         font-size: var(--font-size-small);
-        color: rgba(255, 255, 255, 0.6);
+        color: var(--text-muted);
         margin-bottom: var(--spacing-sm);
       }
 
@@ -100,7 +100,7 @@
   left: var(--spacing-lg);
   background: var(--nav-bg-a90);
   border: 1px solid var(--theme-purple-a50);
-  border-radius: 8px;
+  border-radius: var(--border-radius-lg);
   padding: var(--spacing-md) var(--spacing-lg);
   backdrop-filter: blur(0.625rem);
   font-family: 'Courier New', monospace;
@@ -118,7 +118,7 @@
 
 .hint-title {
   font-weight: 700;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--theme-purple-mid);
@@ -144,7 +144,7 @@
   transform: translateX(-50%);
   background: var(--nav-bg-a90);
   border: 1px solid var(--theme-purple-a50);
-  border-radius: 8px;
+  border-radius: var(--border-radius-lg);
   padding: var(--spacing-sm) var(--spacing-lg);
   backdrop-filter: blur(0.625rem);
   font-family: 'Orbitron', sans-serif;
@@ -294,11 +294,11 @@
 // Mobile responsive adjustments
 @media (max-width: 768px) {
   .game-container {
-    border-width: 2px;
+    border-width: var(--border-width-medium);
     padding: 4px;
 
     .title .letter {
-      font-size: 2rem;
+      font-size: var(--font-size-large);
       margin: 0 0.15rem;
     }
   }

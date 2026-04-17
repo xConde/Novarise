@@ -6,7 +6,6 @@ import { SceneService } from './scene.service';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
 import { TowerPreviewService } from './tower-preview.service';
-import { TilePricingService } from './tile-pricing.service';
 import { TowerType } from '../models/tower.model';
 import { INITIAL_GAME_STATE } from '../models/game-state.model';
 import { createSceneServiceSpy, createGameBoardServiceSpy, createGameStateServiceSpy } from '../testing';
@@ -17,7 +16,6 @@ describe('TowerPlacementService', () => {
   let gameBoardSpy: jasmine.SpyObj<GameBoardService>;
   let gameStateSpy: jasmine.SpyObj<GameStateService>;
   let towerPreviewSpy: jasmine.SpyObj<TowerPreviewService>;
-  let tilePricingSpy: jasmine.SpyObj<TilePricingService>;
 
   beforeEach(() => {
     sceneSpy = createSceneServiceSpy();
@@ -26,10 +24,6 @@ describe('TowerPlacementService', () => {
     towerPreviewSpy = jasmine.createSpyObj<TowerPreviewService>('TowerPreviewService', [
       'showPreview', 'hidePreview', 'cleanup', 'setBoardSize',
     ]);
-    tilePricingSpy = jasmine.createSpyObj<TilePricingService>('TilePricingService', [
-      'getTilePrice', 'getStrategicValue', 'invalidateCache',
-    ]);
-    tilePricingSpy.getTilePrice.and.returnValue({ cost: 50, percentIncrease: 0, strategicMultiplier: 0, tier: 'base', isPremium: false });
 
     TestBed.configureTestingModule({
       providers: [
@@ -38,7 +32,6 @@ describe('TowerPlacementService', () => {
         { provide: GameBoardService, useValue: gameBoardSpy },
         { provide: GameStateService, useValue: gameStateSpy },
         { provide: TowerPreviewService, useValue: towerPreviewSpy },
-        { provide: TilePricingService, useValue: tilePricingSpy },
       ],
     });
 

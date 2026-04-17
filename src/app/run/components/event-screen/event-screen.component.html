@@ -1,0 +1,107 @@
+<div class="event-screen" role="main" [attr.aria-label]="'Event: ' + event.title">
+
+  <!-- Event Card -->
+  <div class="event-card">
+    <div class="event-card__glow" aria-hidden="true"></div>
+
+    <h2 class="event-title">{{ event.title }}</h2>
+    <p class="event-description">{{ event.description }}</p>
+
+    <!-- Choices — shown before selection -->
+    <div class="event-choices" *ngIf="!showOutcome" role="group" aria-label="Choose your action">
+      <button
+        class="event-choice-btn"
+        *ngFor="let choice of event.choices; let i = index"
+        (click)="makeChoice(i)"
+        [attr.aria-label]="choice.label + ': ' + choice.description"
+        type="button"
+      >
+        <span class="event-choice-btn__label">{{ choice.label }}</span>
+        <span class="event-choice-btn__desc">{{ choice.description }}</span>
+      </button>
+    </div>
+
+    <!-- Choices — disabled after selection -->
+    <div class="event-choices event-choices--resolved" *ngIf="showOutcome" aria-hidden="true">
+      <button
+        class="event-choice-btn event-choice-btn--disabled"
+        *ngFor="let choice of event.choices; let i = index"
+        [class.event-choice-btn--selected]="i === selectedChoice"
+        disabled
+        type="button"
+        aria-hidden="true"
+      >
+        <span class="event-choice-btn__label">{{ choice.label }}</span>
+        <span class="event-choice-btn__desc">{{ choice.description }}</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Outcome Panel — slide in after choice -->
+  <div
+    class="event-outcome"
+    [class]="'event-outcome event-outcome--' + (currentOutcome ? getOutcomeClass(currentOutcome) : 'neutral')"
+    *ngIf="showOutcome && currentOutcome"
+    aria-live="polite"
+    role="region"
+    aria-label="Outcome"
+  >
+    <p class="event-outcome__description">{{ currentOutcome.description }}</p>
+
+    <div class="event-outcome__deltas">
+      <!-- Gold delta -->
+      <span
+        class="event-outcome__delta event-outcome__delta--gold"
+        *ngIf="currentOutcome.goldDelta !== 0"
+        [class.positive]="currentOutcome.goldDelta > 0"
+        [class.negative]="currentOutcome.goldDelta < 0"
+        [attr.aria-label]="(currentOutcome.goldDelta > 0 ? 'Gained' : 'Lost') + ' ' + (currentOutcome.goldDelta | number) + ' gold'"
+      >
+        <app-icon name="coin" [size]="12"></app-icon>
+        {{ formatDelta(currentOutcome.goldDelta) }}g
+      </span>
+
+      <!-- Lives delta -->
+      <span
+        class="event-outcome__delta event-outcome__delta--lives"
+        *ngIf="currentOutcome.livesDelta !== 0"
+        [class.positive]="currentOutcome.livesDelta > 0"
+        [class.negative]="currentOutcome.livesDelta < 0"
+        [attr.aria-label]="(currentOutcome.livesDelta > 0 ? 'Gained' : 'Lost') + ' ' + (currentOutcome.livesDelta | number) + ' ' + (currentOutcome.livesDelta === 1 || currentOutcome.livesDelta === -1 ? 'life' : 'lives')"
+      >
+        <app-icon name="heart" [size]="12"></app-icon>
+        {{ formatDelta(currentOutcome.livesDelta) }}
+      </span>
+
+      <!-- Relic gained -->
+      <span
+        class="event-outcome__delta event-outcome__delta--relic positive"
+        *ngIf="currentOutcome.relicId"
+        [attr.aria-label]="'Gained relic: ' + currentOutcome.relicId"
+      >
+        <app-icon name="diamond" [size]="12"></app-icon>
+        Gained: {{ currentOutcome.relicId }}
+      </span>
+
+      <!-- Relic removed -->
+      <span
+        class="event-outcome__delta event-outcome__delta--relic negative"
+        *ngIf="currentOutcome.removeRelicId"
+        [attr.aria-label]="'Lost relic: ' + currentOutcome.removeRelicId"
+      >
+        <app-icon name="diamond" [size]="12"></app-icon>
+        Lost: {{ currentOutcome.removeRelicId }}
+      </span>
+    </div>
+
+    <button
+      class="event-continue-btn run-btn run-btn--primary"
+      type="button"
+      (click)="confirmChoice()"
+      aria-label="Continue to the node map"
+    >
+      Continue
+    </button>
+  </div>
+
+</div>

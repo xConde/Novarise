@@ -3,7 +3,7 @@
   flex-direction: column;
   height: 100vh;
   height: 100dvh;
-  width: 100vw;
+  width: 100%;
   overflow: hidden;
 }
 
@@ -11,23 +11,24 @@
   display: flex;
   gap: 2px;
   background: var(--nav-bg);
-  border-bottom: 1px solid var(--theme-purple-glow);
-  padding: 0 8px;
+  border-bottom: var(--border-width-thin) solid var(--theme-purple-glow);
+  padding: 0 var(--spacing-xs);
   flex-shrink: 0;
   z-index: 2000;
+  user-select: none;
 }
 
 .app-nav a {
-  padding: 8px 20px;
+  padding: var(--spacing-xs) 20px;
   color: var(--theme-purple-light);
   text-decoration: none;
   font-family: 'Orbitron', sans-serif;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   letter-spacing: 1px;
   text-transform: uppercase;
-  border-bottom: 2px solid transparent;
-  transition: color 0.2s, border-color 0.2s;
+  border-bottom: var(--border-width-medium) solid transparent;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
   cursor: pointer;
 }
 
@@ -40,9 +41,44 @@
   border-bottom-color: var(--theme-purple-light);
 }
 
+.settings-cog {
+  position: fixed;
+  top: 50px;
+  right: var(--spacing-md);
+  z-index: 1999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--text-faint);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.settings-cog:hover {
+  color: var(--theme-purple-lighter);
+}
+
+.settings-cog svg {
+  display: block;
+}
+
 @media (max-width: 768px) {
   .app-nav a {
     padding: 6px 14px;
-    font-size: 10px;
+    font-size: var(--font-size-xs);
+  }
+}
+
+/* Sprint 30: ensure settings cog meets 44×44px touch target on mobile */
+@media (max-width: 480px) {
+  .settings-cog {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 }

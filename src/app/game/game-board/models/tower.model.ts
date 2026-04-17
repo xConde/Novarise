@@ -1,28 +1,36 @@
 import * as THREE from 'three';
 import { StatusEffectType } from '../constants/status-effect.constants';
+import { TowerStatOverrides } from '../../../run/models/card.model';
 
 export enum TargetingMode {
   NEAREST = 'nearest',
   FIRST = 'first',
   STRONGEST = 'strongest',
+  WEAKEST = 'weakest',
+  LAST = 'last',
+  FARTHEST = 'farthest',
 }
-export const TARGETING_MODES: TargetingMode[] = [TargetingMode.NEAREST, TargetingMode.FIRST, TargetingMode.STRONGEST];
+export const TARGETING_MODES: TargetingMode[] = [
+  TargetingMode.NEAREST,
+  TargetingMode.FARTHEST,
+  TargetingMode.FIRST,
+  TargetingMode.LAST,
+  TargetingMode.STRONGEST,
+  TargetingMode.WEAKEST,
+];
 export const DEFAULT_TARGETING_MODE: TargetingMode = TargetingMode.NEAREST;
 
 export const TARGETING_MODE_LABELS: Record<TargetingMode, string> = {
   [TargetingMode.NEAREST]: 'Nearest',
   [TargetingMode.FIRST]: 'First',
   [TargetingMode.STRONGEST]: 'Strongest',
+  [TargetingMode.WEAKEST]: 'Weakest',
+  [TargetingMode.LAST]: 'Last',
+  [TargetingMode.FARTHEST]: 'Farthest',
 };
 
-export enum TowerType {
-  BASIC = 'basic',
-  SNIPER = 'sniper',
-  SPLASH = 'splash',
-  SLOW = 'slow',
-  CHAIN = 'chain',
-  MORTAR = 'mortar'
-}
+import { TowerType } from '@core/models/tower-type.model';
+export { TowerType };
 
 export enum TowerSpecialization {
   ALPHA = 'alpha',
@@ -32,7 +40,7 @@ export enum TowerSpecialization {
 export const MAX_TOWER_LEVEL = 3;
 
 export const UPGRADE_COST_CONFIG = {
-  baseMultiplier: 0.5,
+  baseMultiplier: 1.0,
   levelScale: 0.25,
 } as const;
 
@@ -41,14 +49,11 @@ export const SELL_REFUND_RATE = 0.5;
 export interface TowerStats {
   damage: number;
   range: number;        // tiles
-  fireRate: number;     // seconds between shots
   cost: number;
-  projectileSpeed: number; // tiles per second
   splashRadius: number; // tiles, 0 for single-target
   color: number;        // hex color for projectile
   // Slow tower
   slowFactor?: number;    // Speed reduction multiplier (0.5 = 50% of base speed)
-  slowDuration?: number;  // Duration of slow effect in seconds
   // Chain lightning tower
   chainCount?: number;    // Number of chain bounces after primary target
   chainRange?: number;    // World-unit radius to find next chain target
@@ -65,7 +70,6 @@ export interface SpecializationStats {
   description: string;
   damage: number;          // Multiplier on base damage at L3
   range: number;           // Multiplier on base range at L3
-  fireRate: number;        // Multiplier on base fireRate at L3 (lower = faster)
   splashRadiusBonus?: number;
   chainCountBonus?: number;
   slowFactorOverride?: number;
@@ -79,7 +83,6 @@ export interface PlacedTower {
   level: number;        // 1-3
   row: number;
   col: number;
-  lastFireTime: number; // elapsed game time of last shot
   kills: number;
   totalInvested: number; // cumulative gold spent (placement + upgrades)
   targetingMode: TargetingMode;
@@ -89,53 +92,57 @@ export interface PlacedTower {
   muzzleFlashTimer?: number;
   /** Per-mesh snapshot of emissiveIntensity before the flash was applied, keyed by mesh uuid. */
   originalEmissiveIntensity?: Map<string, number>;
+  /**
+   * The combat turn number on which this tower was placed. Set by
+   * TowerCombatService.registerTower() using the caller-supplied turn number.
+   * Defaults to 0 for towers placed before combat begins (setup phase).
+   * Used by the QUICK_DRAW relic: fires +1 extra shot on the placement turn.
+   */
+  placedAtTurn?: number;
+  /**
+   * Optional per-card stat overrides baked in at placement time.
+   * Composed multiplicatively (or additively for bonuses) with relic and
+   * card-modifier effects in TowerCombatService.fireTurn(). Undefined means
+   * no override — identical to pre-extension behavior.
+   */
+  cardStatOverrides?: TowerStatOverrides;
 }
 
 export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
   [TowerType.BASIC]: {
     damage: 25,
     range: 3,
-    fireRate: 1.0,
     cost: 50,
-    projectileSpeed: 8,
     splashRadius: 0,
     color: 0xd47a3a
   },
   [TowerType.SNIPER]: {
     damage: 80,
     range: 8,
-    fireRate: 2.5,
     cost: 125,
-    projectileSpeed: 15,
     splashRadius: 0,
     color: 0x7a5ac4
   },
   [TowerType.SPLASH]: {
     damage: 15,
     range: 3.5,
-    fireRate: 1.5,
     cost: 75,
-    projectileSpeed: 6,
     splashRadius: 1.5,
     color: 0x4ac47a
   },
   [TowerType.SLOW]: {
     damage: 0,
     range: 2.5,
-    fireRate: 0.5,   // Aura pulse interval; not used for projectile fire rate
     cost: 75,
-    projectileSpeed: 0,
     splashRadius: 0,
     color: 0x4488ff,
     slowFactor: 0.5,
-    slowDuration: 2
+    // SLOW status duration is governed by STATUS_EFFECT_CONFIGS[StatusEffectType.SLOW].duration (turns)
   },
   [TowerType.CHAIN]: {
     damage: 15,
     range: 3,
-    fireRate: 0.8,
     cost: 120,
-    projectileSpeed: 12,
     splashRadius: 0,
     color: 0xffdd00,
     chainCount: 3,
@@ -144,9 +151,7 @@ export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {
   [TowerType.MORTAR]: {
     damage: 8,
     range: 4,
-    fireRate: 3.0,   // Slow-firing artillery
     cost: 140,
-    projectileSpeed: 4,
     splashRadius: 0,
     color: 0xff6622,
     blastRadius: 1.5,
@@ -160,92 +165,92 @@ export const TOWER_SPECIALIZATIONS: Record<TowerType, Record<TowerSpecialization
   [TowerType.BASIC]: {
     [TowerSpecialization.ALPHA]: {
       label: 'Marksman',
-      description: 'High damage, slight range boost',
-      damage: 3.0, range: 1.2, fireRate: 0.8,
+      description: 'Marksman: +200% damage, +20% range',
+      damage: 3.0, range: 1.2,
     },
     [TowerSpecialization.BETA]: {
       label: 'Rapid',
-      description: 'Much faster fire rate, wider range',
-      damage: 1.8, range: 1.5, fireRate: 0.5,
+      description: 'Tight-beam salvo: +80% damage, +50% range',
+      damage: 1.8, range: 1.5,
     },
   },
   [TowerType.SNIPER]: {
     [TowerSpecialization.ALPHA]: {
       label: 'Assassin',
-      description: 'Extreme damage, very long range',
-      damage: 3.5, range: 1.5, fireRate: 0.75,
+      description: 'Assassin: +250% damage, +50% range',
+      damage: 3.5, range: 1.5,
     },
     [TowerSpecialization.BETA]: {
       label: 'Sharpshooter',
-      description: 'Fast semi-auto, moderate range',
-      damage: 2.0, range: 1.2, fireRate: 0.45,
+      description: 'Focused shot: +100% damage, +20% range',
+      damage: 2.0, range: 1.2,
     },
   },
   [TowerType.SPLASH]: {
     [TowerSpecialization.ALPHA]: {
       label: 'Bombardier',
-      description: 'Larger blast, more damage, poisons targets',
-      damage: 2.8, range: 1.2, fireRate: 0.8,
+      description: 'Bombardier: +180% damage, +20% range, +0.5 blast radius, applies POISON',
+      damage: 2.8, range: 1.2,
       splashRadiusBonus: 0.5,
       statusEffect: StatusEffectType.POISON,
     },
     [TowerSpecialization.BETA]: {
       label: 'Suppressor',
-      description: 'Rapid small explosions, wider range',
-      damage: 1.8, range: 1.5, fireRate: 0.5,
+      description: 'Sustained barrage: +80% damage, +50% range',
+      damage: 1.8, range: 1.5,
     },
   },
   [TowerType.SLOW]: {
     [TowerSpecialization.ALPHA]: {
       label: 'Glacier',
-      description: 'Stronger slow effect, wider range',
-      damage: 1.0, range: 1.5, fireRate: 1.0,
+      description: 'Glacier: slows to 30% speed (vs 50% base), +50% range',
+      damage: 1.0, range: 1.5,
       slowFactorOverride: 0.3,
     },
     [TowerSpecialization.BETA]: {
       label: 'Frostbite',
-      description: 'Faster pulse rate, extended range',
-      damage: 1.0, range: 1.3, fireRate: 0.7,
+      description: 'Frostbite: +30% range, wider chill coverage',
+      damage: 1.0, range: 1.3,
     },
   },
   [TowerType.CHAIN]: {
     [TowerSpecialization.ALPHA]: {
       label: 'Tesla',
-      description: 'More bounces, longer chain range, burns targets',
-      damage: 2.0, range: 1.2, fireRate: 0.8,
+      description: 'Tesla: +100% damage, +2 chain bounces, +20% range, applies BURN',
+      damage: 2.0, range: 1.2,
       chainCountBonus: 2,
       statusEffect: StatusEffectType.BURN,
     },
     [TowerSpecialization.BETA]: {
       label: 'Arc',
-      description: 'Faster arcs, higher damage per hit',
-      damage: 2.8, range: 1.3, fireRate: 0.5,
+      description: 'Arc: +180% damage, +30% range',
+      damage: 2.8, range: 1.3,
     },
   },
   [TowerType.MORTAR]: {
     [TowerSpecialization.ALPHA]: {
       label: 'Siege',
-      description: 'Larger zones, stronger DoT',
-      damage: 2.5, range: 1.2, fireRate: 0.85,
+      description: 'Siege: +150% damage, 2× DoT per zone, +20% range',
+      damage: 2.5, range: 1.2,
       dotDamageMultiplier: 2.0,
     },
     [TowerSpecialization.BETA]: {
       label: 'Barrage',
-      description: 'Faster firing, more zones active',
-      damage: 1.8, range: 1.3, fireRate: 0.5,
+      description: 'Barrage: +80% damage, +30% range',
+      damage: 1.8, range: 1.3,
     },
   },
 };
 
 /** Per-level stat multipliers. Index 0 = level 1 (base), 1 = level 2, 2 = level 3. */
-export const UPGRADE_MULTIPLIERS: { damage: number; range: number; fireRate: number }[] = [
-  { damage: 1.0,  range: 1.0,  fireRate: 1.0  },  // Level 1 (base)
-  { damage: 1.5,  range: 1.15, fireRate: 0.85 },   // Level 2 (+50% dmg, +15% range, 15% faster)
-  { damage: 2.2,  range: 1.3,  fireRate: 0.7  },   // Level 3 (+120% dmg, +30% range, 30% faster)
+export const UPGRADE_MULTIPLIERS: { damage: number; range: number }[] = [
+  { damage: 1.0,  range: 1.0  },  // Level 1 (base)
+  { damage: 1.5,  range: 1.15 },  // Level 2 (+50% dmg, +15% range)
+  { damage: 2.2,  range: 1.3  },  // Level 3 (+120% dmg, +30% range)
 ];
 
 /** Get the upgrade cost from current level to next level.
- *  Level 1→2: 75% of base cost; Level 2→3: 100% of base cost. */
+ *  Level 1→2: 125% of base cost; Level 2→3: 150% of base cost. */
 export function getUpgradeCost(type: TowerType, currentLevel: number, costMultiplier = 1, tileStrategic = 0): number {
   if (currentLevel < 1 || currentLevel >= MAX_TOWER_LEVEL) return Infinity;
   const baseCost = TOWER_CONFIGS[type].cost;
@@ -278,7 +283,6 @@ export function getEffectiveStats(type: TowerType, level: number, specialization
       ...base,
       damage: Math.round(base.damage * spec.damage),
       range: +(base.range * spec.range).toFixed(2),
-      fireRate: +(base.fireRate * spec.fireRate).toFixed(2),
     };
     if (spec.splashRadiusBonus && result.splashRadius) {
       result.splashRadius += spec.splashRadiusBonus;
@@ -304,6 +308,5 @@ export function getEffectiveStats(type: TowerType, level: number, specialization
     ...base,
     damage: Math.round(base.damage * mult.damage),
     range: +(base.range * mult.range).toFixed(2),
-    fireRate: +(base.fireRate * mult.fireRate).toFixed(2),
   };
 }
