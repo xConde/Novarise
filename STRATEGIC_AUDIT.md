@@ -1630,3 +1630,43 @@ Finding 1 is the only live UX regression — fixed inline by restoring `relicCho
 - [x] P4-C3: Reward differentiation — combat cards-only, elite cards+3 relics, boss 3 relics no cards
 - [x] Red-team gate: Finding 1 hardening (restore 3-option relic picks at elite/boss)
 - [x] Commit Phase 4 + red-team hardening
+
+---
+
+## Red Team Critique — Phase 5 QA Hotfixes (2026-04-16)
+
+**Scope:** Four QA hotfixes discovered during live playtest plus a lint-cleanup pass.
+- `68bf850` SLOW permaparalysis fix + louder status effect feedback
+- `13dbe26` SHIELDED shield HP bar rendering
+- `c7945e1` Reward screen keyboard shortcuts (1/2/3, Esc)
+- `d87c5d4` Reward screen picked-name confirmation lines
+- Lint cleanup: 9 pre-existing lint errors cleared across 7 files (unused imports, empty ngOnDestroy)
+
+### Finding 1: Shield bar billboarding reads stale scratch quaternion (LOW)
+**Location:** `enemy-health.service.ts` — new shield bar block
+**Risk:** The new shield bar billboarding block reads `this.billboardScratchQuat` without re-populating it. Today it works only because the health-bar block runs immediately before it on the same iteration and leaves the scratch field with the correct (current-enemy) world quaternion. If a future SHIELDED enemy existed without a health bar (edge case — e.g., a mesh shape override), the shield bar would inherit the PREVIOUS enemy's rotation, silently facing the wrong direction. No live bug today since all SHIELDED enemies have health bars.
+**Fix:** Re-populate `billboardScratchQuat` inside the shield-bar block before copying to bar planes. One extra matrix compose per shield bar, negligible perf cost. Keeps the two bar systems independent so edge-case enemies can't corrupt each other's orientation.
+
+### Finding 2: Reward-screen keydown listener is document-scoped (ACCEPTED)
+**Location:** `reward-screen.component.ts` `@HostListener('document:keydown', ...)`
+**Risk:** The listener attaches to the whole document while the reward-screen is alive. If something else gains focus (a pause overlay, a settings dialog) while reward-screen is still rendered underneath, 1/2/3 keys could still pick cards.
+**Mitigation:** Reward-screen is rendered only via `*ngIf="viewMode === 'reward'"` and nothing else in the run module overlays it while active. The text-input guard (INPUT/TEXTAREA/contentEditable) covers form-field focus. Accepted as-is — tighter scoping (host-element only) would trade off the ability to fire hotkeys without focusing a specific card button first, which is worse UX.
+
+### Finding 3: Status-effect visual intensity bump may over-brighten on dense waves (LOW)
+**Location:** `effects.constants.ts` — `emissiveIntensity` 0.7 → 1.6 across all status effects
+**Risk:** A wave with 10+ simultaneously-BURNed enemies could saturate the scene with orange emissive. The previous 0.7 was chosen to blend with tower VFX; 1.6 is intentionally loud to fix the "is this enemy affected?" gap — but the ceiling may need re-tuning once denser waves land.
+**Mitigation:** Easy post-QA tweak: 1.6 → 1.2 if QA reports over-saturation on mass-BURN wave templates. No fix needed until playtest data shows it.
+
+### Hardening Applied
+
+Finding 1 is the only latent correctness bug — fixed inline. Findings 2 and 3 are accepted trade-offs documented for future attention.
+
+### Deployment Checklist — Phase 5 (QA Hotfixes)
+
+- [x] SLOW floor-at-1 + brighter status feedback
+- [x] SHIELDED shield HP bar
+- [x] Reward screen 1/2/3 + Esc hotkeys
+- [x] Reward screen picked-name confirmation
+- [x] Lint cleanup (9 errors → 0)
+- [x] Red-team gate: Finding 1 shield-billboard hardening
+- [x] Commit Phase 5 + red-team hardening
