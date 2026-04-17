@@ -83,8 +83,18 @@ const CARD_VALUES = {
   lightningStrikeUpgradedDamage: 150,
   frostWaveUpgradedDuration: 8,
   // salvage has no upgradedEffect; the base value of 1 is a boolean-style flag (full refund multiplier)
-  fortifyDefaultEnergy: 1,
-  fortifyUpgradedEnergy: 0,
+  // Phase 1 Sprint 5 — fortify value now means "number of towers to upgrade".
+  // Energy cost stays at 1 (set on the card definition); upgrade doubles output.
+  // The legacy fortifyDefaultEnergy / fortifyUpgradedEnergy fields are removed.
+  fortifyUpgradeCount: 1,
+  fortifyUpgradedUpgradeCount: 2,
+  // Phase 1 Sprint 5 — INCINERATE / TOXIC_SPRAY now read effect.value as the
+  // status duration in turns. Base values match prior STATUS_EFFECT_CONFIGS
+  // defaults (BURN: 3, POISON: 4); upgrades extend duration.
+  incinerateBurnDuration: 3,
+  incinerateUpgradedBurnDuration: 5,
+  toxicSprayPoisonDuration: 4,
+  toxicSprayUpgradedPoisonDuration: 6,
   overclockFireRateBoost: 0.5,
   overclockUpgradedFireRateBoost: 0.75,
 
@@ -421,13 +431,15 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     id: CardId.FORTIFY,
     name: 'Fortify',
     description: 'Upgrade a random tower one level for free.',
-    upgradedDescription: 'Upgrade a random tower one level for free. Costs 0 energy.',
+    upgradedDescription: 'Upgrade two random towers one level for free.',
     type: CardType.SPELL,
     rarity: CardRarity.RARE,
-    energyCost: CARD_VALUES.fortifyDefaultEnergy,
+    energyCost: 1,
     upgraded: false,
-    effect: { type: 'spell', spellId: 'fortify', value: CARD_VALUES.fortifyDefaultEnergy },
-    upgradedEffect: { type: 'spell', spellId: 'fortify', value: CARD_VALUES.fortifyUpgradedEnergy },  // 0 energy when upgraded
+    // Phase 1 Sprint 5 — value is now "number of towers to upgrade" (1 base, 2 upgraded).
+    // Energy cost stays at 1 for both; the upgrade benefit is doubled output, not free play.
+    effect: { type: 'spell', spellId: 'fortify', value: CARD_VALUES.fortifyUpgradeCount },
+    upgradedEffect: { type: 'spell', spellId: 'fortify', value: CARD_VALUES.fortifyUpgradedUpgradeCount },
   },
 
   [CardId.OVERCLOCK]: {
@@ -448,29 +460,29 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   [CardId.INCINERATE]: {
     id: CardId.INCINERATE,
     name: 'Incinerate',
-    description: 'Apply Burn to all enemies.',
+    description: 'Apply Burn to all enemies for 3 turns.',
+    upgradedDescription: 'Apply Burn to all enemies for 5 turns.',
     type: CardType.SPELL,
     rarity: CardRarity.COMMON,
     energyCost: CARD_VALUES.incinerateCost,
     upgraded: false,
-    // value field unused for gameplay — duration is governed by STATUS_EFFECT_CONFIGS[BURN].
-    // value > 0 in upgradedEffect is a balance flag reserved for a future content sprint
-    // (e.g. extend duration). Handler ignores value in Sprint 2b.
-    effect: { type: 'spell', spellId: 'incinerate', value: 0 },
-    upgradedEffect: { type: 'spell', spellId: 'incinerate', value: 1 },
+    // Phase 1 Sprint 5 — value is now BURN duration in turns; handler reads it.
+    effect: { type: 'spell', spellId: 'incinerate', value: CARD_VALUES.incinerateBurnDuration },
+    upgradedEffect: { type: 'spell', spellId: 'incinerate', value: CARD_VALUES.incinerateUpgradedBurnDuration },
   },
 
   [CardId.TOXIC_SPRAY]: {
     id: CardId.TOXIC_SPRAY,
     name: 'Toxic Spray',
-    description: 'Apply Poison to all enemies.',
+    description: 'Apply Poison to all enemies for 4 turns.',
+    upgradedDescription: 'Apply Poison to all enemies for 6 turns.',
     type: CardType.SPELL,
     rarity: CardRarity.UNCOMMON,
     energyCost: CARD_VALUES.toxicSprayCost,
     upgraded: false,
-    // Same value-as-flag convention as INCINERATE. Handler ignores value in Sprint 2b.
-    effect: { type: 'spell', spellId: 'toxic_spray', value: 0 },
-    upgradedEffect: { type: 'spell', spellId: 'toxic_spray', value: 1 },
+    // Phase 1 Sprint 5 — value is now POISON duration in turns; handler reads it.
+    effect: { type: 'spell', spellId: 'toxic_spray', value: CARD_VALUES.toxicSprayPoisonDuration },
+    upgradedEffect: { type: 'spell', spellId: 'toxic_spray', value: CARD_VALUES.toxicSprayUpgradedPoisonDuration },
   },
 
   [CardId.CRYO_PULSE]: {

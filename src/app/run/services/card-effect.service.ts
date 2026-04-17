@@ -75,29 +75,24 @@ export class CardEffectService {
         break;
 
       case 'frost_wave':
-        // Apply SLOW status to every non-flying, non-dying enemy. SLOW lasts
-        // STATUS_EFFECT_CONFIGS[SLOW].duration turns and reduces tilesPerTurn by 1
-        // (full stop for 1-tile movers, half for 2-tile movers). Flying enemies
-        // are immune (handled inside StatusEffectService.apply). The effect.value
-        // field is ignored — duration is fixed by status config. Ignored value is
-        // a balance lever for a future content sprint.
-        this.applyStatusToAllEnemies(ctx, StatusEffectType.SLOW);
+        // Apply SLOW to every non-flying, non-dying enemy. effect.value is the
+        // duration in turns (Phase 1 Sprint 5: previously ignored). FROST_NOVA
+        // relic still adds +1 to whatever duration we pass — bonus stacks on
+        // top of the override inside StatusEffectService.apply.
+        this.applyStatusToAllEnemies(ctx, StatusEffectType.SLOW, effect.value);
         break;
 
       case 'incinerate':
         // Apply BURN to every non-dying enemy. Flying enemies are NOT immune to BURN
         // (flying immunity is scoped to SLOW only inside StatusEffectService.apply).
-        // Duration is governed by STATUS_EFFECT_CONFIGS[BURN].duration. The effect.value
-        // flag (0 = base, 1 = upgraded) is reserved for a future balance sprint that may
-        // extend duration; this handler intentionally ignores it.
-        this.applyStatusToAllEnemies(ctx, StatusEffectType.BURN);
+        // effect.value = duration in turns (Phase 1 Sprint 5: previously a 0/1 flag).
+        this.applyStatusToAllEnemies(ctx, StatusEffectType.BURN, effect.value);
         break;
 
       case 'toxic_spray':
         // Apply POISON to every non-dying enemy. Same flying-not-immune caveat as INCINERATE.
-        // POISON stacks over 4 turns (vs BURN's 3) at 3 dmg/tick — higher sustained value.
-        // effect.value flag reserved for future balance; ignored here.
-        this.applyStatusToAllEnemies(ctx, StatusEffectType.POISON);
+        // effect.value = duration in turns (Phase 1 Sprint 5: previously a 0/1 flag).
+        this.applyStatusToAllEnemies(ctx, StatusEffectType.POISON, effect.value);
         break;
 
       case 'cryo_pulse': {
@@ -264,11 +259,14 @@ export class CardEffectService {
    * that broadcast a status across the whole board (FROST_WAVE → SLOW,
    * INCINERATE → BURN, TOXIC_SPRAY → POISON). StatusEffectService.apply
    * handles flying-immunity and refresh semantics internally.
+   *
+   * @param durationOverride Optional. Forwarded to StatusEffectService.apply
+   *   so card upgrades can extend status duration without per-enemy bookkeeping.
    */
-  private applyStatusToAllEnemies(ctx: SpellContext, statusType: StatusEffectType): void {
+  private applyStatusToAllEnemies(ctx: SpellContext, statusType: StatusEffectType, durationOverride?: number): void {
     for (const enemy of ctx.enemyService.getEnemies().values()) {
       if (enemy.dying) continue;
-      ctx.statusEffectService.apply(enemy.id, statusType, ctx.currentTurn);
+      ctx.statusEffectService.apply(enemy.id, statusType, ctx.currentTurn, undefined, durationOverride);
     }
   }
 

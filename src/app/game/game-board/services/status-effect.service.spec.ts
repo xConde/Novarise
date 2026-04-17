@@ -144,6 +144,48 @@ describe('StatusEffectService', () => {
       // BURN does not modify speed
       expect(enemy.speed).toBe(4);
     });
+
+    // Phase 1 Sprint 5 — durationOverride parameter (used by INCINERATE upgrade).
+    it('extends duration when durationOverride > config.duration (BURN)', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+
+      const configDuration = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN].duration;
+      const override = configDuration + 10;
+      service.apply('e1', StatusEffectType.BURN, 0, undefined, override);
+
+      // At turn = configDuration, base BURN would have expired but override keeps it active.
+      service.tickTurn(configDuration);
+      expect(service.hasEffect('e1', StatusEffectType.BURN)).toBeTrue();
+
+      // At turn = override, the effect expires.
+      service.tickTurn(override);
+      expect(service.hasEffect('e1', StatusEffectType.BURN)).toBeFalse();
+    });
+
+    it('falls back to config.duration when durationOverride is undefined', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+
+      const configDuration = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN].duration;
+      service.apply('e1', StatusEffectType.BURN, 0, undefined, undefined);
+
+      service.tickTurn(configDuration);
+      // Should expire at exactly config.duration when no override.
+      expect(service.hasEffect('e1', StatusEffectType.BURN)).toBeFalse();
+    });
+
+    it('falls back to config.duration when durationOverride is 0', () => {
+      const enemy = createEnemy('e1', 100, 4);
+      enemyMap.set('e1', enemy);
+
+      const configDuration = STATUS_EFFECT_CONFIGS[StatusEffectType.BURN].duration;
+      service.apply('e1', StatusEffectType.BURN, 0, undefined, 0);
+
+      service.tickTurn(configDuration);
+      // 0 should be treated as "no override" — same as undefined.
+      expect(service.hasEffect('e1', StatusEffectType.BURN)).toBeFalse();
+    });
   });
 
   // --- tickTurn() BURN ticking ---

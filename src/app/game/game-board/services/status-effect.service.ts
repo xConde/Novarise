@@ -32,8 +32,14 @@ export class StatusEffectService {
    * Apply a status effect to an enemy.
    * If the effect already exists and doesn't stack, refreshes duration.
    * Returns false if enemy is immune (e.g., flying enemies immune to SLOW).
+   *
+   * @param durationOverride Optional. When provided, replaces `config.duration`
+   *   for this specific application. Used by spell cards that carry their
+   *   own duration value (FROST_WAVE / INCINERATE / TOXIC_SPRAY upgrades).
+   *   Relic bonuses (e.g. FROST_NOVA) still stack on top of the override.
+   *   Treated as "ignored" when undefined or non-positive.
    */
-  apply(enemyId: string, effectType: StatusEffectType, turnNumber: number, speedMultiplierOverride?: number): boolean {
+  apply(enemyId: string, effectType: StatusEffectType, turnNumber: number, speedMultiplierOverride?: number, durationOverride?: number): boolean {
     const enemy = this.enemyService.getEnemies().get(enemyId);
     if (!enemy || enemy.health <= 0) return false;
 
@@ -50,18 +56,21 @@ export class StatusEffectService {
 
     // FROST_NOVA relic grants +1 turn to SLOW duration.
     const durationBonus = effectType === StatusEffectType.SLOW ? this.relicService.getSlowDurationBonus() : 0;
+    const baseDuration = (durationOverride !== undefined && durationOverride > 0)
+      ? durationOverride
+      : config.duration;
 
     const existing = enemyEffects.get(effectType);
     if (existing) {
       // Effect already active — refresh duration (no stacking)
-      existing.expiresAt = turnNumber + config.duration + durationBonus;
+      existing.expiresAt = turnNumber + baseDuration + durationBonus;
       return true;
     }
 
     // New effect
     const active: ActiveEffect = {
       config,
-      expiresAt: turnNumber + config.duration + durationBonus,
+      expiresAt: turnNumber + baseDuration + durationBonus,
       lastTickTime: turnNumber,
     };
 

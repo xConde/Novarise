@@ -111,11 +111,12 @@ describe('CardEffectService', () => {
 
       service.applySpell(spellEffect('frost_wave', 5), { gameState: gameStateSpy, enemyService: enemyServiceSpy, statusEffectService: statusEffectSpy, currentTurn: 3, deckService: deckServiceSpy, wavePreviewService: wavePreviewSpy });
 
-      // All 3 non-dying enemies trigger an apply call; flying filter is inside StatusEffectService
+      // Phase 1 Sprint 5: spell now passes effect.value through as durationOverride.
+      // All 3 non-dying enemies trigger an apply call; flying filter is inside StatusEffectService.
       expect(statusEffectSpy.apply.calls.count()).toBe(3);
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e-basic', StatusEffectType.SLOW, 3);
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e-fast', StatusEffectType.SLOW, 3);
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e-flying', StatusEffectType.SLOW, 3);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e-basic', StatusEffectType.SLOW, 3, undefined, 5);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e-fast', StatusEffectType.SLOW, 3, undefined, 5);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e-flying', StatusEffectType.SLOW, 3, undefined, 5);
     });
 
     it('skips dying enemies', () => {
@@ -267,11 +268,21 @@ describe('CardEffectService', () => {
       enemyMap.set(e1.id, e1);
       enemyMap.set(e2.id, e2);
 
-      service.applySpell(spellEffect('incinerate', 0), makeCtx({ currentTurn: 5 }));
+      // Phase 1 Sprint 5: incinerate value is now BURN duration in turns.
+      service.applySpell(spellEffect('incinerate', 3), makeCtx({ currentTurn: 5 }));
 
       expect(statusEffectSpy.apply.calls.count()).toBe(2);
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.BURN, 5);
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e2', StatusEffectType.BURN, 5);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.BURN, 5, undefined, 3);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e2', StatusEffectType.BURN, 5, undefined, 3);
+    });
+
+    it('passes upgraded duration value through to apply()', () => {
+      const e1 = createTestEnemy('e1', 0, 0, 100);
+      enemyMap.set(e1.id, e1);
+
+      // Phase 1 Sprint 5: upgraded incinerate carries a longer duration.
+      service.applySpell(spellEffect('incinerate', 5), makeCtx({ currentTurn: 5 }));
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.BURN, 5, undefined, 5);
     });
 
     it('skips dying enemies', () => {
@@ -293,9 +304,9 @@ describe('CardEffectService', () => {
       const e1 = createTestEnemy('e1', 0, 0, 100);
       enemyMap.set(e1.id, e1);
 
-      service.applySpell(spellEffect('incinerate', 0), makeCtx({ currentTurn: 7 }));
+      service.applySpell(spellEffect('incinerate', 3), makeCtx({ currentTurn: 7 }));
 
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.BURN, 7);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.BURN, 7, undefined, 3);
     });
   });
 
@@ -306,11 +317,21 @@ describe('CardEffectService', () => {
       enemyMap.set(e1.id, e1);
       enemyMap.set(e2.id, e2);
 
-      service.applySpell(spellEffect('toxic_spray', 0), makeCtx({ currentTurn: 3 }));
+      // Phase 1 Sprint 5: toxic_spray value is now POISON duration in turns.
+      service.applySpell(spellEffect('toxic_spray', 4), makeCtx({ currentTurn: 3 }));
 
       expect(statusEffectSpy.apply.calls.count()).toBe(2);
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.POISON, 3);
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e2', StatusEffectType.POISON, 3);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.POISON, 3, undefined, 4);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e2', StatusEffectType.POISON, 3, undefined, 4);
+    });
+
+    it('passes upgraded duration value through to apply()', () => {
+      const e1 = createTestEnemy('e1', 0, 0, 100);
+      enemyMap.set(e1.id, e1);
+
+      // Phase 1 Sprint 5: upgraded toxic_spray carries a longer duration.
+      service.applySpell(spellEffect('toxic_spray', 6), makeCtx({ currentTurn: 3 }));
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.POISON, 3, undefined, 6);
     });
 
     it('skips dying enemies', () => {
@@ -318,7 +339,7 @@ describe('CardEffectService', () => {
       dyingEnemy.dying = true;
       enemyMap.set(dyingEnemy.id, dyingEnemy);
 
-      service.applySpell(spellEffect('toxic_spray', 0), makeCtx());
+      service.applySpell(spellEffect('toxic_spray', 4), makeCtx());
 
       expect(statusEffectSpy.apply).not.toHaveBeenCalled();
     });
@@ -327,9 +348,9 @@ describe('CardEffectService', () => {
       const e1 = createTestEnemy('e1', 0, 0, 100);
       enemyMap.set(e1.id, e1);
 
-      service.applySpell(spellEffect('toxic_spray', 0), makeCtx({ currentTurn: 9 }));
+      service.applySpell(spellEffect('toxic_spray', 4), makeCtx({ currentTurn: 9 }));
 
-      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.POISON, 9);
+      expect(statusEffectSpy.apply).toHaveBeenCalledWith('e1', StatusEffectType.POISON, 9, undefined, 4);
     });
   });
 

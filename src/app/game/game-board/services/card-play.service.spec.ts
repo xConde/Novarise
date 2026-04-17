@@ -297,6 +297,41 @@ describe('CardPlayService', () => {
       expect(deckSpy.playCard).toHaveBeenCalledWith('fort-3');
       expect(towerCombatSpy.upgradeTower).toHaveBeenCalledWith('0-0', 0);
     });
+
+    // Phase 1 Sprint 5 — upgraded FORTIFY upgrades up to 2 towers.
+    it('upgraded FORTIFY upgrades up to 2 distinct towers', () => {
+      const t1 = { row: 0, col: 0, level: 1, type: TowerType.BASIC, totalInvested: 50 };
+      const t2 = { row: 1, col: 0, level: 1, type: TowerType.SNIPER, totalInvested: 80 };
+      const placedMap = new Map<string, typeof t1>();
+      placedMap.set('0-0', t1 as never);
+      placedMap.set('1-0', t2 as never);
+      towerCombatSpy.getPlacedTowers.and.returnValue(placedMap as never);
+      towerCombatSpy.upgradeTower.and.callFake((_key: string) => t1 as never);
+
+      const card: CardInstance = { instanceId: 'fort-up', cardId: CardId.FORTIFY, upgraded: true };
+      service.onCardPlayed(card);
+
+      expect(deckSpy.playCard).toHaveBeenCalledWith('fort-up');
+      // Two distinct upgrade calls — one per tower in the pool, never the same key twice.
+      expect(towerCombatSpy.upgradeTower).toHaveBeenCalledTimes(2);
+      const calledKeys = towerCombatSpy.upgradeTower.calls.allArgs().map(a => a[0]);
+      expect(new Set(calledKeys).size).toBe(2);
+    });
+
+    it('upgraded FORTIFY tolerates fewer eligible towers than upgrade count', () => {
+      // Only 1 eligible tower; upgraded FORTIFY (count=2) should still upgrade
+      // that one without crashing or double-upgrading.
+      const tower = { row: 0, col: 0, level: 1, type: TowerType.BASIC, totalInvested: 50 };
+      const placedMap = new Map<string, typeof tower>();
+      placedMap.set('0-0', tower as never);
+      towerCombatSpy.getPlacedTowers.and.returnValue(placedMap as never);
+      towerCombatSpy.upgradeTower.and.returnValue(tower as never);
+
+      const card: CardInstance = { instanceId: 'fort-up2', cardId: CardId.FORTIFY, upgraded: true };
+      service.onCardPlayed(card);
+
+      expect(towerCombatSpy.upgradeTower).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('reset', () => {

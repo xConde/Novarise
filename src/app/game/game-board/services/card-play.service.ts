@@ -127,6 +127,9 @@ export class CardPlayService {
         if (this.towerCombatService.getPlacedTowers().size === 0) return;
       } else if (spellEffect.spellId === 'fortify') {
         const towers = Array.from(this.towerCombatService.getPlacedTowers().values());
+        // At least one tower must be eligible for an L1→L2 upgrade. We don't gate
+        // on the upgraded count (effect.value) — partial fulfilment is allowed
+        // (Sprint 5: upgraded variant upgrades up to 2 but tolerates fewer eligible).
         if (!towers.some(t => t.level < MAX_TOWER_LEVEL - 1)) return;
       }
     }
@@ -140,7 +143,9 @@ export class CardPlayService {
         case 'spell': {
           const spellEffect = effect as SpellCardEffect;
           if (spellEffect.spellId === 'fortify') {
-            this.fortifyRandomTower();
+            // Phase 1 Sprint 5: effect.value is now the upgrade count
+            // (1 base, 2 upgraded). Fewer eligible towers → fewer upgrades.
+            this.fortifyRandomTower(spellEffect.value);
           } else if (spellEffect.spellId === 'salvage') {
             this.salvageLastTower();
           } else {
@@ -195,34 +200,42 @@ export class CardPlayService {
   }
 
   /**
-   * Fortify spell — upgrade a random tower one level for free.
-   * If no tower can be upgraded (all at max level), this is a no-op.
+   * Fortify spell — upgrade up to `count` random towers one level for free.
+   * Each pick removes that tower from the pool so we never double-pick the same
+   * tower. Tolerates `count > eligibleTowers.length` (partial fulfilment).
    * Only L1→L2 upgrades are applied; L2→L3 requires specialization choice
    * which cannot be automated, so those towers are excluded.
    */
-  private fortifyRandomTower(): void {
+  private fortifyRandomTower(count: number = 1): void {
+    if (count < 1) return;
     const towers = Array.from(this.towerCombatService.getPlacedTowers().values());
-    // Exclude max-level towers and L2 towers (L2→L3 requires specialization)
+    // Exclude max-level towers and L2 towers (L2→L3 requires specialization).
     const upgradable = towers.filter(t => t.level < MAX_TOWER_LEVEL - 1);
     if (upgradable.length === 0) return;
 
-    const target = upgradable[Math.floor(Math.random() * upgradable.length)];
-    const key = `${target.row}-${target.col}`;
+    const remaining = upgradable.slice();
+    const upgradesToApply = Math.min(count, remaining.length);
 
-    // Bypass gold cost — free upgrade. Pass actualCost=0 so totalInvested stays clean.
-    const upgraded = this.towerCombatService.upgradeTower(key, 0);
-    if (!upgraded) return;
+    for (let i = 0; i < upgradesToApply; i++) {
+      const idx = Math.floor(Math.random() * remaining.length);
+      const target = remaining.splice(idx, 1)[0];
+      const key = `${target.row}-${target.col}`;
 
-    this.audioService.playTowerUpgrade();
+      // Bypass gold cost — free upgrade. actualCost=0 keeps totalInvested clean.
+      const upgraded = this.towerCombatService.upgradeTower(key, 0);
+      if (!upgraded) continue;
 
-    const towerMesh = this.meshRegistry.towerMeshes.get(key);
-    if (towerMesh) {
-      this.towerUpgradeVisualService.applyUpgradeVisuals(towerMesh, target.level + 1, undefined);
+      this.audioService.playTowerUpgrade();
+
+      const towerMesh = this.meshRegistry.towerMeshes.get(key);
+      if (towerMesh) {
+        this.towerUpgradeVisualService.applyUpgradeVisuals(towerMesh, target.level + 1, undefined);
+      }
+
+      // Invalidate muzzle flash saved emissive — upgrade changed the baseline.
+      target.originalEmissiveIntensity = undefined;
+      target.muzzleFlashTimer = undefined;
     }
-
-    // Invalidate muzzle flash saved emissive — upgrade changed the baseline
-    target.originalEmissiveIntensity = undefined;
-    target.muzzleFlashTimer = undefined;
 
     this.callbacks?.onRefreshUI();
   }
