@@ -334,6 +334,22 @@ describe('ItemService', () => {
       expect(result.success).toBeFalse();
       expect(result.reason).toBe('wrong_node');
     });
+
+    it('inventory count is unchanged when RE_ROLL used outside a shop node', () => {
+      service.addItem(ItemType.RE_ROLL);
+      wireCombat(service, { isAtShop: false });
+      service.useItem(ItemType.RE_ROLL);
+      expect(service.getInventory().get(ItemType.RE_ROLL)).toBe(1);
+    });
+
+    it('calls regeneration method when RE_ROLL used at shop node', () => {
+      service.addItem(ItemType.RE_ROLL);
+      const ctx = wireCombat(service, { isAtShop: true });
+      const result = service.useItem(ItemType.RE_ROLL);
+      expect(result.success).toBeTrue();
+      expect(ctx.shopRegenerated).toBeTrue();
+      expect(service.getInventory().get(ItemType.RE_ROLL)).toBeUndefined();
+    });
   });
 
   // ── SMOKE_BOMB effect ─────────────────────────────────────────────────────

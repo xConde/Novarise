@@ -1169,4 +1169,72 @@ describe('WaveService', () => {
       expect(spawned).toBe(1); // fresh start, no leftover retry count
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // CALTROPS wire-up — S10: consumeNextWaveEnemySpeedMultiplier called at wave-start
+  // ---------------------------------------------------------------------------
+
+  describe('CALTROPS — setNextWaveEnemySpeedMultiplier / consumeNextWaveEnemySpeedMultiplier', () => {
+    it('enemies spawn at reduced speed when multiplier is set before startWave', () => {
+      service.setNextWaveEnemySpeedMultiplier(0.5);
+      service.startWave(1, mockScene);
+      service.spawnForTurn(mockScene);
+
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(
+        EnemyType.BASIC,
+        mockScene,
+        1,       // health mult unchanged
+        0.5,     // caltrops speed applied
+        jasmine.any(Set),
+      );
+    });
+
+    it('multiplier is consumed after startWave — next wave spawns at 1.0 speed', () => {
+      service.setNextWaveEnemySpeedMultiplier(0.5);
+      service.startWave(1, mockScene);
+      service.spawnForTurn(mockScene);
+
+      // Advance past wave 1 entirely then start wave 2
+      while (service.isSpawning()) {
+        service.spawnForTurn(mockScene);
+      }
+
+      enemyServiceSpy.spawnEnemy.calls.reset();
+      service.startWave(2, mockScene);
+      service.spawnForTurn(mockScene);
+
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(
+        jasmine.any(String),
+        mockScene,
+        1,   // health mult
+        1,   // speed back to normal — multiplier was one-shot
+        jasmine.any(Set),
+      );
+    });
+
+    it('consumeNextWaveEnemySpeedMultiplier returns 1.0 when no multiplier is set', () => {
+      expect(service.consumeNextWaveEnemySpeedMultiplier()).toBe(1);
+    });
+
+    it('consumeNextWaveEnemySpeedMultiplier returns set value and resets to 1', () => {
+      service.setNextWaveEnemySpeedMultiplier(0.75);
+      expect(service.consumeNextWaveEnemySpeedMultiplier()).toBe(0.75);
+      expect(service.consumeNextWaveEnemySpeedMultiplier()).toBe(1);
+    });
+
+    it('reset() clears any pending caltrops multiplier', () => {
+      service.setNextWaveEnemySpeedMultiplier(0.5);
+      service.reset();
+      service.startWave(1, mockScene);
+      service.spawnForTurn(mockScene);
+
+      expect(enemyServiceSpy.spawnEnemy).toHaveBeenCalledWith(
+        jasmine.any(String),
+        mockScene,
+        1,
+        1,   // reset cleared the pending multiplier
+        jasmine.any(Set),
+      );
+    });
+  });
 });

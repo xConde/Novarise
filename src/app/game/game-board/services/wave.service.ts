@@ -43,6 +43,13 @@ export class WaveService {
    */
   private nextWaveEnemySpeedMultiplier = 1;
 
+  /**
+   * CALTROPS multiplier consumed from nextWaveEnemySpeedMultiplier at startWave().
+   * Applied in spawnForTurn() so every enemy spawned this wave is affected.
+   * Resets to 1 on the next startWave() call (consumed once, not re-used).
+   */
+  private activeWaveCaltropsMultiplier = 1;
+
   constructor(
     private enemyService: EnemyService,
     private relicService: RelicService,
@@ -154,6 +161,9 @@ export class WaveService {
     } else {
       return;
     }
+
+    // Consume the CALTROPS one-shot multiplier exactly once per wave.
+    this.activeWaveCaltropsMultiplier = this.consumeNextWaveEnemySpeedMultiplier();
 
     const countMultiplier = Math.max(1, waveCountMultiplier);
 
@@ -267,7 +277,7 @@ export class WaveService {
     }
 
     const waveHealthMult = this.currentEndlessResult?.healthMultiplier ?? 1;
-    const waveSpeedMult = this.currentEndlessResult?.speedMultiplier ?? 1;
+    const waveSpeedMult = (this.currentEndlessResult?.speedMultiplier ?? 1) * this.activeWaveCaltropsMultiplier;
 
     // Build the occupied-spawner set ONCE before the batch so that multiple
     // enemies scheduled for the same turn don't double-book different spawners.
@@ -478,6 +488,7 @@ export class WaveService {
     this.turnScheduleIndex = 0;
     this.turnScheduleRetries = [];
     this.nextWaveEnemySpeedMultiplier = 1;
+    this.activeWaveCaltropsMultiplier = 1;
     this.clearCustomWaves();
   }
 }

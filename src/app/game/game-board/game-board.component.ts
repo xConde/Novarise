@@ -72,6 +72,7 @@ import { DeckService } from '../../run/services/deck.service';
 import { CardEffectService } from '../../run/services/card-effect.service';
 import { EncounterCheckpointService } from '../../run/services/encounter-checkpoint.service';
 import { EncounterResult } from '../../run/models/run-state.model';
+import { NodeType, getNodeById } from '../../run/models/node-map.model';
 import { CardInstance, DeckState, EnergyState } from '../../run/models/card.model';
 import { getActiveTowerEffect } from '../../run/constants/card-definitions';
 import { WaveCombatFacadeService } from './services/wave-combat-facade.service';
@@ -538,9 +539,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       (amount: number) => { this.gameStateService.addGold(amount); },
       () => {
         const runState = this.runService.runState;
-        return runState?.currentNodeId !== undefined && runState?.currentNodeId !== null
-          ? this.runService.getShopItems().length > 0 || true
-          : false;
+        const nodeMap = this.runService.nodeMap;
+        if (!runState?.currentNodeId || !nodeMap) return false;
+        const currentNode = getNodeById(nodeMap, runState.currentNodeId);
+        return currentNode?.type === NodeType.SHOP;
       },
       () => { this.runService.generateShopItems(); },
     );
