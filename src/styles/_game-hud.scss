@@ -681,10 +681,10 @@ body.reduce-motion .board-container .game-hud .hud-value.wave-start-pulse {
 }
 
 // M16 — Match the HUD stats block height to the end-turn button (44px)
-// so the two elements form a visually aligned row on mobile. Prior
-// mobile HUD only had padding, letting the natural content height of
-// ~34px show — shorter than the 44px end-turn touch target, which
-// made the row look off-balance.
+// so the two elements form a visually aligned row on mobile.
+// M17 — Widen the stats block, bump stat values a touch, and rebalance
+// the end-turn position so gaps are roughly symmetric:
+//   stats 5-220  →  gap 12  →  button 232-320  →  gap 10  →  gear 330
 @media (max-width: 480px) {
   .board-container .game-hud {
     min-height: 44px !important;
@@ -692,5 +692,29 @@ body.reduce-motion .board-container .game-hud .hud-value.wave-start-pulse {
     align-items: center !important;
     padding: var(--spacing-xs) var(--spacing-md) !important;
     box-sizing: border-box !important;
+    // Widen from the 50vw 768px default to 55vw on small phones so the
+    // stats columns can breathe.
+    max-width: min(55vw, 14rem) !important;
+  }
+  .board-container .game-hud .hud-stats-row {
+    gap: var(--spacing-md) !important;
+  }
+  // Bump label letter-spacing for crisper uppercase rendering at the
+  // small size; bump values a touch for readability.
+  .board-container .game-hud .hud-stat .hud-label {
+    letter-spacing: 0.08em !important;
+  }
+  .board-container .game-hud .hud-stat .hud-value {
+    font-size: 15px !important;
+  }
+}
+
+// M17 — rebalance end-turn position and width given the wider stats.
+// Override the M15 values above.
+@media (max-width: 480px) {
+  .board-container .end-turn-btn {
+    left: 232px !important;
+    width: 88px !important;
+    max-width: 88px !important;
   }
 }
