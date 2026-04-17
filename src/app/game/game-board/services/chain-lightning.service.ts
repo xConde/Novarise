@@ -55,7 +55,7 @@ export class ChainLightningService {
     towerWorldZ: number,
     spatialGrid: SpatialGrid,
     turnNumber: number,
-    extraBounces: number = 0,
+    extraBounces = 0,
   ): { kills: KillInfo[]; damageDealt: number; hitCount: number } {
     const chainCount = (stats.chainCount ?? 3) + extraBounces;
     const chainRange = stats.chainRange ?? 2;
