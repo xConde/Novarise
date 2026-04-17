@@ -1732,3 +1732,11 @@ Phase 1 sprints shipped: reward rarity (already done), exhaust UI (already done)
 ### Hardening for this gate
 Picked Finding 2 as the hardening fix — it's the most immediately exploitable (no duplicate-card prerequisite) and slot-reset can corrupt mid-encounter. Findings 1 + 3 enter the Closer Protocol checklist below.
 
+## Deployment Checklist — Phase 1 archetype-depth
+
+- [ ] Step 1: Apply Finding 1 fix — derive `deckCardIds` from live deck pile contents at persist time so `removeCardFromShop` never desyncs duplicate-card removal. Spec: remove one of two duplicate cards, persist, restore, verify count.
+- [ ] Step 2: Apply Finding 3 fix — thread the seeded run RNG through `SpellContext` so `fortifyRandomTower` uses the deterministic RNG instead of `Math.random()`. Spec: same seed → same upgrade selection.
+- [ ] Step 3: Devil's-advocate review of Phase 1 as a whole — what would have made this phase stronger? What's the next-most-likely thing to break in Phase 2 that we should bake in defense for now?
+- [ ] Step 4: Full quality gate — `tsc --noEmit` (both configs), `ng build --configuration=production`, full `ng test`, all green.
+- [ ] Step 5: Update memory (`MEMORY.md` + sprint plan) to reflect what shipped vs deferred from Phase 1.
+

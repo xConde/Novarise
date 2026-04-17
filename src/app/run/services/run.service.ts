@@ -764,9 +764,13 @@ export class RunService {
     const removed = this.deckService.removeCard(instanceId);
     if (!removed) return false;
 
-    const newDeckCardIds = state.deckCardIds.slice();
-    const idx = newDeckCardIds.indexOf(target.cardId);
-    if (idx >= 0) newDeckCardIds.splice(idx, 1);
+    // Phase 1 red-team Finding 1: derive deckCardIds from the live deck after
+    // removal rather than splicing the persisted array by CardId. The previous
+    // approach silently desynced when the player owned duplicates of the same
+    // card (indexOf removed the first match, but deck.removeCard removed the
+    // specific instance), so on save/restore the wrong copy was preserved and
+    // the 75g purchase appeared to refund itself.
+    const newDeckCardIds = this.deckService.getAllCards().map(c => c.cardId);
 
     this.updateState({
       ...state,

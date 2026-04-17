@@ -2154,5 +2154,39 @@ describe('RunService', () => {
       expect(service.getDeckCards().length).toBe(totalBefore - 1);
       expect(service.runState!.deckCardIds.length).toBe(ids - 1);
     }));
+
+    // Phase 1 red-team Finding 1 — duplicate card removal must keep
+    // deckCardIds in sync with live deck (no silent desync on save).
+    it('keeps deckCardIds in sync when removing one of multiple duplicate cards', fakeAsync(() => {
+      service.startNewRun();
+      service['updateState']({ ...service.runState!, gold: 1000 });
+
+      // Snapshot baseline counts (starter deck may already contain GOLD_RUSH).
+      const baselineGoldRushCount = service.getDeckCards()
+        .filter(c => c.cardId === CardId.GOLD_RUSH).length;
+
+      // Add two extra copies — guarantees at least 2 instances of the same cardId.
+      service.collectReward({ type: 'card', cardId: CardId.GOLD_RUSH });
+      service.collectReward({ type: 'card', cardId: CardId.GOLD_RUSH });
+
+      const goldRushInstances = service.getDeckCards()
+        .filter(c => c.cardId === CardId.GOLD_RUSH);
+      expect(goldRushInstances.length).toBe(baselineGoldRushCount + 2);
+
+      // Remove one copy.
+      const result = service.removeCardFromShop(goldRushInstances[0].instanceId);
+      expect(result).toBeTrue();
+
+      // Live deck and persisted deckCardIds must agree on the post-removal count.
+      const liveAfter = service.getDeckCards().filter(c => c.cardId === CardId.GOLD_RUSH).length;
+      const idsAfter = service.runState!.deckCardIds.filter(id => id === CardId.GOLD_RUSH).length;
+      expect(liveAfter).toBe(baselineGoldRushCount + 1);
+      expect(idsAfter).toBe(liveAfter);
+
+      // The full persisted list must equal the live deck composition (multiset).
+      const liveCardIds = service.getDeckCards().map(c => c.cardId).slice().sort();
+      const persistedSorted = service.runState!.deckCardIds.slice().sort();
+      expect(persistedSorted).toEqual(liveCardIds);
+    }));
   });
 });
