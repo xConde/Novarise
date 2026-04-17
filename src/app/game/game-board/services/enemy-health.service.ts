@@ -81,6 +81,11 @@ export class EnemyHealthService {
           shieldBarFg.position.x = -(1 - shieldPct) * (SHIELD_BAR_CONFIG.width / 2);
 
           if (cameraQuaternion) {
+            // Recompute billboard quaternion — don't depend on the health-bar
+            // block having populated the scratch field, since an enemy could
+            // theoretically have a shield bar without a health bar.
+            enemy.mesh.getWorldQuaternion(this.billboardScratchQuat);
+            this.billboardScratchQuat.invert().premultiply(cameraQuaternion);
             shieldBarBg.quaternion.copy(this.billboardScratchQuat);
             shieldBarFg.quaternion.copy(this.billboardScratchQuat);
           }
