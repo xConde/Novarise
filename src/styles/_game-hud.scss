@@ -643,17 +643,24 @@ body.reduce-motion .board-container .game-hud .hud-value.wave-start-pulse {
 //                   inside .board-container)
 // ============================================================================
 @media (max-width: 480px) {
+  // M14: hard-cap the button width instead of relying on left+right to
+  // constrain it. The prior `right: 72px !important` wasn't producing the
+  // expected 98px width — observed ~135px, which still clipped into the
+  // gear's touch-target area. Explicit width: 92px + right: auto removes
+  // the ambiguity: button is exactly 92px wide, starts at left: 225px,
+  // ends at x=317 — 13px clear of the gear's left edge at 330.
   .board-container .end-turn-btn {
-    left: 220px !important;
-    right: 72px !important;
+    left: 225px !important;
+    right: auto !important;
     top: 10px !important;
-    transform: none !important;
-    padding: 6px 10px !important;
+    width: 92px !important;
     min-width: 0 !important;
-    max-width: unset !important;
-    width: auto !important;
+    max-width: 92px !important;
+    transform: none !important;
+    padding: 6px 8px !important;
     min-height: 44px !important;
     gap: 0 !important;
+    box-sizing: border-box !important;
   }
   .board-container .end-turn-btn:hover:not(:disabled),
   .board-container .end-turn-btn:active:not(:disabled) {
@@ -661,5 +668,6 @@ body.reduce-motion .board-container .game-hud .hud-value.wave-start-pulse {
   }
   .board-container .end-turn-btn .end-turn-label {
     font-size: 13px !important;
+    letter-spacing: 0 !important;
   }
 }
