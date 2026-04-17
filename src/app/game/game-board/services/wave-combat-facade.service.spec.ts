@@ -25,6 +25,7 @@ import { RunStateFlagService } from '../../../run/services/run-state-flag.servic
 import { EncounterCheckpointService } from '../../../run/services/encounter-checkpoint.service';
 import { WavePreviewService } from './wave-preview.service';
 import { TurnHistoryService } from './turn-history.service';
+import { PathMutationService } from './path-mutation.service';
 
 function makeCallbacks(overrides: Partial<WaveCombatCallbacks> = {}): WaveCombatCallbacks {
   return {
@@ -198,6 +199,11 @@ describe('WaveCombatFacadeService', () => {
       encounterCheckpointService,
       wavePreviewService,
       turnHistoryService,
+      (() => {
+        const spy = jasmine.createSpyObj<PathMutationService>('PathMutationService', ['serialize']);
+        spy.serialize.and.returnValue({ mutations: [], nextId: 0 });
+        return spy;
+      })(),
     );
   });
 

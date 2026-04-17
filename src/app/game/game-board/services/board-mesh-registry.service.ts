@@ -33,6 +33,24 @@ export class BoardMeshRegistryService {
     this.towerChildrenArray = children;
   }
 
+  /**
+   * Swap the tile mesh stored at (row, col) with `newMesh`.
+   *
+   * The caller is responsible for:
+   *  - removing the old mesh from the scene
+   *  - disposing the old mesh's geometry and material
+   *  - adding `newMesh` to the scene
+   *
+   * This method only updates the internal map entry and rebuilds the flat
+   * array consumed by the raycaster. Matches the tower-mesh-lifecycle pattern
+   * where the component owns scene add/remove and the registry owns the map.
+   */
+  replaceTileMesh(row: number, col: number, newMesh: THREE.Mesh): void {
+    const key = `${row}-${col}`;
+    this.tileMeshes.set(key, newMesh);
+    this.rebuildTileMeshArray();
+  }
+
   clear(): void {
     this.tileMeshes.clear();
     this.towerMeshes.clear();

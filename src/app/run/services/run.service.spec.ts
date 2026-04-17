@@ -1040,6 +1040,7 @@ describe('RunService', () => {
         turnHistory: [],
         itemInventory: { entries: [] },
         runStateFlags: { entries: [], consumedEventIds: [] },
+        pathMutations: { mutations: [], nextId: 0 },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1075,6 +1076,7 @@ describe('RunService', () => {
         turnHistory: [],
         itemInventory: { entries: [] },
         runStateFlags: { entries: [], consumedEventIds: [] },
+        pathMutations: { mutations: [], nextId: 0 },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1117,6 +1119,7 @@ describe('RunService', () => {
         turnHistory: [],
         itemInventory: { entries: [] },
         runStateFlags: { entries: [], consumedEventIds: [] },
+        pathMutations: { mutations: [], nextId: 0 },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1155,6 +1158,7 @@ describe('RunService', () => {
         turnHistory: [],
         itemInventory: { entries: [] },
         runStateFlags: { entries: [], consumedEventIds: [] },
+        pathMutations: { mutations: [], nextId: 0 },
       });
 
       // node_0_0 is NOT in completedNodeIds — valid checkpoint.
@@ -1708,9 +1712,9 @@ describe('RunService', () => {
       localStorage.removeItem(CHECKPOINT_KEY);
 
       expect(loaded).not.toBeNull();
-      // Migration chain 5→6→7 back-fills both runStateFlags.entries and consumedEventIds.
+      // Migration chain 5→6→7→8 back-fills runStateFlags.entries, consumedEventIds, and pathMutations.
       expect(loaded!.runStateFlags).toEqual({ entries: [], consumedEventIds: [] });
-      expect(loaded!.version).toBe(7);
+      expect(loaded!.version).toBe(8);
     });
 
     it('v6 round-trips populated runStateFlags', () => {
@@ -1739,6 +1743,7 @@ describe('RunService', () => {
         turnHistory: [],
         itemInventory: { entries: [] },
         runStateFlags: { entries: [[FLAG_KEYS.MERCHANT_AIDED, 1], [FLAG_KEYS.SCOUT_SAVED, 3]], consumedEventIds: [] },
+        pathMutations: { mutations: [], nextId: 0 },
       };
 
       const CHECKPOINT_KEY = 'novarise_encounter_checkpoint';

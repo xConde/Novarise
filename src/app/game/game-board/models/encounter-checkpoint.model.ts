@@ -11,9 +11,13 @@ import { EncounterConfig } from '../../../run/models/encounter.model';
 import { TurnEventRecord } from '../services/turn-history.service';
 import { SerializedItemInventory } from '../../../run/models/item.model';
 import { SerializedRunStateFlags } from '../../../run/services/run-state-flag.service';
+import { SerializablePathMutationState } from '../services/path-mutation.types';
+
+// Re-export for consumers that need the type without importing from path-mutation.types.
+export type { SerializablePathMutationState };
 
 /** Schema version — bump when the shape changes to enable migrations. */
-export const CHECKPOINT_VERSION = 7;
+export const CHECKPOINT_VERSION = 8;
 
 /** Plain-object snapshot of GameState (isPaused omitted — always false on restore). */
 export interface SerializableGameState {
@@ -255,6 +259,12 @@ export interface EncounterCheckpoint {
    * v5 checkpoints are migrated with empty flag entries.
    */
   readonly runStateFlags: SerializedRunStateFlags;
+
+  /**
+   * Active path mutations (add/block/destroy/bridgehead) at save time.
+   * Added in v8. v7 checkpoints are migrated with empty mutation state.
+   */
+  readonly pathMutations: SerializablePathMutationState;
 }
 
 /** Serializable WavePreviewService state. */

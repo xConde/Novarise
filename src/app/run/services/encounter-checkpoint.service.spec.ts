@@ -86,6 +86,7 @@ function createTestCheckpoint(overrides: Partial<EncounterCheckpoint> = {}): Enc
     turnHistory: [],
     itemInventory: { entries: [] } as SerializedItemInventory,
     runStateFlags: { entries: [], consumedEventIds: [] },
+    pathMutations: { mutations: [], nextId: 0 },
     ...overrides,
   };
 }
@@ -373,7 +374,7 @@ describe('EncounterCheckpointService', () => {
       expect(service.hasCheckpoint()).toBeFalse();
     });
 
-    it('passes validation for a valid full v7 checkpoint with itemInventory and runStateFlags', () => {
+    it('passes validation for a valid full v8 checkpoint with itemInventory, runStateFlags, and pathMutations', () => {
       const checkpoint = createTestCheckpoint();
       service.saveCheckpoint(checkpoint);
 
@@ -451,6 +452,66 @@ describe('EncounterCheckpointService', () => {
       const loaded = service.loadCheckpoint();
 
       expect(loaded).toBeNull();
+    });
+
+    it('returns null when pathMutations is missing (v8 requirement)', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data: Record<string, any> = { ...createTestCheckpoint() };
+      delete data['pathMutations'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when pathMutations.mutations is not an array', () => {
+      const data = {
+        ...createTestCheckpoint(),
+        pathMutations: { mutations: 'bad', nextId: 0 },
+      };
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+  });
+
+  describe('loadCheckpoint() v7 → v8 migration', () => {
+    it('migrates v7 checkpoint to v8 by inserting empty pathMutations', () => {
+      // Build a v7 checkpoint (no pathMutations field)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v7Data: Record<string, any> = {
+        ...createTestCheckpoint(),
+        version: 7,
+        // pathMutations intentionally absent — simulating a pre-v8 save
+      };
+      delete v7Data['pathMutations'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v7Data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.version).toBe(CHECKPOINT_VERSION);
+      expect(loaded!.pathMutations).toBeDefined();
+      expect(loaded!.pathMutations.mutations.length).toBe(0);
+      expect(loaded!.pathMutations.nextId).toBe(0);
+    });
+
+    it('v7 checkpoint after migration passes structural validation', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v7Data: Record<string, any> = {
+        ...createTestCheckpoint(),
+        version: 7,
+      };
+      delete v7Data['pathMutations'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v7Data));
+
+      const loaded = service.loadCheckpoint();
+
+      // Should pass validation and not return null
+      expect(loaded).not.toBeNull();
     });
   });
 });

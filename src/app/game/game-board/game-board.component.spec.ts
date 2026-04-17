@@ -71,6 +71,7 @@ import { TouchInteractionService } from './services/touch-interaction.service';
 import { BoardPointerService } from './services/board-pointer.service';
 import { CardPlayService } from './services/card-play.service';
 import { TowerInteractionService } from './services/tower-interaction.service';
+import { PathMutationService } from './services/path-mutation.service';
 
 const MOCK_MAP_STATE_SPEC = {
   gridSize: 10,
@@ -151,6 +152,12 @@ describe('GameBoardComponent', () => {
         ChainLightningService,
         TouchInteractionService,
         BoardPointerService,
+        {
+          provide: PathMutationService,
+          useValue: jasmine.createSpyObj<PathMutationService>('PathMutationService', [
+            'setRepathHook', 'tickTurn', 'reset', 'serialize', 'restore', 'swapMesh',
+          ]),
+        },
       ]
     })
     .compileComponents();

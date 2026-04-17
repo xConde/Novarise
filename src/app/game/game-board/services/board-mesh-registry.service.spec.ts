@@ -129,4 +129,66 @@ describe('BoardMeshRegistryService', () => {
       mesh.geometry.dispose(); (mesh.material as THREE.Material).dispose();
     });
   });
+
+  describe('replaceTileMesh', () => {
+    it('updates the map entry to point to the new mesh', () => {
+      const oldMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+      const newMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+
+      service.tileMeshes.set('3-7', oldMesh);
+      service.rebuildTileMeshArray();
+
+      service.replaceTileMesh(3, 7, newMesh);
+
+      expect(service.tileMeshes.get('3-7')).toBe(newMesh);
+
+      oldMesh.geometry.dispose(); (oldMesh.material as THREE.Material).dispose();
+      newMesh.geometry.dispose(); (newMesh.material as THREE.Material).dispose();
+    });
+
+    it('old mesh reference is no longer in the flat array after replacement', () => {
+      const oldMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+      const newMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+
+      service.tileMeshes.set('1-2', oldMesh);
+      service.rebuildTileMeshArray();
+      expect(service.getTileMeshArray()).toContain(oldMesh);
+
+      service.replaceTileMesh(1, 2, newMesh);
+
+      expect(service.getTileMeshArray()).not.toContain(oldMesh);
+      expect(service.getTileMeshArray()).toContain(newMesh);
+
+      oldMesh.geometry.dispose(); (oldMesh.material as THREE.Material).dispose();
+      newMesh.geometry.dispose(); (newMesh.material as THREE.Material).dispose();
+    });
+
+    it('flat array is rebuilt (length stays 1 after replace)', () => {
+      const oldMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+      const newMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+
+      service.tileMeshes.set('0-0', oldMesh);
+      service.rebuildTileMeshArray();
+      expect(service.getTileMeshArray().length).toBe(1);
+
+      service.replaceTileMesh(0, 0, newMesh);
+
+      expect(service.getTileMeshArray().length).toBe(1);
+
+      oldMesh.geometry.dispose(); (oldMesh.material as THREE.Material).dispose();
+      newMesh.geometry.dispose(); (newMesh.material as THREE.Material).dispose();
+    });
+
+    it('inserts a new entry if the key did not exist before', () => {
+      const newMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+      expect(service.tileMeshes.has('5-5')).toBeFalse();
+
+      service.replaceTileMesh(5, 5, newMesh);
+
+      expect(service.tileMeshes.get('5-5')).toBe(newMesh);
+      expect(service.getTileMeshArray()).toContain(newMesh);
+
+      newMesh.geometry.dispose(); (newMesh.material as THREE.Material).dispose();
+    });
+  });
 });

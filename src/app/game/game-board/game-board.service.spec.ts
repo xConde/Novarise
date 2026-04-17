@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { GameBoardService } from './game-board.service';
 import { BlockType, GameBoardTile } from './models/game-board-tile';
 import { TowerType } from './models/tower.model';
+import { MutationOp } from './services/path-mutation.types';
 
 describe('GameBoardService', () => {
   let service: GameBoardService;
@@ -492,6 +493,127 @@ describe('GameBoardService', () => {
       service.resetBoard();
       expect(service.getBoardWidth()).toBe(25);
       expect(service.getBoardHeight()).toBe(20);
+    });
+  });
+
+  // --- setTileType ---
+
+  describe('setTileType', () => {
+    beforeEach(() => {
+      const board = createTestBoard(5, 5);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[0][1] = GameBoardTile.createSpawner(0, 1);
+      board[4][4] = GameBoardTile.createExit(4, 4);
+      service.importBoard(board, 5, 5);
+    });
+
+    it('returns null for out-of-bounds row', () => {
+      expect(service.setTileType(-1, 0, BlockType.WALL, 'block')).toBeNull();
+      expect(service.setTileType(5, 0, BlockType.WALL, 'block')).toBeNull();
+    });
+
+    it('returns null for out-of-bounds col', () => {
+      expect(service.setTileType(0, -1, BlockType.WALL, 'block')).toBeNull();
+      expect(service.setTileType(0, 5, BlockType.WALL, 'block')).toBeNull();
+    });
+
+    it('returns null when tile is SPAWNER', () => {
+      expect(service.setTileType(0, 0, BlockType.WALL, 'block')).toBeNull();
+    });
+
+    it('returns null when tile is EXIT', () => {
+      expect(service.setTileType(4, 4, BlockType.WALL, 'block')).toBeNull();
+    });
+
+    it('returns null when tile is TOWER', () => {
+      service.placeTower(2, 2, TowerType.BASIC);
+      expect(service.setTileType(2, 2, BlockType.BASE, 'build')).toBeNull();
+    });
+
+    it('converts BASE → WALL and returns new tile', () => {
+      const result = service.setTileType(2, 2, BlockType.WALL, 'block' as MutationOp);
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe(BlockType.WALL);
+      expect(result!.isTraversable).toBeFalse();
+      expect(service.getGameBoard()[2][2].type).toBe(BlockType.WALL);
+    });
+
+    it('converts WALL → BASE and returns new tile', () => {
+      // First make tile a WALL
+      service.setTileType(3, 3, BlockType.WALL, 'block' as MutationOp);
+      const result = service.setTileType(3, 3, BlockType.BASE, 'build' as MutationOp);
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe(BlockType.BASE);
+      expect(result!.isTraversable).toBeTrue();
+    });
+
+    it('records priorType correctly when explicitly provided', () => {
+      const result = service.setTileType(2, 2, BlockType.WALL, 'block' as MutationOp, BlockType.BASE);
+      expect(result!.priorType).toBe(BlockType.BASE);
+    });
+
+    it('infers priorType from existing tile when not explicitly provided', () => {
+      // Tile at (2,2) is BASE by default
+      const result = service.setTileType(2, 2, BlockType.WALL, 'block' as MutationOp);
+      expect(result!.priorType).toBe(BlockType.BASE);
+    });
+
+    it('sets mutationOp on the returned tile', () => {
+      const result = service.setTileType(2, 2, BlockType.WALL, 'destroy' as MutationOp);
+      expect(result!.mutationOp).toBe('destroy' as MutationOp);
+    });
+  });
+
+  // --- wouldBlockPathIfSet ---
+
+  describe('wouldBlockPathIfSet', () => {
+    function makeCorridorBoard(): void {
+      // 5×3 board: spawner at (0,0), exit at (0,4), single-row corridor along row 0
+      const board = createTestBoard(5, 3);
+      board[0][0] = GameBoardTile.createSpawner(0, 0);
+      board[0][4] = GameBoardTile.createExit(0, 4);
+      for (let col = 0; col < 5; col++) {
+        board[1][col] = GameBoardTile.createWall(1, col);
+        board[2][col] = GameBoardTile.createWall(2, col);
+      }
+      service.importBoard(board, 5, 3);
+    }
+
+    it('BlockType.WALL on a choke-point returns true (blocks path)', () => {
+      makeCorridorBoard();
+      // Tile (0,2) is mid-corridor — blocking it cuts the only path
+      expect(service.wouldBlockPathIfSet(0, 2, BlockType.WALL)).toBeTrue();
+    });
+
+    it('BlockType.WALL on a non-choke-point returns false', () => {
+      makeCorridorBoard();
+      // Tile (2,2) is already a wall — "adding" another wall doesn't change reachability
+      expect(service.wouldBlockPathIfSet(2, 2, BlockType.WALL)).toBeFalse();
+    });
+
+    it('BlockType.BASE on a tile does not block path', () => {
+      makeCorridorBoard();
+      // Proposing BASE at any existing tile is a connectivity-preserving no-op
+      expect(service.wouldBlockPathIfSet(0, 2, BlockType.BASE)).toBeFalse();
+    });
+
+    it('BlockType.TOWER on a choke-point returns true (same as wouldBlockPath)', () => {
+      makeCorridorBoard();
+      expect(service.wouldBlockPathIfSet(0, 2, BlockType.TOWER)).toBeTrue();
+    });
+
+    it('wouldBlockPath delegates to wouldBlockPathIfSet(row, col, TOWER)', () => {
+      makeCorridorBoard();
+      // Both APIs must agree
+      const direct = service.wouldBlockPath(0, 2);
+      const generalized = service.wouldBlockPathIfSet(0, 2, BlockType.TOWER);
+      expect(direct).toBe(generalized);
+    });
+
+    it('returns false when no spawners exist', () => {
+      // Board with no spawners — connectivity check is vacuously false
+      service.importBoard(createTestBoard(5, 5), 5, 5);
+      expect(service.wouldBlockPathIfSet(2, 2, BlockType.WALL)).toBeFalse();
     });
   });
 });

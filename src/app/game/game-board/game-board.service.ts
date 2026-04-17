@@ -4,6 +4,7 @@ import { BlockType, GameBoardTile, SpawnerType } from './models/game-board-tile'
 import { TowerType } from './models/tower.model';
 import { BOARD_CONFIG } from './constants/board.constants';
 import { assertNever } from './utils/assert-never';
+import { MutationOp } from './services/path-mutation.types';
 
 @Injectable()
 export class GameBoardService {
@@ -287,46 +288,12 @@ export class GameBoardService {
    * Check whether placing a tower at (row, col) would block every path
    * from any spawner to any exit. Uses BFS with the same traversability
    * logic as EnemyService.findPath.
+   *
+   * Delegates to `wouldBlockPathIfSet(row, col, BlockType.TOWER)` for
+   * backward compatibility. All existing callers remain unchanged.
    */
   wouldBlockPath(row: number, col: number): boolean {
-    if (this.spawnerTiles.length === 0 || this.exitTiles.length === 0) {
-      return false;
-    }
-
-    // Temporarily mark the tile as non-traversable
-    const originalTile = this.gameBoard[row][col];
-    this.gameBoard[row][col] = new GameBoardTile(
-      originalTile.x,
-      originalTile.y,
-      BlockType.TOWER,
-      false,
-      false,
-      originalTile.cost,
-      TowerType.BASIC // placeholder — type doesn't matter for traversability
-    );
-
-    try {
-      // Build a set of exit positions for fast lookup
-      const exitSet = new Set<string>();
-      for (const [eRow, eCol] of this.exitTiles) {
-        exitSet.add(`${eRow},${eCol}`);
-      }
-
-      // BFS from each spawner to any exit. If ANY spawner cannot reach
-      // ANY exit, the placement blocks the path.
-      let blocked = false;
-      for (const [sRow, sCol] of this.spawnerTiles) {
-        if (!this.bfsCanReachExit(sRow, sCol, exitSet)) {
-          blocked = true;
-          break;
-        }
-      }
-
-      return blocked;
-    } finally {
-      // Always restore the original tile, even if BFS throws
-      this.gameBoard[row][col] = originalTile;
-    }
+    return this.wouldBlockPathIfSet(row, col, BlockType.TOWER);
   }
 
   /**
@@ -450,6 +417,99 @@ export class GameBoardService {
     // Restore tile to traversable BASE state
     this.gameBoard[row][col] = GameBoardTile.createBase(row, col);
     return true;
+  }
+
+  /**
+   * Mutate a tile's type in-place, returning the new GameBoardTile or null on rejection.
+   *
+   * Rejected when:
+   *  - (row, col) is out of bounds
+   *  - existing tile is SPAWNER or EXIT (immutable)
+   *  - existing tile is TOWER (sell the tower first)
+   *
+   * Does NOT call pathfinding invalidate or enemy repath — that is
+   * PathMutationService's responsibility.
+   *
+   * Note: the tile's x/y fields use (col, row) to match the existing placeTower/
+   * forceSetTower convention (see line 405-414 of the original file).
+   */
+  setTileType(
+    row: number,
+    col: number,
+    type: BlockType,
+    mutationOp: MutationOp,
+    priorType?: BlockType,
+  ): GameBoardTile | null {
+    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+      return null;
+    }
+
+    const existing = this.gameBoard[row][col];
+
+    if (
+      existing.type === BlockType.SPAWNER ||
+      existing.type === BlockType.EXIT ||
+      existing.type === BlockType.TOWER
+    ) {
+      return null;
+    }
+
+    const newTile = GameBoardTile.createMutated(
+      col,
+      row,
+      type,
+      priorType ?? existing.type,
+      mutationOp,
+    );
+    this.gameBoard[row][col] = newTile;
+    return newTile;
+  }
+
+  /**
+   * Generalized version of wouldBlockPath.
+   *
+   * Temporarily sets (row, col) to the proposed `type` and runs the same
+   * spawner→exit BFS. The tile is traversable during BFS iff
+   * `type === BASE` (or `type === EXIT`).
+   *
+   * `wouldBlockPath` is preserved as a one-liner wrapper for backward compat.
+   */
+  wouldBlockPathIfSet(row: number, col: number, type: BlockType): boolean {
+    if (this.spawnerTiles.length === 0 || this.exitTiles.length === 0) {
+      return false;
+    }
+
+    const originalTile = this.gameBoard[row][col];
+
+    // Temporarily substitute the proposed tile type
+    const traversable = type === BlockType.BASE || type === BlockType.EXIT;
+    this.gameBoard[row][col] = new GameBoardTile(
+      originalTile.x,
+      originalTile.y,
+      type,
+      traversable,
+      false,
+      originalTile.cost,
+      originalTile.towerType,
+    );
+
+    try {
+      const exitSet = new Set<string>();
+      for (const [eRow, eCol] of this.exitTiles) {
+        exitSet.add(`${eRow},${eCol}`);
+      }
+
+      let blocked = false;
+      for (const [sRow, sCol] of this.spawnerTiles) {
+        if (!this.bfsCanReachExit(sRow, sCol, exitSet)) {
+          blocked = true;
+          break;
+        }
+      }
+      return blocked;
+    } finally {
+      this.gameBoard[row][col] = originalTile;
+    }
   }
 
 }

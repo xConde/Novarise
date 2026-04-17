@@ -26,6 +26,7 @@ import { PlayerProfileService } from '@core/services/player-profile.service';
 import { CombatLoopService } from './combat-loop.service';
 import { WavePreviewService } from './wave-preview.service';
 import { GamePauseService } from './game-pause.service';
+import { PathMutationService } from './path-mutation.service';
 
 describe('GameSessionService', () => {
   let service: GameSessionService;
@@ -170,6 +171,10 @@ describe('GameSessionService', () => {
         { provide: CombatLoopService, useValue: combatLoopSpy },
         { provide: WavePreviewService, useValue: wavePreviewSpy },
         { provide: GamePauseService, useValue: gamePauseSpy },
+        {
+          provide: PathMutationService,
+          useValue: jasmine.createSpyObj<PathMutationService>('PathMutationService', ['reset']),
+        },
       ],
     });
 

@@ -25,6 +25,7 @@ import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { CombatLoopService } from './combat-loop.service';
 import { WavePreviewService } from './wave-preview.service';
 import { GamePauseService } from './game-pause.service';
+import { PathMutationService } from './path-mutation.service';
 import { disposeMaterial } from '../utils/three-utils';
 
 /**
@@ -58,6 +59,7 @@ export class GameSessionService {
     private combatLoopService: CombatLoopService,
     private wavePreviewService: WavePreviewService,
     private gamePauseService: GamePauseService,
+    private pathMutationService: PathMutationService,
   ) {}
 
   /**
@@ -86,6 +88,10 @@ export class GameSessionService {
     // Clear stale autoPaused / showQuitConfirm state from a prior encounter so
     // the pause menu doesn't open mid-new-encounter stuck on the quit dialog.
     this.gamePauseService.reset();
+    // Clear active path mutations from a prior encounter (defense-in-depth; the
+    // service is component-scoped so it would be destroyed anyway, but explicit
+    // reset matches the pattern for all other encounter-scoped services).
+    this.pathMutationService.reset();
   }
 
   /**

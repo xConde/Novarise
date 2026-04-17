@@ -25,6 +25,7 @@ import { ScreenShakeService } from './screen-shake.service';
 import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 import { WAVE_CONFIG } from '../constants/combat.constants';
 import { isTwinBossWave } from '@core/models/wave-definition.model';
+import { PathMutationService } from './path-mutation.service';
 
 /**
  * Owns the turn-based combat resolution for the COMBAT phase.
@@ -74,6 +75,7 @@ export class CombatLoopService {
     private notificationService: GameNotificationService,
     private audioService: AudioService,
     private screenShakeService: ScreenShakeService,
+    private pathMutationService: PathMutationService,
   ) {}
 
   /** Phase 4: current turn number, exposed for UI bindings. */
@@ -138,6 +140,13 @@ export class CombatLoopService {
    */
   resolveTurn(scene: THREE.Scene): CombatFrameResult {
     this.turnNumber++;
+
+    // Expire path mutations FIRST — before spawn, move, or fire — so all turn-N
+    // actions observe the post-expire board state. (Design doc §4 ordering correction:
+    // the original note said "same slot as status tick" which was wrong because enemy
+    // movement is step 2, before status tick at step 5b.)
+    this.pathMutationService.tickTurn(this.turnNumber, scene);
+
     const cardGoldMult = 1 + this.cardEffectService.getModifierValue(MODIFIER_STAT.GOLD_MULTIPLIER);
 
     // Reset per-turn accumulators

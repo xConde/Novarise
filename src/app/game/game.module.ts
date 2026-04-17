@@ -17,6 +17,8 @@ import { PileInspectorComponent } from './game-board/components/pile-inspector/p
 import { LastTurnSummaryComponent } from './game-board/components/last-turn-summary/last-turn-summary.component';
 import { CardDetailComponent } from './game-board/components/card-detail/card-detail.component';
 import { IconComponent } from '@shared/components/icon/icon.component';
+import { PathMutationService } from './game-board/services/path-mutation.service';
+
 @NgModule({
   declarations: [
     GameComponent,
@@ -35,6 +37,6 @@ import { IconComponent } from '@shared/components/icon/icon.component';
     RouterModule.forChild([{ path: '', component: GameComponent, canDeactivate: [gameLeaveGuard] }]),
     IconComponent,
   ],
-  providers: [GameBoardService, CombatVFXService, GamePauseService, ChallengeDisplayService]
+  providers: [GameBoardService, CombatVFXService, GamePauseService, ChallengeDisplayService, PathMutationService]
 })
 export class GameModule {}

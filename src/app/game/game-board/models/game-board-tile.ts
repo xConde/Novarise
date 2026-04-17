@@ -1,4 +1,5 @@
 import { TowerType } from './tower.model';
+import { MutationOp } from '../services/path-mutation.types';
 
 export class GameBoardTile {
   public readonly x: number;
@@ -8,6 +9,10 @@ export class GameBoardTile {
   public readonly isPurchasable: boolean;
   public readonly cost: number | null;
   public readonly towerType: TowerType | null;
+  /** Set on mutated tiles only — undefined on all factory-created tiles. */
+  public readonly mutationOp?: MutationOp;
+  /** The BlockType that existed before this mutation — undefined on unmutated tiles. */
+  public readonly priorType?: BlockType;
 
   constructor(
     x: number,
@@ -17,6 +22,8 @@ export class GameBoardTile {
     isPurchasable: boolean,
     cost: number | null,
     towerType: TowerType | null,
+    mutationOp?: MutationOp,
+    priorType?: BlockType,
     ) {
     this.x = x;
     this.y = y;
@@ -25,6 +32,8 @@ export class GameBoardTile {
     this.isPurchasable = isPurchasable;
     this.cost = cost;
     this.towerType = towerType;
+    this.mutationOp = mutationOp;
+    this.priorType = priorType;
   }
 
   static createBase(x: number, y: number): GameBoardTile {
@@ -41,6 +50,40 @@ export class GameBoardTile {
 
   static createWall(x: number, y: number): GameBoardTile {
     return new GameBoardTile(x, y, BlockType.WALL, false, false, null, null);
+  }
+
+  /**
+   * Create a mutated tile. Semantics are derived from the target `type`:
+   *  - BASE       → traversable, purchasable, 0-cost
+   *  - WALL       → non-traversable, non-purchasable
+   *  - TOWER_ONLY (BRIDGEHEAD) — represented as a WALL tile that is non-traversable
+   *                but carries mutationOp = 'bridgehead' so tower-placement logic can
+   *                query it via the mutationOp side-channel. No new BlockType needed.
+   *
+   * @param x         Board column (not row) — matches the tile's own x field convention.
+   * @param y         Board row — matches the tile's own y field convention.
+   * @param type      The target BlockType after mutation.
+   * @param priorType The BlockType that existed before this mutation (for revert).
+   * @param mutationOp The operation that produced this tile.
+   */
+  static createMutated(
+    x: number,
+    y: number,
+    type: BlockType,
+    priorType: BlockType,
+    mutationOp: MutationOp,
+  ): GameBoardTile {
+    switch (type) {
+      case BlockType.BASE:
+        // Build: traversable and purchasable path tile
+        return new GameBoardTile(x, y, type, true, true, 0, null, mutationOp, priorType);
+      case BlockType.WALL:
+        // Block / destroy: non-traversable, non-purchasable
+        return new GameBoardTile(x, y, type, false, false, null, null, mutationOp, priorType);
+      default:
+        // Fallback for any future type extension — non-traversable by default
+        return new GameBoardTile(x, y, type, false, false, null, null, mutationOp, priorType);
+    }
   }
 }
 

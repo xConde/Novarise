@@ -17,6 +17,7 @@ import { AudioService } from './audio.service';
 import { ScreenShakeService } from './screen-shake.service';
 import { createRelicServiceSpy, createCardEffectServiceSpy } from '../testing';
 import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
+import { PathMutationService } from './path-mutation.service';
 
 import { GamePhase } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
@@ -183,6 +184,10 @@ describe('CombatLoopService', () => {
         { provide: GameNotificationService, useValue: notificationSpy },
         { provide: AudioService, useValue: audioSpy },
         { provide: ScreenShakeService, useValue: screenShakeSpy },
+        {
+          provide: PathMutationService,
+          useValue: jasmine.createSpyObj<PathMutationService>('PathMutationService', ['tickTurn']),
+        },
       ],
     });
 

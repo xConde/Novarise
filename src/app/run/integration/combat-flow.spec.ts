@@ -29,6 +29,7 @@ import { StatusEffectService } from '../../game/game-board/services/status-effec
 import { GameStatsService } from '../../game/game-board/services/game-stats.service';
 import { GameBoardService } from '../../game/game-board/game-board.service';
 import { CombatLoopService } from '../../game/game-board/services/combat-loop.service';
+import { PathMutationService } from '../../game/game-board/services/path-mutation.service';
 import { GameEndService } from '../../game/game-board/services/game-end.service';
 import { AudioService } from '../../game/game-board/services/audio.service';
 import { TowerAnimationService } from '../../game/game-board/services/tower-animation.service';
@@ -136,6 +137,7 @@ describe('combat-flow integration smoke', () => {
         GameBoardService,
         CombatLoopService,
         GameEndService,
+        { provide: PathMutationService, useValue: (() => { const s = jasmine.createSpyObj<PathMutationService>('PathMutationService', ['tickTurn', 'reset', 'serialize', 'restore', 'setRepathHook', 'swapMesh']); s.serialize.and.returnValue({ mutations: [], nextId: 0 }); return s; })() },
         // Run-side services
         DeckService,
         CardEffectService,

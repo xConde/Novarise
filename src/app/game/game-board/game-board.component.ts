@@ -81,6 +81,8 @@ import { AscensionModifierService } from './services/ascension-modifier.service'
 import { TurnHistoryService, TurnEventRecord } from './services/turn-history.service';
 import { WavePreviewService, FutureWaveSummary } from './services/wave-preview.service';
 import { HandCard } from './components/card-hand/card-hand.component';
+import { PathMutationService } from './services/path-mutation.service';
+import { BlockType } from './models/game-board-tile';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
 export interface EnemyBadge {
@@ -373,11 +375,19 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private wavePreviewService: WavePreviewService,
     private itemService: ItemService,
     private runStateFlagService: RunStateFlagService,
+    private pathMutationService: PathMutationService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
 
   ngOnInit(): void {
+    // Wire PathMutationService enemy repath callback. EnemyService is not injected
+    // by PathMutationService directly (that would create a DI cycle via CombatLoopService),
+    // so the component provides it here as a pluggable hook.
+    this.pathMutationService.setRepathHook((row, col) => {
+      this.enemyService.repathAffectedEnemies(row, col);
+    });
+
     // Feed the RECAP panel off the turn-history buffer so every endTurn()
     // resolves into a fresh row without any call-site flashing logic.
     this.turnRecordsSubscription = this.turnHistoryService.records$.subscribe({
@@ -1148,6 +1158,42 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Step 3: Restore CombatLoopService turn number (before mortar zone expiry checks)
       this.combatLoopService.setTurnNumber(checkpoint.turnNumber);
+
+      // Step 3.5: Restore path mutations BEFORE towers (towers can be placed on player-built
+      // BASE tiles) and BEFORE enemies (their serialized paths assume the mutated board state).
+      //
+      // Restore ordering:
+      //   a) restore() reloads the mutation journal + nextId counter (no tile/mesh side effects)
+      //   b) Re-apply each mutation's tile data change to the freshly-imported board
+      //   c) Swap the tile mesh to match the restored tile type
+      //
+      // The board was imported fresh from map data (Step 1), so tiles are at their
+      // original pre-mutation state. We must re-apply each mutation in journal order
+      // to get back to the mid-encounter board state.
+      this.pathMutationService.restore(checkpoint.pathMutations);
+      for (const mutation of checkpoint.pathMutations.mutations) {
+        // Determine what type the tile should be AFTER this mutation.
+        // op → target type mapping (mirrors PathMutationService.applyMutation):
+        //   build → BASE, block → WALL, destroy → WALL, bridgehead → WALL
+        const targetType =
+          mutation.op === 'build' ? BlockType.BASE : BlockType.WALL;
+
+        // Re-apply tile data (board starts fresh from importBoard)
+        this.gameBoardService.setTileType(
+          mutation.row,
+          mutation.col,
+          targetType,
+          mutation.op,
+          mutation.priorType,
+        );
+
+        // Swap the Three.js mesh to match restored tile type
+        this.pathMutationService.swapMesh(mutation.row, mutation.col, targetType, scene);
+      }
+      // Invalidate path cache once after all mutations are replayed
+      if (checkpoint.pathMutations.mutations.length > 0) {
+        this.enemyService.repathAffectedEnemies(-1, -1);
+      }
 
       // Step 4: Restore towers — create meshes, register in TowerCombatService
       const towerMeshes = new Map<string, THREE.Group>();

@@ -127,7 +127,9 @@ export class PathMutationService {
 
 ### Expire flow (per-turn)
 
-`CombatLoopService.resolveTurn()` calls `pathMutationService.tickTurn(turnNumber)` at the same point it ticks mortar zones and status effects. For each mutation whose `expiresOnTurn === turnNumber`:
+`CombatLoopService.resolveTurn()` calls `pathMutationService.tickTurn(turnNumber, scene)` at the
+**very top of `resolveTurn()`**, immediately after `this.turnNumber++` and before step 1 (spawn).
+For each mutation whose `expiresOnTurn === turnNumber`:
 
 1. Mutate tile back to `priorType`.
 2. Replace mesh.
@@ -135,7 +137,10 @@ export class PathMutationService {
 4. Repath affected enemies.
 5. Drop from journal.
 
-Ordering matters: expire **before** enemy movement resolves (same slot as status tick), so enemies plan against the restored board.
+**Ordering correction (Sprint 9):** The original design doc said "same slot as status tick (step 5b)".
+This is wrong. Enemy movement is step 2, which precedes status tick at step 5b. Mutations that expire
+on turn N must be reverted BEFORE any turn-N action (spawn, move, fire) so the board is consistent.
+The correct call site is immediately after `turnNumber++`, before step 1.
 
 ## 5. `GameBoardTile` changes
 

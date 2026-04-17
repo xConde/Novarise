@@ -76,6 +76,14 @@ export class EncounterCheckpointService {
       data['version'] = 7;
       return data;
     },
+    // 7 → 8: add `pathMutations` field. PathMutationService introduced in Sprint 9
+    // (archetype-depth plan). Pre-v8 saves had no path mutations; default to an
+    // empty journal so existing runs continue without terrain modifications in flight.
+    7: (data) => {
+      data['pathMutations'] = { mutations: [], nextId: 0 };
+      data['version'] = 8;
+      return data;
+    },
   };
 
   /**
@@ -161,6 +169,7 @@ export class EncounterCheckpointService {
   private isValidCheckpoint(data: Record<string, unknown>): boolean {
     const itemInventory = data['itemInventory'] as Record<string, unknown> | undefined;
     const runStateFlags = data['runStateFlags'] as Record<string, unknown> | undefined;
+    const pathMutations = data['pathMutations'] as Record<string, unknown> | undefined;
 
     return (
       typeof data['version'] === 'number' &&
@@ -176,7 +185,10 @@ export class EncounterCheckpointService {
       runStateFlags !== null &&
       runStateFlags !== undefined &&
       Array.isArray(runStateFlags['entries']) &&
-      Array.isArray(runStateFlags['consumedEventIds'])
+      Array.isArray(runStateFlags['consumedEventIds']) &&
+      pathMutations !== null &&
+      pathMutations !== undefined &&
+      Array.isArray(pathMutations['mutations'])
     );
   }
 }
