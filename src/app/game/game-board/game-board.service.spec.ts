@@ -1,8 +1,10 @@
 import { TestBed } from '@angular/core/testing';
+import * as THREE from 'three';
 import { GameBoardService } from './game-board.service';
 import { BlockType, GameBoardTile } from './models/game-board-tile';
 import { TowerType } from './models/tower.model';
 import { MutationOp } from './services/path-mutation.types';
+import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
 
 describe('GameBoardService', () => {
   let service: GameBoardService;
@@ -614,6 +616,68 @@ describe('GameBoardService', () => {
       // Board with no spawners — connectivity check is vacuously false
       service.importBoard(createTestBoard(5, 5), 5, 5);
       expect(service.wouldBlockPathIfSet(2, 2, BlockType.WALL)).toBeFalse();
+    });
+  });
+
+  // --- createTileMesh with mutationOp (pool material) ---
+
+  describe('createTileMesh with mutationOp', () => {
+    let pool: TerraformMaterialPoolService;
+    let serviceWithPool: GameBoardService;
+    const createdMeshes: THREE.Mesh[] = [];
+
+    beforeEach(() => {
+      pool = new TerraformMaterialPoolService();
+      serviceWithPool = new GameBoardService(pool);
+      const board = createTestBoard(5, 5);
+      serviceWithPool.importBoard(board, 5, 5);
+    });
+
+    afterEach(() => {
+      for (const m of createdMeshes) {
+        m.geometry.dispose();
+        // Do not dispose pool materials — pool.dispose() handles them.
+        const mat = m.material as THREE.Material;
+        if (!pool.isPoolMaterial(mat)) {
+          mat.dispose();
+        }
+      }
+      createdMeshes.length = 0;
+      pool.dispose();
+    });
+
+    it('createTileMesh with mutationOp returns a mesh whose material === pool.getMaterial(op)', () => {
+      const expected = pool.getMaterial('build');
+      const mesh = serviceWithPool.createTileMesh(1, 1, BlockType.BASE, 'build');
+      createdMeshes.push(mesh);
+      expect(mesh.material).toBe(expected);
+    });
+
+    it('createTileMesh without mutationOp allocates a fresh per-tile material (not from the pool)', () => {
+      const mesh = serviceWithPool.createTileMesh(1, 1, BlockType.BASE, undefined);
+      createdMeshes.push(mesh);
+      expect(pool.isPoolMaterial(mesh.material as THREE.Material)).toBeFalse();
+    });
+
+    it('two tiles with the same mutationOp share the same material reference', () => {
+      const mesh1 = serviceWithPool.createTileMesh(0, 0, BlockType.BASE, 'build');
+      const mesh2 = serviceWithPool.createTileMesh(0, 1, BlockType.BASE, 'build');
+      createdMeshes.push(mesh1, mesh2);
+      expect(mesh1.material).toBe(mesh2.material);
+    });
+
+    it('createTileMesh without a pool (no-DI) falls back to per-tile material', () => {
+      // Service created with no pool injected (matches spec test context where
+      // GameBoardService is new'd without arguments).
+      const svcNoPool = new GameBoardService();
+      const board = createTestBoard(5, 5);
+      svcNoPool.importBoard(board, 5, 5);
+      const mesh = svcNoPool.createTileMesh(1, 1, BlockType.BASE, 'build');
+      // The material is a plain MeshStandardMaterial, not a pool material
+      expect(pool.isPoolMaterial(mesh.material as THREE.Material)).toBeFalse();
+      // Dispose manually since there's no pool to clean up
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
     });
   });
 });

@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { GameBoardService } from '../game-board.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { PathfindingService } from './pathfinding.service';
+import { TerraformMaterialPoolService } from './terraform-material-pool.service';
 import { BlockType } from '../models/game-board-tile';
 import {
   MutationOp,
@@ -50,6 +51,7 @@ export class PathMutationService {
     private readonly gameBoardService: GameBoardService,
     private readonly registry: BoardMeshRegistryService,
     private readonly pathfindingService: PathfindingService,
+    private readonly terraformPool: TerraformMaterialPoolService,
   ) {}
 
   // ────────────────────────────────────────────────────────────────────────
@@ -286,17 +288,38 @@ export class PathMutationService {
    * Perform the full mesh swap for a mutation — dispose old, create new, register.
    * Called by PathMutationService.applyMutation() and by GameBoardComponent on
    * checkpoint restore.
+   *
+   * @param mutationOp  When set, the new mesh uses the pooled material from
+   *                    TerraformMaterialPoolService. When undefined (revert),
+   *                    a fresh per-tile material is allocated.
+   *
+   * Disposal rule: pool materials are NEVER disposed on individual mesh swaps.
+   * Only non-pool materials (original tile materials) are disposed here.
+   * Pool materials are disposed exactly once by TerraformMaterialPoolService.dispose()
+   * which GameSessionService.cleanupScene() calls at encounter teardown.
    */
-  swapMesh(row: number, col: number, newType: BlockType, scene: THREE.Scene): void {
+  swapMesh(
+    row: number,
+    col: number,
+    newType: BlockType,
+    scene: THREE.Scene,
+    mutationOp?: MutationOp,
+  ): void {
     const key = `${row}-${col}`;
     const oldMesh = this.registry.tileMeshes.get(key);
     if (oldMesh) {
       scene.remove(oldMesh);
+      // Always dispose per-tile geometry — it is never shared.
       oldMesh.geometry.dispose();
-      (oldMesh.material as THREE.Material).dispose();
+      // Only dispose the material if it is NOT a pooled material.
+      // Pool materials must survive until pool.dispose() at teardown.
+      const oldMat = oldMesh.material as THREE.Material;
+      if (!this.terraformPool.isPoolMaterial(oldMat)) {
+        oldMat.dispose();
+      }
     }
 
-    const newMesh = this.gameBoardService.createTileMesh(row, col, newType);
+    const newMesh = this.gameBoardService.createTileMesh(row, col, newType, mutationOp);
     newMesh.userData = {
       row,
       col,
@@ -341,7 +364,7 @@ export class PathMutationService {
 
     // ── Mesh swap ────────────────────────────────────────────────────────────
 
-    this.swapMesh(row, col, targetType, scene);
+    this.swapMesh(row, col, targetType, scene, op);
 
     // ── Pathfinding + enemy repath ────────────────────────────────────────────
 
@@ -443,7 +466,8 @@ export class PathMutationService {
       mutation.priorType,
     );
 
-    this.swapMesh(mutation.row, mutation.col, mutation.priorType, scene);
+    // Reverting to original tile type — no mutationOp, so per-tile material is used.
+    this.swapMesh(mutation.row, mutation.col, mutation.priorType, scene, undefined);
 
     this.pathfindingService.invalidateCache();
     this.repathHook?.(mutation.row, mutation.col);

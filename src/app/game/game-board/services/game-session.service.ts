@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 
 import { GameStateService } from './game-state.service';
@@ -26,6 +26,7 @@ import { CombatLoopService } from './combat-loop.service';
 import { WavePreviewService } from './wave-preview.service';
 import { GamePauseService } from './game-pause.service';
 import { PathMutationService } from './path-mutation.service';
+import { TerraformMaterialPoolService } from './terraform-material-pool.service';
 import { disposeMaterial } from '../utils/three-utils';
 
 /**
@@ -60,6 +61,7 @@ export class GameSessionService {
     private wavePreviewService: WavePreviewService,
     private gamePauseService: GamePauseService,
     private pathMutationService: PathMutationService,
+    @Optional() private terraformPool?: TerraformMaterialPoolService,
   ) {}
 
   /**
@@ -149,13 +151,29 @@ export class GameSessionService {
     });
     this.meshRegistry.towerMeshes.clear();
 
-    // Dispose tile meshes
+    // Dispose tile meshes.
+    // Pool materials (terraformed tiles) are NOT disposed here — they are
+    // disposed in batch by terraformPool.dispose() below, after all meshes
+    // have been removed from the scene. Per-tile materials are disposed
+    // individually as before.
     this.meshRegistry.tileMeshes.forEach(mesh => {
       scene.remove(mesh);
       mesh.geometry.dispose();
-      disposeMaterial(mesh.material);
+      const mat = mesh.material as THREE.Material | THREE.Material[];
+      const mats = Array.isArray(mat) ? mat : [mat];
+      mats.forEach(m => {
+        // Skip pool materials — they are disposed in batch by terraformPool.dispose() below.
+        if (!this.terraformPool?.isPoolMaterial(m)) {
+          m.dispose();
+        }
+      });
     });
     this.meshRegistry.tileMeshes.clear();
+
+    // Dispose all pooled terraform materials in one batch.
+    // Must run AFTER tileMeshes.clear() so no mesh still references a pool material.
+    // terraformPool is optional (not present in test contexts without full GameModule).
+    this.terraformPool?.dispose();
 
     // Dispose grid lines
     if (this.meshRegistry.gridLines) {

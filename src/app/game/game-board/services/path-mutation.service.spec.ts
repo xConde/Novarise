@@ -5,8 +5,9 @@ import { PathMutationService } from './path-mutation.service';
 import { GameBoardService } from '../game-board.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { PathfindingService } from './pathfinding.service';
+import { TerraformMaterialPoolService } from './terraform-material-pool.service';
 import { BlockType, GameBoardTile } from '../models/game-board-tile';
-import { SerializablePathMutationState } from './path-mutation.types';
+import { MutationOp, SerializablePathMutationState } from './path-mutation.types';
 import { TowerType } from '../models/tower.model';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -73,6 +74,7 @@ describe('PathMutationService', () => {
   let gameBoardService: GameBoardService;
   let pathfindingSpy: jasmine.SpyObj<PathfindingService>;
   let registrySpy: jasmine.SpyObj<BoardMeshRegistryService>;
+  let poolService: TerraformMaterialPoolService;
   let scene: THREE.Scene;
 
   /** Meshes created during tests — disposed in afterEach. */
@@ -98,6 +100,7 @@ describe('PathMutationService', () => {
     TestBed.configureTestingModule({
       providers: [
         PathMutationService,
+        TerraformMaterialPoolService,
         { provide: GameBoardService, useValue: gameBoardService },
         { provide: PathfindingService, useValue: pathfindingSpy },
         { provide: BoardMeshRegistryService, useValue: registrySpy },
@@ -105,6 +108,7 @@ describe('PathMutationService', () => {
     });
 
     service = TestBed.inject(PathMutationService);
+    poolService = TestBed.inject(TerraformMaterialPoolService);
 
     // Wire the repath hook (normally done by GameBoardComponent.ngOnInit)
     service.setRepathHook(() => { /* no-op in unit tests */ });
@@ -124,9 +128,14 @@ describe('PathMutationService', () => {
   afterEach(() => {
     for (const m of createdMeshes) {
       m.geometry.dispose();
-      (m.material as THREE.Material).dispose();
+      // Do not dispose pool materials — poolService.dispose() handles them.
+      const mat = m.material as THREE.Material;
+      if (!poolService.isPoolMaterial(mat)) {
+        mat.dispose();
+      }
     }
     createdMeshes.length = 0;
+    poolService.dispose();
     scene.clear();
     service.reset();
   });
@@ -620,6 +629,104 @@ describe('PathMutationService', () => {
     });
   });
 
+  // ── Pool material integration ─────────────────────────────────────────────
+
+  describe('pool material integration', () => {
+    it('after block, the new mesh material === pool.getMaterial(block)', () => {
+      // Override createTileMesh to use the real pool (not a stub)
+      // by creating a GameBoardService that has pool injected.
+      // In this test setup we use a direct TerraformMaterialPoolService
+      // from the TestBed to verify identity.
+      const expectedMat = poolService.getMaterial('block');
+
+      // Override the stub to return a mesh using the pool material directly
+      (gameBoardService.createTileMesh as jasmine.Spy).and.callFake(
+        (row: number, col: number, _type: BlockType, mutationOp?: MutationOp) => {
+          const mat = mutationOp ? poolService.getMaterial(mutationOp) : new THREE.MeshStandardMaterial();
+          const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+          if (!mutationOp) createdMeshes.push(m);
+          m.userData = { row, col };
+          return m;
+        },
+      );
+
+      service.block(0, 3, 3, 'card', 1, scene);
+
+      const key = '0-3';
+      const stored = (registrySpy as unknown as { tileMeshes: Map<string, THREE.Mesh> })
+        .tileMeshes.get(key);
+      // replaceTileMesh stores the new mesh
+      const callArgs = registrySpy.replaceTileMesh.calls.mostRecent().args;
+      const newMesh: THREE.Mesh = callArgs[2];
+      expect(newMesh.material).toBe(expectedMat);
+    });
+
+    it('pool material is NOT disposed when a non-pool old mesh is swapped away', () => {
+      // old mesh uses a pool material
+      const poolMat = poolService.getMaterial('block');
+      const oldMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), poolMat);
+
+      (registrySpy as unknown as { tileMeshes: Map<string, THREE.Mesh> })
+        .tileMeshes.set('0-3', oldMesh);
+      scene.add(oldMesh);
+
+      spyOn(oldMesh.geometry, 'dispose').and.callThrough();
+      spyOn(poolMat, 'dispose');
+
+      // Trigger a swap — pool material must NOT be disposed
+      service.block(0, 3, 3, 'c', 1, scene);
+
+      expect(oldMesh.geometry.dispose).toHaveBeenCalled();
+      expect(poolMat.dispose).not.toHaveBeenCalled();
+    });
+
+    it('two blocked tiles share the same pool material reference via spy', () => {
+      const sharedMat = poolService.getMaterial('block');
+
+      (gameBoardService.createTileMesh as jasmine.Spy).and.callFake(
+        (row: number, col: number, _type: BlockType, mutationOp?: MutationOp) => {
+          const mat = mutationOp ? poolService.getMaterial(mutationOp) : new THREE.MeshStandardMaterial();
+          const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+          if (!mutationOp) createdMeshes.push(m);
+          m.userData = { row, col };
+          return m;
+        },
+      );
+
+      service.block(0, 2, 3, 'c1', 1, scene);
+      service.block(0, 4, 3, 'c2', 1, scene);
+
+      const args = registrySpy.replaceTileMesh.calls.all();
+      const mesh1: THREE.Mesh = args[args.length - 2].args[2];
+      const mesh2: THREE.Mesh = args[args.length - 1].args[2];
+
+      expect(mesh1.material).toBe(sharedMat);
+      expect(mesh2.material).toBe(sharedMat);
+    });
+
+    it('reverted mesh has a fresh per-tile material (not a pool material)', () => {
+      (gameBoardService.createTileMesh as jasmine.Spy).and.callFake(
+        (row: number, col: number, _type: BlockType, mutationOp?: MutationOp) => {
+          const mat = mutationOp
+            ? poolService.getMaterial(mutationOp)
+            : new THREE.MeshStandardMaterial();
+          const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+          if (!mutationOp) createdMeshes.push(m);
+          m.userData = { row, col };
+          return m;
+        },
+      );
+
+      service.block(0, 3, 2, 'c', 1, scene); // expiresOnTurn = 3
+      service.tickTurn(3, scene);             // revert the block
+
+      // Last replaceTileMesh call is for the revert — should have per-tile material
+      const lastArgs = registrySpy.replaceTileMesh.calls.mostRecent().args;
+      const revertedMesh: THREE.Mesh = lastArgs[2];
+      expect(poolService.isPoolMaterial(revertedMesh.material as THREE.Material)).toBeFalse();
+    });
+  });
+
   // ── Perf stress spec (Step 9) ─────────────────────────────────────────────
 
   describe('perf: 10 mutations in a single turn', () => {
@@ -643,7 +750,7 @@ describe('PathMutationService', () => {
       (regService as unknown as { tileMeshes: Map<string, THREE.Mesh> }).tileMeshes =
         new Map<string, THREE.Mesh>();
 
-      const bigService = new PathMutationService(svc25x20, regService, pfService);
+      const bigService = new PathMutationService(svc25x20, regService, pfService, new TerraformMaterialPoolService());
       bigService.setRepathHook(() => { /* no-op */ });
 
       spyOn(svc25x20, 'createTileMesh').and.callFake((row: number, col: number) => {

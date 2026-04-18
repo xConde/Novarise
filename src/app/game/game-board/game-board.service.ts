@@ -1,13 +1,18 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { BlockType, GameBoardTile, SpawnerType } from './models/game-board-tile';
 import { TowerType } from './models/tower.model';
 import { BOARD_CONFIG } from './constants/board.constants';
 import { assertNever } from './utils/assert-never';
 import { MutationOp } from './services/path-mutation.types';
+import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
 
 @Injectable()
 export class GameBoardService {
+  constructor(
+    @Optional() private readonly terraformPool?: TerraformMaterialPoolService,
+  ) {}
+
   // Board configuration
   private gameBoardWidth = BOARD_CONFIG.width;
   private gameBoardHeight = BOARD_CONFIG.height;
@@ -95,22 +100,34 @@ export class GameBoardService {
     }
   }
 
-  // Create a visible tile mesh using BoxGeometry
-  createTileMesh(row: number, col: number, type: BlockType): THREE.Mesh {
+  // Create a visible tile mesh using BoxGeometry.
+  // When mutationOp is provided, the mesh shares the pooled material from
+  // TerraformMaterialPoolService (NOT a freshly-allocated material).
+  // When mutationOp is undefined, behavior is unchanged — a new per-tile
+  // material is created as before.
+  createTileMesh(row: number, col: number, type: BlockType, mutationOp?: MutationOp): THREE.Mesh {
     const geometry = new THREE.BoxGeometry(this.tileSize * 0.95, this.tileHeight, this.tileSize * 0.95);
-    const color = this.getTileColor(type);
 
-    // Material — base tiles glow subtly to signal "buildable", walls are dark and inert
-    const isBase = type === BlockType.BASE;
-    const isWall = type === BlockType.WALL;
-    const material = new THREE.MeshStandardMaterial({
-      color: color,
-      emissive: isWall ? 0x0a0810 : isBase ? 0x303848 : color,
-      emissiveIntensity: isBase ? 0.35 : isWall ? 0.05 : 0.45,
-      metalness: isWall ? 0.5 : 0.1,
-      roughness: isBase ? 0.7 : isWall ? 0.95 : 0.7,
-      envMapIntensity: 0.3
-    });
+    let material: THREE.MeshStandardMaterial;
+
+    if (mutationOp !== undefined && this.terraformPool) {
+      // Shared pool material — do NOT dispose this on individual mesh swap.
+      material = this.terraformPool.getMaterial(mutationOp);
+    } else {
+      const color = this.getTileColor(type);
+
+      // Material — base tiles glow subtly to signal "buildable", walls are dark and inert
+      const isBase = type === BlockType.BASE;
+      const isWall = type === BlockType.WALL;
+      material = new THREE.MeshStandardMaterial({
+        color: color,
+        emissive: isWall ? 0x0a0810 : isBase ? 0x303848 : color,
+        emissiveIntensity: isBase ? 0.35 : isWall ? 0.05 : 0.45,
+        metalness: isWall ? 0.5 : 0.1,
+        roughness: isBase ? 0.7 : isWall ? 0.95 : 0.7,
+        envMapIntensity: 0.3,
+      });
+    }
 
     const mesh = new THREE.Mesh(geometry, material);
 
