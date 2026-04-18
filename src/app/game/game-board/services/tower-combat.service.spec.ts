@@ -4188,6 +4188,7 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
     kothActive: false,
     handshakeBonus: 0,
     formationRangeAdditive: 0,
+    gridSurgeBonus: 0,
     currentTurn: 0,
   };
 
@@ -4372,6 +4373,7 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
       kothActive: true,
       handshakeBonus: 0,                // stage 9 — inactive in this spec
       formationRangeAdditive: 0,        // sprint 44 — inactive
+      gridSurgeBonus: 0,                // stage 10 — inactive
       currentTurn: 0,
     };
     const base = TOWER_CONFIGS[TowerType.SNIPER].damage;
@@ -4625,6 +4627,67 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
       const result = callStackWithGraph(corner, { formationRangeAdditive: 1 });
       expect(result.range).toBeCloseTo(base, 5);
     });
+
+    // ─── Stage 10 — GRID_SURGE (Phase 4 sprint 47) ───────────────────────
+
+    it('GRID_SURGE active + 4 cardinal neighbors → applies (1 + gridSurgeBonus) multiplier', () => {
+      // Cross pattern: center + 4 adjacent neighbors.
+      const center = registerTower(5, 5);
+      registerTower(4, 5);  // N
+      registerTower(6, 5);  // S
+      registerTower(5, 4);  // W
+      registerTower(5, 6);  // E
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(center, { gridSurgeBonus: 1.0 });
+      expect(result.damage).toBe(Math.round(base * 2)); // ×2 damage
+    });
+
+    it('GRID_SURGE active + only 3 neighbors → no multiplier (below MIN=4)', () => {
+      const center = registerTower(5, 5);
+      registerTower(4, 5);
+      registerTower(6, 5);
+      registerTower(5, 4);
+      // Missing E neighbor — only 3 total.
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(center, { gridSurgeBonus: 1.0 });
+      expect(result.damage).toBe(base); // no bonus
+    });
+
+    it('GRID_SURGE active + all 4 neighbors (upgraded bonus 1.5) → ×2.5 damage', () => {
+      const center = registerTower(5, 5);
+      registerTower(4, 5); registerTower(6, 5); registerTower(5, 4); registerTower(5, 6);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(center, { gridSurgeBonus: 1.5 });
+      expect(result.damage).toBe(Math.round(base * 2.5));
+    });
+
+    it('GRID_SURGE inactive (bonus=0) → no multiplier even with 4 neighbors', () => {
+      const center = registerTower(5, 5);
+      registerTower(4, 5); registerTower(6, 5); registerTower(5, 4); registerTower(5, 6);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(center, { gridSurgeBonus: 0 });
+      expect(result.damage).toBe(base);
+    });
+
+    it('GRID_SURGE respects disruption — disrupted tower reads zero neighbors', () => {
+      const center = registerTower(5, 5);
+      registerTower(4, 5); registerTower(6, 5); registerTower(5, 4); registerTower(5, 6);
+      graph.severTower(5, 5, /* until */ 10, 'test-disruptor');
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(center, { gridSurgeBonus: 1.0, currentTurn: 5 });
+      expect(result.damage).toBe(base); // disrupted → zero neighbors → no bonus
+    });
+
+    it('GRID_SURGE composes with HANDSHAKE — both multipliers stack', () => {
+      const center = registerTower(5, 5);
+      registerTower(4, 5); registerTower(6, 5); registerTower(5, 4); registerTower(5, 6);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(center, { handshakeBonus: 0.15, gridSurgeBonus: 1.0 });
+      // base × 1.15 (stage 9 HANDSHAKE) × 2 (stage 10 GRID_SURGE)
+      expect(result.damage).toBe(Math.round(base * 1.15 * 2));
+    });
+
+    // ─── Stage 9 — HANDSHAKE composition regression ──────────────────────
 
     it('HANDSHAKE composes as stage 9 — after all Phase 3 multipliers', () => {
       // Fixture: SNIPER at elev 2, KOTH + VP + HANDSHAKE all active.

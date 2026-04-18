@@ -75,4 +75,13 @@ export const CONDUIT_CONFIG = {
    * Balance-tunable; anchored at 2 for initial playtest.
    */
   HARMONIC_NEIGHBOR_COUNT: 2,
+
+  /**
+   * Minimum 4-direction neighbor count (non-disrupted) required to activate
+   * GRID_SURGE's damage multiplier. Sprint 47. Plan §archetype-47: "towers
+   * with 4+ adjacency triggers double dmg for 1 turn" — a tower needs all
+   * four cardinal neighbors filled. 4 is the hard upper bound on the 4-dir
+   * grid, so GRID_SURGE rewards maximal clustering density.
+   */
+  GRID_SURGE_MIN_NEIGHBORS: 4,
 } as const;

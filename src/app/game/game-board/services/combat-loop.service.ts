@@ -164,11 +164,6 @@ export class CombatLoopService {
     // the primitives, not with the first consumer.
     this.towerGraphService?.tickTurn(this.turnNumber);
 
-    // Phase 4 sprint 45 — expire turn-scoped card modifiers (LINKWORK /
-    // HARMONIC / CONDUIT_BRIDGE). Wave-scoped modifiers are untouched — they
-    // tick via cardEffectService.tickWave() at wave completion.
-    this.cardEffectService.tickTurn();
-
     // Sprint 36 OROGENY — every OROGENY_INTERVAL_TURNS (5) turns, permanently raise
     // a random tower's tile by +1. No-op when no towers exist or all tower tiles are
     // already at MAX_ELEVATION. RunService.nextRandom() used — no Math.random().
@@ -362,6 +357,14 @@ export class CombatLoopService {
         : `Lucky Coin ×${procs} (+${bonus} bonus gold)`;
       this.notificationService.show(NotificationType.INFO, 'Lucky Coin', message);
     }
+
+    // Phase 4 sprint 47 — tick turn-scoped card modifiers at END of turn.
+    // Mirrors cardEffectService.tickWave's end-of-wave semantic: duration=N
+    // means "active for the next N turns after play." If this ran at the
+    // top of resolveTurn alongside the other tickTurn calls, a duration=1
+    // modifier would be removed before fireTurn and never fire — see
+    // sprint-47 commit message for the fix context.
+    this.cardEffectService.tickTurn();
 
     return {
       kills: [...this.frameKills],

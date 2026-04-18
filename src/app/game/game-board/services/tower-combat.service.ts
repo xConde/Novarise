@@ -102,6 +102,14 @@ export interface DamageStackContext {
    * FORMATION is active or the tower is not part of a 3+ straight line.
    */
   readonly formationRangeAdditive: number;
+  /**
+   * Stage 10 damage (Phase 4 Conduit GRID_SURGE — sprint 47). Turn-scoped
+   * bonus applied per-tower iff the tower has ≥ GRID_SURGE_MIN_NEIGHBORS (4)
+   * non-disrupted cardinal neighbors. Aggregate across stacked plays via
+   * getModifierValue. `0` when no GRID_SURGE is active — multiplier short-
+   * circuits to 1 with no graph lookup.
+   */
+  readonly gridSurgeBonus: number;
   /** Current turn number — used only by graph reads that honor disruption / virtual-edge expiry. */
   readonly currentTurn: number;
 }
@@ -326,6 +334,12 @@ export class TowerCombatService {
     // Applied inside the (base + additive) parenthesis per spike §13.
     const formationRangeAdditive = this.cardEffectService.getModifierValue(MODIFIER_STAT.FORMATION_RANGE_ADDITIVE);
 
+    // Phase 4 sprint 47 — GRID_SURGE: turn-scoped damage multiplier for towers
+    // with all 4 cardinal neighbors filled. Read in composeDamageStack via
+    // TowerGraphService.getNeighbors. Aggregate via getModifierValue; gate is
+    // `gridSurgeBonus > 0 && neighbors.length >= GRID_SURGE_MIN_NEIGHBORS`.
+    const gridSurgeBonus = this.cardEffectService.getModifierValue(MODIFIER_STAT.GRID_SURGE_DAMAGE_BONUS);
+
     // Phase 4 sprint 45 — LINKWORK: turn-scoped flag. When active, every tower
     // in a cluster of ≥ LINKWORK_MIN_CLUSTER_SIZE gains +LINKWORK_FIRE_RATE_BONUS
     // shots/turn (read via ceil-semantic alongside fireRateBoost). Disrupted
@@ -342,7 +356,8 @@ export class TowerCombatService {
       cardDamageBoost !== 0 || cardRangeBoost !== 0 || sniperDamageBoost !== 0
       || pathLengthMultiplier !== 1 || hasElevation || highPerchBonus !== 0
       || vantagePointBonus !== 0 || kothActive
-      || handshakeBonus !== 0 || formationRangeAdditive !== 0;
+      || handshakeBonus !== 0 || formationRangeAdditive !== 0
+      || gridSurgeBonus !== 0;
 
     // Phase 4 prep — damage + range multiplier composition bundle. Built once per
     // fireTurn; consumed per-tower inside composeDamageStack. See conduit-
@@ -362,6 +377,7 @@ export class TowerCombatService {
       kothActive,
       handshakeBonus,
       formationRangeAdditive,
+      gridSurgeBonus,
       currentTurn: turnNumber,
     };
 
@@ -706,7 +722,8 @@ export class TowerCombatService {
    *     × vantagePointDmgMult                                   // 7: VANTAGE_POINT (elev ≥ 1)
    *     × kothMult                                              // 8: KING_OF_THE_HILL (elev === max)
    *     × handshakeMult                                         // 9: HANDSHAKE (≥ 1 non-disrupted neighbor — sprint 43)
-   *     [× conduit multipliers — sprint 45+ plug in here]
+   *     × gridSurgeMult                                         // 10: GRID_SURGE (≥ 4 non-disrupted neighbors — sprint 47)
+   *     [× conduit multipliers — sprint 48+ plug in here]
    *
    * ## Range stack (6 stages):
    *   (baseStats.range + rangeAdditive)                         // additive-before-multiplicative (§13)
@@ -796,6 +813,17 @@ export class TowerCombatService {
       && this.towerGraphService.isInStraightLineOf(tower.row, tower.col, CONDUIT_CONFIG.FORMATION_MIN_LINE_LENGTH, ctx.currentTurn);
     const rangeAdditive = formationActive ? ctx.formationRangeAdditive : 0;
 
+    // Sprint 47 GRID_SURGE — per-tower stage-10 damage multiplier. Active iff
+    // `gridSurgeBonus > 0` AND the tower has ≥ GRID_SURGE_MIN_NEIGHBORS non-
+    // disrupted 4-dir neighbors (read via TowerGraphService.getNeighbors).
+    // Short-circuits on `gridSurgeBonus === 0` so pre-Conduit runs pay zero
+    // graph-query cost. A disrupted tower reads zero neighbors (same pattern
+    // as HANDSHAKE) — disruption transparently silences the bonus.
+    const gridSurgeMult = (ctx.gridSurgeBonus > 0 && this.towerGraphService !== undefined
+      && this.towerGraphService.getNeighbors(tower.row, tower.col, ctx.currentTurn).length >= CONDUIT_CONFIG.GRID_SURGE_MIN_NEIGHBORS)
+      ? (1 + ctx.gridSurgeBonus)
+      : 1;
+
     const damage = Math.round(
       baseStats.damage
         * ctx.towerDamageMultiplier
@@ -806,7 +834,8 @@ export class TowerCombatService {
         * ctx.pathLengthMultiplier
         * vantagePointDmgMult
         * kothMult
-        * handshakeMult,
+        * handshakeMult
+        * gridSurgeMult,
     );
 
     const range = (baseStats.range + rangeAdditive)

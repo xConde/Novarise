@@ -116,6 +116,18 @@ export const MODIFIER_STAT = {
   // — propagation consumes `lastTarget` (last successful target of the main
   // tower this turn).
   HARMONIC_SIMULTANEOUS_FIRE: 'harmonicSimultaneousFire',
+
+  // Phase 4 Sprint 47 — GRID_SURGE modifier (Conduit uncommon).
+  //
+  // Numeric damage multiplier — turn-scoped (duration: 1 turn). Applied per-
+  // tower as stage 10 of composeDamageStack, gated on
+  // `getNeighbors(currentTurn).length >= GRID_SURGE_MIN_NEIGHBORS` (4 = all
+  // 4 cardinal neighbors filled and non-disrupted). Additive across stacks;
+  // aggregate via getModifierValue.
+  //
+  // Disruption transparently silences the bonus (disrupted tower reads zero
+  // neighbors — same pattern as HANDSHAKE).
+  GRID_SURGE_DAMAGE_BONUS: 'gridSurgeDamageBonus',
 } as const;
 
 export type ModifierStat = typeof MODIFIER_STAT[keyof typeof MODIFIER_STAT];

@@ -313,6 +313,15 @@ const CARD_VALUES = {
   harmonicValue: 1,                   // sentinel — flag modifier
   harmonicDuration: 3,                // turn countdown (3 turns, base)
   harmonicUpgradedDuration: 4,        // turn countdown (4 turns, upgraded)
+
+  // ── Conduit archetype — GRID_SURGE (Sprint 47) ───────────────────────────
+  // GRID_SURGE (2E uncommon): turn-scoped damage multiplier for towers with
+  // GRID_SURGE_MIN_NEIGHBORS (4) non-disrupted cardinal neighbors. Stage 10 of
+  // composeDamageStack. 1-turn duration. Upgrade boosts the damage bonus.
+  gridSurgeCost: 2,
+  gridSurgeBonus: 1.0,                // +100% damage (base, ×2 multiplier)
+  gridSurgeUpgradedBonus: 1.5,        // +150% damage (upgraded, ×2.5 multiplier)
+  gridSurgeDuration: 1,               // turn countdown (1 turn)
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -1885,6 +1894,42 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
       stat: MODIFIER_STAT.HARMONIC_SIMULTANEOUS_FIRE,
       value: CARD_VALUES.harmonicValue,
       duration: CARD_VALUES.harmonicUpgradedDuration,
+      durationScope: 'turn' as const,
+    },
+    archetype: 'conduit' as const,
+    link: true,
+    terraform: false,
+  },
+
+  /**
+   * GRID_SURGE (Sprint 47) — turn-scoped double-damage modifier for towers
+   * with all four cardinal neighbors filled (and non-disrupted). Stage 10
+   * of composeDamageStack. 1-turn duration — high burst window rewarding
+   * tight 4-neighbor clusters.
+   *
+   * NOT terraform. Gate: `getNeighbors(currentTurn).length >= 4`.
+   */
+  [CardId.GRID_SURGE]: {
+    id: CardId.GRID_SURGE,
+    name: 'Grid Surge',
+    description: 'Towers with 4 adjacent towers deal double damage this turn.',
+    upgradedDescription: 'Towers with 4 adjacent towers deal ×2.5 damage this turn.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.gridSurgeCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.GRID_SURGE_DAMAGE_BONUS,
+      value: CARD_VALUES.gridSurgeBonus,
+      duration: CARD_VALUES.gridSurgeDuration,
+      durationScope: 'turn' as const,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.GRID_SURGE_DAMAGE_BONUS,
+      value: CARD_VALUES.gridSurgeUpgradedBonus,
+      duration: CARD_VALUES.gridSurgeDuration,
       durationScope: 'turn' as const,
     },
     archetype: 'conduit' as const,
