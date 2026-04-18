@@ -130,10 +130,8 @@ export class CardPlayService {
      */
     private elevationService: ElevationService,
     /**
-     * Phase 4 sprint 48 — CONDUIT_BRIDGE writes virtual edges via this service.
-     * @Optional() — test beds that predate sprint 48 or omit Conduit primitives
-     * see bridge_towers as a no-op (card consumes energy but nothing happens).
-     * Production GameBoardComponent always wires it.
+     * CONDUIT_BRIDGE writes virtual edges via this service.
+     * @Optional() — when absent, bridge_towers is a no-op (energy still consumed).
      */
     @Optional() private towerGraphService?: TowerGraphService,
   ) {}
@@ -807,19 +805,15 @@ export class CardPlayService {
   }
 
   /**
-   * Phase 4 sprint 48 — CONDUIT_BRIDGE utility card resolution. Selects a
-   * random non-adjacent tower pair via seeded RNG and registers a virtual
-   * adjacency edge with `expiresOnTurn = currentTurn + duration + 1`.
+   * CONDUIT_BRIDGE — selects a random non-adjacent tower pair (Manhattan > 1)
+   * via seeded RNG and registers a virtual adjacency edge.
    *
-   * The +1 offset compensates for TowerGraphService.tickTurn running at the
-   * TOP of CombatLoopService.resolveTurn (consistent with path-mutation /
-   * elevation expiry). With `expiresOnTurn = M + N + 1` where M is the
-   * play-turn, the edge is alive during turns M+1..M+N (N turns total).
+   * Edge expiry uses `currentTurn + duration + 1`: the +1 compensates for
+   * TowerGraphService.tickTurn running at the TOP of resolveTurn, so the
+   * edge is alive during turns M+1..M+N (N turns total, M = play turn).
    *
-   * MVP behavior: random pair from all non-adjacent pairs (Manhattan > 1).
    * No-op when fewer than 2 towers exist, no non-adjacent pair exists, or
-   * the graph service is absent (test beds). Energy is still consumed
-   * (card was already played at this point).
+   * the graph service is absent. Energy was already consumed by the caller.
    */
   private applyConduitBridge(duration: number): void {
     if (!this.towerGraphService) return;

@@ -7,7 +7,7 @@ import { BoardMeshRegistryService } from './board-mesh-registry.service';
 import { GameBoardService } from '../game-board.service';
 import { PlacedTower, TowerType, DEFAULT_TARGETING_MODE } from '../models/tower.model';
 
-describe('LinkMeshService (Phase 4 Conduit visualization — sprint 42)', () => {
+describe('LinkMeshService (Conduit visualization)', () => {
   let service: LinkMeshService;
   let graph: TowerGraphService;
   let registry: BoardMeshRegistryService;

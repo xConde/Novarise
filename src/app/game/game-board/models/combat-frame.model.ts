@@ -18,14 +18,10 @@ export interface KillInfo {
   towerType: TowerType | null;
   towerLevel: number;
   /**
-   * Killing tower's row + col. Optional — absent for DOT ticks and for
-   * mortar-zone kills (the zone is free-floating; its placer's position
-   * may have changed or been sold).
-   *
-   * CombatLoopService.processKill reads these to resolve the killing
-   * tower's cluster membership for CONSTELLATION (sprint 52 relic:
-   * +25% gold when cluster size ≥ 5). Mortar-zone and DOT kills skip
-   * the CONSTELLATION gate entirely.
+   * Killing tower's row + col. Optional — absent for DOT ticks and
+   * mortar-zone kills (the zone is free-floating; its placer may have
+   * moved or been sold). CombatLoopService.processKill reads these for
+   * CONSTELLATION's cluster-size gate; missing row/col skips the gate.
    */
   towerRow?: number;
   towerCol?: number;

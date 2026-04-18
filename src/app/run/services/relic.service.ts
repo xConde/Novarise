@@ -248,20 +248,16 @@ export class RelicService {
   }
 
   /**
-   * TUNING_FORK: returns true when the relic is owned. TowerCombatService
-   * uses this inside composeDamageStack to conditionally multiply per-tower
-   * damage by `tuningForkNeighborDamageMultiplier` when the tower has at
-   * least one non-disrupted 4-dir neighbor. Sprint 52.
+   * TUNING_FORK: gates a per-tower damage multiplier inside composeDamageStack
+   * when the tower has ≥ 1 non-disrupted 4-dir neighbor.
    */
   hasTuningFork(): boolean {
     return this.hasRelic(RelicId.TUNING_FORK);
   }
 
   /**
-   * CONSTELLATION: returns true when the relic is owned. CombatLoopService
-   * uses this in processKill to multiply gold reward by
-   * `constellationClusterGoldMultiplier` when the killing tower is in a
-   * cluster of ≥ `constellationMinClusterSize`. Sprint 52.
+   * CONSTELLATION: gates a gold multiplier in processKill when the killing
+   * tower is in a cluster of ≥ `constellationMinClusterSize`.
    */
   hasConstellation(): boolean {
     return this.hasRelic(RelicId.CONSTELLATION);

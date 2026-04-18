@@ -257,7 +257,7 @@ describe('CardEffectService', () => {
       expect(service.hasActiveModifier(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBeTrue();
     });
 
-    // Sprint 45 — Conduit turn-scoped modifiers MUST NOT tick via tickWave.
+    // Turn-scoped modifiers MUST NOT tick via tickWave.
     it('leaves turn-scoped modifiers untouched on tickWave', () => {
       service.applyModifier(turnModifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 2));
       service.tickWave();
@@ -272,7 +272,7 @@ describe('CardEffectService', () => {
 
   // ── tickTurn ──────────────────────────────────────────────────
 
-  describe('tickTurn (Sprint 45 — turn-scoped Conduit modifiers)', () => {
+  describe('tickTurn (turn-scoped modifiers)', () => {
     it('decrements remainingTurns on turn-scoped modifiers', () => {
       service.applyModifier(turnModifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 3));
       service.tickTurn();

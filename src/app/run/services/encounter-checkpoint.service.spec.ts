@@ -609,7 +609,7 @@ describe('EncounterCheckpointService', () => {
     });
   });
 
-  describe('loadCheckpoint() v9 → v10 migration (sprint 45 — Conduit)', () => {
+  describe('loadCheckpoint() v9 → v10 migration (Conduit)', () => {
     it('migrates v9 checkpoint to v10 by inserting empty towerGraph', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const v9Data: Record<string, any> = {

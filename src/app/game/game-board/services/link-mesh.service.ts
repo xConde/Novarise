@@ -18,39 +18,25 @@ import { GameBoardService } from '../game-board.service';
  * service's `edgesAdded$` / `edgesRemoved$` observables and maintains exactly
  * one line per edge.
  *
- * ## Lifecycle contract (spike §10)
+ * ## Lifecycle (spike §10)
  *
- * Phase 3 devil's advocate critique #3 predicted cliff-mesh-class leaks for
- * link meshes. This service is the dedicated owner — no other service
- * creates or disposes link line meshes. Four trigger paths, all funneled here:
+ * Dedicated owner — no other service creates or disposes link meshes.
+ * Four trigger paths:
  *
- * 1. Edge added → create `THREE.Line` between the two tower group positions,
- *    add to scene, store in `lines` map keyed by canonical edge id `a__b`.
+ * 1. Edge added → create `THREE.Line`, store in `lines` keyed by canonical
+ *    edge id `a__b`.
  * 2. Edge removed → remove from scene, dispose geometry, delete map entry.
- *    The shared material is NOT disposed per-edge.
- * 3. Encounter teardown → `dispose()` iterates all remaining lines, disposes
- *    each geometry, disposes the shared material ONCE, clears the map.
- * 4. Encounter restart → same as teardown; fresh instance per encounter
- *    (component-scoped service lifecycle).
+ *    Shared materials are NOT disposed per-edge.
+ * 3. Encounter teardown → `dispose()` iterates remaining lines, disposes
+ *    each geometry, disposes the shared materials ONCE, clears the map.
+ * 4. Encounter restart → same as teardown; fresh instance per encounter.
  *
- * ## Materials
+ * Materials: one shared for spatial edges, one for virtual (visual
+ * differentiation per spike §10). Disposed exactly once in `dispose()`.
  *
- * Two shared materials: one for spatial edges, one for virtual edges (visual
- * differentiation per spike §10). Both are owned by this service and disposed
- * exactly once in `dispose()`.
- *
- * ## Scene attachment
- *
- * Scene reference is supplied via `attachScene(scene)` at component init. Not
- * injected — SceneService is component-scoped and supplying scene at service
- * construction creates a DI ordering dependency that's fragile. The component
- * calls attachScene once scene is ready.
- *
- * ## No automatic sync on scene change
- *
- * If the scene is swapped at runtime (e.g., restart), the caller must call
- * `dispose()` before `attachScene(newScene)`. The service does not detect
- * scene changes.
+ * Scene attachment via `attachScene(scene)` at component init — injecting
+ * SceneService creates a fragile DI ordering dependency. If the scene is
+ * swapped (e.g., restart), call `dispose()` before `attachScene(newScene)`.
  */
 @Injectable()
 export class LinkMeshService implements OnDestroy {
@@ -108,7 +94,7 @@ export class LinkMeshService implements OnDestroy {
     if (this.scene === null) return;
 
     const geometry = this.buildLineGeometry(edge.a, edge.b);
-    if (geometry === null) return; // Tower not yet meshed — skip; sprint 42 ships with static scene.
+    if (geometry === null) return; // Tower not yet meshed — skip.
 
     const material = edge.kind === 'virtual' ? this.virtualMaterial : this.spatialMaterial;
     const line = new THREE.Line(geometry, material);
@@ -131,8 +117,8 @@ export class LinkMeshService implements OnDestroy {
 
   /**
    * Build a 2-vertex line between two tower world positions. Returns null if
-   * either tower is not yet meshed (sprint 42 ships without auto-rehydrate
-   * when tower group registers after the edge event).
+   * either tower is not yet meshed — no auto-rehydrate if a tower group
+   * registers after its edge event.
    */
   private buildLineGeometry(aId: string, bId: string): THREE.BufferGeometry | null {
     const aPos = this.getTowerWorldPos(aId);
@@ -169,7 +155,7 @@ export class LinkMeshService implements OnDestroy {
 
   // ─── Queries (for spec + disposal-audit) ─────────────────────────────
 
-  /** Number of link lines currently tracked. Used by sprint 56 disposal-audit spec. */
+  /** Number of link lines currently tracked. Used by disposal-audit specs. */
   getLineCount(): number {
     return this.lines.size;
   }

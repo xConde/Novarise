@@ -3,7 +3,7 @@ import { TowerGraphService } from './tower-graph.service';
 import { PlacedTower, TowerType, DEFAULT_TARGETING_MODE } from '../models/tower.model';
 import { CONDUIT_CONFIG } from '../constants/conduit.constants';
 
-describe('TowerGraphService (Phase 4 Conduit primitives — sprint 41)', () => {
+describe('TowerGraphService (Conduit primitives)', () => {
   let service: TowerGraphService;
   let placedTowers: Map<string, PlacedTower>;
 
@@ -120,7 +120,7 @@ describe('TowerGraphService (Phase 4 Conduit primitives — sprint 41)', () => {
     });
   });
 
-  describe('virtual edges (CONDUIT_BRIDGE API — sprint 48 consumer)', () => {
+  describe('virtual edges (CONDUIT_BRIDGE API)', () => {
     it('addVirtualEdge unions non-adjacent towers into the neighbor set', () => {
       place(5, 5);
       place(10, 10);
@@ -250,7 +250,7 @@ describe('TowerGraphService (Phase 4 Conduit primitives — sprint 41)', () => {
     });
   });
 
-  describe('isInStraightLineOf — FORMATION detection (sprint 44)', () => {
+  describe('isInStraightLineOf — FORMATION detection', () => {
     it('horizontal 3-line: middle + both endpoints all qualify', () => {
       place(5, 4);
       place(5, 5);
@@ -367,7 +367,7 @@ describe('TowerGraphService (Phase 4 Conduit primitives — sprint 41)', () => {
     });
   });
 
-  describe('link-slot capacity (ARCHITECT rare — sprint 49)', () => {
+  describe('link-slot capacity (ARCHITECT rare)', () => {
     it('getLinkSlotCapacity returns DEFAULT_LINK_SLOTS when unset', () => {
       const t = buildTower(5, 5);
       expect(service.getLinkSlotCapacity(t)).toBe(CONDUIT_CONFIG.DEFAULT_LINK_SLOTS);
@@ -390,7 +390,7 @@ describe('TowerGraphService (Phase 4 Conduit primitives — sprint 41)', () => {
     });
   });
 
-  describe('serialize / restore (sprint 48 consumer)', () => {
+  describe('serialize / restore', () => {
     it('empty state round-trips', () => {
       const snapshot = service.serialize();
       service.reset();

@@ -57,7 +57,7 @@ function buildTower(row: number, col: number, overrides: Partial<PlacedTower> = 
   };
 }
 
-describe('Conduit × Path-Mutation × Elevation × Tower composition (sprint 41 entry criterion)', () => {
+describe('Conduit × Path-Mutation × Elevation × Tower composition', () => {
   let graph: TowerGraphService;
   let gameBoardService: GameBoardService;
   let elevation: ElevationService;
@@ -79,7 +79,7 @@ describe('Conduit × Path-Mutation × Elevation × Tower composition (sprint 41 
     });
     graph = TestBed.inject(TowerGraphService);
     gameBoardService = TestBed.inject(GameBoardService);
-    TestBed.inject(PathMutationService); // Provider presence — not directly exercised in sprint 41 composition.
+    TestBed.inject(PathMutationService); // Provider presence only.
     elevation = TestBed.inject(ElevationService);
     pathfinding = TestBed.inject(PathfindingService);
 
@@ -176,12 +176,9 @@ describe('Conduit × Path-Mutation × Elevation × Tower composition (sprint 41 
   //
   // The default generateBaseBoard layout has no WALL tiles, so a
   // BRIDGEHEAD-based composition test requires map-import infrastructure
-  // that's out of scope for the sprint 41 entry criterion. A richer
-  // composition integration lands in sprint 56 QA when Conduit cards are
-  // in play and the full TestBed for encounter lifecycle already exists.
-  // The critical invariant that path-mutation state does NOT bleed into
-  // graph state is covered by test #4 below (disruption does not touch
-  // pathfinding cache or elevation).
+  // that's out of scope here. The critical invariant — path-mutation state
+  // does NOT bleed into graph state — is covered by test #4 below
+  // (disruption does not touch pathfinding cache or elevation).
   // ────────────────────────────────────────────────────────────────────────
 
   // ────────────────────────────────────────────────────────────────────────
@@ -267,7 +264,7 @@ describe('Conduit × Path-Mutation × Elevation × Tower composition (sprint 41 
   });
 
   // ────────────────────────────────────────────────────────────────────────
-  // 7. Serializer round-trip honors mixed state (empty for sprint 41)
+  // 7. Serializer round-trip honors mixed state
   // ────────────────────────────────────────────────────────────────────────
 
   it('serialize/restore round-trip preserves virtual edges and disruption entries', () => {

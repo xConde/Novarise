@@ -4373,9 +4373,9 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
       kothBonus: 1.0,                   // stage 8 → 2 (elev === max)
       kothActive: true,
       handshakeBonus: 0,                // stage 9 — inactive in this spec
-      formationRangeAdditive: 0,        // sprint 44 — inactive
-      gridSurgeBonus: 0,                // stage 10 — inactive
-      architectClusterActive: false,    // sprint 49 — inactive
+      formationRangeAdditive: 0,        // inactive
+      gridSurgeBonus: 0,                // inactive
+      architectClusterActive: false,    // inactive
       currentTurn: 0,
     };
     const base = TOWER_CONFIGS[TowerType.SNIPER].damage;
@@ -4449,7 +4449,7 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
     expect(result.range).toBe(TOWER_CONFIGS[TowerType.BASIC].range);
   });
 
-  // ─── Stage 9 — HANDSHAKE (Phase 4 sprint 43) ─────────────────────────────
+  // ─── Stage 9 — HANDSHAKE ─────────────────────────────────────────────────
 
   describe('HANDSHAKE multiplier (stage 9 — graph-reactive)', () => {
     // Re-wire the real TowerGraphService so composeDamageStack can query neighbors.
@@ -4548,7 +4548,7 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
       expect(result.damage).toBe(base); // disrupted → no neighbors → no bonus
     });
 
-    // ─── FORMATION — additive-to-base range (sprint 44) ───────────────────
+    // ─── FORMATION — additive-to-base range ────────────────────────────────
 
     it('FORMATION active + 3-tower horizontal line → +1 tile range (additive-before-multiplicative)', () => {
       // Build a horizontal line: (5, 5), (5, 6), (5, 7). Tower under test = middle.
@@ -4630,7 +4630,7 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
       expect(result.range).toBeCloseTo(base, 5);
     });
 
-    // ─── Stage 10 — GRID_SURGE (Phase 4 sprint 47) ───────────────────────
+    // ─── Stage 10 — GRID_SURGE ───────────────────────────────────────────
 
     it('GRID_SURGE active + 4 cardinal neighbors → applies (1 + gridSurgeBonus) multiplier', () => {
       // Cross pattern: center + 4 adjacent neighbors.
@@ -4689,7 +4689,7 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
       expect(result.damage).toBe(Math.round(base * 1.15 * 2));
     });
 
-    // ─── Sprint 49 — ARCHITECT cluster propagation ───────────────────────
+    // ─── ARCHITECT cluster propagation ───────────────────────────────────
 
     it('ARCHITECT active + HANDSHAKE + isolated tower → no bonus (cluster of 1)', () => {
       const lone = registerTower(5, 5);
@@ -4751,7 +4751,7 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
       expect(result.damage).toBe(Math.round(base * 1.15));
     });
 
-    // ─── Sprint 52 — TUNING_FORK relic (stage 11) ────────────────────────
+    // ─── Stage 11 — TUNING_FORK relic ────────────────────────────────────
 
     it('TUNING_FORK owned + tower with ≥ 1 neighbor → +10% damage', () => {
       const tA = registerTower(5, 5);
@@ -4840,7 +4840,7 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
   });
 });
 
-// ─── Phase 4 sprint 45 — LINKWORK (cluster fire-rate share) ────────────────────
+// ─── LINKWORK (cluster fire-rate share) ────────────────────────────────────────
 //
 // LINKWORK is a turn-scoped flag that grants +1 shotsPerTurn to any tower
 // in a cluster of size ≥ LINKWORK_MIN_CLUSTER_SIZE while active. Tested via
@@ -4849,7 +4849,7 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
 // TestBed wires the real TowerGraphService + `setPlacedTowersGetter`, which
 // the parent describe's setup does not.
 
-describe('TowerCombatService LINKWORK (Phase 4 sprint 45)', () => {
+describe('TowerCombatService LINKWORK', () => {
   let service: TowerCombatService;
   let graph: TowerGraphService;
   let cardEffectSpy: jasmine.SpyObj<CardEffectService>;
@@ -5012,7 +5012,7 @@ describe('TowerCombatService LINKWORK (Phase 4 sprint 45)', () => {
   });
 });
 
-// ─── Phase 4 sprint 46 — HARMONIC (cluster-fire propagation) ──────────────────
+// ─── HARMONIC (cluster-fire propagation) ──────────────────────────────────────
 //
 // HARMONIC is a turn-scoped flag. When active and a tower fires at target T,
 // up to HARMONIC_NEIGHBOR_COUNT (2) random non-disrupted cluster neighbors
@@ -5021,7 +5021,7 @@ describe('TowerCombatService LINKWORK (Phase 4 sprint 45)', () => {
 // Tested via fireTurn. TestBed wires real TowerGraphService + a RunService
 // stub exposing nextRandom for deterministic passenger selection.
 
-describe('TowerCombatService HARMONIC (Phase 4 sprint 46)', () => {
+describe('TowerCombatService HARMONIC', () => {
   let service: TowerCombatService;
   let graph: TowerGraphService;
   let cardEffectSpy: jasmine.SpyObj<CardEffectService>;
@@ -5186,7 +5186,7 @@ describe('TowerCombatService HARMONIC (Phase 4 sprint 46)', () => {
     expect(runServiceStub.nextRandom).toHaveBeenCalled();
   });
 
-  // ─── Sprint 50 — HIVE_MIND cluster-max composition ────────────────────
+  // ─── HIVE_MIND cluster-max composition ─────────────────────────────────
   //
   // Hard to unit-test in a damage-stack describe because HIVE_MIND is a post-
   // compose step inside fireTurn (swaps composed stats with cluster max

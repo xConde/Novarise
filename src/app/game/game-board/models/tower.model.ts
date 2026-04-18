@@ -107,18 +107,12 @@ export interface PlacedTower {
    */
   cardStatOverrides?: TowerStatOverrides;
   /**
-   * Phase 4 Conduit — per-tower link-slot capacity override.
+   * Per-tower link-slot capacity override (Conduit). `undefined` → reads
+   * CONDUIT_CONFIG.DEFAULT_LINK_SLOTS (4).
    *
-   * When `undefined`, TowerGraphService uses CONDUIT_CONFIG.DEFAULT_LINK_SLOTS
-   * (= 4, one per 4-dir neighbor). When set, overrides the default — used by
-   * the ARCHITECT rare anchor (sprint 49) which grants +1 slot per tower.
-   *
-   * Intentionally lives on PlacedTower, NOT on GameBoardTile. See
-   * docs/design/conduit-adjacency-graph.md §4 — Phase 3 Finding 1 postmortem
-   * shows that any field on GameBoardTile shared between services is a latent
-   * composition bug. Link state belongs on the tower.
-   *
-   * Not serialized in v9 — optional fields round-trip cleanly via spread.
+   * Lives on PlacedTower, NOT on GameBoardTile — any tile-level field shared
+   * between services is a latent composition bug (Phase 3 Finding 1). See
+   * docs/design/conduit-adjacency-graph.md §4.
    */
   linkSlots?: number;
 }

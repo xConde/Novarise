@@ -5,12 +5,8 @@ import { CONDUIT_CONFIG } from '../constants/conduit.constants';
 
 /**
  * Serializable snapshot of `TowerGraphService` state that CANNOT be derived
- * from `placedTowers` + `activeModifiers` alone.
- *
- * Sprints 41-47 ship with `virtualEdges` empty and `disruptedUntil` empty
- * — those surfaces are introduced by sprint 48 (CONDUIT_BRIDGE) and sprint 53
- * (DISRUPTOR). A `CHECKPOINT_VERSION` bump (v9 → v10) is required before
- * either field carries data across saves. See spike §9.
+ * from `placedTowers` + `activeModifiers` alone. See spike §9. Bumping the
+ * shape requires a CHECKPOINT_VERSION bump + migration.
  */
 export interface SerializableTowerGraphState {
   readonly virtualEdges: readonly SerializableVirtualEdge[];
@@ -42,43 +38,23 @@ export interface TowerCluster {
 }
 
 /**
- * Tower adjacency graph service — Phase 4 Conduit primitives (sprint 41).
+ * Tower adjacency graph service — Conduit primitives.
  *
- * ## Responsibilities
+ * Tracks 4-dir spatial adjacency, virtual edges (CONDUIT_BRIDGE), and per-
+ * tower disruption (DISRUPTOR / ISOLATOR / DIVIDER). Exposes O(1) reads for
+ * `composeDamageStack` and card handlers: `getNeighbors`, `getClusterSize`,
+ * `getClusterTowers`, `isDisrupted`.
  *
- * - Track 4-direction spatial adjacency between `PlacedTower` instances.
- * - Track virtual edges (CONDUIT_BRIDGE, sprint 48) that connect
- *   non-adjacent towers for a limited duration.
- * - Track per-tower disruption (DISRUPTOR, ISOLATOR, DIVIDER — sprints 53+).
- * - Expose O(1) per-tower reads for `composeDamageStack` and card/relic
- *   handlers: `getNeighbors`, `getClusterSize`, `getClusterTowers`,
- *   `isDisrupted`.
+ * Invariants:
+ *  - NOT the authoritative tower registry — `TowerCombatService.placedTowers`
+ *    is. The graph is a derived view.
+ *  - NOT mutated during `fireTurn` (see `assertNotFiring()`). Adjacency is
+ *    stable for the duration of a combat resolution.
+ *  - Component-scoped; one graph per encounter. `reset()` on teardown.
  *
- * ## What this service is NOT
- *
- * - NOT the authoritative tower registry — that is
- *   `TowerCombatService.placedTowers`. The graph is a derived view.
- * - NOT mutated during `fireTurn`. Card plays that register / unregister
- *   towers open only in the turn prelude (see invariant
- *   `assertNotFiring()` below). Adjacency is stable for the duration of a
- *   combat resolution.
- * - NOT persisting spatial adjacency or cluster membership. Those are
- *   re-derived on every `registerTower` / `unregisterTower` and on
- *   checkpoint restore (Step 4.5).
- *
- * ## Scope
- *
- * Component-scoped on `GameBoardComponent.providers` — same pattern as
- * `PathMutationService`, `ElevationService`, `LineOfSightService`. One
- * graph per combat encounter. `reset()` is called from
- * `GameSessionService.teardownEncounter`.
- *
- * ## Circular-DI avoidance
- *
- * `TowerGraphService` does NOT inject `TowerCombatService` — that would
- * create a cycle (`TowerCombatService` calls `TowerGraphService` on
- * register). Instead, callers hook via `setPlacedTowersGetter(...)` at
- * component init. Mirrors `PathMutationService.setRepathHook`.
+ * Circular-DI avoidance: does NOT inject `TowerCombatService`. Callers hook
+ * via `setPlacedTowersGetter(...)` at component init. Mirrors
+ * `PathMutationService.setRepathHook`.
  *
  * See `docs/design/conduit-adjacency-graph.md` for the full design spike.
  */
@@ -96,20 +72,16 @@ export class TowerGraphService {
   private readonly keyToId = new Map<string, string>();
 
   /**
-   * Virtual edges (CONDUIT_BRIDGE). Keyed by the canonical edge string
-   * `${a}__${b}` with a < b (lex order). Not a full second-class adjacency
-   * set — unioned into {@link getNeighbors} at read time.
-   *
-   * Sprint 48 activates. Sprints 41-47 never populate this map.
+   * Virtual edges (CONDUIT_BRIDGE). Keyed by canonical edge string
+   * `${a}__${b}` with a < b (lex order). Unioned into {@link getNeighbors}
+   * at read time rather than stored as a second-class adjacency set.
    */
   private readonly virtualEdges = new Map<string, SerializableVirtualEdge>();
 
   /**
    * Per-tower disruption entries: tower id → until-turn (exclusive).
-   * A tower is disrupted when currentTurn < untilTurn.
-   *
-   * Sprints 53/54/55 populate via `disruptRadius` / `severTower`. Sprints
-   * 41-47 never populate this map; `isDisrupted` returns false.
+   * Tower is disrupted when currentTurn < untilTurn. Populated by
+   * `disruptRadius` / `severTower`.
    */
   private readonly disruptedUntil = new Map<string, { untilTurn: number; sourceId: string }>();
 
@@ -120,19 +92,17 @@ export class TowerGraphService {
   private placedTowersGetter: () => ReadonlyMap<string, PlacedTower> = () => new Map();
 
   /**
-   * Edge-lifecycle observables consumed by LinkMeshService (sprint 42).
+   * Edge-lifecycle observables consumed by LinkMeshService.
    *
-   * Emission timing: edges added/removed by `registerTower`, `unregisterTower`,
-   * `addVirtualEdge`, `tickTurn` (virtual-edge expiry), `severTower` /
-   * `disruptRadius` (disruption does NOT emit — disrupted-tower edges are
-   * filtered at read time, not structurally removed).
+   * Emitted by: `registerTower`, `unregisterTower`, `addVirtualEdge`,
+   * `tickTurn` (virtual-edge expiry). NOT emitted by `severTower` /
+   * `disruptRadius` — disruption filters at read time, not structurally.
    *
-   * Emission shape: `{ a, b, kind }` where a/b are tower ids (lex-ordered so
-   * `a < b`) and kind distinguishes spatial from virtual for material styling.
+   * Shape: `{ a, b, kind }` with a/b lex-ordered (`a < b`) so subscribers
+   * can key on the canonical edge id.
    *
-   * Component scope: Subjects complete in `reset()` (encounter teardown)
-   * because the service instance is destroyed with the component, but
-   * explicit `.complete()` lets subscribers release refs early.
+   * Subjects `.complete()` in `reset()` to let subscribers release refs
+   * early even though the component-scoped instance is also destroyed.
    */
   private readonly edgesAddedSubject = new Subject<TowerGraphEdge>();
   private readonly edgesRemovedSubject = new Subject<TowerGraphEdge>();
@@ -199,13 +169,11 @@ export class TowerGraphService {
     this.disruptedUntil.delete(id);
   }
 
-  // ─── Virtual edges (CONDUIT_BRIDGE — sprint 48) ────────────────────────
+  // ─── Virtual edges (CONDUIT_BRIDGE) ────────────────────────────────────
 
   /**
-   * Adds a virtual edge between two towers for a duration. Both towers must
-   * currently be registered. Expires in `tickTurn(expiresOnTurn)`.
-   *
-   * Sprint 41 ships the API; sprint 48 ships the consumer card.
+   * Adds a virtual edge between two registered towers. Expires in
+   * `tickTurn(expiresOnTurn)`.
    */
   addVirtualEdge(
     aRow: number,
@@ -226,14 +194,12 @@ export class TowerGraphService {
     return true;
   }
 
-  // ─── Disruption (DISRUPTOR / ISOLATOR / DIVIDER — sprints 53+) ─────────
+  // ─── Disruption (DISRUPTOR / ISOLATOR / DIVIDER) ───────────────────────
 
   /**
-   * Marks every currently-registered tower within Manhattan `radiusTiles` of
-   * (row, col) as disrupted until `untilTurn`. Re-calls with higher
-   * `untilTurn` extend the entry.
-   *
-   * Sprint 41 ships the API; sprints 53/55 ship the consumer enemies.
+   * Marks every registered tower within Manhattan `radiusTiles` of (row, col)
+   * as disrupted until `untilTurn`. Re-calls with higher `untilTurn` extend
+   * the entry.
    */
   disruptRadius(
     row: number,
@@ -253,7 +219,7 @@ export class TowerGraphService {
 
   /**
    * Severs a specific tower's neighbors until `untilTurn` — ISOLATOR target
-   * behavior. Sprint 54 consumer.
+   * behavior.
    */
   severTower(row: number, col: number, untilTurn: number, sourceId: string): void {
     this.assertNotFiring();
@@ -299,8 +265,7 @@ export class TowerGraphService {
    * Cluster size — including the tower itself. An isolated tower returns 1.
    * Traverses spatial + virtual edges, skipping disrupted towers.
    *
-   * O(cluster_size) BFS per call. No cache in sprint 41; sprint 52
-   * (CONSTELLATION) may add a memo if profiling demands.
+   * O(cluster_size) BFS per call. No cache — add a memo if profiling demands.
    */
   getClusterSize(row: number, col: number, currentTurn = 0): number {
     return this.getClusterTowers(row, col, currentTurn).length;
@@ -343,8 +308,8 @@ export class TowerGraphService {
    * from the tower in both directions along each axis, counting contiguous
    * registered non-disrupted towers.
    *
-   * Used by FORMATION (sprint 44). A disrupted tower is NOT counted — a
-   * line of A-B-C where B is disrupted reads as two separate lines of 1.
+   * Used by FORMATION. A disrupted tower is NOT counted — a line A-B-C with
+   * B disrupted reads as two separate lines of 1.
    *
    * O(line_length) per call — cheap at realistic board sizes. No caching;
    * FORMATION is wave-scoped and the graph mutates ≤ once per turn.
@@ -431,9 +396,8 @@ export class TowerGraphService {
   rebuild(): void {
     this.neighbors.clear();
     this.keyToId.clear();
-    // Note: virtualEdges + disruptedUntil are NOT cleared — they survive
-    // checkpoint restore once sprint 48 persists them (v10+). In v9 they
-    // are always empty so the distinction is a no-op today.
+    // virtualEdges + disruptedUntil are NOT cleared — they survive checkpoint
+    // restore via serialize/restore and must persist through rebuild.
     for (const tower of this.placedTowersGetter().values()) {
       this.registerTowerInternal(tower);
     }
@@ -450,7 +414,7 @@ export class TowerGraphService {
     this.firingInProgress = value;
   }
 
-  // ─── Persistence (no-op in v9; sprint 48 activates) ────────────────────
+  // ─── Persistence ───────────────────────────────────────────────────────
 
   serialize(): SerializableTowerGraphState {
     return {

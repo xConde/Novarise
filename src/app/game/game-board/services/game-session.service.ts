@@ -66,12 +66,11 @@ export class GameSessionService {
     private pathMutationService: PathMutationService,
     private elevationService: ElevationService,
     @Optional() private terraformPool?: TerraformMaterialPoolService,
-    // Phase 4 sprint 41 — @Optional() so test beds predating Conduit primitives
-    // don't need to register TowerGraphService. Production wires it via
-    // GameBoardComponent.providers.
+    // @Optional() so pre-Conduit test beds don't need to register this.
+    // Production wires it via GameBoardComponent.providers.
     @Optional() private towerGraphService?: TowerGraphService,
-    // Phase 4 sprint 42 — @Optional() for the same reason. LinkMeshService
-    // owns all link-mesh disposal; cleanupScene delegates to its dispose().
+    // @Optional() — LinkMeshService owns all link-mesh disposal; cleanupScene
+    // delegates to its dispose().
     @Optional() private linkMeshService?: LinkMeshService,
   ) {}
 
@@ -107,11 +106,9 @@ export class GameSessionService {
     this.pathMutationService.reset();
     // Clear active elevation state from a prior encounter (same lifecycle as pathMutationService).
     this.elevationService.reset();
-    // Phase 4 sprint 41 — clear adjacency graph state. No-op in sprint 41
-    // (graph is derived from placedTowers which is already reset via
-    // TowerCombatService.reset/resetForRestart); explicit call makes the
-    // encounter-teardown contract visible and lands ahead of sprints 48+
-    // which persist virtual-edge state across saves.
+    // Clear adjacency graph state (virtual edges, disruption entries).
+    // Explicit call makes the encounter-teardown contract visible even
+    // though the graph is derived from placedTowers (already reset above).
     this.towerGraphService?.reset();
   }
 
@@ -136,11 +133,9 @@ export class GameSessionService {
     // Clean up tower combat state (projectiles)
     this.towerCombatService.cleanup(scene);
 
-    // Phase 4 sprint 42 — dispose link-mesh lines + shared materials before
-    // tower meshes are disposed. LinkMeshService reads tower positions from
-    // registry, so ordering here is defensive: lines don't need tower positions
-    // on dispose but the contract is "link meshes owned/torn down by their
-    // dedicated owner first."
+    // Dispose link-mesh lines + shared materials before tower meshes are
+    // disposed. Contract: link meshes are torn down by their dedicated owner
+    // first (defensive — positions aren't needed on dispose).
     this.linkMeshService?.dispose();
 
     // Clean up tower placement preview

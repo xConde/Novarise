@@ -43,10 +43,10 @@ export enum RelicId {
   // Rare (Highground)
   OROGENY = 'OROGENY',
 
-  // Uncommon (Conduit) — Phase 4 sprint 52
+  // Uncommon (Conduit)
   TUNING_FORK = 'TUNING_FORK',
 
-  // Rare (Conduit) — Phase 4 sprint 52
+  // Rare (Conduit)
   CONSTELLATION = 'CONSTELLATION',
 }
 
@@ -243,7 +243,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     rarity: RelicRarity.RARE,
   },
 
-  // Sprint 52 — Conduit relic pair
+  // Conduit relic pair
   [RelicId.TUNING_FORK]: {
     id: RelicId.TUNING_FORK,
     name: 'Tuning Fork',

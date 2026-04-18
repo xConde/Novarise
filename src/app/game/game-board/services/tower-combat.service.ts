@@ -57,81 +57,49 @@ export interface RegisterTowerOptions {
 }
 
 /**
- * Per-fireTurn context bundle consumed by {@link TowerCombatService.composeDamageStack}.
- * Hoists constants that are computed ONCE per fireTurn call and read per-tower inside
- * the damage + range multiplier chain. Keeping these as a bundle avoids a 12-arg method
- * signature and keeps the composeDamageStack call site readable.
+ * Per-fireTurn context bundle for {@link TowerCombatService.composeDamageStack}.
+ * Hoists constants computed ONCE per fireTurn and read per-tower. Bundled to
+ * avoid a 12+-arg method signature.
  *
- * Phase 4 Conduit multipliers plug in here (sprint 43+) — add new fields to the bundle
- * + new multiplier stages to composeDamageStack in the same commit, never split across
- * multiple sprints.
+ * To add a new multiplier: extend this bundle AND composeDamageStack in the
+ * same commit — splitting the change across files hides ordering bugs.
  */
 export interface DamageStackContext {
-  /** Stage 1 damage — difficulty-preset tower-damage modifier. */
   readonly towerDamageMultiplier: number;
-  /** Stage 3 damage (additive-inside-1+x) — MODIFIER_STAT.DAMAGE wave bonus. */
   readonly cardDamageBoost: number;
-  /** Stage 2 range (additive-inside-1+x) — MODIFIER_STAT.RANGE wave bonus. */
   readonly cardRangeBoost: number;
-  /** Stage 4 damage — MODIFIER_STAT.SNIPER_DAMAGE; applied only when tower.type === SNIPER. */
+  /** SNIPER_DAMAGE — applied only when tower.type === SNIPER. */
   readonly sniperDamageBoost: number;
-  /** Stage 6 damage — LABYRINTH_MIND path-length scaling. 1 when modifier inactive. */
+  /** LABYRINTH_MIND path-length scaling. 1 when inactive. */
   readonly pathLengthMultiplier: number;
-  /** Short-circuit flag for elevation-read: false on flat boards → skips elevation lookup. */
+  /** Short-circuit flag: false on flat boards → skip elevation lookup. */
   readonly hasElevation: boolean;
-  /** Board-wide max elevation, read once per fireTurn by KING_OF_THE_HILL check. */
+  /** Board-wide max elevation, read once per fireTurn for KOTH check. */
   readonly maxElevation: number;
-  /** Stage 4 range (conditional) — HIGH_PERCH wave bonus; applied when elev ≥ threshold. */
   readonly highPerchBonus: number;
-  /** Stage 7 damage (conditional) — VANTAGE_POINT wave bonus; applied when elev ≥ threshold. */
   readonly vantagePointBonus: number;
-  /** Stage 8 damage (conditional) — KING_OF_THE_HILL base bonus; only applied if {@link kothActive}. */
   readonly kothBonus: number;
-  /** Gate flag for KOTH: true when kothBonus > 0 AND maxElevation ≥ 1 (flat boards skip). */
+  /** Gate for KOTH: true when kothBonus > 0 AND maxElevation ≥ 1. */
   readonly kothActive: boolean;
-  /**
-   * Stage 9 damage (Phase 4 Conduit HANDSHAKE — sprint 43). Aggregate wave-scoped
-   * bonus applied per-tower iff the tower has ≥ 1 active (non-disrupted) 4-dir
-   * neighbor via TowerGraphService. `0` when no HANDSHAKE is active or the graph
-   * service is absent — the multiplier short-circuits to 1 and no lookup runs.
-   */
   readonly handshakeBonus: number;
-  /**
-   * Additive-to-base range bonus (Phase 4 Conduit FORMATION — sprint 44).
-   * Applied INSIDE the `(base + additive)` parenthesis per spike §13 ordering
-   * rule — multipliers compound on top of the augmented base. `0` when no
-   * FORMATION is active or the tower is not part of a 3+ straight line.
-   */
+  /** Additive-to-base range for FORMATION — folds INSIDE (base + additive) per §13. */
   readonly formationRangeAdditive: number;
-  /**
-   * Stage 10 damage (Phase 4 Conduit GRID_SURGE — sprint 47). Turn-scoped
-   * bonus applied per-tower iff the tower has ≥ GRID_SURGE_MIN_NEIGHBORS (4)
-   * non-disrupted cardinal neighbors. Aggregate across stacked plays via
-   * getModifierValue. `0` when no GRID_SURGE is active — multiplier short-
-   * circuits to 1 with no graph lookup.
-   */
   readonly gridSurgeBonus: number;
   /**
-   * ARCHITECT flag (Phase 4 Conduit rare — sprint 49). When true, neighbor-
-   * gated Conduit cards (HANDSHAKE, GRID_SURGE) use `clusterSize - 1`
-   * instead of literal 4-dir neighbor count for their activation gate.
-   * Encounter-scoped; read once per fireTurn.
+   * ARCHITECT flag. When true, HANDSHAKE/GRID_SURGE substitute `clusterSize - 1`
+   * for their literal 4-dir neighbor count. Encounter-scoped.
    */
   readonly architectClusterActive: boolean;
-  /** Current turn number — used only by graph reads that honor disruption / virtual-edge expiry. */
+  /** Turn number — used only by graph reads that honor disruption / virtual-edge expiry. */
   readonly currentTurn: number;
 }
 
 /**
- * Output of {@link TowerCombatService.composeDamageStack}. `damage` and `range` are the
- * final values to write into scratchStats. `towerVantagePointDmgMult` and `towerKothMult`
- * are hoisted for the shot-fire site — {@link TowerCombatService.computeTitanDamage} and
- * {@link TowerCombatService.computeWyrmDamage} need to isolate the elevation-origin
- * portion of the damage stack.
- *
- * Phase 3 DA critique #2 flagged that this pair is the "elevation-origin" set as
- * currently defined; future elevation bonuses must either join this pair or TITAN's
- * formula will silently exclude them (sprint 79 refactor candidate).
+ * Output of {@link TowerCombatService.composeDamageStack}. `damage` and `range`
+ * write into scratchStats. `towerVantagePointDmgMult` / `towerKothMult` are the
+ * elevation-origin multipliers hoisted for TITAN/WYRM per-target adjustment —
+ * any future elevation-origin multiplier MUST join this pair or TITAN's halve
+ * formula will silently exclude it.
  */
 interface DamageStackResult {
   readonly damage: number;
@@ -193,15 +161,11 @@ export class TowerCombatService {
     // sprint 29. When absent, all elevation reads return 0 (flat-board behavior,
     // no regression on non-Highground runs). Full GameModule always wires it.
     @Optional() private elevationService?: ElevationService,
-    // @Optional() — Sprint 41 Conduit primitives. When absent, register/unregister
-    // are no-ops w.r.t. graph state — existing pre-Conduit test beds run unchanged.
-    // composeDamageStack does not read the graph in sprint 41; sprint 43 HANDSHAKE
-    // adds the first read and will require the service to be present for that card's
-    // test bed.
+    // @Optional() — absent in pre-Conduit test beds. Register/unregister
+    // become no-ops w.r.t. graph state; Conduit card tests wire the service.
     @Optional() private towerGraphService?: TowerGraphService,
-    // @Optional() — Sprint 46 HARMONIC needs seeded RNG for passenger selection.
-    // When absent, HARMONIC degrades gracefully (no passenger fires). Test beds
-    // that predate sprint 46 + run contexts without a live run stay unchanged.
+    // @Optional() — HARMONIC needs seeded RNG for passenger selection.
+    // Absent → no passenger fires; test beds without a live run stay unchanged.
     @Optional() private runService?: RunService,
   ) {}
 
@@ -236,9 +200,8 @@ export class TowerCombatService {
       cardStatOverrides,
     };
     this.placedTowers.set(key, tower);
-    // Phase 4 sprint 41 — mirror tower registration into the adjacency graph
-    // AFTER the placedTowers.set, so the graph's neighbor scan sees the newly-
-    // registered tower in the source-of-truth map.
+    // Mirror into adjacency graph AFTER placedTowers.set so the graph's
+    // neighbor scan sees the tower in the source-of-truth map.
     this.towerGraphService?.registerTower(tower);
   }
 
@@ -331,48 +294,15 @@ export class TowerCombatService {
     const kothBonus = this.cardEffectService.getModifierValue(MODIFIER_STAT.KING_OF_THE_HILL_DAMAGE_BONUS);
     const kothActive = kothBonus > 0 && maxElevation >= 1;
 
-    // Phase 4 sprint 43 — HANDSHAKE: wave-scoped damage bonus for towers with
-    // at least one active 4-dir neighbor. Read via TowerGraphService per-tower
-    // in composeDamageStack. Aggregate value via getModifierValue so stacked
-    // HANDSHAKE plays add; the gate is `handshakeBonus > 0 && neighbors ≥ 1`.
     const handshakeBonus = this.cardEffectService.getModifierValue(MODIFIER_STAT.HANDSHAKE_DAMAGE_BONUS);
-
-    // Phase 4 sprint 44 — FORMATION: additive-to-base range bonus for towers
-    // in a straight 4-dir line of 3+. Read via TowerGraphService.isInStraightLineOf.
-    // Applied inside the (base + additive) parenthesis per spike §13.
     const formationRangeAdditive = this.cardEffectService.getModifierValue(MODIFIER_STAT.FORMATION_RANGE_ADDITIVE);
-
-    // Phase 4 sprint 47 — GRID_SURGE: turn-scoped damage multiplier for towers
-    // with all 4 cardinal neighbors filled. Read in composeDamageStack via
-    // TowerGraphService.getNeighbors. Aggregate via getModifierValue; gate is
-    // `gridSurgeBonus > 0 && neighbors.length >= GRID_SURGE_MIN_NEIGHBORS`.
     const gridSurgeBonus = this.cardEffectService.getModifierValue(MODIFIER_STAT.GRID_SURGE_DAMAGE_BONUS);
-
-    // Phase 4 sprint 49 — ARCHITECT: encounter-scoped flag. When active,
-    // HANDSHAKE / GRID_SURGE gate on `clusterSize - 1` instead of literal
-    // 4-dir neighbor count. Read in composeDamageStack; swaps the neighbor
-    // count source transparently, keeping disruption semantics intact
-    // (disrupted towers read their cluster as themselves only).
+    // ARCHITECT swaps the neighbor-count source from `getNeighbors` to
+    // `clusterSize - 1` for HANDSHAKE/GRID_SURGE (non-obvious semantic).
     const architectClusterActive = this.cardEffectService.hasActiveModifier(MODIFIER_STAT.ARCHITECT_CLUSTER_PROPAGATION);
-
-    // Phase 4 sprint 45 — LINKWORK: turn-scoped flag. When active, every tower
-    // in a cluster of ≥ LINKWORK_MIN_CLUSTER_SIZE gains +LINKWORK_FIRE_RATE_BONUS
-    // shots/turn (read via ceil-semantic alongside fireRateBoost). Disrupted
-    // towers see an empty cluster from getClusterSize (transparent gating).
     const linkworkActive = this.cardEffectService.hasActiveModifier(MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE);
-
-    // Phase 4 sprint 46 — HARMONIC: turn-scoped flag. When active, after a
-    // tower fires at a target, up to HARMONIC_NEIGHBOR_COUNT non-disrupted
-    // cluster neighbors also fire at the same target (range-gated, seeded-RNG
-    // selection). Propagation is non-recursive — passengers never cascade.
     const harmonicActive = this.cardEffectService.hasActiveModifier(MODIFIER_STAT.HARMONIC_SIMULTANEOUS_FIRE);
-
-    // Phase 4 sprint 50 — HIVE_MIND: encounter-scoped flag. When active, each
-    // tower's damage + range resolve to the MAX composed value across its
-    // cluster. Requires a two-pass walk: (1) precompose stats for every
-    // registered tower via composeDamageStack, (2) in the per-tower fire
-    // loop, swap in the cluster-max of the pre-composed values. Disruption
-    // shrinks the cluster to 1 so max-of-cluster collapses to self.
+    // HIVE_MIND requires a two-pass walk — see preComposedStats prepass below.
     const hiveMindActive = this.cardEffectService.hasActiveModifier(MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX);
 
     const hasCardModifiers =
@@ -383,10 +313,8 @@ export class TowerCombatService {
       || gridSurgeBonus !== 0 || architectClusterActive
       || hiveMindActive;
 
-    // Phase 4 prep — damage + range multiplier composition bundle. Built once per
-    // fireTurn; consumed per-tower inside composeDamageStack. See conduit-
-    // adjacency-graph.md §12 for the rationale (extracting this chain into a named
-    // pipeline BEFORE Conduit multipliers land).
+    // Damage + range multiplier composition bundle — built once per fireTurn,
+    // consumed per-tower inside composeDamageStack. See conduit-adjacency-graph.md §12.
     const damageStackCtx: DamageStackContext = {
       towerDamageMultiplier,
       cardDamageBoost,
@@ -412,10 +340,9 @@ export class TowerCombatService {
       return a.col - b.col;
     });
 
-    // Phase 4 sprint 50 — HIVE_MIND prepass: when active, compose the full
-    // damage stack for every tower up-front so the per-tower fire loop can
-    // swap in the cluster-max damage/range. Skipped entirely when HIVE_MIND
-    // is absent — pre-Conduit runs pay zero extra compose cost.
+    // HIVE_MIND prepass: compose the full damage stack for every tower up-front
+    // so the per-tower fire loop can swap in the cluster-max damage/range.
+    // Skipped when inactive so pre-Conduit runs pay zero extra compose cost.
     let preComposedStats: Map<string, DamageStackResult> | null = null;
     if (hiveMindActive && this.towerGraphService) {
       preComposedStats = new Map();
@@ -429,22 +356,16 @@ export class TowerCombatService {
       const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
       let stats: TowerStats;
       const hasCardStatOverrides = tower.cardStatOverrides !== undefined;
-      // Sprint 38 TITAN: elevation multipliers must be available at the shot-fire
-      // site to compute per-target damage. Declare at tower-loop scope; defaults
-      // of 1 (no bonus) are safe in the baseline branch where neither modifier applies.
+      // Elevation multipliers (TITAN/WYRM) must be available at the shot-fire
+      // site. Declared at tower-loop scope; default 1 = no bonus.
       let towerVantagePointDmgMult = 1;
       let towerKothMult = 1;
       if (towerDamageMultiplier !== 1 || hasRelicModifiers || hasCardModifiers || hasCardStatOverrides) {
-        // Reuse the pre-composed stack under HIVE_MIND; otherwise compose
-        // fresh. Pre-composed path includes HANDSHAKE/GRID_SURGE/ARCHITECT
-        // multipliers so no information is lost.
         const stack = preComposedStats?.get(tower.id)
           ?? this.composeDamageStack(tower, baseStats, damageStackCtx);
 
-        // Sprint 50 HIVE_MIND — per-tower cluster max. Reads the damage + range
-        // of every cluster member (spatial + virtual edges, non-disrupted) and
-        // takes max. Disrupted towers read their cluster as themselves → no
-        // change.
+        // HIVE_MIND cluster-max: a disrupted tower reads its cluster as
+        // itself only, so max-of-cluster collapses to self.
         let effectiveDamage = stack.damage;
         let effectiveRange = stack.range;
         if (hiveMindActive && this.towerGraphService && preComposedStats !== null) {
@@ -459,7 +380,7 @@ export class TowerCombatService {
 
         this.scratchStats.damage = effectiveDamage;
         this.scratchStats.range = effectiveRange;
-        // Hoist elevation-origin multipliers for TITAN/WYRM per-target adjustment (sprint 38/39).
+        // Hoist elevation-origin multipliers for TITAN/WYRM per-target adjustment.
         towerVantagePointDmgMult = stack.towerVantagePointDmgMult;
         towerKothMult = stack.towerKothMult;
         this.scratchStats.cost = baseStats.cost;
@@ -484,12 +405,9 @@ export class TowerCombatService {
         stats = baseStats;
       }
 
-      // Phase 10 modifier: fireRate boost gives +1 shotsPerTurn at any positive value (ceil semantic).
-      // 30% boost (RAPID_FIRE) → ceil(1.3) = 2. 50% (OVERCLOCK) → ceil(1.5) = 2. Stacked → ceil(1.8) = 2.
-      // Phase 4 sprint 45 — LINKWORK: per-tower cluster-size check adds
-      // LINKWORK_FIRE_RATE_BONUS when the tower is in a cluster of
-      // ≥ LINKWORK_MIN_CLUSTER_SIZE. Folded INTO the ceil so the bonus stacks
-      // linearly with FIRE_RATE card modifiers (boost additive, then ceil).
+      // fireRate boost uses ceil semantic: any positive value adds +1 shot.
+      // LINKWORK's bonus folds INTO the ceil so it stacks linearly with
+      // FIRE_RATE card modifiers (boost additive, then ceil).
       let perTowerFireRateBoost = fireRateBoost;
       if (linkworkActive && this.towerGraphService) {
         const clusterSize = this.towerGraphService.getClusterSize(tower.row, tower.col, turnNumber);
@@ -527,14 +445,9 @@ export class TowerCombatService {
         damageDealt += shotResult.damageDealt;
       }
 
-      // Phase 4 sprint 46 — HARMONIC: turn-scoped flag. When active and the
-      // main tower fired at least one target this turn, up to HARMONIC_NEIGHBOR_COUNT
-      // random non-disrupted cluster neighbors also fire a single shot at the
-      // main tower's last target, provided the target is within the
-      // passenger's composed range. Passengers are gated to avoid cascading
-      // (no HARMONIC recursion — a passenger's shot does NOT propagate to its
-      // own neighbors). SLOW towers are skipped as passengers (no target-
-      // based firing semantic).
+      // HARMONIC propagation — non-recursive: a passenger's shot never
+      // triggers its own HARMONIC burst. SLOW towers are skipped as
+      // passengers (no target-based firing semantic).
       if (harmonicActive && lastTarget !== null && this.towerGraphService && tower.type !== TowerType.SLOW) {
         const passengers = this.pickHarmonicPassengers(tower, turnNumber);
         for (const passenger of passengers) {
@@ -583,11 +496,8 @@ export class TowerCombatService {
    * Fire one shot from `tower` at `target` using the caller-supplied composed
    * `stats`. Handles CHAIN / MORTAR / single-target / splash branching. Does
    * NOT handle SLOW (aura, not target-based) or muzzle-flash / fired bookkeeping —
-   * those are owned by the caller (the fireTurn loop).
-   *
-   * Extracted from the shot loop to let HARMONIC passengers (sprint 46)
-   * reuse the full-fidelity shot pipeline without duplicating the per-type
-   * branching.
+   * those are owned by the caller (the fireTurn loop). Extracted so HARMONIC
+   * passengers reuse the full shot pipeline without duplicating branching.
    */
   private fireShotAtTarget(
     tower: PlacedTower,
@@ -697,8 +607,8 @@ export class TowerCombatService {
         }
       } else {
         // Sprint 38/39 elevation-immunity per-target adjustment.
-        // WYRM_ASCENDANT (sprint 39): strip all elevation bonus damage → base-without-elevation.
-        // TITAN (sprint 38): halve the elevation bonus portion only.
+        // WYRM_ASCENDANT: strip all elevation bonus damage → base-without-elevation.
+        // TITAN: halve the elevation bonus portion only.
         // Chain/status/mortar damage bypasses both checks (only single-target fire applies).
         const targetStats = ENEMY_STATS[target.type];
         const finalDamage = (targetStats?.immuneToElevationDamageBonuses)
@@ -735,11 +645,8 @@ export class TowerCombatService {
    * When the cluster has fewer non-disrupted neighbors than the target
    * count, returns all eligible members. Disrupted towers are filtered via
    * `getClusterTowers(currentTurn)` which treats disrupted entries as
-   * single-tower clusters.
-   *
-   * Sprint 46. Propagation is non-recursive — passengers do NOT trigger
-   * their own HARMONIC bursts (guarded by the caller — this helper fires
-   * nothing; it only selects).
+   * single-tower clusters. Propagation is non-recursive — the caller guards
+   * against passenger-of-passenger recursion; this helper only selects.
    */
   private pickHarmonicPassengers(tower: PlacedTower, currentTurn: number): PlacedTower[] {
     if (!this.towerGraphService || !this.runService) return [];
@@ -781,48 +688,21 @@ export class TowerCombatService {
   }
 
   /**
-   * Single source of truth for the per-tower damage + range multiplier composition.
+   * Single source of truth for per-tower damage + range multiplier composition.
    *
-   * ## Damage stack (8 stages; Phase 4 Conduit adds 9+ in sprints 43-51):
-   *   baseStats.damage
-   *     × towerDamageMultiplier                                 // 1: difficulty preset
-   *     × relicDamage(tower.type)                               // 2: per-type relic
-   *     × (1 + cardDamageBoost)                                 // 3: MODIFIER_STAT.DAMAGE wave bonus (additive-in-1+x)
-   *     × sniperBoost                                           // 4: SNIPER_DAMAGE (SNIPER type only; additive-in-1+x)
-   *     × cardDamageMult                                        // 5: per-tower cardStatOverrides
-   *     × pathLengthMultiplier                                  // 6: LABYRINTH_MIND
-   *     × vantagePointDmgMult                                   // 7: VANTAGE_POINT (elev ≥ 1)
-   *     × kothMult                                              // 8: KING_OF_THE_HILL (elev === max)
-   *     × handshakeMult                                         // 9: HANDSHAKE (≥ 1 non-disrupted neighbor — sprint 43)
-   *     × gridSurgeMult                                         // 10: GRID_SURGE (≥ 4 non-disrupted neighbors — sprint 47)
-   *     × tuningForkMult                                        // 11: TUNING_FORK relic (≥ 1 non-disrupted neighbor — sprint 52)
-   *     [× conduit multipliers — sprint 53+ plug in here]
+   * Ordering rule (conduit-adjacency-graph.md §13): additive-to-base bonuses
+   * (e.g. FORMATION +range) go INSIDE `(base + additive)`; multiplicative
+   * bonuses chain outside. Never invert — player mental model is "my tower's
+   * range is 4" for additive stacks.
    *
-   * ## Range stack (6 stages):
-   *   (baseStats.range + rangeAdditive)                         // additive-before-multiplicative (§13)
-   *     × relicRange(tower.type)                                // per-type relic
-   *     × (1 + cardRangeBoost)                                  // MODIFIER_STAT.RANGE wave bonus
-   *     × cardRangeMult                                         // per-tower cardStatOverrides
-   *     × elevationRangeMult                                    // passive elev × 0.25
-   *     × highPerchMult                                         // HIGH_PERCH conditional (elev ≥ 2)
-   *     [× conduit range multipliers — sprint 43+ plug in here]
+   * Returns `towerVantagePointDmgMult` and `towerKothMult` hoisted for the
+   * shot-fire site (the current "elevation-origin" damage multipliers). Any
+   * future elevation-origin multiplier must also be hoisted or TITAN's halve
+   * formula will silently exclude it.
    *
-   * ## Ordering rule (locked in conduit-adjacency-graph.md §13)
-   * Additive-to-base bonuses (e.g. FORMATION +1 range, sprint 44) go INSIDE the
-   * (base + additive) parenthesis. Multiplicative bonuses chain outside. Never
-   * invert — player mental model is "my tower's range is 4" for additive stacks.
-   *
-   * ## TITAN/WYRM interaction (sprint 38/39)
-   * Returns `towerVantagePointDmgMult` and `towerKothMult` hoisted for the shot-fire
-   * site. These two values are the current "elevation-origin" damage multipliers. A
-   * future elevation damage bonus that bypasses this return will be silently excluded
-   * by TITAN's halve formula — sprint 79 balance pass should refactor both sets to
-   * reference a named elevation-origin list.
-   *
-   * ## Perf
-   * Called per-tower per-fireTurn. All internal reads are O(1) except
-   * `relicService.get*Multiplier(type)` which is a Map lookup. No allocations beyond
-   * the return object — avoid introducing arrays or spreads inside without re-profiling.
+   * Perf: called per-tower per-fireTurn. All internal reads are O(1) except
+   * `relicService.get*Multiplier(type)` (Map lookup). Avoid new allocations
+   * (arrays, spreads) without re-profiling.
    */
   private composeDamageStack(
     tower: PlacedTower,
@@ -837,47 +717,32 @@ export class TowerCombatService {
     const cardDamageMult = tower.cardStatOverrides?.damageMultiplier ?? 1;
     const cardRangeMult = tower.cardStatOverrides?.rangeMultiplier ?? 1;
 
-    // Sprint 29 — passive elevation range bonus: every elevation unit adds
-    // RANGE_BONUS_PER_ELEVATION (0.25) to the range multiplier. A tower at
-    // elevation 0 → 1.0×; elevation 2 → 1.5×; elevation -1 → 0.75×
-    // (self-inflicted penalty for placing towers on depressed tiles).
+    // Passive elevation range bonus: elevation 0 → 1.0×; elevation 2 → 1.5×;
+    // elevation -1 → 0.75× (penalty for placing on depressed tiles).
     const towerElevation = ctx.hasElevation
       ? this.elevationService!.getElevation(tower.row, tower.col)
       : 0;
     const elevationRangeMult = 1 + towerElevation * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION;
 
-    // Sprint 29 HIGH_PERCH — conditional range bonus for towers on elevation
-    // ≥ HIGH_PERCH_ELEVATION_THRESHOLD (2). Applies multiplicatively on top of
-    // the passive elevation bonus.
+    // HIGH_PERCH: conditional range bonus on elevation ≥ threshold (2).
     const highPerchActive = ctx.highPerchBonus > 0
       && towerElevation >= ELEVATION_CONFIG.HIGH_PERCH_ELEVATION_THRESHOLD;
     const highPerchMult = highPerchActive ? (1 + ctx.highPerchBonus) : 1;
 
-    // Sprint 31 VANTAGE_POINT — conditional damage bonus for towers on
-    // elevation ≥ VANTAGE_POINT_ELEVATION_THRESHOLD (1). Flat boards never benefit.
+    // VANTAGE_POINT: conditional damage bonus on elevation ≥ threshold (1).
     const vantagePointActive = ctx.vantagePointBonus > 0
       && towerElevation >= ELEVATION_CONFIG.VANTAGE_POINT_ELEVATION_THRESHOLD;
     const vantagePointDmgMult = vantagePointActive ? (1 + ctx.vantagePointBonus) : 1;
 
-    // Sprint 33 KING_OF_THE_HILL — per-tower KOTH multiplier.
-    // Only applies to towers whose elevation equals the board-wide max.
+    // KING_OF_THE_HILL: applies only to towers at the board-wide max elevation.
     const kothMult = (ctx.kothActive && towerElevation === ctx.maxElevation)
       ? (1 + ctx.kothBonus)
       : 1;
 
-    // Sprint 43 HANDSHAKE — per-tower Conduit multiplier. Active iff
-    // `handshakeBonus > 0` AND the tower has ≥ 1 effective neighbor. The
-    // neighbor read honors disruption (DISRUPTOR / ISOLATOR / DIVIDER) and
-    // virtual edges (CONDUIT_BRIDGE, sprint 48) — disrupted towers query to
-    // zero neighbors, transparently skipping the bonus.
-    //
-    // Sprint 49 ARCHITECT extends the neighbor read to `clusterSize - 1`
-    // when `architectClusterActive` — a tower in a 10-tower cluster with
-    // only 2 spatial neighbors acts as if it had 9 neighbors. Disruption
-    // still applies (disrupted tower reads cluster of 1).
-    //
-    // Gate order matters: we short-circuit on `handshakeBonus === 0` so flat
-    // (no-Conduit) runs never pay the graph-query cost.
+    // HANDSHAKE: ≥ 1 non-disrupted neighbor. Short-circuits on bonus === 0 so
+    // pre-Conduit runs pay zero graph-query cost. ARCHITECT swaps the neighbor
+    // read to cluster-wide (`clusterSize - 1`); disruption shrinks the cluster
+    // so the swap stays transparent.
     const handshakeNeighborCount = (ctx.handshakeBonus > 0 && this.towerGraphService !== undefined)
       ? (ctx.architectClusterActive
           ? Math.max(0, this.towerGraphService.getClusterTowers(tower.row, tower.col, ctx.currentTurn).length - 1)
@@ -885,22 +750,13 @@ export class TowerCombatService {
       : 0;
     const handshakeMult = handshakeNeighborCount > 0 ? (1 + ctx.handshakeBonus) : 1;
 
-    // Sprint 44 FORMATION — additive-to-base range. Active iff `formationRangeAdditive > 0`
-    // AND the tower is part of a 3+ straight 4-dir line (via TowerGraphService).
-    // Sits INSIDE the (base + additive) parenthesis per spike §13 ordering rule.
+    // FORMATION: additive-to-base range, folds INSIDE `(base + additive)` per §13.
     const formationActive = ctx.formationRangeAdditive > 0
       && this.towerGraphService !== undefined
       && this.towerGraphService.isInStraightLineOf(tower.row, tower.col, CONDUIT_CONFIG.FORMATION_MIN_LINE_LENGTH, ctx.currentTurn);
     const rangeAdditive = formationActive ? ctx.formationRangeAdditive : 0;
 
-    // Sprint 47 GRID_SURGE — per-tower stage-10 damage multiplier. Active iff
-    // `gridSurgeBonus > 0` AND the tower has ≥ GRID_SURGE_MIN_NEIGHBORS
-    // effective neighbors. With ARCHITECT active (sprint 49), effective
-    // neighbor count is `clusterSize - 1` — cluster-wide. Disruption still
-    // shrinks the cluster (disrupted tower reads as cluster of 1).
-    //
-    // Short-circuits on `gridSurgeBonus === 0` so pre-Conduit runs pay zero
-    // graph-query cost.
+    // GRID_SURGE: ≥ 4 effective neighbors. ARCHITECT swap same as HANDSHAKE.
     const gridSurgeNeighborCount = (ctx.gridSurgeBonus > 0 && this.towerGraphService !== undefined)
       ? (ctx.architectClusterActive
           ? Math.max(0, this.towerGraphService.getClusterTowers(tower.row, tower.col, ctx.currentTurn).length - 1)
@@ -910,15 +766,8 @@ export class TowerCombatService {
       ? (1 + ctx.gridSurgeBonus)
       : 1;
 
-    // Sprint 52 TUNING_FORK — per-tower stage-11 relic multiplier. When the
-    // relic is owned AND the tower has ≥ 1 non-disrupted neighbor, damage is
-    // multiplied by `tuningForkNeighborDamageMultiplier` (+10% baseline).
-    // Disruption gate is transparent (getNeighbors returns empty for a
-    // disrupted tower). Unlike card modifiers, this applies every turn the
-    // relic is owned — no duration countdown.
-    //
-    // Short-circuits on `hasTuningFork() === false` so runs without the
-    // relic pay zero graph-query cost.
+    // TUNING_FORK relic: ≥ 1 non-disrupted neighbor. Applies every turn the
+    // relic is owned; no duration countdown.
     const tuningForkActive = this.relicService.hasTuningFork()
       && this.towerGraphService !== undefined
       && this.towerGraphService.getNeighbors(tower.row, tower.col, ctx.currentTurn).length > 0;
@@ -1020,8 +869,8 @@ export class TowerCombatService {
     const tower = this.placedTowers.get(key);
     if (!tower) return undefined;
     this.placedTowers.delete(key);
-    // Phase 4 sprint 41 — mirror removal into the adjacency graph AFTER the
-    // placedTowers.delete so neighbor-set mutation reads the fresh state.
+    // Mirror into adjacency graph AFTER placedTowers.delete so neighbor-set
+    // mutation reads the fresh state.
     this.towerGraphService?.unregisterTower(key);
     return tower;
   }

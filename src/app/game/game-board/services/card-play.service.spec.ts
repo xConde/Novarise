@@ -357,7 +357,6 @@ describe('CardPlayService', () => {
       expect(deckSpy.drawOne).toHaveBeenCalledTimes(2);
     });
 
-    // Phase 4 sprint 48 — CONDUIT_BRIDGE utility resolution.
     describe('CONDUIT_BRIDGE ("bridge_towers" utility)', () => {
       it('is a no-op when TowerGraphService is absent (pre-Conduit test beds)', () => {
         // Default TestBed does not provide TowerGraphService, so the @Optional

@@ -92,11 +92,10 @@ export class EncounterCheckpointService {
       data['version'] = 9;
       return data;
     },
-    // 9 → 10: add `towerGraph` field. TowerGraphService virtual-edge / disruption
-    // persistence introduced in Sprint 45 (archetype-depth plan, Conduit phase).
-    // Pre-v10 saves had no overlay state; default to empty — spatial adjacency
-    // is rederived from towers on restore, so existing encounters continue
-    // without any CONDUIT_BRIDGE virtual edges or DISRUPTOR/ISOLATOR entries.
+    // 9 → 10: add `towerGraph` field (TowerGraphService virtual-edge /
+    // disruption persistence). Pre-v10 saves had no overlay state; default
+    // to empty — spatial adjacency is rederived from towers on restore, so
+    // existing encounters continue without any virtual edges or disruption.
     // (The schema bump also brings turn-scoped ActiveModifier.remainingTurns
     // along for free — ActiveModifier.remainingTurns is optional, so pre-v10
     // entries without the field decode correctly; no per-modifier migration

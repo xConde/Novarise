@@ -133,8 +133,6 @@ describe('Ascent Mode — Balance', () => {
   // ── Relic balance ────────────────────────────────────────────────────────
 
   it('all 26 relics should have multipliers within reasonable range', () => {
-    // 22 original + SURVEYOR_ROD (sprint 36, uncommon) + OROGENY (sprint 36, rare)
-    // + TUNING_FORK (sprint 52, uncommon) + CONSTELLATION (sprint 52, rare)
     expect(Object.keys(RELIC_DEFINITIONS).length).toBe(26);
     // No negative stats, no absurd values — spot check key relics
     // GOLD_MAGNET: +15% = 1.15 ≤ 1.5
@@ -162,8 +160,8 @@ describe('Ascent Mode — Balance', () => {
     const rares = Object.values(RELIC_DEFINITIONS).filter(r => r.rarity === RelicRarity.RARE);
 
     expect(commons.length).toBe(10);
-    expect(uncommons.length).toBe(10); // +1: SURVEYOR_COMPASS, +1: SURVEYOR_ROD (sprint 36), +1: TUNING_FORK (sprint 52)
-    expect(rares.length).toBe(6); // +1: WORLD_SPIRIT, +1: OROGENY (sprint 36), +1: CONSTELLATION (sprint 52)
+    expect(uncommons.length).toBe(10);
+    expect(rares.length).toBe(6);
   });
 
   it('no single relic should give more than 35% damage increase', () => {

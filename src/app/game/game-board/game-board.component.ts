@@ -398,9 +398,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.enemyService.repathAffectedEnemies(row, col);
     });
 
-    // Phase 4 sprint 41 — wire TowerGraphService's placed-towers getter.
-    // TowerGraphService does NOT inject TowerCombatService (would create a
-    // register-time DI cycle); the getter pattern mirrors setRepathHook.
+    // Wire TowerGraphService's placed-towers getter. TowerGraphService does
+    // NOT inject TowerCombatService (would create a register-time DI cycle);
+    // the getter pattern mirrors setRepathHook.
     this.towerGraphService.setPlacedTowersGetter(
       () => this.towerCombatService.getPlacedTowers(),
     );
@@ -497,10 +497,8 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sceneService.initLights();
     this.sceneService.initSkybox();
     this.sceneService.initParticles();
-    // Phase 4 sprint 42 — attach scene to LinkMeshService after scene construction.
-    // The link-mesh service subscribes to TowerGraphService edge events at
-    // construction time but cannot render without a scene; `attachScene` is
-    // the "scene ready, start rendering" signal.
+    // Attach scene to LinkMeshService — it subscribes to TowerGraphService
+    // edge events at construction time but cannot render without a scene.
     this.linkMeshService.attachScene(this.sceneService.getScene());
     this.renderGameBoard();
     this.addGridLines();

@@ -81,9 +81,7 @@ export class CombatLoopService {
     private screenShakeService: ScreenShakeService,
     private pathMutationService: PathMutationService,
     private elevationService: ElevationService,
-    // @Optional() — not provided in combat-loop test beds that predate sprint 41.
-    // When absent, tickTurn is a no-op (existing graph mutations, if any, don't
-    // expire). Production GameBoardComponent always wires it.
+    // @Optional() — absent in pre-Conduit test beds; tickTurn becomes a no-op.
     @Optional() private towerGraphService?: TowerGraphService,
   ) {}
 
@@ -159,10 +157,8 @@ export class CombatLoopService {
     // Elevation tickTurn has no scene parameter — translates existing meshes, no geometry rebuild.
     // CRITICAL: elevation expiry does NOT invalidate the pathfinding cache (spike §11).
     this.elevationService.tickTurn(this.turnNumber);
-    // Phase 4 sprint 41 — expire virtual edges (CONDUIT_BRIDGE) and disruption
-    // entries (DISRUPTOR / ISOLATOR / DIVIDER). No-op in sprint 41 (no cards or
-    // enemies yet populate graph state); wired here so the ordering lands with
-    // the primitives, not with the first consumer.
+    // Expire virtual edges (CONDUIT_BRIDGE) and disruption entries
+    // (DISRUPTOR / ISOLATOR / DIVIDER). Ordered with the other tickTurn calls.
     this.towerGraphService?.tickTurn(this.turnNumber);
 
     // Sprint 36 OROGENY — every OROGENY_INTERVAL_TURNS (5) turns, permanently raise
@@ -359,12 +355,10 @@ export class CombatLoopService {
       this.notificationService.show(NotificationType.INFO, 'Lucky Coin', message);
     }
 
-    // Phase 4 sprint 47 — tick turn-scoped card modifiers at END of turn.
-    // Mirrors cardEffectService.tickWave's end-of-wave semantic: duration=N
-    // means "active for the next N turns after play." If this ran at the
-    // top of resolveTurn alongside the other tickTurn calls, a duration=1
-    // modifier would be removed before fireTurn and never fire — see
-    // sprint-47 commit message for the fix context.
+    // Tick turn-scoped card modifiers at END of turn — mirrors tickWave's
+    // end-of-wave semantic: duration=N means "active for the next N turns
+    // after play." Ticking at top of resolveTurn would expire duration=1
+    // modifiers before fireTurn and never fire them.
     this.cardEffectService.tickTurn();
 
     return {
@@ -422,10 +416,9 @@ export class CombatLoopService {
       || (encounter?.isBoss ?? false);
     const luckyCoinMult = this.relicService.rollLuckyCoin();
 
-    // Sprint 52 CONSTELLATION — +25% gold when the killing tower is in a
-    // cluster of ≥ 5. DOT ticks and mortar-zone ticks omit towerRow/towerCol
-    // so they skip the gate naturally. Short-circuits when the relic is
-    // absent so non-Conduit runs never query the graph.
+    // CONSTELLATION — +25% gold when the killing tower is in a cluster of ≥ 5.
+    // DOT / mortar-zone kills omit towerRow/towerCol so they skip the gate.
+    // Short-circuits when the relic is absent.
     let constellationMult = 1;
     if (
       this.relicService.hasConstellation()

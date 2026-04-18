@@ -240,9 +240,7 @@ const CARD_VALUES = {
   cliffsideUpgradedLineLength: 5,       // upgraded: center + 2 wings on each side
   cliffsideRaiseAmount: 1,              // elevation delta per tile in the line
 
-  // ── Highground archetype — VANTAGE_POINT (Sprint 31) ───────────────────
-  // VANTAGE_POINT (2E uncommon): all elevated towers (elevation ≥ 1) gain
-  // +50% damage for this wave. NOT terraform.
+  // ── Highground — VANTAGE_POINT ─────────────────────────────────────────
   vantagePointCost: 2,
   vantagePointBonus: 0.5,               // +50% damage (base)
   vantagePointUpgradedBonus: 0.75,      // +75% damage (upgraded)
@@ -272,84 +270,46 @@ const CARD_VALUES = {
   // change. Plays out of deck identically; difference is a future Memory flag.
   gravityWellCost: 3,
 
-  // ── Conduit archetype — HANDSHAKE (Sprint 43) ───────────────────────────
-  // HANDSHAKE (1E common): towers with at least one active 4-dir neighbor
-  // gain +15% damage (base) / +25% (upgraded) for one wave.
-  // Wave-scoped (duration=1). Read per-tower in composeDamageStack via
-  // towerGraphService.getNeighbors(). Disrupted towers read zero neighbors
-  // and so transparently skip the bonus — no separate predicate needed.
+  // ── Conduit — HANDSHAKE ─────────────────────────────────────────────────
   handshakeCost: 1,
-  handshakeBonus: 0.15,               // +15% damage (base)
-  handshakeUpgradedBonus: 0.25,       // +25% damage (upgraded)
-  handshakeDuration: 1,               // wave countdown (one wave)
+  handshakeBonus: 0.15,
+  handshakeUpgradedBonus: 0.25,
+  handshakeDuration: 1,
 
-  // ── Conduit archetype — FORMATION (Sprint 44) ───────────────────────────
-  // FORMATION (1E common): towers in a straight 4-dir line of 3+ gain +1 tile
-  // range (base) / +2 tiles (upgraded) for one wave. Additive-to-base range,
-  // not multiplicative — applied INSIDE the (base + additive) parenthesis of
-  // composeDamageStack per spike §13 ordering rule.
+  // ── Conduit — FORMATION ─────────────────────────────────────────────────
   formationCost: 1,
-  formationRangeAdditive: 1,          // +1 tile (base)
-  formationUpgradedRangeAdditive: 2,  // +2 tiles (upgraded)
-  formationDuration: 1,               // wave countdown (one wave)
+  formationRangeAdditive: 1,
+  formationUpgradedRangeAdditive: 2,
+  formationDuration: 1,
 
-  // ── Conduit archetype — LINKWORK (Sprint 45) ────────────────────────────
-  // LINKWORK (0E common): for N turns, every tower in a cluster reads the
-  // MAX base fireRate across the cluster. First turn-scoped card in the
-  // codebase — consumes the new CardEffectService.tickTurn hook.
-  // Upgrade grants +1 turn. Read as a boolean flag via hasActiveModifier()
-  // in TowerCombatService before shot-count computation.
+  // ── Conduit — LINKWORK ──────────────────────────────────────────────────
   linkworkCost: 0,
-  linkworkValue: 1,                   // sentinel — flag modifier, non-zero for stacking
-  linkworkDuration: 2,                // turn countdown (2 turns, base)
-  linkworkUpgradedDuration: 3,        // turn countdown (3 turns, upgraded)
+  linkworkValue: 1,                   // sentinel — flag modifier
+  linkworkDuration: 2,                // turns
+  linkworkUpgradedDuration: 3,
 
-  // ── Conduit archetype — HARMONIC (Sprint 46) ────────────────────────────
-  // HARMONIC (2E uncommon): turn-scoped flag. For N turns after play, any
-  // tower firing at a target triggers up to HARMONIC_NEIGHBOR_COUNT passenger
-  // shots from random cluster neighbors at the same target (range-gated,
-  // non-recursive, seeded RNG). Upgrade extends duration by 1 turn.
+  // ── Conduit — HARMONIC ──────────────────────────────────────────────────
   harmonicCost: 2,
   harmonicValue: 1,                   // sentinel — flag modifier
-  harmonicDuration: 3,                // turn countdown (3 turns, base)
-  harmonicUpgradedDuration: 4,        // turn countdown (4 turns, upgraded)
+  harmonicDuration: 3,                // turns
+  harmonicUpgradedDuration: 4,
 
-  // ── Conduit archetype — GRID_SURGE (Sprint 47) ───────────────────────────
-  // GRID_SURGE (2E uncommon): turn-scoped damage multiplier for towers with
-  // GRID_SURGE_MIN_NEIGHBORS (4) non-disrupted cardinal neighbors. Stage 10 of
-  // composeDamageStack. 1-turn duration. Upgrade boosts the damage bonus.
+  // ── Conduit — GRID_SURGE ────────────────────────────────────────────────
   gridSurgeCost: 2,
-  gridSurgeBonus: 1.0,                // +100% damage (base, ×2 multiplier)
-  gridSurgeUpgradedBonus: 1.5,        // +150% damage (upgraded, ×2.5 multiplier)
-  gridSurgeDuration: 1,               // turn countdown (1 turn)
+  gridSurgeBonus: 1.0,
+  gridSurgeUpgradedBonus: 1.5,
+  gridSurgeDuration: 1,               // turn
 
-  // ── Conduit archetype — CONDUIT_BRIDGE (Sprint 48) ───────────────────────
-  // CONDUIT_BRIDGE (2E uncommon): utility card that applies a virtual
-  // adjacency edge between two random non-adjacent towers via seeded RNG
-  // for N turns. First v10-checkpoint consumer that populates the
-  // serialized towerGraph.virtualEdges field (previously always empty).
-  //
-  // MVP: auto-picks the pair (utility framework, no target picker UI).
-  // Full two-click tower target picker deferred to a utility-pass sprint —
-  // the card's core mechanical effect lands here.
+  // ── Conduit — CONDUIT_BRIDGE ────────────────────────────────────────────
   conduitBridgeCost: 2,
-  conduitBridgeDuration: 3,           // turn duration (3 turns, base)
-  conduitBridgeUpgradedDuration: 4,   // turn duration (4 turns, upgraded)
+  conduitBridgeDuration: 3,           // turns
+  conduitBridgeUpgradedDuration: 4,
 
-  // ── Conduit archetype — ARCHITECT (Sprint 49) ────────────────────────────
-  // ARCHITECT (3E rare anchor): encounter-scoped flag. When active, neighbor-
-  // gated Conduit cards (HANDSHAKE, GRID_SURGE) read the effective neighbor
-  // count as `clusterSize - 1` instead of literal 4-dir adjacency count.
-  // Transforms a sprawling cluster into one giant adjacency super-node.
-  // Value is a sentinel (1).
+  // ── Conduit — ARCHITECT ─────────────────────────────────────────────────
   architectCost: 3,
   architectValue: 1,                  // sentinel — flag modifier
 
-  // ── Conduit archetype — HIVE_MIND (Sprint 50) ────────────────────────────
-  // HIVE_MIND (3E rare build-around): encounter-scoped flag. When active,
-  // every tower in a cluster fires using the MAX composed damage and range
-  // across all cluster members. Mixed-tower clusters (BASIC + SNIPER) deal
-  // the stronger tower's damage from every position.
+  // ── Conduit — HIVE_MIND ─────────────────────────────────────────────────
   hiveMindCost: 3,
   hiveMindValue: 1,                   // sentinel — flag modifier
 } as const;
@@ -1537,14 +1497,8 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   },
 
   /**
-   * HIGH_PERCH (Sprint 29) — wave-scoped range bonus for elevated towers.
-   * Towers on elevation ≥ 2 gain +25% range (base) or +40% (upgraded) for
-   * the current wave. Composes multiplicatively with the passive elevation
-   * range bonus already applied in TowerCombatService.fireTurn.
-   *
-   * NOT terraform: HIGH_PERCH does not mutate tiles — it reads elevation and
-   * applies a combat modifier. Using terraform: false follows the same
-   * precedent as LABYRINTH_MIND and DETOUR.
+   * HIGH_PERCH — wave-scoped range bonus for towers on elevation ≥ 2.
+   * Composes multiplicatively with the passive elevation range bonus.
    */
   [CardId.HIGH_PERCH]: {
     id: CardId.HIGH_PERCH,
@@ -1617,17 +1571,7 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   },
 
   /**
-   * VANTAGE_POINT (Sprint 31) — all elevated towers (elevation ≥ 1) gain
-   * +50% damage for this wave. Modifier card, NOT terraform.
-   *
-   * Duration 1 = one-wave countdown (mirrors HIGH_PERCH pattern).
-   * Uses VANTAGE_POINT_DAMAGE_BONUS modifier stat, read per-tower in
-   * TowerCombatService.fireTurn after elevationRangeMult.
-   *
-   * NOT terraform: VANTAGE_POINT is a pure damage modifier — it reads elevation
-   * as a predicate but does not mutate tile state. Follows LABYRINTH_MIND /
-   * HIGH_PERCH / DETOUR precedent (terraform: false for modifiers that read
-   * but do not write board state).
+   * VANTAGE_POINT — wave-scoped damage bonus for towers on elevation ≥ 1.
    */
   [CardId.VANTAGE_POINT]: {
     id: CardId.VANTAGE_POINT,
@@ -1699,17 +1643,10 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   // ── Highground archetype — rare cards (Sprints 33/34) ────────────────────
 
   /**
-   * KING_OF_THE_HILL (Sprint 33) — encounter-scoped passive: the tower(s) at
-   * the HIGHEST elevation on the board deal +100% damage (base) / +150%
-   * (upgraded). Only activates when maxElevation ≥ 1; a flat board (all
-   * towers at elevation 0) confers no bonus — otherwise every tower would
-   * receive it on a flat map, which is obviously wrong.
-   *
-   * Ties: all towers sharing max elevation receive the bonus (anti-flapping —
-   * a single RAISE_PLATFORM must not flip the bonus between towers each turn).
-   *
-   * Duration: null (encounter-scoped, mirrors CARTOGRAPHER_SEAL pattern).
-   * NOT terraform: reads elevation, does not mutate tile state.
+   * KING_OF_THE_HILL — encounter-scoped. Tower(s) at the board-wide max
+   * elevation gain damage bonus. Only activates when maxElevation ≥ 1
+   * (flat boards confer no bonus). Ties: ALL towers at the max receive
+   * the bonus (anti-flapping).
    */
   [CardId.KING_OF_THE_HILL]: {
     id: CardId.KING_OF_THE_HILL,
@@ -1737,16 +1674,9 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   },
 
   /**
-   * GRAVITY_WELL (Sprint 34) — encounter-scoped passive: enemies on tiles
-   * with elevation < 0 (depressed) skip their movement for the turn.
-   * Effect is checked per-enemy independently in EnemyService.stepEnemiesOneTurn.
-   *
-   * Upgrade: same effect, no stat change. Upgrade slot is reserved for future
-   * balance tuning (e.g. cost reduction, or a Memory flag when that keyword
-   * ships). Plays out of deck identically to the base.
-   *
-   * Duration: null (encounter-scoped, mirrors CARTOGRAPHER_SEAL pattern).
-   * NOT terraform: reads elevation, does not mutate tile state.
+   * GRAVITY_WELL — encounter-scoped. Enemies on tiles with elevation < 0
+   * skip their movement for the turn. Checked per-enemy in
+   * EnemyService.stepEnemiesOneTurn.
    */
   [CardId.GRAVITY_WELL]: {
     id: CardId.GRAVITY_WELL,
@@ -1773,19 +1703,11 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     terraform: false,
   },
 
-  // ── Conduit archetype — common modifier (Phase 4, Sprint 43) ─────────────
+  // ── Conduit archetype ────────────────────────────────────────────────────
 
   /**
-   * HANDSHAKE (Sprint 43) — wave-scoped damage bonus for towers with ≥ 1
-   * active 4-dir neighbor. Reads TowerGraphService.getNeighbors per-tower
-   * inside TowerCombatService.composeDamageStack. Stage 9 of the damage
-   * stack (first Conduit multiplier to land).
-   *
-   * NOT terraform: HANDSHAKE is a pure damage modifier — it reads the
-   * adjacency graph but never mutates towers, tiles, or elevation.
-   *
-   * `link: true` signals this is a Conduit keyword card for tooltip / pool
-   * weighting. Marked archetype: 'conduit'.
+   * HANDSHAKE — wave-scoped damage bonus for towers with ≥ 1 active 4-dir
+   * neighbor (read via TowerGraphService.getNeighbors in composeDamageStack).
    */
   [CardId.HANDSHAKE]: {
     id: CardId.HANDSHAKE,
@@ -1814,13 +1736,9 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   },
 
   /**
-   * FORMATION (Sprint 44) — wave-scoped additive range bonus for towers in a
-   * straight 4-dir line of 3 or more. Reads TowerGraphService.isInStraightLineOf
-   * per-tower inside composeDamageStack. Bonus applies INSIDE the
-   * `(baseRange + additive) × multipliers` parenthesis — spike §13 locks this.
-   *
-   * NOT terraform: FORMATION is a pure range modifier — no tile/tower mutation.
-   * `link: true` signals Conduit keyword for tooltip + pool weighting.
+   * FORMATION — wave-scoped additive range for towers in a straight 4-dir
+   * line of 3+. Folds INSIDE `(baseRange + additive) × multipliers` per
+   * spike §13.
    */
   [CardId.FORMATION]: {
     id: CardId.FORMATION,
@@ -1849,19 +1767,9 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   },
 
   /**
-   * LINKWORK (Sprint 45) — turn-scoped cluster-fire-rate-share modifier.
-   *
-   * For 2 turns (base) / 3 turns (upgraded), every tower in a cluster fires
-   * at the MAX base fireRate across its cluster. Read as a boolean flag in
-   * TowerCombatService via `hasActiveModifier(LINKWORK_FIRE_RATE_SHARE)`;
-   * when present, effective fireRate resolves via
-   * `TowerGraphService.getClusterTowers` before the shot-count block.
-   *
-   * First card to use `durationScope: 'turn'` — ticks via CardEffectService
-   * .tickTurn in CombatLoopService.resolveTurn, NOT tickWave. Verified via
-   * the turn-scope serialize/restore round-trip specs.
-   *
-   * NOT terraform: pure behavior modifier; no tile/tower mutation.
+   * LINKWORK — turn-scoped flag. Every tower in a qualifying cluster gains
+   * LINKWORK_FIRE_RATE_BONUS shots/turn, folded into the fireRate ceil.
+   * First card with `durationScope: 'turn'` — ticks via tickTurn, NOT tickWave.
    */
   [CardId.LINKWORK]: {
     id: CardId.LINKWORK,
@@ -1892,16 +1800,9 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   },
 
   /**
-   * HARMONIC (Sprint 46) — turn-scoped cluster-fire propagation modifier.
-   *
-   * For 3 turns (base) / 4 turns (upgraded), when any tower fires at a
-   * target, up to HARMONIC_NEIGHBOR_COUNT (2) non-disrupted cluster members
-   * also fire a shot at the same target. Passengers are range-gated (skip
-   * if target is out of range) and non-recursive (passenger shots never
-   * cascade to a new HARMONIC burst). Selection uses RunService.nextRandom
-   * for replay determinism.
-   *
-   * NOT terraform: behavior-only, no board mutation.
+   * HARMONIC — turn-scoped flag. When any tower fires, up to
+   * HARMONIC_NEIGHBOR_COUNT non-disrupted cluster members fire at the same
+   * target (range-gated). Non-recursive; seeded RNG for replay determinism.
    */
   [CardId.HARMONIC]: {
     id: CardId.HARMONIC,
@@ -1932,12 +1833,9 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   },
 
   /**
-   * GRID_SURGE (Sprint 47) — turn-scoped double-damage modifier for towers
-   * with all four cardinal neighbors filled (and non-disrupted). Stage 10
-   * of composeDamageStack. 1-turn duration — high burst window rewarding
-   * tight 4-neighbor clusters.
-   *
-   * NOT terraform. Gate: `getNeighbors(currentTurn).length >= 4`.
+   * GRID_SURGE — turn-scoped damage multiplier for towers with all 4
+   * cardinal neighbors filled (and non-disrupted). High-burst, 1-turn
+   * window rewarding tight 4-neighbor clusters.
    */
   [CardId.GRID_SURGE]: {
     id: CardId.GRID_SURGE,
@@ -1968,19 +1866,10 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   },
 
   /**
-   * CONDUIT_BRIDGE (Sprint 48) — instant-resolve utility card. Picks two
-   * random non-adjacent towers via seeded RNG and installs a virtual
-   * adjacency edge between them for N turns. First consumer of the
-   * v10-checkpoint towerGraph.virtualEdges field.
-   *
-   * MVP implementation (no target-picker UI): auto-selects the pair from
-   * all non-adjacent pairs. A later polish sprint may replace this with a
-   * two-click player-driven target picker.
-   *
-   * effect.value is the duration (turns). executeUtilityCard reads it when
-   * computing expiresOnTurn via TowerGraphService.addVirtualEdge.
-   *
-   * NOT terraform. Link: true for archetype tooling / pool weighting.
+   * CONDUIT_BRIDGE — utility card. Picks two random non-adjacent towers via
+   * seeded RNG and installs a virtual adjacency edge for N turns.
+   * `effect.value` is the duration (turns) passed to
+   * TowerGraphService.addVirtualEdge.
    */
   [CardId.CONDUIT_BRIDGE]: {
     id: CardId.CONDUIT_BRIDGE,
@@ -2007,22 +1896,10 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   },
 
   /**
-   * ARCHITECT (Sprint 49) — rare anchor. Encounter-scoped flag. While
-   * active, neighbor-gated Conduit cards (HANDSHAKE, GRID_SURGE) substitute
-   * `clusterSize - 1` for their literal 4-dir neighbor count. A tower in a
-   * 10-tower cluster with 2 spatial neighbors acts as if it had 9 neighbors
-   * for gate purposes.
-   *
-   * Interpretation A of the phase-4 session-2 kickoff's "buffs propagate
-   * through Link" clause. Rare-tier identity: transforms the cluster into
-   * a single adjacency super-node.
-   *
-   * Note: the "+1 link slot per tower" mechanic from the plan is deferred —
-   * `tower.linkSlots` is future-proof data with no current consumer. When a
-   * later sprint (relic, rare, or utility) reads link-slot capacity, this
-   * card's upgrade or a companion will increment it.
-   *
-   * NOT terraform. Upgrade slot reserved for future balance tuning.
+   * ARCHITECT — encounter-scoped flag. Neighbor-gated Conduit cards
+   * (HANDSHAKE, GRID_SURGE) substitute `clusterSize - 1` for their literal
+   * 4-dir neighbor count. Transforms the cluster into a single adjacency
+   * super-node.
    */
   [CardId.ARCHITECT]: {
     id: CardId.ARCHITECT,
@@ -2051,17 +1928,9 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
   },
 
   /**
-   * HIVE_MIND (Sprint 50) — rare build-around. Encounter-scoped flag. While
-   * active, every tower in a cluster fires with the MAXIMUM composed damage
-   * and range across all cluster members. Mixed-tower clusters punch at the
-   * strongest tower's stats from every position.
-   *
-   * Implementation: fireTurn pre-composes stats for every registered tower
-   * (two-pass), then each tower's shot-fire uses `max-of-cluster` damage +
-   * range when HIVE_MIND is active. Fire-rate sharing is covered by LINKWORK
-   * (sprint 45) — HIVE_MIND does not duplicate that axis. Disrupted towers
-   * read their cluster as cluster-of-1, collapsing max-of-cluster to their
-   * own stats.
+   * HIVE_MIND — encounter-scoped flag. Every tower in a cluster fires with
+   * the MAX composed damage and range across cluster members. Fire-rate
+   * sharing is covered by LINKWORK. Two-pass prepass in fireTurn.
    */
   [CardId.HIVE_MIND]: {
     id: CardId.HIVE_MIND,

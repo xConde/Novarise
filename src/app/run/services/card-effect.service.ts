@@ -9,8 +9,8 @@
  *  - Modifier cards register a stat bonus with a wave- OR turn-countdown.
  *  - TowerCombatService reads modifier values each combat frame.
  *  - tickWave() is called on wave completion to expire wave-scoped modifiers.
- *  - tickTurn() is called at the start of each turn to expire turn-scoped
- *    modifiers (Phase 4 Conduit: LINKWORK / HARMONIC / CONDUIT_BRIDGE).
+ *  - tickTurn() is called at the END of each turn to expire turn-scoped
+ *    modifiers.
  */
 
 import { Injectable } from '@angular/core';
@@ -252,13 +252,13 @@ export class CardEffectService {
 
   /**
    * Decrement remaining-turn countdown on turn-scoped modifiers. Modifiers
-   * that reach 0 are removed. Call at the start of each turn from
-   * `CombatLoopService.resolveTurn` — alongside `pathMutationService.tickTurn`,
-   * `elevationService.tickTurn`, `towerGraphService.tickTurn`.
+   * reaching 0 are removed. Call at the END of each turn from
+   * `CombatLoopService.resolveTurn` — mirrors `tickWave`'s end-of-wave
+   * semantic so duration=N means "active for the next N turns after play."
+   * Ticking at the TOP of resolveTurn would expire a duration=1 modifier
+   * before fireTurn, so it would never fire.
    *
    * Wave-scoped modifiers (remainingTurns === undefined) are untouched.
-   *
-   * Phase 4 Conduit — LINKWORK / HARMONIC / CONDUIT_BRIDGE.
    */
   tickTurn(): void {
     this.activeModifiers = this.activeModifiers

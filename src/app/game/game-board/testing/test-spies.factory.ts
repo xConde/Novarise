@@ -387,7 +387,7 @@ export function createTowerAnimationServiceSpy(): jasmine.SpyObj<TowerAnimationS
 }
 
 // ---------------------------------------------------------------------------
-// Cross-module service spies (added in Hardening VIII Sprint 44)
+// Cross-module service spies
 // ---------------------------------------------------------------------------
 
 /**

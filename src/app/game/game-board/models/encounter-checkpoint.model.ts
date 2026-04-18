@@ -292,10 +292,7 @@ export interface EncounterCheckpoint {
    * and disruption entries (DISRUPTOR / ISOLATOR / DIVIDER). Spatial edges
    * and cluster membership are derived from placed towers, not persisted.
    *
-   * Added in v10. v9 checkpoints are migrated with empty state (no virtual
-   * edges, no disruption). Sprints 45-47 always save empty state — Sprint 48
-   * (CONDUIT_BRIDGE) is the first consumer to populate `virtualEdges`;
-   * Sprints 53-55 are the first to populate `disruptedUntil`.
+   * Added in v10; v9 migrates with empty state.
    */
   readonly towerGraph: SerializableTowerGraphState;
 }

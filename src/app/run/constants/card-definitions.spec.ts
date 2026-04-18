@@ -56,11 +56,11 @@ describe('CARD_DEFINITIONS', () => {
       expect(getCardsByType(CardType.SPELL).length).toBe(30);
     });
 
-    it('has 25 modifier cards (Phase 3 Highground set + Phase 4 HANDSHAKE + FORMATION + LINKWORK + HARMONIC + GRID_SURGE + ARCHITECT + HIVE_MIND)', () => {
+    it('has 25 modifier cards', () => {
       expect(getCardsByType(CardType.MODIFIER).length).toBe(25);
     });
 
-    it('has 7 utility cards (adds CONDUIT_BRIDGE in sprint 48)', () => {
+    it('has 7 utility cards', () => {
       expect(getCardsByType(CardType.UTILITY).length).toBe(7);
     });
   });
