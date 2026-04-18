@@ -1,0 +1,54 @@
+<button
+  type="button"
+  class="tile"
+  [class.tile--tower]="definition.type === CardType.TOWER"
+  [class.tile--spell]="definition.type === CardType.SPELL"
+  [class.tile--modifier]="definition.type === CardType.MODIFIER"
+  [class.tile--utility]="definition.type === CardType.UTILITY"
+  [class.tile--starter]="definition.rarity === 'starter'"
+  [class.tile--common]="definition.rarity === 'common'"
+  [class.tile--uncommon]="definition.rarity === 'uncommon'"
+  [class.tile--rare]="definition.rarity === 'rare'"
+  [class.tile--upgraded]="showUpgraded"
+  [class.tile--desaturated]="desaturated"
+  [style.--tile-tower-accent]="towerAccent"
+  (click)="onClick()"
+  [attr.aria-label]="definition.name + ' — ' + definition.rarity + ' ' + definition.type + '. Energy cost ' + definition.energyCost + '. ' + effectiveDescription">
+
+  <!-- Energy cost corner pill -->
+  <span class="tile__cost" aria-hidden="true">
+    <strong>{{ definition.energyCost }}</strong>
+    <span class="tile__cost-label">E</span>
+  </span>
+
+  <!-- Upgraded badge (L2+, honored by showUpgraded toggle). -->
+  <span *ngIf="showUpgraded" class="tile__upgraded-badge" aria-hidden="true">+</span>
+
+  <!-- Type icon corner chip. -->
+  <span class="tile__type-icon" aria-hidden="true">
+    <app-icon *ngIf="definition.type === CardType.TOWER"    name="crosshair" [size]="18"></app-icon>
+    <app-icon *ngIf="definition.type === CardType.SPELL"    name="bolt"      [size]="18"></app-icon>
+    <app-icon *ngIf="definition.type === CardType.MODIFIER" name="shield"    [size]="18"></app-icon>
+    <app-icon *ngIf="definition.type === CardType.UTILITY"  name="gear"      [size]="18"></app-icon>
+  </span>
+
+  <!-- Card body — name, archetype, description, keywords, gold cost. -->
+  <div class="tile__body">
+    <h3 class="tile__name">{{ definition.name }}</h3>
+    <span *ngIf="definition.archetype && definition.archetype !== 'neutral'"
+          class="tile__archetype tile__archetype--{{ definition.archetype }}">
+      {{ definition.archetype }}
+    </span>
+    <p class="tile__description">{{ effectiveDescription }}</p>
+  </div>
+
+  <!-- Footer — rarity label + gold cost + keywords. -->
+  <div class="tile__footer" aria-hidden="true">
+    <span class="tile__rarity tile__rarity--{{ definition.rarity }}">{{ definition.rarity }}</span>
+    <span *ngIf="goldCost !== null" class="tile__gold">{{ goldCost }}g</span>
+    <span *ngIf="keywordChips.length > 0" class="tile__keywords">
+      <span *ngFor="let kw of keywordChips" class="tile__keyword">{{ kw }}</span>
+    </span>
+  </div>
+
+</button>

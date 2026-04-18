@@ -1,0 +1,340 @@
+/* ============================================================
+   LibraryCardTileComponent — browsable card grid tile.
+   ============================================================
+   Visual language mirrors CardHandComponent (shared CSS vars)
+   but state model is minimal: no energy gating, no pending /
+   playable / stuck modes. Click → select.
+   ============================================================ */
+
+:host {
+  display: block;
+}
+
+/* --- Base tile --- */
+
+.tile {
+  --tile-accent: var(--theme-purple-mid);
+  --tile-glow: rgba(255, 255, 255, 0.08);
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  aspect-ratio: 22 / 32;       /* 220:320 tiles per kickoff spec */
+  min-height: 280px;
+  padding: var(--spacing-md) var(--spacing-sm) var(--spacing-sm);
+  background: linear-gradient(
+    150deg,
+    rgba(18, 14, 28, 0.92) 0%,
+    rgba(10, 7, 18, 0.95) 100%
+  );
+  border: 1px solid var(--border-color-subtle);
+  border-top: 2px solid var(--tile-accent);
+  border-radius: var(--border-radius-md);
+  color: var(--text-color);
+  font-family: "Orbitron", sans-serif;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 180ms ease-out,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    filter 180ms ease;
+  box-shadow: 0 0 0 1px transparent, 0 0 0 transparent;
+
+  /* Art zone — faint radial bloom tinted by --tile-accent. */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(
+        ellipse at 50% 30%,
+        color-mix(in srgb, var(--tile-accent) 25%, transparent) 0%,
+        transparent 60%
+      );
+    pointer-events: none;
+    opacity: 0.75;
+  }
+
+  /* CRT-ish scanline texture */
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-linear-gradient(
+        0deg,
+        transparent 0px,
+        transparent 2px,
+        rgba(255, 255, 255, 0.015) 2px,
+        rgba(255, 255, 255, 0.015) 3px
+      );
+    pointer-events: none;
+  }
+
+  &:hover,
+  &:focus-visible {
+    transform: translateY(-2px);
+    border-color: var(--tile-accent);
+    box-shadow:
+      0 0 0 1px var(--tile-accent),
+      0 6px 20px -8px var(--tile-glow);
+    outline: none;
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+/* --- Type accents — override --tile-accent --- */
+
+.tile--tower {
+  --tile-accent: var(--tile-tower-accent, var(--tower-color-basic));
+}
+.tile--spell {
+  --tile-accent: var(--theme-cyan);
+}
+.tile--modifier {
+  --tile-accent: var(--theme-purple-light);
+}
+.tile--utility {
+  --tile-accent: var(--action-success);
+}
+
+/* --- Rarity glow --- */
+
+.tile--uncommon {
+  --tile-glow: rgba(100, 200, 255, 0.3);
+}
+.tile--rare {
+  --tile-glow: rgba(255, 215, 0, 0.4);
+  border-top-width: 3px;
+  animation: tile-rare-shimmer 3s ease-in-out infinite;
+}
+
+@keyframes tile-rare-shimmer {
+  0%, 100% { box-shadow: 0 0 0 1px transparent, 0 0 10px -6px var(--tile-glow); }
+  50%      { box-shadow: 0 0 0 1px transparent, 0 0 18px -4px var(--tile-glow); }
+}
+
+/* --- Upgraded + desaturated modes --- */
+
+.tile--upgraded {
+  --tile-glow: rgba(180, 120, 255, 0.45);
+
+  &::before {
+    opacity: 1;
+    background:
+      radial-gradient(
+        ellipse at 50% 30%,
+        color-mix(in srgb, var(--tile-accent) 40%, transparent) 0%,
+        transparent 65%
+      );
+  }
+}
+
+.tile--desaturated {
+  filter: saturate(0.2) brightness(0.7);
+  cursor: default;
+
+  &:hover, &:focus-visible {
+    filter: saturate(0.35) brightness(0.75);
+  }
+}
+
+/* --- Cost pill (top-left) --- */
+
+.tile__cost {
+  position: absolute;
+  top: var(--spacing-sm);
+  left: var(--spacing-sm);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.15rem;
+  padding: 0.2rem 0.45rem;
+  background: var(--game-gold-a15);
+  border: 1px solid var(--game-gold-a40);
+  border-radius: var(--border-radius-sm);
+  color: var(--game-gold);
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  line-height: 1;
+  z-index: 2;
+
+  strong { font-size: 1.1rem; }
+}
+
+.tile__cost-label {
+  font-size: var(--font-size-3xs);
+  letter-spacing: 0.08em;
+  opacity: 0.75;
+}
+
+/* --- Upgraded badge (top-center, only when .tile--upgraded) --- */
+
+.tile__upgraded-badge {
+  position: absolute;
+  top: calc(var(--spacing-sm) - 0.15rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1.4rem;
+  height: 1.4rem;
+  background: linear-gradient(135deg, #d9b3ff 0%, #8e4de0 100%);
+  color: #1a0822;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 0.95rem;
+  box-shadow: 0 0 12px rgba(180, 120, 255, 0.55);
+  z-index: 2;
+}
+
+/* --- Type icon (top-right) --- */
+
+.tile__type-icon {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  display: grid;
+  place-items: center;
+  color: var(--tile-accent);
+  opacity: 0.9;
+  z-index: 2;
+}
+
+/* --- Body (name, archetype, description) --- */
+
+.tile__body {
+  position: relative;
+  z-index: 1;
+  margin-top: 2.5rem;                 /* clear the cost + icon row */
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  flex: 1;
+  width: 100%;
+  overflow: hidden;
+}
+
+.tile__name {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-color);
+}
+
+.tile__archetype {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 0.15rem 0.4rem;
+  font-size: var(--font-size-3xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-radius: var(--border-radius-sm);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color-subtle);
+  color: var(--theme-purple-mid);
+}
+
+.tile__archetype--cartographer { color: #a8d8ff; border-color: rgba(120, 180, 255, 0.35); }
+.tile__archetype--highground   { color: #ffd8a8; border-color: rgba(255, 180, 100, 0.35); }
+.tile__archetype--conduit      { color: #a8ffe0; border-color: rgba(100, 255, 200, 0.35); }
+.tile__archetype--siegeworks   { color: #ffa8a8; border-color: rgba(255, 120, 120, 0.35); }
+
+.tile__description {
+  margin: 0;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: var(--font-size-xs);
+  line-height: 1.35;
+  color: var(--theme-purple-lighter);
+  opacity: 0.9;
+
+  /* Clamp at 5 lines so long descriptions don't break the tile footer. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  overflow: hidden;
+}
+
+/* --- Footer (rarity / gold / keywords) --- */
+
+.tile__footer {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-top: auto;
+  padding-top: var(--spacing-xs);
+  border-top: 1px solid var(--border-color-subtle);
+}
+
+.tile__rarity {
+  font-size: var(--font-size-3xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tile__rarity--starter  { color: rgba(255, 255, 255, 0.55); }
+.tile__rarity--common   { color: rgba(255, 255, 255, 0.7); }
+.tile__rarity--uncommon { color: #74c5ff; }
+.tile__rarity--rare     { color: var(--game-gold); }
+
+.tile__gold {
+  margin-left: auto;
+  padding: 0.1rem 0.35rem;
+  background: var(--game-gold-a08);
+  border: 1px solid var(--game-gold-a25);
+  border-radius: var(--border-radius-sm);
+  color: var(--game-gold);
+  font-size: var(--font-size-3xs);
+  font-weight: 700;
+}
+
+.tile__keywords {
+  display: inline-flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.tile__keyword {
+  padding: 0.1rem 0.35rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color-subtle);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-tiny);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--theme-purple-lighter);
+}
+
+/* --- Reduce-motion --- */
+
+body.reduce-motion .tile,
+body.reduce-motion .tile--rare {
+  transition: none;
+  animation: none;
+}
+body.reduce-motion .tile:hover,
+body.reduce-motion .tile:focus-visible {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile {
+    transition: none;
+    animation: none;
+  }
+  .tile:hover, .tile:focus-visible { transform: none; }
+  .tile--rare { animation: none; }
+}

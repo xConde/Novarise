@@ -3,7 +3,12 @@
 // The list of file replacements can be found in `angular.json`.
 
 export const environment = {
-  production: false
+  production: false,
+  /**
+   * Dev-only UI surfaces (e.g. /library card inspector). Flipped off in
+   * environment.prod.ts so shipping builds don't expose the route.
+   */
+  enableDevTools: true,
 };
 
 /*

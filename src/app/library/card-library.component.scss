@@ -1,0 +1,154 @@
+/* ============================================================
+   CardLibraryComponent — /library page
+   ============================================================ */
+
+:host {
+  display: block;
+  min-height: 100vh;
+  background: var(--bg-color);
+  color: var(--text-color);
+  padding: var(--spacing-lg) var(--spacing-md) var(--spacing-2xl);
+}
+
+.library {
+  max-width: 1440px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+
+  /* Subtle ambient glow (matches other pages) */
+  position: relative;
+
+  &::before {
+    content: '';
+    position: fixed;
+    top: 35%;
+    left: 50%;
+    width: min(720px, 80vw);
+    height: min(720px, 80vw);
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, var(--theme-purple-glow) 0%, transparent 70%);
+    pointer-events: none;
+    opacity: 0.08;
+    z-index: 0;
+  }
+}
+
+/* --- Header --- */
+
+.library__header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.library__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.library__home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.6rem;
+  min-height: 44px;             /* a11y mobile target */
+  color: var(--theme-purple-light);
+  background: var(--theme-purple-a10);
+  border: 1px solid var(--border-color-subtle);
+  border-radius: var(--border-radius-md);
+  text-decoration: none;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: background 180ms ease, border-color 180ms ease;
+
+  &:hover, &:focus-visible {
+    background: var(--theme-purple-a20);
+    border-color: var(--theme-purple-light);
+    outline: none;
+  }
+}
+
+.library__title {
+  font-family: "Orbitron", sans-serif;
+  font-size: var(--font-size-title);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--theme-purple-lighter);
+  margin: 0;
+}
+
+.library__dev-badge {
+  padding: 0.15rem 0.5rem;
+  background: linear-gradient(135deg, #ffcc33 0%, #ff7744 100%);
+  color: #1a0822;
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-3xs);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.library__subtitle {
+  margin: 0;
+  color: var(--theme-purple-lighter);
+  opacity: 0.75;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: var(--font-size-small);
+}
+
+.library__type-tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-xs);
+}
+
+.tally-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color-subtle);
+  border-radius: var(--border-radius-md);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--theme-purple-lighter);
+}
+
+.tally-chip--tower    { border-color: rgba(255, 102, 0, 0.35);   color: #ffb07a; }
+.tally-chip--spell    { border-color: rgba(0, 255, 255, 0.3);    color: #a8f0ff; }
+.tally-chip--modifier { border-color: rgba(154, 138, 176, 0.45); color: #d0c0e8; }
+.tally-chip--utility  { border-color: rgba(80, 255, 136, 0.35);  color: #9af2b8; }
+
+/* --- Grid --- */
+
+.library__grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: var(--spacing-md);
+
+  /* Responsive columns — 5 at ≥1200px, 3-4 at tablet, 2 at mobile. */
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+
+  @media (max-width: 1200px) {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+    gap: var(--spacing-sm);
+  }
+  @media (max-width: 480px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

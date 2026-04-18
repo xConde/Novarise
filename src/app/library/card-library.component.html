@@ -1,0 +1,45 @@
+<main class="library" role="main" aria-label="Card Library — developer tool">
+
+  <!-- Top bar: title + home + counts. -->
+  <header class="library__header">
+    <div class="library__title-row">
+      <a class="library__home-link" routerLink="/" aria-label="Back to home">
+        <app-icon name="chevron-left" [size]="18"></app-icon>
+        <span>Home</span>
+      </a>
+      <h1 class="library__title">Card Library</h1>
+      <span class="library__dev-badge" aria-label="Developer tool">DEV</span>
+    </div>
+    <p class="library__subtitle">
+      Every card in the game — read-only QA view. {{ totalCards }} cards total.
+    </p>
+    <div class="library__type-tally" aria-hidden="true">
+      <span class="tally-chip tally-chip--tower">
+        <app-icon name="crosshair" [size]="14"></app-icon>
+        {{ countsByType.get(CardType.TOWER) || 0 }} Tower
+      </span>
+      <span class="tally-chip tally-chip--spell">
+        <app-icon name="bolt" [size]="14"></app-icon>
+        {{ countsByType.get(CardType.SPELL) || 0 }} Spell
+      </span>
+      <span class="tally-chip tally-chip--modifier">
+        <app-icon name="shield" [size]="14"></app-icon>
+        {{ countsByType.get(CardType.MODIFIER) || 0 }} Modifier
+      </span>
+      <span class="tally-chip tally-chip--utility">
+        <app-icon name="gear" [size]="14"></app-icon>
+        {{ countsByType.get(CardType.UTILITY) || 0 }} Utility
+      </span>
+    </div>
+  </header>
+
+  <!-- Card grid. -->
+  <section class="library__grid" aria-label="All cards">
+    <app-library-card-tile
+      *ngFor="let card of allCards; trackBy: trackById"
+      [definition]="card"
+      (selected)="onCardSelected($event)">
+    </app-library-card-tile>
+  </section>
+
+</main>
