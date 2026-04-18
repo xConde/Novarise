@@ -1,120 +1,92 @@
-<main class="library" role="main" aria-label="Card Library — developer tool">
+<main class="library" role="main" aria-label="Codex">
 
-  <!-- Top bar: title + home + counts. -->
+  <!-- Sticky header — profile-style 3-column grid. -->
   <header class="library__header">
-    <div class="library__title-row">
-      <a class="library__home-link" routerLink="/" aria-label="Back to home">
-        <app-icon name="chevron-left" [size]="18"></app-icon>
-        <span>Home</span>
-      </a>
-      <h1 class="library__title">Card Library</h1>
-      <span class="library__dev-badge" aria-label="Developer tool">DEV</span>
-    </div>
-    <p class="library__subtitle">
-      Every card in the game — read-only QA view. {{ totalCards }} cards total.
-    </p>
-    <div class="library__type-tally" aria-hidden="true">
-      <span class="tally-chip tally-chip--tower">
-        <app-icon name="crosshair" [size]="14"></app-icon>
-        {{ countsByType.get(CardType.TOWER) || 0 }} Tower
-      </span>
-      <span class="tally-chip tally-chip--spell">
-        <app-icon name="bolt" [size]="14"></app-icon>
-        {{ countsByType.get(CardType.SPELL) || 0 }} Spell
-      </span>
-      <span class="tally-chip tally-chip--modifier">
-        <app-icon name="shield" [size]="14"></app-icon>
-        {{ countsByType.get(CardType.MODIFIER) || 0 }} Modifier
-      </span>
-      <span class="tally-chip tally-chip--utility">
-        <app-icon name="gear" [size]="14"></app-icon>
-        {{ countsByType.get(CardType.UTILITY) || 0 }} Utility
-      </span>
-    </div>
+    <a class="library__home-link" routerLink="/" aria-label="Back to home">
+      <app-icon name="chevron-left" [size]="16"></app-icon>
+      <span>Back</span>
+    </a>
+    <h1 class="library__title">Codex</h1>
+    <span class="library__header-tally" aria-live="polite">
+      {{ seenCount }} / {{ totalCards }} seen
+    </span>
   </header>
 
-  <!-- View-mode tabs + dev toggles. -->
-  <div class="library__view-bar" role="tablist" aria-label="View mode">
-    <button
-      type="button"
-      class="tab"
-      role="tab"
-      [class.tab--active]="viewMode === 'all'"
-      [attr.aria-selected]="viewMode === 'all'"
-      (click)="onViewModeChange('all')">
-      All
-      <span class="tab__count">{{ totalCards }}</span>
-    </button>
-    <button
-      type="button"
-      class="tab"
-      role="tab"
-      [class.tab--active]="viewMode === 'seen'"
-      [attr.aria-selected]="viewMode === 'seen'"
-      (click)="onViewModeChange('seen')">
-      Seen
-      <span class="tab__count">{{ seenCount }}</span>
-    </button>
-    <button
-      type="button"
-      class="tab"
-      role="tab"
-      [class.tab--active]="viewMode === 'unseen'"
-      [attr.aria-selected]="viewMode === 'unseen'"
-      (click)="onViewModeChange('unseen')">
-      Unseen
-      <span class="tab__count">{{ unseenCount }}</span>
-    </button>
+  <div class="library__content">
 
-    <div class="library__view-options" aria-label="View options">
-      <label class="view-toggle">
-        <input type="checkbox" [checked]="showUpgraded" (change)="toggleShowUpgraded()">
-        <span>Show upgraded</span>
-      </label>
-      <label class="view-toggle">
-        <input type="checkbox" [checked]="forceFullColor" (change)="toggleForceFullColor()">
-        <span>Full color</span>
-      </label>
+    <!-- View-mode tabs. -->
+    <div class="library__tabs" role="tablist" aria-label="View mode">
       <button
         type="button"
-        class="library__clear-seen"
-        [disabled]="seenCount === 0"
-        (click)="clearSeenHistory()"
-        aria-label="Clear seen history">
-        Reset seen
+        class="tab"
+        role="tab"
+        [class.tab--active]="viewMode === 'all'"
+        [attr.aria-selected]="viewMode === 'all'"
+        (click)="onViewModeChange('all')">
+        All
+        <span class="tab__count">{{ totalCards }}</span>
+      </button>
+      <button
+        type="button"
+        class="tab"
+        role="tab"
+        [class.tab--active]="viewMode === 'seen'"
+        [attr.aria-selected]="viewMode === 'seen'"
+        (click)="onViewModeChange('seen')">
+        Discovered
+        <span class="tab__count">{{ seenCount }}</span>
+      </button>
+      <button
+        type="button"
+        class="tab"
+        role="tab"
+        [class.tab--active]="viewMode === 'unseen'"
+        [attr.aria-selected]="viewMode === 'unseen'"
+        (click)="onViewModeChange('unseen')">
+        Undiscovered
+        <span class="tab__count">{{ unseenCount }}</span>
       </button>
     </div>
+
+    <!-- Upgraded-preview toggle (a legitimate player preference). -->
+    <div class="library__view-options">
+      <label class="view-toggle">
+        <input type="checkbox" [checked]="showUpgraded" (change)="toggleShowUpgraded()">
+        <span>Preview upgrades</span>
+      </label>
+    </div>
+
+    <!-- Filter bar. -->
+    <app-library-filters
+      [state]="filterState"
+      [totalMatches]="filteredCards.length"
+      [totalCards]="totalCards"
+      (stateChange)="onFiltersChange($event)">
+    </app-library-filters>
+
+    <!-- Card grid. -->
+    <section class="library__grid" aria-label="Cards" *ngIf="filteredCards.length > 0">
+      <app-library-card-tile
+        *ngFor="let card of filteredCards; trackBy: trackById"
+        [definition]="card"
+        [showUpgraded]="showUpgraded"
+        [desaturated]="isDesaturated(card)"
+        (selected)="onCardSelected($event)">
+      </app-library-card-tile>
+    </section>
+
+    <!-- Empty state. -->
+    <section class="library__empty" *ngIf="filteredCards.length === 0" aria-live="polite">
+      <p class="library__empty-title">No cards match the current filters.</p>
+      <p class="library__empty-hint">
+        <ng-container *ngIf="viewMode === 'unseen'; else otherHint">
+          Play a run to discover new cards.
+        </ng-container>
+        <ng-template #otherHint>Clear one or more filters to see more results.</ng-template>
+      </p>
+    </section>
+
   </div>
-
-  <!-- Filter bar. -->
-  <app-library-filters
-    [state]="filterState"
-    [totalMatches]="filteredCards.length"
-    [totalCards]="totalCards"
-    (stateChange)="onFiltersChange($event)">
-  </app-library-filters>
-
-  <!-- Card grid. -->
-  <section class="library__grid" aria-label="Filtered cards" *ngIf="filteredCards.length > 0">
-    <app-library-card-tile
-      *ngFor="let card of filteredCards; trackBy: trackById"
-      [definition]="card"
-      [showUpgraded]="showUpgraded"
-      [desaturated]="isDesaturated(card)"
-      (selected)="onCardSelected($event)">
-    </app-library-card-tile>
-  </section>
-
-  <!-- Empty state. -->
-  <section class="library__empty" *ngIf="filteredCards.length === 0" aria-live="polite">
-    <p class="library__empty-title">No cards match the current filters.</p>
-    <p class="library__empty-hint">
-      <ng-container *ngIf="viewMode === 'unseen'; else otherHint">
-        Play a run to discover new cards.
-      </ng-container>
-      <ng-template #otherHint>Clear one or more filters to see more results.</ng-template>
-    </p>
-  </section>
 
   <!-- Detail modal — rendered only while open. -->
   <app-card-detail-modal

@@ -167,11 +167,11 @@ describe('CardLibraryComponent', () => {
     expect(tiles.length).toBe(component.filteredCards.length);
   });
 
-  it('renders the type-tally chips', () => {
-    const towerTally = component.countsByType.get(CardType.TOWER) ?? 0;
-    expect(towerTally).toBeGreaterThan(0);
-    const tallyEls = fixture.nativeElement.querySelectorAll('.tally-chip');
-    expect(tallyEls.length).toBe(4); // tower / spell / modifier / utility
+  it('countsByType tracks every card type', () => {
+    expect(component.countsByType.get(CardType.TOWER) ?? 0).toBeGreaterThan(0);
+    expect(component.countsByType.get(CardType.SPELL) ?? 0).toBeGreaterThan(0);
+    expect(component.countsByType.get(CardType.MODIFIER) ?? 0).toBeGreaterThan(0);
+    expect(component.countsByType.get(CardType.UTILITY) ?? 0).toBeGreaterThan(0);
   });
 
   it('selectedCard starts null', () => {

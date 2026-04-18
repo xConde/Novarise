@@ -3,9 +3,8 @@ import { CanActivateFn, Router, UrlTree } from '@angular/router';
 import { environment } from '../../../environments/environment';
 
 /**
- * Dev-only route gate for /library. In non-dev builds the route redirects
- * to `/`; in dev builds it allows through. Drives the env flag defined in
- * environment.ts (`enableDevTools`).
+ * Route gate for /library. Allows through when `enableDevTools` is on
+ * (phase 5+ will drop the flag); redirects to `/` otherwise.
  */
 export const devLibraryGuard: CanActivateFn = (): boolean | UrlTree => {
   if (environment.enableDevTools) return true;

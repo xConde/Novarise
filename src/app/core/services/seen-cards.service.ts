@@ -10,14 +10,13 @@ const STORAGE_KEY = 'novarise_seen_cards';
  * offered as a reward, or seen in a shop. Persists to localStorage at
  * profile scope (no checkpoint versioning — not encounter-scoped).
  *
- * Drives the library's Seen / Unseen tabs (L5). Safe to call `markSeen`
- * from hot paths (DeckService.drawOne, RunService reward generation) —
- * the write is a no-op when the id was already seen, so repeated calls
- * don't thrash localStorage.
+ * Drives the Codex's Discovered / Undiscovered tabs. Safe to call
+ * `markSeen` from hot paths (DeckService.drawOne, RunService reward
+ * generation) — the write is a no-op when the id was already seen, so
+ * repeated calls don't thrash localStorage.
  *
- * "Seen" here means *offered*, not *kept*. The QA user's goal is "what
- * haven't I encountered yet?" — so seeing a reward card you didn't
- * take still counts.
+ * "Seen" here means *offered*, not *kept*: a reward card you skipped
+ * still counts.
  */
 @Injectable({ providedIn: 'root' })
 export class SeenCardsService {
@@ -64,7 +63,7 @@ export class SeenCardsService {
     return this.ids;
   }
 
-  /** Dev-only: reset the seen set. Exposed through the library UI clear button. */
+  /** Reset the seen set. Not UI-exposed — dev-console / telemetry only. */
   clear(): void {
     if (this.ids.size === 0) return;
     this.ids.clear();

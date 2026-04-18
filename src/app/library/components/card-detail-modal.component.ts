@@ -25,12 +25,10 @@ interface BalanceRow {
 }
 
 /**
- * Detail modal for the /library card inspector. Read-only QA view of a
- * single CardDefinition: base effect, upgraded effect (when defined), a
- * raw-JSON `<details>` block for debugging, and a balance-number table.
- *
- * Backdrop click and Escape both close. Focus traps inside the modal
- * while open; returns focus to the previously-focused element on close.
+ * Codex detail modal. Shows a single CardDefinition: base + upgraded
+ * effect side-by-side, balance stats, and a collapsed raw-JSON block.
+ * Backdrop click and Escape close. Focus traps while open and returns
+ * focus to the previously-focused element on close.
  */
 @Component({
   selector: 'app-card-detail-modal',
@@ -72,9 +70,17 @@ export class CardDetailModalComponent implements AfterViewInit, OnDestroy {
     this.closed.emit();
   }
 
-  /** Upgrade panel is shown only when the card actually has an upgraded effect. */
+  /**
+   * Upgrade panel is shown only when the upgrade actually differs from the
+   * base — otherwise the side-by-side renders two identical blocks. A few
+   * cards ship an `upgradedEffect` with the same values as `effect` as a
+   * placeholder for later tuning; we treat those as "no-upgrade" in the UI.
+   */
   get hasUpgrade(): boolean {
-    return this.definition.upgradedEffect !== undefined;
+    if (this.definition.upgradedEffect === undefined) return false;
+    const baseDesc = this.definition.description;
+    const upDesc = this.definition.upgradedDescription ?? baseDesc;
+    return upDesc !== baseDesc;
   }
 
   /** Gold cost shown on tower cards. Null for non-tower. */

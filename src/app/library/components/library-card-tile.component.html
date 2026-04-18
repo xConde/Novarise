@@ -9,11 +9,13 @@
   [class.tile--common]="definition.rarity === 'common'"
   [class.tile--uncommon]="definition.rarity === 'uncommon'"
   [class.tile--rare]="definition.rarity === 'rare'"
-  [class.tile--upgraded]="showUpgraded"
+  [class.tile--upgraded]="showUpgraded && !desaturated && hasMeaningfulUpgrade"
   [class.tile--desaturated]="desaturated"
   [style.--tile-tower-accent]="towerAccent"
   (click)="onClick()"
-  [attr.aria-label]="definition.name + ' — ' + definition.rarity + ' ' + definition.type + '. Energy cost ' + definition.energyCost + '. ' + effectiveDescription">
+  [attr.aria-label]="desaturated
+    ? 'Undiscovered ' + definition.rarity + ' ' + definition.type + ' — ' + definition.energyCost + ' energy.'
+    : definition.name + ' — ' + definition.rarity + ' ' + definition.type + '. Energy cost ' + definition.energyCost + '. ' + effectiveDescription">
 
   <!-- Energy cost corner pill -->
   <span class="tile__cost" aria-hidden="true">
@@ -21,8 +23,8 @@
     <span class="tile__cost-label">E</span>
   </span>
 
-  <!-- Upgraded badge (L2+, honored by showUpgraded toggle). -->
-  <span *ngIf="showUpgraded" class="tile__upgraded-badge" aria-hidden="true">+</span>
+  <!-- Upgraded badge (top-center, hidden on undiscovered tiles and no-op upgrades). -->
+  <span *ngIf="showUpgraded && !desaturated && hasMeaningfulUpgrade" class="tile__upgraded-badge" aria-hidden="true">+</span>
 
   <!-- Type icon corner chip. -->
   <span class="tile__type-icon" aria-hidden="true">
@@ -32,8 +34,8 @@
     <app-icon *ngIf="definition.type === CardType.UTILITY"  name="gear"      [size]="18"></app-icon>
   </span>
 
-  <!-- Card body — name, archetype, description, keywords, gold cost. -->
-  <div class="tile__body">
+  <!-- DISCOVERED body: name, archetype, description. -->
+  <div *ngIf="!desaturated" class="tile__body">
     <h3 class="tile__name">{{ definition.name }}</h3>
     <span *ngIf="definition.archetype && definition.archetype !== 'neutral'"
           class="tile__archetype tile__archetype--{{ definition.archetype }}">
@@ -42,13 +44,24 @@
     <p class="tile__description">{{ effectiveDescription }}</p>
   </div>
 
-  <!-- Footer — rarity label + gold cost + keywords. -->
-  <div class="tile__footer" aria-hidden="true">
+  <!-- UNDISCOVERED silhouette: centered glyph, no name/description. -->
+  <div *ngIf="desaturated" class="tile__silhouette" aria-hidden="true">
+    <span class="tile__silhouette-mark">?</span>
+    <span class="tile__silhouette-label">Undiscovered</span>
+  </div>
+
+  <!-- Footer — rarity / gold / keywords. Hidden on undiscovered tiles (redaction). -->
+  <div *ngIf="!desaturated" class="tile__footer" aria-hidden="true">
     <span class="tile__rarity tile__rarity--{{ definition.rarity }}">{{ definition.rarity }}</span>
     <span *ngIf="goldCost !== null" class="tile__gold">{{ goldCost }}g</span>
     <span *ngIf="keywordChips.length > 0" class="tile__keywords">
       <span *ngFor="let kw of keywordChips" class="tile__keyword">{{ kw }}</span>
     </span>
+  </div>
+
+  <!-- Undiscovered tile keeps a rarity hint in the footer — without spoilers. -->
+  <div *ngIf="desaturated" class="tile__footer tile__footer--silhouette" aria-hidden="true">
+    <span class="tile__rarity tile__rarity--{{ definition.rarity }}">{{ definition.rarity }}</span>
   </div>
 
 </button>

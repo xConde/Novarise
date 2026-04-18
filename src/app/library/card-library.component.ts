@@ -19,10 +19,8 @@ import { SeenCardsService } from '../core/services/seen-cards.service';
 export type ViewMode = 'all' | 'seen' | 'unseen';
 
 /**
- * Dev-only /library route. Full read-only inventory of every card in
- * CARD_DEFINITIONS so we can QA balance + visuals + archetype coverage
- * without grinding the reward pool. Gated by the enableDevTools env flag
- * at the route level (see devLibraryGuard).
+ * Card Codex — browsable inventory of every card in the game.
+ * Route-gated until phase 5+; designed as a shipped player feature.
  */
 @Component({
   selector: 'app-card-library',
@@ -49,10 +47,10 @@ export class CardLibraryComponent implements OnInit, OnDestroy {
   /** All / Seen / Unseen tab selector. */
   viewMode: ViewMode = 'all';
 
-  /** Dev toggle — when true, render upgradedEffect / upgradedDescription. */
+  /** Preview toggle — when true, tiles render their upgraded effect + description. */
   showUpgraded = false;
 
-  /** Dev toggle — when true, unseen cards render at full saturation anyway. */
+  /** Dev-console escape hatch — unseen cards render fully revealed. Not UI-exposed. */
   forceFullColor = false;
 
   /** Live snapshot of the seen set. */
@@ -117,7 +115,7 @@ export class CardLibraryComponent implements OnInit, OnDestroy {
     this.seenCards.clear();
   }
 
-  /** Desaturation rule: unseen cards dim unless forceFullColor is on. */
+  /** Silhouette rule: unseen cards render as card-back silhouettes unless forceFullColor is on. */
   isDesaturated(card: CardDefinition): boolean {
     if (this.forceFullColor) return false;
     return !this.seenIds.has(card.id);

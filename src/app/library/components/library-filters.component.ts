@@ -3,6 +3,7 @@ import {
   Component,
   EventEmitter,
   Input,
+  OnDestroy,
   Output,
 } from '@angular/core';
 import { CardArchetype, CardRarity, CardType } from '../../run/models/card.model';
@@ -55,7 +56,7 @@ export const DEFAULT_FILTERS: FilterState = Object.freeze({
   styleUrls: ['./library-filters.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class LibraryFiltersComponent {
+export class LibraryFiltersComponent implements OnDestroy {
   @Input() state: FilterState = DEFAULT_FILTERS;
   @Input() totalMatches = 0;
   @Input() totalCards = 0;
@@ -63,6 +64,13 @@ export class LibraryFiltersComponent {
 
   private readonly searchDebounceMs = 150;
   private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  ngOnDestroy(): void {
+    if (this.searchDebounceTimer !== null) {
+      clearTimeout(this.searchDebounceTimer);
+      this.searchDebounceTimer = null;
+    }
+  }
 
   readonly CardType = CardType;
   readonly CardRarity = CardRarity;

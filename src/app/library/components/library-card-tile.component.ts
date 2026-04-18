@@ -12,13 +12,10 @@ import {
 import { TOWER_CONFIGS, TowerType } from '../../game/game-board/models/tower.model';
 
 /**
- * Presentational card tile for the library grid. No energy / pending /
- * playable state — this is a static view of a CardDefinition.
- *
- * Click emits `selected`; the parent opens the detail modal. Kept
- * standalone from CardHandComponent because the hand component is
- * coupled to in-game concerns (energy gating, placement pending,
- * long-press detection) that don't belong in a browsable grid.
+ * Presentational card tile for the Codex grid. Static view of a
+ * CardDefinition — no energy / pending / playable state. Click emits
+ * `selected` and the parent opens the detail modal. When `desaturated`
+ * is true the tile renders as a card-back silhouette (undiscovered).
  */
 @Component({
   selector: 'app-library-card-tile',
@@ -28,9 +25,9 @@ import { TOWER_CONFIGS, TowerType } from '../../game/game-board/models/tower.mod
 })
 export class LibraryCardTileComponent {
   @Input() definition!: CardDefinition;
-  /** When true, the tile renders the upgraded effect (L5: upgraded view toggle). */
+  /** When true, the tile renders the upgraded effect + description. */
   @Input() showUpgraded = false;
-  /** When true, desaturate the tile (L5: unseen state). */
+  /** When true, the tile renders as a card-back silhouette (undiscovered). */
   @Input() desaturated = false;
   @Output() selected = new EventEmitter<CardDefinition>();
 
@@ -84,5 +81,16 @@ export class LibraryCardTileComponent {
       return this.definition.upgradedDescription;
     }
     return this.definition.description;
+  }
+
+  /**
+   * True when the upgrade has a distinct player-visible effect. Cards that
+   * ship an `upgradedEffect` identical to the base (placeholder slots for
+   * future tuning) should not render the upgrade glow / badge — it reads as
+   * a meaningless stylistic flourish.
+   */
+  get hasMeaningfulUpgrade(): boolean {
+    const up = this.definition.upgradedDescription;
+    return up !== undefined && up !== this.definition.description;
   }
 }

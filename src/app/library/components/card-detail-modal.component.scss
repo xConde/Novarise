@@ -7,6 +7,13 @@
   inset: 0;
   z-index: 1000;
   display: block;
+  user-select: none;
+}
+
+/* Allow selection of the raw-JSON block for copy/paste debugging. */
+:host .modal__raw pre,
+:host .modal__raw summary {
+  user-select: text;
 }
 
 /* --- Backdrop --- */
