@@ -42,4 +42,11 @@
     </app-library-card-tile>
   </section>
 
+  <!-- Detail modal — rendered only while open. -->
+  <app-card-detail-modal
+    *ngIf="selectedCard"
+    [definition]="selectedCard"
+    (closed)="onModalClosed()">
+  </app-card-detail-modal>
+
 </main>

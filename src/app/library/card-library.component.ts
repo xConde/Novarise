@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component } from '@angular/core';
 import { CardDefinition, CardRarity, CardType } from '../run/models/card.model';
 import { CARD_DEFINITIONS } from '../run/constants/card-definitions';
 
@@ -22,10 +22,15 @@ import { CARD_DEFINITIONS } from '../run/constants/card-definitions';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CardLibraryComponent {
+  constructor(private cdr: ChangeDetectorRef) {}
+
   /** Ordered by archetype then rarity then name for a predictable grid. */
   readonly allCards: readonly CardDefinition[] = Object.values(CARD_DEFINITIONS).sort(compareCards);
 
   readonly totalCards = this.allCards.length;
+
+  /** Currently open detail modal target, or null when closed. */
+  selectedCard: CardDefinition | null = null;
 
   get countsByType(): ReadonlyMap<CardType, number> {
     const map = new Map<CardType, number>();
@@ -38,8 +43,13 @@ export class CardLibraryComponent {
   readonly CardType = CardType;
 
   onCardSelected(card: CardDefinition): void {
-    // L2: opens detail modal. No-op for L1.
-    void card;
+    this.selectedCard = card;
+    this.cdr.markForCheck();
+  }
+
+  onModalClosed(): void {
+    this.selectedCard = null;
+    this.cdr.markForCheck();
   }
 
   /** Stable trackBy for the card grid *ngFor. */

@@ -5,9 +5,14 @@ import { RouterModule } from '@angular/router';
 import { IconComponent } from '@shared/components/icon/icon.component';
 import { CardLibraryComponent } from './card-library.component';
 import { LibraryCardTileComponent } from './components/library-card-tile.component';
+import { CardDetailModalComponent } from './components/card-detail-modal.component';
 
 @NgModule({
-  declarations: [CardLibraryComponent, LibraryCardTileComponent],
+  declarations: [
+    CardLibraryComponent,
+    LibraryCardTileComponent,
+    CardDetailModalComponent,
+  ],
   imports: [
     CommonModule,
     RouterModule.forChild([{ path: '', component: CardLibraryComponent }]),

@@ -68,4 +68,20 @@ describe('CardLibraryComponent', () => {
     const tallyEls = fixture.nativeElement.querySelectorAll('.tally-chip');
     expect(tallyEls.length).toBe(4); // tower / spell / modifier / utility
   });
+
+  it('selectedCard starts null', () => {
+    expect(component.selectedCard).toBeNull();
+  });
+
+  it('onCardSelected stores the selected card', () => {
+    const card = component.allCards[0];
+    component.onCardSelected(card);
+    expect(component.selectedCard).toBe(card);
+  });
+
+  it('onModalClosed clears the selected card', () => {
+    component.onCardSelected(component.allCards[0]);
+    component.onModalClosed();
+    expect(component.selectedCard).toBeNull();
+  });
 });
