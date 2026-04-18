@@ -10,8 +10,8 @@ import { CardId, CardInstance, CardRarity, CardType, TowerCardEffect } from '../
 import { TowerType } from '../../game/game-board/models/tower.model';
 
 describe('CARD_DEFINITIONS', () => {
-  it('has exactly 54 cards', () => {
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(54);
+  it('has exactly 55 cards', () => {
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(55);
   });
 
   it('contains all CardId enum values', () => {
@@ -50,8 +50,8 @@ describe('CARD_DEFINITIONS', () => {
       expect(getCardsByType(CardType.TOWER).length).toBe(12);
     });
 
-    it('has 24 spell cards (16 original + 3 status-applying + 2 status payoff + 3 Cartographer terraform)', () => {
-      expect(getCardsByType(CardType.SPELL).length).toBe(24);
+    it('has 25 spell cards (16 original + 3 status-applying + 2 status payoff + 4 Cartographer terraform)', () => {
+      expect(getCardsByType(CardType.SPELL).length).toBe(25);
     });
 
     it('has 12 modifier cards', () => {
@@ -622,6 +622,35 @@ describe('CARD_DEFINITIONS', () => {
         expect(def.upgradedEffect?.type).toBe('terraform_target');
         if (def.upgradedEffect?.type === 'terraform_target') {
           expect(def.upgradedEffect.duration).toBe(3);
+        }
+      });
+    });
+
+    describe('BRIDGEHEAD (sprint 15)', () => {
+      const def = CARD_DEFINITIONS[CardId.BRIDGEHEAD];
+
+      it('exists', () => {
+        expect(def).toBeDefined();
+      });
+      it('is tagged as cartographer with terraform keyword', () => {
+        expect(def.archetype).toBe('cartographer');
+        expect(def.terraform).toBeTrue();
+      });
+      it('costs 2 energy (uncommon)', () => {
+        expect(def.energyCost).toBe(2);
+        expect(def.rarity).toBe(CardRarity.UNCOMMON);
+      });
+      it('has a terraform_target effect with op=bridgehead, duration=3', () => {
+        expect(def.effect.type).toBe('terraform_target');
+        if (def.effect.type === 'terraform_target') {
+          expect(def.effect.op).toBe('bridgehead');
+          expect(def.effect.duration).toBe(3);
+        }
+      });
+      it('upgraded effect extends duration to 4', () => {
+        expect(def.upgradedEffect?.type).toBe('terraform_target');
+        if (def.upgradedEffect?.type === 'terraform_target') {
+          expect(def.upgradedEffect.duration).toBe(4);
         }
       });
     });

@@ -186,6 +186,10 @@ const CARD_VALUES = {
   blockPassageCost: 1,
   blockPassageDuration: 2,
   blockPassageUpgradedDuration: 3,
+  // BRIDGEHEAD (sprint 15): 2E uncommon, tower-only platform 3 turns (4 upgraded)
+  bridgeheadCost: 2,
+  bridgeheadDuration: 3,
+  bridgeheadUpgradedDuration: 4,
   // COLLAPSE (sprint 16): 2E uncommon, permanent destroy + %max-HP damage
   collapseCost: 2,
   collapseDamagePctMaxHp: 0.5,
@@ -1142,6 +1146,41 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
       type: 'terraform_target',
       op: 'block',
       duration: CARD_VALUES.blockPassageUpgradedDuration,
+    },
+    archetype: 'cartographer',
+    terraform: true,
+  },
+
+  /**
+   * BRIDGEHEAD (Sprint 15) — create a tower-only platform on a WALL tile
+   * for 3 turns (4 upgraded). The tile stays non-traversable (enemies
+   * cannot walk on it), but a tower CAN be placed on it via the
+   * `canPlaceTower` bridgehead side-channel in GameBoardService.
+   *
+   * Interaction: if the player places a tower on an active bridgehead
+   * and the bridgehead later expires, the tower KEEPS the tile (the
+   * revert is a no-op because the tile is now TOWER — see
+   * PathMutationService.revertMutation). This is intentional: the card
+   * buys permanent territory if the player acts on it in time.
+   */
+  [CardId.BRIDGEHEAD]: {
+    id: CardId.BRIDGEHEAD,
+    name: 'Bridgehead',
+    description: 'Create a tower-only platform on a wall for 3 turns. Place a tower before it expires to keep the tile.',
+    upgradedDescription: 'Create a tower-only platform on a wall for 4 turns. Place a tower before it expires to keep the tile.',
+    type: CardType.SPELL,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.bridgeheadCost,
+    upgraded: false,
+    effect: {
+      type: 'terraform_target',
+      op: 'bridgehead',
+      duration: CARD_VALUES.bridgeheadDuration,
+    },
+    upgradedEffect: {
+      type: 'terraform_target',
+      op: 'bridgehead',
+      duration: CARD_VALUES.bridgeheadUpgradedDuration,
     },
     archetype: 'cartographer',
     terraform: true,

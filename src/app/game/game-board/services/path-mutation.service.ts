@@ -458,13 +458,27 @@ export class PathMutationService {
     const revertOp: MutationOp =
       mutation.priorType === BlockType.BASE ? 'build' : 'block';
 
-    this.gameBoardService.setTileType(
+    const newTile = this.gameBoardService.setTileType(
       mutation.row,
       mutation.col,
       mutation.priorType,
       revertOp,
       mutation.priorType,
     );
+
+    // Sprint 15 — setTileType returns null when the tile is now a TOWER
+    // (most likely a tower was placed on an active BRIDGEHEAD before it
+    // expired). The revert is a no-op for tile data; do NOT run the mesh
+    // swap, cache invalidate, or enemy repath either — all three are
+    // wrong/wasteful:
+    //   - swapMesh would paint a stale WALL mesh under the tower's group
+    //     (visually masked but leaves the registry desynced),
+    //   - cache invalidate + repath are unnecessary because the tile's
+    //     traversability did not change (TOWER remains non-traversable,
+    //     same as the BRIDGEHEAD WALL it replaced).
+    if (newTile === null) {
+      return;
+    }
 
     // Reverting to original tile type — no mutationOp, so per-tile material is used.
     this.swapMesh(mutation.row, mutation.col, mutation.priorType, scene, undefined);

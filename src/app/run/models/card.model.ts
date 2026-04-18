@@ -89,9 +89,10 @@ export enum CardId {
   WARP_STRIKE = 'WARP_STRIKE',
   PHANTOM_GOLD = 'PHANTOM_GOLD',
 
-  // Cartographer archetype — terraform-target cards (Phase 2, Sprints 11/12/16)
+  // Cartographer archetype — terraform-target cards (Phase 2, Sprints 11/12/15/16)
   LAY_TILE = 'LAY_TILE',
   BLOCK_PASSAGE = 'BLOCK_PASSAGE',
+  BRIDGEHEAD = 'BRIDGEHEAD',
   COLLAPSE = 'COLLAPSE',
 }
 

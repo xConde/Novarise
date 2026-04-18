@@ -509,6 +509,34 @@ describe('PathMutationService', () => {
       service.tickTurn(1, scene);
       expect(service.getActive().length).toBe(1);
     });
+
+    // Phase 2 Sprint 15 — BRIDGEHEAD expiration with a tower on the tile
+    it('expiring mutation skips mesh swap when tile is now a TOWER (bridgehead-tower case)', () => {
+      // Place a bridgehead at (2, 3) — a WALL row.
+      const bridgeheadResult = service.bridgehead(2, 3, 3, 'bridge', 1, scene);
+      expect(bridgeheadResult.ok).toBeTrue();
+
+      // Simulate the player placing a tower on the bridgehead tile before it expires.
+      // placeTower() is exercised by canPlaceTower's bridgehead side-channel.
+      const placed = gameBoardService.placeTower(2, 3, TowerType.BASIC);
+      expect(placed).toBeTrue();
+      expect(gameBoardService.getGameBoard()[2][3].type).toBe(BlockType.TOWER);
+
+      // Baseline counts for invalidation-guard assertion
+      pathfindingSpy.invalidateCache.calls.reset();
+      registrySpy.replaceTileMesh.calls.reset();
+
+      // Bridgehead expires on turn 4 (applied turn 1, duration 3).
+      service.tickTurn(4, scene);
+
+      // Journal entry is removed either way.
+      expect(service.getActive().length).toBe(0);
+      // Tile data stays TOWER — setTileType rejected the revert.
+      expect(gameBoardService.getGameBoard()[2][3].type).toBe(BlockType.TOWER);
+      // No mesh swap, no cache invalidate — revertMutation bails after setTileType returns null.
+      expect(registrySpy.replaceTileMesh).not.toHaveBeenCalled();
+      expect(pathfindingSpy.invalidateCache).not.toHaveBeenCalled();
+    });
   });
 
   // ── Multi-mutation sequence ───────────────────────────────────────────────

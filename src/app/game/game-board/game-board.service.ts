@@ -288,12 +288,35 @@ export class GameBoardService {
 
     const tile = this.gameBoard[row][col];
 
-    // Can only place on BASE tiles that are purchasable
-    if (tile.type !== BlockType.BASE || !tile.isPurchasable || tile.towerType !== null) {
+    // Standard case: BASE tile that is purchasable and unoccupied.
+    const isStandardBase =
+      tile.type === BlockType.BASE &&
+      tile.isPurchasable &&
+      tile.towerType === null;
+
+    // Phase 2 Sprint 15 — BRIDGEHEAD exception. A WALL tile carrying
+    // mutationOp === 'bridgehead' is intentionally tower-placeable: the
+    // Cartographer card creates a "tower-only platform" that does NOT admit
+    // enemies (tile stays non-traversable) but DOES admit a tower.
+    // No wouldBlockPath check is needed because the tile is already a WALL —
+    // placing a tower on top does not change traversability.
+    const isBridgehead =
+      tile.type === BlockType.WALL &&
+      tile.mutationOp === 'bridgehead' &&
+      tile.towerType === null;
+
+    if (!isStandardBase && !isBridgehead) {
       return false;
     }
 
-    // Reject placement if it would block all paths from spawners to exits
+    // Bridgehead tiles are already non-traversable, so a tower on them can
+    // never turn a currently-open path into a blocked one. Skip the BFS.
+    if (isBridgehead) {
+      return true;
+    }
+
+    // Standard BASE path: reject placement if it would block all paths from
+    // spawners to exits.
     if (this.wouldBlockPath(row, col)) {
       return false;
     }

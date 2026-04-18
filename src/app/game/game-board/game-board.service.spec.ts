@@ -247,6 +247,66 @@ describe('GameBoardService', () => {
       // Placing at (2,2) should be fine — many paths around
       expect(service.canPlaceTower(2, 2)).toBeTrue();
     });
+
+    // Phase 2 Sprint 15 — BRIDGEHEAD side-channel
+    describe('bridgehead side-channel', () => {
+      it('allows placement on a WALL tile with mutationOp="bridgehead"', () => {
+        const board = createTestBoard(5, 5);
+        board[0][0] = GameBoardTile.createSpawner(0, 0);
+        board[4][4] = GameBoardTile.createExit(4, 4);
+        // Place a bridgehead-marked WALL at (2,2) — simulating BRIDGEHEAD applied
+        board[2][2] = GameBoardTile.createMutated(2, 2, BlockType.WALL, BlockType.WALL, 'bridgehead');
+        service.importBoard(board, 5, 5);
+
+        expect(service.canPlaceTower(2, 2)).toBeTrue();
+      });
+
+      it('still rejects placement on a plain WALL (no mutationOp)', () => {
+        const board = createTestBoard(5, 5);
+        board[2][2] = GameBoardTile.createWall(2, 2);
+        service.importBoard(board, 5, 5);
+
+        expect(service.canPlaceTower(2, 2)).toBeFalse();
+      });
+
+      it('rejects a WALL tile with a DIFFERENT mutationOp (block/destroy)', () => {
+        const board = createTestBoard(5, 5);
+        board[2][2] = GameBoardTile.createMutated(2, 2, BlockType.WALL, BlockType.BASE, 'block');
+        service.importBoard(board, 5, 5);
+
+        expect(service.canPlaceTower(2, 2)).toBeFalse();
+      });
+
+      it('does NOT run wouldBlockPath for bridgehead tiles (they never added traversability)', () => {
+        // Corridor where placing a tower on the ONLY path row would normally fail.
+        // A bridgehead tile sits in row 1 (non-traversable to begin with) and
+        // must be placeable even though row 0 has no alternative — placing a
+        // tower on a bridgehead can't block a path that never existed.
+        const board = createTestBoard(5, 3);
+        board[0][0] = GameBoardTile.createSpawner(0, 0);
+        board[0][4] = GameBoardTile.createExit(0, 4);
+        for (let col = 0; col < 5; col++) {
+          board[1][col] = GameBoardTile.createWall(1, col);
+          board[2][col] = GameBoardTile.createWall(2, col);
+        }
+        board[1][2] = GameBoardTile.createMutated(2, 1, BlockType.WALL, BlockType.WALL, 'bridgehead');
+        service.importBoard(board, 5, 3);
+
+        expect(service.canPlaceTower(1, 2)).toBeTrue();
+      });
+
+      it('rejects a bridgehead tile that already has a tower', () => {
+        const board = createTestBoard(5, 5);
+        board[0][0] = GameBoardTile.createSpawner(0, 0);
+        board[4][4] = GameBoardTile.createExit(4, 4);
+        board[2][2] = GameBoardTile.createMutated(2, 2, BlockType.WALL, BlockType.WALL, 'bridgehead');
+        service.importBoard(board, 5, 5);
+
+        service.placeTower(2, 2, TowerType.BASIC);
+        // Tile is now TOWER — second placement rejected.
+        expect(service.canPlaceTower(2, 2)).toBeFalse();
+      });
+    });
   });
 
   // --- wouldBlockPath ---
