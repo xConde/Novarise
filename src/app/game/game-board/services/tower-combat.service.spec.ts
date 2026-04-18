@@ -19,6 +19,9 @@ import { RelicService } from '../../../run/services/relic.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { PathfindingService } from './pathfinding.service';
 import { LineOfSightService } from './line-of-sight.service';
+import { ElevationService } from './elevation.service';
+import { ELEVATION_CONFIG } from '../constants/elevation.constants';
+import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 
 describe('TowerCombatService', () => {
   let service: TowerCombatService;
@@ -2877,5 +2880,469 @@ describe('TowerCombatService LOS integration (sprint 26)', () => {
 
     // MORTAR bypasses isVisible entirely per elevation-model.md §12
     expect(losServiceSpy.isVisible).not.toHaveBeenCalled();
+  });
+});
+
+// ── Sprint 29 — Elevation range multiplier + HIGH_PERCH integration ────────
+
+/**
+ * Helper: build a minimal ElevationService spy.
+ *
+ * @param tileElevations  Map of "row-col" → elevation for per-tile reads.
+ * @param maxElevation    Override for getMaxElevation() (0 = flat board).
+ */
+function createElevationServiceSpy(
+  tileElevations: Map<string, number> = new Map(),
+  maxElevation = 0,
+): jasmine.SpyObj<ElevationService> {
+  const spy = jasmine.createSpyObj<ElevationService>('ElevationService', [
+    'getElevation',
+    'getMaxElevation',
+    'raise',
+    'depress',
+    'setAbsolute',
+    'collapse',
+    'getElevationMap',
+    'getActiveChanges',
+    'tickTurn',
+    'reset',
+    'serialize',
+    'restore',
+  ]);
+  spy.getMaxElevation.and.returnValue(maxElevation);
+  spy.getElevation.and.callFake((row: number, col: number) =>
+    tileElevations.get(`${row}-${col}`) ?? 0
+  );
+  return spy;
+}
+
+describe('TowerCombatService elevation range multiplier (sprint 29)', () => {
+  // Tower at row=10, col=12, world position (-0.5, 0) — same anchor as main suite
+  const EL_ROW = 10;
+  const EL_COL = 12;
+  const EL_WORLD_X = -0.5;
+  const EL_WORLD_Z = 0;
+  const EL_TURN = 1;
+
+  /** Base BASIC tower range (from TOWER_CONFIGS). Used as reference in multiplier math. */
+  const BASE_BASIC_RANGE = TOWER_CONFIGS[TowerType.BASIC].range;
+  /** Base BASIC tower damage — for damage-unchanged assertions. */
+  const BASE_BASIC_DAMAGE = TOWER_CONFIGS[TowerType.BASIC].damage;
+
+  let elSvc: TowerCombatService;
+  let elEnemyMap: Map<string, Enemy>;
+  let elElevationSpy: jasmine.SpyObj<ElevationService>;
+  let elCardEffectSpy: jasmine.SpyObj<CardEffectService>;
+
+  function buildTestBed(
+    tileElevations: Map<string, number>,
+    maxElevation: number,
+  ): void {
+    elEnemyMap = new Map();
+    elElevationSpy = createElevationServiceSpy(tileElevations, maxElevation);
+    elCardEffectSpy = createCardEffectServiceSpy();
+
+    const elPathSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset']
+    );
+    elPathSpy.getPathToExitLength.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(elEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: elCardEffectSpy },
+        { provide: PathfindingService, useValue: elPathSpy },
+        { provide: ElevationService, useValue: elElevationSpy },
+      ]
+    });
+    elSvc = TestBed.inject(TowerCombatService);
+  }
+
+  // ── Part A: passive elevation range bonus ────────────────────────────────
+
+  describe('passive elevation range bonus', () => {
+    it('tower at elevation 0 → effective range unchanged (multiplier = 1.0×)', () => {
+      // Flat board: getMaxElevation() returns 0 → fast path, no per-tower lookup.
+      buildTestBed(new Map(), 0);
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy at exactly base range — must be hit.
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // Enemy within base range → hit
+      expect(enemy.health).toBeLessThan(10000);
+    });
+
+    it('flat board — getElevation is never called (fast-path guard)', () => {
+      buildTestBed(new Map(), 0);
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // hasElevation=false → getElevation never called
+      expect(elElevationSpy.getElevation).not.toHaveBeenCalled();
+    });
+
+    it('tower at elevation 1 → range × 1.25', () => {
+      // elevation 1 → mult = 1 + 1×0.25 = 1.25
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 1 ]]);
+      buildTestBed(tileMap, 1);
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      const expectedRange = BASE_BASIC_RANGE * 1.25;
+      // Enemy just inside the 1.25× range but outside base range → only hit when elevated.
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE + 0.1, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      // Also place an enemy at exactly expectedRange to confirm it's reachable.
+      const enemyAt125 = createTestEnemy('e2', EL_WORLD_X + expectedRange, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e2', enemyAt125);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // The enemy in the 1.25× zone should be hit (closer, found first)
+      expect(enemy.health).toBeLessThan(10000);
+    });
+
+    it('tower at elevation 2 → range × 1.5', () => {
+      // elevation 2 → mult = 1 + 2×0.25 = 1.5
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 2 ]]);
+      buildTestBed(tileMap, 2);
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      const expectedMult = 1 + 2 * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION; // 1.5
+      const expectedRange = BASE_BASIC_RANGE * expectedMult;
+
+      // Enemy placed between base range and 1.5× range — only reachable when elevated.
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE + 0.5, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // Within 1.5× range → must be hit
+      expect(enemy.health).toBeLessThan(10000);
+
+      // Verify the enemy is actually inside the expected range (guards the test's own logic)
+      const distToEnemy = BASE_BASIC_RANGE + 0.5;
+      expect(distToEnemy).toBeLessThan(expectedRange);
+    });
+
+    it('tower at elevation 3 → range × 1.75 (maximum elevation)', () => {
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 3 ]]);
+      buildTestBed(tileMap, 3);
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      const expectedMult = 1 + 3 * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION; // 1.75
+      const expectedRange = BASE_BASIC_RANGE * expectedMult;
+
+      // Enemy between base range and 1.75× range — unreachable without elevation.
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE + 1.0, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      // Sanity: enemy is within 1.75× range
+      expect(BASE_BASIC_RANGE + 1.0).toBeLessThan(expectedRange);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      expect(enemy.health).toBeLessThan(10000);
+    });
+
+    it('tower at elevation -1 → range × 0.75 (self-inflicted pit penalty)', () => {
+      // Negative elevation → range penalty (0.75×). Realistic scenario: a board where most tiles
+      // are at elevation 0 but the tower tile has been depressed. hasElevation uses
+      // getMaxElevation() > 0 as the guard — so we must simulate a board where at least one
+      // tile is above 0 (another tile raised) so the per-tower elevation lookup fires.
+      // The tower tile itself returns -1; the guard sees maxElevation=1 → lookup runs.
+      buildTestBed(new Map(), 1); // maxElevation=1 → hasElevation=true, triggers per-tower lookup
+      elElevationSpy.getElevation.and.callFake((row: number, col: number) =>
+        (row === EL_ROW && col === EL_COL) ? -1 : 0  // tower tile is depressed; rest at 0
+      );
+
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy placed just beyond the 0.75× range → NOT reachable.
+      // 0.75× range = 3 × 0.75 = 2.25. Enemy at 2.45 is outside that range.
+      const penalizedRange = BASE_BASIC_RANGE * 0.75; // 2.25
+      const enemy = createTestEnemy('e1', EL_WORLD_X + penalizedRange + 0.2, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // Enemy is beyond the 0.75× range → should NOT be hit
+      expect(enemy.health).toBe(10000);
+    });
+
+    it('two towers at different elevations get correct multipliers independently', () => {
+      // Strategy: use two towers in separate columns far apart so neither can
+      // reach the other's enemy. We verify each tower's range multiplier by
+      // checking which enemy it hits.
+      //
+      // Tower A at (row=10, col=2) → elevation 2 → range × 1.5 = 4.5
+      // Tower B at (row=10, col=22) → elevation 0 → range × 1.0 = 3.0
+      //
+      // Board is 25×20, tileSize=1.
+      // worldX_A = (2  - 12.5) * 1 = -10.5, worldZ_A = (10 - 10) * 1 = 0
+      // worldX_B = (22 - 12.5) * 1 =   9.5, worldZ_B = 0
+
+      const ROW_A = 10; const COL_A = 2;
+      const ROW_B = 10; const COL_B = 22;
+      const worldA_X = (COL_A - 25 / 2);  // -10.5
+      const worldA_Z = 0;
+      const worldB_X = (COL_B - 25 / 2);  //   9.5
+      const worldB_Z = 0;
+
+      const tileMap = new Map([
+        [ `${ROW_A}-${COL_A}`, 2 ],  // tower A elevated
+        [ `${ROW_B}-${COL_B}`, 0 ],  // tower B flat
+      ]);
+      buildTestBed(tileMap, 2);
+
+      elSvc.registerTower(ROW_A, COL_A, TowerType.BASIC, new THREE.Group());
+      elSvc.registerTower(ROW_B, COL_B, TowerType.BASIC, new THREE.Group());
+
+      // Enemy A: between BASE_BASIC_RANGE and 1.5× range from tower A.
+      // At worldX = worldA_X + BASE_BASIC_RANGE + 0.5 (3.5 from tower A).
+      // Tower A (range 4.5) can reach it; tower B (far away) cannot.
+      const enemyA = createTestEnemy('eA', worldA_X + BASE_BASIC_RANGE + 0.5, worldA_Z, 10000);
+
+      // Enemy B: at exactly BASE_BASIC_RANGE from tower B.
+      // At worldX = worldB_X + BASE_BASIC_RANGE (3 from tower B).
+      // Tower B (range 3.0) can reach it; tower A (far away) cannot.
+      const enemyB = createTestEnemy('eB', worldB_X + BASE_BASIC_RANGE, worldB_Z, 10000);
+
+      elEnemyMap.set('eA', enemyA);
+      elEnemyMap.set('eB', enemyB);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // Tower A (elevation 2, range 4.5): enemyA at 3.5 → within range → hit
+      expect(enemyA.health).toBeLessThan(10000);
+      // Tower B (elevation 0, range 3.0): enemyB at 3.0 → within range → hit
+      expect(enemyB.health).toBeLessThan(10000);
+    });
+  });
+
+  // ── Part B: HIGH_PERCH modifier card integration ─────────────────────────
+
+  describe('HIGH_PERCH modifier integration', () => {
+    const HIGH_PERCH_STAT = MODIFIER_STAT.HIGH_PERCH_RANGE_BONUS;
+
+    it('HIGH_PERCH active + tower at elevation 2 → range × 1.5 × 1.25 = 1.875×', () => {
+      // elevation 2 → passive mult 1.5; HIGH_PERCH bonus 0.25 → highPerchMult 1.25
+      // combined: 1.5 × 1.25 = 1.875
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 2 ]]);
+      buildTestBed(tileMap, 2);
+
+      elCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === HIGH_PERCH_STAT ? 0.25 : 0
+      );
+
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      const expectedRange = BASE_BASIC_RANGE * 1.875;
+      // Enemy between 1.5× range and 1.875× range — only reachable with both bonuses.
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE * 1.6, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      // Verify test setup: enemy is between 1.5× and 1.875× range
+      expect(BASE_BASIC_RANGE * 1.6).toBeGreaterThan(BASE_BASIC_RANGE * 1.5);
+      expect(BASE_BASIC_RANGE * 1.6).toBeLessThan(expectedRange);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      expect(enemy.health).toBeLessThan(10000);
+    });
+
+    it('HIGH_PERCH active + tower at elevation 1 (below threshold) → only passive 1.25× (no HIGH_PERCH bonus)', () => {
+      // elevation 1 = below HIGH_PERCH_ELEVATION_THRESHOLD (2) → highPerchMult = 1.0
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 1 ]]);
+      buildTestBed(tileMap, 1);
+
+      elCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === HIGH_PERCH_STAT ? 0.25 : 0
+      );
+
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy between 1.25× and 1.5× range — would be hit only if HIGH_PERCH applied.
+      const rangeAt125 = BASE_BASIC_RANGE * 1.25;
+      const rangeAt150 = BASE_BASIC_RANGE * 1.5;
+      const enemy = createTestEnemy('e1', EL_WORLD_X + rangeAt125 + 0.1, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      // Sanity: enemy is beyond 1.25× but within 1.5× (i.e. requires HIGH_PERCH to reach)
+      expect(rangeAt125 + 0.1).toBeLessThan(rangeAt150);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // Tower has only 1.25× passive — enemy at 1.25×+0.1 is out of range → not hit
+      expect(enemy.health).toBe(10000);
+    });
+
+    it('HIGH_PERCH upgraded (0.4) + tower at elevation 2 → range × 1.5 × 1.4 = 2.1×', () => {
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 2 ]]);
+      buildTestBed(tileMap, 2);
+
+      elCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === HIGH_PERCH_STAT ? 0.4 : 0
+      );
+
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      const expectedRange = BASE_BASIC_RANGE * 2.1;
+      // Enemy beyond 1.875× but within 2.1× range (upgraded bonus needed)
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE * 2.0, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      // Sanity: enemy at 2.0× is within 2.1× but beyond 1.875×
+      expect(BASE_BASIC_RANGE * 2.0).toBeLessThan(expectedRange);
+      expect(BASE_BASIC_RANGE * 2.0).toBeGreaterThan(BASE_BASIC_RANGE * 1.875);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      expect(enemy.health).toBeLessThan(10000);
+    });
+
+    it('HIGH_PERCH does not affect tower damage (range-only bonus)', () => {
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 2 ]]);
+      buildTestBed(tileMap, 2);
+
+      elCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === HIGH_PERCH_STAT ? 0.25 : 0
+      );
+
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+      const enemy = createTestEnemy('e1', EL_WORLD_X, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // Damage should be exactly base damage (no bonus)
+      expect(10000 - enemy.health).toBe(BASE_BASIC_DAMAGE);
+    });
+
+    it('no HIGH_PERCH active + tower at elevation 2 → only passive 1.5× applies', () => {
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 2 ]]);
+      buildTestBed(tileMap, 2);
+
+      // No HIGH_PERCH active
+      elCardEffectSpy.getModifierValue.and.returnValue(0);
+
+      elSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy inside 1.875× but outside 1.5× → NOT reachable (no HIGH_PERCH)
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE * 1.6, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      elSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      expect(enemy.health).toBe(10000);
+    });
+  });
+
+  // ── LOS + elevation composition ──────────────────────────────────────────
+
+  describe('LOS and elevation compose correctly', () => {
+    it('elevated tower with LOS clear → hits enemy at extended range', () => {
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 2 ]]);
+      // Build with both elevation AND LOS service
+      elEnemyMap = new Map();
+      elElevationSpy = createElevationServiceSpy(tileMap, 2);
+      elCardEffectSpy = createCardEffectServiceSpy();
+
+      const losServiceSpy = jasmine.createSpyObj<LineOfSightService>('LineOfSightService', ['isVisible']);
+      losServiceSpy.isVisible.and.returnValue(true); // LOS clear
+
+      const elPathSpy = jasmine.createSpyObj<PathfindingService>(
+        'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset']
+      );
+      elPathSpy.getPathToExitLength.and.returnValue(0);
+
+      TestBed.configureTestingModule({
+        providers: [
+          TowerCombatService,
+          ChainLightningService,
+          CombatVFXService,
+          StatusEffectService,
+          GameStateService,
+          { provide: EnemyService, useValue: createEnemyServiceSpy(elEnemyMap) },
+          { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+          { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+          { provide: RelicService, useValue: createRelicServiceSpy() },
+          { provide: CardEffectService, useValue: elCardEffectSpy },
+          { provide: PathfindingService, useValue: elPathSpy },
+          { provide: ElevationService, useValue: elElevationSpy },
+          { provide: LineOfSightService, useValue: losServiceSpy },
+        ]
+      });
+      const combinedSvc = TestBed.inject(TowerCombatService);
+
+      combinedSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy between base range and 1.5× range (reachable because elevation + clear LOS)
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE + 0.5, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      combinedSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // Elevation gives 1.5× range AND LOS passes → hit
+      expect(enemy.health).toBeLessThan(10000);
+    });
+
+    it('elevated tower with LOS blocked → misses enemy even at extended range', () => {
+      const tileMap = new Map([[ `${EL_ROW}-${EL_COL}`, 2 ]]);
+      elEnemyMap = new Map();
+      elElevationSpy = createElevationServiceSpy(tileMap, 2);
+      elCardEffectSpy = createCardEffectServiceSpy();
+
+      const losServiceSpy = jasmine.createSpyObj<LineOfSightService>('LineOfSightService', ['isVisible']);
+      losServiceSpy.isVisible.and.returnValue(false); // LOS blocked
+
+      const elPathSpy = jasmine.createSpyObj<PathfindingService>(
+        'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset']
+      );
+      elPathSpy.getPathToExitLength.and.returnValue(0);
+
+      TestBed.configureTestingModule({
+        providers: [
+          TowerCombatService,
+          ChainLightningService,
+          CombatVFXService,
+          StatusEffectService,
+          GameStateService,
+          { provide: EnemyService, useValue: createEnemyServiceSpy(elEnemyMap) },
+          { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+          { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+          { provide: RelicService, useValue: createRelicServiceSpy() },
+          { provide: CardEffectService, useValue: elCardEffectSpy },
+          { provide: PathfindingService, useValue: elPathSpy },
+          { provide: ElevationService, useValue: elElevationSpy },
+          { provide: LineOfSightService, useValue: losServiceSpy },
+        ]
+      });
+      const combinedSvc = TestBed.inject(TowerCombatService);
+
+      combinedSvc.registerTower(EL_ROW, EL_COL, TowerType.BASIC, new THREE.Group());
+
+      // Enemy within 1.5× range (elevated range allows targeting) but LOS blocked
+      const enemy = createTestEnemy('e1', EL_WORLD_X + BASE_BASIC_RANGE + 0.5, EL_WORLD_Z, 10000);
+      elEnemyMap.set('e1', enemy);
+
+      combinedSvc.fireTurn(new THREE.Scene(), EL_TURN);
+
+      // LOS blocked → shot fails despite elevated range
+      expect(enemy.health).toBe(10000);
+    });
   });
 });

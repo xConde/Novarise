@@ -222,6 +222,15 @@ const CARD_VALUES = {
   // Damage bonus applied in EnemyService.damageEnemy when tile elevation < 0.
   // +25% bonus received on exposed tiles (negative elevation).
   exposedDamageBonus: 0.25,
+
+  // ── Highground archetype — HIGH_PERCH modifier (Sprint 29) ───────────────
+  // HIGH_PERCH (1E common): towers on elevation ≥ threshold gain +25% range
+  // for one wave (stacks additively with the passive per-elevation multiplier).
+  highPerchCost: 1,
+  highPerchBonus: 0.25,          // +25% range for qualifying towers (base)
+  highPerchUpgradedBonus: 0.4,   // +40% range when upgraded
+  highPerchThreshold: 2,         // minimum elevation to qualify for the bonus
+  highPerchDuration: 1,          // wave countdown duration (one wave)
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -1404,6 +1413,41 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     } satisfies ElevationTargetCardEffect,
     archetype: 'highground',
     terraform: true,
+  },
+
+  /**
+   * HIGH_PERCH (Sprint 29) — wave-scoped range bonus for elevated towers.
+   * Towers on elevation ≥ 2 gain +25% range (base) or +40% (upgraded) for
+   * the current wave. Composes multiplicatively with the passive elevation
+   * range bonus already applied in TowerCombatService.fireTurn.
+   *
+   * NOT terraform: HIGH_PERCH does not mutate tiles — it reads elevation and
+   * applies a combat modifier. Using terraform: false follows the same
+   * precedent as LABYRINTH_MIND and DETOUR.
+   */
+  [CardId.HIGH_PERCH]: {
+    id: CardId.HIGH_PERCH,
+    name: 'High Perch',
+    description: 'Towers on elevation 2+ gain +25% range for this wave.',
+    upgradedDescription: 'Towers on elevation 2+ gain +40% range for this wave.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.highPerchCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HIGH_PERCH_RANGE_BONUS,
+      value: CARD_VALUES.highPerchBonus,
+      duration: CARD_VALUES.highPerchDuration,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HIGH_PERCH_RANGE_BONUS,
+      value: CARD_VALUES.highPerchUpgradedBonus,
+      duration: CARD_VALUES.highPerchDuration,
+    },
+    archetype: 'highground' as const,
+    terraform: false,
   },
 };
 

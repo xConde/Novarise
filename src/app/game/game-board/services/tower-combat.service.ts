@@ -23,6 +23,8 @@ import { TowerStatOverrides } from '../../../run/models/card.model';
 import { PathfindingService } from './pathfinding.service';
 import { SerializablePlacedTower, SerializableMortarZone } from '../models/encounter-checkpoint.model';
 import { LineOfSightService } from './line-of-sight.service';
+import { ElevationService } from './elevation.service';
+import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 
 /** M3 S4: turn-based mortar DoT zone. Replaces the legacy real-time path for fireTurn. */
 interface TurnMortarZone {
@@ -99,6 +101,10 @@ export class TowerCombatService {
     // sprint 26. When absent, LOS check is skipped (all shots pass). Full
     // GameModule always wires it.
     @Optional() private lineOfSightService?: LineOfSightService,
+    // @Optional() — not provided in TowerCombatService test beds that predate
+    // sprint 29. When absent, all elevation reads return 0 (flat-board behavior,
+    // no regression on non-Highground runs). Full GameModule always wires it.
+    @Optional() private elevationService?: ElevationService,
   ) {}
 
   /**
@@ -199,8 +205,19 @@ export class TowerCombatService {
       ? 1 + (this.pathfindingService.getPathToExitLength() * labyrinthScaling)
       : 1;
 
+    // Sprint 29 elevation range hook — passive per-tower elevation bonus.
+    // hasElevation guards the per-tower elevation lookup so flat boards (no
+    // Highground cards played yet) pay zero cost: getMaxElevation() is a single
+    // board scan, O(rows×cols), done once per fireTurn call.
+    const hasElevation = this.elevationService != null && this.elevationService.getMaxElevation() !== 0;
+
+    // Sprint 29 HIGH_PERCH — wave-scoped range bonus for elevated towers.
+    // highPerchBonus is summed across all stacked copies via getModifierValue.
+    const highPerchBonus = this.cardEffectService.getModifierValue(MODIFIER_STAT.HIGH_PERCH_RANGE_BONUS);
+
     const hasCardModifiers =
-      cardDamageBoost !== 0 || cardRangeBoost !== 0 || sniperDamageBoost !== 0 || pathLengthMultiplier !== 1;
+      cardDamageBoost !== 0 || cardRangeBoost !== 0 || sniperDamageBoost !== 0
+      || pathLengthMultiplier !== 1 || hasElevation || highPerchBonus !== 0;
 
     // Deterministic firing order: row then col.
     const towerList = Array.from(this.placedTowers.values()).sort((a, b) => {
@@ -227,7 +244,22 @@ export class TowerCombatService {
             * pathLengthMultiplier,
         );
         const cardRangeMult = tower.cardStatOverrides?.rangeMultiplier ?? 1;
-        this.scratchStats.range = baseStats.range * relicRange * (1 + cardRangeBoost) * cardRangeMult;
+        // Sprint 29 — passive elevation range bonus: every elevation unit adds
+        // RANGE_BONUS_PER_ELEVATION (0.25) to the range multiplier. A tower at
+        // elevation 0 → 1.0×; elevation 2 → 1.5×; elevation -1 → 0.75×
+        // (self-inflicted penalty for placing towers on depressed tiles).
+        const towerElevation = hasElevation
+          ? (this.elevationService!.getElevation(tower.row, tower.col))
+          : 0;
+        const elevationRangeMult = 1 + towerElevation * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION;
+        // Sprint 29 HIGH_PERCH — conditional range bonus for towers on elevation
+        // ≥ HIGH_PERCH_ELEVATION_THRESHOLD (2). Applies multiplicatively on top of
+        // the passive elevation bonus. Re-read per fireTurn so mid-wave RAISE_PLATFORM
+        // plays take effect immediately on the next tower firing.
+        const highPerchActive = highPerchBonus > 0
+          && towerElevation >= ELEVATION_CONFIG.HIGH_PERCH_ELEVATION_THRESHOLD;
+        const highPerchMult = highPerchActive ? (1 + highPerchBonus) : 1;
+        this.scratchStats.range = baseStats.range * relicRange * (1 + cardRangeBoost) * cardRangeMult * elevationRangeMult * highPerchMult;
         this.scratchStats.cost = baseStats.cost;
         const cardSplashMult = tower.cardStatOverrides?.splashRadiusMultiplier ?? 1;
         this.scratchStats.splashRadius = (baseStats.splashRadius ?? 0) * this.relicService.getSplashRadiusMultiplier() * cardSplashMult;

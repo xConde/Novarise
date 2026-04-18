@@ -18,4 +18,12 @@ export const ELEVATION_CONFIG = {
    * cross-boundary import from run/constants into game/constants).
    */
   EXPOSED_DAMAGE_BONUS: 0.25,
+
+  /**
+   * Minimum elevation a tower must be on to qualify for the HIGH_PERCH range
+   * bonus. Read by TowerCombatService.fireTurn so card-definitions.ts does not
+   * need to export CARD_VALUES (which is a local const). Mirror is
+   * CARD_VALUES.highPerchThreshold — both must remain in sync.
+   */
+  HIGH_PERCH_ELEVATION_THRESHOLD: 2,
 } as const;

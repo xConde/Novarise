@@ -33,6 +33,14 @@ export const MODIFIER_STAT = {
   //   current path length from spawner to exit.
   TERRAFORM_ANCHOR: 'terraformAnchor',
   LABYRINTH_MIND: 'labyrinthMind',
+
+  // Phase 3 Sprint 29 — Highground modifier.
+  //
+  // Numeric stat (additive across stacked copies via getModifierValue).
+  // Consumed in TowerCombatService.fireTurn per-tower: a tower on elevation ≥ 2
+  // receives (1 + value) range multiplier on top of the passive elevation bonus.
+  // HIGH_PERCH (1E common) uses duration=1 (one-wave countdown).
+  HIGH_PERCH_RANGE_BONUS: 'highPerchRangeBonus',
 } as const;
 
 export type ModifierStat = typeof MODIFIER_STAT[keyof typeof MODIFIER_STAT];

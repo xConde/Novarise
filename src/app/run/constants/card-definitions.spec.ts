@@ -6,12 +6,12 @@ import {
   getCardsByType,
   getStarterDeck,
 } from './card-definitions';
-import { CardId, CardInstance, CardRarity, CardType, TowerCardEffect } from '../models/card.model';
+import { CardId, CardInstance, CardRarity, CardType, TowerCardEffect, ModifierCardEffect } from '../models/card.model';
 import { TowerType } from '../../game/game-board/models/tower.model';
 
 describe('CARD_DEFINITIONS', () => {
-  it('has exactly 60 cards', () => {
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(60);
+  it('has exactly 61 cards', () => {
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(61);
   });
 
   it('contains all CardId enum values', () => {
@@ -54,8 +54,8 @@ describe('CARD_DEFINITIONS', () => {
       expect(getCardsByType(CardType.SPELL).length).toBe(28);
     });
 
-    it('has 14 modifier cards (12 original + CARTOGRAPHER_SEAL + LABYRINTH_MIND)', () => {
-      expect(getCardsByType(CardType.MODIFIER).length).toBe(14);
+    it('has 15 modifier cards (12 original + CARTOGRAPHER_SEAL + LABYRINTH_MIND + HIGH_PERCH)', () => {
+      expect(getCardsByType(CardType.MODIFIER).length).toBe(15);
     });
 
     it('has 6 utility cards', () => {
@@ -780,6 +780,66 @@ describe('CARD_DEFINITIONS', () => {
         if (def.upgradedEffect?.type === 'modifier') {
           expect(def.upgradedEffect.value).toBeCloseTo(0.03, 5);
         }
+      });
+    });
+  });
+
+  // ── Phase 3 Sprint 29 — Highground modifier cards ───────────────────────────
+  describe('Highground modifier cards', () => {
+    describe('HIGH_PERCH (Sprint 29)', () => {
+      const def = CARD_DEFINITIONS[CardId.HIGH_PERCH];
+
+      it('exists in CARD_DEFINITIONS', () => {
+        expect(def).toBeDefined();
+      });
+
+      it('is a COMMON highground MODIFIER card', () => {
+        expect(def.type).toBe(CardType.MODIFIER);
+        expect(def.rarity).toBe(CardRarity.COMMON);
+        expect(def.archetype).toBe('highground');
+      });
+
+      it('costs 1 energy (common modifier cost curve)', () => {
+        expect(def.energyCost).toBe(1);
+      });
+
+      it('does NOT carry the terraform flag (reads elevation, does not mutate tiles)', () => {
+        expect(def.terraform).toBe(false);
+      });
+
+      it('has a modifier effect with stat = highPerchRangeBonus', () => {
+        expect(def.effect.type).toBe('modifier');
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.stat).toBe('highPerchRangeBonus');
+      });
+
+      it('base value is 0.25 (+25% range bonus)', () => {
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.value).toBeCloseTo(0.25, 5);
+      });
+
+      it('base duration is 1 wave', () => {
+        const effect = def.effect as ModifierCardEffect;
+        expect(effect.duration).toBe(1);
+      });
+
+      it('has an upgradedEffect defined', () => {
+        expect(def.upgradedEffect).toBeDefined();
+      });
+
+      it('upgraded value is 0.4 (+40% range bonus)', () => {
+        const upgraded = def.upgradedEffect as ModifierCardEffect;
+        expect(upgraded.value).toBeCloseTo(0.4, 5);
+      });
+
+      it('upgraded duration is still 1 wave', () => {
+        const upgraded = def.upgradedEffect as ModifierCardEffect;
+        expect(upgraded.duration).toBe(1);
+      });
+
+      it('upgradedDescription is defined and non-empty', () => {
+        expect(def.upgradedDescription).toBeDefined();
+        expect(def.upgradedDescription!.trim().length).toBeGreaterThan(0);
       });
     });
   });

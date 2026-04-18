@@ -106,6 +106,9 @@ export enum CardId {
   // Highground archetype — elevation-target cards (Phase 3, Sprints 27/28)
   RAISE_PLATFORM = 'RAISE_PLATFORM',
   DEPRESS_TILE = 'DEPRESS_TILE',
+
+  // Highground archetype — modifier card (Phase 3, Sprint 29)
+  HIGH_PERCH = 'HIGH_PERCH',
 }
 
 export enum CardType {

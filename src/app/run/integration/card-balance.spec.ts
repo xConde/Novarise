@@ -231,12 +231,13 @@ describe('Card System — Balance', () => {
 
   // ── Total Card Count ──────────────────────────────────────────────────────
 
-  it('should have exactly 60 card definitions', () => {
+  it('should have exactly 61 card definitions', () => {
     // 40 original + 6 tower variant cards (sprint 2a) + 3 status-applying spells (sprint 2b)
     // + 2 status payoff spells (sprint 2c) + 4 Cartographer terraform spells (phase 2 sprints 11/12/15/16)
     // + 1 DETOUR routing spell (sprint 14) + 2 Cartographer rare anchors (phase 2 sprints 17/18)
     // + 2 Highground elevation cards (phase 3 sprints 27/28: RAISE_PLATFORM + DEPRESS_TILE)
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(60);
+    // + 1 Highground modifier card (phase 3 sprint 29: HIGH_PERCH)
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(61);
   });
 
   // ── Phase 2 Sprint 19 — Cartographer economy validation ────────────────────
@@ -439,6 +440,43 @@ describe('Card System — Balance', () => {
             .toBe(true);
         }
       }
+    });
+
+    it('HIGH_PERCH has archetype=highground, terraform=false, energyCost=1, COMMON', () => {
+      const def = CARD_DEFINITIONS[CardId.HIGH_PERCH];
+      expect(def.archetype).toBe('highground');
+      expect(def.terraform).toBe(false); // reads elevation, does not mutate tiles
+      expect(def.energyCost).toBe(1);
+      expect(def.rarity).toBe(CardRarity.COMMON);
+      expect(def.type).toBe(CardType.MODIFIER);
+    });
+
+    it('HIGH_PERCH effect is modifier stat=highPerchRangeBonus, value=0.25, duration=1', () => {
+      const def = CARD_DEFINITIONS[CardId.HIGH_PERCH];
+      expect(def.effect.type).toBe('modifier');
+      if (def.effect.type === 'modifier') {
+        expect(def.effect.stat).toBe('highPerchRangeBonus');
+        expect(def.effect.value).toBeCloseTo(0.25, 5);
+        expect(def.effect.duration).toBe(1);
+      }
+    });
+
+    it('HIGH_PERCH upgraded effect has value=0.4', () => {
+      const def = CARD_DEFINITIONS[CardId.HIGH_PERCH];
+      expect(def.upgradedEffect).toBeDefined();
+      if (def.upgradedEffect?.type === 'modifier') {
+        expect(def.upgradedEffect.value).toBeCloseTo(0.4, 5);
+        expect(def.upgradedEffect.duration).toBe(1);
+      }
+    });
+
+    it('non-terraform Highground cards (HIGH_PERCH) explicitly set terraform=false', () => {
+      // HIGH_PERCH is archetype-tagged highground but reads elevation rather than
+      // mutating tiles. Must carry terraform=false so tooltip keyword list is accurate.
+      const def = CARD_DEFINITIONS[CardId.HIGH_PERCH];
+      expect(def.terraform)
+        .withContext('HIGH_PERCH: must NOT be tagged terraform')
+        .toBe(false);
     });
   });
 

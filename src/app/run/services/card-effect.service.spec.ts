@@ -750,4 +750,57 @@ describe('CardEffectService', () => {
       expect(enemyServiceSpy.applyDetour).toHaveBeenCalledTimes(1);
     });
   });
+
+  // ── applyModifier — HIGH_PERCH_RANGE_BONUS (Sprint 29) ────────
+
+  describe('applyModifier — HIGH_PERCH_RANGE_BONUS', () => {
+    const HIGH_PERCH_STAT = MODIFIER_STAT.HIGH_PERCH_RANGE_BONUS;
+
+    it('getModifierValue returns 0 when no HIGH_PERCH modifier is active', () => {
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBe(0);
+    });
+
+    it('getModifierValue returns the bonus value after applyModifier (base: 0.25)', () => {
+      service.applyModifier(modifierEffect(HIGH_PERCH_STAT, 0.25, 1));
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBeCloseTo(0.25, 5);
+    });
+
+    it('getModifierValue returns upgraded bonus value (0.4) when upgraded modifier is applied', () => {
+      service.applyModifier(modifierEffect(HIGH_PERCH_STAT, 0.4, 1));
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBeCloseTo(0.4, 5);
+    });
+
+    it('stacking two HIGH_PERCH copies sums additively (0.25 + 0.25 = 0.5)', () => {
+      // Two copies of the same card → modifier aggregator sums them.
+      service.applyModifier(modifierEffect(HIGH_PERCH_STAT, 0.25, 1));
+      service.applyModifier(modifierEffect(HIGH_PERCH_STAT, 0.25, 1));
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBeCloseTo(0.5, 5);
+    });
+
+    it('modifier expires after tickWave (duration = 1)', () => {
+      service.applyModifier(modifierEffect(HIGH_PERCH_STAT, 0.25, 1));
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBeCloseTo(0.25, 5);
+
+      service.tickWave();
+
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBe(0);
+    });
+
+    it('modifier persists on tickWave when duration > 1', () => {
+      service.applyModifier(modifierEffect(HIGH_PERCH_STAT, 0.25, 2));
+      service.tickWave();
+
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBeCloseTo(0.25, 5);
+
+      service.tickWave();
+
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBe(0);
+    });
+
+    it('reset clears the HIGH_PERCH modifier', () => {
+      service.applyModifier(modifierEffect(HIGH_PERCH_STAT, 0.25, 1));
+      service.reset();
+      expect(service.getModifierValue(HIGH_PERCH_STAT)).toBe(0);
+    });
+  });
 });
