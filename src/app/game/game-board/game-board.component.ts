@@ -1246,6 +1246,10 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         const newTileY = entry.value + BOARD_CONFIG.tileHeight / 2;
         this.meshRegistry.translateTileMesh(entry.row, entry.col, newTileY);
       }
+      // Sprint 39: recreate cliff meshes for all restored elevated tiles.
+      // elevationService.restore() only reloads the journal; cliff meshes (visual-only)
+      // must be recreated separately since they are not serialized (derived from elevation).
+      this.elevationService.restoreCliffMeshes(checkpoint.tileElevations.elevations);
 
       // Step 4: Restore towers — create meshes, register in TowerCombatService
       const towerMeshes = new Map<string, THREE.Group>();

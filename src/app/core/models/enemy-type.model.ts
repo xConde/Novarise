@@ -14,4 +14,6 @@ export enum EnemyType {
   GLIDER = 'GLIDER',
   // Sprint 38 — Highground archetype: elite that halves elevation damage bonuses against it
   TITAN = 'TITAN',
+  // Sprint 39 — Highground archetype: boss counter that is fully immune to elevation damage bonuses
+  WYRM_ASCENDANT = 'WYRM_ASCENDANT',
 }

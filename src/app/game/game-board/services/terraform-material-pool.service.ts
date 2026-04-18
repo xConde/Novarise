@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 
 import { MutationOp } from './path-mutation.types';
+import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 
 /**
  * Color definitions for each mutation operation.
@@ -61,6 +62,13 @@ export class TerraformMaterialPoolService {
   private readonly pool = new Map<MutationOp, THREE.MeshStandardMaterial>();
 
   /**
+   * Shared material for cliff column meshes placed under raised tiles (sprint 39).
+   * Lazily created on first access; disposed by dispose() at encounter teardown.
+   * The pool owns this material — cliff meshes must NOT dispose it individually.
+   */
+  private cliffMaterial: THREE.MeshStandardMaterial | null = null;
+
+  /**
    * Return the shared material for the given mutation op.
    * Lazily creates the material on first access; subsequent calls return the
    * same instance (identity equality guaranteed).
@@ -82,11 +90,28 @@ export class TerraformMaterialPoolService {
   }
 
   /**
+   * Return the shared cliff material (stone-gray, sprint 39).
+   * Lazily created on first access. Cliff meshes share this material
+   * and must NOT dispose it — pool owns the lifecycle via dispose().
+   */
+  getCliffMaterial(): THREE.MeshStandardMaterial {
+    if (!this.cliffMaterial) {
+      this.cliffMaterial = new THREE.MeshStandardMaterial({
+        color: ELEVATION_CONFIG.CLIFF_MATERIAL_COLOR,
+        metalness: 0.1,
+        roughness: 0.85,
+      });
+    }
+    return this.cliffMaterial;
+  }
+
+  /**
    * Returns true if `material` is one of the pooled instances.
    * Used by PathMutationService.swapMesh() and GameSessionService.cleanupScene()
    * to guard against disposing a shared material when replacing a single mesh.
    */
   isPoolMaterial(material: THREE.Material): boolean {
+    if (material === this.cliffMaterial) return true;
     return Array.from(this.pool.values()).includes(
       material as THREE.MeshStandardMaterial,
     );
@@ -95,10 +120,12 @@ export class TerraformMaterialPoolService {
   /**
    * Dispose all pooled materials and reset the cache.
    * Called once by GameSessionService.cleanupScene() at encounter teardown.
-   * After this call, the next getMaterial() returns a fresh instance.
+   * After this call, the next getMaterial() / getCliffMaterial() returns a fresh instance.
    */
   dispose(): void {
     this.pool.forEach(mat => mat.dispose());
     this.pool.clear();
+    this.cliffMaterial?.dispose();
+    this.cliffMaterial = null;
   }
 }

@@ -3932,3 +3932,228 @@ describe('TowerCombatService TITAN elevation damage reduction (sprint 38)', () =
     expect(10000 - titan.health).toBe(Math.round(BASE_DAMAGE * 1.5));
   });
 });
+
+// ── Sprint 39 — WYRM_ASCENDANT immuneToElevationDamageBonuses integration ──
+describe('TowerCombatService WYRM_ASCENDANT elevation damage immunity (sprint 39)', () => {
+  /**
+   * Test vector from spec:
+   *   base BASIC damage = BASE_DAMAGE (10), VP × 1.5, no KOTH
+   *   normal:         Math.round(10 × 1.5) = 15
+   *   TITAN (halve):  Math.round(10 + (15 - 10) × 0.5) = 13
+   *   WYRM (immune):  Math.round(15 / 1.5) = Math.round(10) = 10  ← base without elevation
+   *
+   * Combined VP + KOTH:
+   *   base=10, VP=1.5, KOTH=2 → combinedMult=3 → stats.damage=Math.round(10×3)=30
+   *   WYRM: Math.round(30/3) = 10  ← still base-without-elevation
+   *   TITAN: Math.round(10 + (30-10)×0.5) = Math.round(10+10) = 20
+   */
+
+  const WYRM_ROW = 2;
+  const WYRM_COL = 2;
+  const WYRM_WORLD_X = (WYRM_COL - 25 / 2);  // -10.5
+  const WYRM_WORLD_Z = (WYRM_ROW - 20 / 2);  // -8
+  const WYRM_TURN = 1;
+  const VP_STAT = MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS;
+  const KOTH_STAT = MODIFIER_STAT.KING_OF_THE_HILL_DAMAGE_BONUS;
+  const BASE_DAMAGE = TOWER_CONFIGS[TowerType.BASIC].damage;
+
+  let wyrmSvc: TowerCombatService;
+  let wyrmEnemyMap: Map<string, Enemy>;
+  let wyrmElevSpy: jasmine.SpyObj<ElevationService>;
+  let wyrmCardEffectSpy: jasmine.SpyObj<CardEffectService>;
+
+  function buildWyrmTestBed(
+    tileMap: Map<string, number>,
+    maxElev: number,
+  ): void {
+    wyrmEnemyMap = new Map();
+    wyrmElevSpy = jasmine.createSpyObj<ElevationService>('ElevationService', [
+      'getElevation', 'getMaxElevation', 'raise', 'depress', 'setAbsolute',
+      'collapse', 'getElevationMap', 'getActiveChanges', 'tickTurn', 'reset',
+      'serialize', 'restore',
+    ]);
+    wyrmElevSpy.getMaxElevation.and.returnValue(maxElev);
+    wyrmElevSpy.getElevation.and.callFake((row: number, col: number) =>
+      tileMap.get(`${row}-${col}`) ?? 0,
+    );
+    wyrmCardEffectSpy = createCardEffectServiceSpy();
+
+    const pathSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset'],
+    );
+    pathSpy.getPathToExitLength.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(wyrmEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: wyrmCardEffectSpy },
+        { provide: PathfindingService, useValue: pathSpy },
+        { provide: ElevationService, useValue: wyrmElevSpy },
+      ],
+    });
+
+    wyrmSvc = TestBed.inject(TowerCombatService);
+    wyrmSvc.registerTower(WYRM_ROW, WYRM_COL, TowerType.BASIC, new THREE.Group());
+  }
+
+  afterEach(() => { TestBed.resetTestingModule(); });
+
+  it('spec test vector: VP×1.5 → non-WYRM gets Math.round(BASE×1.5)', () => {
+    // Normal target should see full elevation bonus.
+    buildWyrmTestBed(new Map([[`${WYRM_ROW}-${WYRM_COL}`, 1]]), 1);
+    wyrmCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0,
+    );
+    const normal = createTestEnemy('e-normal', WYRM_WORLD_X, WYRM_WORLD_Z, 10000);
+    wyrmEnemyMap.set('e-normal', normal);
+    wyrmSvc.fireTurn(new THREE.Scene(), WYRM_TURN);
+    expect(10000 - normal.health).toBe(Math.round(BASE_DAMAGE * 1.5));
+  });
+
+  it('spec test vector: VP×1.5 → WYRM receives base-without-elevation (immune)', () => {
+    // WYRM strips the elevation bonus entirely: damage = Math.round(fullDamage / combinedMult)
+    // VP mult = 1+0.5=1.5; stats.damage = Math.round(10*1.5)=15; WYRM: Math.round(15/1.5)=10
+    buildWyrmTestBed(new Map([[`${WYRM_ROW}-${WYRM_COL}`, 1]]), 1);
+    wyrmCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0,
+    );
+    const wyrm = createTestEnemy('e-wyrm', WYRM_WORLD_X, WYRM_WORLD_Z, 10000);
+    wyrm.type = EnemyType.WYRM_ASCENDANT;
+    wyrmEnemyMap.set('e-wyrm', wyrm);
+    wyrmSvc.fireTurn(new THREE.Scene(), WYRM_TURN);
+    const fullDamage = Math.round(BASE_DAMAGE * 1.5);
+    const wyrmDamage = Math.round(fullDamage / 1.5);
+    expect(10000 - wyrm.health).toBe(wyrmDamage);
+    expect(wyrmDamage).toBe(BASE_DAMAGE); // Confirmed: immune path returns base
+  });
+
+  it('VP + KOTH combined → WYRM strips both bonuses (base-without-elevation)', () => {
+    // Tower at elev=2 (maxElev=2) → kothActive. VP=0.5 (mult=1.5), KOTH=1.0 (mult=2).
+    // combined=3; stats.damage=Math.round(BASE×3)=30; WYRM: Math.round(30/3)=10=BASE.
+    buildWyrmTestBed(new Map([[`${WYRM_ROW}-${WYRM_COL}`, 2]]), 2);
+    wyrmCardEffectSpy.getModifierValue.and.callFake((stat: string) => {
+      if (stat === VP_STAT) return 0.5;
+      if (stat === KOTH_STAT) return 1.0;
+      return 0;
+    });
+    const wyrm = createTestEnemy('e-wyrm-vp-koth', WYRM_WORLD_X, WYRM_WORLD_Z, 10000);
+    wyrm.type = EnemyType.WYRM_ASCENDANT;
+    wyrmEnemyMap.set('e-wyrm-vp-koth', wyrm);
+    wyrmSvc.fireTurn(new THREE.Scene(), WYRM_TURN);
+    const fullDamage = Math.round(BASE_DAMAGE * 1.5 * 2); // 30
+    const wyrmDamage = Math.round(fullDamage / (1.5 * 2)); // 10
+    expect(10000 - wyrm.health).toBe(wyrmDamage);
+    expect(wyrmDamage).toBe(BASE_DAMAGE);
+  });
+
+  it('no elevation bonuses active → WYRM takes base damage (fast path)', () => {
+    // Flat board: VP=0, KOTH=0. combinedMult=1. WYRM fast path returns stats.damage unchanged.
+    buildWyrmTestBed(new Map([[`${WYRM_ROW}-${WYRM_COL}`, 0]]), 0);
+    wyrmCardEffectSpy.getModifierValue.and.returnValue(0);
+    const wyrm = createTestEnemy('e-wyrm-flat', WYRM_WORLD_X, WYRM_WORLD_Z, 10000);
+    wyrm.type = EnemyType.WYRM_ASCENDANT;
+    wyrmEnemyMap.set('e-wyrm-flat', wyrm);
+    wyrmSvc.fireTurn(new THREE.Scene(), WYRM_TURN);
+    expect(10000 - wyrm.health).toBe(BASE_DAMAGE);
+  });
+
+  it('WYRM does NOT affect range — tower still fires from elevated position', () => {
+    // With tower at elevation 1, the range multiplier = 1 + 1×0.25 = 1.25.
+    // A WYRM at BASE_RANGE × 1.25 distance away should still be in range.
+    // But a WYRM at BASE_RANGE × 1.3 distance away — strictly beyond base but within
+    // elevated range — should be targetable (elevation range bonus applies).
+    // We verify by placing a WYRM just outside base range but within elevated range;
+    // it should receive damage (confirming it was targeted).
+    const BASE_RANGE = TOWER_CONFIGS[TowerType.BASIC].range;
+    const ELEV_RANGE = BASE_RANGE * (1 + 1 * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION);
+    // Place WYRM at 90% of elevated range — within elevated range, outside base range
+    const wyrmX = WYRM_WORLD_X + BASE_RANGE * 1.15; // beyond base range
+    buildWyrmTestBed(new Map([[`${WYRM_ROW}-${WYRM_COL}`, 1]]), 1);
+    wyrmCardEffectSpy.getModifierValue.and.returnValue(0);
+    const wyrm = createTestEnemy('e-wyrm-range', wyrmX, WYRM_WORLD_Z, 10000);
+    wyrm.type = EnemyType.WYRM_ASCENDANT;
+    wyrmEnemyMap.set('e-wyrm-range', wyrm);
+    wyrmSvc.fireTurn(new THREE.Scene(), WYRM_TURN);
+    // If WYRM is within elevated range, it should take damage.
+    const distFromTower = Math.abs(wyrmX - WYRM_WORLD_X);
+    if (distFromTower <= ELEV_RANGE) {
+      expect(10000 - wyrm.health).toBeGreaterThan(0);
+    } else {
+      // Outside even elevated range — no damage expected
+      expect(10000 - wyrm.health).toBe(0);
+    }
+  });
+
+  it('WYRM + TITAN coexist — each uses its own path independently', () => {
+    // In a single fireTurn there is only one tower (single-shot). So test each
+    // independently with separate buildWyrmTestBed calls (TITAN suite above already
+    // covers TITAN; this test confirms WYRM immunity does not bleed into TITAN logic
+    // by verifying their damage values differ when VP is active).
+    //
+    // WYRM: strips bonus → base-without-elevation
+    // TITAN: halves bonus → base + elev/2
+    const vpMult = 1.5; // VP bonus = 0.5 → mult = 1.5
+    const fullDamage = Math.round(BASE_DAMAGE * vpMult);
+    const wyrmExpected = Math.round(fullDamage / vpMult); // 10 = BASE_DAMAGE
+    const titanExpected = Math.round(BASE_DAMAGE + (fullDamage - BASE_DAMAGE) * ELEVATION_CONFIG.TITAN_ELEVATION_DAMAGE_REDUCTION);
+
+    // WYRM case
+    buildWyrmTestBed(new Map([[`${WYRM_ROW}-${WYRM_COL}`, 1]]), 1);
+    wyrmCardEffectSpy.getModifierValue.and.callFake((s: string) => s === VP_STAT ? 0.5 : 0);
+    const wyrm = createTestEnemy('e-wyrm-coexist', WYRM_WORLD_X, WYRM_WORLD_Z, 10000);
+    wyrm.type = EnemyType.WYRM_ASCENDANT;
+    wyrmEnemyMap.set('e-wyrm-coexist', wyrm);
+    wyrmSvc.fireTurn(new THREE.Scene(), WYRM_TURN);
+    expect(10000 - wyrm.health).toBe(wyrmExpected);
+    TestBed.resetTestingModule();
+
+    // TITAN case — rebuild fresh
+    const titanMap = new Map<string, Enemy>();
+    const titanElevSpy2 = jasmine.createSpyObj<ElevationService>('ElevationService', [
+      'getElevation', 'getMaxElevation', 'raise', 'depress', 'setAbsolute',
+      'collapse', 'getElevationMap', 'getActiveChanges', 'tickTurn', 'reset',
+      'serialize', 'restore',
+    ]);
+    titanElevSpy2.getMaxElevation.and.returnValue(1);
+    titanElevSpy2.getElevation.and.callFake((r: number, c: number) =>
+      r === WYRM_ROW && c === WYRM_COL ? 1 : 0,
+    );
+    const titanCardSpy2 = createCardEffectServiceSpy();
+    const pathSpy2 = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset'],
+    );
+    pathSpy2.getPathToExitLength.and.returnValue(0);
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService, ChainLightningService, CombatVFXService, StatusEffectService, GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(titanMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: titanCardSpy2 },
+        { provide: PathfindingService, useValue: pathSpy2 },
+        { provide: ElevationService, useValue: titanElevSpy2 },
+      ],
+    });
+    const titanSvc2 = TestBed.inject(TowerCombatService);
+    titanSvc2.registerTower(WYRM_ROW, WYRM_COL, TowerType.BASIC, new THREE.Group());
+    titanCardSpy2.getModifierValue.and.callFake((s: string) => s === VP_STAT ? 0.5 : 0);
+    const titan2 = createTestEnemy('e-titan-coexist', WYRM_WORLD_X, WYRM_WORLD_Z, 10000);
+    titan2.type = EnemyType.TITAN;
+    titanMap.set('e-titan-coexist', titan2);
+    titanSvc2.fireTurn(new THREE.Scene(), WYRM_TURN);
+    expect(10000 - titan2.health).toBe(titanExpected);
+
+    // Confirm the two damage values differ when VP is active
+    expect(wyrmExpected).not.toBe(titanExpected);
+    expect(wyrmExpected).toBeLessThan(titanExpected); // WYRM immune → less damage than TITAN halve
+  });
+});

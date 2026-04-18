@@ -433,11 +433,14 @@ export class TowerCombatService {
               }
             }
           } else {
-            // Sprint 38 TITAN — when the target halvesElevationDamageBonuses, split
-            // the elevation-bonus portion of stats.damage and halve it. Applies only
-            // to single-target tower fire; chain/status/mortar damage bypasses.
+            // Sprint 38/39 elevation-immunity per-target adjustment.
+            // WYRM_ASCENDANT (sprint 39): strip all elevation bonus damage → base-without-elevation.
+            // TITAN (sprint 38): halve the elevation bonus portion only.
+            // Chain/status/mortar damage bypasses both checks (only single-target fire applies).
             const targetStats = ENEMY_STATS[target.type];
-            const finalDamage = (targetStats?.halvesElevationDamageBonuses)
+            const finalDamage = (targetStats?.immuneToElevationDamageBonuses)
+              ? this.computeWyrmDamage(stats.damage, towerVantagePointDmgMult, towerKothMult)
+              : (targetStats?.halvesElevationDamageBonuses)
               ? this.computeTitanDamage(stats.damage, towerVantagePointDmgMult, towerKothMult)
               : stats.damage;
             const result = this.enemyService.damageEnemy(target.id, finalDamage);
@@ -690,6 +693,25 @@ export class TowerCombatService {
     const baseWithoutElevation = baseDamage / combinedElevMult;
     const elevationPortion = baseDamage - baseWithoutElevation;
     return Math.round(baseWithoutElevation + elevationPortion * ELEVATION_CONFIG.TITAN_ELEVATION_DAMAGE_REDUCTION);
+  }
+
+  /**
+   * Sprint 39 WYRM_ASCENDANT — strip the elevation-bonus portion entirely.
+   * Returns `baseDamage / combinedElevMult`, i.e. what the tower would deal on
+   * a flat board with no elevation bonuses active. Range bonuses are NOT affected
+   * (tower fires from its elevated position with full range; only damage is stripped).
+   *
+   * Fast path: when no elevation bonuses are active (combinedElevMult === 1),
+   * the result is stats.damage unchanged — identical to a regular target.
+   */
+  private computeWyrmDamage(
+    baseDamage: number,
+    vantagePointDmgMult: number,
+    kothMult: number,
+  ): number {
+    const combinedElevMult = vantagePointDmgMult * kothMult;
+    if (combinedElevMult === 1) return baseDamage; // fast path — no elevation bonus active
+    return Math.round(baseDamage / combinedElevMult);
   }
 
   getTower(key: string): PlacedTower | undefined {

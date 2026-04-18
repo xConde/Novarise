@@ -70,6 +70,15 @@ export interface EnemyStats {
    * Default undefined/false for all other enemies.
    */
   halvesElevationDamageBonuses?: boolean;
+  /**
+   * Sprint 39 WYRM_ASCENDANT boss counter — when true, elevation damage bonuses
+   * (VANTAGE_POINT and KING_OF_THE_HILL multipliers) are stripped entirely in
+   * TowerCombatService.fireTurn, reducing damage to base-without-elevation-bonuses.
+   * Range bonuses still apply (boss is immune to damage bonuses, not range bonuses).
+   * Status tick, chain, and card damage bypass (same carve-out as TITAN).
+   * Default undefined/false for all other enemies.
+   */
+  immuneToElevationDamageBonuses?: boolean;
 }
 
 /** Named constants for UNSHAKEABLE elite stats — no magic numbers inline. */
@@ -137,6 +146,24 @@ export const GLIDER_STATS = {
   color: 0xaaddff,
   size: 0.28,
   leakDamage: 1,
+} as const;
+
+/** Named constants for WYRM_ASCENDANT boss-counter stats — sprint 39 Highground archetype. */
+export const WYRM_ASCENDANT_STATS = {
+  /** High HP — boss-tier bulk, slower than BOSS to compensate for damage immunity. */
+  health: 1400,
+  /** Slow but relentless — cosmetic speed hint; movement driven by tilesPerTurn. */
+  speed: 0.6,
+  tilesPerTurn: 1,
+  value: 120,
+  /**
+   * Deep violet — visually distinct from BOSS magenta, VEINSEEKER crimson, and
+   * UNSHAKEABLE stone gray. The purple hue reinforces "anti-magic / immunity" theme.
+   */
+  color: 0x4b0082,
+  /** Larger than BOSS — imposing, commands attention. */
+  size: 0.70,
+  leakDamage: 6,
 } as const;
 
 /** Named constants for TITAN elite stats — sprint 38 Highground archetype. */
@@ -276,6 +303,17 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     size: TITAN_STATS.size,
     leakDamage: TITAN_STATS.leakDamage,
     halvesElevationDamageBonuses: true,
+  },
+  // Sprint 39 — Highground archetype: boss counter fully immune to elevation damage bonuses
+  [EnemyType.WYRM_ASCENDANT]: {
+    health: WYRM_ASCENDANT_STATS.health,
+    speed: WYRM_ASCENDANT_STATS.speed,
+    tilesPerTurn: WYRM_ASCENDANT_STATS.tilesPerTurn,
+    value: WYRM_ASCENDANT_STATS.value,
+    color: WYRM_ASCENDANT_STATS.color,
+    size: WYRM_ASCENDANT_STATS.size,
+    leakDamage: WYRM_ASCENDANT_STATS.leakDamage,
+    immuneToElevationDamageBonuses: true,
   },
 };
 

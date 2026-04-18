@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy, EnemyType, ENEMY_STATS, ENEMY_MESH_SEGMENTS, MINI_SWARM_STATS } from '../models/enemy.model';
 import { HEALTH_BAR_CONFIG, SHIELD_BAR_CONFIG, SHIELD_VISUAL_CONFIG, ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
-import { BOSS_CROWN_CONFIG, SHIELD_BREAK_CONFIG } from '../constants/effects.constants';
+import { BOSS_CROWN_CONFIG, SHIELD_BREAK_CONFIG, WYRM_ASCENDANT_VISUAL_CONFIG } from '../constants/effects.constants';
 
 @Injectable()
 export class EnemyMeshFactoryService {
@@ -100,6 +100,11 @@ export class EnemyMeshFactoryService {
       this.createBossCrown(mesh, stats.size, stats.color);
     }
 
+    // Add eye-glow ring for WYRM_ASCENDANT (sprint 39)
+    if (enemy.type === EnemyType.WYRM_ASCENDANT) {
+      this.createWyrmEyeGlow(mesh, stats.size);
+    }
+
     return mesh;
   }
 
@@ -164,6 +169,12 @@ export class EnemyMeshFactoryService {
         // Distinct from BOSS sphere and UNSHAKEABLE octahedron.
         return new THREE.CylinderGeometry(size * 0.9, size * 1.1, size * 1.4, 8);
 
+      case EnemyType.WYRM_ASCENDANT:
+        // Sprint 39 — tall narrow cylinder: towering presence reads as boss-counter / apex threat.
+        // Taller aspect ratio than TITAN to emphasise vertical dominance (it lives on Highground boards).
+        // Eye-glow ring added as a child mesh in createWyrmEyeGlow().
+        return new THREE.CylinderGeometry(size * 0.65, size * 0.80, size * 2.2, 10);
+
       case EnemyType.BASIC:
       default:
         // Standard sphere
@@ -195,6 +206,33 @@ export class EnemyMeshFactoryService {
     crown.castShadow = true;
     mesh.add(crown);
     mesh.userData['bossCrown'] = crown;
+  }
+
+  /**
+   * Create and attach a glowing eye-ring to the WYRM_ASCENDANT mesh (sprint 39).
+   * A flat torus positioned near the upper third of the cylinder signals the
+   * boss's "awareness." Disposed with the parent mesh on enemy death/teardown
+   * because it is a child object — Three.js cleans it up via group.traverse.
+   */
+  createWyrmEyeGlow(mesh: THREE.Mesh, size: number): void {
+    const eyeGeometry = new THREE.TorusGeometry(
+      size * WYRM_ASCENDANT_VISUAL_CONFIG.eyeRadiusMultiplier,
+      size * WYRM_ASCENDANT_VISUAL_CONFIG.eyeTubeMultiplier,
+      WYRM_ASCENDANT_VISUAL_CONFIG.eyeRadialSegments,
+      WYRM_ASCENDANT_VISUAL_CONFIG.eyeTubularSegments,
+    );
+    const eyeMaterial = new THREE.MeshStandardMaterial({
+      color: WYRM_ASCENDANT_VISUAL_CONFIG.eyeColor,
+      emissive: WYRM_ASCENDANT_VISUAL_CONFIG.eyeColor,
+      emissiveIntensity: WYRM_ASCENDANT_VISUAL_CONFIG.eyeEmissiveIntensity,
+      roughness: WYRM_ASCENDANT_VISUAL_CONFIG.eyeRoughness,
+      metalness: WYRM_ASCENDANT_VISUAL_CONFIG.eyeMetalness,
+    });
+    const eyeRing = new THREE.Mesh(eyeGeometry, eyeMaterial);
+    eyeRing.position.y = size * WYRM_ASCENDANT_VISUAL_CONFIG.eyeYOffsetMultiplier;
+    eyeRing.castShadow = true;
+    mesh.add(eyeRing);
+    mesh.userData['wyrmEyeGlow'] = eyeRing;
   }
 
   /**

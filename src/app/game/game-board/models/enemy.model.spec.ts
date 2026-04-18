@@ -160,10 +160,11 @@ describe('Enemy Model', () => {
     describe('BOSS enemy stats', () => {
       it('should have highest health and lowest speed among non-elite types', () => {
         const boss = ENEMY_STATS[EnemyType.BOSS];
-        // Boss-tier variants (VEINSEEKER, UNSHAKEABLE) are excluded: they
+        // Boss-tier variants (VEINSEEKER, UNSHAKEABLE, WYRM_ASCENDANT) are excluded: they
         // are co-equal boss-tier units, not subordinate enemy types.
         // VEINSEEKER (sprint 23) shares BOSS health (1000) and exceeds BOSS value (100 vs 50).
-        const BOSS_TIER_VARIANTS: string[] = [EnemyType.VEINSEEKER, EnemyType.UNSHAKEABLE];
+        // WYRM_ASCENDANT (sprint 39): 1400 HP > BOSS 1000 HP by design — apex boss counter.
+        const BOSS_TIER_VARIANTS: string[] = [EnemyType.VEINSEEKER, EnemyType.UNSHAKEABLE, EnemyType.WYRM_ASCENDANT];
 
         Object.entries(ENEMY_STATS).forEach(([type, stats]) => {
           if (type !== EnemyType.BOSS && !BOSS_TIER_VARIANTS.includes(type)) {
@@ -513,12 +514,80 @@ describe('Enemy Model', () => {
       expect(ENEMY_STATS[EnemyType.BASIC].halvesElevationDamageBonuses).toBeFalsy();
     });
 
+    it('BASIC has immuneToElevationDamageBonuses = undefined (not true)', () => {
+      expect(ENEMY_STATS[EnemyType.BASIC].immuneToElevationDamageBonuses).toBeFalsy();
+    });
+
     it('TITAN ignoresElevation is undefined (only halves bonuses, does not ignore)', () => {
       expect(ENEMY_STATS[EnemyType.TITAN].ignoresElevation).toBeFalsy();
     });
 
+    it('TITAN immuneToElevationDamageBonuses is undefined (only halves, does not strip)', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].immuneToElevationDamageBonuses).toBeFalsy();
+    });
+
     it('GLIDER halvesElevationDamageBonuses is undefined (immunity, does not halve)', () => {
       expect(ENEMY_STATS[EnemyType.GLIDER].halvesElevationDamageBonuses).toBeFalsy();
+    });
+
+    it('WYRM_ASCENDANT halvesElevationDamageBonuses is undefined (immune, does not halve)', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].halvesElevationDamageBonuses).toBeFalsy();
+    });
+  });
+
+  // ── Sprint 39 — WYRM_ASCENDANT enemy stats ──────────────────────────────
+  describe('WYRM_ASCENDANT enemy stats (sprint 39)', () => {
+    it('should have a defined WYRM_ASCENDANT entry in ENEMY_STATS', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT]).toBeDefined();
+    });
+
+    it('immuneToElevationDamageBonuses flag is true', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].immuneToElevationDamageBonuses).toBeTrue();
+    });
+
+    it('ignoresElevation flag is absent (falsy) — WYRM does not ignore elevation penalties', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].ignoresElevation).toBeFalsy();
+    });
+
+    it('halvesElevationDamageBonuses flag is absent (falsy) — WYRM uses immune path, not halve path', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].halvesElevationDamageBonuses).toBeFalsy();
+    });
+
+    it('has very high health (boss-tier — must exceed BOSS baseline)', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].health)
+        .toBeGreaterThan(ENEMY_STATS[EnemyType.BOSS].health);
+    });
+
+    it('has tilesPerTurn = 1 (slow boss)', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].tilesPerTurn).toBe(1);
+    });
+
+    it('has leakDamage > BOSS leakDamage (apex boss-counter threat)', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].leakDamage)
+        .toBeGreaterThan(ENEMY_STATS[EnemyType.BOSS].leakDamage);
+    });
+
+    it('has size larger than BOSS (imposing visual)', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].size)
+        .toBeGreaterThan(ENEMY_STATS[EnemyType.BOSS].size);
+    });
+
+    it('has higher value than BOSS (boss-counter reward)', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].value)
+        .toBeGreaterThan(ENEMY_STATS[EnemyType.BOSS].value);
+    });
+
+    it('does not have maxShield or spawnOnDeath', () => {
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].maxShield).toBeUndefined();
+      expect(ENEMY_STATS[EnemyType.WYRM_ASCENDANT].spawnOnDeath).toBeUndefined();
+    });
+
+    it('has a distinct color from BOSS, VEINSEEKER, TITAN, and UNSHAKEABLE', () => {
+      const wyrmColor = ENEMY_STATS[EnemyType.WYRM_ASCENDANT].color;
+      expect(wyrmColor).not.toBe(ENEMY_STATS[EnemyType.BOSS].color);
+      expect(wyrmColor).not.toBe(ENEMY_STATS[EnemyType.VEINSEEKER].color);
+      expect(wyrmColor).not.toBe(ENEMY_STATS[EnemyType.TITAN].color);
+      expect(wyrmColor).not.toBe(ENEMY_STATS[EnemyType.UNSHAKEABLE].color);
     });
   });
 });

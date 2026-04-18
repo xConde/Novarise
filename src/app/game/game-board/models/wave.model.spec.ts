@@ -124,6 +124,41 @@ describe('Wave Model', () => {
       );
       expect(hasTitan).toBeTrue();
     });
+
+    // ── Sprint 39 — WYRM_ASCENDANT wave placement regression guard ───────────
+    it('WYRM_ASCENDANT appears in at least one wave definition (sprint 39 regression guard)', () => {
+      // Sprint 39: WYRM_ASCENDANT placed in wave 10 (boss wave) as the Highground boss counter.
+      // It is appended after VEINSEEKER and does NOT replace it.
+      // If this test fails, a WYRM_ASCENDANT entry was accidentally removed — restore it.
+      const hasWyrm = WAVE_DEFINITIONS.some(wave =>
+        wave.entries!.some(e => e.type === EnemyType.WYRM_ASCENDANT)
+      );
+      expect(hasWyrm).toBeTrue();
+    });
+
+    it('WYRM_ASCENDANT appears in a wave that also contains a BOSS (boss-wave placement guard)', () => {
+      // WYRM_ASCENDANT is a boss-counter — must live in a wave with at least one BOSS entry.
+      // This mirrors the VEINSEEKER placement guard above.
+      const wyrmWaves = WAVE_DEFINITIONS.filter(wave =>
+        wave.entries!.some(e => e.type === EnemyType.WYRM_ASCENDANT)
+      );
+      expect(wyrmWaves.length).toBeGreaterThan(0);
+      const allInBossWaves = wyrmWaves.every(wave =>
+        wave.entries!.some(e => e.type === EnemyType.BOSS)
+      );
+      expect(allInBossWaves).toBeTrue();
+    });
+
+    it('WYRM_ASCENDANT and VEINSEEKER coexist — neither replaced the other', () => {
+      // Sprint 39: WYRM was added to wave 10 ALONGSIDE VEINSEEKER.
+      // Both must be present in the same boss wave (wave 10 as of sprint 39).
+      // If one is missing, a conflation during balance editing removed a boss-counter.
+      const bothPresentInSameWave = WAVE_DEFINITIONS.some(wave =>
+        wave.entries!.some(e => e.type === EnemyType.WYRM_ASCENDANT) &&
+        wave.entries!.some(e => e.type === EnemyType.VEINSEEKER)
+      );
+      expect(bothPresentInSameWave).toBeTrue();
+    });
   });
 
   describe('WaveEntry interface', () => {

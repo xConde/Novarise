@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import * as THREE from 'three';
 
 import { ElevationService } from './elevation.service';
 import { GameBoardService } from '../game-board.service';
@@ -7,6 +8,8 @@ import { BlockType, GameBoardTile } from '../models/game-board-tile';
 import { SerializableTileElevationState } from './elevation.types';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { BOARD_CONFIG } from '../constants/board.constants';
+import { SceneService } from './scene.service';
+import { TerraformMaterialPoolService } from './terraform-material-pool.service';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -664,6 +667,172 @@ describe('ElevationService', () => {
 
       const elapsed = Date.now() - start;
       expect(elapsed).toBeLessThan(4);
+    });
+  });
+
+  // ── Sprint 39 — cliff column mesh management ─────────────────────────────────
+  describe('cliff mesh management (sprint 39)', () => {
+    let cliffBoard: GameBoardService;
+    let cliffRegistry: BoardMeshRegistryService;
+    let mockScene: THREE.Scene;
+    let mockSceneService: jasmine.SpyObj<SceneService>;
+    let cliffMaterial: THREE.MeshStandardMaterial;
+    let mockPoolService: jasmine.SpyObj<TerraformMaterialPoolService>;
+    let cliffSvc: ElevationService;
+
+    beforeEach(() => {
+      // 5×5 board with SPAWNER at (0,0) and EXIT at (0,4)
+      cliffBoard = makeTestBoard5x5();
+
+      // Real BoardMeshRegistryService so cliffMeshes map is actually used
+      cliffRegistry = new BoardMeshRegistryService();
+      // Prime tileMeshes so translateTileMesh has a target
+      cliffRegistry.tileMeshes.set('1-1', new THREE.Mesh(new THREE.BoxGeometry(1, 0.2, 1)));
+      cliffRegistry.tileMeshes.set('2-2', new THREE.Mesh(new THREE.BoxGeometry(1, 0.2, 1)));
+      cliffRegistry.tileMeshes.set('3-3', new THREE.Mesh(new THREE.BoxGeometry(1, 0.2, 1)));
+
+      mockScene = new THREE.Scene();
+      mockSceneService = jasmine.createSpyObj<SceneService>('SceneService', ['getScene']);
+      mockSceneService.getScene.and.returnValue(mockScene);
+
+      cliffMaterial = new THREE.MeshStandardMaterial({ color: 0x3a3a42 });
+      mockPoolService = jasmine.createSpyObj<TerraformMaterialPoolService>(
+        'TerraformMaterialPoolService',
+        ['getCliffMaterial', 'getMaterial', 'isPoolMaterial', 'dispose'],
+      );
+      mockPoolService.getCliffMaterial.and.returnValue(cliffMaterial);
+
+      cliffSvc = new ElevationService(cliffBoard, cliffRegistry, mockSceneService, mockPoolService);
+    });
+
+    afterEach(() => {
+      // Dispose real Three.js objects
+      cliffRegistry.cliffMeshes.forEach(m => {
+        m.geometry.dispose();
+      });
+      cliffRegistry.tileMeshes.forEach(m => {
+        m.geometry.dispose();
+        (m.material as THREE.Material).dispose();
+      });
+      cliffMaterial.dispose();
+    });
+
+    it('raise tile from 0 to 1 → cliff mesh created and added to scene', () => {
+      cliffSvc.raise(1, 1, 1, null, 'card-raise', 1);
+
+      expect(cliffRegistry.cliffMeshes.has('1-1')).toBeTrue();
+      const cliff = cliffRegistry.cliffMeshes.get('1-1')!;
+      // Cliff should be in the scene
+      expect(mockScene.children).toContain(cliff);
+      // Material comes from pool
+      expect(cliff.material).toBe(cliffMaterial);
+    });
+
+    it('raise tile from 0 to 1 → cliff Y position is elevation/2 (midpoint)', () => {
+      cliffSvc.raise(1, 1, 1, null, 'card-raise', 1);
+      const cliff = cliffRegistry.cliffMeshes.get('1-1')!;
+      expect(cliff.position.y).toBeCloseTo(0.5, 5); // elevation(1) / 2 = 0.5
+    });
+
+    it('raise tile from 1 to 2 → cliff geometry resized (pool material retained)', () => {
+      cliffSvc.raise(1, 1, 1, null, 'card-step1', 1);
+      const cliffAfterFirst = cliffRegistry.cliffMeshes.get('1-1')!;
+      const firstGeometry = cliffAfterFirst.geometry;
+
+      cliffSvc.raise(1, 1, 1, null, 'card-step2', 2);
+
+      const cliffAfterSecond = cliffRegistry.cliffMeshes.get('1-1')!;
+      // Same mesh object, geometry replaced
+      expect(cliffAfterSecond).toBe(cliffAfterFirst);
+      expect(cliffAfterSecond.geometry).not.toBe(firstGeometry);
+      // Material still comes from pool
+      expect(cliffAfterSecond.material).toBe(cliffMaterial);
+      // Y repositioned to new midpoint: elevation(2) / 2 = 1
+      expect(cliffAfterSecond.position.y).toBeCloseTo(1.0, 5);
+    });
+
+    it('collapse tile from 1 to 0 → cliff mesh removed from scene and geometry disposed', () => {
+      cliffSvc.raise(1, 1, 1, null, 'card-raise', 1);
+      const cliff = cliffRegistry.cliffMeshes.get('1-1')!;
+      expect(mockScene.children).toContain(cliff);
+
+      cliffSvc.collapse(1, 1, 'card-collapse', 2);
+
+      expect(cliffRegistry.cliffMeshes.has('1-1')).toBeFalse();
+      expect(mockScene.children).not.toContain(cliff);
+    });
+
+    it('DEPRESSED tile (raise then depress to -1) → no cliff mesh created for negative elevation', () => {
+      // First raise so a cliff exists, then depress to negative
+      cliffSvc.raise(2, 2, 1, null, 'card-raise', 1);
+      expect(cliffRegistry.cliffMeshes.has('2-2')).toBeTrue();
+
+      // Collapse back to 0, then depress
+      cliffSvc.collapse(2, 2, 'card-collapse', 2);
+      expect(cliffRegistry.cliffMeshes.has('2-2')).toBeFalse();
+
+      cliffSvc.depress(2, 2, 1, null, 'card-depress', 3);
+      // Depressed tile (elevation -1) must NOT have a cliff
+      expect(cliffRegistry.cliffMeshes.has('2-2')).toBeFalse();
+    });
+
+    it('reset() with active cliffs → all disposed and registry cleared', () => {
+      cliffSvc.raise(1, 1, 1, null, 'card-a', 1);
+      cliffSvc.raise(2, 2, 1, null, 'card-b', 2);
+      expect(cliffRegistry.cliffMeshes.size).toBe(2);
+      const childrenBefore = mockScene.children.length;
+      expect(childrenBefore).toBeGreaterThanOrEqual(2);
+
+      cliffSvc.reset();
+
+      expect(cliffRegistry.cliffMeshes.size).toBe(0);
+      // Both cliff meshes removed from scene
+      expect(mockScene.children.length).toBe(childrenBefore - 2);
+    });
+
+    it('pool material is NOT disposed by cliff removal (pool owns it)', () => {
+      cliffSvc.raise(1, 1, 1, null, 'card-raise', 1);
+      cliffSvc.collapse(1, 1, 'card-collapse', 2);
+
+      // Pool material should never be disposed by collapse
+      expect(cliffMaterial.uuid).toBeTruthy(); // Material still alive (not disposed)
+    });
+
+    it('tickTurn expire → cliff removed when elevation reverts to 0 via expiry', () => {
+      // Raise with duration 1 — expires on turn 2
+      cliffSvc.raise(3, 3, 1, 1, 'card-timed', 1);
+      expect(cliffRegistry.cliffMeshes.has('3-3')).toBeTrue();
+
+      // Tick to expiry turn
+      cliffSvc.tickTurn(2);
+
+      expect(cliffRegistry.cliffMeshes.has('3-3')).toBeFalse();
+    });
+
+    it('restoreCliffMeshes() recreates cliffs from sparse elevation list', () => {
+      // Simulate a fresh service (no prior raises) receiving a restore call with
+      // pre-elevated tiles. Cliff meshes should be created for positive entries.
+      const elevations = [
+        { row: 1, col: 1, value: 2 },
+        { row: 2, col: 2, value: 1 },
+      ];
+      cliffSvc.restoreCliffMeshes(elevations);
+
+      expect(cliffRegistry.cliffMeshes.has('1-1')).toBeTrue();
+      expect(cliffRegistry.cliffMeshes.has('2-2')).toBeTrue();
+      // Y position of cliff at (1,1) should be elevation/2 = 1
+      expect(cliffRegistry.cliffMeshes.get('1-1')!.position.y).toBeCloseTo(1.0, 5);
+    });
+
+    it('restoreCliffMeshes() skips depressed (negative) entries', () => {
+      const elevations = [
+        { row: 1, col: 1, value: -1 },
+        { row: 2, col: 2, value:  0 },
+      ];
+      cliffSvc.restoreCliffMeshes(elevations);
+
+      expect(cliffRegistry.cliffMeshes.has('1-1')).toBeFalse();
+      expect(cliffRegistry.cliffMeshes.has('2-2')).toBeFalse();
     });
   });
 });

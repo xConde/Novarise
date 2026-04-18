@@ -174,9 +174,19 @@ export class GameSessionService {
     });
     this.meshRegistry.tileMeshes.clear();
 
+    // Dispose cliff column meshes (sprint 39 Highground polish).
+    // Cliff geometry is disposed here; material is pool-owned and disposed below.
+    this.meshRegistry.cliffMeshes.forEach(cliffMesh => {
+      scene.remove(cliffMesh);
+      cliffMesh.geometry.dispose();
+      // Material is pool-owned — disposed in the terraformPool.dispose() call below.
+    });
+    this.meshRegistry.cliffMeshes.clear();
+
     // Dispose all pooled terraform materials in one batch.
-    // Must run AFTER tileMeshes.clear() so no mesh still references a pool material.
-    // terraformPool is optional (not present in test contexts without full GameModule).
+    // Must run AFTER tileMeshes.clear() and cliffMeshes.clear() so no mesh still
+    // references a pool material. terraformPool is optional (not present in test contexts
+    // without full GameModule).
     this.terraformPool?.dispose();
 
     // Dispose grid lines

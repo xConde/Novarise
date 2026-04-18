@@ -187,6 +187,27 @@ export const SHIELD_BREAK_CONFIG = {
   breakScale: 2.0,
 } as const;
 
+/**
+ * WYRM_ASCENDANT eye-glow torus visual config (sprint 39).
+ * The torus is added as a child of the WYRM mesh and disposed with it
+ * via Three.js traverse — no manual disposal is needed.
+ */
+export const WYRM_ASCENDANT_VISUAL_CONFIG = {
+  /** Torus inner radius as a multiple of enemy size. */
+  eyeRadiusMultiplier: 0.50,
+  /** Torus tube radius as a multiple of enemy size. */
+  eyeTubeMultiplier: 0.08,
+  eyeRadialSegments: 6,
+  eyeTubularSegments: 16,
+  /** Vivid red eye color — contrasts sharply with the deep violet body. */
+  eyeColor: 0xff2200,
+  eyeEmissiveIntensity: 1.2,
+  eyeRoughness: 0.2,
+  eyeMetalness: 0.8,
+  /** Y offset from cylinder midpoint to upper-third position. */
+  eyeYOffsetMultiplier: 0.7,
+} as const;
+
 /** Per-tower-type projectile appearance — color, emissive, scale, and emissive intensity.
  *  CHAIN and SLOW are omitted: CHAIN uses zigzag arc visuals, SLOW has no projectile. */
 export const PROJECTILE_VISUAL_CONFIG: Partial<Record<TowerType, {

@@ -59,4 +59,23 @@ export const ELEVATION_CONFIG = {
    * portion above the base-without-elevation).
    */
   TITAN_ELEVATION_DAMAGE_REDUCTION: 0.5,
+
+  // ── Sprint 39: Cliff column meshes ─────────────────────────────────────────
+
+  /**
+   * Stone-gray color for the cliff column mesh placed under raised tiles.
+   * Chosen to evoke granite/basalt without competing with the tile color above.
+   * Consumed by TerraformMaterialPoolService cliff material entry.
+   */
+  CLIFF_MATERIAL_COLOR: 0x3a3a42,
+
+  // ── Sprint 39: WYRM_ASCENDANT boss counter (documentary) ───────────────────
+
+  /**
+   * Documentary flag — WYRM_ASCENDANT immuneToElevationDamageBonuses is true.
+   * No runtime usage; keeps the constant file as the single source of truth for
+   * the elevation-immunity model so sprint 79 balance passes don't need to hunt
+   * through service code.
+   */
+  WYRM_BASE_DAMAGE_IMMUNITY: true,
 } as const;

@@ -455,4 +455,69 @@ describe('EnemyMeshFactoryService', () => {
       heavyGeom.dispose();
     });
   });
+
+  // --- WYRM_ASCENDANT geometry + eye-glow (sprint 39) ---
+
+  describe('WYRM_ASCENDANT geometry and mesh (sprint 39)', () => {
+    let geom: THREE.BufferGeometry;
+
+    beforeEach(() => {
+      geom = service.createEnemyGeometry(EnemyType.WYRM_ASCENDANT, ENEMY_STATS[EnemyType.WYRM_ASCENDANT].size);
+    });
+
+    afterEach(() => {
+      geom.dispose();
+    });
+
+    it('returns a CylinderGeometry for WYRM_ASCENDANT', () => {
+      expect(geom).toBeInstanceOf(THREE.CylinderGeometry);
+    });
+
+    it('WYRM_ASCENDANT mesh from createEnemyMesh is a THREE.Mesh', () => {
+      const enemy = makeEnemy(EnemyType.WYRM_ASCENDANT);
+      const mesh = service.createEnemyMesh(enemy);
+      createdMeshes.push(mesh);
+
+      expect(mesh).toBeInstanceOf(THREE.Mesh);
+      expect(mesh.geometry).toBeInstanceOf(THREE.CylinderGeometry);
+    });
+
+    it('WYRM_ASCENDANT mesh has eye-glow child (wyrmEyeGlow in userData)', () => {
+      const enemy = makeEnemy(EnemyType.WYRM_ASCENDANT);
+      const mesh = service.createEnemyMesh(enemy);
+      createdMeshes.push(mesh);
+
+      expect(mesh.userData['wyrmEyeGlow']).toBeDefined();
+      expect(mesh.userData['wyrmEyeGlow']).toBeInstanceOf(THREE.Mesh);
+    });
+
+    it('WYRM_ASCENDANT eye-glow uses TorusGeometry', () => {
+      const enemy = makeEnemy(EnemyType.WYRM_ASCENDANT);
+      const mesh = service.createEnemyMesh(enemy);
+      createdMeshes.push(mesh);
+
+      const eyeGlow = mesh.userData['wyrmEyeGlow'] as THREE.Mesh;
+      expect(eyeGlow.geometry).toBeInstanceOf(THREE.TorusGeometry);
+    });
+
+    it('WYRM_ASCENDANT mesh does NOT have a bossCrown (BOSS-only decoration)', () => {
+      const enemy = makeEnemy(EnemyType.WYRM_ASCENDANT);
+      const mesh = service.createEnemyMesh(enemy);
+      createdMeshes.push(mesh);
+
+      expect(mesh.userData['bossCrown']).toBeUndefined();
+    });
+
+    it('WYRM_ASCENDANT geometry is a CylinderGeometry (same as TITAN) but different instance', () => {
+      const titanGeom = service.createEnemyGeometry(EnemyType.TITAN, ENEMY_STATS[EnemyType.TITAN].size);
+      expect(geom.constructor).toBe(titanGeom.constructor); // Both CylinderGeometry
+      expect(geom).not.toBe(titanGeom);                      // But different instances
+      titanGeom.dispose();
+    });
+
+    it('createEnemyGeometry for WYRM_ASCENDANT disposes without error', () => {
+      const testGeom = service.createEnemyGeometry(EnemyType.WYRM_ASCENDANT, 0.7);
+      expect(() => testGeom.dispose()).not.toThrow();
+    });
+  });
 });

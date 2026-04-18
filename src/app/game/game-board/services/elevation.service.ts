@@ -1,4 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
+import * as THREE from 'three';
 
 import { GameBoardService } from '../game-board.service';
 import { BoardMeshRegistryService } from './board-mesh-registry.service';
@@ -12,6 +13,8 @@ import {
   ElevationResult,
   SerializableTileElevationState,
 } from './elevation.types';
+import { SceneService } from './scene.service';
+import { TerraformMaterialPoolService } from './terraform-material-pool.service';
 
 /**
  * Runtime tile elevation service for the Highground archetype.
@@ -39,6 +42,17 @@ export class ElevationService {
   constructor(
     private readonly gameBoardService: GameBoardService,
     private readonly registry: BoardMeshRegistryService,
+    /**
+     * @Optional() — SceneService is not registered in ElevationService test beds.
+     * When absent, cliff mesh creation/removal is skipped gracefully (test contexts
+     * have no WebGL scene to attach meshes to).
+     */
+    @Optional() private readonly sceneService?: SceneService,
+    /**
+     * @Optional() — TerraformMaterialPoolService is not registered in all test beds.
+     * When absent, cliff mesh creation is skipped (no material → no mesh).
+     */
+    @Optional() private readonly terraformPool?: TerraformMaterialPoolService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -185,8 +199,21 @@ export class ElevationService {
     this.journal = this.journal.filter(c => c.expiresOnTurn !== currentTurn);
   }
 
-  /** Full clear — called on encounter teardown / abandon / victory / defeat. */
+  /**
+   * Full clear — called on encounter teardown / abandon / victory / defeat.
+   * Disposes all cliff meshes (geometry only — material is pool-owned and
+   * will be disposed by TerraformMaterialPoolService.dispose() separately).
+   */
   reset(): void {
+    const scene = this.sceneService?.getScene();
+    // Guard: cliffMeshes may be undefined in lightweight test beds that inject a
+    // spy-only BoardMeshRegistryService without the cliff map property.
+    this.registry.cliffMeshes?.forEach(cliffMesh => {
+      scene?.remove(cliffMesh);
+      cliffMesh.geometry.dispose();
+      // Material is pool-owned — DO NOT dispose here.
+    });
+    this.registry.cliffMeshes?.clear();
     this.journal = [];
     this.nextId = 0;
   }
@@ -223,6 +250,27 @@ export class ElevationService {
   restore(snapshot: SerializableTileElevationState): void {
     this.journal = [...snapshot.changes];
     this.nextId = snapshot.nextId;
+  }
+
+  /**
+   * Recreate cliff meshes for all tiles with non-zero elevation in the given sparse list.
+   *
+   * Called by GameBoardComponent.restoreFromCheckpoint() (Step 3.6) AFTER both
+   * `elevationService.restore()` and the tile-data / mesh-translation loop. This is
+   * necessary because cliff meshes are NOT serialized — they are purely visual and are
+   * derived from the per-tile elevation values. Restoring journal + tile data alone
+   * leaves no cliffs visible; this method recreates them from the elevation list.
+   *
+   * @param elevations Sparse list of {row, col, value} entries from the checkpoint.
+   *   Only positive-elevation tiles are processed (depression = no cliff).
+   */
+  restoreCliffMeshes(elevations: readonly { row: number; col: number; value: number }[]): void {
+    for (const entry of elevations) {
+      if (entry.value > 0) {
+        // Treat priorElevation=0 so updateCliffMesh creates a new cliff
+        this.updateCliffMesh(entry.row, entry.col, 0, entry.value);
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -266,6 +314,11 @@ export class ElevationService {
       const newTowerY = newElevation + BOARD_CONFIG.tileHeight;
       this.registry.translateTowerMesh(row, col, newTowerY);
     }
+
+    // ── Cliff column mesh management (sprint 39 Highground polish) ────────────
+    // DEPRESSED tiles (elevation < 0) never get a cliff — depression is a hole.
+    // Spawner/exit tiles are already rejected above — no cliff is possible.
+    this.updateCliffMesh(row, col, priorElevation, newElevation);
 
     // ── CRITICAL: do NOT invalidate pathfinding cache (spike §11) ───────────
 
@@ -346,6 +399,9 @@ export class ElevationService {
       return;
     }
 
+    // Read current elevation BEFORE revert to know the transition direction
+    const currentElevation = this.getElevation(change.row, change.col);
+
     // Revert tile data
     this.gameBoardService.setTileElevation(change.row, change.col, change.priorElevation);
 
@@ -359,6 +415,89 @@ export class ElevationService {
       this.registry.translateTowerMesh(change.row, change.col, revertTowerY);
     }
 
+    // Cliff column mesh management on revert (sprint 39)
+    this.updateCliffMesh(change.row, change.col, currentElevation, change.priorElevation);
+
     // CRITICAL: do NOT invalidate pathfinding cache (spike §11)
+  }
+
+  /**
+   * Manage the cliff column mesh for a tile transitioning from `priorElevation` to
+   * `newElevation` (sprint 39 Highground polish — elevation-model.md §8 "Option B").
+   *
+   * Rules:
+   *  - newElevation > 0, priorElevation === 0 → CREATE cliff mesh.
+   *  - newElevation > 0, priorElevation > 0   → RESIZE cliff (dispose old geometry,
+   *                                             create new geometry; material stays pooled).
+   *  - newElevation === 0, priorElevation > 0  → REMOVE and geometry-dispose cliff mesh.
+   *  - newElevation < 0 (DEPRESSED)            → no cliff; depression is a hole.
+   *
+   * The tile mesh is centered at newY = newElevation + tileHeight/2, so the cliff
+   * must extend from Y=0 up to the BOTTOM of the tile top surface at Y=newElevation.
+   * We position the cliff box at Y=newElevation/2 with height=newElevation.
+   *
+   * @param row         Tile row index.
+   * @param col         Tile column index.
+   * @param priorElevation Elevation before this change.
+   * @param newElevation   Elevation after this change.
+   */
+  private updateCliffMesh(
+    row: number,
+    col: number,
+    priorElevation: number,
+    newElevation: number,
+  ): void {
+    // Only support cliff meshes when the full scene/pool DI stack is available.
+    if (!this.sceneService || !this.terraformPool) return;
+    const scene = this.sceneService.getScene();
+    if (!scene) return;
+
+    // DEPRESSED tiles (elevation < 0) never get a cliff.
+    if (newElevation < 0) return;
+
+    const key = `${row}-${col}`;
+    const existingCliff = this.registry.cliffMeshes.get(key);
+    const tileSize = BOARD_CONFIG.tileSize;
+
+    if (newElevation === 0) {
+      // ── Remove cliff (elevation returned to ground level) ──────────────────
+      if (existingCliff) {
+        scene.remove(existingCliff);
+        existingCliff.geometry.dispose();
+        // Material is pool-owned — DO NOT dispose.
+        this.registry.cliffMeshes.delete(key);
+      }
+      return;
+    }
+
+    // newElevation > 0 — need a cliff.
+    const cliffHeight = newElevation; // extends from Y=0 to Y=newElevation
+    const cliffMaterial = this.terraformPool.getCliffMaterial();
+
+    if (existingCliff) {
+      // ── Resize existing cliff (elevation changed while remaining > 0) ───────
+      existingCliff.geometry.dispose();
+      existingCliff.geometry = new THREE.BoxGeometry(tileSize, cliffHeight, tileSize);
+      existingCliff.position.y = cliffHeight / 2;
+    } else {
+      // ── Create new cliff ─────────────────────────────────────────────────────
+      const cliffGeometry = new THREE.BoxGeometry(tileSize, cliffHeight, tileSize);
+      const cliffMesh = new THREE.Mesh(cliffGeometry, cliffMaterial);
+
+      // Position at tile world XZ center; Y centered at half the cliff height.
+      const boardWidth = this.gameBoardService.getBoardWidth();
+      const boardHeight = this.gameBoardService.getBoardHeight();
+      // gridToWorld convention: worldX = (col - boardWidth/2) * tileSize
+      //                         worldZ = (row - boardHeight/2) * tileSize
+      cliffMesh.position.set(
+        (col - boardWidth / 2) * tileSize,
+        cliffHeight / 2,
+        (row - boardHeight / 2) * tileSize,
+      );
+      cliffMesh.receiveShadow = true;
+
+      scene.add(cliffMesh);
+      this.registry.cliffMeshes.set(key, cliffMesh);
+    }
   }
 }

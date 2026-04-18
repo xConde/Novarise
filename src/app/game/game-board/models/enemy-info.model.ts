@@ -176,4 +176,17 @@ export const ENEMY_INFO: Record<EnemyType, EnemyInfo> = {
     color: ENEMY_STATS[EnemyType.TITAN].color,
     immunities: [],
   },
+  // Sprint 39 — Highground archetype boss counter
+  [EnemyType.WYRM_ASCENDANT]: {
+    type: EnemyType.WYRM_ASCENDANT,
+    name: 'Wyrm Ascendant',
+    description: 'Highground boss counter. Immune to all elevation-based damage bonuses — VANTAGE_POINT and KING_OF_THE_HILL deal only base damage against it. Range bonuses still apply.',
+    health: ENEMY_STATS[EnemyType.WYRM_ASCENDANT].health,
+    speed: ENEMY_STATS[EnemyType.WYRM_ASCENDANT].speed,
+    reward: ENEMY_STATS[EnemyType.WYRM_ASCENDANT].value,
+    leakDamage: ENEMY_STATS[EnemyType.WYRM_ASCENDANT].leakDamage,
+    special: 'Immune to elevation damage bonuses; 6 leak damage',
+    color: ENEMY_STATS[EnemyType.WYRM_ASCENDANT].color,
+    immunities: ['Elevation damage bonuses'],
+  },
 };

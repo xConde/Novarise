@@ -12,6 +12,15 @@ import * as THREE from 'three';
 export class BoardMeshRegistryService {
   readonly tileMeshes = new Map<string, THREE.Mesh>();
   readonly towerMeshes = new Map<string, THREE.Group>();
+  /**
+   * Cliff column meshes placed under raised tiles (sprint 39 Highground polish).
+   * Key: `"${row}-${col}"`. Created by ElevationService.applyElevation when
+   * newElevation > 0 and priorElevation === 0; resized when elevation increases
+   * while > 0; removed and geometry-disposed when elevation returns to 0.
+   * Material is owned by TerraformMaterialPoolService — cliff meshes must NOT
+   * dispose it individually.
+   */
+  readonly cliffMeshes = new Map<string, THREE.Mesh>();
   gridLines: THREE.Group | null = null;
 
   private tileMeshArray: THREE.Mesh[] = [];
@@ -89,6 +98,7 @@ export class BoardMeshRegistryService {
   clear(): void {
     this.tileMeshes.clear();
     this.towerMeshes.clear();
+    this.cliffMeshes.clear();
     this.gridLines = null;
     this.tileMeshArray = [];
     this.towerChildrenArray = [];

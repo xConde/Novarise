@@ -100,10 +100,15 @@ export const WAVE_DEFINITIONS: WaveDefinition[] = [
     ],
     reward: 150
   },
-  // Wave 10: Boss wave with escort — VEINSEEKER added as additional boss-tier threat.
-  // Phase 3 sprint 35 — VEINSEEKER placed here: the Cartographer mutation threshold
-  // (3 path mutations) is realistically achievable by wave 10, triggering its speed
-  // boost. Appended after existing escort; does not replace any existing entry.
+  // Wave 10: Boss wave with escort — VEINSEEKER (sprint 35) and WYRM_ASCENDANT (sprint 39)
+  // added as additional boss-tier threats.
+  // Sprint 39 — WYRM_ASCENDANT placement: wave 10 is the only boss wave in the current
+  // WAVE_DEFINITIONS set (10 waves total). WYRM is appended after VEINSEEKER; it does NOT
+  // replace VEINSEEKER. A long spawn interval (6.0 s) ensures it arrives as a late climax,
+  // after VEINSEEKER has already tested the player's path-mutation defenses.
+  // TODO (sprint 79 balance pass): if a wave 15/20 is added, relocate WYRM_ASCENDANT there
+  // so that VEINSEEKER (wave 10) and WYRM (later wave) serve as distinct Cartographer vs
+  // Highground boss counters with separate wave timing.
   // Balance: placeholder — refine via playtest + sprint 79 balance pass.
   {
     entries: [
@@ -111,7 +116,8 @@ export const WAVE_DEFINITIONS: WaveDefinition[] = [
       { type: EnemyType.SHIELDED, count: 2, spawnInterval: 1.5 },
       { type: EnemyType.SWARM, count: 3, spawnInterval: 1.0 },
       { type: EnemyType.HEAVY, count: 1, spawnInterval: 2.0 },
-      { type: EnemyType.VEINSEEKER, count: 1, spawnInterval: 4.0 }
+      { type: EnemyType.VEINSEEKER, count: 1, spawnInterval: 4.0 },
+      { type: EnemyType.WYRM_ASCENDANT, count: 1, spawnInterval: 6.0 }
     ],
     reward: 250
   }
