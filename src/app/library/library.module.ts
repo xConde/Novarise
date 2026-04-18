@@ -6,12 +6,14 @@ import { IconComponent } from '@shared/components/icon/icon.component';
 import { CardLibraryComponent } from './card-library.component';
 import { LibraryCardTileComponent } from './components/library-card-tile.component';
 import { CardDetailModalComponent } from './components/card-detail-modal.component';
+import { LibraryFiltersComponent } from './components/library-filters.component';
 
 @NgModule({
   declarations: [
     CardLibraryComponent,
     LibraryCardTileComponent,
     CardDetailModalComponent,
+    LibraryFiltersComponent,
   ],
   imports: [
     CommonModule,

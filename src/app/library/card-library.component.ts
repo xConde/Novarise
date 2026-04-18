@@ -1,19 +1,23 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component } from '@angular/core';
-import { CardDefinition, CardRarity, CardType } from '../run/models/card.model';
+import {
+  CardArchetype,
+  CardDefinition,
+  CardRarity,
+  CardType,
+} from '../run/models/card.model';
 import { CARD_DEFINITIONS } from '../run/constants/card-definitions';
+import {
+  DEFAULT_FILTERS,
+  FilterState,
+  KeywordFilter,
+  SortMode,
+} from './components/library-filters.component';
 
 /**
  * Dev-only /library route. Full read-only inventory of every card in
  * CARD_DEFINITIONS so we can QA balance + visuals + archetype coverage
  * without grinding the reward pool. Gated by the enableDevTools env flag
  * at the route level (see devLibraryGuard).
- *
- * L1: route + all-cards grid.
- * L2: detail modal on tile click.
- * L3: filters + sort + search.
- * L4: SeenCardsService + hook points.
- * L5: Seen/Unseen tabs + desaturated unseen state.
- * L6: Add-to-test-deck dev action.
  */
 @Component({
   selector: 'app-card-library',
@@ -22,12 +26,19 @@ import { CARD_DEFINITIONS } from '../run/constants/card-definitions';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CardLibraryComponent {
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef) {
+    this.recomputeFiltered();
+  }
 
-  /** Ordered by archetype then rarity then name for a predictable grid. */
-  readonly allCards: readonly CardDefinition[] = Object.values(CARD_DEFINITIONS).sort(compareCards);
+  /** Raw source — unordered, unfiltered. */
+  readonly allCards: readonly CardDefinition[] = Object.values(CARD_DEFINITIONS);
 
   readonly totalCards = this.allCards.length;
+
+  filterState: FilterState = DEFAULT_FILTERS;
+
+  /** Derived view after filter + sort + search. Recomputed on state change. */
+  filteredCards: readonly CardDefinition[] = [];
 
   /** Currently open detail modal target, or null when closed. */
   selectedCard: CardDefinition | null = null;
@@ -42,6 +53,12 @@ export class CardLibraryComponent {
 
   readonly CardType = CardType;
 
+  onFiltersChange(next: FilterState): void {
+    this.filterState = next;
+    this.recomputeFiltered();
+    this.cdr.markForCheck();
+  }
+
   onCardSelected(card: CardDefinition): void {
     this.selectedCard = card;
     this.cdr.markForCheck();
@@ -52,18 +69,58 @@ export class CardLibraryComponent {
     this.cdr.markForCheck();
   }
 
-  /** Stable trackBy for the card grid *ngFor. */
   trackById(_index: number, card: CardDefinition): string {
     return card.id;
   }
+
+  private recomputeFiltered(): void {
+    const s = this.filterState;
+    let list = this.allCards.filter(card => matchesFilters(card, s));
+    list = [...list].sort(makeComparator(s.sort));
+    this.filteredCards = list;
+  }
 }
 
-/**
- * Comparator: archetype bucket → rarity bucket → name. Keeps the default
- * grid predictable so newly-added cards from the same archetype stay
- * grouped together. Override via the sort dropdown in L3.
- */
-function compareCards(a: CardDefinition, b: CardDefinition): number {
+function matchesFilters(card: CardDefinition, s: FilterState): boolean {
+  if (s.types.size > 0 && !s.types.has(card.type)) return false;
+  if (s.rarities.size > 0 && !s.rarities.has(card.rarity)) return false;
+  if (s.archetypes.size > 0) {
+    const archetype: CardArchetype = card.archetype ?? 'neutral';
+    if (!s.archetypes.has(archetype)) return false;
+  }
+  if (s.keywords.size > 0 && !matchesAnyKeyword(card, s.keywords)) return false;
+  if (card.energyCost < s.energyMin || card.energyCost > s.energyMax) return false;
+  if (s.search.length > 0 && !matchesSearch(card, s.search)) return false;
+  return true;
+}
+
+function matchesAnyKeyword(card: CardDefinition, active: ReadonlySet<KeywordFilter>): boolean {
+  for (const kw of active) {
+    if (kw === 'link'      && card.link)      return true;
+    if (kw === 'terraform' && card.terraform) return true;
+    if (kw === 'innate'    && card.innate)    return true;
+    if (kw === 'retain'    && card.retain)    return true;
+    if (kw === 'ethereal'  && card.ethereal)  return true;
+    if (kw === 'exhaust'   && card.exhaust)   return true;
+  }
+  return false;
+}
+
+function matchesSearch(card: CardDefinition, query: string): boolean {
+  // Lowercased query normalization lives in LibraryFiltersComponent.onSearchInput.
+  const haystack = (card.name + ' ' + card.description + ' ' + (card.upgradedDescription ?? '')).toLowerCase();
+  return haystack.includes(query);
+}
+
+function makeComparator(sort: SortMode): (a: CardDefinition, b: CardDefinition) => number {
+  const rarityRank = (r: CardRarity): number => {
+    switch (r) {
+      case CardRarity.STARTER:  return 0;
+      case CardRarity.COMMON:   return 1;
+      case CardRarity.UNCOMMON: return 2;
+      case CardRarity.RARE:     return 3;
+    }
+  };
   const archetypeRank = (d: CardDefinition): number => {
     switch (d.archetype) {
       case 'cartographer': return 1;
@@ -73,17 +130,23 @@ function compareCards(a: CardDefinition, b: CardDefinition): number {
       default:             return 0; // neutral / undefined first
     }
   };
-  const rarityRank = (r: CardRarity): number => {
-    switch (r) {
-      case CardRarity.STARTER:  return 0;
-      case CardRarity.COMMON:   return 1;
-      case CardRarity.UNCOMMON: return 2;
-      case CardRarity.RARE:     return 3;
-    }
-  };
-  const archDiff = archetypeRank(a) - archetypeRank(b);
-  if (archDiff !== 0) return archDiff;
-  const rarityDiff = rarityRank(a.rarity) - rarityRank(b.rarity);
-  if (rarityDiff !== 0) return rarityDiff;
-  return a.name.localeCompare(b.name);
+
+  switch (sort) {
+    case 'alpha':
+      return (a, b) => a.name.localeCompare(b.name);
+    case 'rarityAsc':
+      return (a, b) => rarityRank(a.rarity) - rarityRank(b.rarity) || a.name.localeCompare(b.name);
+    case 'rarityDesc':
+      return (a, b) => rarityRank(b.rarity) - rarityRank(a.rarity) || a.name.localeCompare(b.name);
+    case 'energyAsc':
+      return (a, b) => a.energyCost - b.energyCost || a.name.localeCompare(b.name);
+    case 'energyDesc':
+      return (a, b) => b.energyCost - a.energyCost || a.name.localeCompare(b.name);
+    case 'archetype':
+    default:
+      return (a, b) =>
+        archetypeRank(a) - archetypeRank(b)
+        || rarityRank(a.rarity) - rarityRank(b.rarity)
+        || a.name.localeCompare(b.name);
+  }
 }

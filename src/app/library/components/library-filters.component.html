@@ -1,0 +1,120 @@
+<div class="filters" role="region" aria-label="Filter and sort cards">
+
+  <!-- Top row: search + sort + clear + match tally. -->
+  <div class="filters__top-row">
+    <label class="filters__search">
+      <span class="visually-hidden">Search cards</span>
+      <input
+        type="search"
+        class="filters__search-input"
+        placeholder="Search by name or description…"
+        [value]="state.search"
+        (input)="onSearchInput($any($event.target).value)">
+    </label>
+
+    <div class="filters__sort">
+      <label for="library-sort" class="filters__sort-label">Sort</label>
+      <select
+        id="library-sort"
+        class="filters__sort-select"
+        [value]="state.sort"
+        (change)="onSortChange($any($event.target).value)">
+        <option *ngFor="let opt of sortOptions" [value]="opt.value">{{ opt.label }}</option>
+      </select>
+    </div>
+
+    <span class="filters__tally" aria-live="polite">
+      {{ totalMatches }} / {{ totalCards }} cards
+    </span>
+
+    <button
+      type="button"
+      class="filters__clear"
+      [disabled]="!hasActiveFilters"
+      [class.filters__clear--disabled]="!hasActiveFilters"
+      (click)="clearAll()"
+      aria-label="Clear all filters">
+      Clear filters
+    </button>
+  </div>
+
+  <!-- Chip groups (multi-select). -->
+  <div class="filters__group" role="group" aria-label="Card type">
+    <span class="filters__group-label">Type</span>
+    <button
+      *ngFor="let opt of typeOptions"
+      type="button"
+      class="chip chip--type chip--{{ opt.value }}"
+      [class.chip--active]="isTypeActive(opt.value)"
+      [attr.aria-pressed]="isTypeActive(opt.value)"
+      (click)="toggleType(opt.value)">
+      {{ opt.label }}
+    </button>
+  </div>
+
+  <div class="filters__group" role="group" aria-label="Rarity">
+    <span class="filters__group-label">Rarity</span>
+    <button
+      *ngFor="let opt of rarityOptions"
+      type="button"
+      class="chip chip--rarity chip--rarity-{{ opt.value }}"
+      [class.chip--active]="isRarityActive(opt.value)"
+      [attr.aria-pressed]="isRarityActive(opt.value)"
+      (click)="toggleRarity(opt.value)">
+      {{ opt.label }}
+    </button>
+  </div>
+
+  <div class="filters__group" role="group" aria-label="Archetype">
+    <span class="filters__group-label">Archetype</span>
+    <button
+      *ngFor="let opt of archetypeOptions"
+      type="button"
+      class="chip chip--archetype chip--archetype-{{ opt.value }}"
+      [class.chip--active]="isArchetypeActive(opt.value)"
+      [attr.aria-pressed]="isArchetypeActive(opt.value)"
+      (click)="toggleArchetype(opt.value)">
+      {{ opt.label }}
+    </button>
+  </div>
+
+  <div class="filters__group" role="group" aria-label="Keyword">
+    <span class="filters__group-label">Keyword</span>
+    <button
+      *ngFor="let opt of keywordOptions"
+      type="button"
+      class="chip chip--keyword"
+      [class.chip--active]="isKeywordActive(opt.value)"
+      [attr.aria-pressed]="isKeywordActive(opt.value)"
+      (click)="toggleKeyword(opt.value)">
+      {{ opt.label }}
+    </button>
+  </div>
+
+  <!-- Energy cost slider (dual min/max). -->
+  <div class="filters__group filters__group--energy" role="group" aria-label="Energy cost range">
+    <span class="filters__group-label">Energy</span>
+    <div class="energy-range">
+      <label class="energy-range__field">
+        <span class="visually-hidden">Minimum energy cost</span>
+        <input
+          type="number"
+          min="0"
+          max="10"
+          [value]="state.energyMin"
+          (change)="onEnergyMinChange($any($event.target).valueAsNumber)">
+      </label>
+      <span class="energy-range__sep" aria-hidden="true">–</span>
+      <label class="energy-range__field">
+        <span class="visually-hidden">Maximum energy cost</span>
+        <input
+          type="number"
+          min="0"
+          max="10"
+          [value]="state.energyMax"
+          (change)="onEnergyMaxChange($any($event.target).valueAsNumber)">
+      </label>
+    </div>
+  </div>
+
+</div>

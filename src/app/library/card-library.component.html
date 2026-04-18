@@ -33,13 +33,27 @@
     </div>
   </header>
 
+  <!-- Filter bar. -->
+  <app-library-filters
+    [state]="filterState"
+    [totalMatches]="filteredCards.length"
+    [totalCards]="totalCards"
+    (stateChange)="onFiltersChange($event)">
+  </app-library-filters>
+
   <!-- Card grid. -->
-  <section class="library__grid" aria-label="All cards">
+  <section class="library__grid" aria-label="Filtered cards" *ngIf="filteredCards.length > 0">
     <app-library-card-tile
-      *ngFor="let card of allCards; trackBy: trackById"
+      *ngFor="let card of filteredCards; trackBy: trackById"
       [definition]="card"
       (selected)="onCardSelected($event)">
     </app-library-card-tile>
+  </section>
+
+  <!-- Empty state. -->
+  <section class="library__empty" *ngIf="filteredCards.length === 0" aria-live="polite">
+    <p class="library__empty-title">No cards match the current filters.</p>
+    <p class="library__empty-hint">Clear one or more filters to see more results.</p>
   </section>
 
   <!-- Detail modal — rendered only while open. -->
