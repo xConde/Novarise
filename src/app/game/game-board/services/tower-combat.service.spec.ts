@@ -4189,6 +4189,7 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
     handshakeBonus: 0,
     formationRangeAdditive: 0,
     gridSurgeBonus: 0,
+    architectClusterActive: false,
     currentTurn: 0,
   };
 
@@ -4374,6 +4375,7 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
       handshakeBonus: 0,                // stage 9 — inactive in this spec
       formationRangeAdditive: 0,        // sprint 44 — inactive
       gridSurgeBonus: 0,                // stage 10 — inactive
+      architectClusterActive: false,    // sprint 49 — inactive
       currentTurn: 0,
     };
     const base = TOWER_CONFIGS[TowerType.SNIPER].damage;
@@ -4685,6 +4687,68 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
       const result = callStackWithGraph(center, { handshakeBonus: 0.15, gridSurgeBonus: 1.0 });
       // base × 1.15 (stage 9 HANDSHAKE) × 2 (stage 10 GRID_SURGE)
       expect(result.damage).toBe(Math.round(base * 1.15 * 2));
+    });
+
+    // ─── Sprint 49 — ARCHITECT cluster propagation ───────────────────────
+
+    it('ARCHITECT active + HANDSHAKE + isolated tower → no bonus (cluster of 1)', () => {
+      const lone = registerTower(5, 5);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(lone, { handshakeBonus: 0.15, architectClusterActive: true });
+      expect(result.damage).toBe(base); // cluster size 1 → 0 effective neighbors
+    });
+
+    it('ARCHITECT active + HANDSHAKE + cluster of 2 → applies bonus', () => {
+      const tA = registerTower(5, 5);
+      registerTower(5, 6);  // neighbor → 2-tower cluster
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tA, { handshakeBonus: 0.15, architectClusterActive: true });
+      expect(result.damage).toBe(Math.round(base * 1.15));
+    });
+
+    it('ARCHITECT extends GRID_SURGE gate — cluster of 5 qualifies even without all 4 spatial neighbors', () => {
+      // Tower at (5,5) with only 2 spatial neighbors (5,6) and (5,7), but
+      // whole cluster is 5 (via an L-shape at (4,7), (3,7)). Without
+      // ARCHITECT: 2 neighbors < 4 (GRID_SURGE_MIN_NEIGHBORS) → no bonus.
+      // With ARCHITECT: cluster-1 = 4 ≥ 4 → bonus applies.
+      const lone = registerTower(5, 5);
+      registerTower(5, 6);   // neighbor of (5,5)
+      registerTower(5, 7);   // neighbor of (5,6)
+      registerTower(4, 7);   // neighbor of (5,7)
+      registerTower(3, 7);   // neighbor of (4,7)
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+
+      // Without ARCHITECT: no bonus (only 1 spatial neighbor at (5,5)).
+      const withoutArchitect = callStackWithGraph(lone, { gridSurgeBonus: 1.0 });
+      expect(withoutArchitect.damage).toBe(base);
+
+      // With ARCHITECT: cluster of 5, so cluster-1 = 4 ≥ MIN (4) → ×2.
+      const withArchitect = callStackWithGraph(lone, { gridSurgeBonus: 1.0, architectClusterActive: true });
+      expect(withArchitect.damage).toBe(Math.round(base * 2));
+    });
+
+    it('ARCHITECT respects disruption — disrupted tower reads cluster of 1', () => {
+      const tA = registerTower(5, 5);
+      registerTower(5, 6); registerTower(5, 7); registerTower(4, 7);
+      // Disrupt (5,5) — should read its cluster as just itself.
+      graph.severTower(5, 5, /* until */ 10, 'test-disruptor');
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tA, {
+        handshakeBonus: 0.15,
+        architectClusterActive: true,
+        currentTurn: 5,
+      });
+      expect(result.damage).toBe(base); // disrupted → cluster of 1 → no bonus
+    });
+
+    it('ARCHITECT inactive → HANDSHAKE still uses literal neighbor count', () => {
+      // Regression — architectClusterActive=false should route through the
+      // legacy getNeighbors path, not the cluster path.
+      const tA = registerTower(5, 5);
+      registerTower(5, 6);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tA, { handshakeBonus: 0.15, architectClusterActive: false });
+      expect(result.damage).toBe(Math.round(base * 1.15));
     });
 
     // ─── Stage 9 — HANDSHAKE composition regression ──────────────────────

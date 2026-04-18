@@ -128,6 +128,23 @@ export const MODIFIER_STAT = {
   // Disruption transparently silences the bonus (disrupted tower reads zero
   // neighbors — same pattern as HANDSHAKE).
   GRID_SURGE_DAMAGE_BONUS: 'gridSurgeDamageBonus',
+
+  // Phase 4 Sprint 49 — ARCHITECT modifier (Conduit rare anchor).
+  //
+  // Boolean flag — encounter-scoped (duration: null). When active, neighbor-
+  // gated cards (HANDSHAKE, GRID_SURGE) substitute `clusterSize - 1` for
+  // the literal 4-dir neighbor count. Effect: a tower in a 10-tower cluster
+  // counts as having 9 neighbors for gate purposes even if it has only 2
+  // spatial adjacencies.
+  //
+  // Interpretation A from the phase-4 session-2 kickoff (extends propagation
+  // radius from 1 to cluster for all neighbor-gated cards). Gives ARCHITECT
+  // a rare-tier identity: transforms the cluster into one adjacency super-
+  // node.
+  //
+  // Disruption still applies — a disrupted tower reads its cluster as just
+  // itself, so the propagation silences transparently.
+  ARCHITECT_CLUSTER_PROPAGATION: 'architectClusterPropagation',
 } as const;
 
 export type ModifierStat = typeof MODIFIER_STAT[keyof typeof MODIFIER_STAT];

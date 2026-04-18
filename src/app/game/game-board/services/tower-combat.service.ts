@@ -110,6 +110,13 @@ export interface DamageStackContext {
    * circuits to 1 with no graph lookup.
    */
   readonly gridSurgeBonus: number;
+  /**
+   * ARCHITECT flag (Phase 4 Conduit rare — sprint 49). When true, neighbor-
+   * gated Conduit cards (HANDSHAKE, GRID_SURGE) use `clusterSize - 1`
+   * instead of literal 4-dir neighbor count for their activation gate.
+   * Encounter-scoped; read once per fireTurn.
+   */
+  readonly architectClusterActive: boolean;
   /** Current turn number — used only by graph reads that honor disruption / virtual-edge expiry. */
   readonly currentTurn: number;
 }
@@ -340,6 +347,13 @@ export class TowerCombatService {
     // `gridSurgeBonus > 0 && neighbors.length >= GRID_SURGE_MIN_NEIGHBORS`.
     const gridSurgeBonus = this.cardEffectService.getModifierValue(MODIFIER_STAT.GRID_SURGE_DAMAGE_BONUS);
 
+    // Phase 4 sprint 49 — ARCHITECT: encounter-scoped flag. When active,
+    // HANDSHAKE / GRID_SURGE gate on `clusterSize - 1` instead of literal
+    // 4-dir neighbor count. Read in composeDamageStack; swaps the neighbor
+    // count source transparently, keeping disruption semantics intact
+    // (disrupted towers read their cluster as themselves only).
+    const architectClusterActive = this.cardEffectService.hasActiveModifier(MODIFIER_STAT.ARCHITECT_CLUSTER_PROPAGATION);
+
     // Phase 4 sprint 45 — LINKWORK: turn-scoped flag. When active, every tower
     // in a cluster of ≥ LINKWORK_MIN_CLUSTER_SIZE gains +LINKWORK_FIRE_RATE_BONUS
     // shots/turn (read via ceil-semantic alongside fireRateBoost). Disrupted
@@ -357,7 +371,7 @@ export class TowerCombatService {
       || pathLengthMultiplier !== 1 || hasElevation || highPerchBonus !== 0
       || vantagePointBonus !== 0 || kothActive
       || handshakeBonus !== 0 || formationRangeAdditive !== 0
-      || gridSurgeBonus !== 0;
+      || gridSurgeBonus !== 0 || architectClusterActive;
 
     // Phase 4 prep — damage + range multiplier composition bundle. Built once per
     // fireTurn; consumed per-tower inside composeDamageStack. See conduit-
@@ -378,6 +392,7 @@ export class TowerCombatService {
       handshakeBonus,
       formationRangeAdditive,
       gridSurgeBonus,
+      architectClusterActive,
       currentTurn: turnNumber,
     };
 
@@ -793,17 +808,24 @@ export class TowerCombatService {
       : 1;
 
     // Sprint 43 HANDSHAKE — per-tower Conduit multiplier. Active iff
-    // `handshakeBonus > 0` AND the tower has ≥ 1 active 4-dir neighbor. The
+    // `handshakeBonus > 0` AND the tower has ≥ 1 effective neighbor. The
     // neighbor read honors disruption (DISRUPTOR / ISOLATOR / DIVIDER) and
     // virtual edges (CONDUIT_BRIDGE, sprint 48) — disrupted towers query to
     // zero neighbors, transparently skipping the bonus.
     //
+    // Sprint 49 ARCHITECT extends the neighbor read to `clusterSize - 1`
+    // when `architectClusterActive` — a tower in a 10-tower cluster with
+    // only 2 spatial neighbors acts as if it had 9 neighbors. Disruption
+    // still applies (disrupted tower reads cluster of 1).
+    //
     // Gate order matters: we short-circuit on `handshakeBonus === 0` so flat
     // (no-Conduit) runs never pay the graph-query cost.
-    const handshakeMult = (ctx.handshakeBonus > 0 && this.towerGraphService !== undefined
-      && this.towerGraphService.getNeighbors(tower.row, tower.col, ctx.currentTurn).length > 0)
-      ? (1 + ctx.handshakeBonus)
-      : 1;
+    const handshakeNeighborCount = (ctx.handshakeBonus > 0 && this.towerGraphService !== undefined)
+      ? (ctx.architectClusterActive
+          ? Math.max(0, this.towerGraphService.getClusterTowers(tower.row, tower.col, ctx.currentTurn).length - 1)
+          : this.towerGraphService.getNeighbors(tower.row, tower.col, ctx.currentTurn).length)
+      : 0;
+    const handshakeMult = handshakeNeighborCount > 0 ? (1 + ctx.handshakeBonus) : 1;
 
     // Sprint 44 FORMATION — additive-to-base range. Active iff `formationRangeAdditive > 0`
     // AND the tower is part of a 3+ straight 4-dir line (via TowerGraphService).
@@ -814,13 +836,19 @@ export class TowerCombatService {
     const rangeAdditive = formationActive ? ctx.formationRangeAdditive : 0;
 
     // Sprint 47 GRID_SURGE — per-tower stage-10 damage multiplier. Active iff
-    // `gridSurgeBonus > 0` AND the tower has ≥ GRID_SURGE_MIN_NEIGHBORS non-
-    // disrupted 4-dir neighbors (read via TowerGraphService.getNeighbors).
+    // `gridSurgeBonus > 0` AND the tower has ≥ GRID_SURGE_MIN_NEIGHBORS
+    // effective neighbors. With ARCHITECT active (sprint 49), effective
+    // neighbor count is `clusterSize - 1` — cluster-wide. Disruption still
+    // shrinks the cluster (disrupted tower reads as cluster of 1).
+    //
     // Short-circuits on `gridSurgeBonus === 0` so pre-Conduit runs pay zero
-    // graph-query cost. A disrupted tower reads zero neighbors (same pattern
-    // as HANDSHAKE) — disruption transparently silences the bonus.
-    const gridSurgeMult = (ctx.gridSurgeBonus > 0 && this.towerGraphService !== undefined
-      && this.towerGraphService.getNeighbors(tower.row, tower.col, ctx.currentTurn).length >= CONDUIT_CONFIG.GRID_SURGE_MIN_NEIGHBORS)
+    // graph-query cost.
+    const gridSurgeNeighborCount = (ctx.gridSurgeBonus > 0 && this.towerGraphService !== undefined)
+      ? (ctx.architectClusterActive
+          ? Math.max(0, this.towerGraphService.getClusterTowers(tower.row, tower.col, ctx.currentTurn).length - 1)
+          : this.towerGraphService.getNeighbors(tower.row, tower.col, ctx.currentTurn).length)
+      : 0;
+    const gridSurgeMult = gridSurgeNeighborCount >= CONDUIT_CONFIG.GRID_SURGE_MIN_NEIGHBORS
       ? (1 + ctx.gridSurgeBonus)
       : 1;
 

@@ -335,6 +335,15 @@ const CARD_VALUES = {
   conduitBridgeCost: 2,
   conduitBridgeDuration: 3,           // turn duration (3 turns, base)
   conduitBridgeUpgradedDuration: 4,   // turn duration (4 turns, upgraded)
+
+  // ── Conduit archetype — ARCHITECT (Sprint 49) ────────────────────────────
+  // ARCHITECT (3E rare anchor): encounter-scoped flag. When active, neighbor-
+  // gated Conduit cards (HANDSHAKE, GRID_SURGE) read the effective neighbor
+  // count as `clusterSize - 1` instead of literal 4-dir adjacency count.
+  // Transforms a sprawling cluster into one giant adjacency super-node.
+  // Value is a sentinel (1).
+  architectCost: 3,
+  architectValue: 1,                  // sentinel — flag modifier
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -1983,6 +1992,50 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
       type: 'utility' as const,
       utilityId: 'bridge_towers',
       value: CARD_VALUES.conduitBridgeUpgradedDuration,
+    },
+    archetype: 'conduit' as const,
+    link: true,
+    terraform: false,
+  },
+
+  /**
+   * ARCHITECT (Sprint 49) — rare anchor. Encounter-scoped flag. While
+   * active, neighbor-gated Conduit cards (HANDSHAKE, GRID_SURGE) substitute
+   * `clusterSize - 1` for their literal 4-dir neighbor count. A tower in a
+   * 10-tower cluster with 2 spatial neighbors acts as if it had 9 neighbors
+   * for gate purposes.
+   *
+   * Interpretation A of the phase-4 session-2 kickoff's "buffs propagate
+   * through Link" clause. Rare-tier identity: transforms the cluster into
+   * a single adjacency super-node.
+   *
+   * Note: the "+1 link slot per tower" mechanic from the plan is deferred —
+   * `tower.linkSlots` is future-proof data with no current consumer. When a
+   * later sprint (relic, rare, or utility) reads link-slot capacity, this
+   * card's upgrade or a companion will increment it.
+   *
+   * NOT terraform. Upgrade slot reserved for future balance tuning.
+   */
+  [CardId.ARCHITECT]: {
+    id: CardId.ARCHITECT,
+    name: 'Architect',
+    description: 'For the rest of this encounter, every tower in a cluster counts as adjacent to every other cluster member for neighbor-gated cards.',
+    upgradedDescription: 'For the rest of this encounter, every tower in a cluster counts as adjacent to every other cluster member for neighbor-gated cards.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.RARE,
+    energyCost: CARD_VALUES.architectCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.ARCHITECT_CLUSTER_PROPAGATION,
+      value: CARD_VALUES.architectValue,
+      duration: null,                 // encounter-scoped
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.ARCHITECT_CLUSTER_PROPAGATION,
+      value: CARD_VALUES.architectValue,
+      duration: null,
     },
     archetype: 'conduit' as const,
     link: true,
