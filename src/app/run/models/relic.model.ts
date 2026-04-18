@@ -42,6 +42,12 @@ export enum RelicId {
 
   // Rare (Highground)
   OROGENY = 'OROGENY',
+
+  // Uncommon (Conduit) — Phase 4 sprint 52
+  TUNING_FORK = 'TUNING_FORK',
+
+  // Rare (Conduit) — Phase 4 sprint 52
+  CONSTELLATION = 'CONSTELLATION',
 }
 
 export enum RelicRarity {
@@ -234,6 +240,22 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: 'Orogeny',
     description: 'Every 5 turns, permanently raise a random tower tile by +1 elevation',
     flavorText: 'Mountains are made turn by turn.',
+    rarity: RelicRarity.RARE,
+  },
+
+  // Sprint 52 — Conduit relic pair
+  [RelicId.TUNING_FORK]: {
+    id: RelicId.TUNING_FORK,
+    name: 'Tuning Fork',
+    description: 'Towers with at least one adjacent tower deal +10% damage',
+    flavorText: 'A single struck note, sustained by its neighbors.',
+    rarity: RelicRarity.UNCOMMON,
+  },
+  [RelicId.CONSTELLATION]: {
+    id: RelicId.CONSTELLATION,
+    name: 'Constellation',
+    description: 'Kills from towers in a cluster of 5+ grant +25% gold',
+    flavorText: 'When towers align, fortunes follow.',
     rarity: RelicRarity.RARE,
   },
 };

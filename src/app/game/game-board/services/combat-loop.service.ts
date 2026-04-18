@@ -29,6 +29,7 @@ import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
 import { TowerGraphService } from './tower-graph.service';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
+import { RELIC_EFFECT_CONFIG } from '../../../run/constants/run.constants';
 
 /**
  * Owns the turn-based combat resolution for the COMBAT phase.
@@ -420,7 +421,25 @@ export class CombatLoopService {
       || (encounter?.isElite ?? false)
       || (encounter?.isBoss ?? false);
     const luckyCoinMult = this.relicService.rollLuckyCoin();
-    const goldMult = this.relicService.getGoldMultiplier(isElite) * luckyCoinMult;
+
+    // Sprint 52 CONSTELLATION — +25% gold when the killing tower is in a
+    // cluster of ≥ 5. DOT ticks and mortar-zone ticks omit towerRow/towerCol
+    // so they skip the gate naturally. Short-circuits when the relic is
+    // absent so non-Conduit runs never query the graph.
+    let constellationMult = 1;
+    if (
+      this.relicService.hasConstellation()
+      && this.towerGraphService !== undefined
+      && killInfo.towerRow !== undefined
+      && killInfo.towerCol !== undefined
+    ) {
+      const clusterSize = this.towerGraphService.getClusterSize(killInfo.towerRow, killInfo.towerCol, this.turnNumber);
+      if (clusterSize >= RELIC_EFFECT_CONFIG.constellationMinClusterSize) {
+        constellationMult = RELIC_EFFECT_CONFIG.constellationClusterGoldMultiplier;
+      }
+    }
+
+    const goldMult = this.relicService.getGoldMultiplier(isElite) * luckyCoinMult * constellationMult;
     const adjustedGold = Math.round(enemy.value * goldMult * cardGoldMult);
     this.gameStateService.addGoldAndScore(adjustedGold);
     this.gameStatsService.recordGoldEarned(adjustedGold);

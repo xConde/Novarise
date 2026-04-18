@@ -28,6 +28,7 @@ import { ElevationService } from './elevation.service';
 import { TowerGraphService } from './tower-graph.service';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { CONDUIT_CONFIG } from '../constants/conduit.constants';
+import { RELIC_EFFECT_CONFIG } from '../../../run/constants/run.constants';
 
 /** M3 S4: turn-based mortar DoT zone. Replaces the legacy real-time path for fireTurn. */
 interface TurnMortarZone {
@@ -635,7 +636,7 @@ export class TowerCombatService {
           hitCount++;
           damageDealt += blastDamage;
           if (result.killed) {
-            killed.push({ id: enemy.id, damage: blastDamage, towerType: tower.type, towerLevel: tower.level });
+            killed.push({ id: enemy.id, damage: blastDamage, towerType: tower.type, towerLevel: tower.level, towerRow: tower.row, towerCol: tower.col });
             tower.kills++;
           } else {
             this.enemyService.startHitFlash(enemy.id);
@@ -681,7 +682,7 @@ export class TowerCombatService {
             hitCount++;
             damageDealt += stats.damage;
             if (result.killed) {
-              killed.push({ id: enemy.id, damage: stats.damage, towerType: tower.type, towerLevel: tower.level });
+              killed.push({ id: enemy.id, damage: stats.damage, towerType: tower.type, towerLevel: tower.level, towerRow: tower.row, towerCol: tower.col });
               tower.kills++;
             } else {
               this.enemyService.startHitFlash(enemy.id);
@@ -709,7 +710,7 @@ export class TowerCombatService {
         hitCount++;
         damageDealt += finalDamage;
         if (result.killed) {
-          killed.push({ id: target.id, damage: finalDamage, towerType: tower.type, towerLevel: tower.level });
+          killed.push({ id: target.id, damage: finalDamage, towerType: tower.type, towerLevel: tower.level, towerRow: tower.row, towerCol: tower.col });
           tower.kills++;
         } else {
           this.enemyService.startHitFlash(target.id);
@@ -794,7 +795,8 @@ export class TowerCombatService {
    *     × kothMult                                              // 8: KING_OF_THE_HILL (elev === max)
    *     × handshakeMult                                         // 9: HANDSHAKE (≥ 1 non-disrupted neighbor — sprint 43)
    *     × gridSurgeMult                                         // 10: GRID_SURGE (≥ 4 non-disrupted neighbors — sprint 47)
-   *     [× conduit multipliers — sprint 48+ plug in here]
+   *     × tuningForkMult                                        // 11: TUNING_FORK relic (≥ 1 non-disrupted neighbor — sprint 52)
+   *     [× conduit multipliers — sprint 53+ plug in here]
    *
    * ## Range stack (6 stages):
    *   (baseStats.range + rangeAdditive)                         // additive-before-multiplicative (§13)
@@ -908,6 +910,22 @@ export class TowerCombatService {
       ? (1 + ctx.gridSurgeBonus)
       : 1;
 
+    // Sprint 52 TUNING_FORK — per-tower stage-11 relic multiplier. When the
+    // relic is owned AND the tower has ≥ 1 non-disrupted neighbor, damage is
+    // multiplied by `tuningForkNeighborDamageMultiplier` (+10% baseline).
+    // Disruption gate is transparent (getNeighbors returns empty for a
+    // disrupted tower). Unlike card modifiers, this applies every turn the
+    // relic is owned — no duration countdown.
+    //
+    // Short-circuits on `hasTuningFork() === false` so runs without the
+    // relic pay zero graph-query cost.
+    const tuningForkActive = this.relicService.hasTuningFork()
+      && this.towerGraphService !== undefined
+      && this.towerGraphService.getNeighbors(tower.row, tower.col, ctx.currentTurn).length > 0;
+    const tuningForkMult = tuningForkActive
+      ? RELIC_EFFECT_CONFIG.tuningForkNeighborDamageMultiplier
+      : 1;
+
     const damage = Math.round(
       baseStats.damage
         * ctx.towerDamageMultiplier
@@ -919,7 +937,8 @@ export class TowerCombatService {
         * vantagePointDmgMult
         * kothMult
         * handshakeMult
-        * gridSurgeMult,
+        * gridSurgeMult
+        * tuningForkMult,
     );
 
     const range = (baseStats.range + rangeAdditive)

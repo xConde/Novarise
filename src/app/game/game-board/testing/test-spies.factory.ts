@@ -898,6 +898,7 @@ export function createRelicServiceSpy(): jasmine.SpyObj<RelicService> {
     'recordTileVisited', 'consumeSurveyorGold', 'getCardEnergyCostModifier',
     'incrementOrogenyCounter', 'getOrogenyTurnCounter', 'isOrogenyTrigger',
     'hasSurveyorRod', 'serializeEncounterFlags', 'restoreEncounterFlags',
+    'hasTuningFork', 'hasConstellation',
   ], ['relicCount']);
 
   spy.getDamageMultiplier.and.returnValue(1);
@@ -925,6 +926,8 @@ export function createRelicServiceSpy(): jasmine.SpyObj<RelicService> {
   spy.getOrogenyTurnCounter.and.returnValue(0);
   spy.isOrogenyTrigger.and.returnValue(false);
   spy.hasSurveyorRod.and.returnValue(false);
+  spy.hasTuningFork.and.returnValue(false);
+  spy.hasConstellation.and.returnValue(false);
   (Object.getOwnPropertyDescriptor(spy, 'relicCount')!.get as jasmine.Spy).and.returnValue(0);
 
   return spy;

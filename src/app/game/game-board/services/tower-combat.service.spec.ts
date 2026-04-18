@@ -4751,6 +4751,54 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
       expect(result.damage).toBe(Math.round(base * 1.15));
     });
 
+    // ─── Sprint 52 — TUNING_FORK relic (stage 11) ────────────────────────
+
+    it('TUNING_FORK owned + tower with ≥ 1 neighbor → +10% damage', () => {
+      const tA = registerTower(5, 5);
+      registerTower(5, 6);
+      relicSpy.hasTuningFork.and.returnValue(true);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tA, {});
+      expect(result.damage).toBe(Math.round(base * 1.1));
+    });
+
+    it('TUNING_FORK owned + isolated tower → no bonus', () => {
+      const tA = registerTower(5, 5);
+      relicSpy.hasTuningFork.and.returnValue(true);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tA, {});
+      expect(result.damage).toBe(base);
+    });
+
+    it('TUNING_FORK not owned → no bonus even with neighbors', () => {
+      const tA = registerTower(5, 5);
+      registerTower(5, 6);
+      // Default spy — hasTuningFork returns false.
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tA, {});
+      expect(result.damage).toBe(base);
+    });
+
+    it('TUNING_FORK respects disruption — disrupted tower gets no bonus', () => {
+      const tA = registerTower(5, 5);
+      registerTower(5, 6);
+      relicSpy.hasTuningFork.and.returnValue(true);
+      graph.severTower(5, 5, /* until */ 10, 'test-disruptor');
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tA, { currentTurn: 5 });
+      expect(result.damage).toBe(base);
+    });
+
+    it('TUNING_FORK stacks with HANDSHAKE — both multipliers apply', () => {
+      const tA = registerTower(5, 5);
+      registerTower(5, 6);
+      relicSpy.hasTuningFork.and.returnValue(true);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      // Stage 9 HANDSHAKE (+15%) × stage 11 TUNING_FORK (+10%)
+      const result = callStackWithGraph(tA, { handshakeBonus: 0.15 });
+      expect(result.damage).toBe(Math.round(base * 1.15 * 1.1));
+    });
+
     // ─── Stage 9 — HANDSHAKE composition regression ──────────────────────
 
     it('HANDSHAKE composes as stage 9 — after all Phase 3 multipliers', () => {

@@ -90,7 +90,7 @@ export class ChainLightningService {
       damageDealt += currentDamage;
       if (chainResult.killed) {
         // Chain kills attribute to the CHAIN tower that fired the first arc.
-        kills.push({ id: currentTarget.id, damage: currentDamage, towerType: tower.type, towerLevel: tower.level });
+        kills.push({ id: currentTarget.id, damage: currentDamage, towerType: tower.type, towerLevel: tower.level, towerRow: tower.row, towerCol: tower.col });
       } else {
         this.enemyService.startHitFlash(currentTarget.id);
         if (stats.statusEffect) {

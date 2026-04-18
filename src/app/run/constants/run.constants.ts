@@ -257,6 +257,15 @@ export const RELIC_EFFECT_CONFIG = {
 
   /** BOUNTY_HUNTER: gold multiplier for elite kills (double). */
   bountyHunterEliteGoldMultiplier: 2,
+
+  /** TUNING_FORK: damage multiplier applied per-tower when the tower has ≥ 1 non-disrupted neighbor (+10%). */
+  tuningForkNeighborDamageMultiplier: 1.1,
+
+  /** CONSTELLATION: gold multiplier applied at kill-time when the killing tower is in a cluster of at least CONSTELLATION_MIN_CLUSTER_SIZE (+25%). */
+  constellationClusterGoldMultiplier: 1.25,
+
+  /** CONSTELLATION: minimum cluster size (inclusive of the killing tower) that activates the gold bonus. */
+  constellationMinClusterSize: 5,
 } as const;
 
 // ── Seeded RNG ────────────────────────────────────────────────
