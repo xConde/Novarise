@@ -194,6 +194,10 @@ const CARD_VALUES = {
   collapseCost: 2,
   collapseDamagePctMaxHp: 0.5,
   collapseUpgradedDamagePctMaxHp: 0.75,
+
+  // DETOUR (sprint 14): 2E uncommon, force all enemies onto the longest valid
+  // path for one step. Modifies enemy routing, NOT tile state — terraform: false.
+  detourCost: 2,
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -1216,6 +1220,31 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     },
     archetype: 'cartographer',
     terraform: true,
+  },
+
+  /**
+   * DETOUR (Sprint 14) — force all enemies onto the longest valid path for
+   * one step. Unlike the terraform-target cards, DETOUR modifies enemy routing
+   * rather than tile state, so it uses `type: 'spell'` and `terraform: false`.
+   *
+   * Design note: the "one step" framing means enemies walk the long route for
+   * one movement resolution and then fall back to normal shortest-path
+   * re-planning at the next waypoint via the existing executeRepath flow.
+   * This buys roughly 1–3 extra turns of travel time depending on the board.
+   */
+  [CardId.DETOUR]: {
+    id: CardId.DETOUR,
+    name: 'Detour',
+    description: 'Force all enemies onto the longest valid path for one step.',
+    upgradedDescription: 'Force all enemies onto the longest valid path for one step.',
+    type: CardType.SPELL,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.detourCost,
+    upgraded: false,
+    effect: { type: 'spell', spellId: 'detour', value: 1 },
+    upgradedEffect: { type: 'spell', spellId: 'detour', value: 1 },
+    archetype: 'cartographer',
+    terraform: false,
   },
 };
 

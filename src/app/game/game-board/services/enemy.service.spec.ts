@@ -3045,6 +3045,92 @@ describe('EnemyService', () => {
   // Ground straight-line fallback — Fix #43: no-path case
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // applyDetour (DETOUR card — Sprint 14)
+  // ---------------------------------------------------------------------------
+
+  describe('applyDetour', () => {
+    it('returns 0 and mutates nothing when no exit tiles exist', () => {
+      // Board with no exit tile
+      const board: GameBoardTile[][] = [];
+      for (let row = 0; row < 10; row++) {
+        board[row] = [];
+        for (let col = 0; col < 10; col++) {
+          board[row][col] = row === 0 && col === 0
+            ? GameBoardTile.createSpawner(row, col)
+            : GameBoardTile.createBase(row, col);
+        }
+      }
+      gameBoardService.getGameBoard.and.returnValue(board);
+
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      // spawnEnemy itself returns null when no exit — but we can check applyDetour
+      // directly even when no enemy is present.
+      const count = service.applyDetour();
+      expect(count).toBe(0);
+    });
+
+    it('skips flying enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.FLYING, mockScene);
+      expect(enemy).toBeTruthy('FLYING enemy should spawn on a standard board');
+      const originalPath = [...(enemy?.path ?? [])];
+
+      const count = service.applyDetour();
+
+      expect(count).toBe(0);
+      expect(enemy?.path).toEqual(originalPath);
+    });
+
+    it('skips dying enemies', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeTruthy();
+      enemy!.dying = true;
+      const originalPathLength = enemy!.path.length;
+
+      const count = service.applyDetour();
+
+      expect(count).toBe(0);
+      expect(enemy!.path.length).toBe(originalPathLength);
+    });
+
+    it('overrides path on a non-flying, non-dying enemy when a longer path exists', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      expect(enemy).toBeTruthy();
+
+      // Give the enemy a very short path (just 2 nodes) so the DFS will find longer.
+      enemy!.path = [
+        { x: 0, y: 0, g: 0, h: 0, f: 0 },
+        { x: 9, y: 9, g: 0, h: 0, f: 0 },
+      ];
+      enemy!.pathIndex = 0;
+
+      const count = service.applyDetour();
+
+      // On a 10×10 open board, the longest path is much longer than 2 nodes.
+      // The count should reflect 1 override.
+      expect(count).toBe(1);
+      expect(enemy!.pathIndex).toBe(0);
+      expect(enemy!.path.length).toBeGreaterThan(2);
+    });
+
+    it('returns the count of enemies whose path was overridden', () => {
+      // Spawn two enemies — both get short paths.
+      const e1 = service.spawnEnemy(EnemyType.BASIC, mockScene);
+      const e2 = service.spawnEnemy(EnemyType.FAST, mockScene);
+      expect(e1).toBeTruthy();
+      expect(e2).toBeTruthy();
+
+      e1!.path = [{ x: 0, y: 0, g: 0, h: 0, f: 0 }, { x: 9, y: 9, g: 0, h: 0, f: 0 }];
+      e1!.pathIndex = 0;
+      e2!.path = [{ x: 0, y: 0, g: 0, h: 0, f: 0 }, { x: 9, y: 9, g: 0, h: 0, f: 0 }];
+      e2!.pathIndex = 0;
+
+      const count = service.applyDetour();
+
+      expect(count).toBeGreaterThanOrEqual(1);
+    });
+  });
+
   describe('ground enemy straight-line fallback — no A* path', () => {
     it('spawns a ground enemy with a straight-line path when A* is blocked', () => {
       // Block every tile except spawner column 0 and exit column 9, forcing

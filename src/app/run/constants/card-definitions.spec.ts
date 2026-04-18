@@ -10,8 +10,8 @@ import { CardId, CardInstance, CardRarity, CardType, TowerCardEffect } from '../
 import { TowerType } from '../../game/game-board/models/tower.model';
 
 describe('CARD_DEFINITIONS', () => {
-  it('has exactly 55 cards', () => {
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(55);
+  it('has exactly 56 cards', () => {
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(56);
   });
 
   it('contains all CardId enum values', () => {
@@ -50,8 +50,8 @@ describe('CARD_DEFINITIONS', () => {
       expect(getCardsByType(CardType.TOWER).length).toBe(12);
     });
 
-    it('has 25 spell cards (16 original + 3 status-applying + 2 status payoff + 4 Cartographer terraform)', () => {
-      expect(getCardsByType(CardType.SPELL).length).toBe(25);
+    it('has 26 spell cards (16 original + 3 status-applying + 2 status payoff + 4 Cartographer terraform + 1 DETOUR)', () => {
+      expect(getCardsByType(CardType.SPELL).length).toBe(26);
     });
 
     it('has 12 modifier cards', () => {
@@ -685,6 +685,39 @@ describe('CARD_DEFINITIONS', () => {
         if (def.upgradedEffect?.type === 'terraform_target') {
           expect(def.upgradedEffect.damageOnHit?.pctMaxHp).toBe(0.75);
         }
+      });
+    });
+
+    describe('DETOUR (Sprint 14)', () => {
+      const def = CARD_DEFINITIONS[CardId.DETOUR];
+
+      it('exists in CARD_DEFINITIONS', () => {
+        expect(def).toBeDefined();
+      });
+
+      it('is tagged archetype: cartographer', () => {
+        expect(def.archetype).toBe('cartographer');
+      });
+
+      it('terraform is explicitly false — DETOUR is NOT a tile-state card', () => {
+        expect(def.terraform).toBe(false);
+      });
+
+      it('costs 2 energy and is UNCOMMON', () => {
+        expect(def.energyCost).toBe(2);
+        expect(def.rarity).toBe(CardRarity.UNCOMMON);
+      });
+
+      it('has type SPELL', () => {
+        expect(def.type).toBe(CardType.SPELL);
+      });
+
+      it('effect is { type: spell, spellId: detour, value: 1 }', () => {
+        expect(def.effect).toEqual({ type: 'spell', spellId: 'detour', value: 1 });
+      });
+
+      it('upgradedEffect matches base effect (no upgrade change for Sprint 14)', () => {
+        expect(def.upgradedEffect).toEqual({ type: 'spell', spellId: 'detour', value: 1 });
       });
     });
   });

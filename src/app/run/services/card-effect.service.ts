@@ -163,10 +163,21 @@ export class CardEffectService {
         this.addModifier(MODIFIER_STAT.FIRE_RATE, effect.value, 1);
         break;
 
+      case 'detour':
+        // Force all non-flying, non-dying enemies onto their longest valid path
+        // for one movement step. See EnemyService.applyDetour for full semantics.
+        this.applyDetour(ctx);
+        break;
+
       // 'salvage' and 'fortify': handled in GameBoardComponent (need tower selection UI).
       default:
         break;
     }
+  }
+
+  /** Delegate DETOUR routing override to EnemyService. */
+  private applyDetour(ctx: SpellContext): void {
+    ctx.enemyService.applyDetour();
   }
 
   // ── Modifier Effects ─────────────────────────────────────

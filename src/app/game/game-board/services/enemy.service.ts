@@ -754,6 +754,63 @@ export class EnemyService {
   }
 
   /**
+   * Override every non-flying, non-dying enemy's path with the longest simple
+   * path from their current grid position to any exit, for one movement step.
+   *
+   * Called by the DETOUR card (Sprint 14). The enemy's `pathIndex` resets to 0
+   * so they begin walking the new route immediately on the next movement
+   * iteration. Enemies naturally fall back to shortest-path re-planning at the
+   * next waypoint arrival (executeRepath flow).
+   *
+   * // Sprint 22 UNSHAKEABLE: skip if enemy.immuneToDetour — add the flag on
+   * // the Enemy interface and check it here when that phase opens.
+   *
+   * @returns Number of enemies whose path was overridden.
+   */
+  applyDetour(): number {
+    const exitTiles = this.pathfindingService.getExitTiles();
+    if (exitTiles.length === 0) return 0;
+
+    let overrideCount = 0;
+
+    for (const enemy of this.enemies.values()) {
+      if (enemy.isFlying) continue;
+      if (enemy.dying) continue;
+      // Sprint 22 UNSHAKEABLE: skip if enemy.immuneToDetour
+
+      const { col, row } = enemy.gridPosition;
+
+      // Skip enemies already standing on an exit — no path to compute.
+      const atExit = exitTiles.some(e => e.row === row && e.col === col);
+      if (atExit) continue;
+
+      // Find the longest path to each exit; pick the overall longest.
+      let longestPath: import('../models/enemy.model').GridNode[] = [];
+      for (const exit of exitTiles) {
+        const candidate = this.pathfindingService.findLongestPath(
+          { x: col, y: row },
+          { x: exit.col, y: exit.row },
+        );
+        if (candidate.length > longestPath.length) {
+          longestPath = candidate;
+        }
+      }
+
+      // Only override if the longest path is strictly longer than the current
+      // remaining path — otherwise DETOUR has no routing benefit.
+      if (longestPath.length === 0) continue;
+      const remainingCurrent = enemy.path.length - enemy.pathIndex;
+      if (longestPath.length > remainingCurrent) {
+        enemy.path = longestPath;
+        enemy.pathIndex = 0;
+        overrideCount++;
+      }
+    }
+
+    return overrideCount;
+  }
+
+  /**
    * Build a straight-line path to the geometrically nearest exit (Manhattan
    * distance). FLYING enemies bypass terrain so "reachability" always holds;
    * we just pick the closest target.

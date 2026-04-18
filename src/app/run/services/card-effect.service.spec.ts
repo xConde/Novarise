@@ -707,4 +707,13 @@ describe('CardEffectService', () => {
       expect(deckServiceSpy.drawCards).toHaveBeenCalledWith(2);
     });
   });
+
+  // ── Spell: detour (Sprint 14) ─────────────────────────────────
+
+  describe('applySpell — detour', () => {
+    it('calls enemyService.applyDetour via the SpellContext', () => {
+      service.applySpell(spellEffect('detour', 1), makeCtx());
+      expect(enemyServiceSpy.applyDetour).toHaveBeenCalledTimes(1);
+    });
+  });
 });

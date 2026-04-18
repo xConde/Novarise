@@ -94,6 +94,9 @@ export enum CardId {
   BLOCK_PASSAGE = 'BLOCK_PASSAGE',
   BRIDGEHEAD = 'BRIDGEHEAD',
   COLLAPSE = 'COLLAPSE',
+
+  // Cartographer archetype — enemy-routing card (Sprint 14)
+  DETOUR = 'DETOUR',
 }
 
 export enum CardType {

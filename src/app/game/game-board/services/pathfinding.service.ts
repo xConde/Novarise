@@ -135,6 +135,134 @@ export class PathfindingService {
   }
 
   /**
+   * Longest simple path (no revisits) from start to end using DFS with
+   * no-revisit tracking. Returns the longest valid path as GridNode[],
+   * or [] if no path exists.
+   *
+   * Longest path on a general grid is NP-hard in the worst case. On the
+   * Novarise combat board (typically ~500 cells, ~50 traversable) this is
+   * practically bounded because the DFS prunes: (1) any node already on
+   * the current stack is skipped (no revisits), (2) paths shorter than the
+   * best found are abandoned when no improvement is possible.
+   *
+   * Called by DETOUR (Sprint 14) to force enemies onto the longest route.
+   * NOT cached — DETOUR is a rare card play, and the result depends on
+   * the live board state which can change between calls.
+   *
+   * @param start {x: col, y: row} — inherits the same {x,y} = {col,row}
+   *   convention used by findPath() for consistency.
+   * @param end {x: col, y: row}
+   * @param maxDepth Safety cap. Defaults to boardWidth * boardHeight
+   *   (no simple path can exceed total cell count). Lower this to
+   *   budget worst-case compute at the call site.
+   */
+  findLongestPath(
+    start: { x: number; y: number },
+    end: { x: number; y: number },
+    maxDepth?: number,
+  ): GridNode[] {
+    const boardWidth = this.gameBoardService.getBoardWidth();
+    const boardHeight = this.gameBoardService.getBoardHeight();
+    const board = this.gameBoardService.getGameBoard();
+    const depth = maxDepth ?? boardWidth * boardHeight;
+    const iterationBudget = depth * depth;
+
+    // Early-out: start must be in-bounds and traversable (or exit)
+    if (
+      start.x < 0 || start.x >= boardWidth ||
+      start.y < 0 || start.y >= boardHeight
+    ) {
+      return [];
+    }
+
+    /** Iterative DFS frame — tracks which neighbor index to try next. */
+    interface DfsFrame {
+      node: GridNode;
+      childIdx: number;
+    }
+
+    const visited = new Set<string>();
+    const stack: DfsFrame[] = [];
+    const currentPath: GridNode[] = [];
+    let best: GridNode[] = [];
+    let iterations = 0;
+    let budgetExceeded = false;
+
+    const startNode: GridNode = { x: start.x, y: start.y, g: 0, h: 0, f: 0 };
+    stack.push({ node: startNode, childIdx: 0 });
+    visited.add(`${start.x},${start.y}`);
+    currentPath.push(startNode);
+
+    const NEIGHBORS: ReadonlyArray<{ dx: number; dy: number }> = [
+      { dx: 0, dy: -1 }, // Up
+      { dx: 0, dy:  1 }, // Down
+      { dx: -1, dy: 0 }, // Left
+      { dx:  1, dy: 0 }, // Right
+    ];
+
+    while (stack.length > 0) {
+      if (++iterations > iterationBudget) {
+        budgetExceeded = true;
+        break;
+      }
+
+      const frame = stack[stack.length - 1];
+      const { node } = frame;
+
+      // Check if we are at the destination
+      if (node.x === end.x && node.y === end.y) {
+        if (currentPath.length > best.length) {
+          best = [...currentPath];
+        }
+        // Pop — cannot go further from the exit without revisiting
+        stack.pop();
+        currentPath.pop();
+        visited.delete(`${node.x},${node.y}`);
+        continue;
+      }
+
+      // Try next neighbor
+      let pushed = false;
+      while (frame.childIdx < NEIGHBORS.length) {
+        const { dx, dy } = NEIGHBORS[frame.childIdx];
+        frame.childIdx++;
+        const nx = node.x + dx;
+        const ny = node.y + dy;
+
+        if (nx < 0 || nx >= boardWidth || ny < 0 || ny >= boardHeight) continue;
+        const nKey = `${nx},${ny}`;
+        if (visited.has(nKey)) continue;
+
+        const tile = board[ny][nx];
+        if (!tile.isTraversable && tile.type !== BlockType.EXIT) continue;
+
+        const child: GridNode = { x: nx, y: ny, g: 0, h: 0, f: 0 };
+        visited.add(nKey);
+        currentPath.push(child);
+        stack.push({ node: child, childIdx: 0 });
+        pushed = true;
+        break;
+      }
+
+      if (!pushed) {
+        // No more neighbors — backtrack
+        stack.pop();
+        currentPath.pop();
+        visited.delete(`${node.x},${node.y}`);
+      }
+    }
+
+    if (budgetExceeded) {
+      console.warn(
+        `[PathfindingService.findLongestPath] Iteration budget (${iterationBudget}) exceeded. ` +
+        `Returning best path found so far (length=${best.length}).`
+      );
+    }
+
+    return best;
+  }
+
+  /**
    * Clear the path cache. Call after any board mutation (tower placed/sold).
    */
   invalidateCache(): void {
