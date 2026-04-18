@@ -19,14 +19,17 @@ import { DeckService } from '../../../run/services/deck.service';
 import { RunService } from '../../../run/services/run.service';
 import { WavePreviewService } from './wave-preview.service';
 import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
 import {
   CardInstance,
   SpellCardEffect,
   ModifierCardEffect,
   UtilityCardEffect,
   TerraformTargetCardEffect,
+  ElevationTargetCardEffect,
   TileTargetResult,
   isTerraformTargetEffect,
+  isElevationTargetEffect,
 } from '../../../run/models/card.model';
 import { MutationOp } from './path-mutation.types';
 import { getCardDefinition } from '../../../run/constants/card-definitions';
@@ -47,7 +50,7 @@ export interface CardPlayCallbacks {
    * and UI state (e.g., show a "click a tile" prompt). This is the parallel
    * of `onEnterPlacementMode` for tower cards.
    */
-  onEnterTileTargetMode?: (card: CardInstance, op: MutationOp) => void;
+  onEnterTileTargetMode?: (card: CardInstance, op: MutationOp | string) => void;
   /**
    * Called when tile-target mode is exited — either by successful resolution,
    * cancellation, or teardown. Clears any targeting-mode UI state.
@@ -82,6 +85,19 @@ export class CardPlayService {
   private pendingTileTargetCard: CardInstance | null = null;
   private pendingTileTargetEffect: TerraformTargetCardEffect | null = null;
 
+  /**
+   * Pending state for the two-phase elevation-target card flow (Phase 3 Highground).
+   *
+   * WHY SEPARATE FROM pendingTileTargetEffect: Elevation-target effects route to
+   * ElevationService, not PathMutationService. Keeping them in distinct fields
+   * prevents accidental cross-dispatch if the switch ever needs to distinguish
+   * "terraform pending" vs "elevation pending" for UI state. Only one of
+   * `pendingTileTargetEffect` or `pendingElevationTargetEffect` may be non-null
+   * at any time — `clearTileTargetState` nulls both.
+   */
+  private pendingElevationTargetCard: CardInstance | null = null;
+  private pendingElevationTargetEffect: ElevationTargetCardEffect | null = null;
+
   constructor(
     private deckService: DeckService,
     private cardEffectService: CardEffectService,
@@ -105,6 +121,12 @@ export class CardPlayService {
      * Component-scoped: no DI cycle since CardPlayService is also component-scoped.
      */
     private pathMutationService: PathMutationService,
+    /**
+     * Injected to execute elevation ops in resolveTileTarget (Phase 3 Highground).
+     * Component-scoped: peer to PathMutationService in GameModule.
+     * elevation-model.md §4 — peer service, not a MutationOp extension.
+     */
+    private elevationService: ElevationService,
   ) {}
 
   /**
@@ -128,7 +150,11 @@ export class CardPlayService {
    * mutation (board change without energy paid).
    */
   hasPendingCard(): boolean {
-    return this.pendingTowerCard !== null || this.pendingTileTargetCard !== null;
+    return (
+      this.pendingTowerCard !== null ||
+      this.pendingTileTargetCard !== null ||
+      this.pendingElevationTargetCard !== null
+    );
   }
 
   /** Returns the pending tower card (used by tryPlaceTower to capture before consuming). */
@@ -179,6 +205,12 @@ export class CardPlayService {
       this.callbacks?.onRefreshUI();
       return;
     }
+    // Clicking the pending elevation-target card again cancels elevation-target mode
+    if (this.pendingElevationTargetCard && this.pendingElevationTargetCard.instanceId === card.instanceId) {
+      this.cancelTileTarget();
+      this.callbacks?.onRefreshUI();
+      return;
+    }
 
     // Resolve the card definition before mode-blocking checks so we can
     // determine whether a terraform card should override tower-placement limbo.
@@ -202,10 +234,26 @@ export class CardPlayService {
       return;
     }
 
+    if (isElevationTargetEffect(effect)) {
+      // Elevation-target: same two-phase pattern as terraform-target but routes
+      // to ElevationService. Cancel any pending modes before entering limbo.
+      this.cancelPendingTowerCard();
+      this.clearTileTargetState();
+
+      if (this.deckService.getEnergy().current < def.energyCost) return;
+
+      this.pendingElevationTargetCard = card;
+      this.pendingElevationTargetEffect = effect;
+      this.callbacks?.onEnterTileTargetMode?.(card, effect.op);
+      return;
+    }
+
     // Block other card plays while a tower card is awaiting placement
     if (this.pendingTowerCard) return;
     // Block other card plays while a tile-target card is awaiting a tile click
     if (this.pendingTileTargetCard) return;
+    // Block other card plays while an elevation-target card is awaiting a tile click
+    if (this.pendingElevationTargetCard) return;
 
     if (effect.type === 'tower') {
       // Cancel any existing pending tower card first (defensive)
@@ -311,6 +359,13 @@ export class CardPlayService {
     scene: THREE.Scene,
     currentTurn: number,
   ): TileTargetResult {
+    // Phase 3 Highground — elevation-target cards are resolved here alongside
+    // terraform-target cards so the caller (GameBoardComponent.onTilePlace)
+    // uses one resolution point for all tile-target modes.
+    if (this.pendingElevationTargetCard && this.pendingElevationTargetEffect) {
+      return this.resolveElevationTarget(row, col, currentTurn);
+    }
+
     if (!this.pendingTileTargetCard || !this.pendingTileTargetEffect) {
       return { ok: false, reason: 'no-pending-card' };
     }
@@ -449,6 +504,63 @@ export class CardPlayService {
   private clearTileTargetState(): void {
     this.pendingTileTargetCard = null;
     this.pendingTileTargetEffect = null;
+    this.pendingElevationTargetCard = null;
+    this.pendingElevationTargetEffect = null;
+  }
+
+  /**
+   * Internal: resolve a pending elevation-target card at (row, col).
+   *
+   * Called from resolveTileTarget when an elevation-target card is pending.
+   * Routes to ElevationService.raise or ElevationService.depress based on op.
+   * Mirrors the terraform resolution contract:
+   * - Energy re-checked immediately before applying.
+   * - On board rejection: pending state NOT cleared (player can try another tile).
+   * - On success: energy deducted (via playCard), card discarded, state cleared.
+   *
+   * elevation-model.md §5 apply flow is the authoritative spec.
+   */
+  private resolveElevationTarget(row: number, col: number, currentTurn: number): TileTargetResult {
+    const card = this.pendingElevationTargetCard!;
+    const effect = this.pendingElevationTargetEffect!;
+    const def = getCardDefinition(card.cardId);
+
+    // Re-check energy — another card play may have spent it since the card click.
+    if (this.deckService.getEnergy().current < def.energyCost) {
+      this.clearTileTargetState();
+      this.callbacks?.onExitTileTargetMode?.();
+      return { ok: false, reason: 'insufficient-energy' };
+    }
+
+    let elevationResult;
+    const sourceId = card.instanceId;
+
+    if (effect.op === 'raise') {
+      elevationResult = this.elevationService.raise(
+        row, col, effect.amount, effect.duration, sourceId, currentTurn,
+      );
+    } else if (effect.op === 'depress') {
+      elevationResult = this.elevationService.depress(
+        row, col, effect.amount, effect.duration, sourceId, currentTurn,
+      );
+    } else {
+      // Exhaustive guard — future ops ('collapse', 'set') will be routed here
+      // when added. For now, any unrecognised op is an unknown-op rejection.
+      this.clearTileTargetState();
+      this.callbacks?.onExitTileTargetMode?.();
+      return { ok: false, reason: 'unknown-op' };
+    }
+
+    // On board rejection: keep pending state so the player can try a valid tile.
+    if (!elevationResult.ok) {
+      return { ok: false, reason: elevationResult.reason };
+    }
+
+    // Success — consume the card.
+    this.deckService.playCard(card.instanceId);
+    this.clearTileTargetState();
+    this.callbacks?.onExitTileTargetMode?.();
+    return { ok: true };
   }
 
   /**

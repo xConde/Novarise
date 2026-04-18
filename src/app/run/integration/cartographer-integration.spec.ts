@@ -27,6 +27,7 @@ import { PathMutationService } from '../../game/game-board/services/path-mutatio
 import { BoardMeshRegistryService } from '../../game/game-board/services/board-mesh-registry.service';
 import { TerraformMaterialPoolService } from '../../game/game-board/services/terraform-material-pool.service';
 import { CardPlayService } from '../../game/game-board/services/card-play.service';
+import { ElevationService } from '../../game/game-board/services/elevation.service';
 import { TowerCombatService } from '../../game/game-board/services/tower-combat.service';
 import { GameStateService } from '../../game/game-board/services/game-state.service';
 import { GameStatsService } from '../../game/game-board/services/game-stats.service';
@@ -202,6 +203,13 @@ describe('Cartographer integration — Group A: PathMutation + card flow', () =>
     const enemySpy = jasmine.createSpyObj<EnemyService>('EnemyService', ['repathAffectedEnemies', 'getEnemies', 'damageEnemy']);
     enemySpy.getEnemies.and.returnValue(new Map() as never);
 
+    const elevationSpy = jasmine.createSpyObj<ElevationService>('ElevationService', [
+      'raise', 'depress', 'getElevation', 'getMaxElevation', 'getElevationMap',
+      'getActiveChanges', 'tickTurn', 'reset', 'serialize', 'restore', 'setAbsolute', 'collapse',
+    ]);
+    elevationSpy.raise.and.returnValue({ ok: true, newElevation: 1 });
+    elevationSpy.depress.and.returnValue({ ok: true, newElevation: -1 });
+
     TestBed.configureTestingModule({
       providers: [
         PathMutationService,
@@ -223,6 +231,7 @@ describe('Cartographer integration — Group A: PathMutation + card flow', () =>
         { provide: GameStatsService, useValue: createGameStatsServiceSpy() },
         { provide: StatusEffectService, useValue: jasmine.createSpyObj<StatusEffectService>('StatusEffectService', ['apply']) },
         { provide: TowerUpgradeVisualService, useValue: jasmine.createSpyObj<TowerUpgradeVisualService>('TowerUpgradeVisualService', ['applyUpgradeVisuals']) },
+        { provide: ElevationService, useValue: elevationSpy },
       ],
     });
 
@@ -418,6 +427,13 @@ describe('Cartographer integration — Group B: CARTOGRAPHER_SEAL', () => {
     const enemySpy = jasmine.createSpyObj<EnemyService>('EnemyService', ['repathAffectedEnemies', 'getEnemies', 'damageEnemy']);
     enemySpy.getEnemies.and.returnValue(new Map() as never);
 
+    const elevationSpy2 = jasmine.createSpyObj<ElevationService>('ElevationService', [
+      'raise', 'depress', 'getElevation', 'getMaxElevation', 'getElevationMap',
+      'getActiveChanges', 'tickTurn', 'reset', 'serialize', 'restore', 'setAbsolute', 'collapse',
+    ]);
+    elevationSpy2.raise.and.returnValue({ ok: true, newElevation: 1 });
+    elevationSpy2.depress.and.returnValue({ ok: true, newElevation: -1 });
+
     TestBed.configureTestingModule({
       providers: [
         PathMutationService,
@@ -439,6 +455,7 @@ describe('Cartographer integration — Group B: CARTOGRAPHER_SEAL', () => {
         { provide: GameStatsService, useValue: createGameStatsServiceSpy() },
         { provide: StatusEffectService, useValue: jasmine.createSpyObj<StatusEffectService>('StatusEffectService', ['apply']) },
         { provide: TowerUpgradeVisualService, useValue: jasmine.createSpyObj<TowerUpgradeVisualService>('TowerUpgradeVisualService', ['applyUpgradeVisuals']) },
+        { provide: ElevationService, useValue: elevationSpy2 },
       ],
     });
 

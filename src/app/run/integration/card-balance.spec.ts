@@ -231,11 +231,12 @@ describe('Card System — Balance', () => {
 
   // ── Total Card Count ──────────────────────────────────────────────────────
 
-  it('should have exactly 58 card definitions', () => {
+  it('should have exactly 60 card definitions', () => {
     // 40 original + 6 tower variant cards (sprint 2a) + 3 status-applying spells (sprint 2b)
     // + 2 status payoff spells (sprint 2c) + 4 Cartographer terraform spells (phase 2 sprints 11/12/15/16)
     // + 1 DETOUR routing spell (sprint 14) + 2 Cartographer rare anchors (phase 2 sprints 17/18)
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(58);
+    // + 2 Highground elevation cards (phase 3 sprints 27/28: RAISE_PLATFORM + DEPRESS_TILE)
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(60);
   });
 
   // ── Phase 2 Sprint 19 — Cartographer economy validation ────────────────────
@@ -336,6 +337,107 @@ describe('Card System — Balance', () => {
         expect(def.terraform)
           .withContext(`${cardId}: must NOT be tagged terraform`)
           .toBe(false);
+      }
+    });
+  });
+
+  // ── Phase 3 Sprints 27/28 — Highground economy validation ──────────────────
+  //
+  // Mirrors Cartographer economy specs (Sprint 19). Highground common cards must
+  // cost 0-1 energy and carry archetype='highground' + terraform=true.
+  // Codified here so balance regressions surface as test failures.
+
+  describe('Highground economy (Sprints 27/28 — RAISE_PLATFORM + DEPRESS_TILE)', () => {
+    const highgroundCards = Object.values(CARD_DEFINITIONS).filter(c => c.archetype === 'highground');
+
+    it('every Highground card has archetype = highground', () => {
+      for (const card of highgroundCards) {
+        expect(card.archetype)
+          .withContext(`${card.id}: archetype should be highground`)
+          .toBe('highground');
+      }
+    });
+
+    it('common Highground cards cost 0-1 energy (cheap, frequent plays)', () => {
+      const commons = highgroundCards.filter(c => c.rarity === CardRarity.COMMON);
+      expect(commons.length).toBeGreaterThan(0);
+      for (const card of commons) {
+        expect(card.energyCost)
+          .withContext(`${card.id}: common should cost 0-1 energy`)
+          .toBeLessThanOrEqual(1);
+      }
+    });
+
+    it('RAISE_PLATFORM has archetype=highground, terraform=true, energyCost=1', () => {
+      const def = CARD_DEFINITIONS[CardId.RAISE_PLATFORM];
+      expect(def.archetype).toBe('highground');
+      expect(def.terraform).toBe(true);
+      expect(def.energyCost).toBe(1);
+      expect(def.rarity).toBe(CardRarity.COMMON);
+    });
+
+    it('RAISE_PLATFORM effect is elevation_target op=raise amount=1 duration=null', () => {
+      const def = CARD_DEFINITIONS[CardId.RAISE_PLATFORM];
+      expect(def.effect.type).toBe('elevation_target');
+      if (def.effect.type === 'elevation_target') {
+        expect(def.effect.op).toBe('raise');
+        expect(def.effect.amount).toBe(1);
+        expect(def.effect.duration).toBeNull();
+        expect(def.effect.exposeEnemies).toBeFalsy();
+      }
+    });
+
+    it('RAISE_PLATFORM upgradedEffect matches effect shape', () => {
+      const def = CARD_DEFINITIONS[CardId.RAISE_PLATFORM];
+      expect(def.upgradedEffect).toBeDefined();
+      expect(def.upgradedEffect?.type).toBe('elevation_target');
+    });
+
+    it('DEPRESS_TILE has archetype=highground, terraform=true, energyCost=1', () => {
+      const def = CARD_DEFINITIONS[CardId.DEPRESS_TILE];
+      expect(def.archetype).toBe('highground');
+      expect(def.terraform).toBe(true);
+      expect(def.energyCost).toBe(1);
+      expect(def.rarity).toBe(CardRarity.COMMON);
+    });
+
+    it('DEPRESS_TILE effect is elevation_target op=depress amount=1 duration=null exposeEnemies=true', () => {
+      const def = CARD_DEFINITIONS[CardId.DEPRESS_TILE];
+      expect(def.effect.type).toBe('elevation_target');
+      if (def.effect.type === 'elevation_target') {
+        expect(def.effect.op).toBe('depress');
+        expect(def.effect.amount).toBe(1);
+        expect(def.effect.duration).toBeNull();
+        expect(def.effect.exposeEnemies).toBe(true);
+      }
+    });
+
+    it('DEPRESS_TILE upgradedEffect matches effect shape', () => {
+      const def = CARD_DEFINITIONS[CardId.DEPRESS_TILE];
+      expect(def.upgradedEffect).toBeDefined();
+      expect(def.upgradedEffect?.type).toBe('elevation_target');
+      if (def.upgradedEffect?.type === 'elevation_target') {
+        expect(def.upgradedEffect.exposeEnemies).toBe(true);
+      }
+    });
+
+    it('no Highground card is seeded in the starter deck (archetype-neutral start)', () => {
+      const starter = getStarterDeck();
+      for (const cardId of starter) {
+        const def = CARD_DEFINITIONS[cardId];
+        expect(def.archetype ?? 'neutral')
+          .withContext(`${cardId} in starter deck but tagged ${def.archetype}`)
+          .not.toBe('highground');
+      }
+    });
+
+    it('elevation-target Highground cards all set terraform=true for keyword visibility', () => {
+      for (const card of highgroundCards) {
+        if (card.effect.type === 'elevation_target') {
+          expect(card.terraform)
+            .withContext(`${card.id}: elevation-target card must set terraform=true`)
+            .toBe(true);
+        }
       }
     });
   });

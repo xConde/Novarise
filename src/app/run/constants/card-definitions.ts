@@ -14,6 +14,7 @@ import {
   CardRarity,
   CardType,
   TowerCardEffect,
+  ElevationTargetCardEffect,
 } from '../models/card.model';
 import { MODIFIER_STAT } from './modifier-stat.constants';
 
@@ -208,6 +209,19 @@ const CARD_VALUES = {
   labyrinthMindCost: 2,
   labyrinthMindPathScaling: 0.02,
   labyrinthMindUpgradedPathScaling: 0.03,
+
+  // ── Highground archetype — elevation-target cards (Phase 3, Sprints 27/28) ──
+  // RAISE_PLATFORM (sprint 27): 1E common, raise a tile by 1 elevation unit.
+  // Towers on raised tiles gain range (handled by TowerCombatService sprint 29).
+  raisePlatformCost: 1,
+  raisePlatformAmount: 1,       // +1 elevation unit per play
+  // DEPRESS_TILE (sprint 28): 1E common, lower a tile by 1 elevation unit.
+  // Enemies on lowered (negative-elevation) tiles take +25% incoming damage.
+  depressTileCost: 1,
+  depressTileAmount: 1,         // -1 elevation unit per play
+  // Damage bonus applied in EnemyService.damageEnemy when tile elevation < 0.
+  // +25% bonus received on exposed tiles (negative elevation).
+  exposedDamageBonus: 0.25,
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -1325,6 +1339,71 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     },
     archetype: 'cartographer',
     terraform: false,
+  },
+
+  // ── Highground archetype — elevation-target cards (Phase 3) ─────────────────
+
+  /**
+   * RAISE_PLATFORM (Sprint 27) — raise a tile by 1 elevation unit permanently.
+   * Towers on raised tiles gain range (TowerCombatService integration: sprint 29).
+   * Uses the `terraform` keyword (shared Highground/Cartographer surface;
+   * elevation-model.md §3 confirms Highground cards share this keyword).
+   */
+  [CardId.RAISE_PLATFORM]: {
+    id: CardId.RAISE_PLATFORM,
+    name: 'Raise Platform',
+    description: 'Raise a tile by 1 unit. Towers on raised tiles gain range.',
+    upgradedDescription: 'Raise a tile by 1 unit permanently. Towers on raised tiles gain range.',
+    type: CardType.SPELL,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.raisePlatformCost,
+    upgraded: false,
+    effect: {
+      type: 'elevation_target',
+      op: 'raise',
+      amount: CARD_VALUES.raisePlatformAmount,
+      duration: null,
+    } satisfies ElevationTargetCardEffect,
+    upgradedEffect: {
+      type: 'elevation_target',
+      op: 'raise',
+      amount: CARD_VALUES.raisePlatformAmount,
+      duration: null,
+    } satisfies ElevationTargetCardEffect,
+    archetype: 'highground',
+    terraform: true,
+  },
+
+  /**
+   * DEPRESS_TILE (Sprint 28) — lower a tile by 1 elevation unit permanently.
+   * Enemies on lowered (negative-elevation) tiles take +25% incoming damage
+   * (EXPOSED_DAMAGE_BONUS applied in EnemyService.damageEnemy).
+   */
+  [CardId.DEPRESS_TILE]: {
+    id: CardId.DEPRESS_TILE,
+    name: 'Depress Tile',
+    description: 'Lower a tile by 1 unit. Enemies on lowered tiles take +25% damage.',
+    upgradedDescription: 'Lower a tile by 1 unit. Enemies on lowered tiles take +25% damage. (Upgraded — no change; slot reserved for future balance tuning.)',
+    type: CardType.SPELL,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.depressTileCost,
+    upgraded: false,
+    effect: {
+      type: 'elevation_target',
+      op: 'depress',
+      amount: CARD_VALUES.depressTileAmount,
+      duration: null,
+      exposeEnemies: true,
+    } satisfies ElevationTargetCardEffect,
+    upgradedEffect: {
+      type: 'elevation_target',
+      op: 'depress',
+      amount: CARD_VALUES.depressTileAmount,
+      duration: null,
+      exposeEnemies: true,
+    } satisfies ElevationTargetCardEffect,
+    archetype: 'highground',
+    terraform: true,
   },
 };
 

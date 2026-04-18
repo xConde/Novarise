@@ -14,6 +14,8 @@ import { CardEffectService } from '../../../run/services/card-effect.service';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 import { SerializableEnemy } from '../models/encounter-checkpoint.model';
 import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
+import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { BlockType } from '../models/game-board-tile';
 
 export { DamageResult } from '../models/enemy.model';
@@ -47,6 +49,13 @@ export class EnemyService {
      * don't dig in those test contexts.
      */
     @Optional() private pathMutationService: PathMutationService | null,
+    /**
+     * @Optional() guard matches the PathMutationService pattern: EnemyService is
+     * instantiated in test beds that omit ElevationService from providers. The
+     * damageEnemy exposed-multiplier reads `elevationService?.getElevation() ?? 0`
+     * which safely returns 0 (no bonus) in those contexts.
+     */
+    @Optional() private elevationService: ElevationService | null,
   ) {}
 
   /**
@@ -467,6 +476,18 @@ export class EnemyService {
     const noOp: DamageResult = { killed: false, spawnedEnemies: [] };
     const enemy = this.enemies.get(enemyId);
     if (!enemy || enemy.health <= 0) return noOp;
+
+    // Phase 3 Highground — "exposed" multiplier: enemies on tiles with negative
+    // elevation (from DEPRESS_TILE) take +25% incoming damage from all sources.
+    // Read live from ElevationService so the bonus is universal — applies to
+    // tower fire, chain lightning, status tick, COLLAPSE damage, etc.
+    // @Optional() guard: returns 0 (no bonus) in test beds without ElevationService.
+    const tileElevation = this.elevationService?.getElevation(
+      enemy.gridPosition.row, enemy.gridPosition.col,
+    ) ?? 0;
+    if (tileElevation < 0) {
+      damage = Math.round(damage * (1 + ELEVATION_CONFIG.EXPOSED_DAMAGE_BONUS));
+    }
 
     // --- Shield absorption (SHIELDED type) ---
     if (enemy.shield !== undefined && enemy.shield > 0) {

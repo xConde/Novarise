@@ -10,8 +10,8 @@ import { CardId, CardInstance, CardRarity, CardType, TowerCardEffect } from '../
 import { TowerType } from '../../game/game-board/models/tower.model';
 
 describe('CARD_DEFINITIONS', () => {
-  it('has exactly 58 cards', () => {
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(58);
+  it('has exactly 60 cards', () => {
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(60);
   });
 
   it('contains all CardId enum values', () => {
@@ -50,8 +50,8 @@ describe('CARD_DEFINITIONS', () => {
       expect(getCardsByType(CardType.TOWER).length).toBe(12);
     });
 
-    it('has 26 spell cards (16 original + 3 status-applying + 2 status payoff + 4 Cartographer terraform + 1 DETOUR)', () => {
-      expect(getCardsByType(CardType.SPELL).length).toBe(26);
+    it('has 28 spell cards (16 original + 3 status-applying + 2 status payoff + 4 Cartographer terraform + 1 DETOUR + 2 Highground elevation)', () => {
+      expect(getCardsByType(CardType.SPELL).length).toBe(28);
     });
 
     it('has 14 modifier cards (12 original + CARTOGRAPHER_SEAL + LABYRINTH_MIND)', () => {

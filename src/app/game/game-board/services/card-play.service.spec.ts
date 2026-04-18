@@ -4,6 +4,7 @@ import * as THREE from 'three';
 
 import { CardPlayService, CardPlayCallbacks } from './card-play.service';
 import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
 import { DeckService } from '../../../run/services/deck.service';
 import { RunService } from '../../../run/services/run.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
@@ -184,6 +185,15 @@ describe('CardPlayService', () => {
     pathMutationSpy.destroy.and.returnValue(defaultMutationOk);
     pathMutationSpy.bridgehead.and.returnValue(defaultMutationOk);
 
+    // ElevationService: default spy returning successful ops.
+    // Tests that exercise the elevation branch override per-test.
+    const defaultElevationSpy = jasmine.createSpyObj<ElevationService>('ElevationService', [
+      'raise', 'depress', 'getElevation', 'getMaxElevation', 'getElevationMap',
+      'getActiveChanges', 'tickTurn', 'reset', 'serialize', 'restore', 'setAbsolute', 'collapse',
+    ]);
+    defaultElevationSpy.raise.and.returnValue({ ok: true, newElevation: 1 });
+    defaultElevationSpy.depress.and.returnValue({ ok: true, newElevation: -1 });
+
     TestBed.configureTestingModule({
       providers: [
         CardPlayService,
@@ -203,6 +213,7 @@ describe('CardPlayService', () => {
         { provide: WavePreviewService, useValue: wavePreviewSpy },
         { provide: RunService, useValue: runServiceSpy },
         { provide: PathMutationService, useValue: pathMutationSpy },
+        { provide: ElevationService, useValue: defaultElevationSpy },
       ],
     });
 
@@ -980,4 +991,223 @@ describe('CardPlayService', () => {
       expect(() => service.cancelTileTarget()).not.toThrow();
     });
   });
+
+  // ── Phase 3 Highground — elevation-target card tests (Sprints 27/28) ──────
+
+  describe('elevation-target card flow', () => {
+    const mockScene = new THREE.Scene();
+    const currentTurn = 3;
+
+    let elevationSpy: jasmine.SpyObj<ElevationService>;
+
+    // Synthetic CardId for elevation tests — avoids polluting real CARD_DEFINITIONS.
+    const TEST_ELEVATION_CARD_ID = '__TEST_ELEV_CARD__' as CardId;
+
+    function registerElevationDef(
+      energyCost: number,
+      op: 'raise' | 'depress',
+      amount: number,
+      duration: number | null,
+      exposeEnemies?: boolean,
+    ): void {
+      (CARD_DEFINITIONS as Record<string, unknown>)[TEST_ELEVATION_CARD_ID] = {
+        id: TEST_ELEVATION_CARD_ID,
+        name: 'Test Elevation',
+        description: 'Test',
+        type: 'spell' as const,
+        rarity: 'common' as const,
+        energyCost,
+        effect: { type: 'elevation_target', op, amount, duration, exposeEnemies },
+        upgradedEffect: undefined,
+        upgraded: false,
+        archetype: 'highground' as const,
+        terraform: true,
+      };
+    }
+
+    function unregisterElevationDef(): void {
+      delete (CARD_DEFINITIONS as Record<string, unknown>)[TEST_ELEVATION_CARD_ID];
+    }
+
+    function makeElevationInstance(instanceId = 'elev-1'): CardInstance {
+      return { instanceId, cardId: TEST_ELEVATION_CARD_ID, upgraded: false };
+    }
+
+    beforeEach(() => {
+      elevationSpy = jasmine.createSpyObj<ElevationService>('ElevationService', [
+        'raise', 'depress', 'getElevation', 'getMaxElevation', 'getElevationMap',
+        'getActiveChanges', 'tickTurn', 'reset', 'serialize', 'restore', 'setAbsolute', 'collapse',
+      ]);
+      // Default: successful elevation op.
+      const okResult = { ok: true, newElevation: 1 };
+      elevationSpy.raise.and.returnValue(okResult);
+      elevationSpy.depress.and.returnValue({ ok: true, newElevation: -1 });
+
+      // Inject elevationSpy into the service via private field (mirrors terraform test pattern).
+      (service as unknown as { elevationService: ElevationService }).elevationService = elevationSpy;
+    });
+
+    afterEach(() => {
+      unregisterElevationDef();
+    });
+
+    describe('onCardPlayed — entering elevation-target mode', () => {
+      it('sets pending elevation state when a raise card is played', () => {
+        registerElevationDef(1, 'raise', 1, null);
+        const card = makeElevationInstance();
+
+        service.onCardPlayed(card);
+
+        expect(service['pendingElevationTargetCard']).toBe(card);
+        expect(service['pendingElevationTargetEffect']?.op).toBe('raise');
+      });
+
+      it('sets pending elevation state when a depress card is played', () => {
+        registerElevationDef(1, 'depress', 1, null, true);
+        const card = makeElevationInstance();
+
+        service.onCardPlayed(card);
+
+        expect(service['pendingElevationTargetCard']).toBe(card);
+        expect(service['pendingElevationTargetEffect']?.op).toBe('depress');
+        expect(service['pendingElevationTargetEffect']?.exposeEnemies).toBeTrue();
+      });
+
+      it('does NOT enter elevation mode when energy is insufficient', () => {
+        registerElevationDef(2, 'raise', 1, null);
+        deckSpy.getEnergy.and.returnValue({ current: 1, max: 3 } as EnergyState);
+
+        service.onCardPlayed(makeElevationInstance());
+
+        expect(service['pendingElevationTargetCard']).toBeNull();
+      });
+
+      it('cancels pending tower card when elevation card is played', () => {
+        const fakeTowerCard = { instanceId: 'tower-1', cardId: CardId.TOWER_BASIC, upgraded: false };
+        service['pendingTowerCard'] = fakeTowerCard;
+
+        registerElevationDef(1, 'raise', 1, null);
+        service.onCardPlayed(makeElevationInstance());
+
+        expect(service['pendingTowerCard']).toBeNull();
+      });
+
+      it('hasPendingCard returns true when elevation card is in limbo', () => {
+        registerElevationDef(1, 'raise', 1, null);
+        service.onCardPlayed(makeElevationInstance());
+
+        expect(service.hasPendingCard()).toBeTrue();
+      });
+    });
+
+    describe('resolveTileTarget — elevation branch', () => {
+      it('routes raise op → elevationService.raise with correct args', () => {
+        registerElevationDef(1, 'raise', 1, null);
+        const card = makeElevationInstance('elev-raise');
+        service['pendingElevationTargetCard'] = card;
+        service['pendingElevationTargetEffect'] = { type: 'elevation_target', op: 'raise', amount: 1, duration: null };
+
+        const result = service.resolveTileTarget(2, 4, mockScene, currentTurn);
+
+        expect(result.ok).toBeTrue();
+        expect(elevationSpy.raise).toHaveBeenCalledWith(2, 4, 1, null, 'elev-raise', currentTurn);
+      });
+
+      it('routes depress op → elevationService.depress with correct args', () => {
+        registerElevationDef(1, 'depress', 1, null, true);
+        const card = makeElevationInstance('elev-depress');
+        service['pendingElevationTargetCard'] = card;
+        service['pendingElevationTargetEffect'] = { type: 'elevation_target', op: 'depress', amount: 1, duration: null, exposeEnemies: true };
+
+        const result = service.resolveTileTarget(3, 1, mockScene, currentTurn);
+
+        expect(result.ok).toBeTrue();
+        expect(elevationSpy.depress).toHaveBeenCalledWith(3, 1, 1, null, 'elev-depress', currentTurn);
+      });
+
+      it('consumes the card (calls deckService.playCard) on success', () => {
+        registerElevationDef(1, 'raise', 1, null);
+        service['pendingElevationTargetCard'] = makeElevationInstance('elev-consume');
+        service['pendingElevationTargetEffect'] = { type: 'elevation_target', op: 'raise', amount: 1, duration: null };
+
+        service.resolveTileTarget(0, 0, mockScene, currentTurn);
+
+        expect(deckSpy.playCard).toHaveBeenCalledWith('elev-consume');
+      });
+
+      it('clears pending elevation state on success', () => {
+        registerElevationDef(1, 'raise', 1, null);
+        service['pendingElevationTargetCard'] = makeElevationInstance();
+        service['pendingElevationTargetEffect'] = { type: 'elevation_target', op: 'raise', amount: 1, duration: null };
+
+        service.resolveTileTarget(0, 0, mockScene, currentTurn);
+
+        expect(service['pendingElevationTargetCard']).toBeNull();
+        expect(service['pendingElevationTargetEffect']).toBeNull();
+      });
+
+      it('keeps pending state on board rejection so player can retry', () => {
+        registerElevationDef(1, 'raise', 1, null);
+        elevationSpy.raise.and.returnValue({ ok: false, reason: 'out-of-range' });
+
+        const card = makeElevationInstance();
+        service['pendingElevationTargetCard'] = card;
+        service['pendingElevationTargetEffect'] = { type: 'elevation_target', op: 'raise', amount: 1, duration: null };
+
+        const result = service.resolveTileTarget(0, 0, mockScene, currentTurn);
+
+        expect(result.ok).toBeFalse();
+        expect(result.reason).toBe('out-of-range');
+        // Pending state is preserved — player can pick another tile.
+        expect(service['pendingElevationTargetCard']).toBe(card);
+      });
+
+      it('returns insufficient-energy and clears state when energy drops before tile pick', () => {
+        registerElevationDef(2, 'raise', 1, null);
+        service['pendingElevationTargetCard'] = makeElevationInstance();
+        service['pendingElevationTargetEffect'] = { type: 'elevation_target', op: 'raise', amount: 1, duration: null };
+        deckSpy.getEnergy.and.returnValue({ current: 1, max: 3 } as EnergyState);
+
+        const result = service.resolveTileTarget(0, 0, mockScene, currentTurn);
+
+        expect(result.ok).toBeFalse();
+        expect(result.reason).toBe('insufficient-energy');
+        expect(service['pendingElevationTargetCard']).toBeNull();
+      });
+
+      it('does NOT call deckService.playCard on board rejection', () => {
+        registerElevationDef(1, 'raise', 1, null);
+        elevationSpy.raise.and.returnValue({ ok: false, reason: 'spawner-or-exit' });
+
+        service['pendingElevationTargetCard'] = makeElevationInstance();
+        service['pendingElevationTargetEffect'] = { type: 'elevation_target', op: 'raise', amount: 1, duration: null };
+
+        service.resolveTileTarget(0, 0, mockScene, currentTurn);
+
+        expect(deckSpy.playCard).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('cancelTileTarget — covers elevation state', () => {
+      it('clears pending elevation card on cancel', () => {
+        service['pendingElevationTargetCard'] = makeElevationInstance();
+        service['pendingElevationTargetEffect'] = { type: 'elevation_target', op: 'raise', amount: 1, duration: null };
+
+        service.cancelTileTarget();
+
+        expect(service['pendingElevationTargetCard']).toBeNull();
+        expect(service['pendingElevationTargetEffect']).toBeNull();
+      });
+
+      it('hasPendingCard returns false after cancel', () => {
+        service['pendingElevationTargetCard'] = makeElevationInstance();
+        service['pendingElevationTargetEffect'] = { type: 'elevation_target', op: 'raise', amount: 1, duration: null };
+
+        service.cancelTileTarget();
+
+        expect(service.hasPendingCard()).toBeFalse();
+      });
+    });
+  });
 });
+

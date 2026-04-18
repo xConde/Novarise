@@ -19,6 +19,7 @@ import { RelicService } from '../../../run/services/relic.service';
 import { SerializableEnemy } from '../models/encounter-checkpoint.model';
 import { createTestEnemy } from '../testing/test-enemy.factory';
 import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
 
 /**
  * Helper: configure modifier effects on the real GameStateService.
@@ -882,6 +883,102 @@ describe('EnemyService', () => {
 
         expect(result.killed).toBe(true);
         expect(result.spawnedEnemies.length).toBe(0);
+      });
+    });
+
+    // ── Phase 3 Highground — "exposed" damage multiplier (Sprint 28) ──────────
+    //
+    // Enemies on tiles with negative elevation (DEPRESS_TILE effect) take +25%
+    // incoming damage from ALL sources routed through damageEnemy. The multiplier
+    // is applied before shield absorption by design (shield is structural defense;
+    // exposed is a positional bonus that amplifies raw incoming damage).
+
+    describe('exposed damage multiplier (DEPRESS_TILE — negative elevation)', () => {
+      let elevationSpy: jasmine.SpyObj<ElevationService>;
+
+      beforeEach(() => {
+        elevationSpy = jasmine.createSpyObj<ElevationService>('ElevationService', [
+          'getElevation', 'raise', 'depress', 'setAbsolute', 'collapse',
+          'getMaxElevation', 'getElevationMap', 'getActiveChanges',
+          'tickTurn', 'reset', 'serialize', 'restore',
+        ]);
+        // Default: neutral elevation (no bonus).
+        elevationSpy.getElevation.and.returnValue(0);
+        // Inject elevation service directly (bypasses @Optional DI in test bed).
+        (service as unknown as { elevationService: ElevationService | null }).elevationService = elevationSpy;
+      });
+
+      afterEach(() => {
+        // Restore null so other tests remain unaffected.
+        (service as unknown as { elevationService: ElevationService | null }).elevationService = null;
+      });
+
+      it('applies no bonus when tile elevation is 0 (boundary: exactly 0 does NOT expose)', () => {
+        elevationSpy.getElevation.and.returnValue(0);
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+        const healthBefore = enemy.health;
+
+        service.damageEnemy(enemy.id, 100);
+
+        // 100 damage, no multiplier.
+        expect(enemy.health).toBe(healthBefore - 100);
+      });
+
+      it('applies no bonus when tile elevation is positive (raised tiles do NOT expose)', () => {
+        elevationSpy.getElevation.and.returnValue(2);
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+        const healthBefore = enemy.health;
+
+        service.damageEnemy(enemy.id, 100);
+
+        // Positive elevation = no exposed bonus.
+        expect(enemy.health).toBe(healthBefore - 100);
+      });
+
+      it('applies +25% bonus when tile elevation is -1 (exposed)', () => {
+        elevationSpy.getElevation.and.returnValue(-1);
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+        const healthBefore = enemy.health;
+
+        service.damageEnemy(enemy.id, 100);
+
+        // Math.round(100 * (1 + 0.25)) = 125.
+        expect(enemy.health).toBe(healthBefore - 125);
+      });
+
+      it('applies +25% bonus when tile elevation is -2 (max depress)', () => {
+        elevationSpy.getElevation.and.returnValue(-2);
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+        const healthBefore = enemy.health;
+
+        service.damageEnemy(enemy.id, 80);
+
+        // Math.round(80 * 1.25) = 100.
+        expect(enemy.health).toBe(healthBefore - 100);
+      });
+
+      it('rounds the amplified damage correctly (Math.round, not floor)', () => {
+        elevationSpy.getElevation.and.returnValue(-1);
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+        const healthBefore = enemy.health;
+
+        // 10 * 1.25 = 12.5 → Math.round → 13.
+        service.damageEnemy(enemy.id, 10);
+
+        expect(enemy.health).toBe(healthBefore - 13);
+      });
+
+      it('is a no-op when elevationService is null (test beds without elevation)', () => {
+        // Restore null to verify defensive guard: this simulates a test bed
+        // that didn't register ElevationService (the @Optional() path).
+        (service as unknown as { elevationService: ElevationService | null }).elevationService = null;
+        const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+        const healthBefore = enemy.health;
+
+        service.damageEnemy(enemy.id, 100);
+
+        // No bonus — fallback to 0 elevation.
+        expect(enemy.health).toBe(healthBefore - 100);
       });
     });
   });

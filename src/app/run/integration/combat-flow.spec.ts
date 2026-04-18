@@ -139,7 +139,7 @@ describe('combat-flow integration smoke', () => {
         CombatLoopService,
         GameEndService,
         { provide: PathMutationService, useValue: (() => { const s = jasmine.createSpyObj<PathMutationService>('PathMutationService', ['tickTurn', 'reset', 'serialize', 'restore', 'setRepathHook', 'swapMesh']); s.serialize.and.returnValue({ mutations: [], nextId: 0 }); return s; })() },
-        { provide: ElevationService, useValue: (() => { const s = jasmine.createSpyObj<ElevationService>('ElevationService', ['tickTurn', 'reset', 'serialize']); s.serialize.and.returnValue({ elevations: [], changes: [], nextId: 0 }); return s; })() },
+        { provide: ElevationService, useValue: (() => { const s = jasmine.createSpyObj<ElevationService>('ElevationService', ['tickTurn', 'reset', 'serialize', 'getElevation']); s.serialize.and.returnValue({ elevations: [], changes: [], nextId: 0 }); s.getElevation.and.returnValue(0); return s; })() },
         // Run-side services
         DeckService,
         CardEffectService,

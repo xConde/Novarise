@@ -14,6 +14,7 @@
 import { TowerType } from '../../game/game-board/models/tower.model';
 import { ModifierStat } from '../constants/modifier-stat.constants';
 import { MutationOp, MutationRejectionReason } from '../../game/game-board/services/path-mutation.types';
+import { ElevationRejectionReason } from '../../game/game-board/services/elevation.types';
 
 // ── Card Identity ─────────────────────────────────────────────
 
@@ -101,6 +102,10 @@ export enum CardId {
   // Cartographer archetype — rare anchor / build-around (Sprints 17/18)
   CARTOGRAPHER_SEAL = 'CARTOGRAPHER_SEAL',
   LABYRINTH_MIND = 'LABYRINTH_MIND',
+
+  // Highground archetype — elevation-target cards (Phase 3, Sprints 27/28)
+  RAISE_PLATFORM = 'RAISE_PLATFORM',
+  DEPRESS_TILE = 'DEPRESS_TILE',
 }
 
 export enum CardType {
@@ -214,7 +219,8 @@ export type CardEffect =
   | SpellCardEffect
   | ModifierCardEffect
   | UtilityCardEffect
-  | TerraformTargetCardEffect;
+  | TerraformTargetCardEffect
+  | ElevationTargetCardEffect;
 
 /**
  * Optional per-card stat modifications applied at tower placement time.
@@ -318,6 +324,47 @@ export function isTerraformTargetEffect(e: CardEffect): e is TerraformTargetCard
   return e.type === 'terraform_target';
 }
 
+/**
+ * Effect type for Highground-archetype elevation-targeting cards.
+ *
+ * WHY THIS EXISTS: Cards like RAISE_PLATFORM and DEPRESS_TILE need the same
+ * two-phase play flow as terraform-target cards — the player clicks the card,
+ * then clicks a board tile — but they route to ElevationService instead of
+ * PathMutationService. A separate effect type keeps the two concerns orthogonal
+ * and prevents accidental routing through the terraform switch in resolveTileTarget.
+ *
+ * Peer design per docs/design/elevation-model.md §4: elevation is NOT a
+ * mutation variant, so this is a separate effect type rather than a MutationOp
+ * extension on TerraformTargetCardEffect.
+ */
+export interface ElevationTargetCardEffect {
+  readonly type: 'elevation_target';
+  /** 'raise' lifts a tile; 'depress' lowers it. Expand in later sprints. */
+  readonly op: 'raise' | 'depress';
+  /** Integer elevation units to apply. */
+  readonly amount: number;
+  /** Turns until expiry; null = permanent. */
+  readonly duration: number | null;
+  /**
+   * When true, the target tile's negative elevation marks enemies on it as
+   * "exposed" (+EXPOSED_DAMAGE_BONUS incoming damage). Read at damage-application
+   * time via ElevationService.getElevation, not stored as a status effect.
+   * Set on DEPRESS_TILE; unset on RAISE_PLATFORM.
+   */
+  readonly exposeEnemies?: boolean;
+}
+
+/**
+ * Type guard: returns true when a CardEffect is an ElevationTargetCardEffect.
+ *
+ * WHY THIS EXISTS: CardPlayService branches on effect.type. Callers outside
+ * the service (e.g., GameBoardComponent) may also need to distinguish
+ * elevation-target cards from instant-resolve cards for UI state.
+ */
+export function isElevationTargetEffect(e: CardEffect): e is ElevationTargetCardEffect {
+  return e.type === 'elevation_target';
+}
+
 // ── TileTargetResult ──────────────────────────────────────────
 
 /**
@@ -333,7 +380,7 @@ export interface TileTargetResult {
   readonly ok: boolean;
   /** Populated on failure. MutationRejectionReason for board-level rejections;
    *  card-play-level reasons for state errors. */
-  readonly reason?: MutationRejectionReason | 'no-pending-card' | 'insufficient-energy' | 'unknown-op';
+  readonly reason?: MutationRejectionReason | ElevationRejectionReason | 'no-pending-card' | 'insufficient-energy' | 'unknown-op';
 }
 
 // ── Card Instance (in a deck/hand) ────────────────────────────
