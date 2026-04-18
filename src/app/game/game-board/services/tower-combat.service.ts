@@ -14,8 +14,6 @@ import { CombatVFXService } from './combat-vfx.service';
 import { GameStateService } from './game-state.service';
 import { TowerAnimationService } from './tower-animation.service';
 import { ChainLightningService } from './chain-lightning.service';
-// M2 S5: ProjectileService import removed — projectile.service.ts is dead and
-// scheduled for file deletion in this same phase.
 import { RelicService } from '../../../run/services/relic.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { RunService } from '../../../run/services/run.service';

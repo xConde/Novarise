@@ -1016,7 +1016,10 @@ describe('Cartographer integration — Group G: Save / Restore', () => {
 
     // Build a minimal-but-valid checkpoint (only the fields we need to test)
     const checkpointService = TestBed.inject(EncounterCheckpointService);
-    const CHECKPOINT_VERSION_CURRENT = 8; // matches CHECKPOINT_VERSION constant
+    // Intentional literal — this spec exercises the v8 → current migration
+    // chain. Do NOT replace with CHECKPOINT_VERSION; that would skip the
+    // migration path the test is covering.
+    const CHECKPOINT_VERSION_FIXTURE = 8;
 
     // Build a structurally-valid stub checkpoint that passes isValidCheckpoint().
     // isValidCheckpoint() checks: version (number), timestamp (number), nodeId (string),
@@ -1024,7 +1027,7 @@ describe('Cartographer integration — Group G: Save / Restore', () => {
     // runStateFlags.entries (array), runStateFlags.consumedEventIds (array),
     // pathMutations.mutations (array).
     const stubCheckpoint = {
-      version: CHECKPOINT_VERSION_CURRENT,
+      version: CHECKPOINT_VERSION_FIXTURE,
       timestamp: Date.now(),  // matches isValidCheckpoint() field name
       nodeId: 'node-1',       // matches isValidCheckpoint() field name
       encounterConfig: { waves: [] },  // required non-null by isValidCheckpoint

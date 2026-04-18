@@ -1087,10 +1087,13 @@ describe('Highground integration — Group H: Save / Restore', () => {
     const mutSnapshot = pathMutationService.serialize();
 
     const checkpointService = TestBed.inject(EncounterCheckpointService);
-    const CHECKPOINT_VERSION_CURRENT = 9;
+    // Intentional literal — this spec exercises the v9 → current migration
+    // chain. Do NOT replace with CHECKPOINT_VERSION; that would skip the
+    // migration path the test is covering.
+    const CHECKPOINT_VERSION_FIXTURE = 9;
 
     const stubCheckpoint = {
-      version: CHECKPOINT_VERSION_CURRENT,
+      version: CHECKPOINT_VERSION_FIXTURE,
       timestamp: Date.now(),
       nodeId: 'node-hg',
       encounterConfig: { waves: [] },

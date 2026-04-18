@@ -11,6 +11,27 @@
 Same format, same discipline. Nothing is authored in sprint 41 until the
 questions here have explicit answers.
 
+---
+
+> **⚠️ PARTIALLY SUPERSEDED (2026-04-18, session 3).** The original spike
+> specified a per-tower `linkSlots` counter on `PlacedTower` and a
+> `DEFAULT_LINK_SLOTS` constant, with ARCHITECT incrementing the slot
+> count. Session-3 workstream B replaced that approach with
+> **cluster-propagation semantics**: ARCHITECT now substitutes
+> `clusterSize − 1` for the literal 4-dir neighbor count via
+> `getEffectiveNeighborCount()` in `tower-combat.service.ts`, and the
+> `linkSlots` field + constants were deleted (commit `970020a`).
+>
+> References to `linkSlots` / `DEFAULT_LINK_SLOTS` in §3, §5, §8, §15, §17
+> below describe a design that was not shipped. Treat them as historical.
+> The shipped implementation matches the "cluster propagation" alternative
+> briefly discussed in §5, not the slot-counter approach.
+>
+> Everything else in this spike (TowerGraphService API shape, virtual-edge
+> lifecycle, disruption model, checkpoint schema) remains accurate.
+
+---
+
 ## 1. Problem statement
 
 The Conduit archetype (plan sprints 41–56) requires **per-tower adjacency
