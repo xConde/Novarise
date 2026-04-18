@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { Subject } from 'rxjs';
 import { PlacedTower } from '../models/tower.model';
 import { CONDUIT_CONFIG } from '../constants/conduit.constants';
 
@@ -118,6 +119,27 @@ export class TowerGraphService {
   /** Getter for `placedTowers` — injected by component init to avoid DI cycle. */
   private placedTowersGetter: () => ReadonlyMap<string, PlacedTower> = () => new Map();
 
+  /**
+   * Edge-lifecycle observables consumed by LinkMeshService (sprint 42).
+   *
+   * Emission timing: edges added/removed by `registerTower`, `unregisterTower`,
+   * `addVirtualEdge`, `tickTurn` (virtual-edge expiry), `severTower` /
+   * `disruptRadius` (disruption does NOT emit — disrupted-tower edges are
+   * filtered at read time, not structurally removed).
+   *
+   * Emission shape: `{ a, b, kind }` where a/b are tower ids (lex-ordered so
+   * `a < b`) and kind distinguishes spatial from virtual for material styling.
+   *
+   * Component scope: Subjects complete in `reset()` (encounter teardown)
+   * because the service instance is destroyed with the component, but
+   * explicit `.complete()` lets subscribers release refs early.
+   */
+  private readonly edgesAddedSubject = new Subject<TowerGraphEdge>();
+  private readonly edgesRemovedSubject = new Subject<TowerGraphEdge>();
+
+  readonly edgesAdded$ = this.edgesAddedSubject.asObservable();
+  readonly edgesRemoved$ = this.edgesRemovedSubject.asObservable();
+
   // ─── Init ──────────────────────────────────────────────────────────────
 
   /**
@@ -145,6 +167,7 @@ export class TowerGraphService {
       this.neighbors.get(tower.id)!.add(adj.id);
       const back = this.neighbors.get(adj.id);
       if (back) back.add(tower.id);
+      this.edgesAddedSubject.next(this.spatialEdge(tower.id, adj.id));
     }
   }
 
@@ -158,6 +181,7 @@ export class TowerGraphService {
       // Mirror-remove from each peer's neighbor set.
       for (const peer of mySet) {
         this.neighbors.get(peer)?.delete(id);
+        this.edgesRemovedSubject.next(this.spatialEdge(id, peer));
       }
       this.neighbors.delete(id);
     }
@@ -166,7 +190,10 @@ export class TowerGraphService {
     // substring matches (e.g. id "5-5" would substring-match "15-5__5-6").
     for (const edgeKey of Array.from(this.virtualEdges.keys())) {
       const [aId, bId] = edgeKey.split('__');
-      if (aId === id || bId === id) this.virtualEdges.delete(edgeKey);
+      if (aId === id || bId === id) {
+        this.virtualEdges.delete(edgeKey);
+        this.edgesRemovedSubject.next({ a: aId, b: bId, kind: 'virtual' });
+      }
     }
     // Prune disruption entry.
     this.disruptedUntil.delete(id);
@@ -194,6 +221,8 @@ export class TowerGraphService {
     if (aId === undefined || bId === undefined || aId === bId) return false;
     const edgeKey = this.canonicalEdgeKey(aId, bId);
     this.virtualEdges.set(edgeKey, { aRow, aCol, bRow, bCol, expiresOnTurn, sourceId });
+    const [lo, hi] = aId < bId ? [aId, bId] : [bId, aId];
+    this.edgesAddedSubject.next({ a: lo, b: hi, kind: 'virtual', expiresOnTurn });
     return true;
   }
 
@@ -325,7 +354,11 @@ export class TowerGraphService {
    */
   tickTurn(currentTurn: number): void {
     for (const [edgeKey, edge] of Array.from(this.virtualEdges)) {
-      if (edge.expiresOnTurn === currentTurn) this.virtualEdges.delete(edgeKey);
+      if (edge.expiresOnTurn === currentTurn) {
+        this.virtualEdges.delete(edgeKey);
+        const [aId, bId] = edgeKey.split('__');
+        this.edgesRemovedSubject.next({ a: aId, b: bId, kind: 'virtual' });
+      }
     }
     for (const [id, entry] of Array.from(this.disruptedUntil)) {
       if (entry.untilTurn === currentTurn) this.disruptedUntil.delete(id);
@@ -413,7 +446,14 @@ export class TowerGraphService {
       this.neighbors.get(tower.id)!.add(adj.id);
       const back = this.neighbors.get(adj.id);
       if (back) back.add(tower.id);
+      this.edgesAddedSubject.next(this.spatialEdge(tower.id, adj.id));
     }
+  }
+
+  /** Build a canonical spatial edge event with `a < b` (lex). */
+  private spatialEdge(x: string, y: string): TowerGraphEdge {
+    const [a, b] = x < y ? [x, y] : [y, x];
+    return { a, b, kind: 'spatial' };
   }
 
   /**

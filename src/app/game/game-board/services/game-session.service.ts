@@ -28,6 +28,7 @@ import { GamePauseService } from './game-pause.service';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
 import { TowerGraphService } from './tower-graph.service';
+import { LinkMeshService } from './link-mesh.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
 import { disposeMaterial } from '../utils/three-utils';
 
@@ -69,6 +70,9 @@ export class GameSessionService {
     // don't need to register TowerGraphService. Production wires it via
     // GameBoardComponent.providers.
     @Optional() private towerGraphService?: TowerGraphService,
+    // Phase 4 sprint 42 — @Optional() for the same reason. LinkMeshService
+    // owns all link-mesh disposal; cleanupScene delegates to its dispose().
+    @Optional() private linkMeshService?: LinkMeshService,
   ) {}
 
   /**
@@ -131,6 +135,13 @@ export class GameSessionService {
 
     // Clean up tower combat state (projectiles)
     this.towerCombatService.cleanup(scene);
+
+    // Phase 4 sprint 42 — dispose link-mesh lines + shared materials before
+    // tower meshes are disposed. LinkMeshService reads tower positions from
+    // registry, so ordering here is defensive: lines don't need tower positions
+    // on dispose but the contract is "link meshes owned/torn down by their
+    // dedicated owner first."
+    this.linkMeshService?.dispose();
 
     // Clean up tower placement preview
     this.towerPreviewService.cleanup(scene);
