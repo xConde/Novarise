@@ -1740,3 +1740,36 @@ Picked Finding 2 as the hardening fix — it's the most immediately exploitable 
 - [ ] Step 4: Full quality gate — `tsc --noEmit` (both configs), `ng build --configuration=production`, full `ng test`, all green.
 - [ ] Step 5: Update memory (`MEMORY.md` + sprint plan) to reflect what shipped vs deferred from Phase 1.
 
+---
+
+## Red Team Critique — 2026-04-17 (Phase 2 boundary)
+
+Branch: `feat/archetype-depth` | Diff: 86 files / +9185 / −256
+Sprints reviewed: 9, 10, 10.5, 10.75, 11–24
+
+### Finding 0: No `.claude/settings.json` or hooks directory (LOW)
+**Location:** `.claude/settings.json` (absent), `.claude/hooks/` (absent)
+**Risk:** The red-team protocol mandates verifying hook configuration before review. Pre-commit hooks that enforce `tsc --noEmit`, linting, or test runs are not registered. A bad commit (e.g., a TypeScript error introduced mid-sprint) can land silently. Low severity because CI presumably catches it downstream, but the local gate is missing.
+**Fix:** Create `.claude/settings.json` with the project's hook configuration and add pre-commit entries for `tsc --noEmit` and `npm test -- --watch=false`.
+
+---
+
+### Finding 1: `endTurn` does NOT cancel tile-target mode — pending terraform card survives across turn boundaries (HIGH)
+**Location:** `src/app/game/game-board/services/wave-combat-facade.service.ts:191-194`
+**Risk:** `endTurn()` guards only on `hasPendingCard()`, which checks `pendingTowerCard` only (`card-play.service.ts:119-121`). If the player has clicked a terraform card (entering tile-target mode) but has NOT yet clicked a tile, then presses End Turn, the turn resolves normally. `deckService.discardHand()` then fires (`wave-combat-facade.service.ts:249`) — discarding the hand including the terraform card. The `pendingTileTargetCard` reference still holds the now-discarded `CardInstance`. On the next turn's first tile click, `resolveTileTarget` re-checks energy, mutates the board, then calls `deckService.playCard(card.instanceId)`. `playCard` searches all four piles for the instanceId — it may find it in the discard pile, successfully consuming it there. Net effect: the mutation is applied with a one-turn delay that the player didn't pay for, and the card is consumed from an incorrect pile. If the card is NOT found in any pile (e.g. exhausted or already reshuffled), `playCard` returns false but the board mutation already succeeded — free tile mutation with no card cost.
+**Fix:** In `WaveCombatFacadeService.endTurn()`, mirror the tower-card guard: check `cardPlayService.getPendingTileTargetCard()` and call `cardPlayService.cancelTileTarget()` (returning without resolving the turn) the same way tower-card placement is handled. Alternatively, resolve the tile-target automatically on end-turn if a valid tile is selectable, but cancellation is simpler and consistent with tower behavior.
+
+---
+
+### Finding 2: `turnsSinceLastMutation` returns negative on checkpoint restore — VEINSEEKER buffs every turn forever (MEDIUM)
+**Location:** `src/app/game/game-board/services/path-mutation.service.ts:210-214`, `wasMutatedInLastTurns:195-198`
+**Risk:** `turnsSinceLastMutation(currentTurn)` returns `currentTurn - latestTurn`. If a checkpoint is restored with `turnNumber` set to a value smaller than `appliedOnTurn` stored in journal entries (a plausible edge case: the player saves, then the encounter is replayed from an earlier wave checkpoint), `since` is negative. `wasMutatedInLastTurns(currentTurn, 3)` does `since !== Infinity && since <= 3` — a negative number satisfies `<= 3`. VEINSEEKER's sprint-23 speed boost reads this predicate each turn; it would fire every turn for the entire encounter, making VEINSEEKER permanently boosted regardless of actual board activity. While pathological checkpoint restore is the precondition, the math is also silent: there is no assertion or clamp, and the caller has no way to know the result is semantically wrong.
+**Fix:** Clamp `turnsSinceLastMutation` to `Math.max(0, currentTurn - latestTurn)`. Zero means "mutated this very turn," which is the safest fallback — it keeps any "just mutated" effect active rather than leaving VEINSEEKER thinking the board is quiet when the data is ambiguous. Add a `console.warn` when the raw difference is negative (indicates a clock inconsistency worth investigating).
+
+---
+
+### Finding 3: `Number.MAX_SAFE_INTEGER` sentinel for anchored `block`/`bridgehead` is arithmetically safe but semantically diverges from `destroy` permanence — anchor carry-over on encounter boundary (MEDIUM)
+**Location:** `src/app/game/game-board/services/card-play.service.ts:346-360`, `path-mutation.service.ts:256`
+**Risk:** `destroy` uses `duration = null` → `expiresOnTurn = null` → never filtered by `tickTurn`. Anchored `block`/`bridgehead` use `duration = Number.MAX_SAFE_INTEGER` → `expiresOnTurn = currentTurn + MAX_SAFE_INT` (a value outside `Number.isSafeInteger` range; confirmed via `node -e`). `tickTurn` checks `m.expiresOnTurn === currentTurn` — this will never match a floating-point imprecision value, so it won't accidentally expire mid-encounter. However, `PathMutationService.reset()` is called on encounter teardown and clears the journal. The tile-type mutation applied to `GameBoardService` is NOT reverted on reset — only the journal is cleared. This means a WALL tile converted via anchored BLOCK survives into the next encounter (the underlying `GameBoardService` board data was mutated but the journal entry tracking the revert is gone). The next encounter loads the same map from `MapBridgeService` — if the board is re-initialized from the serialized map (not from `GameBoardService` live state), this is fine. If it uses live state, the mutation leaks. Verify the board re-initialization path: if `GameSessionService.resetAllServices()` reinitializes the board from the original map data, the leak doesn't occur; if it reads `gameBoardService.getGameBoard()` live, anchored mutations carry over.
+**Fix:** Verify `GameSessionService.resetAllServices()` or `GameBoardComponent.restartGame()` reinitializes the board from the source map, not from live `GameBoardService` state. If the board is re-read live, `PathMutationService.reset()` must revert all active journal entries before clearing, or `GameBoardService.resetBoard()` must be called with the original map data.
+

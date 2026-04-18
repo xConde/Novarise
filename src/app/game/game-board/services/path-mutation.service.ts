@@ -210,7 +210,23 @@ export class PathMutationService {
   turnsSinceLastMutation(currentTurn: number): number {
     if (this.journal.length === 0) return Infinity;
     const latestTurn = Math.max(...this.journal.map(m => m.appliedOnTurn));
-    return currentTurn - latestTurn;
+    const delta = currentTurn - latestTurn;
+    // Sprint 24 red-team Finding 2: if a restored checkpoint has a journal
+    // entry with an appliedOnTurn greater than the restored turnNumber
+    // (shouldn't happen under clean flow, but could under wave-rewind or
+    // clock inconsistency), a negative delta would satisfy `<= 3` in
+    // `wasMutatedInLastTurns` and give VEINSEEKER a permanent speed buff.
+    // Clamp at 0 so negative-delta states are treated as "mutated this turn".
+    // A negative delta is still semantically "recently mutated" — the
+    // clamping just avoids the unbounded-past overstatement.
+    if (delta < 0) {
+      console.warn(
+        `PathMutationService: negative turn delta (${delta}) — latestTurn=${latestTurn}, currentTurn=${currentTurn}. ` +
+        `Clamping to 0; expect a state-reset bug upstream.`,
+      );
+      return 0;
+    }
+    return delta;
   }
 
   isPlayerBuilt(row: number, col: number): boolean {

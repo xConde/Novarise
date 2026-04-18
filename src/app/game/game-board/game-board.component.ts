@@ -821,9 +821,22 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.previewTowerType = null;
   }
 
-  /** Exit PLACE mode — clears tower type selection, hides ghost preview, removes tile highlights. */
+  /**
+   * Exit PLACE mode — clears tower type selection, hides ghost preview,
+   * removes tile highlights, AND cancels any pending tile-target
+   * (terraform) card.
+   *
+   * Sprint 24 red-team Finding 1: tile-target cards must be cancelled
+   * here too. Otherwise a player clicking a terraform card then pressing
+   * End Turn would discard the card from hand while leaving
+   * `pendingTileTargetCard` stale — the next tile click would resolve a
+   * mutation for a card no longer in the deck. Cancelling here ensures
+   * the turn-end guard (via `hasPendingCard` → this) short-circuits
+   * both modes consistently.
+   */
   cancelPlacement(): void {
     this.cardPlayService.cancelPendingTowerCard();
+    this.cardPlayService.cancelTileTarget();
     this.selectedTowerType = null;
     this.boardPointer.clearSelectedTile();
     this.clearTileHighlights();

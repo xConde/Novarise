@@ -115,9 +115,20 @@ export class CardPlayService {
     this.callbacks = callbacks;
   }
 
-  /** Whether a tower card is currently in placement limbo. */
+  /**
+   * Whether ANY card is currently in limbo — either a tower card awaiting
+   * tile placement, or a terraform card awaiting a tile target.
+   *
+   * Used by `WaveCombatFacadeService.endTurn` to block turn resolution while
+   * a card is mid-resolution. Returning true for tile-target cards closes
+   * the sprint-24 red-team Finding 1: without it, ending a turn while a
+   * terraform card was pending would discard the hand (including that card)
+   * but leave `pendingTileTargetCard` stale — the next tile click would
+   * consume a card that no longer exists, potentially applying a free
+   * mutation (board change without energy paid).
+   */
   hasPendingCard(): boolean {
-    return this.pendingTowerCard !== null;
+    return this.pendingTowerCard !== null || this.pendingTileTargetCard !== null;
   }
 
   /** Returns the pending tower card (used by tryPlaceTower to capture before consuming). */

@@ -222,6 +222,34 @@ describe('CardPlayService', () => {
       service.reset();
       expect(service.hasPendingCard()).toBeFalse();
     });
+
+    // Sprint 24 red-team Finding 1 — hasPendingCard must cover tile-target
+    // mode so endTurn's hasPendingCard guard blocks turn resolution while a
+    // terraform card is mid-resolution (otherwise the card gets discarded
+    // but the pending pointer survives, enabling a free mutation on the
+    // next tile click).
+    it('returns true when a terraform card is pending (tile-target mode)', () => {
+      service['pendingTileTargetCard'] = {
+        instanceId: 'tf-1',
+        cardId: CardId.LAY_TILE,
+        upgraded: false,
+      };
+      expect(service.hasPendingCard()).toBeTrue();
+    });
+
+    it('returns true when BOTH a tower and a terraform card are pending (defensive)', () => {
+      service['pendingTowerCard'] = {
+        instanceId: 'tw-1',
+        cardId: CardId.TOWER_BASIC,
+        upgraded: false,
+      };
+      service['pendingTileTargetCard'] = {
+        instanceId: 'tf-1',
+        cardId: CardId.LAY_TILE,
+        upgraded: false,
+      };
+      expect(service.hasPendingCard()).toBeTrue();
+    });
   });
 
   describe('getPendingCard', () => {
@@ -577,10 +605,16 @@ describe('CardPlayService', () => {
       service['pendingTowerCard'] = { instanceId: 'tower-pending', cardId: CardId.TOWER_BASIC, upgraded: false };
       expect(service.hasPendingCard()).toBeTrue();
 
-      // Play a terraform card — it should clear the tower card
+      // Play a terraform card — it should clear the tower card and swap
+      // in a pending tile-target card. After the preemption:
+      //   - pendingTowerCard is null (tower card was cancelled)
+      //   - pendingTileTargetCard holds the new terraform card
+      //   - hasPendingCard() still returns true because tile-target mode is
+      //     now active (sprint-24 red-team Finding 1 broadened the getter).
       service.onCardPlayed(makeTerraformInstance());
 
-      expect(service.hasPendingCard()).toBeFalse();
+      expect(service['pendingTowerCard']).toBeNull();
+      expect(service.getPendingTileTargetCard()).not.toBeNull();
       expect(service.getPendingTileTargetCard()).not.toBeNull();
     });
 

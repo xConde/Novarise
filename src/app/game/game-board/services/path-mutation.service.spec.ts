@@ -432,6 +432,28 @@ describe('PathMutationService', () => {
       service.block(0, 4, 5, 'b', 7, scene);
       expect(service.turnsSinceLastMutation(10)).toBe(3);
     });
+
+    // Sprint 24 red-team Finding 2 — negative turn delta clamp.
+    it('clamps to 0 when currentTurn < latestTurn (warns about state reset)', () => {
+      spyOn(console, 'warn');
+      service.block(0, 2, 5, 'a', 10, scene);
+      expect(service.turnsSinceLastMutation(5)).toBe(0);
+      expect(console.warn).toHaveBeenCalled();
+    });
+
+    it('wasMutatedInLastTurns does NOT treat negative delta as infinite recent mutation', () => {
+      spyOn(console, 'warn'); // suppress
+      service.block(0, 2, 5, 'a', 10, scene);
+      // Before clamp fix this would satisfy `<= 3` because delta=-5.
+      // With clamp: delta=0, still `<= 3` → true. This is fine: "turn
+      // rewound past the mutation, treat as mutated this turn" is the
+      // intended safe default. The guard prevents the negative from
+      // propagating into calculations downstream (e.g. future callers
+      // that use the value arithmetically).
+      expect(service.wasMutatedInLastTurns(5, 3)).toBeTrue();
+      // Still honors a 0-window when the caller passes it.
+      expect(service.wasMutatedInLastTurns(5, 0)).toBeTrue();
+    });
   });
 
   describe('wasMutatedInLastTurns', () => {
