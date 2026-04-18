@@ -387,6 +387,10 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgraded: false,
     effect: { type: 'spell', spellId: 'scout_ahead', value: CARD_VALUES.scoutAheadWaves },
     upgradedEffect: { type: 'spell', spellId: 'scout_ahead', value: CARD_VALUES.scoutAheadUpgradedWaves },
+    // Phase 2 Sprint 13 — Cartographer archetype. Scouting the battlefield
+    // matches Cartographer's intel/reshape identity. No terraform flag —
+    // the card reveals information, it doesn't modify tiles.
+    archetype: 'cartographer',
   },
 
   [CardId.LIGHTNING_STRIKE]: {

@@ -549,4 +549,24 @@ describe('CARD_DEFINITIONS', () => {
       expect(result).toBeUndefined();
     });
   });
+
+  // ── Phase 2 Sprint 13 — Cartographer archetype tagging ─────────────────────
+  describe('archetype tagging', () => {
+    it('SCOUT_AHEAD is tagged as cartographer', () => {
+      // Retagged in sprint 13 — SCOUT_AHEAD's intel-reveal mechanic aligns
+      // with the Cartographer identity (reshape + reveal the battlefield).
+      // This means cartographer-dominant decks get more scouts offered.
+      expect(CARD_DEFINITIONS[CardId.SCOUT_AHEAD].archetype).toBe('cartographer');
+    });
+
+    it('SCOUT_AHEAD does NOT carry the terraform flag (reveals, does not mutate tiles)', () => {
+      expect(CARD_DEFINITIONS[CardId.SCOUT_AHEAD].terraform).toBeFalsy();
+    });
+
+    it('SCOUT_ELITE stays neutral (uncommon+innate tier retains neutral identity)', () => {
+      // SCOUT_ELITE is an innate keyword card, not a Cartographer-identity
+      // card. Keep neutral so innate-deck builds don't auto-lean Cartographer.
+      expect(CARD_DEFINITIONS[CardId.SCOUT_ELITE].archetype ?? 'neutral').toBe('neutral');
+    });
+  });
 });
