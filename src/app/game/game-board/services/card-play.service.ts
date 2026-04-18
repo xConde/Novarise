@@ -32,6 +32,7 @@ import {
   isElevationTargetEffect,
 } from '../../../run/models/card.model';
 import { MutationOp } from './path-mutation.types';
+import { ElevationOp } from './elevation.types';
 import { getCardDefinition } from '../../../run/constants/card-definitions';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 import { disposeMaterial } from '../utils/three-utils';
@@ -50,7 +51,7 @@ export interface CardPlayCallbacks {
    * and UI state (e.g., show a "click a tile" prompt). This is the parallel
    * of `onEnterPlacementMode` for tower cards.
    */
-  onEnterTileTargetMode?: (card: CardInstance, op: MutationOp | string) => void;
+  onEnterTileTargetMode?: (card: CardInstance, op: MutationOp | ElevationOp) => void;
   /**
    * Called when tile-target mode is exited — either by successful resolution,
    * cancellation, or teardown. Clears any targeting-mode UI state.
