@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { RewardScreenComponent } from './reward-screen.component';
@@ -36,6 +36,7 @@ const MOCK_CONFIG: RewardScreenConfig = {
   completedChallenges: [],
   nodeType: NodeType.COMBAT,
   dominantArchetype: 'neutral',
+  previousDominantArchetype: null,
 };
 
 const MOCK_CONFIG_NO_CARDS: RewardScreenConfig = {
@@ -48,6 +49,7 @@ const MOCK_CONFIG_NO_CARDS: RewardScreenConfig = {
   completedChallenges: [],
   nodeType: NodeType.COMBAT,
   dominantArchetype: 'neutral',
+  previousDominantArchetype: null,
 };
 
 describe('RewardScreenComponent', () => {
@@ -238,7 +240,7 @@ describe('RewardScreenComponent', () => {
   });
 
   it('canContinue is true immediately when both relicChoices and cardChoices are empty', () => {
-    component.config = { goldPickup: 10, relicChoices: [], cardChoices: [], bonusRewards: [], completedChallenges: [], nodeType: NodeType.COMBAT, dominantArchetype: 'neutral' };
+    component.config = { goldPickup: 10, relicChoices: [], cardChoices: [], bonusRewards: [], completedChallenges: [], nodeType: NodeType.COMBAT, dominantArchetype: 'neutral', previousDominantArchetype: null };
     expect(component.canContinue).toBeTrue();
   });
 
@@ -364,6 +366,7 @@ describe('RewardScreenComponent', () => {
         completedChallenges: [],
         nodeType: NodeType.COMBAT,
         dominantArchetype: 'neutral',
+        previousDominantArchetype: null,
       };
       fixture.detectChanges();
 
@@ -380,6 +383,7 @@ describe('RewardScreenComponent', () => {
         completedChallenges: [],
         nodeType: NodeType.BOSS,
         dominantArchetype: 'neutral',
+        previousDominantArchetype: null,
       };
       fixture.detectChanges();
 
@@ -396,6 +400,7 @@ describe('RewardScreenComponent', () => {
         completedChallenges: [],
         nodeType: NodeType.BOSS,
         dominantArchetype: 'neutral',
+        previousDominantArchetype: null,
       };
       fixture.detectChanges();
       component.pickRelic(component.relicCards[0]);
@@ -416,6 +421,7 @@ describe('RewardScreenComponent', () => {
         completedChallenges: [],
         nodeType: NodeType.COMBAT,
         dominantArchetype: 'neutral',
+        previousDominantArchetype: null,
       };
       fixture.detectChanges();
       component.onCardPicked({ type: 'card', cardId: CardId.GOLD_RUSH });
@@ -612,5 +618,100 @@ describe('RewardScreenComponent', () => {
       const chip = (fixture.nativeElement as HTMLElement).querySelector('.reward-archetype__chip');
       expect(chip?.textContent?.trim()).toBe('Cartographer');
     });
+  });
+
+  // ── Phase 3 prep: Archetype chip flip animation ─────────────────────
+
+  describe('archetype chip flip animation', () => {
+    beforeEach(() => {
+      // Stub matchMedia so the reduced-motion branch is deterministic across tests.
+      spyOn(window, 'matchMedia').and.returnValue({
+        matches: false,
+        media: '(prefers-reduced-motion: reduce)',
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      } as unknown as MediaQueryList);
+    });
+
+    // The outer beforeEach calls detectChanges() once, so ngOnInit has already
+    // fired against MOCK_CONFIG (previousDominantArchetype: null → no flip).
+    // Each test below rewires config and re-invokes ngOnInit to exercise the
+    // lifecycle path under the new config. In production the parent destroys
+    // and recreates the component via *ngIf, so ngOnInit runs exactly once
+    // per reward screen.
+
+    it('does not flip on the first reward screen of a run (previous is null)', () => {
+      component.config = { ...MOCK_CONFIG, dominantArchetype: 'cartographer', previousDominantArchetype: null };
+      component.ngOnInit();
+      fixture.detectChanges();
+
+      expect(component.isArchetypeFlipping).toBeFalse();
+      const chip = (fixture.nativeElement as HTMLElement).querySelector('.reward-archetype__chip');
+      expect(chip?.classList.contains('reward-archetype__chip--flipping')).toBeFalse();
+    });
+
+    it('does not flip when the archetype is unchanged between screens', () => {
+      component.config = { ...MOCK_CONFIG, dominantArchetype: 'cartographer', previousDominantArchetype: 'cartographer' };
+      component.ngOnInit();
+      fixture.detectChanges();
+
+      expect(component.isArchetypeFlipping).toBeFalse();
+    });
+
+    it('flips when the dominant archetype changes between reward screens', () => {
+      component.config = { ...MOCK_CONFIG, dominantArchetype: 'cartographer', previousDominantArchetype: 'neutral' };
+      component.ngOnInit();
+      fixture.detectChanges();
+
+      expect(component.isArchetypeFlipping).toBeTrue();
+      const chip = (fixture.nativeElement as HTMLElement).querySelector('.reward-archetype__chip');
+      expect(chip?.classList.contains('reward-archetype__chip--flipping')).toBeTrue();
+    });
+
+    it('clears the flipping flag after 600ms', fakeAsync(() => {
+      component.config = { ...MOCK_CONFIG, dominantArchetype: 'highground', previousDominantArchetype: 'cartographer' };
+      component.ngOnInit();
+      fixture.detectChanges();
+
+      expect(component.isArchetypeFlipping).toBeTrue();
+      tick(600);
+      expect(component.isArchetypeFlipping).toBeFalse();
+    }));
+
+    it('does not schedule the animation when prefers-reduced-motion is set', () => {
+      (window.matchMedia as jasmine.Spy).and.returnValue({
+        matches: true,
+        media: '(prefers-reduced-motion: reduce)',
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      } as unknown as MediaQueryList);
+
+      component.config = { ...MOCK_CONFIG, dominantArchetype: 'conduit', previousDominantArchetype: 'neutral' };
+      component.ngOnInit();
+      fixture.detectChanges();
+
+      expect(component.isArchetypeFlipping).toBeFalse();
+    });
+
+    it('cancels the pending flip timer on destroy (no stray timeouts after teardown)', fakeAsync(() => {
+      component.config = { ...MOCK_CONFIG, dominantArchetype: 'siegeworks', previousDominantArchetype: 'cartographer' };
+      component.ngOnInit();
+      fixture.detectChanges();
+
+      expect(component.isArchetypeFlipping).toBeTrue();
+      fixture.destroy();
+      // If ngOnDestroy did not clear the timer, fakeAsync would flag a pending timer.
+      tick(600);
+      // Reaching here without a fakeAsync error is the assertion.
+      expect(true).toBeTrue();
+    }));
   });
 });

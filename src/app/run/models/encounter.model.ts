@@ -72,6 +72,14 @@ export interface RewardScreenConfig {
    * live deck after a card pick (which would desync with the rewards shown).
    */
   readonly dominantArchetype: CardArchetype;
+  /**
+   * Archetype displayed on the previous reward screen in this run, or `null`
+   * on the first reward screen. Drives the chip flip animation (Phase 3 prep):
+   * when different from `dominantArchetype`, the chip runs a rotateY + color
+   * pulse keyframe so players perceive the transition. Phase 2 devil's
+   * advocate #4 — without this the 60/40 weighting reads as broken.
+   */
+  readonly previousDominantArchetype: CardArchetype | null;
 }
 
 /** Shop item in a shop node. */

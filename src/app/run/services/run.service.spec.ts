@@ -481,6 +481,58 @@ describe('RunService', () => {
     expect(rewards.dominantArchetype).toBe('neutral');
   }));
 
+  // Phase 3 prep — chip flip animation plumbing. RunService threads the prior
+  // reward screen's archetype through RewardScreenConfig.previousDominantArchetype
+  // so the chip can fire a flip keyframe on transition.
+  describe('generateRewards — previousDominantArchetype plumbing', () => {
+    it('returns previousDominantArchetype=null on the first reward screen of a run', fakeAsync(() => {
+      service.startNewRun();
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+
+      const rewards = service.generateRewards();
+
+      expect(rewards.previousDominantArchetype).toBeNull();
+    }));
+
+    it('returns the prior archetype on the second reward screen', fakeAsync(() => {
+      service.startNewRun();
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      const first = service.generateRewards();
+      // Second reward generation in the same run should echo the first's archetype
+      // through the previous field, even if no deck change occurred (dominance
+      // is re-snapshotted each call).
+      const second = service.generateRewards();
+
+      expect(second.previousDominantArchetype).toBe(first.dominantArchetype);
+    }));
+
+    it('resets the prior-archetype cache when a new run starts', fakeAsync(() => {
+      service.startNewRun();
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      service.generateRewards(); // primes lastShownDominantArchetype
+
+      service.startNewRun(); // clears the cache
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      const afterReset = service.generateRewards();
+
+      expect(afterReset.previousDominantArchetype).toBeNull();
+    }));
+
+    it('resets the prior-archetype cache when a run is abandoned', fakeAsync(() => {
+      service.startNewRun();
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      service.generateRewards(); // primes lastShownDominantArchetype
+
+      service.abandonRun();
+
+      service.startNewRun();
+      service.prepareEncounter(service.nodeMap!.nodes[0]);
+      const afterAbandon = service.generateRewards();
+
+      expect(afterAbandon.previousDominantArchetype).toBeNull();
+    }));
+  });
+
   it('generateRewards() returns exactly 3 card choices', fakeAsync(() => {
     service.startNewRun();
     service.prepareEncounter(service.nodeMap!.nodes[0]);

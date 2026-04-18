@@ -96,6 +96,14 @@ export class RunService {
   /** RNG seeded per-run, advanced by each random action. */
   private runRng: SeededRng | null = null;
 
+  /**
+   * Last dominant archetype surfaced on a reward screen this run. Null before
+   * the first reward screen or after run teardown. Drives the chip flip
+   * animation: the next generateRewards() compares current vs this and passes
+   * the delta through RewardScreenConfig.previousDominantArchetype.
+   */
+  private lastShownDominantArchetype: CardArchetype | null = null;
+
   constructor(
     private nodeMapGenerator: NodeMapGeneratorService,
     private encounterService: EncounterService,
@@ -224,6 +232,7 @@ export class RunService {
     this.shopItems = [];
     this.currentEvent = null;
     this.runRng = null;
+    this.lastShownDominantArchetype = null;
 
     const seed = Date.now();
     const config = this.applyAscensionToConfig(DEFAULT_RUN_CONFIG, ascensionLevel);
@@ -462,6 +471,18 @@ export class RunService {
     // Pick cards weighted by rarity (skip call entirely when 0 cards due).
     const cardChoices = cardCount > 0 ? this.pickCardRewards(this.computeCardChoiceCount(cardCount), rng) : [];
 
+    // Phase 2 Sprint 10.5 — snapshot the dominant archetype at reward-
+    // generation time so the chip reflects the state that shaped the pool.
+    // Reading from DeckService live at render time would desync after a
+    // card pick (new card shifts the dominant archetype while the screen
+    // is still showing the pre-pick rewards).
+    const dominantArchetype = this.deckService.getDominantArchetype();
+    // Phase 3 prep — pass the prior screen's archetype through so the chip
+    // can fire a flip animation when the player transitions archetypes
+    // between rewards. Null on the first reward screen of a run.
+    const previousDominantArchetype = this.lastShownDominantArchetype;
+    this.lastShownDominantArchetype = dominantArchetype;
+
     return {
       goldPickup,
       relicChoices,
@@ -469,12 +490,8 @@ export class RunService {
       bonusRewards: [],
       completedChallenges,
       nodeType: encounter?.nodeType ?? NodeType.COMBAT,
-      // Phase 2 Sprint 10.5 — snapshot the dominant archetype at reward-
-      // generation time so the chip reflects the state that shaped the pool.
-      // Reading from DeckService live at render time would desync after a
-      // card pick (new card shifts the dominant archetype while the screen
-      // is still showing the pre-pick rewards).
-      dominantArchetype: this.deckService.getDominantArchetype(),
+      dominantArchetype,
+      previousDominantArchetype,
     };
   }
 
@@ -1143,6 +1160,7 @@ export class RunService {
     this.shopItems = [];
     this.currentEvent = null;
     this.runRng = null;
+    this.lastShownDominantArchetype = null;
     this.relicService.clearRelics();
     this.deckService.clear();
     this.itemService.resetForRun();
