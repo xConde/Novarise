@@ -323,8 +323,10 @@ export class EnemyService {
       // with elevation < 0 (depressed) skip their movement entirely this turn.
       // Per-enemy check: each enemy's current grid position is tested independently.
       // ElevationService is @Optional — returns 0 (no penalty) when absent.
+      // Sprint 37 GLIDER exception: ignoresElevation bypasses the GRAVITY_WELL check —
+      // a glider on a depressed tile moves normally.
       const gravityWellActive = this.cardEffectService.getModifierValue(MODIFIER_STAT.GRAVITY_WELL) > 0;
-      if (gravityWellActive) {
+      if (gravityWellActive && !(ENEMY_STATS[enemy.type]?.ignoresElevation)) {
         const tileElev = this.elevationService?.getElevation(
           enemy.gridPosition.row, enemy.gridPosition.col,
         ) ?? 0;
@@ -494,10 +496,12 @@ export class EnemyService {
     // Read live from ElevationService so the bonus is universal — applies to
     // tower fire, chain lightning, status tick, COLLAPSE damage, etc.
     // @Optional() guard: returns 0 (no bonus) in test beds without ElevationService.
+    // Sprint 37 GLIDER exception: ignoresElevation skips this penalty entirely.
+    const ignoresElevation = ENEMY_STATS[enemy.type]?.ignoresElevation ?? false;
     const tileElevation = this.elevationService?.getElevation(
       enemy.gridPosition.row, enemy.gridPosition.col,
     ) ?? 0;
-    if (tileElevation < 0) {
+    if (!ignoresElevation && tileElevation < 0) {
       damage = Math.round(damage * (1 + ELEVATION_CONFIG.EXPOSED_DAMAGE_BONUS));
     }
 

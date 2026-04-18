@@ -31,11 +31,17 @@ export enum RelicId {
   BOUNTY_HUNTER = 'BOUNTY_HUNTER',
   SURVEYOR_COMPASS = 'SURVEYOR_COMPASS',
 
+  // Uncommon (Highground)
+  SURVEYOR_ROD = 'SURVEYOR_ROD',
+
   // Rare (3 + 1)
   ARCHITECTS_BLUEPRINT = 'ARCHITECTS_BLUEPRINT',
   TEMPORAL_RIFT = 'TEMPORAL_RIFT',
   COMMANDERS_BANNER = 'COMMANDERS_BANNER',
   WORLD_SPIRIT = 'WORLD_SPIRIT',
+
+  // Rare (Highground)
+  OROGENY = 'OROGENY',
 }
 
 export enum RelicRarity {
@@ -183,6 +189,15 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     rarity: RelicRarity.UNCOMMON,
   },
 
+  // Sprint 36 — Highground relic pair (uncommon)
+  [RelicId.SURVEYOR_ROD]: {
+    id: RelicId.SURVEYOR_ROD,
+    name: 'Surveyor Rod',
+    description: 'Start each encounter with 5 random tiles at elevation +1',
+    flavorText: 'Mark the high ground before the battle begins.',
+    rarity: RelicRarity.UNCOMMON,
+  },
+
   // ── Rare (3 + 1) ────────────────────────────────────────────
   [RelicId.ARCHITECTS_BLUEPRINT]: {
     id: RelicId.ARCHITECTS_BLUEPRINT,
@@ -210,6 +225,15 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: 'World Spirit',
     description: 'Cartographer cards cost -1 energy (minimum 0)',
     flavorText: 'The land remembers those who shaped it.',
+    rarity: RelicRarity.RARE,
+  },
+
+  // Sprint 36 — Highground relic pair (rare)
+  [RelicId.OROGENY]: {
+    id: RelicId.OROGENY,
+    name: 'Orogeny',
+    description: 'Every 5 turns, permanently raise a random tower tile by +1 elevation',
+    flavorText: 'Mountains are made turn by turn.',
     rarity: RelicRarity.RARE,
   },
 };

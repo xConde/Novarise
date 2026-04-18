@@ -435,6 +435,7 @@ describe('RelicService', () => {
       const flags: SerializableRelicFlags = {
         firstLeakBlockedThisWave: true,
         freeTowerUsedThisEncounter: true,
+        orogenyTurnCounter: 0,
       };
 
       service.setActiveRelics([RelicId.ARCHITECTS_BLUEPRINT, RelicId.REINFORCED_WALLS]);
@@ -467,4 +468,146 @@ describe('RelicService', () => {
       expect(service.shouldBlockLeak()).toBeFalse();
     });
   });
+
+  // ── Sprint 36: SURVEYOR_ROD + OROGENY ────────────────────────────────────
+
+  describe('hasSurveyorRod()', () => {
+    it('returns false when SURVEYOR_ROD is not active', () => {
+      expect(service.hasSurveyorRod()).toBeFalse();
+    });
+
+    it('returns true when SURVEYOR_ROD is active', () => {
+      service.setActiveRelics([RelicId.SURVEYOR_ROD]);
+      expect(service.hasSurveyorRod()).toBeTrue();
+    });
+  });
+
+  describe('OROGENY — incrementOrogenyCounter + isOrogenyTrigger', () => {
+    it('getOrogenyTurnCounter() returns 0 at encounter start', () => {
+      expect(service.getOrogenyTurnCounter()).toBe(0);
+    });
+
+    it('incrementOrogenyCounter() returns incremented value', () => {
+      expect(service.incrementOrogenyCounter()).toBe(1);
+      expect(service.incrementOrogenyCounter()).toBe(2);
+      expect(service.getOrogenyTurnCounter()).toBe(2);
+    });
+
+    it('resetEncounterState() resets orogenyTurnCounter to 0', () => {
+      service.incrementOrogenyCounter();
+      service.incrementOrogenyCounter();
+      service.resetEncounterState();
+      expect(service.getOrogenyTurnCounter()).toBe(0);
+    });
+
+    it('isOrogenyTrigger() returns false when OROGENY relic is not active', () => {
+      // Counter at 5 — would trigger if relic was active
+      expect(service.isOrogenyTrigger(5, 5)).toBeFalse();
+    });
+
+    it('isOrogenyTrigger() returns false when counter is not a multiple of interval', () => {
+      service.setActiveRelics([RelicId.OROGENY]);
+      expect(service.isOrogenyTrigger(3, 5)).toBeFalse();
+      expect(service.isOrogenyTrigger(4, 5)).toBeFalse();
+    });
+
+    it('isOrogenyTrigger() returns false when counter is 0', () => {
+      service.setActiveRelics([RelicId.OROGENY]);
+      expect(service.isOrogenyTrigger(0, 5)).toBeFalse();
+    });
+
+    it('isOrogenyTrigger() returns true at turn 5 (first interval)', () => {
+      service.setActiveRelics([RelicId.OROGENY]);
+      expect(service.isOrogenyTrigger(5, 5)).toBeTrue();
+    });
+
+    it('isOrogenyTrigger() returns true at turn 10 (second interval)', () => {
+      service.setActiveRelics([RelicId.OROGENY]);
+      expect(service.isOrogenyTrigger(10, 5)).toBeTrue();
+    });
+
+    it('isOrogenyTrigger() returns false at turn 4', () => {
+      service.setActiveRelics([RelicId.OROGENY]);
+      expect(service.isOrogenyTrigger(4, 5)).toBeFalse();
+    });
+
+    it('full counter advancement: trigger fires at 5, not at 4, fires again at 10', () => {
+      service.setActiveRelics([RelicId.OROGENY]);
+      let counter = 0;
+      // Advance to 4
+      for (let t = 1; t <= 4; t++) {
+        counter = service.incrementOrogenyCounter();
+        expect(service.isOrogenyTrigger(counter, 5)).toBeFalse();
+      }
+      // Turn 5 — trigger
+      counter = service.incrementOrogenyCounter();
+      expect(service.isOrogenyTrigger(counter, 5)).toBeTrue();
+      // Turns 6–9 — no trigger
+      for (let t = 6; t <= 9; t++) {
+        counter = service.incrementOrogenyCounter();
+        expect(service.isOrogenyTrigger(counter, 5)).toBeFalse();
+      }
+      // Turn 10 — trigger again
+      counter = service.incrementOrogenyCounter();
+      expect(service.isOrogenyTrigger(counter, 5)).toBeTrue();
+    });
+  });
+
+  describe('OROGENY serialization — save/restore counter', () => {
+    it('serializeEncounterFlags() includes orogenyTurnCounter', () => {
+      service.incrementOrogenyCounter();
+      service.incrementOrogenyCounter();
+      service.incrementOrogenyCounter(); // counter = 3
+
+      const flags = service.serializeEncounterFlags();
+      expect(flags.orogenyTurnCounter).toBe(3);
+    });
+
+    it('restoreEncounterFlags() restores orogenyTurnCounter', () => {
+      const flags: SerializableRelicFlags = {
+        firstLeakBlockedThisWave: false,
+        freeTowerUsedThisEncounter: false,
+        orogenyTurnCounter: 7,
+      };
+      service.restoreEncounterFlags(flags);
+      expect(service.getOrogenyTurnCounter()).toBe(7);
+    });
+
+    it('save at turn 7, restore, next trigger fires at turn 10 (counter interval = 5)', () => {
+      service.setActiveRelics([RelicId.OROGENY]);
+      // Advance to turn 7
+      for (let t = 0; t < 7; t++) service.incrementOrogenyCounter();
+      expect(service.getOrogenyTurnCounter()).toBe(7);
+
+      // Save + restore
+      const flags = service.serializeEncounterFlags();
+      service.resetEncounterState();
+      service.restoreEncounterFlags(flags);
+      expect(service.getOrogenyTurnCounter()).toBe(7);
+
+      // Turns 8, 9 — no trigger
+      let counter = service.incrementOrogenyCounter(); // 8
+      expect(service.isOrogenyTrigger(counter, 5)).toBeFalse();
+      counter = service.incrementOrogenyCounter(); // 9
+      expect(service.isOrogenyTrigger(counter, 5)).toBeFalse();
+      // Turn 10 — trigger
+      counter = service.incrementOrogenyCounter(); // 10
+      expect(service.isOrogenyTrigger(counter, 5)).toBeTrue();
+    });
+
+    it('restoreEncounterFlags() defaults orogenyTurnCounter to 0 when missing from legacy saves', () => {
+      // Simulate a pre-sprint-36 checkpoint with no orogenyTurnCounter field
+      const legacyFlags = {
+        firstLeakBlockedThisWave: false,
+        freeTowerUsedThisEncounter: false,
+        // intentionally omitting orogenyTurnCounter
+      } as unknown as SerializableRelicFlags;
+
+      service.incrementOrogenyCounter(); // set to 1
+      service.restoreEncounterFlags(legacyFlags);
+
+      expect(service.getOrogenyTurnCounter()).toBe(0);
+    });
+  });
 });
+

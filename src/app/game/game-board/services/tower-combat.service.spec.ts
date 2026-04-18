@@ -3715,3 +3715,220 @@ describe('TowerCombatService KING_OF_THE_HILL damage bonus (sprint 33)', () => {
     expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 1.5 * 2.0));
   });
 });
+
+// ── Sprint 38 — TITAN halvesElevationDamageBonuses integration ────────────────
+describe('TowerCombatService TITAN elevation damage reduction (sprint 38)', () => {
+  /**
+   * Test vector from spec:
+   *   base damage 10, VP × 1.5, no KOTH
+   *   normal:   Math.round(10 * 1.5) = 15
+   *   vs TITAN: base-without-elev = 10/1.5 = 6.667; elev-portion = 15 - 6.667 = 8.333
+   *             TITAN gets 6.667 + 8.333 * 0.5 = 6.667 + 4.167 = 10.833 → Math.round → 11
+   *
+   * Wait — let me recheck with integer base:
+   *   base BASIC damage (level 1) = BASE_BASIC_DAMAGE (typically 10 from TOWER_CONFIGS)
+   *   stats.damage after VP×1.5 = Math.round(10 * 1.5) = 15
+   *   vantagePointDmgMult = 1.5, kothMult = 1
+   *   baseWithoutElevation = 15 / (1.5 * 1) = 10
+   *   elevationPortion = 15 - 10 = 5
+   *   TITAN: 10 + 5 * 0.5 = 12.5 → Math.round → 13 ✓ (matches spec example)
+   */
+
+  const TITAN_ROW = 2;
+  const TITAN_COL = 2;
+  // Board is 25 wide × 20 tall, tileSize=1 (matches createGameBoardServiceSpy(25,20,1)).
+  // gridToWorld: worldX = (col - boardWidth/2) * tileSize = (2 - 12.5) = -10.5
+  //              worldZ = (row - boardHeight/2) * tileSize = (2 - 10)   = -8
+  const TITAN_WORLD_X = (TITAN_COL - 25 / 2);  // -10.5
+  const TITAN_WORLD_Z = (TITAN_ROW - 20 / 2);  // -8
+  const TITAN_TURN = 1;
+  const VP_STAT = MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS;
+  const KOTH_STAT = MODIFIER_STAT.KING_OF_THE_HILL_DAMAGE_BONUS;
+  const BASE_DAMAGE = TOWER_CONFIGS[TowerType.BASIC].damage;
+
+  let titanSvc: TowerCombatService;
+  let titanEnemyMap: Map<string, Enemy>;
+  let titanElevSpy: jasmine.SpyObj<ElevationService>;
+  let titanCardEffectSpy: jasmine.SpyObj<CardEffectService>;
+
+  function buildTitanTestBed(
+    tileMap: Map<string, number>,
+    maxElev: number,
+  ): void {
+    titanEnemyMap = new Map();
+    titanElevSpy = createElevationServiceSpy(tileMap, maxElev);
+    titanCardEffectSpy = createCardEffectServiceSpy();
+
+    const pathSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset'],
+    );
+    pathSpy.getPathToExitLength.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(titanEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: titanCardEffectSpy },
+        { provide: PathfindingService, useValue: pathSpy },
+        { provide: ElevationService, useValue: titanElevSpy },
+      ],
+    });
+
+    titanSvc = TestBed.inject(TowerCombatService);
+    titanSvc.registerTower(TITAN_ROW, TITAN_COL, TowerType.BASIC, new THREE.Group());
+  }
+
+  afterEach(() => { TestBed.resetTestingModule(); });
+
+  // Test vector split into two single-enemy passes because BASIC tower is single-shot;
+  // putting two enemies in one fireTurn only damages the targeted one.
+  it('spec test vector (normal): VP×0.5 → non-TITAN gets Math.round(BASE×1.5)', () => {
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 1]]);
+    buildTitanTestBed(tileMap, 1);
+
+    titanCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0,
+    );
+
+    const normalEnemy = createTestEnemy('e-normal', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    titanEnemyMap.set('e-normal', normalEnemy);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    const expectedNormal = Math.round(BASE_DAMAGE * 1.5);
+    expect(10000 - normalEnemy.health).toBe(expectedNormal);
+  });
+
+  it('spec test vector (TITAN): VP×0.5 → TITAN gets base + elev×0.5', () => {
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 1]]);
+    buildTitanTestBed(tileMap, 1);
+
+    titanCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0,
+    );
+
+    const titanEnemy = createTestEnemy('e-titan', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    titanEnemy.type = EnemyType.TITAN;
+    titanEnemyMap.set('e-titan', titanEnemy);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    // stats.damage = Math.round(BASE * 1.5); TITAN: base-without-elev=BASE, elev-portion=stats.damage-BASE
+    const expectedNormal = Math.round(BASE_DAMAGE * 1.5);
+    const expectedTitan = Math.round(BASE_DAMAGE + (expectedNormal - BASE_DAMAGE) * 0.5);
+    expect(10000 - titanEnemy.health).toBe(expectedTitan);
+  });
+
+  it('VANTAGE_POINT active + TITAN target → damage multiplier halved (VP bonus only)', () => {
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 1]]);
+    buildTitanTestBed(tileMap, 1);
+
+    titanCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0,
+    );
+
+    const titan = createTestEnemy('t1', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    titan.type = EnemyType.TITAN;
+    titanEnemyMap.set('t1', titan);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    const damage = 10000 - titan.health;
+    // VP mult = 1.5; baseDmg=10; fullDmg=15; elev=5; titan=10+2.5=12.5→13
+    expect(damage).toBe(Math.round(BASE_DAMAGE + (Math.round(BASE_DAMAGE * 1.5) - BASE_DAMAGE) * ELEVATION_CONFIG.TITAN_ELEVATION_DAMAGE_REDUCTION));
+  });
+
+  it('non-TITAN enemy at same position with VP active → full multiplier applies', () => {
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 1]]);
+    buildTitanTestBed(tileMap, 1);
+
+    titanCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0,
+    );
+
+    const normal = createTestEnemy('n1', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    // default type = BASIC — no halvesElevationDamageBonuses
+    titanEnemyMap.set('n1', normal);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    const damage = 10000 - normal.health;
+    expect(damage).toBe(Math.round(BASE_DAMAGE * 1.5));
+  });
+
+  // Split into two single-enemy passes (single-shot tower only hits one target per fireTurn).
+  it('no elevation bonuses active → TITAN takes base damage (nothing to halve)', () => {
+    // Flat board: elevation=0 everywhere. VP/KOTH are inactive. computeTitanDamage
+    // short-circuits when combinedElevMult===1, returning stats.damage unchanged.
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 0]]);
+    buildTitanTestBed(tileMap, 0);
+
+    titanCardEffectSpy.getModifierValue.and.returnValue(0);
+
+    const titan = createTestEnemy('t-flat', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    titan.type = EnemyType.TITAN;
+    titanEnemyMap.set('t-flat', titan);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    expect(10000 - titan.health).toBe(BASE_DAMAGE);
+  });
+
+  it('no elevation bonuses active → non-TITAN takes base damage', () => {
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 0]]);
+    buildTitanTestBed(tileMap, 0);
+
+    titanCardEffectSpy.getModifierValue.and.returnValue(0);
+
+    const normal = createTestEnemy('n-flat', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    titanEnemyMap.set('n-flat', normal);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    expect(10000 - normal.health).toBe(BASE_DAMAGE);
+  });
+
+  // Split: single-shot tower — test normal and TITAN in separate passes.
+  it('KOTH active + max elevation → non-TITAN gets full KOTH bonus (base × 2)', () => {
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 2]]);
+    buildTitanTestBed(tileMap, 2);
+
+    titanCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === KOTH_STAT ? 1.0 : 0,
+    );
+
+    const normal = createTestEnemy('nk', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    titanEnemyMap.set('nk', normal);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    // Normal: base × (1 + 1.0) = base × 2
+    expect(10000 - normal.health).toBe(Math.round(BASE_DAMAGE * 2));
+  });
+
+  it('KOTH active + max elevation + TITAN target → KOTH bonus halved for TITAN', () => {
+    const tileMap = new Map([[`${TITAN_ROW}-${TITAN_COL}`, 2]]);
+    buildTitanTestBed(tileMap, 2);
+
+    titanCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === KOTH_STAT ? 1.0 : 0,
+    );
+
+    const titan = createTestEnemy('tk', TITAN_WORLD_X, TITAN_WORLD_Z, 10000);
+    titan.type = EnemyType.TITAN;
+    titanEnemyMap.set('tk', titan);
+
+    titanSvc.fireTurn(new THREE.Scene(), TITAN_TURN);
+
+    // stats.damage = BASE × 2; TITAN: base-without-elev = BASE×2/2 = BASE
+    // elev-portion = BASE; titan = BASE + BASE×0.5 = BASE×1.5
+    expect(10000 - titan.health).toBe(Math.round(BASE_DAMAGE * 1.5));
+  });
+});

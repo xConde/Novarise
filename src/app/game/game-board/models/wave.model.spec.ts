@@ -95,6 +95,35 @@ describe('Wave Model', () => {
       );
       expect(allInBossWaves).toBeTrue();
     });
+
+    // ── Sprint 37 — GLIDER wave placement regression guard ─────────────────
+    it('GLIDER appears in at least one wave definition (sprint 37 regression guard)', () => {
+      // Sprint 37: GLIDER placed in wave 6 as an elevation-immunity threat.
+      // If this test fails, a GLIDER entry was accidentally removed — restore it.
+      const hasGlider = WAVE_DEFINITIONS.some(wave =>
+        wave.entries!.some(e => e.type === EnemyType.GLIDER)
+      );
+      expect(hasGlider).toBeTrue();
+    });
+
+    it('GLIDER is in a pre-boss wave (wave index < 9)', () => {
+      // GLIDER is a non-elite threat — should appear before elite/boss waves.
+      const gliderWaveIndex = WAVE_DEFINITIONS.findIndex(wave =>
+        wave.entries!.some(e => e.type === EnemyType.GLIDER)
+      );
+      expect(gliderWaveIndex).toBeGreaterThanOrEqual(0);
+      expect(gliderWaveIndex).toBeLessThan(8); // before wave 9 (elite) and wave 10 (boss)
+    });
+
+    // ── Sprint 38 — TITAN wave placement regression guard ──────────────────
+    it('TITAN appears in at least one wave definition (sprint 38 regression guard)', () => {
+      // Sprint 38: TITAN placed in wave 8 as an elite-tier threat countering elevation damage.
+      // If this test fails, a TITAN entry was accidentally removed — restore it.
+      const hasTitan = WAVE_DEFINITIONS.some(wave =>
+        wave.entries!.some(e => e.type === EnemyType.TITAN)
+      );
+      expect(hasTitan).toBeTrue();
+    });
   });
 
   describe('WaveEntry interface', () => {

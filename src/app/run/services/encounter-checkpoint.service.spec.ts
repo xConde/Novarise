@@ -65,7 +65,7 @@ function createTestCheckpoint(overrides: Partial<EncounterCheckpoint> = {}): Enc
       instanceCounter: 5,
     },
     cardModifiers: [],
-    relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+    relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false, orogenyTurnCounter: 0 },
     gameStats: {
       totalGoldEarned: 100,
       totalDamageDealt: 500,

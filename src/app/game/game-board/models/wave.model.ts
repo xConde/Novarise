@@ -42,11 +42,16 @@ export const WAVE_DEFINITIONS: WaveDefinition[] = [
     ],
     reward: 75
   },
-  // Wave 6: Swift assault
+  // Wave 6: Swift assault with GLIDER scouts.
+  // Sprint 37 — GLIDER first live appearance: 2 GLIDERs added to existing
+  // fast-wave composition. Low HP, 2-tile mover, ignores elevation penalties —
+  // punishes players who depressed tiles expecting the exposed-damage bonus.
+  // Balance: placeholder count — refine via playtest + sprint 79 balance pass.
   {
     entries: [
       { type: EnemyType.FAST, count: 6, spawnInterval: 0.6 },
-      { type: EnemyType.SWIFT, count: 4, spawnInterval: 1.0 }
+      { type: EnemyType.SWIFT, count: 4, spawnInterval: 1.0 },
+      { type: EnemyType.GLIDER, count: 2, spawnInterval: 1.2 }
     ],
     reward: 80
   },
@@ -65,12 +70,17 @@ export const WAVE_DEFINITIONS: WaveDefinition[] = [
     ],
     reward: 100
   },
-  // Wave 8: Swarm rush with flying scouts
+  // Wave 8: Swarm rush with flying scouts and a TITAN elite vanguard.
+  // Sprint 38 — TITAN first live appearance: 1 TITAN added to the swarm-rush
+  // wave. Its halvesElevationDamageBonuses flag makes VANTAGE_POINT and KOTH
+  // cards less effective — punishes over-reliance on elevation damage stacking.
+  // Balance: placeholder count — refine via playtest + sprint 79 balance pass.
   {
     entries: [
       { type: EnemyType.SWARM, count: 8, spawnInterval: 0.6 },
       { type: EnemyType.FAST, count: 6, spawnInterval: 0.4 },
-      { type: EnemyType.FLYING, count: 3, spawnInterval: 1.2 }
+      { type: EnemyType.FLYING, count: 3, spawnInterval: 1.2 },
+      { type: EnemyType.TITAN, count: 1, spawnInterval: 3.0 }
     ],
     reward: 120
   },

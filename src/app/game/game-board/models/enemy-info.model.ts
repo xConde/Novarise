@@ -150,4 +150,30 @@ export const ENEMY_INFO: Record<EnemyType, EnemyInfo> = {
     color: ENEMY_STATS[EnemyType.VEINSEEKER].color,
     immunities: [],
   },
+  // Sprint 37 — Highground archetype
+  [EnemyType.GLIDER]: {
+    type: EnemyType.GLIDER,
+    name: 'Glider',
+    description: 'Ignores all elevation-based penalties. GRAVITY_WELL does not slow it; depressed tiles grant no damage bonus against it.',
+    health: ENEMY_STATS[EnemyType.GLIDER].health,
+    speed: ENEMY_STATS[EnemyType.GLIDER].speed,
+    reward: ENEMY_STATS[EnemyType.GLIDER].value,
+    leakDamage: ENEMY_STATS[EnemyType.GLIDER].leakDamage,
+    special: 'Immune to elevation penalties (GRAVITY_WELL, exposed damage)',
+    color: ENEMY_STATS[EnemyType.GLIDER].color,
+    immunities: [],
+  },
+  // Sprint 38 — Highground archetype
+  [EnemyType.TITAN]: {
+    type: EnemyType.TITAN,
+    name: 'Titan',
+    description: 'Elite enemy. Elevation damage bonuses (VANTAGE_POINT, KING_OF_THE_HILL) are halved against it.',
+    health: ENEMY_STATS[EnemyType.TITAN].health,
+    speed: ENEMY_STATS[EnemyType.TITAN].speed,
+    reward: ENEMY_STATS[EnemyType.TITAN].value,
+    leakDamage: ENEMY_STATS[EnemyType.TITAN].leakDamage,
+    special: 'Halves elevation damage bonuses; 3 leak damage',
+    color: ENEMY_STATS[EnemyType.TITAN].color,
+    immunities: [],
+  },
 };

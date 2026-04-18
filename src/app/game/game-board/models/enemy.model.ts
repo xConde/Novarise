@@ -56,6 +56,20 @@ export interface EnemyStats {
   leakDamage: number; // Lives lost when this enemy reaches the exit
   maxShield?: number;   // Starting shield HP (SHIELDED type only)
   spawnOnDeath?: number; // Number of mini-enemies to spawn on death (SWARM type only)
+  /**
+   * Sprint 37 GLIDER — when true, this enemy is immune to elevation-based
+   * penalties: the EXPOSED (+25% damage on depressed tiles) bonus is skipped
+   * in damageEnemy, and the GRAVITY_WELL movement-skip is bypassed in
+   * stepEnemiesOneTurn. Default undefined/false for all other enemies.
+   */
+  ignoresElevation?: boolean;
+  /**
+   * Sprint 38 TITAN elite — when true, elevation damage bonuses (VANTAGE_POINT
+   * and KING_OF_THE_HILL multipliers) are halved before applying damage in
+   * TowerCombatService.fireTurn. Status tick, chain, and card damage bypass.
+   * Default undefined/false for all other enemies.
+   */
+  halvesElevationDamageBonuses?: boolean;
 }
 
 /** Named constants for UNSHAKEABLE elite stats — no magic numbers inline. */
@@ -112,6 +126,31 @@ export const VEINSEEKER_SPEED_BOOST_WINDOW = 3;
  * is active and reshaping the board.
  */
 export const VEINSEEKER_BOOSTED_TILES_PER_TURN = 2;
+
+/** Named constants for GLIDER stats — sprint 37 Highground archetype. */
+export const GLIDER_STATS = {
+  health: 80,
+  speed: 2.5,
+  tilesPerTurn: 2,
+  value: 12,
+  /** Pale sky blue — reads as low-altitude, aerodynamic. */
+  color: 0xaaddff,
+  size: 0.28,
+  leakDamage: 1,
+} as const;
+
+/** Named constants for TITAN elite stats — sprint 38 Highground archetype. */
+export const TITAN_STATS = {
+  /** 3× BASIC health — heavy, elite-tier bulk. */
+  health: 300,
+  speed: 0.9,
+  tilesPerTurn: 1,
+  value: 35,
+  /** Burnished bronze — visually distinct from BOSS magenta and UNSHAKEABLE stone gray. */
+  color: 0xb87333,
+  size: 0.52,
+  leakDamage: 3,
+} as const;
 
 // Enemy type statistics
 export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
@@ -215,6 +254,28 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     color: VEINSEEKER_STATS.color,
     size: VEINSEEKER_STATS.size,
     leakDamage: VEINSEEKER_STATS.leakDamage,
+  },
+  // Sprint 37 — Highground archetype: ground enemy immune to elevation penalties
+  [EnemyType.GLIDER]: {
+    health: GLIDER_STATS.health,
+    speed: GLIDER_STATS.speed,
+    tilesPerTurn: GLIDER_STATS.tilesPerTurn,
+    value: GLIDER_STATS.value,
+    color: GLIDER_STATS.color,
+    size: GLIDER_STATS.size,
+    leakDamage: GLIDER_STATS.leakDamage,
+    ignoresElevation: true,
+  },
+  // Sprint 38 — Highground archetype: elite enemy that halves elevation damage bonuses
+  [EnemyType.TITAN]: {
+    health: TITAN_STATS.health,
+    speed: TITAN_STATS.speed,
+    tilesPerTurn: TITAN_STATS.tilesPerTurn,
+    value: TITAN_STATS.value,
+    color: TITAN_STATS.color,
+    size: TITAN_STATS.size,
+    leakDamage: TITAN_STATS.leakDamage,
+    halvesElevationDamageBonuses: true,
   },
 };
 

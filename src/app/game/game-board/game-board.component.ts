@@ -83,6 +83,7 @@ import { WavePreviewService, FutureWaveSummary } from './services/wave-preview.s
 import { HandCard } from './components/card-hand/card-hand.component';
 import { PathMutationService } from './services/path-mutation.service';
 import { ElevationService } from './services/elevation.service';
+import { ELEVATION_CONFIG } from './constants/elevation.constants';
 import { BlockType } from './models/game-board-tile';
 import { BOARD_CONFIG } from './constants/board.constants';
 
@@ -600,6 +601,14 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     // this noted: SPEED_RUN challenges would instantly fail from encounter 2
     // onward because turnsUsed was cumulative).
     this.combatLoopService.reset();
+
+    // Sprint 36 SURVEYOR_ROD — pre-place elevated tiles at encounter start.
+    // Board is already imported and rendered before initFreshEncounter() fires,
+    // so tiles are valid. ElevationService.reset() ran in resetAllServices()
+    // before this point — the board is clean. Uses runService.nextRandom().
+    if (this.relicService.hasSurveyorRod()) {
+      this.applySurveyorRodEffect();
+    }
 
     // Reset one-shot scout bonuses so a previous encounter's SCOUT_AHEAD does
     // not leak preview depth into this one. (Permanent SCOUTING_LENS bonus
@@ -1731,6 +1740,46 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.pathVisualizationService.showPath(worldPath, this.sceneService.getScene());
     } else {
       this.pathVisualizationService.hidePath(this.sceneService.getScene());
+    }
+  }
+
+  /**
+   * Sprint 36 SURVEYOR_ROD — pre-place SURVEYOR_ROD_TILE_COUNT (5) tiles at
+   * elevation +1 at encounter start. Uses runService.nextRandom() — no Math.random().
+   *
+   * Candidate tiles: any tile that is not SPAWNER or EXIT, currently at elevation 0,
+   * and not already occupied by something that would reject elevation (guard is in
+   * ElevationService.setAbsolute → validate). Iterates until 5 placements succeed
+   * or all candidates are exhausted — never crashes on pathological boards.
+   */
+  private applySurveyorRodEffect(): void {
+    const board = this.gameBoardService.getGameBoard();
+    // Build candidate list: non-spawner, non-exit, elevation-0 tiles.
+    const candidates: Array<{ row: number; col: number }> = [];
+    for (let row = 0; row < board.length; row++) {
+      for (let col = 0; col < board[row].length; col++) {
+        const tile = board[row][col];
+        if (tile.type === BlockType.SPAWNER || tile.type === BlockType.EXIT) continue;
+        const elevation = tile.elevation ?? 0;
+        if (elevation !== 0) continue; // skip already-elevated tiles
+        candidates.push({ row, col });
+      }
+    }
+
+    let placed = 0;
+    // Fisher-Yates shuffle using runService.nextRandom() for determinism.
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(this.runService.nextRandom() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+
+    for (const { row, col } of candidates) {
+      if (placed >= ELEVATION_CONFIG.SURVEYOR_ROD_TILE_COUNT) break;
+      const result = this.elevationService.setAbsolute(
+        row, col, ELEVATION_CONFIG.SURVEYOR_ROD_ELEVATION_AMOUNT,
+        'surveyor-rod', 0, 'relic',
+      );
+      if (result.ok) placed++;
     }
   }
 

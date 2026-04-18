@@ -154,6 +154,16 @@ export class EnemyMeshFactoryService {
         // this branch is a safety fallback and should never be reached at runtime.
         return new THREE.SphereGeometry(size, ENEMY_MESH_SEGMENTS, ENEMY_MESH_SEGMENTS);
 
+      case EnemyType.GLIDER:
+        // Sprint 37 — flat wing-like silhouette: thin wide box that reads as aerodynamic
+        // and low-profile, visually distinct from ground threats and flying diamond.
+        return new THREE.BoxGeometry(size * 2.4, size * 0.3, size * 1.0);
+
+      case EnemyType.TITAN:
+        // Sprint 38 — wide heavy cylinder: imposing bulk reads as elite / armored.
+        // Distinct from BOSS sphere and UNSHAKEABLE octahedron.
+        return new THREE.CylinderGeometry(size * 0.9, size * 1.1, size * 1.4, 8);
+
       case EnemyType.BASIC:
       default:
         // Standard sphere

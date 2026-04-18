@@ -3918,5 +3918,110 @@ describe('EnemyService', () => {
       service.stepEnemiesOneTurn(() => 0);
       expect(enemyA.pathIndex).toBe(indexAtPath1 + 1); // moves again
     });
+
+    // ── Sprint 37 GLIDER — ignoresElevation bypasses GRAVITY_WELL gate ─────
+    it('GLIDER on a depressed tile with GRAVITY_WELL active → moves normally (ignoresElevation)', () => {
+      buildGravityTestBed(new Map(), false);
+
+      const glider = service.spawnEnemy(EnemyType.GLIDER, mockScene)!;
+
+      // Advance to path[1] first (GRAVITY_WELL inactive).
+      service.stepEnemiesOneTurn(() => 0);
+      const indexAtPath1 = glider.pathIndex;
+
+      // Enable GRAVITY_WELL and depress the GLIDER's current tile.
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 1 : 0
+      );
+      const { row, col } = glider.gridPosition;
+      gravityElevSpy.getElevation.and.callFake((r: number, c: number) =>
+        r === row && c === col ? -1 : 0
+      );
+
+      // GRAVITY_WELL active + depressed tile + GLIDER → GLIDER moves (not gated).
+      service.stepEnemiesOneTurn(() => 0);
+      expect(glider.pathIndex).toBe(indexAtPath1 + 2); // tilesPerTurn = 2 for GLIDER
+    });
+
+    it('BASIC enemy on depressed tile is gated; GLIDER on same tile moves (independence)', () => {
+      buildGravityTestBed(new Map(), false);
+
+      const basic = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const glider = service.spawnEnemy(EnemyType.GLIDER, mockScene)!;
+
+      // Advance both once (GRAVITY_WELL inactive).
+      service.stepEnemiesOneTurn(() => 0);
+      const basicIdx = basic.pathIndex;
+      const gliderIdx = glider.pathIndex;
+
+      // Enable GRAVITY_WELL and depress the path tile.
+      gravityCardSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === MODIFIER_STAT.GRAVITY_WELL ? 1 : 0
+      );
+      // Depress ALL tiles so both enemies are affected (if they weren't GLIDER).
+      gravityElevSpy.getElevation.and.returnValue(-1);
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // BASIC is gated (elevation check applies).
+      expect(basic.pathIndex).toBe(basicIdx);
+      // GLIDER moves normally (ignoresElevation = true).
+      expect(glider.pathIndex).toBeGreaterThan(gliderIdx);
+    });
+  });
+
+  // ── Sprint 37 GLIDER — exposed damage bypass ─────────────────────────────
+  describe('GLIDER damageEnemy — ignoresElevation skips the exposed bonus', () => {
+    let elevationSpy: jasmine.SpyObj<ElevationService>;
+
+    beforeEach(() => {
+      elevationSpy = jasmine.createSpyObj<ElevationService>('ElevationService', [
+        'getElevation', 'raise', 'depress', 'setAbsolute', 'collapse',
+        'getMaxElevation', 'getElevationMap', 'getActiveChanges',
+        'tickTurn', 'reset', 'serialize', 'restore',
+      ]);
+      elevationSpy.getElevation.and.returnValue(0);
+      (service as unknown as { elevationService: ElevationService | null }).elevationService = elevationSpy;
+    });
+
+    afterEach(() => {
+      (service as unknown as { elevationService: ElevationService | null }).elevationService = null;
+    });
+
+    it('BASIC enemy on depressed tile receives +25% bonus', () => {
+      elevationSpy.getElevation.and.returnValue(-1);
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      const healthBefore = enemy.health;
+
+      service.damageEnemy(enemy.id, 100);
+
+      // Math.round(100 * 1.25) = 125.
+      expect(enemy.health).toBe(healthBefore - 125);
+    });
+
+    it('GLIDER on depressed tile does NOT receive +25% exposed bonus', () => {
+      elevationSpy.getElevation.and.returnValue(-1);
+      const glider = service.spawnEnemy(EnemyType.GLIDER, mockScene)!;
+      const healthBefore = glider.health;
+
+      service.damageEnemy(glider.id, 100);
+
+      // ignoresElevation = true → no +25% → exactly 100 damage.
+      expect(glider.health).toBe(healthBefore - 100);
+    });
+
+    it('TITAN on depressed tile receives +25% bonus (halvesElevationDamageBonuses only halves VP/KOTH)', () => {
+      // TITAN does NOT ignoresElevation — only halves tower-fire VP/KOTH bonuses.
+      // It still takes the exposed damage bonus from EnemyService.damageEnemy.
+      elevationSpy.getElevation.and.returnValue(-1);
+      const titan = service.spawnEnemy(EnemyType.TITAN, mockScene)!;
+      const healthBefore = titan.health;
+
+      service.damageEnemy(titan.id, 100);
+
+      // TITAN is not immune to exposed — takes +25%.
+      expect(titan.health).toBe(healthBefore - 125);
+    });
   });
 });
+

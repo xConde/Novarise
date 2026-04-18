@@ -8,8 +8,9 @@ import {
 
 describe('Relic Model', () => {
   describe('RELIC_DEFINITIONS', () => {
-    it('should have exactly 22 relics', () => {
-      expect(Object.keys(RELIC_DEFINITIONS).length).toBe(22);
+    it('should have exactly 24 relics', () => {
+      // 22 original + SURVEYOR_ROD (sprint 36, uncommon) + OROGENY (sprint 36, rare)
+      expect(Object.keys(RELIC_DEFINITIONS).length).toBe(24);
     });
 
     it('should have 10 common relics', () => {
@@ -17,14 +18,14 @@ describe('Relic Model', () => {
       expect(commons.length).toBe(10);
     });
 
-    it('should have 8 uncommon relics', () => {
+    it('should have 9 uncommon relics', () => {
       const uncommons = Object.values(RELIC_DEFINITIONS).filter(r => r.rarity === RelicRarity.UNCOMMON);
-      expect(uncommons.length).toBe(8); // +1: SURVEYOR_COMPASS
+      expect(uncommons.length).toBe(9); // +1: SURVEYOR_COMPASS, +1: SURVEYOR_ROD (sprint 36)
     });
 
-    it('should have 4 rare relics', () => {
+    it('should have 5 rare relics', () => {
       const rares = Object.values(RELIC_DEFINITIONS).filter(r => r.rarity === RelicRarity.RARE);
-      expect(rares.length).toBe(4); // +1: WORLD_SPIRIT
+      expect(rares.length).toBe(5); // +1: WORLD_SPIRIT, +1: OROGENY (sprint 36)
     });
 
     it('every relic should have a non-empty name', () => {
@@ -64,14 +65,14 @@ describe('Relic Model', () => {
       expect(result.length).toBe(10);
     });
 
-    it('should return 8 uncommon relics', () => {
+    it('should return 9 uncommon relics', () => {
       const result = getRelicsByRarity(RelicRarity.UNCOMMON);
-      expect(result.length).toBe(8); // +1: SURVEYOR_COMPASS
+      expect(result.length).toBe(9); // +1: SURVEYOR_COMPASS, +1: SURVEYOR_ROD (sprint 36)
     });
 
-    it('should return 4 rare relics', () => {
+    it('should return 5 rare relics', () => {
       const result = getRelicsByRarity(RelicRarity.RARE);
-      expect(result.length).toBe(4); // +1: WORLD_SPIRIT
+      expect(result.length).toBe(5); // +1: WORLD_SPIRIT, +1: OROGENY (sprint 36)
     });
 
     it('should return only relics of the requested rarity', () => {

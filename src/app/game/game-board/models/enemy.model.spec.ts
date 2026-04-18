@@ -434,4 +434,92 @@ describe('Enemy Model', () => {
       expect(EnemyType.FLYING).toBe('FLYING');
     });
   });
+
+  // ── Sprint 37 — GLIDER enemy stats ──────────────────────────────────────
+  describe('GLIDER enemy stats (sprint 37)', () => {
+    it('should have a defined GLIDER entry in ENEMY_STATS', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER]).toBeDefined();
+    });
+
+    it('ignoresElevation flag is true', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER].ignoresElevation).toBeTrue();
+    });
+
+    it('halvesElevationDamageBonuses flag is absent (falsy)', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER].halvesElevationDamageBonuses).toBeFalsy();
+    });
+
+    it('has tilesPerTurn = 2 (fast mover)', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER].tilesPerTurn).toBe(2);
+    });
+
+    it('has lower health than BASIC (fragile, fast)', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER].health).toBeLessThan(ENEMY_STATS[EnemyType.BASIC].health);
+    });
+
+    it('has leakDamage of 1', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER].leakDamage).toBe(1);
+    });
+
+    it('does not have maxShield or spawnOnDeath', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER].maxShield).toBeUndefined();
+      expect(ENEMY_STATS[EnemyType.GLIDER].spawnOnDeath).toBeUndefined();
+    });
+  });
+
+  // ── Sprint 38 — TITAN enemy stats ────────────────────────────────────────
+  describe('TITAN enemy stats (sprint 38)', () => {
+    it('should have a defined TITAN entry in ENEMY_STATS', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN]).toBeDefined();
+    });
+
+    it('halvesElevationDamageBonuses flag is true', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].halvesElevationDamageBonuses).toBeTrue();
+    });
+
+    it('ignoresElevation flag is absent (falsy)', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].ignoresElevation).toBeFalsy();
+    });
+
+    it('has high health (elite bulk — at least 3× BASIC)', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].health).toBeGreaterThanOrEqual(ENEMY_STATS[EnemyType.BASIC].health * 3);
+    });
+
+    it('has tilesPerTurn = 1 (slow elite)', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].tilesPerTurn).toBe(1);
+    });
+
+    it('has leakDamage of 3 (elite threat)', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].leakDamage).toBe(3);
+    });
+
+    it('has higher value than BASIC (elite reward)', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].value).toBeGreaterThan(ENEMY_STATS[EnemyType.BASIC].value);
+    });
+
+    it('does not have maxShield or spawnOnDeath', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].maxShield).toBeUndefined();
+      expect(ENEMY_STATS[EnemyType.TITAN].spawnOnDeath).toBeUndefined();
+    });
+  });
+
+  // ── Sprint 37/38 — EnemyStats optional fields default correctly ──────────
+  describe('optional EnemyStats flags default behaviour', () => {
+    it('BASIC has ignoresElevation = undefined (not true)', () => {
+      expect(ENEMY_STATS[EnemyType.BASIC].ignoresElevation).toBeFalsy();
+    });
+
+    it('BASIC has halvesElevationDamageBonuses = undefined (not true)', () => {
+      expect(ENEMY_STATS[EnemyType.BASIC].halvesElevationDamageBonuses).toBeFalsy();
+    });
+
+    it('TITAN ignoresElevation is undefined (only halves bonuses, does not ignore)', () => {
+      expect(ENEMY_STATS[EnemyType.TITAN].ignoresElevation).toBeFalsy();
+    });
+
+    it('GLIDER halvesElevationDamageBonuses is undefined (immunity, does not halve)', () => {
+      expect(ENEMY_STATS[EnemyType.GLIDER].halvesElevationDamageBonuses).toBeFalsy();
+    });
+  });
 });
+

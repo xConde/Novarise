@@ -164,6 +164,12 @@ export interface SerializableDeckState {
 export interface SerializableRelicFlags {
   readonly firstLeakBlockedThisWave: boolean;
   readonly freeTowerUsedThisEncounter: boolean;
+  /**
+   * Sprint 36 OROGENY — tracks how many turns have elapsed since the last
+   * OROGENY trigger (or encounter start). Restored from checkpoint so a
+   * save at turn 7 resumes with the counter at 7, firing next at turn 10.
+   */
+  readonly orogenyTurnCounter: number;
 }
 
 /** Game stats service snapshot. */

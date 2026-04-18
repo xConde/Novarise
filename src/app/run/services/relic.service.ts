@@ -65,6 +65,13 @@ export class RelicService {
   private firstLeakBlockedThisWave = false;
 
   /**
+   * Sprint 36 OROGENY — turn counter tracking elapsed turns since encounter start.
+   * OROGENY triggers at every multiple of OROGENY_INTERVAL_TURNS (5).
+   * Serialized into SerializableRelicFlags for save/restore.
+   */
+  private orogenyTurnCounter = 0;
+
+  /**
    * Per-wave state: unique tile keys visited by enemies this wave (SURVEYOR_COMPASS).
    * Not serialized — half-wave gold loss on save is acceptable.
    */
@@ -94,6 +101,36 @@ export class RelicService {
   /** Reset per-encounter relic state. */
   resetEncounterState(): void {
     this.freeTowerUsedThisEncounter = false;
+    this.orogenyTurnCounter = 0;
+  }
+
+  /**
+   * Sprint 36 OROGENY — increment the per-encounter turn counter.
+   * Returns the new counter value so the caller can check if OROGENY should fire.
+   * Call once per turn from CombatLoopService.resolveTurn.
+   */
+  incrementOrogenyCounter(): number {
+    this.orogenyTurnCounter++;
+    return this.orogenyTurnCounter;
+  }
+
+  /** Returns the current OROGENY turn counter (read-only). */
+  getOrogenyTurnCounter(): number {
+    return this.orogenyTurnCounter;
+  }
+
+  /**
+   * Sprint 36 OROGENY — true when OROGENY is active and the counter is a
+   * multiple of OROGENY_INTERVAL_TURNS (5). Callers increment via
+   * incrementOrogenyCounter() first, then call this to check for a trigger.
+   */
+  isOrogenyTrigger(counter: number, intervalTurns: number): boolean {
+    return this.hasRelic(RelicId.OROGENY) && counter > 0 && counter % intervalTurns === 0;
+  }
+
+  /** Returns true when SURVEYOR_ROD is active. */
+  hasSurveyorRod(): boolean {
+    return this.hasRelic(RelicId.SURVEYOR_ROD);
   }
 
   /** Reset per-wave relic state. */
@@ -303,6 +340,7 @@ export class RelicService {
     return {
       firstLeakBlockedThisWave: this.firstLeakBlockedThisWave,
       freeTowerUsedThisEncounter: this.freeTowerUsedThisEncounter,
+      orogenyTurnCounter: this.orogenyTurnCounter,
     };
   }
 
@@ -310,6 +348,9 @@ export class RelicService {
   restoreEncounterFlags(flags: SerializableRelicFlags): void {
     this.firstLeakBlockedThisWave = flags.firstLeakBlockedThisWave;
     this.freeTowerUsedThisEncounter = flags.freeTowerUsedThisEncounter;
+    // Sprint 36 OROGENY — restore the turn counter so saves at turn 7 resume
+    // with the counter at 7, firing the next OROGENY at turn 10.
+    this.orogenyTurnCounter = flags.orogenyTurnCounter ?? 0;
   }
 
   // ── Relic Pool Management ───────────────────────────────
@@ -385,6 +426,11 @@ export class RelicService {
           mods.rangeMultiplier *= 1.15;
           break;
         // WORLD_SPIRIT — trigger-based, handled by getCardEnergyCostModifier()
+
+        // Highground uncommon
+        // SURVEYOR_ROD — encounter-start hook, handled in game-board.component.ts initFreshEncounter
+        // Highground rare
+        // OROGENY — per-turn hook, handled in CombatLoopService.resolveTurn
       }
     }
 

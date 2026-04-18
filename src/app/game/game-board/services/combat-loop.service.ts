@@ -27,6 +27,7 @@ import { WAVE_CONFIG } from '../constants/combat.constants';
 import { isTwinBossWave } from '@core/models/wave-definition.model';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
+import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 
 /**
  * Owns the turn-based combat resolution for the COMBAT phase.
@@ -152,6 +153,14 @@ export class CombatLoopService {
     // Elevation tickTurn has no scene parameter — translates existing meshes, no geometry rebuild.
     // CRITICAL: elevation expiry does NOT invalidate the pathfinding cache (spike §11).
     this.elevationService.tickTurn(this.turnNumber);
+
+    // Sprint 36 OROGENY — every OROGENY_INTERVAL_TURNS (5) turns, permanently raise
+    // a random tower's tile by +1. No-op when no towers exist or all tower tiles are
+    // already at MAX_ELEVATION. RunService.nextRandom() used — no Math.random().
+    const orogenyCounter = this.relicService.incrementOrogenyCounter();
+    if (this.relicService.isOrogenyTrigger(orogenyCounter, ELEVATION_CONFIG.OROGENY_INTERVAL_TURNS)) {
+      this.applyOrogenyEffect();
+    }
 
     const cardGoldMult = 1 + this.cardEffectService.getModifierValue(MODIFIER_STAT.GOLD_MULTIPLIER);
 
@@ -421,5 +430,36 @@ export class CombatLoopService {
 
     this.enemyService.startDyingAnimation(killInfo.id);
     this.runEventBus.emit(RunEventType.ENEMY_KILLED, { enemyType: enemy.type, value: enemy.value });
+  }
+
+  /**
+   * Sprint 36 OROGENY — pick a random tower and permanently raise its tile by +1.
+   * No-op when: no towers exist, all tower tiles are at MAX_ELEVATION, or
+   * the elevation service rejects the raise (spawner/exit guard). Uses
+   * runService.nextRandom() — no Math.random().
+   */
+  private applyOrogenyEffect(): void {
+    const towers = Array.from(this.towerCombatService.getPlacedTowers().values());
+    if (towers.length === 0) return;
+
+    // Filter to towers whose tile is below MAX_ELEVATION
+    const eligible = towers.filter(t =>
+      this.elevationService.getElevation(t.row, t.col) < ELEVATION_CONFIG.MAX_ELEVATION,
+    );
+    if (eligible.length === 0) return;
+
+    const idx = Math.floor(this.runService.nextRandom() * eligible.length);
+    const tower = eligible[idx];
+    if (!tower) return;
+
+    this.elevationService.raise(
+      tower.row,
+      tower.col,
+      ELEVATION_CONFIG.OROGENY_ELEVATION_AMOUNT,
+      null, // permanent
+      'orogeny',
+      this.turnNumber,
+      'relic',
+    );
   }
 }

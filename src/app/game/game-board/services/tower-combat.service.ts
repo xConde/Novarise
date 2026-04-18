@@ -1,6 +1,6 @@
 import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
-import { Enemy } from '../models/enemy.model';
+import { Enemy, ENEMY_STATS } from '../models/enemy.model';
 import { PlacedTower, TowerType, TowerStats, TowerSpecialization, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
 import { assertNever } from '../utils/assert-never';
 import { KillInfo, CombatAudioEvent } from '../models/combat-frame.model';
@@ -243,6 +243,11 @@ export class TowerCombatService {
       const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
       let stats: TowerStats;
       const hasCardStatOverrides = tower.cardStatOverrides !== undefined;
+      // Sprint 38 TITAN: elevation multipliers must be available at the shot-fire
+      // site to compute per-target damage. Declare at tower-loop scope; defaults
+      // of 1 (no bonus) are safe in the baseline branch where neither modifier applies.
+      let towerVantagePointDmgMult = 1;
+      let towerKothMult = 1;
       if (towerDamageMultiplier !== 1 || hasRelicModifiers || hasCardModifiers || hasCardStatOverrides) {
         const relicDamage = this.relicService.getDamageMultiplier(tower.type);
         const relicRange = this.relicService.getRangeMultiplier(tower.type);
@@ -277,6 +282,9 @@ export class TowerCombatService {
         // kothActive already gates on maxElevation ≥ 1, so flat boards never
         // enter this branch. Composition order: ...× vantagePoint × koth.
         const kothMult = (kothActive && towerElevation === maxElevation) ? (1 + kothBonus) : 1;
+        // Hoist elevation multipliers for TITAN per-target adjustment (sprint 38).
+        towerVantagePointDmgMult = vantagePointDmgMult;
+        towerKothMult = kothMult;
         this.scratchStats.damage = Math.round(
           baseStats.damage
             * towerDamageMultiplier
@@ -425,11 +433,18 @@ export class TowerCombatService {
               }
             }
           } else {
-            const result = this.enemyService.damageEnemy(target.id, stats.damage);
+            // Sprint 38 TITAN — when the target halvesElevationDamageBonuses, split
+            // the elevation-bonus portion of stats.damage and halve it. Applies only
+            // to single-target tower fire; chain/status/mortar damage bypasses.
+            const targetStats = ENEMY_STATS[target.type];
+            const finalDamage = (targetStats?.halvesElevationDamageBonuses)
+              ? this.computeTitanDamage(stats.damage, towerVantagePointDmgMult, towerKothMult)
+              : stats.damage;
+            const result = this.enemyService.damageEnemy(target.id, finalDamage);
             hitCount++;
-            damageDealt += stats.damage;
+            damageDealt += finalDamage;
             if (result.killed) {
-              killed.push({ id: target.id, damage: stats.damage, towerType: tower.type, towerLevel: tower.level });
+              killed.push({ id: target.id, damage: finalDamage, towerType: tower.type, towerLevel: tower.level });
               tower.kills++;
             } else {
               this.enemyService.startHitFlash(target.id);
@@ -652,6 +667,30 @@ export class TowerCombatService {
   // M2 S5: applyHitDamage + createMortarZone DELETED. Both were part of the
   // dead projectile-flight path. fireTurn handles all hit resolution inline,
   // and turn-based mortar uses turnMortarZones via tickMortarZonesForTurn.
+
+  /**
+   * Sprint 38 TITAN — compute final damage against a TITAN target.
+   *
+   * stats.damage already includes VANTAGE_POINT and KOTH multipliers baked in.
+   * To halve only the elevation-bonus portion:
+   *   baseWithoutElevation = stats.damage / (vantagePointDmgMult × kothMult)
+   *   elevationPortion = stats.damage - baseWithoutElevation
+   *   finalDamage = baseWithoutElevation + elevationPortion × TITAN_ELEVATION_DAMAGE_REDUCTION
+   *
+   * When neither elevation multiplier is active (both default to 1), this
+   * returns stats.damage unmodified — safe no-op for non-elevated towers.
+   */
+  private computeTitanDamage(
+    baseDamage: number,
+    vantagePointDmgMult: number,
+    kothMult: number,
+  ): number {
+    const combinedElevMult = vantagePointDmgMult * kothMult;
+    if (combinedElevMult === 1) return baseDamage; // fast path — no elevation bonus active
+    const baseWithoutElevation = baseDamage / combinedElevMult;
+    const elevationPortion = baseDamage - baseWithoutElevation;
+    return Math.round(baseWithoutElevation + elevationPortion * ELEVATION_CONFIG.TITAN_ELEVATION_DAMAGE_REDUCTION);
+  }
 
   getTower(key: string): PlacedTower | undefined {
     return this.placedTowers.get(key);

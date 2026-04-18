@@ -28,6 +28,9 @@ const ENEMY_TYPE_LABELS: Record<EnemyType, string> = {
   [EnemyType.MINER]: 'Miner',
   [EnemyType.UNSHAKEABLE]: 'Unshakeable',
   [EnemyType.VEINSEEKER]: 'Veinseeker',
+  // Sprint 37–38 — Highground archetype
+  [EnemyType.GLIDER]: 'Glider',
+  [EnemyType.TITAN]: 'Titan',
 };
 
 /**

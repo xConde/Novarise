@@ -1046,7 +1046,7 @@ describe('Cartographer integration — Group G: Save / Restore', () => {
       enemies: [],
       statusEffects: [],
       relicIds: [],
-      relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false },
+      relicFlags: { firstLeakBlockedThisWave: false, freeTowerUsedThisEncounter: false, orogenyTurnCounter: 0 },
       gameStats: {
         wavesCompleted: 0, towersPlaced: 0, towersUpgraded: 0, towersSold: 0,
         enemiesKilled: 0, goldEarned: 0, livesLost: 0, spellsPlayed: 0,

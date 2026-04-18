@@ -34,4 +34,29 @@ export const ELEVATION_CONFIG = {
    * CARD_VALUES.vantagePointElevationThreshold — both must stay in sync.
    */
   VANTAGE_POINT_ELEVATION_THRESHOLD: 1,
+
+  // ── Sprint 36: SURVEYOR_ROD relic ──────────────────────────────────────────
+
+  /** Number of tiles SURVEYOR_ROD pre-elevates at encounter start. */
+  SURVEYOR_ROD_TILE_COUNT: 5,
+
+  /** Elevation amount applied per tile by SURVEYOR_ROD. */
+  SURVEYOR_ROD_ELEVATION_AMOUNT: 1,
+
+  // ── Sprint 36: OROGENY relic ────────────────────────────────────────────────
+
+  /** How many turns must pass between OROGENY elevation triggers. */
+  OROGENY_INTERVAL_TURNS: 5,
+
+  /** Elevation amount OROGENY raises the chosen tower tile by. */
+  OROGENY_ELEVATION_AMOUNT: 1,
+
+  // ── Sprint 38: TITAN elite ──────────────────────────────────────────────────
+
+  /**
+   * Fraction of the elevation-bonus portion that is applied against a TITAN.
+   * 0.5 = elevation bonus damage is halved (not the full damage — only the
+   * portion above the base-without-elevation).
+   */
+  TITAN_ELEVATION_DAMAGE_REDUCTION: 0.5,
 } as const;
