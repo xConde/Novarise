@@ -567,25 +567,43 @@ export class EnemyService {
 
   /**
    * Scan the MINER's remaining path and return the first WALL tile that is
-   * legal to dig: not SPAWNER / EXIT (PathMutationService.destroy rejects those
-   * automatically) AND not player-built (would invalidate Cartographer
-   * counter-play per design doc §9). Returns null if no legal WALL is
-   * reachable on the remaining path.
+   * legal to dig: not SPAWNER / EXIT (PathMutationService.destroy rejects
+   * those automatically) AND not player-built (would invalidate Cartographer
+   * counter-play per design doc §9). Returns null if no legal WALL adjacent.
    *
-   * GridNode convention: node.x = col, node.y = row.
+   * **Why adjacent walls, not path-walls:** the MINER's A* path
+   * (`enemy.path`) only contains TRAVERSABLE tiles — A* skips WALL tiles
+   * by construction (pathfinding.service.ts:90). Scanning the path for
+   * walls never finds any. Instead we look at the 4-direction neighbors
+   * of the MINER's current grid position — walls it could punch through
+   * to open new traversal options.
+   *
+   * Scan order: up, down, left, right — deterministic so tests can
+   * assert on the first-chosen direction.
+   *
+   * GridNode convention: node.x = col, node.y = row; enemy.gridPosition
+   * is {row, col} directly.
    */
   findMinerDigTarget(enemy: Enemy): { row: number; col: number } | null {
     const board = this.gameBoardService.getGameBoard();
-    for (let i = enemy.pathIndex; i < enemy.path.length; i++) {
-      const node = enemy.path[i];
-      const row = node.y;
-      const col = node.x;
+    const { row: er, col: ec } = enemy.gridPosition;
+    const NEIGHBORS: ReadonlyArray<{ dr: number; dc: number }> = [
+      { dr: -1, dc: 0 }, // up
+      { dr:  1, dc: 0 }, // down
+      { dr:  0, dc: -1 }, // left
+      { dr:  0, dc: 1 }, // right
+    ];
+
+    for (const { dr, dc } of NEIGHBORS) {
+      const row = er + dr;
+      const col = ec + dc;
       const boardRow = board[row];
       if (!boardRow) continue;
       const tile = boardRow[col];
       if (!tile) continue;
       if (tile.type !== BlockType.WALL) continue;
-      // Skip walls that the player intentionally blocked (e.g. Siegeworks).
+      // Skip walls the player intentionally placed (preserve Cartographer
+      // counter-play — BLOCK_PASSAGE / COLLAPSE walls are immune to MINER).
       if (this.pathMutationService?.isPlayerBlocked(row, col)) continue;
       return { row, col };
     }

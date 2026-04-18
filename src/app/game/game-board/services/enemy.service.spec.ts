@@ -3042,69 +3042,80 @@ describe('EnemyService', () => {
       });
     });
 
-    describe('findMinerDigTarget', () => {
-      /** Build a minimal GridNode for path arrays. */
-      function pathNode(col: number, row: number): import('../models/enemy.model').GridNode {
-        return { x: col, y: row, g: 0, h: 0, f: 0 };
-      }
-
-      it('returns null when no WALL tiles exist on the remaining path', () => {
+    // Sprint 24 QA fix: findMinerDigTarget was originally path-scanning, but
+    // A* pathfinding never puts WALL tiles into enemy.path (they're non-
+    // traversable). Rewritten to scan the MINER's 4-direction neighbors for
+    // adjacent walls instead.
+    describe('findMinerDigTarget (adjacent-neighbor scan)', () => {
+      it('returns null when no adjacent tile is a WALL', () => {
         const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
-        // All path nodes are BASE tiles (the test board has BASE tiles on the path)
+        // Test board has all-BASE neighbors by default — no dig target.
         const result = service.findMinerDigTarget(miner);
-
-        // Standard test board has BASE tiles on the spawner→exit path, so no WALL found.
         expect(result).toBeNull();
       });
 
-      it('returns the first WALL tile on the remaining path', () => {
+      it('returns the first adjacent WALL (scan order up/down/left/right)', () => {
         const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
-        // Inject a WALL tile at row=3, col=2 into the gameBoardService mock
-        const board = gameBoardService.getGameBoard();
-        // Create a mock board with a wall at (3, 2)
-        const mockBoard = board.map(row => [...row]);
-        mockBoard[3][2] = GameBoardTile.createWall(3, 2);
-        gameBoardService.getGameBoard.and.returnValue(mockBoard);
+        miner.gridPosition = { row: 2, col: 2 };
 
-        // Set a path that goes through the WALL tile at (row=3, col=2) i.e. node(x=2, y=3)
-        miner.path = [
-          pathNode(0, 0),
-          pathNode(1, 0),
-          pathNode(2, 0),
-          pathNode(2, 1),
-          pathNode(2, 2),
-          pathNode(2, 3), // row=3, col=2 → this is the WALL
-          pathNode(9, 9),
-        ];
-        miner.pathIndex = 0;
+        const board = gameBoardService.getGameBoard();
+        const mockBoard = board.map(row => [...row]);
+        // Put a WALL to the left (row 2, col 1). Up/down come first in
+        // scan order but are BASE → should fall through to left.
+        mockBoard[2][1] = GameBoardTile.createWall(1, 2);
+        gameBoardService.getGameBoard.and.returnValue(mockBoard);
 
         const result = service.findMinerDigTarget(miner);
 
-        expect(result).toEqual({ row: 3, col: 2 });
+        expect(result).toEqual({ row: 2, col: 1 });
       });
 
-      it('respects pathIndex — skips already-passed tiles', () => {
+      it('prefers UP over DOWN when both are walls (deterministic order)', () => {
         const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
-        // Put a WALL at (0, 0) (behind pathIndex) and another at (3, 2) (ahead)
-        const board = gameBoardService.getGameBoard();
-        const mockBoard = board.map(r => [...r]);
-        mockBoard[0][0] = GameBoardTile.createWall(0, 0);
-        mockBoard[3][2] = GameBoardTile.createWall(3, 2);
-        gameBoardService.getGameBoard.and.returnValue(mockBoard);
+        miner.gridPosition = { row: 2, col: 2 };
 
-        miner.path = [
-          pathNode(0, 0), // behind pathIndex
-          pathNode(1, 0),
-          pathNode(2, 0),
-          pathNode(2, 3), // row=3, col=2
-          pathNode(9, 9),
-        ];
-        miner.pathIndex = 1; // skip node(0,0)
+        const board = gameBoardService.getGameBoard();
+        const mockBoard = board.map(row => [...row]);
+        mockBoard[1][2] = GameBoardTile.createWall(2, 1); // up
+        mockBoard[3][2] = GameBoardTile.createWall(2, 3); // down
+        gameBoardService.getGameBoard.and.returnValue(mockBoard);
 
         const result = service.findMinerDigTarget(miner);
 
-        // Should skip (0,0) and find the WALL ahead at (3,2)
-        expect(result).toEqual({ row: 3, col: 2 });
+        expect(result).toEqual({ row: 1, col: 2 });
+      });
+
+      it('skips player-built walls (isPlayerBlocked guard)', () => {
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        miner.gridPosition = { row: 2, col: 2 };
+
+        const board = gameBoardService.getGameBoard();
+        const mockBoard = board.map(row => [...row]);
+        mockBoard[1][2] = GameBoardTile.createWall(2, 1); // up (player-built)
+        mockBoard[3][2] = GameBoardTile.createWall(2, 3); // down (original)
+        gameBoardService.getGameBoard.and.returnValue(mockBoard);
+
+        // Spy on PathMutationService.isPlayerBlocked — sprint-21 wiring makes
+        // this available via @Optional injection on EnemyService. In this
+        // spec we inject a spy via TestBed; if absent, the guard short-circuits.
+        const pathMutation = TestBed.inject(PathMutationService, null);
+        if (pathMutation) {
+          spyOn(pathMutation, 'isPlayerBlocked').and.callFake(
+            (r: number, c: number) => r === 1 && c === 2,
+          );
+
+          const result = service.findMinerDigTarget(miner);
+
+          // Up is player-blocked; MINER falls through to down.
+          expect(result).toEqual({ row: 3, col: 2 });
+        }
+      });
+
+      it('returns null for an out-of-bounds MINER (defensive)', () => {
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        miner.gridPosition = { row: -5, col: -5 };
+        const result = service.findMinerDigTarget(miner);
+        expect(result).toBeNull();
       });
     });
   });
