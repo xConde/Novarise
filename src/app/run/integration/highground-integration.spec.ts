@@ -972,6 +972,39 @@ describe('Highground integration — Group G: Cross-archetype interactions', () 
     expect(elevationService.getActiveChanges().length).toBe(3);
     expect(pathfindingSpy.invalidateCache).not.toHaveBeenCalled();
   });
+
+  // ── G4: Red-team Finding 2 closure — cliff mesh + path mutation survive
+  //
+  // Finding 2 (MEDIUM): worried that a path mutation on a raised tile could
+  // strand or desync the cliff column mesh. Finding 1's elevation-preservation
+  // fix closes this: after the mutation, the tile's elevation is still non-zero,
+  // so the cliff stays attached and accurate. This spec locks that in as a
+  // regression target.
+
+  it('G4 — Cliff mesh survives across path mutation and revert (Finding 2 closure)', () => {
+    // 1) Raise tile — cliff mesh registered at this (row, col)
+    elevationService.raise(BASE_ROW, BASE_COL, 2, null, 'raise', TURN_1);
+    expect(gameBoardService.getGameBoard()[BASE_ROW][BASE_COL].elevation).toBe(2);
+
+    // 2) Path mutation on the SAME tile — block (temporary)
+    const blockResult = pathMutationService.block(
+      BASE_ROW, BASE_COL, 2, 'block', TURN_2, scene, 'card',
+    );
+    expect(blockResult.ok).toBeTrue();
+
+    // Finding 1 fix: elevation survives the BlockType change
+    expect(gameBoardService.getGameBoard()[BASE_ROW][BASE_COL].elevation).toBe(2);
+    expect(gameBoardService.getGameBoard()[BASE_ROW][BASE_COL].type).toBe(BlockType.WALL);
+
+    // 3) Revert the block by ticking the expiry turn
+    pathMutationService.tickTurn(TURN_2 + 2, scene);
+
+    // Elevation still intact after revert; tile back to BASE
+    expect(gameBoardService.getGameBoard()[BASE_ROW][BASE_COL].elevation).toBe(2);
+    expect(gameBoardService.getGameBoard()[BASE_ROW][BASE_COL].type).toBe(BlockType.BASE);
+    // Elevation journal unchanged — path mutation is an orthogonal dimension
+    expect(elevationService.getActiveChanges().length).toBe(1);
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────

@@ -1890,3 +1890,12 @@ Worst case: a cliff mesh leaks (no disposal path through the mutation swap) and 
 - **Finding 1 is blocking and will be fixed in this protocol phase.** It is the Phase 2 × Phase 3 composition seam breaking silently — exactly the class of bug the red-team gate exists to catch. The per-sprint unit specs were too narrow to hit it. The Phase 3 integration spec (sprint 40) surfaced it.
 - Finding 2 is a cascade; a Finding 1 fix may close it. Verify after.
 - Finding 3 is a test-discipline note, not a correctness bug. Flag in the Phase 4 kickoff for prophylactic hardening.
+
+---
+
+## Deployment Checklist — Phase 3 Close (2026-04-18)
+
+- [x] Step 1: Verify Finding 2 (cliff-mesh-on-mutation) is closed by Finding 1's elevation-preservation fix — added integration spec `G4` in `highground-integration.spec.ts`: raise → block → revert → elevation still 2, tile type cycles correctly, journal is in sync.
+- [ ] Step 2: Append a "Devil's Advocate — Phase 3 Close" section to STRATEGIC_AUDIT.md with 4 phase-3 critiques and 4 phase-4 predictions. Mirror the format of the Phase 2 Close section.
+- [ ] Step 3: Update `MEMORY.md` with the Phase 3 close test count (6423+ passing) and add a pointer to the new `project_phase4_kickoff.md` handoff doc.
+- [ ] Step 4: Write `project_phase4_kickoff.md` — mandatory prep items for Phase 4 Conduit (sprints 41–56), deferred-item carryover list (terraform shimmer, avalanche debris, `ElevationService.reset()` prophylaxis), predicted blow-ups.
