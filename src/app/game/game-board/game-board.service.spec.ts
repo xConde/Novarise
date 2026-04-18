@@ -624,6 +624,36 @@ describe('GameBoardService', () => {
       const result = service.setTileType(2, 2, BlockType.WALL, 'destroy' as MutationOp);
       expect(result!.mutationOp).toBe('destroy' as MutationOp);
     });
+
+    // Red-team Finding 1 (Phase 3 close): setTileType must preserve the
+    // existing tile's elevation across a path mutation. Prior to the fix,
+    // GameBoardTile.createMutated silently dropped elevation, causing
+    // Phase 2 × Phase 3 composition to corrupt board state.
+    it('preserves elevation when mutating a raised tile to a new BlockType', () => {
+      // Place tile (2, 2) at elevation 2, then mutate its type to WALL.
+      service.setTileElevation(2, 2, 2);
+      expect(service.getGameBoard()[2][2].elevation).toBe(2);
+
+      const result = service.setTileType(2, 2, BlockType.WALL, 'block' as MutationOp);
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe(BlockType.WALL);
+      expect(result!.elevation).toBe(2); // survives the mutation
+      expect(service.getGameBoard()[2][2].elevation).toBe(2);
+    });
+
+    it('leaves elevation undefined when mutating a non-elevated tile', () => {
+      const result = service.setTileType(2, 2, BlockType.WALL, 'destroy' as MutationOp);
+      expect(result).not.toBeNull();
+      expect(result!.elevation).toBeUndefined();
+    });
+
+    it('preserves depressed (negative) elevation across mutation', () => {
+      service.setTileElevation(2, 2, -1);
+      expect(service.getGameBoard()[2][2].elevation).toBe(-1);
+
+      const result = service.setTileType(2, 2, BlockType.WALL, 'block' as MutationOp);
+      expect(result!.elevation).toBe(-1);
+    });
   });
 
   // --- wouldBlockPathIfSet ---

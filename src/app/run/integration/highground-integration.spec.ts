@@ -928,20 +928,17 @@ describe('Highground integration — Group G: Cross-archetype interactions', () 
     expect(elevationService.getActiveChanges().length).toBe(1);
   });
 
-  // ── G2: COLLAPSE on elevated tile — each service owns its own journal ────
+  // ── G2: COLLAPSE on elevated tile — elevation survives the mutation ────
   //
-  // Design finding (surfaced by this integration spec): `GameBoardService.setTileType()`
-  // creates a new tile via `GameBoardTile.createMutated()` which does NOT carry the
-  // `elevation` field. Calling PathMutationService.destroy() on an elevated tile
-  // replaces the tile with a fresh WALL object — elevation is lost from the board.
-  // HOWEVER both services independently hold their own journals, so the elevation
-  // journal entry remains intact even after the tile is destroyed.
-  //
-  // Implication for game design: if a tile is simultaneously raised AND destroyed, the
-  // elevation journal expiry on the next tick will attempt to revert a field that no
-  // longer exists on the tile. Elevation ticks should guard for null tile types.
+  // Red-team Finding 1 (Phase 3 close): before the fix, GameBoardService.setTileType()
+  // constructed the replacement tile via GameBoardTile.createMutated(), which did NOT
+  // carry the elevation field — any path mutation on a raised tile silently wiped
+  // the board's elevation value. After the fix, setTileType clones the new tile with
+  // the existing tile's elevation, so both service surfaces compose cleanly:
+  // - PathMutationService drives the type change (BASE → WALL) and invalidates paths
+  // - ElevationService's journal entry is still in sync with the board's elevation
 
-  it('G2 — Cartographer COLLAPSE on elevated tile: each service journal is independent; tile type becomes WALL', () => {
+  it('G2 — Cartographer COLLAPSE on elevated tile: elevation survives the BlockType change', () => {
     // First raise the target tile
     elevationService.raise(BASE_ROW, BASE_COL, 1, null, 'pre-raise', TURN_1);
     expect(gameBoardService.getGameBoard()[BASE_ROW][BASE_COL].elevation).toBe(1);
@@ -954,10 +951,8 @@ describe('Highground integration — Group G: Cross-archetype interactions', () 
     // Tile is now WALL (mutation side) — pathfinding cache invalidated
     expect(gameBoardService.getGameBoard()[BASE_ROW][BASE_COL].type).toBe(BlockType.WALL);
     expect(pathfindingSpy.invalidateCache).toHaveBeenCalled();
-    // DESIGN NOTE: setTileType creates a fresh tile via createMutated() — elevation field is lost.
-    // The elevation journal entry still exists in ElevationService (independent service state),
-    // but the board tile itself no longer carries the elevation value.
-    expect(gameBoardService.getGameBoard()[BASE_ROW][BASE_COL].elevation).toBeUndefined();
+    // Finding 1 fix: elevation survives the mutation. Board and journal are in sync.
+    expect(gameBoardService.getGameBoard()[BASE_ROW][BASE_COL].elevation).toBe(1);
     // Both service journals have exactly 1 entry each (independent state surfaces)
     expect(pathMutationService.getActive().length).toBe(1);
     expect(elevationService.getActiveChanges().length).toBe(1);

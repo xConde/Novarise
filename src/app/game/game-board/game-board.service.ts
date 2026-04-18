@@ -533,8 +533,15 @@ export class GameBoardService {
       priorType ?? existing.type,
       mutationOp,
     );
-    this.gameBoard[row][col] = newTile;
-    return newTile;
+    // Red-team Finding 1 (Phase 3 close): `createMutated` does not take an
+    // elevation parameter; path mutations on an elevated tile would silently
+    // wipe the elevation field. Preserve it by cloning the newly-created tile
+    // with the existing tile's elevation when non-zero.
+    const preserved = existing.elevation !== undefined && existing.elevation !== 0
+      ? newTile.withElevation(existing.elevation)
+      : newTile;
+    this.gameBoard[row][col] = preserved;
+    return preserved;
   }
 
   /**

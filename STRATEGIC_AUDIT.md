@@ -1830,3 +1830,63 @@ Sprint 9 established that any tile mutation calls `PathfindingService.invalidate
 - **`CARTOGRAPHER_SEAL` anchor permanence across encounter boundary (Finding 3):** verified non-issue — `GameBoardService` is component-scoped, fresh injector per `/play` navigation. Closed.
 
 **Verdict:** Phase 3 can proceed. None of the deferred items are hard blockers. The two items that carry real risk into Phase 3 are (a) the unplaytested balance baseline and (b) the absence of a written design spike for Highground primitives. The first costs a 2-hour manual playthrough before sprint 25 opens. The second is a repeat of the exact mistake that required sprint 8.5 — and should be pre-scheduled as sprint 24.5 before the first line of elevation code is written.
+
+---
+
+## Red Team Critique — Phase 3 Close (2026-04-18)
+
+Hostile review of commits `a7446ac..012d54a` (Phase 3 / Highground: spike → chip animation → sprints 25–40 integration spec). Scope-locked to changed files only. Findings ordered by severity.
+
+### Finding 1: `setTileType` strips `elevation` on path mutations (HIGH)
+
+**Location:** `src/app/game/game-board/game-board.service.ts:529-536` (`setTileType`)
+
+**Risk:** Phase 3's elevation field is defined on `GameBoardTile` as `readonly elevation?: number`. Phase 2's path-mutation flow (build/block/destroy/bridgehead) calls `setTileType`, which constructs a replacement tile via `GameBoardTile.createMutated(x, y, type, priorType, mutationOp)`. That factory **does not pass elevation through**, so any path mutation on an elevated tile silently erases its elevation. Cascades:
+
+1. **AVALANCHE_ORDER on a tile also held by an active `block` mutation** — the block's expiry-revert calls `setTileType(BASE)`, which wipes elevation. The elevation journal still holds the pre-wipe entry; `tickTurn` will later attempt `setTileElevation(priorElevation)` on a tile whose "prior" elevation has already been destroyed by the intervening mutation. The elevation comes back, but the mesh translate chain has been confused in between.
+2. **BRIDGEHEAD on an already-raised WALL** — the WALL's raised elevation disappears the moment the bridgehead applies. The cliff mesh is still in the scene. Tower placed on the bridgehead lands at the fresh-tile Y while the cliff column remains — visible mesh desync.
+3. **COLLAPSE (destroy) on elevated path** — elevation is wiped; the elevation journal entry (permanent or otherwise) is now inconsistent with board state. `getMaxElevation()` can drop, which changes KING_OF_THE_HILL bonus targets mid-combat without any card having been played.
+
+Surfaced by the Phase 3 integration spec during sprint 40 writing — not by any per-sprint spec.
+
+**Fix:** In `setTileType`, preserve the existing tile's elevation onto the new tile:
+
+```ts
+const newTile = GameBoardTile.createMutated(col, row, type, priorType ?? existing.type, mutationOp);
+const preserved = existing.elevation !== undefined && existing.elevation !== 0
+  ? newTile.withElevation(existing.elevation)
+  : newTile;
+this.gameBoard[row][col] = preserved;
+return preserved;
+```
+
+Symmetric fix for any other tile-factory path the Cartographer flow touches (none identified in the diff, but grep after applying). Add an integration spec: raise tile +2 → block it → unblock → elevation still == 2.
+
+### Finding 2: Cliff mesh lifecycle on path-mutation swap (MEDIUM)
+
+**Location:** `src/app/game/game-board/services/path-mutation.service.ts:338-342` (`swapMesh`) + `elevation.service.ts` cliff management (from sprint 39)
+
+**Risk:** `PathMutationService.swapMesh` passes `currentElevation` to `createTileMesh` so the new tile mesh is positioned correctly, but it does **not** touch the cliff-column mesh. If a WALL tile mutated from an elevated BASE keeps its cliff but loses its elevation (Finding 1), or if the cliff-creation logic only fires through ElevationService apply paths, a stale cliff can survive on a tile that now has elevation 0 — or a cliff is missing from a tile that is still elevated after the swap.
+
+Worst case: a cliff mesh leaks (no disposal path through the mutation swap) and lingers to encounter teardown, then disposes correctly there. Not a runtime crash, but a cosmetic + memory issue.
+
+**Fix path-dependent:** once Finding 1 is fixed, verify the cliff mesh survives a path mutation on an elevated tile (it should, since elevation is now preserved). Add an integration spec. If cliffs are owned by ElevationService and keyed by (row, col), no code change needed — the cliff stays attached as long as elevation stays non-zero.
+
+### Finding 3: `ElevationService.reset()` does not clear board elevation (LOW — design-time, not a bug)
+
+**Location:** `src/app/game/game-board/services/elevation.service.ts` (`reset` method)
+
+**Risk:** `reset()` clears the journal and `nextId`, but does **not** iterate board tiles and zero their `elevation` field. Two possible test-harness pitfalls:
+
+1. A spec that calls `reset()` and then queries `getMaxElevation()` sees the pre-reset values. Documented in the sprint 40 integration spec; not a runtime bug since `GameBoardService.resetBoard()` or `importBoard()` builds a fresh tile array on every encounter start.
+2. If a future refactor reuses the board array across encounters (perf optimization), `reset()` would silently carry elevation into the next encounter.
+
+**Fix (prophylactic, not urgent):** make `reset()` iterate the board and clear non-zero elevation in place. Keep the existing component-scoped guarantee but add defense in depth against a future refactor. Alternatively: leave as-is and add a comment documenting the board-teardown assumption.
+
+---
+
+### Summary
+
+- **Finding 1 is blocking and will be fixed in this protocol phase.** It is the Phase 2 × Phase 3 composition seam breaking silently — exactly the class of bug the red-team gate exists to catch. The per-sprint unit specs were too narrow to hit it. The Phase 3 integration spec (sprint 40) surfaced it.
+- Finding 2 is a cascade; a Finding 1 fix may close it. Verify after.
+- Finding 3 is a test-discipline note, not a correctness bug. Flag in the Phase 4 kickoff for prophylactic hardening.
