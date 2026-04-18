@@ -26,6 +26,7 @@ import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 import { WAVE_CONFIG } from '../constants/combat.constants';
 import { isTwinBossWave } from '@core/models/wave-definition.model';
 import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
 
 /**
  * Owns the turn-based combat resolution for the COMBAT phase.
@@ -76,6 +77,7 @@ export class CombatLoopService {
     private audioService: AudioService,
     private screenShakeService: ScreenShakeService,
     private pathMutationService: PathMutationService,
+    private elevationService: ElevationService,
   ) {}
 
   /** Phase 4: current turn number, exposed for UI bindings. */
@@ -146,6 +148,10 @@ export class CombatLoopService {
     // the original note said "same slot as status tick" which was wrong because enemy
     // movement is step 2, before status tick at step 5b.)
     this.pathMutationService.tickTurn(this.turnNumber, scene);
+    // Expire duration-limited tile elevations AFTER path mutations (structural → numeric ordering).
+    // Elevation tickTurn has no scene parameter — translates existing meshes, no geometry rebuild.
+    // CRITICAL: elevation expiry does NOT invalidate the pathfinding cache (spike §11).
+    this.elevationService.tickTurn(this.turnNumber);
 
     const cardGoldMult = 1 + this.cardEffectService.getModifierValue(MODIFIER_STAT.GOLD_MULTIPLIER);
 

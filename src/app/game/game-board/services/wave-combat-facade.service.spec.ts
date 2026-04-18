@@ -26,6 +26,7 @@ import { EncounterCheckpointService } from '../../../run/services/encounter-chec
 import { WavePreviewService } from './wave-preview.service';
 import { TurnHistoryService } from './turn-history.service';
 import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
 
 function makeCallbacks(overrides: Partial<WaveCombatCallbacks> = {}): WaveCombatCallbacks {
   return {
@@ -202,6 +203,11 @@ describe('WaveCombatFacadeService', () => {
       (() => {
         const spy = jasmine.createSpyObj<PathMutationService>('PathMutationService', ['serialize']);
         spy.serialize.and.returnValue({ mutations: [], nextId: 0 });
+        return spy;
+      })(),
+      (() => {
+        const spy = jasmine.createSpyObj<ElevationService>('ElevationService', ['serialize']);
+        spy.serialize.and.returnValue({ elevations: [], changes: [], nextId: 0 });
         return spy;
       })(),
     );

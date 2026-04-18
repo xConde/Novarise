@@ -87,6 +87,7 @@ function createTestCheckpoint(overrides: Partial<EncounterCheckpoint> = {}): Enc
     itemInventory: { entries: [] } as SerializedItemInventory,
     runStateFlags: { entries: [], consumedEventIds: [] },
     pathMutations: { mutations: [], nextId: 0 },
+    tileElevations: { elevations: [], changes: [], nextId: 0 },
     ...overrides,
   };
 }
@@ -374,7 +375,7 @@ describe('EncounterCheckpointService', () => {
       expect(service.hasCheckpoint()).toBeFalse();
     });
 
-    it('passes validation for a valid full v8 checkpoint with itemInventory, runStateFlags, and pathMutations', () => {
+    it('passes validation for a valid full v9 checkpoint with all required fields', () => {
       const checkpoint = createTestCheckpoint();
       service.saveCheckpoint(checkpoint);
 
@@ -476,6 +477,41 @@ describe('EncounterCheckpointService', () => {
 
       expect(loaded).toBeNull();
     });
+
+    it('returns null when tileElevations is missing (v9 requirement)', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data: Record<string, any> = { ...createTestCheckpoint() };
+      delete data['tileElevations'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when tileElevations.elevations is not an array', () => {
+      const data = {
+        ...createTestCheckpoint(),
+        tileElevations: { elevations: 'bad', changes: [], nextId: 0 },
+      };
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when tileElevations.changes is not an array', () => {
+      const data = {
+        ...createTestCheckpoint(),
+        tileElevations: { elevations: [], changes: 'bad', nextId: 0 },
+      };
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
   });
 
   describe('loadCheckpoint() v7 → v8 migration', () => {
@@ -506,12 +542,69 @@ describe('EncounterCheckpointService', () => {
         version: 7,
       };
       delete v7Data['pathMutations'];
+      delete v7Data['tileElevations'];
       localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v7Data));
 
       const loaded = service.loadCheckpoint();
 
       // Should pass validation and not return null
       expect(loaded).not.toBeNull();
+    });
+  });
+
+  describe('loadCheckpoint() v8 → v9 migration', () => {
+    it('migrates v8 checkpoint to v9 by inserting empty tileElevations', () => {
+      // Build a v8 checkpoint (no tileElevations field)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v8Data: Record<string, any> = {
+        ...createTestCheckpoint(),
+        version: 8,
+        // tileElevations intentionally absent — simulating a pre-v9 save
+      };
+      delete v8Data['tileElevations'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v8Data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.version).toBe(CHECKPOINT_VERSION);
+      expect(loaded!.tileElevations).toBeDefined();
+      expect(loaded!.tileElevations.elevations.length).toBe(0);
+      expect(loaded!.tileElevations.changes.length).toBe(0);
+      expect(loaded!.tileElevations.nextId).toBe(0);
+    });
+
+    it('v8 checkpoint after migration passes structural validation', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v8Data: Record<string, any> = {
+        ...createTestCheckpoint(),
+        version: 8,
+      };
+      delete v8Data['tileElevations'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v8Data));
+
+      const loaded = service.loadCheckpoint();
+
+      // Should pass validation and not return null
+      expect(loaded).not.toBeNull();
+    });
+
+    it('tileElevations round-trips correctly when populated', () => {
+      const checkpoint = createTestCheckpoint({
+        tileElevations: {
+          elevations: [{ row: 3, col: 4, value: 2 }],
+          changes: [],
+          nextId: 1,
+        },
+      });
+
+      service.saveCheckpoint(checkpoint);
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.tileElevations.elevations.length).toBe(1);
+      expect(loaded!.tileElevations.elevations[0]).toEqual({ row: 3, col: 4, value: 2 });
+      expect(loaded!.tileElevations.nextId).toBe(1);
     });
   });
 });

@@ -13,6 +13,12 @@ export class GameBoardTile {
   public readonly mutationOp?: MutationOp;
   /** The BlockType that existed before this mutation — undefined on unmutated tiles. */
   public readonly priorType?: BlockType;
+  /**
+   * Per-tile elevation set by ElevationService (Highground archetype, sprint 25).
+   * `undefined` on tiles that have never been elevated — treated as 0 by all query code.
+   * Never fractional; always an integer in [-MAX_DEPRESS, +MAX_ELEVATION].
+   */
+  public readonly elevation?: number;
 
   constructor(
     x: number,
@@ -24,6 +30,7 @@ export class GameBoardTile {
     towerType: TowerType | null,
     mutationOp?: MutationOp,
     priorType?: BlockType,
+    elevation?: number,
     ) {
     this.x = x;
     this.y = y;
@@ -34,6 +41,27 @@ export class GameBoardTile {
     this.towerType = towerType;
     this.mutationOp = mutationOp;
     this.priorType = priorType;
+    this.elevation = elevation;
+  }
+
+  /**
+   * Return a clone of this tile with the given elevation, preserving every other field.
+   * Used by ElevationService to mutate elevation without side effects.
+   * No pathfinding impact — elevation does not change isTraversable.
+   */
+  withElevation(elevation: number): GameBoardTile {
+    return new GameBoardTile(
+      this.x,
+      this.y,
+      this.type,
+      this.isTraversable,
+      this.isPurchasable,
+      this.cost,
+      this.towerType,
+      this.mutationOp,
+      this.priorType,
+      elevation,
+    );
   }
 
   static createBase(x: number, y: number): GameBoardTile {

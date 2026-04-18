@@ -28,6 +28,7 @@ import { WavePreviewService } from './wave-preview.service';
 import { TurnHistoryService } from './turn-history.service';
 import { TowerType } from '../models/tower.model';
 import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
 
 /** Callbacks that WaveCombatFacadeService calls back into the component for concerns
  *  it cannot own (template-bound state, pending card state). */
@@ -101,6 +102,7 @@ export class WaveCombatFacadeService {
     private wavePreviewService: WavePreviewService,
     private turnHistoryService: TurnHistoryService,
     private pathMutationService: PathMutationService,
+    private elevationService: ElevationService,
   ) {}
 
   /** Register component callbacks. Call in ngOnInit before any wave interaction. */
@@ -291,6 +293,7 @@ export class WaveCombatFacadeService {
         itemInventory: this.itemService.serialize(),
         runStateFlags: this.runStateFlagService.serialize(),
         pathMutations: this.pathMutationService.serialize(),
+        tileElevations: this.elevationService.serialize(),
       };
 
       this.encounterCheckpointService.saveCheckpoint(checkpoint);

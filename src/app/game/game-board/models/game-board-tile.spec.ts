@@ -114,4 +114,102 @@ describe('GameBoardTile', () => {
     });
     it('priorType is WALL', () => { expect(tile.priorType).toBe(BlockType.WALL); });
   });
+
+  // ── elevation field (sprint 25 — Highground archetype) ──
+
+  describe('elevation field', () => {
+    it('is undefined on createBase tiles', () => {
+      expect(GameBoardTile.createBase(0, 0).elevation).toBeUndefined();
+    });
+
+    it('is undefined on createWall tiles', () => {
+      expect(GameBoardTile.createWall(0, 0).elevation).toBeUndefined();
+    });
+
+    it('is undefined on createSpawner tiles', () => {
+      expect(GameBoardTile.createSpawner(0, 0).elevation).toBeUndefined();
+    });
+
+    it('is undefined on createExit tiles', () => {
+      expect(GameBoardTile.createExit(0, 0).elevation).toBeUndefined();
+    });
+  });
+
+  // ── withElevation() clone method ──
+
+  describe('withElevation()', () => {
+    let base: GameBoardTile;
+
+    beforeEach(() => {
+      base = GameBoardTile.createBase(3, 5);
+    });
+
+    it('returns a new tile instance (not the same reference)', () => {
+      const elevated = base.withElevation(2);
+      expect(elevated).not.toBe(base);
+    });
+
+    it('sets the elevation field to the provided value', () => {
+      const elevated = base.withElevation(2);
+      expect(elevated.elevation).toBe(2);
+    });
+
+    it('preserves x and y', () => {
+      const elevated = base.withElevation(1);
+      expect(elevated.x).toBe(base.x);
+      expect(elevated.y).toBe(base.y);
+    });
+
+    it('preserves type', () => {
+      const elevated = base.withElevation(1);
+      expect(elevated.type).toBe(BlockType.BASE);
+    });
+
+    it('preserves isTraversable', () => {
+      const elevated = base.withElevation(1);
+      expect(elevated.isTraversable).toBe(base.isTraversable);
+    });
+
+    it('preserves isPurchasable', () => {
+      const elevated = base.withElevation(1);
+      expect(elevated.isPurchasable).toBe(base.isPurchasable);
+    });
+
+    it('preserves cost', () => {
+      const elevated = base.withElevation(1);
+      expect(elevated.cost).toBe(base.cost);
+    });
+
+    it('preserves towerType', () => {
+      const elevated = base.withElevation(1);
+      expect(elevated.towerType).toBe(base.towerType);
+    });
+
+    it('preserves mutationOp', () => {
+      const mutated = GameBoardTile.createMutated(3, 5, BlockType.BASE, BlockType.WALL, 'build');
+      const elevated = mutated.withElevation(1);
+      expect(elevated.mutationOp).toBe('build' as MutationOp);
+    });
+
+    it('preserves priorType', () => {
+      const mutated = GameBoardTile.createMutated(3, 5, BlockType.BASE, BlockType.WALL, 'build');
+      const elevated = mutated.withElevation(1);
+      expect(elevated.priorType).toBe(BlockType.WALL);
+    });
+
+    it('supports negative elevation (depression)', () => {
+      const depressed = base.withElevation(-1);
+      expect(depressed.elevation).toBe(-1);
+    });
+
+    it('can be called with elevation 0 (explicit zero)', () => {
+      const el = base.withElevation(0);
+      expect(el.elevation).toBe(0);
+    });
+
+    it('does NOT change isTraversable — elevation is orthogonal to traversability', () => {
+      const elevated = base.withElevation(3);
+      expect(elevated.isTraversable).toBeTrue();
+    });
+  });
 });

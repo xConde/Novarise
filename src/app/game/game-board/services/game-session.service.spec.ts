@@ -27,6 +27,7 @@ import { CombatLoopService } from './combat-loop.service';
 import { WavePreviewService } from './wave-preview.service';
 import { GamePauseService } from './game-pause.service';
 import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
 
 describe('GameSessionService', () => {
@@ -184,6 +185,10 @@ describe('GameSessionService', () => {
           provide: PathMutationService,
           useValue: jasmine.createSpyObj<PathMutationService>('PathMutationService', ['reset']),
         },
+        {
+          provide: ElevationService,
+          useValue: jasmine.createSpyObj<ElevationService>('ElevationService', ['reset']),
+        },
         { provide: TerraformMaterialPoolService, useValue: terraformPoolSpy },
       ],
     });
@@ -221,6 +226,10 @@ describe('GameSessionService', () => {
       // Phase 12: pause-state flags reset so a stale quit-confirm from a prior
       // encounter doesn't leak into the next.
       expect(gamePauseSpy.reset).toHaveBeenCalled();
+
+      // Sprint 25 (Highground): elevation state reset between encounters.
+      const elevationSpy = TestBed.inject(ElevationService) as jasmine.SpyObj<ElevationService>;
+      expect(elevationSpy.reset).toHaveBeenCalled();
 
       scene.clear();
     });

@@ -12,12 +12,14 @@ import { TurnEventRecord } from '../services/turn-history.service';
 import { SerializedItemInventory } from '../../../run/models/item.model';
 import { SerializedRunStateFlags } from '../../../run/services/run-state-flag.service';
 import { SerializablePathMutationState } from '../services/path-mutation.types';
+import { SerializableTileElevationState } from '../services/elevation.types';
 
-// Re-export for consumers that need the type without importing from path-mutation.types.
+// Re-export for consumers that need the types without importing from the service files.
 export type { SerializablePathMutationState };
+export type { SerializableTileElevationState };
 
 /** Schema version — bump when the shape changes to enable migrations. */
-export const CHECKPOINT_VERSION = 8;
+export const CHECKPOINT_VERSION = 9;
 
 /** Plain-object snapshot of GameState (isPaused omitted — always false on restore). */
 export interface SerializableGameState {
@@ -269,6 +271,13 @@ export interface EncounterCheckpoint {
    * Added in v8. v7 checkpoints are migrated with empty mutation state.
    */
   readonly pathMutations: SerializablePathMutationState;
+
+  /**
+   * Per-tile elevation state at save time.
+   * Added in v9. v8 checkpoints are migrated with empty elevation state
+   * (no raised tiles, empty journal, nextId=0).
+   */
+  readonly tileElevations: SerializableTileElevationState;
 }
 
 /** Serializable WavePreviewService state. */

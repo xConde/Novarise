@@ -82,7 +82,9 @@ import { TurnHistoryService, TurnEventRecord } from './services/turn-history.ser
 import { WavePreviewService, FutureWaveSummary } from './services/wave-preview.service';
 import { HandCard } from './components/card-hand/card-hand.component';
 import { PathMutationService } from './services/path-mutation.service';
+import { ElevationService } from './services/elevation.service';
 import { BlockType } from './models/game-board-tile';
+import { BOARD_CONFIG } from './constants/board.constants';
 
 /** A small tactical badge shown in the wave preview for each enemy type. */
 export interface EnemyBadge {
@@ -376,6 +378,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private itemService: ItemService,
     private runStateFlagService: RunStateFlagService,
     private pathMutationService: PathMutationService,
+    private elevationService: ElevationService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -1216,6 +1219,23 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // Invalidate path cache once after all mutations are replayed
       if (checkpoint.pathMutations.mutations.length > 0) {
         this.enemyService.repathAffectedEnemies(-1, -1);
+      }
+
+      // Step 3.6: Restore tile elevations AFTER path mutations (mutations may have
+      // changed BlockType; elevations compose on top of the current BlockType) and
+      // BEFORE towers (tower Y is derived from tile elevation at placement time).
+      //
+      // Restore ordering:
+      //   a) restore() reloads the elevation journal + nextId (no tile/mesh side effects)
+      //   b) Re-apply each non-zero tile elevation to the board data
+      //   c) Translate tile mesh Y to the restored elevation
+      //
+      // Does NOT invalidate pathfinding cache — elevation does not affect isTraversable.
+      this.elevationService.restore(checkpoint.tileElevations);
+      for (const entry of checkpoint.tileElevations.elevations) {
+        this.gameBoardService.setTileElevation(entry.row, entry.col, entry.value);
+        const newTileY = entry.value + BOARD_CONFIG.tileHeight / 2;
+        this.meshRegistry.translateTileMesh(entry.row, entry.col, newTileY);
       }
 
       // Step 4: Restore towers — create meshes, register in TowerCombatService

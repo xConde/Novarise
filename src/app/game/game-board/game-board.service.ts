@@ -100,12 +100,44 @@ export class GameBoardService {
     }
   }
 
+  /**
+   * Set the elevation on a tile, returning the new tile or null on rejection.
+   *
+   * Rejected when:
+   *  - (row, col) is out of bounds
+   *  - existing tile is SPAWNER or EXIT (immutable for elevation per spike §7)
+   *
+   * TOWER tiles ARE allowed — that is the point of RAISE_PLATFORM (tower rides
+   * up with its tile). Does NOT invalidate pathfinding cache — elevation does not
+   * change isTraversable. Does NOT call mesh translate — ElevationService owns that.
+   *
+   * Returns the new tile for the caller to act on (e.g. mesh translate).
+   */
+  setTileElevation(row: number, col: number, newElevation: number): GameBoardTile | null {
+    if (row < 0 || row >= this.gameBoardHeight || col < 0 || col >= this.gameBoardWidth) {
+      return null;
+    }
+
+    const existing = this.gameBoard[row][col];
+
+    if (existing.type === BlockType.SPAWNER || existing.type === BlockType.EXIT) {
+      return null;
+    }
+
+    const newTile = existing.withElevation(newElevation);
+    this.gameBoard[row][col] = newTile;
+    return newTile;
+  }
+
   // Create a visible tile mesh using BoxGeometry.
   // When mutationOp is provided, the mesh shares the pooled material from
   // TerraformMaterialPoolService (NOT a freshly-allocated material).
   // When mutationOp is undefined, behavior is unchanged — a new per-tile
   // material is created as before.
-  createTileMesh(row: number, col: number, type: BlockType, mutationOp?: MutationOp): THREE.Mesh {
+  // When elevation is provided and non-zero, the mesh is positioned at
+  // Y = elevation + tileHeight / 2 instead of the default tileHeight / 2.
+  // Default elevation = 0 preserves all existing call sites unchanged.
+  createTileMesh(row: number, col: number, type: BlockType, mutationOp?: MutationOp, elevation: number = 0): THREE.Mesh {
     const geometry = new THREE.BoxGeometry(this.tileSize * 0.95, this.tileHeight, this.tileSize * 0.95);
 
     let material: THREE.MeshStandardMaterial;
@@ -135,7 +167,7 @@ export class GameBoardService {
     const x = (col - this.gameBoardWidth / 2) * this.tileSize;
     const z = (row - this.gameBoardHeight / 2) * this.tileSize;
 
-    mesh.position.set(x, this.tileHeight / 2, z);
+    mesh.position.set(x, elevation + this.tileHeight / 2, z);
     mesh.receiveShadow = true;
     mesh.castShadow = true;
 

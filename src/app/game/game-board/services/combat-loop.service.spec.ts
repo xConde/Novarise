@@ -18,6 +18,7 @@ import { ScreenShakeService } from './screen-shake.service';
 import { createRelicServiceSpy, createCardEffectServiceSpy } from '../testing';
 import { SCREEN_SHAKE_CONFIG } from '../constants/effects.constants';
 import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
 
 import { GamePhase } from '../models/game-state.model';
 import { TowerType } from '../models/tower.model';
@@ -189,6 +190,10 @@ describe('CombatLoopService', () => {
         {
           provide: PathMutationService,
           useValue: jasmine.createSpyObj<PathMutationService>('PathMutationService', ['tickTurn']),
+        },
+        {
+          provide: ElevationService,
+          useValue: jasmine.createSpyObj<ElevationService>('ElevationService', ['tickTurn']),
         },
       ],
     });
@@ -1457,6 +1462,37 @@ describe('CombatLoopService', () => {
       expect(enemySpy.tickMinerDigs).toHaveBeenCalledWith(1, scene);
       expect(enemySpy.tickMinerDigs).toHaveBeenCalledWith(2, scene);
       expect(enemySpy.tickMinerDigs).toHaveBeenCalledWith(3, scene);
+    });
+  });
+
+  // ─── resolveTurn() — ElevationService integration ────────────────────────────
+
+  describe('resolveTurn() — ElevationService.tickTurn integration', () => {
+    let elevationSpy: jasmine.SpyObj<ElevationService>;
+
+    beforeEach(() => {
+      elevationSpy = TestBed.inject(ElevationService) as jasmine.SpyObj<ElevationService>;
+    });
+
+    it('calls elevationService.tickTurn with the current turn number each turn', () => {
+      service.resolveTurn(scene);
+      expect(elevationSpy.tickTurn).toHaveBeenCalledWith(1);
+    });
+
+    it('calls elevationService.tickTurn on each successive turn', () => {
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+
+      expect(elevationSpy.tickTurn).toHaveBeenCalledWith(1);
+      expect(elevationSpy.tickTurn).toHaveBeenCalledWith(2);
+      expect(elevationSpy.tickTurn).toHaveBeenCalledWith(3);
+    });
+
+    it('calls elevationService.tickTurn exactly once per resolveTurn()', () => {
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+      expect(elevationSpy.tickTurn).toHaveBeenCalledTimes(2);
     });
   });
 });

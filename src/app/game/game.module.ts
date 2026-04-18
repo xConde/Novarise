@@ -18,6 +18,7 @@ import { LastTurnSummaryComponent } from './game-board/components/last-turn-summ
 import { CardDetailComponent } from './game-board/components/card-detail/card-detail.component';
 import { IconComponent } from '@shared/components/icon/icon.component';
 import { PathMutationService } from './game-board/services/path-mutation.service';
+import { ElevationService } from './game-board/services/elevation.service';
 import { TerraformMaterialPoolService } from './game-board/services/terraform-material-pool.service';
 
 @NgModule({
@@ -38,6 +39,6 @@ import { TerraformMaterialPoolService } from './game-board/services/terraform-ma
     RouterModule.forChild([{ path: '', component: GameComponent, canDeactivate: [gameLeaveGuard] }]),
     IconComponent,
   ],
-  providers: [GameBoardService, CombatVFXService, GamePauseService, ChallengeDisplayService, PathMutationService, TerraformMaterialPoolService]
+  providers: [GameBoardService, CombatVFXService, GamePauseService, ChallengeDisplayService, PathMutationService, ElevationService, TerraformMaterialPoolService]
 })
 export class GameModule {}

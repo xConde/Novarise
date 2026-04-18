@@ -26,6 +26,7 @@ import { CombatLoopService } from './combat-loop.service';
 import { WavePreviewService } from './wave-preview.service';
 import { GamePauseService } from './game-pause.service';
 import { PathMutationService } from './path-mutation.service';
+import { ElevationService } from './elevation.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
 import { disposeMaterial } from '../utils/three-utils';
 
@@ -61,6 +62,7 @@ export class GameSessionService {
     private wavePreviewService: WavePreviewService,
     private gamePauseService: GamePauseService,
     private pathMutationService: PathMutationService,
+    private elevationService: ElevationService,
     @Optional() private terraformPool?: TerraformMaterialPoolService,
   ) {}
 
@@ -94,6 +96,8 @@ export class GameSessionService {
     // service is component-scoped so it would be destroyed anyway, but explicit
     // reset matches the pattern for all other encounter-scoped services).
     this.pathMutationService.reset();
+    // Clear active elevation state from a prior encounter (same lifecycle as pathMutationService).
+    this.elevationService.reset();
   }
 
   /**

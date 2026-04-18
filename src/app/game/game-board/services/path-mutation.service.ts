@@ -335,7 +335,11 @@ export class PathMutationService {
       }
     }
 
-    const newMesh = this.gameBoardService.createTileMesh(row, col, newType, mutationOp);
+    // Pass the current tile's elevation so a newly-swapped mesh is positioned at
+    // the correct Y offset if the tile was elevated before the mutation (spike §14
+    // failure mode: mesh-swap over elevated tile must preserve Y).
+    const currentElevation = this.gameBoardService.getGameBoard()[row]?.[col]?.elevation ?? 0;
+    const newMesh = this.gameBoardService.createTileMesh(row, col, newType, mutationOp, currentElevation);
     newMesh.userData = {
       row,
       col,

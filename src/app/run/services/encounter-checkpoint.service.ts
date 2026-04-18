@@ -84,6 +84,14 @@ export class EncounterCheckpointService {
       data['version'] = 8;
       return data;
     },
+    // 8 → 9: add `tileElevations` field. ElevationService introduced in Sprint 25
+    // (archetype-depth plan, Highground phase). Pre-v9 saves had no elevation
+    // state; default to empty so existing runs continue without any raised tiles.
+    8: (data) => {
+      data['tileElevations'] = { elevations: [], changes: [], nextId: 0 };
+      data['version'] = 9;
+      return data;
+    },
   };
 
   /**
@@ -170,6 +178,7 @@ export class EncounterCheckpointService {
     const itemInventory = data['itemInventory'] as Record<string, unknown> | undefined;
     const runStateFlags = data['runStateFlags'] as Record<string, unknown> | undefined;
     const pathMutations = data['pathMutations'] as Record<string, unknown> | undefined;
+    const tileElevations = data['tileElevations'] as Record<string, unknown> | undefined;
 
     return (
       typeof data['version'] === 'number' &&
@@ -188,7 +197,11 @@ export class EncounterCheckpointService {
       Array.isArray(runStateFlags['consumedEventIds']) &&
       pathMutations !== null &&
       pathMutations !== undefined &&
-      Array.isArray(pathMutations['mutations'])
+      Array.isArray(pathMutations['mutations']) &&
+      tileElevations !== null &&
+      tileElevations !== undefined &&
+      Array.isArray(tileElevations['elevations']) &&
+      Array.isArray(tileElevations['changes'])
     );
   }
 }
