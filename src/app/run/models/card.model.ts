@@ -97,6 +97,10 @@ export enum CardId {
 
   // Cartographer archetype — enemy-routing card (Sprint 14)
   DETOUR = 'DETOUR',
+
+  // Cartographer archetype — rare anchor / build-around (Sprints 17/18)
+  CARTOGRAPHER_SEAL = 'CARTOGRAPHER_SEAL',
+  LABYRINTH_MIND = 'LABYRINTH_MIND',
 }
 
 export enum CardType {
@@ -249,7 +253,18 @@ export interface ModifierCardEffect {
   readonly type: 'modifier';
   readonly stat: ModifierStat;
   readonly value: number;
-  readonly duration: number;
+  /**
+   * Duration in waves. `null` means encounter-scoped (never expires via
+   * `tickWave` — cleared only on encounter teardown via `reset()`).
+   *
+   * Added for sprints 17/18 (CARTOGRAPHER_SEAL / LABYRINTH_MIND): both are
+   * flag-style modifiers that must persist for the entire encounter without
+   * a wave countdown. Existing numeric modifiers (DAMAGE_BOOST etc.) keep
+   * using positive integer durations. The union widening is backwards
+   * compatible — old v8 checkpoints carrying plain numbers validate
+   * unchanged.
+   */
+  readonly duration: number | null;
 }
 
 export interface UtilityCardEffect {

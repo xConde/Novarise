@@ -23,7 +23,7 @@ function spellEffect(spellId: string, value: number): SpellCardEffect {
   return { type: 'spell', spellId, value };
 }
 
-function modifierEffect(stat: ModifierStat, value: number, duration: number): ModifierCardEffect {
+function modifierEffect(stat: ModifierStat, value: number, duration: number | null): ModifierCardEffect {
   return { type: 'modifier', stat, value, duration };
 }
 
@@ -217,6 +217,40 @@ describe('CardEffectService', () => {
       expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeTrue();
       service.tickWave();
       expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeFalse();
+    });
+
+    // Phase 2 Sprints 17/18 — encounter-scoped (null duration) modifiers survive tickWave.
+    it('preserves encounter-scoped modifiers (duration=null) across any number of tickWave calls', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+      service.applyModifier(modifierEffect(MODIFIER_STAT.LABYRINTH_MIND, 0.02, null));
+
+      service.tickWave();
+      service.tickWave();
+      service.tickWave();
+      service.tickWave();
+      service.tickWave();
+
+      expect(service.hasActiveModifier(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBeTrue();
+      expect(service.hasActiveModifier(MODIFIER_STAT.LABYRINTH_MIND)).toBeTrue();
+      // And remaining count is still null — not decremented to some negative value.
+      const anchored = service.getActiveModifiers().find(m => m.stat === MODIFIER_STAT.TERRAFORM_ANCHOR);
+      expect(anchored?.remainingWaves).toBeNull();
+    });
+
+    it('reset() clears encounter-scoped modifiers (tickWave never could)', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+      service.reset();
+      expect(service.hasActiveModifier(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBeFalse();
+    });
+
+    it('mixed numeric + encounter-scoped: numeric expires normally, encounter-scoped survives', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 1));
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+
+      service.tickWave(); // DAMAGE expires (was 1, now 0), TERRAFORM_ANCHOR stays
+
+      expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeFalse();
+      expect(service.hasActiveModifier(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBeTrue();
     });
   });
 

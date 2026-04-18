@@ -30,6 +30,7 @@ import {
 } from '../../../run/models/card.model';
 import { MutationOp } from './path-mutation.types';
 import { getCardDefinition } from '../../../run/constants/card-definitions';
+import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 import { disposeMaterial } from '../utils/three-utils';
 
 export interface CardPlayCallbacks {
@@ -315,6 +316,18 @@ export class CardPlayService {
       return { ok: false, reason: 'insufficient-energy' };
     }
 
+    // Sprint 17 CARTOGRAPHER_SEAL — if the player has this modifier active,
+    // every terraform mutation played this encounter is forced permanent.
+    // The flag is read live here; its value is unused (just a presence check).
+    // Applies to block/bridgehead only — build is already permanent (duration
+    // is passed through as-is; anchor = null just reinforces that), and
+    // destroy is always permanent regardless.
+    const anchor = this.cardEffectService.hasActiveModifier(MODIFIER_STAT.TERRAFORM_ANCHOR);
+    const buildDuration = anchor ? null : effect.duration;
+    // Block / bridgehead: null = "permanent" within the terraform op semantics.
+    const blockDuration = anchor ? null : (effect.duration ?? 2);
+    const bridgeheadDuration = anchor ? null : (effect.duration ?? 3);
+
     // Route to the correct PathMutationService method based on op.
     let mutationResult;
     const sourceId = card.instanceId;
@@ -322,12 +335,18 @@ export class CardPlayService {
     switch (effect.op) {
       case 'build':
         mutationResult = this.pathMutationService.build(
-          row, col, effect.duration, sourceId, currentTurn, scene,
+          row, col, buildDuration, sourceId, currentTurn, scene,
         );
         break;
       case 'block':
+        // PathMutationService.block requires a numeric duration. When anchored,
+        // pass a very large sentinel (won't expire during any realistic encounter
+        // since turns-per-encounter ≤ ~200 and blockDuration=null converts to
+        // Number.MAX_SAFE_INTEGER, which effectively means permanent).
         mutationResult = this.pathMutationService.block(
-          row, col, effect.duration ?? 2, sourceId, currentTurn, scene,
+          row, col,
+          blockDuration === null ? Number.MAX_SAFE_INTEGER : blockDuration,
+          sourceId, currentTurn, scene,
         );
         break;
       case 'destroy':
@@ -337,7 +356,9 @@ export class CardPlayService {
         break;
       case 'bridgehead':
         mutationResult = this.pathMutationService.bridgehead(
-          row, col, effect.duration ?? 3, sourceId, currentTurn, scene,
+          row, col,
+          bridgeheadDuration === null ? Number.MAX_SAFE_INTEGER : bridgeheadDuration,
+          sourceId, currentTurn, scene,
         );
         break;
       default: {

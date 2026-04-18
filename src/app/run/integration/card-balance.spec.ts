@@ -136,12 +136,22 @@ describe('Card System — Balance', () => {
 
   it('modifier durations should be 1-3 waves (not permanent)', () => {
     const modifierCards = getCardsByType(CardType.MODIFIER);
+    // Encounter-scoped flag modifiers (duration=null) — Cartographer rare
+    // anchors that persist the whole encounter by design (sprints 17/18).
+    const encounterScopedIds: readonly CardId[] = [
+      CardId.CARTOGRAPHER_SEAL,
+      CardId.LABYRINTH_MIND,
+    ];
     for (const card of modifierCards) {
       const effect = card.effect;
       if (effect.type === 'modifier') {
         // SHIELD_WALL uses duration 0 (block-based, not wave-based) — exempt
         if (card.id === CardId.SHIELD_WALL) {
           expect(effect.duration).toBe(0); // intentional exception
+        } else if (encounterScopedIds.includes(card.id)) {
+          // Flag-style modifiers use null duration (encounter-scoped, see
+          // ActiveModifier.remainingWaves widening and CardEffectService.tickWave).
+          expect(effect.duration).toBeNull();
         } else {
           expect(effect.duration)
             .withContext(`${card.id}: duration ${effect.duration} should be 1-3`)
@@ -221,11 +231,11 @@ describe('Card System — Balance', () => {
 
   // ── Total Card Count ──────────────────────────────────────────────────────
 
-  it('should have exactly 56 card definitions', () => {
+  it('should have exactly 58 card definitions', () => {
     // 40 original + 6 tower variant cards (sprint 2a) + 3 status-applying spells (sprint 2b)
     // + 2 status payoff spells (sprint 2c) + 4 Cartographer terraform spells (phase 2 sprints 11/12/15/16)
-    // + 1 DETOUR routing spell (sprint 14)
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(56);
+    // + 1 DETOUR routing spell (sprint 14) + 2 Cartographer rare anchors (phase 2 sprints 17/18)
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(58);
   });
 
   it('starter cards should all have STARTER rarity', () => {

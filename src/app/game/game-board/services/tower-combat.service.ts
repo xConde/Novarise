@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 import { Enemy } from '../models/enemy.model';
 import { PlacedTower, TowerType, TowerStats, TowerSpecialization, TOWER_CONFIGS, MAX_TOWER_LEVEL, getUpgradeCost, getEffectiveStats, TargetingMode, DEFAULT_TARGETING_MODE, TARGETING_MODES } from '../models/tower.model';
@@ -20,6 +20,7 @@ import { RelicService } from '../../../run/services/relic.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 import { TowerStatOverrides } from '../../../run/models/card.model';
+import { PathfindingService } from './pathfinding.service';
 import { SerializablePlacedTower, SerializableMortarZone } from '../models/encounter-checkpoint.model';
 
 /** M3 S4: turn-based mortar DoT zone. Replaces the legacy real-time path for fireTurn. */
@@ -89,6 +90,10 @@ export class TowerCombatService {
     // M2 S5: projectileService dependency removed — projectile.service.ts is dead.
     private relicService: RelicService,
     private cardEffectService: CardEffectService,
+    // @Optional() — not provided in every TowerCombatService test bed.
+    // Sprint 18 LABYRINTH_MIND degrades gracefully to pathLengthMultiplier=1
+    // when the pathfinding service is absent. Full GameModule always wires it.
+    @Optional() private pathfindingService?: PathfindingService,
   ) {}
 
   /**
@@ -177,7 +182,20 @@ export class TowerCombatService {
     const sniperDamageBoost = this.cardEffectService.getModifierValue(MODIFIER_STAT.SNIPER_DAMAGE);
     const fireRateBoost = this.cardEffectService.getModifierValue(MODIFIER_STAT.FIRE_RATE);
     const chainBouncesBonus = this.cardEffectService.getModifierValue(MODIFIER_STAT.CHAIN_BOUNCES);
-    const hasCardModifiers = cardDamageBoost !== 0 || cardRangeBoost !== 0 || sniperDamageBoost !== 0;
+
+    // Sprint 18 LABYRINTH_MIND — when active, tower damage scales with the
+    // live spawner→exit path length. `getModifierValue` sums any stacked
+    // instances (though in practice a single card defines the scaling rate).
+    // Path length is cached by PathfindingService so this is O(1) after the
+    // first tower in the turn. Mutation of the board invalidates the cache
+    // naturally, so LABYRINTH_MIND picks up player-built tiles immediately.
+    const labyrinthScaling = this.cardEffectService.getModifierValue(MODIFIER_STAT.LABYRINTH_MIND);
+    const pathLengthMultiplier = (labyrinthScaling > 0 && this.pathfindingService)
+      ? 1 + (this.pathfindingService.getPathToExitLength() * labyrinthScaling)
+      : 1;
+
+    const hasCardModifiers =
+      cardDamageBoost !== 0 || cardRangeBoost !== 0 || sniperDamageBoost !== 0 || pathLengthMultiplier !== 1;
 
     // Deterministic firing order: row then col.
     const towerList = Array.from(this.placedTowers.values()).sort((a, b) => {
@@ -194,7 +212,15 @@ export class TowerCombatService {
         const relicRange = this.relicService.getRangeMultiplier(tower.type);
         const sniperBoost = (tower.type === TowerType.SNIPER && sniperDamageBoost !== 0) ? (1 + sniperDamageBoost) : 1;
         const cardDamageMult = tower.cardStatOverrides?.damageMultiplier ?? 1;
-        this.scratchStats.damage = Math.round(baseStats.damage * towerDamageMultiplier * relicDamage * (1 + cardDamageBoost) * sniperBoost * cardDamageMult);
+        this.scratchStats.damage = Math.round(
+          baseStats.damage
+            * towerDamageMultiplier
+            * relicDamage
+            * (1 + cardDamageBoost)
+            * sniperBoost
+            * cardDamageMult
+            * pathLengthMultiplier,
+        );
         const cardRangeMult = tower.cardStatOverrides?.rangeMultiplier ?? 1;
         this.scratchStats.range = baseStats.range * relicRange * (1 + cardRangeBoost) * cardRangeMult;
         this.scratchStats.cost = baseStats.cost;

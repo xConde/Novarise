@@ -26,7 +26,12 @@ import { WavePreviewService } from '../../game/game-board/services/wave-preview.
 export interface ActiveModifier {
   readonly stat: ModifierStat;
   readonly value: number;
-  remainingWaves: number;
+  /**
+   * `null` = encounter-scoped (never expires in tickWave, cleared only by
+   * reset() at encounter teardown). Used by flag-style modifiers
+   * (CARTOGRAPHER_SEAL → TERRAFORM_ANCHOR, LABYRINTH_MIND).
+   */
+  remainingWaves: number | null;
 }
 
 /** Per-encounter context bundle passed to spell handlers from the component layer. */
@@ -199,11 +204,18 @@ export class CardEffectService {
   /**
    * Decrement remaining-wave countdown on all active modifiers.
    * Modifiers that reach 0 are removed. Call once per wave completion.
+   *
+   * Modifiers with `remainingWaves === null` are encounter-scoped
+   * (CARTOGRAPHER_SEAL, LABYRINTH_MIND) and skip the decrement entirely —
+   * they survive every tickWave and are cleared only by reset() at
+   * encounter teardown.
    */
   tickWave(): void {
     this.activeModifiers = this.activeModifiers
-      .map(m => ({ ...m, remainingWaves: m.remainingWaves - 1 }))
-      .filter(m => m.remainingWaves > 0);
+      .map(m => m.remainingWaves === null
+        ? m
+        : { ...m, remainingWaves: m.remainingWaves - 1 })
+      .filter(m => m.remainingWaves === null || m.remainingWaves > 0);
   }
 
   // ── Queries ───────────────────────────────────────────────

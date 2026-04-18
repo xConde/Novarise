@@ -10,8 +10,8 @@ import { CardId, CardInstance, CardRarity, CardType, TowerCardEffect } from '../
 import { TowerType } from '../../game/game-board/models/tower.model';
 
 describe('CARD_DEFINITIONS', () => {
-  it('has exactly 56 cards', () => {
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(56);
+  it('has exactly 58 cards', () => {
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(58);
   });
 
   it('contains all CardId enum values', () => {
@@ -54,8 +54,8 @@ describe('CARD_DEFINITIONS', () => {
       expect(getCardsByType(CardType.SPELL).length).toBe(26);
     });
 
-    it('has 12 modifier cards', () => {
-      expect(getCardsByType(CardType.MODIFIER).length).toBe(12);
+    it('has 14 modifier cards (12 original + CARTOGRAPHER_SEAL + LABYRINTH_MIND)', () => {
+      expect(getCardsByType(CardType.MODIFIER).length).toBe(14);
     });
 
     it('has 6 utility cards', () => {
@@ -718,6 +718,68 @@ describe('CARD_DEFINITIONS', () => {
 
       it('upgradedEffect matches base effect (no upgrade change for Sprint 14)', () => {
         expect(def.upgradedEffect).toEqual({ type: 'spell', spellId: 'detour', value: 1 });
+      });
+    });
+
+    // ── Phase 2 Sprints 17/18 — Cartographer rare anchors ──────────────────
+    describe('CARTOGRAPHER_SEAL (Sprint 17)', () => {
+      const def = CARD_DEFINITIONS[CardId.CARTOGRAPHER_SEAL];
+
+      it('exists', () => {
+        expect(def).toBeDefined();
+      });
+      it('is a rare cartographer MODIFIER card', () => {
+        expect(def.type).toBe(CardType.MODIFIER);
+        expect(def.rarity).toBe(CardRarity.RARE);
+        expect(def.archetype).toBe('cartographer');
+      });
+      it('has NO terraform flag (the card changes rules for terraform cards; it does not terraform itself)', () => {
+        expect(def.terraform).toBe(false);
+      });
+      it('costs 2 energy', () => {
+        expect(def.energyCost).toBe(2);
+      });
+      it('uses stat TERRAFORM_ANCHOR with duration = null (encounter-scoped)', () => {
+        if (def.effect.type === 'modifier') {
+          expect(def.effect.stat).toBe('terraformAnchor');
+          expect(def.effect.duration).toBeNull();
+        } else {
+          fail('effect is not a modifier');
+        }
+      });
+    });
+
+    describe('LABYRINTH_MIND (Sprint 18)', () => {
+      const def = CARD_DEFINITIONS[CardId.LABYRINTH_MIND];
+
+      it('exists', () => {
+        expect(def).toBeDefined();
+      });
+      it('is a rare cartographer MODIFIER card', () => {
+        expect(def.type).toBe(CardType.MODIFIER);
+        expect(def.rarity).toBe(CardRarity.RARE);
+        expect(def.archetype).toBe('cartographer');
+      });
+      it('costs 2 energy', () => {
+        expect(def.energyCost).toBe(2);
+      });
+      it('uses stat LABYRINTH_MIND with duration = null (encounter-scoped)', () => {
+        if (def.effect.type === 'modifier') {
+          expect(def.effect.stat).toBe('labyrinthMind');
+          expect(def.effect.duration).toBeNull();
+        } else {
+          fail('effect is not a modifier');
+        }
+      });
+      it('base scaling is 2% per path tile', () => {
+        if (def.effect.type === 'modifier') {
+          expect(def.effect.value).toBeCloseTo(0.02, 5);
+        }
+      });
+      it('upgraded scaling is 3% per path tile', () => {
+        if (def.upgradedEffect?.type === 'modifier') {
+          expect(def.upgradedEffect.value).toBeCloseTo(0.03, 5);
+        }
       });
     });
   });

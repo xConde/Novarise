@@ -290,6 +290,30 @@ export class PathfindingService {
   }
 
   /**
+   * Node count of the shortest spawner→exit path. Zero if no path exists.
+   *
+   * WHY THIS EXISTS: LABYRINTH_MIND (Sprint 18) scales tower damage by the
+   * live path length. The caller (TowerCombatService.fireTurn) reads this
+   * every turn, but the A* result is cached in `pathCache` so repeated calls
+   * within a wave are O(1) after the first. Board mutations invalidate the
+   * cache automatically via `invalidateCache()` — meaning path length
+   * updates the moment the player adds/removes a tile.
+   */
+  getPathToExitLength(): number {
+    const spawnerTiles = this.getSpawnerTiles();
+    const exitTiles = this.getExitTiles();
+    if (spawnerTiles.length === 0 || exitTiles.length === 0) return 0;
+
+    const spawner = spawnerTiles[0];
+    const exit = exitTiles[0];
+    const path = this.findPath(
+      { x: spawner.col, y: spawner.row },
+      { x: exit.col, y: exit.row },
+    );
+    return path.length;
+  }
+
+  /**
    * Full reset: clear the path cache.
    * Call on game restart to prevent stale cached paths.
    */

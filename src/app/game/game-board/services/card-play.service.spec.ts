@@ -125,8 +125,10 @@ describe('CardPlayService', () => {
     );
 
     cardEffectSpy = jasmine.createSpyObj<CardEffectService>('CardEffectService', [
-      'applySpell', 'applyModifier', 'reset',
+      'applySpell', 'applyModifier', 'reset', 'hasActiveModifier',
     ]);
+    // Default: no modifiers active. Sprint-17 CARTOGRAPHER_SEAL specs override this.
+    cardEffectSpy.hasActiveModifier.and.returnValue(false);
 
     towerCombatSpy = jasmine.createSpyObj<TowerCombatService>('TowerCombatService', [
       'getPlacedTowers', 'upgradeTower', 'unregisterTower',
@@ -737,6 +739,85 @@ describe('CardPlayService', () => {
       // Pending state preserved so player can pick a different tile
       expect(service.getPendingTileTargetCard()).not.toBeNull();
       expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    // Phase 2 Sprint 17 — CARTOGRAPHER_SEAL (TERRAFORM_ANCHOR modifier)
+    describe('TERRAFORM_ANCHOR modifier (CARTOGRAPHER_SEAL)', () => {
+      beforeEach(() => {
+        cardEffectSpy.hasActiveModifier.and.returnValue(true); // anchor active
+      });
+
+      it('forces build duration to null regardless of the card effect value', () => {
+        registerTerraformDef(1, 'build', 2);  // nominal duration=2
+        service['pendingTileTargetCard'] = makeTerraformInstance('tf-seal-build');
+        service['pendingTileTargetEffect'] = makeTerraformEffect('build', 2);
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+        pathMutationSpy.build.and.returnValue({ ok: true } as MutationResult);
+
+        service.resolveTileTarget(2, 2, mockScene, currentTurn);
+
+        expect(pathMutationSpy.build).toHaveBeenCalledWith(
+          2, 2, null, 'tf-seal-build', currentTurn, mockScene,
+        );
+      });
+
+      it('forces block duration to MAX_SAFE_INTEGER when anchored (effectively permanent)', () => {
+        registerTerraformDef(1, 'block', 3);
+        service['pendingTileTargetCard'] = makeTerraformInstance('tf-seal-block');
+        service['pendingTileTargetEffect'] = makeTerraformEffect('block', 3);
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+        pathMutationSpy.block.and.returnValue({ ok: true } as MutationResult);
+
+        service.resolveTileTarget(0, 3, mockScene, currentTurn);
+
+        expect(pathMutationSpy.block).toHaveBeenCalledWith(
+          0, 3, Number.MAX_SAFE_INTEGER, 'tf-seal-block', currentTurn, mockScene,
+        );
+      });
+
+      it('forces bridgehead duration to MAX_SAFE_INTEGER when anchored', () => {
+        registerTerraformDef(2, 'bridgehead', 3);
+        service['pendingTileTargetCard'] = makeTerraformInstance('tf-seal-bridge');
+        service['pendingTileTargetEffect'] = makeTerraformEffect('bridgehead', 3);
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+        pathMutationSpy.bridgehead.and.returnValue({ ok: true } as MutationResult);
+
+        service.resolveTileTarget(2, 2, mockScene, currentTurn);
+
+        expect(pathMutationSpy.bridgehead).toHaveBeenCalledWith(
+          2, 2, Number.MAX_SAFE_INTEGER, 'tf-seal-bridge', currentTurn, mockScene,
+        );
+      });
+
+      it('destroy op is unchanged — already permanent', () => {
+        registerTerraformDef(2, 'destroy', null);
+        service['pendingTileTargetCard'] = makeTerraformInstance('tf-seal-destroy');
+        service['pendingTileTargetEffect'] = makeTerraformEffect('destroy', null);
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+        pathMutationSpy.destroy.and.returnValue({ ok: true } as MutationResult);
+
+        service.resolveTileTarget(0, 3, mockScene, currentTurn);
+
+        // destroy() signature takes no duration — anchor state doesn't change the call.
+        expect(pathMutationSpy.destroy).toHaveBeenCalledWith(
+          0, 3, 'tf-seal-destroy', currentTurn, mockScene,
+        );
+      });
+
+      it('when anchor is NOT active, block passes through the card-specified duration', () => {
+        cardEffectSpy.hasActiveModifier.and.returnValue(false);
+        registerTerraformDef(1, 'block', 3);
+        service['pendingTileTargetCard'] = makeTerraformInstance('tf-no-seal');
+        service['pendingTileTargetEffect'] = makeTerraformEffect('block', 3);
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+        pathMutationSpy.block.and.returnValue({ ok: true } as MutationResult);
+
+        service.resolveTileTarget(0, 3, mockScene, currentTurn);
+
+        expect(pathMutationSpy.block).toHaveBeenCalledWith(
+          0, 3, 3, 'tf-no-seal', currentTurn, mockScene,
+        );
+      });
     });
 
     // Phase 2 Sprint 16 — COLLAPSE damage-on-hit rider

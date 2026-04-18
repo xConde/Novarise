@@ -198,6 +198,16 @@ const CARD_VALUES = {
   // DETOUR (sprint 14): 2E uncommon, force all enemies onto the longest valid
   // path for one step. Modifies enemy routing, NOT tile state — terraform: false.
   detourCost: 2,
+
+  // CARTOGRAPHER_SEAL (sprint 17): 2E rare anchor. All terraform mutations this
+  // encounter persist permanently (duration is forced to null at resolve time).
+  cartographerSealCost: 2,
+  // LABYRINTH_MIND (sprint 18): 2E rare build-around. Tower damage scales with
+  // current spawner→exit path length. Multiplier = 1 + (pathLength * k).
+  // k=0.02 → 30-tile path = 60% bonus, 50-tile path = 100% bonus.
+  labyrinthMindCost: 2,
+  labyrinthMindPathScaling: 0.02,
+  labyrinthMindUpgradedPathScaling: 0.03,
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -1243,6 +1253,76 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     upgraded: false,
     effect: { type: 'spell', spellId: 'detour', value: 1 },
     upgradedEffect: { type: 'spell', spellId: 'detour', value: 1 },
+    archetype: 'cartographer',
+    terraform: false,
+  },
+
+  /**
+   * CARTOGRAPHER_SEAL (Sprint 17) — RARE anchor. While this modifier is
+   * active, every terraform mutation resolved via CardPlayService is forced
+   * to permanent (duration = null). Flag-style modifier on
+   * MODIFIER_STAT.TERRAFORM_ANCHOR with encounter-scoped duration (null).
+   *
+   * Upgraded variant currently matches base — reserved for sprint 19 tuning
+   * (could extend to grant `+1E refund on first terraform` or similar).
+   */
+  [CardId.CARTOGRAPHER_SEAL]: {
+    id: CardId.CARTOGRAPHER_SEAL,
+    name: 'Cartographer\'s Seal',
+    description: 'All terraform you play this encounter is permanent.',
+    upgradedDescription: 'All terraform you play this encounter is permanent.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.RARE,
+    energyCost: CARD_VALUES.cartographerSealCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier',
+      stat: MODIFIER_STAT.TERRAFORM_ANCHOR,
+      value: 1,
+      duration: null,  // encounter-scoped — see tickWave
+    },
+    upgradedEffect: {
+      type: 'modifier',
+      stat: MODIFIER_STAT.TERRAFORM_ANCHOR,
+      value: 1,
+      duration: null,
+    },
+    archetype: 'cartographer',
+    terraform: false,   // the card itself does NOT mutate tiles — it changes the rules for terraform cards
+  },
+
+  /**
+   * LABYRINTH_MIND (Sprint 18) — RARE build-around. While this modifier is
+   * active, every tower's damage is multiplied by
+   * `1 + (spawner→exit path length × labyrinthMindPathScaling)` at fire time.
+   *
+   * Reward: lay_tile / build cards stretch the enemy path, which in turn
+   * stretches tower damage. Pays off long-path Cartographer builds.
+   * Read live by TowerCombatService at fireTurn (pathLength queried via
+   * PathfindingService.getPathToExitLength()). Flag-style modifier on
+   * MODIFIER_STAT.LABYRINTH_MIND, value = scaling coefficient.
+   */
+  [CardId.LABYRINTH_MIND]: {
+    id: CardId.LABYRINTH_MIND,
+    name: 'Labyrinth Mind',
+    description: 'Tower damage scales with path length (+2% per tile) this encounter.',
+    upgradedDescription: 'Tower damage scales with path length (+3% per tile) this encounter.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.RARE,
+    energyCost: CARD_VALUES.labyrinthMindCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier',
+      stat: MODIFIER_STAT.LABYRINTH_MIND,
+      value: CARD_VALUES.labyrinthMindPathScaling,
+      duration: null,
+    },
+    upgradedEffect: {
+      type: 'modifier',
+      stat: MODIFIER_STAT.LABYRINTH_MIND,
+      value: CARD_VALUES.labyrinthMindUpgradedPathScaling,
+      duration: null,
+    },
     archetype: 'cartographer',
     terraform: false,
   },

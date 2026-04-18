@@ -17,6 +17,7 @@ import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy, crea
 import { TowerAnimationService } from './tower-animation.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
+import { PathfindingService } from './pathfinding.service';
 
 describe('TowerCombatService', () => {
   let service: TowerCombatService;
@@ -50,6 +51,16 @@ describe('TowerCombatService', () => {
     gameBoardServiceSpy = createGameBoardServiceSpy(25, 20, 1);
     relicServiceSpy = createRelicServiceSpy();
 
+    // Sprint 18 LABYRINTH_MIND — TowerCombatService now takes an @Optional()
+    // PathfindingService. Stub it with a spy that returns 0 length so existing
+    // non-LABYRINTH tests see multiplier=1. The LABYRINTH_MIND-specific test
+    // rebinds getPathToExitLength via the returned spy.
+    const pathfindingSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService',
+      ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset'],
+    );
+    pathfindingSpy.getPathToExitLength.and.returnValue(0);
+
     TestBed.configureTestingModule({
       providers: [
         TowerCombatService,
@@ -62,6 +73,7 @@ describe('TowerCombatService', () => {
         { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
         { provide: RelicService, useValue: relicServiceSpy },
         { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+        { provide: PathfindingService, useValue: pathfindingSpy },
       ]
     });
     service = TestBed.inject(TowerCombatService);
@@ -1796,6 +1808,43 @@ describe('TowerCombatService', () => {
       // hitCount reflects actual enemies struck: primary + up to chainCount+extraBounces bounces
       // With 6 enemies in range and high damage (15 base) all 6 slots fire → hitCount >= 6
       expect(result.hitCount).toBeGreaterThanOrEqual(6);
+    });
+
+    // Phase 2 Sprint 18 — LABYRINTH_MIND damage scaling
+    it('LABYRINTH_MIND: damage scales with path length when modifier is active', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      // Activate LABYRINTH_MIND with 2% scaling and a 30-tile path.
+      // Expected multiplier: 1 + (30 * 0.02) = 1.6 → damage 25 × 1.6 = 40.
+      cardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+        stat === 'labyrinthMind' ? 0.02 : 0,
+      );
+      const pathfindingSpy = TestBed.inject(PathfindingService) as jasmine.SpyObj<PathfindingService>;
+      pathfindingSpy.getPathToExitLength.and.returnValue(30);
+
+      service.fireTurn(mockScene, TURN_1);
+
+      const baseBasicDamage = 25; // TOWER_CONFIGS[BASIC].damage
+      const damageTaken = 10000 - enemy.health;
+      expect(damageTaken).toBe(Math.round(baseBasicDamage * 1.6));
+    });
+
+    it('LABYRINTH_MIND: zero scaling leaves damage unchanged (multiplier fallback = 1)', () => {
+      service.registerTower(TOWER_ROW, TOWER_COL, TowerType.BASIC, new THREE.Group());
+      const enemy = createEnemy('e1', TOWER_WORLD_X, TOWER_WORLD_Z, 10000);
+      enemyMap.set('e1', enemy);
+
+      // No LABYRINTH_MIND; default scaling=0 means pathLengthMultiplier stays 1.
+      cardEffectSpy.getModifierValue.and.returnValue(0);
+      const pathfindingSpy = TestBed.inject(PathfindingService) as jasmine.SpyObj<PathfindingService>;
+      pathfindingSpy.getPathToExitLength.and.returnValue(30);
+
+      service.fireTurn(mockScene, TURN_1);
+
+      const baseBasicDamage = 25;
+      expect(10000 - enemy.health).toBe(baseBasicDamage);
     });
   });
 
