@@ -67,6 +67,17 @@ export const MODIFIER_STAT = {
   // Consumed in EnemyService.stepEnemiesOneTurn via getModifierValue() > 0.
   // Upgrade slot reserved for future balance tuning — same effect, no change.
   GRAVITY_WELL: 'gravityWell',
+
+  // Phase 4 Sprint 43 — HANDSHAKE modifier (Conduit common).
+  //
+  // Numeric stat: +15% damage (base) / +25% (upgraded) for any tower with
+  // at least one active (non-disrupted) 4-dir neighbor, for one wave.
+  // Wave-scoped (duration=1, mirrors HIGH_PERCH pattern).
+  // Read per-tower in TowerCombatService.composeDamageStack via a
+  // towerGraphService.getNeighbors lookup. A disrupted tower's neighbor set
+  // is empty by construction, so disruption transparently silences the
+  // HANDSHAKE bonus without a second predicate.
+  HANDSHAKE_DAMAGE_BONUS: 'handshakeDamageBonus',
 } as const;
 
 export type ModifierStat = typeof MODIFIER_STAT[keyof typeof MODIFIER_STAT];

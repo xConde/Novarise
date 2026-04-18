@@ -20,6 +20,7 @@ import { CardEffectService } from '../../../run/services/card-effect.service';
 import { PathfindingService } from './pathfinding.service';
 import { LineOfSightService } from './line-of-sight.service';
 import { ElevationService } from './elevation.service';
+import { TowerGraphService } from './tower-graph.service';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 
@@ -4171,7 +4172,7 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
   let relicSpy: jasmine.SpyObj<RelicService>;
   let elevationSpy: jasmine.SpyObj<ElevationService>;
 
-  // Default context — neutral: no active modifiers, no elevation.
+  // Default context — neutral: no active modifiers, no elevation, no Conduit.
   const neutralCtx: DamageStackContext = {
     towerDamageMultiplier: 1,
     cardDamageBoost: 0,
@@ -4184,6 +4185,8 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
     vantagePointBonus: 0,
     kothBonus: 0,
     kothActive: false,
+    handshakeBonus: 0,
+    currentTurn: 0,
   };
 
   beforeEach(() => {
@@ -4365,6 +4368,8 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
       vantagePointBonus: 0.5,           // stage 7 → 1.5
       kothBonus: 1.0,                   // stage 8 → 2 (elev === max)
       kothActive: true,
+      handshakeBonus: 0,                // stage 9 — inactive in this spec
+      currentTurn: 0,
     };
     const base = TOWER_CONFIGS[TowerType.SNIPER].damage;
     const expected = Math.round(
@@ -4435,5 +4440,142 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
     expect(Number.isInteger(result.damage)).toBe(true);
     // Range is NOT rounded — fractional precision preserved.
     expect(result.range).toBe(TOWER_CONFIGS[TowerType.BASIC].range);
+  });
+
+  // ─── Stage 9 — HANDSHAKE (Phase 4 sprint 43) ─────────────────────────────
+
+  describe('HANDSHAKE multiplier (stage 9 — graph-reactive)', () => {
+    // Re-wire the real TowerGraphService so composeDamageStack can query neighbors.
+    let graph: TowerGraphService;
+    let placedTowers: Map<string, any>;
+    let serviceWithGraph: TowerCombatService;
+
+    beforeEach(() => {
+      placedTowers = new Map();
+      TestBed.resetTestingModule();
+
+      relicSpy = createRelicServiceSpy();
+      relicSpy.getDamageMultiplier.and.returnValue(1);
+      relicSpy.getRangeMultiplier.and.returnValue(1);
+      elevationSpy = jasmine.createSpyObj<ElevationService>(
+        'ElevationService',
+        ['getElevation', 'getMaxElevation', 'reset', 'serialize', 'restore', 'tickTurn', 'raise', 'depress', 'setAbsolute', 'collapse', 'getActiveChanges', 'getElevationMap'],
+      );
+      elevationSpy.getElevation.and.returnValue(0);
+      elevationSpy.getMaxElevation.and.returnValue(0);
+
+      TestBed.configureTestingModule({
+        providers: [
+          TowerCombatService,
+          ChainLightningService,
+          CombatVFXService,
+          StatusEffectService,
+          GameStateService,
+          TowerGraphService,
+          { provide: EnemyService, useValue: createEnemyServiceSpy(new Map()) },
+          { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+          { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+          { provide: RelicService, useValue: relicSpy },
+          { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+          { provide: ElevationService, useValue: elevationSpy },
+        ],
+      });
+      serviceWithGraph = TestBed.inject(TowerCombatService);
+      graph = TestBed.inject(TowerGraphService);
+      graph.setPlacedTowersGetter(() => placedTowers);
+    });
+
+    function registerTower(row: number, col: number, type: TowerType = TowerType.BASIC): any {
+      const tower = {
+        id: `${row}-${col}`,
+        type,
+        level: 1,
+        row,
+        col,
+        kills: 0,
+        totalInvested: 0,
+        targetingMode: DEFAULT_TARGETING_MODE,
+        mesh: null,
+      };
+      placedTowers.set(tower.id, tower);
+      graph.registerTower(tower);
+      return tower;
+    }
+
+    function callStackWithGraph(tower: any, ctx: Partial<DamageStackContext>) {
+      const fullCtx: DamageStackContext = { ...neutralCtx, ...ctx };
+      const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
+      return (serviceWithGraph as any).composeDamageStack(tower, baseStats, fullCtx);
+    }
+
+    it('HANDSHAKE active + ≥ 1 neighbor → applies (1 + handshakeBonus) multiplier', () => {
+      const towerA = registerTower(5, 5);
+      registerTower(5, 6); // neighbor
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(towerA, { handshakeBonus: 0.15 });
+      expect(result.damage).toBe(Math.round(base * 1.15));
+    });
+
+    it('HANDSHAKE active + ZERO neighbors → multiplier is 1 (bonus gated)', () => {
+      const tower = registerTower(5, 5);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(tower, { handshakeBonus: 0.15 });
+      expect(result.damage).toBe(base);
+    });
+
+    it('HANDSHAKE inactive (bonus=0) → no multiplier applied even with neighbors', () => {
+      const towerA = registerTower(5, 5);
+      registerTower(5, 6);
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(towerA, { handshakeBonus: 0 });
+      expect(result.damage).toBe(base);
+    });
+
+    it('HANDSHAKE respects disruption — disrupted tower reports 0 neighbors, bonus skipped', () => {
+      const towerA = registerTower(5, 5);
+      registerTower(5, 6);
+      // Disrupt the target tower.
+      graph.severTower(5, 5, /* until */ 10, 'test-disruptor');
+      const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+      const result = callStackWithGraph(towerA, { handshakeBonus: 0.25, currentTurn: 5 });
+      expect(result.damage).toBe(base); // disrupted → no neighbors → no bonus
+    });
+
+    it('HANDSHAKE composes as stage 9 — after all Phase 3 multipliers', () => {
+      // Fixture: SNIPER at elev 2, KOTH + VP + HANDSHAKE all active.
+      elevationSpy.getElevation.and.returnValue(2);
+      elevationSpy.getMaxElevation.and.returnValue(2);
+      relicSpy.getDamageMultiplier.and.returnValue(1.1);
+      const towerA = registerTower(5, 5, TowerType.SNIPER);
+      registerTower(5, 6); // neighbor for HANDSHAKE
+
+      const result = callStackWithGraph(towerA, {
+        towerDamageMultiplier: 1.2,
+        cardDamageBoost: 0.3,
+        sniperDamageBoost: 0.4,
+        pathLengthMultiplier: 1.25,
+        hasElevation: true,
+        maxElevation: 2,
+        vantagePointBonus: 0.5,
+        kothBonus: 1.0,
+        kothActive: true,
+        handshakeBonus: 0.15,
+      });
+
+      const base = TOWER_CONFIGS[TowerType.SNIPER].damage;
+      const expected = Math.round(
+        base
+          * 1.2    // stage 1: towerDamageMultiplier
+          * 1.1    // stage 2: relicDamage
+          * 1.3    // stage 3: cardDamageBoost
+          * 1.4    // stage 4: sniperBoost
+          * 1.0    // stage 5: cardStatOverrides (none)
+          * 1.25   // stage 6: pathLengthMultiplier
+          * 1.5    // stage 7: VP
+          * 2      // stage 8: KOTH
+          * 1.15,  // stage 9: HANDSHAKE
+      );
+      expect(result.damage).toBe(expected);
+    });
   });
 });

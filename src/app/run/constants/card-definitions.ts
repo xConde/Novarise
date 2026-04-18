@@ -271,6 +271,17 @@ const CARD_VALUES = {
   // Upgrade: slot reserved for future balance tuning — same effect, no stat
   // change. Plays out of deck identically; difference is a future Memory flag.
   gravityWellCost: 3,
+
+  // ── Conduit archetype — HANDSHAKE (Sprint 43) ───────────────────────────
+  // HANDSHAKE (1E common): towers with at least one active 4-dir neighbor
+  // gain +15% damage (base) / +25% (upgraded) for one wave.
+  // Wave-scoped (duration=1). Read per-tower in composeDamageStack via
+  // towerGraphService.getNeighbors(). Disrupted towers read zero neighbors
+  // and so transparently skip the bonus — no separate predicate needed.
+  handshakeCost: 1,
+  handshakeBonus: 0.15,               // +15% damage (base)
+  handshakeUpgradedBonus: 0.25,       // +25% damage (upgraded)
+  handshakeDuration: 1,               // wave countdown (one wave)
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -1689,6 +1700,46 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
       duration: null,
     },
     archetype: 'highground' as const,
+    terraform: false,
+  },
+
+  // ── Conduit archetype — common modifier (Phase 4, Sprint 43) ─────────────
+
+  /**
+   * HANDSHAKE (Sprint 43) — wave-scoped damage bonus for towers with ≥ 1
+   * active 4-dir neighbor. Reads TowerGraphService.getNeighbors per-tower
+   * inside TowerCombatService.composeDamageStack. Stage 9 of the damage
+   * stack (first Conduit multiplier to land).
+   *
+   * NOT terraform: HANDSHAKE is a pure damage modifier — it reads the
+   * adjacency graph but never mutates towers, tiles, or elevation.
+   *
+   * `link: true` signals this is a Conduit keyword card for tooltip / pool
+   * weighting. Marked archetype: 'conduit'.
+   */
+  [CardId.HANDSHAKE]: {
+    id: CardId.HANDSHAKE,
+    name: 'Handshake',
+    description: 'Towers with at least one adjacent tower gain +15% damage this wave.',
+    upgradedDescription: 'Towers with at least one adjacent tower gain +25% damage this wave.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.handshakeCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HANDSHAKE_DAMAGE_BONUS,
+      value: CARD_VALUES.handshakeBonus,
+      duration: CARD_VALUES.handshakeDuration,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HANDSHAKE_DAMAGE_BONUS,
+      value: CARD_VALUES.handshakeUpgradedBonus,
+      duration: CARD_VALUES.handshakeDuration,
+    },
+    archetype: 'conduit' as const,
+    link: true,
     terraform: false,
   },
 };

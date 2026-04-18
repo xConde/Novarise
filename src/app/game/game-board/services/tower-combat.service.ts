@@ -86,6 +86,15 @@ export interface DamageStackContext {
   readonly kothBonus: number;
   /** Gate flag for KOTH: true when kothBonus > 0 AND maxElevation ≥ 1 (flat boards skip). */
   readonly kothActive: boolean;
+  /**
+   * Stage 9 damage (Phase 4 Conduit HANDSHAKE — sprint 43). Aggregate wave-scoped
+   * bonus applied per-tower iff the tower has ≥ 1 active (non-disrupted) 4-dir
+   * neighbor via TowerGraphService. `0` when no HANDSHAKE is active or the graph
+   * service is absent — the multiplier short-circuits to 1 and no lookup runs.
+   */
+  readonly handshakeBonus: number;
+  /** Current turn number — used only by graph reads that honor disruption / virtual-edge expiry. */
+  readonly currentTurn: number;
 }
 
 /**
@@ -293,10 +302,17 @@ export class TowerCombatService {
     const kothBonus = this.cardEffectService.getModifierValue(MODIFIER_STAT.KING_OF_THE_HILL_DAMAGE_BONUS);
     const kothActive = kothBonus > 0 && maxElevation >= 1;
 
+    // Phase 4 sprint 43 — HANDSHAKE: wave-scoped damage bonus for towers with
+    // at least one active 4-dir neighbor. Read via TowerGraphService per-tower
+    // in composeDamageStack. Aggregate value via getModifierValue so stacked
+    // HANDSHAKE plays add; the gate is `handshakeBonus > 0 && neighbors ≥ 1`.
+    const handshakeBonus = this.cardEffectService.getModifierValue(MODIFIER_STAT.HANDSHAKE_DAMAGE_BONUS);
+
     const hasCardModifiers =
       cardDamageBoost !== 0 || cardRangeBoost !== 0 || sniperDamageBoost !== 0
       || pathLengthMultiplier !== 1 || hasElevation || highPerchBonus !== 0
-      || vantagePointBonus !== 0 || kothActive;
+      || vantagePointBonus !== 0 || kothActive
+      || handshakeBonus !== 0;
 
     // Phase 4 prep — damage + range multiplier composition bundle. Built once per
     // fireTurn; consumed per-tower inside composeDamageStack. See conduit-
@@ -314,6 +330,8 @@ export class TowerCombatService {
       vantagePointBonus,
       kothBonus,
       kothActive,
+      handshakeBonus,
+      currentTurn: turnNumber,
     };
 
     // Deterministic firing order: row then col.
@@ -520,7 +538,8 @@ export class TowerCombatService {
    *     × pathLengthMultiplier                                  // 6: LABYRINTH_MIND
    *     × vantagePointDmgMult                                   // 7: VANTAGE_POINT (elev ≥ 1)
    *     × kothMult                                              // 8: KING_OF_THE_HILL (elev === max)
-   *     [× conduit multipliers — sprint 43+ plug in here]
+   *     × handshakeMult                                         // 9: HANDSHAKE (≥ 1 non-disrupted neighbor — sprint 43)
+   *     [× conduit multipliers — sprint 45+ plug in here]
    *
    * ## Range stack (6 stages):
    *   (baseStats.range + rangeAdditive)                         // additive-before-multiplicative (§13)
@@ -589,6 +608,19 @@ export class TowerCombatService {
       ? (1 + ctx.kothBonus)
       : 1;
 
+    // Sprint 43 HANDSHAKE — per-tower Conduit multiplier. Active iff
+    // `handshakeBonus > 0` AND the tower has ≥ 1 active 4-dir neighbor. The
+    // neighbor read honors disruption (DISRUPTOR / ISOLATOR / DIVIDER) and
+    // virtual edges (CONDUIT_BRIDGE, sprint 48) — disrupted towers query to
+    // zero neighbors, transparently skipping the bonus.
+    //
+    // Gate order matters: we short-circuit on `handshakeBonus === 0` so flat
+    // (no-Conduit) runs never pay the graph-query cost.
+    const handshakeMult = (ctx.handshakeBonus > 0 && this.towerGraphService !== undefined
+      && this.towerGraphService.getNeighbors(tower.row, tower.col, ctx.currentTurn).length > 0)
+      ? (1 + ctx.handshakeBonus)
+      : 1;
+
     // Reserved for sprint 44 FORMATION — additive-to-base range. See doc §13.
     const rangeAdditive = 0;
 
@@ -601,7 +633,8 @@ export class TowerCombatService {
         * cardDamageMult
         * ctx.pathLengthMultiplier
         * vantagePointDmgMult
-        * kothMult,
+        * kothMult
+        * handshakeMult,
     );
 
     const range = (baseStats.range + rangeAdditive)

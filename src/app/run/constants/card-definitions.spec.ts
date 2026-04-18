@@ -11,8 +11,9 @@ import { TowerType } from '../../game/game-board/models/tower.model';
 import { MODIFIER_STAT } from './modifier-stat.constants';
 
 describe('CARD_DEFINITIONS', () => {
-  it('has exactly 66 cards', () => {
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(66);
+  it('has exactly 67 cards', () => {
+    // Sprint 43 added HANDSHAKE (Conduit common) — first Phase 4 card.
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(67);
   });
 
   it('contains all CardId enum values', () => {
@@ -55,8 +56,8 @@ describe('CARD_DEFINITIONS', () => {
       expect(getCardsByType(CardType.SPELL).length).toBe(30);
     });
 
-    it('has 18 modifier cards (12 original + CARTOGRAPHER_SEAL + LABYRINTH_MIND + HIGH_PERCH + VANTAGE_POINT + KING_OF_THE_HILL + GRAVITY_WELL)', () => {
-      expect(getCardsByType(CardType.MODIFIER).length).toBe(18);
+    it('has 19 modifier cards (Phase 3 Highground set + Phase 4 HANDSHAKE)', () => {
+      expect(getCardsByType(CardType.MODIFIER).length).toBe(19);
     });
 
     it('has 6 utility cards', () => {

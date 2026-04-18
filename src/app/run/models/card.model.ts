@@ -118,6 +118,9 @@ export enum CardId {
   // Highground archetype — rare cards (Phase 3, Sprints 33/34)
   KING_OF_THE_HILL = 'KING_OF_THE_HILL',
   GRAVITY_WELL = 'GRAVITY_WELL',
+
+  // Conduit archetype — common cards (Phase 4, Sprints 43+)
+  HANDSHAKE = 'HANDSHAKE',
 }
 
 export enum CardType {
