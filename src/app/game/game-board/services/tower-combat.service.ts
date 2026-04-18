@@ -22,6 +22,7 @@ import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 import { TowerStatOverrides } from '../../../run/models/card.model';
 import { PathfindingService } from './pathfinding.service';
 import { SerializablePlacedTower, SerializableMortarZone } from '../models/encounter-checkpoint.model';
+import { LineOfSightService } from './line-of-sight.service';
 
 /** M3 S4: turn-based mortar DoT zone. Replaces the legacy real-time path for fireTurn. */
 interface TurnMortarZone {
@@ -94,6 +95,10 @@ export class TowerCombatService {
     // Sprint 18 LABYRINTH_MIND degrades gracefully to pathLengthMultiplier=1
     // when the pathfinding service is absent. Full GameModule always wires it.
     @Optional() private pathfindingService?: PathfindingService,
+    // @Optional() — not provided in TowerCombatService test beds that predate
+    // sprint 26. When absent, LOS check is skipped (all shots pass). Full
+    // GameModule always wires it.
+    @Optional() private lineOfSightService?: LineOfSightService,
   ) {}
 
   /**
@@ -499,6 +504,12 @@ export class TowerCombatService {
     let best: Enemy | null = null;
     let bestScore = -Infinity;
 
+    // Sprint 26: MORTAR bypasses LOS — it is an AOE arc weapon that lobs shells
+    // over terrain. Per elevation-model.md §12: "MORTAR already uses AOE, does
+    // not need direct LOS; document that MORTAR bypasses isVisible."
+    // Note: @Optional() injects null (not undefined) when the service is absent.
+    const useLos = this.lineOfSightService != null && tower.type !== TowerType.MORTAR;
+
     const candidates = this.spatialGrid.queryRadius(towerWorldX, towerWorldZ, stats.range);
     for (const enemy of candidates) {
       if (enemy.health <= 0) continue;
@@ -509,6 +520,14 @@ export class TowerCombatService {
 
       // Narrow-phase range check in world units
       if (dist > stats.range) continue;
+
+      // Sprint 26: LOS narrow-phase filter.
+      // Runs after the distance check, before target scoring, so only in-range
+      // enemies pay the raycast cost. Skipped for MORTAR (AOE arc weapon).
+      // useLos guards the null check — safe cast
+      if (useLos && !this.lineOfSightService!.isVisible(tower.row, tower.col, enemy.position.x, enemy.position.z)) {
+        continue;
+      }
 
       let score: number;
       switch (tower.targetingMode) {

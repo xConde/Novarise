@@ -19,6 +19,7 @@ import { CardDetailComponent } from './game-board/components/card-detail/card-de
 import { IconComponent } from '@shared/components/icon/icon.component';
 import { PathMutationService } from './game-board/services/path-mutation.service';
 import { ElevationService } from './game-board/services/elevation.service';
+import { LineOfSightService } from './game-board/services/line-of-sight.service';
 import { TerraformMaterialPoolService } from './game-board/services/terraform-material-pool.service';
 
 @NgModule({
@@ -39,6 +40,6 @@ import { TerraformMaterialPoolService } from './game-board/services/terraform-ma
     RouterModule.forChild([{ path: '', component: GameComponent, canDeactivate: [gameLeaveGuard] }]),
     IconComponent,
   ],
-  providers: [GameBoardService, CombatVFXService, GamePauseService, ChallengeDisplayService, PathMutationService, ElevationService, TerraformMaterialPoolService]
+  providers: [GameBoardService, CombatVFXService, GamePauseService, ChallengeDisplayService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService]
 })
 export class GameModule {}

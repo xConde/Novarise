@@ -18,6 +18,7 @@ import { TowerAnimationService } from './tower-animation.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { PathfindingService } from './pathfinding.service';
+import { LineOfSightService } from './line-of-sight.service';
 
 describe('TowerCombatService', () => {
   let service: TowerCombatService;
@@ -2435,6 +2436,7 @@ describe('Tower Model Functions', () => {
 
 });
 
+
 // --- Checkpoint serialization ---
 
 describe('TowerCombatService checkpoint serialization', () => {
@@ -2775,5 +2777,105 @@ describe('TowerCombatService checkpoint serialization', () => {
       const serialized = svc.serializeMortarZones();
       expect(serialized[0].centerX).toBe(1.0);
     });
+  });
+});
+
+// ── Sprint 26: Line-of-sight integration ─────────────────────────────────────
+// Standalone top-level describe so it has its own TestBed and doesn't share
+// local constants with the primary TowerCombatService describe.
+//
+// Board: 25×20, tileSize=1. Tower at (10,12) → world (-0.5, 0).
+//   worldX = (col - 12.5) * 1  →  col=12 → x=-0.5
+//   worldZ = (row - 10)   * 1  →  row=10 → z=0
+
+describe('TowerCombatService LOS integration (sprint 26)', () => {
+  const LOS_TOWER_ROW = 10;
+  const LOS_TOWER_COL = 12;
+  const LOS_TOWER_WORLD_X = -0.5;
+  const LOS_TOWER_WORLD_Z = 0;
+  const LOS_TURN = 1;
+
+  let losSvc: TowerCombatService;
+  let losEnemyMap: Map<string, Enemy>;
+  let losServiceSpy: jasmine.SpyObj<LineOfSightService>;
+
+  beforeEach(() => {
+    losEnemyMap = new Map();
+    losServiceSpy = jasmine.createSpyObj<LineOfSightService>('LineOfSightService', ['isVisible']);
+    losServiceSpy.isVisible.and.returnValue(true); // default: all shots pass LOS
+
+    const losEnemySpy = createEnemyServiceSpy(losEnemyMap);
+    const losBoardSpy = createGameBoardServiceSpy(25, 20, 1);
+    const losRelicSpy = createRelicServiceSpy();
+    const losPathSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset']
+    );
+    losPathSpy.getPathToExitLength.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: losEnemySpy },
+        { provide: GameBoardService, useValue: losBoardSpy },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: losRelicSpy },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+        { provide: PathfindingService, useValue: losPathSpy },
+        { provide: LineOfSightService, useValue: losServiceSpy },
+      ]
+    });
+    losSvc = TestBed.inject(TowerCombatService);
+  });
+
+  it('non-elevated board: LOS always passes — enemy is hit (no regression)', () => {
+    losSvc.registerTower(LOS_TOWER_ROW, LOS_TOWER_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', LOS_TOWER_WORLD_X, LOS_TOWER_WORLD_Z, 1000);
+    losEnemyMap.set('e1', enemy);
+
+    losSvc.fireTurn(new THREE.Scene(), LOS_TURN);
+
+    expect(enemy.health).toBeLessThan(1000);
+  });
+
+  it('raised intervening tile: enemy behind wall is not targeted', () => {
+    losServiceSpy.isVisible.and.returnValue(false); // simulate raised wall blocking LOS
+
+    losSvc.registerTower(LOS_TOWER_ROW, LOS_TOWER_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', LOS_TOWER_WORLD_X, LOS_TOWER_WORLD_Z, 1000);
+    losEnemyMap.set('e1', enemy);
+
+    losSvc.fireTurn(new THREE.Scene(), LOS_TURN);
+
+    expect(enemy.health).toBe(1000); // LOS blocked — no damage
+  });
+
+  it('elevated tower: can see over low terrain (LOS returns true)', () => {
+    losServiceSpy.isVisible.and.returnValue(true); // tower elevation clears the wall
+
+    losSvc.registerTower(LOS_TOWER_ROW, LOS_TOWER_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', LOS_TOWER_WORLD_X, LOS_TOWER_WORLD_Z, 1000);
+    losEnemyMap.set('e1', enemy);
+
+    losSvc.fireTurn(new THREE.Scene(), LOS_TURN);
+
+    expect(enemy.health).toBeLessThan(1000);
+  });
+
+  it('MORTAR bypasses LOS: isVisible is never called for MORTAR', () => {
+    // LOS spy returns false — but MORTAR is an AOE arc weapon and bypasses LOS per §12
+    losServiceSpy.isVisible.and.returnValue(false);
+
+    losSvc.registerTower(LOS_TOWER_ROW, LOS_TOWER_COL, TowerType.MORTAR, new THREE.Group());
+    const enemy = createTestEnemy('e1', LOS_TOWER_WORLD_X, LOS_TOWER_WORLD_Z, 1000);
+    losEnemyMap.set('e1', enemy);
+
+    losSvc.fireTurn(new THREE.Scene(), LOS_TURN);
+
+    // MORTAR bypasses isVisible entirely per elevation-model.md §12
+    expect(losServiceSpy.isVisible).not.toHaveBeenCalled();
   });
 });
