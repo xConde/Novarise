@@ -1896,6 +1896,55 @@ Worst case: a cliff mesh leaks (no disposal path through the mutation swap) and 
 ## Deployment Checklist — Phase 3 Close (2026-04-18)
 
 - [x] Step 1: Verify Finding 2 (cliff-mesh-on-mutation) is closed by Finding 1's elevation-preservation fix — added integration spec `G4` in `highground-integration.spec.ts`: raise → block → revert → elevation still 2, tile type cycles correctly, journal is in sync.
-- [ ] Step 2: Append a "Devil's Advocate — Phase 3 Close" section to STRATEGIC_AUDIT.md with 4 phase-3 critiques and 4 phase-4 predictions. Mirror the format of the Phase 2 Close section.
-- [ ] Step 3: Update `MEMORY.md` with the Phase 3 close test count (6423+ passing) and add a pointer to the new `project_phase4_kickoff.md` handoff doc.
-- [ ] Step 4: Write `project_phase4_kickoff.md` — mandatory prep items for Phase 4 Conduit (sprints 41–56), deferred-item carryover list (terraform shimmer, avalanche debris, `ElevationService.reset()` prophylaxis), predicted blow-ups.
+- [x] Step 2: Appended "Devil's Advocate — Phase 3 Close" section with 4 phase-3 critiques (`setTileType` composition gap, damage-stack complexity, TITAN's approximate formula, cliff-mesh lifecycle fragility) and 4 phase-4 predictions (linkSlot composition, FORMATION ordering, link-mesh disposal, chip flip per-transition color).
+- [x] Step 3: Updated `MEMORY.md` with Phase-3 close line (6423 passing / +418 over Phase 2 baseline) + added pointer to `project_phase4_kickoff.md`. Appended Phase-3 Finding 1 lesson to the Red-Team Lessons list: cross-service composition on shared `GameBoardTile` fields is latent; any new tile-level field must preserve prior fields on factory reconstruction.
+- [x] Step 4: Wrote `project_phase4_kickoff.md` — Phase 3 shipped summary, open playtest questions (damage-stack complexity, TITAN formula, cliff-mesh service extraction), deferred items, Phase 4 mandatory prep (adjacency graph spike + `composeDamageStack` refactor), predicted blow-ups, load-bearing non-regressions, three startup commands.
+
+---
+
+## Devil's Advocate — Phase 3 Close (2026-04-18)
+
+Adversarial review of what shipped in Phase 3 (Highground archetype, sprints 25–40 + spike + chip animation). Same format as the Phase 2 close.
+
+### What would have made Phase 3 stronger?
+
+**1. The `setTileType` elevation-strip was latent for 13 sprints before the integration spec caught it.**
+Finding 1 of the red-team gate was a Phase 2 × Phase 3 composition bug: `GameBoardService.setTileType` dropped the elevation field on every path mutation. Every per-sprint unit spec passed. Every Cartographer regression spec passed. Only the sprint-40 integration spec composed the two services on the same tile and surfaced the divergence. The lesson: **per-service specs are insufficient when two services share a data record**. Phase 2 shipped `mutationOp` and `priorType`; Phase 3 shipped `elevation`; both live on `GameBoardTile`, but no spec anywhere asserted the cross-service composition until sprint 40. This should be a Phase 4 entry criterion: the primitives sprint (41) includes a composition spec between `GameBoardTile.linkSlot` (Conduit's new field) and every existing field on the tile BEFORE any card code opens.
+
+**2. HIGH_PERCH and VANTAGE_POINT silently drive five-multiplier damage formulas that are impossible to reason about without pulling up the source file.**
+The final damage composition in `TowerCombatService.fireTurn` is now: `base × towerDamageMult × relicDamage × (1 + cardDamageBoost) × sniperBoost × cardDamageMult × pathLengthMult × vantagePointDmgMult × kothMult`. Eight multiplicative stages. Each was introduced atomically and guarded by a unit spec, but there is no single document, constant block, or comment that lists the full stack in order. A player reporting "my tower damage feels wrong with 3 relics + HIGH_PERCH + KOTH on wave 10" would need an implementer to trace 8 lines across 3 files. Phase 3's contribution (VP, KOTH) doubled this surface and did not refactor the chain into a named pipeline. Phase 4 Conduit is about to add network-buff propagation — probably another 2-3 multipliers. Recommendation: before phase-4 primitives open, extract the per-tower damage-stack composition into a named function `composeDamageStack(tower, context)` with each stage explicit and commented. Moving complexity behind a name doesn't fix it, but it makes the total surface visible.
+
+**3. TITAN's damage-halving logic mathematically *approximates* the design intent but is not what the plan said.**
+Plan §archetype-38: *"elevation bonuses halved against it."* Implementation: TITAN recomputes damage at the fire site by isolating the elevation-derived portion of the multiplier (VP × KOTH), halving that portion, adding it to the baseline. This works for the two existing elevation-bonus sources, but the formula is *not* "halve elevation bonuses" in general — it is "halve the combined VP×KOTH multiplier portion." If Phase 3 ever ships a third elevation damage bonus (a future relic, or a different card), TITAN's formula will silently exclude it. The correct shape is either (a) a list of named "elevation-origin" multipliers whose union the TITAN formula halves, or (b) a per-tower `elevationDamageBonus` aggregate that the formula halves. Today it's an inlined special case. Sprint 79 balance pass should refactor.
+
+**4. Cliff mesh lifecycle is correct today but fragile.**
+Sprint 39's cliff management lives inside `ElevationService.applyElevation` and `revertChange`. The restore path hooks in `GameBoardComponent.restoreFromCheckpoint` Step 3.6. `GameSessionService.cleanupScene` disposes on teardown. Four call sites, three services. If any of them is modified without touching all three, cliffs leak. The architecturally clean answer is a dedicated `CliffMeshService` that owns the cliff lifecycle and is wired to `ElevationService` via a hook (like `PathMutationService.setRepathHook`). Today's implementation isn't broken — sprint 40's QA confirmed it — but the coupling between ElevationService (state), BoardMeshRegistryService (storage), and TerraformMaterialPoolService (materials) is what the disposal-audit checklist is supposed to be automating. It isn't. Phase 4 should add a lightweight "Three.js object leak audit" spec that compares `renderer.info.memory.geometries` before and after a full Phase 3 encounter cycle.
+
+---
+
+### What's the next most likely thing to break in Phase 4 (Conduit)?
+
+**1. Tower adjacency graph will want a `linkSlots` field on `GameBoardTile` OR on `PlacedTower`, and the same "orthogonal composition bug" from Finding 1 will recur if we pick tile.**
+Conduit (sprints 41–56) tracks adjacency between towers and propagates buffs along links. The natural data shape is `linkSlot` and `linkedNeighbors[]` on the tower, not the tile. But if any designer argues "it's a board-level concept, put it on the tile" (and someone will), we'll repeat Finding 1: `setTileType`, `placeTower`, `removeTower` all construct fresh tiles. Any tile-level link state will silently wipe on tile churn. Recommendation: lock the decision in the Phase 4 design spike (sprint 40.5 equivalent). Link state lives on `PlacedTower`, not `GameBoardTile`. `TowerGraphService` rebuilds graph state on every `registerTower` / `unregisterTower` — no field serialization needed beyond what `PlacedTower` already carries.
+
+**2. Conduit's "towers in a row of 3+ gain +1 range" reads as an integer boost, but FORMATION composed with the existing `elevationRangeMult × highPerchMult` stack may go non-linear in surprising ways.**
+Example: tower at elevation 2 (×1.5) + HIGH_PERCH active (×1.25) + FORMATION (+1 tile range additive? or +N%?). If FORMATION is additive-to-base, the order of operations matters: `(base + 1) × 1.5 × 1.25` vs `base × 1.5 × 1.25 + 1`. The plan is silent on this (FORMATION isn't specified yet). Phase 4 primitives sprint should lock the "additive before multiplicative" convention explicitly, with a regression spec.
+
+**3. Link visualization (sprint 42) WILL leak meshes unless the disposal audit is proactive.**
+`LinkMeshService` (or wherever adjacency lines live) will create a `THREE.Line` per link, a shared material per link type, and an `InstancedMesh` for aura orbs. Three sources of disposal: (a) on tower unregister, (b) on `GameSessionService.cleanupScene`, (c) on encounter restart. Every cliff-mesh bug from Phase 3 will replay on links. Recommendation: make the adjacency-graph primitive sprint (41) introduce a `Three.jsResourceTracker` utility class (base class or strategy pattern) that every per-primitive mesh owner implements. Formalize the disposal contract up front.
+
+**4. The dominant-archetype chip assumes 4 archetypes; adding 'conduit' as a full archetype is fine, but the deck-leaning flip animation now fires on 4×4 = 16 possible transitions. Visual tuning per-transition is untested.**
+Phase 3 shipped the chip flip but never tested a neutral→conduit or cartographer→conduit transition (conduit deck cards don't exist yet). The animation is the same keyframe regardless of direction. That's fine for correctness, but the glow color (`--archetype-accent`) morphs from the previous archetype's color to the new one's via CSS — and the CSS `animation` property samples color at keyframe time, which is post-transition. Result: the flip glows in the NEW archetype's color the entire 600ms, not the transitioning color. Cosmetic; documented as a phase-4 polish item, not a bug.
+
+---
+
+### What was deferred — is Phase 4 blocked by it?
+
+**Deferred items from Phase 3:**
+- **Terraform shimmer polish (sprint 23 carryover, re-deferred from sprint 39):** still not shipped. Phase 4 is not blocked — the terraform material pool is shared infrastructure, not polish-gated. Fold into sprint 55 (Conduit VFX pass) or skip to sprint 77 polish.
+- **Avalanche debris VFX (sprint 39 skipped):** not shipped. Not blocking — AVALANCHE_ORDER already deals its damage + collapses without the cosmetic. Sprint 55 or later.
+- **`ElevationService.reset()` prophylactic board-clearing (Finding 3):** flagged as design-time, not a bug. Phase 4 is not blocked. Add to sprint 56 QA as a low-severity correctness spec — currently relies on component teardown to zero board elevations; a future perf refactor that reuses board arrays would regress silently. Prophylactic test would catch it.
+- **Balance tuning:** Phase 3 cost curve is codified by invariants, not playtested. Same status as Phase 2. Phase 4 is not blocked; sprint 79 balance pass accumulates carryovers.
+- **WYRM_ASCENDANT wave placement:** currently in wave 10 alongside VEINSEEKER (hard cohabitation). If Phase 4 or balance PR adds wave 15/20 boss slots, migrate WYRM out. Tracked in the sprint-39 commit body TODO.
+
+**Verdict:** Phase 4 can proceed. The carryover list is **smaller** than Phase 2's close — Phase 3's red-team gate surfaced exactly one production-blocking bug (Finding 1), which was fixed this phase. The composition-spec lesson should become a Phase 4 entry criterion. The damage-stack refactor (critique #2) and the cliff-mesh-service extraction (critique #4) are polish backlog — neither gates Phase 4 primitives or card work.
