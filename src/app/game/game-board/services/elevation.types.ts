@@ -30,7 +30,8 @@ export type ElevationRejectionReason =
   | 'spawner-or-exit'
   | 'out-of-range'                // exceeds MAX_ELEVATION or MAX_DEPRESS
   | 'already-changed-this-turn'   // anti-spam: one change per (row,col) per turn
-  | 'no-op';                      // newElevation === priorElevation
+  | 'no-op'                       // newElevation === priorElevation
+  | 'not-elevated';               // AVALANCHE_ORDER: target tile must have elevation ≥ 1
 
 export interface ElevationResult {
   readonly ok: boolean;

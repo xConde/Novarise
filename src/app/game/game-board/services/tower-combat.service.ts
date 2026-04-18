@@ -215,9 +215,15 @@ export class TowerCombatService {
     // highPerchBonus is summed across all stacked copies via getModifierValue.
     const highPerchBonus = this.cardEffectService.getModifierValue(MODIFIER_STAT.HIGH_PERCH_RANGE_BONUS);
 
+    // Sprint 31 VANTAGE_POINT — wave-scoped damage bonus for elevated towers
+    // (elevation ≥ VANTAGE_POINT_ELEVATION_THRESHOLD = 1). Additive across
+    // stacked copies via getModifierValue; applied multiplicatively per-tower.
+    const vantagePointBonus = this.cardEffectService.getModifierValue(MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS);
+
     const hasCardModifiers =
       cardDamageBoost !== 0 || cardRangeBoost !== 0 || sniperDamageBoost !== 0
-      || pathLengthMultiplier !== 1 || hasElevation || highPerchBonus !== 0;
+      || pathLengthMultiplier !== 1 || hasElevation || highPerchBonus !== 0
+      || vantagePointBonus !== 0;
 
     // Deterministic firing order: row then col.
     const towerList = Array.from(this.placedTowers.values()).sort((a, b) => {
@@ -234,15 +240,6 @@ export class TowerCombatService {
         const relicRange = this.relicService.getRangeMultiplier(tower.type);
         const sniperBoost = (tower.type === TowerType.SNIPER && sniperDamageBoost !== 0) ? (1 + sniperDamageBoost) : 1;
         const cardDamageMult = tower.cardStatOverrides?.damageMultiplier ?? 1;
-        this.scratchStats.damage = Math.round(
-          baseStats.damage
-            * towerDamageMultiplier
-            * relicDamage
-            * (1 + cardDamageBoost)
-            * sniperBoost
-            * cardDamageMult
-            * pathLengthMultiplier,
-        );
         const cardRangeMult = tower.cardStatOverrides?.rangeMultiplier ?? 1;
         // Sprint 29 — passive elevation range bonus: every elevation unit adds
         // RANGE_BONUS_PER_ELEVATION (0.25) to the range multiplier. A tower at
@@ -259,6 +256,24 @@ export class TowerCombatService {
         const highPerchActive = highPerchBonus > 0
           && towerElevation >= ELEVATION_CONFIG.HIGH_PERCH_ELEVATION_THRESHOLD;
         const highPerchMult = highPerchActive ? (1 + highPerchBonus) : 1;
+        // Sprint 31 VANTAGE_POINT — conditional damage bonus for towers on
+        // elevation ≥ VANTAGE_POINT_ELEVATION_THRESHOLD (1). A flat board or a
+        // tower on elevation 0 does NOT benefit even when the modifier is active.
+        // Composed multiplicatively: VANTAGE_POINT stacks with other damage boosts
+        // (relic, card modifier) rather than adding to the same pool.
+        const vantagePointActive = vantagePointBonus > 0
+          && towerElevation >= ELEVATION_CONFIG.VANTAGE_POINT_ELEVATION_THRESHOLD;
+        const vantagePointDmgMult = vantagePointActive ? (1 + vantagePointBonus) : 1;
+        this.scratchStats.damage = Math.round(
+          baseStats.damage
+            * towerDamageMultiplier
+            * relicDamage
+            * (1 + cardDamageBoost)
+            * sniperBoost
+            * cardDamageMult
+            * pathLengthMultiplier
+            * vantagePointDmgMult,
+        );
         this.scratchStats.range = baseStats.range * relicRange * (1 + cardRangeBoost) * cardRangeMult * elevationRangeMult * highPerchMult;
         this.scratchStats.cost = baseStats.cost;
         const cardSplashMult = tower.cardStatOverrides?.splashRadiusMultiplier ?? 1;

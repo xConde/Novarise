@@ -231,6 +231,31 @@ const CARD_VALUES = {
   highPerchUpgradedBonus: 0.4,   // +40% range when upgraded
   highPerchThreshold: 2,         // minimum elevation to qualify for the bonus
   highPerchDuration: 1,          // wave countdown duration (one wave)
+
+  // ── Highground archetype — CLIFFSIDE (Sprint 30) ────────────────────────
+  // CLIFFSIDE (2E uncommon): raise a horizontal 3-tile line by +1.
+  // Upgrade: 5-tile line (center + 2 wings each side).
+  cliffsideCost: 2,
+  cliffsideLineLength: 3,               // base: center + 1 wing on each side
+  cliffsideUpgradedLineLength: 5,       // upgraded: center + 2 wings on each side
+  cliffsideRaiseAmount: 1,              // elevation delta per tile in the line
+
+  // ── Highground archetype — VANTAGE_POINT (Sprint 31) ───────────────────
+  // VANTAGE_POINT (2E uncommon): all elevated towers (elevation ≥ 1) gain
+  // +50% damage for this wave. NOT terraform.
+  vantagePointCost: 2,
+  vantagePointBonus: 0.5,               // +50% damage (base)
+  vantagePointUpgradedBonus: 0.75,      // +75% damage (upgraded)
+  vantagePointElevationThreshold: 1,    // tower must be on elevation ≥ 1
+  vantagePointDuration: 1,              // wave countdown (one wave, mirrors highPerchDuration)
+
+  // ── Highground archetype — AVALANCHE_ORDER (Sprint 32) ─────────────────
+  // AVALANCHE_ORDER (2E uncommon): target an elevated tile (elevation ≥ 1).
+  // Enemies on tile take (elevation × damagePerElevation) instant damage.
+  // After damage, tile collapses to elevation 0.
+  avalancheOrderCost: 2,
+  avalancheDamagePerElevation: 10,      // base: 10 damage per elevation unit
+  avalancheUpgradedDamagePerElevation: 15, // upgraded: 15 damage per elevation unit
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -1448,6 +1473,131 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     },
     archetype: 'highground' as const,
     terraform: false,
+  },
+
+  // ── Highground archetype — uncommon cards (Sprints 30/31/32) ─────────────
+
+  /**
+   * CLIFFSIDE (Sprint 30) — raise a 3-tile horizontal line by +1 elevation.
+   * Center tile must be valid; wings (east + west neighbors) that hit SPAWNER,
+   * EXIT, or out-of-bounds are silently skipped (partial success).
+   * Upgrade: 5-tile line (center + 2 wings on each side).
+   *
+   * Uses the `line` field on ElevationTargetCardEffect to signal multi-tile
+   * expansion in resolveElevationTarget. Marked terraform: true (modifies tile
+   * elevation state). elevation-model.md §3 confirms Highground shares this keyword.
+   */
+  [CardId.CLIFFSIDE]: {
+    id: CardId.CLIFFSIDE,
+    name: 'Cliffside',
+    description: 'Raise a horizontal 3-tile line by +1. Wings that hit spawn/exit are skipped.',
+    upgradedDescription: 'Raise a horizontal 5-tile line by +1. Wings that hit spawn/exit are skipped.',
+    type: CardType.SPELL,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.cliffsideCost,
+    upgraded: false,
+    effect: {
+      type: 'elevation_target',
+      op: 'raise',
+      amount: CARD_VALUES.cliffsideRaiseAmount,
+      duration: null,
+      line: {
+        direction: 'horizontal',
+        length: CARD_VALUES.cliffsideLineLength,
+      },
+    } satisfies ElevationTargetCardEffect,
+    upgradedEffect: {
+      type: 'elevation_target',
+      op: 'raise',
+      amount: CARD_VALUES.cliffsideRaiseAmount,
+      duration: null,
+      line: {
+        direction: 'horizontal',
+        length: CARD_VALUES.cliffsideUpgradedLineLength,
+      },
+    } satisfies ElevationTargetCardEffect,
+    archetype: 'highground',
+    terraform: true,
+  },
+
+  /**
+   * VANTAGE_POINT (Sprint 31) — all elevated towers (elevation ≥ 1) gain
+   * +50% damage for this wave. Modifier card, NOT terraform.
+   *
+   * Duration 1 = one-wave countdown (mirrors HIGH_PERCH pattern).
+   * Uses VANTAGE_POINT_DAMAGE_BONUS modifier stat, read per-tower in
+   * TowerCombatService.fireTurn after elevationRangeMult.
+   *
+   * NOT terraform: VANTAGE_POINT is a pure damage modifier — it reads elevation
+   * as a predicate but does not mutate tile state. Follows LABYRINTH_MIND /
+   * HIGH_PERCH / DETOUR precedent (terraform: false for modifiers that read
+   * but do not write board state).
+   */
+  [CardId.VANTAGE_POINT]: {
+    id: CardId.VANTAGE_POINT,
+    name: 'Vantage Point',
+    description: 'Elevated towers (elevation ≥ 1) gain +50% damage for this wave.',
+    upgradedDescription: 'Elevated towers (elevation ≥ 1) gain +75% damage for this wave.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.vantagePointCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS,
+      value: CARD_VALUES.vantagePointBonus,
+      duration: CARD_VALUES.vantagePointDuration,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS,
+      value: CARD_VALUES.vantagePointUpgradedBonus,
+      duration: CARD_VALUES.vantagePointDuration,
+    },
+    archetype: 'highground' as const,
+    terraform: false,
+  },
+
+  /**
+   * AVALANCHE_ORDER (Sprint 32) — target an elevated tile (elevation ≥ 1).
+   * Enemies on the tile take (elevation × damagePerElevation) instant damage
+   * BEFORE the collapse, so the prior elevation is intact at damage time. The
+   * tile then collapses to elevation 0.
+   *
+   * Rejection: if target tile elevation is 0, card rejects with 'not-elevated'.
+   * The `damageOnHit.damagePerElevation` rider signals to resolveElevationTarget
+   * that damage should be applied prior to the collapse call (order matters).
+   *
+   * Timing note: damageEnemy is called BEFORE elevationService.collapse so the
+   * "exposed" multiplier in EnemyService.damageEnemy does NOT double-fire —
+   * the tile is still at positive elevation during the damage call, so the
+   * exposed (negative elevation) check is false.
+   */
+  [CardId.AVALANCHE_ORDER]: {
+    id: CardId.AVALANCHE_ORDER,
+    name: 'Avalanche Order',
+    description: 'Target an elevated tile. Enemies on it take (elevation × 10) damage, then the tile collapses.',
+    upgradedDescription: 'Target an elevated tile. Enemies on it take (elevation × 15) damage, then the tile collapses.',
+    type: CardType.SPELL,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.avalancheOrderCost,
+    upgraded: false,
+    effect: {
+      type: 'elevation_target',
+      op: 'collapse',
+      amount: 0,  // collapse ignores amount — always sets to 0
+      duration: null,
+      damageOnHit: { damagePerElevation: CARD_VALUES.avalancheDamagePerElevation },
+    } satisfies ElevationTargetCardEffect,
+    upgradedEffect: {
+      type: 'elevation_target',
+      op: 'collapse',
+      amount: 0,
+      duration: null,
+      damageOnHit: { damagePerElevation: CARD_VALUES.avalancheUpgradedDamagePerElevation },
+    } satisfies ElevationTargetCardEffect,
+    archetype: 'highground',
+    terraform: true,
   },
 };
 

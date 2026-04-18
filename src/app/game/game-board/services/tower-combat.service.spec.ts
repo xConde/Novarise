@@ -3346,3 +3346,151 @@ describe('TowerCombatService elevation range multiplier (sprint 29)', () => {
     });
   });
 });
+
+// ── Sprint 31 — VANTAGE_POINT damage bonus integration ────────────────────────
+
+describe('TowerCombatService VANTAGE_POINT damage bonus (sprint 31)', () => {
+  // Reuse the same anchor constants as the elevation range suite.
+  const VP_ROW = 10;
+  const VP_COL = 12;
+  const VP_WORLD_X = -0.5;
+  const VP_WORLD_Z = 0;
+  const VP_TURN = 1;
+  const VP_STAT = MODIFIER_STAT.VANTAGE_POINT_DAMAGE_BONUS;
+
+  const BASE_BASIC_DAMAGE = TOWER_CONFIGS[TowerType.BASIC].damage;
+  const BASE_BASIC_RANGE  = TOWER_CONFIGS[TowerType.BASIC].range;
+
+  let vpSvc: TowerCombatService;
+  let vpEnemyMap: Map<string, Enemy>;
+  let vpElevationSpy: jasmine.SpyObj<ElevationService>;
+  let vpCardEffectSpy: jasmine.SpyObj<CardEffectService>;
+
+  function buildVpTestBed(tileElevations: Map<string, number>, maxElevation: number): void {
+    vpEnemyMap = new Map();
+    vpElevationSpy = createElevationServiceSpy(tileElevations, maxElevation);
+    vpCardEffectSpy = createCardEffectServiceSpy();
+
+    const vpPathSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService', ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset']
+    );
+    vpPathSpy.getPathToExitLength.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(vpEnemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: vpCardEffectSpy },
+        { provide: PathfindingService, useValue: vpPathSpy },
+        { provide: ElevationService, useValue: vpElevationSpy },
+      ],
+    });
+    vpSvc = TestBed.inject(TowerCombatService);
+  }
+
+  it('VANTAGE_POINT active + tower at elevation 2 → damage × 1.5', () => {
+    const tileMap = new Map([[ `${VP_ROW}-${VP_COL}`, 2 ]]);
+    buildVpTestBed(tileMap, 2);
+
+    // VP bonus 0.5 → damage multiplier = 1 + 0.5 = 1.5
+    vpCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0
+    );
+
+    vpSvc.registerTower(VP_ROW, VP_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', VP_WORLD_X, VP_WORLD_Z, 10000);
+    vpEnemyMap.set('e1', enemy);
+
+    vpSvc.fireTurn(new THREE.Scene(), VP_TURN);
+
+    expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 1.5));
+  });
+
+  it('VANTAGE_POINT active + tower at elevation 0 → no damage bonus (threshold not met)', () => {
+    // Flat board: maxElevation=0 → hasElevation=false; towerElevation=0; VP does not apply.
+    buildVpTestBed(new Map(), 0);
+
+    vpCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.5 : 0
+    );
+
+    vpSvc.registerTower(VP_ROW, VP_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', VP_WORLD_X, VP_WORLD_Z, 10000);
+    vpEnemyMap.set('e1', enemy);
+
+    vpSvc.fireTurn(new THREE.Scene(), VP_TURN);
+
+    // Base damage only — VP threshold of elevation ≥ 1 not met.
+    expect(10000 - enemy.health).toBe(BASE_BASIC_DAMAGE);
+  });
+
+  it('VANTAGE_POINT inactive → no bonus regardless of elevation', () => {
+    const tileMap = new Map([[ `${VP_ROW}-${VP_COL}`, 3 ]]);
+    buildVpTestBed(tileMap, 3);
+    // getModifierValue returns 0 for all stats by default (no VP active)
+
+    vpSvc.registerTower(VP_ROW, VP_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', VP_WORLD_X, VP_WORLD_Z, 10000);
+    vpEnemyMap.set('e1', enemy);
+
+    vpSvc.fireTurn(new THREE.Scene(), VP_TURN);
+
+    // No VP bonus: damage is base only (no VP; elevation range bonus doesn't affect damage)
+    expect(10000 - enemy.health).toBe(BASE_BASIC_DAMAGE);
+  });
+
+  it('VANTAGE_POINT + HIGH_PERCH composition: damage × 1.5, range × 1.5 × 1.25 = 1.875×', () => {
+    // Tower at elevation 2 → passive range 1.5×; HIGH_PERCH 0.25 → range 1.875×;
+    // VP 0.5 → damage 1.5×. Both apply independently in their respective hook.
+    const tileMap = new Map([[ `${VP_ROW}-${VP_COL}`, 2 ]]);
+    buildVpTestBed(tileMap, 2);
+
+    const HP_STAT = MODIFIER_STAT.HIGH_PERCH_RANGE_BONUS;
+    vpCardEffectSpy.getModifierValue.and.callFake((stat: string) => {
+      if (stat === VP_STAT) return 0.5;
+      if (stat === HP_STAT) return 0.25;
+      return 0;
+    });
+
+    vpSvc.registerTower(VP_ROW, VP_COL, TowerType.BASIC, new THREE.Group());
+
+    // Enemy within 1.875× range but beyond 1.5× — only reachable via HIGH_PERCH range bonus.
+    const rangeAt150 = BASE_BASIC_RANGE * 1.5;
+    const rangeAt1875 = BASE_BASIC_RANGE * 1.875;
+    const enemy = createTestEnemy('e1', VP_WORLD_X + rangeAt150 + 0.1, VP_WORLD_Z, 10000);
+    vpEnemyMap.set('e1', enemy);
+
+    expect(rangeAt150 + 0.1).toBeLessThan(rangeAt1875);
+
+    vpSvc.fireTurn(new THREE.Scene(), VP_TURN);
+
+    // Hit (range satisfied) with 1.5× damage.
+    expect(enemy.health).toBeLessThan(10000);
+    expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 1.5));
+  });
+
+  it('upgraded VANTAGE_POINT (0.75) + tower at elevation 1 → damage × 1.75', () => {
+    // Elevation 1 ≥ threshold (1) → VP applies. 0.75 bonus → multiplier = 1.75.
+    const tileMap = new Map([[ `${VP_ROW}-${VP_COL}`, 1 ]]);
+    buildVpTestBed(tileMap, 1);
+
+    vpCardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === VP_STAT ? 0.75 : 0
+    );
+
+    vpSvc.registerTower(VP_ROW, VP_COL, TowerType.BASIC, new THREE.Group());
+    const enemy = createTestEnemy('e1', VP_WORLD_X, VP_WORLD_Z, 10000);
+    vpEnemyMap.set('e1', enemy);
+
+    vpSvc.fireTurn(new THREE.Scene(), VP_TURN);
+
+    expect(10000 - enemy.health).toBe(Math.round(BASE_BASIC_DAMAGE * 1.75));
+  });
+});

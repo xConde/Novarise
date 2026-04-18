@@ -41,6 +41,15 @@ export const MODIFIER_STAT = {
   // receives (1 + value) range multiplier on top of the passive elevation bonus.
   // HIGH_PERCH (1E common) uses duration=1 (one-wave countdown).
   HIGH_PERCH_RANGE_BONUS: 'highPerchRangeBonus',
+
+  // Phase 3 Sprint 31 — VANTAGE_POINT modifier (uncommon).
+  //
+  // Numeric stat: +50% (base) / +75% (upgraded) damage for all elevated towers
+  // (elevation ≥ VANTAGE_POINT_ELEVATION_THRESHOLD = 1) for the current wave.
+  // Additive across stacked copies via getModifierValue, applied multiplicatively
+  // in TowerCombatService.fireTurn after elevationRangeMult.
+  // Uses duration=1 (one-wave countdown, mirrors HIGH_PERCH pattern).
+  VANTAGE_POINT_DAMAGE_BONUS: 'vantagePointDamageBonus',
 } as const;
 
 export type ModifierStat = typeof MODIFIER_STAT[keyof typeof MODIFIER_STAT];

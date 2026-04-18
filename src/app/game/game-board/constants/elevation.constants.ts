@@ -26,4 +26,12 @@ export const ELEVATION_CONFIG = {
    * CARD_VALUES.highPerchThreshold — both must remain in sync.
    */
   HIGH_PERCH_ELEVATION_THRESHOLD: 2,
+
+  /**
+   * Minimum elevation a tower must be on to qualify for the VANTAGE_POINT
+   * damage bonus (sprint 31). A tower on a flat tile (elevation 0) does NOT
+   * benefit even when VANTAGE_POINT is active. Mirror of
+   * CARD_VALUES.vantagePointElevationThreshold — both must stay in sync.
+   */
+  VANTAGE_POINT_ELEVATION_THRESHOLD: 1,
 } as const;

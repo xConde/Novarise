@@ -1208,6 +1208,321 @@ describe('CardPlayService', () => {
         expect(service.hasPendingCard()).toBeFalse();
       });
     });
+
+    // ── Sprint 30 — CLIFFSIDE horizontal line expansion ────────────────────────
+
+    describe('CLIFFSIDE — horizontal line expansion (sprint 30)', () => {
+      // These tests set pendingElevationTargetCard to a real CLIFFSIDE instance
+      // so getCardDefinition resolves energyCost correctly.
+      const CLIFF_INSTANCE_ID = 'cliff-test-instance';
+
+      function makeCliffsideInstance(id = CLIFF_INSTANCE_ID): CardInstance {
+        return { instanceId: id, cardId: CardId.CLIFFSIDE, upgraded: false };
+      }
+
+      beforeEach(() => {
+        // Wire the real ElevationService spy (raise returns ok: true by default).
+        elevationSpy.raise.and.returnValue({ ok: true, newElevation: 1 });
+        // Ensure enough energy for the 2E card.
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+      });
+
+      it('happy path: raises center + east + west (3-tile line)', () => {
+        // CLIFFSIDE base: center(2,5) + east(2,6) + west(2,4) all raised.
+        const card = makeCliffsideInstance('cliff-1');
+        service['pendingElevationTargetCard'] = card;
+        service['pendingElevationTargetEffect'] = {
+          type: 'elevation_target',
+          op: 'raise',
+          amount: 1,
+          duration: null,
+          line: { direction: 'horizontal', length: 3 },
+        };
+
+        const result = service.resolveTileTarget(2, 5, mockScene, currentTurn);
+
+        expect(result.ok).toBeTrue();
+        // Center at (2,5)
+        expect(elevationSpy.raise).toHaveBeenCalledWith(2, 5, 1, null, 'cliff-1', currentTurn);
+        // East wing (2,6)
+        expect(elevationSpy.raise).toHaveBeenCalledWith(2, 6, 1, null, 'cliff-1', currentTurn);
+        // West wing (2,4)
+        expect(elevationSpy.raise).toHaveBeenCalledWith(2, 4, 1, null, 'cliff-1', currentTurn);
+        expect(deckSpy.playCard).toHaveBeenCalledWith('cliff-1');
+      });
+
+      it('wing hits spawner/exit — center + valid wing succeed, invalid wing skipped', () => {
+        // East wing (2,6) fails; center (2,5) and west wing (2,4) succeed.
+        elevationSpy.raise.and.callFake((row: number, col: number) => {
+          if (col === 6) return { ok: false, reason: 'spawner-or-exit' as const };
+          return { ok: true, newElevation: 1 };
+        });
+
+        const card = makeCliffsideInstance('cliff-skip-wing');
+        service['pendingElevationTargetCard'] = card;
+        service['pendingElevationTargetEffect'] = {
+          type: 'elevation_target',
+          op: 'raise',
+          amount: 1,
+          duration: null,
+          line: { direction: 'horizontal', length: 3 },
+        };
+
+        const result = service.resolveTileTarget(2, 5, mockScene, currentTurn);
+
+        // Center succeeded → card resolves successfully (partial-success model).
+        expect(result.ok).toBeTrue();
+        expect(deckSpy.playCard).toHaveBeenCalledWith('cliff-skip-wing');
+        // Center and west wing raised; east wing attempted but rejected.
+        expect(elevationSpy.raise).toHaveBeenCalledWith(2, 5, 1, null, 'cliff-skip-wing', currentTurn);
+        expect(elevationSpy.raise).toHaveBeenCalledWith(2, 6, 1, null, 'cliff-skip-wing', currentTurn);
+        expect(elevationSpy.raise).toHaveBeenCalledWith(2, 4, 1, null, 'cliff-skip-wing', currentTurn);
+      });
+
+      it('center is spawner/exit — rejects without raising any tile', () => {
+        elevationSpy.raise.and.returnValue({ ok: false, reason: 'spawner-or-exit' as const });
+
+        const card = makeCliffsideInstance('cliff-center-fail');
+        service['pendingElevationTargetCard'] = card;
+        service['pendingElevationTargetEffect'] = {
+          type: 'elevation_target',
+          op: 'raise',
+          amount: 1,
+          duration: null,
+          line: { direction: 'horizontal', length: 3 },
+        };
+
+        const result = service.resolveTileTarget(0, 0, mockScene, currentTurn);
+
+        expect(result.ok).toBeFalse();
+        expect(result.reason).toBe('spawner-or-exit');
+        // Pending state preserved — player can retry on a different tile.
+        expect(service['pendingElevationTargetCard']).not.toBeNull();
+        expect(deckSpy.playCard).not.toHaveBeenCalled();
+      });
+
+      it('board edge — OOB wings skipped, center + valid wing succeed', () => {
+        // Center (2,0) at left edge; west wing (2,-1) is OOB; east wing (2,1) ok.
+        elevationSpy.raise.and.callFake((row: number, col: number) => {
+          if (col < 0) return { ok: false, reason: 'out-of-bounds' as const };
+          return { ok: true, newElevation: 1 };
+        });
+
+        const card = makeCliffsideInstance('cliff-edge');
+        service['pendingElevationTargetCard'] = card;
+        service['pendingElevationTargetEffect'] = {
+          type: 'elevation_target',
+          op: 'raise',
+          amount: 1,
+          duration: null,
+          line: { direction: 'horizontal', length: 3 },
+        };
+
+        const result = service.resolveTileTarget(2, 0, mockScene, currentTurn);
+
+        expect(result.ok).toBeTrue();
+        expect(deckSpy.playCard).toHaveBeenCalledWith('cliff-edge');
+      });
+
+      it('upgraded CLIFFSIDE: 5 tiles — center + 2 wings each side', () => {
+        const card = makeCliffsideInstance('cliff-upgraded');
+        service['pendingElevationTargetCard'] = card;
+        service['pendingElevationTargetEffect'] = {
+          type: 'elevation_target',
+          op: 'raise',
+          amount: 1,
+          duration: null,
+          line: { direction: 'horizontal', length: 5 },
+        };
+
+        service.resolveTileTarget(5, 10, mockScene, currentTurn);
+
+        // Center (5,10), +1(5,11), -1(5,9), +2(5,12), -2(5,8)
+        expect(elevationSpy.raise).toHaveBeenCalledWith(5, 10, 1, null, 'cliff-upgraded', currentTurn);
+        expect(elevationSpy.raise).toHaveBeenCalledWith(5, 11, 1, null, 'cliff-upgraded', currentTurn);
+        expect(elevationSpy.raise).toHaveBeenCalledWith(5, 9, 1, null, 'cliff-upgraded', currentTurn);
+        expect(elevationSpy.raise).toHaveBeenCalledWith(5, 12, 1, null, 'cliff-upgraded', currentTurn);
+        expect(elevationSpy.raise).toHaveBeenCalledWith(5, 8, 1, null, 'cliff-upgraded', currentTurn);
+        expect(elevationSpy.raise).toHaveBeenCalledTimes(5);
+      });
+    });
+
+    // ── Sprint 32 — AVALANCHE_ORDER collapse + damage ──────────────────────────
+
+    describe('AVALANCHE_ORDER — collapse + per-elevation damage (sprint 32)', () => {
+      // These tests use the real AVALANCHE_ORDER CardId so getCardDefinition resolves correctly.
+      function makeAvalancheInstance(id: string): CardInstance {
+        return { instanceId: id, cardId: CardId.AVALANCHE_ORDER, upgraded: false };
+      }
+
+      beforeEach(() => {
+        // Ensure enough energy for the 2E card.
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+        // Default: elevation=0 (test overrides as needed).
+        elevationSpy.getElevation.and.returnValue(0);
+      });
+
+      // Helper: set up the elevation spy to return a given elevation for (row, col).
+      function stubElevation(row: number, col: number, elevation: number): void {
+        elevationSpy.getElevation.and.callFake((r: number, c: number) =>
+          (r === row && c === col) ? elevation : 0
+        );
+        elevationSpy.collapse.and.returnValue({
+          ok: true,
+          change: {
+            id: '0', op: 'collapse' as const, row, col,
+            appliedOnTurn: currentTurn, expiresOnTurn: null,
+            priorElevation: elevation, deltaOrAbsolute: 0,
+            source: 'card' as const, sourceId: 'avl-1',
+          },
+          newElevation: 0,
+        });
+      }
+
+      it('elev-2 tile: enemies take 20 damage, tile collapses', () => {
+        stubElevation(3, 4, 2);
+
+        const enemy = {
+          id: 'e1', maxHealth: 500, health: 500,
+          gridPosition: { row: 3, col: 4 }, dying: false,
+        };
+        const enemyMap = new Map<string, unknown>([['e1', enemy]]);
+        enemySpy.getEnemies.and.returnValue(enemyMap as never);
+
+        const card = makeAvalancheInstance('avl-1');
+        service['pendingElevationTargetCard'] = card;
+        service['pendingElevationTargetEffect'] = {
+          type: 'elevation_target',
+          op: 'collapse',
+          amount: 0,
+          duration: null,
+          damageOnHit: { damagePerElevation: 10 },
+        };
+
+        const result = service.resolveTileTarget(3, 4, mockScene, currentTurn);
+
+        expect(result.ok).toBeTrue();
+        // Damage = 2 elevations × 10 = 20
+        expect(enemySpy.damageEnemy).toHaveBeenCalledWith('e1', 20);
+        expect(elevationSpy.collapse).toHaveBeenCalledWith(3, 4, 'avl-1', currentTurn);
+        expect(deckSpy.playCard).toHaveBeenCalledWith('avl-1');
+      });
+
+      it('elev-0 tile: rejects with not-elevated, no damage applied', () => {
+        // getElevation returns 0 by default (from beforeEach).
+
+        const card = makeAvalancheInstance('avl-not-elevated');
+        service['pendingElevationTargetCard'] = card;
+        service['pendingElevationTargetEffect'] = {
+          type: 'elevation_target',
+          op: 'collapse',
+          amount: 0,
+          duration: null,
+          damageOnHit: { damagePerElevation: 10 },
+        };
+
+        const result = service.resolveTileTarget(1, 1, mockScene, currentTurn);
+
+        expect(result.ok).toBeFalse();
+        expect(result.reason).toBe('not-elevated');
+        expect(enemySpy.damageEnemy).not.toHaveBeenCalled();
+        expect(elevationSpy.collapse).not.toHaveBeenCalled();
+        // Pending state preserved for retry on an elevated tile.
+        expect(service['pendingElevationTargetCard']).not.toBeNull();
+        expect(deckSpy.playCard).not.toHaveBeenCalled();
+      });
+
+      it('upgraded AVALANCHE_ORDER: elev-2 tile → 30 damage (15 per elevation)', () => {
+        stubElevation(2, 2, 2);
+
+        const enemy = {
+          id: 'e-up', maxHealth: 500, health: 500,
+          gridPosition: { row: 2, col: 2 }, dying: false,
+        };
+        const enemyMap = new Map<string, unknown>([['e-up', enemy]]);
+        enemySpy.getEnemies.and.returnValue(enemyMap as never);
+
+        const card = makeAvalancheInstance('avl-upgraded');
+        service['pendingElevationTargetCard'] = card;
+        service['pendingElevationTargetEffect'] = {
+          type: 'elevation_target',
+          op: 'collapse',
+          amount: 0,
+          duration: null,
+          damageOnHit: { damagePerElevation: 15 },
+        };
+
+        service.resolveTileTarget(2, 2, mockScene, currentTurn);
+
+        // Damage = 2 elevations × 15 = 30
+        expect(enemySpy.damageEnemy).toHaveBeenCalledWith('e-up', 30);
+      });
+
+      it('damage-before-collapse: getElevation is called BEFORE collapse', () => {
+        // Verifies the damage-ordering invariant: damage reads priorElevation
+        // while the tile is still raised. If collapse were called first,
+        // getElevation would return 0 and totalDamage would be 0.
+        stubElevation(5, 5, 3);
+
+        const callOrder: string[] = [];
+        elevationSpy.getElevation.and.callFake((r: number, c: number) => {
+          if (r === 5 && c === 5) { callOrder.push('getElevation'); return 3; }
+          return 0;
+        });
+        elevationSpy.collapse.and.callFake(() => {
+          callOrder.push('collapse');
+          return { ok: true, newElevation: 0 };
+        });
+
+        const enemy = {
+          id: 'e-order', maxHealth: 100, health: 100,
+          gridPosition: { row: 5, col: 5 }, dying: false,
+        };
+        enemySpy.getEnemies.and.returnValue(new Map([['e-order', enemy]]) as never);
+
+        const card = makeAvalancheInstance('avl-order');
+        service['pendingElevationTargetCard'] = card;
+        service['pendingElevationTargetEffect'] = {
+          type: 'elevation_target',
+          op: 'collapse',
+          amount: 0,
+          duration: null,
+          damageOnHit: { damagePerElevation: 10 },
+        };
+
+        service.resolveTileTarget(5, 5, mockScene, currentTurn);
+
+        // getElevation must be called before collapse to read the prior elevation.
+        const elevIdx = callOrder.indexOf('getElevation');
+        const collapseIdx = callOrder.indexOf('collapse');
+        expect(elevIdx).toBeGreaterThanOrEqual(0);
+        expect(collapseIdx).toBeGreaterThan(elevIdx);
+      });
+
+      it('dying enemies on tile are NOT damaged', () => {
+        stubElevation(1, 1, 2);
+
+        const dyingEnemy = {
+          id: 'dying', maxHealth: 300, health: 0,
+          gridPosition: { row: 1, col: 1 }, dying: true,
+        };
+        enemySpy.getEnemies.and.returnValue(new Map([['dying', dyingEnemy]]) as never);
+
+        const card = makeAvalancheInstance('avl-dying');
+        service['pendingElevationTargetCard'] = card;
+        service['pendingElevationTargetEffect'] = {
+          type: 'elevation_target',
+          op: 'collapse',
+          amount: 0,
+          duration: null,
+          damageOnHit: { damagePerElevation: 10 },
+        };
+
+        service.resolveTileTarget(1, 1, mockScene, currentTurn);
+
+        expect(enemySpy.damageEnemy).not.toHaveBeenCalled();
+      });
+    });
   });
 });
 

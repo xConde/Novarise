@@ -533,8 +533,62 @@ export class CardPlayService {
       return { ok: false, reason: 'insufficient-energy' };
     }
 
-    let elevationResult;
     const sourceId = card.instanceId;
+
+    // ── COLLAPSE op (AVALANCHE_ORDER, sprint 32) ──────────────────────────
+    // Rejection: target must have elevation ≥ 1. Validated before collapse call
+    // so no partial state occurs on a no-op target.
+    // Damage BEFORE collapse: enemies on the tile take (priorElevation × damagePerElevation)
+    // while the tile is still at its raised height. This prevents the "exposed"
+    // multiplier in EnemyService.damageEnemy from double-firing — the tile is at
+    // positive elevation during damage, so the negative-elevation "exposed" check is
+    // false. After damage, the tile collapses to 0.
+    if (effect.op === 'collapse') {
+      const priorElevation = this.elevationService.getElevation(row, col);
+      if (priorElevation < 1) {
+        // Tile not elevated enough — reject without clearing pending state.
+        return { ok: false, reason: 'not-elevated' };
+      }
+
+      // Apply damage-on-hit BEFORE collapse (order matters for exposed-multiplier timing).
+      if (effect.damageOnHit) {
+        const dmgPerElev = effect.damageOnHit.damagePerElevation;
+        const totalDamage = priorElevation * dmgPerElev;
+        if (totalDamage > 0) {
+          const enemies = this.enemyService.getEnemies();
+          enemies.forEach(enemy => {
+            if (
+              enemy.gridPosition.row === row &&
+              enemy.gridPosition.col === col &&
+              !enemy.dying
+            ) {
+              this.enemyService.damageEnemy(enemy.id, totalDamage);
+            }
+          });
+        }
+      }
+
+      // Now collapse the tile (sets elevation to 0, translates meshes).
+      const collapseResult = this.elevationService.collapse(row, col, sourceId, currentTurn);
+      if (!collapseResult.ok) {
+        return { ok: false, reason: collapseResult.reason };
+      }
+
+      this.deckService.playCard(card.instanceId);
+      this.clearTileTargetState();
+      this.callbacks?.onExitTileTargetMode?.();
+      return { ok: true };
+    }
+
+    // ── RAISE / DEPRESS ops ──────────────────────────────────────────────
+    // Sprint 30 CLIFFSIDE: when `effect.line` is present, expand the target tile
+    // into a line. The center tile is mandatory — its failure rejects the card.
+    // Wing tiles are silently skipped on spawner/exit/out-of-bounds/already-changed.
+    if (effect.line && effect.op === 'raise') {
+      return this.resolveElevationLine(row, col, effect, sourceId, currentTurn, card);
+    }
+
+    let elevationResult;
 
     if (effect.op === 'raise') {
       elevationResult = this.elevationService.raise(
@@ -545,8 +599,7 @@ export class CardPlayService {
         row, col, effect.amount, effect.duration, sourceId, currentTurn,
       );
     } else {
-      // Exhaustive guard — future ops ('collapse', 'set') will be routed here
-      // when added. For now, any unrecognised op is an unknown-op rejection.
+      // Exhaustive guard — any unrecognised op is an unknown-op rejection.
       this.clearTileTargetState();
       this.callbacks?.onExitTileTargetMode?.();
       return { ok: false, reason: 'unknown-op' };
@@ -558,6 +611,74 @@ export class CardPlayService {
     }
 
     // Success — consume the card.
+    this.deckService.playCard(card.instanceId);
+    this.clearTileTargetState();
+    this.callbacks?.onExitTileTargetMode?.();
+    return { ok: true };
+  }
+
+  /**
+   * Sprint 30 CLIFFSIDE — resolve a horizontal/vertical line expansion.
+   *
+   * The center tile at (row, col) is mandatory: if it fails, the card rejects
+   * entirely with no energy cost and no elevation change. Wing tiles (east+west
+   * neighbors for horizontal; north+south for vertical) are silently skipped if
+   * they hit SPAWNER, EXIT, out-of-bounds, or already-changed-this-turn.
+   *
+   * WHY PARTIAL SUCCESS: it models the cliff edge naturally — you can raise a
+   * tile at the edge of the board and the cliff "falls off the map" on one side.
+   * The center must succeed to commit energy; wings are best-effort.
+   */
+  private resolveElevationLine(
+    centerRow: number,
+    centerCol: number,
+    effect: ElevationTargetCardEffect,
+    sourceId: string,
+    currentTurn: number,
+    card: CardInstance,
+  ): TileTargetResult {
+    const line = effect.line!;
+    const halfWings = Math.floor((line.length - 1) / 2);
+
+    // ── Center tile (mandatory) ───────────────────────────────────────────
+    const centerResult = this.elevationService.raise(
+      centerRow, centerCol, effect.amount, effect.duration, sourceId, currentTurn,
+    );
+    if (!centerResult.ok) {
+      // Center rejected — card is a no-op, pending state preserved for retry.
+      return { ok: false, reason: centerResult.reason };
+    }
+
+    // ── Wing tiles (best-effort, skipped on any failure) ─────────────────
+    for (let offset = 1; offset <= halfWings; offset++) {
+      // Both directions (e.g., east+west for horizontal).
+      const posRow = line.direction === 'vertical' ? centerRow + offset : centerRow;
+      const posCol = line.direction === 'horizontal' ? centerCol + offset : centerCol;
+      const negRow = line.direction === 'vertical' ? centerRow - offset : centerRow;
+      const negCol = line.direction === 'horizontal' ? centerCol - offset : centerCol;
+
+      // Wing failures are silently skipped (spawner, exit, OOB, already-changed).
+      const posResult = this.elevationService.raise(
+        posRow, posCol, effect.amount, effect.duration, sourceId, currentTurn,
+      );
+      if (!posResult.ok) {
+        // Wing skipped — log at debug level for QA visibility, not an error.
+        console.debug(
+          `CLIFFSIDE: skipped wing (${posRow},${posCol}): ${posResult.reason}`,
+        );
+      }
+
+      const negResult = this.elevationService.raise(
+        negRow, negCol, effect.amount, effect.duration, sourceId, currentTurn,
+      );
+      if (!negResult.ok) {
+        console.debug(
+          `CLIFFSIDE: skipped wing (${negRow},${negCol}): ${negResult.reason}`,
+        );
+      }
+    }
+
+    // Center succeeded — consume the card.
     this.deckService.playCard(card.instanceId);
     this.clearTileTargetState();
     this.callbacks?.onExitTileTargetMode?.();

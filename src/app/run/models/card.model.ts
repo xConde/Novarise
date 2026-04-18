@@ -109,6 +109,11 @@ export enum CardId {
 
   // Highground archetype — modifier card (Phase 3, Sprint 29)
   HIGH_PERCH = 'HIGH_PERCH',
+
+  // Highground archetype — uncommon cards (Phase 3, Sprints 30/31/32)
+  CLIFFSIDE = 'CLIFFSIDE',
+  VANTAGE_POINT = 'VANTAGE_POINT',
+  AVALANCHE_ORDER = 'AVALANCHE_ORDER',
 }
 
 export enum CardType {
@@ -342,9 +347,12 @@ export function isTerraformTargetEffect(e: CardEffect): e is TerraformTargetCard
  */
 export interface ElevationTargetCardEffect {
   readonly type: 'elevation_target';
-  /** 'raise' lifts a tile; 'depress' lowers it. Expand in later sprints. */
-  readonly op: 'raise' | 'depress';
-  /** Integer elevation units to apply. */
+  /**
+   * 'raise' lifts a tile; 'depress' lowers it; 'collapse' drops it to 0
+   * in a one-shot op (AVALANCHE_ORDER, sprint 32).
+   */
+  readonly op: 'raise' | 'depress' | 'collapse';
+  /** Integer elevation units to apply. Ignored for 'collapse' (always to 0). */
   readonly amount: number;
   /** Turns until expiry; null = permanent. */
   readonly duration: number | null;
@@ -355,6 +363,36 @@ export interface ElevationTargetCardEffect {
    * Set on DEPRESS_TILE; unset on RAISE_PLATFORM.
    */
   readonly exposeEnemies?: boolean;
+  /**
+   * Sprint 30 (CLIFFSIDE) — optional horizontal/vertical line expansion.
+   *
+   * When present, `resolveElevationTarget` in card-play.service expands the
+   * target tile into a line of tiles. The center tile is mandatory (failure =
+   * card reject); wing failures are silently skipped.
+   *
+   * `length` is the total number of tiles including the center (e.g., 3 = center
+   * + 1 wing on each side; 5 = center + 2 wings on each side).
+   */
+  readonly line?: {
+    readonly direction: 'horizontal' | 'vertical';
+    readonly length: number;
+  };
+  /**
+   * Sprint 32 (AVALANCHE_ORDER) — optional per-elevation damage rider.
+   *
+   * When set, after the collapse op succeeds, every enemy on (row, col) takes
+   * `damagePerElevation × change.priorElevation` instant damage. Damage is
+   * applied BEFORE the collapse call in card-play so the prior elevation is
+   * read from elevationService.getElevation while the tile is still raised.
+   *
+   * WHY NOT pctMaxHp: COLLAPSE (Cartographer) uses pctMaxHp on
+   * TerraformTargetCardEffect. This rider uses a flat per-elevation constant
+   * so the damage is deterministic without reading enemy health.
+   */
+  readonly damageOnHit?: {
+    /** Damage per unit of prior elevation, applied to all enemies on the tile. */
+    readonly damagePerElevation: number;
+  };
 }
 
 /**
