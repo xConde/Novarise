@@ -359,6 +359,27 @@ describe('CombatLoopService', () => {
     });
   });
 
+  // ─── resolveTurn() — VEINSEEKER turn-number forwarding ─────────────────────
+
+  describe('resolveTurn() — stepEnemiesOneTurn receives currentTurn', () => {
+    it('calls stepEnemiesOneTurn with the post-increment turn number on turn 1', () => {
+      service.resolveTurn(scene);
+
+      // resolveTurn increments turnNumber to 1 before calling stepEnemiesOneTurn.
+      // The second arg (currentTurn) must be 1 so VEINSEEKER's boost window check
+      // uses the correct reference point.
+      expect(enemySpy.stepEnemiesOneTurn).toHaveBeenCalledWith(jasmine.any(Function), 1);
+    });
+
+    it('calls stepEnemiesOneTurn with the correct turn number after multiple turns', () => {
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+
+      expect(enemySpy.stepEnemiesOneTurn).toHaveBeenCalledWith(jasmine.any(Function), 3);
+    });
+  });
+
   // ─── resolveTurn() — kill processing ────────────────────────────────────────
 
   describe('resolveTurn() — kill processing', () => {

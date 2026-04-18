@@ -27,6 +27,7 @@ const ENEMY_TYPE_LABELS: Record<EnemyType, string> = {
   [EnemyType.FLYING]: 'Flying',
   [EnemyType.MINER]: 'Miner',
   [EnemyType.UNSHAKEABLE]: 'Unshakeable',
+  [EnemyType.VEINSEEKER]: 'Veinseeker',
 };
 
 /**

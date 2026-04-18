@@ -168,9 +168,12 @@ export class CombatLoopService {
     // 1. Spawn this turn's scheduled enemies
     this.waveService.spawnForTurn(scene, this.turnNumber);
 
-    // 2. Enemy movement — each enemy advances its tiles-per-turn count
+    // 2. Enemy movement — each enemy advances its tiles-per-turn count.
+    // Pass this.turnNumber so VEINSEEKER's path-mutation speed boost
+    // can check PathMutationService.wasMutatedInLastTurns(currentTurn, 3).
     const reachedExit = this.enemyService.stepEnemiesOneTurn(
       (enemyId) => this.statusEffectService.getSlowTileReduction(enemyId),
+      this.turnNumber,
     );
 
     // 2.5 — MINER dig phase. MINERs that have been alive N*3 turns destroy

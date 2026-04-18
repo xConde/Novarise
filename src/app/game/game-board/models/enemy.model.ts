@@ -83,6 +83,36 @@ export const MINER_STATS = {
 /** How many turns between MINER dig attempts (cadence: every Nth turn after spawn). */
 export const MINER_DIG_INTERVAL_TURNS = 3;
 
+/** Named constants for VEINSEEKER boss-variant stats — no magic numbers inline. */
+export const VEINSEEKER_STATS = {
+  health: 1000,
+  /** Cosmetic only — same as BOSS, reads as heavy/boss-tier. */
+  speed: 0.8,
+  tilesPerTurn: 1,
+  value: 100,
+  /** Dark crimson — visually distinct from BOSS magenta and UNSHAKEABLE stone gray. */
+  color: 0x6a0f25,
+  size: 0.55,
+  leakDamage: 5,
+} as const;
+
+/**
+ * Number of turns after a path mutation during which VEINSEEKER is boosted.
+ * When `pathMutationService.wasMutatedInLastTurns(currentTurn, VEINSEEKER_SPEED_BOOST_WINDOW)`
+ * returns true, VEINSEEKER advances VEINSEEKER_BOOSTED_TILES_PER_TURN instead of its base 1.
+ *
+ * Design doc reference: archetype-depth plan, VEINSEEKER boss — "path modified in
+ * past 3 turns → +30% speed", simplified to an integer tile bump (1→2 tiles/turn).
+ */
+export const VEINSEEKER_SPEED_BOOST_WINDOW = 3;
+
+/**
+ * Boosted tiles-per-turn for VEINSEEKER when the path was mutated recently.
+ * Base is 1 (same as BOSS); this doubles movement when the Cartographer archetype
+ * is active and reshaping the board.
+ */
+export const VEINSEEKER_BOOSTED_TILES_PER_TURN = 2;
+
 // Enemy type statistics
 export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
   [EnemyType.BASIC]: {
@@ -176,6 +206,15 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     color: UNSHAKEABLE_STATS.color,
     size: UNSHAKEABLE_STATS.size,
     leakDamage: UNSHAKEABLE_STATS.leakDamage,
+  },
+  [EnemyType.VEINSEEKER]: {
+    health: VEINSEEKER_STATS.health,
+    speed: VEINSEEKER_STATS.speed,
+    tilesPerTurn: VEINSEEKER_STATS.tilesPerTurn,
+    value: VEINSEEKER_STATS.value,
+    color: VEINSEEKER_STATS.color,
+    size: VEINSEEKER_STATS.size,
+    leakDamage: VEINSEEKER_STATS.leakDamage,
   },
 };
 

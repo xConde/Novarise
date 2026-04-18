@@ -4,7 +4,7 @@ import { EnemyService } from './enemy.service';
 import { PathfindingService } from './pathfinding.service';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
-import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS, MINER_STATS, MINER_DIG_INTERVAL_TURNS, UNSHAKEABLE_STATS } from '../models/enemy.model';
+import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS, MINER_STATS, MINER_DIG_INTERVAL_TURNS, UNSHAKEABLE_STATS, VEINSEEKER_STATS, VEINSEEKER_SPEED_BOOST_WINDOW, VEINSEEKER_BOOSTED_TILES_PER_TURN } from '../models/enemy.model';
 import { GameBoardTile } from '../models/game-board-tile';
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
@@ -18,6 +18,7 @@ import { CardEffectService } from '../../../run/services/card-effect.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { SerializableEnemy } from '../models/encounter-checkpoint.model';
 import { createTestEnemy } from '../testing/test-enemy.factory';
+import { PathMutationService } from './path-mutation.service';
 
 /**
  * Helper: configure modifier effects on the real GameStateService.
@@ -114,7 +115,8 @@ describe('EnemyService', () => {
       const types: EnemyType[] = [
         EnemyType.BASIC, EnemyType.FAST, EnemyType.HEAVY,
         EnemyType.SWIFT, EnemyType.BOSS, EnemyType.SHIELDED,
-        EnemyType.SWARM, EnemyType.FLYING, EnemyType.MINER, EnemyType.UNSHAKEABLE
+        EnemyType.SWARM, EnemyType.FLYING, EnemyType.MINER, EnemyType.UNSHAKEABLE,
+        EnemyType.VEINSEEKER,
       ];
       types.forEach(type => {
         const enemy = service.spawnEnemy(type, mockScene)!;
@@ -133,7 +135,8 @@ describe('EnemyService', () => {
         EnemyType.SWARM,
         EnemyType.FLYING,
         EnemyType.MINER,
-        EnemyType.UNSHAKEABLE
+        EnemyType.UNSHAKEABLE,
+        EnemyType.VEINSEEKER,
       ];
 
       types.forEach(type => {
@@ -3520,6 +3523,110 @@ describe('EnemyService', () => {
 
       const restored = service.getEnemies().get('unshakeable-1')!;
       expect(restored.immuneToDetour).toBe(true);
+    });
+  });
+
+  // ── VEINSEEKER boss (Sprint 23) — speed boost mechanic ───────────────────
+
+  describe('VEINSEEKER speed boost', () => {
+    /**
+     * PathMutationService has heavy DI (GameBoardService, BoardMeshRegistryService,
+     * PathfindingService, TerraformMaterialPoolService). We use a jasmine spy for the
+     * `wasMutatedInLastTurns` query so we can control the result without wiring up
+     * the full service graph. EnemyService injects PathMutationService as @Optional,
+     * so we provide a spy via the token.
+     */
+    let pathMutationSpy: jasmine.SpyObj<PathMutationService>;
+
+    beforeEach(() => {
+      TestBed.resetTestingModule();
+      const gameBoardServiceSpy = createGameBoardServiceSpy(10, 10, 1, () => createTestBoard());
+      const relicSpy = createRelicServiceSpy();
+      pathMutationSpy = jasmine.createSpyObj<PathMutationService>('PathMutationService', [
+        'wasMutatedInLastTurns',
+      ]);
+      // Default: no mutation active
+      pathMutationSpy.wasMutatedInLastTurns.and.returnValue(false);
+
+      TestBed.configureTestingModule({
+        providers: [
+          PathfindingService,
+          EnemyService,
+          EnemyVisualService,
+          EnemyHealthService,
+          EnemyMeshFactoryService,
+          GameStateService,
+          { provide: PathMutationService, useValue: pathMutationSpy },
+          { provide: GameBoardService, useValue: gameBoardServiceSpy },
+          { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+          { provide: RelicService, useValue: relicSpy },
+        ]
+      });
+
+      service = TestBed.inject(EnemyService);
+      mockScene = new THREE.Scene();
+    });
+
+    it('should spawn VEINSEEKER with correct stats from VEINSEEKER_STATS', () => {
+      const enemy = service.spawnEnemy(EnemyType.VEINSEEKER, mockScene)!;
+
+      expect(enemy.type).toBe(EnemyType.VEINSEEKER);
+      expect(enemy.health).toBe(VEINSEEKER_STATS.health);
+      expect(enemy.speed).toBe(VEINSEEKER_STATS.speed);
+      expect(enemy.value).toBe(VEINSEEKER_STATS.value);
+      expect(enemy.leakDamage).toBe(VEINSEEKER_STATS.leakDamage);
+    });
+
+    it('advances 2 tiles/turn when wasMutatedInLastTurns returns true', () => {
+      const enemy = service.spawnEnemy(EnemyType.VEINSEEKER, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      // Simulate: path was mutated recently → boost is active.
+      pathMutationSpy.wasMutatedInLastTurns.and.returnValue(true);
+      const currentTurn = 2;
+
+      service.stepEnemiesOneTurn(() => 0, currentTurn);
+
+      // Boosted: VEINSEEKER_BOOSTED_TILES_PER_TURN (2) instead of base 1
+      expect(enemy.pathIndex).toBe(startIndex + VEINSEEKER_BOOSTED_TILES_PER_TURN);
+      expect(enemy.distanceTraveled).toBe(VEINSEEKER_BOOSTED_TILES_PER_TURN);
+      // Confirm the spy was queried with the correct arguments
+      expect(pathMutationSpy.wasMutatedInLastTurns).toHaveBeenCalledWith(currentTurn, VEINSEEKER_SPEED_BOOST_WINDOW);
+    });
+
+    it('advances 1 tile/turn (base speed) when wasMutatedInLastTurns returns false', () => {
+      const enemy = service.spawnEnemy(EnemyType.VEINSEEKER, mockScene)!;
+      const startIndex = enemy.pathIndex;
+
+      // No recent mutation — spy already returns false by default.
+      service.stepEnemiesOneTurn(() => 0, 10);
+
+      expect(enemy.pathIndex).toBe(startIndex + 1);
+      expect(enemy.distanceTraveled).toBe(1);
+    });
+
+    it('non-VEINSEEKER boss (BOSS type) is not affected by path mutation state', () => {
+      const boss = service.spawnEnemy(EnemyType.BOSS, mockScene)!;
+      const startIndex = boss.pathIndex;
+
+      // Mutation active — must not affect BOSS
+      pathMutationSpy.wasMutatedInLastTurns.and.returnValue(true);
+      service.stepEnemiesOneTurn(() => 0, 2);
+
+      // BOSS always moves 1 tile/turn regardless of mutations.
+      expect(boss.pathIndex).toBe(startIndex + 1);
+    });
+
+    it('slowed VEINSEEKER during boost still respects floor-at-1', () => {
+      const enemy = service.spawnEnemy(EnemyType.VEINSEEKER, mockScene)!;
+
+      // Mutation active → boosted baseTiles = 2
+      pathMutationSpy.wasMutatedInLastTurns.and.returnValue(true);
+      // slowReduction=2 would take boosted 2 → 0, but floor-at-1 prevents paralysis.
+      service.stepEnemiesOneTurn(() => 2, 2);
+
+      // Floor-at-1 applies: Math.max(1, 2 - 2 - 0) = Math.max(1, 0) = 1
+      expect(enemy.distanceTraveled).toBe(1);
     });
   });
 });

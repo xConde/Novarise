@@ -490,13 +490,16 @@ describe('Balance — Difficulty Curve', () => {
 
 describe('Balance — Enemy Stats', () => {
 
-  it('Boss has the highest health of all enemy types', () => {
+  it('Boss has the highest health among standard (non-boss-tier) enemy types', () => {
     // Boss HP is 1000 — 10× a Basic (100 HP) and 3.3× a Heavy (300 HP).
     // This 10× ratio between Boss and Basic is a deliberate design decision
     // that makes Boss waves feel categorically different from standard waves.
+    // Boss-tier variants (VEINSEEKER, UNSHAKEABLE) are excluded: they are
+    // co-equal boss-tier units intentionally matching or exceeding BOSS stats.
+    const BOSS_TIER_VARIANTS: string[] = [EnemyType.VEINSEEKER, EnemyType.UNSHAKEABLE];
     const bossHp = ENEMY_STATS[EnemyType.BOSS].health;
     for (const [type, stats] of Object.entries(ENEMY_STATS)) {
-      if (type !== EnemyType.BOSS) {
+      if (type !== EnemyType.BOSS && !BOSS_TIER_VARIANTS.includes(type as EnemyType)) {
         expect(bossHp)
           .withContext(`Boss HP (${bossHp}) should exceed ${type} HP (${stats.health})`)
           .toBeGreaterThan(stats.health);

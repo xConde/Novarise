@@ -143,6 +143,12 @@ export class EnemyMeshFactoryService {
         // Faceted octahedron — rock-like silhouette, distinct from the cubic HEAVY
         return new THREE.OctahedronGeometry(size, 0);
 
+      case EnemyType.VEINSEEKER:
+        // Icosahedron (detail=0) — spiky crystalline-vein silhouette, distinct from
+        // SHIELDED (also icosahedron but with shield dome overlay). At detail=0 the
+        // 20 triangular faces read as angular and threatening, fitting a boss-variant.
+        return new THREE.IcosahedronGeometry(size, 0);
+
       case EnemyType.FLYING:
         // Diamond geometry is built inline in createEnemyMesh for flying enemies;
         // this branch is a safety fallback and should never be reached at runtime.

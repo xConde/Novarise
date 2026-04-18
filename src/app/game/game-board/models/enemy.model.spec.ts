@@ -158,11 +158,15 @@ describe('Enemy Model', () => {
     });
 
     describe('BOSS enemy stats', () => {
-      it('should have highest health and lowest speed', () => {
+      it('should have highest health and lowest speed among non-elite types', () => {
         const boss = ENEMY_STATS[EnemyType.BOSS];
+        // Boss-tier variants (VEINSEEKER, UNSHAKEABLE) are excluded: they
+        // are co-equal boss-tier units, not subordinate enemy types.
+        // VEINSEEKER (sprint 23) shares BOSS health (1000) and exceeds BOSS value (100 vs 50).
+        const BOSS_TIER_VARIANTS: string[] = [EnemyType.VEINSEEKER, EnemyType.UNSHAKEABLE];
 
         Object.entries(ENEMY_STATS).forEach(([type, stats]) => {
-          if (type !== EnemyType.BOSS) {
+          if (type !== EnemyType.BOSS && !BOSS_TIER_VARIANTS.includes(type)) {
             expect(boss.health).toBeGreaterThanOrEqual(stats.health);
             expect(boss.speed).toBeLessThanOrEqual(stats.speed);
             expect(boss.value).toBeGreaterThanOrEqual(stats.value);

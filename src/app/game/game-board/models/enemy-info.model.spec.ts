@@ -4,10 +4,10 @@ import { EnemyInfo, ENEMY_INFO } from './enemy-info.model';
 describe('ENEMY_INFO', () => {
   const allTypes = Object.values(EnemyType);
 
-  it('should have entries for all 10 EnemyType values', () => {
-    // 9 original + UNSHAKEABLE elite (sprint 22). MINER landed in sprint 21
-    // already bumped this to 9; UNSHAKEABLE takes it to 10.
-    expect(allTypes.length).toBe(10);
+  it('should have entries for all 11 EnemyType values', () => {
+    // 9 original + UNSHAKEABLE elite (sprint 22) + VEINSEEKER boss (sprint 23).
+    // MINER landed in sprint 21 (9→10); UNSHAKEABLE takes it to 10; VEINSEEKER to 11.
+    expect(allTypes.length).toBe(11);
     for (const type of allTypes) {
       expect(ENEMY_INFO[type]).withContext(`Missing entry for ${type}`).toBeDefined();
     }
@@ -112,9 +112,9 @@ describe('ENEMY_INFO', () => {
     }
   });
 
-  it('Object.values(ENEMY_INFO) should return 10 entries in a stable order', () => {
+  it('Object.values(ENEMY_INFO) should return 11 entries in a stable order', () => {
     const infoList = Object.values(ENEMY_INFO);
-    expect(infoList.length).toBe(10);
+    expect(infoList.length).toBe(11);
     for (const info of infoList) {
       // Each item must satisfy the EnemyInfo interface shape
       expect(info.type).toBeDefined();

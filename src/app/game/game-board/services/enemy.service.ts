@@ -1,6 +1,6 @@
 import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
-import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult, GridNode, MINER_DIG_INTERVAL_TURNS } from '../models/enemy.model';
+import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult, GridNode, MINER_DIG_INTERVAL_TURNS, VEINSEEKER_SPEED_BOOST_WINDOW, VEINSEEKER_BOOSTED_TILES_PER_TURN } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
@@ -295,7 +295,7 @@ export class EnemyService {
    * @returns IDs of enemies that reached the exit this turn (callers apply
    *          leak damage and call {@link removeEnemy}).
    */
-  stepEnemiesOneTurn(slowReductionFor: (enemyId: string) => number): string[] {
+  stepEnemiesOneTurn(slowReductionFor: (enemyId: string) => number, currentTurn = 0): string[] {
     const reachedExit: string[] = [];
     // enemySpeed modifier: floored integer reduction. Weak (<50%) modifiers won't affect FAST/SWIFT,
     // won't affect 1-tile movers at all. Balance in M4 S5.
@@ -310,7 +310,18 @@ export class EnemyService {
         return;
       }
 
-      const baseTiles = ENEMY_STATS[enemy.type].tilesPerTurn;
+      // VEINSEEKER speed-up mechanic: when the path was mutated in the past
+      // VEINSEEKER_SPEED_BOOST_WINDOW turns, VEINSEEKER advances 2 tiles/turn
+      // instead of its base 1. This is the archetype-depth plan's "path modified
+      // in past 3 turns → +30% speed" mechanic, simplified to an integer tile bump.
+      // Slow and modifier reductions apply to the boosted value as normal.
+      let baseTiles = ENEMY_STATS[enemy.type].tilesPerTurn;
+      if (
+        enemy.type === EnemyType.VEINSEEKER &&
+        this.pathMutationService?.wasMutatedInLastTurns(currentTurn, VEINSEEKER_SPEED_BOOST_WINDOW)
+      ) {
+        baseTiles = VEINSEEKER_BOOSTED_TILES_PER_TURN;
+      }
       const slowReduction = slowReductionFor(enemy.id);
       const enemySpeedReduction = enemySpeedSlow > 0 ? Math.floor(baseTiles * enemySpeedSlow) : 0;
       // Floor at 1 tile/turn — SLOW aura re-applies each turn while enemy is in

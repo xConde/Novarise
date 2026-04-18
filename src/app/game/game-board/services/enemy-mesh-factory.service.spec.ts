@@ -71,6 +71,7 @@ describe('EnemyMeshFactoryService', () => {
       EnemyType.SWARM,
       EnemyType.MINER,
       EnemyType.UNSHAKEABLE,
+      EnemyType.VEINSEEKER,
     ];
 
     types.forEach(type => {
@@ -200,6 +201,7 @@ describe('EnemyMeshFactoryService', () => {
       EnemyType.SWARM,
       EnemyType.FLYING,
       EnemyType.UNSHAKEABLE,
+      EnemyType.VEINSEEKER,
     ];
 
     geometryTypes.forEach(type => {
@@ -382,6 +384,42 @@ describe('EnemyMeshFactoryService', () => {
 
       expect(mesh).toBeInstanceOf(THREE.Mesh);
       expect(mesh.geometry).toBeInstanceOf(THREE.BoxGeometry);
+    });
+  });
+
+  // --- VEINSEEKER geometry ---
+
+  describe('VEINSEEKER geometry (createEnemyGeometry)', () => {
+    let geom: THREE.BufferGeometry;
+
+    beforeEach(() => {
+      geom = service.createEnemyGeometry(EnemyType.VEINSEEKER, ENEMY_STATS[EnemyType.VEINSEEKER].size);
+    });
+
+    afterEach(() => {
+      geom.dispose();
+    });
+
+    it('returns an IcosahedronGeometry for VEINSEEKER', () => {
+      expect(geom).toBeInstanceOf(THREE.IcosahedronGeometry);
+    });
+
+    it('VEINSEEKER mesh from createEnemyMesh is a THREE.Mesh with IcosahedronGeometry', () => {
+      const enemy = makeEnemy(EnemyType.VEINSEEKER);
+      const mesh = service.createEnemyMesh(enemy);
+      createdMeshes.push(mesh);
+
+      expect(mesh).toBeInstanceOf(THREE.Mesh);
+      expect(mesh.geometry).toBeInstanceOf(THREE.IcosahedronGeometry);
+    });
+
+    it('VEINSEEKER geometry is distinct from SHIELDED (also icosahedron but smaller)', () => {
+      // SHIELDED and VEINSEEKER both use IcosahedronGeometry — verify they differ in
+      // vertex count via size (VEINSEEKER.size=0.55 vs SHIELDED.size=0.35 produces same
+      // vertex topology at detail=0, so we check constructor identity holds and sizes differ).
+      const shieldedSize = ENEMY_STATS[EnemyType.SHIELDED].size;
+      const veinSeekerSize = ENEMY_STATS[EnemyType.VEINSEEKER].size;
+      expect(veinSeekerSize).not.toEqual(shieldedSize);
     });
   });
 

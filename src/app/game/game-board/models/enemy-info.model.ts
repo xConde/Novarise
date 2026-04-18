@@ -138,4 +138,16 @@ export const ENEMY_INFO: Record<EnemyType, EnemyInfo> = {
     color: ENEMY_STATS[EnemyType.UNSHAKEABLE].color,
     immunities: ['Detour'],
   },
+  [EnemyType.VEINSEEKER]: {
+    type: EnemyType.VEINSEEKER,
+    name: 'Veinseeker',
+    description: 'Cartographer-counter boss. Surges to 2 tiles/turn when the path was modified in the past 3 turns.',
+    health: ENEMY_STATS[EnemyType.VEINSEEKER].health,
+    speed: ENEMY_STATS[EnemyType.VEINSEEKER].speed,
+    reward: ENEMY_STATS[EnemyType.VEINSEEKER].value,
+    leakDamage: ENEMY_STATS[EnemyType.VEINSEEKER].leakDamage,
+    special: 'Surges to 2 tiles/turn when path was mutated in past 3 turns, 5 leak damage',
+    color: ENEMY_STATS[EnemyType.VEINSEEKER].color,
+    immunities: [],
+  },
 };
