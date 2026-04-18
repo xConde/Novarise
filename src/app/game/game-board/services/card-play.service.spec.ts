@@ -149,7 +149,13 @@ describe('CardPlayService', () => {
     audioSpy = createAudioServiceSpy();
     gameStatsSpy = createGameStatsServiceSpy();
     gameBoardSpy = createGameBoardServiceSpy();
-    enemySpy = jasmine.createSpyObj<EnemyService>('EnemyService', ['repathAffectedEnemies']);
+    enemySpy = jasmine.createSpyObj<EnemyService>('EnemyService', [
+      'repathAffectedEnemies',
+      'getEnemies',
+      'damageEnemy',
+    ]);
+    // Default to empty enemy set; COLLAPSE damage specs override per-test.
+    enemySpy.getEnemies.and.returnValue(new Map() as never);
 
     sceneSpy = createSceneServiceSpy();
 
@@ -731,6 +737,99 @@ describe('CardPlayService', () => {
       // Pending state preserved so player can pick a different tile
       expect(service.getPendingTileTargetCard()).not.toBeNull();
       expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    // Phase 2 Sprint 16 — COLLAPSE damage-on-hit rider
+    describe('damageOnHit rider (COLLAPSE)', () => {
+      it('damages enemies on the tile when mutation succeeds', () => {
+        registerTerraformDef(2, 'destroy', null);
+        pathMutationSpy.destroy.and.returnValue({ ok: true } as MutationResult);
+
+        const enemyOnTile = {
+          id: 'e1',
+          maxHealth: 200,
+          gridPosition: { row: 4, col: 5 },
+          dying: false,
+        };
+        const enemyOffTile = {
+          id: 'e2',
+          maxHealth: 200,
+          gridPosition: { row: 0, col: 0 },
+          dying: false,
+        };
+        const enemyMap = new Map<string, unknown>([['e1', enemyOnTile], ['e2', enemyOffTile]]);
+        enemySpy.getEnemies.and.returnValue(enemyMap as never);
+
+        const card = makeTerraformInstance('tf-collapse');
+        service['pendingTileTargetCard'] = card;
+        service['pendingTileTargetEffect'] = {
+          type: 'terraform_target',
+          op: 'destroy',
+          duration: null,
+          damageOnHit: { pctMaxHp: 0.5 },
+        };
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+
+        const result = service.resolveTileTarget(4, 5, mockScene, currentTurn);
+
+        expect(result.ok).toBeTrue();
+        // floor(200 * 0.5) = 100
+        expect(enemySpy.damageEnemy).toHaveBeenCalledWith('e1', 100);
+        // Enemy off the tile was NOT damaged
+        expect(enemySpy.damageEnemy).not.toHaveBeenCalledWith('e2', jasmine.anything());
+      });
+
+      it('skips dying enemies (already counted as killed)', () => {
+        registerTerraformDef(2, 'destroy', null);
+        pathMutationSpy.destroy.and.returnValue({ ok: true } as MutationResult);
+
+        const dyingEnemy = {
+          id: 'dying',
+          maxHealth: 200,
+          gridPosition: { row: 4, col: 5 },
+          dying: true,
+        };
+        const enemyMap = new Map<string, unknown>([['dying', dyingEnemy]]);
+        enemySpy.getEnemies.and.returnValue(enemyMap as never);
+
+        service['pendingTileTargetCard'] = makeTerraformInstance('tf-collapse-dying');
+        service['pendingTileTargetEffect'] = {
+          type: 'terraform_target',
+          op: 'destroy',
+          duration: null,
+          damageOnHit: { pctMaxHp: 0.5 },
+        };
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+
+        service.resolveTileTarget(4, 5, mockScene, currentTurn);
+
+        expect(enemySpy.damageEnemy).not.toHaveBeenCalled();
+      });
+
+      it('does NOT damage when mutation is rejected', () => {
+        registerTerraformDef(2, 'destroy', null);
+        pathMutationSpy.destroy.and.returnValue({ ok: false, reason: 'spawner-or-exit' });
+
+        const enemyMap = new Map<string, unknown>([[
+          'e1',
+          { id: 'e1', maxHealth: 200, gridPosition: { row: 0, col: 0 }, dying: false },
+        ]]);
+        enemySpy.getEnemies.and.returnValue(enemyMap as never);
+
+        service['pendingTileTargetCard'] = makeTerraformInstance('tf-collapse-reject');
+        service['pendingTileTargetEffect'] = {
+          type: 'terraform_target',
+          op: 'destroy',
+          duration: null,
+          damageOnHit: { pctMaxHp: 0.5 },
+        };
+        deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+
+        const result = service.resolveTileTarget(0, 0, mockScene, currentTurn);
+
+        expect(result.ok).toBeFalse();
+        expect(enemySpy.damageEnemy).not.toHaveBeenCalled();
+      });
     });
   });
 

@@ -178,6 +178,18 @@ const CARD_VALUES = {
   epidemicCost: 2,
   epidemicCriticalMass: 2,       // need 2+ poisoned enemies to trigger
   epidemicUpgradedCriticalMass: 1, // upgraded: only need 1
+
+  // ── Cartographer archetype — terraform-target cards (Phase 2) ────────────
+  // LAY_TILE (sprint 11): 1E common, permanent path addition
+  layTileCost: 1,
+  // BLOCK_PASSAGE (sprint 12): 1E common, temporary wall
+  blockPassageCost: 1,
+  blockPassageDuration: 2,
+  blockPassageUpgradedDuration: 3,
+  // COLLAPSE (sprint 16): 2E uncommon, permanent destroy + %max-HP damage
+  collapseCost: 2,
+  collapseDamagePctMaxHp: 0.5,
+  collapseUpgradedDamagePctMaxHp: 0.75,
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -1076,6 +1088,95 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
     ethereal: true,
     effect: { type: 'spell', spellId: 'gold_rush', value: CARD_VALUES.phantomGoldAmount },
     upgradedEffect: { type: 'spell', spellId: 'gold_rush', value: CARD_VALUES.phantomGoldUpgradedAmount },
+  },
+
+  // ── Cartographer archetype — terraform-target cards (Phase 2) ────────────
+  //
+  // All three cards use `type: SPELL` because CardType is a runtime display
+  // classifier (tower vs spell vs modifier vs utility) that affects UI
+  // sorting and deck composition bookkeeping. The 'terraform_target' effect
+  // variant is the actual runtime dispatch discriminant (CardPlayService
+  // branches on `effect.type === 'terraform_target'`). Treating them as
+  // SPELLs keeps the UI treatment consistent with other instant-effect
+  // cards while the new effect type carries the terraform semantics.
+
+  /**
+   * LAY_TILE (Sprint 11) — add 1 path tile (WALL → BASE) at a chosen tile
+   * adjacent to existing path. Permanent. Anchors Cartographer's core
+   * "reshape the board" identity.
+   */
+  [CardId.LAY_TILE]: {
+    id: CardId.LAY_TILE,
+    name: 'Lay Tile',
+    description: 'Convert a wall into a path tile.',
+    upgradedDescription: 'Convert a wall into a path tile. (Upgraded — no change; slot reserved for future balance tuning.)',
+    type: CardType.SPELL,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.layTileCost,
+    upgraded: false,
+    effect: { type: 'terraform_target', op: 'build', duration: null },
+    upgradedEffect: { type: 'terraform_target', op: 'build', duration: null },
+    archetype: 'cartographer',
+    terraform: true,
+  },
+
+  /**
+   * BLOCK_PASSAGE (Sprint 12) — convert a path tile to wall for 2 turns.
+   * Upgrade extends to 3 turns.
+   */
+  [CardId.BLOCK_PASSAGE]: {
+    id: CardId.BLOCK_PASSAGE,
+    name: 'Block Passage',
+    description: 'Convert a path tile into a wall for 2 turns.',
+    upgradedDescription: 'Convert a path tile into a wall for 3 turns.',
+    type: CardType.SPELL,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.blockPassageCost,
+    upgraded: false,
+    effect: {
+      type: 'terraform_target',
+      op: 'block',
+      duration: CARD_VALUES.blockPassageDuration,
+    },
+    upgradedEffect: {
+      type: 'terraform_target',
+      op: 'block',
+      duration: CARD_VALUES.blockPassageUpgradedDuration,
+    },
+    archetype: 'cartographer',
+    terraform: true,
+  },
+
+  /**
+   * COLLAPSE (Sprint 16) — permanently destroy a path tile and deal
+   * 50% max-HP damage to any enemies standing on it. Upgrade bumps
+   * damage to 75% max-HP. The damage side-effect is carried on the
+   * TerraformTargetCardEffect.damageOnHit rider, applied AFTER mutation
+   * success so rejected mutations cannot cause partial effects.
+   */
+  [CardId.COLLAPSE]: {
+    id: CardId.COLLAPSE,
+    name: 'Collapse',
+    description: 'Destroy a path tile. Enemies on it take 50% of max HP as damage.',
+    upgradedDescription: 'Destroy a path tile. Enemies on it take 75% of max HP as damage.',
+    type: CardType.SPELL,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.collapseCost,
+    upgraded: false,
+    effect: {
+      type: 'terraform_target',
+      op: 'destroy',
+      duration: null,
+      damageOnHit: { pctMaxHp: CARD_VALUES.collapseDamagePctMaxHp },
+    },
+    upgradedEffect: {
+      type: 'terraform_target',
+      op: 'destroy',
+      duration: null,
+      damageOnHit: { pctMaxHp: CARD_VALUES.collapseUpgradedDamagePctMaxHp },
+    },
+    archetype: 'cartographer',
+    terraform: true,
   },
 };
 

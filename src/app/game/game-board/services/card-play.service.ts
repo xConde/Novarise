@@ -355,6 +355,27 @@ export class CardPlayService {
       return { ok: false, reason: mutationResult.reason };
     }
 
+    // Apply damage-on-hit rider if the card has one (COLLAPSE).
+    // Runs AFTER the mutation succeeds so a rejected mutation can't cause
+    // partial effects (damage without board change). Damage is deterministic
+    // (pct of max HP) so no RNG is involved.
+    if (effect.damageOnHit) {
+      const pct = effect.damageOnHit.pctMaxHp;
+      const enemies = this.enemyService.getEnemies();
+      enemies.forEach(enemy => {
+        if (
+          enemy.gridPosition.row === row &&
+          enemy.gridPosition.col === col &&
+          !enemy.dying
+        ) {
+          const damage = Math.floor(enemy.maxHealth * pct);
+          if (damage > 0) {
+            this.enemyService.damageEnemy(enemy.id, damage);
+          }
+        }
+      });
+    }
+
     // Mutation succeeded — consume the card (deducts energy, moves to discard).
     // Energy was confirmed sufficient above, so playCard should not fail here.
     this.deckService.playCard(card.instanceId);

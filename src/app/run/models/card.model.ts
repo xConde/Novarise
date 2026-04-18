@@ -88,6 +88,11 @@ export enum CardId {
   DESPERATE_MEASURES = 'DESPERATE_MEASURES',
   WARP_STRIKE = 'WARP_STRIKE',
   PHANTOM_GOLD = 'PHANTOM_GOLD',
+
+  // Cartographer archetype — terraform-target cards (Phase 2, Sprints 11/12/16)
+  LAY_TILE = 'LAY_TILE',
+  BLOCK_PASSAGE = 'BLOCK_PASSAGE',
+  COLLAPSE = 'COLLAPSE',
 }
 
 export enum CardType {
@@ -266,6 +271,20 @@ export interface TerraformTargetCardEffect {
   readonly op: MutationOp;
   /** Duration in turns; null = permanent. */
   readonly duration: number | null;
+  /**
+   * Optional damage-on-hit rider. When set, after the mutation succeeds,
+   * every enemy on (row, col) takes `pctMaxHp × enemy.maxHealth` damage.
+   *
+   * WHY SEPARATE FROM pathMutationService: the service is pure board state.
+   * Damage is a card concern — routing it through the service would couple
+   * it to EnemyService and make side effects harder to reason about.
+   *
+   * Currently used by COLLAPSE (0.5 max-HP damage on destroy).
+   */
+  readonly damageOnHit?: {
+    /** Fraction of maxHealth — 0.5 means 50% of max HP. */
+    readonly pctMaxHp: number;
+  };
 }
 
 /**

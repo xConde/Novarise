@@ -221,9 +221,10 @@ describe('Card System — Balance', () => {
 
   // ── Total Card Count ──────────────────────────────────────────────────────
 
-  it('should have exactly 51 card definitions', () => {
-    // 40 original + 6 tower variant cards (sprint 2a) + 3 status-applying spells (sprint 2b) + 2 status payoff spells (sprint 2c)
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(51);
+  it('should have exactly 54 card definitions', () => {
+    // 40 original + 6 tower variant cards (sprint 2a) + 3 status-applying spells (sprint 2b)
+    // + 2 status payoff spells (sprint 2c) + 3 Cartographer terraform spells (phase 2 sprints 11/12/16)
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(54);
   });
 
   it('starter cards should all have STARTER rarity', () => {

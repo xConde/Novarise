@@ -10,8 +10,8 @@ import { CardId, CardInstance, CardRarity, CardType, TowerCardEffect } from '../
 import { TowerType } from '../../game/game-board/models/tower.model';
 
 describe('CARD_DEFINITIONS', () => {
-  it('has exactly 51 cards', () => {
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(51);
+  it('has exactly 54 cards', () => {
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(54);
   });
 
   it('contains all CardId enum values', () => {
@@ -50,8 +50,8 @@ describe('CARD_DEFINITIONS', () => {
       expect(getCardsByType(CardType.TOWER).length).toBe(12);
     });
 
-    it('has 21 spell cards (16 original + 3 status-applying + 2 status payoff spells)', () => {
-      expect(getCardsByType(CardType.SPELL).length).toBe(21);
+    it('has 24 spell cards (16 original + 3 status-applying + 2 status payoff + 3 Cartographer terraform)', () => {
+      expect(getCardsByType(CardType.SPELL).length).toBe(24);
     });
 
     it('has 12 modifier cards', () => {
@@ -567,6 +567,96 @@ describe('CARD_DEFINITIONS', () => {
       // SCOUT_ELITE is an innate keyword card, not a Cartographer-identity
       // card. Keep neutral so innate-deck builds don't auto-lean Cartographer.
       expect(CARD_DEFINITIONS[CardId.SCOUT_ELITE].archetype ?? 'neutral').toBe('neutral');
+    });
+  });
+
+  // ── Phase 2 Sprints 11/12/16 — Cartographer terraform cards ────────────────
+  describe('Cartographer terraform cards', () => {
+    describe('LAY_TILE (sprint 11)', () => {
+      const def = CARD_DEFINITIONS[CardId.LAY_TILE];
+
+      it('exists', () => {
+        expect(def).toBeDefined();
+      });
+      it('is tagged as cartographer', () => {
+        expect(def.archetype).toBe('cartographer');
+      });
+      it('carries the terraform keyword', () => {
+        expect(def.terraform).toBeTrue();
+      });
+      it('costs 1 energy (common)', () => {
+        expect(def.energyCost).toBe(1);
+        expect(def.rarity).toBe(CardRarity.COMMON);
+      });
+      it('has a terraform_target effect with op=build, duration=null (permanent)', () => {
+        expect(def.effect.type).toBe('terraform_target');
+        if (def.effect.type === 'terraform_target') {
+          expect(def.effect.op).toBe('build');
+          expect(def.effect.duration).toBeNull();
+        }
+      });
+    });
+
+    describe('BLOCK_PASSAGE (sprint 12)', () => {
+      const def = CARD_DEFINITIONS[CardId.BLOCK_PASSAGE];
+
+      it('exists', () => {
+        expect(def).toBeDefined();
+      });
+      it('is tagged as cartographer with terraform keyword', () => {
+        expect(def.archetype).toBe('cartographer');
+        expect(def.terraform).toBeTrue();
+      });
+      it('costs 1 energy (common)', () => {
+        expect(def.energyCost).toBe(1);
+        expect(def.rarity).toBe(CardRarity.COMMON);
+      });
+      it('has a terraform_target effect with op=block, duration=2', () => {
+        expect(def.effect.type).toBe('terraform_target');
+        if (def.effect.type === 'terraform_target') {
+          expect(def.effect.op).toBe('block');
+          expect(def.effect.duration).toBe(2);
+        }
+      });
+      it('upgraded effect extends duration to 3', () => {
+        expect(def.upgradedEffect?.type).toBe('terraform_target');
+        if (def.upgradedEffect?.type === 'terraform_target') {
+          expect(def.upgradedEffect.duration).toBe(3);
+        }
+      });
+    });
+
+    describe('COLLAPSE (sprint 16)', () => {
+      const def = CARD_DEFINITIONS[CardId.COLLAPSE];
+
+      it('exists', () => {
+        expect(def).toBeDefined();
+      });
+      it('is tagged as cartographer with terraform keyword', () => {
+        expect(def.archetype).toBe('cartographer');
+        expect(def.terraform).toBeTrue();
+      });
+      it('costs 2 energy (uncommon)', () => {
+        expect(def.energyCost).toBe(2);
+        expect(def.rarity).toBe(CardRarity.UNCOMMON);
+      });
+      it('has a terraform_target effect with op=destroy, permanent', () => {
+        expect(def.effect.type).toBe('terraform_target');
+        if (def.effect.type === 'terraform_target') {
+          expect(def.effect.op).toBe('destroy');
+          expect(def.effect.duration).toBeNull();
+        }
+      });
+      it('deals 50% max-HP damage on hit (base)', () => {
+        if (def.effect.type === 'terraform_target') {
+          expect(def.effect.damageOnHit?.pctMaxHp).toBe(0.5);
+        }
+      });
+      it('deals 75% max-HP damage when upgraded', () => {
+        if (def.upgradedEffect?.type === 'terraform_target') {
+          expect(def.upgradedEffect.damageOnHit?.pctMaxHp).toBe(0.75);
+        }
+      });
     });
   });
 });
