@@ -106,15 +106,6 @@ export interface PlacedTower {
    * no override — identical to pre-extension behavior.
    */
   cardStatOverrides?: TowerStatOverrides;
-  /**
-   * Per-tower link-slot capacity override (Conduit). `undefined` → reads
-   * CONDUIT_CONFIG.DEFAULT_LINK_SLOTS (4).
-   *
-   * Lives on PlacedTower, NOT on GameBoardTile — any tile-level field shared
-   * between services is a latent composition bug (Phase 3 Finding 1). See
-   * docs/design/conduit-adjacency-graph.md §4.
-   */
-  linkSlots?: number;
 }
 
 export const TOWER_CONFIGS: Record<TowerType, TowerStats> = {

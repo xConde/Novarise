@@ -704,6 +704,25 @@ export class TowerCombatService {
    * `relicService.get*Multiplier(type)` (Map lookup). Avoid new allocations
    * (arrays, spreads) without re-profiling.
    */
+  /**
+   * Effective neighbor count for HANDSHAKE / GRID_SURGE gates. Returns 0
+   * when the gate is inactive or the graph service is absent — short-
+   * circuits the graph query so pre-Conduit runs pay zero cost. When
+   * ARCHITECT is active, reads `clusterSize - 1` so the gate is cluster-
+   * wide; disruption shrinks the cluster transparently.
+   */
+  private getEffectiveNeighborCount(
+    tower: PlacedTower,
+    ctx: DamageStackContext,
+    gateActive: boolean,
+  ): number {
+    if (!gateActive || this.towerGraphService === undefined) return 0;
+    if (ctx.architectClusterActive) {
+      return Math.max(0, this.towerGraphService.getClusterTowers(tower.row, tower.col, ctx.currentTurn).length - 1);
+    }
+    return this.towerGraphService.getNeighbors(tower.row, tower.col, ctx.currentTurn).length;
+  }
+
   private composeDamageStack(
     tower: PlacedTower,
     baseStats: TowerStats,
@@ -739,16 +758,11 @@ export class TowerCombatService {
       ? (1 + ctx.kothBonus)
       : 1;
 
-    // HANDSHAKE: ≥ 1 non-disrupted neighbor. Short-circuits on bonus === 0 so
-    // pre-Conduit runs pay zero graph-query cost. ARCHITECT swaps the neighbor
+    // HANDSHAKE: ≥ 1 non-disrupted neighbor. ARCHITECT swaps the neighbor
     // read to cluster-wide (`clusterSize - 1`); disruption shrinks the cluster
     // so the swap stays transparent.
-    const handshakeNeighborCount = (ctx.handshakeBonus > 0 && this.towerGraphService !== undefined)
-      ? (ctx.architectClusterActive
-          ? Math.max(0, this.towerGraphService.getClusterTowers(tower.row, tower.col, ctx.currentTurn).length - 1)
-          : this.towerGraphService.getNeighbors(tower.row, tower.col, ctx.currentTurn).length)
-      : 0;
-    const handshakeMult = handshakeNeighborCount > 0 ? (1 + ctx.handshakeBonus) : 1;
+    const handshakeCount = this.getEffectiveNeighborCount(tower, ctx, ctx.handshakeBonus > 0);
+    const handshakeMult = handshakeCount > 0 ? (1 + ctx.handshakeBonus) : 1;
 
     // FORMATION: additive-to-base range, folds INSIDE `(base + additive)` per §13.
     const formationActive = ctx.formationRangeAdditive > 0
@@ -757,12 +771,8 @@ export class TowerCombatService {
     const rangeAdditive = formationActive ? ctx.formationRangeAdditive : 0;
 
     // GRID_SURGE: ≥ 4 effective neighbors. ARCHITECT swap same as HANDSHAKE.
-    const gridSurgeNeighborCount = (ctx.gridSurgeBonus > 0 && this.towerGraphService !== undefined)
-      ? (ctx.architectClusterActive
-          ? Math.max(0, this.towerGraphService.getClusterTowers(tower.row, tower.col, ctx.currentTurn).length - 1)
-          : this.towerGraphService.getNeighbors(tower.row, tower.col, ctx.currentTurn).length)
-      : 0;
-    const gridSurgeMult = gridSurgeNeighborCount >= CONDUIT_CONFIG.GRID_SURGE_MIN_NEIGHBORS
+    const gridSurgeCount = this.getEffectiveNeighborCount(tower, ctx, ctx.gridSurgeBonus > 0);
+    const gridSurgeMult = gridSurgeCount >= CONDUIT_CONFIG.GRID_SURGE_MIN_NEIGHBORS
       ? (1 + ctx.gridSurgeBonus)
       : 1;
 

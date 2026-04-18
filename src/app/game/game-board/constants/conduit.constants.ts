@@ -6,15 +6,6 @@
  */
 export const CONDUIT_CONFIG = {
   /**
-   * Default per-tower link-slot capacity. ARCHITECT increments
-   * `tower.linkSlots` past this default; every tower with `linkSlots ===
-   * undefined` reads the default.
-   *
-   * 4 = one slot per cardinal direction (spike §6 locks 4-dir adjacency).
-   */
-  DEFAULT_LINK_SLOTS: 4,
-
-  /**
    * Adjacency model: cardinal 4-direction only (spike §6). Changing this
    * constant is INSUFFICIENT to switch modes — TowerGraphService's
    * neighbor-scan iterates cardinal offsets literally. Documentary; diagonal

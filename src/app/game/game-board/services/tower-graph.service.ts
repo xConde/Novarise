@@ -349,11 +349,6 @@ export class TowerGraphService {
     return count;
   }
 
-  /** Effective link-slot capacity for a tower. Defaults to DEFAULT_LINK_SLOTS. */
-  getLinkSlotCapacity(tower: PlacedTower): number {
-    return tower.linkSlots ?? CONDUIT_CONFIG.DEFAULT_LINK_SLOTS;
-  }
-
   // ─── Per-turn lifecycle ────────────────────────────────────────────────
 
   /**

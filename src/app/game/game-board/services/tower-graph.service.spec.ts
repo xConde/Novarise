@@ -1,15 +1,14 @@
 import { TestBed } from '@angular/core/testing';
 import { TowerGraphService } from './tower-graph.service';
 import { PlacedTower, TowerType, DEFAULT_TARGETING_MODE } from '../models/tower.model';
-import { CONDUIT_CONFIG } from '../constants/conduit.constants';
 
 describe('TowerGraphService (Conduit primitives)', () => {
   let service: TowerGraphService;
   let placedTowers: Map<string, PlacedTower>;
 
-  // Simple tower factory — only fields the graph cares about (id, row, col,
-  // linkSlots). Everything else stubbed to minimum viable types.
-  function buildTower(row: number, col: number, linkSlots?: number): PlacedTower {
+  // Simple tower factory — only fields the graph cares about (id, row, col).
+  // Everything else stubbed to minimum viable types.
+  function buildTower(row: number, col: number): PlacedTower {
     const id = `${row}-${col}`;
     return {
       id,
@@ -21,12 +20,11 @@ describe('TowerGraphService (Conduit primitives)', () => {
       totalInvested: 0,
       targetingMode: DEFAULT_TARGETING_MODE,
       mesh: null,
-      ...(linkSlots !== undefined ? { linkSlots } : {}),
     };
   }
 
-  function place(row: number, col: number, linkSlots?: number): PlacedTower {
-    const tower = buildTower(row, col, linkSlots);
+  function place(row: number, col: number): PlacedTower {
+    const tower = buildTower(row, col);
     placedTowers.set(tower.id, tower);
     service.registerTower(tower);
     return tower;
@@ -364,19 +362,6 @@ describe('TowerGraphService (Conduit primitives)', () => {
       service.reset();
       expect(service.getNeighbors(5, 5)).toEqual([]);
       expect(service.isDisrupted(5, 5, 5)).toBe(false);
-    });
-  });
-
-  describe('link-slot capacity (ARCHITECT rare)', () => {
-    it('getLinkSlotCapacity returns DEFAULT_LINK_SLOTS when unset', () => {
-      const t = buildTower(5, 5);
-      expect(service.getLinkSlotCapacity(t)).toBe(CONDUIT_CONFIG.DEFAULT_LINK_SLOTS);
-      expect(CONDUIT_CONFIG.DEFAULT_LINK_SLOTS).toBe(4);
-    });
-
-    it('getLinkSlotCapacity honors the linkSlots override', () => {
-      const t = buildTower(5, 5, 7);
-      expect(service.getLinkSlotCapacity(t)).toBe(7);
     });
   });
 

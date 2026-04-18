@@ -11,8 +11,8 @@
  *
  * What this spec checks:
  *
- *   1. PlacedTower.linkSlots does not collide with placedAtTurn,
- *      cardStatOverrides, or specialization across register/unregister.
+ *   1. PlacedTower optional fields (placedAtTurn, cardStatOverrides) survive
+ *      register/unregister without collision.
  *   2. Tower placed on an elevated tile → graph reflects position + elevation
  *      is preserved, and both states survive sell.
  *   3. Tower placed on a player-built (BASE from WALL) path tile → path
@@ -39,7 +39,6 @@ import { TerraformMaterialPoolService } from '../../game/game-board/services/ter
 
 import { PlacedTower, TowerType, DEFAULT_TARGETING_MODE } from '../../game/game-board/models/tower.model';
 import { BlockType } from '../../game/game-board/models/game-board-tile';
-import { CONDUIT_CONFIG } from '../../game/game-board/constants/conduit.constants';
 
 /** Factory — just the fields TowerGraphService reads. */
 function buildTower(row: number, col: number, overrides: Partial<PlacedTower> = {}): PlacedTower {
@@ -115,24 +114,15 @@ describe('Conduit × Path-Mutation × Elevation × Tower composition', () => {
   // 1. PlacedTower field composition
   // ────────────────────────────────────────────────────────────────────────
 
-  it('PlacedTower.linkSlots coexists with placedAtTurn, cardStatOverrides, and specialization', () => {
+  it('PlacedTower placedAtTurn and cardStatOverrides survive register', () => {
     const tower = place(5, 5, {
-      linkSlots: 6,
       placedAtTurn: 3,
       cardStatOverrides: { damageMultiplier: 1.5 },
     });
-    expect(tower.linkSlots).toBe(6);
     expect(tower.placedAtTurn).toBe(3);
     expect(tower.cardStatOverrides?.damageMultiplier).toBe(1.5);
-    expect(graph.getLinkSlotCapacity(tower)).toBe(6);
-  });
-
-  it('undefined linkSlots resolves to DEFAULT_LINK_SLOTS without mutating the tower', () => {
-    const tower = place(5, 5);
-    expect(tower.linkSlots).toBeUndefined();
-    expect(graph.getLinkSlotCapacity(tower)).toBe(CONDUIT_CONFIG.DEFAULT_LINK_SLOTS);
-    // Capacity read must not backfill linkSlots onto the tower.
-    expect(tower.linkSlots).toBeUndefined();
+    // Graph registered the tower (id is in the keyToId map).
+    expect(graph.getNeighbors(5, 5)).toBeDefined();
   });
 
   // ────────────────────────────────────────────────────────────────────────
