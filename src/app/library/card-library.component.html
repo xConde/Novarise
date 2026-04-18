@@ -33,6 +33,59 @@
     </div>
   </header>
 
+  <!-- View-mode tabs + dev toggles. -->
+  <div class="library__view-bar" role="tablist" aria-label="View mode">
+    <button
+      type="button"
+      class="tab"
+      role="tab"
+      [class.tab--active]="viewMode === 'all'"
+      [attr.aria-selected]="viewMode === 'all'"
+      (click)="onViewModeChange('all')">
+      All
+      <span class="tab__count">{{ totalCards }}</span>
+    </button>
+    <button
+      type="button"
+      class="tab"
+      role="tab"
+      [class.tab--active]="viewMode === 'seen'"
+      [attr.aria-selected]="viewMode === 'seen'"
+      (click)="onViewModeChange('seen')">
+      Seen
+      <span class="tab__count">{{ seenCount }}</span>
+    </button>
+    <button
+      type="button"
+      class="tab"
+      role="tab"
+      [class.tab--active]="viewMode === 'unseen'"
+      [attr.aria-selected]="viewMode === 'unseen'"
+      (click)="onViewModeChange('unseen')">
+      Unseen
+      <span class="tab__count">{{ unseenCount }}</span>
+    </button>
+
+    <div class="library__view-options" aria-label="View options">
+      <label class="view-toggle">
+        <input type="checkbox" [checked]="showUpgraded" (change)="toggleShowUpgraded()">
+        <span>Show upgraded</span>
+      </label>
+      <label class="view-toggle">
+        <input type="checkbox" [checked]="forceFullColor" (change)="toggleForceFullColor()">
+        <span>Full color</span>
+      </label>
+      <button
+        type="button"
+        class="library__clear-seen"
+        [disabled]="seenCount === 0"
+        (click)="clearSeenHistory()"
+        aria-label="Clear seen history">
+        Reset seen
+      </button>
+    </div>
+  </div>
+
   <!-- Filter bar. -->
   <app-library-filters
     [state]="filterState"
@@ -46,6 +99,8 @@
     <app-library-card-tile
       *ngFor="let card of filteredCards; trackBy: trackById"
       [definition]="card"
+      [showUpgraded]="showUpgraded"
+      [desaturated]="isDesaturated(card)"
       (selected)="onCardSelected($event)">
     </app-library-card-tile>
   </section>
@@ -53,7 +108,12 @@
   <!-- Empty state. -->
   <section class="library__empty" *ngIf="filteredCards.length === 0" aria-live="polite">
     <p class="library__empty-title">No cards match the current filters.</p>
-    <p class="library__empty-hint">Clear one or more filters to see more results.</p>
+    <p class="library__empty-hint">
+      <ng-container *ngIf="viewMode === 'unseen'; else otherHint">
+        Play a run to discover new cards.
+      </ng-container>
+      <ng-template #otherHint>Clear one or more filters to see more results.</ng-template>
+    </p>
   </section>
 
   <!-- Detail modal — rendered only while open. -->

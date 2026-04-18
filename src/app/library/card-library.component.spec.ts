@@ -3,23 +3,34 @@ import { RouterTestingModule } from '@angular/router/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { CardLibraryComponent } from './card-library.component';
 import { CARD_DEFINITIONS } from '../run/constants/card-definitions';
-import { CardRarity, CardType } from '../run/models/card.model';
+import { CardId, CardRarity, CardType } from '../run/models/card.model';
 import { DEFAULT_FILTERS } from './components/library-filters.component';
+import { SeenCardsService } from '../core/services/seen-cards.service';
 
 describe('CardLibraryComponent', () => {
   let fixture: ComponentFixture<CardLibraryComponent>;
   let component: CardLibraryComponent;
+  let seenCards: SeenCardsService;
 
   beforeEach(async () => {
+    // Clear localStorage between tests so view-mode specs start from a
+    // known-empty seen set regardless of which other specs ran earlier.
+    localStorage.removeItem('novarise_seen_cards');
     await TestBed.configureTestingModule({
       declarations: [CardLibraryComponent],
       imports: [RouterTestingModule],
-      schemas: [NO_ERRORS_SCHEMA], // skip app-icon / app-library-card-tile deep render
+      schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
 
     fixture = TestBed.createComponent(CardLibraryComponent);
     component = fixture.componentInstance;
+    seenCards = TestBed.inject(SeenCardsService);
+    seenCards.clear();
     fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    localStorage.removeItem('novarise_seen_cards');
   });
 
   it('creates', () => {
@@ -177,5 +188,97 @@ describe('CardLibraryComponent', () => {
     component.onCardSelected(component.allCards[0]);
     component.onModalClosed();
     expect(component.selectedCard).toBeNull();
+  });
+
+  // ── Seen / Unseen (L5) ──────────────────────────────────────────────
+
+  it('viewMode starts as "all" and filteredCards includes every card', () => {
+    expect(component.viewMode).toBe('all');
+    expect(component.filteredCards.length).toBe(component.allCards.length);
+  });
+
+  it('viewMode "seen" shows only cards already in the seen set', () => {
+    const target = component.allCards[0];
+    seenCards.markSeen(target.id);
+    component.onViewModeChange('seen');
+    expect(component.filteredCards.length).toBe(1);
+    expect(component.filteredCards[0]).toBe(target);
+  });
+
+  it('viewMode "unseen" excludes cards in the seen set', () => {
+    const target = component.allCards[0];
+    seenCards.markSeen(target.id);
+    component.onViewModeChange('unseen');
+    expect(component.filteredCards.length).toBe(component.allCards.length - 1);
+    expect(component.filteredCards.every(c => c.id !== target.id)).toBe(true);
+  });
+
+  it('seenCount + unseenCount equals totalCards', () => {
+    expect(component.seenCount + component.unseenCount).toBe(component.totalCards);
+  });
+
+  it('isDesaturated returns true for unseen cards by default', () => {
+    const unseen = component.allCards[0];
+    expect(component.isDesaturated(unseen)).toBe(true);
+  });
+
+  it('isDesaturated returns false for seen cards', () => {
+    const card = component.allCards[0];
+    seenCards.markSeen(card.id);
+    expect(component.isDesaturated(card)).toBe(false);
+  });
+
+  it('isDesaturated returns false for every card when forceFullColor is on', () => {
+    component.forceFullColor = true;
+    expect(component.isDesaturated(component.allCards[0])).toBe(false);
+  });
+
+  it('toggleShowUpgraded flips the showUpgraded flag', () => {
+    expect(component.showUpgraded).toBe(false);
+    component.toggleShowUpgraded();
+    expect(component.showUpgraded).toBe(true);
+    component.toggleShowUpgraded();
+    expect(component.showUpgraded).toBe(false);
+  });
+
+  it('toggleForceFullColor flips the forceFullColor flag', () => {
+    expect(component.forceFullColor).toBe(false);
+    component.toggleForceFullColor();
+    expect(component.forceFullColor).toBe(true);
+  });
+
+  it('clearSeenHistory empties the seen set via SeenCardsService', () => {
+    seenCards.markSeen(CardId.TOWER_BASIC);
+    component.clearSeenHistory();
+    expect(seenCards.getAll().size).toBe(0);
+  });
+
+  it('seen observable updates filteredCards when viewMode is seen', () => {
+    component.onViewModeChange('seen');
+    expect(component.filteredCards.length).toBe(0);
+    seenCards.markSeen(component.allCards[0].id);
+    expect(component.filteredCards.length).toBe(1);
+  });
+
+  it('view-mode filter composes with other filter axes', () => {
+    // Mark one Conduit card as seen, then combine viewMode=seen with archetype=conduit
+    const conduitCard = component.allCards.find(c => c.archetype === 'conduit');
+    if (!conduitCard) throw new Error('spec invariant — at least one conduit card must exist');
+    seenCards.markSeen(conduitCard.id);
+    component.onViewModeChange('seen');
+    component.onFiltersChange({
+      ...DEFAULT_FILTERS,
+      archetypes: new Set(['conduit']),
+    });
+    expect(component.filteredCards.length).toBe(1);
+    expect(component.filteredCards[0]).toBe(conduitCard);
+  });
+
+  it('empty state shows tab-specific hint on unseen tab', () => {
+    seenCards.markSeenMany(component.allCards.map(c => c.id));
+    component.onViewModeChange('unseen');
+    fixture.detectChanges();
+    const hint = fixture.nativeElement.querySelector('.library__empty-hint') as HTMLElement;
+    expect(hint.textContent).toContain('run');
   });
 });

@@ -50,6 +50,7 @@ import { RunPersistenceService } from './run-persistence.service';
 import { RunEventBusService, RunEventType } from './run-event-bus.service';
 import { RUN_EVENTS } from '../constants/run-events';
 import { PlayerProfileService } from '../../core/services/player-profile.service';
+import { SeenCardsService } from '../../core/services/seen-cards.service';
 import { getStarterDeck, CARD_DEFINITIONS } from '../constants/card-definitions';
 import { CardArchetype, CardId, CardInstance, CardRarity } from '../models/card.model';
 import { EncounterCheckpointService } from './encounter-checkpoint.service';
@@ -115,6 +116,7 @@ export class RunService {
     private eventBus: RunEventBusService,
     private playerProfile: PlayerProfileService,
     private encounterCheckpointService: EncounterCheckpointService,
+    private seenCards: SeenCardsService,
   ) {}
 
   // ── Queries ─────────────────────────────────────────────
@@ -545,6 +547,10 @@ export class RunService {
       picked.push({ type: 'card', cardId: card.id });
     }
 
+    // Every offered card counts as seen — QA user wants "what haven't I
+    // encountered yet?" not "what did I keep".
+    this.seenCards.markSeenMany(picked.map(r => r.cardId));
+
     return picked;
   }
 
@@ -717,6 +723,7 @@ export class RunService {
       if (pool.length === 0) continue;
       const card = this.pickArchetypeAwareCard(pool, dominant, rng);
       pickedCardIds.add(card.id);
+      this.seenCards.markSeen(card.id);
       const rarityKey = card.rarity as keyof typeof SHOP_CONFIG.priceByRarity;
       const basePrice = SHOP_CONFIG.priceByRarity[rarityKey] ?? SHOP_CONFIG.priceByRarity.common;
       items.push({

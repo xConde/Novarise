@@ -1,7 +1,9 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { Subscription } from 'rxjs';
 import {
   CardArchetype,
   CardDefinition,
+  CardId,
   CardRarity,
   CardType,
 } from '../run/models/card.model';
@@ -12,6 +14,9 @@ import {
   KeywordFilter,
   SortMode,
 } from './components/library-filters.component';
+import { SeenCardsService } from '../core/services/seen-cards.service';
+
+export type ViewMode = 'all' | 'seen' | 'unseen';
 
 /**
  * Dev-only /library route. Full read-only inventory of every card in
@@ -25,8 +30,12 @@ import {
   styleUrls: ['./card-library.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class CardLibraryComponent {
-  constructor(private cdr: ChangeDetectorRef) {
+export class CardLibraryComponent implements OnInit, OnDestroy {
+  constructor(
+    private cdr: ChangeDetectorRef,
+    private seenCards: SeenCardsService,
+  ) {
+    this.seenIds = seenCards.getAll();
     this.recomputeFiltered();
   }
 
@@ -37,11 +46,25 @@ export class CardLibraryComponent {
 
   filterState: FilterState = DEFAULT_FILTERS;
 
-  /** Derived view after filter + sort + search. Recomputed on state change. */
+  /** All / Seen / Unseen tab selector. */
+  viewMode: ViewMode = 'all';
+
+  /** Dev toggle — when true, render upgradedEffect / upgradedDescription. */
+  showUpgraded = false;
+
+  /** Dev toggle — when true, unseen cards render at full saturation anyway. */
+  forceFullColor = false;
+
+  /** Live snapshot of the seen set. */
+  seenIds: ReadonlySet<CardId>;
+
+  /** Derived view after filter + view-mode + sort + search. */
   filteredCards: readonly CardDefinition[] = [];
 
   /** Currently open detail modal target, or null when closed. */
   selectedCard: CardDefinition | null = null;
+
+  private seenSub?: Subscription;
 
   get countsByType(): ReadonlyMap<CardType, number> {
     const map = new Map<CardType, number>();
@@ -51,12 +74,53 @@ export class CardLibraryComponent {
     return map;
   }
 
+  get seenCount(): number { return this.seenIds.size; }
+  get unseenCount(): number { return this.totalCards - this.seenIds.size; }
+
   readonly CardType = CardType;
+
+  ngOnInit(): void {
+    this.seenSub = this.seenCards.seen$.subscribe(snapshot => {
+      this.seenIds = snapshot;
+      this.recomputeFiltered();
+      this.cdr.markForCheck();
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.seenSub?.unsubscribe();
+  }
 
   onFiltersChange(next: FilterState): void {
     this.filterState = next;
     this.recomputeFiltered();
     this.cdr.markForCheck();
+  }
+
+  onViewModeChange(mode: ViewMode): void {
+    this.viewMode = mode;
+    this.recomputeFiltered();
+    this.cdr.markForCheck();
+  }
+
+  toggleShowUpgraded(): void {
+    this.showUpgraded = !this.showUpgraded;
+    this.cdr.markForCheck();
+  }
+
+  toggleForceFullColor(): void {
+    this.forceFullColor = !this.forceFullColor;
+    this.cdr.markForCheck();
+  }
+
+  clearSeenHistory(): void {
+    this.seenCards.clear();
+  }
+
+  /** Desaturation rule: unseen cards dim unless forceFullColor is on. */
+  isDesaturated(card: CardDefinition): boolean {
+    if (this.forceFullColor) return false;
+    return !this.seenIds.has(card.id);
   }
 
   onCardSelected(card: CardDefinition): void {
@@ -76,6 +140,7 @@ export class CardLibraryComponent {
   private recomputeFiltered(): void {
     const s = this.filterState;
     let list = this.allCards.filter(card => matchesFilters(card, s));
+    list = list.filter(card => matchesViewMode(card, this.viewMode, this.seenIds));
     list = [...list].sort(makeComparator(s.sort));
     this.filteredCards = list;
   }
@@ -94,6 +159,16 @@ function matchesFilters(card: CardDefinition, s: FilterState): boolean {
   return true;
 }
 
+function matchesViewMode(
+  card: CardDefinition,
+  mode: ViewMode,
+  seenIds: ReadonlySet<CardId>,
+): boolean {
+  if (mode === 'all') return true;
+  const seen = seenIds.has(card.id);
+  return mode === 'seen' ? seen : !seen;
+}
+
 function matchesAnyKeyword(card: CardDefinition, active: ReadonlySet<KeywordFilter>): boolean {
   for (const kw of active) {
     if (kw === 'link'      && card.link)      return true;
@@ -107,7 +182,6 @@ function matchesAnyKeyword(card: CardDefinition, active: ReadonlySet<KeywordFilt
 }
 
 function matchesSearch(card: CardDefinition, query: string): boolean {
-  // Lowercased query normalization lives in LibraryFiltersComponent.onSearchInput.
   const haystack = (card.name + ' ' + card.description + ' ' + (card.upgradedDescription ?? '')).toLowerCase();
   return haystack.includes(query);
 }
@@ -127,7 +201,7 @@ function makeComparator(sort: SortMode): (a: CardDefinition, b: CardDefinition) 
       case 'highground':   return 2;
       case 'conduit':      return 3;
       case 'siegeworks':   return 4;
-      default:             return 0; // neutral / undefined first
+      default:             return 0;
     }
   };
 

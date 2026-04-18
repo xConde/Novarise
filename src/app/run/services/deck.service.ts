@@ -12,6 +12,7 @@ import { getCardDefinition } from '../constants/card-definitions';
 import { SeededRng, createSeededRng } from '../constants/run.constants';
 import { SerializableDeckState } from '../../game/game-board/models/encounter-checkpoint.model';
 import { RelicService } from './relic.service';
+import { SeenCardsService } from '../../core/services/seen-cards.service';
 
 /**
  * DeckService — deck management for Ascent Mode encounters.
@@ -39,7 +40,10 @@ export class DeckService {
   readonly deckState$: Observable<DeckState> = this.deckStateSubject.asObservable();
   readonly energy$: Observable<EnergyState> = this.energySubject.asObservable();
 
-  constructor(@Optional() private relicService: RelicService | null = null) {}
+  constructor(
+    @Optional() private relicService: RelicService | null = null,
+    @Optional() private seenCardsService: SeenCardsService | null = null,
+  ) {}
 
   // ── Lifecycle ─────────────────────────────────────────────
 
@@ -55,6 +59,8 @@ export class DeckService {
       exhaustPile: [],
     };
     this.energyState = { current: 0, max: DECK_CONFIG.baseEnergy };
+    // Starter deck counts as "seen" — every cardId in the initial deck.
+    this.seenCardsService?.markSeenMany(cardIds);
     this.emit();
   }
 
@@ -212,6 +218,7 @@ export class DeckService {
       drawPile: this.deckState.drawPile.slice(1),
       hand: [...this.deckState.hand, drawn],
     };
+    this.seenCardsService?.markSeen(drawn.cardId);
     return true;
   }
 
@@ -222,6 +229,7 @@ export class DeckService {
       ...this.deckState,
       discardPile: [...this.deckState.discardPile, instance],
     };
+    this.seenCardsService?.markSeen(cardId);
     this.emit();
   }
 
