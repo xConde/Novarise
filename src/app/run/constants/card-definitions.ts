@@ -344,6 +344,14 @@ const CARD_VALUES = {
   // Value is a sentinel (1).
   architectCost: 3,
   architectValue: 1,                  // sentinel — flag modifier
+
+  // ── Conduit archetype — HIVE_MIND (Sprint 50) ────────────────────────────
+  // HIVE_MIND (3E rare build-around): encounter-scoped flag. When active,
+  // every tower in a cluster fires using the MAX composed damage and range
+  // across all cluster members. Mixed-tower clusters (BASIC + SNIPER) deal
+  // the stronger tower's damage from every position.
+  hiveMindCost: 3,
+  hiveMindValue: 1,                   // sentinel — flag modifier
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -2035,6 +2043,45 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
       type: 'modifier' as const,
       stat: MODIFIER_STAT.ARCHITECT_CLUSTER_PROPAGATION,
       value: CARD_VALUES.architectValue,
+      duration: null,
+    },
+    archetype: 'conduit' as const,
+    link: true,
+    terraform: false,
+  },
+
+  /**
+   * HIVE_MIND (Sprint 50) — rare build-around. Encounter-scoped flag. While
+   * active, every tower in a cluster fires with the MAXIMUM composed damage
+   * and range across all cluster members. Mixed-tower clusters punch at the
+   * strongest tower's stats from every position.
+   *
+   * Implementation: fireTurn pre-composes stats for every registered tower
+   * (two-pass), then each tower's shot-fire uses `max-of-cluster` damage +
+   * range when HIVE_MIND is active. Fire-rate sharing is covered by LINKWORK
+   * (sprint 45) — HIVE_MIND does not duplicate that axis. Disrupted towers
+   * read their cluster as cluster-of-1, collapsing max-of-cluster to their
+   * own stats.
+   */
+  [CardId.HIVE_MIND]: {
+    id: CardId.HIVE_MIND,
+    name: 'Hive Mind',
+    description: 'For the rest of this encounter, every tower in a cluster fires with the strongest tower\u2019s damage and range.',
+    upgradedDescription: 'For the rest of this encounter, every tower in a cluster fires with the strongest tower\u2019s damage and range.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.RARE,
+    energyCost: CARD_VALUES.hiveMindCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+      value: CARD_VALUES.hiveMindValue,
+      duration: null,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+      value: CARD_VALUES.hiveMindValue,
       duration: null,
     },
     archetype: 'conduit' as const,

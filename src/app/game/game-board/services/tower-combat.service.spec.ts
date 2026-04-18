@@ -5138,6 +5138,79 @@ describe('TowerCombatService HARMONIC (Phase 4 sprint 46)', () => {
     expect(runServiceStub.nextRandom).toHaveBeenCalled();
   });
 
+  // ─── Sprint 50 — HIVE_MIND cluster-max composition ────────────────────
+  //
+  // Hard to unit-test in a damage-stack describe because HIVE_MIND is a post-
+  // compose step inside fireTurn (swaps composed stats with cluster max
+  // before writing to scratchStats). These tests exercise the full fireTurn
+  // path to confirm a BASIC next to a SNIPER under HIVE_MIND deals SNIPER
+  // damage.
+
+  it('HIVE_MIND active + BASIC+SNIPER cluster → BASIC deals SNIPER damage', () => {
+    // BASIC (25 dmg) at (10,12), SNIPER (80 dmg) at (10,13). Adjacent → one cluster.
+    // Under HIVE_MIND, BASIC's shot should deal 80 damage (max of cluster).
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.SNIPER, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+    );
+    const enemy = enemyAt('e1', -0.5, 0, 10000);
+
+    service.fireTurn(mockScene, 1);
+
+    // Both towers fire once. SNIPER at (10, 13) world (-0.4, 0) — close enough
+    // to enemy at (-0.5, 0). Enemy gets hit by both; total damage should be at
+    // least 2×80 = 160 (BASIC under HIVE_MIND → 80, plus SNIPER's own 80).
+    const damageTaken = 10000 - enemy.health;
+    expect(damageTaken).toBeGreaterThanOrEqual(160);
+  });
+
+  it('HIVE_MIND inactive → BASIC deals own damage (25), SNIPER deals 80', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.SNIPER, new THREE.Group());
+    // Default spy: no modifiers active.
+    const enemy = enemyAt('e1', -0.5, 0, 10000);
+
+    service.fireTurn(mockScene, 1);
+
+    // BASIC (25) + SNIPER (80) = 105 if both hit and neither gets HIVE_MIND.
+    const damageTaken = 10000 - enemy.health;
+    expect(damageTaken).toBeGreaterThanOrEqual(105);
+    expect(damageTaken).toBeLessThan(160); // < 2×SNIPER confirms HIVE_MIND off
+  });
+
+  it('HIVE_MIND active + isolated BASIC → deals own 25 damage (cluster of 1)', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+    );
+    const enemy = enemyAt('e1', -0.5, 0, 10000);
+
+    service.fireTurn(mockScene, 1);
+
+    // Lone BASIC: max-of-cluster collapses to self. Deals 25.
+    expect(10000 - enemy.health).toBe(25);
+  });
+
+  it('HIVE_MIND respects disruption — disrupted BASIC reads cluster of 1', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.SNIPER, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX,
+    );
+    // Disrupt the BASIC so its cluster reads as size 1 — collapsing HIVE_MIND.
+    graph.severTower(BASE_ROW, BASE_COL, /* until */ 100, 'test-disruptor');
+    const enemy = enemyAt('e1', -0.5, 0, 10000);
+
+    service.fireTurn(mockScene, 5);
+
+    // BASIC disrupted → its own damage (25). SNIPER fires normally at 80.
+    // Total ~ 25 + 80 = 105 (HIVE_MIND dead for BASIC).
+    const damageTaken = 10000 - enemy.health;
+    expect(damageTaken).toBeGreaterThanOrEqual(105);
+    expect(damageTaken).toBeLessThan(160);
+  });
+
   it('HARMONIC skips passengers when target is out of their range', () => {
     // Place two towers far apart in the cluster via a virtual edge (simulates
     // CONDUIT_BRIDGE) so cluster membership includes a tower well outside

@@ -131,6 +131,7 @@ export enum CardId {
 
   // Conduit archetype — rare cards (Phase 4, Sprints 49+)
   ARCHITECT = 'ARCHITECT',
+  HIVE_MIND = 'HIVE_MIND',
 }
 
 export enum CardType {

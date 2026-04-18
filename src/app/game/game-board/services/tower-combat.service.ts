@@ -366,12 +366,21 @@ export class TowerCombatService {
     // selection). Propagation is non-recursive — passengers never cascade.
     const harmonicActive = this.cardEffectService.hasActiveModifier(MODIFIER_STAT.HARMONIC_SIMULTANEOUS_FIRE);
 
+    // Phase 4 sprint 50 — HIVE_MIND: encounter-scoped flag. When active, each
+    // tower's damage + range resolve to the MAX composed value across its
+    // cluster. Requires a two-pass walk: (1) precompose stats for every
+    // registered tower via composeDamageStack, (2) in the per-tower fire
+    // loop, swap in the cluster-max of the pre-composed values. Disruption
+    // shrinks the cluster to 1 so max-of-cluster collapses to self.
+    const hiveMindActive = this.cardEffectService.hasActiveModifier(MODIFIER_STAT.HIVE_MIND_CLUSTER_MAX);
+
     const hasCardModifiers =
       cardDamageBoost !== 0 || cardRangeBoost !== 0 || sniperDamageBoost !== 0
       || pathLengthMultiplier !== 1 || hasElevation || highPerchBonus !== 0
       || vantagePointBonus !== 0 || kothActive
       || handshakeBonus !== 0 || formationRangeAdditive !== 0
-      || gridSurgeBonus !== 0 || architectClusterActive;
+      || gridSurgeBonus !== 0 || architectClusterActive
+      || hiveMindActive;
 
     // Phase 4 prep — damage + range multiplier composition bundle. Built once per
     // fireTurn; consumed per-tower inside composeDamageStack. See conduit-
@@ -402,6 +411,19 @@ export class TowerCombatService {
       return a.col - b.col;
     });
 
+    // Phase 4 sprint 50 — HIVE_MIND prepass: when active, compose the full
+    // damage stack for every tower up-front so the per-tower fire loop can
+    // swap in the cluster-max damage/range. Skipped entirely when HIVE_MIND
+    // is absent — pre-Conduit runs pay zero extra compose cost.
+    let preComposedStats: Map<string, DamageStackResult> | null = null;
+    if (hiveMindActive && this.towerGraphService) {
+      preComposedStats = new Map();
+      for (const t of towerList) {
+        const tBase = getEffectiveStats(t.type, t.level, t.specialization);
+        preComposedStats.set(t.id, this.composeDamageStack(t, tBase, damageStackCtx));
+      }
+    }
+
     for (const tower of towerList) {
       const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
       let stats: TowerStats;
@@ -412,9 +434,30 @@ export class TowerCombatService {
       let towerVantagePointDmgMult = 1;
       let towerKothMult = 1;
       if (towerDamageMultiplier !== 1 || hasRelicModifiers || hasCardModifiers || hasCardStatOverrides) {
-        const stack = this.composeDamageStack(tower, baseStats, damageStackCtx);
-        this.scratchStats.damage = stack.damage;
-        this.scratchStats.range = stack.range;
+        // Reuse the pre-composed stack under HIVE_MIND; otherwise compose
+        // fresh. Pre-composed path includes HANDSHAKE/GRID_SURGE/ARCHITECT
+        // multipliers so no information is lost.
+        const stack = preComposedStats?.get(tower.id)
+          ?? this.composeDamageStack(tower, baseStats, damageStackCtx);
+
+        // Sprint 50 HIVE_MIND — per-tower cluster max. Reads the damage + range
+        // of every cluster member (spatial + virtual edges, non-disrupted) and
+        // takes max. Disrupted towers read their cluster as themselves → no
+        // change.
+        let effectiveDamage = stack.damage;
+        let effectiveRange = stack.range;
+        if (hiveMindActive && this.towerGraphService && preComposedStats !== null) {
+          const clusterIds = this.towerGraphService.getClusterTowers(tower.row, tower.col, turnNumber);
+          for (const id of clusterIds) {
+            const cached = preComposedStats.get(id);
+            if (!cached) continue;
+            if (cached.damage > effectiveDamage) effectiveDamage = cached.damage;
+            if (cached.range > effectiveRange) effectiveRange = cached.range;
+          }
+        }
+
+        this.scratchStats.damage = effectiveDamage;
+        this.scratchStats.range = effectiveRange;
         // Hoist elevation-origin multipliers for TITAN/WYRM per-target adjustment (sprint 38/39).
         towerVantagePointDmgMult = stack.towerVantagePointDmgMult;
         towerKothMult = stack.towerKothMult;
@@ -496,11 +539,24 @@ export class TowerCombatService {
         for (const passenger of passengers) {
           if (passenger.type === TowerType.SLOW) continue;
           const passengerBaseStats = getEffectiveStats(passenger.type, passenger.level, passenger.specialization);
-          const passengerStackResult = this.composeDamageStack(passenger, passengerBaseStats, damageStackCtx);
+          const passengerStackResult = preComposedStats?.get(passenger.id)
+            ?? this.composeDamageStack(passenger, passengerBaseStats, damageStackCtx);
+          // HIVE_MIND cluster-max also applies to HARMONIC passenger shots.
+          let passengerDamage = passengerStackResult.damage;
+          let passengerRange = passengerStackResult.range;
+          if (hiveMindActive && this.towerGraphService && preComposedStats !== null) {
+            const passengerClusterIds = this.towerGraphService.getClusterTowers(passenger.row, passenger.col, turnNumber);
+            for (const id of passengerClusterIds) {
+              const cached = preComposedStats.get(id);
+              if (!cached) continue;
+              if (cached.damage > passengerDamage) passengerDamage = cached.damage;
+              if (cached.range > passengerRange) passengerRange = cached.range;
+            }
+          }
           const passengerStats: TowerStats = {
             ...passengerBaseStats,
-            damage: passengerStackResult.damage,
-            range: passengerStackResult.range,
+            damage: passengerDamage,
+            range: passengerRange,
           };
           if (!this.isTargetInRange(passenger, lastTarget, passengerStats)) continue;
           if (lastTarget.health <= 0) continue;

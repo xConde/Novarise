@@ -144,6 +144,7 @@ describe('Card System — Balance', () => {
       CardId.KING_OF_THE_HILL,
       CardId.GRAVITY_WELL,
       CardId.ARCHITECT,
+      CardId.HIVE_MIND,
     ];
     for (const card of modifierCards) {
       const effect = card.effect;
@@ -234,7 +235,7 @@ describe('Card System — Balance', () => {
 
   // ── Total Card Count ──────────────────────────────────────────────────────
 
-  it('should have exactly 73 card definitions', () => {
+  it('should have exactly 74 card definitions', () => {
     // 40 original + 6 tower variant cards (sprint 2a) + 3 status-applying spells (sprint 2b)
     // + 2 status payoff spells (sprint 2c) + 4 Cartographer terraform spells (phase 2 sprints 11/12/15/16)
     // + 1 DETOUR routing spell (sprint 14) + 2 Cartographer rare anchors (phase 2 sprints 17/18)
@@ -244,8 +245,8 @@ describe('Card System — Balance', () => {
     // + 2 Highground rare cards (phase 3 sprints 33/34: KING_OF_THE_HILL + GRAVITY_WELL)
     // + 3 Conduit commons (phase 4 sprints 43/44/45: HANDSHAKE + FORMATION + LINKWORK)
     // + 3 Conduit uncommons (phase 4 sprints 46/47/48: HARMONIC + GRID_SURGE + CONDUIT_BRIDGE)
-    // + 1 Conduit rare (phase 4 sprint 49: ARCHITECT)
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(73);
+    // + 2 Conduit rares (phase 4 sprints 49/50: ARCHITECT + HIVE_MIND)
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(74);
   });
 
   // ── Phase 2 Sprint 19 — Cartographer economy validation ────────────────────

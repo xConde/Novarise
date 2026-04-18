@@ -145,6 +145,22 @@ export const MODIFIER_STAT = {
   // Disruption still applies — a disrupted tower reads its cluster as just
   // itself, so the propagation silences transparently.
   ARCHITECT_CLUSTER_PROPAGATION: 'architectClusterPropagation',
+
+  // Phase 4 Sprint 50 — HIVE_MIND modifier (Conduit rare build-around).
+  //
+  // Boolean flag — encounter-scoped (duration: null). When active, every
+  // tower in a cluster reads the MAX composed damage and range across all
+  // cluster members (spatial + virtual edges, non-disrupted). A cluster
+  // of a BASIC tower (low damage) + a SNIPER (high damage) under HIVE_MIND
+  // has both firing at the SNIPER's damage output.
+  //
+  // Stats composed: damage and range (via composeDamageStack's output).
+  // Fire-rate sharing already covered by LINKWORK (sprint 45) — HIVE_MIND
+  // does not duplicate that knob.
+  //
+  // Disruption gate: disrupted towers read their cluster as cluster-of-1
+  // (themselves only), so the max-of-cluster collapses to their own stats.
+  HIVE_MIND_CLUSTER_MAX: 'hiveMindClusterMax',
 } as const;
 
 export type ModifierStat = typeof MODIFIER_STAT[keyof typeof MODIFIER_STAT];
