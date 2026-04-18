@@ -114,4 +114,16 @@ export const ENEMY_INFO: Record<EnemyType, EnemyInfo> = {
     color: ENEMY_STATS[EnemyType.FLYING].color,
     immunities: [SLOW_IMMUNITY_LABEL],
   },
+  [EnemyType.MINER]: {
+    type: EnemyType.MINER,
+    name: 'Miner',
+    description: 'Destroys WALL tiles on its path every 3 turns, reshaping the board mid-wave.',
+    health: ENEMY_STATS[EnemyType.MINER].health,
+    speed: ENEMY_STATS[EnemyType.MINER].speed,
+    reward: ENEMY_STATS[EnemyType.MINER].value,
+    leakDamage: ENEMY_STATS[EnemyType.MINER].leakDamage,
+    special: 'Digs through walls every 3 turns',
+    color: ENEMY_STATS[EnemyType.MINER].color,
+    immunities: [],
+  },
 };

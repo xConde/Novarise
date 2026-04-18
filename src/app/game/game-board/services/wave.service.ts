@@ -260,7 +260,7 @@ export class WaveService {
    *          intentional empty prep turns, or when a spawn fails due to path
    *          invalidation — retried next turn).
    */
-  spawnForTurn(scene: THREE.Scene): number {
+  spawnForTurn(scene: THREE.Scene, currentTurn?: number): number {
     if (!this.active) return 0;
     if (this.turnScheduleIndex >= this.turnSchedule.length) {
       this.active = false;
@@ -288,7 +288,7 @@ export class WaveService {
     let spawned = 0;
     const failedTypes: EnemyType[] = [];
     for (const type of turnSpawns) {
-      const enemy = this.enemyService.spawnEnemy(type, scene, waveHealthMult, waveSpeedMult, occupiedThisBatch);
+      const enemy = this.enemyService.spawnEnemy(type, scene, waveHealthMult, waveSpeedMult, occupiedThisBatch, currentTurn);
       if (enemy) {
         spawned++;
       } else {

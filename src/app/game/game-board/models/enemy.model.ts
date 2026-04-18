@@ -38,6 +38,8 @@ export interface Enemy {
   shieldBreakTimer?: number;   // Seconds remaining in the shield break animation (counts down to 0)
   statusParticles?: THREE.Mesh[]; // Small particle meshes for active status effect visuals
   statusParticleEffectType?: string; // Tracks which effect type the current particles belong to
+  /** Turn number when this enemy was spawned. Set only for MINER — drives the 3-turn dig cadence. */
+  spawnedOnTurn?: number;
 }
 
 export interface EnemyStats {
@@ -53,6 +55,20 @@ export interface EnemyStats {
   maxShield?: number;   // Starting shield HP (SHIELDED type only)
   spawnOnDeath?: number; // Number of mini-enemies to spawn on death (SWARM type only)
 }
+
+/** Named constants for MINER stats — no magic numbers inline. */
+export const MINER_STATS = {
+  health: 175,
+  speed: 1.5,
+  tilesPerTurn: 1,
+  value: 12,
+  color: 0x996633, // Earthy brown
+  size: 0.35,
+  leakDamage: 1,
+} as const;
+
+/** How many turns between MINER dig attempts (cadence: every Nth turn after spawn). */
+export const MINER_DIG_INTERVAL_TURNS = 3;
 
 // Enemy type statistics
 export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
@@ -129,6 +145,15 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     color: 0x88ccff, // Light blue
     size: 0.3,
     leakDamage: 1
+  },
+  [EnemyType.MINER]: {
+    health: MINER_STATS.health,
+    speed: MINER_STATS.speed,
+    tilesPerTurn: MINER_STATS.tilesPerTurn,
+    value: MINER_STATS.value,
+    color: MINER_STATS.color,
+    size: MINER_STATS.size,
+    leakDamage: MINER_STATS.leakDamage,
   }
 };
 

@@ -69,6 +69,7 @@ describe('EnemyMeshFactoryService', () => {
       EnemyType.BOSS,
       EnemyType.SHIELDED,
       EnemyType.SWARM,
+      EnemyType.MINER,
     ];
 
     types.forEach(type => {
@@ -352,6 +353,33 @@ describe('EnemyMeshFactoryService', () => {
 
     it('should have castShadow enabled', () => {
       expect(mesh.castShadow).toBeTrue();
+    });
+  });
+
+  // --- MINER geometry ---
+
+  describe('MINER geometry (createEnemyGeometry)', () => {
+    let geom: THREE.BufferGeometry;
+
+    beforeEach(() => {
+      geom = service.createEnemyGeometry(EnemyType.MINER, 0.35);
+    });
+
+    afterEach(() => {
+      geom.dispose();
+    });
+
+    it('returns a BoxGeometry for MINER', () => {
+      expect(geom).toBeInstanceOf(THREE.BoxGeometry);
+    });
+
+    it('MINER mesh from createEnemyMesh is a THREE.Mesh with BoxGeometry', () => {
+      const enemy = makeEnemy(EnemyType.MINER);
+      const mesh = service.createEnemyMesh(enemy);
+      createdMeshes.push(mesh);
+
+      expect(mesh).toBeInstanceOf(THREE.Mesh);
+      expect(mesh.geometry).toBeInstanceOf(THREE.BoxGeometry);
     });
   });
 });

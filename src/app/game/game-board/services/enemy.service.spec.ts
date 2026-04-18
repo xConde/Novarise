@@ -4,9 +4,9 @@ import { EnemyService } from './enemy.service';
 import { PathfindingService } from './pathfinding.service';
 import { GameBoardService } from '../game-board.service';
 import { GameStateService } from './game-state.service';
-import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS } from '../models/enemy.model';
-import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
+import { EnemyType, ENEMY_STATS, MINI_SWARM_STATS, MINER_STATS, MINER_DIG_INTERVAL_TURNS } from '../models/enemy.model';
 import { GameBoardTile } from '../models/game-board-tile';
+import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { HIT_FLASH_CONFIG, STATUS_EFFECT_VISUAL_CONFIG } from '../constants/effects.constants';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
@@ -114,7 +114,7 @@ describe('EnemyService', () => {
       const types: EnemyType[] = [
         EnemyType.BASIC, EnemyType.FAST, EnemyType.HEAVY,
         EnemyType.SWIFT, EnemyType.BOSS, EnemyType.SHIELDED,
-        EnemyType.SWARM, EnemyType.FLYING
+        EnemyType.SWARM, EnemyType.FLYING, EnemyType.MINER
       ];
       types.forEach(type => {
         const enemy = service.spawnEnemy(type, mockScene)!;
@@ -131,7 +131,8 @@ describe('EnemyService', () => {
         EnemyType.BOSS,
         EnemyType.SHIELDED,
         EnemyType.SWARM,
-        EnemyType.FLYING
+        EnemyType.FLYING,
+        EnemyType.MINER
       ];
 
       types.forEach(type => {
@@ -1392,6 +1393,13 @@ describe('EnemyService', () => {
       // Should NOT be one of the named geometry subclasses — it's a custom diamond
       expect(enemy.mesh!.geometry).not.toBeInstanceOf(THREE.SphereGeometry);
       expect(enemy.mesh!.geometry).not.toBeInstanceOf(THREE.BoxGeometry);
+    });
+
+    it('MINER enemy creates a BoxGeometry mesh', () => {
+      const enemy = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+      meshesToDispose.push(enemy.mesh!);
+
+      expect(enemy.mesh!.geometry).toBeInstanceOf(THREE.BoxGeometry);
     });
 
     it('Mini-swarm mesh uses OctahedronGeometry', () => {
@@ -2904,6 +2912,196 @@ describe('EnemyService', () => {
       // Verify counter was restored
       const { enemyCounter: counterAfterRestore } = service.serializeEnemies();
       expect(counterAfterRestore).toBe(enemyCounter);
+    });
+
+    it('serializeEnemies() round-trips spawnedOnTurn for MINER', () => {
+      const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+      miner.spawnedOnTurn = 7;
+
+      const { enemies } = service.serializeEnemies();
+      const serialized = enemies.find(e => e.id === miner.id)!;
+
+      expect(serialized.spawnedOnTurn).toBe(7);
+    });
+
+    it('restoreEnemies() preserves spawnedOnTurn on MINER', () => {
+      const serialized: SerializableEnemy[] = [
+        {
+          id: 'miner-1',
+          type: EnemyType.MINER,
+          position: { x: 0, y: 0.35, z: 0 },
+          gridPosition: { row: 0, col: 0 },
+          health: MINER_STATS.health,
+          maxHealth: MINER_STATS.health,
+          speed: MINER_STATS.speed,
+          value: MINER_STATS.value,
+          leakDamage: MINER_STATS.leakDamage,
+          path: [],
+          pathIndex: 0,
+          distanceTraveled: 0,
+          spawnedOnTurn: 5,
+        }
+      ];
+      const meshMap = new Map<string, THREE.Mesh>([['miner-1', new THREE.Mesh()]]);
+
+      service.restoreEnemies(serialized, meshMap, 1);
+
+      const restored = service.getEnemies().get('miner-1')!;
+      expect(restored.spawnedOnTurn).toBe(5);
+    });
+
+    it('serializeEnemies() omits spawnedOnTurn for non-MINER enemies', () => {
+      const basic = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+
+      const { enemies } = service.serializeEnemies();
+      const serialized = enemies.find(e => e.id === basic.id)!;
+
+      expect((serialized as unknown as Record<string, unknown>)['spawnedOnTurn']).toBeUndefined();
+    });
+  });
+
+  describe('MINER enemy', () => {
+    it('should spawn with correct stats from MINER_STATS', () => {
+      const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+
+      expect(miner.type).toBe(EnemyType.MINER);
+      expect(miner.health).toBe(MINER_STATS.health);
+      expect(miner.speed).toBeCloseTo(MINER_STATS.speed);
+      expect(miner.value).toBe(MINER_STATS.value);
+      expect(miner.leakDamage).toBe(MINER_STATS.leakDamage);
+    });
+
+    it('should NOT set spawnedOnTurn when currentTurn is omitted', () => {
+      const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+
+      expect(miner.spawnedOnTurn).toBeUndefined();
+    });
+
+    it('should set spawnedOnTurn when currentTurn is provided', () => {
+      const miner = service.spawnEnemy(EnemyType.MINER, mockScene, 1, 1, undefined, 4)!;
+
+      expect(miner.spawnedOnTurn).toBe(4);
+    });
+
+    it('should NOT set spawnedOnTurn on non-MINER enemies', () => {
+      const basic = service.spawnEnemy(EnemyType.BASIC, mockScene, 1, 1, undefined, 4)!;
+
+      expect(basic.spawnedOnTurn).toBeUndefined();
+    });
+
+    describe('MINER_STATS constants', () => {
+      it('MINER_STATS.health is 175', () => {
+        expect(MINER_STATS.health).toBe(175);
+      });
+
+      it('MINER_STATS.tilesPerTurn is 1', () => {
+        expect(MINER_STATS.tilesPerTurn).toBe(1);
+      });
+
+      it('MINER_DIG_INTERVAL_TURNS is 3', () => {
+        expect(MINER_DIG_INTERVAL_TURNS).toBe(3);
+      });
+    });
+
+    describe('tickMinerDigs (without PathMutationService — @Optional null)', () => {
+      it('should be a no-op when PathMutationService is null (early-out)', () => {
+        // PathMutationService is not registered — @Optional injects null
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        miner.spawnedOnTurn = 1;
+
+        // Should not throw even though pathMutationService is null
+        expect(() => service.tickMinerDigs(4, mockScene)).not.toThrow();
+      });
+
+      it('should skip dying enemies', () => {
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        miner.spawnedOnTurn = 1;
+        miner.dying = true;
+
+        expect(() => service.tickMinerDigs(4, mockScene)).not.toThrow();
+      });
+
+      it('should skip enemies with undefined spawnedOnTurn', () => {
+        service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        // spawnedOnTurn is undefined (no currentTurn passed to spawnEnemy)
+
+        expect(() => service.tickMinerDigs(4, mockScene)).not.toThrow();
+      });
+
+      it('should not fire on the spawn turn itself (turnsSinceSpawn === 0)', () => {
+        // Even if we had PathMutationService, the turn=0 guard must hold.
+        // We verify by ensuring the method exits early without error.
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        miner.spawnedOnTurn = 4;
+
+        expect(() => service.tickMinerDigs(4, mockScene)).not.toThrow();
+      });
+    });
+
+    describe('findMinerDigTarget', () => {
+      /** Build a minimal GridNode for path arrays. */
+      function pathNode(col: number, row: number): import('../models/enemy.model').GridNode {
+        return { x: col, y: row, g: 0, h: 0, f: 0 };
+      }
+
+      it('returns null when no WALL tiles exist on the remaining path', () => {
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        // All path nodes are BASE tiles (the test board has BASE tiles on the path)
+        const result = service.findMinerDigTarget(miner);
+
+        // Standard test board has BASE tiles on the spawner→exit path, so no WALL found.
+        expect(result).toBeNull();
+      });
+
+      it('returns the first WALL tile on the remaining path', () => {
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        // Inject a WALL tile at row=3, col=2 into the gameBoardService mock
+        const board = gameBoardService.getGameBoard();
+        // Create a mock board with a wall at (3, 2)
+        const mockBoard = board.map(row => [...row]);
+        mockBoard[3][2] = GameBoardTile.createWall(3, 2);
+        gameBoardService.getGameBoard.and.returnValue(mockBoard);
+
+        // Set a path that goes through the WALL tile at (row=3, col=2) i.e. node(x=2, y=3)
+        miner.path = [
+          pathNode(0, 0),
+          pathNode(1, 0),
+          pathNode(2, 0),
+          pathNode(2, 1),
+          pathNode(2, 2),
+          pathNode(2, 3), // row=3, col=2 → this is the WALL
+          pathNode(9, 9),
+        ];
+        miner.pathIndex = 0;
+
+        const result = service.findMinerDigTarget(miner);
+
+        expect(result).toEqual({ row: 3, col: 2 });
+      });
+
+      it('respects pathIndex — skips already-passed tiles', () => {
+        const miner = service.spawnEnemy(EnemyType.MINER, mockScene)!;
+        // Put a WALL at (0, 0) (behind pathIndex) and another at (3, 2) (ahead)
+        const board = gameBoardService.getGameBoard();
+        const mockBoard = board.map(r => [...r]);
+        mockBoard[0][0] = GameBoardTile.createWall(0, 0);
+        mockBoard[3][2] = GameBoardTile.createWall(3, 2);
+        gameBoardService.getGameBoard.and.returnValue(mockBoard);
+
+        miner.path = [
+          pathNode(0, 0), // behind pathIndex
+          pathNode(1, 0),
+          pathNode(2, 0),
+          pathNode(2, 3), // row=3, col=2
+          pathNode(9, 9),
+        ];
+        miner.pathIndex = 1; // skip node(0,0)
+
+        const result = service.findMinerDigTarget(miner);
+
+        // Should skip (0,0) and find the WALL ahead at (3,2)
+        expect(result).toEqual({ row: 3, col: 2 });
+      });
     });
   });
 

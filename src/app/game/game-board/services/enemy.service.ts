@@ -1,6 +1,6 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
-import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult, GridNode } from '../models/enemy.model';
+import { Enemy, EnemyType, ENEMY_STATS, MINI_SWARM_STATS, FLYING_ENEMY_HEIGHT, MIN_ENEMY_SPEED, DamageResult, GridNode, MINER_DIG_INTERVAL_TURNS } from '../models/enemy.model';
 import { GameBoardService } from '../game-board.service';
 import { GameModifier, GAME_MODIFIER_CONFIGS } from '../models/game-modifier.model';
 import { StatusEffectType } from '../constants/status-effect.constants';
@@ -13,6 +13,8 @@ import { EnemyHealthService } from './enemy-health.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 import { SerializableEnemy } from '../models/encounter-checkpoint.model';
+import { PathMutationService } from './path-mutation.service';
+import { BlockType } from '../models/game-board-tile';
 
 export { DamageResult } from '../models/enemy.model';
 
@@ -35,6 +37,16 @@ export class EnemyService {
     private enemyHealth: EnemyHealthService,
     private cardEffectService: CardEffectService,
     private relicService: RelicService,
+    /**
+     * @Optional() breaks the EnemyService → PathMutationService DI.
+     * PathMutationService already avoids injecting EnemyService directly
+     * (uses a setRepathHook callback instead), so no cycle exists at
+     * runtime — @Optional() is a belt-and-suspenders guard for test beds
+     * that don't register PathMutationService in their providers array.
+     * tickMinerDigs early-outs when the service is null so MINERs simply
+     * don't dig in those test contexts.
+     */
+    @Optional() private pathMutationService: PathMutationService | null,
   ) {}
 
   /**
@@ -62,6 +74,13 @@ export class EnemyService {
      * fresh from the live enemies map (previous-turn enemies only).
      */
     externalOccupied?: Set<string>,
+    /**
+     * The current turn number, threaded from CombatLoopService.resolveTurn
+     * → WaveService.spawnForTurn → here. Only used to stamp spawnedOnTurn on
+     * MINER enemies. Callers that don't have a turn context (test helpers, one-off
+     * spawns) should omit this — MINERs spawned without a turn context won't dig.
+     */
+    currentTurn?: number,
   ): Enemy | null {
     const spawnerTiles = this.pathfindingService.getSpawnerTiles();
     if (spawnerTiles.length === 0) {
@@ -231,6 +250,16 @@ export class EnemyService {
 
     if (isFlying) {
       enemy.isFlying = true;
+    }
+
+    // MINER: record spawn turn for 3-turn dig cadence.
+    // spawnEnemy receives currentTurn via an optional parameter threaded
+    // from CombatLoopService.resolveTurn → WaveService.spawnForTurn(scene, currentTurn)
+    // → EnemyService.spawnEnemy(..., currentTurn). Existing callers that
+    // omit currentTurn get undefined — those MINERs won't dig, which is
+    // correct for test helpers and one-off spawns that have no turn context.
+    if (type === EnemyType.MINER && currentTurn !== undefined) {
+      enemy.spawnedOnTurn = currentTurn;
     }
 
     if (stats.maxShield !== undefined) {
@@ -514,6 +543,79 @@ export class EnemyService {
    */
   updateShieldBreakAnimations(deltaTime: number): void {
     this.enemyHealth.updateShieldBreakAnimations(this.enemies, deltaTime);
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // MINER dig phase (Sprint 21)
+  // ────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Scan the MINER's remaining path and return the first WALL tile that is
+   * legal to dig: not SPAWNER / EXIT (PathMutationService.destroy rejects those
+   * automatically) AND not player-built (would invalidate Cartographer
+   * counter-play per design doc §9). Returns null if no legal WALL is
+   * reachable on the remaining path.
+   *
+   * GridNode convention: node.x = col, node.y = row.
+   */
+  findMinerDigTarget(enemy: Enemy): { row: number; col: number } | null {
+    const board = this.gameBoardService.getGameBoard();
+    for (let i = enemy.pathIndex; i < enemy.path.length; i++) {
+      const node = enemy.path[i];
+      const row = node.y;
+      const col = node.x;
+      const boardRow = board[row];
+      if (!boardRow) continue;
+      const tile = boardRow[col];
+      if (!tile) continue;
+      if (tile.type !== BlockType.WALL) continue;
+      // Skip walls that the player intentionally blocked (e.g. Siegeworks).
+      if (this.pathMutationService?.isPlayerBlocked(row, col)) continue;
+      return { row, col };
+    }
+    return null;
+  }
+
+  /**
+   * Trigger the MINER dig behaviour for all living, non-flying MINERs whose
+   * 3-turn cadence fires this turn. Called from CombatLoopService.resolveTurn
+   * after enemy movement (step 2.5) so each MINER walks first, then digs
+   * from its new position.
+   *
+   * Early-outs:
+   * - If PathMutationService is absent (test contexts) — no dig.
+   * - If enemy is dying or flying.
+   * - If spawnedOnTurn is undefined (non-MINER or legacy spawn).
+   * - If (currentTurn - spawnedOnTurn) is 0 or not a multiple of MINER_DIG_INTERVAL_TURNS.
+   *
+   * Each dig is journaled as source='boss', sourceId=`miner:<enemyId>` so
+   * save/restore preserves the tile mutation even after the MINER dies.
+   */
+  tickMinerDigs(currentTurn: number, scene: THREE.Scene): void {
+    if (!this.pathMutationService) return;
+
+    for (const enemy of this.enemies.values()) {
+      if (enemy.dying || enemy.health <= 0) continue;
+      if (enemy.isFlying) continue;
+      if (enemy.type !== EnemyType.MINER) continue;
+      if (enemy.spawnedOnTurn === undefined) continue;
+
+      const turnsSinceSpawn = currentTurn - enemy.spawnedOnTurn;
+      if (turnsSinceSpawn <= 0) continue;
+      if (turnsSinceSpawn % MINER_DIG_INTERVAL_TURNS !== 0) continue;
+
+      const target = this.findMinerDigTarget(enemy);
+      if (!target) continue;
+
+      this.pathMutationService.destroy(
+        target.row,
+        target.col,
+        `miner:${enemy.id}`,
+        currentTurn,
+        scene,
+        'boss',
+      );
+    }
   }
 
   /**
@@ -869,6 +971,7 @@ export class EnemyService {
       ...(e.hitFlashTimer !== undefined && { hitFlashTimer: e.hitFlashTimer }),
       ...(e.shieldBreaking !== undefined && { shieldBreaking: e.shieldBreaking }),
       ...(e.shieldBreakTimer !== undefined && { shieldBreakTimer: e.shieldBreakTimer }),
+      ...(e.spawnedOnTurn !== undefined && { spawnedOnTurn: e.spawnedOnTurn }),
     }));
     return { enemies, enemyCounter: this.enemyCounter };
   }

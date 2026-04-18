@@ -124,6 +124,7 @@ describe('CombatLoopService', () => {
       'removeEnemy',
       'startDyingAnimation',
       'getLivingEnemyCount',
+      'tickMinerDigs',
     ]);
     enemySpy.getEnemies.and.returnValue(new Map());
     enemySpy.stepEnemiesOneTurn.and.returnValue([]);
@@ -343,10 +344,10 @@ describe('CombatLoopService', () => {
   // ─── resolveTurn() — spawning delegation ────────────────────────────────────
 
   describe('resolveTurn() — spawning', () => {
-    it('should call waveService.spawnForTurn(scene) each turn', () => {
+    it('should call waveService.spawnForTurn(scene, currentTurn) each turn', () => {
       service.resolveTurn(scene);
 
-      expect(waveSpy.spawnForTurn).toHaveBeenCalledWith(scene);
+      expect(waveSpy.spawnForTurn).toHaveBeenCalledWith(scene, 1);
     });
 
     it('should call spawnForTurn once per resolveTurn call', () => {
@@ -1408,6 +1409,33 @@ describe('CombatLoopService', () => {
       const calls = gameStateSpy.addGoldAndScore.calls.allArgs();
       const surveyorZeroCall = calls.find(([amount]: [number]) => amount === 0);
       expect(surveyorZeroCall).toBeUndefined();
+    });
+  });
+
+  // ─── resolveTurn() — MINER dig phase ────────────────────────────────────────
+
+  describe('resolveTurn() — MINER dig phase', () => {
+    it('should call tickMinerDigs with the current turn number and scene', () => {
+      service.resolveTurn(scene);
+
+      expect(enemySpy.tickMinerDigs).toHaveBeenCalledWith(1, scene);
+    });
+
+    it('should call tickMinerDigs after movement (called once per resolveTurn)', () => {
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+
+      expect(enemySpy.tickMinerDigs).toHaveBeenCalledTimes(2);
+    });
+
+    it('should pass incremented turn numbers across sequential calls', () => {
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+      service.resolveTurn(scene);
+
+      expect(enemySpy.tickMinerDigs).toHaveBeenCalledWith(1, scene);
+      expect(enemySpy.tickMinerDigs).toHaveBeenCalledWith(2, scene);
+      expect(enemySpy.tickMinerDigs).toHaveBeenCalledWith(3, scene);
     });
   });
 });

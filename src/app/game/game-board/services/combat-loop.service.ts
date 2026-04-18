@@ -166,12 +166,17 @@ export class CombatLoopService {
     const waveAtTurnStart = this.gameStateService.getState().wave;
 
     // 1. Spawn this turn's scheduled enemies
-    this.waveService.spawnForTurn(scene);
+    this.waveService.spawnForTurn(scene, this.turnNumber);
 
     // 2. Enemy movement — each enemy advances its tiles-per-turn count
     const reachedExit = this.enemyService.stepEnemiesOneTurn(
       (enemyId) => this.statusEffectService.getSlowTileReduction(enemyId),
     );
+
+    // 2.5 — MINER dig phase. MINERs that have been alive N*3 turns destroy
+    // the next eligible WALL on their path, reshaping the board mid-wave.
+    // Runs AFTER movement so the MINER walks first, then digs from its new position.
+    this.enemyService.tickMinerDigs(this.turnNumber, scene);
 
     // 3. Tower fire — picks targets and applies damage instantly
     const fireResult = this.towerCombatService.fireTurn(scene, this.turnNumber);

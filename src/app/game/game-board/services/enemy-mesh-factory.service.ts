@@ -135,6 +135,10 @@ export class EnemyMeshFactoryService {
         // Octahedron — compact, gem-like
         return new THREE.OctahedronGeometry(size, 0);
 
+      case EnemyType.MINER:
+        // Chunky squat box — wider and taller than HEAVY, earthy and bulldozing
+        return new THREE.BoxGeometry(size * 1.2, size * 1.4, size * 1.2);
+
       case EnemyType.FLYING:
         // Diamond geometry is built inline in createEnemyMesh for flying enemies;
         // this branch is a safety fallback and should never be reached at runtime.

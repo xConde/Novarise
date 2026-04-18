@@ -90,6 +90,8 @@ export interface SerializableEnemy {
   readonly hitFlashTimer?: number;
   readonly shieldBreaking?: boolean;
   readonly shieldBreakTimer?: number;
+  /** Spawn turn for MINER enemies — drives 3-turn dig cadence. Undefined on non-MINER enemies. */
+  readonly spawnedOnTurn?: number;
 }
 
 /**

@@ -2,7 +2,7 @@ import { EnemyType, ENEMY_STATS, Enemy, GridNode, MINI_SWARM_STATS } from './ene
 
 describe('Enemy Model', () => {
   describe('EnemyType Enum', () => {
-    it('should have all 8 enemy types defined', () => {
+    it('should have all 9 enemy types defined', () => {
       expect(EnemyType.BASIC).toBe('BASIC');
       expect(EnemyType.FAST).toBe('FAST');
       expect(EnemyType.HEAVY).toBe('HEAVY');
@@ -11,6 +11,7 @@ describe('Enemy Model', () => {
       expect(EnemyType.SHIELDED).toBe('SHIELDED');
       expect(EnemyType.SWARM).toBe('SWARM');
       expect(EnemyType.FLYING).toBe('FLYING');
+      expect(EnemyType.MINER).toBe('MINER');
     });
   });
 
@@ -24,6 +25,7 @@ describe('Enemy Model', () => {
       expect(ENEMY_STATS[EnemyType.SHIELDED]).toBeDefined();
       expect(ENEMY_STATS[EnemyType.SWARM]).toBeDefined();
       expect(ENEMY_STATS[EnemyType.FLYING]).toBeDefined();
+      expect(ENEMY_STATS[EnemyType.MINER]).toBeDefined();
     });
 
     it('should have valid health values', () => {
@@ -84,6 +86,7 @@ describe('Enemy Model', () => {
       expect(ENEMY_STATS[EnemyType.SWIFT].leakDamage).toBe(1);
       expect(ENEMY_STATS[EnemyType.SWARM].leakDamage).toBe(1);
       expect(ENEMY_STATS[EnemyType.FLYING].leakDamage).toBe(1);
+      expect(ENEMY_STATS[EnemyType.MINER].leakDamage).toBe(1);
     });
 
     describe('BASIC enemy stats', () => {
@@ -272,8 +275,8 @@ describe('Enemy Model', () => {
         colors.add(stats.color);
       });
 
-      // All 8 enemy types should have unique colors
-      expect(colors.size).toBe(8);
+      // All enemy types should have unique colors
+      expect(colors.size).toBe(Object.values(ENEMY_STATS).length);
     });
 
     it('should have distinct sizes for visibility', () => {

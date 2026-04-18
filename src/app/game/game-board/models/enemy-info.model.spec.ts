@@ -4,8 +4,8 @@ import { EnemyInfo, ENEMY_INFO } from './enemy-info.model';
 describe('ENEMY_INFO', () => {
   const allTypes = Object.values(EnemyType);
 
-  it('should have entries for all 8 EnemyType values', () => {
-    expect(allTypes.length).toBe(8);
+  it('should have entries for all 9 EnemyType values', () => {
+    expect(allTypes.length).toBe(9);
     for (const type of allTypes) {
       expect(ENEMY_INFO[type]).withContext(`Missing entry for ${type}`).toBeDefined();
     }
@@ -110,9 +110,9 @@ describe('ENEMY_INFO', () => {
     }
   });
 
-  it('Object.values(ENEMY_INFO) should return 8 entries in a stable order', () => {
+  it('Object.values(ENEMY_INFO) should return 9 entries in a stable order', () => {
     const infoList = Object.values(ENEMY_INFO);
-    expect(infoList.length).toBe(8);
+    expect(infoList.length).toBe(9);
     for (const info of infoList) {
       // Each item must satisfy the EnemyInfo interface shape
       expect(info.type).toBeDefined();
