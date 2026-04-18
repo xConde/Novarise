@@ -5,6 +5,7 @@ import {
   OnChanges,
   OnDestroy,
   OnInit,
+  Optional,
   Output,
   SimpleChanges,
 } from '@angular/core';
@@ -19,12 +20,18 @@ import {
 } from '../../../../run/models/card.model';
 import { getCardDefinition } from '../../../../run/constants/card-definitions';
 import { TOWER_CONFIGS, TowerType } from '../../models/tower.model';
+import { RelicService } from '../../../../run/services/relic.service';
 
 /** Pre-computed view model for a single card in hand. */
 export interface HandCard {
   instance: CardInstance;
   definition: CardDefinition;
   canPlay: boolean;
+  /**
+   * Energy cost after applying relic discounts (e.g. WORLD_SPIRIT).
+   * Equals definition.energyCost when no discount is active.
+   */
+  effectiveEnergyCost: number;
   /** Gold cost shown on tower cards (from TOWER_CONFIGS). Null for non-tower cards. */
   goldCost: number | null;
 }
@@ -45,6 +52,8 @@ const MAX_ENERGY_PIPS = 6;
   styleUrls: ['./card-hand.component.scss'],
 })
 export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
+  constructor(@Optional() private relicService: RelicService | null = null) {}
+
   @Input() deckState!: DeckState;
   @Input() energy!: EnergyState;
   /**
@@ -213,10 +222,13 @@ export class CardHandComponent implements OnInit, OnChanges, OnDestroy {
       const definition = getCardDefinition(instance.cardId);
       const effect = instance.upgraded && definition.upgradedEffect ? definition.upgradedEffect : definition.effect;
       const goldCost = effect.type === 'tower' ? (TOWER_CONFIGS[effect.towerType]?.cost ?? null) : null;
+      const costModifier = this.relicService ? this.relicService.getCardEnergyCostModifier(definition) : 0;
+      const effectiveEnergyCost = Math.max(0, definition.energyCost + costModifier);
       return {
         instance,
         definition,
-        canPlay: this.energy.current >= definition.energyCost,
+        canPlay: this.energy.current >= effectiveEnergyCost,
+        effectiveEnergyCost,
         goldCost,
       };
     });

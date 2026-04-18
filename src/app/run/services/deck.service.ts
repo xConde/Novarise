@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import {
   CardArchetype,
@@ -11,6 +11,7 @@ import {
 import { getCardDefinition } from '../constants/card-definitions';
 import { SeededRng, createSeededRng } from '../constants/run.constants';
 import { SerializableDeckState } from '../../game/game-board/models/encounter-checkpoint.model';
+import { RelicService } from './relic.service';
 
 /**
  * DeckService — deck management for Ascent Mode encounters.
@@ -37,6 +38,8 @@ export class DeckService {
 
   readonly deckState$: Observable<DeckState> = this.deckStateSubject.asObservable();
   readonly energy$: Observable<EnergyState> = this.energySubject.asObservable();
+
+  constructor(@Optional() private relicService: RelicService | null = null) {}
 
   // ── Lifecycle ─────────────────────────────────────────────
 
@@ -164,7 +167,8 @@ export class DeckService {
 
     const card = this.deckState.hand[index];
     const def = getCardDefinition(card.cardId);
-    const cost = def.energyCost;
+    const costModifier = this.relicService ? this.relicService.getCardEnergyCostModifier(def) : 0;
+    const cost = Math.max(0, def.energyCost + costModifier);
 
     if (this.energyState.current < cost) return false;
 

@@ -10,11 +10,12 @@ import { GameBoardTile } from '../models/game-board-tile';
 import { StatusEffectType } from '../constants/status-effect.constants';
 import { HIT_FLASH_CONFIG, STATUS_EFFECT_VISUAL_CONFIG } from '../constants/effects.constants';
 import { ENEMY_VISUAL_CONFIG } from '../constants/ui.constants';
-import { createTestBoard, createGameBoardServiceSpy, createCardEffectServiceSpy } from '../testing';
+import { createTestBoard, createGameBoardServiceSpy, createCardEffectServiceSpy, createRelicServiceSpy } from '../testing';
 import { EnemyMeshFactoryService } from './enemy-mesh-factory.service';
 import { EnemyVisualService } from './enemy-visual.service';
 import { EnemyHealthService } from './enemy-health.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
+import { RelicService } from '../../../run/services/relic.service';
 import { SerializableEnemy } from '../models/encounter-checkpoint.model';
 import { createTestEnemy } from '../testing/test-enemy.factory';
 
@@ -31,10 +32,12 @@ describe('EnemyService', () => {
   let service: EnemyService;
   let gameBoardService: jasmine.SpyObj<GameBoardService>;
   let gameStateService: GameStateService;
+  let relicServiceSpy: jasmine.SpyObj<RelicService>;
   let mockScene: THREE.Scene;
 
   beforeEach(() => {
     const gameBoardServiceSpy = createGameBoardServiceSpy(10, 10, 1, () => createTestBoard());
+    relicServiceSpy = createRelicServiceSpy();
 
     TestBed.configureTestingModule({
       providers: [
@@ -46,6 +49,7 @@ describe('EnemyService', () => {
         GameStateService,
         { provide: GameBoardService, useValue: gameBoardServiceSpy },
         { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+        { provide: RelicService, useValue: relicServiceSpy },
       ]
     });
 
@@ -3153,6 +3157,45 @@ describe('EnemyService', () => {
       // Should still spawn (straight-line fallback) rather than return null
       expect(enemy).not.toBeNull();
       expect(enemy!.path.length).toBeGreaterThan(0);
+    });
+  });
+
+  // ── SURVEYOR_COMPASS tile tracking ───────────────────────────────────────
+
+  describe('stepEnemiesOneTurn — SURVEYOR_COMPASS tile tracking', () => {
+    it('calls relicService.recordTileVisited for each tile an enemy steps onto', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      expect(enemy).not.toBeNull();
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // BASIC enemy moves 1 tile per turn — recordTileVisited should have been called
+      // at least once with the new position (row, col).
+      expect(relicServiceSpy.recordTileVisited).toHaveBeenCalled();
+      const calls = relicServiceSpy.recordTileVisited.calls.allArgs();
+      // Each call should be (row: number, col: number)
+      calls.forEach(([row, col]: [number, number]) => {
+        expect(typeof row).toBe('number');
+        expect(typeof col).toBe('number');
+      });
+    });
+
+    it('passes the enemy gridPosition values to recordTileVisited after stepping', () => {
+      const enemy = service.spawnEnemy(EnemyType.BASIC, mockScene)!;
+      relicServiceSpy.recordTileVisited.calls.reset();
+
+      service.stepEnemiesOneTurn(() => 0);
+
+      // After stepping, enemy.gridPosition should match the last recordTileVisited call args.
+      const lastCall = relicServiceSpy.recordTileVisited.calls.mostRecent();
+      if (lastCall) {
+        const [row, col] = lastCall.args as [number, number];
+        expect(row).toBe(enemy.gridPosition.row);
+        expect(col).toBe(enemy.gridPosition.col);
+      } else {
+        // If enemy has no path remaining it won't step — not a failure
+        expect(enemy.pathIndex).toBe(enemy.path.length - 1);
+      }
     });
   });
 });

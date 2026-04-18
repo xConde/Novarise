@@ -21,7 +21,7 @@ export enum RelicId {
   LUCKY_COIN = 'LUCKY_COIN',
   APPRENTICE_MANUAL = 'APPRENTICE_MANUAL',
 
-  // Uncommon (7)
+  // Uncommon (7 + 1)
   CHAIN_REACTION = 'CHAIN_REACTION',
   FROST_NOVA = 'FROST_NOVA',
   MORTAR_SHELL = 'MORTAR_SHELL',
@@ -29,11 +29,13 @@ export enum RelicId {
   BASIC_TRAINING = 'BASIC_TRAINING',
   SPLASH_ZONE = 'SPLASH_ZONE',
   BOUNTY_HUNTER = 'BOUNTY_HUNTER',
+  SURVEYOR_COMPASS = 'SURVEYOR_COMPASS',
 
-  // Rare (3)
+  // Rare (3 + 1)
   ARCHITECTS_BLUEPRINT = 'ARCHITECTS_BLUEPRINT',
   TEMPORAL_RIFT = 'TEMPORAL_RIFT',
   COMMANDERS_BANNER = 'COMMANDERS_BANNER',
+  WORLD_SPIRIT = 'WORLD_SPIRIT',
 }
 
 export enum RelicRarity {
@@ -173,8 +175,15 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavorText: 'The bigger they are, the richer they fall.',
     rarity: RelicRarity.UNCOMMON,
   },
+  [RelicId.SURVEYOR_COMPASS]: {
+    id: RelicId.SURVEYOR_COMPASS,
+    name: 'Surveyor Compass',
+    description: '+5 gold per unique tile enemies cross this wave',
+    flavorText: 'Every path walked is a path understood.',
+    rarity: RelicRarity.UNCOMMON,
+  },
 
-  // ── Rare (3) ────────────────────────────────────────────────
+  // ── Rare (3 + 1) ────────────────────────────────────────────
   [RelicId.ARCHITECTS_BLUEPRINT]: {
     id: RelicId.ARCHITECTS_BLUEPRINT,
     name: "Architect's Blueprint",
@@ -194,6 +203,13 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: "Commander's Banner",
     description: 'All towers +15% damage and +15% range',
     flavorText: 'Under this banner, none falter.',
+    rarity: RelicRarity.RARE,
+  },
+  [RelicId.WORLD_SPIRIT]: {
+    id: RelicId.WORLD_SPIRIT,
+    name: 'World Spirit',
+    description: 'Cartographer cards cost -1 energy (minimum 0)',
+    flavorText: 'The land remembers those who shaped it.',
     rarity: RelicRarity.RARE,
   },
 };

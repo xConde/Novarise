@@ -272,6 +272,13 @@ export class CombatLoopService {
       }
 
       this.gameStateService.completeWave(reward);
+
+      // SURVEYOR_COMPASS: award gold for unique tiles enemies crossed this wave.
+      const surveyorGold = this.relicService.consumeSurveyorGold();
+      if (surveyorGold > 0) {
+        this.gameStateService.addGoldAndScore(surveyorGold);
+      }
+
       const postWavePhase = this.gameStateService.getState().phase;
 
       let interestEarned = 0;

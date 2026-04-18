@@ -3,6 +3,9 @@ import { RelicService } from './relic.service';
 import { RelicId, RelicRarity, RELIC_DEFINITIONS } from '../models/relic.model';
 import { TowerType } from '../../game/game-board/models/tower.model';
 import { SerializableRelicFlags } from '../../game/game-board/models/encounter-checkpoint.model';
+import { CardDefinition, CardRarity, CardType } from '../models/card.model';
+import { CardId } from '../models/card.model';
+import { getCardDefinition } from '../constants/card-definitions';
 
 describe('RelicService', () => {
   let service: RelicService;
@@ -282,6 +285,129 @@ describe('RelicService', () => {
     const available = service.getAvailableRelics(RelicRarity.RARE);
     expect(available.every(r => r.rarity === RelicRarity.RARE)).toBeTrue();
     expect(available.find(r => r.id === RelicId.COMMANDERS_BANNER)).toBeUndefined();
+  });
+
+  // ── SURVEYOR_COMPASS ─────────────────────────────────────────
+
+  describe('SURVEYOR_COMPASS', () => {
+    it('recordTileVisited is a no-op when relic is not active', () => {
+      service.recordTileVisited(1, 2);
+      expect(service.consumeSurveyorGold()).toBe(0);
+    });
+
+    it('consumeSurveyorGold returns 0 when relic is not active', () => {
+      expect(service.consumeSurveyorGold()).toBe(0);
+    });
+
+    it('unique tiles aggregate correctly: n unique tiles → n * 5 gold', () => {
+      service.setActiveRelics([RelicId.SURVEYOR_COMPASS]);
+      service.recordTileVisited(0, 0);
+      service.recordTileVisited(0, 1);
+      service.recordTileVisited(1, 0);
+      expect(service.consumeSurveyorGold()).toBe(15); // 3 unique tiles × 5
+    });
+
+    it('duplicate tile visits do not double-count', () => {
+      service.setActiveRelics([RelicId.SURVEYOR_COMPASS]);
+      service.recordTileVisited(0, 0);
+      service.recordTileVisited(0, 0);
+      service.recordTileVisited(0, 0);
+      expect(service.consumeSurveyorGold()).toBe(5); // 1 unique tile × 5
+    });
+
+    it('consumeSurveyorGold clears the set (second call returns 0)', () => {
+      service.setActiveRelics([RelicId.SURVEYOR_COMPASS]);
+      service.recordTileVisited(0, 0);
+      service.consumeSurveyorGold();
+      expect(service.consumeSurveyorGold()).toBe(0);
+    });
+
+    it('resetWaveState clears the visited-tile set', () => {
+      service.setActiveRelics([RelicId.SURVEYOR_COMPASS]);
+      service.recordTileVisited(0, 0);
+      service.recordTileVisited(0, 1);
+      service.resetWaveState();
+      expect(service.consumeSurveyorGold()).toBe(0);
+    });
+
+    it('clearRelics clears the visited-tile set', () => {
+      service.setActiveRelics([RelicId.SURVEYOR_COMPASS]);
+      service.recordTileVisited(0, 0);
+      service.clearRelics();
+      // Re-activate to allow consumeSurveyorGold to run (otherwise bails early)
+      service.setActiveRelics([RelicId.SURVEYOR_COMPASS]);
+      expect(service.consumeSurveyorGold()).toBe(0);
+    });
+  });
+
+  // ── WORLD_SPIRIT ──────────────────────────────────────────────
+
+  describe('WORLD_SPIRIT', () => {
+    it('getCardEnergyCostModifier returns 0 when relic is not active', () => {
+      const def = getCardDefinition(CardId.LAY_TILE); // cartographer archetype
+      expect(service.getCardEnergyCostModifier(def)).toBe(0);
+    });
+
+    it('getCardEnergyCostModifier returns -1 for cartographer card when WORLD_SPIRIT is active', () => {
+      service.setActiveRelics([RelicId.WORLD_SPIRIT]);
+      const def = getCardDefinition(CardId.LAY_TILE);
+      expect(def.archetype).toBe('cartographer');
+      expect(service.getCardEnergyCostModifier(def)).toBe(-1);
+    });
+
+    it('getCardEnergyCostModifier returns 0 for non-cartographer card when WORLD_SPIRIT is active', () => {
+      service.setActiveRelics([RelicId.WORLD_SPIRIT]);
+      const def = getCardDefinition(CardId.GOLD_RUSH); // no archetype (undefined, not cartographer)
+      expect(def.archetype).not.toBe('cartographer');
+      expect(service.getCardEnergyCostModifier(def)).toBe(0);
+    });
+
+    it('effective cost for a 0-energy cartographer card stays 0 (Math.max prevents negative)', () => {
+      service.setActiveRelics([RelicId.WORLD_SPIRIT]);
+      // SCOUT_AHEAD is 0-cost; archetype may be neutral but test the math guarantee:
+      // Math.max(0, 0 + (-1)) = 0 when modifier applies, or 0 + 0 = 0 otherwise
+      const def = getCardDefinition(CardId.SCOUT_AHEAD);
+      const modifier = service.getCardEnergyCostModifier(def);
+      const effectiveCost = Math.max(0, def.energyCost + modifier);
+      expect(effectiveCost).toBe(0); // never negative
+    });
+
+    it('getCardEnergyCostModifier returns 0 after clearRelics', () => {
+      service.setActiveRelics([RelicId.WORLD_SPIRIT]);
+      service.clearRelics();
+      const def = getCardDefinition(CardId.LAY_TILE);
+      expect(service.getCardEnergyCostModifier(def)).toBe(0);
+    });
+  });
+
+  // ── Reward pool integration ───────────────────────────────────
+
+  describe('Reward pool — new relics appear in getAvailableRelics()', () => {
+    it('SURVEYOR_COMPASS appears in available uncommon relics when not owned', () => {
+      const available = service.getAvailableRelics(RelicRarity.UNCOMMON);
+      const found = available.find(r => r.id === RelicId.SURVEYOR_COMPASS);
+      expect(found).toBeDefined();
+    });
+
+    it('WORLD_SPIRIT appears in available rare relics when not owned', () => {
+      const available = service.getAvailableRelics(RelicRarity.RARE);
+      const found = available.find(r => r.id === RelicId.WORLD_SPIRIT);
+      expect(found).toBeDefined();
+    });
+
+    it('SURVEYOR_COMPASS is excluded from available relics when already owned', () => {
+      service.setActiveRelics([RelicId.SURVEYOR_COMPASS]);
+      const available = service.getAvailableRelics(RelicRarity.UNCOMMON);
+      const found = available.find(r => r.id === RelicId.SURVEYOR_COMPASS);
+      expect(found).toBeUndefined();
+    });
+
+    it('WORLD_SPIRIT is excluded from available relics when already owned', () => {
+      service.setActiveRelics([RelicId.WORLD_SPIRIT]);
+      const available = service.getAvailableRelics(RelicRarity.RARE);
+      const found = available.find(r => r.id === RelicId.WORLD_SPIRIT);
+      expect(found).toBeUndefined();
+    });
   });
 
   // ── checkpoint serialization ──────────────────────────────────

@@ -255,6 +255,7 @@ describe('CardHandComponent', () => {
         instance: { cardId: CardId.TOWER_BASIC, instanceId: 'x', upgraded: false },
         definition: { ...getCardDefinition(CardId.TOWER_BASIC), innate: undefined, retain: undefined, ethereal: undefined, exhaust: undefined } as any,
         canPlay: true,
+        effectiveEnergyCost: 1,
         goldCost: 50,
       };
       expect(component.keywordAriaLabel(card)).toBe('');
@@ -265,6 +266,7 @@ describe('CardHandComponent', () => {
         instance: { cardId: CardId.TOWER_BASIC, instanceId: 'x', upgraded: false },
         definition: { ...getCardDefinition(CardId.TOWER_BASIC), innate: true, retain: true, ethereal: false, exhaust: true } as any,
         canPlay: true,
+        effectiveEnergyCost: 1,
         goldCost: 50,
       };
       expect(component.keywordAriaLabel(card)).toBe('Keywords: Innate, Retain, Exhaust');
@@ -440,12 +442,16 @@ describe('CardHandComponent', () => {
   });
 
   describe('fan overlap', () => {
-    const stubHandCard = (id: string, cardId: CardId): HandCard => ({
-      instance: { instanceId: id, cardId, upgraded: false },
-      definition: getCardDefinition(cardId),
-      canPlay: true,
-      goldCost: null,
-    });
+    const stubHandCard = (id: string, cardId: CardId): HandCard => {
+      const definition = getCardDefinition(cardId);
+      return {
+        instance: { instanceId: id, cardId, upgraded: false },
+        definition,
+        canPlay: true,
+        effectiveEnergyCost: definition.energyCost,
+        goldCost: null,
+      };
+    };
 
     const makeCards = (count: number): HandCard[] => {
       const ids: CardId[] = [
@@ -531,6 +537,7 @@ describe('CardHandComponent', () => {
         instance: makeInstance(id, upgraded),
         definition: def,
         canPlay: true,
+        effectiveEnergyCost: def.energyCost,
         goldCost: null,
       };
     }

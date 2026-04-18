@@ -3,6 +3,7 @@ import { DeckService } from './deck.service';
 import { CardId, CardInstance, DECK_CONFIG } from '../models/card.model';
 import { getStarterDeck } from '../constants/card-definitions';
 import { SerializableDeckState } from '../../game/game-board/models/encounter-checkpoint.model';
+import { RelicService } from './relic.service';
 
 describe('DeckService', () => {
   let service: DeckService;
@@ -600,6 +601,75 @@ describe('DeckService', () => {
         { instanceId: 'b', cardId: CardId.DAMAGE_BOOST, upgraded: false },
       ]);
       expect(service.getDominantArchetype()).toBe('neutral');
+    });
+  });
+
+  // ── WORLD_SPIRIT energy discount ─────────────────────────────
+
+  describe('playCard — WORLD_SPIRIT energy discount', () => {
+    let relicSpy: jasmine.SpyObj<RelicService>;
+
+    beforeEach(() => {
+      relicSpy = jasmine.createSpyObj<RelicService>('RelicService', ['getCardEnergyCostModifier']);
+      relicSpy.getCardEnergyCostModifier.and.returnValue(0); // default: no discount
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          DeckService,
+          { provide: RelicService, useValue: relicSpy },
+        ],
+      });
+      service = TestBed.inject(DeckService);
+      service.clear();
+    });
+
+    it('applies -1 discount when relicService returns -1 for a 2-cost card', () => {
+      // LAY_TILE costs 1E normally; mock -1 makes it 0E — playable at 0 energy.
+      // Use TOWER_MORTAR (3E) to show: with -1 discount → 2E needed.
+      relicSpy.getCardEnergyCostModifier.and.returnValue(-1);
+      service.initializeDeck([CardId.TOWER_MORTAR], 1);
+      service.setMaxEnergy(2);
+      service.drawForWave(); // fills energy to 2; TOWER_MORTAR raw cost is 3 → effective 2
+
+      const hand = service.getDeckState().hand;
+      const instanceId = hand[0].instanceId;
+      const result = service.playCard(instanceId);
+
+      expect(result).toBeTrue();
+      expect(service.getEnergy().current).toBe(0); // 2 - 2 = 0
+    });
+
+    it('effective cost never goes negative: -1 discount on a 0-cost card costs 0', () => {
+      relicSpy.getCardEnergyCostModifier.and.returnValue(-1);
+      // SCOUT_AHEAD costs 0E; with -1 modifier → Math.max(0, -1) = 0
+      service.initializeDeck([CardId.SCOUT_AHEAD], 1);
+      service.setMaxEnergy(3);
+      service.drawForWave();
+      // Set energy to 0 to confirm 0-cost playable
+      (service as unknown as { energyState: { current: number; max: number } }).energyState = { current: 0, max: 3 };
+
+      const hand = service.getDeckState().hand;
+      const instanceId = hand[0].instanceId;
+      const result = service.playCard(instanceId);
+
+      expect(result).toBeTrue(); // cost = 0 → succeeds at 0 energy
+      expect(service.getEnergy().current).toBe(0); // 0 - 0 = 0
+    });
+
+    it('without RelicService (@Optional null) uses raw energyCost', () => {
+      // Create a DeckService with no RelicService provided — @Optional() yields null.
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({ providers: [DeckService] });
+      const noRelicService = TestBed.inject(DeckService);
+      noRelicService.clear();
+
+      noRelicService.initializeDeck([CardId.TOWER_BASIC], 1);
+      noRelicService.drawForWave(); // TOWER_BASIC costs 1; energy filled to max
+
+      const hand = noRelicService.getDeckState().hand;
+      const result = noRelicService.playCard(hand[0].instanceId);
+      expect(result).toBeTrue(); // no crash; falls back to raw cost
     });
   });
 });

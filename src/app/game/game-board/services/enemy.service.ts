@@ -303,6 +303,9 @@ export class EnemyService {
         enemy.gridPosition.row = node.y;
         enemy.gridPosition.col = node.x;
 
+        // Track tile for SURVEYOR_COMPASS relic (no-op if relic inactive).
+        this.relicService.recordTileVisited(node.y, node.x);
+
         // Snap world position to the new tile center.
         this.pathfindingService.gridToWorldPosInto(node.y, node.x, this.scratchCurrentWorld);
         enemy.position.x = this.scratchCurrentWorld.x;

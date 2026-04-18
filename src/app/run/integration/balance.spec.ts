@@ -132,8 +132,8 @@ describe('Ascent Mode — Balance', () => {
 
   // ── Relic balance ────────────────────────────────────────────────────────
 
-  it('all 20 relics should have multipliers within reasonable range', () => {
-    expect(Object.keys(RELIC_DEFINITIONS).length).toBe(20);
+  it('all 22 relics should have multipliers within reasonable range', () => {
+    expect(Object.keys(RELIC_DEFINITIONS).length).toBe(22);
     // No negative stats, no absurd values — spot check key relics
     // GOLD_MAGNET: +15% = 1.15 ≤ 1.5
     // COMMANDERS_BANNER: +15% damage AND range ≤ 1.5 each
@@ -160,8 +160,8 @@ describe('Ascent Mode — Balance', () => {
     const rares = Object.values(RELIC_DEFINITIONS).filter(r => r.rarity === RelicRarity.RARE);
 
     expect(commons.length).toBe(10);
-    expect(uncommons.length).toBe(7);
-    expect(rares.length).toBe(3);
+    expect(uncommons.length).toBe(8); // +1: SURVEYOR_COMPASS
+    expect(rares.length).toBe(4); // +1: WORLD_SPIRIT
   });
 
   it('no single relic should give more than 35% damage increase', () => {

@@ -3,6 +3,10 @@ import { RelicId, RELIC_DEFINITIONS, RelicRarity, getRelicsByRarity, RelicDefini
 import { TowerType } from '../../game/game-board/models/tower.model';
 import { RELIC_EFFECT_CONFIG } from '../constants/run.constants';
 import { SerializableRelicFlags } from '../../game/game-board/models/encounter-checkpoint.model';
+import { CardDefinition } from '../models/card.model';
+
+/** Gold awarded per unique tile crossed when SURVEYOR_COMPASS is active. */
+const SURVEYOR_TILE_GOLD = 5;
 
 /**
  * Relic effect engine — pull model.
@@ -60,6 +64,12 @@ export class RelicService {
   /** Per-wave state: whether first leak has been blocked (REINFORCED_WALLS). */
   private firstLeakBlockedThisWave = false;
 
+  /**
+   * Per-wave state: unique tile keys visited by enemies this wave (SURVEYOR_COMPASS).
+   * Not serialized — half-wave gold loss on save is acceptable.
+   */
+  private surveyorVisitedTiles: Set<string> = new Set();
+
   // ── Lifecycle ───────────────────────────────────────────
 
   /** Set the active relic IDs (called when run state changes). */
@@ -78,6 +88,7 @@ export class RelicService {
     this.activeRelicIds.clear();
     this.modifiersDirty = true;
     this.cachedModifiers = { ...BASELINE_MODIFIERS };
+    this.surveyorVisitedTiles.clear();
   }
 
   /** Reset per-encounter relic state. */
@@ -88,6 +99,7 @@ export class RelicService {
   /** Reset per-wave relic state. */
   resetWaveState(): void {
     this.firstLeakBlockedThisWave = false;
+    this.surveyorVisitedTiles.clear();
   }
 
   /** Check if a specific relic is active. */
@@ -252,6 +264,38 @@ export class RelicService {
       : 1;
   }
 
+  // ── Cartographer Relic Methods ──────────────────────────
+
+  /**
+   * SURVEYOR_COMPASS: Record that an enemy stepped on a tile.
+   * No-op when relic is not active — cheap bail-out for the hot path.
+   */
+  recordTileVisited(row: number, col: number): void {
+    if (!this.hasRelic(RelicId.SURVEYOR_COMPASS)) return;
+    this.surveyorVisitedTiles.add(`${row}-${col}`);
+  }
+
+  /**
+   * SURVEYOR_COMPASS: Consume the visited-tile count and return gold earned.
+   * Clears the set. Returns 0 when relic is not active.
+   * Name is "consume" — callers must not call this more than once per wave.
+   */
+  consumeSurveyorGold(): number {
+    if (!this.hasRelic(RelicId.SURVEYOR_COMPASS)) return 0;
+    const gold = this.surveyorVisitedTiles.size * SURVEYOR_TILE_GOLD;
+    this.surveyorVisitedTiles.clear();
+    return gold;
+  }
+
+  /**
+   * WORLD_SPIRIT: Returns -1 when relic is active and the card is
+   * cartographer-archetype; 0 otherwise. Callers must apply Math.max(0, ...).
+   */
+  getCardEnergyCostModifier(def: CardDefinition): number {
+    if (!this.hasRelic(RelicId.WORLD_SPIRIT)) return 0;
+    return def.archetype === 'cartographer' ? -1 : 0;
+  }
+
   // ── Checkpoint Serialization ────────────────────────────
 
   /** Serialize per-encounter relic flags for checkpoint save. */
@@ -328,6 +372,9 @@ export class RelicService {
           break;
         // BOUNTY_HUNTER — handled in getGoldMultiplier()
 
+        // Uncommon (archetype)
+        // SURVEYOR_COMPASS — trigger-based, handled by recordTileVisited() / consumeSurveyorGold()
+
         // Rare
         // ARCHITECTS_BLUEPRINT — trigger-based
         case RelicId.TEMPORAL_RIFT:
@@ -337,6 +384,7 @@ export class RelicService {
           mods.damageMultiplier *= 1.15;
           mods.rangeMultiplier *= 1.15;
           break;
+        // WORLD_SPIRIT — trigger-based, handled by getCardEnergyCostModifier()
       }
     }
 

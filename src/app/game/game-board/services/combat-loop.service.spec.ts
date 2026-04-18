@@ -49,6 +49,7 @@ describe('CombatLoopService', () => {
   let enemySpy: jasmine.SpyObj<EnemyService>;
   let gameStatsSpy: jasmine.SpyObj<GameStatsService>;
   let gameEndSpy: jasmine.SpyObj<GameEndService>;
+  let relicSpy: jasmine.SpyObj<RelicService>;
   let eventBusSpy: jasmine.SpyObj<RunEventBusService>;
   let notificationSpy: jasmine.SpyObj<GameNotificationService>;
   let audioSpy: jasmine.SpyObj<AudioService>;
@@ -178,7 +179,7 @@ describe('CombatLoopService', () => {
         { provide: GameStatsService, useValue: gameStatsSpy },
         { provide: GameEndService, useValue: gameEndSpy },
         { provide: StatusEffectService, useValue: statusEffectSpy },
-        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: RelicService, useValue: (relicSpy = createRelicServiceSpy()) },
         { provide: RunEventBusService, useValue: eventBusSpy },
         { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
         { provide: GameNotificationService, useValue: notificationSpy },
@@ -1367,6 +1368,46 @@ describe('CombatLoopService', () => {
       service.resolveTurn(scene);
 
       expect(audioSpy.playLifeLoss).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── SURVEYOR_COMPASS wave-end gold award ──────────────────────────────────
+
+  describe('SURVEYOR_COMPASS gold award at wave completion', () => {
+    function setupWaveClearState(): void {
+      waveSpy.isSpawning.and.returnValue(false);
+      enemySpy.getLivingEnemyCount.and.returnValue(0);
+      enemySpy.stepEnemiesOneTurn.and.returnValue([]);
+
+      let callCount = 0;
+      gameStateSpy.getState.and.callFake(() => ({
+        phase: callCount++ < 2 ? GamePhase.COMBAT : GamePhase.INTERMISSION,
+        wave: 1, lives: 10, gold: 100, score: 0, isPaused: false,
+        isEndless: false, difficulty: 'normal', maxWaves: 10, elapsedTime: 0,
+        consecutiveWavesWithoutLeak: 0, highestWave: 0, activeModifiers: new Set(),
+      } as any));
+    }
+
+    it('awards surveyor gold via addGoldAndScore when consumeSurveyorGold returns > 0', () => {
+      setupWaveClearState();
+      relicSpy.consumeSurveyorGold.and.returnValue(25);
+
+      service.resolveTurn(scene);
+
+      expect(gameStateSpy.addGoldAndScore).toHaveBeenCalledWith(25);
+    });
+
+    it('does NOT call addGoldAndScore for surveyor gold when consumeSurveyorGold returns 0', () => {
+      setupWaveClearState();
+      relicSpy.consumeSurveyorGold.and.returnValue(0);
+      gameStateSpy.addGoldAndScore.calls.reset();
+
+      service.resolveTurn(scene);
+
+      // addGoldAndScore should not have been called with 0 (could be called for other reasons)
+      const calls = gameStateSpy.addGoldAndScore.calls.allArgs();
+      const surveyorZeroCall = calls.find(([amount]: [number]) => amount === 0);
+      expect(surveyorZeroCall).toBeUndefined();
     });
   });
 });

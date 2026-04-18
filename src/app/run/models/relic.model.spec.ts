@@ -8,8 +8,8 @@ import {
 
 describe('Relic Model', () => {
   describe('RELIC_DEFINITIONS', () => {
-    it('should have exactly 20 relics', () => {
-      expect(Object.keys(RELIC_DEFINITIONS).length).toBe(20);
+    it('should have exactly 22 relics', () => {
+      expect(Object.keys(RELIC_DEFINITIONS).length).toBe(22);
     });
 
     it('should have 10 common relics', () => {
@@ -17,14 +17,14 @@ describe('Relic Model', () => {
       expect(commons.length).toBe(10);
     });
 
-    it('should have 7 uncommon relics', () => {
+    it('should have 8 uncommon relics', () => {
       const uncommons = Object.values(RELIC_DEFINITIONS).filter(r => r.rarity === RelicRarity.UNCOMMON);
-      expect(uncommons.length).toBe(7);
+      expect(uncommons.length).toBe(8); // +1: SURVEYOR_COMPASS
     });
 
-    it('should have 3 rare relics', () => {
+    it('should have 4 rare relics', () => {
       const rares = Object.values(RELIC_DEFINITIONS).filter(r => r.rarity === RelicRarity.RARE);
-      expect(rares.length).toBe(3);
+      expect(rares.length).toBe(4); // +1: WORLD_SPIRIT
     });
 
     it('every relic should have a non-empty name', () => {
@@ -64,14 +64,14 @@ describe('Relic Model', () => {
       expect(result.length).toBe(10);
     });
 
-    it('should return 7 uncommon relics', () => {
+    it('should return 8 uncommon relics', () => {
       const result = getRelicsByRarity(RelicRarity.UNCOMMON);
-      expect(result.length).toBe(7);
+      expect(result.length).toBe(8); // +1: SURVEYOR_COMPASS
     });
 
-    it('should return 3 rare relics', () => {
+    it('should return 4 rare relics', () => {
       const result = getRelicsByRarity(RelicRarity.RARE);
-      expect(result.length).toBe(3);
+      expect(result.length).toBe(4); // +1: WORLD_SPIRIT
     });
 
     it('should return only relics of the requested rarity', () => {

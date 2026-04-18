@@ -895,6 +895,7 @@ export function createRelicServiceSpy(): jasmine.SpyObj<RelicService> {
     'getDotDamageMultiplier', 'isNextTowerFree', 'consumeFreeTower',
     'shouldBlockLeak', 'rollLuckyCoin', 'getAvailableRelics',
     'hasQuickDraw', 'getSlowDurationBonus', 'getTurnDelayPerWave',
+    'recordTileVisited', 'consumeSurveyorGold', 'getCardEnergyCostModifier',
   ], ['relicCount']);
 
   spy.getDamageMultiplier.and.returnValue(1);
@@ -916,6 +917,8 @@ export function createRelicServiceSpy(): jasmine.SpyObj<RelicService> {
   spy.shouldBlockLeak.and.returnValue(false);
   spy.rollLuckyCoin.and.returnValue(1);
   spy.getAvailableRelics.and.returnValue([]);
+  spy.consumeSurveyorGold.and.returnValue(0);
+  spy.getCardEnergyCostModifier.and.returnValue(0);
   (Object.getOwnPropertyDescriptor(spy, 'relicCount')!.get as jasmine.Spy).and.returnValue(0);
 
   return spy;
