@@ -85,6 +85,7 @@ import { PathMutationService } from './services/path-mutation.service';
 import { ElevationService } from './services/elevation.service';
 import { LineOfSightService } from './services/line-of-sight.service';
 import { TerraformMaterialPoolService } from './services/terraform-material-pool.service';
+import { TowerGraphService } from './services/tower-graph.service';
 import { ELEVATION_CONFIG } from './constants/elevation.constants';
 import { BlockType } from './models/game-board-tile';
 import { BOARD_CONFIG } from './constants/board.constants';
@@ -152,7 +153,7 @@ function buildEnemyBadgeMap(): ReadonlyMap<EnemyType, EnemyBadge[]> {
   selector: 'app-game-board',
   templateUrl: './game-board.component.html',
   styleUrls: ['./game-board.component.scss'],
-  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService]
+  providers: [BoardMeshRegistryService, SceneService, EnemyService, EnemyVisualService, EnemyHealthService, PathfindingService, GameStateService, WaveService, TowerCombatService, ChainLightningService, AudioService, ParticleService, ScreenShakeService, GoldPopupService, FpsCounterService, GameStatsService, DamagePopupService, MinimapService, TowerPreviewService, PathVisualizationService, StatusEffectService, GameNotificationService, ChallengeTrackingService, GameEndService, GameSessionService, TowerInteractionService, CombatLoopService, TileHighlightService, TowerAnimationService, RangeVisualizationService, TowerMeshFactoryService, EnemyMeshFactoryService, GameInputService, GamePauseService, ChallengeDisplayService, TowerUpgradeVisualService, TowerPlacementService, TowerSelectionService, GameRenderService, TouchInteractionService, BoardPointerService, CardPlayService, TowerMeshLifecycleService, WaveCombatFacadeService, TutorialFacadeService, AscensionModifierService, TurnHistoryService, WavePreviewService, PathMutationService, ElevationService, LineOfSightService, TerraformMaterialPoolService, TowerGraphService]
 })
 export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
@@ -382,6 +383,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     private runStateFlagService: RunStateFlagService,
     private pathMutationService: PathMutationService,
     private elevationService: ElevationService,
+    private towerGraphService: TowerGraphService,
   ) {
     this.gameState = this.gameStateService.getState();
   }
@@ -393,6 +395,13 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.pathMutationService.setRepathHook((row, col) => {
       this.enemyService.repathAffectedEnemies(row, col);
     });
+
+    // Phase 4 sprint 41 — wire TowerGraphService's placed-towers getter.
+    // TowerGraphService does NOT inject TowerCombatService (would create a
+    // register-time DI cycle); the getter pattern mirrors setRepathHook.
+    this.towerGraphService.setPlacedTowersGetter(
+      () => this.towerCombatService.getPlacedTowers(),
+    );
 
     // Feed the RECAP panel off the turn-history buffer so every endTurn()
     // resolves into a fresh row without any call-site flashing logic.
@@ -1279,6 +1288,16 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
       this.towerCombatService.restoreTowers(checkpoint.towers, towerMeshes);
       this.meshRegistry.rebuildTowerChildrenArray();
+
+      // Step 4.5: Rebuild the tower adjacency graph from the restored placedTowers.
+      // Graph is DERIVED state (not persisted) — restoreTowers repopulates the
+      // source-of-truth map directly, bypassing the register/unregister hooks that
+      // would normally keep the graph in sync. This single rebuild() consumes the
+      // current `placedTowersGetter()` result and re-derives all 4-dir edges +
+      // cluster membership. O(N × 4) lookups — well under 0.1ms for realistic
+      // tower counts. See conduit-adjacency-graph.md §9 for the rationale and §17
+      // for the 19→20-step restore coordinator.
+      this.towerGraphService.rebuild();
 
       // Step 5: Restore mortar zones
       this.towerCombatService.restoreMortarZones(checkpoint.mortarZones);

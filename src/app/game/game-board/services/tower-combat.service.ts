@@ -24,6 +24,7 @@ import { PathfindingService } from './pathfinding.service';
 import { SerializablePlacedTower, SerializableMortarZone } from '../models/encounter-checkpoint.model';
 import { LineOfSightService } from './line-of-sight.service';
 import { ElevationService } from './elevation.service';
+import { TowerGraphService } from './tower-graph.service';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 
 /** M3 S4: turn-based mortar DoT zone. Replaces the legacy real-time path for fireTurn. */
@@ -158,6 +159,12 @@ export class TowerCombatService {
     // sprint 29. When absent, all elevation reads return 0 (flat-board behavior,
     // no regression on non-Highground runs). Full GameModule always wires it.
     @Optional() private elevationService?: ElevationService,
+    // @Optional() — Sprint 41 Conduit primitives. When absent, register/unregister
+    // are no-ops w.r.t. graph state — existing pre-Conduit test beds run unchanged.
+    // composeDamageStack does not read the graph in sprint 41; sprint 43 HANDSHAKE
+    // adds the first read and will require the service to be present for that card's
+    // test bed.
+    @Optional() private towerGraphService?: TowerGraphService,
   ) {}
 
   /**
@@ -177,7 +184,7 @@ export class TowerCombatService {
     const placedAtTurn = opts.placedAtTurn ?? 0;
     const cardStatOverrides = opts.cardStatOverrides;
     const key = `${row}-${col}`;
-    this.placedTowers.set(key, {
+    const tower: PlacedTower = {
       id: key,
       type,
       level: 1,
@@ -189,7 +196,12 @@ export class TowerCombatService {
       mesh,
       placedAtTurn,
       cardStatOverrides,
-    });
+    };
+    this.placedTowers.set(key, tower);
+    // Phase 4 sprint 41 — mirror tower registration into the adjacency graph
+    // AFTER the placedTowers.set, so the graph's neighbor scan sees the newly-
+    // registered tower in the source-of-truth map.
+    this.towerGraphService?.registerTower(tower);
   }
 
   /** Upgrades a tower from L1→L2. Returns false if at max level, already L2 (L2→L3 requires specialization), or not found. `actualCost` defaults to the configured upgrade cost. */
@@ -671,6 +683,9 @@ export class TowerCombatService {
     const tower = this.placedTowers.get(key);
     if (!tower) return undefined;
     this.placedTowers.delete(key);
+    // Phase 4 sprint 41 — mirror removal into the adjacency graph AFTER the
+    // placedTowers.delete so neighbor-set mutation reads the fresh state.
+    this.towerGraphService?.unregisterTower(key);
     return tower;
   }
 

@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import * as THREE from 'three';
 
 import { GameStateService } from './game-state.service';
@@ -27,6 +27,7 @@ import { WAVE_CONFIG } from '../constants/combat.constants';
 import { isTwinBossWave } from '@core/models/wave-definition.model';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
+import { TowerGraphService } from './tower-graph.service';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
 
 /**
@@ -79,6 +80,10 @@ export class CombatLoopService {
     private screenShakeService: ScreenShakeService,
     private pathMutationService: PathMutationService,
     private elevationService: ElevationService,
+    // @Optional() — not provided in combat-loop test beds that predate sprint 41.
+    // When absent, tickTurn is a no-op (existing graph mutations, if any, don't
+    // expire). Production GameBoardComponent always wires it.
+    @Optional() private towerGraphService?: TowerGraphService,
   ) {}
 
   /** Phase 4: current turn number, exposed for UI bindings. */
@@ -153,6 +158,11 @@ export class CombatLoopService {
     // Elevation tickTurn has no scene parameter — translates existing meshes, no geometry rebuild.
     // CRITICAL: elevation expiry does NOT invalidate the pathfinding cache (spike §11).
     this.elevationService.tickTurn(this.turnNumber);
+    // Phase 4 sprint 41 — expire virtual edges (CONDUIT_BRIDGE) and disruption
+    // entries (DISRUPTOR / ISOLATOR / DIVIDER). No-op in sprint 41 (no cards or
+    // enemies yet populate graph state); wired here so the ordering lands with
+    // the primitives, not with the first consumer.
+    this.towerGraphService?.tickTurn(this.turnNumber);
 
     // Sprint 36 OROGENY — every OROGENY_INTERVAL_TURNS (5) turns, permanently raise
     // a random tower's tile by +1. No-op when no towers exist or all tower tiles are

@@ -27,6 +27,7 @@ import { WavePreviewService } from './wave-preview.service';
 import { GamePauseService } from './game-pause.service';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
+import { TowerGraphService } from './tower-graph.service';
 import { TerraformMaterialPoolService } from './terraform-material-pool.service';
 import { disposeMaterial } from '../utils/three-utils';
 
@@ -64,6 +65,10 @@ export class GameSessionService {
     private pathMutationService: PathMutationService,
     private elevationService: ElevationService,
     @Optional() private terraformPool?: TerraformMaterialPoolService,
+    // Phase 4 sprint 41 — @Optional() so test beds predating Conduit primitives
+    // don't need to register TowerGraphService. Production wires it via
+    // GameBoardComponent.providers.
+    @Optional() private towerGraphService?: TowerGraphService,
   ) {}
 
   /**
@@ -98,6 +103,12 @@ export class GameSessionService {
     this.pathMutationService.reset();
     // Clear active elevation state from a prior encounter (same lifecycle as pathMutationService).
     this.elevationService.reset();
+    // Phase 4 sprint 41 — clear adjacency graph state. No-op in sprint 41
+    // (graph is derived from placedTowers which is already reset via
+    // TowerCombatService.reset/resetForRestart); explicit call makes the
+    // encounter-teardown contract visible and lands ahead of sprints 48+
+    // which persist virtual-edge state across saves.
+    this.towerGraphService?.reset();
   }
 
   /**
