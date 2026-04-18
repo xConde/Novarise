@@ -50,12 +50,18 @@ export const WAVE_DEFINITIONS: WaveDefinition[] = [
     ],
     reward: 80
   },
-  // Wave 7: Heavy siege with shielded vanguard
+  // Wave 7: Heavy siege with shielded vanguard, plus diggers.
+  // Phase 2 sprint 21 — MINER introduced as a mid-wave board-mutation threat.
+  // 2 MINERs every 2.0s on an 8-turn-ish wave means each digs once if the
+  // wave runs long enough (dig cadence is every 3rd turn post-spawn). Their
+  // adjacent-wall destruction can carve new paths for follower enemies.
+  // Balance: placeholder count — refine via playtest + sprint 79 balance pass.
   {
     entries: [
       { type: EnemyType.SHIELDED, count: 3, spawnInterval: 2.0 },
       { type: EnemyType.HEAVY, count: 4, spawnInterval: 1.5 },
-      { type: EnemyType.BASIC, count: 8, spawnInterval: 0.8 }
+      { type: EnemyType.BASIC, count: 8, spawnInterval: 0.8 },
+      { type: EnemyType.MINER, count: 2, spawnInterval: 2.5 }
     ],
     reward: 100
   },
