@@ -250,6 +250,90 @@ describe('TowerGraphService (Phase 4 Conduit primitives — sprint 41)', () => {
     });
   });
 
+  describe('isInStraightLineOf — FORMATION detection (sprint 44)', () => {
+    it('horizontal 3-line: middle + both endpoints all qualify', () => {
+      place(5, 4);
+      place(5, 5);
+      place(5, 6);
+      expect(service.isInStraightLineOf(5, 4, 3)).toBe(true);
+      expect(service.isInStraightLineOf(5, 5, 3)).toBe(true);
+      expect(service.isInStraightLineOf(5, 6, 3)).toBe(true);
+    });
+
+    it('vertical 3-line qualifies', () => {
+      place(3, 5);
+      place(4, 5);
+      place(5, 5);
+      expect(service.isInStraightLineOf(4, 5, 3)).toBe(true);
+    });
+
+    it('2-tower horizontal line does NOT qualify for minLength=3', () => {
+      place(5, 5);
+      place(5, 6);
+      expect(service.isInStraightLineOf(5, 5, 3)).toBe(false);
+    });
+
+    it('L-shape is not a straight line', () => {
+      place(5, 5);
+      place(5, 6);
+      place(6, 6);
+      expect(service.isInStraightLineOf(5, 5, 3)).toBe(false);
+      expect(service.isInStraightLineOf(5, 6, 3)).toBe(false);
+      expect(service.isInStraightLineOf(6, 6, 3)).toBe(false);
+    });
+
+    it('diagonal is not a straight line (only 4-dir counts)', () => {
+      place(5, 5);
+      place(6, 6);
+      place(7, 7);
+      expect(service.isInStraightLineOf(5, 5, 3)).toBe(false);
+    });
+
+    it('5-tower line qualifies for any minLength ≤ 5', () => {
+      for (let c = 0; c < 5; c++) place(5, c);
+      for (let c = 0; c < 5; c++) {
+        expect(service.isInStraightLineOf(5, c, 3)).toBe(true);
+        expect(service.isInStraightLineOf(5, c, 5)).toBe(true);
+      }
+    });
+
+    it('disrupted tower at the query point returns false', () => {
+      place(5, 4);
+      place(5, 5);
+      place(5, 6);
+      service.severTower(5, 5, /* until */ 10, 'd');
+      expect(service.isInStraightLineOf(5, 5, 3, /* currentTurn */ 5)).toBe(false);
+    });
+
+    it('disrupted interior tower breaks the line for its peers', () => {
+      place(5, 4);
+      place(5, 5);
+      place(5, 6);
+      service.severTower(5, 5, 10, 'd');
+      // (5, 4) + (5, 6) see a broken line — disrupted middle stops the walk.
+      expect(service.isInStraightLineOf(5, 4, 3, 5)).toBe(false);
+      expect(service.isInStraightLineOf(5, 6, 3, 5)).toBe(false);
+    });
+
+    it('gap in the line breaks it', () => {
+      place(5, 4);
+      // (5, 5) missing — gap
+      place(5, 6);
+      place(5, 7);
+      expect(service.isInStraightLineOf(5, 6, 3)).toBe(false);
+      expect(service.isInStraightLineOf(5, 7, 3)).toBe(false);
+    });
+
+    it('unregistered position returns false', () => {
+      expect(service.isInStraightLineOf(99, 99, 3)).toBe(false);
+    });
+
+    it('isolated tower with minLength=1 returns true', () => {
+      place(5, 5);
+      expect(service.isInStraightLineOf(5, 5, 1)).toBe(true);
+    });
+  });
+
   describe('rebuild() and reset() lifecycle', () => {
     it('rebuild() from an empty graph to a populated placedTowers map produces the same graph as incremental registration', () => {
       place(5, 5);

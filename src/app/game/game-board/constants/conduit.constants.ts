@@ -39,4 +39,11 @@ export const CONDUIT_CONFIG = {
    * DIVIDER so players see "within 2 tiles" as diamond-shaped.
    */
   DISRUPTION_METRIC: 'manhattan' as const,
+
+  /**
+   * Minimum straight-line length (inclusive of the tower itself) that triggers
+   * FORMATION's +range additive. Plan §archetype-44: "towers in a row of 3+".
+   * Sprint 44. Balance-tunable; anchored at 3 for initial playtest.
+   */
+  FORMATION_MIN_LINE_LENGTH: 3,
 } as const;

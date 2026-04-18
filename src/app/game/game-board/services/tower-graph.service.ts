@@ -337,6 +337,53 @@ export class TowerGraphService {
     return this.isDisruptedId(id, currentTurn);
   }
 
+  /**
+   * Returns true iff the tower at (row, col) is part of a straight 4-dir line
+   * of length ≥ `minLength`. Horizontal OR vertical qualifies. Walks outward
+   * from the tower in both directions along each axis, counting contiguous
+   * registered non-disrupted towers.
+   *
+   * Used by FORMATION (sprint 44). A disrupted tower is NOT counted — a
+   * line of A-B-C where B is disrupted reads as two separate lines of 1.
+   *
+   * O(line_length) per call — cheap at realistic board sizes. No caching;
+   * FORMATION is wave-scoped and the graph mutates ≤ once per turn.
+   */
+  isInStraightLineOf(row: number, col: number, minLength: number, currentTurn = 0): boolean {
+    const id = this.keyToId.get(`${row}-${col}`);
+    if (id === undefined) return false;
+    if (this.isDisruptedId(id, currentTurn)) return false;
+
+    // Horizontal line: count contiguous registered non-disrupted towers
+    // at (row, col ± k).
+    let horizontal = 1;
+    horizontal += this.walkAxis(row, col, 0, -1, currentTurn);
+    horizontal += this.walkAxis(row, col, 0, +1, currentTurn);
+    if (horizontal >= minLength) return true;
+
+    // Vertical line.
+    let vertical = 1;
+    vertical += this.walkAxis(row, col, -1, 0, currentTurn);
+    vertical += this.walkAxis(row, col, +1, 0, currentTurn);
+    return vertical >= minLength;
+  }
+
+  /** Count contiguous non-disrupted towers starting one step from (row, col) along (dr, dc). */
+  private walkAxis(row: number, col: number, dr: number, dc: number, currentTurn: number): number {
+    let count = 0;
+    let r = row + dr;
+    let c = col + dc;
+    while (true) {
+      const id = this.keyToId.get(`${r}-${c}`);
+      if (id === undefined) break;
+      if (this.isDisruptedId(id, currentTurn)) break;
+      count++;
+      r += dr;
+      c += dc;
+    }
+    return count;
+  }
+
   /** Effective link-slot capacity for a tower. Defaults to DEFAULT_LINK_SLOTS. */
   getLinkSlotCapacity(tower: PlacedTower): number {
     return tower.linkSlots ?? CONDUIT_CONFIG.DEFAULT_LINK_SLOTS;

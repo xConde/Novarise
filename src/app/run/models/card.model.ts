@@ -121,6 +121,7 @@ export enum CardId {
 
   // Conduit archetype — common cards (Phase 4, Sprints 43+)
   HANDSHAKE = 'HANDSHAKE',
+  FORMATION = 'FORMATION',
 }
 
 export enum CardType {

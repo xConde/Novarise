@@ -11,9 +11,9 @@ import { TowerType } from '../../game/game-board/models/tower.model';
 import { MODIFIER_STAT } from './modifier-stat.constants';
 
 describe('CARD_DEFINITIONS', () => {
-  it('has exactly 67 cards', () => {
-    // Sprint 43 added HANDSHAKE (Conduit common) — first Phase 4 card.
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(67);
+  it('has exactly 68 cards', () => {
+    // Phase 4 adds HANDSHAKE (sprint 43) + FORMATION (sprint 44).
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(68);
   });
 
   it('contains all CardId enum values', () => {
@@ -56,8 +56,8 @@ describe('CARD_DEFINITIONS', () => {
       expect(getCardsByType(CardType.SPELL).length).toBe(30);
     });
 
-    it('has 19 modifier cards (Phase 3 Highground set + Phase 4 HANDSHAKE)', () => {
-      expect(getCardsByType(CardType.MODIFIER).length).toBe(19);
+    it('has 20 modifier cards (Phase 3 Highground set + Phase 4 HANDSHAKE + FORMATION)', () => {
+      expect(getCardsByType(CardType.MODIFIER).length).toBe(20);
     });
 
     it('has 6 utility cards', () => {

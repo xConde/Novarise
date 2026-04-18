@@ -78,6 +78,19 @@ export const MODIFIER_STAT = {
   // is empty by construction, so disruption transparently silences the
   // HANDSHAKE bonus without a second predicate.
   HANDSHAKE_DAMAGE_BONUS: 'handshakeDamageBonus',
+
+  // Phase 4 Sprint 44 — FORMATION modifier (Conduit common).
+  //
+  // Additive-to-base range bonus (NOT multiplicative): towers in a straight
+  // 4-dir line of 3+ towers gain `+value` tiles of range for the wave.
+  // Conduit spike §13 locks the ordering — the additive folds inside the
+  // `(base + additive) × multipliers` parenthesis so elevation + HIGH_PERCH
+  // multipliers compound on top of the augmented base.
+  //
+  // Detected per-tower in composeDamageStack via
+  // TowerGraphService.isInStraightLineOf(row, col, minLen=3). Base +1 tile,
+  // upgraded +2 tiles. Duration 1 (wave-scoped).
+  FORMATION_RANGE_ADDITIVE: 'formationRangeAdditive',
 } as const;
 
 export type ModifierStat = typeof MODIFIER_STAT[keyof typeof MODIFIER_STAT];

@@ -4186,6 +4186,7 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
     kothBonus: 0,
     kothActive: false,
     handshakeBonus: 0,
+    formationRangeAdditive: 0,
     currentTurn: 0,
   };
 
@@ -4369,6 +4370,7 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
       kothBonus: 1.0,                   // stage 8 → 2 (elev === max)
       kothActive: true,
       handshakeBonus: 0,                // stage 9 — inactive in this spec
+      formationRangeAdditive: 0,        // sprint 44 — inactive
       currentTurn: 0,
     };
     const base = TOWER_CONFIGS[TowerType.SNIPER].damage;
@@ -4539,6 +4541,88 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
       const base = TOWER_CONFIGS[TowerType.BASIC].damage;
       const result = callStackWithGraph(towerA, { handshakeBonus: 0.25, currentTurn: 5 });
       expect(result.damage).toBe(base); // disrupted → no neighbors → no bonus
+    });
+
+    // ─── FORMATION — additive-to-base range (sprint 44) ───────────────────
+
+    it('FORMATION active + 3-tower horizontal line → +1 tile range (additive-before-multiplicative)', () => {
+      // Build a horizontal line: (5, 5), (5, 6), (5, 7). Tower under test = middle.
+      registerTower(5, 5);
+      const middle = registerTower(5, 6);
+      registerTower(5, 7);
+      const base = TOWER_CONFIGS[TowerType.BASIC].range;
+      const result = callStackWithGraph(middle, { formationRangeAdditive: 1 });
+      // additive inside parenthesis → (base + 1) × (all mults === 1) = base + 1.
+      expect(result.range).toBeCloseTo(base + 1, 5);
+    });
+
+    it('FORMATION applies to endpoints of a 3-tile line (not just middle)', () => {
+      const leftEnd = registerTower(5, 5);
+      registerTower(5, 6);
+      registerTower(5, 7);
+      const base = TOWER_CONFIGS[TowerType.BASIC].range;
+      const result = callStackWithGraph(leftEnd, { formationRangeAdditive: 1 });
+      expect(result.range).toBeCloseTo(base + 1, 5);
+    });
+
+    it('FORMATION does NOT apply to a 2-tower line (below minLength=3)', () => {
+      const tower = registerTower(5, 5);
+      registerTower(5, 6);
+      const base = TOWER_CONFIGS[TowerType.BASIC].range;
+      const result = callStackWithGraph(tower, { formationRangeAdditive: 1 });
+      expect(result.range).toBeCloseTo(base, 5); // no bonus
+    });
+
+    it('FORMATION applies additive INSIDE multipliers — (base + 1) × elevation × HIGH_PERCH', () => {
+      // Spike §13 regression: (base + 1) × 1.5 × 1.25 ≠ base × 1.5 × 1.25 + 1.
+      elevationSpy.getElevation.and.returnValue(2);
+      registerTower(5, 5);
+      const middle = registerTower(5, 6);
+      registerTower(5, 7);
+
+      const result = callStackWithGraph(middle, {
+        formationRangeAdditive: 1,
+        hasElevation: true,
+        highPerchBonus: 0.25, // HIGH_PERCH active + threshold met at elevation 2
+      });
+
+      const base = TOWER_CONFIGS[TowerType.BASIC].range;
+      const elevationRangeMult = 1 + 2 * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION; // 1.5
+      const highPerchMult = 1 + 0.25; // 1.25
+      const additiveInside = (base + 1) * elevationRangeMult * highPerchMult;
+      const additiveOutside = base * elevationRangeMult * highPerchMult + 1;
+      expect(result.range).toBeCloseTo(additiveInside, 5);
+      expect(result.range).not.toBeCloseTo(additiveOutside, 5);
+    });
+
+    it('FORMATION respects disruption — a disrupted tile interrupts the line', () => {
+      registerTower(5, 5);
+      const middle = registerTower(5, 6);
+      registerTower(5, 7);
+      // Disrupt the middle — now the line reads as three isolated towers.
+      graph.severTower(5, 6, /* until */ 10, 'disruptor');
+      const base = TOWER_CONFIGS[TowerType.BASIC].range;
+      const result = callStackWithGraph(middle, { formationRangeAdditive: 1, currentTurn: 5 });
+      // Middle tower is itself disrupted → isInStraightLineOf returns false.
+      expect(result.range).toBeCloseTo(base, 5);
+    });
+
+    it('FORMATION vertical line — 3 towers at (r, r+1, r+2) same col qualifies', () => {
+      registerTower(3, 5);
+      const mid = registerTower(4, 5);
+      registerTower(5, 5);
+      const base = TOWER_CONFIGS[TowerType.BASIC].range;
+      const result = callStackWithGraph(mid, { formationRangeAdditive: 1 });
+      expect(result.range).toBeCloseTo(base + 1, 5);
+    });
+
+    it('FORMATION does NOT apply to L-shape (3 towers at (5,5), (5,6), (6,6)) — no straight line of 3', () => {
+      const corner = registerTower(5, 5);
+      registerTower(5, 6);
+      registerTower(6, 6);
+      const base = TOWER_CONFIGS[TowerType.BASIC].range;
+      const result = callStackWithGraph(corner, { formationRangeAdditive: 1 });
+      expect(result.range).toBeCloseTo(base, 5);
     });
 
     it('HANDSHAKE composes as stage 9 — after all Phase 3 multipliers', () => {

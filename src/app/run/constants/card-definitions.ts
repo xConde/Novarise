@@ -282,6 +282,16 @@ const CARD_VALUES = {
   handshakeBonus: 0.15,               // +15% damage (base)
   handshakeUpgradedBonus: 0.25,       // +25% damage (upgraded)
   handshakeDuration: 1,               // wave countdown (one wave)
+
+  // ── Conduit archetype — FORMATION (Sprint 44) ───────────────────────────
+  // FORMATION (1E common): towers in a straight 4-dir line of 3+ gain +1 tile
+  // range (base) / +2 tiles (upgraded) for one wave. Additive-to-base range,
+  // not multiplicative — applied INSIDE the (base + additive) parenthesis of
+  // composeDamageStack per spike §13 ordering rule.
+  formationCost: 1,
+  formationRangeAdditive: 1,          // +1 tile (base)
+  formationUpgradedRangeAdditive: 2,  // +2 tiles (upgraded)
+  formationDuration: 1,               // wave countdown (one wave)
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -1737,6 +1747,41 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
       stat: MODIFIER_STAT.HANDSHAKE_DAMAGE_BONUS,
       value: CARD_VALUES.handshakeUpgradedBonus,
       duration: CARD_VALUES.handshakeDuration,
+    },
+    archetype: 'conduit' as const,
+    link: true,
+    terraform: false,
+  },
+
+  /**
+   * FORMATION (Sprint 44) — wave-scoped additive range bonus for towers in a
+   * straight 4-dir line of 3 or more. Reads TowerGraphService.isInStraightLineOf
+   * per-tower inside composeDamageStack. Bonus applies INSIDE the
+   * `(baseRange + additive) × multipliers` parenthesis — spike §13 locks this.
+   *
+   * NOT terraform: FORMATION is a pure range modifier — no tile/tower mutation.
+   * `link: true` signals Conduit keyword for tooltip + pool weighting.
+   */
+  [CardId.FORMATION]: {
+    id: CardId.FORMATION,
+    name: 'Formation',
+    description: 'Towers in a row of 3 or more gain +1 range this wave.',
+    upgradedDescription: 'Towers in a row of 3 or more gain +2 range this wave.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.formationCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.FORMATION_RANGE_ADDITIVE,
+      value: CARD_VALUES.formationRangeAdditive,
+      duration: CARD_VALUES.formationDuration,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.FORMATION_RANGE_ADDITIVE,
+      value: CARD_VALUES.formationUpgradedRangeAdditive,
+      duration: CARD_VALUES.formationDuration,
     },
     archetype: 'conduit' as const,
     link: true,

@@ -26,6 +26,7 @@ import { LineOfSightService } from './line-of-sight.service';
 import { ElevationService } from './elevation.service';
 import { TowerGraphService } from './tower-graph.service';
 import { ELEVATION_CONFIG } from '../constants/elevation.constants';
+import { CONDUIT_CONFIG } from '../constants/conduit.constants';
 
 /** M3 S4: turn-based mortar DoT zone. Replaces the legacy real-time path for fireTurn. */
 interface TurnMortarZone {
@@ -93,6 +94,13 @@ export interface DamageStackContext {
    * service is absent — the multiplier short-circuits to 1 and no lookup runs.
    */
   readonly handshakeBonus: number;
+  /**
+   * Additive-to-base range bonus (Phase 4 Conduit FORMATION — sprint 44).
+   * Applied INSIDE the `(base + additive)` parenthesis per spike §13 ordering
+   * rule — multipliers compound on top of the augmented base. `0` when no
+   * FORMATION is active or the tower is not part of a 3+ straight line.
+   */
+  readonly formationRangeAdditive: number;
   /** Current turn number — used only by graph reads that honor disruption / virtual-edge expiry. */
   readonly currentTurn: number;
 }
@@ -308,11 +316,16 @@ export class TowerCombatService {
     // HANDSHAKE plays add; the gate is `handshakeBonus > 0 && neighbors ≥ 1`.
     const handshakeBonus = this.cardEffectService.getModifierValue(MODIFIER_STAT.HANDSHAKE_DAMAGE_BONUS);
 
+    // Phase 4 sprint 44 — FORMATION: additive-to-base range bonus for towers
+    // in a straight 4-dir line of 3+. Read via TowerGraphService.isInStraightLineOf.
+    // Applied inside the (base + additive) parenthesis per spike §13.
+    const formationRangeAdditive = this.cardEffectService.getModifierValue(MODIFIER_STAT.FORMATION_RANGE_ADDITIVE);
+
     const hasCardModifiers =
       cardDamageBoost !== 0 || cardRangeBoost !== 0 || sniperDamageBoost !== 0
       || pathLengthMultiplier !== 1 || hasElevation || highPerchBonus !== 0
       || vantagePointBonus !== 0 || kothActive
-      || handshakeBonus !== 0;
+      || handshakeBonus !== 0 || formationRangeAdditive !== 0;
 
     // Phase 4 prep — damage + range multiplier composition bundle. Built once per
     // fireTurn; consumed per-tower inside composeDamageStack. See conduit-
@@ -331,6 +344,7 @@ export class TowerCombatService {
       kothBonus,
       kothActive,
       handshakeBonus,
+      formationRangeAdditive,
       currentTurn: turnNumber,
     };
 
@@ -621,8 +635,13 @@ export class TowerCombatService {
       ? (1 + ctx.handshakeBonus)
       : 1;
 
-    // Reserved for sprint 44 FORMATION — additive-to-base range. See doc §13.
-    const rangeAdditive = 0;
+    // Sprint 44 FORMATION — additive-to-base range. Active iff `formationRangeAdditive > 0`
+    // AND the tower is part of a 3+ straight 4-dir line (via TowerGraphService).
+    // Sits INSIDE the (base + additive) parenthesis per spike §13 ordering rule.
+    const formationActive = ctx.formationRangeAdditive > 0
+      && this.towerGraphService !== undefined
+      && this.towerGraphService.isInStraightLineOf(tower.row, tower.col, CONDUIT_CONFIG.FORMATION_MIN_LINE_LENGTH, ctx.currentTurn);
+    const rangeAdditive = formationActive ? ctx.formationRangeAdditive : 0;
 
     const damage = Math.round(
       baseStats.damage
