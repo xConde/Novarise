@@ -18,7 +18,17 @@ import { CardEffectService, SpellContext } from '../../../run/services/card-effe
 import { DeckService } from '../../../run/services/deck.service';
 import { RunService } from '../../../run/services/run.service';
 import { WavePreviewService } from './wave-preview.service';
-import { CardInstance, SpellCardEffect, ModifierCardEffect, UtilityCardEffect } from '../../../run/models/card.model';
+import { PathMutationService } from './path-mutation.service';
+import {
+  CardInstance,
+  SpellCardEffect,
+  ModifierCardEffect,
+  UtilityCardEffect,
+  TerraformTargetCardEffect,
+  TileTargetResult,
+  isTerraformTargetEffect,
+} from '../../../run/models/card.model';
+import { MutationOp } from './path-mutation.types';
 import { getCardDefinition } from '../../../run/constants/card-definitions';
 import { disposeMaterial } from '../utils/three-utils';
 
@@ -28,6 +38,23 @@ export interface CardPlayCallbacks {
   onRefreshUI: () => void;
   /** Called after salvage — clears selected tile, refreshes path overlay, deselects tower if it matched the salvaged key. */
   onSalvageComplete: (salvageKey: string) => void;
+  /**
+   * Called when a terraform-target card enters tile-targeting mode.
+   *
+   * WHY THIS EXISTS: GameBoardComponent needs to know when the player has
+   * activated a tile-targeting card so it can update the cursor, highlights,
+   * and UI state (e.g., show a "click a tile" prompt). This is the parallel
+   * of `onEnterPlacementMode` for tower cards.
+   */
+  onEnterTileTargetMode?: (card: CardInstance, op: MutationOp) => void;
+  /**
+   * Called when tile-target mode is exited — either by successful resolution,
+   * cancellation, or teardown. Clears any targeting-mode UI state.
+   *
+   * WHY THIS EXISTS: The component can't poll card state every frame; it needs
+   * a push notification to tear down tile-target highlights and cursor changes.
+   */
+  onExitTileTargetMode?: () => void;
 }
 
 /**
@@ -40,6 +67,19 @@ export interface CardPlayCallbacks {
 export class CardPlayService {
   private pendingTowerCard: CardInstance | null = null;
   private callbacks: CardPlayCallbacks | null = null;
+
+  /**
+   * Pending state for the two-phase terraform-target card flow.
+   *
+   * WHY KEPT SEPARATE FROM pendingTowerCard: Tower cards and terraform-target
+   * cards are mutually exclusive modes. Mixing them into a single field would
+   * require a discriminant and risk inadvertent cross-contamination (e.g.,
+   * resolving a terraform op but consuming a tower card). Keeping them
+   * separate makes it impossible to have both modes active simultaneously —
+   * the type system enforces the invariant.
+   */
+  private pendingTileTargetCard: CardInstance | null = null;
+  private pendingTileTargetEffect: TerraformTargetCardEffect | null = null;
 
   constructor(
     private deckService: DeckService,
@@ -59,6 +99,11 @@ export class CardPlayService {
     /** Phase 1 closer (Finding 3) — seeded run RNG bridge for deterministic
      *  card-side randomness (FORTIFY tower selection). */
     private runService: RunService,
+    /**
+     * Injected to execute the actual tile mutation in resolveTileTarget.
+     * Component-scoped: no DI cycle since CardPlayService is also component-scoped.
+     */
+    private pathMutationService: PathMutationService,
   ) {}
 
   /**
@@ -85,6 +130,18 @@ export class CardPlayService {
   }
 
   /**
+   * Returns the card currently awaiting a tile-target click, or null.
+   *
+   * WHY THIS EXISTS: GameBoardComponent.onTilePlace needs to distinguish
+   * between "player is placing a tower" and "player is targeting a tile for a
+   * terraform card". Checking this getter is cheaper than adding a new flag to
+   * GameState, and keeps tile-target mode state purely in this service.
+   */
+  getPendingTileTargetCard(): CardInstance | null {
+    return this.pendingTileTargetCard;
+  }
+
+  /**
    * Handle a card played from CardHandComponent.
    *
    * Tower cards: defer consumption — enter placement mode, consume on actual
@@ -104,11 +161,39 @@ export class CardPlayService {
       this.callbacks?.onRefreshUI();
       return;
     }
-    // Block other card plays while a tower card is awaiting placement
-    if (this.pendingTowerCard) return;
+    // Clicking the pending tile-target card again cancels tile-target mode
+    if (this.pendingTileTargetCard && this.pendingTileTargetCard.instanceId === card.instanceId) {
+      this.cancelTileTarget();
+      this.callbacks?.onRefreshUI();
+      return;
+    }
 
+    // Resolve the card definition before mode-blocking checks so we can
+    // determine whether a terraform card should override tower-placement limbo.
     const def = getCardDefinition(card.cardId);
     const effect = card.upgraded && def.upgradedEffect ? def.upgradedEffect : def.effect;
+
+    if (isTerraformTargetEffect(effect)) {
+      // Terraform-target takes priority over tower placement (spec §4).
+      // Cancel any pending tower card — both modes cannot be active simultaneously.
+      this.cancelPendingTowerCard();
+      // Also cancel an existing tile-target card (replace it, same as towers).
+      this.clearTileTargetState();
+
+      // Check energy affordability without consuming — same pattern as tower cards.
+      if (this.deckService.getEnergy().current < def.energyCost) return;
+
+      // Enter tile-target mode — hold the card in limbo.
+      this.pendingTileTargetCard = card;
+      this.pendingTileTargetEffect = effect;
+      this.callbacks?.onEnterTileTargetMode?.(card, effect.op);
+      return;
+    }
+
+    // Block other card plays while a tower card is awaiting placement
+    if (this.pendingTowerCard) return;
+    // Block other card plays while a tile-target card is awaiting a tile click
+    if (this.pendingTileTargetCard) return;
 
     if (effect.type === 'tower') {
       // Cancel any existing pending tower card first (defensive)
@@ -192,15 +277,125 @@ export class CardPlayService {
     this.pendingTowerCard = null;
   }
 
+  /**
+   * Attempt to resolve the pending tile-target card at (row, col).
+   *
+   * WHY THIS EXISTS: The two-phase terraform flow needs a single resolution
+   * point that handles energy re-check, mutation dispatch, card consumption,
+   * and state cleanup atomically. Keeping it here (rather than in
+   * GameBoardComponent) means the resolution logic is testable without a
+   * component fixture.
+   *
+   * Energy is re-checked at this point (not just at card click time) because
+   * another card could have been played between the click and the tile pick,
+   * reducing available energy.
+   *
+   * On mutation failure: the pending state is NOT cleared so the player can
+   * pick a different valid tile without re-playing the card.
+   */
+  resolveTileTarget(
+    row: number,
+    col: number,
+    scene: THREE.Scene,
+    currentTurn: number,
+  ): TileTargetResult {
+    if (!this.pendingTileTargetCard || !this.pendingTileTargetEffect) {
+      return { ok: false, reason: 'no-pending-card' };
+    }
+
+    const card = this.pendingTileTargetCard;
+    const effect = this.pendingTileTargetEffect;
+    const def = getCardDefinition(card.cardId);
+
+    // Re-check energy immediately before mutation — a prior card play this
+    // turn may have reduced available energy since the card was clicked.
+    if (this.deckService.getEnergy().current < def.energyCost) {
+      this.clearTileTargetState();
+      this.callbacks?.onExitTileTargetMode?.();
+      return { ok: false, reason: 'insufficient-energy' };
+    }
+
+    // Route to the correct PathMutationService method based on op.
+    let mutationResult;
+    const sourceId = card.instanceId;
+
+    switch (effect.op) {
+      case 'build':
+        mutationResult = this.pathMutationService.build(
+          row, col, effect.duration, sourceId, currentTurn, scene,
+        );
+        break;
+      case 'block':
+        mutationResult = this.pathMutationService.block(
+          row, col, effect.duration ?? 2, sourceId, currentTurn, scene,
+        );
+        break;
+      case 'destroy':
+        mutationResult = this.pathMutationService.destroy(
+          row, col, sourceId, currentTurn, scene,
+        );
+        break;
+      case 'bridgehead':
+        mutationResult = this.pathMutationService.bridgehead(
+          row, col, effect.duration ?? 3, sourceId, currentTurn, scene,
+        );
+        break;
+      default: {
+        // Exhaustive check — TypeScript should never reach here.
+        const _exhaustive: never = effect.op;
+        void _exhaustive;
+        this.clearTileTargetState();
+        this.callbacks?.onExitTileTargetMode?.();
+        return { ok: false, reason: 'unknown-op' };
+      }
+    }
+
+    // On board rejection: keep pending state so the player can try another tile.
+    if (!mutationResult.ok) {
+      return { ok: false, reason: mutationResult.reason };
+    }
+
+    // Mutation succeeded — consume the card (deducts energy, moves to discard).
+    // Energy was confirmed sufficient above, so playCard should not fail here.
+    this.deckService.playCard(card.instanceId);
+    this.clearTileTargetState();
+    this.callbacks?.onExitTileTargetMode?.();
+    return { ok: true };
+  }
+
+  /**
+   * Cancel tile-target mode without consuming energy or playing the card.
+   *
+   * WHY THIS EXISTS: Called on Escape, pause-open, and encounter teardown to
+   * ensure no dangling pending-card state survives a mode transition. The card
+   * returns to hand implicitly — it was never consumed.
+   */
+  cancelTileTarget(): void {
+    this.clearTileTargetState();
+    this.callbacks?.onExitTileTargetMode?.();
+  }
+
   /** Reset pending state — call between encounters (root-scoped services survive route transitions). */
   reset(): void {
     this.pendingTowerCard = null;
+    this.clearTileTargetState();
   }
 
   /** Null out callback references to prevent stale component references after destroy. */
   cleanup(): void {
     this.callbacks = null;
     this.pendingTowerCard = null;
+    this.clearTileTargetState();
+  }
+
+  /**
+   * Internal: null out tile-target pending state.
+   * Extracted so callers that don't want to fire the callback can clear state
+   * directly (e.g., clearTileTargetState before firing the callback manually).
+   */
+  private clearTileTargetState(): void {
+    this.pendingTileTargetCard = null;
+    this.pendingTileTargetEffect = null;
   }
 
   /**

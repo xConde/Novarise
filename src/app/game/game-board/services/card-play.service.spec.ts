@@ -3,6 +3,7 @@ import { BehaviorSubject } from 'rxjs';
 import * as THREE from 'three';
 
 import { CardPlayService, CardPlayCallbacks } from './card-play.service';
+import { PathMutationService } from './path-mutation.service';
 import { DeckService } from '../../../run/services/deck.service';
 import { RunService } from '../../../run/services/run.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
@@ -20,7 +21,16 @@ import { CombatLoopService } from './combat-loop.service';
 import { WavePreviewService } from './wave-preview.service';
 import { TowerType, TOWER_CONFIGS } from '../models/tower.model';
 import { GamePhase, INITIAL_GAME_STATE } from '../models/game-state.model';
-import { CardId, CardInstance, DeckState, EnergyState } from '../../../run/models/card.model';
+import {
+  CardId,
+  CardInstance,
+  DeckState,
+  EnergyState,
+  TerraformTargetCardEffect,
+  isTerraformTargetEffect,
+} from '../../../run/models/card.model';
+import { MutationOp, MutationResult, MutationRejectionReason } from './path-mutation.types';
+import { CARD_DEFINITIONS } from '../../../run/constants/card-definitions';
 import {
   createGameStateServiceSpy,
   createGameBoardServiceSpy,
@@ -28,6 +38,61 @@ import {
   createAudioServiceSpy,
   createSceneServiceSpy,
 } from '../testing';
+
+// ── Terraform card fixture helpers ────────────────────────────────────────────
+
+/**
+ * Build a fake TerraformTargetCardEffect for testing.
+ * Not wired to CARD_DEFINITIONS — infrastructure tests must not depend
+ * on real card definitions (those land in sprints 11+).
+ */
+function makeTerraformEffect(op: MutationOp, duration: number | null = null): TerraformTargetCardEffect {
+  return { type: 'terraform_target', op, duration };
+}
+
+/**
+ * Synthetic CardId reserved for terraform infrastructure tests.
+ * Cast to CardId because CardId is a string-backed enum; any string value
+ * round-trips through `getCardDefinition()` as long as CARD_DEFINITIONS has
+ * an entry for the key. Chosen prefix `__TEST_TF_` is guaranteed unused by
+ * real content (the enum members are all uppercase, no leading underscore).
+ *
+ * Rationale for NOT borrowing a real CardId (e.g. SCOUT_AHEAD): overwriting
+ * a real definition leaks across specs — e.g. card-definitions.spec.ts
+ * asserts `SCOUT_AHEAD.archetype === 'cartographer'` (sprint 13) and a stale
+ * override from this file was flipping that test to failure.
+ */
+const TEST_TERRAFORM_CARD_ID = '__TEST_TF_CARD__' as CardId;
+
+/**
+ * Register a synthetic terraform CardDefinition under TEST_TERRAFORM_CARD_ID.
+ * Paired with unregisterTerraformDef() in afterEach.
+ */
+function registerTerraformDef(energyCost: number, op: MutationOp, duration: number | null = null): void {
+  (CARD_DEFINITIONS as Record<string, unknown>)[TEST_TERRAFORM_CARD_ID] = {
+    id: TEST_TERRAFORM_CARD_ID,
+    name: 'Test Terraform',
+    description: 'Test',
+    type: 'terraform' as const,
+    rarity: 'common' as const,
+    energyCost,
+    effect: makeTerraformEffect(op, duration),
+    upgradedEffect: undefined,
+    upgraded: false,
+    archetype: 'cartographer' as const,
+    terraform: true,
+  };
+}
+
+/** Remove the synthetic terraform CardDefinition — no real card is touched. */
+function unregisterTerraformDef(): void {
+  delete (CARD_DEFINITIONS as Record<string, unknown>)[TEST_TERRAFORM_CARD_ID];
+}
+
+/** Convenience: a test CardInstance using the synthetic terraform CardId. */
+function makeTerraformInstance(instanceId = 'tf-1'): CardInstance {
+  return { instanceId, cardId: TEST_TERRAFORM_CARD_ID, upgraded: false };
+}
 
 describe('CardPlayService', () => {
   let service: CardPlayService;
@@ -45,6 +110,7 @@ describe('CardPlayService', () => {
   let statusEffectSpy: jasmine.SpyObj<StatusEffectService>;
   let combatLoopSpy: jasmine.SpyObj<CombatLoopService>;
   let wavePreviewSpy: jasmine.SpyObj<WavePreviewService>;
+  let pathMutationSpy: jasmine.SpyObj<PathMutationService>;
 
   const combatState = { ...INITIAL_GAME_STATE, phase: GamePhase.COMBAT };
 
@@ -100,6 +166,16 @@ describe('CardPlayService', () => {
     const runServiceSpy = jasmine.createSpyObj<RunService>('RunService', ['nextRandom']);
     runServiceSpy.nextRandom.and.returnValue(0);
 
+    pathMutationSpy = jasmine.createSpyObj<PathMutationService>('PathMutationService', [
+      'build', 'block', 'destroy', 'bridgehead',
+    ]);
+    // Default: successful mutation — overridden per test as needed.
+    const defaultMutationOk: MutationResult = { ok: true, mutation: { id: '0', op: 'build', row: 0, col: 0, appliedOnTurn: 1, expiresOnTurn: null, priorType: 1 as never, source: 'card', sourceId: 'tf-1' } };
+    pathMutationSpy.build.and.returnValue(defaultMutationOk);
+    pathMutationSpy.block.and.returnValue(defaultMutationOk);
+    pathMutationSpy.destroy.and.returnValue(defaultMutationOk);
+    pathMutationSpy.bridgehead.and.returnValue(defaultMutationOk);
+
     TestBed.configureTestingModule({
       providers: [
         CardPlayService,
@@ -118,6 +194,7 @@ describe('CardPlayService', () => {
         { provide: CombatLoopService, useValue: combatLoopSpy },
         { provide: WavePreviewService, useValue: wavePreviewSpy },
         { provide: RunService, useValue: runServiceSpy },
+        { provide: PathMutationService, useValue: pathMutationSpy },
       ],
     });
 
@@ -360,11 +437,18 @@ describe('CardPlayService', () => {
   });
 
   describe('reset', () => {
-    it('should clear pending card state', () => {
+    it('should clear pending tower card state', () => {
       service['pendingTowerCard'] = { instanceId: 'x', cardId: CardId.TOWER_BASIC, upgraded: false };
       service.reset();
       expect(service.hasPendingCard()).toBeFalse();
       expect(service.getPendingCard()).toBeNull();
+    });
+
+    it('should clear pending tile-target state', () => {
+      service['pendingTileTargetCard'] = makeTerraformInstance();
+      service['pendingTileTargetEffect'] = makeTerraformEffect('build');
+      service.reset();
+      expect(service.getPendingTileTargetCard()).toBeNull();
     });
   });
 
@@ -386,6 +470,300 @@ describe('CardPlayService', () => {
       const card: CardInstance = { instanceId: 'spell-2', cardId: CardId.GOLD_RUSH, upgraded: false };
       service.onCardPlayed(card);
       expect(deckSpy.undoPlay).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Terraform tile-target infrastructure ────────────────────────────────────
+
+  describe('isTerraformTargetEffect (type guard)', () => {
+    it('returns true for terraform_target effects', () => {
+      expect(isTerraformTargetEffect(makeTerraformEffect('build'))).toBeTrue();
+    });
+
+    it('returns false for non-terraform effects', () => {
+      const spell = { type: 'spell' as const, spellId: 'gold_rush', value: 0 };
+      expect(isTerraformTargetEffect(spell)).toBeFalse();
+    });
+  });
+
+  describe('getPendingTileTargetCard', () => {
+    it('returns null initially', () => {
+      expect(service.getPendingTileTargetCard()).toBeNull();
+    });
+
+    it('returns the card after entering tile-target mode', () => {
+      const card = makeTerraformInstance();
+      service['pendingTileTargetCard'] = card;
+      expect(service.getPendingTileTargetCard()).toBe(card);
+    });
+  });
+
+  describe('onCardPlayed — terraform_target branch', () => {
+    beforeEach(() => {
+      // Register a terraform_target definition under SCOUT_AHEAD so that
+      // getCardDefinition(CardId.SCOUT_AHEAD) returns a terraform effect.
+      // Cost = 2 so the "insufficient energy" test can set current = 1.
+      registerTerraformDef(2, 'build', null);
+    });
+
+    afterEach(() => {
+      // Restore the real SCOUT_AHEAD definition for all other tests.
+      unregisterTerraformDef();
+    });
+
+    it('does NOT spend energy — enters pending mode instead', () => {
+      const onEnterTileTargetMode = jasmine.createSpy('onEnterTileTargetMode');
+      service.init({
+        onEnterPlacementMode: jasmine.createSpy(),
+        onRefreshUI: jasmine.createSpy(),
+        onSalvageComplete: jasmine.createSpy(),
+        onEnterTileTargetMode,
+      });
+
+      service.onCardPlayed(makeTerraformInstance());
+
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+      expect(service.getPendingTileTargetCard()).not.toBeNull();
+    });
+
+    it('fires onEnterTileTargetMode callback with card and op', () => {
+      const onEnterTileTargetMode = jasmine.createSpy('onEnterTileTargetMode');
+      service.init({
+        onEnterPlacementMode: jasmine.createSpy(),
+        onRefreshUI: jasmine.createSpy(),
+        onSalvageComplete: jasmine.createSpy(),
+        onEnterTileTargetMode,
+      });
+
+      const card = makeTerraformInstance('tf-cb');
+      service.onCardPlayed(card);
+
+      expect(onEnterTileTargetMode).toHaveBeenCalledWith(card, 'build');
+    });
+
+    it('returns early (no pending state) when energy is insufficient', () => {
+      deckSpy.getEnergy.and.returnValue({ current: 1, max: 3 } as EnergyState); // cost=2, energy=1
+      const onEnterTileTargetMode = jasmine.createSpy('onEnterTileTargetMode');
+      service.init({
+        onEnterPlacementMode: jasmine.createSpy(),
+        onRefreshUI: jasmine.createSpy(),
+        onSalvageComplete: jasmine.createSpy(),
+        onEnterTileTargetMode,
+      });
+
+      service.onCardPlayed(makeTerraformInstance());
+
+      expect(service.getPendingTileTargetCard()).toBeNull();
+      expect(onEnterTileTargetMode).not.toHaveBeenCalled();
+    });
+
+    it('cancels a pending tower card when a terraform card is played', () => {
+      service.init({
+        onEnterPlacementMode: jasmine.createSpy(),
+        onRefreshUI: jasmine.createSpy(),
+        onSalvageComplete: jasmine.createSpy(),
+        onEnterTileTargetMode: jasmine.createSpy(),
+      });
+
+      // Put a tower card in pending state
+      service['pendingTowerCard'] = { instanceId: 'tower-pending', cardId: CardId.TOWER_BASIC, upgraded: false };
+      expect(service.hasPendingCard()).toBeTrue();
+
+      // Play a terraform card — it should clear the tower card
+      service.onCardPlayed(makeTerraformInstance());
+
+      expect(service.hasPendingCard()).toBeFalse();
+      expect(service.getPendingTileTargetCard()).not.toBeNull();
+    });
+
+    it('re-clicking the pending terraform card cancels tile-target mode', () => {
+      const onExitTileTargetMode = jasmine.createSpy('onExitTileTargetMode');
+      const onRefreshUI = jasmine.createSpy('onRefreshUI');
+      service.init({
+        onEnterPlacementMode: jasmine.createSpy(),
+        onRefreshUI,
+        onSalvageComplete: jasmine.createSpy(),
+        onExitTileTargetMode,
+      });
+
+      const card = makeTerraformInstance('tf-cancel');
+      // Put the card in pending state directly (simulates a prior onCardPlayed)
+      service['pendingTileTargetCard'] = card;
+      service['pendingTileTargetEffect'] = makeTerraformEffect('build');
+
+      service.onCardPlayed(card);
+
+      expect(service.getPendingTileTargetCard()).toBeNull();
+      expect(onExitTileTargetMode).toHaveBeenCalled();
+      expect(onRefreshUI).toHaveBeenCalled();
+    });
+  });
+
+  describe('resolveTileTarget', () => {
+    const mockScene = new THREE.Scene();
+    const currentTurn = 5;
+
+    // Each test that calls resolveTileTarget must have a registered def.
+    // We set it per-test (different ops/durations) via registerTerraformDef().
+
+    afterEach(() => {
+      // Restore SCOUT_AHEAD so later non-terraform tests use the real def.
+      unregisterTerraformDef();
+    });
+
+    it('returns no-pending-card when no card is awaiting a tile', () => {
+      const result = service.resolveTileTarget(0, 0, mockScene, currentTurn);
+      expect(result.ok).toBeFalse();
+      expect(result.reason).toBe('no-pending-card');
+    });
+
+    it('returns insufficient-energy and clears state when energy drops before tile pick', () => {
+      registerTerraformDef(1, 'build', null);
+      service['pendingTileTargetCard'] = makeTerraformInstance();
+      service['pendingTileTargetEffect'] = makeTerraformEffect('build');
+      // energy dropped to 0 between card click and tile click
+      deckSpy.getEnergy.and.returnValue({ current: 0, max: 3 } as EnergyState);
+      const result = service.resolveTileTarget(0, 0, mockScene, currentTurn);
+      expect(result.ok).toBeFalse();
+      expect(result.reason).toBe('insufficient-energy');
+      expect(service.getPendingTileTargetCard()).toBeNull();
+    });
+
+    it('routes build op → pathMutationService.build with correct args', () => {
+      registerTerraformDef(1, 'build', null);
+      const card = makeTerraformInstance('tf-build');
+      service['pendingTileTargetCard'] = card;
+      service['pendingTileTargetEffect'] = makeTerraformEffect('build', null);
+      deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+
+      const result = service.resolveTileTarget(2, 3, mockScene, currentTurn);
+
+      expect(result.ok).toBeTrue();
+      expect(pathMutationSpy.build).toHaveBeenCalledWith(2, 3, null, 'tf-build', currentTurn, mockScene);
+    });
+
+    it('routes block op → pathMutationService.block with duration default (2) when null', () => {
+      registerTerraformDef(1, 'block', null);
+      const card = makeTerraformInstance('tf-block');
+      service['pendingTileTargetCard'] = card;
+      service['pendingTileTargetEffect'] = makeTerraformEffect('block', null); // null → default 2
+      deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+
+      service.resolveTileTarget(1, 1, mockScene, currentTurn);
+
+      expect(pathMutationSpy.block).toHaveBeenCalledWith(1, 1, 2, 'tf-block', currentTurn, mockScene);
+    });
+
+    it('routes block op with explicit duration (4)', () => {
+      registerTerraformDef(1, 'block', 4);
+      const card = makeTerraformInstance('tf-block-dur');
+      service['pendingTileTargetCard'] = card;
+      service['pendingTileTargetEffect'] = makeTerraformEffect('block', 4);
+      deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+
+      service.resolveTileTarget(1, 1, mockScene, currentTurn);
+
+      expect(pathMutationSpy.block).toHaveBeenCalledWith(1, 1, 4, 'tf-block-dur', currentTurn, mockScene);
+    });
+
+    it('routes destroy op → pathMutationService.destroy', () => {
+      registerTerraformDef(1, 'destroy', null);
+      const card = makeTerraformInstance('tf-destroy');
+      service['pendingTileTargetCard'] = card;
+      service['pendingTileTargetEffect'] = makeTerraformEffect('destroy', null);
+      deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+
+      service.resolveTileTarget(3, 2, mockScene, currentTurn);
+
+      expect(pathMutationSpy.destroy).toHaveBeenCalledWith(3, 2, 'tf-destroy', currentTurn, mockScene);
+    });
+
+    it('routes bridgehead op → pathMutationService.bridgehead with duration default (3) when null', () => {
+      registerTerraformDef(1, 'bridgehead', null);
+      const card = makeTerraformInstance('tf-bridge');
+      service['pendingTileTargetCard'] = card;
+      service['pendingTileTargetEffect'] = makeTerraformEffect('bridgehead', null); // null → default 3
+      deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+
+      service.resolveTileTarget(0, 5, mockScene, currentTurn);
+
+      expect(pathMutationSpy.bridgehead).toHaveBeenCalledWith(0, 5, 3, 'tf-bridge', currentTurn, mockScene);
+    });
+
+    it('on success: consumes card, clears pending state, fires onExitTileTargetMode', () => {
+      registerTerraformDef(1, 'build', null);
+      const onExitTileTargetMode = jasmine.createSpy('onExitTileTargetMode');
+      service.init({
+        onEnterPlacementMode: jasmine.createSpy(),
+        onRefreshUI: jasmine.createSpy(),
+        onSalvageComplete: jasmine.createSpy(),
+        onExitTileTargetMode,
+      });
+
+      const card = makeTerraformInstance('tf-ok');
+      service['pendingTileTargetCard'] = card;
+      service['pendingTileTargetEffect'] = makeTerraformEffect('build', null);
+      deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+      pathMutationSpy.build.and.returnValue({ ok: true } as MutationResult);
+
+      const result = service.resolveTileTarget(0, 0, mockScene, currentTurn);
+
+      expect(result.ok).toBeTrue();
+      expect(deckSpy.playCard).toHaveBeenCalledWith('tf-ok');
+      expect(service.getPendingTileTargetCard()).toBeNull();
+      expect(onExitTileTargetMode).toHaveBeenCalled();
+    });
+
+    it('on mutation rejection: does NOT clear pending state, does NOT spend energy', () => {
+      registerTerraformDef(1, 'block', null);
+      const rejection: MutationResult = { ok: false, reason: 'would-block-all-paths' };
+      pathMutationSpy.block.and.returnValue(rejection);
+
+      const card = makeTerraformInstance('tf-reject');
+      service['pendingTileTargetCard'] = card;
+      service['pendingTileTargetEffect'] = makeTerraformEffect('block', null);
+      deckSpy.getEnergy.and.returnValue({ current: 3, max: 3 } as EnergyState);
+
+      const result = service.resolveTileTarget(1, 1, mockScene, currentTurn);
+
+      expect(result.ok).toBeFalse();
+      expect(result.reason).toBe('would-block-all-paths');
+      // Pending state preserved so player can pick a different tile
+      expect(service.getPendingTileTargetCard()).not.toBeNull();
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cancelTileTarget', () => {
+    it('clears pending state and fires onExitTileTargetMode', () => {
+      const onExitTileTargetMode = jasmine.createSpy('onExitTileTargetMode');
+      service.init({
+        onEnterPlacementMode: jasmine.createSpy(),
+        onRefreshUI: jasmine.createSpy(),
+        onSalvageComplete: jasmine.createSpy(),
+        onExitTileTargetMode,
+      });
+
+      service['pendingTileTargetCard'] = makeTerraformInstance();
+      service['pendingTileTargetEffect'] = makeTerraformEffect('build');
+
+      service.cancelTileTarget();
+
+      expect(service.getPendingTileTargetCard()).toBeNull();
+      expect(onExitTileTargetMode).toHaveBeenCalled();
+    });
+
+    it('does NOT spend energy on cancel', () => {
+      service['pendingTileTargetCard'] = makeTerraformInstance();
+      service['pendingTileTargetEffect'] = makeTerraformEffect('destroy');
+
+      service.cancelTileTarget();
+
+      expect(deckSpy.playCard).not.toHaveBeenCalled();
+    });
+
+    it('is a safe no-op when no card is pending', () => {
+      expect(() => service.cancelTileTarget()).not.toThrow();
     });
   });
 });

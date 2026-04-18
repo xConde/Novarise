@@ -31,7 +31,7 @@ import { PathVisualizationService } from './services/path-visualization.service'
 import { StatusEffectService } from './services/status-effect.service';
 import { StatusEffectType } from './constants/status-effect.constants';
 import { TutorialService, TutorialStep } from '../../core/services/tutorial.service';
-import { GameNotificationService, GameNotification } from './services/game-notification.service';
+import { GameNotificationService, GameNotification, NotificationType } from './services/game-notification.service';
 import { ChallengeTrackingService } from './services/challenge-tracking.service';
 import { GameEndService } from './services/game-end.service';
 import { TowerInteractionService } from './services/tower-interaction.service';
@@ -655,7 +655,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     const canvas = this.sceneService.getRenderer().domElement;
     this.boardPointer.init(canvas, {
       onTowerClick: (key) => this.selectPlacedTower(key),
-      onTilePlace: (row, col) => this.tryPlaceTower(row, col),
+      onTilePlace: (row, col) => this.onTilePlace(row, col),
       onDeselect: () => this.deselectTower(),
       onCancelPlacement: () => this.cancelPlacement(),
       onContextMenu: () => {
@@ -689,6 +689,7 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       onPause: () => this.togglePause(),
       onEscape: () => {
         if (this.isPaused) { this.togglePause(); }
+        else if (this.cardPlayService.getPendingTileTargetCard()) { this.cardPlayService.cancelTileTarget(); }
         else if (this.isPlaceMode) { this.cancelPlacement(); }
         else if (this.selectedTowerInfo) { this.deselectTower(); }
         else { this.togglePause(); }
@@ -723,6 +724,15 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
         if (this.selectedTowerInfo?.id === salvageKey) {
           this.deselectTower();
         }
+      },
+      // Sprint 2 tile-target infrastructure: no visual highlighting yet (sprint 23).
+      // These callbacks are wired so GameBoardComponent can react when they land.
+      onEnterTileTargetMode: (_card, _op) => {
+        // Visual tile highlighting deferred to sprint 23. Callback is intentionally
+        // minimal here — the pending state in CardPlayService drives onTilePlace routing.
+      },
+      onExitTileTargetMode: () => {
+        // No tile-target-specific cleanup needed until sprint 23 adds highlights.
       },
     });
 
@@ -1404,6 +1414,51 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     }, UI_CONFIG.pathBlockedDismissMs);
   }
 
+  /**
+   * Route a tile click to the correct handler based on which card mode is active.
+   *
+   * WHY THIS EXISTS: BoardPointerService calls onTilePlace for every tile click
+   * while a placement/targeting mode is active. Prior to this sprint only tower
+   * placement existed; now terraform-target cards need a parallel path. This
+   * method is the single dispatch point so neither path needs to know about the
+   * other.
+   *
+   * Priority: terraform-target > tower placement (spec §4).
+   */
+  private onTilePlace(row: number, col: number): void {
+    if (this.cardPlayService.getPendingTileTargetCard()) {
+      const scene = this.sceneService.getScene();
+      const currentTurn = this.combatLoopService.getTurnNumber();
+      const result = this.cardPlayService.resolveTileTarget(row, col, scene, currentTurn);
+      if (!result.ok) {
+        // Surface a toast so the player understands why the tile was rejected.
+        const reason = result.reason ?? 'unknown';
+        const reasonMessages: Record<string, string> = {
+          'would-block-all-paths': 'Cannot block — all paths would be cut off.',
+          'spawner-or-exit': 'Cannot modify spawner or exit tiles.',
+          'tower-occupied': 'A tower already occupies that tile.',
+          'out-of-bounds': 'Tile is out of bounds.',
+          'already-mutated-this-turn': 'That tile was already modified this turn.',
+          'no-op': 'That tile is already in the target state.',
+          'insufficient-energy': 'Not enough energy to play that card.',
+          'no-pending-card': 'No card is awaiting a tile target.',
+          'unknown-op': 'Unknown card operation.',
+        };
+        const message = reasonMessages[reason] ?? `Could not apply card (${reason}).`;
+        this.notificationService.show(NotificationType.INFO, 'Cannot place', message);
+      } else {
+        // Log card-play to turn history — mirrors the path in onCardPlayed.
+        this.turnHistoryService.recordCardPlayed();
+      }
+      return;
+    }
+
+    if (this.cardPlayService.hasPendingCard()) {
+      this.tryPlaceTower(row, col);
+      return;
+    }
+  }
+
   private tryPlaceTower(row: number, col: number): void {
     // Towers can ONLY be placed via tower cards. No card = no placement.
     if (!this.selectedTowerType || !this.cardPlayService.hasPendingCard()) return;
@@ -1507,6 +1562,9 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!willPause) {
       this.pauseFocusTrap.deactivate();
     } else {
+      // Clear tile-target mode when pausing — resuming with a dangling tile-
+      // target is confusing UX and the card stays in hand anyway.
+      this.cardPlayService.cancelTileTarget();
       this.activatePauseFocus();
     }
   }

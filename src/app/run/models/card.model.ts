@@ -13,6 +13,7 @@
 
 import { TowerType } from '../../game/game-board/models/tower.model';
 import { ModifierStat } from '../constants/modifier-stat.constants';
+import { MutationOp, MutationRejectionReason } from '../../game/game-board/services/path-mutation.types';
 
 // ── Card Identity ─────────────────────────────────────────────
 
@@ -199,7 +200,8 @@ export type CardEffect =
   | TowerCardEffect
   | SpellCardEffect
   | ModifierCardEffect
-  | UtilityCardEffect;
+  | UtilityCardEffect
+  | TerraformTargetCardEffect;
 
 /**
  * Optional per-card stat modifications applied at tower placement time.
@@ -245,6 +247,55 @@ export interface UtilityCardEffect {
   readonly type: 'utility';
   readonly utilityId: string;
   readonly value: number;
+}
+
+/**
+ * Effect type for Cartographer-archetype tile-targeting cards.
+ *
+ * WHY THIS EXISTS: Cards like LAY_TILE, BLOCK_PASSAGE, COLLAPSE, BRIDGEHEAD,
+ * and DETOUR need a two-phase play flow — the player clicks the card, then
+ * clicks a board tile to apply the operation. This effect type signals to
+ * CardPlayService that the card requires a tile target rather than resolving
+ * immediately (like spells) or awaiting tower placement.
+ *
+ * `op` maps directly to PathMutationService methods (build/block/destroy/bridgehead).
+ * `duration` is passed through to the mutation journal; null = permanent.
+ */
+export interface TerraformTargetCardEffect {
+  readonly type: 'terraform_target';
+  readonly op: MutationOp;
+  /** Duration in turns; null = permanent. */
+  readonly duration: number | null;
+}
+
+/**
+ * Type guard: returns true when a CardEffect is a TerraformTargetCardEffect.
+ *
+ * WHY THIS EXISTS: CardPlayService branches on effect.type, but calling code
+ * outside the service (e.g., CardHandComponent, GameBoardComponent) may also
+ * need to distinguish terraform-target cards from instant-resolve cards to
+ * determine UI state (e.g., whether the card is in targeting mode).
+ */
+export function isTerraformTargetEffect(e: CardEffect): e is TerraformTargetCardEffect {
+  return e.type === 'terraform_target';
+}
+
+// ── TileTargetResult ──────────────────────────────────────────
+
+/**
+ * Return value of CardPlayService.resolveTileTarget().
+ *
+ * WHY THIS EXISTS: The caller (GameBoardComponent.onTilePlace) needs to know
+ * whether the tile click succeeded so it can surface an appropriate toast and
+ * decide whether to clear the pending state. Mirrors the MutationResult shape
+ * but adds card-play-level rejection reasons so the component can distinguish
+ * "board rejected the tile" from "card state was invalid."
+ */
+export interface TileTargetResult {
+  readonly ok: boolean;
+  /** Populated on failure. MutationRejectionReason for board-level rejections;
+   *  card-play-level reasons for state errors. */
+  readonly reason?: MutationRejectionReason | 'no-pending-card' | 'insufficient-energy' | 'unknown-op';
 }
 
 // ── Card Instance (in a deck/hand) ────────────────────────────
