@@ -52,6 +52,59 @@ export interface RegisterTowerOptions {
   cardStatOverrides?: TowerStatOverrides;
 }
 
+/**
+ * Per-fireTurn context bundle consumed by {@link TowerCombatService.composeDamageStack}.
+ * Hoists constants that are computed ONCE per fireTurn call and read per-tower inside
+ * the damage + range multiplier chain. Keeping these as a bundle avoids a 12-arg method
+ * signature and keeps the composeDamageStack call site readable.
+ *
+ * Phase 4 Conduit multipliers plug in here (sprint 43+) — add new fields to the bundle
+ * + new multiplier stages to composeDamageStack in the same commit, never split across
+ * multiple sprints.
+ */
+export interface DamageStackContext {
+  /** Stage 1 damage — difficulty-preset tower-damage modifier. */
+  readonly towerDamageMultiplier: number;
+  /** Stage 3 damage (additive-inside-1+x) — MODIFIER_STAT.DAMAGE wave bonus. */
+  readonly cardDamageBoost: number;
+  /** Stage 2 range (additive-inside-1+x) — MODIFIER_STAT.RANGE wave bonus. */
+  readonly cardRangeBoost: number;
+  /** Stage 4 damage — MODIFIER_STAT.SNIPER_DAMAGE; applied only when tower.type === SNIPER. */
+  readonly sniperDamageBoost: number;
+  /** Stage 6 damage — LABYRINTH_MIND path-length scaling. 1 when modifier inactive. */
+  readonly pathLengthMultiplier: number;
+  /** Short-circuit flag for elevation-read: false on flat boards → skips elevation lookup. */
+  readonly hasElevation: boolean;
+  /** Board-wide max elevation, read once per fireTurn by KING_OF_THE_HILL check. */
+  readonly maxElevation: number;
+  /** Stage 4 range (conditional) — HIGH_PERCH wave bonus; applied when elev ≥ threshold. */
+  readonly highPerchBonus: number;
+  /** Stage 7 damage (conditional) — VANTAGE_POINT wave bonus; applied when elev ≥ threshold. */
+  readonly vantagePointBonus: number;
+  /** Stage 8 damage (conditional) — KING_OF_THE_HILL base bonus; only applied if {@link kothActive}. */
+  readonly kothBonus: number;
+  /** Gate flag for KOTH: true when kothBonus > 0 AND maxElevation ≥ 1 (flat boards skip). */
+  readonly kothActive: boolean;
+}
+
+/**
+ * Output of {@link TowerCombatService.composeDamageStack}. `damage` and `range` are the
+ * final values to write into scratchStats. `towerVantagePointDmgMult` and `towerKothMult`
+ * are hoisted for the shot-fire site — {@link TowerCombatService.computeTitanDamage} and
+ * {@link TowerCombatService.computeWyrmDamage} need to isolate the elevation-origin
+ * portion of the damage stack.
+ *
+ * Phase 3 DA critique #2 flagged that this pair is the "elevation-origin" set as
+ * currently defined; future elevation bonuses must either join this pair or TITAN's
+ * formula will silently exclude them (sprint 79 refactor candidate).
+ */
+interface DamageStackResult {
+  readonly damage: number;
+  readonly range: number;
+  readonly towerVantagePointDmgMult: number;
+  readonly towerKothMult: number;
+}
+
 @Injectable()
 export class TowerCombatService {
   private placedTowers: Map<string, PlacedTower> = new Map();
@@ -233,6 +286,24 @@ export class TowerCombatService {
       || pathLengthMultiplier !== 1 || hasElevation || highPerchBonus !== 0
       || vantagePointBonus !== 0 || kothActive;
 
+    // Phase 4 prep — damage + range multiplier composition bundle. Built once per
+    // fireTurn; consumed per-tower inside composeDamageStack. See conduit-
+    // adjacency-graph.md §12 for the rationale (extracting this chain into a named
+    // pipeline BEFORE Conduit multipliers land).
+    const damageStackCtx: DamageStackContext = {
+      towerDamageMultiplier,
+      cardDamageBoost,
+      cardRangeBoost,
+      sniperDamageBoost,
+      pathLengthMultiplier,
+      hasElevation,
+      maxElevation,
+      highPerchBonus,
+      vantagePointBonus,
+      kothBonus,
+      kothActive,
+    };
+
     // Deterministic firing order: row then col.
     const towerList = Array.from(this.placedTowers.values()).sort((a, b) => {
       if (a.row !== b.row) return a.row - b.row;
@@ -249,54 +320,12 @@ export class TowerCombatService {
       let towerVantagePointDmgMult = 1;
       let towerKothMult = 1;
       if (towerDamageMultiplier !== 1 || hasRelicModifiers || hasCardModifiers || hasCardStatOverrides) {
-        const relicDamage = this.relicService.getDamageMultiplier(tower.type);
-        const relicRange = this.relicService.getRangeMultiplier(tower.type);
-        const sniperBoost = (tower.type === TowerType.SNIPER && sniperDamageBoost !== 0) ? (1 + sniperDamageBoost) : 1;
-        const cardDamageMult = tower.cardStatOverrides?.damageMultiplier ?? 1;
-        const cardRangeMult = tower.cardStatOverrides?.rangeMultiplier ?? 1;
-        // Sprint 29 — passive elevation range bonus: every elevation unit adds
-        // RANGE_BONUS_PER_ELEVATION (0.25) to the range multiplier. A tower at
-        // elevation 0 → 1.0×; elevation 2 → 1.5×; elevation -1 → 0.75×
-        // (self-inflicted penalty for placing towers on depressed tiles).
-        const towerElevation = hasElevation
-          ? (this.elevationService!.getElevation(tower.row, tower.col))
-          : 0;
-        const elevationRangeMult = 1 + towerElevation * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION;
-        // Sprint 29 HIGH_PERCH — conditional range bonus for towers on elevation
-        // ≥ HIGH_PERCH_ELEVATION_THRESHOLD (2). Applies multiplicatively on top of
-        // the passive elevation bonus. Re-read per fireTurn so mid-wave RAISE_PLATFORM
-        // plays take effect immediately on the next tower firing.
-        const highPerchActive = highPerchBonus > 0
-          && towerElevation >= ELEVATION_CONFIG.HIGH_PERCH_ELEVATION_THRESHOLD;
-        const highPerchMult = highPerchActive ? (1 + highPerchBonus) : 1;
-        // Sprint 31 VANTAGE_POINT — conditional damage bonus for towers on
-        // elevation ≥ VANTAGE_POINT_ELEVATION_THRESHOLD (1). A flat board or a
-        // tower on elevation 0 does NOT benefit even when the modifier is active.
-        // Composed multiplicatively: VANTAGE_POINT stacks with other damage boosts
-        // (relic, card modifier) rather than adding to the same pool.
-        const vantagePointActive = vantagePointBonus > 0
-          && towerElevation >= ELEVATION_CONFIG.VANTAGE_POINT_ELEVATION_THRESHOLD;
-        const vantagePointDmgMult = vantagePointActive ? (1 + vantagePointBonus) : 1;
-        // Sprint 33 KING_OF_THE_HILL — per-tower KOTH multiplier.
-        // Only applies to towers whose elevation equals the board-wide max.
-        // kothActive already gates on maxElevation ≥ 1, so flat boards never
-        // enter this branch. Composition order: ...× vantagePoint × koth.
-        const kothMult = (kothActive && towerElevation === maxElevation) ? (1 + kothBonus) : 1;
-        // Hoist elevation multipliers for TITAN per-target adjustment (sprint 38).
-        towerVantagePointDmgMult = vantagePointDmgMult;
-        towerKothMult = kothMult;
-        this.scratchStats.damage = Math.round(
-          baseStats.damage
-            * towerDamageMultiplier
-            * relicDamage
-            * (1 + cardDamageBoost)
-            * sniperBoost
-            * cardDamageMult
-            * pathLengthMultiplier
-            * vantagePointDmgMult
-            * kothMult,
-        );
-        this.scratchStats.range = baseStats.range * relicRange * (1 + cardRangeBoost) * cardRangeMult * elevationRangeMult * highPerchMult;
+        const stack = this.composeDamageStack(tower, baseStats, damageStackCtx);
+        this.scratchStats.damage = stack.damage;
+        this.scratchStats.range = stack.range;
+        // Hoist elevation-origin multipliers for TITAN/WYRM per-target adjustment (sprint 38/39).
+        towerVantagePointDmgMult = stack.towerVantagePointDmgMult;
+        towerKothMult = stack.towerKothMult;
         this.scratchStats.cost = baseStats.cost;
         const cardSplashMult = tower.cardStatOverrides?.splashRadiusMultiplier ?? 1;
         this.scratchStats.splashRadius = (baseStats.splashRadius ?? 0) * this.relicService.getSplashRadiusMultiplier() * cardSplashMult;
@@ -464,6 +493,118 @@ export class TowerCombatService {
     }
 
     return { killed, fired, hitCount, damageDealt };
+  }
+
+  /**
+   * Single source of truth for the per-tower damage + range multiplier composition.
+   *
+   * ## Damage stack (8 stages; Phase 4 Conduit adds 9+ in sprints 43-51):
+   *   baseStats.damage
+   *     × towerDamageMultiplier                                 // 1: difficulty preset
+   *     × relicDamage(tower.type)                               // 2: per-type relic
+   *     × (1 + cardDamageBoost)                                 // 3: MODIFIER_STAT.DAMAGE wave bonus (additive-in-1+x)
+   *     × sniperBoost                                           // 4: SNIPER_DAMAGE (SNIPER type only; additive-in-1+x)
+   *     × cardDamageMult                                        // 5: per-tower cardStatOverrides
+   *     × pathLengthMultiplier                                  // 6: LABYRINTH_MIND
+   *     × vantagePointDmgMult                                   // 7: VANTAGE_POINT (elev ≥ 1)
+   *     × kothMult                                              // 8: KING_OF_THE_HILL (elev === max)
+   *     [× conduit multipliers — sprint 43+ plug in here]
+   *
+   * ## Range stack (6 stages):
+   *   (baseStats.range + rangeAdditive)                         // additive-before-multiplicative (§13)
+   *     × relicRange(tower.type)                                // per-type relic
+   *     × (1 + cardRangeBoost)                                  // MODIFIER_STAT.RANGE wave bonus
+   *     × cardRangeMult                                         // per-tower cardStatOverrides
+   *     × elevationRangeMult                                    // passive elev × 0.25
+   *     × highPerchMult                                         // HIGH_PERCH conditional (elev ≥ 2)
+   *     [× conduit range multipliers — sprint 43+ plug in here]
+   *
+   * ## Ordering rule (locked in conduit-adjacency-graph.md §13)
+   * Additive-to-base bonuses (e.g. FORMATION +1 range, sprint 44) go INSIDE the
+   * (base + additive) parenthesis. Multiplicative bonuses chain outside. Never
+   * invert — player mental model is "my tower's range is 4" for additive stacks.
+   *
+   * ## TITAN/WYRM interaction (sprint 38/39)
+   * Returns `towerVantagePointDmgMult` and `towerKothMult` hoisted for the shot-fire
+   * site. These two values are the current "elevation-origin" damage multipliers. A
+   * future elevation damage bonus that bypasses this return will be silently excluded
+   * by TITAN's halve formula — sprint 79 balance pass should refactor both sets to
+   * reference a named elevation-origin list.
+   *
+   * ## Perf
+   * Called per-tower per-fireTurn. All internal reads are O(1) except
+   * `relicService.get*Multiplier(type)` which is a Map lookup. No allocations beyond
+   * the return object — avoid introducing arrays or spreads inside without re-profiling.
+   */
+  private composeDamageStack(
+    tower: PlacedTower,
+    baseStats: TowerStats,
+    ctx: DamageStackContext,
+  ): DamageStackResult {
+    const relicDamage = this.relicService.getDamageMultiplier(tower.type);
+    const relicRange = this.relicService.getRangeMultiplier(tower.type);
+    const sniperBoost = (tower.type === TowerType.SNIPER && ctx.sniperDamageBoost !== 0)
+      ? (1 + ctx.sniperDamageBoost)
+      : 1;
+    const cardDamageMult = tower.cardStatOverrides?.damageMultiplier ?? 1;
+    const cardRangeMult = tower.cardStatOverrides?.rangeMultiplier ?? 1;
+
+    // Sprint 29 — passive elevation range bonus: every elevation unit adds
+    // RANGE_BONUS_PER_ELEVATION (0.25) to the range multiplier. A tower at
+    // elevation 0 → 1.0×; elevation 2 → 1.5×; elevation -1 → 0.75×
+    // (self-inflicted penalty for placing towers on depressed tiles).
+    const towerElevation = ctx.hasElevation
+      ? this.elevationService!.getElevation(tower.row, tower.col)
+      : 0;
+    const elevationRangeMult = 1 + towerElevation * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION;
+
+    // Sprint 29 HIGH_PERCH — conditional range bonus for towers on elevation
+    // ≥ HIGH_PERCH_ELEVATION_THRESHOLD (2). Applies multiplicatively on top of
+    // the passive elevation bonus.
+    const highPerchActive = ctx.highPerchBonus > 0
+      && towerElevation >= ELEVATION_CONFIG.HIGH_PERCH_ELEVATION_THRESHOLD;
+    const highPerchMult = highPerchActive ? (1 + ctx.highPerchBonus) : 1;
+
+    // Sprint 31 VANTAGE_POINT — conditional damage bonus for towers on
+    // elevation ≥ VANTAGE_POINT_ELEVATION_THRESHOLD (1). Flat boards never benefit.
+    const vantagePointActive = ctx.vantagePointBonus > 0
+      && towerElevation >= ELEVATION_CONFIG.VANTAGE_POINT_ELEVATION_THRESHOLD;
+    const vantagePointDmgMult = vantagePointActive ? (1 + ctx.vantagePointBonus) : 1;
+
+    // Sprint 33 KING_OF_THE_HILL — per-tower KOTH multiplier.
+    // Only applies to towers whose elevation equals the board-wide max.
+    const kothMult = (ctx.kothActive && towerElevation === ctx.maxElevation)
+      ? (1 + ctx.kothBonus)
+      : 1;
+
+    // Reserved for sprint 44 FORMATION — additive-to-base range. See doc §13.
+    const rangeAdditive = 0;
+
+    const damage = Math.round(
+      baseStats.damage
+        * ctx.towerDamageMultiplier
+        * relicDamage
+        * (1 + ctx.cardDamageBoost)
+        * sniperBoost
+        * cardDamageMult
+        * ctx.pathLengthMultiplier
+        * vantagePointDmgMult
+        * kothMult,
+    );
+
+    const range = (baseStats.range + rangeAdditive)
+      * relicRange
+      * (1 + ctx.cardRangeBoost)
+      * cardRangeMult
+      * elevationRangeMult
+      * highPerchMult;
+
+    return {
+      damage,
+      range,
+      towerVantagePointDmgMult: vantagePointDmgMult,
+      towerKothMult: kothMult,
+    };
   }
 
   /**

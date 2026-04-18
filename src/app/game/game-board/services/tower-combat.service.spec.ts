@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { TowerCombatService, KillInfo, CombatAudioEvent, RegisterTowerOptions } from './tower-combat.service';
+import { TowerCombatService, KillInfo, CombatAudioEvent, RegisterTowerOptions, DamageStackContext } from './tower-combat.service';
 import { ChainLightningService } from './chain-lightning.service';
 // M2 S5: ProjectileService import removed (file deleted)
 import { CombatVFXService } from './combat-vfx.service';
@@ -4155,5 +4155,285 @@ describe('TowerCombatService WYRM_ASCENDANT elevation damage immunity (sprint 39
     // Confirm the two damage values differ when VP is active
     expect(wyrmExpected).not.toBe(titanExpected);
     expect(wyrmExpected).toBeLessThan(titanExpected); // WYRM immune → less damage than TITAN halve
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 4 prep — composeDamageStack regression spec.
+// Pre-sprint-41 refactor extracted the 8-stage damage chain + 6-stage range
+// chain from TowerCombatService.fireTurn into a named private method. This
+// spec asserts bit-for-bit equality with the pre-refactor inline computation
+// for a representative input set. If any assertion breaks after this commit
+// lands, the extracted chain diverged from the inline version — revert.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
+  let service: TowerCombatService;
+  let relicSpy: jasmine.SpyObj<RelicService>;
+  let elevationSpy: jasmine.SpyObj<ElevationService>;
+
+  // Default context — neutral: no active modifiers, no elevation.
+  const neutralCtx: DamageStackContext = {
+    towerDamageMultiplier: 1,
+    cardDamageBoost: 0,
+    cardRangeBoost: 0,
+    sniperDamageBoost: 0,
+    pathLengthMultiplier: 1,
+    hasElevation: false,
+    maxElevation: 0,
+    highPerchBonus: 0,
+    vantagePointBonus: 0,
+    kothBonus: 0,
+    kothActive: false,
+  };
+
+  beforeEach(() => {
+    relicSpy = createRelicServiceSpy();
+    relicSpy.getDamageMultiplier.and.returnValue(1);
+    relicSpy.getRangeMultiplier.and.returnValue(1);
+    elevationSpy = jasmine.createSpyObj<ElevationService>(
+      'ElevationService',
+      ['getElevation', 'getMaxElevation', 'reset', 'serialize', 'restore', 'tickTurn', 'raise', 'depress', 'setAbsolute', 'collapse', 'getActiveChanges', 'getElevationMap'],
+    );
+    elevationSpy.getElevation.and.returnValue(0);
+    elevationSpy.getMaxElevation.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(new Map()) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: relicSpy },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+        { provide: ElevationService, useValue: elevationSpy },
+      ],
+    });
+    service = TestBed.inject(TowerCombatService);
+  });
+
+  function buildTower(type: TowerType = TowerType.BASIC, row = 5, col = 5, overrides?: { damageMultiplier?: number; rangeMultiplier?: number }) {
+    const tower: any = {
+      id: `t-${row}-${col}`,
+      type,
+      row,
+      col,
+      level: 1,
+      kills: 0,
+      totalInvested: 0,
+      targetingMode: DEFAULT_TARGETING_MODE,
+      mesh: null,
+    };
+    if (overrides) tower.cardStatOverrides = overrides;
+    return tower;
+  }
+
+  function callStack(tower: any, ctx: DamageStackContext = neutralCtx) {
+    const baseStats = getEffectiveStats(tower.type, tower.level, tower.specialization);
+    return (service as any).composeDamageStack(tower, baseStats, ctx);
+  }
+
+  it('neutral inputs → damage = base, range = base, hoisted mults = 1', () => {
+    const tower = buildTower();
+    const base = TOWER_CONFIGS[TowerType.BASIC];
+    const result = callStack(tower);
+
+    expect(result.damage).toBe(base.damage);
+    expect(result.range).toBeCloseTo(base.range, 5);
+    expect(result.towerVantagePointDmgMult).toBe(1);
+    expect(result.towerKothMult).toBe(1);
+  });
+
+  it('applies towerDamageMultiplier (difficulty preset) at stage 1', () => {
+    const tower = buildTower();
+    const result = callStack(tower, { ...neutralCtx, towerDamageMultiplier: 1.5 });
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(result.damage).toBe(Math.round(base * 1.5));
+  });
+
+  it('applies relicDamage multiplier at stage 2 (per-tower-type lookup)', () => {
+    const tower = buildTower();
+    relicSpy.getDamageMultiplier.and.callFake((type: TowerType) => (type === TowerType.BASIC ? 1.2 : 1));
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    const result = callStack(tower);
+    expect(result.damage).toBe(Math.round(base * 1.2));
+  });
+
+  it('applies cardDamageBoost at stage 3 as (1 + x) additive inside multiplier', () => {
+    const tower = buildTower();
+    const result = callStack(tower, { ...neutralCtx, cardDamageBoost: 0.5 });
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(result.damage).toBe(Math.round(base * (1 + 0.5)));
+  });
+
+  it('applies sniperDamageBoost at stage 4 ONLY for SNIPER towers', () => {
+    const sniper = buildTower(TowerType.SNIPER);
+    const basic = buildTower(TowerType.BASIC);
+    const ctx: DamageStackContext = { ...neutralCtx, sniperDamageBoost: 0.25 };
+
+    const sniperResult = callStack(sniper, ctx);
+    const basicResult = callStack(basic, ctx);
+
+    const sniperBase = TOWER_CONFIGS[TowerType.SNIPER].damage;
+    const basicBase = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(sniperResult.damage).toBe(Math.round(sniperBase * (1 + 0.25)));
+    expect(basicResult.damage).toBe(basicBase); // Not SNIPER → boost skipped.
+  });
+
+  it('applies per-tower cardStatOverrides.damageMultiplier at stage 5', () => {
+    const tower = buildTower(TowerType.BASIC, 5, 5, { damageMultiplier: 2 });
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    const result = callStack(tower);
+    expect(result.damage).toBe(Math.round(base * 2));
+  });
+
+  it('applies pathLengthMultiplier at stage 6 (LABYRINTH_MIND)', () => {
+    const tower = buildTower();
+    const result = callStack(tower, { ...neutralCtx, pathLengthMultiplier: 1.3 });
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(result.damage).toBe(Math.round(base * 1.3));
+  });
+
+  it('applies vantagePointDmgMult at stage 7 gated by elevation ≥ VP threshold', () => {
+    elevationSpy.getElevation.and.returnValue(ELEVATION_CONFIG.VANTAGE_POINT_ELEVATION_THRESHOLD);
+    const tower = buildTower();
+    const result = callStack(tower, { ...neutralCtx, hasElevation: true, vantagePointBonus: 0.5 });
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(result.damage).toBe(Math.round(base * 1.5));
+    expect(result.towerVantagePointDmgMult).toBe(1.5);
+  });
+
+  it('skips vantagePointDmgMult when elevation is BELOW threshold (gate)', () => {
+    elevationSpy.getElevation.and.returnValue(0); // elev 0, threshold is 1
+    const tower = buildTower();
+    const result = callStack(tower, { ...neutralCtx, hasElevation: true, vantagePointBonus: 0.5 });
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(result.damage).toBe(base); // VP skipped
+    expect(result.towerVantagePointDmgMult).toBe(1);
+  });
+
+  it('applies kothMult at stage 8 only when tower elevation === maxElevation', () => {
+    elevationSpy.getElevation.and.returnValue(3);
+    const tower = buildTower();
+    const ctx: DamageStackContext = {
+      ...neutralCtx,
+      hasElevation: true,
+      maxElevation: 3,
+      kothBonus: 1.0,
+      kothActive: true,
+    };
+    const result = callStack(tower, ctx);
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(result.damage).toBe(Math.round(base * 2));
+    expect(result.towerKothMult).toBe(2);
+  });
+
+  it('skips kothMult when tower is below maxElevation (per-tower gate)', () => {
+    elevationSpy.getElevation.and.returnValue(1);
+    const tower = buildTower();
+    const ctx: DamageStackContext = {
+      ...neutralCtx,
+      hasElevation: true,
+      maxElevation: 3, // board has a taller tower
+      kothBonus: 1.0,
+      kothActive: true,
+    };
+    const result = callStack(tower, ctx);
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    expect(result.damage).toBe(base);
+    expect(result.towerKothMult).toBe(1);
+  });
+
+  it('composes all 8 damage stages in the documented multiplicative order', () => {
+    // Tower: SNIPER, L1, cardStatOverrides.damageMultiplier = 1.5
+    // Elevation: 2 (triggers VP @ threshold 1 and KOTH when === max)
+    elevationSpy.getElevation.and.returnValue(2);
+    relicSpy.getDamageMultiplier.and.returnValue(1.1); // stage 2
+    const tower = buildTower(TowerType.SNIPER, 5, 5, { damageMultiplier: 1.5 });
+    const ctx: DamageStackContext = {
+      towerDamageMultiplier: 1.2,      // stage 1
+      cardDamageBoost: 0.3,             // stage 3 → 1.3
+      cardRangeBoost: 0,
+      sniperDamageBoost: 0.4,           // stage 4 → 1.4 (SNIPER)
+      pathLengthMultiplier: 1.25,       // stage 6
+      hasElevation: true,
+      maxElevation: 2,
+      highPerchBonus: 0,
+      vantagePointBonus: 0.5,           // stage 7 → 1.5
+      kothBonus: 1.0,                   // stage 8 → 2 (elev === max)
+      kothActive: true,
+    };
+    const base = TOWER_CONFIGS[TowerType.SNIPER].damage;
+    const expected = Math.round(
+      base
+        * 1.2    // stage 1
+        * 1.1    // stage 2
+        * 1.3    // stage 3
+        * 1.4    // stage 4
+        * 1.5    // stage 5 (cardStatOverrides)
+        * 1.25   // stage 6
+        * 1.5    // stage 7
+        * 2,     // stage 8
+    );
+    expect(callStack(tower, ctx).damage).toBe(expected);
+  });
+
+  it('range stack: 6 stages compose multiplicatively with (base + additive) parenthesis', () => {
+    // Elevation 2 → elevationRangeMult = 1 + 2 × 0.25 = 1.5
+    // HIGH_PERCH active (threshold 2) → 1 + 0.2 = 1.2
+    elevationSpy.getElevation.and.returnValue(ELEVATION_CONFIG.HIGH_PERCH_ELEVATION_THRESHOLD);
+    relicSpy.getRangeMultiplier.and.returnValue(1.1);
+    const tower = buildTower(TowerType.BASIC, 5, 5, { rangeMultiplier: 1.3 });
+    const ctx: DamageStackContext = {
+      ...neutralCtx,
+      cardRangeBoost: 0.2,          // stage 2 → 1.2
+      hasElevation: true,
+      highPerchBonus: 0.2,          // stage 6 → 1.2 (threshold met)
+    };
+    const base = TOWER_CONFIGS[TowerType.BASIC].range;
+    const elevationRangeMult = 1 + ELEVATION_CONFIG.HIGH_PERCH_ELEVATION_THRESHOLD * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION;
+    const expected = (base + 0) * 1.1 * 1.2 * 1.3 * elevationRangeMult * 1.2;
+    expect(callStack(tower, ctx).range).toBeCloseTo(expected, 5);
+  });
+
+  it('range stack: highPerchMult gated below threshold', () => {
+    elevationSpy.getElevation.and.returnValue(1); // HIGH_PERCH threshold is 2
+    const tower = buildTower();
+    const result = callStack(tower, { ...neutralCtx, hasElevation: true, highPerchBonus: 0.5 });
+    const base = TOWER_CONFIGS[TowerType.BASIC].range;
+    const elevationRangeMult = 1 + 1 * ELEVATION_CONFIG.RANGE_BONUS_PER_ELEVATION;
+    // HIGH_PERCH skipped → multiplier 1; passive elevation still applies.
+    expect(result.range).toBeCloseTo(base * elevationRangeMult, 5);
+  });
+
+  it('hasElevation=false short-circuits — no elevation lookup, all elevation mults are 1', () => {
+    // Production invariant: fireTurn computes kothActive = kothBonus > 0 && maxElevation >= 1.
+    // So when hasElevation=false (maxElevation=0), kothActive is always false.
+    // Production never constructs a ctx with kothActive=true AND maxElevation=0.
+    const tower = buildTower();
+    const ctx: DamageStackContext = {
+      ...neutralCtx,
+      vantagePointBonus: 0.5, // VP gate requires tower elev ≥ 1 — skipped when hasElevation=false.
+      highPerchBonus: 0.5,    // HIGH_PERCH gate requires elev ≥ 2 — same.
+    };
+    const result = callStack(tower, ctx);
+    const base = TOWER_CONFIGS[TowerType.BASIC];
+    expect(result.damage).toBe(base.damage);
+    expect(result.range).toBeCloseTo(base.range, 5);
+    expect(elevationSpy.getElevation).not.toHaveBeenCalled();
+  });
+
+  it('rounds damage to integer (Math.round), preserves range as float', () => {
+    const tower = buildTower();
+    const ctx: DamageStackContext = { ...neutralCtx, towerDamageMultiplier: 1.333 };
+    const base = TOWER_CONFIGS[TowerType.BASIC].damage;
+    const result = callStack(tower, ctx);
+    expect(result.damage).toBe(Math.round(base * 1.333));
+    expect(Number.isInteger(result.damage)).toBe(true);
+    // Range is NOT rounded — fractional precision preserved.
+    expect(result.range).toBe(TOWER_CONFIGS[TowerType.BASIC].range);
   });
 });
