@@ -122,6 +122,7 @@ export enum CardId {
   // Conduit archetype — common cards (Phase 4, Sprints 43+)
   HANDSHAKE = 'HANDSHAKE',
   FORMATION = 'FORMATION',
+  LINKWORK = 'LINKWORK',
 }
 
 export enum CardType {
@@ -276,8 +277,11 @@ export interface ModifierCardEffect {
   readonly stat: ModifierStat;
   readonly value: number;
   /**
-   * Duration in waves. `null` means encounter-scoped (never expires via
-   * `tickWave` — cleared only on encounter teardown via `reset()`).
+   * Duration countdown. When `durationScope` is 'wave' (default), counts in
+   * waves; `null` means encounter-scoped (never expires via `tickWave` —
+   * cleared only on encounter teardown via `reset()`). When `durationScope`
+   * is 'turn', counts in turns and MUST be a positive integer (turn-scoped
+   * encounter-span buffs are not currently needed).
    *
    * Added for sprints 17/18 (CARTOGRAPHER_SEAL / LABYRINTH_MIND): both are
    * flag-style modifiers that must persist for the entire encounter without
@@ -287,6 +291,13 @@ export interface ModifierCardEffect {
    * unchanged.
    */
   readonly duration: number | null;
+  /**
+   * Countdown scope. `'wave'` (default) ticks via `tickWave` at wave
+   * completion. `'turn'` ticks via `tickTurn` at the start of each turn —
+   * used by Phase 4 Conduit cards (LINKWORK / HARMONIC / CONDUIT_BRIDGE).
+   * Omit for wave-scoped modifiers to preserve existing call sites.
+   */
+  readonly durationScope?: 'wave' | 'turn';
 }
 
 export interface UtilityCardEffect {

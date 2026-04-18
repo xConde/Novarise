@@ -13,13 +13,15 @@ import { SerializedItemInventory } from '../../../run/models/item.model';
 import { SerializedRunStateFlags } from '../../../run/services/run-state-flag.service';
 import { SerializablePathMutationState } from '../services/path-mutation.types';
 import { SerializableTileElevationState } from '../services/elevation.types';
+import { SerializableTowerGraphState } from '../services/tower-graph.service';
 
 // Re-export for consumers that need the types without importing from the service files.
 export type { SerializablePathMutationState };
 export type { SerializableTileElevationState };
+export type { SerializableTowerGraphState };
 
 /** Schema version — bump when the shape changes to enable migrations. */
-export const CHECKPOINT_VERSION = 9;
+export const CHECKPOINT_VERSION = 10;
 
 /** Plain-object snapshot of GameState (isPaused omitted — always false on restore). */
 export interface SerializableGameState {
@@ -284,6 +286,18 @@ export interface EncounterCheckpoint {
    * (no raised tiles, empty journal, nextId=0).
    */
   readonly tileElevations: SerializableTileElevationState;
+
+  /**
+   * Tower adjacency graph overlay state — virtual edges (CONDUIT_BRIDGE)
+   * and disruption entries (DISRUPTOR / ISOLATOR / DIVIDER). Spatial edges
+   * and cluster membership are derived from placed towers, not persisted.
+   *
+   * Added in v10. v9 checkpoints are migrated with empty state (no virtual
+   * edges, no disruption). Sprints 45-47 always save empty state — Sprint 48
+   * (CONDUIT_BRIDGE) is the first consumer to populate `virtualEdges`;
+   * Sprints 53-55 are the first to populate `disruptedUntil`.
+   */
+  readonly towerGraph: SerializableTowerGraphState;
 }
 
 /** Serializable WavePreviewService state. */

@@ -91,6 +91,18 @@ export const MODIFIER_STAT = {
   // TowerGraphService.isInStraightLineOf(row, col, minLen=3). Base +1 tile,
   // upgraded +2 tiles. Duration 1 (wave-scoped).
   FORMATION_RANGE_ADDITIVE: 'formationRangeAdditive',
+
+  // Phase 4 Sprint 45 — LINKWORK modifier (Conduit common).
+  //
+  // Boolean flag — turn-scoped (duration: 2 turns). When active, every tower
+  // in a cluster reads the MAXIMUM base fireRate across its cluster (spatial
+  // + virtual edges, non-disrupted members). Reads via hasActiveModifier(),
+  // then `TowerGraphService.getClusterTowers(...)` in TowerCombatService.
+  //
+  // `value` is a sentinel (1) — the flag is what matters, not the number.
+  // First turn-scoped modifier in the codebase — see tickTurn in
+  // CardEffectService.
+  LINKWORK_FIRE_RATE_SHARE: 'linkworkFireRateShare',
 } as const;
 
 export type ModifierStat = typeof MODIFIER_STAT[keyof typeof MODIFIER_STAT];

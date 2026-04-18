@@ -1127,6 +1127,7 @@ describe('Highground integration — Group H: Save / Restore', () => {
       turnHistory: [],
       pathMutations: mutSnapshot,
       tileElevations: elevSnapshot,
+      towerGraph: { virtualEdges: [], disruptedUntil: [] },
       runStateFlags: { entries: [], consumedEventIds: [] },
       itemInventory: { entries: [] },
     };

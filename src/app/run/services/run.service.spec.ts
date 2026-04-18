@@ -1094,6 +1094,7 @@ describe('RunService', () => {
         runStateFlags: { entries: [], consumedEventIds: [] },
         pathMutations: { mutations: [], nextId: 0 },
         tileElevations: { elevations: [], changes: [], nextId: 0 },
+        towerGraph: { virtualEdges: [], disruptedUntil: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1131,6 +1132,7 @@ describe('RunService', () => {
         runStateFlags: { entries: [], consumedEventIds: [] },
         pathMutations: { mutations: [], nextId: 0 },
         tileElevations: { elevations: [], changes: [], nextId: 0 },
+        towerGraph: { virtualEdges: [], disruptedUntil: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1175,6 +1177,7 @@ describe('RunService', () => {
         runStateFlags: { entries: [], consumedEventIds: [] },
         pathMutations: { mutations: [], nextId: 0 },
         tileElevations: { elevations: [], changes: [], nextId: 0 },
+        towerGraph: { virtualEdges: [], disruptedUntil: [] },
       });
 
       expect(checkpointService.hasCheckpoint()).toBeTrue();
@@ -1215,6 +1218,7 @@ describe('RunService', () => {
         runStateFlags: { entries: [], consumedEventIds: [] },
         pathMutations: { mutations: [], nextId: 0 },
         tileElevations: { elevations: [], changes: [], nextId: 0 },
+        towerGraph: { virtualEdges: [], disruptedUntil: [] },
       });
 
       // node_0_0 is NOT in completedNodeIds — valid checkpoint.
@@ -1768,7 +1772,7 @@ describe('RunService', () => {
       localStorage.removeItem(CHECKPOINT_KEY);
 
       expect(loaded).not.toBeNull();
-      // Migration chain 5→6→7→8→9 back-fills runStateFlags.entries, consumedEventIds, pathMutations, and tileElevations.
+      // Migration chain 5→6→7→8→9→10 back-fills runStateFlags.entries, consumedEventIds, pathMutations, tileElevations, and towerGraph.
       expect(loaded!.runStateFlags).toEqual({ entries: [], consumedEventIds: [] });
       expect(loaded!.version).toBe(CHECKPOINT_VERSION);
     });
@@ -1801,6 +1805,7 @@ describe('RunService', () => {
         runStateFlags: { entries: [[FLAG_KEYS.MERCHANT_AIDED, 1], [FLAG_KEYS.SCOUT_SAVED, 3]], consumedEventIds: [] },
         pathMutations: { mutations: [], nextId: 0 },
         tileElevations: { elevations: [], changes: [], nextId: 0 },
+        towerGraph: { virtualEdges: [], disruptedUntil: [] },
       };
 
       const CHECKPOINT_KEY = 'novarise_encounter_checkpoint';

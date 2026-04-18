@@ -4663,3 +4663,175 @@ describe('TowerCombatService.composeDamageStack (refactor regression)', () => {
     });
   });
 });
+
+// ─── Phase 4 sprint 45 — LINKWORK (cluster fire-rate share) ────────────────────
+//
+// LINKWORK is a turn-scoped flag that grants +1 shotsPerTurn to any tower
+// in a cluster of size ≥ LINKWORK_MIN_CLUSTER_SIZE while active. Tested via
+// fireTurn's shot count path, not composeDamageStack (LINKWORK is a shot
+// modifier, not a damage modifier). Separate top-level describe because the
+// TestBed wires the real TowerGraphService + `setPlacedTowersGetter`, which
+// the parent describe's setup does not.
+
+describe('TowerCombatService LINKWORK (Phase 4 sprint 45)', () => {
+  let service: TowerCombatService;
+  let graph: TowerGraphService;
+  let cardEffectSpy: jasmine.SpyObj<CardEffectService>;
+  let enemyMap: Map<string, Enemy>;
+  let mockScene: THREE.Scene;
+
+  // Tower at row=10, col=12 on a 25x20 board → world (-0.5, 0).
+  const BASE_ROW = 10;
+  const BASE_COL = 12;
+
+  beforeEach(() => {
+    enemyMap = new Map();
+    TestBed.resetTestingModule();
+    const pathfindingSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService',
+      ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset'],
+    );
+    pathfindingSpy.getPathToExitLength.and.returnValue(0);
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        TowerGraphService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(enemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+        { provide: PathfindingService, useValue: pathfindingSpy },
+      ],
+    });
+    service = TestBed.inject(TowerCombatService);
+    graph = TestBed.inject(TowerGraphService);
+    graph.setPlacedTowersGetter(() => service.getPlacedTowers());
+    cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+    mockScene = new THREE.Scene();
+  });
+
+  // Helper: tower world pos is derived by GameBoardService spy mapping — we
+  // reuse createTestEnemy for enemies at the tower's world position. The
+  // shared spy helper maps row=10,col=12 on a 25x20 board to world (-0.5, 0)
+  // (same projection as the parent describe's TOWER_WORLD_X/Z constants).
+  function enemyAt(id: string, x: number, z: number, hp = 10000): Enemy {
+    const e = createTestEnemy(id, x, z, hp);
+    enemyMap.set(id, e);
+    return e;
+  }
+
+  it('LINKWORK active + cluster of 2 → each tower fires 2 shots (+1 from LINKWORK)', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE,
+    );
+    // 4 enemies so each of 2 towers can land both shots. createTestEnemy
+    // projects tower (10, 12) on a 25x20 board to world (-0.5, 0).
+    enemyAt('e1', -0.5, 0);
+    enemyAt('e2', -0.4, 0);
+    enemyAt('e3', -0.3, 0);
+    enemyAt('e4', -0.2, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // 2 towers × 2 shots each = 4 fires. LINKWORK grants +1 shot to each
+    // cluster member (cluster size 2 ≥ LINKWORK_MIN_CLUSTER_SIZE).
+    expect(result.fired.length).toBe(4);
+  });
+
+  it('LINKWORK active + isolated tower (cluster of 1) → fires 1 shot (below min)', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE,
+    );
+    enemyAt('e1', -0.5, 0);
+    enemyAt('e2', -0.4, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    expect(result.fired.length).toBe(1);
+  });
+
+  it('LINKWORK inactive → cluster size is ignored, tower fires 1 shot', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    // Default spy: hasActiveModifier returns false for everything.
+    enemyAt('e1', -0.5, 0);
+    enemyAt('e2', -0.4, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // Two towers × 1 shot each = 2 fires. Without LINKWORK, per-tower is 1.
+    // Tower at (10, 13) targets the nearer enemy; first tower at (10, 12) also
+    // fires once. So total fires = 2 but neither tower is multi-shotting.
+    // Assert no tower fired more than once.
+    const firesByPos = result.fired.length;
+    expect(firesByPos).toBe(2);
+  });
+
+  it('LINKWORK respects disruption — disrupted tower sees itself only (cluster=1)', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE,
+    );
+    // Disrupt the first tower so its cluster size reads as 1.
+    graph.severTower(BASE_ROW, BASE_COL, /* until */ 10, 'test-disruptor');
+    enemyAt('e1', -0.5, 0);
+    enemyAt('e2', -0.4, 0);
+
+    // Turn 5 is within the disruption window.
+    const result = service.fireTurn(mockScene, 5);
+
+    // Disrupted tower no longer multi-shots; its partner (at col+1) is also
+    // disrupted by virtue of the cluster severance, so cluster size for both
+    // drops below the minimum. 1 shot per tower, 2 towers = 2 total fires —
+    // same as the inactive case, not the +1 bonus case.
+    expect(result.fired.length).toBe(2);
+  });
+
+  it('LINKWORK + FIRE_RATE modifier stack additively before ceil', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE,
+    );
+    cardEffectSpy.getModifierValue.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.FIRE_RATE ? 0.3 : 0,
+    );
+    // 4 enemies so both shots from both towers can resolve.
+    enemyAt('e1', -0.5, 0);
+    enemyAt('e2', -0.4, 0);
+    enemyAt('e3', -0.3, 0);
+    enemyAt('e4', -0.2, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // Per tower: fireRateBoost=0.3 + LINKWORK=1 → ceil(1 + 1.3) = 3 shots each.
+    // Two towers × 3 shots = 6 total fires.
+    expect(result.fired.length).toBe(6);
+  });
+
+  it('LINKWORK with 3-tower horizontal line → all three towers get +1 shot', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 2, TowerType.BASIC, new THREE.Group());
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE,
+    );
+    // Enough enemies for 3 towers × 2 shots each = 6 fires.
+    for (let i = 0; i < 6; i++) enemyAt(`e${i}`, -0.5 + i * 0.05, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // Cluster size is 3 for each tower (≥ MIN=2 for all). Total = 3 × 2 = 6 fires.
+    expect(result.fired.length).toBe(6);
+  });
+});

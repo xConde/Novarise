@@ -92,6 +92,20 @@ export class EncounterCheckpointService {
       data['version'] = 9;
       return data;
     },
+    // 9 → 10: add `towerGraph` field. TowerGraphService virtual-edge / disruption
+    // persistence introduced in Sprint 45 (archetype-depth plan, Conduit phase).
+    // Pre-v10 saves had no overlay state; default to empty — spatial adjacency
+    // is rederived from towers on restore, so existing encounters continue
+    // without any CONDUIT_BRIDGE virtual edges or DISRUPTOR/ISOLATOR entries.
+    // (The schema bump also brings turn-scoped ActiveModifier.remainingTurns
+    // along for free — ActiveModifier.remainingTurns is optional, so pre-v10
+    // entries without the field decode correctly; no per-modifier migration
+    // is needed.)
+    9: (data) => {
+      data['towerGraph'] = { virtualEdges: [], disruptedUntil: [] };
+      data['version'] = 10;
+      return data;
+    },
   };
 
   /**
@@ -179,6 +193,7 @@ export class EncounterCheckpointService {
     const runStateFlags = data['runStateFlags'] as Record<string, unknown> | undefined;
     const pathMutations = data['pathMutations'] as Record<string, unknown> | undefined;
     const tileElevations = data['tileElevations'] as Record<string, unknown> | undefined;
+    const towerGraph = data['towerGraph'] as Record<string, unknown> | undefined;
 
     return (
       typeof data['version'] === 'number' &&
@@ -201,7 +216,11 @@ export class EncounterCheckpointService {
       tileElevations !== null &&
       tileElevations !== undefined &&
       Array.isArray(tileElevations['elevations']) &&
-      Array.isArray(tileElevations['changes'])
+      Array.isArray(tileElevations['changes']) &&
+      towerGraph !== null &&
+      towerGraph !== undefined &&
+      Array.isArray(towerGraph['virtualEdges']) &&
+      Array.isArray(towerGraph['disruptedUntil'])
     );
   }
 }

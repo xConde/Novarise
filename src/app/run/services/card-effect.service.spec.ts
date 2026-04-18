@@ -27,6 +27,10 @@ function modifierEffect(stat: ModifierStat, value: number, duration: number | nu
   return { type: 'modifier', stat, value, duration };
 }
 
+function turnModifierEffect(stat: ModifierStat, value: number, turns: number): ModifierCardEffect {
+  return { type: 'modifier', stat, value, duration: turns, durationScope: 'turn' };
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe('CardEffectService', () => {
@@ -251,6 +255,98 @@ describe('CardEffectService', () => {
 
       expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeFalse();
       expect(service.hasActiveModifier(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBeTrue();
+    });
+
+    // Sprint 45 — Conduit turn-scoped modifiers MUST NOT tick via tickWave.
+    it('leaves turn-scoped modifiers untouched on tickWave', () => {
+      service.applyModifier(turnModifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 2));
+      service.tickWave();
+      service.tickWave();
+      service.tickWave();
+      const mods = service.getActiveModifiers();
+      expect(mods.length).toBe(1);
+      expect(mods[0].remainingTurns).toBe(2);
+      expect(mods[0].remainingWaves).toBeNull();
+    });
+  });
+
+  // ── tickTurn ──────────────────────────────────────────────────
+
+  describe('tickTurn (Sprint 45 — turn-scoped Conduit modifiers)', () => {
+    it('decrements remainingTurns on turn-scoped modifiers', () => {
+      service.applyModifier(turnModifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 3));
+      service.tickTurn();
+      const mods = service.getActiveModifiers();
+      expect(mods.length).toBe(1);
+      expect(mods[0].remainingTurns).toBe(2);
+    });
+
+    it('removes turn-scoped modifiers that reach 0', () => {
+      service.applyModifier(turnModifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 1));
+      service.tickTurn();
+      expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeFalse();
+    });
+
+    it('handles multiple turn ticks until expiry', () => {
+      service.applyModifier(turnModifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 3));
+      service.tickTurn();
+      service.tickTurn();
+      expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeTrue();
+      service.tickTurn();
+      expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeFalse();
+    });
+
+    it('leaves wave-scoped modifiers untouched', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.RANGE, 0.20, 2));
+      service.tickTurn();
+      service.tickTurn();
+      service.tickTurn();
+      const mods = service.getActiveModifiers();
+      expect(mods.length).toBe(1);
+      expect(mods[0].remainingWaves).toBe(2);
+      expect(mods[0].remainingTurns).toBeUndefined();
+    });
+
+    it('leaves encounter-scoped modifiers untouched', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));
+      service.tickTurn();
+      service.tickTurn();
+      expect(service.hasActiveModifier(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBeTrue();
+    });
+
+    it('mixed wave + turn + encounter: each decays on the correct tick', () => {
+      service.applyModifier(modifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 1));            // wave-scoped, 1 wave
+      service.applyModifier(turnModifierEffect(MODIFIER_STAT.RANGE, 0.20, 1));         // turn-scoped, 1 turn
+      service.applyModifier(modifierEffect(MODIFIER_STAT.TERRAFORM_ANCHOR, 1, null));  // encounter-scoped
+
+      service.tickTurn();
+      // RANGE should be expired; DAMAGE and TERRAFORM_ANCHOR still active.
+      expect(service.hasActiveModifier(MODIFIER_STAT.RANGE)).toBeFalse();
+      expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeTrue();
+      expect(service.hasActiveModifier(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBeTrue();
+
+      service.tickWave();
+      // DAMAGE now expired; TERRAFORM_ANCHOR still active.
+      expect(service.hasActiveModifier(MODIFIER_STAT.DAMAGE)).toBeFalse();
+      expect(service.hasActiveModifier(MODIFIER_STAT.TERRAFORM_ANCHOR)).toBeTrue();
+    });
+
+    it('applyModifier with durationScope=turn stores remainingTurns, not remainingWaves', () => {
+      service.applyModifier(turnModifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 2));
+      const mods = service.getActiveModifiers();
+      expect(mods[0].remainingTurns).toBe(2);
+      expect(mods[0].remainingWaves).toBeNull();
+    });
+
+    it('serializeModifiers round-trips remainingTurns', () => {
+      service.applyModifier(turnModifierEffect(MODIFIER_STAT.DAMAGE, 0.25, 2));
+      const snapshot = service.serializeModifiers();
+      service.reset();
+      service.restoreModifiers(snapshot);
+      const mods = service.getActiveModifiers();
+      expect(mods.length).toBe(1);
+      expect(mods[0].remainingTurns).toBe(2);
+      expect(mods[0].remainingWaves).toBeNull();
     });
   });
 

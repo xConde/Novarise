@@ -1306,6 +1306,12 @@ export class GameBoardComponent implements OnInit, AfterViewInit, OnDestroy {
       // for the 19→20-step restore coordinator.
       this.towerGraphService.rebuild();
 
+      // Step 4.6: Restore graph overlay state (virtual edges + disruption entries).
+      // v10 added — v9 checkpoints migrated to empty state by EncounterCheckpointService.
+      // MUST run after rebuild() so keyToId is populated — restore() maps virtual-edge
+      // coordinates to tower ids via that lookup.
+      this.towerGraphService.restore(checkpoint.towerGraph);
+
       // Step 5: Restore mortar zones
       this.towerCombatService.restoreMortarZones(checkpoint.mortarZones);
 

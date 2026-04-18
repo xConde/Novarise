@@ -985,13 +985,14 @@ export function createRunServiceSpy(): jasmine.SpyObj<RunService> {
  *   - getModifierValue() — 0 (no active modifiers)
  *   - hasActiveModifier() — false
  *   - getActiveModifiers() — empty readonly array
- *   - applySpell / applyModifier / tickWave / reset — no-op void
+ *   - applySpell / applyModifier / tickWave / tickTurn / reset — no-op void
  */
 export function createCardEffectServiceSpy(): jasmine.SpyObj<CardEffectService> {
   const spy = jasmine.createSpyObj<CardEffectService>('CardEffectService', [
     'applySpell',
     'applyModifier',
     'tickWave',
+    'tickTurn',
     'getModifierValue',
     'hasActiveModifier',
     'getActiveModifiers',

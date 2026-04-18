@@ -292,6 +292,17 @@ const CARD_VALUES = {
   formationRangeAdditive: 1,          // +1 tile (base)
   formationUpgradedRangeAdditive: 2,  // +2 tiles (upgraded)
   formationDuration: 1,               // wave countdown (one wave)
+
+  // ── Conduit archetype — LINKWORK (Sprint 45) ────────────────────────────
+  // LINKWORK (0E common): for N turns, every tower in a cluster reads the
+  // MAX base fireRate across the cluster. First turn-scoped card in the
+  // codebase — consumes the new CardEffectService.tickTurn hook.
+  // Upgrade grants +1 turn. Read as a boolean flag via hasActiveModifier()
+  // in TowerCombatService before shot-count computation.
+  linkworkCost: 0,
+  linkworkValue: 1,                   // sentinel — flag modifier, non-zero for stacking
+  linkworkDuration: 2,                // turn countdown (2 turns, base)
+  linkworkUpgradedDuration: 3,        // turn countdown (3 turns, upgraded)
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -1782,6 +1793,49 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
       stat: MODIFIER_STAT.FORMATION_RANGE_ADDITIVE,
       value: CARD_VALUES.formationUpgradedRangeAdditive,
       duration: CARD_VALUES.formationDuration,
+    },
+    archetype: 'conduit' as const,
+    link: true,
+    terraform: false,
+  },
+
+  /**
+   * LINKWORK (Sprint 45) — turn-scoped cluster-fire-rate-share modifier.
+   *
+   * For 2 turns (base) / 3 turns (upgraded), every tower in a cluster fires
+   * at the MAX base fireRate across its cluster. Read as a boolean flag in
+   * TowerCombatService via `hasActiveModifier(LINKWORK_FIRE_RATE_SHARE)`;
+   * when present, effective fireRate resolves via
+   * `TowerGraphService.getClusterTowers` before the shot-count block.
+   *
+   * First card to use `durationScope: 'turn'` — ticks via CardEffectService
+   * .tickTurn in CombatLoopService.resolveTurn, NOT tickWave. Verified via
+   * the turn-scope serialize/restore round-trip specs.
+   *
+   * NOT terraform: pure behavior modifier; no tile/tower mutation.
+   */
+  [CardId.LINKWORK]: {
+    id: CardId.LINKWORK,
+    name: 'Linkwork',
+    description: 'For 2 turns, linked towers share the highest fire rate in their cluster.',
+    upgradedDescription: 'For 3 turns, linked towers share the highest fire rate in their cluster.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.COMMON,
+    energyCost: CARD_VALUES.linkworkCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE,
+      value: CARD_VALUES.linkworkValue,
+      duration: CARD_VALUES.linkworkDuration,
+      durationScope: 'turn' as const,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE,
+      value: CARD_VALUES.linkworkValue,
+      duration: CARD_VALUES.linkworkUpgradedDuration,
+      durationScope: 'turn' as const,
     },
     archetype: 'conduit' as const,
     link: true,

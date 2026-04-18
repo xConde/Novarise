@@ -6,9 +6,11 @@
  *
  * Design:
  *  - Spell cards are applied immediately (gold, lives, damage, slow).
- *  - Modifier cards register a stat bonus with a wave-countdown duration.
+ *  - Modifier cards register a stat bonus with a wave- OR turn-countdown.
  *  - TowerCombatService reads modifier values each combat frame.
- *  - tickWave() is called on wave completion to expire modifiers.
+ *  - tickWave() is called on wave completion to expire wave-scoped modifiers.
+ *  - tickTurn() is called at the start of each turn to expire turn-scoped
+ *    modifiers (Phase 4 Conduit: LINKWORK / HARMONIC / CONDUIT_BRIDGE).
  */
 
 import { Injectable } from '@angular/core';
@@ -22,16 +24,26 @@ import { StatusEffectType } from '../../game/game-board/constants/status-effect.
 import { DeckService } from './deck.service';
 import { WavePreviewService } from '../../game/game-board/services/wave-preview.service';
 
-/** A single active modifier with a wave-based countdown. */
+/** A single active modifier with a wave- or turn-based countdown. */
 export interface ActiveModifier {
   readonly stat: ModifierStat;
   readonly value: number;
   /**
-   * `null` = encounter-scoped (never expires in tickWave, cleared only by
-   * reset() at encounter teardown). Used by flag-style modifiers
-   * (CARTOGRAPHER_SEAL → TERRAFORM_ANCHOR, LABYRINTH_MIND).
+   * Wave-countdown (legacy default). `null` = encounter-scoped (never
+   * expires in tickWave, cleared only by reset() at encounter teardown).
+   * Used by flag-style modifiers (CARTOGRAPHER_SEAL → TERRAFORM_ANCHOR,
+   * LABYRINTH_MIND). A turn-scoped modifier MUST set this to `null` so
+   * tickWave does not collide with its tickTurn countdown.
    */
   remainingWaves: number | null;
+  /**
+   * Turn-countdown (v10 / Phase 4 Conduit). When set, decremented by
+   * `tickTurn()` at the start of each turn; removed on reaching 0.
+   * Undefined for wave-scoped modifiers. A modifier is EITHER wave-scoped
+   * OR turn-scoped — never both — so `remainingWaves === null` when this
+   * field is populated.
+   */
+  remainingTurns?: number;
 }
 
 /** Per-encounter context bundle passed to spell handlers from the component layer. */
@@ -190,8 +202,22 @@ export class CardEffectService {
   /**
    * Register a modifier card effect.
    * Multiple modifiers with the same stat stack additively.
+   * Routes to either wave- or turn-countdown depending on `effect.durationScope`.
    */
   applyModifier(effect: ModifierCardEffect): void {
+    if (effect.durationScope === 'turn') {
+      // Turn-scoped modifiers set remainingWaves to null so tickWave ignores
+      // them. effect.duration must be a positive integer per the card-model
+      // contract — null is not a legal turn-scope duration.
+      const turns = effect.duration ?? 0;
+      this.activeModifiers.push({
+        stat: effect.stat,
+        value: effect.value,
+        remainingWaves: null,
+        remainingTurns: turns,
+      });
+      return;
+    }
     this.activeModifiers.push({
       stat: effect.stat,
       value: effect.value,
@@ -202,20 +228,44 @@ export class CardEffectService {
   // ── Wave Tick ────────────────────────────────────────────
 
   /**
-   * Decrement remaining-wave countdown on all active modifiers.
-   * Modifiers that reach 0 are removed. Call once per wave completion.
+   * Decrement remaining-wave countdown on wave-scoped modifiers. Modifiers
+   * that reach 0 are removed. Call once per wave completion.
    *
-   * Modifiers with `remainingWaves === null` are encounter-scoped
-   * (CARTOGRAPHER_SEAL, LABYRINTH_MIND) and skip the decrement entirely —
-   * they survive every tickWave and are cleared only by reset() at
-   * encounter teardown.
+   * Wave-scoped with `remainingWaves === null` are encounter-scoped
+   * (CARTOGRAPHER_SEAL, LABYRINTH_MIND) and skip the decrement — cleared
+   * only by reset() at encounter teardown.
+   *
+   * Turn-scoped modifiers (remainingTurns !== undefined) are left untouched
+   * — they tick via {@link tickTurn}.
    */
   tickWave(): void {
     this.activeModifiers = this.activeModifiers
-      .map(m => m.remainingWaves === null
+      .map(m => {
+        if (m.remainingTurns !== undefined) return m; // turn-scoped; skip
+        if (m.remainingWaves === null) return m;       // encounter-scoped; skip
+        return { ...m, remainingWaves: m.remainingWaves - 1 };
+      })
+      .filter(m => m.remainingTurns !== undefined || m.remainingWaves === null || m.remainingWaves > 0);
+  }
+
+  // ── Turn Tick ────────────────────────────────────────────
+
+  /**
+   * Decrement remaining-turn countdown on turn-scoped modifiers. Modifiers
+   * that reach 0 are removed. Call at the start of each turn from
+   * `CombatLoopService.resolveTurn` — alongside `pathMutationService.tickTurn`,
+   * `elevationService.tickTurn`, `towerGraphService.tickTurn`.
+   *
+   * Wave-scoped modifiers (remainingTurns === undefined) are untouched.
+   *
+   * Phase 4 Conduit — LINKWORK / HARMONIC / CONDUIT_BRIDGE.
+   */
+  tickTurn(): void {
+    this.activeModifiers = this.activeModifiers
+      .map(m => m.remainingTurns === undefined
         ? m
-        : { ...m, remainingWaves: m.remainingWaves - 1 })
-      .filter(m => m.remainingWaves === null || m.remainingWaves > 0);
+        : { ...m, remainingTurns: m.remainingTurns - 1 })
+      .filter(m => m.remainingTurns === undefined || m.remainingTurns > 0);
   }
 
   // ── Queries ───────────────────────────────────────────────
@@ -260,12 +310,20 @@ export class CardEffectService {
 
   /** Serialize active modifiers for checkpoint save. */
   serializeModifiers(): ActiveModifier[] {
-    return this.activeModifiers.map(m => ({ stat: m.stat, value: m.value, remainingWaves: m.remainingWaves }));
+    return this.activeModifiers.map(m => {
+      const base: ActiveModifier = { stat: m.stat, value: m.value, remainingWaves: m.remainingWaves };
+      if (m.remainingTurns !== undefined) base.remainingTurns = m.remainingTurns;
+      return base;
+    });
   }
 
   /** Restore active modifiers from a checkpoint snapshot. Replaces current modifiers directly. */
   restoreModifiers(modifiers: ActiveModifier[]): void {
-    this.activeModifiers = modifiers.map(m => ({ stat: m.stat, value: m.value, remainingWaves: m.remainingWaves }));
+    this.activeModifiers = modifiers.map(m => {
+      const base: ActiveModifier = { stat: m.stat, value: m.value, remainingWaves: m.remainingWaves };
+      if (m.remainingTurns !== undefined) base.remainingTurns = m.remainingTurns;
+      return base;
+    });
   }
 
   // ── Lifecycle ─────────────────────────────────────────────

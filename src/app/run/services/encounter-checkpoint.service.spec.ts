@@ -88,6 +88,7 @@ function createTestCheckpoint(overrides: Partial<EncounterCheckpoint> = {}): Enc
     runStateFlags: { entries: [], consumedEventIds: [] },
     pathMutations: { mutations: [], nextId: 0 },
     tileElevations: { elevations: [], changes: [], nextId: 0 },
+    towerGraph: { virtualEdges: [], disruptedUntil: [] },
     ...overrides,
   };
 }
@@ -605,6 +606,99 @@ describe('EncounterCheckpointService', () => {
       expect(loaded!.tileElevations.elevations.length).toBe(1);
       expect(loaded!.tileElevations.elevations[0]).toEqual({ row: 3, col: 4, value: 2 });
       expect(loaded!.tileElevations.nextId).toBe(1);
+    });
+  });
+
+  describe('loadCheckpoint() v9 → v10 migration (sprint 45 — Conduit)', () => {
+    it('migrates v9 checkpoint to v10 by inserting empty towerGraph', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v9Data: Record<string, any> = {
+        ...createTestCheckpoint(),
+        version: 9,
+      };
+      delete v9Data['towerGraph'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v9Data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.version).toBe(CHECKPOINT_VERSION);
+      expect(loaded!.towerGraph).toBeDefined();
+      expect(loaded!.towerGraph.virtualEdges.length).toBe(0);
+      expect(loaded!.towerGraph.disruptedUntil.length).toBe(0);
+    });
+
+    it('v9 checkpoint after migration passes structural validation', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v9Data: Record<string, any> = {
+        ...createTestCheckpoint(),
+        version: 9,
+      };
+      delete v9Data['towerGraph'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(v9Data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+    });
+
+    it('returns null when towerGraph is missing (v10 requirement)', () => {
+      const checkpoint = createTestCheckpoint();
+      const data = JSON.parse(JSON.stringify(checkpoint));
+      delete data['towerGraph'];
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when towerGraph.virtualEdges is not an array', () => {
+      const checkpoint = createTestCheckpoint({
+        towerGraph: { virtualEdges: 'bad' as unknown as [], disruptedUntil: [] },
+      });
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(checkpoint));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('returns null when towerGraph.disruptedUntil is not an array', () => {
+      const checkpoint = createTestCheckpoint({
+        towerGraph: { virtualEdges: [], disruptedUntil: 'bad' as unknown as [] },
+      });
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(checkpoint));
+
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).toBeNull();
+    });
+
+    it('towerGraph round-trips correctly when populated', () => {
+      const checkpoint = createTestCheckpoint({
+        towerGraph: {
+          virtualEdges: [
+            { aRow: 1, aCol: 2, bRow: 5, bCol: 6, expiresOnTurn: 12, sourceId: 'conduit_bridge_1' },
+          ],
+          disruptedUntil: [
+            { key: '3-3', untilTurn: 10, sourceId: 'disruptor_7' },
+          ],
+        },
+      });
+
+      service.saveCheckpoint(checkpoint);
+      const loaded = service.loadCheckpoint();
+
+      expect(loaded).not.toBeNull();
+      expect(loaded!.towerGraph.virtualEdges.length).toBe(1);
+      expect(loaded!.towerGraph.virtualEdges[0]).toEqual({
+        aRow: 1, aCol: 2, bRow: 5, bCol: 6, expiresOnTurn: 12, sourceId: 'conduit_bridge_1',
+      });
+      expect(loaded!.towerGraph.disruptedUntil.length).toBe(1);
+      expect(loaded!.towerGraph.disruptedUntil[0]).toEqual({
+        key: '3-3', untilTurn: 10, sourceId: 'disruptor_7',
+      });
     });
   });
 });

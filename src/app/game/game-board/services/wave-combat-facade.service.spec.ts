@@ -27,6 +27,7 @@ import { WavePreviewService } from './wave-preview.service';
 import { TurnHistoryService } from './turn-history.service';
 import { PathMutationService } from './path-mutation.service';
 import { ElevationService } from './elevation.service';
+import { TowerGraphService } from './tower-graph.service';
 
 function makeCallbacks(overrides: Partial<WaveCombatCallbacks> = {}): WaveCombatCallbacks {
   return {
@@ -208,6 +209,11 @@ describe('WaveCombatFacadeService', () => {
       (() => {
         const spy = jasmine.createSpyObj<ElevationService>('ElevationService', ['serialize']);
         spy.serialize.and.returnValue({ elevations: [], changes: [], nextId: 0 });
+        return spy;
+      })(),
+      (() => {
+        const spy = jasmine.createSpyObj<TowerGraphService>('TowerGraphService', ['serialize']);
+        spy.serialize.and.returnValue({ virtualEdges: [], disruptedUntil: [] });
         return spy;
       })(),
     );

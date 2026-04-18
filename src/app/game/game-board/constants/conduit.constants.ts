@@ -46,4 +46,22 @@ export const CONDUIT_CONFIG = {
    * Sprint 44. Balance-tunable; anchored at 3 for initial playtest.
    */
   FORMATION_MIN_LINE_LENGTH: 3,
+
+  /**
+   * Minimum cluster size (inclusive of the tower itself) that activates
+   * LINKWORK's shared fire-rate boost. Sprint 45. A lone tower (cluster size
+   * 1) gets no benefit — the buff rewards building linked groups.
+   *
+   * Balance-tunable; anchored at 2 for initial playtest (any link triggers).
+   */
+  LINKWORK_MIN_CLUSTER_SIZE: 2,
+
+  /**
+   * Per-tower fire-rate boost granted by LINKWORK to every tower in a
+   * qualifying cluster. Sprint 45. Added to `fireRateBoost` before the
+   * shot-count ceiling so the ceil-semantic (1 + boost → 2 shots) applies
+   * as if a FIRE_RATE modifier card were stacked in. Value mirrors the
+   * OVERCLOCK / RAPID_FIRE economy.
+   */
+  LINKWORK_FIRE_RATE_BONUS: 1,
 } as const;

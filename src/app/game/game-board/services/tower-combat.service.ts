@@ -321,6 +321,12 @@ export class TowerCombatService {
     // Applied inside the (base + additive) parenthesis per spike §13.
     const formationRangeAdditive = this.cardEffectService.getModifierValue(MODIFIER_STAT.FORMATION_RANGE_ADDITIVE);
 
+    // Phase 4 sprint 45 — LINKWORK: turn-scoped flag. When active, every tower
+    // in a cluster of ≥ LINKWORK_MIN_CLUSTER_SIZE gains +LINKWORK_FIRE_RATE_BONUS
+    // shots/turn (read via ceil-semantic alongside fireRateBoost). Disrupted
+    // towers see an empty cluster from getClusterSize (transparent gating).
+    const linkworkActive = this.cardEffectService.hasActiveModifier(MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE);
+
     const hasCardModifiers =
       cardDamageBoost !== 0 || cardRangeBoost !== 0 || sniperDamageBoost !== 0
       || pathLengthMultiplier !== 1 || hasElevation || highPerchBonus !== 0
@@ -394,7 +400,18 @@ export class TowerCombatService {
 
       // Phase 10 modifier: fireRate boost gives +1 shotsPerTurn at any positive value (ceil semantic).
       // 30% boost (RAPID_FIRE) → ceil(1.3) = 2. 50% (OVERCLOCK) → ceil(1.5) = 2. Stacked → ceil(1.8) = 2.
-      const baseShots = Math.max(1, Math.ceil(1 + fireRateBoost));
+      // Phase 4 sprint 45 — LINKWORK: per-tower cluster-size check adds
+      // LINKWORK_FIRE_RATE_BONUS when the tower is in a cluster of
+      // ≥ LINKWORK_MIN_CLUSTER_SIZE. Folded INTO the ceil so the bonus stacks
+      // linearly with FIRE_RATE card modifiers (boost additive, then ceil).
+      let perTowerFireRateBoost = fireRateBoost;
+      if (linkworkActive && this.towerGraphService) {
+        const clusterSize = this.towerGraphService.getClusterSize(tower.row, tower.col, turnNumber);
+        if (clusterSize >= CONDUIT_CONFIG.LINKWORK_MIN_CLUSTER_SIZE) {
+          perTowerFireRateBoost += CONDUIT_CONFIG.LINKWORK_FIRE_RATE_BONUS;
+        }
+      }
+      const baseShots = Math.max(1, Math.ceil(1 + perTowerFireRateBoost));
       // QUICK_DRAW relic: +1 extra shot on the turn the tower was placed.
       const quickDrawBonus = this.relicService.hasQuickDraw() && (tower.placedAtTurn ?? 0) === turnNumber ? 1 : 0;
       const shotsPerTurn = baseShots + quickDrawBonus;
