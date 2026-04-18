@@ -64,4 +64,15 @@ export const CONDUIT_CONFIG = {
    * OVERCLOCK / RAPID_FIRE economy.
    */
   LINKWORK_FIRE_RATE_BONUS: 1,
+
+  /**
+   * Number of cluster neighbors selected to fire-along when HARMONIC is
+   * active. Sprint 46. Plan §archetype-46: "tower + 2 neighbors fire
+   * simultaneously." Passengers chosen via seeded RNG so replays are
+   * deterministic. When a cluster has fewer than this count of non-disrupted
+   * neighbors, all eligible members fire as passengers.
+   *
+   * Balance-tunable; anchored at 2 for initial playtest.
+   */
+  HARMONIC_NEIGHBOR_COUNT: 2,
 } as const;

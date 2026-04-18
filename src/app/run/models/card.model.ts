@@ -123,6 +123,9 @@ export enum CardId {
   HANDSHAKE = 'HANDSHAKE',
   FORMATION = 'FORMATION',
   LINKWORK = 'LINKWORK',
+
+  // Conduit archetype — uncommon cards (Phase 4, Sprints 46+)
+  HARMONIC = 'HARMONIC',
 }
 
 export enum CardType {

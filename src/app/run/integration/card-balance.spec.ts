@@ -233,7 +233,7 @@ describe('Card System — Balance', () => {
 
   // ── Total Card Count ──────────────────────────────────────────────────────
 
-  it('should have exactly 69 card definitions', () => {
+  it('should have exactly 70 card definitions', () => {
     // 40 original + 6 tower variant cards (sprint 2a) + 3 status-applying spells (sprint 2b)
     // + 2 status payoff spells (sprint 2c) + 4 Cartographer terraform spells (phase 2 sprints 11/12/15/16)
     // + 1 DETOUR routing spell (sprint 14) + 2 Cartographer rare anchors (phase 2 sprints 17/18)
@@ -242,7 +242,8 @@ describe('Card System — Balance', () => {
     // + 3 Highground uncommon cards (phase 3 sprints 30/31/32: CLIFFSIDE + VANTAGE_POINT + AVALANCHE_ORDER)
     // + 2 Highground rare cards (phase 3 sprints 33/34: KING_OF_THE_HILL + GRAVITY_WELL)
     // + 3 Conduit commons (phase 4 sprints 43/44/45: HANDSHAKE + FORMATION + LINKWORK)
-    expect(Object.keys(CARD_DEFINITIONS).length).toBe(69);
+    // + 1 Conduit uncommon (phase 4 sprint 46: HARMONIC)
+    expect(Object.keys(CARD_DEFINITIONS).length).toBe(70);
   });
 
   // ── Phase 2 Sprint 19 — Cartographer economy validation ────────────────────

@@ -18,6 +18,7 @@ import { ChainLightningService } from './chain-lightning.service';
 // scheduled for file deletion in this same phase.
 import { RelicService } from '../../../run/services/relic.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
+import { RunService } from '../../../run/services/run.service';
 import { MODIFIER_STAT } from '../../../run/constants/modifier-stat.constants';
 import { TowerStatOverrides } from '../../../run/models/card.model';
 import { PathfindingService } from './pathfinding.service';
@@ -182,6 +183,10 @@ export class TowerCombatService {
     // adds the first read and will require the service to be present for that card's
     // test bed.
     @Optional() private towerGraphService?: TowerGraphService,
+    // @Optional() — Sprint 46 HARMONIC needs seeded RNG for passenger selection.
+    // When absent, HARMONIC degrades gracefully (no passenger fires). Test beds
+    // that predate sprint 46 + run contexts without a live run stay unchanged.
+    @Optional() private runService?: RunService,
   ) {}
 
   /**
@@ -327,6 +332,12 @@ export class TowerCombatService {
     // towers see an empty cluster from getClusterSize (transparent gating).
     const linkworkActive = this.cardEffectService.hasActiveModifier(MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE);
 
+    // Phase 4 sprint 46 — HARMONIC: turn-scoped flag. When active, after a
+    // tower fires at a target, up to HARMONIC_NEIGHBOR_COUNT non-disrupted
+    // cluster neighbors also fire at the same target (range-gated, seeded-RNG
+    // selection). Propagation is non-recursive — passengers never cascade.
+    const harmonicActive = this.cardEffectService.hasActiveModifier(MODIFIER_STAT.HARMONIC_SIMULTANEOUS_FIRE);
+
     const hasCardModifiers =
       cardDamageBoost !== 0 || cardRangeBoost !== 0 || sniperDamageBoost !== 0
       || pathLengthMultiplier !== 1 || hasElevation || highPerchBonus !== 0
@@ -416,6 +427,7 @@ export class TowerCombatService {
       const quickDrawBonus = this.relicService.hasQuickDraw() && (tower.placedAtTurn ?? 0) === turnNumber ? 1 : 0;
       const shotsPerTurn = baseShots + quickDrawBonus;
 
+      let lastTarget: Enemy | null = null;
       for (let shot = 0; shot < shotsPerTurn; shot++) {
         if (tower.type === TowerType.SLOW) {
           this.applySlowAura(tower, stats, turnNumber);
@@ -429,120 +441,165 @@ export class TowerCombatService {
 
         this.towerAnimationService.startMuzzleFlash(tower);
         fired.push(tower.type);
+        lastTarget = target;
 
-        if (tower.type === TowerType.CHAIN) {
-          const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
-          const chainResult = this.chainLightningService.fire(
-            tower, target, stats, scene,
-            towerWorldX, towerWorldZ,
-            this.spatialGrid, turnNumber,
+        const shotResult = this.fireShotAtTarget(
+          tower, target, stats, scene, turnNumber,
+          chainBouncesBonus, towerVantagePointDmgMult, towerKothMult,
+        );
+        killed.push(...shotResult.killed);
+        hitCount += shotResult.hitCount;
+        damageDealt += shotResult.damageDealt;
+      }
+
+      // Phase 4 sprint 46 — HARMONIC: turn-scoped flag. When active and the
+      // main tower fired at least one target this turn, up to HARMONIC_NEIGHBOR_COUNT
+      // random non-disrupted cluster neighbors also fire a single shot at the
+      // main tower's last target, provided the target is within the
+      // passenger's composed range. Passengers are gated to avoid cascading
+      // (no HARMONIC recursion — a passenger's shot does NOT propagate to its
+      // own neighbors). SLOW towers are skipped as passengers (no target-
+      // based firing semantic).
+      if (harmonicActive && lastTarget !== null && this.towerGraphService && tower.type !== TowerType.SLOW) {
+        const passengers = this.pickHarmonicPassengers(tower, turnNumber);
+        for (const passenger of passengers) {
+          if (passenger.type === TowerType.SLOW) continue;
+          const passengerBaseStats = getEffectiveStats(passenger.type, passenger.level, passenger.specialization);
+          const passengerStackResult = this.composeDamageStack(passenger, passengerBaseStats, damageStackCtx);
+          const passengerStats: TowerStats = {
+            ...passengerBaseStats,
+            damage: passengerStackResult.damage,
+            range: passengerStackResult.range,
+          };
+          if (!this.isTargetInRange(passenger, lastTarget, passengerStats)) continue;
+          if (lastTarget.health <= 0) continue;
+          this.towerAnimationService.startMuzzleFlash(passenger);
+          fired.push(passenger.type);
+          const passengerResult = this.fireShotAtTarget(
+            passenger, lastTarget, passengerStats, scene, turnNumber,
             chainBouncesBonus,
+            passengerStackResult.towerVantagePointDmgMult,
+            passengerStackResult.towerKothMult,
           );
-          killed.push(...chainResult.kills);
-          damageDealt += chainResult.damageDealt;
-          hitCount += chainResult.hitCount;
-          if (chainResult.kills.length > 0) tower.kills += chainResult.kills.length;
-        } else if (tower.type === TowerType.MORTAR) {
-          // M3 S4: mortar drops a turn-ticked DoT zone instead of one-shot.
-          // Initial blast applies on placement turn; the zone then deals
-          // dotDamage to enemies in radius for `dotDuration` turns.
-          const blastRadius = stats.blastRadius ?? 1.5;
-          const blastDamage = stats.dotDamage ?? stats.damage;
-          const dotDuration = Math.max(1, Math.round(stats.dotDuration ?? 3));
+          killed.push(...passengerResult.killed);
+          hitCount += passengerResult.hitCount;
+          damageDealt += passengerResult.damageDealt;
+        }
+      }
+    }
 
-          // Initial blast (same turn as placement)
-          const candidates = this.spatialGrid.queryRadius(target.position.x, target.position.z, blastRadius);
-          for (const enemy of candidates) {
-            if (enemy.health <= 0) continue;
-            // S1: flying enemies bypass ground effects — mortar initial blast is ground-level
-            if (enemy.isFlying) continue;
-            const dx = enemy.position.x - target.position.x;
-            const dz = enemy.position.z - target.position.z;
-            if (Math.sqrt(dx * dx + dz * dz) <= blastRadius) {
-              const result = this.enemyService.damageEnemy(enemy.id, blastDamage);
-              hitCount++;
-              damageDealt += blastDamage;
-              if (result.killed) {
-                killed.push({ id: enemy.id, damage: blastDamage, towerType: tower.type, towerLevel: tower.level });
-                tower.kills++;
-              } else {
-                this.enemyService.startHitFlash(enemy.id);
-                if (stats.statusEffect) {
-                  this.statusEffectService.apply(enemy.id, stats.statusEffect, turnNumber);
-                }
-              }
-              result.spawnedEnemies.forEach(mini => {
-                if (mini.mesh) scene.add(mini.mesh);
-              });
+    return { killed, fired, hitCount, damageDealt };
+  }
+
+  /**
+   * Fire one shot from `tower` at `target` using the caller-supplied composed
+   * `stats`. Handles CHAIN / MORTAR / single-target / splash branching. Does
+   * NOT handle SLOW (aura, not target-based) or muzzle-flash / fired bookkeeping —
+   * those are owned by the caller (the fireTurn loop).
+   *
+   * Extracted from the shot loop to let HARMONIC passengers (sprint 46)
+   * reuse the full-fidelity shot pipeline without duplicating the per-type
+   * branching.
+   */
+  private fireShotAtTarget(
+    tower: PlacedTower,
+    target: Enemy,
+    stats: TowerStats,
+    scene: THREE.Scene,
+    turnNumber: number,
+    chainBouncesBonus: number,
+    towerVantagePointDmgMult: number,
+    towerKothMult: number,
+  ): { killed: KillInfo[]; hitCount: number; damageDealt: number } {
+    const killed: KillInfo[] = [];
+    let hitCount = 0;
+    let damageDealt = 0;
+
+    if (tower.type === TowerType.CHAIN) {
+      const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
+      const chainResult = this.chainLightningService.fire(
+        tower, target, stats, scene,
+        towerWorldX, towerWorldZ,
+        this.spatialGrid, turnNumber,
+        chainBouncesBonus,
+      );
+      killed.push(...chainResult.kills);
+      damageDealt += chainResult.damageDealt;
+      hitCount += chainResult.hitCount;
+      if (chainResult.kills.length > 0) tower.kills += chainResult.kills.length;
+    } else if (tower.type === TowerType.MORTAR) {
+      // M3 S4: mortar drops a turn-ticked DoT zone instead of one-shot.
+      // Initial blast applies on placement turn; the zone then deals
+      // dotDamage to enemies in radius for `dotDuration` turns.
+      const blastRadius = stats.blastRadius ?? 1.5;
+      const blastDamage = stats.dotDamage ?? stats.damage;
+      const dotDuration = Math.max(1, Math.round(stats.dotDuration ?? 3));
+
+      // Initial blast (same turn as placement)
+      const candidates = this.spatialGrid.queryRadius(target.position.x, target.position.z, blastRadius);
+      for (const enemy of candidates) {
+        if (enemy.health <= 0) continue;
+        // S1: flying enemies bypass ground effects — mortar initial blast is ground-level
+        if (enemy.isFlying) continue;
+        const dx = enemy.position.x - target.position.x;
+        const dz = enemy.position.z - target.position.z;
+        if (Math.sqrt(dx * dx + dz * dz) <= blastRadius) {
+          const result = this.enemyService.damageEnemy(enemy.id, blastDamage);
+          hitCount++;
+          damageDealt += blastDamage;
+          if (result.killed) {
+            killed.push({ id: enemy.id, damage: blastDamage, towerType: tower.type, towerLevel: tower.level });
+            tower.kills++;
+          } else {
+            this.enemyService.startHitFlash(enemy.id);
+            if (stats.statusEffect) {
+              this.statusEffectService.apply(enemy.id, stats.statusEffect, turnNumber);
             }
           }
-
-          // Drop the persistent zone — ticks for `dotDuration` more turns.
-          this.turnMortarZones.push({
-            centerX: target.position.x,
-            centerZ: target.position.z,
-            blastRadius,
-            dotDamage: blastDamage,
-            expiresOnTurn: turnNumber + dotDuration,
-            statusEffect: stats.statusEffect,
-            placerLevel: tower.level,
+          result.spawnedEnemies.forEach(mini => {
+            if (mini.mesh) scene.add(mini.mesh);
           });
+        }
+      }
 
-          // Visual zone — uses the existing VFX service. gameTime arg passed
-          // through; for the new path we use turnNumber * approximation. The
-          // VFX expiry is decoupled from logic and runs on RAF.
-          this.combatVFXService.createMortarZoneMesh(
-            target.position.x, target.position.z, blastRadius, dotDuration, scene, turnNumber,
-          );
-          this.pendingAudioEvents.push({ type: 'sfx', sfxKey: 'mortarExplosion' });
-        } else {
-          // Single-target or splash
-          const splashRadius = stats.splashRadius ?? 0;
-          if (splashRadius > 0) {
-            const candidates = this.spatialGrid.queryRadius(target.position.x, target.position.z, splashRadius);
-            for (const enemy of candidates) {
-              if (enemy.health <= 0) continue;
-              const dx = enemy.position.x - target.position.x;
-              const dz = enemy.position.z - target.position.z;
-              if (Math.sqrt(dx * dx + dz * dz) <= splashRadius) {
-                const result = this.enemyService.damageEnemy(enemy.id, stats.damage);
-                hitCount++;
-                damageDealt += stats.damage;
-                if (result.killed) {
-                  killed.push({ id: enemy.id, damage: stats.damage, towerType: tower.type, towerLevel: tower.level });
-                  tower.kills++;
-                } else {
-                  this.enemyService.startHitFlash(enemy.id);
-                  if (stats.statusEffect) {
-                    this.statusEffectService.apply(enemy.id, stats.statusEffect, turnNumber);
-                  }
-                }
-                result.spawnedEnemies.forEach(mini => {
-                  if (mini.mesh) scene.add(mini.mesh);
-                });
-              }
-            }
-          } else {
-            // Sprint 38/39 elevation-immunity per-target adjustment.
-            // WYRM_ASCENDANT (sprint 39): strip all elevation bonus damage → base-without-elevation.
-            // TITAN (sprint 38): halve the elevation bonus portion only.
-            // Chain/status/mortar damage bypasses both checks (only single-target fire applies).
-            const targetStats = ENEMY_STATS[target.type];
-            const finalDamage = (targetStats?.immuneToElevationDamageBonuses)
-              ? this.computeWyrmDamage(stats.damage, towerVantagePointDmgMult, towerKothMult)
-              : (targetStats?.halvesElevationDamageBonuses)
-              ? this.computeTitanDamage(stats.damage, towerVantagePointDmgMult, towerKothMult)
-              : stats.damage;
-            const result = this.enemyService.damageEnemy(target.id, finalDamage);
+      // Drop the persistent zone — ticks for `dotDuration` more turns.
+      this.turnMortarZones.push({
+        centerX: target.position.x,
+        centerZ: target.position.z,
+        blastRadius,
+        dotDamage: blastDamage,
+        expiresOnTurn: turnNumber + dotDuration,
+        statusEffect: stats.statusEffect,
+        placerLevel: tower.level,
+      });
+
+      // Visual zone — uses the existing VFX service. gameTime arg passed
+      // through; for the new path we use turnNumber * approximation. The
+      // VFX expiry is decoupled from logic and runs on RAF.
+      this.combatVFXService.createMortarZoneMesh(
+        target.position.x, target.position.z, blastRadius, dotDuration, scene, turnNumber,
+      );
+      this.pendingAudioEvents.push({ type: 'sfx', sfxKey: 'mortarExplosion' });
+    } else {
+      // Single-target or splash
+      const splashRadius = stats.splashRadius ?? 0;
+      if (splashRadius > 0) {
+        const candidates = this.spatialGrid.queryRadius(target.position.x, target.position.z, splashRadius);
+        for (const enemy of candidates) {
+          if (enemy.health <= 0) continue;
+          const dx = enemy.position.x - target.position.x;
+          const dz = enemy.position.z - target.position.z;
+          if (Math.sqrt(dx * dx + dz * dz) <= splashRadius) {
+            const result = this.enemyService.damageEnemy(enemy.id, stats.damage);
             hitCount++;
-            damageDealt += finalDamage;
+            damageDealt += stats.damage;
             if (result.killed) {
-              killed.push({ id: target.id, damage: finalDamage, towerType: tower.type, towerLevel: tower.level });
+              killed.push({ id: enemy.id, damage: stats.damage, towerType: tower.type, towerLevel: tower.level });
               tower.kills++;
             } else {
-              this.enemyService.startHitFlash(target.id);
+              this.enemyService.startHitFlash(enemy.id);
               if (stats.statusEffect) {
-                this.statusEffectService.apply(target.id, stats.statusEffect, turnNumber);
+                this.statusEffectService.apply(enemy.id, stats.statusEffect, turnNumber);
               }
             }
             result.spawnedEnemies.forEach(mini => {
@@ -550,10 +607,89 @@ export class TowerCombatService {
             });
           }
         }
+      } else {
+        // Sprint 38/39 elevation-immunity per-target adjustment.
+        // WYRM_ASCENDANT (sprint 39): strip all elevation bonus damage → base-without-elevation.
+        // TITAN (sprint 38): halve the elevation bonus portion only.
+        // Chain/status/mortar damage bypasses both checks (only single-target fire applies).
+        const targetStats = ENEMY_STATS[target.type];
+        const finalDamage = (targetStats?.immuneToElevationDamageBonuses)
+          ? this.computeWyrmDamage(stats.damage, towerVantagePointDmgMult, towerKothMult)
+          : (targetStats?.halvesElevationDamageBonuses)
+          ? this.computeTitanDamage(stats.damage, towerVantagePointDmgMult, towerKothMult)
+          : stats.damage;
+        const result = this.enemyService.damageEnemy(target.id, finalDamage);
+        hitCount++;
+        damageDealt += finalDamage;
+        if (result.killed) {
+          killed.push({ id: target.id, damage: finalDamage, towerType: tower.type, towerLevel: tower.level });
+          tower.kills++;
+        } else {
+          this.enemyService.startHitFlash(target.id);
+          if (stats.statusEffect) {
+            this.statusEffectService.apply(target.id, stats.statusEffect, turnNumber);
+          }
+        }
+        result.spawnedEnemies.forEach(mini => {
+          if (mini.mesh) scene.add(mini.mesh);
+        });
       }
     }
 
-    return { killed, fired, hitCount, damageDealt };
+    return { killed, hitCount, damageDealt };
+  }
+
+  /**
+   * HARMONIC passenger selection — returns up to HARMONIC_NEIGHBOR_COUNT
+   * non-disrupted cluster members of `tower` (excluding `tower` itself),
+   * chosen via the seeded run-level RNG so replay determinism is preserved.
+   *
+   * When the cluster has fewer non-disrupted neighbors than the target
+   * count, returns all eligible members. Disrupted towers are filtered via
+   * `getClusterTowers(currentTurn)` which treats disrupted entries as
+   * single-tower clusters.
+   *
+   * Sprint 46. Propagation is non-recursive — passengers do NOT trigger
+   * their own HARMONIC bursts (guarded by the caller — this helper fires
+   * nothing; it only selects).
+   */
+  private pickHarmonicPassengers(tower: PlacedTower, currentTurn: number): PlacedTower[] {
+    if (!this.towerGraphService || !this.runService) return [];
+    const clusterIds = this.towerGraphService.getClusterTowers(tower.row, tower.col, currentTurn);
+    const candidateIds = clusterIds.filter(id => id !== tower.id);
+    if (candidateIds.length === 0) return [];
+
+    const n = CONDUIT_CONFIG.HARMONIC_NEIGHBOR_COUNT;
+    const pickCount = Math.min(n, candidateIds.length);
+
+    // Fisher–Yates partial shuffle using seeded RNG — pick first `pickCount`
+    // after the shuffle. RunService.nextRandom keeps replay determinism.
+    const shuffled = [...candidateIds];
+    for (let i = 0; i < pickCount; i++) {
+      const j = i + Math.floor(this.runService.nextRandom() * (shuffled.length - i));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const selected = shuffled.slice(0, pickCount);
+
+    const passengers: PlacedTower[] = [];
+    for (const id of selected) {
+      const t = this.placedTowers.get(id);
+      if (t !== undefined) passengers.push(t);
+    }
+    return passengers;
+  }
+
+  /**
+   * True iff `target` is within `tower`'s composed `stats.range` (world-space
+   * Euclidean). Mirrors the distance test inside findTarget's candidate loop.
+   * Used by HARMONIC propagation to range-gate passenger shots without
+   * re-selecting a target.
+   */
+  private isTargetInRange(tower: PlacedTower, target: Enemy, stats: TowerStats): boolean {
+    const { x: towerWorldX, z: towerWorldZ } = this.getTowerWorldPos(tower);
+    const dx = target.position.x - towerWorldX;
+    const dz = target.position.z - towerWorldZ;
+    return (dx * dx + dz * dz) <= (stats.range * stats.range);
   }
 
   /**

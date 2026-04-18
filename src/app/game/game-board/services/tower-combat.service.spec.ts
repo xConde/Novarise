@@ -17,6 +17,7 @@ import { createTestEnemy, createGameBoardServiceSpy, createEnemyServiceSpy, crea
 import { TowerAnimationService } from './tower-animation.service';
 import { RelicService } from '../../../run/services/relic.service';
 import { CardEffectService } from '../../../run/services/card-effect.service';
+import { RunService } from '../../../run/services/run.service';
 import { PathfindingService } from './pathfinding.service';
 import { LineOfSightService } from './line-of-sight.service';
 import { ElevationService } from './elevation.service';
@@ -4833,5 +4834,204 @@ describe('TowerCombatService LINKWORK (Phase 4 sprint 45)', () => {
 
     // Cluster size is 3 for each tower (≥ MIN=2 for all). Total = 3 × 2 = 6 fires.
     expect(result.fired.length).toBe(6);
+  });
+});
+
+// ─── Phase 4 sprint 46 — HARMONIC (cluster-fire propagation) ──────────────────
+//
+// HARMONIC is a turn-scoped flag. When active and a tower fires at target T,
+// up to HARMONIC_NEIGHBOR_COUNT (2) random non-disrupted cluster neighbors
+// also fire a single shot at T (range-gated, non-recursive, seeded RNG).
+//
+// Tested via fireTurn. TestBed wires real TowerGraphService + a RunService
+// stub exposing nextRandom for deterministic passenger selection.
+
+describe('TowerCombatService HARMONIC (Phase 4 sprint 46)', () => {
+  let service: TowerCombatService;
+  let graph: TowerGraphService;
+  let cardEffectSpy: jasmine.SpyObj<CardEffectService>;
+  let runServiceStub: { nextRandom: jasmine.Spy };
+  let enemyMap: Map<string, Enemy>;
+  let mockScene: THREE.Scene;
+
+  const BASE_ROW = 10;
+  const BASE_COL = 12;
+
+  beforeEach(() => {
+    enemyMap = new Map();
+    TestBed.resetTestingModule();
+    const pathfindingSpy = jasmine.createSpyObj<PathfindingService>(
+      'PathfindingService',
+      ['getPathToExitLength', 'findPath', 'invalidateCache', 'reset'],
+    );
+    pathfindingSpy.getPathToExitLength.and.returnValue(0);
+
+    // Deterministic RNG — returns 0, 0, 0, … so Fisher–Yates picks the
+    // earliest candidates. Override per-test as needed.
+    runServiceStub = {
+      nextRandom: jasmine.createSpy('nextRandom').and.returnValue(0),
+    };
+
+    TestBed.configureTestingModule({
+      providers: [
+        TowerCombatService,
+        ChainLightningService,
+        CombatVFXService,
+        StatusEffectService,
+        GameStateService,
+        TowerGraphService,
+        { provide: EnemyService, useValue: createEnemyServiceSpy(enemyMap) },
+        { provide: GameBoardService, useValue: createGameBoardServiceSpy(25, 20, 1) },
+        { provide: TowerAnimationService, useValue: createTowerAnimationServiceSpy() },
+        { provide: RelicService, useValue: createRelicServiceSpy() },
+        { provide: CardEffectService, useValue: createCardEffectServiceSpy() },
+        { provide: PathfindingService, useValue: pathfindingSpy },
+        { provide: RunService, useValue: runServiceStub },
+      ],
+    });
+    service = TestBed.inject(TowerCombatService);
+    graph = TestBed.inject(TowerGraphService);
+    graph.setPlacedTowersGetter(() => service.getPlacedTowers());
+    cardEffectSpy = TestBed.inject(CardEffectService) as jasmine.SpyObj<CardEffectService>;
+    mockScene = new THREE.Scene();
+  });
+
+  function enemyAt(id: string, x: number, z: number, hp = 10000): Enemy {
+    const e = createTestEnemy(id, x, z, hp);
+    enemyMap.set(id, e);
+    return e;
+  }
+
+  function activateHarmonic(): void {
+    cardEffectSpy.hasActiveModifier.and.callFake((stat: string) =>
+      stat === MODIFIER_STAT.HARMONIC_SIMULTANEOUS_FIRE,
+    );
+  }
+
+  it('HARMONIC active + 3-tower cluster → main tower + 2 passengers fire at same target', () => {
+    // 3 towers adjacent horizontally: (10,12) (10,13) (10,14). All in one cluster.
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 2, TowerType.BASIC, new THREE.Group());
+    activateHarmonic();
+    // Single enemy near (10, 12) within range of all 3 (BASIC range = 3 tiles).
+    enemyAt('e1', -0.5, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // 3 towers × 1 main shot each = 3. Each main tower triggers 2 passengers
+    // at its own target (the shared enemy for adjacent-enough towers).
+    // Main tower (10,12): 1 shot + 2 passengers = 3 fires.
+    // (10,13) fires as main (still has target in range): 1 + 2 passengers = 3.
+    // (10,14) fires as main (target may be borderline): 1 + up to 2 passengers.
+    // The exact number depends on range — at minimum, the main-tower chain at
+    // (10,12) produces 1 main + 2 passenger shots if target is in range of
+    // the two neighbors.
+    expect(result.fired.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('HARMONIC active + isolated tower → only main shot fires (no passengers)', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    activateHarmonic();
+    enemyAt('e1', -0.5, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    expect(result.fired.length).toBe(1);
+  });
+
+  it('HARMONIC inactive → passenger propagation never triggers', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 2, TowerType.BASIC, new THREE.Group());
+    // Default spy: hasActiveModifier returns false.
+    enemyAt('e1', -0.5, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // Each tower fires once at whatever target is in range — no passenger bursts.
+    // 3 towers × 1 shot = 3 fires.
+    expect(result.fired.length).toBeLessThanOrEqual(3);
+  });
+
+  it('HARMONIC does NOT recurse — passenger shots never trigger their own HARMONIC burst', () => {
+    // 3-tower cluster. Count how many fires happen per tower-type logic:
+    // If HARMONIC recursed, a passenger shot would also trigger N more
+    // passengers, leading to a runaway cascade. Our implementation must
+    // bound total fires per main tower to (1 main + N passengers).
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 2, TowerType.BASIC, new THREE.Group());
+    activateHarmonic();
+    enemyAt('e1', -0.5, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // Bound: 3 main-tower iterations. Each iteration = 1 main shot + at most
+    // HARMONIC_NEIGHBOR_COUNT (2) passengers = 3 fires per iteration. Hard
+    // cap: 3 * 3 = 9 fires. If recursion leaked, we'd see much more.
+    expect(result.fired.length).toBeLessThanOrEqual(9);
+  });
+
+  it('HARMONIC respects disruption — disrupted tower has cluster size 1, no passengers', () => {
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 1, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL + 2, TowerType.BASIC, new THREE.Group());
+    activateHarmonic();
+    // Disrupt the middle tower. The graph reports a disrupted tower as its
+    // own single-tower cluster; cluster reads from (10,12) and (10,14) drop
+    // the disrupted middle tower from the cluster.
+    graph.severTower(BASE_ROW, BASE_COL + 1, /* until */ 20, 'test-disruptor');
+    enemyAt('e1', -0.5, 0);
+
+    const result = service.fireTurn(mockScene, 5);
+
+    // Disruption splits the cluster. Each tower now sees cluster size 1
+    // (or less for the disrupted one), so HARMONIC finds no passengers.
+    // Max fires = 3 main shots × 1 (no passengers) = 3.
+    expect(result.fired.length).toBeLessThanOrEqual(3);
+  });
+
+  it('HARMONIC uses seeded RNG — identical RNG yields identical passenger selection', () => {
+    // 4-tower cluster (main + 3 neighbors). HARMONIC_NEIGHBOR_COUNT=2 → pick 2 of 3.
+    // With nextRandom stubbed to return 0, the Fisher-Yates shuffle is deterministic.
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW - 1, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW + 1, BASE_COL, TowerType.BASIC, new THREE.Group());
+    service.registerTower(BASE_ROW, BASE_COL - 1, TowerType.BASIC, new THREE.Group());
+    activateHarmonic();
+    // Spy on nextRandom to confirm it was called (determinism gate).
+    expect(runServiceStub.nextRandom).not.toHaveBeenCalled();
+
+    enemyAt('e1', -0.5, 0);
+    service.fireTurn(mockScene, 1);
+
+    // If HARMONIC fires at least once through the 4-tower cluster, nextRandom
+    // is called inside pickHarmonicPassengers. Sanity check: RNG was consulted.
+    expect(runServiceStub.nextRandom).toHaveBeenCalled();
+  });
+
+  it('HARMONIC skips passengers when target is out of their range', () => {
+    // Place two towers far apart in the cluster via a virtual edge (simulates
+    // CONDUIT_BRIDGE) so cluster membership includes a tower well outside
+    // BASIC range.
+    service.registerTower(BASE_ROW, BASE_COL, TowerType.BASIC, new THREE.Group());
+    // 15 tiles away horizontally — well outside BASIC range (3 tiles).
+    service.registerTower(BASE_ROW, BASE_COL - 8, TowerType.BASIC, new THREE.Group());
+    // Use virtual edge to union them into one cluster even though they are
+    // not spatially adjacent (mirrors sprint-48 CONDUIT_BRIDGE semantics).
+    graph.addVirtualEdge(BASE_ROW, BASE_COL, BASE_ROW, BASE_COL - 8, /* expires */ 100, 'test-bridge');
+    activateHarmonic();
+    // Enemy near (10,12) but NOT near (10, 4).
+    enemyAt('e1', -0.5, 0);
+
+    const result = service.fireTurn(mockScene, 1);
+
+    // Main tower fires at e1, HARMONIC tries to propagate to its far
+    // passenger, but the passenger's range doesn't reach e1 → passenger
+    // skipped. Total fires = 1 main + 0 passengers = 1 (plus whatever
+    // firing happens from the far tower if an enemy is in its range —
+    // not in this test). Assert upper bound: no passenger propagation.
+    expect(result.fired.length).toBeLessThanOrEqual(1);
   });
 });

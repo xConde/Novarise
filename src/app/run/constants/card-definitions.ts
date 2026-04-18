@@ -303,6 +303,16 @@ const CARD_VALUES = {
   linkworkValue: 1,                   // sentinel — flag modifier, non-zero for stacking
   linkworkDuration: 2,                // turn countdown (2 turns, base)
   linkworkUpgradedDuration: 3,        // turn countdown (3 turns, upgraded)
+
+  // ── Conduit archetype — HARMONIC (Sprint 46) ────────────────────────────
+  // HARMONIC (2E uncommon): turn-scoped flag. For N turns after play, any
+  // tower firing at a target triggers up to HARMONIC_NEIGHBOR_COUNT passenger
+  // shots from random cluster neighbors at the same target (range-gated,
+  // non-recursive, seeded RNG). Upgrade extends duration by 1 turn.
+  harmonicCost: 2,
+  harmonicValue: 1,                   // sentinel — flag modifier
+  harmonicDuration: 3,                // turn countdown (3 turns, base)
+  harmonicUpgradedDuration: 4,        // turn countdown (4 turns, upgraded)
 } as const;
 
 // ── Card Definitions ──────────────────────────────────────────
@@ -1835,6 +1845,46 @@ export const CARD_DEFINITIONS: Record<CardId, CardDefinition> = {
       stat: MODIFIER_STAT.LINKWORK_FIRE_RATE_SHARE,
       value: CARD_VALUES.linkworkValue,
       duration: CARD_VALUES.linkworkUpgradedDuration,
+      durationScope: 'turn' as const,
+    },
+    archetype: 'conduit' as const,
+    link: true,
+    terraform: false,
+  },
+
+  /**
+   * HARMONIC (Sprint 46) — turn-scoped cluster-fire propagation modifier.
+   *
+   * For 3 turns (base) / 4 turns (upgraded), when any tower fires at a
+   * target, up to HARMONIC_NEIGHBOR_COUNT (2) non-disrupted cluster members
+   * also fire a shot at the same target. Passengers are range-gated (skip
+   * if target is out of range) and non-recursive (passenger shots never
+   * cascade to a new HARMONIC burst). Selection uses RunService.nextRandom
+   * for replay determinism.
+   *
+   * NOT terraform: behavior-only, no board mutation.
+   */
+  [CardId.HARMONIC]: {
+    id: CardId.HARMONIC,
+    name: 'Harmonic',
+    description: 'For 3 turns, when a tower fires, 2 random linked neighbors fire at the same target.',
+    upgradedDescription: 'For 4 turns, when a tower fires, 2 random linked neighbors fire at the same target.',
+    type: CardType.MODIFIER,
+    rarity: CardRarity.UNCOMMON,
+    energyCost: CARD_VALUES.harmonicCost,
+    upgraded: false,
+    effect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HARMONIC_SIMULTANEOUS_FIRE,
+      value: CARD_VALUES.harmonicValue,
+      duration: CARD_VALUES.harmonicDuration,
+      durationScope: 'turn' as const,
+    },
+    upgradedEffect: {
+      type: 'modifier' as const,
+      stat: MODIFIER_STAT.HARMONIC_SIMULTANEOUS_FIRE,
+      value: CARD_VALUES.harmonicValue,
+      duration: CARD_VALUES.harmonicUpgradedDuration,
       durationScope: 'turn' as const,
     },
     archetype: 'conduit' as const,

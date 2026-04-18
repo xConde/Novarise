@@ -103,6 +103,19 @@ export const MODIFIER_STAT = {
   // First turn-scoped modifier in the codebase — see tickTurn in
   // CardEffectService.
   LINKWORK_FIRE_RATE_SHARE: 'linkworkFireRateShare',
+
+  // Phase 4 Sprint 46 — HARMONIC modifier (Conduit uncommon).
+  //
+  // Boolean flag — turn-scoped (duration: 3 turns base / 4 upgraded). When
+  // active, a tower's fire at a target triggers up to HARMONIC_NEIGHBOR_COUNT
+  // passenger shots from random cluster members at the same target (range-
+  // gated). Non-recursive (passengers never cascade). Seeded RNG selection
+  // via RunService.nextRandom() for replay determinism.
+  //
+  // Read as a boolean flag in TowerCombatService.fireTurn AFTER the shot loop
+  // — propagation consumes `lastTarget` (last successful target of the main
+  // tower this turn).
+  HARMONIC_SIMULTANEOUS_FIRE: 'harmonicSimultaneousFire',
 } as const;
 
 export type ModifierStat = typeof MODIFIER_STAT[keyof typeof MODIFIER_STAT];
